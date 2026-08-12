@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-12
+// 生成时间：2026-08-13
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8857,5 +8857,14 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-08-11T03:42:40Z", type: "fix", cleanMessage: "期权订单模式标的/方向/到期日/行权价/权利金字段颜色改为深色（白底可见）" },
     { date: "2026-08-11T04:08:44Z", type: "feat", cleanMessage: "新增 BNB 币种支持（购买币种选择+实时价格）" },
     { date: "2026-08-11T04:49:57Z", type: "fix", cleanMessage: "后端 coin 枚举加入 BNB 和 HYPE（修复添加订单时 invalid_value 错误）" },
+  ],
+  "2026-08-12": [
+    { date: "2026-08-11T18:41:29Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-12T06:48:26Z", type: "feat", cleanMessage: "融资付息顶部增加钱包与缺口汇总" },
+    { date: "2026-08-12T09:05:13Z", type: "feat", cleanMessage: "谷底增筹顶部增加钱包与缺口汇总" },
+    { date: "2026-08-12T09:23:37Z", type: "refactor", cleanMessage: "replace qiban sso with independent app entry" },
+  ],
+  "2026-08-13": [
+    { date: "2026-08-12T16:41:54Z", type: "fix", cleanMessage: "数字币订单浮盈按买入价值计算" },
   ],
 };
