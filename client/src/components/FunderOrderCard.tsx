@@ -856,9 +856,12 @@ export function FunderOrderCard({
   const liveP = livePrices[order.coin] ?? null;
   const currentValue = liveP !== null ? liveP * qty : null;
   const isShort = (order as any).trade_direction === 'short';
+  // 数字币现货的浮盈只比较资产市值与买入价值；计息基数可能是人民币，不能作为 U 成本。
+  // 期权和其他非数字币订单仍保留原有的风险敞口基准。
+  const floatPnlBase = !isStockOrder && !isOptionOrder ? totalU : interestBaseNum;
   // 做空盈亏取反：跌了是盈，涨了是亏
   const floatPnl = currentValue !== null
-    ? (isShort ? interestBaseNum - currentValue : currentValue - interestBaseNum)
+    ? (isShort ? floatPnlBase - currentValue : currentValue - floatPnlBase)
     : null;
   const principalLentOut = order.principal_lent_out === 1 || order.principal_lent_out === true;
   const exposure = floatPnl !== null
