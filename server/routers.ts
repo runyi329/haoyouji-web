@@ -18681,21 +18681,20 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         if (!input.orderIds.length) return {};
-        // 按订单汇总已付金额，将 CNY 按 exchange_rate 折算成 U
+        // 按订单、原始币种与汇率分组返回；前端据订单利息币种做准确显示，避免把 CNY 手工结息误当 U。
         const rows = await db.execute(
-          sql`SELECT order_id,
-                SUM(CASE WHEN currency = 'CNY' AND exchange_rate > 0
-                         THEN amount / exchange_rate
-                         ELSE amount END) as total_paid_u
+          sql`SELECT order_id, IFNULL(currency, 'U') as currency, IFNULL(exchange_rate, 1) as exchange_rate,
+                SUM(amount) as total_paid
               FROM ledger_order_payments
               WHERE ledger_id = ${input.ledgerId} AND order_id IN (${sql.raw(input.orderIds.join(','))})
-              GROUP BY order_id`
+              GROUP BY order_id, IFNULL(currency, 'U'), IFNULL(exchange_rate, 1)`
         ) as any;
-        const result: Record<number, number> = {};
-        for (const row of ((rows[0] || rows) as any[])) {
-          result[row.order_id] = parseFloat(row.total_paid_u || '0');
-        }
-        return result;
+        return ((rows[0] || rows) as any[]).map((row: any) => ({
+          orderId: Number(row.order_id),
+          currency: row.currency || 'U',
+          total: parseFloat(row.total_paid || '0'),
+          exchangeRate: parseFloat(row.exchange_rate || '1'),
+        }));
       }),
 
     // 融资付息订单结息记录 - 删除

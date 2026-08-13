@@ -2510,7 +2510,7 @@ export default function LedgerDetail() {
   const PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
   const { data: funderAssetData, isLoading: funderOrdersLoading } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: isCustomAF && !!ledgerId, refetchOnWindowFocus: true, staleTime: 30000 }
+    { enabled: isCustomAF && !!ledgerId, refetchOnWindowFocus: true, staleTime: 5000, refetchInterval: 15000 }
   );
   const funderAssetOrders = (funderAssetData as any)?.orders ?? funderAssetData ?? [];
   // livePrices：优先用接口返回的最新价格，若还未加载则从 localStorage 读取上次缓存
@@ -2562,7 +2562,7 @@ export default function LedgerDetail() {
   const funderOrderIds = useMemo(() => (funderAssetOrders as any[]).map((o: any) => Number(o.id)), [funderAssetOrders]);
   const { data: interestSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
     { ledgerId: Number(ledgerId), orderIds: funderOrderIds },
-    { enabled: isCustomAF && funderOrderIds.length > 0 }
+    { enabled: isCustomAF && funderOrderIds.length > 0, staleTime: 5000, refetchInterval: 15000 }
   );
   // 后端返回数组格式 [{orderId, currency, total, exchangeRate}]，按 orderId 分组，每个订单可能有多个币种
   const interestSummaryMap = useMemo(() => {
@@ -2575,6 +2575,24 @@ export default function LedgerDetail() {
     }
     return map;
   }, [interestSummary]);
+  // 用户端卡片以独立结息汇总为最终来源回填 paidTotal，避免订单列表接口漏带汇总时显示 0.00。
+  // 金额先折算到订单计息基数货币，组件再按既有逻辑转换为展示利息货币。
+  const funderDisplayOrders = useMemo(() => (funderAssetOrders as any[]).map((order: any) => {
+    const payments = interestSummaryMap[Number(order.id)] || [];
+    if (!payments.length) return order;
+    const baseCurrency = String(order.interest_base_currency || 'USDT').toUpperCase();
+    const paidInBase = payments.reduce((sum, payment) => {
+      const amount = Number(payment.total || 0);
+      const paymentCurrency = String(payment.currency || 'U').toUpperCase();
+      const exchangeRate = Number(payment.exchangeRate || cnyRate || 1);
+      if (!Number.isFinite(amount)) return sum;
+      if (paymentCurrency === baseCurrency || (paymentCurrency === 'U' && baseCurrency === 'USDT')) return sum + amount;
+      if (paymentCurrency === 'CNY' && baseCurrency === 'USDT') return sum + amount / (exchangeRate > 0 ? exchangeRate : cnyRate);
+      if ((paymentCurrency === 'U' || paymentCurrency === 'USDT') && baseCurrency === 'CNY') return sum + amount * (exchangeRate > 0 ? exchangeRate : cnyRate);
+      return sum + amount;
+    }, 0);
+    return { ...order, paidTotal: { amount: paidInBase, currency: baseCurrency } };
+  }), [funderAssetOrders, interestSummaryMap, cnyRate]);
   // AF 账本：YJH邀请树（仅当弹窗打开时才加载）
   // 管理员/创建人点推荐时，强制以YJH(4957151)视角查询，无需切换视角
   const YJH_USER_ID = 4957151;
@@ -5292,7 +5310,7 @@ export default function LedgerDetail() {
             ) : funderViewMode === 'card' ? (
               /* 卡片模式：銀色铭牌风格 */
               <div className="space-y-3">
-                {(funderAssetOrders as any[]).filter((order: any) => order.status !== 'settled' && (funderOrderTab === 'participant' ? (order as any).order_perspective === 'other' : (order as any).order_perspective !== 'other')).map((order: any) => {
+                {funderDisplayOrders.filter((order: any) => order.status !== 'settled' && (funderOrderTab === 'participant' ? (order as any).order_perspective === 'other' : (order as any).order_perspective !== 'other')).map((order: any) => {
                   // 按利率符号判断布局：正号（rate>=0）→付息型（突出利息），负号（rate<0）→权益型（突出持有数量/浮动盈亏）
                   // 参与者视角：优先用 participantInfo.commissionRate，否则用 interest_rate_annual
                   const isParticipantView = (order as any).order_perspective === 'other';
@@ -5326,7 +5344,7 @@ export default function LedgerDetail() {
             ) : (
               /* 订单模式：原始 FunderOrderCard */
               <div className="space-y-3">
-                {(funderAssetOrders as any[]).filter((order: any) => order.status !== 'settled' && (funderOrderTab === 'participant' ? (order as any).order_perspective === 'other' : (order as any).order_perspective !== 'other')).map((order: any) => (
+                {funderDisplayOrders.filter((order: any) => order.status !== 'settled' && (funderOrderTab === 'participant' ? (order as any).order_perspective === 'other' : (order as any).order_perspective !== 'other')).map((order: any) => (
                   <FunderOrderCard
                     key={order.id}
                     order={order}
