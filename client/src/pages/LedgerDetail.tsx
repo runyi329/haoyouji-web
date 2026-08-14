@@ -568,7 +568,7 @@ function FunderOrderCardLegacy({
   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
   const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
   const isSettled = order.status === 'settled';
-  const rateStr = String(isInvited ? (order.participantInfo?.commissionRate || '') : (order.interest_rate_annual || ''));
+  const rateStr = String(isInvited ? (order.participantInfo?.commissionRate ?? '') : (order.interest_rate_annual ?? ''));
   const isNegRate = rateStr.startsWith('-');
   const rateAbs = isNegRate ? parseFloat(rateStr.slice(1)).toFixed(0) : (rateStr ? parseFloat(rateStr).toFixed(0) : '');
   const rateSign = isNegRate ? '-' : '+';
@@ -5313,10 +5313,12 @@ export default function LedgerDetail() {
               <div className="space-y-3">
                 {funderDisplayOrders.filter((order: any) => order.status !== 'settled' && (funderOrderTab === 'participant' ? (order as any).order_perspective === 'other' : (order as any).order_perspective !== 'other')).map((order: any) => {
                   // 按利率符号判断布局：正号（rate>=0）→付息型（突出利息），负号（rate<0）→权益型（突出持有数量/浮动盈亏）
-                  // 参与者视角：优先用 participantInfo.commissionRate，否则用 interest_rate_annual
+                  // 参与者视角：优先使用参与者专属利率；0% 是有效配置，不能回退主订单利率。
                   const isParticipantView = (order as any).order_perspective === 'other';
-                  const participantRate = isParticipantView ? parseFloat(String((order as any).participantInfo?.interestRate || (order as any).participantInfo?.commissionRate || '0')) : 0;
-                  const rateVal = isParticipantView && participantRate !== 0 ? participantRate : parseFloat(String(order.interest_rate_annual || '0'));
+                  const participantRateRaw = isParticipantView ? ((order as any).participantInfo?.interestRate ?? (order as any).participantInfo?.commissionRate) : undefined;
+                  const hasParticipantRate = participantRateRaw !== undefined && participantRateRaw !== null && String(participantRateRaw).trim() !== '';
+                  const participantRate = hasParticipantRate ? parseFloat(String(participantRateRaw)) : 0;
+                  const rateVal = isParticipantView && hasParticipantRate ? participantRate : parseFloat(String(order.interest_rate_annual || '0'));
                   return rateVal > 0 ? (
                     <FunderLenderCardSilver
                       key={order.id}

@@ -1906,8 +1906,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       tradeDirection: (order.trade_direction as null | 'long' | 'short') || null,
       ownerLabel: '',
       interestRateCurrency: (order.interest_rate_currency || 'USDT') as 'USDT' | 'CNY',
-      commissionRate: order.participantInfo?.commissionRate || '',
-      commissionBase: order.participantInfo?.commissionBase || '',
+      commissionRate: order.participantInfo?.commissionRate != null ? String(order.participantInfo.commissionRate) : '',
+      commissionBase: order.participantInfo?.commissionBase != null ? String(order.participantInfo.commissionBase) : '',
       commissionStartDate: order.participantInfo?.commissionStartDate || '',
       tags: (() => {
         try {

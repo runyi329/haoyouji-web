@@ -2519,12 +2519,14 @@ export function FunderLenderCardSilver({
   const priceColor = priceDiff === null ? (isOption ? OPT_TEXT_PRI : SL_TEXT_PRI) : priceDiff >= 0 ? SL_GREEN : SL_RED;
 
   const _isParticipantLn = (order as any).order_perspective === 'other';
-  const _participantInterestRate = _isParticipantLn ? String((order as any).participantInfo?.interestRate || '') : '';
-  const rateStr = _isParticipantLn && _participantInterestRate ? _participantInterestRate : getRateStr(order);
+  const _participantInterestRateValue = _isParticipantLn ? (order as any).participantInfo?.interestRate : undefined;
+  const _hasParticipantInterestRate = _participantInterestRateValue !== undefined && _participantInterestRateValue !== null && _participantInterestRateValue !== '';
+  const _participantInterestRate = _hasParticipantInterestRate ? String(_participantInterestRateValue) : '';
+  const rateStr = _isParticipantLn && _hasParticipantInterestRate ? _participantInterestRate : getRateStr(order);
   const isNegRate = rateStr.startsWith('-');
   const rateAbs = rateStr ? parseFloat(isNegRate ? rateStr.slice(1) : rateStr).toFixed(_isParticipantLn ? 2 : 0) : '';
   const _effectiveInterestBase = _isParticipantLn ? ((order as any).participantInfo?.commissionBase || order.interest_base) : order.interest_base;
-  const _effectiveInterestRate = _isParticipantLn && _participantInterestRate ? _participantInterestRate : order.interest_rate_annual;
+  const _effectiveInterestRate = _isParticipantLn && _hasParticipantInterestRate ? _participantInterestRate : order.interest_rate_annual;
   const accrued = useAccruedInterestFunder(
     order.status === 'active' ? _effectiveInterestBase : null,
     order.status === 'active' ? _effectiveInterestRate : null,

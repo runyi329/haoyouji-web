@@ -16269,8 +16269,8 @@ ${klinesSummary}
               participantInfo: {
                 userId: participantQueryUserId,
                 role: pi.role,
-                interestRate: pi.interest_rate || null,
-                commissionRate: pi.commission_rate || null,
+                interestRate: pi.interest_rate != null ? pi.interest_rate : null,
+                commissionRate: pi.commission_rate != null ? pi.commission_rate : null,
                 commissionBase: pi.commission_base || o.interest_base || null,
                 commissionStartDate: pi.commission_start_date || o.interest_start_date || null,
                 paidCommission: pi.paid_commission || '0',
@@ -16292,7 +16292,7 @@ ${klinesSummary}
           result.order_owner_name = o.owner_label || o.username || null;
           if (participantUserName) result.owner_label = participantUserName;
           if (pi) {
-            if (pi.interest_rate) result.interest_rate_annual = pi.interest_rate;
+            if (pi.interest_rate != null && pi.interest_rate !== '') result.interest_rate_annual = pi.interest_rate;
             if (pi.interest_base) result.interest_base = pi.interest_base;
             if (pi.interest_base_currency) result.interest_base_currency = pi.interest_base_currency;
             if (pi.interest_payment_type) result.interest_payment_type = pi.interest_payment_type;
@@ -17288,7 +17288,7 @@ ${klinesSummary}
                 (o as any).participantInfo = {
                   userId: targetUserId,
                   role: pi.role,
-                  commissionRate: pi.commission_rate || null,
+                  commissionRate: pi.commission_rate != null ? pi.commission_rate : null,
                   commissionBase: pi.commission_base || o.interest_base || null,
                   commissionStartDate: pi.commission_start_date || o.interest_start_date || null,
                   paidCommission: pi.paid_commission || '0',
@@ -17302,7 +17302,7 @@ ${klinesSummary}
                   // 参与者自己的名字作为显示名
                   if (participantUserName) (o as any).owner_label = participantUserName;
                   // 用参与者的利率、计息基数、展示配置覆盖主订单
-                  if (pi.interest_rate) (o as any).interest_rate_annual = pi.interest_rate;
+                  if (pi.interest_rate != null && pi.interest_rate !== '') (o as any).interest_rate_annual = pi.interest_rate;
                   if (pi.interest_base) (o as any).interest_base = pi.interest_base;
                   if (pi.interest_base_currency) (o as any).interest_base_currency = pi.interest_base_currency;
                   if (pi.interest_payment_type) (o as any).interest_payment_type = pi.interest_payment_type;
@@ -18156,7 +18156,7 @@ ${klinesSummary}
             [
               input.orderId, input.ledgerId, p.userId,
               p.amount || null, p.amountCurrency || null,
-              p.interestRate || null, p.interestBase || null, p.interestBaseCurrency || null,
+              p.interestRate === undefined || p.interestRate === '' ? null : p.interestRate, p.interestBase || null, p.interestBaseCurrency || null,
               p.interestPaymentType || null, p.interestStartDate || null, p.interestRateCurrency || null,
               p.displayConfig || null, p.note || null,
               p.sortOrder ?? i,
@@ -18212,8 +18212,8 @@ ${klinesSummary}
             updated_at = NOW()
            WHERE order_id = ? AND ledger_id = ? AND user_id = ?`,
           [
-            input.commissionRate || null, input.commissionBase || null, input.commissionStartDate || null,
-            input.interestRate || null, input.interestBase || null, input.interestBaseCurrency || null,
+            input.commissionRate === undefined || input.commissionRate === '' ? null : input.commissionRate, input.commissionBase || null, input.commissionStartDate || null,
+            input.interestRate === undefined || input.interestRate === '' ? null : input.interestRate, input.interestBase || null, input.interestBaseCurrency || null,
             input.interestPaymentType || null, input.interestStartDate || null, input.interestRateCurrency || null,
             input.displayConfig || null, input.note || null,
             input.orderNoOverride || null, input.buyDateOverride || null,
