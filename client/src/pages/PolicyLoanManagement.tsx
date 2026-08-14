@@ -189,7 +189,7 @@ export default function PolicyLoanManagement({
             <div className="p-4 bg-gradient-to-br from-[#17345E] to-[#27507D] text-white relative">
               <div className="flex justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 text-white/65 text-xs mb-1"><ShieldCheck className="w-3.5 h-3.5" /><span>{loan.insurer}</span></div>
+                  <div className="flex items-center gap-1.5 text-white/65 text-xs mb-1"><span className="rounded border border-amber-200/45 bg-amber-300/10 px-1.5 text-[10px] font-semibold leading-4 text-amber-100">保单贷款</span><ShieldCheck className="w-3.5 h-3.5" /><span>{loan.insurer}</span></div>
                   <p className="font-semibold text-base truncate">{loan.policy_name || "保单贷款"}</p>
                   <p className="text-xs text-white/60 mt-1">{adminMode && loan.user_name ? `${loan.user_name} · ` : ""}{loan.policy_holder || "未填写投保人"}{loan.policy_no ? ` · ${loan.policy_no}` : ""}</p>
                 </div>

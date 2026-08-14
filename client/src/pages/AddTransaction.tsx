@@ -949,7 +949,7 @@ const AddTransaction = () => {
                   onClick={() => { setShowAJMenu(false); setLocation('/credit-cards'); }}
                   className="w-full px-4 py-3 text-sm text-left text-gray-700 border-t border-gray-100"
                 >
-                  信用卡管理
+                  贷款管理
                 </button>
               </div>
             )}
