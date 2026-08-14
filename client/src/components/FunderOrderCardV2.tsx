@@ -1320,6 +1320,13 @@ export function FunderOrderCardV2Silver({
   const isParticipant = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder;
   const cardBg = isParticipant ? GRN_BG : isStockCard ? GOLD_BG_SV : isOptionCard ? OPT_BG : SL_BG;
   const cardBorder = isParticipant ? GRN_BORDER : isStockCard ? GOLD_BORDER_SV : isOptionCard ? OPT_BORDER : SL_BORDER;
+  const showTradeDirection = (() => {
+    try {
+      const raw = (order as any).display_config;
+      const config = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : null;
+      return !config || config.showTradeDirection !== false;
+    } catch { return true; }
+  })();
   const cardShadow = isParticipant ? GRN_SHADOW : isStockCard ? GOLD_SHADOW_SV : isOptionCard ? OPT_SHADOW : SL_SHADOW;
   // 动态文字颜色：参与者和期权卡片用白色系列，其他用黑色系列
   const TXT_PRI = (isParticipant || isOptionCard) ? (isParticipant ? GRN_TEXT_PRI : OPT_TEXT_PRI) : SL_TEXT_PRI;
@@ -1500,7 +1507,7 @@ export function FunderOrderCardV2Silver({
                 {isParticipant && (
                   <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.7)' }}>参与</span>
                 )}
-                {(order as any).trade_direction && (
+                {showTradeDirection && ((order as any).trade_direction === 'long' || (order as any).trade_direction === 'short') && (
                   <span
                     className="text-[10px] font-bold px-1 py-0"
                     style={{ borderRadius: '3px', color: '#fff', backgroundColor: (order as any).trade_direction === 'long' ? '#DC2626' : '#16A34A' }}
@@ -2758,25 +2765,13 @@ export function FunderLenderCardSilver({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="flex items-center gap-1.5 mb-1">
             <span className="text-[10px]" style={{ color: TXT_SEC }}>应收利息 ({interestUnit})</span>
-            {!isStock && !isOption && (
-              <>
-                <span
-                  className="text-[10px] font-bold px-1.5 rounded"
-                  style={
-                    (order as any).trade_direction === 'long'
-                      ? { backgroundColor: 'rgba(16,185,129,0.18)', color: '#10B981', border: '1px solid rgba(16,185,129,0.4)' }
-                      : { backgroundColor: 'rgba(156,163,175,0.12)', color: '#9CA3AF', border: '1px solid rgba(156,163,175,0.25)' }
-                  }
-                >多</span>
-                <span
-                  className="text-[10px] font-bold px-1.5 rounded"
-                  style={
-                    (order as any).trade_direction === 'short'
-                      ? { backgroundColor: 'rgba(239,68,68,0.18)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.4)' }
-                      : { backgroundColor: 'rgba(156,163,175,0.12)', color: '#9CA3AF', border: '1px solid rgba(156,163,175,0.25)' }
-                  }
-                >空</span>
-              </>
+            {!isStock && !isOption && showField('showTradeDirection') && ((order as any).trade_direction === 'long' || (order as any).trade_direction === 'short') && (
+              <span
+                className="text-[10px] font-bold px-1.5 rounded"
+                style={(order as any).trade_direction === 'long'
+                  ? { backgroundColor: 'rgba(16,185,129,0.18)', color: '#10B981', border: '1px solid rgba(16,185,129,0.4)' }
+                  : { backgroundColor: 'rgba(239,68,68,0.18)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.4)' }}
+              >{(order as any).trade_direction === 'long' ? '多' : '空'}</span>
             )}
           </div>
           <div style={{ lineHeight: 1, display: 'flex', alignItems: 'baseline', gap: '6px' }}>

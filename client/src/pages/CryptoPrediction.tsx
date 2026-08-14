@@ -3367,10 +3367,11 @@ export default function CryptoPrediction() {
               </div>
             ) : (() => {
               const activeOrders = financeOrders.filter((o: any) => o.status === 'active');
-              // 「本人 / 他人」只读取订单创建时设置的 order_perspective，决定订单所在的 Tab；
-              // 「参与」是独立身份，只由卡片绿色主题与参与标签表达。
-              const mineOrders = activeOrders.filter((o: any) => (o.order_perspective || 'self') !== 'other');
-              const sharedOrders = activeOrders.filter((o: any) => (o.order_perspective || 'self') === 'other');
+              // 所有真实参与订单统一放入“他人”Tab；绿色主题仍只由参与者身份表达。
+              // 非参与订单再按创建时设置的 order_perspective 归入本人 / 他人。
+              const isParticipantOrder = (o: any) => !!o.participantInfo || !!o._isParticipant || !!o._fromFunder;
+              const mineOrders = activeOrders.filter((o: any) => !isParticipantOrder(o) && (o.order_perspective || 'self') !== 'other');
+              const sharedOrders = activeOrders.filter((o: any) => isParticipantOrder(o) || (o.order_perspective || 'self') === 'other');
 
               // 第2层：本人 / 他人 → 仅决定订单位置
               const l2Pool = financeL2Tab === 'shared' ? sharedOrders : mineOrders;
