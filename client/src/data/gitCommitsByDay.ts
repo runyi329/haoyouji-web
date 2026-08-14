@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-14
+// 生成时间：2026-08-15
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8868,5 +8868,16 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-08-12T16:41:54Z", type: "fix", cleanMessage: "数字币订单浮盈按买入价值计算" },
     { date: "2026-08-12T18:42:10Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-08-13T05:58:47Z", type: "fix", cleanMessage: "同步融资订单手工结息汇总" },
+  ],
+  "2026-08-14": [
+    { date: "2026-08-13T18:42:51Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-14T03:09:06Z", type: "feat", cleanMessage: "统一贷款管理整合信用卡与保单贷款" },
+    { date: "2026-08-14T04:27:41Z", type: "feat", cleanMessage: "优化贷款管理卡片信息层级" },
+    { date: "2026-08-14T05:34:25Z", type: "fix", cleanMessage: "区分谷底增筹与融资付息成员范围" },
+    { date: "2026-08-14T07:59:21Z", type: "fix", cleanMessage: "decouple finance participant identity from order perspective" },
+    { date: "2026-08-14T08:11:49Z", type: "fix", cleanMessage: "group participant orders under others tab" },
+    { date: "2026-08-14T08:32:10Z", type: "fix", cleanMessage: "unify participant name display" },
+    { date: "2026-08-14T09:10:56Z", type: "fix", cleanMessage: "unify global user search by username and nickname" },
+    { date: "2026-08-14T14:16:27Z", type: "fix", cleanMessage: "preserve zero participant interest rates" },
   ],
 };
