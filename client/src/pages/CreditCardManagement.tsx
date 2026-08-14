@@ -3,10 +3,11 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
+import PolicyLoanManagement from "./PolicyLoanManagement";
 import {
   ChevronLeft, Plus, CreditCard, Pencil, Trash2,
   X, Check, Users, User, Search, ChevronDown, Lightbulb, ToggleLeft, ToggleRight,
-  Eye, EyeOff,
+  Eye, EyeOff, ShieldCheck,
 } from "lucide-react";
 
 const BANK_COLORS: Record<string, { bg: string; border: string }> = {
@@ -207,6 +208,10 @@ export default function CreditCardManagement() {
   const [showUserPicker, setShowUserPicker] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
+  const [showAddTypePicker, setShowAddTypePicker] = useState(false);
+  const [loanTypeFilter, setLoanTypeFilter] = useState<'all' | 'creditCard' | 'policyLoan'>('all');
+  const [loanSort, setLoanSort] = useState<'default' | 'dueDate' | 'rate' | 'amount'>('default');
+  const [policyAddRequestId, setPolicyAddRequestId] = useState(0);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<CardForm>(emptyForm);
   const [hasDraft, setHasDraft] = useState(false);
@@ -351,6 +356,16 @@ export default function CreditCardManagement() {
   }, [form.billingDay, form.dueDay]);
 
   // 管理员视角：按用户分组
+  const sortedMyCards = useMemo(() => [...(myCards as any[])].sort((a, b) => {
+    // 默认与“按到期日”均把下一次还款日最近的信用卡排在前面；未设还款日的排在最后。
+    if (loanSort === 'default' || loanSort === 'dueDate') {
+      const aDays = a.due_day ? daysUntil(Number(a.due_day)) : Number.MAX_SAFE_INTEGER;
+      const bDays = b.due_day ? daysUntil(Number(b.due_day)) : Number.MAX_SAFE_INTEGER;
+      return aDays === bDays ? Number(b.id || 0) - Number(a.id || 0) : aDays - bDays;
+    }
+    return Number(b.id || 0) - Number(a.id || 0);
+  }), [myCards, loanSort]);
+
   const groupedCards = useMemo(() => {
     if (viewMode !== 'admin') return {};
     const groups: Record<number, { userName: string; cards: any[] }> = {};
@@ -756,28 +771,11 @@ export default function CreditCardManagement() {
         <button onClick={() => setLocation("/ledger/76/add?from=home")}>
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-base font-semibold">信用卡管理</h1>
+        <h1 className="text-base font-semibold">贷款管理</h1>
         <button
-          onClick={() => {
-            setEditingId(null);
-            isFirstMount.current = true;
-            // 如果有草稿，自动恢复
-            try {
-              const saved = localStorage.getItem(draftKey);
-              if (saved) {
-                const parsed = JSON.parse(saved);
-                if (parsed.bankName || parsed.cardHolder || parsed.cardLast4) {
-                  setForm({ ...emptyForm, ...parsed });
-                  setShowForm(true);
-                  toast.info('已恢复上次未完成的草稿');
-                  return;
-                }
-              }
-            } catch {}
-            setForm(emptyForm);
-            setShowForm(true);
-          }}
-          className="relative w-7 h-7 flex items-center justify-center rounded-full bg-white/20 active:bg-white/30">
+          onClick={() => setShowAddTypePicker(true)}
+          className="relative w-7 h-7 flex items-center justify-center rounded-full bg-white/20 active:bg-white/30"
+          aria-label="新增金融工具">
           <Plus className="w-4 h-4" />
           {hasDraft && (
             <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full" />
@@ -785,16 +783,61 @@ export default function CreditCardManagement() {
         </button>
       </div>
 
+      {/* 右上角 + ：选择新增的金融工具类型 */}
+      {showAddTypePicker && (
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="bg-white w-full max-w-[480px] mx-auto rounded-t-2xl px-4 pt-4 pb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div><p className="text-gray-900 font-semibold">新增贷款工具</p><p className="text-xs text-gray-400 mt-0.5">选择信用卡或保单贷款</p></div>
+              <button onClick={() => setShowAddTypePicker(false)}><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setShowAddTypePicker(false);
+                  setLoanTypeFilter('creditCard');
+                  setEditingId(null);
+                  isFirstMount.current = true;
+                  try {
+                    const saved = localStorage.getItem(draftKey);
+                    if (saved) {
+                      const parsed = JSON.parse(saved);
+                      if (parsed.bankName || parsed.cardHolder || parsed.cardLast4) {
+                        setForm({ ...emptyForm, ...parsed });
+                        setShowForm(true);
+                        toast.info('已恢复上次未完成的草稿');
+                        return;
+                      }
+                    }
+                  } catch {}
+                  setForm(emptyForm);
+                  setShowForm(true);
+                }}
+                className="w-full flex items-center gap-3 rounded-xl border border-slate-200 p-3.5 text-left active:bg-slate-50">
+                <span className="w-10 h-10 rounded-xl bg-[#1A2B4A] flex items-center justify-center"><CreditCard className="w-5 h-5 text-white" /></span>
+                <span><span className="block text-sm font-semibold text-gray-800">信用卡</span><span className="block text-xs text-gray-400 mt-0.5">额度、账单日、还款日及免息期建议</span></span>
+              </button>
+              <button
+                onClick={() => { setShowAddTypePicker(false); setLoanTypeFilter('policyLoan'); setPolicyAddRequestId(v => v + 1); }}
+                className="w-full flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/40 p-3.5 text-left active:bg-amber-50">
+                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#17345E] to-[#27507D] flex items-center justify-center"><ShieldCheck className="w-5 h-5 text-amber-300" /></span>
+                <span><span className="block text-sm font-semibold text-gray-800">保单贷款</span><span className="block text-xs text-gray-400 mt-0.5">保单、贷款余额、利率、还款方式及到期日</span></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 管理员视角切换 */}
       {isAdmin && (
         <div className="bg-white border-b border-gray-100 px-4 py-2 flex space-x-2">
           <button onClick={() => setViewMode('self')}
             className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'self' ? 'bg-[#1A2B4A] text-white' : 'bg-gray-100 text-gray-600'}`}>
-            <User className="w-3.5 h-3.5" /><span>我的卡</span>
+            <User className="w-3.5 h-3.5" /><span>我的贷款</span>
           </button>
           <button onClick={() => setViewMode('admin')}
             className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'admin' ? 'bg-[#1A2B4A] text-white' : 'bg-gray-100 text-gray-600'}`}>
-            <Users className="w-3.5 h-3.5" /><span>所有人</span>
+            <Users className="w-3.5 h-3.5" /><span>所有人贷款</span>
           </button>
         </div>
       )}
@@ -802,7 +845,7 @@ export default function CreditCardManagement() {
       {/* 管理员视角：用户选择器 */}
       {isAdmin && viewMode === 'admin' && (
         <div className="bg-amber-50 border-b border-amber-100 px-4 py-2">
-          <p className="text-amber-700 text-xs mb-1.5">为指定用户添加信用卡：</p>
+          <p className="text-amber-700 text-xs mb-1.5">为指定用户添加贷款工具：</p>
           <div className="relative">
             <button onClick={() => setShowUserPicker(v => !v)}
               className="w-full flex items-center justify-between bg-white border border-amber-200 rounded-lg px-3 py-2 text-sm">
@@ -841,29 +884,52 @@ export default function CreditCardManagement() {
         </div>
       )}
 
-      {/* 卡片列表 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3" onClick={() => showUserPicker && setShowUserPicker(false)}>
+      {/* 类别筛选与排序 */}
+      <div className="bg-white border-b border-gray-100 px-4 py-2.5 space-y-2">
+        <div className="flex gap-2">
+          {([
+            ['all', '全部'],
+            ['creditCard', '信用卡'],
+            ['policyLoan', '保单贷款'],
+          ] as const).map(([value, label]) => (
+            <button key={value} onClick={() => setLoanTypeFilter(value)} className={`flex-1 py-1.5 rounded-lg text-xs font-medium ${loanTypeFilter === value ? 'bg-[#1A2B4A] text-white' : 'bg-slate-100 text-slate-600'}`}>{label}</button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-gray-400 shrink-0">排序</span>
+          {([
+            ['default', '默认'],
+            ['dueDate', '按到期日'],
+            ['rate', '按利率'],
+            ['amount', '按贷款金额'],
+          ] as const).map(([value, label]) => (
+            <button key={value} onClick={() => setLoanSort(value)} className={`px-2.5 py-1 rounded-md ${loanSort === value ? 'bg-blue-50 text-[#1A2B4A] font-semibold' : 'text-gray-500'}`}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* 统一贷款卡片列表 */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#F6F7FB]" onClick={() => showUserPicker && setShowUserPicker(false)}>
         {viewMode === 'self' && (
           <>
-            {(myCards as any[]).length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                <CreditCard className="w-12 h-12 mb-3 opacity-30" />
-                <p className="text-sm">暂无信用卡</p>
-                <p className="text-xs mt-1">点击右上角 + 添加</p>
-              </div>
+            {loanTypeFilter === 'all' && sortedMyCards.length > 0 && <p className="px-1 pt-1 text-xs font-semibold text-slate-500">信用卡</p>}
+            {loanTypeFilter !== 'policyLoan' && sortedMyCards.map((card: any) => <CardItem key={card.id} card={card} />)}
+            {loanTypeFilter === 'all' && <p className="px-1 pt-2 text-xs font-semibold text-slate-500">保单贷款</p>}
+            {loanTypeFilter !== 'creditCard' && <PolicyLoanManagement embedded sortBy={loanSort} addRequestId={policyAddRequestId} />}
+            {loanTypeFilter !== 'policyLoan' && sortedMyCards.length === 0 && loanTypeFilter === 'creditCard' && (
+              <div className="flex flex-col items-center justify-center py-16 text-gray-400"><CreditCard className="w-12 h-12 mb-3 opacity-30" /><p className="text-sm">暂无信用卡</p><p className="text-xs mt-1">点击右上角 + 添加</p></div>
             )}
-            {(myCards as any[]).map((card: any) => <CardItem key={card.id} card={card} />)}
           </>
         )}
         {viewMode === 'admin' && (
           <>
-            {Object.keys(groupedCards).length === 0 && (
+            {loanTypeFilter !== 'policyLoan' && Object.keys(groupedCards).length === 0 && (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                 <Users className="w-12 h-12 mb-3 opacity-30" />
                 <p className="text-sm">暂无用户信用卡数据</p>
               </div>
             )}
-            {Object.entries(groupedCards).map(([userId, group]) => (
+            {loanTypeFilter !== 'policyLoan' && Object.entries(groupedCards).map(([userId, group]) => (
               <div key={userId}>
                 <div className="flex items-center space-x-2 mb-2 px-1">
                   <User className="w-3.5 h-3.5 text-gray-400" />
@@ -875,6 +941,8 @@ export default function CreditCardManagement() {
                 </div>
               </div>
             ))}
+            {loanTypeFilter === 'all' && <p className="px-1 pt-2 text-xs font-semibold text-slate-500">保单贷款</p>}
+            {loanTypeFilter !== 'creditCard' && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} addRequestId={policyAddRequestId} />}
           </>
         )}
       </div>
