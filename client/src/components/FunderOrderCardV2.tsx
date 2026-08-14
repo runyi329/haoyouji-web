@@ -1316,7 +1316,8 @@ export function FunderOrderCardV2Silver({
     'inset 1.5px 0 rgba(245,205,65,0.28)',
     'inset -1.5px 0 rgba(0,0,0,0.16)',
   ].join(', ');
-  const isParticipant = (order as any).order_perspective === 'other';
+  // 本人 / 他人仅决定列表归属；绿色主题仅表达真实参与者身份。
+  const isParticipant = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder;
   const cardBg = isParticipant ? GRN_BG : isStockCard ? GOLD_BG_SV : isOptionCard ? OPT_BG : SL_BG;
   const cardBorder = isParticipant ? GRN_BORDER : isStockCard ? GOLD_BORDER_SV : isOptionCard ? OPT_BORDER : SL_BORDER;
   const cardShadow = isParticipant ? GRN_SHADOW : isStockCard ? GOLD_SHADOW_SV : isOptionCard ? OPT_SHADOW : SL_SHADOW;
@@ -2608,7 +2609,8 @@ export function FunderLenderCardSilver({
     { bottom: '6px', right: '7px' },
   ];
 
-  const isParticipant = (order as any).order_perspective === 'other';
+  // 本人 / 他人仅决定列表归属；绿色主题仅表达真实参与者身份。
+  const isParticipant = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder;
   const GRN_POSITIVE_COLOR = LN_EARN;  // 暂时恢复原始颜色
   // 动态文字颜色：参与者和期权卡片用白色系列，其他用黑色系列
   const TXT_PRI = (isParticipant || isOption) ? (isParticipant ? GRN_TEXT_PRI : OPT_TEXT_PRI) : SL_TEXT_PRI;

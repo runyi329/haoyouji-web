@@ -16286,7 +16286,9 @@ ${klinesSummary}
           if (!isParticipantOrder) return o;
           const pi = piDetailMap[Number(o.id)];
           const result = { ...o };
-          result.order_perspective = 'other';
+          // 参与者身份只用于附带参与者专属数据与视觉状态；
+          // 本人 / 他人位置沿用订单自身的 order_perspective，不能在此强制改写。
+          result.order_perspective = o.order_perspective || 'self';
           result.order_owner_name = o.owner_label || o.username || null;
           if (participantUserName) result.owner_label = participantUserName;
           if (pi) {
@@ -17353,8 +17355,8 @@ ${klinesSummary}
         const ordersWithPaid = allOrders.map((o: any) => ({
           ...o,
           paidTotal: paidTotalMap[Number(o.id)] || null,
-          // 参与方订单强制覆盖 order_perspective 为 'other'，确保前端显示绿色卡片
-          order_perspective: (o as any)._isParticipant ? 'other' : (o.order_perspective || 'self'),
+          // 本人 / 他人决定列表位置；参与者身份通过 participantInfo / _isParticipant 独立传给前端控制绿色主题。
+          order_perspective: o.order_perspective || 'self',
         }));
         return { orders: ordersWithPaid };
       }),

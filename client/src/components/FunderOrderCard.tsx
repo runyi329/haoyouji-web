@@ -479,7 +479,8 @@ export function FunderOrderCard({
   });
   // 已结利息历史浮层
   const [showInterestHistory, setShowInterestHistory] = useState(false);
-  const _isParticipantOrder = (order as any).order_perspective === 'other';
+  // 参与者身份独立于本人/他人归属；仅真实参与者才查询参与者专属结息数据。
+  const _isParticipantOrder = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder;
   const _participantUserId = _isParticipantOrder ? ((order as any).participantInfo?.userId || undefined) : undefined;
   const interestHistoryQuery = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId, orderId: order.id as number, participantUserId: _participantUserId },
@@ -738,6 +739,13 @@ export function FunderOrderCard({
   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
   const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
   const isSettled = order.status === 'settled';
+  // “本人 / 他人”只决定列表归属；绿色主题只由真实参与关系决定。
+  // order_perspective 不能作为颜色条件，避免“他人订单”被误标为参与订单。
+  const isParticipantVisual = !!(order as any).participantInfo
+    || !!(order as any)._isParticipant
+    || !!(order as any)._fromFunder;
+  // 管理员列表接口返回 _participantCount，旧接口可能返回 participantCount，统一兼容。
+  const participantCount = Number((order as any).participantCount ?? (order as any)._participantCount ?? 0);
   const rateStr = String(order.interest_rate_annual || '');
   const isNegRate = rateStr.startsWith('-');
   const rateAbs = isNegRate ? parseFloat(rateStr.slice(1)).toFixed(0) : (rateStr ? parseFloat(rateStr).toFixed(0) : '');
@@ -896,7 +904,11 @@ export function FunderOrderCard({
     <>
     <div
       className="rounded-lg overflow-hidden relative"
-      style={{ background: '#ffffff', border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}
+      style={{
+        background: isParticipantVisual ? '#F0FDF4' : '#ffffff',
+        border: isParticipantVisual ? '1px solid #86EFAC' : '1px solid #E8EDFF',
+        boxShadow: isParticipantVisual ? '0 1px 5px rgba(5,150,105,0.12)' : '0 1px 4px rgba(26,35,64,0.05)',
+      }}
     >
       {isSettled && (
         <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center" style={{ backgroundColor: 'rgba(220,38,38,0.06)', zIndex: 10 }}>
@@ -905,7 +917,13 @@ export function FunderOrderCard({
       )}
 
       {/* 帽子：标签行 + 操作按钮 */}
-      <div className="flex items-center gap-2 px-4 py-2" style={{ borderBottom: '1px solid #E4E8F5', backgroundColor: '#D0D6EE' }}>
+      <div
+        className="flex items-center gap-2 px-4 py-2"
+        style={{
+          borderBottom: isParticipantVisual ? '1px solid #BBF7D0' : '1px solid #E4E8F5',
+          backgroundColor: isParticipantVisual ? '#DCFCE7' : '#D0D6EE',
+        }}
+      >
 
         {/* 状态：仅非持有中时显示（圆点 + 文字） */}
         {order.status !== 'active' && (
@@ -933,7 +951,9 @@ export function FunderOrderCard({
               return m ? (m.username || m.nickname) : null;
             })();
             if (!label) return null;
-            const isParticipantOrder = (order as any).order_perspective === 'other';
+            // 只有真实参与者才展示“参与者 | 订单拥有者”的双姓名；
+            // 他人归属订单仍只显示订单所属人，避免出现 YJH | YJH。
+            const isParticipantOrder = isParticipantVisual;
             // 参与者视角：订单拥有者名字（优先用 order_owner_name，备用 username）
             const orderOwnerLabel = isParticipantOrder ? (
               (order as any).order_owner_name ||
@@ -992,7 +1012,7 @@ export function FunderOrderCard({
             {(order as any).order_fill_status === 'pending' && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#F97316' }}>挂单中</span>
             )}
-            {(order as any).order_perspective === 'other' && (
+            {isParticipantVisual && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#16A34A', backgroundColor: '#fff', border: '1px solid #16A34A' }}>参与</span>
             )}
             {order.asset_type === 'crypto' && show('showTradeDirection') && (order as any).trade_direction === 'long' && (
@@ -2035,7 +2055,7 @@ export function FunderOrderCard({
             className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
             style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}
           >
-            参与者{order.participantCount > 0 ? ` ${order.participantCount}` : ''}
+            参与者{participantCount > 0 ? ` ${participantCount}` : ''}
           </button>
           <button
             onClick={() => {
@@ -2359,7 +2379,10 @@ export function FunderOrderCard({
       )}
 
       {/* 结息面板 + 备注区 */}
-      <div className="px-4 pt-3 pb-3 border-t border-blue-100" style={{ backgroundColor: '#D0D6EE' }}>
+      <div
+        className={`px-4 pt-3 pb-3 border-t ${isParticipantVisual ? 'border-green-200' : 'border-blue-100'}`}
+        style={{ backgroundColor: isParticipantVisual ? '#DCFCE7' : '#D0D6EE' }}
+      >
 
         {$showPaymentPanel === order.id && (
           <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">

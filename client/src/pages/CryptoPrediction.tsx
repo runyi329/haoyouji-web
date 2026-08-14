@@ -3367,28 +3367,15 @@ export default function CryptoPrediction() {
               </div>
             ) : (() => {
               const activeOrders = financeOrders.filter((o: any) => o.status === 'active');
-              // 「自己」= 订单归属用户是当前用户（viewAs 视角下是被观察用户）
-              // 「共享」= 订单归属用户不是当前用户，但当前用户是参与方
-              // 用 user_id 判断归属，避免「自己创建的订单同时也是参与方」导致重复计算
-              const effectiveUserId = viewAsUserId ?? currentUserId;
-              const mineOrders = activeOrders.filter((o: any) => {
-                // order_perspective === 'other' 的订单强制归到「他人」 Tab
-                if (o.order_perspective === 'other') return false;
-                if (effectiveUserId) return Number(o.user_id) === Number(effectiveUserId);
-                // 无法确定当前用户 ID 时，退回原逻辑
-                return !(o._isParticipant || o._fromFunder);
-              });
-              const sharedOrders = activeOrders.filter((o: any) => {
-                // order_perspective === 'other' 的订单强制归到「他人」 Tab
-                if (o.order_perspective === 'other') return true;
-                if (effectiveUserId) return Number(o.user_id) !== Number(effectiveUserId) && !!(o._isParticipant || o._fromFunder || o.participantInfo);
-                return !!(o._isParticipant || o._fromFunder);
-              });
+              // 「本人 / 他人」只读取订单创建时设置的 order_perspective，决定订单所在的 Tab；
+              // 「参与」是独立身份，只由卡片绿色主题与参与标签表达。
+              const mineOrders = activeOrders.filter((o: any) => (o.order_perspective || 'self') !== 'other');
+              const sharedOrders = activeOrders.filter((o: any) => (o.order_perspective || 'self') === 'other');
 
-              // 第2层：自己/共享 → 决定订单池
+              // 第2层：本人 / 他人 → 仅决定订单位置
               const l2Pool = financeL2Tab === 'shared' ? sharedOrders : mineOrders;
 
-                            // 第3层：全部/股/币（他人视角才显示，自己视角直接显示全部）
+                            // 第3层：全部/股/币（他人视角才显示，本人视角直接显示全部）
               const showL3 = financeL2Tab === 'shared';
               // 共享担保：担保物选择为「共享担保」的订单（collateral_share_mode === 'self'）
               const hasCollateral = (o: any) => o.collateral_share_mode === 'self';
@@ -3439,11 +3426,11 @@ export default function CryptoPrediction() {
 
               return (
                 <>
-                  {/* 第2层：自己 / 他人 / 已结清 */}
+                  {/* 第2层：本人 / 他人；参与身份由卡片绿色主题表达 */}
                   <div className="flex rounded p-1 gap-1 mb-3" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
                     {([
                       ['mine',   '本人', cntMine],
-                      ['shared', '参与', cntShared],
+                      ['shared', '他人', cntShared],
                     ] as const).map(([key, label, cnt]) => (
                       <button key={key} onClick={() => { setFinanceL2Tab(key as any); setFinanceL3Tab('all'); }}
                         style={tabBtnStyle(financeL2Tab === key)}>
