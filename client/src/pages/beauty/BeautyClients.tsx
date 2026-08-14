@@ -233,7 +233,11 @@ export default function BeautyClients() {
   const clients = clientsQuery.data ?? [];
   const filteredClients = searchTerm
     ? clients.filter((c) =>
-        (c.name || c.username || "").toLowerCase().includes(searchTerm.toLowerCase())
+        [c.nickname, c.name, c.username]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(searchTerm.trim().toLowerCase())
       )
     : clients;
 

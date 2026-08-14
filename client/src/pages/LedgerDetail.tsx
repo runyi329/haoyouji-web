@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, useMem
 
 import { FunderOrderCard, FunderNoteRow, formatCoinQtyFunder, useAccruedInterestFunder, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType } from "@/components/FunderOrderCard";
 import { FunderOrderCardV2, FunderOrderCardV2Light, FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
+import { matchesUserSearch } from "@/lib/userIdentity";
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
 
@@ -7452,8 +7453,7 @@ export default function LedgerDetail() {
                   if (viewAsRoleFilter === 'member' && m.role !== 'member') return false;
                   if (viewAsRoleFilter === 'funder' && m.role !== 'funder') return false;
                   if (!viewAsSearch) return true;
-                  const keyword = viewAsSearch.toLowerCase();
-                  return (m.nickname || '').toLowerCase().includes(keyword) || (m.username || '').toLowerCase().includes(keyword);
+                  return matchesUserSearch(m, viewAsSearch);
                 }).sort((a: any, b: any) => {
                   // 当前查看中的用户排最前
                   if (a.userId === viewAsUserId) return -1;

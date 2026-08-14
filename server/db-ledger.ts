@@ -765,6 +765,7 @@ export async function getLedgerById(ledgerId: number, userId: number) {
         userId: ledgerMembers.userId,
         role: ledgerMembers.role,
         nickname: ledgerMembers.nickname,
+        name: users.name,
         username: users.username,
         avatar: users.avatar,
       })

@@ -1765,7 +1765,7 @@ function StatsTab() {
               <div className="px-3 pt-2 pb-1">
                 <input
                   type="text"
-                  placeholder="搜索用户名…"
+                  placeholder="搜索用户名、昵称或 ID…"
                   value={userSearch}
                   onChange={e => setUserSearch(e.target.value)}
                   className="w-full text-sm border border-gray-200 rounded-sm px-2 py-1.5 outline-none"
@@ -1774,7 +1774,14 @@ function StatsTab() {
               </div>
               <div className="max-h-52 overflow-y-auto py-1">
                 {allStats
-                  .filter(u => !userSearch || (u.nickname || u.wecom_user_id).toLowerCase().includes(userSearch.toLowerCase()))
+                  .filter(u => {
+                    const query = userSearch.trim().toLowerCase();
+                    const searchText = [u.nickname, (u as any).username, u.wecom_user_id]
+                      .filter(Boolean)
+                      .join(' ')
+                      .toLowerCase();
+                    return !query || searchText.includes(query);
+                  })
                   .slice(0, userSearch ? 50 : 10)
                   .map(u => (
                     <label key={u.wecom_user_id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer">
@@ -6860,7 +6867,14 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
                         {/* 用户列表 */}
                         <div className="max-h-52 overflow-y-auto py-1">
                           {wecomUsers2
-                            .filter(u => !userSearch || (u.nickname || u.wecom_user_id).toLowerCase().includes(userSearch.toLowerCase()))
+                            .filter(u => {
+                              const query = userSearch.trim().toLowerCase();
+                              const searchText = [u.nickname, (u as any).username, u.wecom_user_id]
+                                .filter(Boolean)
+                                .join(' ')
+                                .toLowerCase();
+                              return !query || searchText.includes(query);
+                            })
                             .map(u => (
                               <label
                                 key={u.wecom_user_id}
@@ -6882,7 +6896,14 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
                                 <span className="text-sm text-gray-700 truncate">{u.nickname || u.wecom_user_id}</span>
                               </label>
                             ))}
-                          {wecomUsers2.filter(u => !userSearch || (u.nickname || u.wecom_user_id).toLowerCase().includes(userSearch.toLowerCase())).length === 0 && (
+                          {wecomUsers2.filter(u => {
+                            const query = userSearch.trim().toLowerCase();
+                            const searchText = [u.nickname, (u as any).username, u.wecom_user_id]
+                              .filter(Boolean)
+                              .join(' ')
+                              .toLowerCase();
+                            return !query || searchText.includes(query);
+                          }).length === 0 && (
                             <div className="text-xs text-gray-400 text-center py-4">暂无匹配用户</div>
                           )}
                         </div>

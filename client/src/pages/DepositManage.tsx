@@ -412,7 +412,11 @@ export default function DepositManage() {
     let list = members;
     if (searchText.trim()) {
       const kw = searchText.trim().toLowerCase();
-      list = list.filter((m: any) => (m.nickname || m.username || "").toLowerCase().includes(kw));
+      list = list.filter((m: any) => [m.nickname, m.name, m.username]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(kw));
     }
     if (filterHasDeposit) {
       list = list.filter((m: any) => {

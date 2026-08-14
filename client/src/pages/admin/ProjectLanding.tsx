@@ -1831,10 +1831,17 @@ function RulesTab() {
                     {userDropdownOpen && (
                       <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-2xl shadow-lg" style={{ borderColor: C.line }}>
                         <div className="px-3 pt-2.5 pb-1.5">
-                          <input type="text" placeholder="搜索用户名..." value={userSearch} onChange={e => setUserSearch(e.target.value)} className="w-full text-sm border rounded-xl px-2.5 py-1.5 outline-none" style={{ borderColor: C.line }} />
+                          <input type="text" placeholder="搜索用户名、昵称或用户标识..." value={userSearch} onChange={e => setUserSearch(e.target.value)} className="w-full text-sm border rounded-xl px-2.5 py-1.5 outline-none" style={{ borderColor: C.line }} />
                         </div>
                         <div className="max-h-52 overflow-y-auto py-1">
-                          {users.filter(u => !userSearch || (u.nickname || u.wecom_user_id).toLowerCase().includes(userSearch.toLowerCase())).map(u => (
+                          {users.filter(u => {
+                            const query = userSearch.trim().toLowerCase();
+                            const searchText = [u.nickname, (u as any).username, u.wecom_user_id]
+                              .filter(Boolean)
+                              .join(' ')
+                              .toLowerCase();
+                            return !query || searchText.includes(query);
+                          }).map(u => (
                             <label key={u.wecom_user_id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer">
                               <input type="checkbox" checked={form.selected_user_ids.includes(u.wecom_user_id)} onChange={() => setForm(p => ({ ...p, selected_user_ids: p.selected_user_ids.includes(u.wecom_user_id) ? p.selected_user_ids.filter(id => id !== u.wecom_user_id) : [...p.selected_user_ids, u.wecom_user_id] }))} className="w-4 h-4 flex-shrink-0" style={{ accentColor: C.brand }} />
                               {u.avatar_url ? <img src={u.avatar_url} className="w-6 h-6 rounded-full flex-shrink-0" alt="" /> : <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0"><User className="w-3.5 h-3.5 text-gray-400" /></div>}
@@ -4627,9 +4634,14 @@ function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_T
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const timeLabels: Record<CdTimeRange, string> = { all: '全部时间', today: '今天', week: '本周', month: '本月' };
 
-  const filteredUsers = allUsers.filter(u =>
-    !userSearch || (u.nickname || u.wecom_user_id).toLowerCase().includes(userSearch.toLowerCase())
-  ).slice(0, 20);
+  const filteredUsers = allUsers.filter(u => {
+    const query = userSearch.trim().toLowerCase();
+    const searchText = [u.nickname, (u as any).username, u.wecom_user_id]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return !query || searchText.includes(query);
+  }).slice(0, 20);
 
   const modelOptions = summary?.models || [];
 

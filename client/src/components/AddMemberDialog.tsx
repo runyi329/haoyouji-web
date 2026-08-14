@@ -100,7 +100,7 @@ export default function AddMemberDialog({ isOpen, onClose, onSuccess, partnershi
                 type="text"
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
-                placeholder="搜索用户名"
+                placeholder="搜索用户名或昵称"
                 className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#D32F2F]"
               />
             </div>
@@ -123,12 +123,12 @@ export default function AddMemberDialog({ isOpen, onClose, onSuccess, partnershi
                       }`}
                     >
                       <div className="w-10 h-10 rounded-full bg-[#D32F2F] flex items-center justify-center text-white font-bold">
-                        {(user.username || user.name || '?').charAt(0).toUpperCase()}
+                        {(user.name || user.username || '?').charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1">
-                        <div className="font-semibold text-[#222222]">{user.username}</div>
-                        {user.name && (
-                          <div className="text-xs text-[#757575]">{user.name}</div>
+                        <div className="font-semibold text-[#222222]">{user.name || user.username}</div>
+                        {user.name && user.username && user.name !== user.username && (
+                          <div className="text-xs text-[#757575]">{user.username}</div>
                         )}
                       </div>
                       {selectedUserId === user.id && (

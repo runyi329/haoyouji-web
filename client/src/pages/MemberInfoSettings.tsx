@@ -50,8 +50,13 @@ export default function MemberInfoSettings() {
   const filteredMembers = useMemo(() => {
     const nonOwnerMembers = members?.filter((m: any) => m.role !== 'owner' && m.memberType !== 'ai') || [];
     if (!searchQuery.trim()) return nonOwnerMembers;
+    const query = searchQuery.trim().toLowerCase();
     return nonOwnerMembers.filter((m: any) =>
-      (m.nickname || m.username || "").toLowerCase().includes(searchQuery.toLowerCase())
+      [m.nickname, m.name, m.username]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(query)
     );
   }, [members, searchQuery]);
 

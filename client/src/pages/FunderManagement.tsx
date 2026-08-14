@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { getUserDisplayName, getUserSearchLabel, matchesUserSearch } from "@/lib/userIdentity";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER } from "@/components/FunderOrderCard";
@@ -1149,7 +1150,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 {selectedUserId === null
                   ? '全部成员'
                   : (funderUsers as any[])?.find((u: any) => u.userId === selectedUserId)
-                    ? (() => { const _u = (funderUsers as any[]).find((u: any) => u.userId === selectedUserId); return _u?.username || _u?.name || '成员'; })()
+                    ? (() => { const _u = (funderUsers as any[]).find((u: any) => u.userId === selectedUserId); return getUserDisplayName(_u, '成员'); })()
                     : '选择成员'}
               </span>
               <ChevronDown className="w-4 h-4 text-gray-400 ml-1 shrink-0" />
@@ -1175,8 +1176,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     style={{ color: selectedUserId === null ? '#1A56DB' : '#374151', fontWeight: selectedUserId === null ? 600 : 400 }}
                   >全部成员</button>
                   {(funderUsers as any[])?.filter((u: any) => {
-                    const name = u.username || u.nickname || u.name || '';
-                    if (userSearchText && !name.includes(userSearchText)) return false;
+                    if (!matchesUserSearch(u, userSearchText)) return false;
                     // 过滤掉没有订单的用户
                     const hasOrders = allOrders.some((o: any) => o.userId === u.userId || o.user_id === u.userId || (o._participantUserIds && o._participantUserIds.includes(u.userId)));
                     return hasOrders;
@@ -1191,7 +1191,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
                       style={{ color: selectedUserId === u.userId ? '#1A56DB' : '#374151', fontWeight: selectedUserId === u.userId ? 600 : 400 }}
                     >
-                      <span className="whitespace-nowrap">{u.username}{u.name && u.name !== u.username ? ` (${u.name})` : ''}</span>
+                      <span className="whitespace-nowrap">{getUserSearchLabel(u)}</span>
                       <span className="text-xs ml-2 shrink-0" style={{ color: '#9CA3AF', fontWeight: 400 }}>
                         {activeCount > 0 && <span style={{ color: '#22C55E' }}>进行中 {activeCount}</span>}
                         {activeCount > 0 && settledCount > 0 && <span style={{ color: '#D1D5DB' }}> / </span>}
@@ -1538,14 +1538,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           {(() => {
                             const allMembers = ((ledgerData as any)?.members || []) as any[];
                             const m = allMembers.find((m: any) => m.userId === formData.userId);
-                            return (m?.username || m?.nickname || m?.name || '?')[0].toUpperCase();
+                            return getUserDisplayName(m, '?')[0].toUpperCase();
                           })()}
                         </div>
                         <span className="text-sm font-medium flex-1" style={{ color: '#1A2340' }}>
                           {(() => {
                             const allMembers = ((ledgerData as any)?.members || []) as any[];
                             const m = allMembers.find((m: any) => m.userId === formData.userId);
-                            return m?.username || m?.nickname || m?.name || `用户${formData.userId}`;
+                            return getUserDisplayName(m, `用户${formData.userId}`);
                           })()}
                         </span>
                         <button
@@ -1580,8 +1580,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             const allMembers = ((ledgerData as any)?.members || []) as any[];
                             const filtered = allMembers.filter((m: any) => {
                               if (!formUserSearch) return true;
-                              const name = (m.username || m.nickname || m.name || '').toLowerCase();
-                              return name.includes(formUserSearch.toLowerCase());
+                              return matchesUserSearch(m, formUserSearch);
                             });
                             if (filtered.length === 0) {
                               return <div className="px-4 py-3 text-sm text-gray-400 text-center">无匹配用户</div>;
@@ -1589,18 +1588,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             return filtered.map((m: any) => (
                               <button
                                 key={m.userId}
-                                onClick={() => { setFormData(d => ({ ...d, userId: m.userId })); setFormUserSearch(m.username || m.nickname || m.name || ''); setFormUserDropdown(false); }}
+                                onClick={() => { setFormData(d => ({ ...d, userId: m.userId })); setFormUserSearch(getUserDisplayName(m)); setFormUserDropdown(false); }}
                                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 text-left"
                               >
                                 <div
                                   className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
                                   style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
                                 >
-                                  {(m.username || m.nickname || m.name || '?')[0].toUpperCase()}
+                                  {getUserDisplayName(m, '?')[0].toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm font-medium truncate" style={{ color: '#1A2340' }}>
-                                    {m.username || m.nickname || m.name}
+                                    {getUserSearchLabel(m)}
                                   </div>
                                   <div className="text-xs text-gray-400">{m.role}</div>
                                 </div>
@@ -3093,9 +3092,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   {participantUserSearch.trim() && (
                     <div className="space-y-1 max-h-40 overflow-y-auto">
                       {((ledgerData as any)?.members || funderUsers || []).filter((m: any) => {
-                        const q = participantUserSearch.toLowerCase();
-                        const name = (m.nickname || m.username || m.userName || '').toLowerCase();
-                        return name.includes(q) && !participants.some(pp => pp.userId === (m.userId || m.id));
+                        return matchesUserSearch(m, participantUserSearch) && !participantsList.some(p => p.userId === (m.userId || m.id));
                       }).map((m: any) => (
                         <button
                           key={m.userId || m.id}
@@ -3103,7 +3100,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           onClick={() => {
                             const newP: ParticipantForm = {
                               userId: m.userId || m.id,
-                              userName: m.nickname || m.username || m.userName || String(m.userId || m.id),
+                              userName: getUserDisplayName(m, String(m.userId || m.id)),
                               avatar: m.avatar,
                               coin: formData.coin,
                               amount: formData.assetType === 'stock' ? amountInputValue : (computedAmount || ''),
@@ -3123,8 +3120,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           }}
                           className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-gray-100 hover:bg-indigo-50 text-left"
                         >
-                          {m.avatar ? <img src={m.avatar} className="w-6 h-6 rounded-full object-cover shrink-0" /> : <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500 shrink-0">{(m.nickname || m.username || '?').slice(0,1).toUpperCase()}</div>}
-                          <span className="text-sm text-gray-700">{m.nickname || m.username || m.userName}</span>
+                          {m.avatar ? <img src={m.avatar} className="w-6 h-6 rounded-full object-cover shrink-0" /> : <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500 shrink-0">{getUserDisplayName(m, '?').slice(0,1).toUpperCase()}</div>}
+                          <span className="text-sm text-gray-700">{getUserSearchLabel(m)}</span>
                         </button>
                       ))}
                     </div>

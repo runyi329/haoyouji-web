@@ -335,7 +335,7 @@ export async function getAllUsersWithPoints(page: number = 1, pageSize: number =
 }
 
 /**
- * 搜索用户（按用户名）
+ * 搜索用户（用户名或账户昵称的任意连续片段）
  */
 export async function searchUsersByUsername(keyword: string) {
   const db = await getDb();
@@ -345,7 +345,7 @@ export async function searchUsersByUsername(keyword: string) {
     const result: any = await db.execute(sql`
       SELECT id, username, name, points, role 
       FROM users 
-      WHERE username LIKE ${`%${keyword}%`} 
+      WHERE username LIKE ${`%${keyword}%`} OR name LIKE ${`%${keyword}%`}
       ORDER BY points DESC 
       LIMIT 20
     `);
