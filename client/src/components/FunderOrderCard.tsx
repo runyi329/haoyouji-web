@@ -536,10 +536,10 @@ export function FunderOrderCard({
     _intSetParticipantsLoading(true);
     try {
       const result = await trpcUtils.ledger.funderGetOrderParticipants.fetch({ orderId, ledgerId });
-      const mapped = (result.participants || []).map((p: any) => ({ userId: p.user_id, displayName: p.username || p.nickname || p.userName || `用户${p.user_id}`, role: p.role, sortOrder: p.sort_order || 0, rate: (p.commission_rate != null && p.commission_rate !== '') ? String(p.commission_rate) : (p.rate != null ? String(p.rate) : '') }));
+      const mapped = (result.participants || []).map((p: any) => ({ userId: p.user_id, displayName: p.nickname || p.user_nickname || p.username || p.userName || `用户${p.user_id}`, role: p.role, sortOrder: p.sort_order || 0, rate: (p.commission_rate != null && p.commission_rate !== '') ? String(p.commission_rate) : (p.rate != null ? String(p.rate) : '') }));
       _intSetParticipantsList(mapped);
       _intSetParticipantsEditMode(mapped.length === 0);
-      const mappedMembers = (result.members || []).map((m: any) => ({ userId: m.userId, displayName: m.username || m.nickname || m.userName || `用户${m.userId}`, memberRole: m.memberRole }));
+      const mappedMembers = (result.members || []).map((m: any) => ({ userId: m.userId, displayName: m.nickname || m.user_nickname || m.username || m.userName || `用户${m.userId}`, memberRole: m.memberRole }));
       _intSetLedgerMembers(mappedMembers);
     } catch { toast.error('加载参与方失败'); _intSetParticipantsList([]); _intSetParticipantsEditMode(true); }
     finally { _intSetParticipantsLoading(false); }
@@ -946,10 +946,9 @@ export function FunderOrderCard({
         <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
           {/* 所有者：第一位 */}
           {show('showOwnerName') && (() => {
-            const label = (order as any).owner_label || (() => {
-              const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
-              return m ? (m.username || m.nickname) : null;
-            })();
+            const member = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
+            // 名称展示统一：账本昵称优先，用户名兜底；历史 owner_label 仅作最后兜底。
+            const label = member?.nickname || (order as any).nickname || member?.username || (order as any).owner_label || null;
             if (!label) return null;
             // 只有真实参与者才展示“参与者 | 订单拥有者”的双姓名；
             // 他人归属订单仍只显示订单所属人，避免出现 YJH | YJH。
@@ -957,6 +956,7 @@ export function FunderOrderCard({
             // 参与者视角：订单拥有者名字（优先用 order_owner_name，备用 username）
             const orderOwnerLabel = isParticipantOrder ? (
               (order as any).order_owner_name ||
+              (order as any).nickname ||
               (order as any).username ||
               null
             ) : null;

@@ -17127,7 +17127,7 @@ ${klinesSummary}
         let orders: any[] = [];
         if (targetIsManager) {
           const rows = await db.execute(
-            sql`SELECT fo.*, u.username, u.username as userName, u.avatar as userAvatar,
+            sql`SELECT fo.*, u.username, u.name as nickname, u.username as userName, u.avatar as userAvatar,
                 COALESCE(pc.cnt, 0) as _participantCount
                 FROM ledger_orders fo
                 LEFT JOIN users u ON u.id = fo.user_id
@@ -17189,7 +17189,7 @@ ${klinesSummary}
         } else {
           // 先查自己的订单
           const myRows = await db.execute(
-            sql`SELECT fo.*, u.username, u.username as userName, u.avatar as userAvatar
+            sql`SELECT fo.*, u.username, u.name as nickname, u.username as userName, u.avatar as userAvatar
                 FROM ledger_orders fo
                 LEFT JOIN users u ON u.id = fo.user_id
                 WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'finance' AND fo.deleted_at IS NULL AND fo.user_id = ${targetUserId}
@@ -17199,7 +17199,7 @@ ${klinesSummary}
           // 再查参与方订单（排除自己的订单，不限 order_role，资方订单也能看到）
           try {
             const participantOrderRows = await db.execute(
-              sql`SELECT fo.*, u.username, u.username as userName, u.avatar as userAvatar
+              sql`SELECT fo.*, u.username, u.name as nickname, u.username as userName, u.avatar as userAvatar
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                INNER JOIN ledger_order_participants p ON p.order_id = fo.id
@@ -17297,8 +17297,8 @@ ${klinesSummary}
                 };
                 // 参与者视角：用参与者自己的字段覆盖主订单字段
                 if ((o as any)._isParticipant) {
-                  // 订单拥有者名字（原 owner_label 或 username）
-                  (o as any).order_owner_name = o.owner_label || (o as any).username || null;
+                  // 名称展示统一：昵称优先，用户名兜底。
+                  (o as any).order_owner_name = (o as any).nickname || o.owner_label || (o as any).username || null;
                   // 参与者自己的名字作为显示名
                   if (participantUserName) (o as any).owner_label = participantUserName;
                   // 用参与者的利率、计息基数、展示配置覆盖主订单
@@ -18019,7 +18019,7 @@ ${klinesSummary}
         if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看参与方配置' });
         // 已配置的参与方
         const rows = await db.execute(
-          sql`SELECT p.*, u.username, u.username as userName, u.avatar, lm.nickname
+          sql`SELECT p.*, u.username, u.name as user_nickname, u.username as userName, u.avatar, lm.nickname
               FROM ledger_order_participants p
               LEFT JOIN users u ON u.id = p.user_id
               LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
@@ -18028,7 +18028,7 @@ ${klinesSummary}
         ) as any;
         // 账本所有成员（供前端下拉选择）
         const memberRows = await db.execute(
-          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.username as userName, u.avatar
+          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.name as user_nickname, u.username as userName, u.avatar
               FROM ledger_members lm
               LEFT JOIN users u ON u.id = lm.userId
               WHERE lm.ledgerId = ${input.ledgerId}
@@ -18275,7 +18275,7 @@ ${klinesSummary}
         const isManager = role === 'owner' || role === 'admin';
         if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看参与方配置' });
         const rows = await db.execute(
-          sql`SELECT p.*, u.username, u.username as userName, u.avatar, lm.nickname
+          sql`SELECT p.*, u.username, u.name as user_nickname, u.username as userName, u.avatar, lm.nickname
               FROM ledger_order_participants p
               LEFT JOIN users u ON u.id = p.user_id
               LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
@@ -18283,7 +18283,7 @@ ${klinesSummary}
               ORDER BY p.sort_order ASC, p.id ASC`
         ) as any;
         const memberRows = await db.execute(
-          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.username as userName, u.avatar
+          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.name as user_nickname, u.username as userName, u.avatar
               FROM ledger_members lm
               LEFT JOIN users u ON u.id = lm.userId
               WHERE lm.ledgerId = ${input.ledgerId}
