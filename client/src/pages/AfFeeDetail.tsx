@@ -214,6 +214,23 @@ export default function AfFeeDetail() {
       }
       return o;
     });
+  // 人员范围必须独立：谷底增筹为 YJH 推荐体系中属于 52 号账本的成员；融资付息为 52 号账本全体真实成员。
+  const { data: ledgerMembersData } = trpc.ledger.getMembers.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId }
+  );
+  const ledgerMembers: any[] = Array.isArray(ledgerMembersData)
+    ? (ledgerMembersData as any[]).filter((member: any) => Number(member.userId) > 0)
+    : [];
+  const financeLedgerMembers = ledgerMembers;
+  const { data: yjhInviteTreeData } = trpc.ledger.afGetInviteTree.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId && mainTab === 'gujian' }
+  );
+  const ledgerMemberIdSet = new Set(ledgerMembers.map((member: any) => Number(member.userId)));
+  const gujianEligibleMembers: any[] = Array.isArray((yjhInviteTreeData as any)?.users)
+    ? ((yjhInviteTreeData as any).users as any[]).filter((member: any) => ledgerMemberIdSet.has(Number(member.id)))
+    : [];
   // 实时 CNY/USDT 汇率 — 走服务器tRPC，3秒刷新（与订单卡片、FinanceManagement 保持一致）
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: 'USD', tocoin: 'CNY', money: 1 }, { refetchInterval: 3000, staleTime: 1000 });
   const cnyRate = parseFloat((cnyRateData as any)?.money ?? '6.8') || 6.8;
@@ -276,16 +293,15 @@ export default function AfFeeDetail() {
     }),
   })).filter(g => g.orders.length > 0);
 
-  // 批量查询各成员的【全局】钱包余额（口径与钱包页一致）
-  // 同时包含谷底增筹用户和融资付息用户
-  const financeUserIds = financeOrders
-    .map((o: any) => parseInt(o.user_id || o.userId || '0'))
-    .filter(n => Number.isFinite(n) && n > 0);
+  // 批量查询当前模块统计范围内成员的【全局】钱包余额（口径与钱包页一致）。
+  // 谷底增筹：YJH 推荐体系与 52 号账本成员的交集；融资付息：52 号账本全体真实成员。
   const memberUserIds = Array.from(
-    new Set([
-      ...userGroups.map(g => parseInt(g.userId)).filter(n => Number.isFinite(n) && n > 0),
-      ...financeUserIds,
-    ])
+    new Set(
+      (mainTab === 'gujian'
+        ? gujianEligibleMembers.map((member: any) => Number(member.id))
+        : financeLedgerMembers.map((member: any) => Number(member.userId)))
+        .filter((id: number) => Number.isFinite(id) && id > 0)
+    )
   );
   const { data: memberBalances } = trpc.recharge.getMembersBalance.useQuery(
     { userIds: memberUserIds },
@@ -378,16 +394,16 @@ export default function AfFeeDetail() {
 
           // 资金概况：与下方「人员」视图严格采用同一成员范围与缺口口径。
           const gjPersonOrders = new Map<string, { userId: number; orders: any[] }>();
+          // 先放入 YJH 推荐体系中属于 52 号账本的全部成员；无订单但有余额的成员同样计入谷底增筹钱包汇总。
+          for (const member of gujianEligibleMembers) {
+            const userId = Number(member.id);
+            if (userId > 0) gjPersonOrders.set(String(userId), { userId, orders: [] });
+          }
           for (const item of feeItems) {
             if (item.feeType === 'settled') continue;
             const userKey = String(item.userId || item.username || 'unknown');
-            const numericUserId = parseInt(userKey);
-            if (!gjPersonOrders.has(userKey)) {
-              gjPersonOrders.set(userKey, {
-                userId: Number.isFinite(numericUserId) ? numericUserId : 0,
-                orders: [],
-              });
-            }
+            // 不属于 YJH 推荐体系的订单，不纳入谷底增筹的人员、余额或缺口统计。
+            if (!gjPersonOrders.has(userKey)) continue;
             gjPersonOrders.get(userKey)!.orders.push(item);
           }
           let gjWalletBalanceTotal = 0;
@@ -504,6 +520,11 @@ export default function AfFeeDetail() {
             return baseInU && annualRate != null ? baseInU * (Math.abs(annualRate) / 100) / 365 : 0;
           };
           const financePersonOrders = new Map<string, { userId: number; orders: any[] }>();
+          // 融资付息固定覆盖 52 号账本全体真实成员；无订单但有余额的成员也参与钱包余额汇总。
+          for (const member of financeLedgerMembers) {
+            const userId = Number(member.userId);
+            if (userId > 0) financePersonOrders.set(String(userId), { userId, orders: [] });
+          }
           for (const order of ongoingOrders) {
             const userKey = String(order.user_id || order.userId || order.username || 'unknown');
             const numericUserId = parseInt(order.user_id || order.userId || '0');
@@ -875,13 +896,17 @@ export default function AfFeeDetail() {
           <div className="text-center py-16 text-gray-400 text-sm">加载中…</div>
         ) : (() => {
           const personMap = new Map<string, { nickname: string; username: string; userId: number; dailyTotal: number; orders: typeof feeItems }>();
+          // 人员视图固定为 YJH 推荐体系中属于 52 号账本的成员，不再只显示有谷底增筹订单的成员。
+          for (const member of gujianEligibleMembers) {
+            const userId = Number(member.id);
+            if (userId <= 0) continue;
+            const nickname = member.name || member.username || `成员${userId}`;
+            personMap.set(String(userId), { nickname, username: member.username || '', userId, dailyTotal: 0, orders: [] });
+          }
           for (const item of feeItems) {
             if (item.feeType === 'settled') continue;
             const uid = String(item.userId || item.username || 'unknown');
-            const nickname = item.nickname || item.username || uid;
-            const numericUserId = parseInt(uid);
-            const username = item.username || '';
-            if (!personMap.has(uid)) personMap.set(uid, { nickname, username, userId: Number.isFinite(numericUserId) ? numericUserId : 0, dailyTotal: 0, orders: [] });
+            if (!personMap.has(uid)) continue;
             const p = personMap.get(uid)!;
             p.dailyTotal += item.dailyFee;
             p.orders.push(item);
@@ -1877,6 +1902,13 @@ export default function AfFeeDetail() {
                   return base2 * (Math.abs(rate) / 100) / 365;
                 };
                 const personMap = new Map<string, { name: string; userId: number; orders: any[]; collectDaily: number; payDaily: number }>();
+                // 融资付息人员视图固定为 52 号账本全体真实成员，不再只显示有订单的成员。
+                for (const member of financeLedgerMembers) {
+                  const userId = Number(member.userId);
+                  if (userId <= 0) continue;
+                  const name = member.nickname || member.username || member.realName || `成员${userId}`;
+                  personMap.set(String(userId), { name, userId, orders: [], collectDaily: 0, payDaily: 0 });
+                }
                 for (const o of finFiltered) {
                   const uid = String(o.user_id || o.userId || o.username || 'unknown');
                   const name = o.username || o.userName || uid;
