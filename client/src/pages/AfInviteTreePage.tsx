@@ -167,7 +167,12 @@ export default function AfInviteTreePage() {
 
   const { data: inviteTreeData, isLoading: inviteTreeLoading, refetch: refetchInviteTree } = trpc.ledger.afGetInviteTree.useQuery(
     { ledgerId, ...(inviteTreeViewAsId ? { viewAsUserId: inviteTreeViewAsId } : {}) },
-    { enabled: ledgerLoaded && !!ledgerId }
+    {
+      enabled: ledgerLoaded && !!ledgerId,
+      // 智能钱包可在其他管理页被手动调账；邀请名单每 15 秒与切回窗口时重新读取当前余额。
+      refetchInterval: 15000,
+      refetchOnWindowFocus: true,
+    }
   );
 
   // 最新动态数据

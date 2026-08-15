@@ -13169,17 +13169,25 @@ ${klinesSummary}
             try {
               const userIds3 = result.map(u => u.id);
               const placeholders4 = userIds3.map(() => '?').join(',');
-              // 充值订单：用于余额基础 + 累计充值
+              // 智能钱包当前基础余额：手动调整钱包余额会直接更新 users.balance。
+              // 邀请名单必须从这里读取，不能只用历史充值汇总，否则调账后卡片余额不会变化。
+              const [walletBaseRows] = await rawDb.execute(
+                `SELECT id AS user_id, COALESCE(balance, 0) AS wallet_balance FROM users WHERE id IN (${placeholders4})`,
+                userIds3
+              ) as any[];
+              for (const row of (walletBaseRows as any[])) {
+                balanceMap.set(row.user_id, parseFloat(row.wallet_balance?.toString() || '0'));
+              }
+              // 充值订单仅用于“充值”累计统计；充值已经写入 users.balance，不能再次叠加到余额。
               const [rechargeRows] = await rawDb.execute(
                 `SELECT user_id, COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) as recharged FROM recharge_orders WHERE user_id IN (${placeholders4}) AND ledger_id = ? AND status = 'completed' GROUP BY user_id`,
                 [...userIds3, input.ledgerId]
               ) as any[];
               for (const row of (rechargeRows as any[])) {
                 const recharged = parseFloat(row.recharged?.toString() || '0');
-                balanceMap.set(row.user_id, recharged);
                 totalRechargeMap.set(row.user_id, recharged);
               }
-              // 手动调账（全部，含买入负数、撤单退款等）→ 用于计算可用余额
+              // 账本手动调账（全部，含买入负数、撤单退款等）→ 与智能钱包基础余额相加计算可用余额
               const [manualRows] = await rawDb.execute(
                 `SELECT user_id, COALESCE(SUM(amount), 0) as manual FROM af_manual_balances WHERE user_id IN (${placeholders4}) AND ledger_id = ? GROUP BY user_id`,
                 [...userIds3, input.ledgerId]
