@@ -1092,9 +1092,10 @@ export default function CreditCardManagement() {
                       setForm(f => ({ ...f, expiryMonth: e.target.value ? `${mo}/${e.target.value}` : '' }));
                     }}>
                     <option value="">年份</option>
-                    {Array.from({ length: 12 }, (_, i) => {
-                      const yr = String(new Date().getFullYear() + i).slice(-2);
-                      return <option key={yr} value={yr}>{20}{yr} 年</option>;
+                    {Array.from({ length: Math.max(1, 2050 - new Date().getFullYear() + 1) }, (_, i) => {
+                      const fullYear = new Date().getFullYear() + i;
+                      const yr = String(fullYear).slice(-2);
+                      return <option key={yr} value={yr}>{fullYear} 年</option>;
                     })}
                   </select>
                 </div>
