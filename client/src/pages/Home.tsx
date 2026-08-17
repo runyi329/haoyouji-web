@@ -30,6 +30,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useLocation } from "wouter";
 import "@/styles/level-text.css";
 import BottomNav from "@/components/BottomNav";
+import { getSmartAccountingRoute } from "@/lib/smartAccountingNavigation";
 
 // 翻牌卡片单个数字组件
 // 原理：数字元素高度固定为 h，用 overflow:hidden 裁切上半 / 下半
@@ -2570,7 +2571,7 @@ export default function Home() {
                 onClick={() => {
                   if (!user) return; // 未登录无反应
                   if (!isLedger76Member) return; // 非76号账本成员无反应
-                  navigate('/ledger/76/add?from=home');
+                  navigate(getSmartAccountingRoute((user as any)?.id));
                 }}
                 style={{
                   background: 'linear-gradient(135deg, #111111 0%, #2a2a2a 45%, #1a1a1a 100%)',

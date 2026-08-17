@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { setSmartAccountingLastPage } from "@/lib/smartAccountingNavigation";
 import { toast } from "sonner";
 import PolicyLoanManagement from "./PolicyLoanManagement";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -744,7 +745,13 @@ export default function CreditCardManagement() {
     <div className="flex flex-col h-screen bg-[#1A2B4A] max-w-[480px] mx-auto">
       {/* 顶部导航 */}
       <div className="bg-[#1A2B4A] text-white p-3 flex items-center justify-between flex-shrink-0">
-        <button onClick={() => setLocation("/ledger/76/add?from=home")} aria-label="返回">
+        <button
+          onClick={() => {
+            setSmartAccountingLastPage((user as any)?.id, 'loans');
+            setLocation('/');
+          }}
+          aria-label="返回首页"
+        >
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="relative mx-2 flex min-w-0 flex-1 items-center gap-2">
@@ -767,7 +774,16 @@ export default function CreditCardManagement() {
           {showLoanHeaderMenu && (
             <div className="absolute top-full right-0 z-50 mt-2 w-36 overflow-hidden rounded-xl bg-white text-gray-700 shadow-xl">
               <button onClick={() => setShowLoanHeaderMenu(false)} className="w-full bg-blue-50 px-4 py-3 text-left text-sm font-semibold text-[#1A2B4A]">贷款管理</button>
-              <button onClick={() => { setShowLoanHeaderMenu(false); setLocation('/ledger/76/add?from=home'); }} className="w-full border-t border-gray-100 px-4 py-3 text-left text-sm">报销申请单</button>
+              <button
+                onClick={() => {
+                  setSmartAccountingLastPage((user as any)?.id, 'reimbursement');
+                  setShowLoanHeaderMenu(false);
+                  setLocation('/ledger/76/add?from=home');
+                }}
+                className="w-full border-t border-gray-100 px-4 py-3 text-left text-sm"
+              >
+                报销申请单
+              </button>
             </div>
           )}
         </div>

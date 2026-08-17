@@ -39,6 +39,7 @@ import { trpc } from "@/lib/trpc";
 import { EXPENSE_CATEGORIES, getDefaultExpenseConfig } from "@/pages/AJCompanyManager";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { autoCompressImage } from "@/utils/imageUtils";
+import { setSmartAccountingLastPage } from "@/lib/smartAccountingNavigation";
 
 type TransactionType = "expense" | "income" | "transfer";
 
@@ -816,7 +817,8 @@ const AddTransaction = () => {
       // 使缓存失效，强制重新获取数据
       utils.ledger.getTransactions.invalidate({ ledgerId });
       if (fromPage === 'home') {
-        // 从首页智能会计进入：提交后留在004页，重载页面以重置表单
+        // 从首页智能会计进入：提交后继续留在报销申请单，并记住该功能页。
+        setSmartAccountingLastPage((currentUser as any)?.id, 'reimbursement');
         setLocation(`/ledger/${id}/add?from=home`);
       } else {
         setLocation(`/ledger/${id}`);
@@ -925,7 +927,14 @@ const AddTransaction = () => {
     <div className={`h-screen flex flex-col overflow-x-hidden ${isCustomAJ ? 'bg-[#F4F6F9]' : 'bg-[#FAF3ED]'}`}>
       {/* 顶部导航 */}
       <div className={`${isCustomAJ ? 'bg-[#1A2B4A]' : 'bg-[#D32F2F]'} text-white p-3 flex items-center justify-between flex-shrink-0`}>
-        <button onClick={() => setLocation(fromPage === 'home' ? '/' : `/ledger/${id}`)}>
+        <button
+          onClick={() => {
+            if (fromPage === 'home' && isCustomAJ) {
+              setSmartAccountingLastPage((currentUser as any)?.id, 'reimbursement');
+            }
+            setLocation(fromPage === 'home' ? '/' : `/ledger/${id}`);
+          }}
+        >
           <ChevronLeft className="w-5 h-5" />
         </button>
         {isCustomAJ && !isEditMode ? (
@@ -946,7 +955,11 @@ const AddTransaction = () => {
                   报销申请单
                 </button>
                 <button
-                  onClick={() => { setShowAJMenu(false); setLocation('/credit-cards'); }}
+                  onClick={() => {
+                    setSmartAccountingLastPage((currentUser as any)?.id, 'loans');
+                    setShowAJMenu(false);
+                    setLocation('/credit-cards?from=home');
+                  }}
                   className="w-full px-4 py-3 text-sm text-left text-gray-700 border-t border-gray-100"
                 >
                   贷款管理
