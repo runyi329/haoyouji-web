@@ -15,6 +15,8 @@ interface PolicyLoanManagementProps {
   sortBy?: LoanSort;
   /** 父组件每次递增该值即可打开新增保单贷款表单 */
   addRequestId?: number;
+  /** 父组件每次递增该值即可强制重新请求当前贷款类型的真实数据 */
+  refreshRequestId?: number;
   /** 管理员的全员视角 */
   adminMode?: boolean;
   targetUser?: { id: number; name: string } | null;
@@ -72,6 +74,7 @@ export default function PolicyLoanManagement({
   embedded = false,
   sortBy = "default",
   addRequestId = 0,
+  refreshRequestId = 0,
   adminMode = false,
   targetUser = null,
   loanType = "policy",
@@ -147,6 +150,13 @@ export default function PolicyLoanManagement({
     // addRequestId 只用于父组件触发新增，避免因对象变动重复打开。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addRequestId]);
+
+  useEffect(() => {
+    if (refreshRequestId <= 0) return;
+    // 由贷款管理页头的刷新按钮触发；仅请求当前视角正在使用的真实接口。
+    void (adminMode ? refetchAll() : refetchMy());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshRequestId]);
 
   const openEdit = (loan: any) => {
     setEditingId(Number(loan.id));

@@ -9,7 +9,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import {
   ChevronLeft, Plus, CreditCard, Pencil, Trash2,
   X, Check, Users, User, Search, ChevronDown, Lightbulb, ToggleLeft, ToggleRight,
-  Eye, EyeOff, ShieldCheck, PhoneCall,
+  Eye, EyeOff, ShieldCheck, PhoneCall, RefreshCw,
 } from "lucide-react";
 import { LoanServiceContactSheet } from "@/components/LoanServiceContactSheet";
 import { getCreditCardServiceContact, type LoanServiceContact } from "@/lib/loanServiceContacts";
@@ -246,6 +246,8 @@ export default function CreditCardManagement() {
   const [loanSort, setLoanSort] = useState<'default' | 'dueDate' | 'rate' | 'amount'>('default');
   const [policyAddRequestId, setPolicyAddRequestId] = useState(0);
   const [huabeiAddRequestId, setHuabeiAddRequestId] = useState(0);
+  const [loanRefreshRequestId, setLoanRefreshRequestId] = useState(0);
+  const [isRefreshingLoans, setIsRefreshingLoans] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<CardForm>(emptyForm);
   const [hasDraft, setHasDraft] = useState(false);
@@ -297,6 +299,22 @@ export default function CreditCardManagement() {
   );
 
   const refetch = () => { refetchMy(); refetchAll(); };
+
+  const handleForceRefresh = async () => {
+    if (isRefreshingLoans) return;
+    setIsRefreshingLoans(true);
+    try {
+      // 当前视图的信用卡立即强制重新请求；两类通用贷款由刷新标记通知子组件重新请求真实接口。
+      if (viewMode === 'admin') await refetchAll();
+      else await refetchMy();
+      setLoanRefreshRequestId((value) => value + 1);
+      toast.success('贷款数据已刷新');
+    } catch (error: any) {
+      toast.error(`刷新失败：${error?.message || '请稍后重试'}`);
+    } finally {
+      setIsRefreshingLoans(false);
+    }
+  };
 
   const createMutation = trpc.creditCard.create.useMutation({
     onSuccess: () => {
@@ -803,15 +821,25 @@ export default function CreditCardManagement() {
             </div>
           )}
         </div>
-        <button
-          onClick={() => setShowAddTypePicker(true)}
-          className="relative w-7 h-7 flex items-center justify-center rounded-full bg-white/20 active:bg-white/30"
-          aria-label="新增贷款工具">
-          <Plus className="w-4 h-4" />
-          {hasDraft && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full" />
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleForceRefresh}
+            disabled={isRefreshingLoans}
+            className="w-7 h-7 flex items-center justify-center rounded-full bg-white/20 active:bg-white/30 disabled:opacity-60"
+            aria-label="强制刷新贷款数据"
+            title="刷新贷款数据">
+            <RefreshCw className={`w-4 h-4 ${isRefreshingLoans ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={() => setShowAddTypePicker(true)}
+            className="relative w-7 h-7 flex items-center justify-center rounded-full bg-white/20 active:bg-white/30"
+            aria-label="新增贷款工具">
+            <Plus className="w-4 h-4" />
+            {hasDraft && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full" />
+            )}
+          </button>
+        </div>
       </div>
 
       {/* 右上角 + ：选择新增的金融工具类型 */}
@@ -951,8 +979,8 @@ export default function CreditCardManagement() {
         {viewMode === 'self' && (
           <>
             {(loanTypeFilter === 'all' || loanTypeFilter === 'creditCard') && sortedMyCards.map((card: any) => <CardItem key={card.id} card={card} />)}
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'policyLoan') && <PolicyLoanManagement embedded sortBy={loanSort} addRequestId={policyAddRequestId} loanType="policy" showEmpty={loanTypeFilter === 'policyLoan'} />}
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'huabei') && <PolicyLoanManagement embedded sortBy={loanSort} addRequestId={huabeiAddRequestId} loanType="huabei" showEmpty={loanTypeFilter === 'huabei'} />}
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'policyLoan') && <PolicyLoanManagement embedded sortBy={loanSort} addRequestId={policyAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="policy" showEmpty={loanTypeFilter === 'policyLoan'} />}
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'huabei') && <PolicyLoanManagement embedded sortBy={loanSort} addRequestId={huabeiAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="huabei" showEmpty={loanTypeFilter === 'huabei'} />}
             {(loanTypeFilter === 'all' || loanTypeFilter === 'creditCard') && sortedMyCards.length === 0 && loanTypeFilter === 'creditCard' && (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400"><CreditCard className="w-12 h-12 mb-3 opacity-30" /><p className="text-sm">暂无信用卡</p><p className="text-xs mt-1">点击右上角 + 添加</p></div>
             )}
@@ -978,8 +1006,8 @@ export default function CreditCardManagement() {
                 </div>
               </div>
             ))}
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'policyLoan') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} addRequestId={policyAddRequestId} loanType="policy" showEmpty={loanTypeFilter === 'policyLoan'} />}
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'huabei') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} addRequestId={huabeiAddRequestId} loanType="huabei" showEmpty={loanTypeFilter === 'huabei'} />}
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'policyLoan') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} addRequestId={policyAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="policy" showEmpty={loanTypeFilter === 'policyLoan'} />}
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'huabei') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} addRequestId={huabeiAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="huabei" showEmpty={loanTypeFilter === 'huabei'} />}
           </>
         )}
       </div>
