@@ -196,7 +196,7 @@ export default function PolicyLoanManagement({
         const annual = balance * Number(loan.annual_rate || 0) / 100;
         return (
           <div key={loan.id} className="rounded-2xl overflow-hidden bg-white shadow-sm border border-slate-100">
-            <div className="p-4 bg-gradient-to-br from-[#17345E] to-[#27507D] text-white relative">
+            <div className="relative bg-gradient-to-br from-[#17345E] to-[#27507D] p-4 pb-10 text-white">
               <div className="flex justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 text-white/65 text-xs mb-1"><span className="rounded border border-white/30 bg-white/10 px-1.5 text-[10px] font-semibold leading-4 text-white/85">{loanLabel}</span><ShieldCheck className="w-3.5 h-3.5" /><span>{loan.insurer}</span></div>
@@ -204,7 +204,6 @@ export default function PolicyLoanManagement({
                   <p className="text-xs text-white/60 mt-1">{adminMode && loan.user_name ? `${loan.user_name} · ` : ""}{loan.policy_holder || `未填写${loanHolderLabel}`}{loan.policy_no ? ` · ${loan.policy_no}` : ""}</p>
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <button onClick={() => setServiceContact(isHuabei ? getHuabeiServiceContact() : getPolicyLoanServiceContact(loan.insurer))} className="h-7 w-7 flex items-center justify-center rounded border border-white/30 text-white/85 active:bg-white/10" aria-label="查看官方客服电话"><PhoneCall className="h-3.5 w-3.5" /></button>
                   {!adminMode && <button onClick={() => openEdit(loan)} className="w-7 h-7 flex items-center justify-center text-white/70 active:text-white" aria-label="编辑"><Pencil className="w-3.5 h-3.5" /></button>}
                   <button onClick={() => { setDeleteId(loan.id); setDeleteStep(1); }} className="w-7 h-7 flex items-center justify-center text-white/70 active:text-white" aria-label="删除"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
@@ -213,6 +212,7 @@ export default function PolicyLoanManagement({
                 <div><p className="text-white/60 text-xs">当前贷款余额</p><p className="text-2xl font-bold mt-0.5">{formatAmount(balance)}</p></div>
                 <div className="text-right"><p className="text-white/60 text-xs">年利率</p><p className="text-lg font-semibold mt-0.5">{loan.annual_rate != null ? `${Number(loan.annual_rate).toFixed(2)}%` : "未设置"}</p></div>
               </div>
+              <button onClick={() => setServiceContact(isHuabei ? getHuabeiServiceContact() : getPolicyLoanServiceContact(loan.insurer))} className="absolute bottom-2.5 right-3 flex h-7 w-7 items-center justify-center text-white/85 active:text-white" aria-label="查看官方客服电话"><PhoneCall className="h-4 w-4" /></button>
             </div>
             <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <div><p className="text-gray-400 text-xs">贷款金额</p><p className="text-gray-800 font-semibold mt-0.5">{loan.loan_amount != null ? formatAmount(loan.loan_amount) : "未设置"}</p></div>
@@ -254,7 +254,7 @@ export default function PolicyLoanManagement({
             <div><label className="text-xs text-gray-500 block mb-1.5">贷款年利率（%） *</label><input type="number" step="0.01" value={form.annualRate} onChange={e => setForm(f => ({ ...f, annualRate: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder="如：4.75" /></div>
             {annualInterest > 0 && <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 text-xs text-amber-700">按当前贷款余额估算，年化利息约 <span className="font-semibold">{formatAmount(annualInterest)}</span>。</div>}
             <div><label className="text-xs text-gray-500 block mb-1.5">还款方式</label><select value={form.repaymentMethod} onChange={e => setForm(f => ({ ...f, repaymentMethod: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white"><option value="">选择还款方式</option>{REPAYMENT_METHODS.map(method => <option key={method} value={method}>{method}</option>)}</select></div>
-            <div className="grid grid-cols-2 gap-3 min-w-0"><div className="min-w-0"><label className="text-xs text-gray-500 block mb-1.5">贷款日期</label><input type="date" value={form.loanDate} onChange={e => setForm(f => ({ ...f, loanDate: e.target.value }))} className="block w-full min-w-0 h-10 border border-gray-200 rounded-lg px-2 text-xs bg-white" /></div><div className="min-w-0"><label className="text-xs text-gray-500 block mb-1.5">到期日</label><input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} className="block w-full min-w-0 h-10 border border-gray-200 rounded-lg px-2 text-xs bg-white" /></div></div>
+            <div className="grid min-w-0 grid-cols-2 gap-2"><div className="min-w-0"><label className="mb-1 block text-xs leading-4 text-gray-500">贷款日期</label><input type="date" value={form.loanDate} onChange={e => setForm(f => ({ ...f, loanDate: e.target.value }))} className="!h-9 !min-h-0 block w-full min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-0 text-[11px] leading-none" /></div><div className="min-w-0"><label className="mb-1 block text-xs leading-4 text-gray-500">到期日</label><input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} className="!h-9 !min-h-0 block w-full min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-0 text-[11px] leading-none" /></div></div>
             <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"><span className="text-xs text-gray-500">计价币种</span><span className="text-xs font-semibold text-[#1A2B4A]">人民币（CNY）</span></div>
             <div><label className="text-xs text-gray-500 block mb-1.5">备注</label><textarea rows={2} value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm resize-none" placeholder="如：利息支付方式、续期约定等" /></div>
             <button disabled={createMutation.isPending || updateMutation.isPending || adminCreateMutation.isPending} onClick={submit} className="w-full py-3 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-[#1A2B4A] to-[#2D5C8F]"><Check className="w-4 h-4" /><span>{editingId ? "保存修改" : `添加${loanLabel}`}</span></button>

@@ -439,7 +439,7 @@ export default function CreditCardManagement() {
     return (
       <div className="rounded-2xl overflow-hidden shadow-md">
         {/* 卡片主体 */}
-        <div className="relative px-3.5 py-3" style={{ background: `linear-gradient(135deg, ${color.bg} 0%, ${color.border} 100%)` }}>
+        <div className="relative px-3.5 pt-3 pb-9" style={{ background: `linear-gradient(135deg, ${color.bg} 0%, ${color.border} 100%)` }}>
 
           <div className="relative z-10">
             <div className="flex items-start justify-between">
@@ -485,8 +485,6 @@ export default function CreditCardManagement() {
                   {card.expiry_month && <span className="shrink-0 text-[11px] text-white/50">{card.expiry_month}</span>}
                 </div>
               </div>
-              <div className="flex items-start gap-1">
-                <button onClick={() => setServiceContact(getCreditCardServiceContact(card.bank_name))} className="mt-0.5 flex h-7 w-7 items-center justify-center rounded border border-white/30 text-white/85 active:bg-white/10" aria-label="查看官方客服电话"><PhoneCall className="h-3.5 w-3.5" /></button>
               {/* ··· 更多菜单 */}
               <div className="relative">
                 <button
@@ -531,7 +529,6 @@ export default function CreditCardManagement() {
                   </>
                 )}
               </div>
-              </div>
             </div>
             {/* 额度行：正常额度 + 临时额度标签 */}
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -570,6 +567,7 @@ export default function CreditCardManagement() {
               )}
             </div>
           </div>
+          <button onClick={() => setServiceContact(getCreditCardServiceContact(card.bank_name))} className="absolute bottom-2.5 right-3 flex h-7 w-7 items-center justify-center text-white/85 active:text-white" aria-label="查看官方客服电话"><PhoneCall className="h-4 w-4" /></button>
         </div>
 
         {/* 可用额度输入弹出 */}
