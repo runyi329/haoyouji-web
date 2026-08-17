@@ -9,8 +9,10 @@ import { UserAvatar } from "@/components/UserAvatar";
 import {
   ChevronLeft, Plus, CreditCard, Pencil, Trash2,
   X, Check, Users, User, Search, ChevronDown, Lightbulb, ToggleLeft, ToggleRight,
-  Eye, EyeOff, ShieldCheck,
+  Eye, EyeOff, ShieldCheck, PhoneCall,
 } from "lucide-react";
+import { LoanServiceContactSheet } from "@/components/LoanServiceContactSheet";
+import { getCreditCardServiceContact, type LoanServiceContact } from "@/lib/loanServiceContacts";
 
 const BANK_COLORS: Record<string, { bg: string; border: string }> = {
   "招商银行": { bg: "#E8001D", border: "#C0001A" },
@@ -240,9 +242,10 @@ export default function CreditCardManagement() {
   const [showForm, setShowForm] = useState(false);
   const [showAddTypePicker, setShowAddTypePicker] = useState(false);
   const [showLoanHeaderMenu, setShowLoanHeaderMenu] = useState(false);
-  const [loanTypeFilter, setLoanTypeFilter] = useState<'all' | 'creditCard' | 'policyLoan'>('all');
+  const [loanTypeFilter, setLoanTypeFilter] = useState<'all' | 'creditCard' | 'policyLoan' | 'huabei'>('all');
   const [loanSort, setLoanSort] = useState<'default' | 'dueDate' | 'rate' | 'amount'>('default');
   const [policyAddRequestId, setPolicyAddRequestId] = useState(0);
+  const [huabeiAddRequestId, setHuabeiAddRequestId] = useState(0);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<CardForm>(emptyForm);
   const [hasDraft, setHasDraft] = useState(false);
@@ -431,6 +434,7 @@ export default function CreditCardManagement() {
     const [showMenu, setShowMenu] = useState(false);
     const [showAvailableInput, setShowAvailableInput] = useState(false);
     const [availableInputVal, setAvailableInputVal] = useState('');
+    const [serviceContact, setServiceContact] = useState<LoanServiceContact | null>(null);
 
     return (
       <div className="rounded-2xl overflow-hidden shadow-md">
@@ -481,6 +485,8 @@ export default function CreditCardManagement() {
                   {card.expiry_month && <span className="shrink-0 text-[11px] text-white/50">{card.expiry_month}</span>}
                 </div>
               </div>
+              <div className="flex items-start gap-1">
+                <button onClick={() => setServiceContact(getCreditCardServiceContact(card.bank_name))} className="mt-0.5 flex h-7 w-7 items-center justify-center rounded border border-white/30 text-white/85 active:bg-white/10" aria-label="查看官方客服电话"><PhoneCall className="h-3.5 w-3.5" /></button>
               {/* ··· 更多菜单 */}
               <div className="relative">
                 <button
@@ -524,6 +530,7 @@ export default function CreditCardManagement() {
                     </div>
                   </>
                 )}
+              </div>
               </div>
             </div>
             {/* 额度行：正常额度 + 临时额度标签 */}
@@ -747,6 +754,7 @@ export default function CreditCardManagement() {
           })()}
           {card.note && <p className="col-span-4 px-2 pt-1 text-xs text-gray-500">{card.note}</p>}
         </div>
+        {serviceContact && <LoanServiceContactSheet contact={serviceContact} open={true} onClose={() => setServiceContact(null)} />}
       </div>
     );
   };
@@ -813,7 +821,7 @@ export default function CreditCardManagement() {
         <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="bg-white w-full max-w-[480px] mx-auto rounded-t-2xl px-4 pt-4 pb-8">
             <div className="flex items-center justify-between mb-4">
-              <div><p className="text-gray-900 font-semibold">新增贷款工具</p><p className="text-xs text-gray-400 mt-0.5">选择信用卡或保单贷款</p></div>
+              <div><p className="text-gray-900 font-semibold">新增贷款工具</p><p className="text-xs text-gray-400 mt-0.5">选择信用卡、保单贷款或花呗</p></div>
               <button onClick={() => setShowAddTypePicker(false)}><X className="w-5 h-5 text-gray-400" /></button>
             </div>
             <div className="space-y-3">
@@ -847,6 +855,12 @@ export default function CreditCardManagement() {
                 className="w-full flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/40 p-3.5 text-left active:bg-amber-50">
                 <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#17345E] to-[#27507D] flex items-center justify-center"><ShieldCheck className="w-5 h-5 text-amber-300" /></span>
                 <span><span className="block text-sm font-semibold text-gray-800">保单贷款</span><span className="block text-xs text-gray-400 mt-0.5">保单、贷款余额、利率、还款方式及到期日</span></span>
+              </button>
+              <button
+                onClick={() => { setShowAddTypePicker(false); setLoanTypeFilter('huabei'); setHuabeiAddRequestId(v => v + 1); }}
+                className="w-full flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50/50 p-3.5 text-left active:bg-sky-50">
+                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1677FF] to-[#2B4E9A] flex items-center justify-center"><CreditCard className="w-5 h-5 text-white" /></span>
+                <span><span className="block text-sm font-semibold text-gray-800">花呗</span><span className="block text-xs text-gray-400 mt-0.5">额度、待还余额、费率、还款方式及到期日</span></span>
               </button>
             </div>
           </div>
@@ -916,6 +930,7 @@ export default function CreditCardManagement() {
             ['all', '全部'],
             ['creditCard', '信用卡'],
             ['policyLoan', '保单贷款'],
+            ['huabei', '花呗'],
           ] as const).map(([value, label]) => (
             <button key={value} onClick={() => setLoanTypeFilter(value)} className={`flex-1 py-1.5 rounded-lg text-xs font-medium ${loanTypeFilter === value ? 'bg-[#1A2B4A] text-white' : 'bg-slate-100 text-slate-600'}`}>{label}</button>
           ))}
@@ -937,22 +952,23 @@ export default function CreditCardManagement() {
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#F6F7FB]" onClick={() => showUserPicker && setShowUserPicker(false)}>
         {viewMode === 'self' && (
           <>
-            {loanTypeFilter !== 'policyLoan' && sortedMyCards.map((card: any) => <CardItem key={card.id} card={card} />)}
-            {loanTypeFilter !== 'creditCard' && <PolicyLoanManagement embedded sortBy={loanSort} addRequestId={policyAddRequestId} />}
-            {loanTypeFilter !== 'policyLoan' && sortedMyCards.length === 0 && loanTypeFilter === 'creditCard' && (
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'creditCard') && sortedMyCards.map((card: any) => <CardItem key={card.id} card={card} />)}
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'policyLoan') && <PolicyLoanManagement embedded sortBy={loanSort} addRequestId={policyAddRequestId} loanType="policy" showEmpty={loanTypeFilter === 'policyLoan'} />}
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'huabei') && <PolicyLoanManagement embedded sortBy={loanSort} addRequestId={huabeiAddRequestId} loanType="huabei" showEmpty={loanTypeFilter === 'huabei'} />}
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'creditCard') && sortedMyCards.length === 0 && loanTypeFilter === 'creditCard' && (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400"><CreditCard className="w-12 h-12 mb-3 opacity-30" /><p className="text-sm">暂无信用卡</p><p className="text-xs mt-1">点击右上角 + 添加</p></div>
             )}
           </>
         )}
         {viewMode === 'admin' && (
           <>
-            {loanTypeFilter !== 'policyLoan' && Object.keys(groupedCards).length === 0 && (
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'creditCard') && Object.keys(groupedCards).length === 0 && loanTypeFilter === 'creditCard' && (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                 <Users className="w-12 h-12 mb-3 opacity-30" />
                 <p className="text-sm">暂无用户信用卡数据</p>
               </div>
             )}
-            {loanTypeFilter !== 'policyLoan' && Object.entries(groupedCards).map(([userId, group]) => (
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'creditCard') && Object.entries(groupedCards).map(([userId, group]) => (
               <div key={userId}>
                 <div className="flex items-center space-x-2 mb-2 px-1">
                   <User className="w-3.5 h-3.5 text-gray-400" />
@@ -964,7 +980,8 @@ export default function CreditCardManagement() {
                 </div>
               </div>
             ))}
-            {loanTypeFilter !== 'creditCard' && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} addRequestId={policyAddRequestId} />}
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'policyLoan') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} addRequestId={policyAddRequestId} loanType="policy" showEmpty={loanTypeFilter === 'policyLoan'} />}
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'huabei') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} addRequestId={huabeiAddRequestId} loanType="huabei" showEmpty={loanTypeFilter === 'huabei'} />}
           </>
         )}
       </div>

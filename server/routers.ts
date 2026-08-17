@@ -28317,18 +28317,21 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
 
   // ========== 保单贷款管理 ==========
   policyLoan: router({
-    list: protectedProcedure.query(async ({ ctx }) => {
-      const conn = await (await import('./db')).getDbConnection();
-      if (!conn) return [];
-      const [rows] = await conn.execute(
-        'SELECT * FROM policy_loans WHERE user_id=? AND is_active=1 ORDER BY due_date IS NULL, due_date ASC, created_at DESC',
-        [ctx.user.id]
-      ) as any[];
-      return Array.isArray(rows) ? rows : [];
-    }),
+    list: protectedProcedure
+      .input(z.object({ loanType: z.enum(['policy', 'huabei']).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return [];
+        const loanType = input?.loanType ?? 'policy';
+        const [rows] = await conn.execute(
+          'SELECT * FROM policy_loans WHERE user_id=? AND loan_type=? AND is_active=1 ORDER BY due_date IS NULL, due_date ASC, created_at DESC',
+          [ctx.user.id, loanType]
+        ) as any[];
+        return Array.isArray(rows) ? rows : [];
+      }),
     create: protectedProcedure
       .input(z.object({
-        insurer: z.string().min(1), policyName: z.string().optional(), policyHolder: z.string().optional(),
+        insurer: z.string().min(1), loanType: z.enum(['policy', 'huabei']).default('policy'), policyName: z.string().optional(), policyHolder: z.string().optional(),
         policyNo: z.string().optional(), loanAmount: z.number().optional(), outstandingBalance: z.number().optional(),
         cashValue: z.number().optional(), annualRate: z.number().optional(), repaymentMethod: z.string().optional(), loanDate: z.string().optional(),
         dueDate: z.string().optional(), currency: z.string().default('CNY'), note: z.string().optional(),
@@ -28337,14 +28340,14 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new Error('db error');
         await conn.execute(
-          'INSERT INTO policy_loans (user_id, insurer, policy_name, policy_holder, policy_no, loan_amount, outstanding_balance, cash_value, annual_rate, repayment_method, loan_date, due_date, currency, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-          [ctx.user.id, input.insurer, input.policyName || null, input.policyHolder || null, input.policyNo || null, input.loanAmount ?? null, input.outstandingBalance ?? null, input.cashValue ?? null, input.annualRate ?? null, input.repaymentMethod || null, input.loanDate || null, input.dueDate || null, input.currency, input.note || null]
+          'INSERT INTO policy_loans (user_id, insurer, loan_type, policy_name, policy_holder, policy_no, loan_amount, outstanding_balance, cash_value, annual_rate, repayment_method, loan_date, due_date, currency, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [ctx.user.id, input.insurer, input.loanType, input.policyName || null, input.policyHolder || null, input.policyNo || null, input.loanAmount ?? null, input.outstandingBalance ?? null, input.cashValue ?? null, input.annualRate ?? null, input.repaymentMethod || null, input.loanDate || null, input.dueDate || null, input.currency, input.note || null]
         );
         return { success: true };
       }),
     update: protectedProcedure
       .input(z.object({
-        id: z.number(), insurer: z.string().optional(), policyName: z.string().optional(), policyHolder: z.string().optional(),
+        id: z.number(), insurer: z.string().optional(), loanType: z.enum(['policy', 'huabei']).optional(), policyName: z.string().optional(), policyHolder: z.string().optional(),
         policyNo: z.string().optional(), loanAmount: z.number().nullable().optional(), outstandingBalance: z.number().nullable().optional(),
         cashValue: z.number().nullable().optional(), annualRate: z.number().nullable().optional(), repaymentMethod: z.string().nullable().optional(), loanDate: z.string().nullable().optional(),
         dueDate: z.string().nullable().optional(), currency: z.string().optional(), note: z.string().nullable().optional(),
@@ -28353,7 +28356,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new Error('db error');
         const { id, ...fields } = input;
-        const map: Record<string, string> = { insurer: 'insurer', policyName: 'policy_name', policyHolder: 'policy_holder', policyNo: 'policy_no', loanAmount: 'loan_amount', outstandingBalance: 'outstanding_balance', cashValue: 'cash_value', annualRate: 'annual_rate', repaymentMethod: 'repayment_method', loanDate: 'loan_date', dueDate: 'due_date', currency: 'currency', note: 'note' };
+        const map: Record<string, string> = { insurer: 'insurer', loanType: 'loan_type', policyName: 'policy_name', policyHolder: 'policy_holder', policyNo: 'policy_no', loanAmount: 'loan_amount', outstandingBalance: 'outstanding_balance', cashValue: 'cash_value', annualRate: 'annual_rate', repaymentMethod: 'repayment_method', loanDate: 'loan_date', dueDate: 'due_date', currency: 'currency', note: 'note' };
         const sets: string[] = []; const vals: any[] = [];
         for (const [key, column] of Object.entries(map)) {
           if ((fields as any)[key] !== undefined) { sets.push(`${column}=?`); vals.push((fields as any)[key]); }
@@ -28371,18 +28374,22 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         await conn.execute('UPDATE policy_loans SET is_active=0 WHERE id=? AND user_id=?', [input.id, ctx.user.id]);
         return { success: true };
       }),
-    adminListAll: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user.role !== 'super_admin') throw new Error('no permission');
-      const conn = await (await import('./db')).getDbConnection();
-      if (!conn) return [];
-      const [rows] = await conn.execute(
-        `SELECT pl.*, u.name as user_name, u.username as user_username FROM policy_loans pl LEFT JOIN users u ON u.id=pl.user_id WHERE pl.is_active=1 ORDER BY pl.user_id, pl.due_date IS NULL, pl.due_date ASC, pl.created_at DESC`
-      ) as any[];
-      return Array.isArray(rows) ? rows : [];
-    }),
+    adminListAll: protectedProcedure
+      .input(z.object({ loanType: z.enum(['policy', 'huabei']).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') throw new Error('no permission');
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return [];
+        const loanType = input?.loanType ?? 'policy';
+        const [rows] = await conn.execute(
+          `SELECT pl.*, u.name as user_name, u.username as user_username FROM policy_loans pl LEFT JOIN users u ON u.id=pl.user_id WHERE pl.is_active=1 AND pl.loan_type=? ORDER BY pl.user_id, pl.due_date IS NULL, pl.due_date ASC, pl.created_at DESC`,
+          [loanType]
+        ) as any[];
+        return Array.isArray(rows) ? rows : [];
+      }),
     adminCreate: protectedProcedure
       .input(z.object({
-        targetUserId: z.number(), insurer: z.string().min(1), policyName: z.string().optional(), policyHolder: z.string().optional(),
+        targetUserId: z.number(), insurer: z.string().min(1), loanType: z.enum(['policy', 'huabei']).default('policy'), policyName: z.string().optional(), policyHolder: z.string().optional(),
         policyNo: z.string().optional(), loanAmount: z.number().optional(), outstandingBalance: z.number().optional(), cashValue: z.number().optional(), annualRate: z.number().optional(), repaymentMethod: z.string().optional(), loanDate: z.string().optional(), dueDate: z.string().optional(), currency: z.string().default('CNY'), note: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -28390,8 +28397,8 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new Error('db error');
         await conn.execute(
-          'INSERT INTO policy_loans (user_id, insurer, policy_name, policy_holder, policy_no, loan_amount, outstanding_balance, cash_value, annual_rate, repayment_method, loan_date, due_date, currency, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-          [input.targetUserId, input.insurer, input.policyName || null, input.policyHolder || null, input.policyNo || null, input.loanAmount ?? null, input.outstandingBalance ?? null, input.cashValue ?? null, input.annualRate ?? null, input.repaymentMethod || null, input.loanDate || null, input.dueDate || null, input.currency, input.note || null]
+          'INSERT INTO policy_loans (user_id, insurer, loan_type, policy_name, policy_holder, policy_no, loan_amount, outstanding_balance, cash_value, annual_rate, repayment_method, loan_date, due_date, currency, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [input.targetUserId, input.insurer, input.loanType, input.policyName || null, input.policyHolder || null, input.policyNo || null, input.loanAmount ?? null, input.outstandingBalance ?? null, input.cashValue ?? null, input.annualRate ?? null, input.repaymentMethod || null, input.loanDate || null, input.dueDate || null, input.currency, input.note || null]
         );
         return { success: true };
       }),
