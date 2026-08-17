@@ -3367,16 +3367,14 @@ export default function CryptoPrediction() {
               </div>
             ) : (() => {
               const activeOrders = financeOrders.filter((o: any) => o.status === 'active');
-              // 所有真实参与订单统一放入“他人”Tab；绿色主题仍只由参与者身份表达。
-              // 非参与订单再按创建时设置的 order_perspective 归入本人 / 他人。
+                            // 前端现有两类位置：本人 / 参与。
+              // 真实参与订单或订单设置为“他人”时，均进入“参与”Tab；本人仅显示本人且非参与的订单。
               const isParticipantOrder = (o: any) => !!o.participantInfo || !!o._isParticipant || !!o._fromFunder;
               const mineOrders = activeOrders.filter((o: any) => !isParticipantOrder(o) && (o.order_perspective || 'self') !== 'other');
               const sharedOrders = activeOrders.filter((o: any) => isParticipantOrder(o) || (o.order_perspective || 'self') === 'other');
-
-              // 第2层：本人 / 他人 → 仅决定订单位置
+              // 参与 Tab 包含真实参与订单和设置为他人的订单；绿色主题仍仅由真实参与身份触发。
               const l2Pool = financeL2Tab === 'shared' ? sharedOrders : mineOrders;
-
-                            // 第3层：全部/股/币（他人视角才显示，本人视角直接显示全部）
+              // 第3层：参与视角支持全部/股/币；本人视角直接显示全部。
               const showL3 = financeL2Tab === 'shared';
               // 共享担保：担保物选择为「共享担保」的订单（collateral_share_mode === 'self'）
               const hasCollateral = (o: any) => o.collateral_share_mode === 'self';
@@ -3427,11 +3425,11 @@ export default function CryptoPrediction() {
 
               return (
                 <>
-                  {/* 第2层：本人 / 他人；参与身份由卡片绿色主题表达 */}
+                  {/* 第2层仅保留本人和参与：他人设置与真实参与订单统一进入参与。 */}
                   <div className="flex rounded p-1 gap-1 mb-3" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
                     {([
                       ['mine',   '本人', cntMine],
-                      ['shared', '他人', cntShared],
+                      ['shared', '参与', cntShared],
                     ] as const).map(([key, label, cnt]) => (
                       <button key={key} onClick={() => { setFinanceL2Tab(key as any); setFinanceL3Tab('all'); }}
                         style={tabBtnStyle(financeL2Tab === key)}>
