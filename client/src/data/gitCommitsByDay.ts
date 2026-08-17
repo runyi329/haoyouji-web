@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-17
+// 生成时间：2026-08-18
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8886,5 +8886,22 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-08-16": [
     { date: "2026-08-15T18:08:57Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+  ],
+  "2026-08-17": [
+    { date: "2026-08-16T18:09:08Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-17T03:20:33Z", type: "feat", cleanMessage: "remember smart accounting last page" },
+    { date: "2026-08-17T03:48:31Z", type: "fix", cleanMessage: "prevent recharge base balance double counting in withdrawals" },
+    { date: "2026-08-17T06:53:57Z", type: "fix", cleanMessage: "group finance participant orders in participation tab" },
+    { date: "2026-08-17T08:53:59Z", type: "fix", cleanMessage: "handle empty temporary card limits" },
+    { date: "2026-08-17T09:20:16Z", type: "fix", cleanMessage: "restore admin loan visibility and extend card expiry" },
+    { date: "2026-08-17T09:39:01Z", type: "fix", cleanMessage: "extend card expiry year picker to 2050" },
+    { date: "2026-08-17T10:13:28Z", type: "feat", cleanMessage: "add huabei loans and service contacts" },
+    { date: "2026-08-17T11:08:58Z", type: "style", cleanMessage: "refine loan contact and date inputs" },
+    { date: "2026-08-17T12:01:49Z", type: "fix", cleanMessage: "unify invite tree balance and access" },
+    { date: "2026-08-17T12:31:12Z", type: "feat", cleanMessage: "add loan management force refresh" },
+    { date: "2026-08-17T14:03:53Z", type: "feat", cleanMessage: "streamline admin loan management" },
+  ],
+  "2026-08-18": [
+    { date: "2026-08-17T17:39:51Z", type: "feat", cleanMessage: "enhance loan management cards and billing" },
   ],
 };
