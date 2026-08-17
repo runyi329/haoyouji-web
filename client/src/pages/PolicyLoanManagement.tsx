@@ -19,7 +19,12 @@ interface PolicyLoanManagementProps {
   refreshRequestId?: number;
   /** 管理员的全员视角 */
   adminMode?: boolean;
+  /** 管理员通过加号选择的新增目标用户；为空时管理员为本人新增 */
   targetUser?: { id: number; name: string } | null;
+  /** 管理员列表筛选的用户，不影响新增对象 */
+  filterUserId?: number | null;
+  /** 到期状态筛选 */
+  dueFilter?: 'all' | 'dueSoon' | 'overdue' | 'unset';
   /** 通用贷款类型：保单贷款或花呗 */
   loanType?: "policy" | "huabei";
   /** 在“全部”筛选中无记录时不单独显示空状态 */
@@ -77,6 +82,8 @@ export default function PolicyLoanManagement({
   refreshRequestId = 0,
   adminMode = false,
   targetUser = null,
+  filterUserId = null,
+  dueFilter = 'all',
   loanType = "policy",
   showEmpty = true,
 }: PolicyLoanManagementProps) {
@@ -94,7 +101,18 @@ export default function PolicyLoanManagement({
   const { data: myLoans = [], refetch: refetchMy } = trpc.policyLoan.list.useQuery({ loanType }, { enabled: !adminMode });
   const { data: allLoans = [], refetch: refetchAll } = trpc.policyLoan.adminListAll.useQuery({ loanType }, { enabled: adminMode });
   const refetch = () => { refetchMy(); refetchAll(); };
-  const sourceLoans = (adminMode ? allLoans : myLoans) as any[];
+  const sourceLoans = ((adminMode ? allLoans : myLoans) as any[]).filter((loan) => {
+    if (adminMode && filterUserId && Number(loan.user_id) !== filterUserId) return false;
+    if (dueFilter === 'all') return true;
+    if (!loan.due_date) return dueFilter === 'unset';
+    const dueDate = new Date(String(loan.due_date).slice(0, 10));
+    dueDate.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (dueFilter === 'overdue') return days < 0;
+    return dueFilter === 'dueSoon' && days >= 0 && days <= 7;
+  });
 
   const createMutation = trpc.policyLoan.create.useMutation({
     onSuccess: () => { toast.success(`${loanLabel}已添加`); refetch(); setShowForm(false); setForm(emptyForm); },
@@ -136,10 +154,6 @@ export default function PolicyLoanManagement({
   }, [form.outstandingBalance, form.loanAmount, form.annualRate]);
 
   const openAdd = () => {
-    if (adminMode && !targetUser) {
-      toast.error(`请先选择要添加${loanLabel}的用户`);
-      return;
-    }
     setEditingId(null);
     setForm(isHuabei ? { ...emptyForm, insurer: "支付宝·花呗" } : emptyForm);
     setShowForm(true);
@@ -187,8 +201,7 @@ export default function PolicyLoanManagement({
     };
     if (editingId) {
       updateMutation.mutate({ id: editingId, ...payload });
-    } else if (adminMode) {
-      if (!targetUser) { toast.error("请先选择用户"); return; }
+    } else if (adminMode && targetUser) {
       adminCreateMutation.mutate({ targetUserId: targetUser.id, ...payload });
     } else {
       createMutation.mutate(payload);

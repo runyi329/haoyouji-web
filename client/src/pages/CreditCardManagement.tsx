@@ -235,14 +235,18 @@ export default function CreditCardManagement() {
   const isAdmin = !!user && (user as any).role === "super_admin";
 
   const [viewMode, setViewMode] = useState<'self' | 'admin'>('self');
+  // targetUser 仅用于管理员通过右上角“+”为他人新增；adminUserFilter 仅用于管理员列表筛选。
   const [targetUser, setTargetUser] = useState<{ id: number; name: string } | null>(null);
+  const [adminUserFilter, setAdminUserFilter] = useState<{ id: number; name: string } | null>(null);
   const [userSearchText, setUserSearchText] = useState('');
+  const [userPickerMode, setUserPickerMode] = useState<'add' | 'filter' | null>(null);
   const [showUserPicker, setShowUserPicker] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
   const [showAddTypePicker, setShowAddTypePicker] = useState(false);
   const [showLoanHeaderMenu, setShowLoanHeaderMenu] = useState(false);
   const [loanTypeFilter, setLoanTypeFilter] = useState<'all' | 'creditCard' | 'policyLoan' | 'huabei'>('all');
+  const [loanDueFilter, setLoanDueFilter] = useState<'all' | 'dueSoon' | 'overdue' | 'unset'>('all');
   const [loanSort, setLoanSort] = useState<'default' | 'dueDate' | 'rate' | 'amount'>('default');
   const [policyAddRequestId, setPolicyAddRequestId] = useState(0);
   const [huabeiAddRequestId, setHuabeiAddRequestId] = useState(0);
@@ -295,8 +299,30 @@ export default function CreditCardManagement() {
   );
   const { data: userSearchResults = [] } = trpc.sharing.searchUsers.useQuery(
     { query: userSearchText },
-    { enabled: isAdmin && userSearchText.trim().length > 0 }
+    { enabled: isAdmin && showUserPicker && userSearchText.trim().length > 0 }
   );
+
+  const openUserPicker = (mode: 'add' | 'filter') => {
+    setUserPickerMode(mode);
+    setUserSearchText('');
+    setShowUserPicker(true);
+  };
+
+  const closeUserPicker = () => {
+    setShowUserPicker(false);
+    setUserPickerMode(null);
+    setUserSearchText('');
+  };
+
+  const selectPickerUser = (selected: { id: number; name: string }) => {
+    if (userPickerMode === 'add') {
+      setTargetUser(selected);
+      // 通用贷款子表单需处于管理员模式，才能调用管理员新增接口。
+      setViewMode('admin');
+    }
+    if (userPickerMode === 'filter') setAdminUserFilter(selected);
+    closeUserPicker();
+  };
 
   const refetch = () => { refetchMy(); refetchAll(); };
 
@@ -391,8 +417,7 @@ export default function CreditCardManagement() {
     };
     if (editingId) {
       updateMutation.mutate({ id: editingId, ...payload });
-    } else if (isAdmin && viewMode === 'admin') {
-      if (!targetUser) { toast.error("请先选择要为哪位用户添加"); return; }
+    } else if (isAdmin && targetUser) {
       adminCreateMutation.mutate({ targetUserId: targetUser.id, ...payload });
     } else {
       createMutation.mutate(payload);
@@ -425,10 +450,22 @@ export default function CreditCardManagement() {
     return Number(b.id || 0) - Number(a.id || 0);
   }), [myCards, loanSort]);
 
+  const cardMatchesDueFilter = (card: any) => {
+    if (loanDueFilter === 'all') return true;
+    if (!card.due_day) return loanDueFilter === 'unset';
+    const dueDays = daysUntil(Number(card.due_day));
+    if (loanDueFilter === 'dueSoon') return dueDays <= 7;
+    // 信用卡的最后还款日为循环日期，已自动滚动至下一期，不产生“已逾期”状态。
+    return false;
+  };
+
   const groupedCards = useMemo(() => {
     if (viewMode !== 'admin') return {};
     const groups: Record<number, { userName: string; cards: any[] }> = {};
-    for (const card of allCards as any[]) {
+    const filteredCards = (allCards as any[]).filter((card) =>
+      (!adminUserFilter || Number(card.user_id) === adminUserFilter.id) && cardMatchesDueFilter(card)
+    );
+    for (const card of filteredCards) {
       if (!groups[card.user_id]) {
         groups[card.user_id] = {
           userName: card.user_name || card.user_username || `用户${card.user_id}`,
@@ -437,8 +474,19 @@ export default function CreditCardManagement() {
       }
       groups[card.user_id].cards.push(card);
     }
+    Object.values(groups).forEach((group) => {
+      group.cards.sort((a, b) => {
+        if (loanSort === 'default' || loanSort === 'dueDate') {
+          const aDays = a.due_day ? daysUntil(Number(a.due_day)) : Number.MAX_SAFE_INTEGER;
+          const bDays = b.due_day ? daysUntil(Number(b.due_day)) : Number.MAX_SAFE_INTEGER;
+          return aDays === bDays ? Number(b.id || 0) - Number(a.id || 0) : aDays - bDays;
+        }
+        if (loanSort === 'amount') return Number(b.credit_limit || 0) - Number(a.credit_limit || 0);
+        return Number(b.id || 0) - Number(a.id || 0);
+      });
+    });
     return groups;
-  }, [allCards, viewMode]);
+  }, [allCards, viewMode, adminUserFilter, loanDueFilter, loanSort]);
 
   const CardItem = ({ card }: { card: any }) => {
     const color = bankColor(card.bank_name);
@@ -831,7 +879,7 @@ export default function CreditCardManagement() {
             <RefreshCw className={`w-4 h-4 ${isRefreshingLoans ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() => setShowAddTypePicker(true)}
+            onClick={() => { setTargetUser(null); setShowAddTypePicker(true); }}
             className="relative w-7 h-7 flex items-center justify-center rounded-full bg-white/20 active:bg-white/30"
             aria-label="新增贷款工具">
             <Plus className="w-4 h-4" />
@@ -850,6 +898,33 @@ export default function CreditCardManagement() {
               <div><p className="text-gray-900 font-semibold">新增贷款工具</p><p className="text-xs text-gray-400 mt-0.5">选择信用卡、保单贷款或花呗</p></div>
               <button onClick={() => setShowAddTypePicker(false)}><X className="w-5 h-5 text-gray-400" /></button>
             </div>
+            {isAdmin && (
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+                <p className="text-xs font-semibold text-amber-800">新增对象</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    onClick={() => openUserPicker('add')}
+                    className="flex min-w-0 flex-1 items-center justify-between rounded-lg border border-amber-200 bg-white px-3 py-2 text-left text-sm active:bg-amber-50"
+                  >
+                    <span className={targetUser ? 'truncate text-gray-800' : 'text-gray-500'}>{targetUser ? `为 ${targetUser.name} 新增` : '本人（点击可为其他用户新增）'}</span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-amber-500" />
+                  </button>
+                  {targetUser && <button onClick={() => setTargetUser(null)} className="shrink-0 px-2 py-2 text-xs text-amber-700">本人</button>}
+                </div>
+                {showUserPicker && userPickerMode === 'add' && (
+                  <div className="mt-2 overflow-hidden rounded-lg border border-amber-200 bg-white shadow-sm">
+                    <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-2 py-2">
+                      <Search className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                      <input className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="输入用户名或昵称搜索..." value={userSearchText} onChange={(e) => setUserSearchText(e.target.value)} autoFocus />
+                      <button onClick={closeUserPicker}><X className="h-4 w-4 text-gray-400" /></button>
+                    </div>
+                    {userSearchText.trim().length === 0 && <p className="px-3 py-3 text-xs text-gray-400">输入关键词后选择新增对象</p>}
+                    {userSearchText.trim().length > 0 && (userSearchResults as any[]).length === 0 && <p className="px-3 py-3 text-xs text-gray-400">未找到用户</p>}
+                    {(userSearchResults as any[]).map((u: any) => <button key={u.id} onClick={() => selectPickerUser({ id: u.id, name: u.name || u.username })} className="flex w-full items-center gap-2 px-3 py-2.5 text-left active:bg-amber-50"><User className="h-4 w-4 text-gray-400" /><span className="truncate text-sm text-gray-800">{u.name || u.username}</span>{u.name && u.username && <span className="truncate text-xs text-gray-400">@{u.username}</span>}</button>)}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="space-y-3">
               <button
                 onClick={() => {
@@ -907,49 +982,9 @@ export default function CreditCardManagement() {
         </div>
       )}
 
-      {/* 管理员视角：用户选择器 */}
-      {isAdmin && viewMode === 'admin' && (
-        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2">
-          <p className="text-amber-700 text-[11px] mb-1">为指定用户添加贷款工具：</p>
-          <div className="relative">
-            <button onClick={() => setShowUserPicker(v => !v)}
-              className="w-full flex items-center justify-between bg-white border border-amber-200 rounded-lg px-3 py-2 text-sm">
-              <span className={targetUser ? 'text-gray-800' : 'text-gray-400'}>
-                {targetUser ? targetUser.name : "搜索并选择用户..."}
-              </span>
-              <ChevronDown className="w-4 h-4 text-gray-400" />
-            </button>
-            {showUserPicker && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-60 overflow-y-auto">
-                <div className="p-2 border-b border-gray-100 sticky top-0 bg-white">
-                  <div className="flex items-center space-x-2 bg-gray-50 rounded-lg px-2 py-1.5">
-                    <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                    <input className="flex-1 bg-transparent text-sm outline-none" placeholder="输入姓名或用户名搜索..."
-                      value={userSearchText} onChange={e => setUserSearchText(e.target.value)} autoFocus />
-                    {userSearchText && <button onClick={() => setUserSearchText('')}><X className="w-3.5 h-3.5 text-gray-400" /></button>}
-                  </div>
-                </div>
-                {userSearchText.trim().length === 0 && <div className="px-4 py-6 text-center text-gray-400 text-sm">输入关键词搜索用户</div>}
-                {userSearchText.trim().length > 0 && (userSearchResults as any[]).length === 0 && <div className="px-4 py-6 text-center text-gray-400 text-sm">未找到用户</div>}
-                {(userSearchResults as any[]).map((u: any) => (
-                  <button key={u.id} onClick={() => { setTargetUser({ id: u.id, name: u.name || u.username }); setShowUserPicker(false); setUserSearchText(''); }}
-                    className={`w-full px-3 py-2.5 text-left hover:bg-gray-50 flex items-center space-x-3 ${targetUser?.id === u.id ? 'bg-blue-50' : ''}`}>
-                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" alt="" /> : <User className="w-4 h-4 text-gray-400" />}
-                    </div>
-                    <div>
-                      <p className={`text-sm font-medium ${targetUser?.id === u.id ? 'text-blue-700' : 'text-gray-800'}`}>{u.name || u.username}</p>
-                      {u.name && u.username && <p className="text-xs text-gray-400">@{u.username}</p>}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* 管理员的新增对象选择已迁移至右上角“+”的新增流程。 */}
 
-      {/* 类别筛选与排序 */}
+      {/* 类别筛选、管理员多维筛选与排序 */}
       <div className="bg-white border-b border-gray-100 px-4 py-2.5 space-y-2">
         <div className="flex gap-2">
           {([
@@ -961,6 +996,28 @@ export default function CreditCardManagement() {
             <button key={value} onClick={() => setLoanTypeFilter(value)} className={`flex-1 py-1.5 rounded-lg text-xs font-medium ${loanTypeFilter === value ? 'bg-[#1A2B4A] text-white' : 'bg-slate-100 text-slate-600'}`}>{label}</button>
           ))}
         </div>
+        {isAdmin && viewMode === 'admin' && (
+          <>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="shrink-0 text-gray-400">用户</span>
+              <button onClick={() => setAdminUserFilter(null)} className={`rounded-md px-2.5 py-1 ${!adminUserFilter ? 'bg-blue-50 font-semibold text-[#1A2B4A]' : 'text-gray-500'}`}>全部用户</button>
+              <button onClick={() => openUserPicker('filter')} className={`flex min-w-0 items-center gap-1 rounded-md px-2.5 py-1 ${adminUserFilter ? 'bg-[#1A2B4A] font-semibold text-white' : 'bg-slate-100 text-slate-600'}`}><span className="max-w-24 truncate">{adminUserFilter?.name || '指定用户'}</span><Search className="h-3 w-3" /></button>
+              {adminUserFilter && <button onClick={() => setAdminUserFilter(null)} className="text-gray-400">清除</button>}
+            </div>
+            {showUserPicker && userPickerMode === 'filter' && (
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-2 py-2"><Search className="h-3.5 w-3.5 shrink-0 text-gray-400" /><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="输入用户名或昵称搜索..." value={userSearchText} onChange={(e) => setUserSearchText(e.target.value)} autoFocus /><button onClick={closeUserPicker}><X className="h-4 w-4 text-gray-400" /></button></div>
+                {userSearchText.trim().length === 0 && <p className="px-3 py-3 text-xs text-gray-400">输入关键词后筛选用户贷款</p>}
+                {userSearchText.trim().length > 0 && (userSearchResults as any[]).length === 0 && <p className="px-3 py-3 text-xs text-gray-400">未找到用户</p>}
+                {(userSearchResults as any[]).map((u: any) => <button key={u.id} onClick={() => selectPickerUser({ id: u.id, name: u.name || u.username })} className="flex w-full items-center gap-2 px-3 py-2.5 text-left active:bg-slate-50"><User className="h-4 w-4 text-gray-400" /><span className="truncate text-sm text-gray-800">{u.name || u.username}</span>{u.name && u.username && <span className="truncate text-xs text-gray-400">@{u.username}</span>}</button>)}
+              </div>
+            )}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="shrink-0 text-gray-400">到期</span>
+              {([['all', '全部'], ['dueSoon', '7天内'], ['overdue', '已逾期'], ['unset', '未设置']] as const).map(([value, label]) => <button key={value} onClick={() => setLoanDueFilter(value)} className={`rounded-md px-2.5 py-1 ${loanDueFilter === value ? 'bg-blue-50 font-semibold text-[#1A2B4A]' : 'text-gray-500'}`}>{label}</button>)}
+            </div>
+          </>
+        )}
         <div className="flex items-center gap-2 text-xs">
           <span className="text-gray-400 shrink-0">排序</span>
           {([
@@ -975,7 +1032,7 @@ export default function CreditCardManagement() {
       </div>
 
       {/* 统一贷款卡片列表 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#F6F7FB]" onClick={() => showUserPicker && setShowUserPicker(false)}>
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#F6F7FB]" onClick={() => showUserPicker && closeUserPicker()}>
         {viewMode === 'self' && (
           <>
             {(loanTypeFilter === 'all' || loanTypeFilter === 'creditCard') && sortedMyCards.map((card: any) => <CardItem key={card.id} card={card} />)}
@@ -1006,8 +1063,8 @@ export default function CreditCardManagement() {
                 </div>
               </div>
             ))}
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'policyLoan') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} addRequestId={policyAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="policy" showEmpty={loanTypeFilter === 'policyLoan'} />}
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'huabei') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} addRequestId={huabeiAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="huabei" showEmpty={loanTypeFilter === 'huabei'} />}
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'policyLoan') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} filterUserId={adminUserFilter?.id} dueFilter={loanDueFilter} addRequestId={policyAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="policy" showEmpty={loanTypeFilter === 'policyLoan'} />}
+            {(loanTypeFilter === 'all' || loanTypeFilter === 'huabei') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} filterUserId={adminUserFilter?.id} dueFilter={loanDueFilter} addRequestId={huabeiAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="huabei" showEmpty={loanTypeFilter === 'huabei'} />}
           </>
         )}
       </div>
@@ -1021,7 +1078,7 @@ export default function CreditCardManagement() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 sticky top-0 bg-white z-10">
               <div>
                 <h2 className="font-semibold text-gray-800">{editingId ? "编辑信用卡" : "添加信用卡"}</h2>
-                {viewMode === 'admin' && !editingId && targetUser && (
+                {isAdmin && !editingId && targetUser && (
                   <p className="text-xs text-amber-600 mt-0.5">为 {targetUser.name} 添加</p>
                 )}
                 {!editingId && hasDraft && (
