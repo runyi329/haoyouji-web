@@ -210,15 +210,18 @@ const emptyForm: CardForm = {
 
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
-// 生成月份选项（当前月往后24个月）
+// 生成有效期月份选项（从当前月延伸至 2050 年 12 月）
 function genMonthOptions() {
   const opts: { label: string; value: string }[] = [];
   const now = new Date();
-  for (let i = 0; i < 24; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const y = d.getFullYear();
-    opts.push({ label: `${y}年${m}月`, value: `${y}-${m}-01` });
+  const firstYear = now.getFullYear();
+  const lastYear = Math.max(2050, firstYear);
+  for (let year = firstYear; year <= lastYear; year++) {
+    const firstMonth = year === firstYear ? now.getMonth() : 0;
+    for (let month = firstMonth; month < 12; month++) {
+      const m = String(month + 1).padStart(2, '0');
+      opts.push({ label: `${year}年${m}月`, value: `${year}-${m}-01` });
+    }
   }
   return opts;
 }

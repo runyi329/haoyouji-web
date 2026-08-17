@@ -28251,7 +28251,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       }),
     // 管理员：查看所有用户的信用卡（按用户分组）
     adminListAll: protectedProcedure.query(async ({ ctx }) => {
-      if (!ctx.user.isAdmin) throw new Error('no permission');
+      if (ctx.user.role !== 'super_admin') throw new Error('no permission');
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) return [];
       const [rows] = await conn.execute(
@@ -28265,7 +28265,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
     }),
     // 管理员：获取所有用户列表（用于选择要为谁添加）
     adminListUsers: protectedProcedure.query(async ({ ctx }) => {
-      if (!ctx.user.isAdmin) throw new Error('no permission');
+      if (ctx.user.role !== 'super_admin') throw new Error('no permission');
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) return [];
       const [rows] = await conn.execute(
@@ -28294,7 +28294,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         tempLimitEnd: z.string().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (!ctx.user.isAdmin) throw new Error('no permission');
+        if (ctx.user.role !== 'super_admin') throw new Error('no permission');
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new Error('db error');
         await conn.execute(
@@ -28307,7 +28307,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
     adminDelete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        if (!ctx.user.isAdmin) throw new Error('no permission');
+        if (ctx.user.role !== 'super_admin') throw new Error('no permission');
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new Error('db error');
         await conn.execute('UPDATE credit_cards SET is_active=0 WHERE id=?', [input.id]);
@@ -28372,7 +28372,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         return { success: true };
       }),
     adminListAll: protectedProcedure.query(async ({ ctx }) => {
-      if (!ctx.user.isAdmin) throw new Error('no permission');
+      if (ctx.user.role !== 'super_admin') throw new Error('no permission');
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) return [];
       const [rows] = await conn.execute(
@@ -28386,7 +28386,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         policyNo: z.string().optional(), loanAmount: z.number().optional(), outstandingBalance: z.number().optional(), cashValue: z.number().optional(), annualRate: z.number().optional(), repaymentMethod: z.string().optional(), loanDate: z.string().optional(), dueDate: z.string().optional(), currency: z.string().default('CNY'), note: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (!ctx.user.isAdmin) throw new Error('no permission');
+        if (ctx.user.role !== 'super_admin') throw new Error('no permission');
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new Error('db error');
         await conn.execute(
@@ -28398,7 +28398,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
     adminDelete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        if (!ctx.user.isAdmin) throw new Error('no permission');
+        if (ctx.user.role !== 'super_admin') throw new Error('no permission');
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new Error('db error');
         await conn.execute('UPDATE policy_loans SET is_active=0 WHERE id=?', [input.id]);
