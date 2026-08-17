@@ -25,10 +25,11 @@ export default function AfLedgerInvite() {
     { enabled: !!ledgerId }
   );
   const YJH_USER_ID = 4957151;
-  const JIANG_USER_ID = 870413;
   const currentUserId = (me as any)?.id;
-  // 只有 YJH 本人（4957151）和管理员 jiang（870413）能看到邀请树按鈕
-  const canSeeInviteTree = currentUserId === YJH_USER_ID || currentUserId === JIANG_USER_ID;
+  const isLedgerAdmin = (ledgerData as any)?.userRole === 'owner' || (ledgerData as any)?.userRole === 'admin';
+  const isSuperAdmin = (me as any)?.role === 'super_admin';
+  // 推荐人员名单仅限 YJH 与账本管理员进入。
+  const canSeeInviteTree = currentUserId === YJH_USER_ID || isLedgerAdmin || isSuperAdmin;
 
   // 使用用户固定邀请码生成邀请链接（与上方邀请码保持一致）
   const inviteLink = inviteCode
@@ -82,7 +83,7 @@ export default function AfLedgerInvite() {
           <h1 className="flex-1 text-center text-lg font-semibold text-white">
             我的邀请
           </h1>
-          {/* 右上角树状图按钮：只有 YJH 本人、owner、管理员可见 */}
+          {/* 右上角推荐人员按钮：仅 YJH 与账本管理员可见 */}
           {canSeeInviteTree ? (
             <button
               onClick={() => setLocation(`/ledger/${ledgerId}/af-invite-tree${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}

@@ -2597,10 +2597,11 @@ export default function LedgerDetail() {
   // AF 账本：YJH邀请树（仅当弹窗打开时才加载）
   // 管理员/创建人点推荐时，强制以YJH(4957151)视角查询，无需切换视角
   const YJH_USER_ID = 4957151;
-  const inviteTreeViewAsId = (isOwner || isAdmin) && (user as any)?.id !== YJH_USER_ID ? YJH_USER_ID : (viewAsUserId || undefined);
+  const canAccessInviteTree = isCustomAF && ((user as any)?.id === YJH_USER_ID || isOwner || isAdmin || (user as any)?.role === 'super_admin');
+  const inviteTreeViewAsId = (isOwner || isAdmin || (user as any)?.role === 'super_admin') && (user as any)?.id !== YJH_USER_ID ? YJH_USER_ID : (viewAsUserId || undefined);
   const { data: inviteTreeData, isLoading: inviteTreeLoading } = trpc.ledger.afGetInviteTree.useQuery(
     { ledgerId: Number(ledgerId), ...(inviteTreeViewAsId ? { viewAsUserId: inviteTreeViewAsId } : {}) },
-    { enabled: isCustomAF && (showInviteTree || (user as any)?.id === YJH_USER_ID || viewAsUserId === YJH_USER_ID) }
+    { enabled: canAccessInviteTree && (showInviteTree || (user as any)?.id === YJH_USER_ID || viewAsUserId === YJH_USER_ID) }
   );
   // AF账本推荐页动态消息（仅yjh和管理员可见）
   const YJH_USER_ID_CONST = 4957151;
@@ -6680,7 +6681,7 @@ export default function LedgerDetail() {
       )}
 
       {/* AF 账本：YJH邀请树弹窗 */}
-      {showInviteTree && (
+      {showInviteTree && canAccessInviteTree && (
         <div className="fixed inset-0 z-[100] flex flex-col" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }} onClick={() => setShowInviteTree(false)}>
           <div className="mt-auto mx-0 rounded-t-3xl overflow-hidden flex flex-col" style={{ backgroundColor: '#fff', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
             {/* 弹窗标题栏 */}

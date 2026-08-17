@@ -12996,18 +12996,23 @@ ${klinesSummary}
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
-        // 视角切换（仅owner/admin可viewAs）
-        let targetUserId = ctx.user.id;
-        if (input.viewAsUserId) {
-          const memberCheck = await db.execute(
-            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
-          ) as any;
-          const myRole = (memberCheck[0]?.[0] ?? memberCheck[0])?.role;
-          if (myRole === 'owner' || myRole === 'admin') {
-            targetUserId = input.viewAsUserId;
-          }
-        }
         const YJH_USER_ID = 4957151;
+        const currentUserId = Number(ctx.user.id);
+        const memberCheck = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${currentUserId} LIMIT 1`
+        ) as any;
+        const myRole = (memberCheck[0]?.[0] ?? memberCheck[0])?.role;
+        const isLedgerAdmin = myRole === 'owner' || myRole === 'admin';
+        const isSuperAdmin = ctx.user.role === 'super_admin';
+        const isYJH = currentUserId === YJH_USER_ID;
+        // 推荐名单及其人员余额为 YJH 推荐体系专属数据：只允许 YJH 或账本管理员读取。
+        if (!isYJH && !isLedgerAdmin && !isSuperAdmin) {
+          throw new Error('仅管理员或YJH可查看推荐人员名单');
+        }
+        // 视角参数只保留给管理员兼容旧链接；邀请树始终基于 YJH 推荐体系构建。
+        if (input.viewAsUserId && !isLedgerAdmin && !isSuperAdmin) {
+          throw new Error('仅管理员可切换推荐人员视角');
+        }
         try {
           const rawDb = await getDbConnection();
           if (!rawDb) return { users: [], allPayoutRatios: [] };
@@ -13187,9 +13192,10 @@ ${klinesSummary}
                 const recharged = parseFloat(row.recharged?.toString() || '0');
                 totalRechargeMap.set(row.user_id, recharged);
               }
-              // 账本手动调账（全部，含买入负数、撤单退款等）→ 与智能钱包基础余额相加计算可用余额
+              // 合并尚未写入 users.balance 的账本流水。充值基准 [BALANCE_BASE] 已包含在 users.balance，
+              // 必须排除以避免双算；提现冻结不带该标记，会以负数立即反映在推荐人员视图中。
               const [manualRows] = await rawDb.execute(
-                `SELECT user_id, COALESCE(SUM(amount), 0) as manual FROM af_manual_balances WHERE user_id IN (${placeholders4}) AND ledger_id = ? GROUP BY user_id`,
+                `SELECT user_id, COALESCE(SUM(amount), 0) as manual FROM af_manual_balances WHERE user_id IN (${placeholders4}) AND ledger_id = ? AND note NOT LIKE '[CNY]%' AND note NOT LIKE '[BALANCE_BASE]%' GROUP BY user_id`,
                 [...userIds3, input.ledgerId]
               ) as any[];
               for (const row of (manualRows as any[])) {

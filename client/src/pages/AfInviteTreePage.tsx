@@ -152,15 +152,16 @@ export default function AfInviteTreePage() {
   const isAdmin = (ledgerData as any)?.userRole === 'admin';
   const isCustomAF = (ledgerData as any)?.type === 'custom_af';
 
-  const canSeeRecentDynamics = isCustomAF && ((user as any)?.id === YJH_USER_ID_CONST || isOwner || isAdmin);
-  const isYJH = (user as any)?.id === YJH_USER_ID_CONST || (user as any)?.id === 870413;
-  const isYJHOnly = (user as any)?.id === YJH_USER_ID_CONST;
+  const isYJH = (user as any)?.id === YJH_USER_ID_CONST;
+  const isSuperAdmin = (user as any)?.role === 'super_admin';
+  const canAccessInviteTree = isCustomAF && (isYJH || isOwner || isAdmin || isSuperAdmin);
+  const canSeeRecentDynamics = canAccessInviteTree;
   const JIANG_USER_ID = 870413;
   const canSetMarketPerm = (user as any)?.id === YJH_USER_ID_CONST || (user as any)?.id === JIANG_USER_ID;
 
   const ledgerLoaded = !ledgerLoading && !!ledgerData;
   const inviteTreeViewAsId = ledgerLoaded
-    ? ((isOwner || isAdmin) && (user as any)?.id !== YJH_USER_ID_CONST
+    ? ((isOwner || isAdmin || isSuperAdmin) && !isYJH
         ? YJH_USER_ID_CONST
         : (viewAsUserId || undefined))
     : undefined;
@@ -168,7 +169,7 @@ export default function AfInviteTreePage() {
   const { data: inviteTreeData, isLoading: inviteTreeLoading, refetch: refetchInviteTree } = trpc.ledger.afGetInviteTree.useQuery(
     { ledgerId, ...(inviteTreeViewAsId ? { viewAsUserId: inviteTreeViewAsId } : {}) },
     {
-      enabled: ledgerLoaded && !!ledgerId,
+      enabled: ledgerLoaded && !!ledgerId && canAccessInviteTree,
       // 智能钱包可在其他管理页被手动调账；邀请名单每 15 秒与切回窗口时重新读取当前余额。
       refetchInterval: 15000,
       refetchOnWindowFocus: true,
@@ -194,7 +195,7 @@ export default function AfInviteTreePage() {
   // 管理费数据（应付 + 缺口）
   const { data: afFeeOrders } = trpc.ledger.afAdminGetOrders.useQuery(
     { ledgerId },
-    { enabled: ledgerLoaded && !!ledgerId }
+    { enabled: ledgerLoaded && !!ledgerId && canAccessInviteTree }
   );
   const afFeeByUser = useMemo(() => {
     const orders: any[] = Array.isArray(afFeeOrders) ? afFeeOrders : [];
@@ -284,6 +285,18 @@ export default function AfInviteTreePage() {
   const [showMarketDrawer, setShowMarketDrawer] = useState(false);
 
   const stats = treeStats as any;
+
+  if (ledgerLoaded && !canAccessInviteTree) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F5] px-6 text-center">
+        <div>
+          <p className="text-base font-semibold text-gray-800">无权查看推荐人员名单</p>
+          <p className="mt-2 text-sm text-gray-500">该功能仅对 52 号账本管理员和 YJH 开放。</p>
+          <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="mt-5 rounded-xl bg-[#1A2B4A] px-5 py-2.5 text-sm font-semibold text-white">返回账本</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F5F5' }}>
