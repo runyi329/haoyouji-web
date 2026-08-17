@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { ChevronLeft, Plus, ShieldCheck, Pencil, Trash2, X, Check, Landmark, FileText, PhoneCall } from "lucide-react";
+import { ChevronLeft, Plus, ShieldCheck, Pencil, Trash2, X, Check, Landmark, FileText, PhoneCall, MoreHorizontal } from "lucide-react";
 import { LoanServiceContactSheet } from "@/components/LoanServiceContactSheet";
 import { getHuabeiServiceContact, getPolicyLoanServiceContact, type LoanServiceContact } from "@/lib/loanServiceContacts";
 
@@ -42,13 +42,15 @@ interface PolicyLoanForm {
   repaymentMethod: string;
   loanDate: string;
   dueDate: string;
+  huabeiBillingDay: string;
+  huabeiRepaymentDay: string;
   note: string;
 }
 
 const emptyForm: PolicyLoanForm = {
   insurer: "", policyName: "", policyHolder: "", policyNo: "",
   loanAmount: "", outstandingBalance: "", annualRate: "", repaymentMethod: "",
-  loanDate: "", dueDate: "", note: "",
+  loanDate: "", dueDate: "", huabeiBillingDay: "", huabeiRepaymentDay: "", note: "",
 };
 
 const INSURERS = ["中国人寿", "平安人寿", "太平洋人寿", "新华保险", "泰康人寿", "友邦保险", "香港保险公司", "其他保险公司"];
@@ -65,14 +67,59 @@ const REPAYMENT_METHODS = [
 
 function formatAmount(value: unknown) {
   const amount = Number(value || 0);
-  return `¥${amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  return `${Math.round(amount).toLocaleString()}元`;
 }
 
 function formatDate(value: unknown) {
   if (!value) return "未设置";
   const raw = String(value).slice(0, 10);
   const [y, m, d] = raw.split("-");
-  return y && m && d ? `${y}.${m}.${d}` : raw;
+  if (y && m && d) return `${y}.${m}.${d}`;
+  const parsed = new Date(String(value));
+  if (!Number.isNaN(parsed.getTime())) return `${parsed.getFullYear()}.${String(parsed.getMonth() + 1).padStart(2, '0')}.${String(parsed.getDate()).padStart(2, '0')}`;
+  return raw;
+}
+
+const MONTH_DAY_OPTIONS = Array.from({ length: 31 }, (_, index) => index + 1);
+
+function atMonthDay(year: number, month: number, day: number) {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(Math.max(1, day), lastDay));
+}
+
+function nextMonthlyDay(day: number, after: Date) {
+  const reference = new Date(after);
+  reference.setHours(0, 0, 0, 0);
+  let candidate = atMonthDay(reference.getFullYear(), reference.getMonth(), day);
+  if (candidate <= reference) candidate = atMonthDay(reference.getFullYear(), reference.getMonth() + 1, day);
+  return candidate;
+}
+
+function formatMonthDay(date: Date) {
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+function buildHuabeiCycle(billingDay: unknown, repaymentDay: unknown) {
+  const billDay = Number(billingDay);
+  const repayDay = Number(repaymentDay);
+  if (!Number.isInteger(billDay) || billDay < 1 || billDay > 31 || !Number.isInteger(repayDay) || repayDay < 1 || repayDay > 31) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const upcomingBill = nextMonthlyDay(billDay, today);
+  const todayDue = nextMonthlyDay(repayDay, upcomingBill);
+  const optimalUse = new Date(upcomingBill);
+  optimalUse.setDate(optimalUse.getDate() + 1);
+  const nextBillAfterOptimal = nextMonthlyDay(billDay, optimalUse);
+  const optimalDue = nextMonthlyDay(repayDay, nextBillAfterOptimal);
+  const dayMs = 24 * 60 * 60 * 1000;
+  return {
+    upcomingBill,
+    todayDue,
+    optimalUse,
+    billingDays: Math.max(0, Math.ceil((upcomingBill.getTime() - today.getTime()) / dayMs)),
+    todayDays: Math.max(0, Math.ceil((todayDue.getTime() - today.getTime()) / dayMs)),
+    optimalDays: Math.max(0, Math.ceil((optimalDue.getTime() - today.getTime()) / dayMs)),
+  };
 }
 
 export default function PolicyLoanManagement({
@@ -94,6 +141,7 @@ export default function PolicyLoanManagement({
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [serviceContact, setServiceContact] = useState<LoanServiceContact | null>(null);
+  const [showLoanMenuId, setShowLoanMenuId] = useState<number | null>(null);
   const isHuabei = loanType === "huabei";
   const loanLabel = isHuabei ? "花呗" : "保单贷款";
   const loanHolderLabel = isHuabei ? "使用人" : "投保人 / 持有人";
@@ -126,8 +174,12 @@ export default function PolicyLoanManagement({
     onSuccess: () => { toast.success(`${loanLabel}已更新`); refetch(); setShowForm(false); setEditingId(null); setForm(emptyForm); },
     onError: (e) => toast.error(`更新失败: ${e.message || ""}`),
   });
+  const adminUpdateMutation = trpc.policyLoan.adminUpdate.useMutation({
+    onSuccess: () => { toast.success(`${loanLabel}额度已更新`); refetch(); setShowForm(false); setEditingId(null); setForm(emptyForm); },
+    onError: (e) => toast.error(`更新失败: ${e.message || ""}`),
+  });
   const deleteMutation = trpc.policyLoan.delete.useMutation({
-    onSuccess: () => { toast.success("保单贷款已删除"); refetch(); setDeleteId(null); setDeleteStep(1); },
+    onSuccess: () => { toast.success(`${loanLabel}已删除`); refetch(); setDeleteId(null); setDeleteStep(1); },
     onError: (e) => toast.error(`删除失败: ${e.message || ""}`),
   });
   const adminDeleteMutation = trpc.policyLoan.adminDelete.useMutation({
@@ -181,6 +233,7 @@ export default function PolicyLoanManagement({
       annualRate: loan.annual_rate != null ? String(loan.annual_rate) : "",
       repaymentMethod: loan.repayment_method || "",
       loanDate: loan.loan_date ? String(loan.loan_date).slice(0, 10) : "", dueDate: loan.due_date ? String(loan.due_date).slice(0, 10) : "",
+      huabeiBillingDay: loan.huabei_billing_day != null ? String(loan.huabei_billing_day) : "", huabeiRepaymentDay: loan.huabei_repayment_day != null ? String(loan.huabei_repayment_day) : "",
       note: loan.note || "",
     });
     setShowForm(true);
@@ -190,17 +243,21 @@ export default function PolicyLoanManagement({
     if (!form.insurer.trim()) { toast.error("请选择保险公司"); return; }
     if (!form.policyHolder.trim()) { toast.error("请填写投保人 / 持有人"); return; }
     if (!form.loanAmount || Number(form.loanAmount) <= 0) { toast.error("请填写有效的贷款金额"); return; }
-    if (form.annualRate.trim() === "") { toast.error("请填写贷款年利率"); return; }
+    if (!isHuabei && form.annualRate.trim() === "") { toast.error("请填写贷款年利率"); return; }
+    if (isHuabei && (!form.huabeiBillingDay || !form.huabeiRepaymentDay)) { toast.error("请选择花呗账单日和最后还款日"); return; }
     const payload = {
       insurer: form.insurer.trim(), policyName: form.policyName || undefined, policyHolder: form.policyHolder || undefined,
       policyNo: form.policyNo || undefined, loanAmount: form.loanAmount ? Number(form.loanAmount) : undefined,
       outstandingBalance: form.outstandingBalance ? Number(form.outstandingBalance) : undefined,
       annualRate: form.annualRate ? Number(form.annualRate) : 0,
       repaymentMethod: form.repaymentMethod || undefined, loanDate: form.loanDate || undefined, dueDate: form.dueDate || undefined,
+      huabeiBillingDay: isHuabei && form.huabeiBillingDay ? Number(form.huabeiBillingDay) : undefined,
+      huabeiRepaymentDay: isHuabei && form.huabeiRepaymentDay ? Number(form.huabeiRepaymentDay) : undefined,
       currency: "CNY", note: form.note || undefined, loanType,
     };
     if (editingId) {
-      updateMutation.mutate({ id: editingId, ...payload });
+      if (adminMode) adminUpdateMutation.mutate({ id: editingId, ...payload });
+      else updateMutation.mutate({ id: editingId, ...payload });
     } else if (adminMode && targetUser) {
       adminCreateMutation.mutate({ targetUserId: targetUser.id, ...payload });
     } else {
@@ -215,8 +272,39 @@ export default function PolicyLoanManagement({
         <p className="text-sm">暂无{loanLabel}</p>
         <p className="text-xs mt-1">点击右上角 + 添加</p>
       </div>) : sortedLoans.map((loan: any) => {
-        const balance = loan.outstanding_balance != null ? Number(loan.outstanding_balance) : Number(loan.loan_amount || 0);
+        const totalLimit = Number(loan.loan_amount || 0);
+        const balance = loan.outstanding_balance != null ? Number(loan.outstanding_balance) : totalLimit;
+        const available = Math.max(0, totalLimit - balance);
+        const usedPercent = totalLimit > 0 ? Math.min(100, Math.round((balance / totalLimit) * 100)) : 0;
         const annual = balance * Number(loan.annual_rate || 0) / 100;
+        const huabeiCycle = isHuabei ? buildHuabeiCycle(loan.huabei_billing_day, loan.huabei_repayment_day) : null;
+        if (isHuabei) {
+          return (
+            <div key={loan.id} className="overflow-hidden rounded-2xl border border-[#D7E9FF] bg-white shadow-sm">
+              <div className="relative bg-gradient-to-br from-[#1677FF] via-[#1686FF] to-[#42B6FF] px-3.5 pb-10 pt-3 text-white">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-xs text-white/85"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-[#1677FF]">花</span><span className="font-semibold">支付宝</span><span className="rounded border border-white/35 bg-white/15 px-1.5 text-[10px] font-semibold leading-4">花呗</span><button onClick={() => setServiceContact(getHuabeiServiceContact())} className="flex h-4 w-4 items-center justify-center text-white/80 active:text-white" aria-label="查看花呗官方客服电话"><PhoneCall className="h-3.5 w-3.5" /></button></div>
+                    <p className="mt-1.5 truncate text-sm font-semibold">{loan.policy_name || '花呗额度'}</p>
+                    <p className="mt-0.5 text-xs text-white/70">{loan.policy_holder || '未填写使用人'}</p>
+                  </div>
+                  <div className="relative shrink-0">
+                    <button onClick={() => setShowLoanMenuId(showLoanMenuId === loan.id ? null : loan.id)} className="flex h-7 w-7 items-center justify-center text-white/85 active:text-white" aria-label="花呗管理菜单"><MoreHorizontal className="h-5 w-5" /></button>
+                    {showLoanMenuId === loan.id && <div className="absolute right-0 top-8 z-20 w-28 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-slate-700 shadow-xl"><button onClick={() => { setShowLoanMenuId(null); openEdit(loan); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs active:bg-slate-50"><Pencil className="h-3.5 w-3.5" />更新额度</button><button onClick={() => { setShowLoanMenuId(null); setDeleteId(loan.id); setDeleteStep(1); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-rose-500 active:bg-rose-50"><Trash2 className="h-3.5 w-3.5" />删除</button></div>}
+                  </div>
+                </div>
+                <div className="mt-3 text-xs"><div><span className="text-white/65">额度 </span><span className="font-semibold">{formatAmount(totalLimit)}</span></div><div className="mt-1.5 flex items-end gap-4"><div><span className="text-white/65">可用余额 </span><span className="font-semibold">{formatAmount(available)}</span></div><div><span className="text-white/65">已用额度 </span><span className="font-semibold">{formatAmount(balance)} · {usedPercent}%</span></div></div></div>
+              </div>
+              {huabeiCycle ? <div className="grid grid-cols-4 divide-x divide-[#D7E9FF] bg-[#F8FBFF] px-1 py-2.5 text-center">
+                <div className="px-1"><p className="text-[10px] text-slate-400">账单日</p><p className="mt-1 text-[11px] font-semibold text-slate-700">{formatMonthDay(huabeiCycle.upcomingBill)}</p><p className="mt-0.5 text-[10px] text-slate-400">{huabeiCycle.billingDays}天后</p></div>
+                <div className="px-1"><p className="text-[10px] text-slate-400">最后还款日</p><p className="mt-1 text-[11px] font-semibold text-slate-700">{formatMonthDay(huabeiCycle.todayDue)}</p><p className="mt-0.5 text-[10px] text-slate-400">{huabeiCycle.todayDays}天后</p></div>
+                <div className="px-1"><p className="text-[10px] text-slate-400">今日使用</p><p className="mt-1 text-[11px] font-semibold text-slate-700">{formatMonthDay(new Date())}</p><p className="mt-0.5 text-[10px] text-slate-400">{huabeiCycle.todayDays}天账期</p></div>
+                <div className="px-1"><p className="text-[10px] text-slate-400">最优使用日</p><p className="mt-1 text-[11px] font-semibold text-[#1677FF]">{formatMonthDay(huabeiCycle.optimalUse)}</p><p className="mt-0.5 text-[10px] text-slate-400">{huabeiCycle.optimalDays}天账期</p></div>
+              </div> : <div className="bg-[#F8FBFF] px-3 py-3 text-center text-xs text-slate-400">请在“更新额度”中设置账单日和最后还款日</div>}
+              {loan.note && <div className="flex gap-1.5 border-t border-[#E7F2FF] px-3 py-2 text-xs text-slate-500"><FileText className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{loan.note}</span></div>}
+            </div>
+          );
+        }
         return (
           <div key={loan.id} className="rounded-2xl overflow-hidden bg-white shadow-sm border border-slate-100">
             <div className="relative bg-gradient-to-br from-[#17345E] to-[#27507D] p-4 pb-10 text-white">
@@ -235,7 +323,7 @@ export default function PolicyLoanManagement({
                 <div><p className="text-white/60 text-xs">当前贷款余额</p><p className="text-2xl font-bold mt-0.5">{formatAmount(balance)}</p></div>
                 <div className="text-right"><p className="text-white/60 text-xs">年利率</p><p className="text-lg font-semibold mt-0.5">{loan.annual_rate != null ? `${Number(loan.annual_rate).toFixed(2)}%` : "未设置"}</p></div>
               </div>
-              <button onClick={() => setServiceContact(isHuabei ? getHuabeiServiceContact() : getPolicyLoanServiceContact(loan.insurer))} className="absolute bottom-2.5 right-3 flex h-7 w-7 items-center justify-center text-white/85 active:text-white" aria-label="查看官方客服电话"><PhoneCall className="h-4 w-4" /></button>
+              <button onClick={() => setServiceContact(getPolicyLoanServiceContact(loan.insurer))} className="absolute bottom-2.5 right-3 flex h-7 w-7 items-center justify-center text-white/85 active:text-white" aria-label="查看官方客服电话"><PhoneCall className="h-4 w-4" /></button>
             </div>
             <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <div><p className="text-gray-400 text-xs">贷款金额</p><p className="text-gray-800 font-semibold mt-0.5">{loan.loan_amount != null ? formatAmount(loan.loan_amount) : "未设置"}</p></div>
@@ -268,19 +356,16 @@ export default function PolicyLoanManagement({
 
       {showForm && <div className="fixed inset-0 z-50 flex justify-center items-end overflow-hidden" style={{ background: "rgba(0,0,0,.5)" }}>
         <div className="w-full max-w-[480px] bg-white rounded-t-2xl max-h-[90dvh] overflow-x-hidden overflow-y-auto shadow-2xl">
-          <div className="sticky top-0 z-10 bg-white flex items-center justify-between px-4 py-3 border-b border-gray-100"><div><h2 className="font-semibold text-gray-800">{editingId ? `编辑${loanLabel}` : `添加${loanLabel}`}</h2><p className="text-xs text-gray-400 mt-0.5">带 * 的信息将用于建立贷款档案</p></div><button onClick={() => { setShowForm(false); setEditingId(null); }}><X className="w-5 h-5 text-gray-400" /></button></div>
+          <div className="sticky top-0 z-10 bg-white flex items-center justify-between px-4 py-3 border-b border-gray-100"><div><h2 className="font-semibold text-gray-800">{editingId ? (isHuabei ? '更新花呗额度' : `编辑${loanLabel}`) : `添加${loanLabel}`}</h2><p className="text-xs text-gray-400 mt-0.5">带 * 的信息将用于建立贷款档案</p></div><button onClick={() => { setShowForm(false); setEditingId(null); }}><X className="w-5 h-5 text-gray-400" /></button></div>
           <div className="p-4 space-y-4 overflow-x-hidden">
             {isHuabei ? <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"><span className="text-xs text-gray-500">贷款平台</span><span className="text-xs font-semibold text-[#1A2B4A]">支付宝 · 花呗</span></div> : <div><label className="text-xs text-gray-500 block mb-1.5">保险公司 *</label><select value={form.insurer} onChange={e => setForm(f => ({ ...f, insurer: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white"><option value="">选择保险公司</option>{INSURERS.map(v => <option key={v} value={v}>{v}</option>)}</select></div>}
             <div><label className="text-xs text-gray-500 block mb-1.5">{isHuabei ? "花呗账户名称（选填）" : "保单名称（选填）"}</label><input value={form.policyName} onChange={e => setForm(f => ({ ...f, policyName: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder={isHuabei ? "如：个人花呗" : "如：某某终身寿险"} /></div>
             <div className="grid grid-cols-2 gap-3"><div><label className="text-xs text-gray-500 block mb-1.5">{loanHolderLabel} *</label><input value={form.policyHolder} onChange={e => setForm(f => ({ ...f, policyHolder: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder="姓名" /></div><div><label className="text-xs text-gray-500 block mb-1.5">{isHuabei ? "账户标识（选填）" : "保单号（选填）"}</label><input value={form.policyNo} onChange={e => setForm(f => ({ ...f, policyNo: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder="可选" /></div></div>
-            <div className="grid grid-cols-2 gap-3"><div><label className="text-xs text-gray-500 block mb-1.5">贷款金额 *</label><input type="number" value={form.loanAmount} onChange={e => setForm(f => ({ ...f, loanAmount: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder="0" /></div><div><label className="text-xs text-gray-500 block mb-1.5">当前贷款余额（选填）</label><input type="number" value={form.outstandingBalance} onChange={e => setForm(f => ({ ...f, outstandingBalance: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder="0" /></div></div>
-            <div><label className="text-xs text-gray-500 block mb-1.5">贷款年利率（%） *</label><input type="number" step="0.01" value={form.annualRate} onChange={e => setForm(f => ({ ...f, annualRate: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder="如：4.75" /></div>
-            {annualInterest > 0 && <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 text-xs text-amber-700">按当前贷款余额估算，年化利息约 <span className="font-semibold">{formatAmount(annualInterest)}</span>。</div>}
-            <div><label className="text-xs text-gray-500 block mb-1.5">还款方式</label><select value={form.repaymentMethod} onChange={e => setForm(f => ({ ...f, repaymentMethod: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white"><option value="">选择还款方式</option>{REPAYMENT_METHODS.map(method => <option key={method} value={method}>{method}</option>)}</select></div>
-            <div className="grid min-w-0 grid-cols-2 gap-2"><div className="min-w-0"><label className="mb-1 block text-xs leading-4 text-gray-500">贷款日期</label><input type="date" value={form.loanDate} onChange={e => setForm(f => ({ ...f, loanDate: e.target.value }))} className="!h-9 !min-h-0 block w-full min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-0 text-[11px] leading-none" /></div><div className="min-w-0"><label className="mb-1 block text-xs leading-4 text-gray-500">到期日</label><input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} className="!h-9 !min-h-0 block w-full min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-0 text-[11px] leading-none" /></div></div>
+            <div className="grid grid-cols-2 gap-3"><div><label className="text-xs text-gray-500 block mb-1.5">{isHuabei ? '总额度' : '贷款金额'} *</label><input type="number" value={form.loanAmount} onChange={e => setForm(f => ({ ...f, loanAmount: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder="0" /></div><div><label className="text-xs text-gray-500 block mb-1.5">{isHuabei ? '本期应还（选填）' : '当前贷款余额（选填）'}</label><input type="number" value={form.outstandingBalance} onChange={e => setForm(f => ({ ...f, outstandingBalance: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder="0" /></div></div>
+            {isHuabei ? <><div className="grid grid-cols-2 gap-3"><div><label className="mb-1.5 block text-xs text-gray-500">账单日 *</label><select value={form.huabeiBillingDay} onChange={e => setForm(f => ({ ...f, huabeiBillingDay: e.target.value }))} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm"><option value="">每月几日</option>{MONTH_DAY_OPTIONS.map(day => <option key={day} value={day}>每月 {day} 日</option>)}</select></div><div><label className="mb-1.5 block text-xs text-gray-500">最后还款日 *</label><select value={form.huabeiRepaymentDay} onChange={e => setForm(f => ({ ...f, huabeiRepaymentDay: e.target.value }))} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm"><option value="">每月几日</option>{MONTH_DAY_OPTIONS.map(day => <option key={day} value={day}>每月 {day} 日</option>)}</select></div></div><div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs leading-5 text-blue-700">按时全额还款通常不产生利息；花呗账单日和最后还款日请以支付宝“我的账单”实际显示为准。</div></> : <><div><label className="text-xs text-gray-500 block mb-1.5">贷款年利率（%） *</label><input type="number" step="0.01" value={form.annualRate} onChange={e => setForm(f => ({ ...f, annualRate: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder="如：4.75" /></div>{annualInterest > 0 && <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 text-xs text-amber-700">按当前贷款余额估算，年化利息约 <span className="font-semibold">{formatAmount(annualInterest)}</span>。</div>}<div><label className="text-xs text-gray-500 block mb-1.5">还款方式</label><select value={form.repaymentMethod} onChange={e => setForm(f => ({ ...f, repaymentMethod: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white"><option value="">选择还款方式</option>{REPAYMENT_METHODS.map(method => <option key={method} value={method}>{method}</option>)}</select></div><div className="grid min-w-0 grid-cols-2 gap-2"><div className="min-w-0"><label className="mb-1 block text-xs leading-4 text-gray-500">贷款日期</label><input type="date" value={form.loanDate} onChange={e => setForm(f => ({ ...f, loanDate: e.target.value }))} className="!h-9 !min-h-0 block w-full min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-0 text-[11px] leading-none" /></div><div className="min-w-0"><label className="mb-1 block text-xs leading-4 text-gray-500">到期日</label><input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} className="!h-9 !min-h-0 block w-full min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-0 text-[11px] leading-none" /></div></div></>}
             <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"><span className="text-xs text-gray-500">计价币种</span><span className="text-xs font-semibold text-[#1A2B4A]">人民币（CNY）</span></div>
             <div><label className="text-xs text-gray-500 block mb-1.5">备注</label><textarea rows={2} value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm resize-none" placeholder="如：利息支付方式、续期约定等" /></div>
-            <button disabled={createMutation.isPending || updateMutation.isPending || adminCreateMutation.isPending} onClick={submit} className="w-full py-3 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-[#1A2B4A] to-[#2D5C8F]"><Check className="w-4 h-4" /><span>{editingId ? "保存修改" : `添加${loanLabel}`}</span></button>
+            <button disabled={createMutation.isPending || updateMutation.isPending || adminUpdateMutation.isPending || adminCreateMutation.isPending} onClick={submit} className={`w-full py-3 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2 ${isHuabei ? 'bg-gradient-to-r from-[#1677FF] to-[#38A7FF]' : 'bg-gradient-to-r from-[#1A2B4A] to-[#2D5C8F]'}`}><Check className="w-4 h-4" /><span>{editingId ? (isHuabei ? '保存额度' : '保存修改') : `添加${loanLabel}`}</span></button>
           </div>
         </div>
       </div>}

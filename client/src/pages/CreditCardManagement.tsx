@@ -9,29 +9,11 @@ import { UserAvatar } from "@/components/UserAvatar";
 import {
   ChevronLeft, Plus, CreditCard, Pencil, Trash2,
   X, Check, Users, User, Search, ChevronDown, Lightbulb, ToggleLeft, ToggleRight,
-  Eye, EyeOff, ShieldCheck, PhoneCall, RefreshCw,
+  Eye, EyeOff, ShieldCheck, PhoneCall, RefreshCw, SlidersHorizontal, Loader2,
 } from "lucide-react";
 import { LoanServiceContactSheet } from "@/components/LoanServiceContactSheet";
 import { getCreditCardServiceContact, type LoanServiceContact } from "@/lib/loanServiceContacts";
-
-const BANK_COLORS: Record<string, { bg: string; border: string }> = {
-  "招商银行": { bg: "#E8001D", border: "#C0001A" },
-  "工商银行": { bg: "#D4000A", border: "#A80008" },
-  "建设银行": { bg: "#003087", border: "#002060" },
-  "农业银行": { bg: "#007A33", border: "#005A25" },
-  "中国银行": { bg: "#CC0000", border: "#990000" },
-  "交通银行": { bg: "#005BAC", border: "#004080" },
-  "浦发银行": { bg: "#1B4F8A", border: "#123A6A" },
-  "民生银行": { bg: "#0066CC", border: "#004A99" },
-  "光大银行": { bg: "#E8001D", border: "#B00015" },
-  "华夏银行": { bg: "#CC0000", border: "#990000" },
-  "中信银行": { bg: "#CC0000", border: "#990000" },
-  "兴业银行": { bg: "#006633", border: "#004D26" },
-  "平安银行": { bg: "#FF6600", border: "#CC5200" },
-  "广发银行": { bg: "#CC0000", border: "#990000" },
-  "邮储银行": { bg: "#006633", border: "#004D26" },
-};
-const DEFAULT_COLOR = { bg: "#4A5568", border: "#2D3748" };
+import { getBankBrand, normalizeDisplayBankName } from "@/lib/bankBranding";
 
 const BANK_OPTIONS = [
   // 六大国有銀行（规模最大）
@@ -229,6 +211,131 @@ function genMonthOptions() {
 }
 const MONTH_OPTIONS = genMonthOptions();
 
+function getCreditCardCapacity(card: any) {
+  const baseLimit = Number(card.credit_limit || 0);
+  const hasTempLimit = card.temp_limit != null && Number(card.temp_limit) > 0;
+  const tempLimit = hasTempLimit ? Number(card.temp_limit) : null;
+  const tempActive = hasTempLimit && isTempLimitActive(card.temp_limit_start, card.temp_limit_end);
+  const rawAvailable = card.available_limit != null ? Number(card.available_limit) : null;
+
+  if (tempActive && tempLimit != null) {
+    const availableLimit = rawAvailable == null ? tempLimit : Math.max(0, Math.min(tempLimit, rawAvailable));
+    const usedLimit = Math.max(0, tempLimit - availableLimit);
+    return { baseLimit, tempLimit, tempActive, tempExpired: false, totalLimit: tempLimit, availableLimit, usedLimit, overBaseLimit: Math.max(0, usedLimit - baseLimit) };
+  }
+
+  if (hasTempLimit && tempLimit != null && rawAvailable != null) {
+    // 到期后仍用原临时额度与当时记录的可用额度，保留临时额度期间的真实已用金额。
+    const usedLimit = Math.max(0, tempLimit - rawAvailable);
+    const availableLimit = Math.max(0, baseLimit - usedLimit);
+    return { baseLimit, tempLimit, tempActive: false, tempExpired: true, totalLimit: baseLimit, availableLimit, usedLimit, overBaseLimit: Math.max(0, usedLimit - baseLimit) };
+  }
+
+  const availableLimit = rawAvailable == null ? baseLimit : Math.max(0, Math.min(baseLimit, rawAvailable));
+  const usedLimit = Math.max(0, baseLimit - availableLimit);
+  return { baseLimit, tempLimit, tempActive: false, tempExpired: false, totalLimit: baseLimit, availableLimit, usedLimit, overBaseLimit: 0 };
+}
+
+function LoanCapacitySummary({
+  viewMode,
+  cards,
+  adminUserFilter,
+  isCardsLoading,
+}: {
+  viewMode: 'self' | 'admin';
+  cards: any[];
+  adminUserFilter: { id: number; name: string } | null;
+  isCardsLoading: boolean;
+}) {
+  const adminMode = viewMode === 'admin';
+  const { data: myPolicyLoans = [], isFetching: isFetchingMyPolicy } = trpc.policyLoan.list.useQuery({ loanType: 'policy' }, { enabled: !adminMode });
+  const { data: myHuabeiLoans = [], isFetching: isFetchingMyHuabei } = trpc.policyLoan.list.useQuery({ loanType: 'huabei' }, { enabled: !adminMode });
+  const { data: allPolicyLoans = [], isFetching: isFetchingAllPolicy } = trpc.policyLoan.adminListAll.useQuery({ loanType: 'policy' }, { enabled: adminMode });
+  const { data: allHuabeiLoans = [], isFetching: isFetchingAllHuabei } = trpc.policyLoan.adminListAll.useQuery({ loanType: 'huabei' }, { enabled: adminMode });
+
+  const summary = useMemo(() => {
+    const scopedCards = adminMode && adminUserFilter
+      ? (cards as any[]).filter((card) => Number(card.user_id) === adminUserFilter.id)
+      : (cards as any[]);
+    const matchesSelectedAdminUser = (loan: any) => !adminMode || !adminUserFilter || Number(loan.user_id) === adminUserFilter.id;
+    const scopedPolicyLoans = ((adminMode ? allPolicyLoans : myPolicyLoans) as any[]).filter(matchesSelectedAdminUser);
+    const scopedHuabeiLoans = ((adminMode ? allHuabeiLoans : myHuabeiLoans) as any[]).filter(matchesSelectedAdminUser);
+
+    let totalLimit = 0;
+    let usedLimit = 0;
+    let availableLimit = 0;
+
+    scopedCards.forEach((card: any) => {
+      const capacity = getCreditCardCapacity(card);
+      totalLimit += capacity.totalLimit;
+      availableLimit += capacity.availableLimit;
+      usedLimit += capacity.usedLimit;
+    });
+
+    [...scopedPolicyLoans, ...scopedHuabeiLoans].forEach((loan: any) => {
+      const limit = Number(loan.loan_amount || 0);
+      const used = loan.outstanding_balance != null ? Math.max(0, Number(loan.outstanding_balance)) : limit;
+      const safeUsed = Math.min(limit, used);
+      totalLimit += limit;
+      usedLimit += safeUsed;
+      availableLimit += Math.max(0, limit - safeUsed);
+    });
+
+    return {
+      totalLimit,
+      usedLimit,
+      availableLimit,
+      cardCount: scopedCards.length,
+      policyCount: scopedPolicyLoans.length,
+      huabeiCount: scopedHuabeiLoans.length,
+    };
+  }, [adminMode, adminUserFilter, cards, myPolicyLoans, myHuabeiLoans, allPolicyLoans, allHuabeiLoans]);
+
+  const title = adminMode
+    ? (adminUserFilter ? `${adminUserFilter.name}的额度汇总` : '所有用户额度汇总')
+    : '我的额度汇总';
+  const formatAmount = (value: number) => value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const isLoading = isCardsLoading || (adminMode ? isFetchingAllPolicy || isFetchingAllHuabei : isFetchingMyPolicy || isFetchingMyHuabei);
+
+  return (
+    <div className="border-b border-slate-100 bg-white px-4 py-3">
+      <div className="overflow-hidden rounded-2xl border border-[#D8E5F5] bg-gradient-to-br from-[#F4F9FF] via-white to-[#EEF6FF] shadow-sm">
+        <div className="flex items-start justify-between px-3.5 pt-3">
+          <div>
+            <p className="text-xs font-semibold text-[#1A2B4A]">{title}</p>
+            <p className="mt-0.5 text-[10px] text-slate-400">信用卡、保单贷款与花呗统一统计</p>
+          </div>
+          <span className="rounded-full bg-[#1A2B4A]/8 px-2 py-1 text-[10px] font-medium text-[#1A2B4A]">人民币元</span>
+        </div>
+        <div className="px-3.5 pb-3 pt-2">
+          {isLoading ? (
+            <div className="flex h-[82px] items-center justify-center gap-2 text-xs text-slate-400">
+              <Loader2 className="h-4 w-4 animate-spin text-[#1A2B4A]" />
+              正在加载{adminMode ? '所有用户' : '我的'}贷款数据...
+            </div>
+          ) : (
+            <>
+              <p className="text-[11px] text-slate-400">总额度</p>
+              <p className="mt-0.5 text-[26px] font-bold leading-7 tracking-tight text-[#1A2B4A]">{formatAmount(summary.totalLimit)}</p>
+              <div className="mt-3 grid grid-cols-2 divide-x divide-[#D8E5F5] rounded-xl border border-[#D8E5F5] bg-white/80 py-2">
+                <div className="px-3">
+                  <p className="text-[10px] text-slate-400">剩余可用额度</p>
+                  <p className="mt-0.5 text-sm font-bold text-emerald-600">{formatAmount(summary.availableLimit)}</p>
+                </div>
+                <div className="px-3">
+                  <p className="text-[10px] text-slate-400">已用额度</p>
+                  <p className="mt-0.5 text-sm font-bold text-rose-500">{formatAmount(summary.usedLimit)}</p>
+                </div>
+              </div>
+              <p className="mt-2 text-[10px] text-slate-400">信用卡 {summary.cardCount} 张 · 保单贷款 {summary.policyCount} 笔 · 花呗 {summary.huabeiCount} 笔</p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CreditCardManagement() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
@@ -245,6 +352,7 @@ export default function CreditCardManagement() {
   const [showForm, setShowForm] = useState(false);
   const [showAddTypePicker, setShowAddTypePicker] = useState(false);
   const [showLoanHeaderMenu, setShowLoanHeaderMenu] = useState(false);
+  const [showLoanControls, setShowLoanControls] = useState(false);
   const [loanTypeFilter, setLoanTypeFilter] = useState<'all' | 'creditCard' | 'policyLoan' | 'huabei'>('all');
   const [loanDueFilter, setLoanDueFilter] = useState<'all' | 'dueSoon' | 'overdue' | 'unset'>('all');
   const [loanSort, setLoanSort] = useState<'default' | 'dueDate' | 'rate' | 'amount'>('default');
@@ -291,10 +399,10 @@ export default function CreditCardManagement() {
   const [showBankPicker, setShowBankPicker] = useState(false);
   const [showNetworkPicker, setShowNetworkPicker] = useState(false);
 
-  const { data: myCards = [], refetch: refetchMy } = trpc.creditCard.list.useQuery(
+  const { data: myCards = [], refetch: refetchMy, isFetching: isFetchingMyCards } = trpc.creditCard.list.useQuery(
     undefined, { enabled: viewMode === 'self' }
   );
-  const { data: allCards = [], refetch: refetchAll } = trpc.creditCard.adminListAll.useQuery(
+  const { data: allCards = [], refetch: refetchAll, isFetching: isFetchingAllCards } = trpc.creditCard.adminListAll.useQuery(
     undefined, { enabled: isAdmin && viewMode === 'admin' }
   );
   const { data: userSearchResults = [] } = trpc.sharing.searchUsers.useQuery(
@@ -326,20 +434,19 @@ export default function CreditCardManagement() {
 
   const refetch = () => { refetchMy(); refetchAll(); };
 
-  const handleForceRefresh = async () => {
-    if (isRefreshingLoans) return;
-    setIsRefreshingLoans(true);
-    try {
-      // 当前视图的信用卡立即强制重新请求；两类通用贷款由刷新标记通知子组件重新请求真实接口。
-      if (viewMode === 'admin') await refetchAll();
-      else await refetchMy();
+  useEffect(() => {
+    if (viewMode === 'admin' && isAdmin) {
+      // 顶部多人图标切换后主动刷新所有人信用卡、保单贷款和花呗真实数据。
+      void refetchAll();
       setLoanRefreshRequestId((value) => value + 1);
-      toast.success('贷款数据已刷新');
-    } catch (error: any) {
-      toast.error(`刷新失败：${error?.message || '请稍后重试'}`);
-    } finally {
-      setIsRefreshingLoans(false);
     }
+  }, [viewMode, isAdmin, refetchAll]);
+
+  const handleForceRefresh = () => {
+    if (isRefreshingLoans) return;
+    // 使用整页重载重新初始化当前账户、贷款列表、管理员筛选和子组件查询，不显示额外提示框。
+    setIsRefreshingLoans(true);
+    window.setTimeout(() => window.location.reload(), 80);
   };
 
   const createMutation = trpc.creditCard.create.useMutation({
@@ -372,7 +479,7 @@ export default function CreditCardManagement() {
 
   const handleEdit = (card: any) => {
     setEditingId(card.id);
-    const hasTemp = !!(card.temp_limit && card.temp_limit_end);
+    const hasTemp = !!(card.temp_limit && card.temp_limit_end) && isTempLimitActive(card.temp_limit_start, card.temp_limit_end);
     setForm({
       bankName: card.bank_name || "", cardHolder: card.card_holder || "",
       cardLast4: card.card_last4 || "", creditLimit: card.credit_limit ? String(card.credit_limit) : "",
@@ -397,8 +504,10 @@ export default function CreditCardManagement() {
       toast.error("请完整填写临时额度金额和到期日");
       return;
     }
-    // 新增信用卡不传未启用的临时额度字段；编辑时显式传 null，确保可以清空既有临时额度。
-    const clearedTempLimit = editingId ? null : undefined;
+    // 新增信用卡不传未启用的临时额度字段；编辑时可清空有效临时额度。
+    // 已到期的临时额度则保留为历史快照，用于展示当时形成的真实已用金额。
+    const editingExpiredTemp = editingId && form.tempLimit && form.tempLimitEnd && !isTempLimitActive(undefined, form.tempLimitEnd);
+    const clearedTempLimit = editingId && !editingExpiredTemp ? null : undefined;
     const payload = {
       bankName: form.bankName,
       cardHolder: form.cardHolder || undefined,
@@ -428,8 +537,6 @@ export default function CreditCardManagement() {
     if (viewMode === 'admin' && isAdmin) adminDeleteMutation.mutate({ id });
     else deleteMutation.mutate({ id });
   };
-
-  const bankColor = (name: string) => BANK_COLORS[name] || DEFAULT_COLOR;
 
   // 最优刷卡建议（表单实时预览）
   const bestSwipe = useMemo(() => {
@@ -489,13 +596,15 @@ export default function CreditCardManagement() {
   }, [allCards, viewMode, adminUserFilter, loanDueFilter, loanSort]);
 
   const CardItem = ({ card }: { card: any }) => {
-    const color = bankColor(card.bank_name);
+    const brand = getBankBrand(card.bank_name);
     const nextBilling = card.billing_day ? getNextMonthlyDate(Number(card.billing_day)) : null;
     const nextDue = card.due_day ? getNextMonthlyDate(Number(card.due_day)) : null;
     const swipe = card.billing_day && card.due_day ? calcBestSwipeDay(card.billing_day, card.due_day) : null;
-    const tempActive = isTempLimitActive(card.temp_limit_start, card.temp_limit_end);
+    const capacity = getCreditCardCapacity(card);
+    const { baseLimit: regularLimit, tempLimit: tempLimitValue, tempActive, tempExpired, totalLimit: activeLimit, availableLimit: currentAvailableLimit, usedLimit: currentUsedLimit, overBaseLimit } = capacity;
     const tempEndLabel = card.temp_limit_end ? formatDateLabel(card.temp_limit_end) : '';
-    const currencyLabel = String(card.currency || 'CNY').split(',').map((currency: string) => currency.trim() === 'CNY' ? '人民币元' : currency.trim()).join(' / ');
+    const currencyLabel = String(card.currency || 'CNY').split(',').map((currency: string) => currency.trim() === 'CNY' ? '元' : currency.trim()).join(' / ');
+    const formatCardAmount = (value: number) => Math.round(value).toLocaleString();
     const [showFullCard, setShowFullCard] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const [showAvailableInput, setShowAvailableInput] = useState(false);
@@ -503,20 +612,26 @@ export default function CreditCardManagement() {
     const [serviceContact, setServiceContact] = useState<LoanServiceContact | null>(null);
 
     return (
-      <div className="rounded-2xl overflow-hidden shadow-md">
-        {/* 卡片主体 */}
-        <div className="relative px-3.5 pt-3 pb-9" style={{ background: `linear-gradient(135deg, ${color.bg} 0%, ${color.border} 100%)` }}>
+      <div className="overflow-hidden rounded-2xl border shadow-md" style={{ borderColor: brand.line, boxShadow: `0 8px 20px ${brand.border}24` }}>
+        {/* 卡片主体：每家银行使用自身主色的渐变，而非统一深色。 */}
+        <div className="relative px-3.5 pt-3 pb-9" style={{ background: `linear-gradient(135deg, ${brand.start} 0%, ${brand.end} 100%)` }}>
+          <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full border border-white/10 bg-white/5" />
+          <div className="pointer-events-none absolute right-7 top-10 h-16 w-16 rounded-full border border-white/10" />
 
           <div className="relative z-10">
             <div className="flex items-start justify-between">
               <div className="min-w-0 pr-2">
                 {/* 银行、类型与卡组织集中在首行；持卡人姓名随卡号展示 */}
                 <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                  {card.bank_name && <p className="text-sm font-bold text-white">{card.bank_name.replace(/銀/g, "银").replace(/購/g, "购").replace(/廣/g, "广")}</p>}
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/95 p-1 shadow-sm" title={`${normalizeDisplayBankName(card.bank_name)}标识`}>
+                    {brand.logo ? <img src={brand.logo} alt="" className="h-full w-full object-contain" /> : <span className="text-xs font-black" style={{ color: brand.start }}>{brand.mark}</span>}
+                  </span>
+                  <p className="text-sm font-bold text-white">{normalizeDisplayBankName(card.bank_name)}</p>
                   <span className="rounded border border-white/30 bg-white/10 px-1.5 text-[10px] font-semibold leading-4 text-white/85">信用卡</span>
                   {card.card_network && card.card_network.split(',').map((net: string) => (
                     <span key={net} className="rounded border border-white/25 px-1 text-[10px] leading-4 text-white/70">{net.trim()}</span>
                   ))}
+                  <button onClick={() => setServiceContact(getCreditCardServiceContact(card.bank_name))} className="flex h-4 w-4 shrink-0 items-center justify-center text-white/80 active:text-white" aria-label="查看官方客服电话"><PhoneCall className="h-3.5 w-3.5" /></button>
                 </div>
                 <div className="mt-0.5 flex min-w-0 items-center gap-x-2 overflow-hidden whitespace-nowrap">
                   {(card.card_holder || card.card_name) && <span className="max-w-16 shrink-0 truncate text-xs font-semibold text-white/85">{card.card_holder || card.card_name}</span>}
@@ -575,7 +690,7 @@ export default function CreditCardManagement() {
                       )}
                       <button
                         onClick={() => {
-                          setAvailableInputVal(card.available_limit != null ? String(card.available_limit) : '');
+                          setAvailableInputVal(String(currentAvailableLimit));
                           setShowAvailableInput(true);
                           setShowMenu(false);
                         }}
@@ -596,44 +711,33 @@ export default function CreditCardManagement() {
                 )}
               </div>
             </div>
-            {/* 额度行：正常额度 + 临时额度标签 */}
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {card.credit_limit && (() => {
-                const limit = Number(card.credit_limit);
-                const avail = card.available_limit != null ? Number(card.available_limit) : null;
-                const used = avail != null ? limit - avail : null;
-                const usedPct = avail != null ? Math.round((used! / limit) * 100) : null;
-                return (
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
-                    <span className="text-white/70">额度 <span className="font-semibold text-white">{limit.toLocaleString()}</span></span>
-                    <span className="text-white/60">{currencyLabel}</span>
-                    {avail != null && <span className="text-white/70">· 可用 <span className="font-semibold text-white">{avail.toLocaleString()}</span></span>}
-                    {used != null && <span className="text-white/70">· 已用 <span className="font-semibold text-white">{used.toLocaleString()}</span> · {usedPct}%</span>}
-                    {used != null && (
-                      <div className="h-1 w-14 rounded-full bg-white/20 overflow-hidden">
-                        <div className={`h-full rounded-full ${
-                          usedPct! >= 90 ? 'bg-red-400' : usedPct! >= 70 ? 'bg-amber-400' : 'bg-green-400'
-                        }`} style={{width: `${Math.min(100, usedPct!)}%`}} />
-                      </div>
+            {/* 额度信息：第一行基础/临时额度，第二行可用/已用额度。 */}
+            {regularLimit > 0 && (() => {
+              const usedPct = activeLimit > 0 ? Math.round((currentUsedLimit / activeLimit) * 100) : 0;
+              return (
+                <div className="mt-2 space-y-1.5 text-xs">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-white/70">额度 <span className="font-semibold text-white">{formatCardAmount(regularLimit)}</span></span>
+                    {currencyLabel !== '元' && <span className="text-white/60">{currencyLabel}</span>}
+                    {tempLimitValue != null && (
+                      <span className={`rounded-full px-2 py-0.5 font-medium ${tempActive ? 'bg-amber-300 text-amber-950' : 'bg-white/15 text-white/70'}`}>
+                        {tempActive ? `临时额度 ${formatCardAmount(tempLimitValue)} · 至${tempEndLabel}` : `临时额度已到期 · ${tempEndLabel}`}
+                      </span>
                     )}
                   </div>
-                );
-              })()}
-              {/* 临时额度标签 */}
-              {card.temp_limit && (
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  tempActive
-                    ? 'bg-amber-400 text-amber-900'
-                    : 'bg-white/20 text-white/60'
-                }`}>
-                  {tempActive
-                    ? `临时额度 ${Number(card.temp_limit).toLocaleString()} · 至${tempEndLabel}`
-                    : `临时额度（已过期）`}
-                </span>
-              )}
-            </div>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-white/75">可用 <span className="font-semibold text-white">{formatCardAmount(currentAvailableLimit)}</span></span>
+                    <span className="text-white/75">已用 <span className="font-semibold text-white">{formatCardAmount(currentUsedLimit)}</span> · {usedPct}%</span>
+                    <div className="h-1 w-14 overflow-hidden rounded-full bg-white/20">
+                      <div className={`h-full rounded-full ${usedPct >= 100 ? 'bg-rose-400' : usedPct >= 90 ? 'bg-red-400' : usedPct >= 70 ? 'bg-amber-300' : 'bg-emerald-300'}`} style={{ width: `${Math.min(100, usedPct)}%` }} />
+                    </div>
+                    {tempExpired && overBaseLimit > 0 && <span className="rounded bg-rose-400/20 px-1.5 py-0.5 text-[10px] font-medium text-rose-100">超基础额度 {formatCardAmount(overBaseLimit)}</span>}
+                  </div>
+                </div>
+              );
+            })()}
+
           </div>
-          <button onClick={() => setServiceContact(getCreditCardServiceContact(card.bank_name))} className="absolute bottom-2.5 right-3 flex h-7 w-7 items-center justify-center text-white/85 active:text-white" aria-label="查看官方客服电话"><PhoneCall className="h-4 w-4" /></button>
         </div>
 
         {/* 可用额度输入弹出 */}
@@ -647,7 +751,7 @@ export default function CreditCardManagement() {
                 </button>
               </div>
               {card.credit_limit && (
-                <p className="text-gray-400 text-xs mb-3">信用额度 {Number(card.credit_limit).toLocaleString()} {currencyLabel}</p>
+                <p className="text-gray-400 text-xs mb-3">当前总额度 {activeLimit.toLocaleString()} {currencyLabel}{tempActive && tempLimitValue != null ? '（临时额度有效）' : tempExpired ? '（临时额度已到期，已用金额已保留）' : ''}</p>
               )}
               <input
                 type="number"
@@ -657,18 +761,26 @@ export default function CreditCardManagement() {
                 onChange={e => setAvailableInputVal(e.target.value)}
                 autoFocus
               />
-              {availableInputVal && card.credit_limit && (
-                <p className="text-gray-400 text-xs mb-4">
-                  已用额度：<span className="text-gray-700 font-medium">{(Number(card.credit_limit) - Number(availableInputVal)).toLocaleString()}</span>
-                  {' · '}
-                  <span className="text-gray-700 font-medium">{Math.round(((Number(card.credit_limit) - Number(availableInputVal)) / Number(card.credit_limit)) * 100)}%</span>
-                </p>
-              )}
+              {availableInputVal && regularLimit > 0 && (() => {
+                const previewUsed = tempExpired && tempLimitValue != null
+                  ? Math.max(0, tempLimitValue - Number(availableInputVal))
+                  : Math.max(0, activeLimit - Number(availableInputVal));
+                return (
+                  <p className="text-gray-400 text-xs mb-4">
+                    已用额度：<span className="text-gray-700 font-medium">{previewUsed.toLocaleString()}</span>
+                    {' · '}
+                    <span className="text-gray-700 font-medium">{Math.round((previewUsed / activeLimit) * 100)}%</span>
+                    {tempActive && tempLimitValue != null && <span className="text-amber-600">（按临时额度计算）</span>}
+                    {tempExpired && <span className="text-rose-500">（临时额度已到期，保留临时额度期间已用金额）</span>}
+                  </p>
+                );
+              })()}
               <button
                 onClick={async () => {
                   const val = Number(availableInputVal);
                   if (isNaN(val) || val < 0) return;
                   try {
+                    // 保留到期临时额度快照，用于持续展示该期间形成的真实已用金额。
                     await updateMutation.mutateAsync({ id: card.id, availableLimit: val } as any);
                     await refetch();
                     setShowAvailableInput(false);
@@ -685,8 +797,8 @@ export default function CreditCardManagement() {
           </div>
         )}
 
-        {/* 账单信息 */}
-        <div className="grid grid-cols-4 divide-x divide-gray-100 bg-white py-2">
+        {/* 账单信息：使用银行主色对应的浅色账单区，保持数据区高可读性。 */}
+        <div className="grid grid-cols-4 divide-x divide-slate-200/70 py-2" style={{ backgroundColor: brand.surface, borderTop: `1px solid ${brand.line}` }}>
           <div className="contents">
             <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-2 py-1">
               <p className="text-[11px] leading-4 text-gray-400">账单日</p>
@@ -869,7 +981,27 @@ export default function CreditCardManagement() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          {isAdmin && (
+            <div className="flex items-center gap-0.5 rounded-full bg-white/10 p-0.5">
+              <button
+                onClick={() => setViewMode('self')}
+                className={`w-7 h-7 flex items-center justify-center rounded-full transition-colors ${viewMode === 'self' ? 'bg-white/30 text-white shadow-sm' : 'text-white/60 active:bg-white/15 active:text-white'}`}
+                aria-label="查看我的贷款"
+                title="我的贷款"
+              >
+                <User className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('admin')}
+                className={`w-7 h-7 flex items-center justify-center rounded-full transition-colors ${viewMode === 'admin' ? 'bg-white/30 text-white shadow-sm' : 'text-white/60 active:bg-white/15 active:text-white'}`}
+                aria-label="查看所有人贷款"
+                title="所有人贷款"
+              >
+                <Users className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <button
             onClick={handleForceRefresh}
             disabled={isRefreshingLoans}
@@ -968,67 +1100,76 @@ export default function CreditCardManagement() {
         </div>
       )}
 
-      {/* 管理员视角切换 */}
-      {isAdmin && (
-        <div className="bg-white border-b border-gray-100 px-4 py-2 flex space-x-2">
-          <button onClick={() => setViewMode('self')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'self' ? 'bg-[#1A2B4A] text-white' : 'bg-gray-100 text-gray-600'}`}>
-            <User className="w-3.5 h-3.5" /><span>我的贷款</span>
-          </button>
-          <button onClick={() => setViewMode('admin')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'admin' ? 'bg-[#1A2B4A] text-white' : 'bg-gray-100 text-gray-600'}`}>
-            <Users className="w-3.5 h-3.5" /><span>所有人贷款</span>
-          </button>
-        </div>
-      )}
+      <LoanCapacitySummary
+        viewMode={viewMode}
+        cards={(viewMode === 'admin' ? allCards : myCards) as any[]}
+        adminUserFilter={adminUserFilter}
+        isCardsLoading={viewMode === 'admin' ? isFetchingAllCards : isFetchingMyCards}
+      />
 
       {/* 管理员的新增对象选择已迁移至右上角“+”的新增流程。 */}
 
-      {/* 类别筛选、管理员多维筛选与排序 */}
-      <div className="bg-white border-b border-gray-100 px-4 py-2.5 space-y-2">
-        <div className="flex gap-2">
-          {([
-            ['all', '全部'],
-            ['creditCard', '信用卡'],
-            ['policyLoan', '保单贷款'],
-            ['huabei', '花呗'],
-          ] as const).map(([value, label]) => (
-            <button key={value} onClick={() => setLoanTypeFilter(value)} className={`flex-1 py-1.5 rounded-lg text-xs font-medium ${loanTypeFilter === value ? 'bg-[#1A2B4A] text-white' : 'bg-slate-100 text-slate-600'}`}>{label}</button>
-          ))}
+      {/* 高使用频率的类别入口保持可见，排序与扩展筛选收纳在可展开面板。 */}
+      <div className="border-b border-gray-100 bg-white px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <div className="grid min-w-0 flex-1 grid-cols-4 gap-1.5">
+            {([
+              ['all', '全部'],
+              ['creditCard', '信用卡'],
+              ['policyLoan', '保单贷款'],
+              ['huabei', '花呗'],
+            ] as const).map(([value, label]) => (
+              <button key={value} onClick={() => setLoanTypeFilter(value)} className={`truncate rounded-lg py-1.5 text-xs font-medium ${loanTypeFilter === value ? 'bg-[#1A2B4A] text-white' : 'bg-slate-100 text-slate-600'}`}>{label}</button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowLoanControls((open) => !open)}
+            className={`flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium transition-colors ${showLoanControls ? 'bg-[#1A2B4A] text-white' : 'bg-slate-100 text-slate-600 active:bg-slate-200'}`}
+            aria-label="展开筛选和排序"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            <span>筛选</span>
+          </button>
         </div>
-        {isAdmin && viewMode === 'admin' && (
-          <>
+        {showLoanControls && (
+          <div className="mt-2.5 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
             <div className="flex items-center gap-2 text-xs">
-              <span className="shrink-0 text-gray-400">用户</span>
-              <button onClick={() => setAdminUserFilter(null)} className={`rounded-md px-2.5 py-1 ${!adminUserFilter ? 'bg-blue-50 font-semibold text-[#1A2B4A]' : 'text-gray-500'}`}>全部用户</button>
-              <button onClick={() => openUserPicker('filter')} className={`flex min-w-0 items-center gap-1 rounded-md px-2.5 py-1 ${adminUserFilter ? 'bg-[#1A2B4A] font-semibold text-white' : 'bg-slate-100 text-slate-600'}`}><span className="max-w-24 truncate">{adminUserFilter?.name || '指定用户'}</span><Search className="h-3 w-3" /></button>
-              {adminUserFilter && <button onClick={() => setAdminUserFilter(null)} className="text-gray-400">清除</button>}
-            </div>
-            {showUserPicker && userPickerMode === 'filter' && (
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-2 py-2"><Search className="h-3.5 w-3.5 shrink-0 text-gray-400" /><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="输入用户名或昵称搜索..." value={userSearchText} onChange={(e) => setUserSearchText(e.target.value)} autoFocus /><button onClick={closeUserPicker}><X className="h-4 w-4 text-gray-400" /></button></div>
-                {userSearchText.trim().length === 0 && <p className="px-3 py-3 text-xs text-gray-400">输入关键词后筛选用户贷款</p>}
-                {userSearchText.trim().length > 0 && (userSearchResults as any[]).length === 0 && <p className="px-3 py-3 text-xs text-gray-400">未找到用户</p>}
-                {(userSearchResults as any[]).map((u: any) => <button key={u.id} onClick={() => selectPickerUser({ id: u.id, name: u.name || u.username })} className="flex w-full items-center gap-2 px-3 py-2.5 text-left active:bg-slate-50"><User className="h-4 w-4 text-gray-400" /><span className="truncate text-sm text-gray-800">{u.name || u.username}</span>{u.name && u.username && <span className="truncate text-xs text-gray-400">@{u.username}</span>}</button>)}
+              <span className="shrink-0 text-gray-400">排序</span>
+              <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+                {([
+                  ['default', '默认'],
+                  ['dueDate', '到期日'],
+                  ['rate', '利率'],
+                  ['amount', '金额'],
+                ] as const).map(([value, label]) => (
+                  <button key={value} onClick={() => setLoanSort(value)} className={`rounded-md px-2.5 py-1 ${loanSort === value ? 'bg-white font-semibold text-[#1A2B4A] shadow-sm' : 'text-gray-500'}`}>{label}</button>
+                ))}
               </div>
-            )}
-            <div className="flex items-center gap-2 text-xs">
-              <span className="shrink-0 text-gray-400">到期</span>
-              {([['all', '全部'], ['dueSoon', '7天内'], ['overdue', '已逾期'], ['unset', '未设置']] as const).map(([value, label]) => <button key={value} onClick={() => setLoanDueFilter(value)} className={`rounded-md px-2.5 py-1 ${loanDueFilter === value ? 'bg-blue-50 font-semibold text-[#1A2B4A]' : 'text-gray-500'}`}>{label}</button>)}
             </div>
-          </>
+            {isAdmin && viewMode === 'admin' && (
+              <>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="shrink-0 text-gray-400">用户</span>
+                  <button onClick={() => setAdminUserFilter(null)} className={`rounded-md px-2.5 py-1 ${!adminUserFilter ? 'bg-white font-semibold text-[#1A2B4A] shadow-sm' : 'text-gray-500'}`}>全部用户</button>
+                  <button onClick={() => openUserPicker('filter')} className={`flex min-w-0 items-center gap-1 rounded-md px-2.5 py-1 ${adminUserFilter ? 'bg-[#1A2B4A] font-semibold text-white' : 'bg-white text-slate-600 shadow-sm'}`}><span className="max-w-24 truncate">{adminUserFilter?.name || '指定用户'}</span><Search className="h-3 w-3" /></button>
+                  {adminUserFilter && <button onClick={() => setAdminUserFilter(null)} className="text-gray-400">清除</button>}
+                </div>
+                {showUserPicker && userPickerMode === 'filter' && (
+                  <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                    <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-2 py-2"><Search className="h-3.5 w-3.5 shrink-0 text-gray-400" /><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="输入用户名或昵称搜索..." value={userSearchText} onChange={(e) => setUserSearchText(e.target.value)} autoFocus /><button onClick={closeUserPicker}><X className="h-4 w-4 text-gray-400" /></button></div>
+                    {userSearchText.trim().length === 0 && <p className="px-3 py-3 text-xs text-gray-400">输入关键词后筛选用户贷款</p>}
+                    {userSearchText.trim().length > 0 && (userSearchResults as any[]).length === 0 && <p className="px-3 py-3 text-xs text-gray-400">未找到用户</p>}
+                    {(userSearchResults as any[]).map((u: any) => <button key={u.id} onClick={() => selectPickerUser({ id: u.id, name: u.name || u.username })} className="flex w-full items-center gap-2 px-3 py-2.5 text-left active:bg-slate-50"><User className="h-4 w-4 text-gray-400" /><span className="truncate text-sm text-gray-800">{u.name || u.username}</span>{u.name && u.username && <span className="truncate text-xs text-gray-400">@{u.username}</span>}</button>)}
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="shrink-0 text-gray-400">到期</span>
+                  {([['all', '全部'], ['dueSoon', '7天内'], ['overdue', '已逾期'], ['unset', '未设置']] as const).map(([value, label]) => <button key={value} onClick={() => setLoanDueFilter(value)} className={`rounded-md px-2.5 py-1 ${loanDueFilter === value ? 'bg-white font-semibold text-[#1A2B4A] shadow-sm' : 'text-gray-500'}`}>{label}</button>)}
+                </div>
+              </>
+            )}
+          </div>
         )}
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-gray-400 shrink-0">排序</span>
-          {([
-            ['default', '默认'],
-            ['dueDate', '按到期日'],
-            ['rate', '按利率'],
-            ['amount', '按贷款金额'],
-          ] as const).map(([value, label]) => (
-            <button key={value} onClick={() => setLoanSort(value)} className={`px-2.5 py-1 rounded-md ${loanSort === value ? 'bg-blue-50 text-[#1A2B4A] font-semibold' : 'text-gray-500'}`}>{label}</button>
-          ))}
-        </div>
       </div>
 
       {/* 统一贷款卡片列表 */}

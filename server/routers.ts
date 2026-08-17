@@ -28340,14 +28340,14 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         insurer: z.string().min(1), loanType: z.enum(['policy', 'huabei']).default('policy'), policyName: z.string().optional(), policyHolder: z.string().optional(),
         policyNo: z.string().optional(), loanAmount: z.number().optional(), outstandingBalance: z.number().optional(),
         cashValue: z.number().optional(), annualRate: z.number().optional(), repaymentMethod: z.string().optional(), loanDate: z.string().optional(),
-        dueDate: z.string().optional(), currency: z.string().default('CNY'), note: z.string().optional(),
+        dueDate: z.string().optional(), huabeiBillingDay: z.number().int().min(1).max(31).optional(), huabeiRepaymentDay: z.number().int().min(1).max(31).optional(), currency: z.string().default('CNY'), note: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new Error('db error');
         await conn.execute(
-          'INSERT INTO policy_loans (user_id, insurer, loan_type, policy_name, policy_holder, policy_no, loan_amount, outstanding_balance, cash_value, annual_rate, repayment_method, loan_date, due_date, currency, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-          [ctx.user.id, input.insurer, input.loanType, input.policyName || null, input.policyHolder || null, input.policyNo || null, input.loanAmount ?? null, input.outstandingBalance ?? null, input.cashValue ?? null, input.annualRate ?? null, input.repaymentMethod || null, input.loanDate || null, input.dueDate || null, input.currency, input.note || null]
+          'INSERT INTO policy_loans (user_id, insurer, loan_type, policy_name, policy_holder, policy_no, loan_amount, outstanding_balance, cash_value, annual_rate, repayment_method, loan_date, due_date, huabei_billing_day, huabei_repayment_day, currency, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [ctx.user.id, input.insurer, input.loanType, input.policyName || null, input.policyHolder || null, input.policyNo || null, input.loanAmount ?? null, input.outstandingBalance ?? null, input.cashValue ?? null, input.annualRate ?? null, input.repaymentMethod || null, input.loanDate || null, input.dueDate || null, input.huabeiBillingDay ?? null, input.huabeiRepaymentDay ?? null, input.currency, input.note || null]
         );
         return { success: true };
       }),
@@ -28356,13 +28356,13 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         id: z.number(), insurer: z.string().optional(), loanType: z.enum(['policy', 'huabei']).optional(), policyName: z.string().optional(), policyHolder: z.string().optional(),
         policyNo: z.string().optional(), loanAmount: z.number().nullable().optional(), outstandingBalance: z.number().nullable().optional(),
         cashValue: z.number().nullable().optional(), annualRate: z.number().nullable().optional(), repaymentMethod: z.string().nullable().optional(), loanDate: z.string().nullable().optional(),
-        dueDate: z.string().nullable().optional(), currency: z.string().optional(), note: z.string().nullable().optional(),
+        dueDate: z.string().nullable().optional(), huabeiBillingDay: z.number().int().min(1).max(31).nullable().optional(), huabeiRepaymentDay: z.number().int().min(1).max(31).nullable().optional(), currency: z.string().optional(), note: z.string().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new Error('db error');
         const { id, ...fields } = input;
-        const map: Record<string, string> = { insurer: 'insurer', loanType: 'loan_type', policyName: 'policy_name', policyHolder: 'policy_holder', policyNo: 'policy_no', loanAmount: 'loan_amount', outstandingBalance: 'outstanding_balance', cashValue: 'cash_value', annualRate: 'annual_rate', repaymentMethod: 'repayment_method', loanDate: 'loan_date', dueDate: 'due_date', currency: 'currency', note: 'note' };
+        const map: Record<string, string> = { insurer: 'insurer', loanType: 'loan_type', policyName: 'policy_name', policyHolder: 'policy_holder', policyNo: 'policy_no', loanAmount: 'loan_amount', outstandingBalance: 'outstanding_balance', cashValue: 'cash_value', annualRate: 'annual_rate', repaymentMethod: 'repayment_method', loanDate: 'loan_date', dueDate: 'due_date', huabeiBillingDay: 'huabei_billing_day', huabeiRepaymentDay: 'huabei_repayment_day', currency: 'currency', note: 'note' };
         const sets: string[] = []; const vals: any[] = [];
         for (const [key, column] of Object.entries(map)) {
           if ((fields as any)[key] !== undefined) { sets.push(`${column}=?`); vals.push((fields as any)[key]); }
@@ -28396,16 +28396,38 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
     adminCreate: protectedProcedure
       .input(z.object({
         targetUserId: z.number(), insurer: z.string().min(1), loanType: z.enum(['policy', 'huabei']).default('policy'), policyName: z.string().optional(), policyHolder: z.string().optional(),
-        policyNo: z.string().optional(), loanAmount: z.number().optional(), outstandingBalance: z.number().optional(), cashValue: z.number().optional(), annualRate: z.number().optional(), repaymentMethod: z.string().optional(), loanDate: z.string().optional(), dueDate: z.string().optional(), currency: z.string().default('CNY'), note: z.string().optional(),
+        policyNo: z.string().optional(), loanAmount: z.number().optional(), outstandingBalance: z.number().optional(), cashValue: z.number().optional(), annualRate: z.number().optional(), repaymentMethod: z.string().optional(), loanDate: z.string().optional(), dueDate: z.string().optional(), huabeiBillingDay: z.number().int().min(1).max(31).optional(), huabeiRepaymentDay: z.number().int().min(1).max(31).optional(), currency: z.string().default('CNY'), note: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user.role !== 'super_admin') throw new Error('no permission');
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new Error('db error');
         await conn.execute(
-          'INSERT INTO policy_loans (user_id, insurer, loan_type, policy_name, policy_holder, policy_no, loan_amount, outstanding_balance, cash_value, annual_rate, repayment_method, loan_date, due_date, currency, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-          [input.targetUserId, input.insurer, input.loanType, input.policyName || null, input.policyHolder || null, input.policyNo || null, input.loanAmount ?? null, input.outstandingBalance ?? null, input.cashValue ?? null, input.annualRate ?? null, input.repaymentMethod || null, input.loanDate || null, input.dueDate || null, input.currency, input.note || null]
+          'INSERT INTO policy_loans (user_id, insurer, loan_type, policy_name, policy_holder, policy_no, loan_amount, outstanding_balance, cash_value, annual_rate, repayment_method, loan_date, due_date, huabei_billing_day, huabei_repayment_day, currency, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [input.targetUserId, input.insurer, input.loanType, input.policyName || null, input.policyHolder || null, input.policyNo || null, input.loanAmount ?? null, input.outstandingBalance ?? null, input.cashValue ?? null, input.annualRate ?? null, input.repaymentMethod || null, input.loanDate || null, input.dueDate || null, input.huabeiBillingDay ?? null, input.huabeiRepaymentDay ?? null, input.currency, input.note || null]
         );
+        return { success: true };
+      }),
+    adminUpdate: protectedProcedure
+      .input(z.object({
+        id: z.number(), insurer: z.string().optional(), loanType: z.enum(['policy', 'huabei']).optional(), policyName: z.string().optional(), policyHolder: z.string().optional(),
+        policyNo: z.string().optional(), loanAmount: z.number().nullable().optional(), outstandingBalance: z.number().nullable().optional(),
+        cashValue: z.number().nullable().optional(), annualRate: z.number().nullable().optional(), repaymentMethod: z.string().nullable().optional(), loanDate: z.string().nullable().optional(),
+        dueDate: z.string().nullable().optional(), huabeiBillingDay: z.number().int().min(1).max(31).nullable().optional(), huabeiRepaymentDay: z.number().int().min(1).max(31).nullable().optional(), currency: z.string().optional(), note: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') throw new Error('no permission');
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new Error('db error');
+        const { id, ...fields } = input;
+        const map: Record<string, string> = { insurer: 'insurer', loanType: 'loan_type', policyName: 'policy_name', policyHolder: 'policy_holder', policyNo: 'policy_no', loanAmount: 'loan_amount', outstandingBalance: 'outstanding_balance', cashValue: 'cash_value', annualRate: 'annual_rate', repaymentMethod: 'repayment_method', loanDate: 'loan_date', dueDate: 'due_date', huabeiBillingDay: 'huabei_billing_day', huabeiRepaymentDay: 'huabei_repayment_day', currency: 'currency', note: 'note' };
+        const sets: string[] = []; const vals: any[] = [];
+        for (const [key, column] of Object.entries(map)) {
+          if ((fields as any)[key] !== undefined) { sets.push(`${column}=?`); vals.push((fields as any)[key]); }
+        }
+        if (!sets.length) return { success: true };
+        vals.push(id);
+        await conn.execute(`UPDATE policy_loans SET ${sets.join(',')} WHERE id=?`, vals);
         return { success: true };
       }),
     adminDelete: protectedProcedure
