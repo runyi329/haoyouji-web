@@ -28179,9 +28179,9 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         currency: z.string().default('CNY'),
         color: z.string().optional(),
         note: z.string().optional(),
-        tempLimit: z.number().optional(),
-        tempLimitStart: z.string().optional(),
-        tempLimitEnd: z.string().optional(),
+        tempLimit: z.number().nullable().optional(),
+        tempLimitStart: z.string().nullable().optional(),
+        tempLimitEnd: z.string().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
@@ -28289,9 +28289,9 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         currency: z.string().default('CNY'),
         color: z.string().optional(),
         note: z.string().optional(),
-        tempLimit: z.number().optional(),
-        tempLimitStart: z.string().optional(),
-        tempLimitEnd: z.string().optional(),
+        tempLimit: z.number().nullable().optional(),
+        tempLimitStart: z.string().nullable().optional(),
+        tempLimitEnd: z.string().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user.isAdmin) throw new Error('no permission');

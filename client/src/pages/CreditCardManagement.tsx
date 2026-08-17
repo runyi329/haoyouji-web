@@ -342,6 +342,13 @@ export default function CreditCardManagement() {
 
   const handleSubmit = () => {
     if (!form.bankName.trim()) { toast.error("请选择银行"); return; }
+    const hasCompleteTempLimit = form.hasTempLimit && Number(form.tempLimit) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(form.tempLimitEnd);
+    if (form.hasTempLimit && !hasCompleteTempLimit) {
+      toast.error("请完整填写临时额度金额和到期日");
+      return;
+    }
+    // 新增信用卡不传未启用的临时额度字段；编辑时显式传 null，确保可以清空既有临时额度。
+    const clearedTempLimit = editingId ? null : undefined;
     const payload = {
       bankName: form.bankName,
       cardHolder: form.cardHolder || undefined,
@@ -353,10 +360,10 @@ export default function CreditCardManagement() {
       dueDay: form.dueDay ? parseInt(form.dueDay) : undefined,
       currency: form.currencies.join(','),
       note: form.note || undefined,
-      // 临时额度：关闭时清空，开始日固定为今天
-      tempLimit: form.hasTempLimit && form.tempLimit ? parseFloat(form.tempLimit) : null,
-      tempLimitStart: form.hasTempLimit && form.tempLimitEnd ? new Date().toISOString().slice(0, 10) : null,
-      tempLimitEnd: form.hasTempLimit && form.tempLimitEnd ? form.tempLimitEnd : null,
+      // 临时额度启用时开始日固定为当天；关闭时新增不传字段，编辑则显式清空数据库值。
+      tempLimit: hasCompleteTempLimit ? parseFloat(form.tempLimit) : clearedTempLimit,
+      tempLimitStart: hasCompleteTempLimit ? new Date().toISOString().slice(0, 10) : clearedTempLimit,
+      tempLimitEnd: hasCompleteTempLimit ? form.tempLimitEnd : clearedTempLimit,
     };
     if (editingId) {
       updateMutation.mutate({ id: editingId, ...payload });
