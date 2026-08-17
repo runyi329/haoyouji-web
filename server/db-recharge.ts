@@ -811,16 +811,19 @@ export async function addUserBalance(
   return amount;
 }
 
-// 获取用户统一余额
-// 正确公式：users.balance（充值到账累计）+ af_manual_balances合计（委买扣款/撤单退款/手动调账，不写users.balance）
-// 注意：recharge_orders充值已经写进users.balance，不能重复叠加
+// 获取用户统一余额。
+// users.balance 已包含充值到账；af_manual_balances 中的 [BALANCE_BASE] 是同笔充值的账本
+// 基准流水，不能再次叠加。仅合并尚未写入 users.balance 的业务扣款、退款和手动调账。
 export async function getUserBalance(userId: number, ledgerId?: number): Promise<number> {
   const db = await getDb();
   
   const result = await db.execute(
     sql`SELECT
       (SELECT COALESCE(balance, 0) FROM users WHERE id = ${userId}) as userBalance,
-      (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${userId} AND note NOT LIKE '[CNY]%') as manual`
+      (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances
+       WHERE user_id = ${userId}
+         AND note NOT LIKE '[CNY]%'
+         AND note NOT LIKE '[BALANCE_BASE]%') as manual`
   ) as any;
   
   const row = result[0]?.[0] ?? result[0];
@@ -866,7 +869,9 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
   // 来源2：af_manual_balances（手动调账/米伴扣款/退款等）
   const [manualRows] = await pool.execute(
     `SELECT id, amount, note, created_at AS createdAt FROM af_manual_balances
-     WHERE user_id = ? AND amount != 0
+     WHERE user_id = ?
+       AND amount != 0
+       AND note NOT LIKE '[BALANCE_BASE]%'
      ORDER BY created_at ASC`,
     [userId]
   ) as any[];
