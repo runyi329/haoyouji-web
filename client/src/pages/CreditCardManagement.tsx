@@ -136,6 +136,64 @@ function getNextMonthlyDate(day: number): { label: string; days: number } {
   };
 }
 
+// 返回北京时间最近一次已经到达的账单日，作为手动录入“本期还款账单数”的默认账期。
+function getLatestBillingDateValue(day: number): string {
+  const nowBj = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  let year = nowBj.getUTCFullYear();
+  let month = nowBj.getUTCMonth();
+  const today = nowBj.getUTCDate();
+  const daysInMonth = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  let targetDay = Math.min(Math.max(1, day), daysInMonth(year, month));
+
+  if (today < targetDay) {
+    month -= 1;
+    if (month < 0) {
+      month = 11;
+      year -= 1;
+    }
+    targetDay = Math.min(Math.max(1, day), daysInMonth(year, month));
+  }
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
+}
+
+function toBillingDateValue(value: string | Date | null | undefined): string {
+  const match = String(value || '').match(/^\d{4}-\d{2}-\d{2}/);
+  return match?.[0] || '';
+}
+
+function formatBillingPeriodDate(value: string | Date | null | undefined): string {
+  const dateValue = toBillingDateValue(value);
+  if (!dateValue) return '未设置账期';
+  const [year, month, day] = dateValue.split('-').map(Number);
+  return `${year}年${month}月${day}日`;
+}
+
+// 从北京时间下一次账单日起，生成连续账期；例如账单日为 17 日时依次生成 2026-09-17、2026-10-17……
+function getUpcomingBillingPeriodValues(day: number, count = 12): string[] {
+  const nowBj = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  let year = nowBj.getUTCFullYear();
+  let month = nowBj.getUTCMonth();
+  const today = nowBj.getUTCDate();
+  const daysInMonth = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  let candidateDay = Math.min(Math.max(1, day), daysInMonth(year, month));
+
+  if (today > candidateDay) {
+    month += 1;
+    if (month > 11) {
+      month = 0;
+      year += 1;
+    }
+  }
+
+  return Array.from({ length: count }, (_, index) => {
+    const targetMonth = month + index;
+    const targetYear = year + Math.floor(targetMonth / 12);
+    const normalizedMonth = targetMonth % 12;
+    const targetDay = Math.min(Math.max(1, day), daysInMonth(targetYear, normalizedMonth));
+    return `${targetYear}-${String(normalizedMonth + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
+  });
+}
+
 // 兼容列表排序等既有调用，统一使用北京时间下一期日期。
 function daysUntil(day: number): number {
   return getNextMonthlyDate(day).days;
@@ -291,47 +349,63 @@ function LoanCapacitySummary({
     };
   }, [adminMode, adminUserFilter, cards, myPolicyLoans, myHuabeiLoans, allPolicyLoans, allHuabeiLoans]);
 
-  const title = adminMode
-    ? (adminUserFilter ? `${adminUserFilter.name}的额度汇总` : '所有用户额度汇总')
-    : '我的额度汇总';
-  const formatAmount = (value: number) => value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatAmount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const totalForRatio = Math.max(0, summary.totalLimit);
+  const usedPercent = totalForRatio > 0
+    ? Math.min(100, Math.max(0, (summary.usedLimit / totalForRatio) * 100))
+    : 0;
+  const availablePercent = totalForRatio > 0
+    ? Math.min(100 - usedPercent, Math.max(0, (summary.availableLimit / totalForRatio) * 100))
+    : 0;
   const isLoading = isCardsLoading || (adminMode ? isFetchingAllPolicy || isFetchingAllHuabei : isFetchingMyPolicy || isFetchingMyHuabei);
 
   return (
-    <div className="border-b border-slate-100 bg-white px-4 py-3">
-      <div className="overflow-hidden rounded-2xl border border-[#D8E5F5] bg-gradient-to-br from-[#F4F9FF] via-white to-[#EEF6FF] shadow-sm">
-        <div className="flex items-start justify-between px-3.5 pt-3">
-          <div>
-            <p className="text-xs font-semibold text-[#1A2B4A]">{title}</p>
-            <p className="mt-0.5 text-[10px] text-slate-400">信用卡、保单贷款与花呗统一统计</p>
-          </div>
-          <span className="rounded-full bg-[#1A2B4A]/8 px-2 py-1 text-[10px] font-medium text-[#1A2B4A]">人民币元</span>
+    <div className="border-b border-slate-100 bg-white px-4 py-2">
+      {isLoading ? (
+        <div className="flex h-[88px] items-center justify-center gap-2 rounded-xl border border-[#DCE8F6] bg-white text-xs text-slate-400 shadow-[0_6px_16px_rgba(26,43,74,0.04)]">
+          <Loader2 className="h-4 w-4 animate-spin text-[#1A2B4A]" />
+          正在加载{adminMode ? '所有用户' : '我的'}贷款数据...
         </div>
-        <div className="px-3.5 pb-3 pt-2">
-          {isLoading ? (
-            <div className="flex h-[82px] items-center justify-center gap-2 text-xs text-slate-400">
-              <Loader2 className="h-4 w-4 animate-spin text-[#1A2B4A]" />
-              正在加载{adminMode ? '所有用户' : '我的'}贷款数据...
+      ) : (
+        <div className="rounded-xl border border-[#DCE8F6] bg-white p-2.5 shadow-[0_6px_16px_rgba(26,43,74,0.04)]">
+          <div className="flex items-end justify-between gap-2">
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-[10px] font-medium text-slate-500">总额度</p>
+              <p className="text-[24px] font-bold leading-6 tracking-tight text-[#1A2B4A]">{formatAmount(summary.totalLimit)}</p>
             </div>
-          ) : (
-            <>
-              <p className="text-[11px] text-slate-400">总额度</p>
-              <p className="mt-0.5 text-[26px] font-bold leading-7 tracking-tight text-[#1A2B4A]">{formatAmount(summary.totalLimit)}</p>
-              <div className="mt-3 grid grid-cols-2 divide-x divide-[#D8E5F5] rounded-xl border border-[#D8E5F5] bg-white/80 py-2">
-                <div className="px-3">
-                  <p className="text-[10px] text-slate-400">剩余可用额度</p>
-                  <p className="mt-0.5 text-sm font-bold text-emerald-600">{formatAmount(summary.availableLimit)}</p>
-                </div>
-                <div className="px-3">
-                  <p className="text-[10px] text-slate-400">已用额度</p>
-                  <p className="mt-0.5 text-sm font-bold text-rose-500">{formatAmount(summary.usedLimit)}</p>
-                </div>
-              </div>
-              <p className="mt-2 text-[10px] text-slate-400">信用卡 {summary.cardCount} 张 · 保单贷款 {summary.policyCount} 笔 · 花呗 {summary.huabeiCount} 笔</p>
-            </>
-          )}
+            <div className="flex items-center gap-2 whitespace-nowrap text-[10px] font-medium">
+              <span className="text-rose-500">已用 {Math.round(usedPercent)}%</span>
+              <span className="h-2.5 w-px bg-slate-200" />
+              <span className="text-emerald-600">可用 {Math.round(availablePercent)}%</span>
+            </div>
+          </div>
+
+          <div
+            className="relative mt-1.5 h-2.5 overflow-hidden rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200/80"
+            aria-label={`额度使用情况：已用 ${Math.round(usedPercent)}%，剩余可用 ${Math.round(availablePercent)}%`}
+          >
+            <div
+              className="absolute inset-y-0 left-0 bg-gradient-to-r from-rose-400 to-rose-500 transition-[width] duration-500"
+              style={{ width: `${usedPercent}%` }}
+            />
+            <div
+              className="absolute inset-y-0 right-0 bg-gradient-to-r from-emerald-400 to-emerald-500 transition-[width] duration-500"
+              style={{ width: `${availablePercent}%` }}
+            />
+          </div>
+
+          <div className="mt-2 grid grid-cols-2 divide-x divide-[#E4ECF5] text-[10px] font-medium">
+            <p className="flex items-baseline gap-1.5 pr-2 text-slate-500">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
+              已用 <span className="text-sm font-bold text-rose-500">{formatAmount(summary.usedLimit)}</span>
+            </p>
+            <p className="flex items-baseline justify-end gap-1.5 pl-2 text-slate-500">
+              剩余可用 <span className="text-sm font-bold text-emerald-600">{formatAmount(summary.availableLimit)}</span>
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+            </p>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -610,6 +684,67 @@ export default function CreditCardManagement() {
     const [showAvailableInput, setShowAvailableInput] = useState(false);
     const [availableInputVal, setAvailableInputVal] = useState('');
     const [serviceContact, setServiceContact] = useState<LoanServiceContact | null>(null);
+    const [showBillingStatementSheet, setShowBillingStatementSheet] = useState(false);
+    const [billingStatementDrafts, setBillingStatementDrafts] = useState<Record<string, string>>({});
+    const [locallySavedBillingDates, setLocallySavedBillingDates] = useState<Record<string, true>>({});
+    const billingStatementsQuery = trpc.creditCard.billingStatements.useQuery(
+      { creditCardId: Number(card.id) },
+      { enabled: showBillingStatementSheet && Number(card.id) > 0 }
+    );
+    const billingPeriods = useMemo(
+      () => card.billing_day ? getUpcomingBillingPeriodValues(Number(card.billing_day), 12) : [],
+      [card.billing_day]
+    );
+    const billingStatementByDate = useMemo(() => new Map(
+      (billingStatementsQuery.data || []).map((statement: any) => [toBillingDateValue(statement.billing_date), statement])
+    ), [billingStatementsQuery.data]);
+    const saveBillingStatementMutation = trpc.creditCard.upsertBillingStatement.useMutation({
+      onSuccess: (_data, variables) => {
+        setLocallySavedBillingDates((previous) => ({ ...previous, [variables.billingDate]: true }));
+        void billingStatementsQuery.refetch();
+        toast.success('本期还款账单已保存');
+      },
+      onError: (error) => toast.error(error.message || '账单保存失败'),
+    });
+
+    useEffect(() => {
+      if (!showBillingStatementSheet) return;
+      setBillingStatementDrafts((previous) => {
+        const next = { ...previous };
+        billingPeriods.forEach((billingDate) => {
+          const saved = billingStatementByDate.get(billingDate);
+          if (saved && (next[billingDate] === undefined || next[billingDate] === '')) {
+            next[billingDate] = String(Number(saved.statement_amount));
+          }
+          if (!saved && next[billingDate] === undefined) next[billingDate] = '';
+        });
+        return next;
+      });
+    }, [showBillingStatementSheet, billingPeriods, billingStatementByDate]);
+
+    const openBillingStatementSheet = () => {
+      if (!card.billing_day) {
+        toast.error('请先在信用卡编辑页设置账单日');
+        return;
+      }
+      setBillingStatementDrafts({});
+      setLocallySavedBillingDates({});
+      setShowBillingStatementSheet(true);
+    };
+
+    const saveBillingStatement = async (billingDate: string) => {
+      const rawAmount = billingStatementDrafts[billingDate] ?? '';
+      const statementAmount = Number(rawAmount);
+      if (!rawAmount.trim() || Number.isNaN(statementAmount) || statementAmount < 0) {
+        toast.error('请输入不小于 0 的本期还款账单数');
+        return;
+      }
+      await saveBillingStatementMutation.mutateAsync({
+        creditCardId: Number(card.id),
+        billingDate,
+        statementAmount,
+      });
+    };
 
     return (
       <div className="overflow-hidden rounded-2xl border shadow-md" style={{ borderColor: brand.line, boxShadow: `0 8px 20px ${brand.border}24` }}>
@@ -797,11 +932,61 @@ export default function CreditCardManagement() {
           </div>
         )}
 
+        {showBillingStatementSheet && (
+          <div className="fixed inset-0 z-[60] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+            <div className="relative flex max-h-[84vh] w-full max-w-[480px] flex-col rounded-t-2xl bg-white px-5 pb-6 pt-3">
+              <button onClick={() => setShowBillingStatementSheet(false)} className="absolute right-4 top-3 z-10 text-gray-400 active:text-gray-600" aria-label="关闭账期还款录入">
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+                <div className="py-1 pr-7">
+                  {billingPeriods.map((billingDate) => {
+                    const savedStatement = billingStatementByDate.get(billingDate);
+                    const draftAmount = billingStatementDrafts[billingDate] ?? '';
+                    const hasSavedStatement = !!savedStatement || !!locallySavedBillingDates[billingDate];
+                    return (
+                      <div key={billingDate} className="flex items-center justify-between gap-3 border-b border-gray-100 py-2.5 last:border-b-0">
+                        <p className="shrink-0 text-sm font-semibold text-gray-800">{formatBillingPeriodDate(billingDate)}</p>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={draftAmount}
+                            onChange={(event) => setBillingStatementDrafts((previous) => ({ ...previous, [billingDate]: event.target.value }))}
+                            aria-label={`${formatBillingPeriodDate(billingDate)}账单金额`}
+                            className="min-w-0 w-28 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-right text-sm font-semibold text-gray-900 outline-none focus:border-[#1A2B4A]"
+                          />
+                          <button
+                            type="button"
+                            disabled={saveBillingStatementMutation.isPending || !draftAmount.trim()}
+                            onClick={() => void saveBillingStatement(billingDate)}
+                            className="shrink-0 rounded-lg bg-[#1A2B4A] px-2.5 py-2 text-[11px] font-semibold text-white active:opacity-80 disabled:opacity-40"
+                          >
+                            {saveBillingStatementMutation.isPending ? '保存中' : (hasSavedStatement ? '编辑' : '保存')}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 账单信息：使用银行主色对应的浅色账单区，保持数据区高可读性。 */}
         <div className="grid grid-cols-4 divide-x divide-slate-200/70 py-2" style={{ backgroundColor: brand.surface, borderTop: `1px solid ${brand.line}` }}>
           <div className="contents">
-            <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-2 py-1">
-              <p className="text-[11px] leading-4 text-gray-400">账单日</p>
+            <button
+              type="button"
+              onClick={openBillingStatementSheet}
+              className="grid min-w-0 grid-rows-[16px_20px_16px] px-2 py-1 text-left transition-colors active:bg-black/[0.03]"
+              aria-label="打开本期还款账单录入"
+            >
+              <p className="text-[11px] leading-4 text-gray-400"><span className="inline-block border-b border-dashed border-[#1A2B4A]/55 pb-px">账单日</span></p>
               {nextBilling ? (
                 <>
                   <p className="truncate text-sm font-bold leading-5 text-gray-900">{nextBilling.label}</p>
@@ -811,7 +996,7 @@ export default function CreditCardManagement() {
                   }`}>{nextBilling.days === 0 ? '今天' : `${nextBilling.days}天后`}</span>
                 </>
               ) : <><p className="text-sm leading-5 text-gray-300">未设置</p><span /></>}
-            </div>
+            </button>
             <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-2 py-1">
               <p className="text-[11px] leading-4 text-gray-400">最后还款日</p>
               {nextDue ? (

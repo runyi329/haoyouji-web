@@ -28170,6 +28170,61 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       ) as any[];
       return (Array.isArray(rows) ? rows : []) as any[];
     }),
+    // 查询指定信用卡的账期还款记录：卡主与超级管理员均可查看。
+    billingStatements: protectedProcedure
+      .input(z.object({ creditCardId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+        const [cardRows] = await conn.execute(
+          'SELECT user_id FROM credit_cards WHERE id=? AND is_active=1 LIMIT 1',
+          [input.creditCardId]
+        ) as any[];
+        const card = Array.isArray(cardRows) ? cardRows[0] : null;
+        if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: '信用卡不存在或已停用' });
+        if (Number(card.user_id) !== Number(ctx.user.id) && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看该信用卡账期记录' });
+        }
+        const [rows] = await conn.execute(
+          `SELECT id, credit_card_id, billing_date, statement_amount, created_by_user_id, updated_by_user_id, created_at, updated_at
+           FROM credit_card_billing_statements
+           WHERE credit_card_id=?
+           ORDER BY billing_date DESC, updated_at DESC`,
+          [input.creditCardId]
+        ) as any[];
+        return Array.isArray(rows) ? rows : [];
+      }),
+    // 新增或更新指定账期的本期还款账单金额；同一信用卡同一账单日始终只有一条记录。
+    upsertBillingStatement: protectedProcedure
+      .input(z.object({
+        creditCardId: z.number().int().positive(),
+        billingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '账单日格式应为 YYYY-MM-DD'),
+        statementAmount: z.number().min(0).max(9999999999),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+        const [cardRows] = await conn.execute(
+          'SELECT user_id FROM credit_cards WHERE id=? AND is_active=1 LIMIT 1',
+          [input.creditCardId]
+        ) as any[];
+        const card = Array.isArray(cardRows) ? cardRows[0] : null;
+        if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: '信用卡不存在或已停用' });
+        if (Number(card.user_id) !== Number(ctx.user.id) && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权录入该信用卡账期记录' });
+        }
+        await conn.execute(
+          `INSERT INTO credit_card_billing_statements
+             (credit_card_id, billing_date, statement_amount, created_by_user_id, updated_by_user_id)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             statement_amount=VALUES(statement_amount),
+             updated_by_user_id=VALUES(updated_by_user_id),
+             updated_at=CURRENT_TIMESTAMP`,
+          [input.creditCardId, input.billingDate, input.statementAmount, ctx.user.id, ctx.user.id]
+        );
+        return { success: true };
+      }),
     // 新增信用卡
     create: protectedProcedure
       .input(z.object({
