@@ -2252,7 +2252,7 @@ export default function CryptoPrediction() {
   // 融资付息：已结利息汇总
   const { data: financeInterestSummary } = trpc.ledger.financeGetInterestPaymentSummary.useQuery(
     { ledgerId, orderIds: financeOrders.map((o: any) => o.id) },
-    { enabled: isCustomAF && !isFunder && tab === 'finance' && financeOrders.length > 0 }
+    { enabled: isCustomAF && tab === 'finance' && financeOrders.length > 0 }
   );
   // 融资付息：实时价格（与资金方共用同一个 localStorage key）
   const FINANCE_PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
@@ -2566,8 +2566,8 @@ export default function CryptoPrediction() {
         </div>
       )}
 
-      {/* Tab 切换：首页分流进入时隐藏 */}
-      {!hideTab && (
+      {/* Tab 切换：首页分流进入时隐藏；查看他人时必须保留，以便切换谷底增筹与融资付息。 */}
+      {(!hideTab || !!viewAsUserId) && (
       <div className="px-4 pt-3">
         <div className="flex rounded p-1 gap-1" style={{ backgroundColor: '#E8EEFF' }}>
           {(isCustomAF ? [
