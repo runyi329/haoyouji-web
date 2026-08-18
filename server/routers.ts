@@ -28186,7 +28186,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
           throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看该信用卡账期记录' });
         }
         const [rows] = await conn.execute(
-          `SELECT id, credit_card_id, billing_date, statement_amount, created_by_user_id, updated_by_user_id, created_at, updated_at
+          `SELECT id, credit_card_id, billing_date, statement_amount, paid_amount, created_by_user_id, updated_by_user_id, created_at, updated_at
            FROM credit_card_billing_statements
            WHERE credit_card_id=?
            ORDER BY billing_date DESC, updated_at DESC`,
@@ -28224,6 +28224,53 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
           [input.creditCardId, input.billingDate, input.statementAmount, ctx.user.id, ctx.user.id]
         );
         return { success: true };
+      }),
+    // 更新某期已还金额。账单应还金额必须先由账单日入口录入，避免还款记录脱离账期。
+    upsertBillingPayment: protectedProcedure
+      .input(z.object({
+        creditCardId: z.number().int().positive(),
+        billingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '账单日格式应为 YYYY-MM-DD'),
+        paidAmount: z.number().min(0).max(9999999999),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+        const [cardRows] = await conn.execute(
+          'SELECT user_id FROM credit_cards WHERE id=? AND is_active=1 LIMIT 1',
+          [input.creditCardId]
+        ) as any[];
+        const card = Array.isArray(cardRows) ? cardRows[0] : null;
+        if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: '信用卡不存在或已停用' });
+        if (Number(card.user_id) !== Number(ctx.user.id) && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权录入该信用卡账期还款记录' });
+        }
+        const [statementRows] = await conn.execute(
+          `SELECT id, statement_amount
+           FROM credit_card_billing_statements
+           WHERE credit_card_id=? AND billing_date=?
+           LIMIT 1`,
+          [input.creditCardId, input.billingDate]
+        ) as any[];
+        const statement = Array.isArray(statementRows) ? statementRows[0] : null;
+        if (!statement) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '请先在账单日录入本期账单金额' });
+        }
+        const statementAmount = Number(statement.statement_amount || 0);
+        if (input.paidAmount > statementAmount) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '已还金额不能超过本期账单应还金额' });
+        }
+        await conn.execute(
+          `UPDATE credit_card_billing_statements
+           SET paid_amount=?, updated_by_user_id=?, updated_at=CURRENT_TIMESTAMP
+           WHERE id=?`,
+          [input.paidAmount, ctx.user.id, statement.id]
+        );
+        return {
+          success: true,
+          statementAmount,
+          paidAmount: input.paidAmount,
+          remainingAmount: Math.max(0, statementAmount - input.paidAmount),
+        };
       }),
     // 新增信用卡
     create: protectedProcedure

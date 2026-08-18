@@ -168,30 +168,58 @@ function formatBillingPeriodDate(value: string | Date | null | undefined): strin
   return `${year}年${month}月${day}日`;
 }
 
-// 从北京时间下一次账单日起，生成连续账期；例如账单日为 17 日时依次生成 2026-09-17、2026-10-17……
-function getUpcomingBillingPeriodValues(day: number, count = 12): string[] {
+// 从北京时间最近一个已到达的账单日开始向过去生成账期。
+// 未来账单日必须等到当天 00:00 后才会出现，避免预先展示无效的空输入容器。
+function getReachedBillingPeriodValues(day: number, count = 12): string[] {
   const nowBj = new Date(Date.now() + 8 * 60 * 60 * 1000);
   let year = nowBj.getUTCFullYear();
   let month = nowBj.getUTCMonth();
   const today = nowBj.getUTCDate();
   const daysInMonth = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-  let candidateDay = Math.min(Math.max(1, day), daysInMonth(year, month));
+  const candidateDay = Math.min(Math.max(1, day), daysInMonth(year, month));
 
-  if (today > candidateDay) {
-    month += 1;
-    if (month > 11) {
-      month = 0;
-      year += 1;
+  // 在本月账单日零点之前，本月账期还未产生，因此从上月账单日开始。
+  if (today < candidateDay) {
+    month -= 1;
+    if (month < 0) {
+      month = 11;
+      year -= 1;
     }
   }
 
   return Array.from({ length: count }, (_, index) => {
-    const targetMonth = month + index;
-    const targetYear = year + Math.floor(targetMonth / 12);
-    const normalizedMonth = targetMonth % 12;
+    const targetMonthDate = new Date(Date.UTC(year, month - index, 1));
+    const targetYear = targetMonthDate.getUTCFullYear();
+    const normalizedMonth = targetMonthDate.getUTCMonth();
     const targetDay = Math.min(Math.max(1, day), daysInMonth(targetYear, normalizedMonth));
     return `${targetYear}-${String(normalizedMonth + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
   });
+}
+
+// 账单日状态圆点只看本月账期：未到本月账单日时不显示，到了当天零点后才显示。
+function getCurrentMonthBillingPeriod(day: number) {
+  const nowBj = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  const year = nowBj.getUTCFullYear();
+  const month = nowBj.getUTCMonth();
+  const today = nowBj.getUTCDate();
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const billingDay = Math.min(Math.max(1, day), daysInMonth);
+  return {
+    billingDate: `${year}-${String(month + 1).padStart(2, '0')}-${String(billingDay).padStart(2, '0')}`,
+    hasReached: today >= billingDay,
+  };
+}
+
+// 将一个账单日映射到该账期对应的最后还款日，供还款金额弹窗引用。
+function getDueDateForBillingPeriod(billingDateValue: string, dueDay: number): string {
+  const [billingYear, billingMonth, billingDay] = billingDateValue.split('-').map(Number);
+  const dueInNextMonth = dueDay <= billingDay;
+  const dueBase = new Date(Date.UTC(billingYear, billingMonth - 1 + (dueInNextMonth ? 1 : 0), 1));
+  const dueYear = dueBase.getUTCFullYear();
+  const dueMonth = dueBase.getUTCMonth();
+  const daysInDueMonth = new Date(Date.UTC(dueYear, dueMonth + 1, 0)).getUTCDate();
+  const resolvedDueDay = Math.min(Math.max(1, dueDay), daysInDueMonth);
+  return `${dueYear}-${String(dueMonth + 1).padStart(2, '0')}-${String(resolvedDueDay).padStart(2, '0')}`;
 }
 
 // 兼容列表排序等既有调用，统一使用北京时间下一期日期。
@@ -687,17 +715,32 @@ export default function CreditCardManagement() {
     const [showBillingStatementSheet, setShowBillingStatementSheet] = useState(false);
     const [billingStatementDrafts, setBillingStatementDrafts] = useState<Record<string, string>>({});
     const [locallySavedBillingDates, setLocallySavedBillingDates] = useState<Record<string, true>>({});
+    const [showBillingPaymentSheet, setShowBillingPaymentSheet] = useState(false);
+    const [paidAmountInput, setPaidAmountInput] = useState('');
+    // 卡片本身也需要读取真实账期记录，用于在“账单日”旁展示已录入/待录入状态。
     const billingStatementsQuery = trpc.creditCard.billingStatements.useQuery(
       { creditCardId: Number(card.id) },
-      { enabled: showBillingStatementSheet && Number(card.id) > 0 }
+      { enabled: Number(card.id) > 0 }
     );
     const billingPeriods = useMemo(
-      () => card.billing_day ? getUpcomingBillingPeriodValues(Number(card.billing_day), 12) : [],
+      () => card.billing_day ? getReachedBillingPeriodValues(Number(card.billing_day), 12) : [],
       [card.billing_day]
     );
     const billingStatementByDate = useMemo(() => new Map(
       (billingStatementsQuery.data || []).map((statement: any) => [toBillingDateValue(statement.billing_date), statement])
     ), [billingStatementsQuery.data]);
+    // 圆点仅对应本月账期；账单日当天零点前不显示任何状态。
+    const currentMonthBilling = card.billing_day ? getCurrentMonthBillingPeriod(Number(card.billing_day)) : null;
+    const shouldShowBillingStatus = !!currentMonthBilling?.hasReached;
+    const hasSavedCurrentMonthBilling = shouldShowBillingStatus && !!currentMonthBilling && billingStatementByDate.has(currentMonthBilling.billingDate);
+    const latestReachedBillingDate = billingPeriods[0] || '';
+    const latestReachedStatement = latestReachedBillingDate ? billingStatementByDate.get(latestReachedBillingDate) : null;
+    const latestStatementAmount = Number(latestReachedStatement?.statement_amount || 0);
+    const latestPaidAmount = Number(latestReachedStatement?.paid_amount || 0);
+    const latestRemainingAmount = Math.max(0, latestStatementAmount - latestPaidAmount);
+    const latestDueDate = latestReachedBillingDate && card.due_day
+      ? getDueDateForBillingPeriod(latestReachedBillingDate, Number(card.due_day))
+      : '';
     const saveBillingStatementMutation = trpc.creditCard.upsertBillingStatement.useMutation({
       onSuccess: (_data, variables) => {
         setLocallySavedBillingDates((previous) => ({ ...previous, [variables.billingDate]: true }));
@@ -705,6 +748,15 @@ export default function CreditCardManagement() {
         toast.success('本期还款账单已保存');
       },
       onError: (error) => toast.error(error.message || '账单保存失败'),
+    });
+
+    const saveBillingPaymentMutation = trpc.creditCard.upsertBillingPayment.useMutation({
+      onSuccess: () => {
+        void billingStatementsQuery.refetch();
+        setShowBillingPaymentSheet(false);
+        toast.success('本期已还金额已保存');
+      },
+      onError: (error) => toast.error(error.message || '已还金额保存失败'),
     });
 
     useEffect(() => {
@@ -743,6 +795,32 @@ export default function CreditCardManagement() {
         creditCardId: Number(card.id),
         billingDate,
         statementAmount,
+      });
+    };
+
+    const openBillingPaymentSheet = () => {
+      if (!card.billing_day || !card.due_day) {
+        toast.error('请先在信用卡编辑页设置账单日和最后还款日');
+        return;
+      }
+      if (!latestReachedBillingDate || !latestReachedStatement) {
+        toast.error('请先在账单日录入本期账单金额');
+        return;
+      }
+      setPaidAmountInput(String(latestPaidAmount));
+      setShowBillingPaymentSheet(true);
+    };
+
+    const saveBillingPayment = async () => {
+      const paidAmount = Number(paidAmountInput);
+      if (!paidAmountInput.trim() || Number.isNaN(paidAmount) || paidAmount < 0) {
+        toast.error('请输入不小于 0 的本期已还金额');
+        return;
+      }
+      await saveBillingPaymentMutation.mutateAsync({
+        creditCardId: Number(card.id),
+        billingDate: latestReachedBillingDate,
+        paidAmount,
       });
     };
 
@@ -977,6 +1055,29 @@ export default function CreditCardManagement() {
           </div>
         )}
 
+        {showBillingPaymentSheet && latestReachedStatement && (
+          <div className="fixed inset-0 z-[60] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+            <div className="w-full max-w-[480px] rounded-t-2xl bg-white px-5 pb-7 pt-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <p className="text-base font-semibold text-slate-900">本期还款</p>
+                  <p className="mt-0.5 text-xs text-slate-400">账单日 {formatBillingPeriodDate(latestReachedBillingDate)}{latestDueDate ? ` · 最后还款日 ${formatBillingPeriodDate(latestDueDate)}` : ''}</p>
+                </div>
+                <button onClick={() => setShowBillingPaymentSheet(false)} className="text-gray-400 active:text-gray-600" aria-label="关闭本期还款录入"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-xl border border-slate-100 bg-slate-50 py-3 text-center">
+                <div className="px-1"><p className="text-[11px] text-slate-400">账单应还</p><p className="mt-1 text-sm font-bold text-slate-800">{latestStatementAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
+                <div className="px-1"><p className="text-[11px] text-slate-400">已还</p><p className="mt-1 text-sm font-bold text-emerald-600">{latestPaidAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
+                <div className="px-1"><p className="text-[11px] text-slate-400">剩余应还</p><p className="mt-1 text-sm font-bold text-rose-500">{latestRemainingAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
+              </div>
+              <label className="mt-5 block text-xs font-medium text-slate-600">目前已还金额</label>
+              <input type="number" min="0" max={latestStatementAmount} step="0.01" inputMode="decimal" value={paidAmountInput} onChange={(event) => setPaidAmountInput(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-lg font-semibold text-slate-900 outline-none focus:border-[#1A2B4A]" placeholder="输入本期累计已还金额" autoFocus />
+              <p className="mt-2 text-xs text-slate-400">保存后自动计算剩余应还金额；已还金额不得超过本期账单应还金额。</p>
+              <button type="button" disabled={saveBillingPaymentMutation.isPending || !paidAmountInput.trim()} onClick={() => void saveBillingPayment()} className="mt-5 w-full rounded-xl bg-[#1A2B4A] py-3 text-sm font-semibold text-white active:opacity-80 disabled:opacity-40">{saveBillingPaymentMutation.isPending ? '保存中' : '保存已还金额'}</button>
+            </div>
+          </div>
+        )}
+
         {/* 账单信息：使用银行主色对应的浅色账单区，保持数据区高可读性。 */}
         <div className="grid grid-cols-4 divide-x divide-slate-200/70 py-2" style={{ backgroundColor: brand.surface, borderTop: `1px solid ${brand.line}` }}>
           <div className="contents">
@@ -986,7 +1087,7 @@ export default function CreditCardManagement() {
               className="grid min-w-0 grid-rows-[16px_20px_16px] px-2 py-1 text-left transition-colors active:bg-black/[0.03]"
               aria-label="打开本期还款账单录入"
             >
-              <p className="text-[11px] leading-4 text-gray-400"><span className="inline-block border-b border-dashed border-[#1A2B4A]/55 pb-px">账单日</span></p>
+              <p className="flex items-center gap-1 text-[11px] leading-4 text-gray-400"><span className="inline-block border-b border-dashed border-[#1A2B4A]/55 pb-px">账单日</span>{shouldShowBillingStatus && <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${hasSavedCurrentMonthBilling ? 'bg-emerald-500' : 'border border-amber-500 bg-transparent'}`} title={hasSavedCurrentMonthBilling ? '本月账单已录入' : '本月账单待录入'} aria-label={hasSavedCurrentMonthBilling ? '本月账单已录入' : '本月账单待录入'} />}</p>
               {nextBilling ? (
                 <>
                   <p className="truncate text-sm font-bold leading-5 text-gray-900">{nextBilling.label}</p>
@@ -997,8 +1098,8 @@ export default function CreditCardManagement() {
                 </>
               ) : <><p className="text-sm leading-5 text-gray-300">未设置</p><span /></>}
             </button>
-            <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-2 py-1">
-              <p className="text-[11px] leading-4 text-gray-400">最后还款日</p>
+            <button type="button" onClick={openBillingPaymentSheet} className="grid min-w-0 grid-rows-[16px_20px_16px] px-2 py-1 text-left transition-colors active:bg-black/[0.03]" aria-label="打开本期已还金额录入">
+              <p className="text-[11px] leading-4 text-gray-400"><span className="inline-block border-b border-dashed border-[#1A2B4A]/55 pb-px">最后还款日</span></p>
               {nextDue ? (
                 <>
                   <p className="truncate text-sm font-bold leading-5 text-gray-900">{nextDue.label}</p>
@@ -1008,7 +1109,7 @@ export default function CreditCardManagement() {
                   }`}>{nextDue.days === 0 ? '今天' : `${nextDue.days}天后`}</span>
                 </>
               ) : <><p className="text-sm leading-5 text-gray-300">未设置</p><span /></>}
-            </div>
+            </button>
           </div>
           {/* 四列单行布局不再需要独立分隔线 */}
           <div className="hidden" />
