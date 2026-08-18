@@ -281,7 +281,8 @@ export default function PolicyLoanManagement({
         if (isHuabei) {
           return (
             <div key={loan.id} className="overflow-hidden rounded-2xl border border-[#D7E9FF] bg-white shadow-sm">
-              <div className="relative bg-gradient-to-br from-[#1677FF] via-[#1686FF] to-[#42B6FF] px-3.5 pb-10 pt-3 text-white">
+              {/* 支付宝蓝色品牌区：信息密度、金额层级和进度条与信用卡卡片保持一致。 */}
+              <div className="relative bg-gradient-to-br from-[#1677FF] via-[#1686FF] to-[#42B6FF] px-3.5 pb-3.5 pt-3 text-white">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 text-xs text-white/85"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-[#1677FF]">花</span><span className="font-semibold">支付宝</span><span className="rounded border border-white/35 bg-white/15 px-1.5 text-[10px] font-semibold leading-4">花呗</span><button onClick={() => setServiceContact(getHuabeiServiceContact())} className="flex h-4 w-4 items-center justify-center text-white/80 active:text-white" aria-label="查看花呗官方客服电话"><PhoneCall className="h-3.5 w-3.5" /></button></div>
@@ -293,14 +294,26 @@ export default function PolicyLoanManagement({
                     {showLoanMenuId === loan.id && <div className="absolute right-0 top-8 z-20 w-28 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-slate-700 shadow-xl"><button onClick={() => { setShowLoanMenuId(null); openEdit(loan); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs active:bg-slate-50"><Pencil className="h-3.5 w-3.5" />更新额度</button><button onClick={() => { setShowLoanMenuId(null); setDeleteId(loan.id); setDeleteStep(1); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-rose-500 active:bg-rose-50"><Trash2 className="h-3.5 w-3.5" />删除</button></div>}
                   </div>
                 </div>
-                <div className="mt-3 text-xs"><div><span className="text-white/65">额度 </span><span className="font-semibold">{formatAmount(totalLimit)}</span></div><div className="mt-1.5 flex items-end gap-4"><div><span className="text-white/65">可用余额 </span><span className="font-semibold">{formatAmount(available)}</span></div><div><span className="text-white/65">已用额度 </span><span className="font-semibold">{formatAmount(balance)} · {usedPercent}%</span></div></div></div>
+                <div className="mt-2.5 space-y-1.5 text-xs">
+                  <div><span className="text-white/70">额度 </span><span className="font-semibold text-white">{formatAmount(totalLimit)}</span></div>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-white/75">可用 <span className="font-semibold text-white">{formatAmount(available)}</span></span>
+                    <span className="text-white/75">已用 <span className="font-semibold text-white">{formatAmount(balance)}</span> · {usedPercent}%</span>
+                    <div className="h-1 w-14 overflow-hidden rounded-full bg-white/20"><div className={`h-full rounded-full ${usedPercent >= 100 ? 'bg-rose-400' : usedPercent >= 90 ? 'bg-red-400' : usedPercent >= 70 ? 'bg-amber-300' : 'bg-emerald-300'}`} style={{ width: `${usedPercent}%` }} /></div>
+                  </div>
+                </div>
               </div>
-              {huabeiCycle ? <div className="grid grid-cols-4 divide-x divide-[#D7E9FF] bg-[#F8FBFF] px-1 py-2.5 text-center">
-                <div className="px-1"><p className="text-[10px] text-slate-400">账单日</p><p className="mt-1 text-[11px] font-semibold text-slate-700">{formatMonthDay(huabeiCycle.upcomingBill)}</p><p className="mt-0.5 text-[10px] text-slate-400">{huabeiCycle.billingDays}天后</p></div>
-                <div className="px-1"><p className="text-[10px] text-slate-400">最后还款日</p><p className="mt-1 text-[11px] font-semibold text-slate-700">{formatMonthDay(huabeiCycle.todayDue)}</p><p className="mt-0.5 text-[10px] text-slate-400">{huabeiCycle.todayDays}天后</p></div>
-                <div className="px-1"><p className="text-[10px] text-slate-400">今日使用</p><p className="mt-1 text-[11px] font-semibold text-slate-700">{formatMonthDay(new Date())}</p><p className="mt-0.5 text-[10px] text-slate-400">{huabeiCycle.todayDays}天账期</p></div>
-                <div className="px-1"><p className="text-[10px] text-slate-400">最优使用日</p><p className="mt-1 text-[11px] font-semibold text-[#1677FF]">{formatMonthDay(huabeiCycle.optimalUse)}</p><p className="mt-0.5 text-[10px] text-slate-400">{huabeiCycle.optimalDays}天账期</p></div>
-              </div> : <div className="bg-[#F8FBFF] px-3 py-3 text-center text-xs text-slate-400">请在“更新额度”中设置账单日和最后还款日</div>}
+              {/* 白色账期区：与信用卡一致，固定为四列三行信息层级。 */}
+              <div className="grid grid-cols-4 divide-x divide-[#D7E9FF] bg-[#F8FBFF] py-2 text-center" style={{ borderTop: '1px solid #D7E9FF' }}>
+                {huabeiCycle ? <>
+                  <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1"><p className="text-[11px] leading-4 text-slate-400">账单日</p><p className="truncate text-sm font-bold leading-5 text-slate-800">{formatMonthDay(huabeiCycle.upcomingBill)}</p><p className={`text-[10px] leading-4 ${huabeiCycle.billingDays <= 3 ? 'text-red-500' : huabeiCycle.billingDays <= 7 ? 'text-orange-500' : 'text-slate-400'}`}>{huabeiCycle.billingDays === 0 ? '今天' : `${huabeiCycle.billingDays}天后`}</p></div>
+                  <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1"><p className="text-[11px] leading-4 text-slate-400">最后还款日</p><p className="truncate text-sm font-bold leading-5 text-slate-800">{formatMonthDay(huabeiCycle.todayDue)}</p><p className={`text-[10px] leading-4 ${huabeiCycle.todayDays <= 3 ? 'text-red-500' : huabeiCycle.todayDays <= 7 ? 'text-orange-500' : 'text-slate-400'}`}>{huabeiCycle.todayDays === 0 ? '今天' : `${huabeiCycle.todayDays}天后`}</p></div>
+                  <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1"><p className="text-[11px] leading-4 text-slate-400">今日使用</p><p className="truncate text-sm font-bold leading-5 text-slate-800">{formatMonthDay(new Date())}</p><p className="text-[10px] leading-4 text-slate-400">{huabeiCycle.todayDays}天账期</p></div>
+                  <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1"><p className="text-[11px] leading-4 text-slate-400">最优使用日</p><p className="truncate text-sm font-bold leading-5 text-[#1677FF]">{formatMonthDay(huabeiCycle.optimalUse)}</p><p className="text-[10px] leading-4 text-rose-500">{huabeiCycle.optimalDays}天账期</p></div>
+                </> : <>
+                  {['账单日', '最后还款日', '今日使用', '最优使用日'].map((label) => <div key={label} className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1"><p className="text-[11px] leading-4 text-slate-400">{label}</p><p className="text-sm font-bold leading-5 text-slate-300">未设置</p><span /></div>)}
+                </>}
+              </div>
               {loan.note && <div className="flex gap-1.5 border-t border-[#E7F2FF] px-3 py-2 text-xs text-slate-500"><FileText className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{loan.note}</span></div>}
             </div>
           );
