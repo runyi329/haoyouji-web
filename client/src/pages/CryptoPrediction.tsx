@@ -2227,13 +2227,12 @@ export default function CryptoPrediction() {
     { enabled: !!ledgerId, staleTime: 60000 }
   );
   const isCustomAF = (ledgerInfo as any)?.type === 'custom_af';
-  const isFunder = (ledgerInfo as any)?.userRole === 'funder';
   const isOwner = (ledgerInfo as any)?.userRole === 'owner';
 
-  // 融资付息：订单列表（仅非资方用户在融资付息Tab时加载）
+  // 融资付息：所有自定义账本成员均可在融资付息 Tab 查询自己的订单与参与订单
   const { data: financeOrdersData, refetch: refetchFinanceOrders, isFetching: financeOrdersFetching } = trpc.ledger.financeGetOrders.useQuery(
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: isCustomAF && !isFunder && tab === 'finance' }
+    { enabled: isCustomAF && tab === 'finance' }
   );
   const financeOrders: any[] = (financeOrdersData as any)?.orders ?? [];
   const [sharedOrdersExpanded, setSharedOrdersExpanded] = useState(false);
@@ -2248,7 +2247,7 @@ export default function CryptoPrediction() {
   // 融资付息：资产汇总
   const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
     { ledgerId },
-    { enabled: isCustomAF && !isFunder && tab === 'finance' }
+    { enabled: isCustomAF && tab === 'finance' }
   );
   // 融资付息：已结利息汇总
   const { data: financeInterestSummary } = trpc.ledger.financeGetInterestPaymentSummary.useQuery(
@@ -2571,7 +2570,7 @@ export default function CryptoPrediction() {
       {!hideTab && (
       <div className="px-4 pt-3">
         <div className="flex rounded p-1 gap-1" style={{ backgroundColor: '#E8EEFF' }}>
-          {(isCustomAF && !isFunder ? [
+          {(isCustomAF ? [
             { key: "contract", label: "谷底增筹" },
             { key: "finance", label: "融资付息" },
             ...(isOwner ? [{ key: "market", label: "冠军预测" }] : []),
@@ -3358,12 +3357,6 @@ export default function CryptoPrediction() {
                     </div>
                   </div>
                 ))}
-              </div>
-            ) : financeOrders.length === 0 ? (
-              <div className="text-center py-12">
-                <AlertCircle className="w-14 h-14 text-gray-300 mx-auto mb-3" />
-                <div className="text-gray-400 text-base mb-1">暂无融资订单</div>
-                <div className="text-gray-400 text-sm">管理员将为您配置融资订单</div>
               </div>
             ) : (() => {
               const activeOrders = financeOrders.filter((o: any) => o.status === 'active');
