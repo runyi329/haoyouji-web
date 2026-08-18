@@ -168,34 +168,6 @@ function formatBillingPeriodDate(value: string | Date | null | undefined): strin
   return `${year}年${month}月${day}日`;
 }
 
-// 从北京时间最近一个已到达的账单日开始向过去生成账期。
-// 未来账单日必须等到当天 00:00 后才会出现，避免预先展示无效的空输入容器。
-function getReachedBillingPeriodValues(day: number, count = 12): string[] {
-  const nowBj = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  let year = nowBj.getUTCFullYear();
-  let month = nowBj.getUTCMonth();
-  const today = nowBj.getUTCDate();
-  const daysInMonth = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-  const candidateDay = Math.min(Math.max(1, day), daysInMonth(year, month));
-
-  // 在本月账单日零点之前，本月账期还未产生，因此从上月账单日开始。
-  if (today < candidateDay) {
-    month -= 1;
-    if (month < 0) {
-      month = 11;
-      year -= 1;
-    }
-  }
-
-  return Array.from({ length: count }, (_, index) => {
-    const targetMonthDate = new Date(Date.UTC(year, month - index, 1));
-    const targetYear = targetMonthDate.getUTCFullYear();
-    const normalizedMonth = targetMonthDate.getUTCMonth();
-    const targetDay = Math.min(Math.max(1, day), daysInMonth(targetYear, normalizedMonth));
-    return `${targetYear}-${String(normalizedMonth + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
-  });
-}
-
 // 账单日状态圆点只看本月账期：未到本月账单日时不显示，到了当天零点后才显示。
 function getCurrentMonthBillingPeriod(day: number) {
   const nowBj = new Date(Date.now() + 8 * 60 * 60 * 1000);
@@ -722,8 +694,9 @@ export default function CreditCardManagement() {
       { creditCardId: Number(card.id) },
       { enabled: Number(card.id) > 0 }
     );
+    // 弹窗只保留当前最近已到达账期；此前历史账期与未来账期均不显示。
     const billingPeriods = useMemo(
-      () => card.billing_day ? getReachedBillingPeriodValues(Number(card.billing_day), 12) : [],
+      () => card.billing_day ? [getLatestBillingDateValue(Number(card.billing_day))] : [],
       [card.billing_day]
     );
     const billingStatementByDate = useMemo(() => new Map(
