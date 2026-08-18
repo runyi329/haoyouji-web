@@ -99,6 +99,21 @@ function formatMonthDay(date: Date) {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
+// 统一日期字段为 HTML date 输入框和 MySQL DATE 均可识别的 YYYY-MM-DD。
+// mysql2 在部分环境会把 DATE 返回为 Date 对象，直接 String 后会变成如 "Mon Aug 17" 的浏览器文本。
+function toDateInputValue(value: unknown): string {
+  if (!value) return '';
+  const raw = String(value).trim();
+  const directMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (directMatch) return directMatch[1];
+  const parsed = value instanceof Date ? value : new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function buildHuabeiCycle(billingDay: unknown, repaymentDay: unknown) {
   const billDay = Number(billingDay);
   const repayDay = Number(repaymentDay);
@@ -232,7 +247,7 @@ export default function PolicyLoanManagement({
       outstandingBalance: loan.outstanding_balance != null ? String(loan.outstanding_balance) : "",
       annualRate: loan.annual_rate != null ? String(loan.annual_rate) : "",
       repaymentMethod: loan.repayment_method || "",
-      loanDate: loan.loan_date ? String(loan.loan_date).slice(0, 10) : "", dueDate: loan.due_date ? String(loan.due_date).slice(0, 10) : "",
+      loanDate: toDateInputValue(loan.loan_date), dueDate: toDateInputValue(loan.due_date),
       huabeiBillingDay: loan.huabei_billing_day != null ? String(loan.huabei_billing_day) : "", huabeiRepaymentDay: loan.huabei_repayment_day != null ? String(loan.huabei_repayment_day) : "",
       note: loan.note || "",
     });
@@ -250,7 +265,7 @@ export default function PolicyLoanManagement({
       policyNo: form.policyNo || undefined, loanAmount: form.loanAmount ? Number(form.loanAmount) : undefined,
       outstandingBalance: form.outstandingBalance ? Number(form.outstandingBalance) : undefined,
       annualRate: form.annualRate ? Number(form.annualRate) : 0,
-      repaymentMethod: form.repaymentMethod || undefined, loanDate: form.loanDate || undefined, dueDate: form.dueDate || undefined,
+      repaymentMethod: form.repaymentMethod || undefined, loanDate: toDateInputValue(form.loanDate) || undefined, dueDate: toDateInputValue(form.dueDate) || undefined,
       huabeiBillingDay: isHuabei && form.huabeiBillingDay ? Number(form.huabeiBillingDay) : undefined,
       huabeiRepaymentDay: isHuabei && form.huabeiRepaymentDay ? Number(form.huabeiRepaymentDay) : undefined,
       currency: "CNY", note: form.note || undefined, loanType,
