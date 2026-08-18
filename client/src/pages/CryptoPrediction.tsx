@@ -2566,8 +2566,8 @@ export default function CryptoPrediction() {
         </div>
       )}
 
-      {/* Tab 切换：首页分流进入时隐藏；查看他人时必须保留，以便切换谷底增筹与融资付息。 */}
-      {(!hideTab || !!viewAsUserId) && (
+      {/* Tab 切换：首页分流与查看他人视角均隐藏一级业务标签，仅保留内容区的本人 / 参与分组。 */}
+      {!hideTab && !viewAsUserId && (
       <div className="px-4 pt-3">
         <div className="flex rounded p-1 gap-1" style={{ backgroundColor: '#E8EEFF' }}>
           {(isCustomAF ? [

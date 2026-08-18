@@ -5224,8 +5224,7 @@ export default function LedgerDetail() {
               const allActive = (funderAssetOrders as any[]).filter((o: any) => o.status !== 'settled');
               const mineOrders = allActive.filter((o: any) => (o as any).order_perspective !== 'other');
               const participantOrders = allActive.filter((o: any) => (o as any).order_perspective === 'other');
-              const hasParticipant = participantOrders.length > 0;
-              return hasParticipant ? (
+              return (
                 <div className="flex rounded p-1 gap-1 mb-3" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
                   {([['mine', '本人', mineOrders.length], ['participant', '参与', participantOrders.length]] as const).map(([key, label, cnt]) => (
                     <button key={key} onClick={() => setFunderOrderTab(key)}
@@ -5234,7 +5233,7 @@ export default function LedgerDetail() {
                     </button>
                   ))}
                 </div>
-              ) : null;
+              );
             })()}
             <div className="flex items-center mb-3">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
@@ -5308,6 +5307,11 @@ export default function LedgerDetail() {
                 <Receipt className="w-14 h-14 text-gray-200 mx-auto mb-3" />
                 <div className="text-gray-400 text-base mb-1">暂无资产订单</div>
                 <div className="text-gray-400 text-sm">管理员将为您配置资产订单</div>
+              </div>
+            ) : funderDisplayOrders.filter((order: any) => order.status !== 'settled' && (funderOrderTab === 'participant' ? (order as any).order_perspective === 'other' : (order as any).order_perspective !== 'other')).length === 0 ? (
+              <div className="text-center py-12">
+                <Receipt className="w-14 h-14 text-gray-200 mx-auto mb-3" />
+                <div className="text-gray-400 text-base mb-1">{funderOrderTab === 'participant' ? '暂无参与订单' : '暂无本人订单'}</div>
               </div>
             ) : funderViewMode === 'card' ? (
               /* 卡片模式：銀色铭牌风格 */
