@@ -2566,7 +2566,7 @@ export default function CryptoPrediction() {
         </div>
       )}
 
-      {/* Tab 切换：首页分流与查看他人视角均隐藏一级业务标签，仅保留内容区的本人 / 参与分组。 */}
+{/* Tab 切换：首页分流与查看他人视角均隐藏一级业务标签，仅保留内容区的本人 / 参与分组。 */}
       {!hideTab && !viewAsUserId && (
       <div className="px-4 pt-3">
         <div className="flex rounded p-1 gap-1" style={{ backgroundColor: '#E8EEFF' }}>
