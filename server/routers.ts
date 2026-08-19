@@ -28186,7 +28186,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
           throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看该信用卡账期记录' });
         }
         const [rows] = await conn.execute(
-          `SELECT id, credit_card_id, billing_date, statement_amount, paid_amount, created_by_user_id, updated_by_user_id, created_at, updated_at
+          `SELECT id, credit_card_id, DATE_FORMAT(billing_date, '%Y-%m-%d') AS billing_date, statement_amount, paid_amount, created_by_user_id, updated_by_user_id, created_at, updated_at
            FROM credit_card_billing_statements
            WHERE credit_card_id=?
            ORDER BY billing_date DESC, updated_at DESC`,
@@ -28212,7 +28212,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
           params.push(targetUserId);
         }
         const [rows] = await conn.execute(
-          `SELECT bs.id, bs.credit_card_id, bs.billing_date, bs.statement_amount, bs.paid_amount, bs.updated_at
+          `SELECT bs.id, bs.credit_card_id, DATE_FORMAT(bs.billing_date, '%Y-%m-%d') AS billing_date, bs.statement_amount, bs.paid_amount, bs.updated_at
            FROM credit_card_billing_statements bs
            INNER JOIN credit_cards cc ON cc.id = bs.credit_card_id
            WHERE ${conditions.join(' AND ')}
