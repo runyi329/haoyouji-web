@@ -135,6 +135,7 @@ export default function RechargeHistory() {
                   const amtDisplay = `${isPositive ? '+' : ''}${amt.toFixed(2)} USDT`;
                   const isManual = item.sourceType === 'manual';
                   const isBh = item.sourceType === 'balance_history';
+                  const isOpening = item.sourceType === 'opening';
                   // 提取世界杯国旗 code
                   const noteText = item.note || item.description || '';
                   const wcCode = extractWcTeamCode(noteText);
@@ -144,6 +145,8 @@ export default function RechargeHistory() {
                   };
                   const label = isRecharge
                     ? (item.note || '充值')
+                    : isOpening
+                    ? '历史期初余额'
                     : isManual
                     ? '手动调账'
                     : isBh
@@ -158,6 +161,8 @@ export default function RechargeHistory() {
                   };
                   const statusStyle = isRecharge
                     ? (statusStyleMap[item.status] || { bg: 'bg-gray-800/40', text: 'text-gray-400', border: 'border-gray-600/40' })
+                    : isOpening
+                    ? { bg: 'bg-gray-800/40', text: 'text-gray-400', border: 'border-gray-600/40' }
                     : { bg: 'bg-blue-900/30', text: 'text-blue-300', border: 'border-blue-700/40' };
                   return (
                     <div key={item.id} className="px-4 py-3">
@@ -194,7 +199,7 @@ export default function RechargeHistory() {
                         <span className={`font-semibold text-base ${isPositive ? 'text-green-400' : 'text-red-400'}`}>{amtDisplay}</span>
                       </div>
                       {/* 非世界杯才显示备注文字 */}
-                      {!wcCode && (isManual || isBh) && noteText && (
+                      {!wcCode && (isManual || isBh || isOpening) && noteText && (
                         <div className="text-xs text-gray-400 mb-1 ml-10">{noteText}</div>
                       )}
                       <div className="flex items-center justify-between text-xs text-gray-600 ml-10">

@@ -13512,7 +13512,18 @@ ${klinesSummary}
         }
         // 1. 充値订单（recharge_orders，只显示已完成的充値到账记录，不显示待支付/确认中/过期/取消）
         const rechargeRows = await db.execute(
-          sql`SELECT id, amount, status, created_at FROM recharge_orders WHERE user_id = ${targetUserId} AND status = 'completed' ORDER BY created_at DESC LIMIT 100`
+          sql`SELECT r.id,
+                     COALESCE(h.amount, r.amount) AS actual_amount,
+                     r.status,
+                     COALESCE(r.completed_at, r.created_at) AS occurred_at
+              FROM recharge_orders r
+              LEFT JOIN balance_history h ON h.user_id = r.user_id
+                AND h.type = 'recharge'
+                AND h.related_id = r.id
+              WHERE r.user_id = ${targetUserId}
+                AND r.status = 'completed'
+              ORDER BY COALESCE(r.completed_at, r.created_at) DESC
+              LIMIT 100`
         ) as any;
         const statusLabelMap: Record<string, string> = {
           completed: '充值到账',
@@ -13523,11 +13534,11 @@ ${klinesSummary}
         };
         const rechargeList = ((rechargeRows[0] || rechargeRows) as any[]).map((r: any) => ({
           id: `r_${r.id}`,
-          amount: parseFloat(r.amount),
+          amount: parseFloat(r.actual_amount),
           sourceType: 'recharge' as const,
           note: statusLabelMap[r.status] || r.status,
           status: r.status,
-          createdAt: r.created_at,
+          createdAt: r.occurred_at,
         }));
         // 2. 手动调账记录（af_manual_balances），JOIN af_orders 获取订单创建日期用于生成完整编号
         let manualList: any[] = [];
@@ -13540,6 +13551,8 @@ ${klinesSummary}
                   m.note REGEXP CONCAT('#', o.id, '$') AND o.ledger_id = m.ledger_id
                 )
                 WHERE m.user_id = ${targetUserId}
+                  AND m.note NOT LIKE '[CNY]%'
+                  AND m.note NOT LIKE '[BALANCE_BASE]%'
                 ORDER BY m.created_at DESC`
           ) as any;
           manualList = ((manualRows[0] || manualRows) as any[]).map((r: any) => {
@@ -13570,7 +13583,7 @@ ${klinesSummary}
         let bhList: any[] = [];
         try {
           const bhRows = await db.execute(
-            sql`SELECT id, amount, type, description, created_at
+            sql`SELECT id, amount, type, related_id, description, created_at
                 FROM balance_history
                 WHERE user_id = ${targetUserId}
                   AND type IN ('recharge', 'consume', 'refund', 'commission', 'reward')
@@ -13582,6 +13595,7 @@ ${klinesSummary}
             sourceType: 'balance_history' as const,
             note: r.description || r.type,
             type: r.type,
+            relatedId: r.related_id,
             createdAt: r.created_at,
           }));
           // 去重：如果 manualList 里已有相同时间（±2s）且金额相同的条目，说明是改造后的新记录，跳过
@@ -13590,14 +13604,16 @@ ${klinesSummary}
             amt: Math.abs(m.amount),
           }));
           bhList = allBh.filter(bh => {
+            // 充值订单已使用该订单对应的实际到账金额，不能再把同一笔 recharge history 并入。
+            if (bh.type === 'recharge' && bh.relatedId) return false;
             const bhT = new Date(bh.createdAt).getTime();
             const bhAmt = Math.abs(bh.amount);
             return !manualTimes.some(m => Math.abs(m.t - bhT) <= 2000 && Math.abs(m.amt - bhAmt) < 0.001);
           });
         } catch (_) { /* 忽略 */ }
 
-        // 4. 合并并按时间正序排列（从旧到新）
-        const combinedAsc = [...rechargeList, ...manualList, ...bhList].sort(
+        // 4. 合并并按时间正序排列（从旧到新）。此处只保留一次实际影响 USDT 余额的事件。
+        let combinedAsc = [...rechargeList, ...manualList, ...bhList].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
 
@@ -13608,11 +13624,28 @@ ${klinesSummary}
             (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${targetUserId} AND note NOT LIKE '[CNY]%' AND note NOT LIKE '[BALANCE_BASE]%') AS manual`
         ) as any;
         const balData = (balRow[0]?.[0] ?? balRow[0]) as any;
-        const currentBalance = parseFloat(
-          ((parseFloat(balData?.userBalance ?? '0') || 0) + (parseFloat(balData?.manual ?? '0') || 0)).toFixed(2)
-        );
+        const currentBalance =
+          (parseFloat(balData?.userBalance ?? '0') || 0) +
+          (parseFloat(balData?.manual ?? '0') || 0);
 
-        // 6. 倒推余额：从当前真实余额开始，倒序遍历每条记录，记录发生后的余额快照
+        // 6. 历史迁移前的余额可能已经汇总到 users.balance，却没有可逐笔还原的原始事件。
+        // 补一条只读期初余额锚点，使第一笔到最后一笔的余额连续且最后严格等于真实余额。
+        const listedEventSum = combinedAsc.reduce((sum, item) => sum + (parseFloat(String(item.amount)) || 0), 0);
+        const openingBalance = Number((currentBalance - listedEventSum).toFixed(6));
+        if (Math.abs(openingBalance) >= 0.000001) {
+          const earliestTime = combinedAsc.length
+            ? new Date(combinedAsc[0].createdAt).getTime() - 1
+            : Date.now();
+          combinedAsc = [{
+            id: `opening_${targetUserId}`,
+            amount: openingBalance,
+            sourceType: 'opening' as const,
+            note: '历史期初余额（系统迁移前）',
+            createdAt: new Date(earliestTime),
+          }, ...combinedAsc];
+        }
+
+        // 7. 倒推余额：从当前真实余额开始，倒序遍历每条记录，记录发生后的余额快照
         const combinedDesc = [...combinedAsc].reverse();
         let running = currentBalance;
         const balanceMap = new Map<string, number>();
@@ -13624,8 +13657,9 @@ ${klinesSummary}
           const affects =
             (srcType === 'recharge' && status === 'completed') ||
             srcType === 'manual' ||
-            srcType === 'balance_history';
-          balanceMap.set(String((item as any).id), parseFloat(running.toFixed(2)));
+            srcType === 'balance_history' ||
+            srcType === 'opening';
+          balanceMap.set(String((item as any).id), parseFloat(running.toFixed(8)));
           if (affects) {
             running -= amt; // 倒推：当前余额减去该笔金额 = 该笔发生前的余额
           }

@@ -223,8 +223,11 @@ export default function WalletTransactions() {
               const isRecharge = item.sourceType === 'recharge';
               const isManual = item.sourceType === 'manual';
               const isBh = item.sourceType === 'balance_history';
+              const isOpening = item.sourceType === 'opening';
               const label = isRecharge
                 ? '充值到账'
+                : isOpening
+                ? '历史期初余额'
                 : isManual
                 ? '手动调账'
                 : isBh
