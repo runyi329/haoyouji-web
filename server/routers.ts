@@ -28194,6 +28194,33 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         ) as any[];
         return Array.isArray(rows) ? rows : [];
       }),
+    // 批量查询可见信用卡的手动账单登记记录，供额度汇总中的最近已出账期登记统计使用。
+    billingStatementEntries: protectedProcedure
+      .input(z.object({ userId: z.number().int().positive().optional() }).nullish())
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+        const requestedUserId = input?.userId;
+        if (requestedUserId && Number(requestedUserId) !== Number(ctx.user.id) && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看该用户账期记录' });
+        }
+        const targetUserId = requestedUserId ?? (ctx.user.role === 'super_admin' ? null : Number(ctx.user.id));
+        const conditions = ['cc.is_active = 1'];
+        const params: any[] = [];
+        if (targetUserId) {
+          conditions.push('cc.user_id = ?');
+          params.push(targetUserId);
+        }
+        const [rows] = await conn.execute(
+          `SELECT bs.id, bs.credit_card_id, bs.billing_date, bs.statement_amount, bs.paid_amount, bs.updated_at
+           FROM credit_card_billing_statements bs
+           INNER JOIN credit_cards cc ON cc.id = bs.credit_card_id
+           WHERE ${conditions.join(' AND ')}
+           ORDER BY bs.billing_date DESC, bs.updated_at DESC`,
+          params
+        ) as any[];
+        return Array.isArray(rows) ? rows : [];
+      }),
     // 新增或更新指定账期的本期还款账单金额；同一信用卡同一账单日始终只有一条记录。
     upsertBillingStatement: protectedProcedure
       .input(z.object({
@@ -28505,7 +28532,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
   // ========== 保单贷款管理 ==========
   policyLoan: router({
     list: protectedProcedure
-      .input(z.object({ loanType: z.enum(['policy', 'huabei']).optional() }).optional())
+      .input(z.object({ loanType: z.enum(['policy', 'huabei', 'housing_fund']).optional() }).optional())
       .query(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return [];
@@ -28518,7 +28545,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       }),
     create: protectedProcedure
       .input(z.object({
-        insurer: z.string().min(1), loanType: z.enum(['policy', 'huabei']).default('policy'), policyName: z.string().optional(), policyHolder: z.string().optional(),
+        insurer: z.string().min(1), loanType: z.enum(['policy', 'huabei', 'housing_fund']).default('policy'), policyName: z.string().optional(), policyHolder: z.string().optional(),
         policyNo: z.string().optional(), loanAmount: z.number().optional(), outstandingBalance: z.number().optional(),
         cashValue: z.number().optional(), annualRate: z.number().optional(), repaymentMethod: z.string().optional(), loanDate: z.string().optional(),
         dueDate: z.string().optional(), huabeiBillingDay: z.number().int().min(1).max(31).optional(), huabeiRepaymentDay: z.number().int().min(1).max(31).optional(), currency: z.string().default('CNY'), note: z.string().optional(),
@@ -28534,7 +28561,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       }),
     update: protectedProcedure
       .input(z.object({
-        id: z.number(), insurer: z.string().optional(), loanType: z.enum(['policy', 'huabei']).optional(), policyName: z.string().optional(), policyHolder: z.string().optional(),
+        id: z.number(), insurer: z.string().optional(), loanType: z.enum(['policy', 'huabei', 'housing_fund']).optional(), policyName: z.string().optional(), policyHolder: z.string().optional(),
         policyNo: z.string().optional(), loanAmount: z.number().nullable().optional(), outstandingBalance: z.number().nullable().optional(),
         cashValue: z.number().nullable().optional(), annualRate: z.number().nullable().optional(), repaymentMethod: z.string().nullable().optional(), loanDate: z.string().nullable().optional(),
         dueDate: z.string().nullable().optional(), huabeiBillingDay: z.number().int().min(1).max(31).nullable().optional(), huabeiRepaymentDay: z.number().int().min(1).max(31).nullable().optional(), currency: z.string().optional(), note: z.string().nullable().optional(),
@@ -28562,7 +28589,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         return { success: true };
       }),
     adminListAll: protectedProcedure
-      .input(z.object({ loanType: z.enum(['policy', 'huabei']).optional() }).optional())
+      .input(z.object({ loanType: z.enum(['policy', 'huabei', 'housing_fund']).optional() }).optional())
       .query(async ({ ctx, input }) => {
         if (ctx.user.role !== 'super_admin') throw new Error('no permission');
         const conn = await (await import('./db')).getDbConnection();
@@ -28576,7 +28603,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       }),
     adminCreate: protectedProcedure
       .input(z.object({
-        targetUserId: z.number(), insurer: z.string().min(1), loanType: z.enum(['policy', 'huabei']).default('policy'), policyName: z.string().optional(), policyHolder: z.string().optional(),
+        targetUserId: z.number(), insurer: z.string().min(1), loanType: z.enum(['policy', 'huabei', 'housing_fund']).default('policy'), policyName: z.string().optional(), policyHolder: z.string().optional(),
         policyNo: z.string().optional(), loanAmount: z.number().optional(), outstandingBalance: z.number().optional(), cashValue: z.number().optional(), annualRate: z.number().optional(), repaymentMethod: z.string().optional(), loanDate: z.string().optional(), dueDate: z.string().optional(), huabeiBillingDay: z.number().int().min(1).max(31).optional(), huabeiRepaymentDay: z.number().int().min(1).max(31).optional(), currency: z.string().default('CNY'), note: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -28591,7 +28618,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       }),
     adminUpdate: protectedProcedure
       .input(z.object({
-        id: z.number(), insurer: z.string().optional(), loanType: z.enum(['policy', 'huabei']).optional(), policyName: z.string().optional(), policyHolder: z.string().optional(),
+        id: z.number(), insurer: z.string().optional(), loanType: z.enum(['policy', 'huabei', 'housing_fund']).optional(), policyName: z.string().optional(), policyHolder: z.string().optional(),
         policyNo: z.string().optional(), loanAmount: z.number().nullable().optional(), outstandingBalance: z.number().nullable().optional(),
         cashValue: z.number().nullable().optional(), annualRate: z.number().nullable().optional(), repaymentMethod: z.string().nullable().optional(), loanDate: z.string().nullable().optional(),
         dueDate: z.string().nullable().optional(), huabeiBillingDay: z.number().int().min(1).max(31).nullable().optional(), huabeiRepaymentDay: z.number().int().min(1).max(31).nullable().optional(), currency: z.string().optional(), note: z.string().nullable().optional(),

@@ -7,9 +7,9 @@ import { toast } from "sonner";
 import PolicyLoanManagement from "./PolicyLoanManagement";
 import { UserAvatar } from "@/components/UserAvatar";
 import {
-  ChevronLeft, Plus, CreditCard, Pencil, Trash2,
+  ChevronLeft, Plus, CreditCard, Pencil, Trash2, Copy,
   X, Check, Users, User, Search, ChevronDown, Lightbulb, ToggleLeft, ToggleRight,
-  Eye, EyeOff, ShieldCheck, PhoneCall, RefreshCw, SlidersHorizontal, Loader2,
+  Eye, EyeOff, ShieldCheck, PhoneCall, RefreshCw, SlidersHorizontal, Loader2, CalendarDays,
 } from "lucide-react";
 import { LoanServiceContactSheet } from "@/components/LoanServiceContactSheet";
 import { getCreditCardServiceContact, type LoanServiceContact } from "@/lib/loanServiceContacts";
@@ -31,6 +31,47 @@ const BANK_OPTIONS = [
 
 const CARD_NETWORKS = ["银联", "Visa", "Mastercard", "AMEX", "JCB", "Discover"];
 const CURRENCIES = ["CNY", "USD", "HKD", "EUR", "JPY", "SGD", "GBP", "AUD"];
+
+type LoanCategory = 'creditCard' | 'policyLoan' | 'huabei' | 'housingFund';
+const LOAN_CATEGORY_OPTIONS: Array<{ value: LoanCategory; label: string }> = [
+  { value: 'creditCard', label: '信用卡' },
+  { value: 'policyLoan', label: '保单贷款' },
+  { value: 'huabei', label: '花呗' },
+  { value: 'housingFund', label: '公积金贷款' },
+];
+
+const LOAN_TYPE_FILTER_STORAGE_KEY = 'haoyouji:loan-management:type-filters';
+const ADMIN_LOAN_USER_FILTER_STORAGE_KEY = 'haoyouji:loan-management:admin-user-filter';
+type AdminLoanUserFilter = { id: number; name: string };
+
+function readRememberedAdminLoanUserFilter(): AdminLoanUserFilter | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const rawValue = window.localStorage.getItem(ADMIN_LOAN_USER_FILTER_STORAGE_KEY);
+    const parsedValue: unknown = rawValue ? JSON.parse(rawValue) : null;
+    if (!parsedValue || typeof parsedValue !== 'object') return null;
+    const candidate = parsedValue as { id?: unknown; name?: unknown };
+    const id = Number(candidate.id);
+    const name = typeof candidate.name === 'string' ? candidate.name.trim() : '';
+    return Number.isInteger(id) && id > 0 && name ? { id, name } : null;
+  } catch {
+    return null;
+  }
+}
+
+function readRememberedLoanTypeFilters(): LoanCategory[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const rawValue = window.localStorage.getItem(LOAN_TYPE_FILTER_STORAGE_KEY);
+    const parsedValue: unknown = rawValue ? JSON.parse(rawValue) : [];
+    if (!Array.isArray(parsedValue)) return [];
+    const allowedTypes = new Set<LoanCategory>(LOAN_CATEGORY_OPTIONS.map((option) => option.value));
+    const validTypes = Array.from(new Set(parsedValue.filter((value): value is LoanCategory => typeof value === 'string' && allowedTypes.has(value as LoanCategory))));
+    return validTypes.length === 0 || validTypes.length === LOAN_CATEGORY_OPTIONS.length ? [] : validTypes;
+  } catch {
+    return [];
+  }
+}
 
 // 计算最优刷卡建议
 // 正确逻辑：最优刷卡日 = 账单日 + 1天
@@ -134,6 +175,25 @@ function getNextMonthlyDate(day: number): { label: string; days: number } {
     label: `${targetMonth + 1}月${targetDay}日`,
     days: Math.max(0, Math.round((targetStart - todayStart) / (1000 * 60 * 60 * 24))),
   };
+}
+
+// 返回北京时间从今天起最近一次发生的每月固定日期；当天仍归入今天。
+function getUpcomingMonthlyDateKey(day: number): string {
+  const nowBj = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  let year = nowBj.getUTCFullYear();
+  let month = nowBj.getUTCMonth();
+  const today = nowBj.getUTCDate();
+  const daysInMonth = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  let targetDay = Math.min(Math.max(1, day), daysInMonth(year, month));
+  if (today > targetDay) {
+    month += 1;
+    if (month > 11) {
+      month = 0;
+      year += 1;
+    }
+    targetDay = Math.min(Math.max(1, day), daysInMonth(year, month));
+  }
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
 }
 
 // 返回北京时间最近一次已经到达的账单日，作为手动录入“本期还款账单数”的默认账期。
@@ -322,17 +382,35 @@ function getCreditCardCapacity(card: any) {
 function LoanCapacitySummary({
   viewMode,
   cards,
+  registrationCards,
   adminUserFilter,
   isCardsLoading,
+  showLoanControls,
+  onToggleLoanControls,
+  activeLoanTypeFilterCount,
+  hasAdminDueFilter,
 }: {
   viewMode: 'self' | 'admin';
   cards: any[];
+  registrationCards: any[];
   adminUserFilter: { id: number; name: string } | null;
   isCardsLoading: boolean;
+  showLoanControls: boolean;
+  onToggleLoanControls: () => void;
+  activeLoanTypeFilterCount: number;
+  hasAdminDueFilter: boolean;
 }) {
   const { user } = useAuth();
   const adminMode = viewMode === 'admin';
+  const hasActiveLoanTypeFilter = activeLoanTypeFilterCount > 0;
+  const hasAdminUserFilter = adminMode && !!adminUserFilter;
+  const activeFilterCount = activeLoanTypeFilterCount + (hasAdminUserFilter ? 1 : 0) + (hasAdminDueFilter ? 1 : 0);
+  const hasActiveFilter = activeFilterCount > 0;
+  const collapsedFilterLabel = hasAdminUserFilter && activeFilterCount === 1 ? '已选用户' : `已筛选 ${activeFilterCount}`;
   const targetUsageUserId = adminMode ? (adminUserFilter?.id ?? null) : Number((user as any)?.id || 0);
+  const billingStatementEntriesQuery = trpc.creditCard.billingStatementEntries.useQuery(
+    adminMode && adminUserFilter ? { userId: adminUserFilter.id } : undefined
+  );
   const [showUsageSheet, setShowUsageSheet] = useState(false);
   const [editingUsageRecordId, setEditingUsageRecordId] = useState<number | null>(null);
   const [usageDraft, setUsageDraft] = useState({ amount: '', description: '' });
@@ -371,29 +449,137 @@ function LoanCapacitySummary({
   });
   const { data: myPolicyLoans = [], isFetching: isFetchingMyPolicy } = trpc.policyLoan.list.useQuery({ loanType: 'policy' }, { enabled: !adminMode });
   const { data: myHuabeiLoans = [], isFetching: isFetchingMyHuabei } = trpc.policyLoan.list.useQuery({ loanType: 'huabei' }, { enabled: !adminMode });
+  const { data: myHousingFundLoans = [], isFetching: isFetchingMyHousingFund } = trpc.policyLoan.list.useQuery({ loanType: 'housing_fund' }, { enabled: !adminMode });
   const { data: allPolicyLoans = [], isFetching: isFetchingAllPolicy } = trpc.policyLoan.adminListAll.useQuery({ loanType: 'policy' }, { enabled: adminMode });
   const { data: allHuabeiLoans = [], isFetching: isFetchingAllHuabei } = trpc.policyLoan.adminListAll.useQuery({ loanType: 'huabei' }, { enabled: adminMode });
+  const { data: allHousingFundLoans = [], isFetching: isFetchingAllHousingFund } = trpc.policyLoan.adminListAll.useQuery({ loanType: 'housing_fund' }, { enabled: adminMode });
+
+  const [scheduleDayMarker, setScheduleDayMarker] = useState(() => Date.now());
+  const billingTimelineRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const nowBj = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const nextBeijingMidnight = Date.UTC(nowBj.getUTCFullYear(), nowBj.getUTCMonth(), nowBj.getUTCDate() + 1);
+    const delay = Math.max(1000, nextBeijingMidnight - (Date.now() + 8 * 60 * 60 * 1000) + 250);
+    const timer = window.setTimeout(() => setScheduleDayMarker(Date.now()), delay);
+    return () => window.clearTimeout(timer);
+  }, [scheduleDayMarker]);
+
+  const scopedCreditCards = useMemo(
+    () => adminMode && adminUserFilter
+      ? (cards as any[]).filter((card) => Number(card.user_id) === adminUserFilter.id)
+      : (cards as any[]),
+    [adminMode, adminUserFilter, cards]
+  );
+
+  const latestBillingRegistrationSummary = useMemo(() => {
+    const issuedCards = registrationCards.filter((card: any) => Number(card.billing_day || 0) > 0);
+    const statementByKey = new Map(
+      ((billingStatementEntriesQuery.data || []) as any[]).map((statement) => [`${Number(statement.credit_card_id)}:${toBillingDateValue(statement.billing_date)}`, statement])
+    );
+    let registeredCount = 0;
+    let paidOffCount = 0;
+    let partiallyPaidCount = 0;
+    let unpaidCount = 0;
+    issuedCards.forEach((card: any) => {
+      const statement = statementByKey.get(`${Number(card.id)}:${getLatestBillingDateValue(Number(card.billing_day))}`);
+      if (!statement) return;
+      registeredCount += 1;
+      const statementAmount = Math.max(0, Number(statement.statement_amount || 0));
+      const paidAmount = Math.max(0, Number(statement.paid_amount || 0));
+      // 本期账单登记为 0 表示无消费，不需要再录入还款，直接视为已还清。
+      if (statementAmount <= 0) paidOffCount += 1;
+      else if (paidAmount >= statementAmount) paidOffCount += 1;
+      else if (paidAmount > 0) partiallyPaidCount += 1;
+      else unpaidCount += 1;
+    });
+    return {
+      issuedCount: issuedCards.length,
+      registeredCount,
+      pendingCount: Math.max(0, issuedCards.length - registeredCount),
+      paidOffCount,
+      partiallyPaidCount,
+      unpaidCount,
+    };
+  }, [registrationCards, billingStatementEntriesQuery.data, scheduleDayMarker]);
+
+  const upcomingBillingReminders = useMemo(() => {
+    const nowBj = new Date(scheduleDayMarker + 8 * 60 * 60 * 1000);
+    const startYear = nowBj.getUTCFullYear();
+    const startMonth = nowBj.getUTCMonth();
+    const startDay = nowBj.getUTCDate();
+    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    // 以今天为锚点：左侧过去30天，右侧未来30天，首次打开自动将今天对齐到第一格。
+    const dates = Array.from({ length: 61 }, (_, index) => {
+      const offset = index - 30;
+      const date = new Date(Date.UTC(startYear, startMonth, startDay + offset));
+      const year = date.getUTCFullYear();
+      const month = date.getUTCMonth();
+      const day = date.getUTCDate();
+      return {
+        key: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        year,
+        month,
+        day,
+        dateLabel: `${month + 1}/${day}`,
+        weekday: offset === 0 ? '今日' : weekdays[date.getUTCDay()],
+        isToday: offset === 0,
+        billingCount: 0,
+        dueCount: 0,
+        billingBanks: [] as string[],
+        dueBanks: [] as string[],
+      };
+    });
+    const markMonthlyDate = (dayOfMonth: number, kind: 'billing' | 'due', bankName: string) => {
+      dates.forEach((date) => {
+        const lastDay = new Date(Date.UTC(date.year, date.month + 1, 0)).getUTCDate();
+        if (date.day !== Math.min(Math.max(1, dayOfMonth), lastDay)) return;
+        if (kind === 'billing') {
+          date.billingCount += 1;
+          date.billingBanks.push(bankName);
+        } else {
+          date.dueCount += 1;
+          date.dueBanks.push(bankName);
+        }
+      });
+    };
+    scopedCreditCards.forEach((card: any) => {
+      const bankName = normalizeDisplayBankName(card.bank_name);
+      const billingDay = Number(card.billing_day || 0);
+      if (billingDay > 0) markMonthlyDate(billingDay, 'billing', bankName);
+      const dueDay = Number(card.due_day || 0);
+      if (dueDay > 0) markMonthlyDate(dueDay, 'due', bankName);
+    });
+    return dates;
+  }, [scopedCreditCards, scheduleDayMarker]);
+
+  useEffect(() => {
+    const timeline = billingTimelineRef.current;
+    if (!timeline) return;
+    const timer = window.requestAnimationFrame(() => {
+      const today = timeline.querySelector<HTMLElement>('[data-billing-today="true"]');
+      if (today) timeline.scrollLeft = today.offsetLeft;
+    });
+    return () => window.cancelAnimationFrame(timer);
+  }, [scheduleDayMarker, upcomingBillingReminders]);
 
   const summary = useMemo(() => {
-    const scopedCards = adminMode && adminUserFilter
-      ? (cards as any[]).filter((card) => Number(card.user_id) === adminUserFilter.id)
-      : (cards as any[]);
     const matchesSelectedAdminUser = (loan: any) => !adminMode || !adminUserFilter || Number(loan.user_id) === adminUserFilter.id;
     const scopedPolicyLoans = ((adminMode ? allPolicyLoans : myPolicyLoans) as any[]).filter(matchesSelectedAdminUser);
     const scopedHuabeiLoans = ((adminMode ? allHuabeiLoans : myHuabeiLoans) as any[]).filter(matchesSelectedAdminUser);
+    const scopedHousingFundLoans = ((adminMode ? allHousingFundLoans : myHousingFundLoans) as any[]).filter(matchesSelectedAdminUser);
 
     let totalLimit = 0;
     let usedLimit = 0;
     let availableLimit = 0;
 
-    scopedCards.forEach((card: any) => {
+    scopedCreditCards.forEach((card: any) => {
       const capacity = getCreditCardCapacity(card);
       totalLimit += capacity.totalLimit;
       availableLimit += capacity.availableLimit;
       usedLimit += capacity.usedLimit;
     });
 
-    [...scopedPolicyLoans, ...scopedHuabeiLoans].forEach((loan: any) => {
+    [...scopedPolicyLoans, ...scopedHuabeiLoans, ...scopedHousingFundLoans].forEach((loan: any) => {
       const limit = Number(loan.loan_amount || 0);
       const used = loan.outstanding_balance != null ? Math.max(0, Number(loan.outstanding_balance)) : limit;
       const safeUsed = Math.min(limit, used);
@@ -406,11 +592,12 @@ function LoanCapacitySummary({
       totalLimit,
       usedLimit,
       availableLimit,
-      cardCount: scopedCards.length,
+      cardCount: scopedCreditCards.length,
       policyCount: scopedPolicyLoans.length,
       huabeiCount: scopedHuabeiLoans.length,
+      housingFundCount: scopedHousingFundLoans.length,
     };
-  }, [adminMode, adminUserFilter, cards, myPolicyLoans, myHuabeiLoans, allPolicyLoans, allHuabeiLoans]);
+  }, [adminMode, adminUserFilter, scopedCreditCards, myPolicyLoans, myHuabeiLoans, myHousingFundLoans, allPolicyLoans, allHuabeiLoans, allHousingFundLoans]);
 
   const formatAmount = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 0 });
   const totalForRatio = Math.max(0, summary.totalLimit);
@@ -420,7 +607,7 @@ function LoanCapacitySummary({
   const availablePercent = totalForRatio > 0
     ? Math.min(100 - usedPercent, Math.max(0, (summary.availableLimit / totalForRatio) * 100))
     : 0;
-    const isLoading = isCardsLoading || (adminMode ? isFetchingAllPolicy || isFetchingAllHuabei : isFetchingMyPolicy || isFetchingMyHuabei);
+  const isLoading = isCardsLoading || (adminMode ? isFetchingAllPolicy || isFetchingAllHuabei || isFetchingAllHousingFund : isFetchingMyPolicy || isFetchingMyHuabei || isFetchingMyHousingFund);
   const listedUsageAmount = useMemo(
     () => usageRecords.reduce((total, record) => total + Math.max(0, Number(record.amount || 0)), 0),
     [usageRecords]
@@ -474,26 +661,25 @@ function LoanCapacitySummary({
   return (
     <div className="border-b border-slate-100 bg-white px-4 py-2">
       {isLoading ? (
-        <div className="flex h-[88px] items-center justify-center gap-2 rounded-xl border border-[#DCE8F6] bg-white text-xs text-slate-400 shadow-[0_6px_16px_rgba(26,43,74,0.04)]">
+        <div className="flex h-[88px] items-center justify-center gap-2 rounded-md border border-[#DCE8F6] bg-white text-xs text-slate-400 shadow-[0_6px_16px_rgba(26,43,74,0.04)]">
           <Loader2 className="h-4 w-4 animate-spin text-[#1A2B4A]" />
           正在加载{adminMode ? '所有用户' : '我的'}贷款数据...
         </div>
       ) : (
-        <div className="rounded-xl border border-[#DCE8F6] bg-white p-2.5 shadow-[0_6px_16px_rgba(26,43,74,0.04)]">
+        <div className="rounded-md border border-[#DCE8F6] bg-white p-2.5 shadow-[0_6px_16px_rgba(26,43,74,0.04)]">
           <div className="flex items-end justify-between gap-2">
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-[10px] font-medium text-slate-500">总额度</p>
-              <p className="text-[24px] font-bold leading-6 tracking-tight text-[#1A2B4A]">{formatAmount(summary.totalLimit)}</p>
+            <div className="flex min-w-0 items-baseline gap-1.5">
+              <p className="shrink-0 text-[10px] font-medium text-slate-500">总额度</p>
+              <p className="truncate text-[24px] font-bold leading-6 tracking-tight text-[#1A2B4A]">{formatAmount(summary.totalLimit)}</p>
             </div>
-            <div className="flex items-center gap-2 whitespace-nowrap text-[10px] font-medium">
-              <span className="text-rose-500">已用 {Math.round(usedPercent)}%</span>
-              <span className="h-2.5 w-px bg-slate-200" />
-              <span className="text-emerald-600">可用 {Math.round(availablePercent)}%</span>
-            </div>
+            <button type="button" onClick={onToggleLoanControls} className={`mb-0.5 flex h-6 shrink-0 items-center gap-1 rounded-sm px-1.5 text-[10px] font-semibold transition-colors ${showLoanControls ? 'bg-[#1A2B4A] text-white' : hasActiveFilter ? 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-300 active:bg-amber-100' : 'bg-slate-100 text-slate-600 active:bg-slate-200'}`} aria-label={showLoanControls ? '收起筛选和排序' : hasActiveFilter ? `已应用 ${activeFilterCount} 个筛选条件${hasAdminUserFilter ? `，用户：${adminUserFilter?.name}` : ''}` : '展开筛选和排序'}>
+              {showLoanControls ? <ChevronDown className="h-3 w-3 rotate-180 transition-transform" /> : <SlidersHorizontal className="h-3 w-3" />}
+              <span>{showLoanControls ? '收起' : hasActiveFilter ? collapsedFilterLabel : '筛选'}</span>
+            </button>
           </div>
 
           <div
-            className="relative mt-1.5 h-2.5 overflow-hidden rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200/80"
+            className="relative mt-1.5 h-2.5 overflow-hidden rounded-sm bg-slate-100 ring-1 ring-inset ring-slate-200/80"
             aria-label={`额度使用情况：已用 ${Math.round(usedPercent)}%，剩余可用 ${Math.round(availablePercent)}%`}
           >
             <div
@@ -509,13 +695,48 @@ function LoanCapacitySummary({
           <div className="mt-2 grid grid-cols-2 divide-x divide-[#E4ECF5] text-[10px] font-medium">
             <button type="button" onClick={openUsageSheet} className="flex min-w-0 items-baseline gap-1.5 pr-2 text-left text-slate-500 transition-opacity active:opacity-60" aria-label="查看并记录已用额度用途">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
-              <span className="inline-block border-b border-dashed border-[#1A2B4A]/55 pb-px">已用</span> <span className="text-sm font-bold text-rose-500">{formatAmount(summary.usedLimit)}</span>
+              <span className="inline-block border-b border-dashed border-[#1A2B4A]/55 pb-px">已用</span>
+              <span className="text-sm font-bold text-rose-500">{formatAmount(summary.usedLimit)}</span>
+              <span className="text-[10px] font-semibold text-rose-500">{Math.round(usedPercent)}%</span>
             </button>
-            <p className="flex items-baseline justify-end gap-1.5 pl-2 text-slate-500">
-              剩余可用 <span className="text-sm font-bold text-emerald-600">{formatAmount(summary.availableLimit)}</span>
+            <p className="flex min-w-0 items-baseline justify-end gap-1.5 pl-2 text-slate-500">
+              <span>可用</span>
+              <span className="text-sm font-bold text-emerald-600">{formatAmount(summary.availableLimit)}</span>
+              <span className="text-[10px] font-semibold text-emerald-600">{Math.round(availablePercent)}%</span>
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
             </p>
           </div>
+
+          <section className="mt-1.5 border-t border-[#E4ECF5] pt-1.5" aria-label="前后30日账期提醒，默认从今日开始，可横向双向滑动查看">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-0.5 text-[9px] font-semibold leading-3 text-slate-600"><CalendarDays className="h-3 w-3 text-[#1A2B4A]" />前后30日账期</p>
+              <p className="flex items-center gap-1.5 text-[8px] font-medium leading-3 text-slate-400"><span className="flex items-center gap-0.5"><i className="h-1 w-1 rounded-full" style={{ backgroundColor: '#FACC15' }} />账单日</span><span className="flex items-center gap-0.5"><i className="h-1 w-1 rounded-full" style={{ backgroundColor: '#0066FF' }} />还款日</span></p>
+            </div>
+            <div ref={billingTimelineRef} className="-mx-0.5 touch-pan-x overflow-x-auto px-0.5 pb-0.5 scroll-smooth snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="横向滑动查看过去30天和未来30天账期">
+              <div className="flex w-max gap-0.5 pr-0.5">
+              {upcomingBillingReminders.map((day) => {
+                const hasReminder = day.billingCount > 0 || day.dueCount > 0;
+                const tooltip = [
+                  day.billingCount > 0 ? `账单日：${day.billingBanks.join('、')}` : '',
+                  day.dueCount > 0 ? `最后还款日：${day.dueBanks.join('、')}` : '',
+                ].filter(Boolean).join('\n');
+                return (
+                  <div key={day.key} data-billing-today={day.isToday ? 'true' : undefined} title={tooltip || `${day.weekday}${day.day}日无账期提醒`} className={`w-[calc((100vw-42px)/7)] max-w-[62px] shrink-0 snap-start rounded-sm px-0.5 py-0.5 text-center ${day.weekday === '今日' ? 'bg-[#1A2B4A] text-white' : hasReminder ? 'bg-slate-50 ring-1 ring-inset ring-slate-200' : 'bg-slate-50/50 text-slate-400'}`}>
+                    <p className={`flex items-baseline justify-center gap-0.5 text-[7px] leading-3 ${day.weekday === '今日' ? 'text-white/70' : 'text-slate-400'}`}><span>{day.weekday}</span><span className={`font-bold ${day.weekday === '今日' ? 'text-white' : 'text-slate-700'}`}>{day.dateLabel}</span></p>
+                    <div className="mt-px flex min-h-2 items-center justify-center gap-px overflow-hidden" aria-label={tooltip || '无账期提醒'}>
+                      {Array.from({ length: day.billingCount }, (_, index) => <span key={`billing-${index}`} className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: '#FACC15' }} />)}
+                      {Array.from({ length: day.dueCount }, (_, index) => <span key={`due-${index}`} className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: '#0066FF' }} />)}
+                    </div>
+                  </div>
+                );
+              })}
+              </div>
+            </div>
+            <div className="mt-1 grid grid-cols-2 divide-x divide-slate-100 border-t border-slate-100 pt-1 text-[9px]">
+              <div className="min-w-0 pr-2"><p className="text-slate-400">本期已出账单</p>{billingStatementEntriesQuery.isFetching ? <p className="mt-0.5 flex items-center gap-1 text-slate-400"><Loader2 className="h-2.5 w-2.5 animate-spin" />读取中</p> : latestBillingRegistrationSummary.issuedCount === 0 ? <p className="mt-0.5 text-slate-400">暂无账单日卡</p> : <p className="mt-0.5 whitespace-nowrap font-medium"><span className="text-emerald-600">已登记 {latestBillingRegistrationSummary.registeredCount}</span><span className="text-slate-300"> · </span><span className="text-rose-500">待 {latestBillingRegistrationSummary.pendingCount}</span></p>}</div>
+              <div className="min-w-0 pl-2 text-right"><p className="text-slate-400">本期还款完成情况</p>{billingStatementEntriesQuery.isFetching ? <p className="mt-0.5 text-slate-400">读取中</p> : latestBillingRegistrationSummary.registeredCount === 0 ? <p className="mt-0.5 text-slate-400">暂无已登记账单</p> : <p className="mt-0.5 whitespace-nowrap font-medium"><span className="text-emerald-600">还清 {latestBillingRegistrationSummary.paidOffCount}</span><span className="text-slate-300"> · </span><span className="text-amber-600">部分 {latestBillingRegistrationSummary.partiallyPaidCount}</span><span className="text-slate-300"> · </span><span className="text-rose-500">未还 {latestBillingRegistrationSummary.unpaidCount}</span></p>}</div>
+            </div>
+          </section>
         </div>
             )}
       {showUsageSheet && (
@@ -565,12 +786,14 @@ function LoanCapacitySummary({
 export default function CreditCardManagement() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
+  const utils = trpc.useUtils();
   const isAdmin = !!user && (user as any).role === "super_admin";
 
   const [viewMode, setViewMode] = useState<'self' | 'admin'>('self');
   // targetUser 仅用于管理员通过右上角“+”为他人新增；adminUserFilter 仅用于管理员列表筛选。
   const [targetUser, setTargetUser] = useState<{ id: number; name: string } | null>(null);
-  const [adminUserFilter, setAdminUserFilter] = useState<{ id: number; name: string } | null>(null);
+  const [adminUserFilter, setAdminUserFilter] = useState<AdminLoanUserFilter | null>(readRememberedAdminLoanUserFilter);
+  const hasRestoredAdminUserFilterView = useRef(false);
   const [userSearchText, setUserSearchText] = useState('');
   const [userPickerMode, setUserPickerMode] = useState<'add' | 'filter' | null>(null);
   const [showUserPicker, setShowUserPicker] = useState(false);
@@ -579,11 +802,29 @@ export default function CreditCardManagement() {
   const [showAddTypePicker, setShowAddTypePicker] = useState(false);
   const [showLoanHeaderMenu, setShowLoanHeaderMenu] = useState(false);
   const [showLoanControls, setShowLoanControls] = useState(false);
-  const [loanTypeFilter, setLoanTypeFilter] = useState<'all' | 'creditCard' | 'policyLoan' | 'huabei'>('all');
+  // 空数组代表默认“全部”；筛选面板中显示为四类均已勾选。
+  const [loanTypeFilters, setLoanTypeFilters] = useState<LoanCategory[]>(readRememberedLoanTypeFilters);
   const [loanDueFilter, setLoanDueFilter] = useState<'all' | 'dueSoon' | 'overdue' | 'unset'>('all');
   const [loanSort, setLoanSort] = useState<'default' | 'dueDate' | 'rate' | 'amount'>('default');
   const [policyAddRequestId, setPolicyAddRequestId] = useState(0);
   const [huabeiAddRequestId, setHuabeiAddRequestId] = useState(0);
+  const [housingFundAddRequestId, setHousingFundAddRequestId] = useState(0);
+  const isAllLoanTypes = loanTypeFilters.length === 0 || loanTypeFilters.length === LOAN_CATEGORY_OPTIONS.length;
+  const isLoanTypeVisible = (loanType: LoanCategory) => isAllLoanTypes || loanTypeFilters.includes(loanType);
+  const isOnlyLoanTypeVisible = (loanType: LoanCategory) => loanTypeFilters.length === 1 && loanTypeFilters[0] === loanType;
+  const updateLoanTypeFilter = (loanType: LoanCategory, checked: boolean) => {
+    const currentTypes = isAllLoanTypes ? LOAN_CATEGORY_OPTIONS.map(option => option.value) : loanTypeFilters;
+    const nextTypes = checked ? Array.from(new Set([...currentTypes, loanType])) : currentTypes.filter(value => value !== loanType);
+    // 全部勾选和没有单独筛选均统一为“全部”状态；不允许出现没有任何类别的空白筛选。
+    setLoanTypeFilters(nextTypes.length === 0 || nextTypes.length === LOAN_CATEGORY_OPTIONS.length ? [] : nextTypes);
+  };
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LOAN_TYPE_FILTER_STORAGE_KEY, JSON.stringify(loanTypeFilters));
+    } catch {
+      // 本地存储不可用时保持默认全部筛选，不影响贷款管理使用。
+    }
+  }, [loanTypeFilters]);
   const [loanRefreshRequestId, setLoanRefreshRequestId] = useState(0);
   const [isRefreshingLoans, setIsRefreshingLoans] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -659,6 +900,25 @@ export default function CreditCardManagement() {
   };
 
   const refetch = () => { refetchMy(); refetchAll(); };
+
+  useEffect(() => {
+    if (!isAdmin || hasRestoredAdminUserFilterView.current) return;
+    hasRestoredAdminUserFilterView.current = true;
+    if (adminUserFilter) setViewMode('admin');
+  }, [isAdmin, adminUserFilter]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    try {
+      if (adminUserFilter) {
+        window.localStorage.setItem(ADMIN_LOAN_USER_FILTER_STORAGE_KEY, JSON.stringify(adminUserFilter));
+      } else {
+        window.localStorage.removeItem(ADMIN_LOAN_USER_FILTER_STORAGE_KEY);
+      }
+    } catch {
+      // 本地存储不可用时不阻断管理员筛选功能。
+    }
+  }, [isAdmin, adminUserFilter]);
 
   useEffect(() => {
     if (viewMode === 'admin' && isAdmin) {
@@ -832,6 +1092,7 @@ export default function CreditCardManagement() {
     const currencyLabel = String(card.currency || 'CNY').split(',').map((currency: string) => currency.trim() === 'CNY' ? '元' : currency.trim()).join(' / ');
     const formatCardAmount = (value: number) => Math.round(value).toLocaleString();
     const [showFullCard, setShowFullCard] = useState(false);
+    const [copiedCardDetails, setCopiedCardDetails] = useState<string | null>(null);
     const [showMenu, setShowMenu] = useState(false);
     const [showAvailableInput, setShowAvailableInput] = useState(false);
     const [availableInputVal, setAvailableInputVal] = useState('');
@@ -881,7 +1142,8 @@ export default function CreditCardManagement() {
         setLocallySavedBillingDates((previous) => ({ ...previous, [variables.billingDate]: true }));
         setEditingBillingStatementDate(null);
         void billingStatementsQuery.refetch();
-        toast.success('本期还款账单已保存');
+        void utils.creditCard.billingStatementEntries.invalidate();
+        toast.success(Number(variables.statementAmount) === 0 ? '本期无消费账单已保存' : '本期还款账单已保存');
       },
       onError: (error) => toast.error(error.message || '账单保存失败'),
     });
@@ -889,6 +1151,7 @@ export default function CreditCardManagement() {
     const saveBillingPaymentMutation = trpc.creditCard.upsertBillingPayment.useMutation({
       onSuccess: () => {
         void billingStatementsQuery.refetch();
+        void utils.creditCard.billingStatementEntries.invalidate();
         setShowBillingPaymentSheet(false);
         toast.success('本期已还金额已保存');
       },
@@ -962,6 +1225,42 @@ export default function CreditCardManagement() {
       });
     };
 
+    const openCopyCardDetailsPreview = () => {
+      const digits = String(card.card_last4 || '').replace(/\D/g, '');
+      if (!digits) {
+        toast.error('暂无可复制的完整卡号');
+        return;
+      }
+      setCopiedCardDetails([
+        `银行：${normalizeDisplayBankName(card.bank_name)}`,
+        `姓名：${card.card_holder || card.card_name || '未填写'}`,
+        `卡号：${digits.replace(/(\d{4})(?=\d)/g, '$1 ')}`,
+      ].join('\n'));
+    };
+
+    const confirmCopyCardDetails = async () => {
+      if (!copiedCardDetails) return;
+      try {
+        if (navigator.clipboard?.writeText && window.isSecureContext) {
+          await navigator.clipboard.writeText(copiedCardDetails);
+        } else {
+          const textArea = document.createElement('textarea');
+          textArea.value = copiedCardDetails;
+          textArea.setAttribute('readonly', '');
+          textArea.style.position = 'fixed';
+          textArea.style.opacity = '0';
+          document.body.appendChild(textArea);
+          textArea.select();
+          const copied = document.execCommand('copy');
+          document.body.removeChild(textArea);
+          if (!copied) throw new Error('copy_failed');
+        }
+        setCopiedCardDetails(null);
+      } catch {
+        toast.error('复制失败，请检查浏览器剪贴板权限');
+      }
+    };
+
     return (
       <div className="overflow-hidden rounded-2xl border shadow-md" style={{ borderColor: brand.line, boxShadow: `0 8px 20px ${brand.border}24` }}>
         {/* 卡片主体：每家银行使用自身主色的渐变，而非统一深色。 */}
@@ -1006,10 +1305,19 @@ export default function CreditCardManagement() {
                         <button
                           onClick={() => setShowFullCard(v => !v)}
                           className="h-5 w-5 shrink-0 flex items-center justify-center opacity-60 active:opacity-100"
+                          aria-label={showFullCard ? '隐藏完整卡号' : '显示完整卡号'}
                         >
                           {showFullCard
                             ? <EyeOff className="w-3.5 h-3.5 text-white" />
                             : <Eye className="w-3.5 h-3.5 text-white" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openCopyCardDetailsPreview}
+                          className="h-5 w-5 shrink-0 flex items-center justify-center rounded opacity-70 active:bg-white/15 active:opacity-100"
+                          aria-label="复制银行、姓名和完整卡号"
+                        >
+                          <Copy className="w-3.5 h-3.5 text-white" />
                         </button>
                       </div>
                     );
@@ -1183,6 +1491,7 @@ export default function CreditCardManagement() {
                             <div>
                               <p className="text-[11px] font-medium text-emerald-700/70">本期账单金额</p>
                               <p className="mt-1 text-lg font-bold leading-5 text-emerald-700">{savedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                              {savedAmount === 0 && <p className="mt-1 text-[11px] font-medium text-emerald-600/80">本期无消费</p>}
                             </div>
                             <button
                               type="button"
@@ -1204,13 +1513,13 @@ export default function CreditCardManagement() {
                                 value={draftAmount}
                                 onChange={(event) => setBillingStatementDrafts((previous) => ({ ...previous, [billingDate]: event.target.value }))}
                                 aria-label={`${formatBillingPeriodDate(billingDate)}账单金额`}
-                                placeholder="输入金额"
+                                placeholder="输入金额（无消费可填0）"
                                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-base font-semibold text-slate-900 outline-none focus:border-[#1A2B4A] focus:bg-white"
                               />
                             </label>
                             <button
                               type="button"
-                              disabled={saveBillingStatementMutation.isPending || !draftAmount.trim()}
+                              disabled={saveBillingStatementMutation.isPending || draftAmount.trim() === ''}
                               onClick={() => void saveBillingStatement(billingDate)}
                               className="shrink-0 rounded-xl bg-[#1A2B4A] px-4 py-2.5 text-sm font-semibold text-white active:opacity-80 disabled:opacity-40"
                             >
@@ -1402,6 +1711,21 @@ export default function CreditCardManagement() {
           {card.note && <p className="col-span-4 px-2 pt-1 text-xs text-gray-500">{card.note}</p>}
         </div>
         {serviceContact && <LoanServiceContactSheet contact={serviceContact} open={true} onClose={() => setServiceContact(null)} />}
+        {copiedCardDetails && (
+          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 px-4 pb-4" role="dialog" aria-modal="true" aria-label="已复制的信用卡信息">
+            <div className="w-full max-w-[448px] rounded-2xl bg-white p-4 shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-base font-semibold text-slate-900">已复制卡片信息</p>
+                  <p className="mt-1 text-xs text-slate-400">确认内容无误后，再点击下方一键复制</p>
+                </div>
+                <button type="button" onClick={() => setCopiedCardDetails(null)} className="rounded-full p-1 text-slate-400 active:bg-slate-100" aria-label="关闭复制内容预览"><X className="h-5 w-5" /></button>
+              </div>
+              <pre className="mt-4 whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-sm font-medium leading-6 text-slate-700">{copiedCardDetails}</pre>
+              <button type="button" onClick={() => void confirmCopyCardDetails()} className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#1A2B4A] py-2.5 text-sm font-semibold text-white active:opacity-80"><Copy className="h-4 w-4" />一键复制</button>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -1498,7 +1822,7 @@ export default function CreditCardManagement() {
         <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="bg-white w-full max-w-[480px] mx-auto rounded-t-2xl px-4 pt-4 pb-8">
             <div className="flex items-center justify-between mb-4">
-              <div><p className="text-gray-900 font-semibold">新增贷款工具</p><p className="text-xs text-gray-400 mt-0.5">选择信用卡、保单贷款或花呗</p></div>
+              <div><p className="text-gray-900 font-semibold">新增贷款工具</p><p className="text-xs text-gray-400 mt-0.5">选择信用卡、保单贷款、花呗或公积金贷款</p></div>
               <button onClick={() => setShowAddTypePicker(false)}><X className="w-5 h-5 text-gray-400" /></button>
             </div>
             {isAdmin && (
@@ -1532,7 +1856,7 @@ export default function CreditCardManagement() {
               <button
                 onClick={() => {
                   setShowAddTypePicker(false);
-                  setLoanTypeFilter('creditCard');
+                  setLoanTypeFilters(['creditCard']);
                   setEditingId(null);
                   isFirstMount.current = true;
                   try {
@@ -1555,16 +1879,22 @@ export default function CreditCardManagement() {
                 <span><span className="block text-sm font-semibold text-gray-800">信用卡</span><span className="block text-xs text-gray-400 mt-0.5">额度、账单日、还款日及免息期建议</span></span>
               </button>
               <button
-                onClick={() => { setShowAddTypePicker(false); setLoanTypeFilter('policyLoan'); setPolicyAddRequestId(v => v + 1); }}
+                onClick={() => { setShowAddTypePicker(false); setLoanTypeFilters(['policyLoan']); setPolicyAddRequestId(v => v + 1); }}
                 className="w-full flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/40 p-3.5 text-left active:bg-amber-50">
                 <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#17345E] to-[#27507D] flex items-center justify-center"><ShieldCheck className="w-5 h-5 text-amber-300" /></span>
                 <span><span className="block text-sm font-semibold text-gray-800">保单贷款</span><span className="block text-xs text-gray-400 mt-0.5">保单、贷款余额、利率、还款方式及到期日</span></span>
               </button>
               <button
-                onClick={() => { setShowAddTypePicker(false); setLoanTypeFilter('huabei'); setHuabeiAddRequestId(v => v + 1); }}
+                onClick={() => { setShowAddTypePicker(false); setLoanTypeFilters(['huabei']); setHuabeiAddRequestId(v => v + 1); }}
                 className="w-full flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50/50 p-3.5 text-left active:bg-sky-50">
                 <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1677FF] to-[#2B4E9A] flex items-center justify-center"><CreditCard className="w-5 h-5 text-white" /></span>
                 <span><span className="block text-sm font-semibold text-gray-800">花呗</span><span className="block text-xs text-gray-400 mt-0.5">额度、待还余额、费率、还款方式及到期日</span></span>
+              </button>
+              <button
+                onClick={() => { setShowAddTypePicker(false); setLoanTypeFilters(['housingFund']); setHousingFundAddRequestId(v => v + 1); }}
+                className="w-full flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5 text-left active:bg-emerald-50">
+                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-700 to-teal-700 flex items-center justify-center"><Landmark className="w-5 h-5 text-emerald-50" /></span>
+                <span><span className="block text-sm font-semibold text-gray-800">公积金贷款</span><span className="block text-xs text-gray-400 mt-0.5">等额本息或等额本金，按贷款期限还款</span></span>
               </button>
             </div>
           </div>
@@ -1574,36 +1904,36 @@ export default function CreditCardManagement() {
       <LoanCapacitySummary
         viewMode={viewMode}
         cards={(viewMode === 'admin' ? allCards : myCards) as any[]}
+        registrationCards={(isLoanTypeVisible('creditCard')
+          ? (viewMode === 'admin'
+            ? Object.values(groupedCards).flatMap((group: any) => group.cards)
+            : sortedMyCards)
+          : []) as any[]}
         adminUserFilter={adminUserFilter}
         isCardsLoading={viewMode === 'admin' ? isFetchingAllCards : isFetchingMyCards}
+        showLoanControls={showLoanControls}
+        onToggleLoanControls={() => setShowLoanControls((open) => !open)}
+        activeLoanTypeFilterCount={loanTypeFilters.length}
+        hasAdminDueFilter={viewMode === 'admin' && loanDueFilter !== 'all'}
       />
 
       {/* 管理员的新增对象选择已迁移至右上角“+”的新增流程。 */}
 
-      {/* 高使用频率的类别入口保持可见，排序与扩展筛选收纳在可展开面板。 */}
-      <div className="border-b border-gray-100 bg-white px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <div className="grid min-w-0 flex-1 grid-cols-4 gap-1.5">
-            {([
-              ['all', '全部'],
-              ['creditCard', '信用卡'],
-              ['policyLoan', '保单贷款'],
-              ['huabei', '花呗'],
-            ] as const).map(([value, label]) => (
-              <button key={value} onClick={() => setLoanTypeFilter(value)} className={`truncate rounded-lg py-1.5 text-xs font-medium ${loanTypeFilter === value ? 'bg-[#1A2B4A] text-white' : 'bg-slate-100 text-slate-600'}`}>{label}</button>
-            ))}
-          </div>
-          <button
-            onClick={() => setShowLoanControls((open) => !open)}
-            className={`flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium transition-colors ${showLoanControls ? 'bg-[#1A2B4A] text-white' : 'bg-slate-100 text-slate-600 active:bg-slate-200'}`}
-            aria-label="展开筛选和排序"
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            <span>筛选</span>
-          </button>
-        </div>
-        {showLoanControls && (
-          <div className="mt-2.5 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+      {/* 筛选入口收进额度汇总卡片；仅在展开时保留原有下拉筛选面板。 */}
+      {showLoanControls && (
+        <div className="border-b border-gray-100 bg-white px-4 pb-2.5">
+          <div className="mt-2.5 space-y-2.5 rounded-md border border-slate-200 bg-slate-50/70 p-2.5">
+            <div className="flex items-start gap-2 text-xs">
+              <span className="shrink-0 pt-1 text-gray-400">类型</span>
+              <div className="grid min-w-0 flex-1 grid-cols-2 gap-1.5">
+                {LOAN_CATEGORY_OPTIONS.map(({ value, label }) => (
+                  <label key={value} className="flex min-w-0 items-center gap-1.5 rounded-md bg-white px-2 py-1.5 text-slate-600 shadow-sm">
+                    <input type="checkbox" checked={isLoanTypeVisible(value)} onChange={(event) => updateLoanTypeFilter(value, event.target.checked)} className="h-3.5 w-3.5 shrink-0 accent-[#1A2B4A]" />
+                    <span className="truncate">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
             <div className="flex items-center gap-2 text-xs">
               <span className="shrink-0 text-gray-400">排序</span>
               <div className="flex min-w-0 flex-1 flex-wrap gap-1">
@@ -1640,30 +1970,31 @@ export default function CreditCardManagement() {
               </>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 统一贷款卡片列表 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#F6F7FB]" onClick={() => showUserPicker && closeUserPicker()}>
         {viewMode === 'self' && (
           <>
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'creditCard') && sortedMyCards.map((card: any) => <CardItem key={card.id} card={card} />)}
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'policyLoan') && <PolicyLoanManagement embedded sortBy={loanSort} addRequestId={policyAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="policy" showEmpty={loanTypeFilter === 'policyLoan'} />}
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'huabei') && <PolicyLoanManagement embedded sortBy={loanSort} addRequestId={huabeiAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="huabei" showEmpty={loanTypeFilter === 'huabei'} />}
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'creditCard') && sortedMyCards.length === 0 && loanTypeFilter === 'creditCard' && (
+            {isLoanTypeVisible('creditCard') && sortedMyCards.map((card: any) => <CardItem key={card.id} card={card} />)}
+            {isLoanTypeVisible('policyLoan') && <PolicyLoanManagement embedded sortBy={loanSort} addRequestId={policyAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="policy" showEmpty={isOnlyLoanTypeVisible('policyLoan')} />}
+            {isLoanTypeVisible('huabei') && <PolicyLoanManagement embedded sortBy={loanSort} addRequestId={huabeiAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="huabei" showEmpty={isOnlyLoanTypeVisible('huabei')} />}
+            {isLoanTypeVisible('housingFund') && <PolicyLoanManagement embedded sortBy={loanSort} addRequestId={housingFundAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="housing_fund" showEmpty={isOnlyLoanTypeVisible('housingFund')} />}
+            {isLoanTypeVisible('creditCard') && sortedMyCards.length === 0 && isOnlyLoanTypeVisible('creditCard') && (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400"><CreditCard className="w-12 h-12 mb-3 opacity-30" /><p className="text-sm">暂无信用卡</p><p className="text-xs mt-1">点击右上角 + 添加</p></div>
             )}
           </>
         )}
         {viewMode === 'admin' && (
           <>
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'creditCard') && Object.keys(groupedCards).length === 0 && loanTypeFilter === 'creditCard' && (
+            {isLoanTypeVisible('creditCard') && Object.keys(groupedCards).length === 0 && isOnlyLoanTypeVisible('creditCard') && (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                 <Users className="w-12 h-12 mb-3 opacity-30" />
                 <p className="text-sm">暂无用户信用卡数据</p>
               </div>
             )}
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'creditCard') && Object.entries(groupedCards).map(([userId, group]) => (
+            {isLoanTypeVisible('creditCard') && Object.entries(groupedCards).map(([userId, group]) => (
               <div key={userId}>
                 <div className="flex items-center space-x-2 mb-2 px-1">
                   <User className="w-3.5 h-3.5 text-gray-400" />
@@ -1675,8 +2006,9 @@ export default function CreditCardManagement() {
                 </div>
               </div>
             ))}
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'policyLoan') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} filterUserId={adminUserFilter?.id} dueFilter={loanDueFilter} addRequestId={policyAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="policy" showEmpty={loanTypeFilter === 'policyLoan'} />}
-            {(loanTypeFilter === 'all' || loanTypeFilter === 'huabei') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} filterUserId={adminUserFilter?.id} dueFilter={loanDueFilter} addRequestId={huabeiAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="huabei" showEmpty={loanTypeFilter === 'huabei'} />}
+            {isLoanTypeVisible('policyLoan') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} filterUserId={adminUserFilter?.id} dueFilter={loanDueFilter} addRequestId={policyAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="policy" showEmpty={isOnlyLoanTypeVisible('policyLoan')} />}
+            {isLoanTypeVisible('huabei') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} filterUserId={adminUserFilter?.id} dueFilter={loanDueFilter} addRequestId={huabeiAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="huabei" showEmpty={isOnlyLoanTypeVisible('huabei')} />}
+            {isLoanTypeVisible('housingFund') && <PolicyLoanManagement embedded sortBy={loanSort} adminMode targetUser={targetUser} filterUserId={adminUserFilter?.id} dueFilter={loanDueFilter} addRequestId={housingFundAddRequestId} refreshRequestId={loanRefreshRequestId} loanType="housing_fund" showEmpty={isOnlyLoanTypeVisible('housingFund')} />}
           </>
         )}
       </div>
