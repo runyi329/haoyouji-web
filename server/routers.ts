@@ -28272,6 +28272,85 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
           remainingAmount: Math.max(0, statementAmount - input.paidAmount),
         };
       }),
+    // 获取贷款管理“已用额度”的用途明细。普通用户仅可读取自己的记录，管理员可读取指定用户的记录。
+    usageRecords: protectedProcedure
+      .input(z.object({ userId: z.number().int().positive().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        const targetUserId = input?.userId ?? ctx.user.id;
+        if (Number(targetUserId) !== Number(ctx.user.id) && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看该用户的已用额度明细' });
+        }
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+        const [rows] = await conn.execute(
+          `SELECT id, user_id, amount, description, created_by_user_id, updated_by_user_id, created_at, updated_at
+           FROM loan_usage_records
+           WHERE user_id=?
+           ORDER BY updated_at DESC, id DESC`,
+          [targetUserId]
+        ) as any[];
+        return Array.isArray(rows) ? rows : [];
+      }),
+    // 新增一条已用额度用途说明。管理员可为指定用户录入，其他用户仅能为自己录入。
+    createUsageRecord: protectedProcedure
+      .input(z.object({
+        userId: z.number().int().positive().optional(),
+        amount: z.number().positive().max(9999999999),
+        description: z.string().trim().min(1, '请填写用途说明').max(200),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const targetUserId = input.userId ?? ctx.user.id;
+        if (Number(targetUserId) !== Number(ctx.user.id) && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权为该用户录入已用额度明细' });
+        }
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+        const [result] = await conn.execute(
+          `INSERT INTO loan_usage_records (user_id, amount, description, created_by_user_id, updated_by_user_id)
+           VALUES (?, ?, ?, ?, ?)`,
+          [targetUserId, input.amount, input.description, ctx.user.id, ctx.user.id]
+        ) as any[];
+        return { success: true, id: Number((result as any)?.insertId || 0) };
+      }),
+    // 更新一条已用额度用途说明。记录归属用户本人或管理员可操作。
+    updateUsageRecord: protectedProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        amount: z.number().positive().max(9999999999),
+        description: z.string().trim().min(1, '请填写用途说明').max(200),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+        const [recordRows] = await conn.execute('SELECT user_id FROM loan_usage_records WHERE id=? LIMIT 1', [input.id]) as any[];
+        const record = Array.isArray(recordRows) ? recordRows[0] : null;
+        if (!record) throw new TRPCError({ code: 'NOT_FOUND', message: '已用额度明细不存在' });
+        if (Number(record.user_id) !== Number(ctx.user.id) && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权修改该已用额度明细' });
+        }
+        await conn.execute(
+          `UPDATE loan_usage_records
+           SET amount=?, description=?, updated_by_user_id=?, updated_at=CURRENT_TIMESTAMP
+           WHERE id=?`,
+          [input.amount, input.description, ctx.user.id, input.id]
+        );
+        return { success: true };
+      }),
+    // 删除一条已用额度用途说明。记录归属用户本人或管理员可操作。
+    deleteUsageRecord: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+        const [recordRows] = await conn.execute('SELECT user_id FROM loan_usage_records WHERE id=? LIMIT 1', [input.id]) as any[];
+        const record = Array.isArray(recordRows) ? recordRows[0] : null;
+        if (!record) throw new TRPCError({ code: 'NOT_FOUND', message: '已用额度明细不存在' });
+        if (Number(record.user_id) !== Number(ctx.user.id) && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权删除该已用额度明细' });
+        }
+        await conn.execute('DELETE FROM loan_usage_records WHERE id=?', [input.id]);
+        return { success: true };
+      }),
     // 新增信用卡
     create: protectedProcedure
       .input(z.object({
