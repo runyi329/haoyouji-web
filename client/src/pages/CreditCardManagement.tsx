@@ -1158,6 +1158,36 @@ export default function CreditCardManagement() {
       onError: (error) => toast.error(error.message || '已还金额保存失败'),
     });
 
+    const deleteBillingStatementMutation = trpc.creditCard.deleteBillingStatement.useMutation({
+      onSuccess: (_data, variables) => {
+        setLocallySavedBillingDates((previous) => {
+          const next = { ...previous };
+          delete next[variables.billingDate];
+          return next;
+        });
+        setBillingStatementDrafts((previous) => {
+          const next = { ...previous };
+          delete next[variables.billingDate];
+          return next;
+        });
+        setEditingBillingStatementDate(null);
+        void billingStatementsQuery.refetch();
+        void utils.creditCard.billingStatementEntries.invalidate();
+        toast.success('本期账单登记已删除');
+      },
+      onError: (error) => toast.error(error.message || '账单登记删除失败'),
+    });
+
+    const clearBillingPaymentMutation = trpc.creditCard.clearBillingPayment.useMutation({
+      onSuccess: () => {
+        setPaidAmountInput('');
+        void billingStatementsQuery.refetch();
+        void utils.creditCard.billingStatementEntries.invalidate();
+        toast.success('本期已还金额已清除');
+      },
+      onError: (error) => toast.error(error.message || '已还金额清除失败'),
+    });
+
     useEffect(() => {
       if (!showBillingStatementSheet) return;
       setBillingStatementDrafts((previous) => {
@@ -1222,6 +1252,23 @@ export default function CreditCardManagement() {
         creditCardId: Number(card.id),
         billingDate: latestReachedBillingDate,
         paidAmount,
+      });
+    };
+
+    const deleteBillingStatement = async (billingDate: string) => {
+      if (!window.confirm(`确认删除 ${formatBillingPeriodDate(billingDate)} 的账单登记吗？\n删除后账单金额和本期已还金额都会清除。`)) return;
+      await deleteBillingStatementMutation.mutateAsync({
+        creditCardId: Number(card.id),
+        billingDate,
+      });
+    };
+
+    const clearBillingPayment = async () => {
+      if (!latestReachedBillingDate || latestPaidAmount <= 0) return;
+      if (!window.confirm('确认清除本期已还金额吗？\n账单金额会保留，之后可重新录入已还金额。')) return;
+      await clearBillingPaymentMutation.mutateAsync({
+        creditCardId: Number(card.id),
+        billingDate: latestReachedBillingDate,
       });
     };
 
@@ -1493,13 +1540,23 @@ export default function CreditCardManagement() {
                               <p className="mt-1 text-lg font-bold leading-5 text-emerald-700">{savedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
                               {savedAmount === 0 && <p className="mt-1 text-[11px] font-medium text-emerald-600/80">本期无消费</p>}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => setEditingBillingStatementDate(billingDate)}
-                              className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-700 active:bg-emerald-100"
-                            >
-                              编辑
-                            </button>
+                            <div className="flex shrink-0 flex-col gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditingBillingStatementDate(billingDate)}
+                                className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-700 active:bg-emerald-100"
+                              >
+                                编辑
+                              </button>
+                              <button
+                                type="button"
+                                disabled={deleteBillingStatementMutation.isPending}
+                                onClick={() => void deleteBillingStatement(billingDate)}
+                                className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-rose-600 active:bg-rose-50 disabled:opacity-40"
+                              >
+                                {deleteBillingStatementMutation.isPending ? '删除中' : '删除登记'}
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <div className="mt-3 flex items-end gap-2.5">
@@ -1568,6 +1625,16 @@ export default function CreditCardManagement() {
               <input type="number" min="0" max={latestStatementAmount} step="0.01" inputMode="decimal" value={paidAmountInput} onChange={(event) => setPaidAmountInput(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-center text-lg font-semibold text-slate-900 outline-none focus:border-[#1A2B4A]" placeholder="输入本期累计已还金额" autoFocus />
               <p className="mt-2 text-xs text-slate-400">保存后自动计算剩余应还金额；已还金额不得超过本期账单应还金额。</p>
               <button type="button" disabled={saveBillingPaymentMutation.isPending || !paidAmountInput.trim()} onClick={() => void saveBillingPayment()} className="mt-5 w-full rounded-xl bg-[#1A2B4A] py-3 text-sm font-semibold text-white active:opacity-80 disabled:opacity-40">{saveBillingPaymentMutation.isPending ? '保存中' : '保存已还金额'}</button>
+              {latestPaidAmount > 0 && (
+                <button
+                  type="button"
+                  disabled={clearBillingPaymentMutation.isPending}
+                  onClick={() => void clearBillingPayment()}
+                  className="mt-2 w-full rounded-xl border border-rose-200 bg-white py-2.5 text-sm font-semibold text-rose-600 active:bg-rose-50 disabled:opacity-40"
+                >
+                  {clearBillingPaymentMutation.isPending ? '清除中' : '清除已还登记'}
+                </button>
+              )}
             </div>
           </div>
         )}

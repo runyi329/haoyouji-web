@@ -28299,6 +28299,59 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
           remainingAmount: Math.max(0, statementAmount - input.paidAmount),
         };
       }),
+    // 删除误填的整期账单登记；账单金额与本期已还金额会一并清除，卡片状态恢复为待登记。
+    deleteBillingStatement: protectedProcedure
+      .input(z.object({
+        creditCardId: z.number().int().positive(),
+        billingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '账单日格式应为 YYYY-MM-DD'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+        const [cardRows] = await conn.execute(
+          'SELECT user_id FROM credit_cards WHERE id=? AND is_active=1 LIMIT 1',
+          [input.creditCardId]
+        ) as any[];
+        const card = Array.isArray(cardRows) ? cardRows[0] : null;
+        if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: '信用卡不存在或已停用' });
+        if (Number(card.user_id) !== Number(ctx.user.id) && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权删除该信用卡账期记录' });
+        }
+        const [result] = await conn.execute(
+          'DELETE FROM credit_card_billing_statements WHERE credit_card_id=? AND billing_date=?',
+          [input.creditCardId, input.billingDate]
+        ) as any[];
+        return { success: true, deleted: Number(result?.affectedRows || 0) > 0 };
+      }),
+    // 清除误填的本期已还金额；保留账单金额，让用户可重新从最后还款日录入。
+    clearBillingPayment: protectedProcedure
+      .input(z.object({
+        creditCardId: z.number().int().positive(),
+        billingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '账单日格式应为 YYYY-MM-DD'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+        const [cardRows] = await conn.execute(
+          'SELECT user_id FROM credit_cards WHERE id=? AND is_active=1 LIMIT 1',
+          [input.creditCardId]
+        ) as any[];
+        const card = Array.isArray(cardRows) ? cardRows[0] : null;
+        if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: '信用卡不存在或已停用' });
+        if (Number(card.user_id) !== Number(ctx.user.id) && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权清除该信用卡已还金额' });
+        }
+        const [result] = await conn.execute(
+          `UPDATE credit_card_billing_statements
+           SET paid_amount=0, updated_by_user_id=?, updated_at=CURRENT_TIMESTAMP
+           WHERE credit_card_id=? AND billing_date=?`,
+          [ctx.user.id, input.creditCardId, input.billingDate]
+        ) as any[];
+        if (Number(result?.affectedRows || 0) === 0) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '未找到可清除的本期账单记录' });
+        }
+        return { success: true, paidAmount: 0 };
+      }),
     // 获取贷款管理“已用额度”的用途明细。普通用户仅可读取自己的记录，管理员可读取指定用户的记录。
     usageRecords: protectedProcedure
       .input(z.object({ userId: z.number().int().positive().optional() }).optional())
