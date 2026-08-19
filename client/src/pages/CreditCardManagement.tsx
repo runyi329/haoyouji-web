@@ -413,6 +413,7 @@ function LoanCapacitySummary({
   );
   const [showUsageSheet, setShowUsageSheet] = useState(false);
   const [editingUsageRecordId, setEditingUsageRecordId] = useState<number | null>(null);
+  const [expandedUsagePurposeKey, setExpandedUsagePurposeKey] = useState<string | null>(null);
   const [usageDraft, setUsageDraft] = useState({ amount: '', description: '' });
   const { data: usageRecordsData = [], refetch: refetchUsageRecords, isFetching: isFetchingUsageRecords } = trpc.creditCard.usageRecords.useQuery(
     targetUsageUserId ? { userId: targetUsageUserId } : undefined,
@@ -616,6 +617,19 @@ function LoanCapacitySummary({
   const overListedUsageAmount = Math.max(0, listedUsageAmount - summary.usedLimit);
   const listedUsagePercent = summary.usedLimit > 0 ? (listedUsageAmount / summary.usedLimit) * 100 : 0;
   const listedUsageWidth = Math.min(100, Math.max(0, listedUsagePercent));
+  const usagePurposeStats = useMemo(() => {
+    const groups = new Map<string, { key: string; description: string; amount: number; count: number; records: any[] }>();
+    usageRecords.forEach((record: any) => {
+      const description = String(record.description || '').trim() || '未命名用途';
+      const key = description.toLocaleLowerCase();
+      const existing = groups.get(key) || { key, description, amount: 0, count: 0, records: [] };
+      existing.amount += Math.max(0, Number(record.amount || 0));
+      existing.count += 1;
+      existing.records.push(record);
+      groups.set(key, existing);
+    });
+    return Array.from(groups.values()).sort((a, b) => b.amount - a.amount || a.description.localeCompare(b.description, 'zh-CN'));
+  }, [usageRecords]);
   const isSavingUsageRecord = createUsageRecordMutation.isPending || updateUsageRecordMutation.isPending;
   const openUsageSheet = () => {
     if (!targetUsageUserId) {
@@ -745,21 +759,22 @@ function LoanCapacitySummary({
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <p className="text-base font-semibold text-slate-900">已用额度用途</p>
-                <p className="mt-0.5 text-xs text-slate-400">逐条记录已用金额及其用途</p>
+                <p className="mt-0.5 text-xs text-slate-400">按用途汇总已用金额、占比与未列明额度</p>
               </div>
               <button type="button" onClick={() => { setShowUsageSheet(false); clearUsageDraft(); }} className="rounded-full p-1 text-slate-400 active:bg-slate-100 active:text-slate-700" aria-label="关闭已用额度用途明细"><X className="h-5 w-5" /></button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
-              <section className="rounded-2xl border border-slate-100 bg-slate-50 p-3.5">
-                <div className="flex items-baseline justify-between gap-3">
-                  <div><p className="text-[11px] text-slate-400">当前已用额度</p><p className="mt-1 text-xl font-bold text-rose-500">{formatAmount(summary.usedLimit)}</p></div>
-                  <div className="text-right"><p className="text-[11px] text-slate-400">已列明</p><p className="mt-1 text-base font-bold text-[#1A2B4A]">{formatAmount(listedUsageAmount)} <span className="text-xs font-medium text-slate-400">{Math.round(listedUsagePercent)}%</span></p></div>
+              <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="grid grid-cols-3 divide-x divide-slate-200 text-center">
+                  <div className="px-1.5 text-left"><p className="text-[10px] text-slate-400">总已用</p><p className="mt-1 text-lg font-bold text-rose-500">{formatAmount(summary.usedLimit)}</p></div>
+                  <div className="px-1.5"><p className="text-[10px] text-slate-400">已列明</p><p className="mt-1 text-base font-bold text-[#1A2B4A]">{formatAmount(listedUsageAmount)}</p><p className="mt-0.5 text-[10px] font-medium text-slate-400">占已用 {Math.round(listedUsagePercent)}%</p></div>
+                  <div className="px-1.5 text-right"><p className="text-[10px] text-slate-400">未列明</p><p className={`mt-1 text-base font-bold ${overListedUsageAmount > 0 ? 'text-rose-500' : 'text-amber-600'}`}>{formatAmount(overListedUsageAmount > 0 ? overListedUsageAmount : unlistedUsageAmount)}</p><p className="mt-0.5 text-[10px] font-medium text-slate-400">{overListedUsageAmount > 0 ? '超出已用' : '待说明'}</p></div>
                 </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-gradient-to-r from-sky-400 to-[#1A2B4A] transition-[width] duration-500" style={{ width: `${listedUsageWidth}%` }} /></div>
-                <p className={`mt-2 text-xs font-medium ${overListedUsageAmount > 0 ? 'text-rose-500' : 'text-amber-600'}`}>{overListedUsageAmount > 0 ? `已列明金额超出当前已用 ${formatAmount(overListedUsageAmount)}` : `尚未列明 ${formatAmount(unlistedUsageAmount)}`}</p>
+                <div className="mt-3 h-1.5 overflow-hidden rounded-sm bg-slate-200"><div className="h-full bg-[#1A2B4A] transition-[width] duration-500" style={{ width: `${listedUsageWidth}%` }} /></div>
+                <p className={`mt-2 text-[11px] font-medium ${overListedUsageAmount > 0 ? 'text-rose-500' : 'text-slate-500'}`}>{overListedUsageAmount > 0 ? `已列明金额超出当前已用 ${formatAmount(overListedUsageAmount)}` : `还有 ${formatAmount(unlistedUsageAmount)} 已用额度尚未说明用途`}</p>
               </section>
               <section className="mt-4 rounded-2xl border border-slate-100 p-3.5">
-                <div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold text-slate-800">{editingUsageRecordId ? '编辑用途记录' : '新增用途记录'}</p>{editingUsageRecordId && <button type="button" onClick={clearUsageDraft} className="text-xs font-medium text-slate-400 active:text-slate-700">取消编辑</button>}</div>
+                <div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold text-slate-800">{editingUsageRecordId ? '编辑用途登记' : '登记新用途'}</p>{editingUsageRecordId && <button type="button" onClick={clearUsageDraft} className="text-xs font-medium text-slate-400 active:text-slate-700">取消编辑</button>}</div>
                 <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-2">
                   <input type="number" min="0" step="0.01" inputMode="decimal" value={usageDraft.amount} onChange={(event) => setUsageDraft((previous) => ({ ...previous, amount: event.target.value }))} placeholder="金额" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-sm font-semibold text-slate-900 outline-none focus:border-[#1A2B4A] focus:bg-white" />
                   <input type="text" maxLength={200} value={usageDraft.description} onChange={(event) => setUsageDraft((previous) => ({ ...previous, description: event.target.value }))} placeholder="填写用途，例如：日常采购" className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#1A2B4A] focus:bg-white" />
@@ -767,13 +782,23 @@ function LoanCapacitySummary({
                 <button type="button" disabled={isSavingUsageRecord || !usageDraft.amount.trim() || !usageDraft.description.trim()} onClick={() => void saveUsageRecord()} className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#1A2B4A] py-2.5 text-sm font-semibold text-white active:opacity-80 disabled:opacity-40"><Check className="h-4 w-4" />{isSavingUsageRecord ? '保存中' : editingUsageRecordId ? '更新记录' : '保存记录'}</button>
               </section>
               <section className="mt-4 pb-1">
-                <div className="mb-2 flex items-center justify-between"><p className="text-sm font-semibold text-slate-800">已记录明细</p><span className="text-xs text-slate-400">{usageRecords.length} 条</span></div>
+                <div className="mb-2 flex items-center justify-between"><div><p className="text-sm font-semibold text-slate-800">用途统计</p><p className="mt-0.5 text-[11px] text-slate-400">相同用途自动合并；点击可查看或编辑原始登记</p></div><span className="text-xs text-slate-400">{usagePurposeStats.length} 类 · {usageRecords.length} 笔</span></div>
                 {isFetchingUsageRecords ? (
-                  <div className="flex items-center justify-center py-8 text-xs text-slate-400"><Loader2 className="mr-2 h-4 w-4 animate-spin" />正在加载记录...</div>
-                ) : usageRecords.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 py-7 text-center text-xs text-slate-400">尚未记录用途；可从上方开始逐条列明。</div>
+                  <div className="flex items-center justify-center py-8 text-xs text-slate-400"><Loader2 className="mr-2 h-4 w-4 animate-spin" />正在汇总用途...</div>
+                ) : usagePurposeStats.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 py-7 text-center text-xs text-slate-400">尚未列明用途；可从上方登记第一笔用途。</div>
                 ) : (
-                  <div className="space-y-2">{usageRecords.map((record) => <div key={record.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white px-3 py-2.5 shadow-[0_3px_10px_rgba(26,43,74,0.03)]"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-slate-800">{record.description}</p><p className="mt-0.5 text-xs text-slate-400">{Number(record.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p></div><button type="button" onClick={() => startEditingUsageRecord(record)} className="rounded-lg p-2 text-slate-400 active:bg-slate-100 active:text-[#1A2B4A]" aria-label={`编辑${record.description}`}><Pencil className="h-4 w-4" /></button><button type="button" disabled={deleteUsageRecordMutation.isPending} onClick={() => void removeUsageRecord(record)} className="rounded-lg p-2 text-slate-400 active:bg-rose-50 active:text-rose-500 disabled:opacity-40" aria-label={`删除${record.description}`}><Trash2 className="h-4 w-4" /></button></div>)}</div>
+                  <div className="space-y-2">{usagePurposeStats.map((purpose) => {
+                    const percentage = summary.usedLimit > 0 ? (purpose.amount / summary.usedLimit) * 100 : 0;
+                    const isExpanded = expandedUsagePurposeKey === purpose.key;
+                    return <article key={purpose.key} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                      <button type="button" onClick={() => setExpandedUsagePurposeKey((previous) => previous === purpose.key ? null : purpose.key)} className="w-full px-3 py-2.5 text-left active:bg-slate-50">
+                        <div className="flex items-center justify-between gap-3"><p className="min-w-0 truncate text-sm font-semibold text-slate-800">{purpose.description}</p><p className="shrink-0 text-sm font-bold text-[#1A2B4A]">{formatAmount(purpose.amount)}</p></div>
+                        <div className="mt-1.5 flex items-center gap-2"><div className="h-1 flex-1 overflow-hidden rounded-sm bg-slate-100"><div className="h-full bg-[#1A2B4A]" style={{ width: `${Math.min(100, Math.max(0, percentage))}%` }} /></div><span className="shrink-0 text-[10px] font-medium text-slate-500">占已用 {Math.round(percentage)}% · {purpose.count}笔</span></div>
+                      </button>
+                      {isExpanded && <div className="border-t border-slate-100 bg-slate-50 px-3 py-2">{purpose.records.map((record) => <div key={record.id} className="flex items-center gap-2 border-b border-slate-100 py-2 last:border-b-0"><div className="min-w-0 flex-1"><p className="text-xs font-medium text-slate-700">单笔登记</p><p className="mt-0.5 text-[11px] text-slate-400">{formatAmount(Number(record.amount || 0))}</p></div><button type="button" onClick={() => startEditingUsageRecord(record)} className="rounded-md p-1.5 text-slate-400 active:bg-white active:text-[#1A2B4A]" aria-label={`编辑${record.description}`}><Pencil className="h-3.5 w-3.5" /></button><button type="button" disabled={deleteUsageRecordMutation.isPending} onClick={() => void removeUsageRecord(record)} className="rounded-md p-1.5 text-slate-400 active:bg-white active:text-rose-500 disabled:opacity-40" aria-label={`删除${record.description}`}><Trash2 className="h-3.5 w-3.5" /></button></div>)}</div>}
+                    </article>;
+                  })}</div>
                 )}
               </section>
             </div>
