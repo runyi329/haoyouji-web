@@ -14548,11 +14548,13 @@ ${klinesSummary}
           }
           
           if (Math.abs(balanceAdjust) > 0.001) {
-            // 查重：防止重复结算（note 中包含订单 ID，确保精确匹配）
+            // 查重：防止重复结算（note 中包含订单 ID，确保精确匹配）。
+            // mysql2 查询无记录时返回 [[], fields]；旧逻辑将空数组当作真值，误判为已结算并跳过入账。
             const dupRows = await db.execute(
               sql`SELECT id FROM af_manual_balances WHERE user_id = ${userId} AND ledger_id = ${input.ledgerId} AND note LIKE ${`%卖出成交%`} AND note LIKE ${`%#${input.orderId}%`} LIMIT 1`
             ) as any;
-            const alreadySettled = (dupRows[0]?.[0] ?? dupRows[0]);
+            const settlementRow = dupRows?.[0]?.[0] ?? null;
+            const alreadySettled = Boolean(settlementRow?.id);
             if (!alreadySettled) {
               await db.execute(
                 sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
