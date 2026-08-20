@@ -1665,6 +1665,13 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           <span className="text-[#9CA3AF]">登记时间</span>
           <span className="text-[#64748B]">{order.confirmedAt || '(无数据)'}</span>
         </div>
+        {/* 委卖时间（仅挂单委卖中显示） */}
+        {order.sellStatus === 'selling' && (
+          <div className="flex justify-between items-center">
+            <span className="text-[#9CA3AF]">委卖时间</span>
+            <span className="text-[#64748B]">{order.sellAt || '(无数据)'}</span>
+          </div>
+        )}
         {/* 卖出时间（已卖出时显示） */}
         {order.sellStatus === 'sold' && order.sellConfirmedAt && (
           <div className="flex justify-between items-center">

@@ -13947,7 +13947,7 @@ ${klinesSummary}
           // 卖出字段（订单合并模型）
           sellPrice: r.sell_price || null,
           sellQuantity: r.sell_quantity || null,
-          sellAt: r.sell_at || null,
+          sellAt: toBeijingTimeStr(r.sell_at),
           sellConfirmedAt: toBeijingTimeStr(r.sell_confirmed_at),
           sellStatus: r.sell_status || null,
           confirmedAt: toBeijingTimeStr(r.confirmed_at),
@@ -14104,7 +14104,7 @@ ${klinesSummary}
           // 卖出字段（订单合并模型）
           sellPrice: r.sell_price || null,
           sellQuantity: r.sell_quantity || null,
-          sellAt: r.sell_at || null,
+          sellAt: toBeijingTimeStr(r.sell_at),
           sellConfirmedAt: toBeijingTimeStr(r.sell_confirmed_at),
           sellStatus: r.sell_status || null,
           confirmedAt: toBeijingTimeStr(r.confirmed_at),
@@ -14623,7 +14623,7 @@ ${klinesSummary}
         if (input.sellStatus === 'selling') {
           const sellPriceUpdate = input.sellPrice ? `, sell_price = '${input.sellPrice.replace(/'/g, '')}'` : '';
           await db.execute(
-            sql`UPDATE af_orders SET sell_status = 'selling'${sql.raw(sellPriceUpdate)}, updated_at = NOW()
+            sql`UPDATE af_orders SET sell_status = 'selling', sell_at = NOW()${sql.raw(sellPriceUpdate)}, updated_at = NOW()
                 WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
           );
           // 继续执行后续的买单状态/金额更新逻辑（不提前 return）

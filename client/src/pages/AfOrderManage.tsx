@@ -1799,17 +1799,23 @@ export default function AfOrderManage() {
                             <option value="completed">买入成交</option>
                             <option value="cancelled">已撤单</option>
                           </select>
-                          {editState!.status === 'completed' && (
-                            <select
-                              value={editState!.sellStatus || ''}
-                              onChange={(e) => setEditState({ ...editState!, sellStatus: e.target.value || null })}
-                              className="border border-gray-300 rounded px-2 py-0.5 text-xs"
-                            >
-                              <option value="">持仓中</option>
-                              <option value="selling">委卖中</option>
-                              <option value="sold">已卖出</option>
-                            </select>
-                          )}
+                          <select
+                            value={editState!.sellStatus || ''}
+                            onChange={(e) => {
+                              const nextSellStatus = e.target.value || null;
+                              setEditState({
+                                ...editState!,
+                                sellStatus: nextSellStatus,
+                                // 选择委卖或已卖出时，自动将订单设为买入成交，确保所有订单类型均可录入实际卖出价。
+                                status: nextSellStatus ? 'completed' : editState!.status,
+                              });
+                            }}
+                            className="border border-gray-300 rounded px-2 py-0.5 text-xs"
+                          >
+                            <option value="">持仓中</option>
+                            <option value="selling">委卖中</option>
+                            <option value="sold">已卖出</option>
+                          </select>
                         </div>
                       ) : (
                         <span className={`font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>
