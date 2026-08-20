@@ -298,6 +298,7 @@ const CryptoPrediction = lazy(() => import("./pages/CryptoPrediction"));
 const PositionCalc = lazy(() => import("./pages/PositionCalc"));
 const OrderFlowPage = lazy(() => import("./pages/OrderFlowPage"));
 const OptionAnalysisPage = lazy(() => import("./pages/OptionAnalysisPage"));
+const AfOptionSellSettings = lazy(() => import("./pages/AfOptionSellSettings"));
 const PositionLevelEdit = lazy(() => import("./pages/PositionLevelEdit"));
 // 谷间优筹
 const GujianPage = lazy(() => import("./pages/GujianPage"));
@@ -693,6 +694,7 @@ function Router() {
         <Route path="/ledger/:id/position-calc" component={PositionCalc} />
         <Route path="/ledger/:id/order-flow" component={OrderFlowPage} />
         <Route path="/ledger/:id/option-analysis" component={OptionAnalysisPage} />
+        <Route path="/ledger/:id/option-sell-settings" component={AfOptionSellSettings} />
         <Route path="/ledger/:id/position-calc/:price" component={PositionLevelEdit} />
         {/* 谷间优筹 */}
         <Route path="/ledger/:id/gujian" component={GujianPage} />

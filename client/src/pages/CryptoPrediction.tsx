@@ -22,7 +22,7 @@ import { WorldCupEmbedded } from "@/pages/WorldCup";
 // 委买价格档位（低于市价，抄底用）
 const BUY_PRICE_OPTIONS: Record<string, number[]> = {
   BTC: [70000, 69000, 68000, 67000, 66000, 65000, 64000, 63000, 62000, 61000, 60000, 59000, 58000, 57000, 56000, 55000, 54000, 53000, 52000, 51000, 50000],
-  ETH: [1800, 1750, 1700, 1650, 1600, 1550, 1500, 1450, 1400, 1350, 1300],
+  ETH: [2200, 2150, 2100, 2050, 2000, 1950, 1900, 1850, 1800, 1750, 1700, 1650, 1600, 1550, 1500, 1450, 1400, 1350, 1300],
   SOL: [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50],
 };
 
@@ -2308,6 +2308,22 @@ export default function CryptoPrediction() {
     }
   }, [isGuDiZengChouLedger, priceMode, isYJHOrAdmin, myMarketPermData]);
 
+  // 卖期权锁仓配置（52号账本 ETH 专用）
+  const { data: optionLocksData } = trpc.ledger.afGetActiveOptionLocks.useQuery(
+    { ledgerId, coin: coinKey },
+    { enabled: isGuDiZengChouLedger && coinKey === 'ETH', staleTime: 60000 }
+  );
+  const [lockChecked, setLockChecked] = useState(false);
+  // 当前选中价格对应的锁仓配置
+  const activeLockForPrice = useMemo(() => {
+    if (!isGuDiZengChouLedger || coinKey !== 'ETH' || !orderPrice) return null;
+    const price = parseFloat(orderPrice);
+    const locks = (optionLocksData as any)?.locks || [];
+    return locks.find((l: any) => Number(l.strike_price) === price) || null;
+  }, [isGuDiZengChouLedger, coinKey, orderPrice, optionLocksData]);
+  // 切换价格时重置锁仓勾选
+  useEffect(() => { setLockChecked(false); }, [orderPrice]);
+
   // 可用余额（账本总资产）
   const { data: assetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
@@ -2833,6 +2849,31 @@ export default function CryptoPrediction() {
               </>
             )}
 
+            {/* 锁仓勾选框：仅 52 号账本 ETH 且当前价格档位已启用锁仓时显示 */}
+            {orderSide === 'buy' && activeLockForPrice && (
+              <div
+                className="rounded-xl px-4 py-3 cursor-pointer select-none"
+                style={{ backgroundColor: lockChecked ? '#EEF7ED' : '#FFF9E6', border: `1px solid ${lockChecked ? '#86EFAC' : '#FDE68A'}` }}
+                onClick={() => setLockChecked(!lockChecked)}
+              >
+                <div className="flex items-start gap-2.5">
+                  <div className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                    lockChecked ? 'bg-green-600 border-green-600' : 'border-amber-400 bg-white'
+                  }`}>
+                    {lockChecked && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold" style={{ color: lockChecked ? '#166534' : '#92400E' }}>
+                      锁定至 {activeLockForPrice.expiry_date?.slice(0, 10)}  ·  获得 <span className="text-sm font-bold">{(Number(activeLockForPrice.monthly_yield) * 100).toFixed(1)}%</span> 月化收益
+                    </p>
+                    <p className="text-[10px] mt-0.5" style={{ color: '#78716C' }}>
+                      勾选后该订单将不可撤单，直到期权到期日自动解锁
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* 委卖模式：已成交买入订单列表选择 */}
             {orderSide === "sell" && (() => {
               const completedBuyOrders = (ordersData as any[] || []).filter(
@@ -2938,6 +2979,12 @@ export default function CryptoPrediction() {
                     quantity: qty,
                     orderType: '无损合约',
                     isMarketOrder: priceMode === 'market',
+                    ...(lockChecked && activeLockForPrice ? {
+                      isLocked: true,
+                      lockExpiry: activeLockForPrice.expiry_date?.slice(0, 10),
+                      lockInstrument: activeLockForPrice.instrument_name,
+                      lockYield: Number(activeLockForPrice.monthly_yield),
+                    } : {}),
                   });
                 } else {
                   // 委卖：批量提交选中的所有订单

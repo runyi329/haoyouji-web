@@ -657,6 +657,14 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/ledger/${ledgerId}/shortcut-buttons`)}
  />
  )}
+ {/* 52号账本卖期权设置入口 */}
+ {ledgerId === 52 && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ <SettingItem
+ label="卖期权设置"
+ showIcon
+ onClick={() => setLocation(`/ledger/${ledgerId}/option-sell-settings`)}
+ />
+ )}
 
  {/* AJ型定制账本：企业管理入口（管理员/创始人可见） */}
  {ledgerData?.type === 'custom_aj' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (

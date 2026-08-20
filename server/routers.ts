@@ -13669,6 +13669,10 @@ ${klinesSummary}
         orderType: z.string().optional(), // 无损合约 / 无损现货 / 行情评估
         sourceOrderId: z.number().nullable().optional(), // 委托卖出时关联的原始买入订单ID
         isMarketOrder: z.boolean().optional(), // 市价单：直接自动成交
+        isLocked: z.boolean().optional(), // 锁仓订单（不可撤单）
+        lockExpiry: z.string().optional(), // 锁仓到期日 YYYY-MM-DD
+        lockInstrument: z.string().optional(), // 关联期权合约名称
+        lockYield: z.number().optional(), // 月化收益率
       }))
       .mutation(async ({ ctx, input }) => {
         
@@ -13750,6 +13754,12 @@ ${klinesSummary}
             sql`SELECT id FROM af_orders WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} AND side = 'buy' ORDER BY created_at DESC LIMIT 1`
           ) as any;
           const newOrderId = (newOrderRows[0]?.[0] ?? newOrderRows[0])?.id;
+          // 锁仓订单：写入锁仓字段
+          if (newOrderId && input.isLocked && input.lockExpiry) {
+            await db.execute(
+              sql`UPDATE af_orders SET is_locked = 1, lock_expiry = ${input.lockExpiry}, lock_instrument = ${input.lockInstrument || null}, lock_yield = ${input.lockYield || null} WHERE id = ${newOrderId}`
+            );
+          }
           const buyNote = newOrderId
             ? `委托买入 ${input.coin} ${input.amount} USDT #${newOrderId}`
             : `委托买入 ${input.coin} ${input.amount} USDT`;
@@ -14913,7 +14923,21 @@ ${klinesSummary}
         if (!order) throw new Error('订单不存在');
         
         const cancelType = input.cancelType || (order.sell_status === 'selling' ? 'sell' : 'buy');
-        
+
+        // 锁仓订单禁止撤单（买入撤单）
+        if (cancelType === 'buy') {
+          const [lockRows] = await (await getDbConnection())!.execute(
+            `SELECT is_locked, lock_expiry FROM af_orders WHERE id = ? LIMIT 1`, [input.orderId]
+          ) as any[];
+          const lockRow = (lockRows as any[])[0];
+          if (lockRow?.is_locked === 1) {
+            const today = new Date().toISOString().slice(0, 10);
+            if (!lockRow.lock_expiry || lockRow.lock_expiry >= today) {
+              throw new Error(`该订单已锁仓至 ${lockRow.lock_expiry || '到期日'}，不可撤单`);
+            }
+          }
+        }
+
         if (cancelType === 'sell') {
           // 撤销委托卖出：清空卖出字段，回到已成交状态
           if (order.sell_status !== 'selling') throw new Error('该订单未在委托卖出中');
@@ -15627,6 +15651,152 @@ ${klinesSummary}
         } catch (err: any) {
           return { logs: [], total: 0, _debug: `error: ${err?.message}` };
         }
+      }),
+
+    // ===== 卖期权设置（52号账本谷底增筹）=====
+    // 从 Deribit 拉取 ETH 期权到期日列表
+    afGetOptionExpiries: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async () => {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 5000);
+          const resp = await fetch('https://www.deribit.com/api/v2/public/get_expirations?currency=ETH&kind=option', { signal: controller.signal });
+          clearTimeout(timeout);
+          if (!resp.ok) return { expiries: [], source: 'error' };
+          const data = await resp.json();
+          const expiries: string[] = data?.result?.eth?.option || data?.result?.option || [];
+          return { expiries, source: 'deribit' };
+        } catch {
+          return { expiries: [], source: 'unavailable' };
+        }
+      }),
+
+    // 获取卖期权配置列表
+    afGetOptionSellConfig: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) return { configs: [] };
+        const [rows] = await dbConn.execute(
+          `SELECT * FROM af_option_sell_config WHERE ledger_id = ? ORDER BY expiry_date ASC, strike_price ASC`,
+          [input.ledgerId]
+        ) as any[];
+        return { configs: rows as any[] };
+      }),
+
+    // 获取前端下单页面需要的已启用锁仓配置（仅返回 enabled=1 的）
+    afGetActiveOptionLocks: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), coin: z.string().optional() }))
+      .query(async ({ input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) return { locks: [] };
+        const coin = input.coin || 'ETH';
+        const [rows] = await dbConn.execute(
+          `SELECT strike_price, expiry_date, expiry_label, instrument_name, monthly_yield, option_type
+           FROM af_option_sell_config WHERE ledger_id = ? AND coin = ? AND enabled = 1
+           ORDER BY expiry_date ASC, strike_price ASC`,
+          [input.ledgerId, coin]
+        ) as any[];
+        return { locks: rows as any[] };
+      }),
+
+    // 管理员保存/更新卖期权配置（批量 upsert）
+    afSaveOptionSellConfig: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        configs: z.array(z.object({
+          coin: z.string().default('ETH'),
+          expiryLabel: z.string(),
+          expiryDate: z.string(), // YYYY-MM-DD
+          strikePrice: z.number(),
+          optionType: z.string().default('PUT'),
+          instrumentName: z.string(),
+          monthlyYield: z.number(),
+          enabled: z.boolean(),
+        })),
+      }))
+      .mutation(async ({ input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        for (const cfg of input.configs) {
+          await dbConn.execute(
+            `INSERT INTO af_option_sell_config (ledger_id, coin, expiry_label, expiry_date, strike_price, option_type, instrument_name, monthly_yield, enabled)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+               expiry_label = VALUES(expiry_label),
+               expiry_date = VALUES(expiry_date),
+               strike_price = VALUES(strike_price),
+               option_type = VALUES(option_type),
+               monthly_yield = VALUES(monthly_yield),
+               enabled = VALUES(enabled),
+               updated_at = NOW()`,
+            [input.ledgerId, cfg.coin, cfg.expiryLabel, cfg.expiryDate, cfg.strikePrice, cfg.optionType, cfg.instrumentName, cfg.monthlyYield, cfg.enabled ? 1 : 0]
+          );
+        }
+        return { success: true, count: input.configs.length };
+      }),
+
+    // 管理员删除卖期权配置
+    afDeleteOptionSellConfig: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), id: z.number() }))
+      .mutation(async ({ input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await dbConn.execute(
+          `DELETE FROM af_option_sell_config WHERE id = ? AND ledger_id = ?`,
+          [input.id, input.ledgerId]
+        );
+        return { success: true };
+      }),
+
+    // 数据库迁移：创建卖期权设置表 + 订单表新增锁仓字段
+    afMigrateOptionSellConfig: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .mutation(async () => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const results: string[] = [];
+        // 创建配置表
+        await dbConn.execute(`
+          CREATE TABLE IF NOT EXISTS af_option_sell_config (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL DEFAULT 52,
+            coin VARCHAR(10) NOT NULL DEFAULT 'ETH',
+            expiry_label VARCHAR(20) NOT NULL,
+            expiry_date DATE NOT NULL,
+            strike_price DECIMAL(12,2) NOT NULL,
+            option_type VARCHAR(10) NOT NULL DEFAULT 'PUT',
+            instrument_name VARCHAR(60) NOT NULL,
+            monthly_yield DECIMAL(6,4) NOT NULL DEFAULT 0,
+            enabled TINYINT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_ledger_instrument (ledger_id, instrument_name),
+            INDEX idx_ledger_coin_enabled (ledger_id, coin, enabled)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+        results.push('af_option_sell_config table created/exists');
+        // 订单表新增锁仓字段
+        const [cols] = await dbConn.execute("SHOW COLUMNS FROM af_orders") as any[];
+        const existingCols = (cols as any[]).map((c: any) => c.Field);
+        if (!existingCols.includes('is_locked')) {
+          await dbConn.execute(`ALTER TABLE af_orders ADD COLUMN is_locked TINYINT NOT NULL DEFAULT 0 COMMENT '0=普通, 1=已锁仓'`);
+          results.push('Added is_locked');
+        }
+        if (!existingCols.includes('lock_expiry')) {
+          await dbConn.execute(`ALTER TABLE af_orders ADD COLUMN lock_expiry DATE NULL COMMENT '锁仓到期日'`);
+          results.push('Added lock_expiry');
+        }
+        if (!existingCols.includes('lock_instrument')) {
+          await dbConn.execute(`ALTER TABLE af_orders ADD COLUMN lock_instrument VARCHAR(60) NULL COMMENT '关联期权合约名称'`);
+          results.push('Added lock_instrument');
+        }
+        if (!existingCols.includes('lock_yield')) {
+          await dbConn.execute(`ALTER TABLE af_orders ADD COLUMN lock_yield DECIMAL(6,4) NULL COMMENT '锁仓月化收益率'`);
+          results.push('Added lock_yield');
+        }
+        return { success: true, results };
       }),
 
     // ===== AH 型定制账本（公司财务记账管理）=====
