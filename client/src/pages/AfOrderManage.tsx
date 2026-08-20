@@ -1736,6 +1736,11 @@ export default function AfOrderManage() {
                             <span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}
                           </span>
                         )}
+                        {order.sellStatus === 'selling' && order.sellAt && (
+                          <span className="text-[10px] text-amber-500">
+                            <span className="text-amber-400 mr-1">委卖</span>{formatDate(order.sellAt)}
+                          </span>
+                        )}
                       </div>
                       {!isEditing ? (
                         <div className="flex items-center gap-1.5">
