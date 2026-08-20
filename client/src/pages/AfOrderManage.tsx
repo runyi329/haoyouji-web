@@ -70,9 +70,9 @@ interface ProfitCalculation {
 const getBJDateOnly = (d: any): Date => {
   if (!d) return new Date(0);
   const dt = new Date(d);
-  // MySQL DATETIME存的是北京时间，服务端UTC环境下String()后UTC值=北京时间值
-  // 所以直接用UTC方法取年月日即可
-  return new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()));
+  // 统一转换为北京时间取年月日，不依赖服务端时区假设
+  const bj = new Date(dt.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+  return new Date(Date.UTC(bj.getFullYear(), bj.getMonth(), bj.getDate()));
 };
 const getTodayBJDateOnly = (): Date => {
   const bjNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
@@ -479,12 +479,14 @@ export default function AfOrderManage() {
     if (!d) return "-";
     const dt = new Date(d);
     if (isNaN(dt.getTime())) return "-";
-    const yy = String(dt.getUTCFullYear()).slice(2);
-    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(dt.getUTCDate()).padStart(2, '0');
-    const hh = String(dt.getUTCHours()).padStart(2, '0');
-    const min = String(dt.getUTCMinutes()).padStart(2, '0');
-    const ss = String(dt.getUTCSeconds()).padStart(2, '0');
+    // 统一转换为北京时间显示，不依赖服务端时区假设
+    const bj = new Date(dt.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+    const yy = String(bj.getFullYear()).slice(2);
+    const mm = String(bj.getMonth() + 1).padStart(2, '0');
+    const dd = String(bj.getDate()).padStart(2, '0');
+    const hh = String(bj.getHours()).padStart(2, '0');
+    const min = String(bj.getMinutes()).padStart(2, '0');
+    const ss = String(bj.getSeconds()).padStart(2, '0');
     return `${yy}-${mm}-${dd} ${hh}:${min}:${ss}`;
   };
 
