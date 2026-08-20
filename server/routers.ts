@@ -13707,6 +13707,10 @@ ${klinesSummary}
 
         // 买入订单：正常创建新订单
         const orderType = input.orderType || '无损合约';
+        // 谷底增筹仅支持限价委托，后端同时拦截市价提交以防前端绕过。
+        if (input.ledgerId === 52 && input.isMarketOrder) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '谷底增筹仅支持限价委托' });
+        }
         // 市价单直接自动成交，无需管理员手工确认
         if (input.isMarketOrder) {
           // ★ 安全校验：后端验证市价权限，防止前端绕过

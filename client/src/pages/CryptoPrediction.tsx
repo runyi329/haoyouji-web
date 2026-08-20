@@ -2286,23 +2286,26 @@ export default function CryptoPrediction() {
   // 当前有效倍数：52号账本开关开启时用 5，其他情况用 5.25
   const orderMultiplier = (ledgerId === 52 && (switch525Data as any)?.enabled) ? 5 : 5.25;
 
-  // 试驾单权限：是否允许下市价单（YJH 和超管始终允许，其他人查后端权限）
+  // 谷底增筹只允许限价委托；其他页面仍按原有市价权限判断。
   const isYJHOrAdmin = currentUserId === 4957151 || currentUserId === 870413;
   const { data: myMarketPermData } = trpc.ledger.afGetMyMarketOrderPermission.useQuery(
     { ledgerId },
     { enabled: isCustomAF && !isYJHOrAdmin, staleTime: 60000 }
   );
-  const canUseMarketOrder = isYJHOrAdmin || (myMarketPermData as any)?.enabled === true;
+  const canUseMarketOrder = !isCustomAF && (isYJHOrAdmin || (myMarketPermData as any)?.enabled === true);
 
-  // 权限确认后：若无市价权限，强制重置 priceMode 为 limit，防止默认市价状态绕过审核
+  // 谷底增筹强制限价；其他页面沿用既有的市价权限限制，防止旧状态或手工请求绕过。
   useEffect(() => {
-    // 已确认无权限（非 YJH/超管，且后端返回 false）
-    if (!isYJHOrAdmin && myMarketPermData !== undefined && !(myMarketPermData as any)?.enabled) {
+    if (isCustomAF && priceMode === 'market') {
       setPriceMode('limit');
-      // 自动选中第一个限价档位（不设置 orderPrice，让用户自己选）
+      setOrderPrice('');
+      return;
+    }
+    if (!isCustomAF && !isYJHOrAdmin && myMarketPermData !== undefined && !(myMarketPermData as any)?.enabled) {
+      setPriceMode('limit');
       setOrderPrice('');
     }
-  }, [isYJHOrAdmin, myMarketPermData]);
+  }, [isCustomAF, priceMode, isYJHOrAdmin, myMarketPermData]);
 
   // 可用余额（账本总资产）
   const { data: assetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
@@ -2918,6 +2921,7 @@ export default function CryptoPrediction() {
                   const amt = parseFloat(orderAmount);
                   if (!amt || amt <= 0) { toast.error("请输入金额"); return; }
                   if (amt > availableUsdt) { toast.error("金额超过可用余额"); return; }
+                  if (isCustomAF && priceMode === 'market') { toast.error('谷底增筹仅支持限价委托'); return; }
                   // 市价单限额校验：仅允许 3000 USDT 以内的市价单
                   if (priceMode === 'market' && amt > 3000) {
                     toast.error('市价单最高 3,000 USDT，请改用限价委托');
