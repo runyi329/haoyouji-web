@@ -13513,11 +13513,11 @@ ${klinesSummary}
         // 1. 充値订单（recharge_orders，只显示已完成的充値到账记录，不显示待支付/确认中/过期/取消）
         const rechargeRows = await db.execute(
           sql`SELECT r.id,
-                     COALESCE(h.amount, r.amount) AS actual_amount,
+                     h.amount AS actual_amount,
                      r.status,
                      COALESCE(r.completed_at, r.created_at) AS occurred_at
               FROM recharge_orders r
-              LEFT JOIN balance_history h ON h.user_id = r.user_id
+              INNER JOIN balance_history h ON h.user_id = r.user_id
                 AND h.type = 'recharge'
                 AND h.related_id = r.id
               WHERE r.user_id = ${targetUserId}
@@ -13583,10 +13583,11 @@ ${klinesSummary}
         let bhList: any[] = [];
         try {
           const bhRows = await db.execute(
-            sql`SELECT id, amount, type, related_id, description, created_at
+            sql`SELECT id, amount, type, currency, related_id, description, created_at
                 FROM balance_history
                 WHERE user_id = ${targetUserId}
-                  AND type IN ('recharge', 'consume', 'refund', 'commission', 'reward')
+                  AND (currency IS NULL OR currency = '' OR UPPER(currency) = 'USDT')
+                  AND (type <> 'withdraw' OR related_id IS NULL)
                 ORDER BY created_at ASC`
           ) as any;
           const allBh = ((bhRows[0] || bhRows) as any[]).map((r: any) => ({
@@ -13606,6 +13607,8 @@ ${klinesSummary}
           bhList = allBh.filter(bh => {
             // 充值订单已使用该订单对应的实际到账金额，不能再把同一笔 recharge history 并入。
             if (bh.type === 'recharge' && bh.relatedId) return false;
+            // 迁移时从手动调账复制出的兼容副本不代表额外资金事件。
+            if (String(bh.note).includes('[迁移自af_manual_balances')) return false;
             const bhT = new Date(bh.createdAt).getTime();
             const bhAmt = Math.abs(bh.amount);
             return !manualTimes.some(m => Math.abs(m.t - bhT) <= 2000 && Math.abs(m.amt - bhAmt) < 0.001);
@@ -13628,22 +13631,7 @@ ${klinesSummary}
           (parseFloat(balData?.userBalance ?? '0') || 0) +
           (parseFloat(balData?.manual ?? '0') || 0);
 
-        // 6. 历史迁移前的余额可能已经汇总到 users.balance，却没有可逐笔还原的原始事件。
-        // 补一条只读期初余额锚点，使第一笔到最后一笔的余额连续且最后严格等于真实余额。
-        const listedEventSum = combinedAsc.reduce((sum, item) => sum + (parseFloat(String(item.amount)) || 0), 0);
-        const openingBalance = Number((currentBalance - listedEventSum).toFixed(6));
-        if (Math.abs(openingBalance) >= 0.000001) {
-          const earliestTime = combinedAsc.length
-            ? new Date(combinedAsc[0].createdAt).getTime() - 1
-            : Date.now();
-          combinedAsc = [{
-            id: `opening_${targetUserId}`,
-            amount: openingBalance,
-            sourceType: 'opening' as const,
-            note: '历史期初余额（系统迁移前）',
-            createdAt: new Date(earliestTime),
-          }, ...combinedAsc];
-        }
+        // 6. 仅展示可追溯的真实资金事件；不再生成没有原始记录的虚拟期初余额。
 
         // 7. 倒推余额：从当前真实余额开始，倒序遍历每条记录，记录发生后的余额快照
         const combinedDesc = [...combinedAsc].reverse();
@@ -13657,8 +13645,7 @@ ${klinesSummary}
           const affects =
             (srcType === 'recharge' && status === 'completed') ||
             srcType === 'manual' ||
-            srcType === 'balance_history' ||
-            srcType === 'opening';
+            srcType === 'balance_history';
           balanceMap.set(String((item as any).id), parseFloat(running.toFixed(8)));
           if (affects) {
             running -= amt; // 倒推：当前余额减去该笔金额 = 该笔发生前的余额
