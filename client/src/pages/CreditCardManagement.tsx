@@ -253,20 +253,6 @@ function formatBillingPeriodDate(value: string | Date | null | undefined): strin
   return `${year}年${month}月${day}日`;
 }
 
-// 账单日状态圆点只看本月账期：未到本月账单日时不显示，到了当天零点后才显示。
-function getCurrentMonthBillingPeriod(day: number) {
-  const nowBj = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  const year = nowBj.getUTCFullYear();
-  const month = nowBj.getUTCMonth();
-  const today = nowBj.getUTCDate();
-  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  const billingDay = Math.min(Math.max(1, day), daysInMonth);
-  return {
-    billingDate: `${year}-${String(month + 1).padStart(2, '0')}-${String(billingDay).padStart(2, '0')}`,
-    hasReached: today >= billingDay,
-  };
-}
-
 // 将一个账单日映射到该账期对应的最后还款日，供还款金额弹窗引用。
 function getDueDateForBillingPeriod(billingDateValue: string, dueDay: number): string {
   const [billingYear, billingMonth, billingDay] = billingDateValue.split('-').map(Number);
@@ -1141,11 +1127,11 @@ export default function CreditCardManagement() {
     const billingStatementByDate = useMemo(() => new Map(
       (billingStatementsQuery.data || []).map((statement: any) => [toBillingDateValue(statement.billing_date), statement])
     ), [billingStatementsQuery.data]);
-    // 圆点仅对应本月账期；账单日当天零点前不显示任何状态。
-    const currentMonthBilling = card.billing_day ? getCurrentMonthBillingPeriod(Number(card.billing_day)) : null;
-    const shouldShowBillingStatus = !!currentMonthBilling?.hasReached;
-    const hasSavedCurrentMonthBilling = shouldShowBillingStatus && !!currentMonthBilling && billingStatementByDate.has(currentMonthBilling.billingDate);
+    // 圆点对应最近一个已到达账期。账单日在本月尚未来临时，录入窗口保存的是上月账期；
+    // 若仍用本月未来账期判断，会错误地隐藏这类已保存记录的状态提示。
     const latestReachedBillingDate = billingPeriods[0] || '';
+    const shouldShowBillingStatus = !!latestReachedBillingDate;
+    const hasSavedCurrentMonthBilling = shouldShowBillingStatus && billingStatementByDate.has(latestReachedBillingDate);
     const nextBillingInfo = card.billing_day ? getNextBillingDateInfo(Number(card.billing_day)) : null;
     const latestReachedStatement = latestReachedBillingDate ? billingStatementByDate.get(latestReachedBillingDate) : null;
     const latestStatementAmount = Number(latestReachedStatement?.statement_amount || 0);
@@ -1673,7 +1659,7 @@ export default function CreditCardManagement() {
               className="grid min-w-0 grid-rows-[16px_20px_16px] px-2 py-1 text-left transition-colors active:bg-black/[0.03]"
               aria-label="打开本期还款账单录入"
             >
-              <p className="flex items-center gap-1 text-[11px] leading-4 text-gray-400"><span className="inline-block border-b border-dashed border-[#1A2B4A]/55 pb-px">账单日</span>{shouldShowBillingStatus && <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${hasSavedCurrentMonthBilling ? 'bg-emerald-500' : 'border border-amber-500 bg-transparent'}`} title={hasSavedCurrentMonthBilling ? '本月账单已录入' : '本月账单待录入'} aria-label={hasSavedCurrentMonthBilling ? '本月账单已录入' : '本月账单待录入'} />}</p>
+              <p className="flex items-center gap-1 text-[11px] leading-4 text-gray-400"><span className="inline-block border-b border-dashed border-[#1A2B4A]/55 pb-px">账单日</span>{shouldShowBillingStatus && <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${hasSavedCurrentMonthBilling ? 'bg-emerald-500' : 'border border-amber-500 bg-transparent'}`} title={hasSavedCurrentMonthBilling ? '本期账单已录入' : '本期账单待录入'} aria-label={hasSavedCurrentMonthBilling ? '本期账单已录入' : '本期账单待录入'} />}</p>
               {nextBilling ? (
                 <>
                   <p className="truncate text-sm font-bold leading-5 text-gray-900">{nextBilling.label}</p>
