@@ -15672,6 +15672,27 @@ ${klinesSummary}
         }
       }),
 
+    // 从 Deribit 拉取指定到期日的行权价列表
+    afGetOptionStrikes: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), expiryLabel: z.string() }))
+      .query(async ({ input }) => {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 8000);
+          const resp = await fetch('https://www.deribit.com/api/v2/public/get_instruments?currency=ETH&kind=option&expired=false', { signal: controller.signal });
+          clearTimeout(timeout);
+          if (!resp.ok) return { puts: [], calls: [], source: 'error' };
+          const data = await resp.json();
+          const instruments: any[] = data?.result || [];
+          const matching = instruments.filter((i: any) => i.instrument_name?.includes(input.expiryLabel));
+          const puts = matching.filter((i: any) => i.option_type === 'put').map((i: any) => ({ strike: i.strike, name: i.instrument_name })).sort((a: any, b: any) => a.strike - b.strike);
+          const calls = matching.filter((i: any) => i.option_type === 'call').map((i: any) => ({ strike: i.strike, name: i.instrument_name })).sort((a: any, b: any) => a.strike - b.strike);
+          return { puts, calls, source: 'deribit' };
+        } catch {
+          return { puts: [], calls: [], source: 'unavailable' };
+        }
+      }),
+
     // 获取卖期权配置列表
     afGetOptionSellConfig: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
