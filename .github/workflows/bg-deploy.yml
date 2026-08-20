@@ -9,18 +9,50 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 10
     steps:
       - name: setup ssh
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  ServerAliveInterval 20\n  ServerAliveCountMax 20\n' > ~/.ssh/config
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  ServerAliveInterval 15\n  ServerAliveCountMax 10\n  ConnectTimeout 20\n  ConnectionAttempts 3\n' > ~/.ssh/config
           chmod 600 ~/.ssh/config
 
-      - name: upload deploy script
+      - name: upload and configure
         run: |
+          # SSH 连接重试函数
+          ssh_retry() {
+            local max_attempts=3
+            local attempt=1
+            while [ $attempt -le $max_attempts ]; do
+              if ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "$@"; then
+                return 0
+              fi
+              echo "SSH attempt $attempt/$max_attempts failed, retrying in 10s..."
+              sleep 10
+              attempt=$((attempt + 1))
+            done
+            echo "SSH failed after $max_attempts attempts"
+            return 1
+          }
+
+          scp_retry() {
+            local max_attempts=3
+            local attempt=1
+            while [ $attempt -le $max_attempts ]; do
+              if scp -i ~/.ssh/id_rsa -P ${{ secrets.DEPLOY_PORT }} "$@"; then
+                return 0
+              fi
+              echo "SCP attempt $attempt/$max_attempts failed, retrying in 10s..."
+              sleep 10
+              attempt=$((attempt + 1))
+            done
+            echo "SCP failed after $max_attempts attempts"
+            return 1
+          }
+
+          # 生成部署脚本
           cat > /tmp/deploy.sh << 'SCRIPTEOF'
           #!/bin/bash
           export PATH="/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
@@ -61,79 +93,80 @@ jobs:
           sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' ecosystem.config.cjs > /home/ubuntu/haoyouji-web/ecosystem.config.cjs
           chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] pm2 restart..." >> $LOG
-          # 只重启 root 用户的 haoyouji-web 进程（Nginx 代理 root:3000）
-          # ubuntu 用户的进程已清空，不再启动，避免双进程抢端口
           pm2 restart haoyouji-web --update-env >> $LOG 2>&1 || \
             pm2 start /root/haoyouji-web/ecosystem.config.cjs >> $LOG 2>&1 || true
           pm2 save >> $LOG 2>&1 || true
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] pm2 status:" >> $LOG
           pm2 list >> $LOG 2>&1 || true
-          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' >> $LOG 2>&1 || true
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] === DEPLOY DONE ===" >> $LOG
           SCRIPTEOF
           chmod +x /tmp/deploy.sh
-          scp -i ~/.ssh/id_rsa -P ${{ secrets.DEPLOY_PORT }} /tmp/deploy.sh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/haoyouji-deploy.sh
-          # 将 WECOM_DEEPSEEK_API_KEY 写入服务器 .env（如已存在则更新，否则新增）
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            'grep -q "WECOM_DEEPSEEK_API_KEY" /root/haoyouji-web/.env && sed -i "s|WECOM_DEEPSEEK_API_KEY=.*|WECOM_DEEPSEEK_API_KEY=\"${{ secrets.WECOM_DEEPSEEK_API_KEY }}\"|" /root/haoyouji-web/.env || echo "WECOM_DEEPSEEK_API_KEY=\"${{ secrets.WECOM_DEEPSEEK_API_KEY }}\"" >> /root/haoyouji-web/.env'
-          # 将 HUNYUAN_API_KEY（腾讯混元 embedding）写入服务器 .env（存在则更新，否则新增）
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            'grep -q "HUNYUAN_API_KEY" /root/haoyouji-web/.env && sed -i "s|HUNYUAN_API_KEY=.*|HUNYUAN_API_KEY=\"sk-OAOVyNdZqmZsybgDDcU3FtgB56HWxgJxdhxUbSNsfgZKdbHb\"|" /root/haoyouji-web/.env || echo "HUNYUAN_API_KEY=\"sk-OAOVyNdZqmZsybgDDcU3FtgB56HWxgJxdhxUbSNsfgZKdbHb\"" >> /root/haoyouji-web/.env'
-          # 将 BUILT_IN_FORGE_API_URL 写入服务器 .env（Manus forgeApi 地址，用于语音识别/Whisper）
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            'grep -q "BUILT_IN_FORGE_API_URL" /root/haoyouji-web/.env && sed -i "s|BUILT_IN_FORGE_API_URL=.*|BUILT_IN_FORGE_API_URL=\"https://api.manus.im/api/llm-proxy/v1\"|" /root/haoyouji-web/.env || echo "BUILT_IN_FORGE_API_URL=\"https://api.manus.im/api/llm-proxy/v1\"" >> /root/haoyouji-web/.env'
-          # 将 BUILT_IN_FORGE_API_KEY 写入服务器 .env（Manus forgeApi key，用于语音识别/Whisper）
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            'grep -q "BUILT_IN_FORGE_API_KEY" /root/haoyouji-web/.env && sed -i "s|BUILT_IN_FORGE_API_KEY=.*|BUILT_IN_FORGE_API_KEY=\"sk-UYkiAKe6Pn6SWtsWt5r3qV\"|" /root/haoyouji-web/.env || echo "BUILT_IN_FORGE_API_KEY=\"sk-UYkiAKe6Pn6SWtsWt5r3qV\"" >> /root/haoyouji-web/.env'
-          # 将 COS_SECRET_ID 写入服务器 .env（腾讯云COS，用于语音录音文件存储）
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            'grep -q "COS_SECRET_ID" /root/haoyouji-web/.env && sed -i "s|COS_SECRET_ID=.*|COS_SECRET_ID=${{ secrets.COS_SECRET_ID }}|" /root/haoyouji-web/.env || echo "COS_SECRET_ID=${{ secrets.COS_SECRET_ID }}" >> /root/haoyouji-web/.env'
-          # 将 COS_SECRET_KEY 写入服务器 .env
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            'grep -q "COS_SECRET_KEY" /root/haoyouji-web/.env && sed -i "s|COS_SECRET_KEY=.*|COS_SECRET_KEY=${{ secrets.COS_SECRET_KEY }}|" /root/haoyouji-web/.env || echo "COS_SECRET_KEY=${{ secrets.COS_SECRET_KEY }}" >> /root/haoyouji-web/.env'
-          # 将 COS_BUCKET 写入服务器 .env
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            'grep -q "COS_BUCKET" /root/haoyouji-web/.env && sed -i "s|COS_BUCKET=.*|COS_BUCKET=haoyouji-images-1396946788|" /root/haoyouji-web/.env || echo "COS_BUCKET=haoyouji-images-1396946788" >> /root/haoyouji-web/.env'
-          # 将 COS_REGION 写入服务器 .env
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            'grep -q "COS_REGION" /root/haoyouji-web/.env && sed -i "s|COS_REGION=.*|COS_REGION=ap-shanghai|" /root/haoyouji-web/.env || echo "COS_REGION=ap-shanghai" >> /root/haoyouji-web/.env'
-          # 配置 Nginx client_max_body_size 为 50m，支持大音频文件上传
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
-            # 查找 Nginx 配置文件中包含 server_name 的文件
-            NGINX_CONF=$(grep -rl "server_name" /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ 2>/dev/null | head -1)
-            if [ -z "$NGINX_CONF" ]; then
-              NGINX_CONF=$(grep -rl "server_name" /etc/nginx/ 2>/dev/null | grep -v "nginx.conf" | head -1)
-            fi
-            if [ -n "$NGINX_CONF" ]; then
-              # 如果已有 client_max_body_size 则更新，否则在第一个 server { 后插入
-              if grep -q "client_max_body_size" "$NGINX_CONF"; then
-                sed -i "s|client_max_body_size.*|client_max_body_size 50m;|g" "$NGINX_CONF"
-              else
-                sed -i "/server[[:space:]]*{/a\\    client_max_body_size 50m;" "$NGINX_CONF"
-              fi
-              nginx -t && nginx -s reload && echo "Nginx reloaded with client_max_body_size 50m" || echo "Nginx reload failed, check config"
+
+          # 上传部署脚本（带重试）
+          scp_retry /tmp/deploy.sh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/haoyouji-deploy.sh
+
+          # 一次性批量写入所有环境变量 + Nginx 配置（合并为单次 SSH，减少握手开销）
+          ssh_retry << 'ENVSSH'
+          cd /root/haoyouji-web
+          # 环境变量批量更新函数
+          upsert_env() {
+            local key="$1" val="$2" file="/root/haoyouji-web/.env"
+            if grep -q "^${key}=" "$file" 2>/dev/null; then
+              sed -i "s|^${key}=.*|${key}=${val}|" "$file"
             else
-              echo "Nginx config not found, skipping"
+              echo "${key}=${val}" >> "$file"
             fi
-          '
-          echo "Script uploaded and env updated"
+          }
+          upsert_env "WECOM_DEEPSEEK_API_KEY" "\"${{ secrets.WECOM_DEEPSEEK_API_KEY }}\""
+          upsert_env "HUNYUAN_API_KEY" "\"sk-OAOVyNdZqmZsybgDDcU3FtgB56HWxgJxdhxUbSNsfgZKdbHb\""
+          upsert_env "BUILT_IN_FORGE_API_URL" "\"https://api.manus.im/api/llm-proxy/v1\""
+          upsert_env "BUILT_IN_FORGE_API_KEY" "\"sk-UYkiAKe6Pn6SWtsWt5r3qV\""
+          upsert_env "COS_SECRET_ID" "${{ secrets.COS_SECRET_ID }}"
+          upsert_env "COS_SECRET_KEY" "${{ secrets.COS_SECRET_KEY }}"
+          upsert_env "COS_BUCKET" "haoyouji-images-1396946788"
+          upsert_env "COS_REGION" "ap-shanghai"
+          # Nginx client_max_body_size
+          NGINX_CONF=$(grep -rl "server_name" /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ 2>/dev/null | head -1)
+          [ -z "$NGINX_CONF" ] && NGINX_CONF=$(grep -rl "server_name" /etc/nginx/ 2>/dev/null | grep -v "nginx.conf" | head -1)
+          if [ -n "$NGINX_CONF" ]; then
+            if grep -q "client_max_body_size" "$NGINX_CONF"; then
+              sed -i "s|client_max_body_size.*|client_max_body_size 50m;|g" "$NGINX_CONF"
+            else
+              sed -i "/server[[:space:]]*{/a\\    client_max_body_size 50m;" "$NGINX_CONF"
+            fi
+            nginx -t && nginx -s reload && echo "Nginx reloaded" || echo "Nginx reload failed"
+          fi
+          echo "Environment configured"
+          ENVSSH
+          echo "Upload and configure done"
 
       - name: start background deploy
         run: |
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            'chmod +x /tmp/haoyouji-deploy.sh && nohup /tmp/haoyouji-deploy.sh </dev/null >/dev/null 2>/dev/null & disown; echo "started pid=$!"'
+          # SSH 连接重试
+          for attempt in 1 2 3; do
+            if ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+              'chmod +x /tmp/haoyouji-deploy.sh && nohup /tmp/haoyouji-deploy.sh </dev/null >/dev/null 2>/dev/null & disown; echo "started pid=$!"'; then
+              echo "Deploy script started"
+              break
+            fi
+            echo "Attempt $attempt failed, retrying in 10s..."
+            sleep 10
+          done
 
       - name: wait for deploy
         run: |
           echo "Waiting for deploy to complete..."
-          for i in $(seq 1 20); do
-            sleep 30
+          for i in $(seq 1 24); do
+            sleep 15
             RESULT=$(ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
               'tail -3 /tmp/haoyouji-deploy.log 2>/dev/null || echo "log not ready"' 2>/dev/null || echo "ssh-fail")
-            echo "[$i/20] $RESULT"
+            echo "[$i/24] $RESULT"
             if echo "$RESULT" | grep -q "DEPLOY DONE"; then
               echo "Deploy completed!"
               exit 0
+            fi
+            if echo "$RESULT" | grep -q "ssh-fail"; then
+              echo "SSH check failed, will retry..."
             fi
           done
           echo "=== Full deploy log ==="
