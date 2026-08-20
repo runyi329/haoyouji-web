@@ -1132,6 +1132,16 @@ export function FunderOrderCard({
                 })()}
               </div>
             )}
+            {show('todayPrice') && order.coin !== 'CNY' && order.coin !== 'USDT' && !isOptionOrder && ((order as any).currentPriceUpdatedAt || (order as any).currentPriceStale) && (
+              <div className="flex items-center justify-between text-[10px] -mt-1">
+                <span className="text-gray-400 shrink-0">行情状态</span>
+                <span style={{ color: (order as any).currentPriceStale ? '#D97706' : '#9CA3AF' }}>
+                  {(order as any).currentPriceStale
+                    ? '更新延迟，请以行情源为准'
+                    : `${(order as any).currentPriceSource || '行情源'} · ${new Date((order as any).currentPriceUpdatedAt).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}`}
+                </span>
+              </div>
+            )}
             {show('floatPnl') && floatPnl !== null && (order as any).order_fill_status !== 'pending' && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">浮动盈亏</span>

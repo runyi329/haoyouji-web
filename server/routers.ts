@@ -16454,8 +16454,9 @@ ${klinesSummary}
             for (const r of paidArr) { paidMap[Number(r.order_id)] = parseFloat(r.total_paid || '0'); }
           }
 
-          // 获取实时价格
-          const { getLatestPrice } = await import('./price-scanner');
+          // 获取实时价格及其健康状态；前端可据此标识长期未更新的报价
+          const { getLatestPrice, getMarketPriceHealth } = await import('./price-scanner');
+          const marketPriceHealth = getMarketPriceHealth();
 
           console.log('[SharedPool] orders count:', orders.length, orders.map((o: any) => ({ id: o.id, no: o.order_no, raw_assets: o.collateral_assets, type: typeof o.collateral_assets, isBuffer: Buffer.isBuffer(o.collateral_assets) })));
           // 汇总每张订单的担保物价值和担保需求
@@ -16502,6 +16503,7 @@ ${klinesSummary}
             const coinUpper = effectiveCoin;
             const isStablecoinCoin = coinUpper === 'USDT' || coinUpper === 'U' || coinUpper === 'USDC' || coinUpper === 'BUSD' || coinUpper === 'DAI';
             const currentPrice = isStablecoinCoin ? 1 : (getLatestPrice(coinUpper) || null);
+            const quoteHealth = marketPriceHealth[coinUpper];
             const currentValue = currentPrice !== null ? quantity * currentPrice : null;
             // 本金亏损：当前市值 < 计息基数时的差小
             const principalLoss = currentValue !== null ? Math.max(0, principal - currentValue) : null;
@@ -16518,6 +16520,9 @@ ${klinesSummary}
               buyValue,
               principal,
               currentPrice,
+              currentPriceUpdatedAt: quoteHealth?.lastSuccessAt || null,
+              currentPriceSource: quoteHealth?.source || null,
+              currentPriceStale: quoteHealth?.stale ?? !isStablecoinCoin,
               currentValue,
               principalLoss,
               pendingInterest,
@@ -16542,6 +16547,7 @@ ${klinesSummary}
           await conn.end();
           return {
             orders: orderDetails,
+            livePrices,
             totalCollateralValue,
             totalCollateralRequired,
             totalGap,
@@ -24676,18 +24682,20 @@ insights 数组每项包含：
     // 从 price-scanner 内存缓存读取（规范：crypto-price-unified）
     // changePercent 已由 price-scanner 用火币日K开盘价实时计算（北京时间 00:00 对齐）
     // 不再查数据库，直接返回缓存即可
-    const { getAllLatestPrices, getUsdtCnyRate } = await import('./price-scanner');
+    const { getAllLatestPrices, getMarketPriceHealth, getUsdtCnyRate } = await import('./price-scanner');
     const allPrices = getAllLatestPrices();
     const prices: Record<string, number> = {};
     const changes: Record<string, number> = {};
     const opens: Record<string, number> = {};
+    const updatedAt: Record<string, string> = {};
     for (const [coin, entry] of Object.entries(allPrices)) {
       prices[coin] = entry.price;
       changes[coin] = entry.changePercent ?? 0;
       opens[coin] = entry.todayOpen ?? 0;
+      updatedAt[coin] = entry.updatedAt;
     }
     const usdtCnyRate = getUsdtCnyRate();
-    return { prices, changes, opens, usdtCnyRate };
+    return { prices, changes, opens, updatedAt, health: getMarketPriceHealth(), usdtCnyRate };
   }),
 
   // 分红功能：获取某用户在某账本的分红汇总（按标签分组）
