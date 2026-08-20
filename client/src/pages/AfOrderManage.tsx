@@ -1153,6 +1153,7 @@ export default function AfOrderManage() {
                                       <span className="text-[10px] text-gray-400"><span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}</span>
                                       {order.confirmedAt && <span className="text-[10px] text-blue-400"><span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}</span>}
                                       {order.sellStatus==='selling'&&order.sellAt&&<span className="text-[10px] text-orange-400"><span className="text-orange-300 mr-1">委卖</span>{formatDate(order.sellAt)}</span>}
+                                      {order.sellStatus==='sold'&&order.sellConfirmedAt&&<span className="text-[10px] text-green-500"><span className="text-green-400 mr-1">确认</span>{formatDate(order.sellConfirmedAt)}</span>}
                                     </div>
                                     {!isEditing ? (
                                       <div className="flex items-center gap-1.5">
@@ -1298,6 +1299,7 @@ export default function AfOrderManage() {
                                     <span className="text-[10px] text-gray-400"><span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}</span>
                                     {order.confirmedAt && <span className="text-[10px] text-blue-400"><span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}</span>}
                                     {order.sellStatus==='selling'&&order.sellAt&&<span className="text-[10px] text-orange-400"><span className="text-orange-300 mr-1">委卖</span>{formatDate(order.sellAt)}</span>}
+                                    {order.sellStatus==='sold'&&order.sellConfirmedAt&&<span className="text-[10px] text-green-500"><span className="text-green-400 mr-1">确认</span>{formatDate(order.sellConfirmedAt)}</span>}
                                   </div>
                                   {!isEditing ? (<div className="flex items-center gap-1.5"><button onClick={() => startEdit(order)} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><Pencil className="w-3 h-3" /> 编辑</button><button onClick={() => { setDeleteTarget(order); const ig = order.isGift===true||order.isGift===1; setDeleteScope('all'); setSelectedGiftIds([]); setRefundChecked(order.status==='pending'&&!ig); }} className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"><Trash2 className="w-3 h-3" /> 删除</button></div>) : (<div className="flex items-center gap-1.5"><button onClick={saveEdit} disabled={updateMutation.isPending} className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"><Check className="w-3 h-3" /> 保存</button><button onClick={cancelEdit} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><X className="w-3 h-3" /> 取消</button></div>)}
                                 </div>
@@ -1479,6 +1481,7 @@ export default function AfOrderManage() {
                                     <span className="text-[10px] text-gray-400"><span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}</span>
                                     {order.confirmedAt && <span className="text-[10px] text-blue-400"><span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}</span>}
                                     {order.sellStatus==='selling'&&order.sellAt&&<span className="text-[10px] text-orange-400"><span className="text-orange-300 mr-1">委卖</span>{formatDate(order.sellAt)}</span>}
+                                    {order.sellStatus==='sold'&&order.sellConfirmedAt&&<span className="text-[10px] text-green-500"><span className="text-green-400 mr-1">确认</span>{formatDate(order.sellConfirmedAt)}</span>}
                                   </div>
                                   {!isEditing ? (<div className="flex items-center gap-1.5"><button onClick={() => startEdit(order)} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><Pencil className="w-3 h-3" /> 编辑</button><button onClick={() => { setDeleteTarget(order); const ig = order.isGift===true||order.isGift===1; setDeleteScope('all'); setSelectedGiftIds([]); setRefundChecked(order.status==='pending'&&!ig); }} className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"><Trash2 className="w-3 h-3" /> 删除</button></div>) : (<div className="flex items-center gap-1.5"><button onClick={saveEdit} disabled={updateMutation.isPending} className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"><Check className="w-3 h-3" /> 保存</button><button onClick={cancelEdit} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><X className="w-3 h-3" /> 取消</button></div>)}
                                 </div>
@@ -1743,6 +1746,7 @@ export default function AfOrderManage() {
                           </span>
                         )}
                         {order.sellStatus==='selling'&&order.sellAt&&<span className="text-[10px] text-orange-400"><span className="text-orange-300 mr-1">委卖</span>{formatDate(order.sellAt)}</span>}
+                        {order.sellStatus==='sold'&&order.sellConfirmedAt&&<span className="text-[10px] text-green-500"><span className="text-green-400 mr-1">确认</span>{formatDate(order.sellConfirmedAt)}</span>}
                       </div>
                       {!isEditing ? (
                         <div className="flex items-center gap-1.5">

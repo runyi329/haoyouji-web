@@ -13947,10 +13947,10 @@ ${klinesSummary}
           // 卖出字段（订单合并模型）
           sellPrice: r.sell_price || null,
           sellQuantity: r.sell_quantity || null,
-          sellAt: toBeijingTimeStr(r.sell_at),
-          sellConfirmedAt: toBeijingTimeStr(r.sell_confirmed_at),
+          sellAt: r.sell_at,
+          sellConfirmedAt: r.sell_confirmed_at,
           sellStatus: r.sell_status || null,
-          confirmedAt: toBeijingTimeStr(r.confirmed_at),
+          confirmedAt: r.confirmed_at,
           // 兼容旧字段：是否已在委托卖中
           hasPendingSell: r.sell_status === 'selling',
           // 档位信息
@@ -14104,10 +14104,10 @@ ${klinesSummary}
           // 卖出字段（订单合并模型）
           sellPrice: r.sell_price || null,
           sellQuantity: r.sell_quantity || null,
-          sellAt: toBeijingTimeStr(r.sell_at),
-          sellConfirmedAt: toBeijingTimeStr(r.sell_confirmed_at),
+          sellAt: r.sell_at,
+          sellConfirmedAt: r.sell_confirmed_at,
           sellStatus: r.sell_status || null,
-          confirmedAt: toBeijingTimeStr(r.confirmed_at),
+          confirmedAt: r.confirmed_at,
           equityTier: 0,
           allTimeLowPrice: null as string | null,
           allTimeLowAt: null as string | null,
