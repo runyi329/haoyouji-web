@@ -15532,6 +15532,10 @@ ${klinesSummary}
     afToggleFundingRate: protectedProcedure
       .input(z.object({ ledgerId: z.number(), enabled: z.boolean(), currentBalance: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
+        // 闲时自动赚费功能已下线，禁止开启（52号账本）
+        if (input.ledgerId === 52 && input.enabled) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '该功能已停用' });
+        }
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const nowMs = Date.now();
@@ -29636,6 +29640,8 @@ async function runAfFundingRateSettlement() {
     if (!settings || settings.length === 0) return;
     const HOURS_PER_YEAR = 8760;
     for (const setting of settings) {
+      // 闲时自动赚费已下线，跳过52号账本不再累加
+      if (Number(setting.ledger_id) === 52) continue;
       try {
         const { ledger_id: ledgerId, user_id: userId } = setting;
         const openAt = Number(setting.open_at);

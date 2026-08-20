@@ -3890,30 +3890,23 @@ export default function LedgerDetail() {
                 </div>
                 <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid rgba(201,168,76,0.18)' }}>
                   <div className="flex items-center gap-2">
+                    {/* 闲时自动赚费功能已下线，开关强制禁用为关闭态 */}
                     <button
-                      onClick={() => {
-                        if (!viewAsUserId) {
-                          const newEnabled = !(localFundingRateEnabled ?? false);
-                          setLocalFundingRateEnabled(newEnabled);
-                          const currentBalance = afTotalAsset ? Number(afTotalAsset.total) : 0;
-                          toggleFundingRateMutation.mutate({ ledgerId: Number(ledgerId), enabled: newEnabled, currentBalance: String(currentBalance) });
-                        }
-                      }}
-                      disabled={!!viewAsUserId || toggleFundingRateMutation.isPending}
-                      className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0"
-                      style={{ backgroundColor: (localFundingRateEnabled ?? false) ? 'rgba(201,168,76,0.85)' : 'rgba(255,255,255,0.12)' }}
+                      disabled
+                      className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 opacity-50 cursor-not-allowed"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
                     >
                       <span
                         className="inline-block h-3.5 w-3.5 rounded-full shadow transition-transform"
                         style={{
-                          backgroundColor: (localFundingRateEnabled ?? false) ? '#000' : 'rgba(255,255,255,0.45)',
-                          transform: (localFundingRateEnabled ?? false) ? 'translateX(18px)' : 'translateX(2px)',
+                          backgroundColor: 'rgba(255,255,255,0.45)',
+                          transform: 'translateX(2px)',
                         }}
                       />
                     </button>
-                    <span className="text-[11px]" style={{ color: (localFundingRateEnabled ?? false) ? 'rgba(245,215,142,0.8)' : 'rgba(255,255,255,0.35)' }}>闲时自动赚费</span>
+                    <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>闲时自动赚费</span>
                   </div>
-                  {(localFundingRateEnabled ?? false) ? (
+                  {parseFloat(fundingRateStatus?.totalAccumulated || '0') > 0 ? (
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.5)' }}>赚费累计</span>
                       <span className="text-sm font-bold tabular-nums" style={{ color: '#F5D78E' }}>{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(2)}</span>
@@ -3925,7 +3918,7 @@ export default function LedgerDetail() {
                       </button>
                     </div>
                   ) : (
-                    <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.2)' }}>开启后自动赚取资金费率</span>
+                    <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.2)' }}>该功能已停用</span>
                   )}
                 </div>
               </div>
