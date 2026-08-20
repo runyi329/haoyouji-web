@@ -13707,7 +13707,7 @@ ${klinesSummary}
 
         // 买入订单：正常创建新订单
         const orderType = input.orderType || '无损合约';
-        // 谷底增筹仅支持限价委托，后端同时拦截市价提交以防前端绕过。
+        // 52号账本谷底增筹只允许限价委托，后端拒绝任何市价请求以防绕过前端。
         if (input.ledgerId === 52 && input.isMarketOrder) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '谷底增筹仅支持限价委托' });
         }

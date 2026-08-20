@@ -2286,26 +2286,27 @@ export default function CryptoPrediction() {
   // 当前有效倍数：52号账本开关开启时用 5，其他情况用 5.25
   const orderMultiplier = (ledgerId === 52 && (switch525Data as any)?.enabled) ? 5 : 5.25;
 
-  // 谷底增筹只允许限价委托；其他页面仍按原有市价权限判断。
+// 52号账本谷底增筹只允许限价委托；直接用账本ID判断，避免ledgerInfo加载状态导致市价入口漏出。
+  const isGuDiZengChouLedger = ledgerId === 52;
   const isYJHOrAdmin = currentUserId === 4957151 || currentUserId === 870413;
   const { data: myMarketPermData } = trpc.ledger.afGetMyMarketOrderPermission.useQuery(
     { ledgerId },
     { enabled: isCustomAF && !isYJHOrAdmin, staleTime: 60000 }
   );
-  const canUseMarketOrder = !isCustomAF && (isYJHOrAdmin || (myMarketPermData as any)?.enabled === true);
+  const canUseMarketOrder = !isGuDiZengChouLedger && (isYJHOrAdmin || (myMarketPermData as any)?.enabled === true);
 
-  // 谷底增筹强制限价；其他页面沿用既有的市价权限限制，防止旧状态或手工请求绕过。
+  // 谷底增筹强制限价；其他页面沿用既有的市价权限限制。
   useEffect(() => {
-    if (isCustomAF && priceMode === 'market') {
+    if (isGuDiZengChouLedger && priceMode === 'market') {
       setPriceMode('limit');
       setOrderPrice('');
       return;
     }
-    if (!isCustomAF && !isYJHOrAdmin && myMarketPermData !== undefined && !(myMarketPermData as any)?.enabled) {
+    if (!isGuDiZengChouLedger && !isYJHOrAdmin && myMarketPermData !== undefined && !(myMarketPermData as any)?.enabled) {
       setPriceMode('limit');
       setOrderPrice('');
     }
-  }, [isCustomAF, priceMode, isYJHOrAdmin, myMarketPermData]);
+  }, [isGuDiZengChouLedger, priceMode, isYJHOrAdmin, myMarketPermData]);
 
   // 可用余额（账本总资产）
   const { data: assetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
@@ -2686,13 +2687,13 @@ export default function CryptoPrediction() {
             {/* 委托价格选择器：委买时第一档为市价，委卖时仅限价 */}
             <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
               <span className="text-sm flex-shrink-0" style={{ color: '#6B7A9A', minWidth: '4rem' }}>
-                {orderSide === 'buy' && priceMode === 'market' ? '市价委托' : '限价委托'}
+                {isGuDiZengChouLedger || !(orderSide === 'buy' && priceMode === 'market') ? '限价委托' : '市价委托'}
               </span>
               <select
-                value={orderSide === 'buy' && priceMode === 'market' ? '__market__' : orderPrice}
+                value={!isGuDiZengChouLedger && orderSide === 'buy' && priceMode === 'market' ? '__market__' : orderPrice}
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (val === '__market__') {
+                  if (!isGuDiZengChouLedger && val === '__market__') {
                     setPriceMode('market');
                     setOrderPrice(currentPrice > 0 ? currentPrice.toFixed(2) : '');
                   } else {
@@ -2705,7 +2706,7 @@ export default function CryptoPrediction() {
               >
                 {orderSide === 'buy' ? (
                   <>
-                    {canUseMarketOrder && (
+                    {!isGuDiZengChouLedger && canUseMarketOrder && (
                       <option value="__market__">市价· {currentPrice > 0 ? `$${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '加载中...'}</option>
                     )}
                     {(BUY_PRICE_OPTIONS[coin.name] || []).map((p) => (
