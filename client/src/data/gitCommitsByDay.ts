@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-20
+// 生成时间：2026-08-21
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8925,5 +8925,27 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-08-20": [
     { date: "2026-08-20T00:03:14+08:00", type: "fix", cleanMessage: "settle valley sale proceeds when no prior record exists" },
     { date: "2026-08-20T01:00:22+08:00", type: "fix", cleanMessage: "reconcile wallet history running balances" },
+    { date: "2026-08-19T18:15:21Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-20T08:58:29+08:00", type: "feat", cleanMessage: "record consignment time and unify manual sell price input" },
+    { date: "2026-08-20T09:24:58+08:00", type: "fix", cleanMessage: "show consignment time on active selling orders" },
+    { date: "2026-08-20T09:39:07+08:00", type: "revert", cleanMessage: "remove active selling time display change" },
+    { date: "2026-08-20T02:20:16Z", type: "fix", cleanMessage: "补齐人员/币种/价格视图的确认卖出成交输入框 + 全视图添加委卖时间显示" },
+    { date: "2026-08-20T02:39:32Z", type: "fix", cleanMessage: "统一时间字段为北京时间 + 全视图新增确认卖出时间行" },
+    { date: "2026-08-20T02:54:35Z", type: "fix", cleanMessage: "统一所有时间字段经过toBeijingTimeStr转换，确保前端显示正确北京时间" },
+    { date: "2026-08-20T03:04:10Z", type: "fix", cleanMessage: "前端formatDate/getBJDateOnly改用toLocaleString(Asia/Shanghai)统一北京时间" },
+    { date: "2026-08-20T03:40:22Z", type: "feat", cleanMessage: "新增卖出价分组Tab，按委托卖出价格分类显示订单" },
+    { date: "2026-08-20T10:30:33Z", type: "fix", cleanMessage: "reconcile global wallet history records" },
+    { date: "2026-08-20T11:22:00Z", type: "fix", cleanMessage: "harden market price updates and fallbacks" },
+    { date: "2026-08-20T13:02:45Z", type: "fix", cleanMessage: "禁用谷底增筹市价下单" },
+    { date: "2026-08-20T13:55:46Z", type: "fix", cleanMessage: "强制隐藏谷底增筹市价入口" },
+    { date: "2026-08-20T14:38:27Z", type: "fix", cleanMessage: "correct credit card billing status indicator" },
+    { date: "2026-08-20T15:24:11Z", type: "feat", cleanMessage: "disable idle auto-earn for ledger 52 (switch off, stop accrual, keep history)" },
+    { date: "2026-08-20T15:34:05Z", type: "chore", cleanMessage: "retry deploy" },
+    { date: "2026-08-20T15:38:12Z", type: "chore", cleanMessage: "trigger deploy retry" },
+    { date: "2026-08-20T15:46:51Z", type: "ci", cleanMessage: "optimize bg-deploy with SSH retry, batch env writes, faster polling" },
+  ],
+  "2026-08-21": [
+    { date: "2026-08-20T16:14:06Z", type: "feat", cleanMessage: "卖期权设置功能（后台管理+前端锁仓勾选+撤单禁用+ETH档位扩展至2200）" },
+    { date: "2026-08-20T16:26:48Z", type: "fix", cleanMessage: "卖期权设置页面改为中文日期显示+拉取行权价列表+Call/Put选择" },
   ],
 };
