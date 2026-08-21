@@ -1618,6 +1618,10 @@ export const afOrders = mysqlTable("af_orders", {
   sellStatus: varchar('sell_status', { length: 20 }),            // selling=委托卖中, sold=已卖出, sell_cancelled=卖出已撤
   // 学习用模拟订单：只用于订单展示、费用演示和扫描次数演示，不参与真实钱包及账本统计
   isSimulated: tinyint('is_simulated').default(0).notNull(),
+  // 模拟订单的真实历史行情展示数据（与真实扫描表隔离）
+  simulationLowAt: datetime('simulation_low_at', { mode: 'string' }),
+  simulationLastScanPrice: varchar('simulation_last_scan_price', { length: 50 }),
+  simulationLastScanAt: datetime('simulation_last_scan_at', { mode: 'string' }),
   createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
   updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 }, (table) => [

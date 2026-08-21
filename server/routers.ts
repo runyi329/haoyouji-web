@@ -108,12 +108,20 @@ async function ensureAfSimulationColumns(): Promise<void> {
   if (!conn) throw new Error('数据库连接失败，无法初始化模拟订单字段');
   const [columnRows] = await (conn as any).execute(
     `SELECT COLUMN_NAME FROM information_schema.columns
-     WHERE table_schema = DATABASE() AND table_name = 'af_orders' AND column_name = 'is_simulated'`
+     WHERE table_schema = DATABASE() AND table_name = 'af_orders'
+       AND column_name IN ('is_simulated', 'simulation_low_at', 'simulation_last_scan_price', 'simulation_last_scan_at')`
   );
-  if (!(columnRows as any[]).some((r: any) => String(r.COLUMN_NAME || r.column_name) === 'is_simulated')) {
-    await (conn as any).execute(
-      `ALTER TABLE af_orders ADD COLUMN is_simulated TINYINT NOT NULL DEFAULT 0 COMMENT '学习用模拟订单：不参与钱包和真实统计'`
-    );
+  const existing = new Set((columnRows as any[]).map((r: any) => String(r.COLUMN_NAME || r.column_name)));
+  const requiredColumns: Array<[string, string]> = [
+    ['is_simulated', "TINYINT NOT NULL DEFAULT 0 COMMENT '学习用模拟订单：不参与钱包和真实统计'"],
+    ['simulation_low_at', 'DATETIME NULL COMMENT \'模拟订单真实历史最低价发生时间\''],
+    ['simulation_last_scan_price', 'VARCHAR(50) NULL COMMENT \'模拟订单最后一次真实K线扫描价\''],
+    ['simulation_last_scan_at', 'DATETIME NULL COMMENT \'模拟订单最后一次真实K线扫描时间\''],
+  ];
+  for (const [columnName, definition] of requiredColumns) {
+    if (!existing.has(columnName)) {
+      await (conn as any).execute(`ALTER TABLE af_orders ADD COLUMN ${columnName} ${definition}`);
+    }
   }
   afSimulationColumnsEnsured = true;
 }
@@ -15129,6 +15137,7 @@ ${klinesSummary}
         // 验证订单属于目标用户
         const orderRows = await db.execute(
           sql`SELECT id, coin, limit_price, status, tier_mode, sell_price, sell_confirmed_at,
+                     all_time_low_price, simulation_low_at, simulation_last_scan_price, simulation_last_scan_at,
                      COALESCE(is_simulated, 0) as is_simulated, created_at
               FROM af_orders
               WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} LIMIT 1`
@@ -15144,17 +15153,24 @@ ${klinesSummary}
           const scanCount = Math.max(1, Math.floor(durationMs / 10_000) + 1);
           const buyPrice = parseFloat(order.limit_price || '0');
           const sellPrice = parseFloat(order.sell_price || order.limit_price || '0');
-          const displayLow = Math.min(buyPrice || sellPrice, sellPrice || buyPrice);
-          const lastScanAt = new Date(endedAt || Date.now()).toISOString();
+          const historicalLow = parseFloat(order.all_time_low_price || '0');
+          const displayLow = historicalLow > 0 ? historicalLow : Math.min(buyPrice || sellPrice, sellPrice || buyPrice);
+          const lastScanPrice = parseFloat(order.simulation_last_scan_price || '0') || displayLow;
+          const lastScanAt = order.simulation_last_scan_at
+            ? new Date(order.simulation_last_scan_at).toISOString()
+            : new Date(endedAt || Date.now()).toISOString();
+          const allTimeLowAt = order.simulation_low_at
+            ? new Date(order.simulation_low_at).toISOString()
+            : new Date(startedAt || Date.now()).toISOString();
           return {
             triggers: [],
             buyPrice: order.limit_price,
             coin: order.coin,
-            scanStatus: { lastScanAt, lowestPrice: displayLow > 0 ? String(displayLow) : null, scanning: false },
-            latestLowPrice: displayLow > 0 ? String(displayLow) : null,
+            scanStatus: { lastScanAt, lowestPrice: lastScanPrice > 0 ? String(lastScanPrice) : null, scanning: false },
+            latestLowPrice: lastScanPrice > 0 ? String(lastScanPrice) : null,
             scanCount,
             allTimeLowPrice: displayLow > 0 ? String(displayLow) : null,
-            allTimeLowAt: new Date(startedAt || Date.now()).toISOString(),
+            allTimeLowAt,
             tierMode: (order.tier_mode || 'step') as 'step' | 'linear',
           };
         }
