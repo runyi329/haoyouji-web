@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-21
+// 生成时间：2026-08-22
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8947,5 +8947,24 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-08-21": [
     { date: "2026-08-20T16:14:06Z", type: "feat", cleanMessage: "卖期权设置功能（后台管理+前端锁仓勾选+撤单禁用+ETH档位扩展至2200）" },
     { date: "2026-08-20T16:26:48Z", type: "fix", cleanMessage: "卖期权设置页面改为中文日期显示+拉取行权价列表+Call/Put选择" },
+    { date: "2026-08-20T18:18:09Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-21T00:44:00Z", type: "fix", cleanMessage: "卖期权设置改为纯手动模式（选币种→日期→行权价→Call/Put→收益率）" },
+    { date: "2026-08-21T01:21:25Z", type: "feat", cleanMessage: "卖期权绑定买入价格+下单页面锁定收益标签" },
+    { date: "2026-08-21T01:51:31Z", type: "feat", cleanMessage: "卖期权支持批量添加、到期归档和独立买入价绑定" },
+    { date: "2026-08-21T02:05:28Z", type: "fix", cleanMessage: "卖期权保存时自动补齐买入价绑定字段" },
+    { date: "2026-08-21T02:17:26Z", type: "fix", cleanMessage: "统一卖期权到期日格式避免英文日期保存错误" },
+    { date: "2026-08-21T03:17:44Z", type: "fix", cleanMessage: "补齐共享担保池接口中缺失的livePrices定义" },
+    { date: "2026-08-21T04:11:27Z", type: "feat", cleanMessage: "增加12号账本可控参考手续费与支付状态" },
+    { date: "2026-08-21T08:14:24Z", type: "fix", cleanMessage: "仅52号账本启用手续费并修复订单创建" },
+    { date: "2026-08-21T08:44:22Z", type: "fix", cleanMessage: "兼容数据库的订单手续费字段初始化" },
+    { date: "2026-08-21T08:54:44Z", type: "fix", cleanMessage: "订单模式同步显示52号账本手续费" },
+    { date: "2026-08-21T09:21:10Z", type: "fix", cleanMessage: "紧凑显示订单模式手续费" },
+    { date: "2026-08-21T09:30:27Z", type: "fix", cleanMessage: "调整订单手续费状态标签位置" },
+    { date: "2026-08-21T09:47:16Z", type: "fix", cleanMessage: "优化贷款用途滚动和一键全额还款" },
+    { date: "2026-08-21T14:24:31Z", type: "feat", cleanMessage: "add isolated AF simulation order display" },
+  ],
+  "2026-08-22": [
+    { date: "2026-08-21T18:04:56Z", type: "feat", cleanMessage: "persist real history for simulation scans" },
+    { date: "2026-08-21T18:11:32Z", type: "feat", cleanMessage: "add simulation order display numbers" },
   ],
 };
