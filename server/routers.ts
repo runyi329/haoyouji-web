@@ -17820,8 +17820,23 @@ ${klinesSummary}
         const orderSchemaConn = await getDbConnection();
         if (!orderSchemaConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接不可用' });
         try {
-          await orderSchemaConn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000`);
-          await orderSchemaConn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`);
+          const [columnRows] = await orderSchemaConn.execute(
+            `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ledger_orders'
+               AND COLUMN_NAME IN ('trading_fee_rate_per_mille', 'trading_fee_status')`
+          ) as any;
+          const existingColumns = new Set((columnRows || []).map((row: any) => String(row.COLUMN_NAME)));
+          const addColumnIfMissing = async (columnName: string, definition: string) => {
+            if (existingColumns.has(columnName)) return;
+            try {
+              await orderSchemaConn.execute(`ALTER TABLE ledger_orders ADD COLUMN ${definition}`);
+            } catch (error: any) {
+              // 并发首次提交时，另一请求可能已先建好此列；此时重新确认即可。
+              if (!/duplicate column|already exists/i.test(String(error?.message || ''))) throw error;
+            }
+          };
+          await addColumnIfMissing('trading_fee_rate_per_mille', 'trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000');
+          await addColumnIfMissing('trading_fee_status', "trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'");
         } catch (e: any) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '初始化订单手续费字段失败: ' + (e?.message || '未知错误') });
         }
