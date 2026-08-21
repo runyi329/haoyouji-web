@@ -822,6 +822,17 @@ export function FunderOrderCard({
     } catch { return null; }
   })();
   const show = (key: string) => dc ? (dc[key] !== false) : true;
+  // 52号账本：手续费仅在订单控制区明确开启后，才在订单模式向前端展示。
+  const isLedger52 = Number(ledgerId ?? (order as any).ledger_id) === 52;
+  const showTradingFee = isLedger52 && dc?.tradingFee === true;
+  const tradingFeeRatePerMille = (() => {
+    const value = Number((order as any).trading_fee_rate_per_mille ?? 2);
+    return Number.isFinite(value) && value >= 0 ? value : 2;
+  })();
+  const tradingFeeStatus = (['unpaid', 'half_paid', 'paid'].includes((order as any).trading_fee_status)
+    ? (order as any).trading_fee_status
+    : 'unpaid') as 'unpaid' | 'half_paid' | 'paid';
+  const tradingFeeStatusLabel = ({ unpaid: '已付0%', half_paid: '已付50%', paid: '已付100%' } as const)[tradingFeeStatus];
 
   // 担保物
   let collateralAssets: { coin: string; qty: string; note?: string }[] = [];
@@ -861,6 +872,9 @@ export function FunderOrderCard({
         ? (order.interest_base ? Number(order.interest_base) : totalU)
         : (optionStrikePrice > 0 && optionBuyQty > 0 ? optionStrikePrice * optionBuyQty : totalU))
     : (order.interest_base ? Number(order.interest_base) : totalU);
+  // 与卡片模式一致：按计息基数优先、订单金额兜底，展示参考手续费全额及支付进度。
+  const feeBase = Number(order.interest_base || totalU || 0);
+  const referenceTradingFee = showTradingFee ? feeBase * tradingFeeRatePerMille / 1000 : 0;
   const liveP = livePrices[order.coin] ?? null;
   const currentValue = liveP !== null ? liveP * qty : null;
   const isShort = (order as any).trade_direction === 'short';
@@ -1377,6 +1391,20 @@ export function FunderOrderCard({
               );
             })()}
             </>
+            )}
+            {showTradingFee && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-gray-400 whitespace-nowrap">参考手续费 ({tradingFeeRatePerMille}‰)</span>
+                <span className="flex items-center gap-1.5 text-right">
+                  <span className="font-medium" style={{ color: '#4B5563' }}>
+                    {referenceTradingFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
+                  </span>
+                  <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap" style={{
+                    background: tradingFeeStatus === 'paid' ? '#DCFCE7' : tradingFeeStatus === 'half_paid' ? '#FEF3C7' : '#FEE2E2',
+                    color: tradingFeeStatus === 'paid' ? '#15803D' : tradingFeeStatus === 'half_paid' ? '#B45309' : '#B91C1C',
+                  }}>{tradingFeeStatusLabel}</span>
+                </span>
+              </div>
             )}
             {show('interestBase') && order.interest_base && parseFloat(order.interest_base) > 0 && (
               <div className="flex items-center justify-between">
