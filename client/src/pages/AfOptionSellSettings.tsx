@@ -1,30 +1,23 @@
 /**
  * AfOptionSellSettings.tsx
- * 52号账本"卖期权设置"管理页面
- * 管理员可以：
- *   1. 从 Deribit 自动拉取 ETH 期权到期日（显示为中文日期格式）
- *   2. 手动添加到期日
- *   3. 选择到期日后拉取该日期的行权价列表（含 Call/Put）
- *   4. 对每个行权价配置月化收益率和启用状态
+ * 52号账本"卖期权设置"管理页面（纯手动模式）
+ * 管理员通过表单逐步选择：币种 → 到期日 → 行权价 → Call/Put → 月化收益率
+ * 系统自动拼接标准期权名称，如 ETH-20260926-1500-P
  */
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, Plus, RefreshCw, Save, ToggleLeft, ToggleRight, Loader2 } from "lucide-react";
+import { ChevronLeft, Plus, Save, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
 import { toast } from "sonner";
 
-// 将 Deribit 到期日标签（如 "28AUG26"）转为 YYYY-MM-DD
-function expiryLabelToDate(label: string): string {
-  const months: Record<string, string> = {
-    JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
-    JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12',
-  };
-  const match = label.match(/^(\d{1,2})([A-Z]{3})(\d{2})$/);
-  if (!match) return '';
-  const [, day, mon, yr] = match;
-  const monthNum = months[mon];
-  if (!monthNum) return '';
-  return `20${yr}-${monthNum}-${day.padStart(2, '0')}`;
+// ETH 行权价档位（50一档，1300~2200）
+const STRIKE_PRICES = Array.from({ length: 19 }, (_, i) => 1300 + i * 50);
+
+// 生成标准期权名称：ETH-20260926-1500-P
+function makeInstrumentName(coin: string, dateStr: string, strike: number, type: string): string {
+  const d = dateStr.replace(/-/g, '');
+  const suffix = type === 'PUT' ? 'P' : 'C';
+  return `${coin}-${d}-${strike}-${suffix}`;
 }
 
 // 将 YYYY-MM-DD 转为中文显示
@@ -34,20 +27,32 @@ function formatDateCN(dateStr: string): string {
   return `${y}年${parseInt(m)}月${parseInt(d)}日`;
 }
 
-// 生成标准合约名称
-function makeInstrumentName(expiryLabel: string, strike: number, optionType: string): string {
-  const suffix = optionType === 'PUT' ? 'P' : 'C';
-  return `ETH-${expiryLabel}-${strike}-${suffix}`;
+// 将 expiryLabel（如 28AUG26）转为 YYYY-MM-DD
+function expiryLabelToDate(label: string): string {
+  const months: Record<string, string> = {
+    JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
+    JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12',
+  };
+  const match = label.match(/^(\d{1,2})([A-Z]{3})(\d{2})$/);
+  if (!match) return label; // 可能已经是 YYYY-MM-DD
+  const [, day, mon, yr] = match;
+  const monthNum = months[mon];
+  if (!monthNum) return label;
+  return `20${yr}-${monthNum}-${day.padStart(2, '0')}`;
+}
+
+// 将 YYYY-MM-DD 转为 Deribit 风格标签（用于数据库 expiry_label 字段）
+function dateToExpiryLabel(dateStr: string): string {
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const [y, m, d] = dateStr.split('-');
+  return `${parseInt(d)}${months[parseInt(m) - 1]}${y.slice(2)}`;
 }
 
 export default function AfOptionSellSettings() {
   const [, params] = useRoute("/ledger/:id/option-sell-settings");
   const [, setLocation] = useLocation();
   const ledgerId = Number(params?.id || 52);
-  const utils = trpc.useUtils();
 
-  // 拉取 Deribit 到期日
-  const expiriesQuery = trpc.ledger.afGetOptionExpiries.useQuery({ ledgerId }, { staleTime: 60000 });
   // 已保存的配置
   const configQuery = trpc.ledger.afGetOptionSellConfig.useQuery({ ledgerId });
   // 迁移接口
@@ -57,105 +62,84 @@ export default function AfOptionSellSettings() {
   });
   // 保存配置
   const saveMutation = trpc.ledger.afSaveOptionSellConfig.useMutation({
-    onSuccess: () => { toast.success('配置已保存'); void configQuery.refetch(); },
+    onSuccess: () => { toast.success('已保存'); void configQuery.refetch(); resetForm(); },
+    onError: (e) => toast.error(e.message),
+  });
+  // 删除配置
+  const deleteMutation = trpc.ledger.afDeleteOptionSellConfig.useMutation({
+    onSuccess: () => { toast.success('已删除'); void configQuery.refetch(); },
     onError: (e) => toast.error(e.message),
   });
 
-  // 本地状态
-  const [selectedExpiry, setSelectedExpiry] = useState('');
-  const [manualExpiryInput, setManualExpiryInput] = useState('');
-  const [selectedType, setSelectedType] = useState<'PUT' | 'CALL'>('PUT');
+  // 新建表单状态
+  const [formCoin] = useState('ETH');
+  const [formDate, setFormDate] = useState('');
+  const [formStrike, setFormStrike] = useState('');
+  const [formType, setFormType] = useState<'PUT' | 'CALL'>('PUT');
+  const [formYield, setFormYield] = useState('');
 
-  // 拉取选中到期日的行权价列表
-  const strikesQuery = trpc.ledger.afGetOptionStrikes.useQuery(
-    { ledgerId, expiryLabel: selectedExpiry },
-    { enabled: !!selectedExpiry, staleTime: 120000 }
-  );
-
-  // 编辑中的配置
-  const [editConfigs, setEditConfigs] = useState<Record<string, { enabled: boolean; yield: string }>>({});
-
-  // 已保存配置按到期日分组
-  const configsByExpiry = useMemo(() => {
-    const map: Record<string, any[]> = {};
-    for (const cfg of (configQuery.data?.configs || [])) {
-      const key = cfg.expiry_label;
-      if (!map[key]) map[key] = [];
-      map[key].push(cfg);
-    }
-    return map;
-  }, [configQuery.data]);
-
-  const savedExpiries = Object.keys(configsByExpiry);
-
-  // Deribit 到期日列表（过滤掉已过期的）
-  const availableExpiries = (expiriesQuery.data?.expiries || []).filter((e: string) => {
-    const d = expiryLabelToDate(e);
-    return d && d >= new Date().toISOString().slice(0, 10);
-  });
-
-  // 当前选中类型的行权价列表
-  const currentStrikes = useMemo(() => {
-    if (!strikesQuery.data) return [];
-    return selectedType === 'PUT' ? (strikesQuery.data as any).puts || [] : (strikesQuery.data as any).calls || [];
-  }, [strikesQuery.data, selectedType]);
-
-  // 选择到期日后，初始化编辑状态
-  useEffect(() => {
-    if (!selectedExpiry || !currentStrikes.length) return;
-    const configs = configsByExpiry[selectedExpiry] || [];
-    const map: Record<string, { enabled: boolean; yield: string }> = {};
-    for (const s of currentStrikes) {
-      const strike = Number(s.strike);
-      const existing = configs.find((c: any) => Number(c.strike_price) === strike && c.option_type === selectedType);
-      map[`${strike}`] = {
-        enabled: existing ? existing.enabled === 1 : false,
-        yield: existing ? (Number(existing.monthly_yield) * 100).toFixed(2) : '',
-      };
-    }
-    setEditConfigs(map);
-  }, [selectedExpiry, currentStrikes, selectedType, configsByExpiry]);
-
-  // 手动添加到期日
-  const handleAddManualExpiry = () => {
-    const input = manualExpiryInput.trim().toUpperCase();
-    if (!input) { toast.error('请输入到期日标签'); return; }
-    if (!input.match(/^\d{1,2}[A-Z]{3}\d{2}$/)) {
-      toast.error('格式错误，请使用如 28AUG26 的格式（日+月英文缩写+年后两位）');
-      return;
-    }
-    const dateStr = expiryLabelToDate(input);
-    if (!dateStr) { toast.error('无法解析日期'); return; }
-    setManualExpiryInput('');
-    setSelectedExpiry(input);
-    toast.success(`已选择到期日 ${formatDateCN(dateStr)}`);
+  const resetForm = () => {
+    setFormDate('');
+    setFormStrike('');
+    setFormType('PUT');
+    setFormYield('');
   };
 
-  // 保存当前到期日的配置
-  const handleSave = () => {
-    if (!selectedExpiry) return;
-    const expiryDate = expiryLabelToDate(selectedExpiry);
-    if (!expiryDate) { toast.error('到期日格式错误'); return; }
-    const configs = currentStrikes
-      .map((s: any) => {
-        const strike = Number(s.strike);
-        const key = `${strike}`;
-        const edit = editConfigs[key];
-        const yieldVal = parseFloat(edit?.yield || '0') / 100;
-        return {
-          coin: 'ETH',
-          expiryLabel: selectedExpiry,
-          expiryDate,
-          strikePrice: strike,
-          optionType: selectedType,
-          instrumentName: s.name || makeInstrumentName(selectedExpiry, strike, selectedType),
-          monthlyYield: isNaN(yieldVal) ? 0 : yieldVal,
-          enabled: edit?.enabled || false,
-        };
-      })
-      .filter((c) => c.enabled || c.monthlyYield > 0);
-    if (configs.length === 0) { toast.error('请至少启用一个行权价'); return; }
-    saveMutation.mutate({ ledgerId, configs });
+  // 预览期权名称
+  const previewName = formDate && formStrike
+    ? makeInstrumentName(formCoin, formDate, Number(formStrike), formType)
+    : '';
+
+  // 提交新建
+  const handleCreate = () => {
+    if (!formDate) { toast.error('请选择到期日'); return; }
+    if (!formStrike) { toast.error('请选择行权价'); return; }
+    const yieldVal = parseFloat(formYield || '0');
+    if (yieldVal <= 0) { toast.error('请输入月化收益率'); return; }
+    const expiryLabel = dateToExpiryLabel(formDate);
+    saveMutation.mutate({
+      ledgerId,
+      configs: [{
+        coin: formCoin,
+        expiryLabel,
+        expiryDate: formDate,
+        strikePrice: Number(formStrike),
+        optionType: formType,
+        instrumentName: previewName,
+        monthlyYield: yieldVal / 100,
+        enabled: true,
+      }],
+    });
+  };
+
+  // 已保存配置按到期日分组
+  const configsByDate = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    for (const cfg of (configQuery.data?.configs || [])) {
+      const dateStr = cfg.expiry_date?.slice(0, 10) || expiryLabelToDate(cfg.expiry_label);
+      if (!map[dateStr]) map[dateStr] = [];
+      map[dateStr].push(cfg);
+    }
+    // 按日期排序
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+  }, [configQuery.data]);
+
+  // 切换启用状态
+  const handleToggle = (cfg: any) => {
+    const dateStr = cfg.expiry_date?.slice(0, 10) || expiryLabelToDate(cfg.expiry_label);
+    saveMutation.mutate({
+      ledgerId,
+      configs: [{
+        coin: cfg.coin,
+        expiryLabel: cfg.expiry_label,
+        expiryDate: dateStr,
+        strikePrice: Number(cfg.strike_price),
+        optionType: cfg.option_type,
+        instrumentName: cfg.instrument_name,
+        monthlyYield: Number(cfg.monthly_yield),
+        enabled: cfg.enabled !== 1,
+      }],
+    });
   };
 
   return (
@@ -177,205 +161,178 @@ export default function AfOptionSellSettings() {
       </div>
 
       <div className="p-4 space-y-4">
-        {/* 到期日选择区 */}
+        {/* 新建期权配置 */}
         <div className="bg-white rounded-xl p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-800">以太坊 ETH 期权到期日</h2>
-            <button
-              onClick={() => void expiriesQuery.refetch()}
-              disabled={expiriesQuery.isFetching}
-              className="flex items-center gap-1 text-xs text-blue-600"
-            >
-              <RefreshCw className={`w-3 h-3 ${expiriesQuery.isFetching ? 'animate-spin' : ''}`} />
-              刷新
-            </button>
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">新建期权</h2>
+
+          {/* 第1步：币种（固定ETH） */}
+          <div className="mb-3">
+            <label className="text-xs text-gray-500 mb-1 block">币种</label>
+            <div className="flex gap-2">
+              <div className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold">ETH 以太坊</div>
+            </div>
           </div>
 
-          {/* Deribit 来源状态 */}
-          {expiriesQuery.data?.source === 'unavailable' && (
-            <p className="text-xs text-amber-600 mb-2">Deribit 不可达，请手动添加到期日</p>
-          )}
-          {expiriesQuery.data?.source === 'deribit' && (
-            <p className="text-xs text-green-600 mb-2">已从 Deribit 获取 {availableExpiries.length} 个可用到期日</p>
-          )}
+          {/* 第2步：到期日 */}
+          <div className="mb-3">
+            <label className="text-xs text-gray-500 mb-1 block">到期日</label>
+            <input
+              type="date"
+              value={formDate}
+              onChange={(e) => setFormDate(e.target.value)}
+              min={new Date().toISOString().slice(0, 10)}
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:border-blue-400"
+            />
+            {formDate && (
+              <p className="text-xs text-blue-600 mt-1">{formatDateCN(formDate)}</p>
+            )}
+          </div>
 
-          {/* 到期日按钮列表 - 显示中文日期 */}
-          <div className="flex flex-wrap gap-2 mb-3">
-            {[...new Set([...savedExpiries, ...availableExpiries])].map((label) => {
-              const dateStr = expiryLabelToDate(label);
-              const dateCN = formatDateCN(dateStr);
-              return (
+          {/* 第3步：行权价 */}
+          <div className="mb-3">
+            <label className="text-xs text-gray-500 mb-1 block">行权价 (USDT)</label>
+            <div className="flex flex-wrap gap-1.5">
+              {STRIKE_PRICES.map((p) => (
                 <button
-                  key={label}
-                  onClick={() => setSelectedExpiry(label)}
-                  className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                    selectedExpiry === label
+                  key={p}
+                  onClick={() => setFormStrike(p.toString())}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    formStrike === p.toString()
                       ? 'bg-blue-600 text-white'
-                      : savedExpiries.includes(label)
-                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                        : 'bg-gray-100 text-gray-600'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  <div className="text-left">
-                    <div>ETH {dateCN}</div>
-                    {savedExpiries.includes(label) && (
-                      <div className="text-[10px] opacity-70 mt-0.5">
-                        已配置 {(configsByExpiry[label] || []).filter((c: any) => c.enabled).length} 档
-                      </div>
-                    )}
-                  </div>
+                  {p.toLocaleString()}
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
 
-          {/* 手动添加 */}
-          <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-            <input
-              type="text"
-              value={manualExpiryInput}
-              onChange={(e) => setManualExpiryInput(e.target.value)}
-              placeholder="手动输入，如 28AUG26"
-              className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-blue-400"
-            />
-            <button onClick={handleAddManualExpiry} className="flex items-center gap-1 px-3 py-2 rounded-lg bg-gray-800 text-white text-xs">
-              <Plus className="w-3 h-3" /> 添加
-            </button>
+          {/* 第4步：Call / Put */}
+          <div className="mb-3">
+            <label className="text-xs text-gray-500 mb-1 block">方向</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setFormType('PUT')}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                  formType === 'PUT' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-500'
+                }`}
+              >
+                PUT 看跌
+              </button>
+              <button
+                onClick={() => setFormType('CALL')}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                  formType === 'CALL' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'
+                }`}
+              >
+                CALL 看涨
+              </button>
+            </div>
           </div>
+
+          {/* 第5步：月化收益率 */}
+          <div className="mb-4">
+            <label className="text-xs text-gray-500 mb-1 block">月化收益率</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                value={formYield}
+                onChange={(e) => setFormYield(e.target.value)}
+                placeholder="例如 8.0"
+                className="flex-1 px-3 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:border-blue-400"
+              />
+              <span className="text-sm text-gray-500 font-medium">%</span>
+            </div>
+          </div>
+
+          {/* 预览 + 提交 */}
+          {previewName && (
+            <div className="mb-3 px-3 py-2.5 rounded-lg bg-gray-50 border border-gray-100">
+              <p className="text-[10px] text-gray-400 mb-0.5">期权合约名称</p>
+              <p className="text-sm font-mono font-semibold text-gray-800">{previewName}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {formCoin} {formatDateCN(formDate)} {formType === 'PUT' ? '看跌' : '看涨'} 行权价 ${Number(formStrike).toLocaleString()}
+                {formYield && <span className="text-blue-600 ml-1">· 月化 {formYield}%</span>}
+              </p>
+            </div>
+          )}
+
+          <button
+            onClick={handleCreate}
+            disabled={saveMutation.isPending || !previewName}
+            className={`w-full py-3 rounded-xl text-white font-semibold text-sm transition-opacity ${
+              previewName ? 'bg-blue-600 opacity-100' : 'bg-gray-300 opacity-50'
+            }`}
+          >
+            <Plus className="w-4 h-4 inline mr-1" />
+            {saveMutation.isPending ? '保存中...' : '添加期权'}
+          </button>
         </div>
 
-        {/* 选中到期日后：Call/Put 选择 + 行权价列表 */}
-        {selectedExpiry && (
+        {/* 已配置的期权列表 */}
+        {configsByDate.length > 0 && (
           <div className="bg-white rounded-xl p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h2 className="text-sm font-semibold text-gray-800">
-                  ETH {formatDateCN(expiryLabelToDate(selectedExpiry))}
-                </h2>
-                <p className="text-[10px] text-gray-400 mt-0.5">选择期权方向和行权价</p>
-              </div>
-              {/* Call / Put 切换 */}
-              <div className="flex rounded-lg overflow-hidden border border-gray-200">
-                <button
-                  onClick={() => setSelectedType('PUT')}
-                  className={`px-4 py-1.5 text-xs font-semibold ${selectedType === 'PUT' ? 'bg-red-500 text-white' : 'bg-white text-gray-500'}`}
-                >
-                  PUT 看跌
-                </button>
-                <button
-                  onClick={() => setSelectedType('CALL')}
-                  className={`px-4 py-1.5 text-xs font-semibold ${selectedType === 'CALL' ? 'bg-green-500 text-white' : 'bg-white text-gray-500'}`}
-                >
-                  CALL 看涨
-                </button>
-              </div>
-            </div>
+            <h2 className="text-sm font-semibold text-gray-800 mb-3">已配置的期权</h2>
 
-            {/* 加载状态 */}
-            {strikesQuery.isFetching && (
-              <div className="flex items-center justify-center py-8 gap-2 text-gray-400">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-xs">正在从 Deribit 获取行权价...</span>
-              </div>
-            )}
-
-            {/* 行权价列表 */}
-            {!strikesQuery.isFetching && currentStrikes.length > 0 && (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-500">{currentStrikes.length} 个行权价可选</span>
-                  <button
-                    onClick={handleSave}
-                    disabled={saveMutation.isPending}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs"
-                  >
-                    <Save className="w-3 h-3" />
-                    {saveMutation.isPending ? '保存中...' : '保存配置'}
-                  </button>
+            {configsByDate.map(([dateStr, configs]) => (
+              <div key={dateStr} className="mb-4 last:mb-0">
+                <div className="text-xs font-semibold text-gray-500 mb-2 px-1">
+                  {formatDateCN(dateStr)} 到期
                 </div>
-
-                <div className="space-y-1 max-h-[50vh] overflow-y-auto">
-                  {currentStrikes.map((s: any) => {
-                    const strike = Number(s.strike);
-                    const key = `${strike}`;
-                    const edit = editConfigs[key] || { enabled: false, yield: '' };
-                    return (
-                      <div key={key} className={`flex items-center gap-3 py-2.5 px-3 rounded-lg ${edit.enabled ? 'bg-blue-50' : 'bg-gray-50'}`}>
-                        {/* 启用开关 */}
-                        <button
-                          onClick={() => setEditConfigs((prev) => ({
-                            ...prev,
-                            [key]: { ...edit, enabled: !edit.enabled },
-                          }))}
-                          className="flex-shrink-0"
-                        >
-                          {edit.enabled
-                            ? <ToggleRight className="w-6 h-6 text-blue-600" />
-                            : <ToggleLeft className="w-6 h-6 text-gray-300" />
-                          }
-                        </button>
-                        {/* 行权价 */}
-                        <div className="flex-1">
-                          <span className={`text-sm font-mono font-semibold ${edit.enabled ? 'text-gray-900' : 'text-gray-400'}`}>
-                            ${strike.toLocaleString()}
+                <div className="space-y-1.5">
+                  {configs.map((cfg: any) => (
+                    <div key={cfg.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${cfg.enabled ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                      {/* 启用开关 */}
+                      <button onClick={() => handleToggle(cfg)} className="flex-shrink-0" disabled={saveMutation.isPending}>
+                        {cfg.enabled
+                          ? <ToggleRight className="w-5 h-5 text-blue-600" />
+                          : <ToggleLeft className="w-5 h-5 text-gray-300" />
+                        }
+                      </button>
+                      {/* 信息 */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                            cfg.option_type === 'PUT' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
+                          }`}>
+                            {cfg.option_type}
                           </span>
-                          <span className="text-[10px] text-gray-300 ml-2 font-mono">{s.name}</span>
+                          <span className="text-sm font-mono font-semibold text-gray-800">
+                            ${Number(cfg.strike_price).toLocaleString()}
+                          </span>
+                          <span className="text-xs text-blue-600 font-medium">
+                            {(Number(cfg.monthly_yield) * 100).toFixed(1)}%
+                          </span>
                         </div>
-                        {/* 月化收益输入 */}
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-gray-400">月化</span>
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            max="100"
-                            value={edit.yield}
-                            onChange={(e) => setEditConfigs((prev) => ({
-                              ...prev,
-                              [key]: { ...edit, yield: e.target.value },
-                            }))}
-                            disabled={!edit.enabled}
-                            placeholder="0"
-                            className={`w-14 text-xs px-2 py-1.5 rounded border text-center outline-none ${
-                              edit.enabled ? 'border-blue-300 bg-white text-gray-900' : 'border-gray-200 bg-gray-100 text-gray-300'
-                            }`}
-                          />
-                          <span className="text-xs text-gray-400">%</span>
-                        </div>
+                        <p className="text-[10px] text-gray-400 font-mono mt-0.5 truncate">{cfg.instrument_name}</p>
                       </div>
-                    );
-                  })}
+                      {/* 删除 */}
+                      <button
+                        onClick={() => {
+                          if (confirm('确认删除？')) deleteMutation.mutate({ ledgerId, id: cfg.id });
+                        }}
+                        disabled={deleteMutation.isPending}
+                        className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              </>
-            )}
-
-            {/* 无数据 */}
-            {!strikesQuery.isFetching && currentStrikes.length === 0 && (strikesQuery.data as any)?.source === 'unavailable' && (
-              <p className="text-xs text-amber-600 py-4 text-center">无法获取行权价数据，请检查网络</p>
-            )}
+              </div>
+            ))}
           </div>
         )}
 
-        {/* 已保存配置概览（未选中到期日时显示） */}
-        {savedExpiries.length > 0 && !selectedExpiry && (
-          <div className="bg-white rounded-xl p-4 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-800 mb-3">已配置的期权</h2>
-            {savedExpiries.map((label) => {
-              const configs = configsByExpiry[label] || [];
-              const enabledCount = configs.filter((c: any) => c.enabled).length;
-              const dateStr = expiryLabelToDate(label);
-              return (
-                <div key={label} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
-                  <div>
-                    <span className="text-sm font-medium text-gray-800">ETH {formatDateCN(dateStr)}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-blue-600 font-medium">{enabledCount} 档启用</span>
-                    <button onClick={() => setSelectedExpiry(label)} className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600">编辑</button>
-                  </div>
-                </div>
-              );
-            })}
+        {/* 空状态 */}
+        {configsByDate.length === 0 && !configQuery.isLoading && (
+          <div className="text-center py-8 text-gray-400">
+            <p className="text-sm">暂无期权配置</p>
+            <p className="text-xs mt-1">使用上方表单添加期权</p>
           </div>
         )}
       </div>
