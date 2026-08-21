@@ -15775,6 +15775,13 @@ ${klinesSummary}
       .mutation(async ({ input }) => {
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 旧生产表首次保存时自动补齐独立买入价绑定字段，无需管理员手动初始化。
+        const [configCols] = await dbConn.execute("SHOW COLUMNS FROM af_option_sell_config") as any[];
+        const existingConfigCols = (configCols as any[]).map((column: any) => column.Field);
+        if (!existingConfigCols.includes('bind_buy_price')) {
+          await dbConn.execute(`ALTER TABLE af_option_sell_config ADD COLUMN bind_buy_price DECIMAL(12,2) NULL COMMENT '绑定的用户买入价格档位' AFTER strike_price`);
+          await dbConn.execute(`ALTER TABLE af_option_sell_config ADD INDEX idx_ledger_bind_buy_price (ledger_id, coin, bind_buy_price, enabled)`);
+        }
         for (const cfg of input.configs) {
           await dbConn.execute(
             `INSERT INTO af_option_sell_config (ledger_id, coin, expiry_label, expiry_date, strike_price, bind_buy_price, option_type, instrument_name, monthly_yield, enabled)
@@ -15800,6 +15807,13 @@ ${klinesSummary}
       .mutation(async ({ input }) => {
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 兼容旧配置表：绑定动作同样可自动补齐字段。
+        const [configCols] = await dbConn.execute("SHOW COLUMNS FROM af_option_sell_config") as any[];
+        const existingConfigCols = (configCols as any[]).map((column: any) => column.Field);
+        if (!existingConfigCols.includes('bind_buy_price')) {
+          await dbConn.execute(`ALTER TABLE af_option_sell_config ADD COLUMN bind_buy_price DECIMAL(12,2) NULL COMMENT '绑定的用户买入价格档位' AFTER strike_price`);
+          await dbConn.execute(`ALTER TABLE af_option_sell_config ADD INDEX idx_ledger_bind_buy_price (ledger_id, coin, bind_buy_price, enabled)`);
+        }
         const [targetRows] = await dbConn.execute(
           `SELECT id FROM af_option_sell_config WHERE id = ? AND ledger_id = ? LIMIT 1`,
           [input.optionId, input.ledgerId]
