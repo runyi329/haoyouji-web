@@ -740,8 +740,8 @@ function LoanCapacitySummary({
         </div>
             )}
       {showUsageSheet && (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
-          <div className="flex max-h-[86vh] w-full max-w-[480px] flex-col rounded-t-2xl bg-white px-5 pb-6 pt-5">
+        <div className="fixed inset-0 z-[70] flex items-end justify-center overflow-hidden" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="flex h-[86dvh] max-h-[calc(100dvh-12px)] w-full max-w-[480px] flex-col overflow-hidden rounded-t-2xl bg-white px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <p className="text-base font-semibold text-slate-900">已用额度用途</p>
@@ -749,7 +749,7 @@ function LoanCapacitySummary({
               </div>
               <button type="button" onClick={() => { setShowUsageSheet(false); clearUsageDraft(); }} className="rounded-full p-1 text-slate-400 active:bg-slate-100 active:text-slate-700" aria-label="关闭已用额度用途明细"><X className="h-5 w-5" /></button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5 pb-6" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
               <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <div className="grid grid-cols-3 divide-x divide-slate-200 text-center">
                   <div className="px-1.5 text-left"><p className="text-[10px] text-slate-400">总已用</p><p className="mt-1 text-lg font-bold text-rose-500">{formatAmount(summary.usedLimit)}</p></div>
@@ -1634,7 +1634,15 @@ export default function CreditCardManagement() {
               </div>
               <label className="mt-5 block text-xs font-medium text-slate-600">目前已还金额</label>
               <input type="number" min="0" max={latestStatementAmount} step="0.01" inputMode="decimal" value={paidAmountInput} onChange={(event) => setPaidAmountInput(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-center text-lg font-semibold text-slate-900 outline-none focus:border-[#1A2B4A]" placeholder="输入本期累计已还金额" autoFocus />
-              <p className="mt-2 text-xs text-slate-400">保存后自动计算剩余应还金额；已还金额不得超过本期账单应还金额。</p>
+              <button
+                type="button"
+                disabled={latestStatementAmount <= 0}
+                onClick={() => setPaidAmountInput(String(latestStatementAmount))}
+                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 text-sm font-semibold text-emerald-700 active:bg-emerald-100 disabled:opacity-40"
+              >
+                <Check className="h-4 w-4" />一键全额还清
+              </button>
+              <p className="mt-2 text-xs text-slate-400">点击“一键全额还清”会自动填入账单应还金额；仍需点击下方保存确认。已还金额不得超过本期账单应还金额。</p>
               <button type="button" disabled={saveBillingPaymentMutation.isPending || !paidAmountInput.trim()} onClick={() => void saveBillingPayment()} className="mt-5 w-full rounded-xl bg-[#1A2B4A] py-3 text-sm font-semibold text-white active:opacity-80 disabled:opacity-40">{saveBillingPaymentMutation.isPending ? '保存中' : '保存已还金额'}</button>
               {latestPaidAmount > 0 && (
                 <button
