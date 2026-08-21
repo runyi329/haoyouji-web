@@ -37,7 +37,21 @@ type OptionConfig = {
 
 function toDateOnly(value: string | Date | null | undefined): string {
   if (!value) return "";
-  return String(value).slice(0, 10);
+  const raw = String(value).trim();
+  // 常规数据库日期或接口已格式化日期。
+  const directMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (directMatch) return directMatch[1];
+  // 兼容旧接口曾返回的英文日期对象，如 "Fri Sep 25 2026 ..."。
+  const parsed = value instanceof Date ? value : new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(parsed);
+  const pick = (kind: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === kind)?.value || "";
+  return `${pick("year")}-${pick("month")}-${pick("day")}`;
 }
 
 function formatDateCN(dateStr: string): string {
@@ -52,12 +66,7 @@ function makeInstrumentName(dateStr: string, strike: number, optionType: "PUT" |
 }
 
 function todayInBeijing(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  return toDateOnly(new Date());
 }
 
 function optionDescriptor(option: OptionConfig): string {

@@ -15727,7 +15727,12 @@ ${klinesSummary}
         const dbConn = await getDbConnection();
         if (!dbConn) return { configs: [] };
         const [rows] = await dbConn.execute(
-          `SELECT * FROM af_option_sell_config WHERE ledger_id = ? ORDER BY expiry_date ASC, strike_price ASC`,
+          `SELECT id, ledger_id, coin, expiry_label,
+                  DATE_FORMAT(expiry_date, '%Y-%m-%d') AS expiry_date,
+                  strike_price, bind_buy_price, option_type, instrument_name, monthly_yield, enabled, created_at, updated_at
+           FROM af_option_sell_config
+           WHERE ledger_id = ?
+           ORDER BY expiry_date ASC, strike_price ASC`,
           [input.ledgerId]
         ) as any[];
         return { configs: rows as any[] };
@@ -15742,7 +15747,9 @@ ${klinesSummary}
         const coin = input.coin || 'ETH';
         try {
           const [rows] = await dbConn.execute(
-            `SELECT bind_buy_price, strike_price, expiry_date, expiry_label, instrument_name, monthly_yield, option_type
+            `SELECT bind_buy_price, strike_price,
+                    DATE_FORMAT(expiry_date, '%Y-%m-%d') AS expiry_date,
+                    expiry_label, instrument_name, monthly_yield, option_type
              FROM af_option_sell_config
              WHERE ledger_id = ? AND coin = ? AND enabled = 1
                AND bind_buy_price IS NOT NULL AND expiry_date >= CURDATE()
