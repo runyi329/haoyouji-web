@@ -1327,9 +1327,9 @@ export function FunderOrderCardV2Silver({
     } catch { return {}; }
   })();
   const showTradeDirection = cardDisplayConfig.showTradeDirection !== false;
-  // 12号账本的手续费只有在订单控制区明确开启后才向前端展示。
-  const isLedger12 = Number(ledgerId ?? (order as any).ledger_id) === 12;
-  const showTradingFee = isLedger12 && cardDisplayConfig.tradingFee === true;
+  // 52号账本的手续费只有在订单控制区明确开启后才向前端展示。
+  const isLedger52 = Number(ledgerId ?? (order as any).ledger_id) === 52;
+  const showTradingFee = isLedger52 && cardDisplayConfig.tradingFee === true;
   const tradingFeeRatePerMille = (() => {
     const value = Number((order as any).trading_fee_rate_per_mille ?? 2);
     return Number.isFinite(value) && value >= 0 ? value : 2;
@@ -1968,7 +1968,7 @@ export function FunderOrderCardV2Silver({
                 })() : <span style={{ color: TXT_PRI }}>{displayAccrued > 0 ? '-' : ''}{fmt(displayAccrued, 2)} {interestUnit}</span>}
               </span>
             </div>
-            {/* 12号账本：仅在订单控制区开启“手续费”后显示参考手续费 */}
+            {/* 52号账本：仅在订单控制区开启“手续费”后显示参考手续费 */}
             {showTradingFee && (
               <div className="flex justify-between items-center">
                 <span style={{ color: TXT_SEC }}>参考手续费 ({tradingFeeRatePerMille}‰)</span>

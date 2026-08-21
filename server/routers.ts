@@ -17816,6 +17816,15 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        // 先通过项目已建立的生产连接补齐手续费字段。旧的临时URL解析会被密码中的@截断，导致建列失败而INSERT报错。
+        const orderSchemaConn = await getDbConnection();
+        if (!orderSchemaConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接不可用' });
+        try {
+          await orderSchemaConn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000`);
+          await orderSchemaConn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`);
+        } catch (e: any) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '初始化订单手续费字段失败: ' + (e?.message || '未知错误') });
+        }
         // 自动建表时添加列（如果不存在）
         try {
           const mysql = await import('mysql2/promise');
@@ -17844,7 +17853,7 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS option_info JSON DEFAULT NULL`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trade_direction VARCHAR(10) DEFAULT NULL`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS order_fill_status VARCHAR(20) DEFAULT 'filled'`).catch(() => {});
-          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN order_perspective VARCHAR(10) DEFAULT 'self'`).catch(() => {});
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS order_perspective VARCHAR(10) DEFAULT 'self'`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`).catch(() => {});
           await conn.end();

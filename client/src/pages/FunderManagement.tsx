@@ -163,7 +163,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     showGreeks: false,
     // 浮动盈亏（默认关闭）
     floatPnl: false,
-    // 12号账本：交易手续费默认隐藏，由控制开关决定是否向前端展示
+    // 52号账本：交易手续费默认隐藏，由控制开关决定是否向前端展示
     tradingFee: false,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | string>>(DEFAULT_DISPLAY_CONFIG);
@@ -1027,8 +1027,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         ? { ...collateralSource, interestTagName: interestTagName || collateralSource.tagName }
         : null,
       principalLentOut: formData.principalLentOut,
-      tradingFeeRate: ledgerId === 12 ? (Number.isFinite(Number(formData.tradingFeeRate)) ? Math.max(0, Number(formData.tradingFeeRate)) : 2) : undefined,
-      tradingFeeStatus: ledgerId === 12 ? formData.tradingFeeStatus : undefined,
+      tradingFeeRate: ledgerId === 52 ? (Number.isFinite(Number(formData.tradingFeeRate)) ? Math.max(0, Number(formData.tradingFeeRate)) : 2) : undefined,
+      tradingFeeStatus: ledgerId === 52 ? formData.tradingFeeStatus : undefined,
       orderFillStatus: formData.orderFillStatus,
       orderPerspective: formData.orderPerspective,
       brokerName: formData.brokerName || undefined,
@@ -2494,7 +2494,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     ))}
                   </div>
                 </div>
-                {ledgerId === 12 && (
+                {ledgerId === 52 && (
                   <>
                     {/* 手续费操作区：交易管理员可调整费率及付款进度 */}
                     <div className="px-4 pb-3">
@@ -2577,7 +2577,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     ))}
                   </div>
                 </div>
-                {ledgerId === 12 && (
+                {ledgerId === 52 && (
                   <div className="px-4 pb-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -3088,8 +3088,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               interest_rate_currency: p.interestRateCurrency || formData.interestRateCurrency || 'USDT',
                               interest_start_date: p.interestStartDate || formData.interestStartDate || null,
                               principal_lent_out: p.displayConfig?.principalLentOut ? 1 : 0,
-                              trading_fee_rate_per_mille: ledgerId === 12 ? (Number(formData.tradingFeeRate) || 2) : null,
-                              trading_fee_status: ledgerId === 12 ? formData.tradingFeeStatus : 'unpaid',
+                              trading_fee_rate_per_mille: ledgerId === 52 ? (Number(formData.tradingFeeRate) || 2) : null,
+                              trading_fee_status: ledgerId === 52 ? formData.tradingFeeStatus : 'unpaid',
                               collateral_assets: collateralAssets.length > 0 ? JSON.stringify(collateralAssets) : null,
                               option_info: formData.assetType === 'crypto_option' ? JSON.stringify({
                                 coin: optionFormData.optionCurrency,
@@ -3103,7 +3103,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               }) : null,
                               collateral_share_mode: collateralShareMode || 'none',
                               trade_direction: formData.tradeDirection || null,
-                              display_config: JSON.stringify({ ...p.displayConfig, tradingFee: ledgerId === 12 ? Boolean(displayConfig.tradingFee) : false, marginAlertThreshold: p.marginAlertThreshold || undefined }),
+                              display_config: JSON.stringify({ ...p.displayConfig, tradingFee: ledgerId === 52 ? Boolean(displayConfig.tradingFee) : false, marginAlertThreshold: p.marginAlertThreshold || undefined }),
                               participantCount: 0,
                               participantInfo: null,
                               paidTotal: null,
