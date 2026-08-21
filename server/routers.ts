@@ -16951,6 +16951,8 @@ ${klinesSummary}
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
         principalLentOut: z.boolean().optional(),
+        tradingFeeRate: z.number().min(0).max(100).optional(),
+        tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
         optionInfo: z.object({
           coin: z.enum(['BTC', 'ETH']),
           direction: z.enum(['long_call', 'long_put', 'short_call', 'short_put']),
@@ -16982,6 +16984,8 @@ ${klinesSummary}
         // 确保 principal_lent_out 字段存在
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS principal_lent_out TINYINT(1) DEFAULT 0`).catch(() => {});
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS option_info JSON DEFAULT NULL`).catch(() => {});
+        await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000`).catch(() => {});
+        await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`).catch(() => {});
         // 生成唯一订单号（2个大写字母 + 4个数字）
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         const digits = '0123456789';
@@ -16996,8 +17000,8 @@ ${klinesSummary}
           if (!exists) isUnique = true;
         }
         const insertResult = await db.execute(
-          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, lent_out_assets, display_config, asset_type, tags, collateral_share_mode, principal_lent_out, option_info, created_by)
-              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, lent_out_assets, display_config, asset_type, tags, collateral_share_mode, principal_lent_out, option_info, trading_fee_rate_per_mille, trading_fee_status, created_by)
+              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
         ) as any;
         // 新订单创建后触发即时扫描
         const newOrderId = insertResult?.insertId || (insertResult?.[0] as any)?.insertId;
@@ -17783,6 +17787,8 @@ ${klinesSummary}
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
         principalLentOut: z.boolean().optional(),
+        tradingFeeRate: z.number().min(0).max(100).optional(),
+        tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
         brokerName: z.string().optional(),
         brokerAccount: z.string().optional(),
         optionInfo: z.object({
@@ -17839,6 +17845,8 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trade_direction VARCHAR(10) DEFAULT NULL`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS order_fill_status VARCHAR(20) DEFAULT 'filled'`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN order_perspective VARCHAR(10) DEFAULT 'self'`).catch(() => {});
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000`).catch(() => {});
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`).catch(() => {});
           await conn.end();
         } catch(e) {}
         // 生成唯一订单号
@@ -17855,8 +17863,8 @@ ${klinesSummary}
           if (!exists) isUnique = true;
         }
         await db.execute(
-          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, principal_lent_out, broker_name, broker_account, option_info, trade_direction, order_fill_status, order_perspective, created_by)
-              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${(input.assetType === 'crypto_option' && input.optionInfo?.coin) ? input.optionInfo.coin : input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${input.orderFillStatus || 'filled'}, ${input.orderPerspective || 'self'}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, principal_lent_out, broker_name, broker_account, option_info, trade_direction, order_fill_status, order_perspective, trading_fee_rate_per_mille, trading_fee_status, created_by)
+              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${(input.assetType === 'crypto_option' && input.optionInfo?.coin) ? input.optionInfo.coin : input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${input.orderFillStatus || 'filled'}, ${input.orderPerspective || 'self'}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -17897,6 +17905,8 @@ ${klinesSummary}
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
         principalLentOut: z.boolean().optional(),
+        tradingFeeRate: z.number().min(0).max(100).optional(),
+        tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
         brokerName: z.string().optional(),
         brokerAccount: z.string().optional(),
         tradeDirection: z.enum(['long', 'short']).nullable().optional(),
@@ -17951,6 +17961,8 @@ ${klinesSummary}
         if (input.tags !== undefined) { updateCols.push('tags = ?'); updateVals.push(input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null); }
         if (input.collateralShareMode !== undefined) { updateCols.push('collateral_share_mode = ?'); updateVals.push(input.collateralShareMode || 'none'); }
         if (input.principalLentOut !== undefined) { updateCols.push('principal_lent_out = ?'); updateVals.push(input.principalLentOut ? 1 : 0); }
+        if (input.tradingFeeRate !== undefined) { updateCols.push('trading_fee_rate_per_mille = ?'); updateVals.push(input.tradingFeeRate); }
+        if (input.tradingFeeStatus !== undefined) { updateCols.push('trading_fee_status = ?'); updateVals.push(input.tradingFeeStatus); }
         if (input.optionInfo !== undefined) { updateCols.push('option_info = ?'); updateVals.push(input.optionInfo ? JSON.stringify(input.optionInfo) : null); }
         if (input.tradeDirection !== undefined) { updateCols.push('trade_direction = ?'); updateVals.push(input.tradeDirection || null); }
         if (input.orderFillStatus !== undefined) { updateCols.push('order_fill_status = ?'); updateVals.push(input.orderFillStatus || 'filled'); }
@@ -18023,6 +18035,8 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS lent_out_assets TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_share_mode VARCHAR(10) DEFAULT 'none'`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trade_direction VARCHAR(10) DEFAULT NULL`).catch(() => {});
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000`).catch(() => {});
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`).catch(() => {});
         } catch(e) {}
         try {
                 await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);

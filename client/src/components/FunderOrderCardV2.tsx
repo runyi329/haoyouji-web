@@ -1320,13 +1320,24 @@ export function FunderOrderCardV2Silver({
   const isParticipant = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder;
   const cardBg = isParticipant ? GRN_BG : isStockCard ? GOLD_BG_SV : isOptionCard ? OPT_BG : SL_BG;
   const cardBorder = isParticipant ? GRN_BORDER : isStockCard ? GOLD_BORDER_SV : isOptionCard ? OPT_BORDER : SL_BORDER;
-  const showTradeDirection = (() => {
+  const cardDisplayConfig = (() => {
     try {
       const raw = (order as any).display_config;
-      const config = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : null;
-      return !config || config.showTradeDirection !== false;
-    } catch { return true; }
+      return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
+    } catch { return {}; }
   })();
+  const showTradeDirection = cardDisplayConfig.showTradeDirection !== false;
+  // 12号账本的手续费只有在订单控制区明确开启后才向前端展示。
+  const isLedger12 = Number(ledgerId ?? (order as any).ledger_id) === 12;
+  const showTradingFee = isLedger12 && cardDisplayConfig.tradingFee === true;
+  const tradingFeeRatePerMille = (() => {
+    const value = Number((order as any).trading_fee_rate_per_mille ?? 2);
+    return Number.isFinite(value) && value >= 0 ? value : 2;
+  })();
+  const tradingFeeStatus = (['unpaid', 'half_paid', 'paid'].includes((order as any).trading_fee_status)
+    ? (order as any).trading_fee_status
+    : 'unpaid') as 'unpaid' | 'half_paid' | 'paid';
+  const tradingFeeStatusLabel = ({ unpaid: '已付0%', half_paid: '已付50%', paid: '已付100%' } as const)[tradingFeeStatus];
   const cardShadow = isParticipant ? GRN_SHADOW : isStockCard ? GOLD_SHADOW_SV : isOptionCard ? OPT_SHADOW : SL_SHADOW;
   // 动态文字颜色：参与者和期权卡片用白色系列，其他用黑色系列
   const TXT_PRI = (isParticipant || isOptionCard) ? (isParticipant ? GRN_TEXT_PRI : OPT_TEXT_PRI) : SL_TEXT_PRI;
@@ -1796,7 +1807,10 @@ export function FunderOrderCardV2Silver({
 
       {feeExpanded && (() => {
         const interestBase = order.interest_base ? parseFloat(order.interest_base) : 0;
-        const tradingFee = interestBase * 0.002;
+        // 参考手续费按费率（‰）计算；计息基数为空时回退使用订单金额。
+        const feeBase = interestBase > 0 ? interestBase : (parseFloat(order.amount || '0') || 0);
+        const referenceTradingFee = showTradingFee ? feeBase * tradingFeeRatePerMille / 1000 : 0;
+        const payableTradingFee = referenceTradingFee * (tradingFeeStatus === 'paid' ? 0 : tradingFeeStatus === 'half_paid' ? 0.5 : 1);
         // 计息基数单位按 interest_base_currency 判断
         const baseUnit2 = (order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'u';
         // 天数算法与 hook 一致：北京时间自然日，开始日算第1天
@@ -1954,12 +1968,16 @@ export function FunderOrderCardV2Silver({
                 })() : <span style={{ color: TXT_PRI }}>{displayAccrued > 0 ? '-' : ''}{fmt(displayAccrued, 2)} {interestUnit}</span>}
               </span>
             </div>
-            {/* 交易手续费：仅数字币（银色卡片）显示 */}
-            {!isStockCard && (
-              <div className="flex justify-between">
-                <span style={{ color: TXT_SEC }}>交易手续费 (1‰买+1‰卖)</span>
-                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
-                  {tradingFee > 0 ? '-' : ''}{fmt(tradingFee, 2)} {interestUnit}
+            {/* 12号账本：仅在订单控制区开启“手续费”后显示参考手续费 */}
+            {showTradingFee && (
+              <div className="flex justify-between items-center">
+                <span style={{ color: TXT_SEC }}>参考手续费 ({tradingFeeRatePerMille}‰)</span>
+                <span className="flex items-center gap-1.5" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+                  <span>{referenceTradingFee > 0 ? '-' : ''}{fmt(referenceTradingFee, 2)} {interestUnit}</span>
+                  <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{
+                    background: tradingFeeStatus === 'paid' ? '#DCFCE7' : tradingFeeStatus === 'half_paid' ? '#FEF3C7' : '#FEE2E2',
+                    color: tradingFeeStatus === 'paid' ? '#15803D' : tradingFeeStatus === 'half_paid' ? '#B45309' : '#B91C1C',
+                  }}>{tradingFeeStatusLabel}</span>
                 </span>
               </div>
             )}
@@ -1978,7 +1996,8 @@ export function FunderOrderCardV2Silver({
             </div>
             {/* 合计待付 = 待付利息 + 手续费 - 已结利息 */}
             {(() => {
-              const gross = isStockCard ? displayAccrued : displayAccrued + tradingFee;
+              // 已付50%或100%的手续费不再计入本次待付合计。
+              const gross = displayAccrued + payableTradingFee;
               const net = gross - displayPaid;
               return (
                 <div className="flex justify-between" style={{ borderTop: `1px solid ${DIVIDER}`, paddingTop: 4, marginTop: 4 }}>

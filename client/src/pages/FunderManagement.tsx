@@ -91,6 +91,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     ownerLabelMode: 'member' as 'member' | 'manual',
     tags: [] as string[],
     principalLentOut: false,
+    tradingFeeRate: '2',
+    tradingFeeStatus: 'unpaid' as 'unpaid' | 'half_paid' | 'paid',
     brokerName: '',
     brokerAccount: '',
     orderFillStatus: 'filled' as 'pending' | 'filled',
@@ -161,6 +163,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     showGreeks: false,
     // 浮动盈亏（默认关闭）
     floatPnl: false,
+    // 12号账本：交易手续费默认隐藏，由控制开关决定是否向前端展示
+    tradingFee: false,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | string>>(DEFAULT_DISPLAY_CONFIG);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
@@ -735,6 +739,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ownerLabelMode: 'member' as 'member' | 'manual',
       tags: [] as string[],
       principalLentOut: false,
+      tradingFeeRate: '2',
+      tradingFeeStatus: 'unpaid' as 'unpaid' | 'half_paid' | 'paid',
       brokerName: '',
       brokerAccount: '',
     });
@@ -803,6 +809,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ownerLabelMode: (order.owner_label ? 'manual' : 'member') as 'member' | 'manual',
       tags: (() => { try { const t = order.tags; return Array.isArray(t) ? t : (typeof t === 'string' ? JSON.parse(t) : []); } catch { return []; } })(),
       principalLentOut: !!(order.principal_lent_out),
+      tradingFeeRate: order.trading_fee_rate_per_mille != null ? String(order.trading_fee_rate_per_mille) : '2',
+      tradingFeeStatus: (['unpaid', 'half_paid', 'paid'].includes(order.trading_fee_status) ? order.trading_fee_status : 'unpaid') as 'unpaid' | 'half_paid' | 'paid',
       brokerName: order.broker_name || '',
       brokerAccount: order.broker_account || '',
       orderFillStatus: (order.order_fill_status === 'pending' ? 'pending' : 'filled') as 'pending' | 'filled',
@@ -1019,6 +1027,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         ? { ...collateralSource, interestTagName: interestTagName || collateralSource.tagName }
         : null,
       principalLentOut: formData.principalLentOut,
+      tradingFeeRate: ledgerId === 12 ? (Number.isFinite(Number(formData.tradingFeeRate)) ? Math.max(0, Number(formData.tradingFeeRate)) : 2) : undefined,
+      tradingFeeStatus: ledgerId === 12 ? formData.tradingFeeStatus : undefined,
       orderFillStatus: formData.orderFillStatus,
       orderPerspective: formData.orderPerspective,
       brokerName: formData.brokerName || undefined,
@@ -2484,7 +2494,57 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     ))}
                   </div>
                 </div>
-                <div className="mx-4 h-px bg-gray-100 my-2" />
+                {ledgerId === 12 && (
+                  <>
+                    {/* 手续费操作区：交易管理员可调整费率及付款进度 */}
+                    <div className="px-4 pb-3">
+                      <div className="text-xs font-medium text-blue-500 mb-2">手续费操作</div>
+                      <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium text-gray-700">参考手续费费率</div>
+                            <p className="text-[11px] text-gray-400 mt-0.5">按计息基数（为空时按订单金额）自动计算</p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              value={formData.tradingFeeRate}
+                              onChange={e => setFormData(d => ({ ...d, tradingFeeRate: e.target.value }))}
+                              className="w-16 rounded-lg border border-blue-200 bg-white px-2 py-1.5 text-center text-sm font-semibold text-blue-700 outline-none focus:border-blue-500"
+                            />
+                            <span className="text-sm font-medium text-gray-500">‰</span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1.5">手续费支付进度</div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {([
+                              { value: 'unpaid', label: '已付0%' },
+                              { value: 'half_paid', label: '已付50%' },
+                              { value: 'paid', label: '已付100%' },
+                            ] as const).map(item => (
+                              <button
+                                key={item.value}
+                                type="button"
+                                onClick={() => setFormData(d => ({ ...d, tradingFeeStatus: item.value }))}
+                                className={`rounded-lg border px-1 py-1.5 text-xs font-medium transition-colors ${
+                                  formData.tradingFeeStatus === item.value
+                                    ? 'border-blue-500 bg-blue-500 text-white'
+                                    : 'border-gray-200 bg-white text-gray-600'
+                                }`}
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mx-4 h-px bg-gray-100 my-2" />
+                  </>
+                )}
                 {/* 约等于显示控制 */}
                 <div className="px-4 pb-2">
                   <div className="text-xs font-medium text-blue-500 mb-2">约等于显示控制</div>
@@ -2517,6 +2577,28 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     ))}
                   </div>
                 </div>
+                {ledgerId === 12 && (
+                  <div className="px-4 pb-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <span className="text-sm font-medium text-gray-700">手续费</span>
+                        <p className="text-xs text-gray-400 mt-0.5">开启后，订单卡片和订单详情显示参考手续费及已付进度</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDisplayConfig(c => ({ ...c, tradingFee: !Boolean(c.tradingFee) }))}
+                        className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                          displayConfig.tradingFee ? 'bg-blue-500' : 'bg-gray-200'
+                        }`}
+                        aria-label="显示手续费"
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                          displayConfig.tradingFee ? 'translate-x-5' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="mx-4 h-px bg-gray-100 my-2" />
                 {/* 借出本金开关 */}
                 <div className="px-4 pb-3">
@@ -3006,6 +3088,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               interest_rate_currency: p.interestRateCurrency || formData.interestRateCurrency || 'USDT',
                               interest_start_date: p.interestStartDate || formData.interestStartDate || null,
                               principal_lent_out: p.displayConfig?.principalLentOut ? 1 : 0,
+                              trading_fee_rate_per_mille: ledgerId === 12 ? (Number(formData.tradingFeeRate) || 2) : null,
+                              trading_fee_status: ledgerId === 12 ? formData.tradingFeeStatus : 'unpaid',
                               collateral_assets: collateralAssets.length > 0 ? JSON.stringify(collateralAssets) : null,
                               option_info: formData.assetType === 'crypto_option' ? JSON.stringify({
                                 coin: optionFormData.optionCurrency,
@@ -3019,7 +3103,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               }) : null,
                               collateral_share_mode: collateralShareMode || 'none',
                               trade_direction: formData.tradeDirection || null,
-                              display_config: JSON.stringify({ ...p.displayConfig, marginAlertThreshold: p.marginAlertThreshold || undefined }),
+                              display_config: JSON.stringify({ ...p.displayConfig, tradingFee: ledgerId === 12 ? Boolean(displayConfig.tradingFee) : false, marginAlertThreshold: p.marginAlertThreshold || undefined }),
                               participantCount: 0,
                               participantInfo: null,
                               paidTotal: null,
