@@ -1394,15 +1394,15 @@ export function FunderOrderCard({
             )}
             {showTradingFee && (
               <div className="flex items-center justify-between gap-2">
-                <span className="text-gray-400 whitespace-nowrap">手续费（{tradingFeeRatePerMille}‰）</span>
-                <span className="flex min-w-0 items-center gap-1.5 text-right">
-                  <span className="font-medium whitespace-nowrap" style={{ color: '#4B5563' }}>
-                    {referenceTradingFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
-                  </span>
+                <span className="flex min-w-0 items-center gap-1.5 text-gray-400 whitespace-nowrap">
+                  <span>手续费</span>
                   <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap" style={{
                     background: tradingFeeStatus === 'paid' ? '#DCFCE7' : tradingFeeStatus === 'half_paid' ? '#FEF3C7' : '#FEE2E2',
                     color: tradingFeeStatus === 'paid' ? '#15803D' : tradingFeeStatus === 'half_paid' ? '#B45309' : '#B91C1C',
                   }}>{tradingFeeStatusLabel}</span>
+                </span>
+                <span className="font-medium whitespace-nowrap text-right" style={{ color: '#4B5563' }}>
+                  {referenceTradingFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
                 </span>
               </div>
             )}
