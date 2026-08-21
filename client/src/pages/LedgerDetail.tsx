@@ -5358,6 +5358,7 @@ export default function LedgerDetail() {
                     currentUser={user}
                     membersData={membersData as any[]}
                     isAdmin={false}
+                    allOrders={funderDisplayOrders as any[]}
                   />
                 ))}
               </div>
