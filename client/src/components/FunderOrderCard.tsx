@@ -1607,14 +1607,20 @@ export function FunderOrderCard({
                               const oPrincipal = Number(o.principal ?? 0);
                               const oCoin = (o.coin || '').toUpperCase();
                               const isCNYr = oCoin === 'CNY';
+                              const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
+                              const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
+                              const oPrincipalLentOutR = o.principalLentOut === true || o.principalLentOut === 1;
+                              const oPrincipalDeductR = oPrincipalLentOutR ? oPrincipalUR : 0;
+                              // 与逐单列表保持一致：期权或数量为0的借出本金订单没有可估值持仓，不能先按“市值0−本金”再扣本金。
+                              const isOptionNoQtyR = o.assetType === 'crypto_option' || (oQty === 0 && oPrincipalLentOutR);
+                              if (isOptionNoQtyR) {
+                                totalRequired -= oPendingInterestR + oPrincipalDeductR;
+                                continue;
+                              }
                               const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
                               if (!isCNYr && oLiveP === null) { allHaveGap = false; continue; }
                               const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
-                              const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
-                              const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
                               const oFloatPnlR = oCurrentValueR - oPrincipalUR;
-                              const oPrincipalLentOutR = o.principalLentOut === true || o.principalLentOut === 1;
-                              const oPrincipalDeductR = oPrincipalLentOutR ? oPrincipalUR : 0;
                               totalRequired += oFloatPnlR - oPendingInterestR - oPrincipalDeductR;
                             }
                             const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
