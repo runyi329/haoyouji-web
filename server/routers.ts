@@ -16750,6 +16750,14 @@ ${klinesSummary}
           const marketPriceHealth = getMarketPriceHealth();
 
           console.log('[SharedPool] orders count:', orders.length, orders.map((o: any) => ({ id: o.id, no: o.order_no, raw_assets: o.collateral_assets, type: typeof o.collateral_assets, isBuffer: Buffer.isBuffer(o.collateral_assets) })));
+
+          // 构建实时价格映射（供前端弹窗计算缺口使用）
+          const livePrices: Record<string, number> = {};
+          for (const coin of ['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX', 'BZ']) {
+            const p = getLatestPrice(coin);
+            if (p) livePrices[coin] = p;
+          }
+
           // 汇总每张订单的担保物价值和担保需求
           const orderDetails = orders.map((o: any) => {
             const collateralAssets = (() => { try { const raw = o.collateral_assets; if (Array.isArray(raw)) return raw; if (Buffer.isBuffer(raw)) return JSON.parse(raw.toString('utf8')); if (typeof raw === 'string') return JSON.parse(raw || '[]'); return []; } catch { return []; } })();
