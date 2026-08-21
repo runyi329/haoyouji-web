@@ -109,7 +109,7 @@ async function ensureAfSimulationColumns(): Promise<void> {
   const [columnRows] = await (conn as any).execute(
     `SELECT COLUMN_NAME FROM information_schema.columns
      WHERE table_schema = DATABASE() AND table_name = 'af_orders'
-       AND column_name IN ('is_simulated', 'simulation_low_at', 'simulation_last_scan_price', 'simulation_last_scan_at')`
+       AND column_name IN ('is_simulated', 'simulation_low_at', 'simulation_last_scan_price', 'simulation_last_scan_at', 'simulation_order_no')`
   );
   const existing = new Set((columnRows as any[]).map((r: any) => String(r.COLUMN_NAME || r.column_name)));
   const requiredColumns: Array<[string, string]> = [
@@ -117,6 +117,7 @@ async function ensureAfSimulationColumns(): Promise<void> {
     ['simulation_low_at', 'DATETIME NULL COMMENT \'模拟订单真实历史最低价发生时间\''],
     ['simulation_last_scan_price', 'VARCHAR(50) NULL COMMENT \'模拟订单最后一次真实K线扫描价\''],
     ['simulation_last_scan_at', 'DATETIME NULL COMMENT \'模拟订单最后一次真实K线扫描时间\''],
+    ['simulation_order_no', 'VARCHAR(32) NULL COMMENT \'模拟订单展示编号，不改变主键\''],
   ];
   for (const [columnName, definition] of requiredColumns) {
     if (!existing.has(columnName)) {
@@ -13949,6 +13950,7 @@ ${klinesSummary}
                      o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at,
                      COALESCE(o.prepaid_fee, 0) as prepaid_fee,
                      COALESCE(o.tier_mode, 'step') as tier_mode,
+                     o.simulation_order_no,
                      COALESCE(o.is_simulated, 0) as is_simulated
               FROM af_orders o
               LEFT JOIN users su ON su.id = o.source_user_id
@@ -14018,6 +14020,7 @@ ${klinesSummary}
           tierMode: (r.tier_mode || 'step') as 'step' | 'linear',
           // 学习用模拟订单：只影响展示，不参与真实钱包和统计
           isSimulated: Number(r.is_simulated || 0) === 1,
+          simulationOrderNo: r.simulation_order_no || null,
         }));
         return list;
       }),
@@ -14134,6 +14137,7 @@ ${klinesSummary}
                      o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at,
                      COALESCE(o.prepaid_fee, 0) as prepaid_fee,
                      COALESCE(o.tier_mode, 'step') as tier_mode,
+                     o.simulation_order_no,
                      COALESCE(o.is_simulated, 0) as is_simulated
               FROM af_orders o
               LEFT JOIN users u ON u.id = o.user_id

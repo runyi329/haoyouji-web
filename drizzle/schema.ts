@@ -1622,6 +1622,8 @@ export const afOrders = mysqlTable("af_orders", {
   simulationLowAt: datetime('simulation_low_at', { mode: 'string' }),
   simulationLastScanPrice: varchar('simulation_last_scan_price', { length: 50 }),
   simulationLastScanAt: datetime('simulation_last_scan_at', { mode: 'string' }),
+  // 模拟订单展示编号：仅覆盖界面编号，不改动数据库主键
+  simulationOrderNo: varchar('simulation_order_no', { length: 32 }),
   createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
   updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 }, (table) => [

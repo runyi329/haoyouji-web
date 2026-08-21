@@ -1137,7 +1137,7 @@ export default function AfOrderManage() {
                             const yy = String(orderDate.getUTCFullYear()).slice(2);
                             const mm2 = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
                             const dd2 = String(orderDate.getUTCDate()).padStart(2, '0');
-                            const orderNo = `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
+                            const orderNo = (order.isSimulated && order.simulationOrderNo) ? order.simulationOrderNo : `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
                             return (
                               <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
                                 <div className="flex items-start justify-between mb-3 gap-3">
@@ -1285,7 +1285,7 @@ export default function AfOrderManage() {
                           const yy = String(orderDate.getUTCFullYear()).slice(2);
                           const mm2 = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
                           const dd2 = String(orderDate.getUTCDate()).padStart(2, '0');
-                          const orderNo = `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
+                          const orderNo = (order.isSimulated && order.simulationOrderNo) ? order.simulationOrderNo : `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
                           return (
                             <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
                               <div className="flex items-start justify-between mb-3 gap-3">
@@ -1467,7 +1467,7 @@ export default function AfOrderManage() {
                           const yy = String(orderDate.getUTCFullYear()).slice(2);
                           const mm2 = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
                           const dd2 = String(orderDate.getUTCDate()).padStart(2, '0');
-                          const orderNo = `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
+                          const orderNo = (order.isSimulated && order.simulationOrderNo) ? order.simulationOrderNo : `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
                           return (
                             <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
                               <div className="flex items-start justify-between mb-3 gap-3">
@@ -1644,7 +1644,7 @@ export default function AfOrderManage() {
                           const yy = String(bjDate.getFullYear()).slice(2);
                           const mm2 = String(bjDate.getMonth() + 1).padStart(2, '0');
                           const dd2 = String(bjDate.getDate()).padStart(2, '0');
-                          const orderNo = `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
+                          const orderNo = (order.isSimulated && order.simulationOrderNo) ? order.simulationOrderNo : `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
                           return (
                             <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
                               <div className="flex items-start justify-between mb-3 gap-3">
@@ -1879,7 +1879,7 @@ export default function AfOrderManage() {
               const yy = String(orderDate.getUTCFullYear()).slice(2);
               const mm = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
               const dd = String(orderDate.getUTCDate()).padStart(2, '0');
-              const orderNo = `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
+              const orderNo = (order.isSimulated && order.simulationOrderNo) ? order.simulationOrderNo : `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
 
               return (
                 <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">

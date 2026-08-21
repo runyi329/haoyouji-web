@@ -1440,7 +1440,9 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
   const yy = String(orderDate.getFullYear()).slice(2);
   const mm = String(orderDate.getMonth() + 1).padStart(2, '0');
   const dd = String(orderDate.getDate()).padStart(2, '0');
-  const orderNo = `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
+  const orderNo = ((order as any).isSimulated && (order as any).simulationOrderNo)
+    ? (order as any).simulationOrderNo
+    : `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
 
   return (
     <div className="mt-2 rounded-xl p-3 space-y-2 text-[13px]" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.06)' }}>
