@@ -13715,6 +13715,33 @@ ${klinesSummary}
         if (input.ledgerId === 52 && input.isMarketOrder) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '谷底增筹仅支持限价委托' });
         }
+        // 锁仓属于可选动作，但锁仓日期、收益和期权名称必须由后台绑定配置决定，不能信任客户端传参。
+        let verifiedLock: { expiry: string; instrument: string; yield: number } | null = null;
+        if (input.isLocked) {
+          if (input.ledgerId !== 52 || input.coin !== 'ETH' || input.side !== 'buy') {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '当前订单不支持锁定收益' });
+          }
+          const lockConn = await getDbConnection();
+          if (!lockConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+          const [lockRows] = await lockConn.execute(
+            `SELECT expiry_date, instrument_name, monthly_yield
+             FROM af_option_sell_config
+             WHERE ledger_id = ? AND coin = 'ETH' AND enabled = 1
+               AND bind_buy_price = ? AND expiry_date >= CURDATE()
+             ORDER BY expiry_date ASC LIMIT 1`,
+            [input.ledgerId, input.limitPrice]
+          ) as any[];
+          const lock = (lockRows as any[])[0];
+          if (!lock) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '该买入价格当前没有可用的锁定收益期权' });
+          }
+          verifiedLock = {
+            expiry: String(lock.expiry_date).slice(0, 10),
+            instrument: String(lock.instrument_name),
+            yield: Number(lock.monthly_yield),
+          };
+        }
+
         // 市价单直接自动成交，无需管理员手工确认
         if (input.isMarketOrder) {
           // ★ 安全校验：后端验证市价权限，防止前端绕过
@@ -13754,10 +13781,10 @@ ${klinesSummary}
             sql`SELECT id FROM af_orders WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} AND side = 'buy' ORDER BY created_at DESC LIMIT 1`
           ) as any;
           const newOrderId = (newOrderRows[0]?.[0] ?? newOrderRows[0])?.id;
-          // 锁仓订单：写入锁仓字段
-          if (newOrderId && input.isLocked && input.lockExpiry) {
+          // 锁仓订单：仅写入后端已校验过的配置数据
+          if (newOrderId && verifiedLock) {
             await db.execute(
-              sql`UPDATE af_orders SET is_locked = 1, lock_expiry = ${input.lockExpiry}, lock_instrument = ${input.lockInstrument || null}, lock_yield = ${input.lockYield || null} WHERE id = ${newOrderId}`
+              sql`UPDATE af_orders SET is_locked = 1, lock_expiry = ${verifiedLock.expiry}, lock_instrument = ${verifiedLock.instrument}, lock_yield = ${verifiedLock.yield} WHERE id = ${newOrderId}`
             );
           }
           const buyNote = newOrderId
@@ -15713,13 +15740,20 @@ ${klinesSummary}
         const dbConn = await getDbConnection();
         if (!dbConn) return { locks: [] };
         const coin = input.coin || 'ETH';
-        const [rows] = await dbConn.execute(
-          `SELECT strike_price, expiry_date, expiry_label, instrument_name, monthly_yield, option_type
-           FROM af_option_sell_config WHERE ledger_id = ? AND coin = ? AND enabled = 1
-           ORDER BY expiry_date ASC, strike_price ASC`,
-          [input.ledgerId, coin]
-        ) as any[];
-        return { locks: rows as any[] };
+        try {
+          const [rows] = await dbConn.execute(
+            `SELECT bind_buy_price, strike_price, expiry_date, expiry_label, instrument_name, monthly_yield, option_type
+             FROM af_option_sell_config
+             WHERE ledger_id = ? AND coin = ? AND enabled = 1
+               AND bind_buy_price IS NOT NULL AND expiry_date >= CURDATE()
+             ORDER BY expiry_date ASC, bind_buy_price ASC`,
+            [input.ledgerId, coin]
+          ) as any[];
+          return { locks: rows as any[] };
+        } catch {
+          // 老表尚未点击“初始化/更新表”时不展示锁定收益，普通下单保持可用。
+          return { locks: [] };
+        }
       }),
 
     // 管理员保存/更新卖期权配置（批量 upsert）
@@ -15731,6 +15765,7 @@ ${klinesSummary}
           expiryLabel: z.string(),
           expiryDate: z.string(), // YYYY-MM-DD
           strikePrice: z.number(),
+          bindBuyPrice: z.number().nullable().optional(),
           optionType: z.string().default('PUT'),
           instrumentName: z.string(),
           monthlyYield: z.number(),
@@ -15742,20 +15777,46 @@ ${klinesSummary}
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         for (const cfg of input.configs) {
           await dbConn.execute(
-            `INSERT INTO af_option_sell_config (ledger_id, coin, expiry_label, expiry_date, strike_price, option_type, instrument_name, monthly_yield, enabled)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO af_option_sell_config (ledger_id, coin, expiry_label, expiry_date, strike_price, bind_buy_price, option_type, instrument_name, monthly_yield, enabled)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE
                expiry_label = VALUES(expiry_label),
                expiry_date = VALUES(expiry_date),
                strike_price = VALUES(strike_price),
+               bind_buy_price = VALUES(bind_buy_price),
                option_type = VALUES(option_type),
                monthly_yield = VALUES(monthly_yield),
                enabled = VALUES(enabled),
                updated_at = NOW()`,
-            [input.ledgerId, cfg.coin, cfg.expiryLabel, cfg.expiryDate, cfg.strikePrice, cfg.optionType, cfg.instrumentName, cfg.monthlyYield, cfg.enabled ? 1 : 0]
+            [input.ledgerId, cfg.coin, cfg.expiryLabel, cfg.expiryDate, cfg.strikePrice, cfg.bindBuyPrice ?? null, cfg.optionType, cfg.instrumentName, cfg.monthlyYield, cfg.enabled ? 1 : 0]
           );
         }
         return { success: true, count: input.configs.length };
+      }),
+
+    // 管理员将期权独立绑定到一个买入价格档位；同一价格只保留一条绑定
+    afBindOptionToBuyPrice: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), optionId: z.number(), buyPrice: z.number().nullable() }))
+      .mutation(async ({ input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [targetRows] = await dbConn.execute(
+          `SELECT id FROM af_option_sell_config WHERE id = ? AND ledger_id = ? LIMIT 1`,
+          [input.optionId, input.ledgerId]
+        ) as any[];
+        if (!(targetRows as any[])[0]) throw new TRPCError({ code: 'NOT_FOUND', message: '期权配置不存在' });
+        if (input.buyPrice !== null) {
+          // 先解除该价格此前的绑定，避免一档价格对应多条期权
+          await dbConn.execute(
+            `UPDATE af_option_sell_config SET bind_buy_price = NULL WHERE ledger_id = ? AND bind_buy_price = ? AND id <> ?`,
+            [input.ledgerId, input.buyPrice, input.optionId]
+          );
+        }
+        await dbConn.execute(
+          `UPDATE af_option_sell_config SET bind_buy_price = ?, updated_at = NOW() WHERE id = ? AND ledger_id = ?`,
+          [input.buyPrice, input.optionId, input.ledgerId]
+        );
+        return { success: true };
       }),
 
     // 管理员删除卖期权配置
@@ -15787,6 +15848,7 @@ ${klinesSummary}
             expiry_label VARCHAR(20) NOT NULL,
             expiry_date DATE NOT NULL,
             strike_price DECIMAL(12,2) NOT NULL,
+            bind_buy_price DECIMAL(12,2) NULL COMMENT '绑定的用户买入价格档位',
             option_type VARCHAR(10) NOT NULL DEFAULT 'PUT',
             instrument_name VARCHAR(60) NOT NULL,
             monthly_yield DECIMAL(6,4) NOT NULL DEFAULT 0,
@@ -15794,10 +15856,19 @@ ${klinesSummary}
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY uk_ledger_instrument (ledger_id, instrument_name),
-            INDEX idx_ledger_coin_enabled (ledger_id, coin, enabled)
+            INDEX idx_ledger_coin_enabled (ledger_id, coin, enabled),
+            INDEX idx_ledger_bind_buy_price (ledger_id, coin, bind_buy_price, enabled)
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
         results.push('af_option_sell_config table created/exists');
+        // 兼容已创建的旧配置表：补充独立的买入价格绑定字段
+        const [configCols] = await dbConn.execute("SHOW COLUMNS FROM af_option_sell_config") as any[];
+        const existingConfigCols = (configCols as any[]).map((c: any) => c.Field);
+        if (!existingConfigCols.includes('bind_buy_price')) {
+          await dbConn.execute(`ALTER TABLE af_option_sell_config ADD COLUMN bind_buy_price DECIMAL(12,2) NULL COMMENT '绑定的用户买入价格档位' AFTER strike_price`);
+          await dbConn.execute(`ALTER TABLE af_option_sell_config ADD INDEX idx_ledger_bind_buy_price (ledger_id, coin, bind_buy_price, enabled)`);
+          results.push('Added bind_buy_price');
+        }
         // 订单表新增锁仓字段
         const [cols] = await dbConn.execute("SHOW COLUMNS FROM af_orders") as any[];
         const existingCols = (cols as any[]).map((c: any) => c.Field);

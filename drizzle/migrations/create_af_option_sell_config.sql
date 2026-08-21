@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS af_option_sell_config (
   coin VARCHAR(10) NOT NULL DEFAULT 'ETH',
   expiry_label VARCHAR(20) NOT NULL COMMENT '到期日标签，如 28AUG26',
   expiry_date DATE NOT NULL COMMENT '到期日期',
-  strike_price DECIMAL(12,2) NOT NULL COMMENT '行权价（即委买价格档位）',
+  strike_price DECIMAL(12,2) NOT NULL COMMENT '期权行权价',
+  bind_buy_price DECIMAL(12,2) NULL COMMENT '绑定的用户买入价格档位',
   option_type VARCHAR(10) NOT NULL DEFAULT 'PUT' COMMENT 'PUT/CALL',
   instrument_name VARCHAR(60) NOT NULL COMMENT '标准合约名称，如 ETH-28AUG26-1500-P',
   monthly_yield DECIMAL(6,4) NOT NULL DEFAULT 0 COMMENT '月化收益率，如 0.08 表示 8%',
@@ -13,8 +14,13 @@ CREATE TABLE IF NOT EXISTS af_option_sell_config (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_ledger_instrument (ledger_id, instrument_name),
-  INDEX idx_ledger_coin_enabled (ledger_id, coin, enabled)
+  INDEX idx_ledger_coin_enabled (ledger_id, coin, enabled),
+  INDEX idx_ledger_bind_buy_price (ledger_id, coin, bind_buy_price, enabled)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 兼容已创建的旧表：补充独立的买入价格绑定字段
+ALTER TABLE af_option_sell_config
+  ADD COLUMN IF NOT EXISTS bind_buy_price DECIMAL(12,2) NULL COMMENT '绑定的用户买入价格档位' AFTER strike_price;
 
 -- 订单表新增锁仓字段
 ALTER TABLE af_orders

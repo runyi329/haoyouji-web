@@ -2319,13 +2319,13 @@ export default function CryptoPrediction() {
     if (!isGuDiZengChouLedger || coinKey !== 'ETH' || !orderPrice) return null;
     const price = parseFloat(orderPrice);
     const locks = (optionLocksData as any)?.locks || [];
-    return locks.find((l: any) => Number(l.strike_price) === price) || null;
+    return locks.find((l: any) => Number(l.bind_buy_price) === price) || null;
   }, [isGuDiZengChouLedger, coinKey, orderPrice, optionLocksData]);
   // 所有价格的锁仓配置映射（用于价格列表显示“锁定收益”标签）
   const activeLockForPriceMap = useMemo(() => {
     const map: Record<number, any> = {};
     const locks = (optionLocksData as any)?.locks || [];
-    for (const l of locks) map[Number(l.strike_price)] = l;
+    for (const l of locks) map[Number(l.bind_buy_price)] = l;
     return map;
   }, [optionLocksData]);
   // 切换价格时重置锁仓勾选
@@ -2734,7 +2734,7 @@ export default function CryptoPrediction() {
                     )}
                     {(BUY_PRICE_OPTIONS[coin.name] || []).map((p) => {
                       const hasLock = isGuDiZengChouLedger && coinKey === 'ETH' && activeLockForPriceMap[p];
-                      return <option key={p} value={p.toString()}>{hasLock ? '🔒 ' : ''}限价· {p.toLocaleString()} USDT{hasLock ? ' · 锁定收益' : ''}</option>;
+                      return <option key={p} value={p.toString()}>限价· {p.toLocaleString()} USDT{hasLock ? ' · 锁定收益' : ''}</option>;
                     })}
                   </>
                 ) : (
@@ -2987,12 +2987,8 @@ export default function CryptoPrediction() {
                     quantity: qty,
                     orderType: '无损合约',
                     isMarketOrder: priceMode === 'market',
-                    ...(lockChecked && activeLockForPrice ? {
-                      isLocked: true,
-                      lockExpiry: activeLockForPrice.expiry_date?.slice(0, 10),
-                      lockInstrument: activeLockForPrice.instrument_name,
-                      lockYield: Number(activeLockForPrice.monthly_yield),
-                    } : {}),
+                    // 勾选时仅声明参与锁仓；到期日、收益率和合约名称均由后端根据买入价绑定配置重新核验。
+                    ...(lockChecked && activeLockForPrice ? { isLocked: true } : {}),
                   });
                 } else {
                   // 委卖：批量提交选中的所有订单
