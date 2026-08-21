@@ -2321,6 +2321,13 @@ export default function CryptoPrediction() {
     const locks = (optionLocksData as any)?.locks || [];
     return locks.find((l: any) => Number(l.strike_price) === price) || null;
   }, [isGuDiZengChouLedger, coinKey, orderPrice, optionLocksData]);
+  // 所有价格的锁仓配置映射（用于价格列表显示“锁定收益”标签）
+  const activeLockForPriceMap = useMemo(() => {
+    const map: Record<number, any> = {};
+    const locks = (optionLocksData as any)?.locks || [];
+    for (const l of locks) map[Number(l.strike_price)] = l;
+    return map;
+  }, [optionLocksData]);
   // 切换价格时重置锁仓勾选
   useEffect(() => { setLockChecked(false); }, [orderPrice]);
 
@@ -2725,9 +2732,10 @@ export default function CryptoPrediction() {
                     {!isGuDiZengChouLedger && canUseMarketOrder && (
                       <option value="__market__">市价· {currentPrice > 0 ? `$${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '加载中...'}</option>
                     )}
-                    {(BUY_PRICE_OPTIONS[coin.name] || []).map((p) => (
-                      <option key={p} value={p.toString()}>限价· {p.toLocaleString()} USDT</option>
-                    ))}
+                    {(BUY_PRICE_OPTIONS[coin.name] || []).map((p) => {
+                      const hasLock = isGuDiZengChouLedger && coinKey === 'ETH' && activeLockForPriceMap[p];
+                      return <option key={p} value={p.toString()}>{hasLock ? '🔒 ' : ''}限价· {p.toLocaleString()} USDT{hasLock ? ' · 锁定收益' : ''}</option>;
+                    })}
                   </>
                 ) : (
                   <>
