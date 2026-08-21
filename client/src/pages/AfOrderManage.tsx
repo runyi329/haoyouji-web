@@ -84,7 +84,7 @@ function FeeDetailModal({ orders, onClose }: { orders: any[], onClose: () => voi
   const todayStart = getTodayBJDateOnly();
 
   const feeItems = orders
-    .filter((o: any) => o.side === 'buy' && o.status === 'completed')
+    .filter((o: any) => !(o as any).isSimulated && o.side === 'buy' && o.status === 'completed')
     .map((o: any) => {
       const amount = parseFloat(o.amount || '0');
       const tradeValue = o.isGift ? amount : amount * 5.25;
@@ -538,7 +538,7 @@ export default function AfOrderManage() {
             {(() => {
               // 持仓中币种：只统计已成交且未卖出的（status=completed，sellStatus != sold）
               const holdingOrders = (orders as any[] || []).filter(
-                (o: any) => o.status === 'completed' && o.sellStatus !== 'sold'
+                (o: any) => !(o as any).isSimulated && o.status === 'completed' && o.sellStatus !== 'sold'
               );
               if (holdingOrders.length === 0) return null;
               const COIN_ORDER_S = ['ETH', 'BTC', 'SOL'];

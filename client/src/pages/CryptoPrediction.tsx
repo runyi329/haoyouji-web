@@ -1431,7 +1431,8 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
   const maxTriggered = triggeredTiers.size > 0 ? Math.max(...Array.from(triggeredTiers)) : 0;
   const currentTier = maxTriggered; // 0 = 未触发任何档
 
-  const isContract = !order.orderType || order.orderType === '无损合约';
+  // 模拟订单复用真实的谷底增筹详情、费用和收益权展示，但不参与真实资金及汇总。
+  const isContract = !!(order as any).isSimulated || !order.orderType || order.orderType === '无损合约';
   const isCompleted = order.status === 'completed';
 
   // 生成订单编号
@@ -3220,7 +3221,7 @@ export default function CryptoPrediction() {
                               <button
                                 onClick={() => setOrderDetailId(order.id === orderDetailId ? null : order.id)}
                                 className="font-medium" style={{ color: '#1A56DB' }}>
-                                详情
+                                {(order as any).isSimulated ? '模拟' : '详情'}
                               </button>
                             </td>
                           </tr>
@@ -3240,7 +3241,7 @@ export default function CryptoPrediction() {
               )}
               {/* 管理费虚线触发区 */}
               {(!ordersLoading && orders.length > 0) && (() => {
-                const feeOrders = orders.filter((o: any) => o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹'));
+                const feeOrders = orders.filter((o: any) => !(o as any).isSimulated && o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹'));
                 const activeFeeOrders = feeOrders.filter((o: any) => o.sellStatus !== 'sold');
                 if (activeFeeOrders.length === 0) return null;
                 let totalFee = 0;
@@ -3267,7 +3268,7 @@ export default function CryptoPrediction() {
               })()}
               {/* 管理费小票弹窗 */}
               {showFeeModal && (() => {
-                const feeOrders = orders.filter((o: any) => o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹') && o.sellStatus !== 'sold');
+                const feeOrders = orders.filter((o: any) => !(o as any).isSimulated && o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹') && o.sellStatus !== 'sold');
                 const feeItems = feeOrders.map((o: any) => {
                   const amount = parseFloat(o.amount);
                   const tradeValue = o.isGift ? amount : amount * 5.25;

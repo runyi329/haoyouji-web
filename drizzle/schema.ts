@@ -1616,6 +1616,8 @@ export const afOrders = mysqlTable("af_orders", {
   sellAt: datetime('sell_at', { mode: 'string' }),               // 委托卖出时间
   sellConfirmedAt: datetime('sell_confirmed_at', { mode: 'string' }), // 卖出成交确认时间
   sellStatus: varchar('sell_status', { length: 20 }),            // selling=委托卖中, sold=已卖出, sell_cancelled=卖出已撤
+  // 学习用模拟订单：只用于订单展示、费用演示和扫描次数演示，不参与真实钱包及账本统计
+  isSimulated: tinyint('is_simulated').default(0).notNull(),
   createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
   updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 }, (table) => [

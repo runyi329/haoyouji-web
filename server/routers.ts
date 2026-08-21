@@ -98,6 +98,25 @@ function getCache(key: string): any | null {
 function setCache(key: string, data: any): void {
   _marketCache.set(key, { data, ts: Date.now() });
 }
+
+// ===== 谷底增筹模拟订单字段兼容 =====
+// 模拟订单只用于学习展示，绝不允许触发钱包扣款、卖出回款或真实账本统计。
+let afSimulationColumnsEnsured = false;
+async function ensureAfSimulationColumns(): Promise<void> {
+  if (afSimulationColumnsEnsured) return;
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败，无法初始化模拟订单字段');
+  const [columnRows] = await (conn as any).execute(
+    `SELECT COLUMN_NAME FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = 'af_orders' AND column_name = 'is_simulated'`
+  );
+  if (!(columnRows as any[]).some((r: any) => String(r.COLUMN_NAME || r.column_name) === 'is_simulated')) {
+    await (conn as any).execute(
+      `ALTER TABLE af_orders ADD COLUMN is_simulated TINYINT NOT NULL DEFAULT 0 COMMENT '学习用模拟订单：不参与钱包和真实统计'`
+    );
+  }
+  afSimulationColumnsEnsured = true;
+}
 // ================================================================
 
 // ===== Deribit 数据库缓存（每天北京时间凌晨 00:00 刷新，跨实例共享）=====
@@ -13898,6 +13917,7 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
+        await ensureAfSimulationColumns();
         // 视角切换
         let targetUserId = ctx.user.id;
         if (input.viewAsUserId) {
@@ -13920,7 +13940,8 @@ ${klinesSummary}
                      COALESCE(su.username, '') as source_username,
                      o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at,
                      COALESCE(o.prepaid_fee, 0) as prepaid_fee,
-                     COALESCE(o.tier_mode, 'step') as tier_mode
+                     COALESCE(o.tier_mode, 'step') as tier_mode,
+                     COALESCE(o.is_simulated, 0) as is_simulated
               FROM af_orders o
               LEFT JOIN users su ON su.id = o.source_user_id
               WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
@@ -13987,6 +14008,8 @@ ${klinesSummary}
           prepaidFee: parseFloat(r.prepaid_fee || '0'),
           // 档位计算模式
           tierMode: (r.tier_mode || 'step') as 'step' | 'linear',
+          // 学习用模拟订单：只影响展示，不参与真实钱包和统计
+          isSimulated: Number(r.is_simulated || 0) === 1,
         }));
         return list;
       }),
@@ -14084,6 +14107,7 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
+        await ensureAfSimulationColumns();
         // 验证是否是该账本成员（任意角色均可访问）
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
@@ -14101,7 +14125,8 @@ ${klinesSummary}
                      COALESCE(su.username, '') as source_username,
                      o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at,
                      COALESCE(o.prepaid_fee, 0) as prepaid_fee,
-                     COALESCE(o.tier_mode, 'step') as tier_mode
+                     COALESCE(o.tier_mode, 'step') as tier_mode,
+                     COALESCE(o.is_simulated, 0) as is_simulated
               FROM af_orders o
               LEFT JOIN users u ON u.id = o.user_id
               LEFT JOIN users su ON su.id = o.source_user_id
@@ -14141,6 +14166,7 @@ ${klinesSummary}
           allTimeLowAt: null as string | null,
           prepaidFee: parseFloat(r.prepaid_fee || '0'),
           tierMode: (r.tier_mode || 'step') as 'step' | 'linear',
+          isSimulated: Number(r.is_simulated || 0) === 1,
         }));
         
         // 批量查询每笔订单的扫描最低价（af_order_scan_stats）
@@ -14318,6 +14344,7 @@ ${klinesSummary}
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
+        await ensureAfSimulationColumns();
         // 权限控制：只有账本创建者/拥有者才能查看
         const ledgerResult = await db.execute(
           sql`SELECT createdBy, ownerId FROM ledgers WHERE id = ${input.ledgerId} LIMIT 1`
@@ -14340,7 +14367,7 @@ ${klinesSummary}
                 SUM(CASE WHEN side='buy' AND COALESCE(is_gift,0)=0 THEN 1 ELSE 0 END) as normalCount,
                 SUM(CASE WHEN side='buy' AND COALESCE(is_gift,0)=1 THEN 1 ELSE 0 END) as giftCount,
                 SUM(CASE WHEN side='buy' THEN 1 ELSE 0 END) as totalCount
-              FROM af_orders WHERE ledger_id = ${input.ledgerId}`
+              FROM af_orders WHERE ledger_id = ${input.ledgerId} AND COALESCE(is_simulated, 0) = 0`
         ) as any;
         const os = (orderStatsRows[0]?.[0] ?? orderStatsRows[0] ?? {});
         const normalCount = parseInt(os.normalCount || '0') || 0;
@@ -14358,7 +14385,8 @@ ${klinesSummary}
                      COALESCE(o.sell_status, '') as sell_status_val,
                      o.sell_confirmed_at
               FROM af_orders o
-              WHERE o.ledger_id = ${input.ledgerId} AND o.side = 'buy' AND o.status = 'completed'`
+              WHERE o.ledger_id = ${input.ledgerId} AND o.side = 'buy' AND o.status = 'completed'
+                AND COALESCE(o.is_simulated, 0) = 0`
         ) as any;
         const buyOrders = ((buyOrderRows[0] || buyOrderRows) as any[]);
 
@@ -14518,8 +14546,9 @@ ${klinesSummary}
         const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         // 查询原始订单信息
+        await ensureAfSimulationColumns();
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, source_order_id, sell_status, sell_price, sell_confirmed_at, tier_mode, created_at FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, source_order_id, sell_status, sell_price, sell_confirmed_at, tier_mode, created_at, COALESCE(is_simulated, 0) as is_simulated FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
@@ -14530,6 +14559,7 @@ ${klinesSummary}
         const userId = order.user_id;
         const coin = order.coin;
         const side = order.side;
+        const isSimulated = Number(order.is_simulated || 0) === 1;
         
         let balanceAdjust = 0;
         let balanceNote = '';
@@ -14541,6 +14571,15 @@ ${klinesSummary}
         // 原因：sell_confirmed_at 可能在余额写入前就已写入（事务异常/重启），导致余额永远不写入
         // 改为：直接查 af_manual_balances 是否有该订单的结算记录，没有就写入
         if (input.sellStatus === 'sold') {
+          // 模拟订单允许更新展示状态，但绝不写入用户钱包或结算流水。
+          if (isSimulated) {
+            const sellPriceUpdate = input.sellPrice ? `, sell_price = '${input.sellPrice.replace(/'/g, '')}'` : '';
+            await db.execute(
+              sql`UPDATE af_orders SET sell_status = 'sold', sell_confirmed_at = NOW()${sql.raw(sellPriceUpdate)}, updated_at = NOW()
+                  WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
+            );
+            return { success: true, simulated: true };
+          }
           // 确认卖出成交：从同一订单取买入信息
           const actualSellPrice = input.sellPrice ? parseFloat(input.sellPrice) : parseFloat(order.sell_price || '0');
           const isGift = parseInt(order.is_gift || '0') === 1;
@@ -14681,7 +14720,7 @@ ${klinesSummary}
           balanceNote = `订单调整 委买 ${coin} 金额 ${oldAmount} -> ${newAmount} USDT`;
         }
         // 执行余额调整
-        if (Math.abs(balanceAdjust) > 0.001) {
+        if (!isSimulated && Math.abs(balanceAdjust) > 0.001) {
           await db.execute(
             sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
                 VALUES (${input.ledgerId}, ${userId}, ${balanceAdjust}, ${balanceNote || '订单调整'}, NOW(), NOW())`
@@ -14942,8 +14981,9 @@ ${klinesSummary}
       .mutation(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
+        await ensureAfSimulationColumns();
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, amount, status, sell_status FROM af_orders
+          sql`SELECT id, user_id, coin, side, amount, status, sell_status, COALESCE(is_simulated, 0) as is_simulated FROM af_orders
               WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
@@ -14984,7 +15024,7 @@ ${klinesSummary}
         if (order.status !== 'pending') throw new Error('只有委托中的订单才能撤单');
         const amount = parseFloat(order.amount || '0');
         // 买单撤单：退回冻结金额
-        if (amount > 0.001) {
+        if (Number(order.is_simulated || 0) !== 1 && amount > 0.001) {
           await db.execute(
             sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
                 VALUES (${input.ledgerId}, ${ctx.user.id}, ${amount}, ${`用户撤单 委买 ${order.coin} ${amount} USDT`}, NOW(), NOW())`
@@ -15023,8 +15063,9 @@ ${klinesSummary}
         const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         // 查询订单信息
+        await ensureAfSimulationColumns();
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, amount, quantity, status, is_gift, source_order_id, sell_status FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          sql`SELECT id, user_id, coin, side, amount, quantity, status, is_gift, source_order_id, sell_status, COALESCE(is_simulated, 0) as is_simulated FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
@@ -15032,7 +15073,7 @@ ${klinesSummary}
         const amount = parseFloat(order.amount || '0');
         const isGift = parseInt(order.is_gift || '0') === 1;
         // 退款逻辑：管理员勾选了退款且订单有金额
-        if (input.refund && !isGift && amount > 0.001) {
+        if (input.refund && Number(order.is_simulated || 0) !== 1 && !isGift && amount > 0.001) {
           await db.execute(
             sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
                 VALUES (${input.ledgerId}, ${userId}, ${amount}, ${`管理员删除订单退回 ${order.coin} ${amount} USDT`}, NOW(), NOW())`
@@ -15073,6 +15114,7 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
+        await ensureAfSimulationColumns();
         // 支持 viewAs 视角切换（管理员可查看其他用户的订单）
         let targetUserId = ctx.user.id;
         if (input.viewAsUserId) {
@@ -15086,11 +15128,36 @@ ${klinesSummary}
         }
         // 验证订单属于目标用户
         const orderRows = await db.execute(
-          sql`SELECT id, coin, limit_price, status, tier_mode FROM af_orders
+          sql`SELECT id, coin, limit_price, status, tier_mode, sell_price, sell_confirmed_at,
+                     COALESCE(is_simulated, 0) as is_simulated, created_at
+              FROM af_orders
               WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) return { triggers: [], scanStatus: null, latestLowPrice: null, scanCount: 0, allTimeLowPrice: null, allTimeLowAt: null, tierMode: 'step' as 'step' | 'linear' };
+
+        // 模拟订单按真实“每10秒一次”的规则推算扫描次数，仅用于详情展示，绝不写入真实扫描表或定时任务。
+        if (Number(order.is_simulated || 0) === 1) {
+          const startedAt = new Date(order.created_at).getTime();
+          const endedAt = order.sell_confirmed_at ? new Date(order.sell_confirmed_at).getTime() : Date.now();
+          const durationMs = Math.max(0, endedAt - startedAt);
+          const scanCount = Math.max(1, Math.floor(durationMs / 10_000) + 1);
+          const buyPrice = parseFloat(order.limit_price || '0');
+          const sellPrice = parseFloat(order.sell_price || order.limit_price || '0');
+          const displayLow = Math.min(buyPrice || sellPrice, sellPrice || buyPrice);
+          const lastScanAt = new Date(endedAt || Date.now()).toISOString();
+          return {
+            triggers: [],
+            buyPrice: order.limit_price,
+            coin: order.coin,
+            scanStatus: { lastScanAt, lowestPrice: displayLow > 0 ? String(displayLow) : null, scanning: false },
+            latestLowPrice: displayLow > 0 ? String(displayLow) : null,
+            scanCount,
+            allTimeLowPrice: displayLow > 0 ? String(displayLow) : null,
+            allTimeLowAt: new Date(startedAt || Date.now()).toISOString(),
+            tierMode: (order.tier_mode || 'step') as 'step' | 'linear',
+          };
+        }
 
         // 查询该订单的所有档位触发记录
         const triggerRows = await db.execute(
