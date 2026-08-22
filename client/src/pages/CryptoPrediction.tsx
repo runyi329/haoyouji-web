@@ -1434,6 +1434,19 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
   // 模拟订单复用真实的谷底增筹详情、费用和收益权展示，但不参与真实资金及汇总。
   const isContract = !!(order as any).isSimulated || !order.orderType || order.orderType === '无损合约';
   const isCompleted = order.status === 'completed';
+  // MySQL时间按北京时间写入；tRPC可能还原为Date对象，展示时使用UTC字段避免重复加8小时。
+  const formatOrderDateTime = (value: any): string => {
+    if (!value) return '(无数据)';
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return String(value);
+    const yyyy = dt.getUTCFullYear();
+    const mm2 = String(dt.getUTCMonth() + 1).padStart(2, '0');
+    const dd2 = String(dt.getUTCDate()).padStart(2, '0');
+    const hh = String(dt.getUTCHours()).padStart(2, '0');
+    const mi = String(dt.getUTCMinutes()).padStart(2, '0');
+    const ss = String(dt.getUTCSeconds()).padStart(2, '0');
+    return `${yyyy}-${mm2}-${dd2} ${hh}:${mi}:${ss}`;
+  };
 
   // 生成订单编号
   const orderDate = new Date(order.createdAt);
@@ -1661,24 +1674,26 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
         {/* 开仓时间 */}
         <div className="flex justify-between items-center">
           <span className="text-[#9CA3AF]">开仓时间</span>
-          <span className="text-[#64748B]">{timeStr}</span>
+          <span className="text-[#64748B]">{formatOrderDateTime(order.createdAt)}</span>
         </div>
         {/* 登记时间（管理员确认成交的时间） */}
         <div className="flex justify-between items-center">
           <span className="text-[#9CA3AF]">登记时间</span>
-          <span className="text-[#64748B]">{order.confirmedAt || '(无数据)'}</span>
+          <span className="text-[#64748B]">{formatOrderDateTime(order.confirmedAt)}</span>
         </div>
         {/* 委卖时间（仅挂单委卖中显示） */}
         {order.sellStatus === 'selling' && (
           <div className="flex justify-between items-center">
             <span className="text-[#9CA3AF]">委卖时间</span>
-            <span className="text-[#64748B]">{order.sellAt || '(无数据)'}</span>
+            <span className="text-[#64748B]">{formatOrderDateTime(order.sellAt)}</span>
           </div>
         )}
         {/* 卖出时间（已卖出时显示） */}
         {order.sellStatus === 'sold' && order.sellConfirmedAt && (
           <div className="flex justify-between items-center">
-            <span className="text-[#9CA3AF]">卖出时间</span>            <span className="text-[#64748B]">{order.sellConfirmedAt}</span>         </div>
+            <span className="text-[#9CA3AF]">卖出时间</span>
+            <span className="text-[#64748B]">{formatOrderDateTime(order.sellConfirmedAt)}</span>
+          </div>
         )}
         {/* 订单编号 */}
         <div className="flex justify-between items-center">

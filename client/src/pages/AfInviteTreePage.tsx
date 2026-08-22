@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, GitBranch, ArrowUpDown, Settings, BarChart2, List, ChevronDown, ChevronUp } from "lucide-react";
+import { OrderDetail } from "@/pages/CryptoPrediction";
 
 // 北京时间辅助函数（MySQL存储的是北京时间，服务端String()后UTC值即为北京时间值）
 const getBJDateOnly_Tree = (d: any): Date => {
@@ -274,6 +275,7 @@ export default function AfInviteTreePage() {
 
   // 列表区 Tab
   const [listTab, setListTab] = useState<'recharge' | 'pending' | 'completed' | 'gift' | 'orders'>('recharge');
+  const [completedDetailOrder, setCompletedDetailOrder] = useState<any>(null);
 
   // 订单详情子视图
   const [orderView, setOrderView] = useState<'person' | 'order'>('person');
@@ -515,31 +517,122 @@ export default function AfInviteTreePage() {
 
             {/* 最新成交 */}
             {listTab === 'completed' && (
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, margin: '6px 12px', overflow: 'hidden' }}>
+              <div style={{ margin: '6px 12px' }}>
                 {(recentCompletedOrders as any[]).length === 0
                   ? <div style={{ fontSize: 12, color: '#D1D5DB', padding: '16px', textAlign: 'center' }}>暂无记录</div>
-                  : <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                      <thead>
-                        <tr style={{ background: '#f8fafc', fontSize: 11, color: '#9CA3AF' }}>
-                          <th style={{ padding: '6px 8px', fontWeight: 400, textAlign: 'left', borderBottom: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>日期</th>
-                          <th style={{ padding: '6px 8px', fontWeight: 400, textAlign: 'left', borderBottom: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>成交</th>
-                          <th style={{ padding: '6px 8px', fontWeight: 400, textAlign: 'left', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>会员</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(recentCompletedOrders as any[]).map((r: any, i: number) => {
-                          const dateStr = fmtBJTime_Tree(r.eventTime, false);
-                          return (
-                          <tr key={r.id} style={{ borderTop: i === 0 ? 'none' : '1px solid #f3f4f6' }}>
-                            <td style={{ padding: '7px 8px', color: '#9CA3AF', whiteSpace: 'nowrap', borderRight: '1px solid #e5e7eb', fontSize: 11 }}>{dateStr}</td>
-                            <td style={{ padding: '7px 8px', fontWeight: 500, color: '#374151', whiteSpace: 'nowrap', borderRight: '1px solid #e5e7eb' }}>{r.coin} {r.side === 'buy' ? '买' : '卖'} {r.amount}<span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 1 }}>u</span>{r.limitPrice ? <span style={{ fontSize: 10, color: '#9CA3AF' }}> @{r.limitPrice}</span> : ''}</td>
-                            <td style={{ padding: '7px 8px', color: '#374151', whiteSpace: 'nowrap' }}>{r.userName} <span style={{ fontSize: 10, color: '#9CA3AF' }}>{r.username}</span></td>
-                          </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                  : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {(recentCompletedOrders as any[]).map((r: any) => {
+                        const isSellEvent = r.eventType === 'sell';
+                        const buyPrice = parseFloat(r.limitPrice || r.originalLimitPrice || '0');
+                        const sellPrice = parseFloat(r.sellPrice || '0');
+                        const buyQty = parseFloat(r.quantity || '0');
+                        const sellQty = parseFloat(r.sellQuantity || r.quantity || '0');
+                        const eventQty = isSellEvent ? sellQty : buyQty;
+                        const qtyStr = r.coin === 'BTC' ? eventQty.toFixed(4) : eventQty.toFixed(2);
+                        const eventAmount = isSellEvent && sellPrice > 0 && sellQty > 0
+                          ? sellPrice * sellQty
+                          : parseFloat(r.amount || '0');
+                        const amountStr = eventAmount >= 1000
+                          ? eventAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })
+                          : eventAmount.toLocaleString('en-US', { maximumFractionDigits: 2 });
+                        const eventTimeStr = fmtBJTime_Tree(r.eventTime, true);
+                        // 只有卖出成交事件才显示本次实现获利。
+                        const profit = isSellEvent && sellPrice > 0 && buyPrice > 0 && sellQty > 0 ? (sellPrice - buyPrice) * sellQty : null;
+                        const profitPct = isSellEvent && sellPrice > 0 && buyPrice > 0 ? ((sellPrice - buyPrice) / buyPrice * 100) : null;
+                        const holdDays = (() => {
+                          if (!isSellEvent || !r.createdAt || !r.sellConfirmedAt) return null;
+                          const startD = new Date(r.createdAt);
+                          const endD = new Date(r.sellConfirmedAt);
+                          return Math.max(1, Math.ceil((endD.getTime() - startD.getTime()) / 86400000));
+                        })();
+                        return (
+                          <div
+                            key={r.eventId || `${r.id}-${r.eventType || 'buy'}`}
+                            onClick={() => setCompletedDetailOrder(r)}
+                            style={{ background: '#fff', borderRadius: 12, padding: '10px 12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', cursor: 'pointer' }}
+                          >
+                            {/* 第一行：币种+方向 | 状态标签 | 时间 */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: isSellEvent ? '#DC2626' : '#15803D' }}>{r.coin}</span>
+                                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, fontWeight: 600, background: isSellEvent ? '#FEE2E2' : '#DCFCE7', color: isSellEvent ? '#DC2626' : '#15803D' }}>{isSellEvent ? '已卖出' : '已买入'}</span>
+                                {r.isSimulated && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, fontWeight: 500, background: '#F3E8FF', color: '#7C3AED' }}>模拟</span>}
+                              </div>
+                              <span style={{ fontSize: 10, color: '#9CA3AF' }}>{eventTimeStr}</span>
+                            </div>
+                            {/* 第二行：金额 | 价格 | 数量 | 用户 */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div>
+                                  <div style={{ fontSize: 10, color: '#9CA3AF' }}>{isSellEvent ? '卖出金额' : '买入金额'}</div>
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: '#1f2937' }}>{amountStr} U</div>
+                                </div>
+                                {isSellEvent && buyPrice > 0 && sellPrice > 0 ? (
+                                  <div>
+                                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>买入→卖出</div>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#1f2937' }}>@{buyPrice}→@{sellPrice}</div>
+                                  </div>
+                                ) : buyPrice > 0 ? (
+                                  <div>
+                                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>价格</div>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#1f2937' }}>@{buyPrice}</div>
+                                  </div>
+                                ) : null}
+                                {eventQty > 0 && (
+                                  <div>
+                                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>数量</div>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#1f2937' }}>{qtyStr}</div>
+                                  </div>
+                                )}
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: 10, color: '#9CA3AF' }}>用户</div>
+                                <div style={{ fontSize: 12, color: '#374151' }}>{(r.userName || '').slice(0, 4)}</div>
+                              </div>
+                            </div>
+                            {/* 第三行：卖出订单显示获利和持仓天数 */}
+                            {isSellEvent && profit !== null && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 6, paddingTop: 6, borderTop: '1px dashed #E5E7EB' }}>
+                                <div>
+                                  <div style={{ fontSize: 10, color: '#9CA3AF' }}>价差收益</div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: profit >= 0 ? '#DC2626' : '#16A34A' }}>
+                                    {profit >= 0 ? '+' : ''}{profit.toFixed(0)} U
+                                    {profitPct !== null && <span style={{ fontSize: 10, fontWeight: 500, marginLeft: 3 }}>({profitPct >= 0 ? '+' : ''}{profitPct.toFixed(1)}%)</span>}
+                                  </div>
+                                </div>
+                                {holdDays !== null && (
+                                  <div>
+                                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>持仓</div>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{holdDays}天</div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                 }
+                {/* 最新成交订单详情弹窗：复用谷底增筹 OrderDetail 组件 */}
+                {completedDetailOrder && (
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setCompletedDetailOrder(null)}>
+                    <div style={{ width: '100%', maxWidth: 480, background: '#fff', borderRadius: '16px 16px 0 0', overflowY: 'auto', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 8px' }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#1A2340' }}>
+                          {completedDetailOrder.userName} - {completedDetailOrder.coin} {completedDetailOrder.eventType === 'sell' ? '卖出' : '买入'}订单详情
+                        </span>
+                        <button type="button" onClick={() => setCompletedDetailOrder(null)} style={{ color: '#9CA3AF', fontSize: 20, background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}>×</button>
+                      </div>
+                      <div style={{ paddingBottom: 16 }}>
+                        <OrderDetail
+                          order={completedDetailOrder}
+                          timeStr={completedDetailOrder.eventTime ? new Date(completedDetailOrder.eventTime).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : ''}
+                          ledgerId={ledgerId}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

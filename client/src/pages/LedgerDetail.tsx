@@ -8,6 +8,7 @@ import aiTagAnimData from "@/assets/aitag-blue.json";
 
 import { FunderAIPanel } from "@/components/FunderAIPanel";
 import EthLeverageProduct from "@/components/EthLeverageProduct";
+import { OrderDetail } from "@/pages/CryptoPrediction";
 
 // 智能钱包动图（与首页保持一致）
 const WalletLottie = React.memo(function WalletLottie() {
@@ -2633,6 +2634,7 @@ export default function LedgerDetail() {
   );
   // 最新成交抽屉展开状态
   const [completedExpanded, setCompletedExpanded] = useState(false);
+  const [completedDetailOrder, setCompletedDetailOrder] = useState<any>(null);
   const { data: recentCompletedOrders = [] } = trpc.ledger.afGetRecentCompletedOrders.useQuery(
     { ledgerId: Number(ledgerId) },
     { enabled: canSeeRecentDynamics && showInviteTree, staleTime: 5 * 60 * 1000 }
@@ -6790,7 +6792,7 @@ export default function LedgerDetail() {
                   {!completedExpanded && recentCompletedOrders.length > 0 && (
                     <div className="flex items-center gap-1 ml-2 flex-1 min-w-0" style={{ overflow: 'hidden' }}>
                       <span className="text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{(recentCompletedOrders[0].userName || '').slice(0,2)}</span>
-                      <span className="text-xs font-semibold whitespace-nowrap flex-shrink-0" style={{ color: '#15803D' }}>{recentCompletedOrders[0].coin} {recentCompletedOrders[0].side === 'buy' ? '买' : '卖'} {recentCompletedOrders[0].amount}U</span>
+                      <span className="text-xs font-semibold whitespace-nowrap flex-shrink-0" style={{ color: recentCompletedOrders[0].eventType === 'sell' ? '#DC2626' : '#15803D' }}>{(() => { const r0 = recentCompletedOrders[0]; const isSellEvent0 = r0.eventType === 'sell'; const price0 = isSellEvent0 ? r0.sellPrice : r0.limitPrice; return `${r0.coin} ${isSellEvent0 ? '已卖出' : '已买入'}${price0 ? ` @${price0}` : ''}`; })()}</span>
                       <span className="text-xs text-gray-400 ml-auto whitespace-nowrap flex-shrink-0">{recentCompletedOrders[0].eventTime ? new Date(recentCompletedOrders[0].eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
                     </div>
                   )}
@@ -6800,21 +6802,85 @@ export default function LedgerDetail() {
                   <span className="ml-2 flex-shrink-0 text-gray-400 text-xs">{completedExpanded ? '▲' : '▼'}</span>
                 </div>
                 {completedExpanded && (
-                  <div className="px-3 py-2" style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                  <div className="px-3 py-2" style={{ maxHeight: '400px', overflowY: 'auto' }}>
                     {recentCompletedOrders.length === 0 ? (
                       <div className="text-xs text-gray-300 py-2 text-center">暂无记录</div>
                     ) : (
-                      <div className="space-y-1">
-                        {recentCompletedOrders.map((r: any) => (
-                          <div key={r.id} className="flex items-center gap-2 py-1.5" style={{ borderBottom: '1px solid rgba(22,163,74,0.08)' }}>
-                            <span className="text-xs text-gray-600 truncate" style={{ minWidth: '4em', maxWidth: '6em' }}>{r.userName}({r.username})</span>
-                            <span className="text-xs font-semibold" style={{ color: '#15803D' }}>{r.coin} {r.side === 'buy' ? '买' : '卖'} {r.amount}U</span>
-                            {r.limitPrice && <span className="text-xs text-gray-400">@{r.limitPrice}</span>}
-                            <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{r.eventTime ? new Date(r.eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                          </div>
-                        ))}
+                      <div className="space-y-2">
+                        {recentCompletedOrders.map((r: any) => {
+                          const isSellEvent = r.eventType === 'sell';
+                          const buyPrice = parseFloat(r.limitPrice || r.originalLimitPrice || '0');
+                          const sellPrice = parseFloat(r.sellPrice || '0');
+                          const qtyNum = parseFloat(isSellEvent ? (r.sellQuantity || r.quantity || '0') : (r.quantity || '0'));
+                          const qtyStr = r.coin === 'BTC' ? qtyNum.toFixed(4) : qtyNum.toFixed(2);
+                          const amountNum = isSellEvent && sellPrice > 0 && qtyNum > 0 ? sellPrice * qtyNum : parseFloat(r.amount || '0');
+                          const amountStr = amountNum >= 1000 ? amountNum.toLocaleString('en-US', { maximumFractionDigits: 0 }) : amountNum.toLocaleString('en-US', { maximumFractionDigits: 2 });
+                          const priceDisplay = isSellEvent ? r.sellPrice : r.limitPrice;
+                          const eventTimeStr = r.eventTime ? new Date(r.eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                          return (
+                            <div
+                              key={r.eventId || `${r.id}-${r.eventType || 'buy'}`}
+                              className="bg-white rounded-xl px-3 py-2.5 cursor-pointer active:bg-gray-50 transition-colors"
+                              style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
+                              onClick={() => setCompletedDetailOrder(r)}
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-bold" style={{ color: isSellEvent ? '#DC2626' : '#15803D' }}>{r.coin}</span>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: isSellEvent ? '#FEE2E2' : '#DCFCE7', color: isSellEvent ? '#DC2626' : '#15803D' }}>{isSellEvent ? '已卖出' : '已买入'}</span>
+                                  {r.isSimulated && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: '#F3E8FF', color: '#7C3AED' }}>模拟</span>}
+                                </div>
+                                <span className="text-[10px] text-gray-400">{eventTimeStr}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div>
+                                    <div className="text-[10px] text-gray-400">{isSellEvent ? '卖出金额' : '买入金额'}</div>
+                                    <div className="text-xs font-semibold text-gray-800">{amountStr} U</div>
+                                  </div>
+                                  {priceDisplay && (
+                                    <div>
+                                      <div className="text-[10px] text-gray-400">{isSellEvent ? '卖出价' : '买入价'}</div>
+                                      <div className="text-xs font-semibold text-gray-800">@{priceDisplay}</div>
+                                    </div>
+                                  )}
+                                  {qtyNum > 0 && (
+                                    <div>
+                                      <div className="text-[10px] text-gray-400">数量</div>
+                                      <div className="text-xs font-semibold text-gray-800">{qtyStr}</div>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-[10px] text-gray-400">用户</div>
+                                  <div className="text-xs text-gray-600">{(r.userName || '').slice(0, 4)}</div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
+                  </div>
+                )}
+                {/* 最新成交订单详情弹窗：复用谷底增筹 OrderDetail 组件 */}
+                {completedDetailOrder && (
+                  <div className="fixed inset-0 z-[200] flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setCompletedDetailOrder(null)}>
+                    <div className="w-full max-w-lg bg-white rounded-t-2xl overflow-y-auto" style={{ maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                        <span className="text-sm font-bold" style={{ color: '#1A2340' }}>
+                          {completedDetailOrder.userName} - {completedDetailOrder.coin} {completedDetailOrder.eventType === 'sell' ? '卖出' : '买入'}订单详情
+                        </span>
+                        <button type="button" onClick={() => setCompletedDetailOrder(null)} className="text-gray-400 text-xl leading-none">×</button>
+                      </div>
+                      <div className="pb-4">
+                        <OrderDetail
+                          order={completedDetailOrder}
+                          timeStr={completedDetailOrder.eventTime ? new Date(completedDetailOrder.eventTime).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : ''}
+                          ledgerId={Number(ledgerId)}
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

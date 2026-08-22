@@ -21084,27 +21084,54 @@ ${klinesSummary}
         }
         const ids2 = Array.from(treeIds);
         const ph2 = ids2.map(() => '?').join(',');
-        // 查买入和卖出成交（status=completed, is_gift=0），按成交时间倒序
+        // 按真实成交事件展示：同一订单的买入确认与卖出确认分别形成一条记录。
+        const commonFields = `o.id, o.coin, o.side, o.amount, o.limit_price, o.quantity, o.status,
+          COALESCE(o.order_type,'') AS order_type, o.created_at, o.updated_at,
+          COALESCE(o.is_gift, 0) AS is_gift, COALESCE(o.gift_multiplier, '') AS gift_multiplier,
+          o.source_order_id, o.source_user_id,
+          COALESCE(o.original_limit_price, o.limit_price) AS original_limit_price,
+          COALESCE(o.source_amount, '') AS source_amount,
+          o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at,
+          COALESCE(o.prepaid_fee, 0) AS prepaid_fee, COALESCE(o.tier_mode, 'step') AS tier_mode,
+          o.simulation_order_no, COALESCE(o.is_simulated, 0) AS is_simulated,
+          u.name AS display_name, u.username AS login_name`;
         const [rows] = await (conn as any).execute(
-          `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.sell_price, o.order_type,
-                  COALESCE(o.sell_confirmed_at, o.confirmed_at, o.updated_at) as eventTime,
-                  u.name as userName, u.username
-           FROM af_orders o
-           LEFT JOIN users u ON u.id = o.user_id
-           WHERE o.ledger_id=${input.ledgerId} AND o.status='completed' AND o.is_gift=0 AND o.user_id IN (${ph2})
-           ORDER BY COALESCE(o.sell_confirmed_at, o.confirmed_at, o.updated_at) DESC LIMIT 10`,
-          ids2
+          `SELECT * FROM (
+             SELECT CONCAT(o.id, '-buy') AS eventId, 'buy' AS eventType, ${commonFields},
+                    COALESCE(o.confirmed_at, o.updated_at, o.created_at) AS eventTime
+             FROM af_orders o LEFT JOIN users u ON u.id = o.user_id
+             WHERE o.ledger_id=? AND o.status='completed' AND COALESCE(o.is_gift,0)=0 AND o.user_id IN (${ph2})
+             UNION ALL
+             SELECT CONCAT(o.id, '-sell') AS eventId, 'sell' AS eventType, ${commonFields},
+                    COALESCE(o.sell_confirmed_at, o.sell_at, o.updated_at) AS eventTime
+             FROM af_orders o LEFT JOIN users u ON u.id = o.user_id
+             WHERE o.ledger_id=? AND o.sell_status='sold' AND COALESCE(o.is_gift,0)=0 AND o.user_id IN (${ph2})
+           ) AS completed_events
+           ORDER BY eventTime DESC LIMIT 10`,
+          [input.ledgerId, ...ids2, input.ledgerId, ...ids2]
         );
         return (rows as any[]).map((r: any) => ({
+          eventId: String(r.eventId || `${r.id}-${r.eventType || 'buy'}`),
+          eventType: r.eventType === 'sell' ? 'sell' as const : 'buy' as const,
           id: r.id,
-          userName: r.userName || r.username || '新用户',
-          username: r.username || '',
-          coin: r.coin || '',
-          side: r.side || '',
-          amount: parseFloat(r.amount || 0).toFixed(0),
+          userName: r.display_name || r.login_name || '新用户',
+          username: r.login_name || '',
+          coin: r.coin || '', side: r.side || 'buy',
+          amount: String(r.amount || '0'), quantity: String(r.quantity || '0'),
+          status: r.status || '', orderType: r.order_type || '',
           limitPrice: r.limit_price ? String(r.limit_price) : '',
+          originalLimitPrice: r.original_limit_price ? String(r.original_limit_price) : '',
+          createdAt: r.created_at, updatedAt: r.updated_at,
+          isGift: !!r.is_gift, giftMultiplier: r.gift_multiplier || '',
+          sourceOrderId: r.source_order_id || null, sourceAmount: r.source_amount || '',
           sellPrice: r.sell_price ? String(r.sell_price) : '',
-          orderType: r.order_type || '',
+          sellQuantity: r.sell_quantity ? String(r.sell_quantity) : '',
+          sellAt: r.sell_at, sellConfirmedAt: r.sell_confirmed_at,
+          sellStatus: r.sell_status || null, confirmedAt: r.confirmed_at,
+          hasPendingSell: r.sell_status === 'selling',
+          prepaidFee: parseFloat(r.prepaid_fee || '0'), tierMode: r.tier_mode || 'step',
+          isSimulated: Number(r.is_simulated || 0) === 1,
+          simulationOrderNo: r.simulation_order_no || null,
           eventTime: r.eventTime ? String(r.eventTime) : '',
         }));
       }),
@@ -29412,21 +29439,48 @@ export const adminFeatureRouter = router({
           if (idsC.length === 0) return [];
           const ph2C = idsC.map(() => '?').join(',');
           const ledgerIdC = Number(input.ledgerId);
+          const commonFieldsC = `o.id, o.coin, o.side, o.amount, o.limit_price, o.quantity, o.status,
+            COALESCE(o.order_type,'') AS order_type, o.created_at, o.updated_at,
+            COALESCE(o.is_gift,0) AS is_gift, COALESCE(o.gift_multiplier,'') AS gift_multiplier,
+            o.source_order_id, o.source_user_id,
+            COALESCE(o.original_limit_price,o.limit_price) AS original_limit_price,
+            COALESCE(o.source_amount,'') AS source_amount,
+            o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at,
+            COALESCE(o.prepaid_fee,0) AS prepaid_fee, COALESCE(o.tier_mode,'step') AS tier_mode,
+            o.simulation_order_no, COALESCE(o.is_simulated,0) AS is_simulated,
+            u.name AS display_name, u.username AS login_name`;
           const [rows] = await (conn as any).execute(
-            `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.sell_price, o.order_type,
-                    COALESCE(o.confirmed_at, o.sell_confirmed_at, o.updated_at, o.created_at) as eventTime,
-                    u.name as userName, u.username
-             FROM af_orders o LEFT JOIN users u ON u.id = o.user_id
-             WHERE o.ledger_id=${ledgerIdC} AND o.status='completed' AND o.is_gift=0 AND o.user_id IN (${ph2C})
-             ORDER BY COALESCE(o.confirmed_at, o.sell_confirmed_at, o.updated_at, o.created_at) DESC LIMIT 10`,
-            idsC
+            `SELECT * FROM (
+               SELECT CONCAT(o.id, '-buy') AS eventId, 'buy' AS eventType, ${commonFieldsC},
+                      COALESCE(o.confirmed_at,o.updated_at,o.created_at) AS eventTime
+               FROM af_orders o LEFT JOIN users u ON u.id=o.user_id
+               WHERE o.ledger_id=? AND o.status='completed' AND COALESCE(o.is_gift,0)=0 AND o.user_id IN (${ph2C})
+               UNION ALL
+               SELECT CONCAT(o.id, '-sell') AS eventId, 'sell' AS eventType, ${commonFieldsC},
+                      COALESCE(o.sell_confirmed_at,o.sell_at,o.updated_at) AS eventTime
+               FROM af_orders o LEFT JOIN users u ON u.id=o.user_id
+               WHERE o.ledger_id=? AND o.sell_status='sold' AND COALESCE(o.is_gift,0)=0 AND o.user_id IN (${ph2C})
+             ) AS completed_events
+             ORDER BY eventTime DESC LIMIT 10`,
+            [ledgerIdC, ...idsC, ledgerIdC, ...idsC]
           );
           return (rows as any[]).map((r: any) => ({
-            id: r.id, orderNo: String(r.id), coin: String(r.coin || ''), side: String(r.side || ''),
-            amount: String(r.amount || '0'), limitPrice: String(r.limit_price || ''),
-            sellPrice: String(r.sell_price || ''), orderType: String(r.order_type || ''),
+            eventId: String(r.eventId || `${r.id}-${r.eventType || 'buy'}`),
+            eventType: r.eventType === 'sell' ? 'sell' as const : 'buy' as const,
+            id: r.id, coin: r.coin, side: r.side || 'buy',
+            limitPrice: r.limit_price, originalLimitPrice: r.original_limit_price || r.limit_price,
+            amount: r.amount, quantity: r.quantity, status: r.status, orderType: r.order_type || '',
+            createdAt: r.created_at, updatedAt: r.updated_at,
+            isGift: !!r.is_gift, giftMultiplier: r.gift_multiplier || '',
+            sourceOrderId: r.source_order_id || null, sourceAmount: r.source_amount || '',
+            sellPrice: r.sell_price || null, sellQuantity: r.sell_quantity || null,
+            sellAt: r.sell_at, sellConfirmedAt: r.sell_confirmed_at,
+            sellStatus: r.sell_status || null, confirmedAt: r.confirmed_at,
+            hasPendingSell: r.sell_status === 'selling', prepaidFee: parseFloat(r.prepaid_fee || '0'),
+            tierMode: r.tier_mode || 'step', isSimulated: Number(r.is_simulated || 0) === 1,
+            simulationOrderNo: r.simulation_order_no || null,
             eventTime: r.eventTime ? String(r.eventTime) : '',
-            userName: String(r.userName || r.username || '未知用户'), username: String(r.username || ''),
+            userName: String(r.display_name || r.login_name || '未知用户'), username: String(r.login_name || ''),
           }));
         } catch (e) { console.error('[afGetRecentCompletedOrders]', e); return []; }
       }),
