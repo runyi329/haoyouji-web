@@ -18,6 +18,7 @@ import {
   parseNotes,
   formatNoteTime,
   NoteAvatar,
+  FunderOrderCard,
 } from "./FunderOrderCard";
 
 // ===== P&L 曲线图组件（复用自 OptionAnalysisPage）=====
@@ -404,6 +405,8 @@ interface FunderOrderCardV2Props {
   membersData?: any[];
   ledgerId?: number;
   currentUser?: { id: number; name?: string; username?: string; avatar?: string };
+  /** 共享担保弹窗点击订单号时，用于打开订单模式详情 */
+  allOrders?: any[];
 }
 
 export function FunderOrderCardV2({
@@ -1066,12 +1069,16 @@ export function FunderOrderCardV2Silver({
   membersData = [],
   ledgerId,
   currentUser,
+  allOrders,
 }: FunderOrderCardV2Props) {
   const [activeTab, setActiveTab] = useState<'detail' | 'note' | null>(null);
   const feeExpanded = activeTab === 'detail';
   const noteExpanded = activeTab === 'note';
   const toggleTab = (tab: 'detail' | 'note') => setActiveTab(v => v === tab ? null : tab);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
+  // 卡片模式共享担保弹窗：点击订单号后，以订单模式打开对应详情
+  const [clickedOrderNo, setClickedOrderNo] = useState<string | null>(null);
+  const clickedOrder = clickedOrderNo ? (allOrders ?? []).find((o: any) => o.order_no === clickedOrderNo) : null;
   const [showInterestDetail, setShowInterestDetail] = useState(false);
   const [showInterestHistory, setShowInterestHistory] = useState(false);
   const _v2IsParticipant = (order as any).order_perspective === 'other';
@@ -2063,10 +2070,67 @@ export function FunderOrderCardV2Silver({
                         <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
                       </div>
                       <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
-                        {/* ① 共享订单缺口汇总 */}
+                        {/* ①② 总计风险敞口 + 保证金比例：与订单模式使用同一口径 */}
+                        {sharedPoolInfo && (() => {
+                          const orders = (sharedPoolInfo as any).orders ?? [];
+                          let totalRequired = 0;
+                          let allHaveGap = true;
+                          for (const o of orders) {
+                            const oQty = Number(o.quantity ?? 0);
+                            const oPrincipal = Number(o.principal ?? 0);
+                            const oCoin = (o.coin || '').toUpperCase();
+                            const isCNYr = oCoin === 'CNY';
+                            const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
+                            const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
+                            const oPrincipalLentOutR = o.principalLentOut === true || o.principalLentOut === 1;
+                            const oPrincipalDeductR = oPrincipalLentOutR ? oPrincipalUR : 0;
+                            // 数量为零的期权/借出本金订单没有可估值持仓，不能重复扣除本金。
+                            const isOptionNoQtyR = o.assetType === 'crypto_option' || (oQty === 0 && oPrincipalLentOutR);
+                            if (isOptionNoQtyR) {
+                              totalRequired -= oPendingInterestR + oPrincipalDeductR;
+                              continue;
+                            }
+                            const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
+                            if (!isCNYr && oLiveP === null) { allHaveGap = false; continue; }
+                            const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
+                            const oFloatPnlR = oCurrentValueR - oPrincipalUR;
+                            totalRequired += oFloatPnlR - oPendingInterestR - oPrincipalDeductR;
+                          }
+                          const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
+                          const diff = totalColl + totalRequired;
+                          const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;
+                          const marginRatio = totalBuyValue > 0 ? (diff / totalBuyValue) * 100 : null;
+                          const diffColor = diff < 0 ? '#16A34A' : '#DC2626';
+                          const ratioColor = marginRatio === null ? '#9CA3AF' : (marginRatio < 0 ? '#16A34A' : '#DC2626');
+                          return (
+                            <>
+                              <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+                                <div className="font-semibold mb-1" style={{ color: '#374151' }}>① 总计风险敞口</div>
+                                <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>担保物合计 + 净缺口合计</div>
+                                <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
+                                  {allHaveGap
+                                    ? <>{totalColl.toFixed(2)} + ({totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} u</span></>
+                                    : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
+                                </div>
+                              </div>
+                              <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+                                <div className="font-semibold mb-1" style={{ color: '#374151' }}>② 保证金比例</div>
+                                <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>风险敞口 ÷ 总订单买入价値</div>
+                                <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
+                                  {allHaveGap
+                                    ? <>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
+                                    : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
+                                </div>
+                                <div className="text-xs" style={{ color: '#9CA3AF' }}>总买入价値 {totalBuyValue.toFixed(2)} u（各订单买入价 × 数量之和，不随币价变动）</div>
+                              </div>
+                            </>
+                          );
+                        })()}
+
+                        {/* ③ 共享订单缺口汇总 */}
                         <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                          <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>① 共享订单缺口汇总</div>
-                          <div className="mb-1" style={{ color: '#9CA3AF' }}>每张订单缺口 = 浮动盈亏 - 待结利息</div>
+                          <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>③ 共享订单缺口汇总</div>
+                          <div className="mb-1" style={{ color: '#9CA3AF' }}>每张订单缺口 = 浮动盈亏 − 待结利息（已扣除已结利息）</div>
                           {sharedPoolInfo ? (
                             <>
                               <div className="space-y-1.5">
@@ -2074,22 +2138,36 @@ export function FunderOrderCardV2Silver({
                                   const oQty = Number(o.quantity ?? 0);
                                   const oPrincipal = Number(o.principal ?? 0);
                                   const oCoin = (o.coin || '').toUpperCase();
-                                  const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
-                                  // CNY 订单：金额单位是人民币，除以汇率换算成 U
                                   const isCNY = oCoin === 'CNY';
-                                  const oCurrentValue = isCNY ? oQty / cnyRate : (oLiveP !== null ? oLiveP * oQty : null);
-                                  const oPrincipalU = isCNY ? oPrincipal / cnyRate : oPrincipal;
-                                  const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipalU : null;
                                   const oPendingInterestRaw = Number(o.pendingInterest ?? 0);
                                   const oPendingInterest = isCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
+                                  const oPrincipalU = isCNY ? oPrincipal / cnyRate : oPrincipal;
                                   const oPrincipalLentOut = o.principalLentOut === true || o.principalLentOut === 1;
                                   const oPrincipalDeduct = oPrincipalLentOut ? oPrincipalU : 0;
+                                  // 期权或零数量的借出本金订单没有可估值持仓，只计待结利息及借出本金。
+                                  const isOptionNoQty = o.assetType === 'crypto_option' || (oQty === 0 && oPrincipalLentOut);
+                                  if (isOptionNoQty) {
+                                    const gap = -(oPendingInterest + oPrincipalDeduct);
+                                    return (
+                                      <div key={o.orderId} className="flex justify-between items-center">
+                                        <div>
+                                          <button type="button" onClick={() => allOrders && setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
+                                          <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
+                                        </div>
+                                        <div className="text-right"><span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span></div>
+                                      </div>
+                                    );
+                                  }
+                                  const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
+                                  const oCurrentValue = isCNY ? oQty / cnyRate : (oLiveP !== null ? oLiveP * oQty : null);
+                                  const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipalU : null;
                                   const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest - oPrincipalDeduct : null;
                                   return (
                                     <div key={o.orderId} className="flex justify-between items-center">
                                       <div>
-                                        <span className="font-mono font-medium" style={{ color: '#374151' }}>{o.orderNo}</span>
+                                        <button type="button" onClick={() => allOrders && setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                         <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
+                                        {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {oCoin === 'BTC' ? oQty.toFixed(2) : oQty}</span> : null}
                                       </div>
                                       <div className="text-right">
                                         {gap !== null
@@ -2107,12 +2185,17 @@ export function FunderOrderCardV2Silver({
                                   const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
                                   const oCoin = (o.coin || '').toUpperCase();
                                   const isCNYt = oCoin === 'CNY';
-                                  const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
-                                  if (!isCNYt && oLiveP === null) { allKnown = false; continue; }
-                                  const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
                                   const oPrincipalUT = isCNYt ? oPrincipal / cnyRate : oPrincipal;
                                   const oPendingInterestT = isCNYt ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
                                   const oPrincipalLentOutT = o.principalLentOut === true || o.principalLentOut === 1;
+                                  const isOptionNoQtyT = o.assetType === 'crypto_option' || (oQty === 0 && oPrincipalLentOutT);
+                                  if (isOptionNoQtyT) {
+                                    totalGapLive -= oPendingInterestT + (oPrincipalLentOutT ? oPrincipalUT : 0);
+                                    continue;
+                                  }
+                                  const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
+                                  if (!isCNYt && oLiveP === null) { allKnown = false; continue; }
+                                  const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
                                   totalGapLive += oCurrentValueT - oPrincipalUT - oPendingInterestT - (oPrincipalLentOutT ? oPrincipalUT : 0);
                                 }
                                 return (
@@ -2127,15 +2210,20 @@ export function FunderOrderCardV2Silver({
                             </>
                           ) : <div className="text-gray-400">加载中...</div>}
                         </div>
-                        {/* ② 共享担保物汇总 */}
+                        {/* ④ 共享担保物汇总 */}
                         <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                          <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>② 共享担保物汇总</div>
+                          <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>④ 共享担保物汇总</div>
                           {sharedPoolInfo ? (
                             <>
                               <div className="space-y-1.5">
                                 {((sharedPoolInfo as any).orders ?? []).map((o: any) => (
                                   <div key={o.orderId} className="flex justify-between items-center">
-                                    <span className="font-mono" style={{ color: '#374151' }}>{o.orderNo}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setClickedOrderNo(o.orderNo)}
+                                      className="font-mono"
+                                      style={{ color: '#2563EB', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
+                                    >{o.orderNo}</button>
                                     {(o.collateralAssets ?? []).length === 0
                                       ? <span style={{ color: '#9CA3AF' }}>无担保物</span>
                                       : <span className="font-mono font-semibold" style={{ color: '#DC2626' }}>{o.collateralValue > 0 ? `+${o.collateralValue.toFixed(2)} u` : '+--- u'}</span>}
@@ -2149,8 +2237,17 @@ export function FunderOrderCardV2Silver({
                             </>
                           ) : <div className="text-gray-400">加载中...</div>}
                         </div>
-                        {/* ③ 总计风险敎口 */}
-                        {sharedPoolInfo && (() => {
+                        {/* 共享担保计算说明：与订单模式保持一致 */}
+                        <div className="mt-2 p-2.5 rounded-lg text-[10px] space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
+                          <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
+                          <div>• <strong>每张订单缺口</strong> = 浮动盈亏 − 待结利息（已扣除已结利息），盈利订单缺口为正（盈余），亏损订单缺口为负</div>
+                          <div>• <strong>总计风险敞口</strong> = 共享担保物合计 + 各订单缺口合计（正数表示担保充足，负数表示担保不足）</div>
+                          <div>• <strong>保证金比例</strong> = 风险敞口 ÷ 全部订单买入价值，负数表示担保不足需补仓</div>
+                          <div>• <strong>期权订单缺口</strong>：开启「借出本金」开关→ 缺口 = 计息基数 + 待结利息；未开启→ 缺口 = 只有待结利息</div>
+                        </div>
+
+                        {/* 已在弹窗顶部按订单模式统一展示总计风险敞口与保证金比例，隐藏旧的重复计算区。 */}
+                        {false && sharedPoolInfo && (() => {
                           const orders = (sharedPoolInfo as any).orders ?? [];
                           let totalRequired = 0; let allHaveGap = true;
                           for (const o of orders) {
@@ -2455,6 +2552,31 @@ export function FunderOrderCardV2Silver({
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
               <span style={{ fontSize: '11px' }}>添加备注</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 第二层弹窗：卡片模式的共享担保订单号以订单模式打开详情 */}
+      {clickedOrderNo && clickedOrder && (
+        <div className="fixed inset-0 z-[220] flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setClickedOrderNo(null)}>
+          <div className="w-full max-w-lg bg-white rounded-t-2xl overflow-y-auto" style={{ maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 pt-4 pb-2">
+              <span className="text-sm font-bold" style={{ color: '#1A2340' }}>{clickedOrderNo} 订单详情</span>
+              <button type="button" onClick={() => setClickedOrderNo(null)} className="text-gray-400 text-xl leading-none">×</button>
+            </div>
+            <div className="pb-4">
+              <FunderOrderCard
+                order={clickedOrder}
+                livePrices={livePrices}
+                priceDirection={priceDirection}
+                currentUser={currentUser}
+                isAdmin={false}
+                membersData={membersData}
+                ledgerId={ledgerId}
+                previewMode={true}
+                allOrders={allOrders}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -3402,6 +3524,7 @@ export function FunderLenderCardSilver({
           </div>
         </div>
       )}
+
     </div>
   );
 }

@@ -5341,6 +5341,7 @@ export default function LedgerDetail() {
                       membersData={membersData as any[]}
                       cnyRate={cnyRate}
                       currentUser={user ? { id: (user as any).id, name: (user as any).name, username: (user as any).username, avatar: (user as any).avatar } : undefined}
+                      allOrders={funderDisplayOrders as any[]}
                     />
                   );
                 })}
