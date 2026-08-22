@@ -39,9 +39,13 @@ let nextScanTimer: NodeJS.Timeout | null = null;
 // 已覆盖原有行情需求，并包含52号账本当前的全部加密资产。
 const CRYPTO_COINS = ['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'SEI', 'PLUME'];
 // 美股/指数化合约。优先走新浪美股，缺失才走 OKX SWAP。
-const STOCK_COINS = ['COIN', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD'];
+const STOCK_COINS = ['COIN', 'AAOI', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD'];
 // 商品与海外股票：新浪国内源优先，Yahoo 双域名兜底。
-const YAHOO_ONLY_COINS = ['COIN', 'CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX'];
+const YAHOO_ONLY_COINS = ['COIN', 'AAOI', 'CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX'];
+// 代币化美股现货：系统统一显示基础股票代码，行情优先使用对应的X前缀交易对。
+const TOKENIZED_STOCK_SPOT_MAP: Record<string, string> = {
+  AAOI: 'XAAOI-USDT',
+};
 const COMMODITY_COINS = ['BZ', 'CL', 'NG'];
 const KRW_COINS = new Set(['SKHYNIX']);
 
@@ -53,7 +57,7 @@ const YAHOO_CODE_MAP: Record<string, string> = {
 };
 
 const SINA_CODE_MAP: Record<string, string> = {
-  COIN: 'gb_coin', TSLA: 'gb_tsla', NVDA: 'gb_nvda', AAPL: 'gb_aapl', MSFT: 'gb_msft',
+  COIN: 'gb_coin', AAOI: 'gb_aaoi', TSLA: 'gb_tsla', NVDA: 'gb_nvda', AAPL: 'gb_aapl', MSFT: 'gb_msft',
   GOOGL: 'gb_googl', META: 'gb_meta', AMZN: 'gb_amzn', SPY: 'gb_spy',
   QQQ: 'gb_qqq', NFLX: 'gb_nflx', ORCL: 'gb_orcl', TSM: 'gb_tsm',
   AMD: 'gb_amd', CRCL: 'gb_crcl', DRAM: 'gb_dram', MU: 'gb_mu', MSTR: 'gb_mstr',
@@ -208,6 +212,27 @@ async function fetchOkxSwap(coin: string): Promise<number | null> {
   } catch { return null; }
 }
 
+async function fetchOkxSpotQuote(instId: string): Promise<{ price: number; patch: Partial<PriceEntry> } | null> {
+  try {
+    const data = await fetchJson(`https://www.okx.com/api/v5/market/ticker?instId=${encodeURIComponent(instId)}`);
+    const row = data?.code === '0' ? data.data?.[0] : null;
+    const price = Number(row?.last);
+    if (!isValidPrice(price)) return null;
+    const todayOpen = Number(row.open24h) || price;
+    return {
+      price,
+      patch: {
+        todayOpen,
+        changePercent: todayOpen > 0 ? ((price - todayOpen) / todayOpen) * 100 : 0,
+        high24h: Number(row.high24h) || 0,
+        low24h: Number(row.low24h) || 0,
+        volume24h: Number(row.vol24h) || 0,
+        quoteVolume24h: Number(row.volCcy24h) || 0,
+      },
+    };
+  } catch { return null; }
+}
+
 async function refreshUsdtCnyRate() {
   try {
     const data = await fetchJson('https://api.gateio.ws/api/v4/spot/tickers?currency_pair=USDT_CNY');
@@ -250,6 +275,12 @@ async function updateSecuritiesAndCommodities() {
     const price = raw && KRW_COINS.has(coin) && usdKrw > 0 ? raw / usdKrw : raw;
     if (price && isValidPrice(price)) entryFromPrice(coin, price, 'Yahoo Finance');
     else markFailure(coin, '新浪财经及Yahoo Finance均无有效报价');
+  }));
+
+  // XAAOI为AAOI的24/7代币化现货。可用时覆盖传统美股延迟报价；失败时保留新浪/Yahoo结果。
+  await Promise.all(Object.entries(TOKENIZED_STOCK_SPOT_MAP).map(async ([coin, instId]) => {
+    const quote = await fetchOkxSpotQuote(instId);
+    if (quote) entryFromPrice(coin, quote.price, `OKX ${instId.replace('-', '/')}`, quote.patch);
   }));
 }
 
