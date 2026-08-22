@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-22
+// 生成时间：2026-08-23
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8966,5 +8966,16 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-08-22": [
     { date: "2026-08-21T18:04:56Z", type: "feat", cleanMessage: "persist real history for simulation scans" },
     { date: "2026-08-21T18:11:32Z", type: "feat", cleanMessage: "add simulation order display numbers" },
+    { date: "2026-08-21T18:17:26Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-21T18:31:26Z", type: "feat", cleanMessage: "add COIN to funder market prices" },
+    { date: "2026-08-21T23:12:50Z", type: "fix", cleanMessage: "align shared collateral gap calculations" },
+    { date: "2026-08-21T23:29:37Z", type: "fix", cleanMessage: "restore shared collateral order detail links" },
+    { date: "2026-08-22T00:11:12Z", type: "fix", cleanMessage: "unify shared collateral popup across views" },
+    { date: "2026-08-22T00:25:43Z", type: "fix", cleanMessage: "unify card mode top-line collateral gap calc with popup" },
+    { date: "2026-08-22T00:59:50Z", type: "fix", cleanMessage: "card mode shared collateral order detail click - fallback to pool data" },
+    { date: "2026-08-22T01:37:06Z", type: "fix", cleanMessage: "resolve 'before initialization' error and add dashed dividers to shared collateral popup" },
+    { date: "2026-08-22T01:57:33Z", type: "fix", cleanMessage: "order mode shared collateral detail popup - add fallback and raise z-index" },
+    { date: "2026-08-22T06:38:35Z", type: "feat", cleanMessage: "show recent AF trade events with order details" },
+    { date: "2026-08-22T07:51:53Z", type: "feat", cleanMessage: "add AAOI to funder orders and live pricing" },
   ],
 };
