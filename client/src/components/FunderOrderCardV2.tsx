@@ -3398,16 +3398,27 @@ export function FunderLenderCardSilver({
                         >?</button>
                       </span>
                       {isSharedMode ? (() => {
-                        // 共享模式：用 livePrices 重算共享池缺口
+                        // 共享模式：用 livePrices 重算共享池缺口（与弹窗内①总计风险敞口同一口径）
                         if (!sharedPoolInfo) return <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>计算中...</span>;
                         const orders = (sharedPoolInfo as any).orders ?? [];
                         let totalRequired = 0; let allKnown = true;
                         for (const o of orders) {
                           const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
                           const oCoin = (o.coin || '').toUpperCase();
-                          const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
-                          if (oLiveP === null) { allKnown = false; continue; }
-                          totalRequired += oLiveP * oQty - oPrincipal - Number(o.pendingInterest ?? 0);
+                          const isCNYtl = oCoin === 'CNY';
+                          const oPrincipalUtl = isCNYtl ? oPrincipal / cnyRate : oPrincipal;
+                          const oPendingItl = isCNYtl ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
+                          const oPrincipalLentOutTl = o.principalLentOut === true || o.principalLentOut === 1;
+                          const oPrincipalDeductTl = oPrincipalLentOutTl ? oPrincipalUtl : 0;
+                          const isOptionNoQtyTl = o.assetType === 'crypto_option' || (oQty === 0 && oPrincipalLentOutTl);
+                          if (isOptionNoQtyTl) {
+                            totalRequired -= oPendingItl + oPrincipalDeductTl;
+                            continue;
+                          }
+                          const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
+                          if (!isCNYtl && oLiveP === null) { allKnown = false; continue; }
+                          const oCurrentValueTl = isCNYtl ? oQty / cnyRate : oLiveP! * oQty;
+                          totalRequired += oCurrentValueTl - oPrincipalUtl - oPendingItl - oPrincipalDeductTl;
                         }
                         const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
                         const diff = totalColl + totalRequired;
