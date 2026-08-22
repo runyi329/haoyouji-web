@@ -1078,7 +1078,32 @@ export function FunderOrderCardV2Silver({
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   // 卡片模式共享担保弹窗：点击订单号后，以订单模式打开对应详情
   const [clickedOrderNo, setClickedOrderNo] = useState<string | null>(null);
-  const clickedOrder = clickedOrderNo ? (allOrders ?? []).find((o: any) => o.order_no === clickedOrderNo) : null;
+  // 先从 allOrders 查找完整订单，找不到则从 sharedPoolInfo 构造兼容对象
+  const clickedOrder = clickedOrderNo ? (
+    (allOrders ?? []).find((o: any) => o.order_no === clickedOrderNo)
+    || (() => {
+      const poolOrder = ((sharedPoolInfo as any)?.orders ?? []).find((o: any) => o.orderNo === clickedOrderNo);
+      if (!poolOrder) return null;
+      // 构造一个与 funderGetAssetOrders 返回格式兼容的简化订单对象
+      return {
+        id: poolOrder.orderId,
+        order_no: poolOrder.orderNo,
+        coin: poolOrder.coin,
+        amount: poolOrder.principal,
+        buy_price: poolOrder.buyPrice,
+        buy_quantity: poolOrder.quantity,
+        interest_base: poolOrder.principal,
+        interest_rate_annual: 0,
+        collateral_assets: JSON.stringify(poolOrder.collateralAssets ?? []),
+        collateral_share_mode: poolOrder.shareMode || 'self',
+        principal_lent_out: poolOrder.principalLentOut ? 1 : 0,
+        asset_type: poolOrder.assetType || 'crypto',
+        status: 'active',
+        user_id: (order as any).user_id,
+        ledger_id: ledgerId,
+      };
+    })()
+  ) : null;
   const [showInterestDetail, setShowInterestDetail] = useState(false);
   const [showInterestHistory, setShowInterestHistory] = useState(false);
   const _v2IsParticipant = (order as any).order_perspective === 'other';
@@ -2151,7 +2176,7 @@ export function FunderOrderCardV2Silver({
                                     return (
                                       <div key={o.orderId} className="flex justify-between items-center">
                                         <div>
-                                          <button type="button" onClick={() => allOrders && setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
+                                          <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                           <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
                                         </div>
                                         <div className="text-right"><span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span></div>
@@ -2165,7 +2190,7 @@ export function FunderOrderCardV2Silver({
                                   return (
                                     <div key={o.orderId} className="flex justify-between items-center">
                                       <div>
-                                        <button type="button" onClick={() => allOrders && setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
+                                        <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                         <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
                                         {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {oCoin === 'BTC' ? oQty.toFixed(2) : oQty}</span> : null}
                                       </div>
