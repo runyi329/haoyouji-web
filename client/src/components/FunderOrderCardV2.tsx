@@ -1076,34 +1076,8 @@ export function FunderOrderCardV2Silver({
   const noteExpanded = activeTab === 'note';
   const toggleTab = (tab: 'detail' | 'note') => setActiveTab(v => v === tab ? null : tab);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
-  // 卡片模式共享担保弹窗：点击订单号后，以订单模式打开对应详情
+  // 卡片模式共享担保弹窗：点击订单号后打开订单详情
   const [clickedOrderNo, setClickedOrderNo] = useState<string | null>(null);
-  // 先从 allOrders 查找完整订单，找不到则从 sharedPoolInfo 构造兼容对象
-  const clickedOrder = clickedOrderNo ? (
-    (allOrders ?? []).find((o: any) => o.order_no === clickedOrderNo)
-    || (() => {
-      const poolOrder = ((sharedPoolInfo as any)?.orders ?? []).find((o: any) => o.orderNo === clickedOrderNo);
-      if (!poolOrder) return null;
-      // 构造一个与 funderGetAssetOrders 返回格式兼容的简化订单对象
-      return {
-        id: poolOrder.orderId,
-        order_no: poolOrder.orderNo,
-        coin: poolOrder.coin,
-        amount: poolOrder.principal,
-        buy_price: poolOrder.buyPrice,
-        buy_quantity: poolOrder.quantity,
-        interest_base: poolOrder.principal,
-        interest_rate_annual: 0,
-        collateral_assets: JSON.stringify(poolOrder.collateralAssets ?? []),
-        collateral_share_mode: poolOrder.shareMode || 'self',
-        principal_lent_out: poolOrder.principalLentOut ? 1 : 0,
-        asset_type: poolOrder.assetType || 'crypto',
-        status: 'active',
-        user_id: (order as any).user_id,
-        ledger_id: ledgerId,
-      };
-    })()
-  ) : null;
   const [showInterestDetail, setShowInterestDetail] = useState(false);
   const [showInterestHistory, setShowInterestHistory] = useState(false);
   const _v2IsParticipant = (order as any).order_perspective === 'other';
@@ -1265,6 +1239,32 @@ export function FunderOrderCardV2Silver({
     { ledgerId: (order as any).ledger_id ?? 0, userId: Number(order.user_id) },
     { enabled: isSharedMode && !!((order as any).ledger_id), staleTime: 0, refetchInterval: 3000 }
   );
+
+  // 卡片模式共享担保弹窗：点击订单号后打开订单详情（先从 allOrders 找，找不到则从 sharedPoolInfo 构造）
+  const clickedOrder = clickedOrderNo ? (
+    (allOrders ?? []).find((o: any) => o.order_no === clickedOrderNo)
+    || (() => {
+      const poolOrder = ((sharedPoolInfo as any)?.orders ?? []).find((o: any) => o.orderNo === clickedOrderNo);
+      if (!poolOrder) return null;
+      return {
+        id: poolOrder.orderId,
+        order_no: poolOrder.orderNo,
+        coin: poolOrder.coin,
+        amount: poolOrder.principal,
+        buy_price: poolOrder.buyPrice,
+        buy_quantity: poolOrder.quantity,
+        interest_base: poolOrder.principal,
+        interest_rate_annual: 0,
+        collateral_assets: JSON.stringify(poolOrder.collateralAssets ?? []),
+        collateral_share_mode: poolOrder.shareMode || 'self',
+        principal_lent_out: poolOrder.principalLentOut ? 1 : 0,
+        asset_type: poolOrder.assetType || 'crypto',
+        status: 'active',
+        user_id: (order as any).user_id,
+        ledger_id: ledgerId,
+      };
+    })()
+  ) : null;
 
   // 担保物价値计算（非共享担保模式）
   let collateralValue = 0;
@@ -2158,8 +2158,8 @@ export function FunderOrderCardV2Silver({
                           <div className="mb-1" style={{ color: '#9CA3AF' }}>每张订单缺口 = 浮动盈亏 − 待结利息（已扣除已结利息）</div>
                           {sharedPoolInfo ? (
                             <>
-                              <div className="space-y-1.5">
-                                {((sharedPoolInfo as any).orders ?? []).map((o: any) => {
+                              <div className="space-y-0">
+                                {((sharedPoolInfo as any).orders ?? []).map((o: any, _idx: number, _arr: any[]) => {
                                   const oQty = Number(o.quantity ?? 0);
                                   const oPrincipal = Number(o.principal ?? 0);
                                   const oCoin = (o.coin || '').toUpperCase();
@@ -2174,7 +2174,7 @@ export function FunderOrderCardV2Silver({
                                   if (isOptionNoQty) {
                                     const gap = -(oPendingInterest + oPrincipalDeduct);
                                     return (
-                                      <div key={o.orderId} className="flex justify-between items-center">
+                                      <div key={o.orderId} className="flex justify-between items-center py-1" style={_idx < _arr.length - 1 ? { borderBottom: '1px dashed #E5E7EB' } : undefined}>
                                         <div>
                                           <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                           <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
@@ -2188,7 +2188,7 @@ export function FunderOrderCardV2Silver({
                                   const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipalU : null;
                                   const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest - oPrincipalDeduct : null;
                                   return (
-                                    <div key={o.orderId} className="flex justify-between items-center">
+                                    <div key={o.orderId} className="flex justify-between items-center py-1" style={_idx < _arr.length - 1 ? { borderBottom: '1px dashed #E5E7EB' } : undefined}>
                                       <div>
                                         <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                         <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
@@ -2240,14 +2240,14 @@ export function FunderOrderCardV2Silver({
                           <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>④ 共享担保物汇总</div>
                           {sharedPoolInfo ? (
                             <>
-                              <div className="space-y-1.5">
-                                {((sharedPoolInfo as any).orders ?? []).map((o: any) => (
-                                  <div key={o.orderId} className="flex justify-between items-center">
+                              <div className="space-y-0">
+                                {((sharedPoolInfo as any).orders ?? []).map((o: any, idx: number, arr: any[]) => (
+                                  <div key={o.orderId} className="flex justify-between items-center py-1" style={idx < arr.length - 1 ? { borderBottom: '1px dashed #E5E7EB' } : undefined}>
                                     <button
                                       type="button"
                                       onClick={() => setClickedOrderNo(o.orderNo)}
-                                      className="font-mono"
-                                      style={{ color: '#2563EB', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
+                                      className="font-mono underline underline-offset-2 cursor-pointer"
+                                      style={{ color: '#1A56DB', border: 'none', background: 'transparent', padding: 0 }}
                                     >{o.orderNo}</button>
                                     {(o.collateralAssets ?? []).length === 0
                                       ? <span style={{ color: '#9CA3AF' }}>无担保物</span>
