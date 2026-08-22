@@ -454,7 +454,7 @@ export function FunderOrderCard({
 }: FunderOrderCardProps) {
   // 共享担保弹窗：点击订单号弹出第二层订单详情
   const [clickedOrderNo, setClickedOrderNo] = useState<string | null>(null);
-  const clickedOrder = clickedOrderNo ? (allOrders ?? []).find((o: any) => o.order_no === clickedOrderNo) : null;
+  // clickedOrder: 延迟计算，在 sharedPoolInfo 声明之后（见下方 clickedOrderResolved）
   // ===== 内部 fallback：当父组件未传入对应 props 时，组件自己管理 state 和 mutation =====
   const trpcUtils = trpc.useUtils();
   // 结息面板
@@ -596,6 +596,31 @@ export function FunderOrderCard({
     { ledgerId, userId: Number(order.user_id) },
     { enabled: ledgerId > 0 && orderShareMode === 'self', staleTime: 0, refetchInterval: 3000 }
   );
+  // 订单模式共享担保弹窗：点击订单号后打开订单详情（先从 allOrders 找，找不到则从 sharedPoolInfo 构造）
+  const clickedOrder = clickedOrderNo ? (
+    (allOrders ?? []).find((o: any) => o.order_no === clickedOrderNo)
+    || (() => {
+      const poolOrder = ((sharedPoolInfo as any)?.orders ?? []).find((o: any) => o.orderNo === clickedOrderNo);
+      if (!poolOrder) return null;
+      return {
+        id: poolOrder.orderId,
+        order_no: poolOrder.orderNo,
+        coin: poolOrder.coin,
+        amount: poolOrder.principal,
+        buy_price: poolOrder.buyPrice,
+        buy_quantity: poolOrder.quantity,
+        interest_base: poolOrder.principal,
+        interest_rate_annual: 0,
+        collateral_assets: JSON.stringify(poolOrder.collateralAssets ?? []),
+        collateral_share_mode: poolOrder.shareMode || 'self',
+        principal_lent_out: poolOrder.principalLentOut ? 1 : 0,
+        asset_type: poolOrder.assetType || 'crypto',
+        status: 'active',
+        user_id: (order as any).user_id,
+        ledger_id: ledgerId,
+      };
+    })()
+  ) : null;
   // 解析 collateral_source（调用其他账本担保物）
   const _parsedCollateralSource = useMemo(() => {
     try {
@@ -1684,7 +1709,7 @@ export function FunderOrderCard({
                                       return (
                                         <div key={o.orderId} className="flex justify-between items-center">
                                           <div>
-                                            <button type="button" onClick={() => allOrders && setClickedOrderNo(o.orderNo)} className={`font-mono font-medium ${allOrders ? 'underline underline-offset-2 cursor-pointer' : ''}`} style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
+                                            <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                             <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
                                           </div>
                                           <div className="text-right">
@@ -1703,7 +1728,7 @@ export function FunderOrderCard({
                                     return (
                                       <div key={o.orderId} className="flex justify-between items-center">
                                         <div>
-                                          <button type="button" onClick={() => allOrders && setClickedOrderNo(o.orderNo)} className={`font-mono font-medium ${allOrders ? 'underline underline-offset-2 cursor-pointer' : ''}`} style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
+                                          <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                           <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
                                           {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {oCoin === 'BTC' ? oQty.toFixed(2) : oQty}</span> : null}
                                         </div>
@@ -1770,12 +1795,12 @@ export function FunderOrderCard({
                                     <div key={o.orderId}>
                                       {(o.collateralAssets ?? []).length === 0 ? (
                                         <div className="flex justify-between items-center">
-                                          <button type="button" onClick={() => allOrders && setClickedOrderNo(o.orderNo)} className={`font-mono ${allOrders ? 'underline underline-offset-2 cursor-pointer' : ''}`} style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
+                                          <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                           <span style={{ color: '#9CA3AF' }}>无担保物</span>
                                         </div>
                                       ) : (
                                         <div className="flex justify-between items-center">
-                                          <button type="button" onClick={() => allOrders && setClickedOrderNo(o.orderNo)} className={`font-mono ${allOrders ? 'underline underline-offset-2 cursor-pointer' : ''}`} style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
+                                          <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                           <span className="font-mono font-semibold" style={{ color: '#DC2626' }}>
                                             {o.collateralValue > 0 ? `+${o.collateralValue.toFixed(2)} u` : '+--- u'}
                                           </span>
@@ -1878,7 +1903,7 @@ export function FunderOrderCard({
               )}
               {/* 第二层弹窗：点击订单号弹出订单详情 */}
               {clickedOrderNo && clickedOrder && (
-                <div className="fixed inset-0 z-[200] flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setClickedOrderNo(null)}>
+                <div className="fixed inset-0 z-[220] flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setClickedOrderNo(null)}>
                   <div className="w-full max-w-lg bg-white rounded-t-2xl overflow-y-auto" style={{ maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-between px-4 pt-4 pb-2">
                       <span className="text-sm font-bold" style={{ color: '#1A2340' }}>{clickedOrderNo} 订单详情</span>
