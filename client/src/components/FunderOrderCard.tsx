@@ -860,6 +860,27 @@ export function FunderOrderCard({
     } catch { return null; }
   })();
   const show = (key: string) => dc ? (dc[key] !== false) : true;
+  const [headerTagsExpanded, setHeaderTagsExpanded] = useState(false);
+  const headerMember = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
+  const normalHeaderOwner = headerMember?.nickname || (order as any).nickname || headerMember?.username || (order as any).owner_label || null;
+  const headerOwnerLabel = isParticipantVisual
+    ? ((order as any).order_owner_name || (order as any).nickname || (order as any).username || normalHeaderOwner)
+    : normalHeaderOwner;
+  const headerParticipantLabel = isParticipantVisual
+    ? ((order as any).participant_name || (order as any).owner_label || null)
+    : null;
+  const manualHeaderTags: string[] = (() => {
+    try {
+      const raw = (order as any).tags;
+      const parsed = Array.isArray(raw) ? raw : (typeof raw === 'string' && raw ? JSON.parse(raw) : []);
+      return Array.isArray(parsed) ? parsed.filter((tag: unknown) => typeof tag === 'string' && tag.trim().length > 0) : [];
+    } catch {
+      return [];
+    }
+  })();
+  const headerTagCount = (show('showOwnerName') ? Number(Boolean(headerOwnerLabel)) + Number(Boolean(headerParticipantLabel)) : 0)
+    + Number(Boolean(order.asset_type && show('assetType')))
+    + manualHeaderTags.length;
   // 52号账本：手续费仅在订单控制区明确开启后，才在订单模式向前端展示。
   const isLedger52 = Number(ledgerId ?? (order as any).ledger_id) === 52;
   const showTradingFee = isLedger52 && dc?.tradingFee === true;
@@ -970,7 +991,7 @@ export function FunderOrderCard({
 
       {/* 帽子：标签行 + 操作按钮 */}
       <div
-        className="flex items-center gap-2 px-4 py-2"
+        className="flex items-start gap-2 px-4 py-2"
         style={{
           borderBottom: isParticipantVisual ? '1px solid #BBF7D0' : '1px solid #E4E8F5',
           backgroundColor: isParticipantVisual ? '#DCFCE7' : '#D0D6EE',
@@ -994,38 +1015,21 @@ export function FunderOrderCard({
             </span>
           )
         )}
-        {/* 标签区：所有者第一，其余依次排列 */}
-        <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
-          {/* 所有者：第一位 */}
-          {show('showOwnerName') && (() => {
-            const member = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
-            const isParticipantOrder = isParticipantVisual;
-            const normalOwnerLabel = member?.nickname || (order as any).nickname || member?.username || (order as any).owner_label || null;
-            const orderOwnerLabel = isParticipantOrder ? (
-              (order as any).order_owner_name || (order as any).nickname || (order as any).username || normalOwnerLabel
-            ) : normalOwnerLabel;
-            const participantLabel = isParticipantOrder ? (
-              (order as any).participant_name || (order as any).owner_label || null
-            ) : null;
-            if (!orderOwnerLabel && !participantLabel) return null;
-            return (
-              <span className="flex items-center gap-1 flex-wrap">
-                {orderOwnerLabel && (
-                  <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[110px]" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
-                    {isParticipantOrder ? `拥有者 ${orderOwnerLabel}` : orderOwnerLabel}
-                  </span>
-                )}
-                {isParticipantOrder && participantLabel && (
-                  <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[110px]" style={{ backgroundColor: '#DCFCE7', color: '#15803D' }}>
-                    参与者 {participantLabel}
-                  </span>
-                )}
-              </span>
-            );
-          })()}
+        {/* 标签区：默认仅显示一行，展开后显示全部；自动标签与手动标签均计数 */}
+        <div className={`flex items-center gap-1 flex-1 min-w-0 ${headerTagsExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden h-6'}`}>
+          {show('showOwnerName') && headerOwnerLabel && (
+            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[130px] shrink-0" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
+              {isParticipantVisual ? `拥有者 ${headerOwnerLabel}` : headerOwnerLabel}
+            </span>
+          )}
+          {show('showOwnerName') && isParticipantVisual && headerParticipantLabel && (
+            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[130px] shrink-0" style={{ backgroundColor: '#DCFCE7', color: '#15803D' }}>
+              参与者 {headerParticipantLabel}
+            </span>
+          )}
           {order.asset_type && show('assetType') && (
             <span
-              className="text-[11px] font-medium px-1.5 py-0.5 rounded"
+              className="text-[11px] font-medium px-1.5 py-0.5 rounded shrink-0"
               style={order.asset_type === 'crypto_option'
                 ? { backgroundColor: '#F3E8FF', color: '#7C3AED' }
                 : { backgroundColor: '#EDEEF5', color: '#4B5563' }
@@ -1034,20 +1038,28 @@ export function FunderOrderCard({
               {order.asset_type === 'stock' ? '股票' : order.asset_type === 'crypto_option' ? '期权' : '数字币'}
             </span>
           )}
-
-
-          {(() => {
-            try {
-              const t = (order as any).tags;
-              const tags: string[] = Array.isArray(t) ? t : (typeof t === 'string' && t ? JSON.parse(t) : []);
-              return tags.map((tag, i) => (
-                <span key={i} className="text-[11px] font-medium px-1.5 py-0.5 rounded" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
-                  {tag}
-                </span>
-              ));
-            } catch { return null; }
-          })()}
+          {manualHeaderTags.map((tag, i) => (
+            <span
+              key={`${tag}-${i}`}
+              className={`text-[11px] font-medium px-1.5 py-0.5 rounded shrink-0 ${headerTagsExpanded ? 'max-w-full whitespace-normal break-all' : 'max-w-[220px] truncate'}`}
+              style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}
+            >
+              {tag}
+            </span>
+          ))}
         </div>
+        {headerTagCount > 0 && (
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); setHeaderTagsExpanded(v => !v); }}
+            className="flex items-center gap-0.5 shrink-0 h-6 px-1 rounded-md"
+            style={{ color: '#6366F1' }}
+            aria-label={headerTagsExpanded ? `收起${headerTagCount}个标签` : `展开${headerTagCount}个标签`}
+          >
+            <span className="text-[11px] font-semibold tabular-nums">{headerTagCount}</span>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${headerTagsExpanded ? 'rotate-180' : ''}`} />
+          </button>
+        )}
       </div>
 
       {/* 主体：左右两栏布局 */}
@@ -1413,15 +1425,14 @@ export function FunderOrderCard({
                 {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
               </span>
             </div>
-            {displayPaid > 0 && (() => {
+            {(() => {
               const approxPaid = (dc as any)?.approxPaid ?? 'U';
               if (approxPaid === 'hidden') return null;
               const showU = approxPaid === 'U';
               const approxPaidVal = showU
-                ? (interestUnit === 'u' ? null : (displayPaid / cnyRate))
-                : (interestUnit === 'u' ? (displayPaid * cnyRate) : null);
+                ? (interestUnit === 'u' ? displayPaid : (displayPaid / cnyRate))
+                : (interestUnit === 'u' ? (displayPaid * cnyRate) : displayPaid);
               const approxPaidUnit = showU ? 'u' : '元';
-              if (approxPaidVal === null) return null;
               return (
                 <div className="flex justify-end">
                   <span className="text-gray-400">≈{approxPaidVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {approxPaidUnit}</span>

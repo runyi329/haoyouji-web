@@ -556,6 +556,7 @@ function FunderOrderCardLegacy({
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const [showMarginInfo, setShowMarginInfo] = useState(false);
   const [showStatusSheet, setShowStatusSheet] = useState(false);
+  const [headerTagsExpanded, setHeaderTagsExpanded] = useState(false);
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
   const accrued = useAccruedInterestFunder(
@@ -600,7 +601,6 @@ function FunderOrderCardLegacy({
   const displayAccrued = convertAccrued(accrued);
   const displayPaid = convertAccrued(totalPaid);
   const altAccrued = convertAlt(displayAccrued);
-  const altPaid = convertAlt(displayPaid);
 
   // 持有时长——已结清订单冻结在 settled_at 时刻
   const holdDurationLabel = (() => {
@@ -616,7 +616,7 @@ function FunderOrderCardLegacy({
   })();
 
   // 读取 display_config（与 LedgerDetail show() 函数一致：默认全部显示，除非明确设为 false）
-  const dc: Record<string, boolean> | null = (() => {
+  const dc: Record<string, boolean | string> | null = (() => {
     try {
       const raw = order.display_config;
       if (!raw) return null;
@@ -624,6 +624,34 @@ function FunderOrderCardLegacy({
     } catch { return null; }
   })();
   const show = (key: string) => dc ? (dc[key] !== false) : true;
+  const legacyMember = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
+  const legacyNormalOwner = (order as any).owner_label || legacyMember?.nickname || legacyMember?.username || null;
+  const legacyOwnerLabel = isInvited
+    ? ((order as any).order_owner_name || (order as any).nickname || (order as any).username || legacyNormalOwner)
+    : legacyNormalOwner;
+  const legacyParticipantLabel = isInvited
+    ? ((order as any).participant_name || (order as any).owner_label || null)
+    : null;
+  const legacyManualTags: string[] = (() => {
+    try {
+      const raw = (order as any).tags;
+      const parsed = Array.isArray(raw) ? raw : (typeof raw === 'string' && raw ? JSON.parse(raw) : []);
+      return Array.isArray(parsed) ? parsed.filter((tag: unknown) => typeof tag === 'string' && tag.trim().length > 0) : [];
+    } catch {
+      return [];
+    }
+  })();
+  const legacyHeaderTagCount = 1
+    + Number(Boolean(order.asset_type && show('assetType')))
+    + 1
+    + Number(Boolean(isInvited))
+    + (show('showOwnerName') ? Number(Boolean(legacyOwnerLabel)) + Number(Boolean(legacyParticipantLabel)) : 0)
+    + legacyManualTags.length;
+  const approxPaidMode = typeof dc?.approxPaid === 'string' ? dc.approxPaid : 'U';
+  const approxPaidValue = approxPaidMode === 'U'
+    ? (interestUnit === 'U' ? displayPaid : displayPaid / cnyRate)
+    : (interestUnit === 'U' ? displayPaid * cnyRate : displayPaid);
+  const approxPaidUnit = approxPaidMode === 'U' ? 'U' : '元';
 
   // 担保物
   let collateralAssets: { coin: string; qty: string; note?: string }[] = [];
@@ -676,8 +704,8 @@ function FunderOrderCardLegacy({
       )}
 
       {/* 帽子：标签行 + 操作按钮 */}
-      <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: isInvited ? '#F0FDF4' : '#FAFBFF' }}>
-        <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex items-start justify-between gap-2 px-4 py-2.5" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: isInvited ? '#F0FDF4' : '#FAFBFF' }}>
+        <div className={`flex items-center gap-1.5 flex-1 min-w-0 ${headerTagsExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden h-6'}`}>
           <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
             {order.coin}
           </span>
@@ -704,31 +732,37 @@ function FunderOrderCardLegacy({
               受邀
             </span>
           )}
-          {show('showOwnerName') && (() => {
-            const label = (order as any).owner_label || (() => {
-              const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
-              return m ? (m.username || m.nickname) : null;
-            })();
-            if (!label) return null;
-            return (
-              <span className="text-xs font-medium px-1.5 py-0.5" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
-                {label}
-              </span>
-            );
-          })()}
-          {(() => {
-            try {
-              const t = (order as any).tags;
-              const tags: string[] = Array.isArray(t) ? t : (typeof t === 'string' && t ? JSON.parse(t) : []);
-              return tags.map((tag, i) => (
-                <span key={i} className="text-xs font-medium px-1.5 py-0.5" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
-                  {tag}
-                </span>
-              ));
-            } catch { return null; }
-          })()}
+          {show('showOwnerName') && legacyOwnerLabel && (
+            <span className="text-xs font-medium px-1.5 py-0.5 truncate max-w-[130px] shrink-0" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
+              {isInvited ? `拥有者 ${legacyOwnerLabel}` : legacyOwnerLabel}
+            </span>
+          )}
+          {show('showOwnerName') && isInvited && legacyParticipantLabel && (
+            <span className="text-xs font-medium px-1.5 py-0.5 truncate max-w-[130px] shrink-0" style={{ border: '1px solid #86EFAC', borderRadius: '3px', color: '#15803D', backgroundColor: '#DCFCE7' }}>
+              参与者 {legacyParticipantLabel}
+            </span>
+          )}
+          {legacyManualTags.map((tag, i) => (
+            <span
+              key={`${tag}-${i}`}
+              className={`text-xs font-medium px-1.5 py-0.5 shrink-0 ${headerTagsExpanded ? 'max-w-full whitespace-normal break-all' : 'max-w-[220px] truncate'}`}
+              style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}
+            >
+              {tag}
+            </span>
+          ))}
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); setHeaderTagsExpanded(v => !v); }}
+            className="flex items-center gap-0.5 h-6 px-1 rounded-md"
+            style={{ color: '#6366F1' }}
+            aria-label={headerTagsExpanded ? `收起${legacyHeaderTagCount}个标签` : `展开${legacyHeaderTagCount}个标签`}
+          >
+            <span className="text-[11px] font-semibold tabular-nums">{legacyHeaderTagCount}</span>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${headerTagsExpanded ? 'rotate-180' : ''}`} />
+          </button>
           {!isInvited && (
             <button
               onClick={() => handleOpenParticipants?.(order.id, order.interest_base || '')}
@@ -966,9 +1000,9 @@ function FunderOrderCardLegacy({
                 {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
               </span>
             </div>
-            {displayPaid > 0 && (
+            {approxPaidMode !== 'hidden' && (
               <div className="flex justify-end">
-                <span className="text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
+                <span className="text-gray-400">≈{approxPaidValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {approxPaidUnit}</span>
               </div>
             )}
             </>
@@ -1652,6 +1686,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Settings,
   BarChart3,
   Plus,

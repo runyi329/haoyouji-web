@@ -382,6 +382,16 @@ const FONT = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Ne
 const DEFAULT_CNY_RATE = 6.8;
 
 // 读取利率字符串，当利率为0时从 display_config.rate_negative 判断符号
+function getDisplayMode(order: any, key: string, fallback = 'U'): string {
+  try {
+    const raw = order?.display_config;
+    const parsed = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
+    return typeof parsed?.[key] === 'string' ? parsed[key] : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function getRateStr(order: any): string {
   const r = String(order.interest_rate_annual ?? '');
   if (r.startsWith('-')) return r;
@@ -1157,6 +1167,11 @@ export function FunderOrderCardV2Silver({
   const displayAccrued = convertAccrued(accrued);
   const totalPaid = (order as any).paidTotal ? parseFloat((order as any).paidTotal.amount || '0') : 0;
   const displayPaid = convertAccrued(totalPaid);
+  const approxPaidMode = getDisplayMode(order, 'approxPaid', 'U');
+  const approxPaidValue = approxPaidMode === 'U'
+    ? (interestUnit === 'U' ? displayPaid : displayPaid / cnyRate)
+    : (interestUnit === 'U' ? displayPaid * cnyRate : displayPaid);
+  const approxPaidUnit = approxPaidMode === 'U' ? 'U' : '元';
 
   const holdDurationLabel = (() => {
     if (!order.buy_date) return '--';
@@ -2023,7 +2038,12 @@ export function FunderOrderCardV2Silver({
                   style={{ background: '#8B6914', color: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.18)' }}
                 >!</button>
               </span>
-              <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>+{fmt(displayPaid, 2)} {interestUnit}</span>
+              <span className="flex flex-col items-end" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+                <span>+{fmt(displayPaid, 2)} {interestUnit}</span>
+                {approxPaidMode !== 'hidden' && (
+                  <span className="text-[10px]" style={{ color: TXT_DIM }}>≈{fmt(approxPaidValue, 2)} {approxPaidUnit}</span>
+                )}
+              </span>
             </div>
             {/* 合计待付 = 待付利息 + 手续费 - 已结利息 */}
             {(() => {
@@ -2711,6 +2731,11 @@ export function FunderLenderCardSilver({
   const displayAccrued = convertAccrued(accrued);
   const totalPaid = (order as any).paidTotal ? parseFloat((order as any).paidTotal.amount || '0') : 0;
   const displayPaid = convertAccrued(totalPaid);
+  const approxPaidMode = getDisplayMode(order, 'approxPaid', 'U');
+  const approxPaidValue = approxPaidMode === 'U'
+    ? (interestUnit === 'U' ? displayPaid : displayPaid / cnyRate)
+    : (interestUnit === 'U' ? displayPaid * cnyRate : displayPaid);
+  const approxPaidUnit = approxPaidMode === 'U' ? 'U' : '元';
   // 约等于换算
   const approxAccrued = interestUnit === '元' ? displayAccrued / cnyRate : displayAccrued * cnyRate;
   const approxUnit = interestUnit === '元' ? 'u' : '元';
@@ -3159,7 +3184,12 @@ export function FunderLenderCardSilver({
               <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
                 已结利息
               </span>
-              <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{displayPaid > 0 ? `+${fmt(displayPaid, 2)} ${interestUnit}` : `+0.00 ${interestUnit}`}</span>
+              <span className="flex flex-col items-end" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+                <span>{displayPaid > 0 ? `+${fmt(displayPaid, 2)} ${interestUnit}` : `+0.00 ${interestUnit}`}</span>
+                {approxPaidMode !== 'hidden' && (
+                  <span className="text-[10px]" style={{ color: TXT_DIM }}>≈{fmt(approxPaidValue, 2)} {approxPaidUnit}</span>
+                )}
+              </span>
             </div>
             {/* 合计应收 = 待收利息 - 已结利息 */}
             {(() => {

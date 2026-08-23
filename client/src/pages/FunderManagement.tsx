@@ -152,6 +152,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     // 约等于显示控制：'hidden'=不显示, 'U'=显示U, 'CNY'=显示元
     approxHolding: 'U',
     approxInterest: 'U',
+    approxPaid: 'U',
     approxCollateralItem: 'U',
     approxCollateralValue: 'hidden',
     // 股票专属字段
@@ -2586,6 +2587,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     {([
                       { key: 'approxHolding', label: '持有资产约等于' },
                       { key: 'approxInterest', label: '待结利息约等于' },
+                      { key: 'approxPaid', label: '已结利息约等于' },
                       { key: 'approxCollateralItem', label: '担保货币约等于' },
                       { key: 'approxCollateralValue', label: '担保价値约等于' },
                     ] as { key: string; label: string }[]).map(({ key, label }) => (
@@ -3049,6 +3051,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               {([
                                 { key: 'approxHolding', label: '持有资产约等于' },
                                 { key: 'approxInterest', label: '待结利息约等于' },
+                                { key: 'approxPaid', label: '已结利息约等于' },
                                 { key: 'approxCollateralItem', label: '担保货币约等于' },
                                 { key: 'approxCollateralValue', label: '担保价値约等于' },
                               ] as { key: string; label: string }[]).map(({ key, label }) => (
