@@ -16739,8 +16739,11 @@ ${klinesSummary}
             ).catch((e: any) => { console.error('[funderGetAssetOrders] piDetail error:', e); return null; }) as Promise<any> : Promise.resolve(null),
             // 3. 参与者名字（只有有参与订单时才查）
             participantOrderIds.length > 0 ? conn.execute(
-              'SELECT username, name FROM users WHERE id = ? LIMIT 1',
-              [participantQueryUserId]
+              `SELECT lm.nickname, u.username, u.name
+               FROM users u
+               LEFT JOIN ledger_members lm ON lm.userId = u.id AND lm.ledgerId = ?
+               WHERE u.id = ? LIMIT 1`,
+              [input.ledgerId, participantQueryUserId]
             ).catch((e: any) => { console.error('[funderGetAssetOrders] participantUserName error:', e); return null; }) as Promise<any> : Promise.resolve(null)
           ]);
           // 处理参与方配置
@@ -16760,10 +16763,10 @@ ${klinesSummary}
             for (const pi of piDetailArr) piDetailMap[Number(pi.order_id)] = pi;
           }
           // 处理参与者名字
-          if (puRowsResult) {
-            const puArr = Array.isArray(puRowsResult[0]) ? puRowsResult[0] : (Array.isArray(puRowsResult) ? puRowsResult : []);
-            if (puArr.length > 0) participantUserName = puArr[0].name || puArr[0].username || '';
-          }
+            if (puRowsResult) {
+              const puArr = Array.isArray(puRowsResult[0]) ? puRowsResult[0] : (Array.isArray(puRowsResult) ? puRowsResult : []);
+              if (puArr.length > 0) participantUserName = puArr[0].nickname || puArr[0].name || puArr[0].username || '';
+            }
         }
         // 给每个订单附带 participantInfo（如果当前用户是参与方）
         const ordersWithParticipant = orders.map((o: any) => {
@@ -16803,7 +16806,10 @@ ${klinesSummary}
           // 本人 / 他人位置沿用订单自身的 order_perspective，不能在此强制改写。
           result.order_perspective = result.order_perspective || o.order_perspective || 'self';
           result.order_owner_name = o.owner_label || o.username || null;
-          if (participantUserName) result.owner_label = participantUserName;
+          if (participantUserName) {
+            result.participant_name = participantUserName;
+            result.owner_label = participantUserName; // 兼容旧版卡片字段
+          }
           if (pi) {
             if (pi.amount != null && pi.amount !== '') result.amount = pi.amount;
             if (pi.amount_currency) result.amount_currency = pi.amount_currency;
@@ -17942,8 +17948,11 @@ ${klinesSummary}
                 [input.ledgerId, targetUserId, ...participantOrderIds]
               ).catch(() => null) as Promise<any>,
               piConnRaw.execute(
-                'SELECT username, name FROM users WHERE id = ? LIMIT 1',
-                [targetUserId]
+                `SELECT lm.nickname, u.username, u.name
+                 FROM users u
+                 LEFT JOIN ledger_members lm ON lm.userId = u.id AND lm.ledgerId = ?
+                 WHERE u.id = ? LIMIT 1`,
+                [input.ledgerId, targetUserId]
               ).catch(() => null) as Promise<any>
             ]);
             const piArr = piRowsResult ? ((piRowsResult[0] || piRowsResult) as any[]) || [] : [];
@@ -17952,7 +17961,7 @@ ${klinesSummary}
             let participantUserName = '';
             if (puRowsResult) {
               const puArr = ((puRowsResult[0] || puRowsResult) as any[]) || [];
-              if (puArr.length > 0) participantUserName = puArr[0].name || puArr[0].username || '';
+              if (puArr.length > 0) participantUserName = puArr[0].nickname || puArr[0].name || puArr[0].username || '';
             }
             for (const o of allOrders) {
               const pi = piMap[Number(o.id)];
@@ -17975,7 +17984,10 @@ ${klinesSummary}
                   // 名称展示统一：昵称优先，用户名兜底。
                   (o as any).order_owner_name = (o as any).nickname || o.owner_label || (o as any).username || null;
                   // 参与者自己的名字作为显示名
-                  if (participantUserName) (o as any).owner_label = participantUserName;
+                  if (participantUserName) {
+                    (o as any).participant_name = participantUserName;
+                    (o as any).owner_label = participantUserName; // 兼容旧版卡片字段
+                  }
                   // 用参与者的利率、计息基数、展示配置覆盖主订单
                   if (pi.interest_rate != null && pi.interest_rate !== '') (o as any).interest_rate_annual = pi.interest_rate;
                   if (pi.interest_base) (o as any).interest_base = pi.interest_base;

@@ -1442,13 +1442,13 @@ export function FunderOrderCardV2Silver({
         {/* 左侧：竖线分隔的标签组 */}
         <div className="flex items-center text-xs" style={{ color: TXT_SEC, gap: 0 }}>
           {(() => {
-            const member = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
-            // 名称展示统一：账本昵称优先，用户名兜底；参与者名称由后端 owner_label 提供。
-            const ownerName = isParticipant
-              ? (order.owner_label || null)
-              : (member?.nickname || (order as any).nickname || member?.username || order.owner_label || null);
+            const member = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
+            const normalOwnerName = member?.nickname || (order as any).nickname || member?.username || order.owner_label || null;
             const orderOwnerName = isParticipant ? (
-              (order as any).order_owner_name || (order as any).nickname || (order as any).username || null
+              (order as any).order_owner_name || (order as any).nickname || (order as any).username || normalOwnerName
+            ) : normalOwnerName;
+            const participantName = isParticipant ? (
+              (order as any).participant_name || order.owner_label || null
             ) : null;
             const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
             // 参与者视角：拥有者名字紧跟在参与者名字后，无框白色字体
@@ -1458,21 +1458,20 @@ export function FunderOrderCardV2Silver({
             const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
             return (
               <>
-                {/* 参与者名字 */}
-                {ownerName && (
-                  <span style={{ color: TXT_PRI, fontWeight: 500 }}>{ownerName}</span>
+                {/* 订单拥有者在前，当前参与者在后 */}
+                {orderOwnerName && (
+                  <span style={{ color: TXT_PRI, fontWeight: 500 }}>{isParticipant ? `拥有者 ${orderOwnerName}` : orderOwnerName}</span>
                 )}
-                {/* 拥有者名字：用竖线分隔，颜色与参与者名字一致 */}
-                {isParticipant && orderOwnerName && (
+                {isParticipant && participantName && (
                   <>
-                    {ownerName && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
-                    <span style={{ color: TXT_PRI, fontWeight: 500 }}>{orderOwnerName}</span>
+                    {orderOwnerName && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
+                    <span style={{ color: SL_GREEN, fontWeight: 600 }}>参与者 {participantName}</span>
                   </>
                 )}
-                {!ownerName && isParticipant && !orderOwnerName && null}
+                {!orderOwnerName && isParticipant && !participantName && null}
                 {items.map((item, i) => (
                   <React.Fragment key={i}>
-                    {(ownerName || (isParticipant && orderOwnerName) || i > 0) && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
+                    {(orderOwnerName || (isParticipant && participantName) || i > 0) && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
                     <span style={{ color: TXT_SEC, fontWeight: 400 }}>{item}</span>
                   </React.Fragment>
                 ))}
@@ -2865,13 +2864,13 @@ export function FunderLenderCardSilver({
       <div className="flex items-center px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
         <div className="flex items-center text-xs" style={{ color: TXT_SEC, gap: 0 }}>
           {(() => {
-            const member = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
-            // 名称展示统一：账本昵称优先，用户名兜底；参与者名称由后端 owner_label 提供。
-            const ownerName = isParticipant
-              ? (order.owner_label || null)
-              : (member?.nickname || (order as any).nickname || member?.username || order.owner_label || null);
+            const member = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
+            const normalOwnerName = member?.nickname || (order as any).nickname || member?.username || order.owner_label || null;
             const orderOwnerName = isParticipant ? (
-              (order as any).order_owner_name || (order as any).nickname || (order as any).username || null
+              (order as any).order_owner_name || (order as any).nickname || (order as any).username || normalOwnerName
+            ) : normalOwnerName;
+            const participantName = isParticipant ? (
+              (order as any).participant_name || order.owner_label || null
             ) : null;
             const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
             const brokerStr = order.asset_type === 'stock'
@@ -2896,7 +2895,7 @@ export function FunderLenderCardSilver({
                 )}
                 {items.map((item, i) => (
                   <React.Fragment key={i}>
-                    {(ownerName || (isParticipant && orderOwnerName) || i > 0) && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
+                    {(orderOwnerName || (isParticipant && participantName) || i > 0) && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
                     <span style={{ color: TXT_SEC, fontWeight: 400 }}>{item}</span>
                   </React.Fragment>
                 ))}

@@ -998,27 +998,27 @@ export function FunderOrderCard({
         <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
           {/* 所有者：第一位 */}
           {show('showOwnerName') && (() => {
-            const member = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
-            // 名称展示统一：账本昵称优先，用户名兜底；历史 owner_label 仅作最后兜底。
-            const label = member?.nickname || (order as any).nickname || member?.username || (order as any).owner_label || null;
-            if (!label) return null;
-            // 只有真实参与者才展示“参与者 | 订单拥有者”的双姓名；
-            // 他人归属订单仍只显示订单所属人，避免出现 YJH | YJH。
+            const member = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
             const isParticipantOrder = isParticipantVisual;
-            // 参与者视角：订单拥有者名字（优先用 order_owner_name，备用 username）
+            const normalOwnerLabel = member?.nickname || (order as any).nickname || member?.username || (order as any).owner_label || null;
             const orderOwnerLabel = isParticipantOrder ? (
-              (order as any).order_owner_name ||
-              (order as any).nickname ||
-              (order as any).username ||
-              null
+              (order as any).order_owner_name || (order as any).nickname || (order as any).username || normalOwnerLabel
+            ) : normalOwnerLabel;
+            const participantLabel = isParticipantOrder ? (
+              (order as any).participant_name || (order as any).owner_label || null
             ) : null;
+            if (!orderOwnerLabel && !participantLabel) return null;
             return (
-              <span className="flex items-center gap-0.5">
-                <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[80px]" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
-                  {label}
-                </span>
-                {isParticipantOrder && orderOwnerLabel && (
-                  <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[80px]" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>{orderOwnerLabel}</span>
+              <span className="flex items-center gap-1 flex-wrap">
+                {orderOwnerLabel && (
+                  <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[110px]" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
+                    {isParticipantOrder ? `拥有者 ${orderOwnerLabel}` : orderOwnerLabel}
+                  </span>
+                )}
+                {isParticipantOrder && participantLabel && (
+                  <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[110px]" style={{ backgroundColor: '#DCFCE7', color: '#15803D' }}>
+                    参与者 {participantLabel}
+                  </span>
                 )}
               </span>
             );
