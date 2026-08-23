@@ -14301,14 +14301,30 @@ ${klinesSummary}
           console.error('[afAdminGetOrders] 查询扫描最低价失败:', e);
         }
 
-        // 为每个买单查询权益折扣档位
-        for (const order of list) {
-          if (order.side === 'buy') {
-            const tierRows = await db.execute(
-              sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id = ${order.id}`
-            ) as any;
-            const maxTier = parseInt((tierRows[0]?.[0]?.maxTier ?? tierRows[0]?.maxTier ?? '0').toString()) || 0;
-            order.equityTier = maxTier;
+        // 批量查询全部买单的权益折扣档位，避免逐单执行数百次SQL拖慢推荐页和订单管理。
+        const tierOrderIds = list.filter((order: any) => order.side === 'buy').map((order: any) => Number(order.id));
+        if (tierOrderIds.length > 0) {
+          try {
+            const tierConn = await (await import('./db')).getDbConnection();
+            if (tierConn) {
+              const tierPlaceholders = tierOrderIds.map(() => '?').join(',');
+              const [tierRows] = await (tierConn as any).execute(
+                `SELECT order_id, COALESCE(MAX(tier), 0) AS maxTier
+                 FROM af_order_tier_triggers
+                 WHERE order_id IN (${tierPlaceholders})
+                 GROUP BY order_id`,
+                tierOrderIds
+              );
+              const tierMap = new Map<number, number>();
+              for (const row of (tierRows as any[])) {
+                tierMap.set(Number(row.order_id), parseInt(String(row.maxTier || '0')) || 0);
+              }
+              for (const order of list) {
+                order.equityTier = tierMap.get(Number(order.id)) ?? 0;
+              }
+            }
+          } catch (e) {
+            console.error('[afAdminGetOrders] 批量查询权益档位失败:', e);
           }
         }
 

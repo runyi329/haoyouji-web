@@ -1252,7 +1252,12 @@ export function FunderOrderCardV2Silver({
   })();
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId: (order as any).ledger_id ?? 0, userId: Number(order.user_id) },
-    { enabled: isSharedMode && !!((order as any).ledger_id), staleTime: 0, refetchInterval: 3000 }
+    {
+      enabled: isSharedMode && !!((order as any).ledger_id),
+      staleTime: 5000,
+      refetchInterval: 15000,
+      refetchIntervalInBackground: false,
+    }
   );
 
   // 卡片模式共享担保弹窗：点击订单号后打开订单详情（先从 allOrders 找，找不到则从 sharedPoolInfo 构造）
@@ -2681,7 +2686,12 @@ export function FunderLenderCardSilver({
   const isSharedMode = orderShareMode === 'self';
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId: ledgerId ?? 0, userId: Number(order.user_id) },
-    { enabled: !!ledgerId && isSharedMode, staleTime: 0, refetchInterval: 3000 }
+    {
+      enabled: !!ledgerId && isSharedMode,
+      staleTime: 5000,
+      refetchInterval: 15000,
+      refetchIntervalInBackground: false,
+    }
   );
 
   // 期权订单：标的资产以 option_info.coin 为准（此处 isOption 尚未定义，直接用 order.asset_type 判断）
@@ -2907,15 +2917,14 @@ export function FunderLenderCardSilver({
             const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
             return (
               <>
-                {/* 参与者名字 */}
-                {ownerName && (
-                  <span style={{ color: TXT_PRI, fontWeight: 500 }}>{ownerName}</span>
+                {/* 订单拥有者在前，当前参与者在后 */}
+                {orderOwnerName && (
+                  <span style={{ color: TXT_PRI, fontWeight: 500 }}>{isParticipant ? `拥有者 ${orderOwnerName}` : orderOwnerName}</span>
                 )}
-                {/* 拥有者名字：用竖线分隔，颜色与参与者名字一致 */}
-                {isParticipant && orderOwnerName && (
+                {isParticipant && participantName && (
                   <>
-                    {ownerName && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
-                    <span style={{ color: TXT_PRI, fontWeight: 500 }}>{orderOwnerName}</span>
+                    {orderOwnerName && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
+                    <span style={{ color: SL_GREEN, fontWeight: 600 }}>参与者 {participantName}</span>
                   </>
                 )}
                 {items.map((item, i) => (

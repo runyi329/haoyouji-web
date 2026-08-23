@@ -600,13 +600,21 @@ export function FunderOrderCard({
     { value: 'borrower', label: '借方', color: '#F59E0B', defaultRateLabel: '利率' },
   ];
   // ===== END 内部 fallback =====
-  const { data: _cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
+  const { data: _cnyRateData } = trpc.exchange.getRate.useQuery(
+    { fromcoin: "USD", tocoin: "CNY", money: 1 },
+    { staleTime: 30000, refetchInterval: 30000, refetchIntervalInBackground: false }
+  );
   const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "6.8") || 6.8;
   // 共享担保池查询（仅当订单开启了本人订单共享时才查询）
   const orderShareMode = (order as any).collateral_share_mode;
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId, userId: Number(order.user_id) },
-    { enabled: ledgerId > 0 && orderShareMode === 'self', staleTime: 0, refetchInterval: 3000 }
+    {
+      enabled: ledgerId > 0 && orderShareMode === 'self',
+      staleTime: 5000,
+      refetchInterval: 15000,
+      refetchIntervalInBackground: false,
+    }
   );
   // 订单模式共享担保弹窗：点击订单号后打开订单详情（先从 allOrders 找，找不到则从 sharedPoolInfo 构造）
   const clickedOrder = clickedOrderNo ? (

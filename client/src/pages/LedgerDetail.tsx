@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
 
 import { FunderOrderCard, FunderNoteRow, formatCoinQtyFunder, useAccruedInterestFunder, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType } from "@/components/FunderOrderCard";
-import { FunderOrderCardV2, FunderOrderCardV2Light, FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
 import { matchesUserSearch } from "@/lib/userIdentity";
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
 
-import { FunderAIPanel } from "@/components/FunderAIPanel";
 import EthLeverageProduct from "@/components/EthLeverageProduct";
-import { OrderDetail } from "@/pages/CryptoPrediction";
 
 // 智能钱包动图（与首页保持一致）
 const WalletLottie = React.memo(function WalletLottie() {
@@ -1711,6 +1708,9 @@ function FunderOrderCardLegacy({
 
 
 const FunderOrderDetailModal = lazy(() => import('@/components/FunderOrderDetailModal'));
+const FunderOrderCardV2Silver = lazy(() => import('@/components/FunderOrderCardV2').then(module => ({ default: module.FunderOrderCardV2Silver })));
+const FunderLenderCardSilver = lazy(() => import('@/components/FunderOrderCardV2').then(module => ({ default: module.FunderLenderCardSilver })));
+const RecentAfOrderDetail = lazy(() => import('@/pages/CryptoPrediction').then(module => ({ default: module.OrderDetail })));
 const LedgerDetailAA = lazy(() => import('./LedgerDetailAA'));
 const LedgerDetailAG = lazy(() => import('./LedgerDetailAG'));
 const MemoLedgerPage = lazy(() => import('./MemoLedgerPage'));
@@ -2223,6 +2223,8 @@ export default function LedgerDetail() {
 
   // 获取记账记录列表（应用筛选条件）
   const { data: transactionsData, refetch: refetchTransactions } = trpc.ledger.getTransactions.useQuery(filters, {
+    // 52号账本使用独立的钱包、谷底增筹和融资付息数据链路，首屏不需要加载2000条普通记账记录。
+    enabled: ledgerId !== 52,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     staleTime: 0,
@@ -2261,9 +2263,10 @@ export default function LedgerDetail() {
     viewAsStatusData?.realUserLedgerRole === 'owner' || viewAsStatusData?.realUserLedgerRole === 'admin'
   );
   // 获取待审批记账数量（后端通过身份代入自动判断权限）
-  const { data: pendingApprovals = [] } = trpc.ledger.getPendingApprovals.useQuery({
-    ledgerId: Number(ledgerId),
-  });
+  const { data: pendingApprovals = [] } = trpc.ledger.getPendingApprovals.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: ledgerId !== 52 }
+  );
   const [viewAsSearch, setViewAsSearch] = useState('');
   const [viewAsRoleFilter, setViewAsRoleFilter] = useState<'all' | 'member' | 'funder'>('all');
   // 视角切换点击历史（localStorage持久化，用于智能排序）
@@ -2329,9 +2332,11 @@ export default function LedgerDetail() {
     });
   };
   useEffect(() => {
+    // 秒级倒计时仅服务AE抽奖账本，避免52号巨型页面每秒整体重渲染。
+    if ((ledgerData as any)?.type !== 'custom_ae') return;
     const timer = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [(ledgerData as any)?.type]);
   // 离开账本页面时清除 viewAs 身份代入状态
   useEffect(() => {
     return () => {
@@ -2341,7 +2346,8 @@ export default function LedgerDetail() {
 
   // 抽奖活动列表（全量，前端按子Tab过滤）
   const { data: lotteryActivities, isLoading: lotteryLoading } = trpc.lottery.listByLedger.useQuery(
-    { ledgerId: Number(ledgerId) }
+    { ledgerId: Number(ledgerId) },
+    { enabled: ledgerId !== 52 }
   );
   // ============================================================
   // ⚠️  账本类型隔离保护区 ⚠️
@@ -2411,19 +2417,25 @@ export default function LedgerDetail() {
   // AF 账本：总资产估值（充值到账 + 手动调账）
   const { data: afTotalAsset } = trpc.ledger.afGetMyTotalAsset.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF, refetchInterval: 3000, staleTime: 0 }
+    {
+      enabled: isCustomAF && !effectiveIsFunder,
+      refetchInterval: 15000,
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true,
+      staleTime: 5000,
+    }
   );
-  // 普通用户实时价格（从 afGetMyTotalAsset 返回的 livePrices，3秒刷新）
+  // 普通用户实时价格（从 afGetMyTotalAsset 返回的 livePrices，15秒刷新）
   const userLivePrices: Record<string, number> = (afTotalAsset as any)?.livePrices ?? {};
   // AF 账本：管理员统计（订单数 + 管理费）——后端控制权限，无权限返回null
   const { data: afAdminStats } = trpc.ledger.afAdminGetStats.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF }
+    { enabled: isCustomAF && !effectiveIsFunder && !viewAsUserId && (isOwner || isAdmin), staleTime: 60000 }
   );
   // AF 账本：人员视图管理费数据（owner/admin 才有权限，仅在人员视图展开时加载）
   const { data: afAdminOrdersForTree } = trpc.ledger.afAdminGetOrders.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF, staleTime: 60000 }
+    { enabled: isCustomAF && showInviteTree, staleTime: 5 * 60 * 1000, refetchOnWindowFocus: false }
   );
   // 按 userId 汇总：应付管理费（进行中订单累计）和缺口（应付 - 钱包余额，负数则为缺口）
   const afFeeByUser = useMemo(() => {
@@ -2568,27 +2580,28 @@ export default function LedgerDetail() {
   // ETH 持仓计算预览数据（仅 isCustomAF 时加载）
   const { data: ethPositionSettings } = trpc.ethPositionGetSettings.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF }
+    { enabled: isCustomAF && !effectiveIsFunder, staleTime: 5 * 60 * 1000, refetchOnWindowFocus: false }
   );
   const { data: ethPositionLevels } = trpc.ethPositionGetLevels.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF }
+    { enabled: isCustomAF && !effectiveIsFunder, staleTime: 5 * 60 * 1000, refetchOnWindowFocus: false }
   );
   // 计算实际持仓总量
   const ethActualQty = (ethPositionLevels?.levels ?? []).reduce((sum: number, l: any) => sum + (l.actualQty || 0), 0);
   const ethTargetQty = ethPositionSettings?.targetEthQty ?? 0;
   const ethPositionPct = ethTargetQty > 0 ? Math.min(1, ethActualQty / ethTargetQty) : 0;
 
-  // 资方专属：资产汇总（仅 funder 角色查询，管理员视角切换时传目标用户ID）
-  const { data: funderAssetSummary } = trpc.ledger.funderGetAssetSummary.useQuery(
-    { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF && effectiveIsFunder }
-  );
   // 资方专属：资产订单列表（funder 角色查询，管理员视角切换时传目标用户ID）
   const PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
   const { data: funderAssetData, isLoading: funderOrdersLoading } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: isCustomAF && !!ledgerId, refetchOnWindowFocus: true, staleTime: 5000, refetchInterval: 15000 }
+    {
+      enabled: isCustomAF && effectiveIsFunder && !!ledgerId,
+      refetchOnWindowFocus: true,
+      refetchInterval: 15000,
+      refetchIntervalInBackground: false,
+      staleTime: 5000,
+    }
   );
   const funderAssetOrders = (funderAssetData as any)?.orders ?? funderAssetData ?? [];
   // livePrices：优先用接口返回的最新价格，若还未加载则从 localStorage 读取上次缓存
@@ -2606,8 +2619,18 @@ export default function LedgerDetail() {
   const equityLivePrices: Record<string, number> = effectiveIsFunder
     ? funderLivePrices
     : (Object.keys(userLivePrices).length > 0 ? userLivePrices : cachedPrices);
-  // 实时 USD/CNY 汇率 — 走服务器tRPC，3秒刷新（与订单卡片保持一致）
-  const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: 'USD', tocoin: 'CNY', money: 1 }, { refetchInterval: 3000, staleTime: 1000 });
+  // 实时 USD/CNY 汇率 — 资方订单返回后启用，30秒刷新
+  const { data: cnyRateData } = trpc.exchange.getRate.useQuery(
+    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
+    {
+      // 先让资方订单独立返回，再加载外部汇率，避免同一tRPC批次被慢汇率拖住。
+      enabled: isCustomAF && effectiveIsFunder && funderAssetOrders.length > 0,
+      refetchInterval: 30000,
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true,
+      staleTime: 30000,
+    }
+  );
   const cnyRate = (cnyRateData?.success && cnyRateData?.money) ? parseFloat(cnyRateData.money) : 6.75;
 
 
@@ -2643,7 +2666,12 @@ export default function LedgerDetail() {
   const funderOrderIds = useMemo(() => (funderAssetOrders as any[]).map((o: any) => Number(o.id)), [funderAssetOrders]);
   const { data: interestSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
     { ledgerId: Number(ledgerId), orderIds: funderOrderIds, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: isCustomAF && funderOrderIds.length > 0, staleTime: 5000, refetchInterval: 15000 }
+    {
+      enabled: isCustomAF && effectiveIsFunder && funderOrderIds.length > 0,
+      staleTime: 5000,
+      refetchInterval: 15000,
+      refetchIntervalInBackground: false,
+    }
   );
   // 后端返回数组格式 [{orderId, currency, total, exchangeRate}]，按 orderId 分组，每个订单可能有多个币种
   const interestSummaryMap = useMemo(() => {
@@ -2681,14 +2709,14 @@ export default function LedgerDetail() {
   const inviteTreeViewAsId = (isOwner || isAdmin || (user as any)?.role === 'super_admin') && (user as any)?.id !== YJH_USER_ID ? YJH_USER_ID : (viewAsUserId || undefined);
   const { data: inviteTreeData, isLoading: inviteTreeLoading } = trpc.ledger.afGetInviteTree.useQuery(
     { ledgerId: Number(ledgerId), ...(inviteTreeViewAsId ? { viewAsUserId: inviteTreeViewAsId } : {}) },
-    { enabled: canAccessInviteTree && (showInviteTree || (user as any)?.id === YJH_USER_ID || viewAsUserId === YJH_USER_ID) }
+    { enabled: canAccessInviteTree && showInviteTree, staleTime: 5 * 60 * 1000, refetchOnWindowFocus: false }
   );
   // AF账本推荐页动态消息（仅yjh和管理员可见）
   const YJH_USER_ID_CONST = 4957151;
   const canSeeRecentDynamics = isCustomAF && ((user as any)?.id === YJH_USER_ID_CONST || isOwner || isAdmin);
   const { data: recentDynamics = [] } = trpc.ledger.afGetRecentDynamics.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: canSeeRecentDynamics, refetchInterval: 30000 }
+    { enabled: canSeeRecentDynamics && showInviteTree, staleTime: 60000, refetchInterval: 30000, refetchIntervalInBackground: false }
   );
   const { data: recentRecharges = [] } = trpc.ledger.afGetRecentRecharges.useQuery(
     { ledgerId: Number(ledgerId) },
@@ -5388,7 +5416,12 @@ export default function LedgerDetail() {
                 <div className="text-gray-400 text-base mb-1">{funderOrderTab === 'participant' ? '暂无参与订单' : '暂无本人订单'}</div>
               </div>
             ) : funderViewMode === 'card' ? (
-              /* 卡片模式：銀色铭牌风格 */
+              /* 卡片模式：银色铭牌风格，组件按资金方视角懒加载 */
+              <Suspense fallback={
+                <div className="space-y-3 px-1">
+                  {[1, 2].map(i => <div key={i} className="h-48 rounded-2xl animate-pulse" style={{ background: '#E5E7EB' }} />)}
+                </div>
+              }>
               <div className="space-y-3">
                 {funderDisplayOrders.filter((order: any) => order.status !== 'settled' && (funderOrderTab === 'participant' ? isFunderParticipantOrder(order) : !isFunderParticipantOrder(order))).map((order: any) => {
                   // 按利率符号判断布局：正号（rate>=0）→付息型（突出利息），负号（rate<0）→权益型（突出持有数量/浮动盈亏）
@@ -5424,6 +5457,7 @@ export default function LedgerDetail() {
                   );
                 })}
               </div>
+              </Suspense>
             ) : (
               /* 订单模式：原始 FunderOrderCard */
               <div className="space-y-3">
@@ -6950,11 +6984,13 @@ export default function LedgerDetail() {
                         <button type="button" onClick={() => setCompletedDetailOrder(null)} className="text-gray-400 text-xl leading-none">×</button>
                       </div>
                       <div className="pb-4">
-                        <OrderDetail
-                          order={completedDetailOrder}
-                          timeStr={completedDetailOrder.eventTime ? new Date(completedDetailOrder.eventTime).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : ''}
-                          ledgerId={Number(ledgerId)}
-                        />
+                        <Suspense fallback={<div className="py-10 text-center text-sm text-gray-400">加载订单详情...</div>}>
+                          <RecentAfOrderDetail
+                            order={completedDetailOrder}
+                            timeStr={completedDetailOrder.eventTime ? new Date(completedDetailOrder.eventTime).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : ''}
+                            ledgerId={Number(ledgerId)}
+                          />
+                        </Suspense>
                       </div>
                     </div>
                   </div>
