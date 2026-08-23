@@ -881,6 +881,30 @@ export function FunderOrderCard({
   const headerTagCount = (show('showOwnerName') ? Number(Boolean(headerOwnerLabel)) + Number(Boolean(headerParticipantLabel)) : 0)
     + Number(Boolean(order.asset_type && show('assetType')))
     + manualHeaderTags.length;
+  const headerTagsRef = useRef<HTMLDivElement>(null);
+  const [hasHeaderTagOverflow, setHasHeaderTagOverflow] = useState(false);
+  useEffect(() => {
+    const node = headerTagsRef.current;
+    if (!node || headerTagsExpanded) return;
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const childClipped = Array.from(node.querySelectorAll<HTMLElement>('[data-header-tag]'))
+          .some(tag => tag.scrollWidth > tag.clientWidth + 1);
+        setHasHeaderTagOverflow(node.scrollWidth > node.clientWidth + 1 || childClipped);
+      });
+    };
+    measure();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    observer?.observe(node);
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [headerTagsExpanded, headerTagCount, headerOwnerLabel, headerParticipantLabel, order.asset_type, manualHeaderTags.join('\u0001')]);
   // 52号账本：手续费仅在订单控制区明确开启后，才在订单模式向前端展示。
   const isLedger52 = Number(ledgerId ?? (order as any).ledger_id) === 52;
   const showTradingFee = isLedger52 && dc?.tradingFee === true;
@@ -1016,19 +1040,20 @@ export function FunderOrderCard({
           )
         )}
         {/* 标签区：默认仅显示一行，展开后显示全部；自动标签与手动标签均计数 */}
-        <div className={`flex items-center gap-1 flex-1 min-w-0 ${headerTagsExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden h-6'}`}>
+        <div ref={headerTagsRef} className={`relative flex items-center gap-1 flex-1 min-w-0 ${headerTagsExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden h-6'}`}>
           {show('showOwnerName') && headerOwnerLabel && (
-            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[130px] shrink-0" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
+            <span data-header-tag className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[130px] shrink-0" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
               {isParticipantVisual ? `拥有者 ${headerOwnerLabel}` : headerOwnerLabel}
             </span>
           )}
           {show('showOwnerName') && isParticipantVisual && headerParticipantLabel && (
-            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[130px] shrink-0" style={{ backgroundColor: '#DCFCE7', color: '#15803D' }}>
+            <span data-header-tag className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[130px] shrink-0" style={{ backgroundColor: '#DCFCE7', color: '#15803D' }}>
               参与者 {headerParticipantLabel}
             </span>
           )}
           {order.asset_type && show('assetType') && (
             <span
+              data-header-tag
               className="text-[11px] font-medium px-1.5 py-0.5 rounded shrink-0"
               style={order.asset_type === 'crypto_option'
                 ? { backgroundColor: '#F3E8FF', color: '#7C3AED' }
@@ -1041,19 +1066,33 @@ export function FunderOrderCard({
           {manualHeaderTags.map((tag, i) => (
             <span
               key={`${tag}-${i}`}
-              className={`text-[11px] font-medium px-1.5 py-0.5 rounded shrink-0 ${headerTagsExpanded ? 'max-w-full whitespace-normal break-all' : 'max-w-[220px] truncate'}`}
+              data-header-tag
+              className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${headerTagsExpanded ? 'shrink-0 max-w-full whitespace-normal break-all' : 'shrink min-w-[54px] max-w-[220px] truncate'}`}
               style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}
             >
               {tag}
             </span>
           ))}
+          {!headerTagsExpanded && hasHeaderTagOverflow && (
+            <span
+              className="absolute right-0 top-0 h-6 w-8 pointer-events-none flex items-center justify-end pr-0.5 text-[12px]"
+              style={{
+                color: '#9CA3AF',
+                background: isParticipantVisual
+                  ? 'linear-gradient(90deg, rgba(220,252,231,0), #DCFCE7 58%)'
+                  : 'linear-gradient(90deg, rgba(208,214,238,0), #D0D6EE 58%)',
+              }}
+            >
+              …
+            </span>
+          )}
         </div>
-        {headerTagCount > 0 && (
+        {hasHeaderTagOverflow && (
           <button
             type="button"
             onClick={e => { e.stopPropagation(); setHeaderTagsExpanded(v => !v); }}
             className="flex items-center gap-0.5 shrink-0 h-6 px-1 rounded-md"
-            style={{ color: '#6366F1' }}
+            style={{ color: '#9CA3AF' }}
             aria-label={headerTagsExpanded ? `收起${headerTagCount}个标签` : `展开${headerTagCount}个标签`}
           >
             <span className="text-[11px] font-semibold tabular-nums">{headerTagCount}</span>

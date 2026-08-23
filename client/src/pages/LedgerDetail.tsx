@@ -647,6 +647,30 @@ function FunderOrderCardLegacy({
     + Number(Boolean(isInvited))
     + (show('showOwnerName') ? Number(Boolean(legacyOwnerLabel)) + Number(Boolean(legacyParticipantLabel)) : 0)
     + legacyManualTags.length;
+  const legacyHeaderTagsRef = useRef<HTMLDivElement>(null);
+  const [hasLegacyHeaderTagOverflow, setHasLegacyHeaderTagOverflow] = useState(false);
+  useEffect(() => {
+    const node = legacyHeaderTagsRef.current;
+    if (!node || headerTagsExpanded) return;
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const childClipped = Array.from(node.querySelectorAll<HTMLElement>('[data-header-tag]'))
+          .some(tag => tag.scrollWidth > tag.clientWidth + 1);
+        setHasLegacyHeaderTagOverflow(node.scrollWidth > node.clientWidth + 1 || childClipped);
+      });
+    };
+    measure();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    observer?.observe(node);
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [headerTagsExpanded, legacyHeaderTagCount, legacyOwnerLabel, legacyParticipantLabel, order.asset_type, legacyManualTags.join('\u0001')]);
   const approxPaidMode = typeof dc?.approxPaid === 'string' ? dc.approxPaid : 'U';
   const approxPaidValue = approxPaidMode === 'U'
     ? (interestUnit === 'U' ? displayPaid : displayPaid / cnyRate)
@@ -705,64 +729,81 @@ function FunderOrderCardLegacy({
 
       {/* 帽子：标签行 + 操作按钮 */}
       <div className="flex items-start justify-between gap-2 px-4 py-2.5" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: isInvited ? '#F0FDF4' : '#FAFBFF' }}>
-        <div className={`flex items-center gap-1.5 flex-1 min-w-0 ${headerTagsExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden h-6'}`}>
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
+        <div ref={legacyHeaderTagsRef} className={`relative flex items-center gap-1.5 flex-1 min-w-0 ${headerTagsExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden h-6'}`}>
+          <span data-header-tag className="text-xs font-bold px-2 py-0.5 rounded-full text-white shrink-0" style={{ backgroundColor: coinColor }}>
             {order.coin}
           </span>
           {order.asset_type && show('assetType') && (
-            <span className="text-xs px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
+            <span data-header-tag className="text-xs px-1.5 py-0.5 font-medium shrink-0" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
               {order.asset_type === 'stock' ? '股票' : '数字币'}
             </span>
           )}
           {isAdmin ? (
             <button
               onClick={() => setShowStatusSheet(true)}
-              className="text-xs px-1.5 py-0.5 rounded-full font-medium transition-opacity hover:opacity-70"
+              data-header-tag
+              className="text-xs px-1.5 py-0.5 rounded-full font-medium transition-opacity hover:opacity-70 shrink-0"
               style={{ backgroundColor: `${statusColor}15`, color: statusColor }}
             >
               {statusLabel}
             </button>
           ) : (
-            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: `${statusColor}15`, color: statusColor }}>
+            <span data-header-tag className="text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: `${statusColor}15`, color: statusColor }}>
               {statusLabel}
             </span>
           )}
           {isInvited && (
-            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#ECFDF5', color: '#059669', border: '1px solid #A7F3D0' }}>
+            <span data-header-tag className="text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: '#ECFDF5', color: '#059669', border: '1px solid #A7F3D0' }}>
               受邀
             </span>
           )}
           {show('showOwnerName') && legacyOwnerLabel && (
-            <span className="text-xs font-medium px-1.5 py-0.5 truncate max-w-[130px] shrink-0" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
+            <span data-header-tag className="text-xs font-medium px-1.5 py-0.5 truncate max-w-[130px] shrink-0" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
               {isInvited ? `拥有者 ${legacyOwnerLabel}` : legacyOwnerLabel}
             </span>
           )}
           {show('showOwnerName') && isInvited && legacyParticipantLabel && (
-            <span className="text-xs font-medium px-1.5 py-0.5 truncate max-w-[130px] shrink-0" style={{ border: '1px solid #86EFAC', borderRadius: '3px', color: '#15803D', backgroundColor: '#DCFCE7' }}>
+            <span data-header-tag className="text-xs font-medium px-1.5 py-0.5 truncate max-w-[130px] shrink-0" style={{ border: '1px solid #86EFAC', borderRadius: '3px', color: '#15803D', backgroundColor: '#DCFCE7' }}>
               参与者 {legacyParticipantLabel}
             </span>
           )}
           {legacyManualTags.map((tag, i) => (
             <span
               key={`${tag}-${i}`}
-              className={`text-xs font-medium px-1.5 py-0.5 shrink-0 ${headerTagsExpanded ? 'max-w-full whitespace-normal break-all' : 'max-w-[220px] truncate'}`}
+              data-header-tag
+              className={`text-xs font-medium px-1.5 py-0.5 ${headerTagsExpanded ? 'shrink-0 max-w-full whitespace-normal break-all' : 'shrink min-w-[54px] max-w-[220px] truncate'}`}
               style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}
             >
               {tag}
             </span>
           ))}
+          {!headerTagsExpanded && hasLegacyHeaderTagOverflow && (
+            <span
+              className="absolute right-0 top-0 h-6 w-8 pointer-events-none flex items-center justify-end pr-0.5 text-[12px]"
+              style={{
+                color: '#9CA3AF',
+                background: isInvited
+                  ? 'linear-gradient(90deg, rgba(240,253,244,0), #F0FDF4 58%)'
+                  : 'linear-gradient(90deg, rgba(250,251,255,0), #FAFBFF 58%)',
+              }}
+            >
+              …
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
-          <button
-            type="button"
-            onClick={e => { e.stopPropagation(); setHeaderTagsExpanded(v => !v); }}
-            className="flex items-center gap-0.5 h-6 px-1 rounded-md"
-            style={{ color: '#6366F1' }}
-            aria-label={headerTagsExpanded ? `收起${legacyHeaderTagCount}个标签` : `展开${legacyHeaderTagCount}个标签`}
-          >
-            <span className="text-[11px] font-semibold tabular-nums">{legacyHeaderTagCount}</span>
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${headerTagsExpanded ? 'rotate-180' : ''}`} />
-          </button>
+          {hasLegacyHeaderTagOverflow && (
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); setHeaderTagsExpanded(v => !v); }}
+              className="flex items-center gap-0.5 h-6 px-1 rounded-md"
+              style={{ color: '#9CA3AF' }}
+              aria-label={headerTagsExpanded ? `收起${legacyHeaderTagCount}个标签` : `展开${legacyHeaderTagCount}个标签`}
+            >
+              <span className="text-[11px] font-semibold tabular-nums">{legacyHeaderTagCount}</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${headerTagsExpanded ? 'rotate-180' : ''}`} />
+            </button>
+          )}
           {!isInvited && (
             <button
               onClick={() => handleOpenParticipants?.(order.id, order.interest_base || '')}
