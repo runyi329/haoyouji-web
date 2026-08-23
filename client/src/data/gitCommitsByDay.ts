@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-23
+// 生成时间：2026-08-24
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8977,5 +8977,13 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-08-22T01:57:33Z", type: "fix", cleanMessage: "order mode shared collateral detail popup - add fallback and raise z-index" },
     { date: "2026-08-22T06:38:35Z", type: "feat", cleanMessage: "show recent AF trade events with order details" },
     { date: "2026-08-22T07:51:53Z", type: "feat", cleanMessage: "add AAOI to funder orders and live pricing" },
+  ],
+  "2026-08-23": [
+    { date: "2026-08-22T18:09:30Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-23T01:56:59Z", type: "feat", cleanMessage: "isolate funder participant suborders" },
+    { date: "2026-08-23T02:14:53Z", type: "fix", cleanMessage: "distinguish owner and participant names" },
+    { date: "2026-08-23T02:38:01Z", type: "feat", cleanMessage: "add paid interest display control and collapsible tags" },
+    { date: "2026-08-23T03:02:06Z", type: "fix", cleanMessage: "refine adaptive header tag overflow" },
+    { date: "2026-08-23T04:20:24Z", type: "perf", cleanMessage: "optimize ledger 52 loading" },
   ],
 };
