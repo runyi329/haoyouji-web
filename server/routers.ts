@@ -128,6 +128,95 @@ async function ensureAfSimulationColumns(): Promise<void> {
 }
 // ================================================================
 
+// ===== 融资付息参与者子订单字段兼容 =====
+// 参与者子订单只用于记账展示，绝不触发钱包、余额或充值流水。
+let funderParticipantSnapshotColumnsEnsured = false;
+async function ensureFunderParticipantSnapshotColumns(): Promise<void> {
+  if (funderParticipantSnapshotColumnsEnsured) return;
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败，无法初始化参与者子订单字段');
+  const [tableRows] = await (conn as any).execute(
+    `SELECT COUNT(*) AS cnt FROM information_schema.tables
+     WHERE table_schema = DATABASE() AND table_name = 'ledger_order_participants'`
+  );
+  if (Number((tableRows as any[])?.[0]?.cnt || 0) === 0) return;
+  const [columnRows] = await (conn as any).execute(
+    `SELECT COLUMN_NAME FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = 'ledger_order_participants'
+       AND column_name IN ('order_snapshot', 'previous_role', 'parent_archive_state')`
+  );
+  const existing = new Set((columnRows as any[]).map((r: any) => String(r.COLUMN_NAME || r.column_name)));
+  if (!existing.has('order_snapshot')) {
+    try { await (conn as any).execute(`ALTER TABLE ledger_order_participants ADD COLUMN order_snapshot LONGTEXT NULL COMMENT '参与者独立子订单完整业务快照'`); } catch {}
+  }
+  if (!existing.has('previous_role')) {
+    try { await (conn as any).execute(`ALTER TABLE ledger_order_participants ADD COLUMN previous_role VARCHAR(20) NULL COMMENT '停用前角色，用于恢复参与关系'`); } catch {}
+  }
+  if (!existing.has('parent_archive_state')) {
+    try { await (conn as any).execute(`ALTER TABLE ledger_order_participants ADD COLUMN parent_archive_state VARCHAR(20) NULL COMMENT '主订单删除时参与者的保留或统一结算状态'`); } catch {}
+  }
+  // 旧参与关系首次升级时，以当前主订单为默认快照，并叠加已经存在的参与者独立字段。
+  const [backfillRows] = await (conn as any).execute(
+    `SELECT p.id AS participant_id, p.amount AS participant_amount, p.amount_currency AS participant_amount_currency,
+            p.interest_rate AS participant_interest_rate, p.interest_base AS participant_interest_base,
+            p.interest_base_currency AS participant_interest_base_currency,
+            p.interest_payment_type AS participant_interest_payment_type,
+            p.interest_start_date AS participant_interest_start_date,
+            p.interest_rate_currency AS participant_interest_rate_currency,
+            p.display_config AS participant_display_config, p.note AS participant_note,
+            p.buy_date_override, p.broker_name_override, p.broker_account_override, o.*
+     FROM ledger_order_participants p
+     INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
+     WHERE p.order_snapshot IS NULL`
+  );
+  for (const row of (backfillRows as any[])) {
+    const snapshot = buildFunderParticipantSnapshot(row);
+    if (row.participant_amount != null && row.participant_amount !== '') snapshot.amount = row.participant_amount;
+    if (row.participant_amount_currency) snapshot.amount_currency = row.participant_amount_currency;
+    if (row.participant_interest_rate != null && row.participant_interest_rate !== '') snapshot.interest_rate_annual = row.participant_interest_rate;
+    if (row.participant_interest_base != null && row.participant_interest_base !== '') snapshot.interest_base = row.participant_interest_base;
+    if (row.participant_interest_base_currency) snapshot.interest_base_currency = row.participant_interest_base_currency;
+    if (row.participant_interest_payment_type) snapshot.interest_payment_type = row.participant_interest_payment_type;
+    if (row.participant_interest_start_date) snapshot.interest_start_date = row.participant_interest_start_date;
+    if (row.participant_interest_rate_currency) snapshot.interest_rate_currency = row.participant_interest_rate_currency;
+    if (row.participant_display_config) snapshot.display_config = row.participant_display_config;
+    if (row.participant_note != null) snapshot.public_note = row.participant_note;
+    if (row.buy_date_override) snapshot.buy_date = row.buy_date_override;
+    if (row.broker_name_override) snapshot.broker_name = row.broker_name_override;
+    if (row.broker_account_override) snapshot.broker_account = row.broker_account_override;
+    await (conn as any).execute('UPDATE ledger_order_participants SET order_snapshot = ? WHERE id = ?', [JSON.stringify(snapshot), row.participant_id]);
+  }
+  funderParticipantSnapshotColumnsEnsured = true;
+}
+
+const FUNDER_PARTICIPANT_SNAPSHOT_FIELDS = [
+  'coin', 'amount', 'amount_currency', 'buy_price', 'buy_date', 'buy_quantity', 'storage_account', 'status',
+  'admin_note', 'public_note', 'interest_rate_annual', 'interest_payment_type', 'interest_base',
+  'interest_base_currency', 'interest_rate_currency', 'interest_start_date', 'collateral_coin', 'collateral_qty',
+  'finance_type', 'collateral_assets', 'lent_out_assets', 'show_profit_share', 'commission_share', 'display_config',
+  'asset_type', 'tags', 'collateral_share_mode', 'principal_lent_out', 'broker_name', 'broker_account',
+  'option_info', 'trade_direction', 'order_fill_status', 'order_perspective', 'trading_fee_rate_per_mille',
+  'trading_fee_status', 'collateral_source', 'settled_at'
+] as const;
+
+function buildFunderParticipantSnapshot(source: any): Record<string, any> {
+  const snapshot: Record<string, any> = {};
+  for (const field of FUNDER_PARTICIPANT_SNAPSHOT_FIELDS) {
+    if (source && source[field] !== undefined) snapshot[field] = source[field];
+  }
+  return snapshot;
+}
+
+function parseFunderParticipantSnapshot(value: unknown): Record<string, any> | null {
+  if (!value) return null;
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, any> : null;
+  } catch {
+    return null;
+  }
+}
+
 // ===== Deribit 数据库缓存（每天北京时间凌晨 00:00 刷新，跨实例共享）=====
 // 使用数据库存储缓存，解决 Autoscale 无状态环境下内存缓存失效的问题
 const DERIBIT_MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -16451,6 +16540,7 @@ ${klinesSummary}
       .input(z.object({ ledgerId: z.number(), userId: z.number().optional(), viewAsUserId: z.number().optional(), roleFilter: z.enum(["funder", "admin"]).optional(), financeOnly: z.boolean().optional() }))
       .query(async ({ ctx, input }) => {
         const _t0 = Date.now();
+        await ensureFunderParticipantSnapshotColumns();
         // 并行初始化：同时获取 DB 连接和 Drizzle DB
         const [db, { getDbConnection }] = await Promise.all([
           getLedgerDb(),
@@ -16465,7 +16555,7 @@ ${klinesSummary}
             sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
           ) as Promise<any>,
           conn ? conn.execute(
-            'SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ?',
+            'SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND role <> \'inactive\'',
             [input.ledgerId, input.viewAsUserId || input.userId || ctx.user.id]
           ).catch(() => null) as Promise<any> : Promise.resolve(null)
         ]);
@@ -16491,7 +16581,7 @@ ${klinesSummary}
         } else if (conn) {
           try {
             const pRows2 = await conn.execute(
-              'SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ?',
+              'SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND role <> \'inactive\'',
               [input.ledgerId, participantQueryUserIdEarly]
             ) as any;
             const pArr = Array.isArray(pRows2[0]) ? pRows2[0] : (Array.isArray(pRows2) ? pRows2 : []);
@@ -16512,7 +16602,7 @@ ${klinesSummary}
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-               WHERE fo.ledger_id = ? AND fo.deleted_at IS NULL AND lm.role IN (${memberRoleFilter}) AND (fo.user_id = ? OR fo.id IN (${placeholders}))
+               WHERE fo.ledger_id = ? AND lm.role IN (${memberRoleFilter}) AND ((fo.user_id = ? AND fo.deleted_at IS NULL) OR fo.id IN (${placeholders}))
                ORDER BY fo.created_at DESC`,
               [input.ledgerId, targetUserId, ...participantOrderIds]
             );
@@ -16538,7 +16628,7 @@ ${klinesSummary}
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-               WHERE fo.ledger_id = ? AND fo.deleted_at IS NULL AND fo.id IN (${placeholders})
+               WHERE fo.ledger_id = ? AND fo.id IN (${placeholders})
                ORDER BY fo.created_at DESC`,
               [input.ledgerId, ...participantOrderIds]
             );
@@ -16551,7 +16641,7 @@ ${klinesSummary}
             let targetParticipantOrderIds: number[] = [];
             try {
               const tpRows = await conn!.execute(
-                'SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ?',
+                'SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND role <> \'inactive\'',
                 [input.ledgerId, targetUserId]
               ) as any;
               const tpArr = Array.isArray(tpRows[0]) ? tpRows[0] : (Array.isArray(tpRows) ? tpRows : []);
@@ -16564,7 +16654,7 @@ ${klinesSummary}
                  FROM ledger_orders fo
                  LEFT JOIN users u ON u.id = fo.user_id
                  LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-                 WHERE fo.ledger_id = ? AND fo.deleted_at IS NULL AND lm.role IN (${memberRoleFilter}) AND (fo.user_id = ? OR fo.id IN (${ph}))
+                 WHERE fo.ledger_id = ? AND lm.role IN (${memberRoleFilter}) AND ((fo.user_id = ? AND fo.deleted_at IS NULL) OR fo.id IN (${ph}))
                  ORDER BY fo.created_at DESC`,
                 [input.ledgerId, targetUserId, ...targetParticipantOrderIds]
               );
@@ -16639,12 +16729,12 @@ ${klinesSummary}
           const [piRowsResult, piDetailRowsResult, puRowsResult] = await Promise.all([
             // 1. 参与方配置
             conn.execute(
-              'SELECT order_id, role, interest_rate, commission_rate, commission_base, commission_start_date, paid_commission, note FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ?',
+              'SELECT order_id, role, interest_rate, interest_base_currency, commission_rate, commission_base, commission_start_date, paid_commission, paid_interest, note FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND role <> \'inactive\'',
               [input.ledgerId, participantQueryUserId]
             ).catch(() => null) as Promise<any>,
             // 2. 参与者独立字段（只有有参与订单时才查）
             ph2 ? conn.execute(
-              `SELECT order_id, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, buy_date_override, broker_name_override, broker_account_override, note FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${ph2})`,
+              `SELECT order_id, amount, amount_currency, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, buy_date_override, broker_name_override, broker_account_override, order_no_override, paid_interest, note, order_snapshot FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND role <> 'inactive' AND order_id IN (${ph2})`,
               [input.ledgerId, participantQueryUserId, ...participantOrderIds]
             ).catch((e: any) => { console.error('[funderGetAssetOrders] piDetail error:', e); return null; }) as Promise<any> : Promise.resolve(null),
             // 3. 参与者名字（只有有参与订单时才查）
@@ -16689,8 +16779,9 @@ ${klinesSummary}
                 commissionBase: pi.commission_base || o.interest_base || null,
                 commissionStartDate: pi.commission_start_date || o.interest_start_date || null,
                 paidCommission: pi.paid_commission || '0',
+                paidInterest: pi.paid_interest || '0',
                 note: pi.note || null,
-                interestBaseCurrency: (['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes(o.interest_base_currency || '') ? 'CNY' : 'USDT'),
+                interestBaseCurrency: (['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes(pi.interest_base_currency || o.interest_base_currency || '') ? 'CNY' : 'USDT'),
               }
             };
           }
@@ -16700,13 +16791,22 @@ ${klinesSummary}
           const isParticipantOrder = participantQueryUserIdSet.has(Number(o.id)) && Number(o.user_id) !== participantQueryUserId;
           if (!isParticipantOrder) return o;
           const pi = piDetailMap[Number(o.id)];
-          const result = { ...o };
+          const snapshot = parseFunderParticipantSnapshot(pi?.order_snapshot);
+          const result = { ...o, ...(snapshot || {}) };
+          // 系统关联字段始终沿用主订单，业务字段则由参与者完整快照独立覆盖。
+          result.id = o.id;
+          result.ledger_id = o.ledger_id;
+          result.user_id = o.user_id;
+          result.order_no = pi?.order_no_override || o.order_no;
+          result._participantParentDeleted = Boolean(o.deleted_at);
           // 参与者身份只用于附带参与者专属数据与视觉状态；
           // 本人 / 他人位置沿用订单自身的 order_perspective，不能在此强制改写。
-          result.order_perspective = o.order_perspective || 'self';
+          result.order_perspective = result.order_perspective || o.order_perspective || 'self';
           result.order_owner_name = o.owner_label || o.username || null;
           if (participantUserName) result.owner_label = participantUserName;
           if (pi) {
+            if (pi.amount != null && pi.amount !== '') result.amount = pi.amount;
+            if (pi.amount_currency) result.amount_currency = pi.amount_currency;
             if (pi.interest_rate != null && pi.interest_rate !== '') result.interest_rate_annual = pi.interest_rate;
             if (pi.interest_base) result.interest_base = pi.interest_base;
             if (pi.interest_base_currency) result.interest_base_currency = pi.interest_base_currency;
@@ -16717,7 +16817,11 @@ ${klinesSummary}
             if (pi.buy_date_override) result.buy_date = pi.buy_date_override;
             if (pi.broker_name_override) result.broker_name = pi.broker_name_override;
             if (pi.broker_account_override) result.broker_account = pi.broker_account_override;
-            if (pi.note) result.note = pi.note;
+            if (pi.order_no_override) result.order_no = pi.order_no_override;
+            result.participant_paid_interest = pi.paid_interest || '0';
+            // 参与者备注必须与订单拥有者的 public_note 完全隔离；空备注也不能回退到主订单备注。
+            result.public_note = pi.note || null;
+            result.note = pi.note || null;
           }
           return result;
         });
@@ -16728,30 +16832,42 @@ ${klinesSummary}
         if (conn && ordersWithParticipantView.length > 0) {
           const orderIds = ordersWithParticipantView.map((o: any) => Number(o.id));
           const placeholders = orderIds.map(() => '?').join(',');
-          const isParticipantQuery = participantOrderIds.length > 0 && !isManager;
-          const paidWhereClause = isParticipantQuery
-            ? `order_id IN (${placeholders}) AND participant_user_id = ?`
-            : `order_id IN (${placeholders}) AND participant_user_id IS NULL`;
-          const paidParams = isParticipantQuery ? [...orderIds, participantQueryUserId] : orderIds;
           const [ptRowsResult, pcRowsResult] = await Promise.all([
             conn.execute(
-              `SELECT order_id, IFNULL(currency, 'U') as currency, SUM(amount) as total_paid FROM ledger_order_payments WHERE ${paidWhereClause} GROUP BY order_id, IFNULL(currency, 'U')`,
-              paidParams
+              `SELECT order_id, participant_user_id, amount, IFNULL(currency, 'U') as currency, IFNULL(exchange_rate, 6.75) as exchange_rate
+               FROM ledger_order_payments WHERE order_id IN (${placeholders})`,
+              orderIds
             ).catch(() => null) as Promise<any>,
             conn.execute(
-              `SELECT order_id, user_id FROM ledger_order_participants WHERE order_id IN (${placeholders})`,
+              `SELECT order_id, user_id FROM ledger_order_participants WHERE role <> 'inactive' AND order_id IN (${placeholders})`,
               orderIds
             ).catch(() => null) as Promise<any>
           ]);
           if (ptRowsResult) {
             const ptArr = Array.isArray(ptRowsResult[0]) ? ptRowsResult[0] : (Array.isArray(ptRowsResult) ? ptRowsResult : []);
+            const orderMap = new Map(ordersWithParticipantView.map((o: any) => [Number(o.id), o]));
+            const participantOrderSet = new Set(participantOrderIds.map(Number));
             for (const row of ptArr) {
               const oid = Number(row.order_id);
-              if (!paidTotalMap[oid]) {
-                paidTotalMap[oid] = { amount: parseFloat(row.total_paid || '0'), currency: row.currency };
-              } else {
-                paidTotalMap[oid].amount += parseFloat(row.total_paid || '0');
-              }
+              const viewedOrder: any = orderMap.get(oid);
+              if (!viewedOrder) continue;
+              const scopedView = targetUserId !== null || !isManager;
+              const isParticipantViewForOrder = scopedView && participantOrderSet.has(oid) && Number(viewedOrder.user_id) !== participantQueryUserId;
+              const expectedParticipantId = isParticipantViewForOrder ? participantQueryUserId : null;
+              const rowParticipantId = row.participant_user_id == null ? null : Number(row.participant_user_id);
+              if (rowParticipantId !== expectedParticipantId) continue;
+
+              const baseCurrencyRaw = String(viewedOrder.interest_base_currency || 'USDT').toUpperCase();
+              const baseCurrency = baseCurrencyRaw === 'CNY' ? 'CNY' : 'USDT';
+              const paymentCurrencyRaw = String(row.currency || 'U').toUpperCase();
+              const paymentCurrency = paymentCurrencyRaw === 'CNY' ? 'CNY' : 'USDT';
+              const amount = parseFloat(row.amount || '0');
+              const exchangeRate = parseFloat(row.exchange_rate || '6.75') || 6.75;
+              let converted = amount;
+              if (paymentCurrency === 'CNY' && baseCurrency === 'USDT') converted = amount / exchangeRate;
+              if (paymentCurrency === 'USDT' && baseCurrency === 'CNY') converted = amount * exchangeRate;
+              if (!paidTotalMap[oid]) paidTotalMap[oid] = { amount: 0, currency: baseCurrency };
+              paidTotalMap[oid].amount += converted;
             }
           }
           if (pcRowsResult) {
@@ -17157,7 +17273,11 @@ ${klinesSummary}
 
     // 管理员删除资方资产订单
     funderDeleteAssetOrder: protectedProcedure
-      .input(z.object({ id: z.number(), ledgerId: z.number() }))
+      .input(z.object({
+        id: z.number(),
+        ledgerId: z.number(),
+        participantAction: z.enum(['retain', 'settle_all']).default('settle_all'),
+      }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         // 验证管理员权限
@@ -17166,10 +17286,47 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-        await db.execute(
-          sql`UPDATE ledger_orders SET deleted_at = NOW() WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND deleted_at IS NULL`
-        );
-        return { success: true };
+        await ensureFunderParticipantSnapshotColumns();
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const [orderRows] = await conn.execute(
+          'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1',
+          [input.id, input.ledgerId]
+        ) as any;
+        const order = Array.isArray(orderRows) ? orderRows[0] : null;
+        if (!order) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在或已删除' });
+        const [participantRows] = await conn.execute(
+          "SELECT id, user_id, role, order_snapshot FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive'",
+          [input.id, input.ledgerId]
+        ) as any;
+        const participants = Array.isArray(participantRows) ? participantRows : [];
+        if (input.participantAction === 'retain') {
+          await conn.execute(
+            "UPDATE ledger_order_participants SET parent_archive_state = 'retained', updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive'",
+            [input.id, input.ledgerId]
+          );
+          await conn.execute('UPDATE ledger_orders SET deleted_at = NOW() WHERE id = ? AND ledger_id = ?', [input.id, input.ledgerId]);
+        } else {
+          const settledAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+          for (const participant of participants) {
+            const snapshot = {
+              ...buildFunderParticipantSnapshot(order),
+              ...(parseFunderParticipantSnapshot(participant.order_snapshot) || {}),
+              status: 'settled',
+              settled_at: settledAt,
+            };
+            await conn.execute(
+              `UPDATE ledger_order_participants SET order_snapshot = ?, previous_role = role, role = 'inactive',
+               parent_archive_state = 'settled', updated_at = NOW() WHERE id = ?`,
+              [JSON.stringify(snapshot), participant.id]
+            );
+          }
+          await conn.execute(
+            "UPDATE ledger_orders SET status = 'settled', settled_at = ?, deleted_at = NOW() WHERE id = ? AND ledger_id = ?",
+            [settledAt, input.id, input.ledgerId]
+          );
+        }
+        return { success: true, participantCount: participants.length, participantAction: input.participantAction };
       }),
 
     // 获取已删除的订单（回收站）
@@ -17210,9 +17367,31 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-        await db.execute(
-          sql`UPDATE ledger_orders SET deleted_at = NULL WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
-        );
+        await ensureFunderParticipantSnapshotColumns();
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        await conn.execute('UPDATE ledger_orders SET deleted_at = NULL WHERE id = ? AND ledger_id = ?', [input.id, input.ledgerId]);
+        const [archivedRows] = await conn.execute(
+          "SELECT id, previous_role, order_snapshot, parent_archive_state FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ? AND parent_archive_state IN ('retained','settled')",
+          [input.id, input.ledgerId]
+        ) as any;
+        const archivedParticipants = Array.isArray(archivedRows) ? archivedRows : [];
+        const restoringSettledGroup = archivedParticipants.some((p: any) => p.parent_archive_state === 'settled');
+        if (restoringSettledGroup) {
+          await conn.execute("UPDATE ledger_orders SET status = 'active', settled_at = NULL WHERE id = ? AND ledger_id = ?", [input.id, input.ledgerId]);
+        }
+        for (const participant of archivedParticipants) {
+          const snapshot = parseFunderParticipantSnapshot(participant.order_snapshot);
+          if (snapshot && participant.parent_archive_state === 'settled') {
+            snapshot.status = 'active';
+            snapshot.settled_at = null;
+          }
+          await conn.execute(
+            `UPDATE ledger_order_participants SET role = COALESCE(previous_role, NULLIF(role, 'inactive'), 'funder'), previous_role = NULL,
+             parent_archive_state = NULL, order_snapshot = ?, updated_at = NOW() WHERE id = ?`,
+            [snapshot ? JSON.stringify(snapshot) : participant.order_snapshot, participant.id]
+          );
+        }
         return { success: true };
       }),
 
@@ -17226,6 +17405,15 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        await ensureFunderParticipantSnapshotColumns();
+        const participantRows = await db.execute(
+          sql`SELECT COUNT(*) AS cnt FROM ledger_order_participants
+              WHERE order_id = ${input.id} AND ledger_id = ${input.ledgerId}`
+        ) as any;
+        const participantHistoryCount = Number((participantRows[0]?.[0] ?? participantRows[0])?.cnt || 0);
+        if (participantHistoryCount > 0) {
+          throw new TRPCError({ code: 'CONFLICT', message: '该订单包含参与者子订单或历史记录，为防止数据失联不能永久删除' });
+        }
         await db.execute(
           sql`DELETE FROM ledger_orders WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND deleted_at IS NOT NULL`
         );
@@ -17285,6 +17473,7 @@ ${klinesSummary}
         await db.execute(sql`CREATE TABLE IF NOT EXISTS ledger_order_payments (
           id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
           order_id int NOT NULL,
+          participant_user_id int NULL,
           ledger_id int NOT NULL,
           amount decimal(20, 4) NOT NULL,
           currency varchar(10) NOT NULL DEFAULT 'U',
@@ -17299,9 +17488,12 @@ ${klinesSummary}
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
         // 检查并补充新字段（先查字段存在再决定是否ALTER）
         const addColCheck = await db.execute(
-          sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`
+          sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('participant_user_id','currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`
         ) as any;
-        const addExistingCols = ((addColCheck[0] || addColCheck) as any[]).map((r: any) => r.COLUMN_NAME || r.column_name);
+        const addExistingCols = ((addColCheck[0] || addColCheck) as any[]).map((r: any) => (r.COLUMN_NAME || r.column_name || '').toLowerCase());
+        if (!addExistingCols.includes('participant_user_id')) {
+          await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN participant_user_id int NULL AFTER order_id`);
+        }
         if (!addExistingCols.includes('currency')) {
           await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN currency varchar(10) NOT NULL DEFAULT 'U'`);
         }
@@ -17319,6 +17511,13 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        if (input.participantUserId) {
+          const participantRows = await db.execute(
+            sql`SELECT id FROM ledger_order_participants WHERE order_id=${input.orderId} AND ledger_id=${input.ledgerId} AND user_id=${input.participantUserId} AND role <> 'inactive' LIMIT 1`
+          ) as any;
+          const participant = participantRows[0]?.[0] ?? participantRows[0];
+          if (!participant?.id) throw new TRPCError({ code: 'NOT_FOUND', message: '参与关系不存在' });
+        }
         await db.execute(
           sql`INSERT INTO ledger_order_payments (order_id, ledger_id, amount, currency, exchange_rate, pay_date, note, period_start, period_end, created_by, participant_user_id)
               VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.currency || 'U'}, ${input.exchangeRate || 6.75}, ${input.payDate}, ${input.note || ''}, ${input.periodStart || null}, ${input.periodEnd || null}, ${ctx.user.id}, ${input.participantUserId || null})`
@@ -17328,13 +17527,14 @@ ${klinesSummary}
 
     // 查询某订单的结息记录列表
     funderGetInterestPayments: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), orderId: z.number() }))
+      .input(z.object({ ledgerId: z.number(), orderId: z.number(), participantUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         // 自动建表（幂等）
         await db.execute(sql`CREATE TABLE IF NOT EXISTS ledger_order_payments (
           id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
           order_id int NOT NULL,
+          participant_user_id int NULL,
           ledger_id int NOT NULL,
           amount decimal(20, 4) NOT NULL,
           pay_date date NOT NULL,
@@ -17347,8 +17547,9 @@ ${klinesSummary}
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
         // 补充新字段（幂等）
         try {
-          const colCheck = await db.execute(sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`) as any;
+          const colCheck = await db.execute(sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('participant_user_id','currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`) as any;
           const existingCols = ((colCheck[0] || colCheck) as any[]).map((r: any) => (r.COLUMN_NAME || r.column_name || '').toLowerCase());
+          if (!existingCols.includes('participant_user_id')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN participant_user_id int NULL AFTER order_id`);
           if (!existingCols.includes('currency')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN currency varchar(10) NOT NULL DEFAULT 'U'`);
           if (!existingCols.includes('exchange_rate')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN exchange_rate decimal(10,4) NOT NULL DEFAULT 7.0`);
           if (!existingCols.includes('period_start')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN period_start date NULL`);
@@ -17358,8 +17559,27 @@ ${klinesSummary}
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
-        if (role !== 'owner' && role !== 'admin' && role !== 'funder') throw new TRPCError({ code: 'FORBIDDEN', message: '无权限查看' });
-        // 参与者视角：只查自己的付款记录；拥有者视角：只查 participant_user_id IS NULL 的记录
+        if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限查看' });
+        const isManager = role === 'owner' || role === 'admin';
+        if (input.participantUserId) {
+          if (!isManager && input.participantUserId !== ctx.user.id) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看其他参与者结息记录' });
+          }
+          const participantRows = await db.execute(
+            sql`SELECT id FROM ledger_order_participants WHERE order_id=${input.orderId} AND ledger_id=${input.ledgerId} AND user_id=${input.participantUserId} AND role <> 'inactive' LIMIT 1`
+          ) as any;
+          const participant = participantRows[0]?.[0] ?? participantRows[0];
+          if (!participant?.id) throw new TRPCError({ code: 'NOT_FOUND', message: '参与关系不存在' });
+        } else if (!isManager) {
+          const orderRows = await db.execute(
+            sql`SELECT user_id FROM ledger_orders WHERE id=${input.orderId} AND ledger_id=${input.ledgerId} AND deleted_at IS NULL LIMIT 1`
+          ) as any;
+          const order = orderRows[0]?.[0] ?? orderRows[0];
+          if (!order || Number(order.user_id) !== ctx.user.id) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看该订单拥有者的结息记录' });
+          }
+        }
+        // 参与者视角：只查该参与者付款记录；拥有者视角：只查 participant_user_id IS NULL 的记录
         const rawRows = input.participantUserId
           ? await db.execute(
               sql`SELECT p.*, u.username, u.name as operatorName
@@ -17392,41 +17612,57 @@ ${klinesSummary}
 
     // 查询订单已结利息总额（给卡片显示用）
     funderGetInterestPaymentSummary: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), orderIds: z.array(z.number()) }))
+      .input(z.object({ ledgerId: z.number(), orderIds: z.array(z.number()), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
-        if (role !== 'owner' && role !== 'admin' && role !== 'funder') throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const isManager = role === 'owner' || role === 'admin';
+        if (input.viewAsUserId && !isManager && input.viewAsUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看其他用户结息汇总' });
+        }
         if (!input.orderIds.length) return [];
-        // 按 order_id + currency 分组汇总，同时取每组最新的 exchange_rate
+        // 管理员未指定观察用户时，显示各订单拥有者流水；指定观察用户或普通用户时，
+        // 每张订单根据其与该用户的关系分别选择拥有者流水或参与者流水。
+        const scopedUserId = input.viewAsUserId || (!isManager ? ctx.user.id : null);
+        const paymentScope = scopedUserId
+          ? sql`AND (
+              (o.user_id = ${scopedUserId} AND p.participant_user_id IS NULL)
+              OR
+              (o.user_id <> ${scopedUserId} AND p.participant_user_id = ${scopedUserId}
+                AND EXISTS (
+                  SELECT 1 FROM ledger_order_participants op
+                  WHERE op.order_id = o.id AND op.ledger_id = o.ledger_id AND op.user_id = ${scopedUserId} AND op.role <> 'inactive'
+                ))
+            )`
+          : sql`AND p.participant_user_id IS NULL`;
         const rows = await db.execute(
-          sql`SELECT t.order_id, t.currency, t.total_paid,
+          sql`SELECT t.order_id, t.participant_user_id, t.currency, t.total_paid,
               (SELECT p2.exchange_rate FROM ledger_order_payments p2
                WHERE p2.ledger_id = ${input.ledgerId}
                  AND p2.order_id = t.order_id
+                 AND p2.participant_user_id <=> t.participant_user_id
                  AND IFNULL(p2.currency, 'U') = t.currency
                ORDER BY p2.pay_date DESC, p2.id DESC LIMIT 1) as latest_rate
               FROM (
-                SELECT order_id, IFNULL(currency, 'U') as currency, SUM(amount) as total_paid
-                FROM ledger_order_payments
-                WHERE ledger_id = ${input.ledgerId} AND order_id IN (${sql.raw(input.orderIds.join(','))})
-                GROUP BY order_id, IFNULL(currency, 'U')
+                SELECT p.order_id, p.participant_user_id, IFNULL(p.currency, 'U') as currency, SUM(p.amount) as total_paid
+                FROM ledger_order_payments p
+                JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
+                WHERE p.ledger_id = ${input.ledgerId}
+                  AND p.order_id IN (${sql.raw(input.orderIds.join(','))})
+                  ${paymentScope}
+                GROUP BY p.order_id, p.participant_user_id, IFNULL(p.currency, 'U')
               ) t`
         ) as any;
-        // 返回: [{ orderId, currency, total, exchangeRate }]
-        const result: Array<{ orderId: number; currency: string; total: number; exchangeRate: number }> = [];
-        for (const row of ((rows[0] || rows) as any[])) {
-          result.push({
-            orderId: Number(row.order_id),
-            currency: row.currency || 'U',
-            total: parseFloat(row.total_paid || '0'),
-            exchangeRate: parseFloat(row.latest_rate || '1'),
-          });
-        }
-        return result;
+        return ((rows[0] || rows) as any[]).map((row: any) => ({
+          orderId: Number(row.order_id),
+          currency: row.currency || 'U',
+          total: parseFloat(row.total_paid || '0'),
+          exchangeRate: parseFloat(row.latest_rate || '1'),
+        }));
       }),
 
     // 修改一笔结息记录
@@ -17447,7 +17683,7 @@ ${klinesSummary}
         const db = await getLedgerDb();
         // 检查并补充新字段
         const colCheck = await db.execute(
-          sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`
+          sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('participant_user_id','currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`
         ) as any;
         const existingCols = ((colCheck[0] || colCheck) as any[]).map((r: any) => r.COLUMN_NAME || r.column_name);
         if (!existingCols.includes('currency')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN currency varchar(10) NOT NULL DEFAULT 'U'`);
@@ -17460,10 +17696,10 @@ ${klinesSummary}
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         // 取旧値用于日志
-        const oldRows = await db.execute(sql`SELECT * FROM ledger_order_payments WHERE id=${input.paymentId} AND ledger_id=${input.ledgerId} LIMIT 1`) as any;
+        const oldRows = await db.execute(sql`SELECT * FROM ledger_order_payments WHERE id=${input.paymentId} AND order_id=${input.orderId} AND ledger_id=${input.ledgerId} LIMIT 1`) as any;
         const oldRec = (oldRows[0]?.[0] ?? oldRows[0]) as any;
         await db.execute(
-          sql`UPDATE ledger_order_payments SET amount=${input.amount}, currency=${input.currency}, exchange_rate=${input.exchangeRate}, pay_date=${input.payDate}, note=${input.note || ''}, period_start=${input.periodStart || null}, period_end=${input.periodEnd || null} WHERE id=${input.paymentId} AND ledger_id=${input.ledgerId}`
+          sql`UPDATE ledger_order_payments SET amount=${input.amount}, currency=${input.currency}, exchange_rate=${input.exchangeRate}, pay_date=${input.payDate}, note=${input.note || ''}, period_start=${input.periodStart || null}, period_end=${input.periodEnd || null} WHERE id=${input.paymentId} AND order_id=${input.orderId} AND ledger_id=${input.ledgerId}`
         );
         // 写入操作日志
         try {
@@ -17499,10 +17735,10 @@ ${klinesSummary}
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         // 取旧値用于日志
-        const oldRows2 = await db.execute(sql`SELECT * FROM ledger_order_payments WHERE id=${input.paymentId} AND ledger_id=${input.ledgerId} LIMIT 1`) as any;
+        const oldRows2 = await db.execute(sql`SELECT * FROM ledger_order_payments WHERE id=${input.paymentId} AND order_id=${input.orderId} AND ledger_id=${input.ledgerId} LIMIT 1`) as any;
         const oldRec2 = (oldRows2[0]?.[0] ?? oldRows2[0]) as any;
         await db.execute(
-          sql`DELETE FROM ledger_order_payments WHERE id=${input.paymentId} AND ledger_id=${input.ledgerId}`
+          sql`DELETE FROM ledger_order_payments WHERE id=${input.paymentId} AND order_id=${input.orderId} AND ledger_id=${input.ledgerId}`
         );
         // 写入操作日志
         try {
@@ -17531,6 +17767,7 @@ ${klinesSummary}
     financeGetOrders: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
+        await ensureFunderParticipantSnapshotColumns();
         const db = await getLedgerDb();
         // 验证当前登录用户的权限
         const myRoleRows = await db.execute(
@@ -17567,6 +17804,7 @@ ${klinesSummary}
                 LEFT JOIN (
                   SELECT order_id, COUNT(*) as cnt
                   FROM ledger_order_participants
+                  WHERE role <> 'inactive'
                   GROUP BY order_id
                 ) pc ON pc.order_id = fo.id
                 WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role IN ('finance', 'funder') AND fo.deleted_at IS NULL
@@ -17583,9 +17821,10 @@ ${klinesSummary}
                   LEFT JOIN (
                     SELECT order_id, COUNT(*) as cnt
                     FROM ledger_order_participants
+                    WHERE role <> 'inactive'
                     GROUP BY order_id
                   ) pc ON pc.order_id = fo.id
-                  INNER JOIN ledger_order_participants p ON p.order_id = fo.id AND p.ledger_id = ${input.ledgerId}
+                  INNER JOIN ledger_order_participants p ON p.order_id = fo.id AND p.ledger_id = ${input.ledgerId} AND p.role <> 'inactive'
                   WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role NOT IN ('finance', 'funder') AND fo.deleted_at IS NULL
                   ORDER BY fo.created_at DESC`
             ) as any;
@@ -17606,7 +17845,7 @@ ${klinesSummary}
               const allOrderIds = orders.map((o: any) => o.id);
               const idPlaceholders = allOrderIds.map((id: number) => sql`${id}`);
               const pRows = await db.execute(
-                sql`SELECT order_id, user_id FROM ledger_order_participants WHERE ledger_id = ${input.ledgerId} AND order_id IN (${sql.join(idPlaceholders, sql`, `)})`
+                sql`SELECT order_id, user_id FROM ledger_order_participants WHERE ledger_id = ${input.ledgerId} AND role <> 'inactive' AND order_id IN (${sql.join(idPlaceholders, sql`, `)})`
               ) as any;
               const pList = ((pRows[0] || pRows) as any[]) || [];
               const pMap: Record<number, number[]> = {};
@@ -17636,7 +17875,7 @@ ${klinesSummary}
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                INNER JOIN ledger_order_participants p ON p.order_id = fo.id
-               WHERE fo.ledger_id = ${input.ledgerId} AND fo.deleted_at IS NULL AND p.ledger_id = ${input.ledgerId} AND p.user_id = ${targetUserId} AND fo.user_id != ${targetUserId}`
+               WHERE fo.ledger_id = ${input.ledgerId} AND p.ledger_id = ${input.ledgerId} AND p.user_id = ${targetUserId} AND p.role <> 'inactive' AND fo.user_id != ${targetUserId}`
             ) as any;
             const participantOrders = ((participantOrderRows[0] || participantOrderRows) as any[]) || [];
             // 标记这些订单为参与方订单
@@ -17670,7 +17909,7 @@ ${klinesSummary}
             const placeholders = orderIds.map(() => '?').join(',');
             const conn = await getLedgerDb();
             const participantRows = await (conn as any).execute(
-              `SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${placeholders})`,
+              `SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND role <> 'inactive' AND order_id IN (${placeholders})`,
               [input.ledgerId, targetUserId, ...orderIds]
             ) as any;
             const participantOrderIds = new Set(
@@ -17698,8 +17937,8 @@ ${klinesSummary}
             const [piRowsResult, puRowsResult] = await Promise.all([
               piConnRaw.execute(
                 `SELECT order_id, role, commission_rate, commission_base, commission_start_date, paid_commission, note,
-                 interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config
-                 FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${piPlaceholders})`,
+                 interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, order_snapshot
+                 FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND role <> 'inactive' AND order_id IN (${piPlaceholders})`,
                 [input.ledgerId, targetUserId, ...participantOrderIds]
               ).catch(() => null) as Promise<any>,
               piConnRaw.execute(
@@ -17728,8 +17967,11 @@ ${klinesSummary}
                   note: pi.note || null,
                   interestBaseCurrency: (['CNY', 'RMB', 'cny', 'rmb', '\u4eba\u6c11\u5e01'].includes((pi.interest_base_currency || o.interest_base_currency || '') ) ? 'CNY' : 'USDT'),
                 };
-                // 参与者视角：用参与者自己的字段覆盖主订单字段
+                // 参与者视角：完整业务字段由参与者子订单快照覆盖主订单。
                 if ((o as any)._isParticipant) {
+                  const snapshot = parseFunderParticipantSnapshot(pi.order_snapshot);
+                  if (snapshot) Object.assign(o, snapshot);
+                  (o as any)._participantParentDeleted = Boolean((o as any).deleted_at);
                   // 名称展示统一：昵称优先，用户名兜底。
                   (o as any).order_owner_name = (o as any).nickname || o.owner_label || (o as any).username || null;
                   // 参与者自己的名字作为显示名
@@ -18299,15 +18541,17 @@ ${klinesSummary}
         id: z.number(),
         ledgerId: z.number(),
         publicNote: z.string(),
+        participantUserId: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
-        // 验证用户是账本成员
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const isManager = role === 'owner' || role === 'admin';
+        await ensureFunderParticipantSnapshotColumns();
         const mysql = await import('mysql2/promise');
         const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL || 'mysql://root:Miao@20190603@124.223.54.69:3306/crm_db';
         const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
@@ -18318,8 +18562,42 @@ ${klinesSummary}
           password: decodeURIComponent(parsedUrl.password),
           database: parsedUrl.pathname.replace(/^\//, ''),
         });
-        await conn.execute('UPDATE ledger_orders SET public_note = ? WHERE id = ? AND ledger_id = ?', [input.publicNote || null, input.id, input.ledgerId]);
-        await conn.end();
+        try {
+          if (input.participantUserId) {
+            if (!isManager && input.participantUserId !== ctx.user.id) {
+              throw new TRPCError({ code: 'FORBIDDEN', message: '无权修改其他参与者备注' });
+            }
+            const [participantRows] = await conn.execute(
+              'SELECT id, order_snapshot FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> \'inactive\' LIMIT 1',
+              [input.id, input.ledgerId, input.participantUserId]
+            ) as any;
+            if (!Array.isArray(participantRows) || participantRows.length === 0) {
+              throw new TRPCError({ code: 'NOT_FOUND', message: '参与关系不存在' });
+            }
+            const snapshot = parseFunderParticipantSnapshot(participantRows[0].order_snapshot) || {};
+            snapshot.public_note = input.publicNote || null;
+            await conn.execute(
+              'UPDATE ledger_order_participants SET note = ?, order_snapshot = ?, updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> \'inactive\'',
+              [input.publicNote || null, JSON.stringify(snapshot), input.id, input.ledgerId, input.participantUserId]
+            );
+          } else {
+            const [orderRows] = await conn.execute(
+              'SELECT user_id FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1',
+              [input.id, input.ledgerId]
+            ) as any;
+            const orderOwnerId = Array.isArray(orderRows) && orderRows.length > 0 ? Number(orderRows[0].user_id) : 0;
+            if (!orderOwnerId) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在' });
+            if (!isManager && orderOwnerId !== ctx.user.id) {
+              throw new TRPCError({ code: 'FORBIDDEN', message: '无权修改该订单备注' });
+            }
+            await conn.execute(
+              'UPDATE ledger_orders SET public_note = ? WHERE id = ? AND ledger_id = ?',
+              [input.publicNote || null, input.id, input.ledgerId]
+            );
+          }
+        } finally {
+          await conn.end();
+        }
         return { success: true };
       }),
 
@@ -18478,6 +18756,7 @@ ${klinesSummary}
           INDEX fop_ledger_idx (ledger_id),
           INDEX fop_user_idx (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+        await ensureFunderParticipantSnapshotColumns();
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
@@ -18490,7 +18769,7 @@ ${klinesSummary}
               FROM ledger_order_participants p
               LEFT JOIN users u ON u.id = p.user_id
               LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
-              WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId}
+              WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId} AND p.role <> 'inactive'
               ORDER BY p.sort_order ASC, p.id ASC`
         ) as any;
         // 账本所有成员（供前端下拉选择）
@@ -18551,18 +18830,49 @@ ${klinesSummary}
           INDEX fop_ledger_idx (ledger_id),
           INDEX fop_user_idx (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+        await ensureFunderParticipantSnapshotColumns();
         // 兼容老表：补齐 commission_* 列（已存在则忽略报错）
         for (const col of ['commission_rate varchar(20) NULL', 'commission_base varchar(50) NULL', 'commission_start_date varchar(20) NULL', 'paid_commission varchar(50) NULL']) {
           try { await conn.execute(`ALTER TABLE ledger_order_participants ADD COLUMN ${col}`); } catch (e) { /* 列已存在，忽略 */ }
         }
-        // 先删除旧的参与方记录
-        await conn.execute('DELETE FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ?', [input.orderId, input.ledgerId]);
-        // 批量插入新的参与方（以 user_id 为核心）
-        for (const p of input.participants) {
+        // 仅删除管理员明确移除的参与者；保留仍存在参与者的备注、结息和独立覆盖字段。
+        const participantUserIds = input.participants.map(p => Number(p.userId)).filter(Boolean);
+        if (participantUserIds.length > 0) {
+          const placeholders = participantUserIds.map(() => '?').join(',');
           await conn.execute(
-            'INSERT INTO ledger_order_participants (order_id, ledger_id, user_id, role, rate, commission_rate, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [input.orderId, input.ledgerId, p.userId, p.role, p.rate ?? null, p.rate ?? null, p.sortOrder ?? 0]
+            `UPDATE ledger_order_participants SET previous_role = IF(role = 'inactive', previous_role, role), role = 'inactive', updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND user_id NOT IN (${placeholders})`,
+            [input.orderId, input.ledgerId, ...participantUserIds]
           );
+        } else {
+          await conn.execute("UPDATE ledger_order_participants SET previous_role = IF(role = 'inactive', previous_role, role), role = 'inactive', updated_at = NOW() WHERE order_id = ? AND ledger_id = ?", [input.orderId, input.ledgerId]);
+        }
+        // 新增参与者完整复制主订单；已存在或恢复的参与者保留自己已经修改过的子订单快照。
+        const [parentRows] = await conn.execute(
+          'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? LIMIT 1',
+          [input.orderId, input.ledgerId]
+        ) as any;
+        const parentOrder = Array.isArray(parentRows) ? parentRows[0] : null;
+        if (!parentOrder) throw new TRPCError({ code: 'NOT_FOUND', message: '主订单不存在' });
+        const defaultSnapshot = JSON.stringify(buildFunderParticipantSnapshot(parentOrder));
+        const [existingRows] = await conn.execute(
+          'SELECT user_id FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ?',
+          [input.orderId, input.ledgerId]
+        ) as any;
+        const existingUserIds = new Set((Array.isArray(existingRows) ? existingRows : []).map((r: any) => Number(r.user_id)));
+        for (const p of input.participants) {
+          if (existingUserIds.has(Number(p.userId))) {
+            await conn.execute(
+              `UPDATE ledger_order_participants
+               SET role = ?, previous_role = NULL, rate = ?, commission_rate = ?, order_snapshot = COALESCE(order_snapshot, ?), sort_order = ?, updated_at = NOW()
+               WHERE order_id = ? AND ledger_id = ? AND user_id = ?`,
+              [p.role, p.rate ?? null, p.rate ?? null, defaultSnapshot, p.sortOrder ?? 0, input.orderId, input.ledgerId, p.userId]
+            );
+          } else {
+            await conn.execute(
+              'INSERT INTO ledger_order_participants (order_id, ledger_id, user_id, role, rate, commission_rate, order_snapshot, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              [input.orderId, input.ledgerId, p.userId, p.role, p.rate ?? null, p.rate ?? null, defaultSnapshot, p.sortOrder ?? 0]
+            );
+          }
         }
         return { success: true };
       }),
@@ -18598,6 +18908,7 @@ ${klinesSummary}
         const { getDbConnection } = await import('./db');
         const conn = await getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        await ensureFunderParticipantSnapshotColumns();
         // 幂等补齐新字段
         const newCols = [
           'amount_currency varchar(20) NULL',
@@ -18612,23 +18923,75 @@ ${klinesSummary}
         for (const col of newCols) {
           try { await conn.execute(`ALTER TABLE ledger_order_participants ADD COLUMN ${col}`); } catch {}
         }
-        // 先删除旧记录，再批量插入
-        await conn.execute('DELETE FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ?', [input.orderId, input.ledgerId]);
+        // 只删除明确移除的参与者，保留其余参与者的备注、结息、订单号和券商覆盖值。
+        const participantUserIds = input.participants.map(p => Number(p.userId)).filter(Boolean);
+        if (participantUserIds.length > 0) {
+          const placeholders = participantUserIds.map(() => '?').join(',');
+          await conn.execute(
+            `UPDATE ledger_order_participants SET previous_role = IF(role = 'inactive', previous_role, role), role = 'inactive', updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND user_id NOT IN (${placeholders})`,
+            [input.orderId, input.ledgerId, ...participantUserIds]
+          );
+        } else {
+          await conn.execute("UPDATE ledger_order_participants SET previous_role = IF(role = 'inactive', previous_role, role), role = 'inactive', updated_at = NOW() WHERE order_id = ? AND ledger_id = ?", [input.orderId, input.ledgerId]);
+        }
+        const [parentRows] = await conn.execute(
+          'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? LIMIT 1',
+          [input.orderId, input.ledgerId]
+        ) as any;
+        const parentOrder = Array.isArray(parentRows) ? parentRows[0] : null;
+        if (!parentOrder) throw new TRPCError({ code: 'NOT_FOUND', message: '主订单不存在' });
+        const parentSnapshot = buildFunderParticipantSnapshot(parentOrder);
+        const [existingRows] = await conn.execute(
+          'SELECT user_id, order_snapshot FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ?',
+          [input.orderId, input.ledgerId]
+        ) as any;
+        const existingMap = new Map<number, any>((Array.isArray(existingRows) ? existingRows : []).map((r: any) => [Number(r.user_id), r]));
         for (let i = 0; i < input.participants.length; i++) {
           const p = input.participants[i];
-          await conn.execute(
-            `INSERT INTO ledger_order_participants
-              (order_id, ledger_id, user_id, role, amount, amount_currency, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, note, sort_order)
-             VALUES (?, ?, ?, 'funder', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              input.orderId, input.ledgerId, p.userId,
-              p.amount || null, p.amountCurrency || null,
-              p.interestRate === undefined || p.interestRate === '' ? null : p.interestRate, p.interestBase || null, p.interestBaseCurrency || null,
-              p.interestPaymentType || null, p.interestStartDate || null, p.interestRateCurrency || null,
-              p.displayConfig || null, p.note || null,
-              p.sortOrder ?? i,
-            ]
-          );
+          const existing = existingMap.get(Number(p.userId));
+          const snapshot = {
+            ...parentSnapshot,
+            ...(parseFunderParticipantSnapshot(existing?.order_snapshot) || {}),
+            amount: p.amount || null,
+            amount_currency: p.amountCurrency || null,
+            interest_rate_annual: p.interestRate === undefined || p.interestRate === '' ? null : p.interestRate,
+            interest_base: p.interestBase || null,
+            interest_base_currency: p.interestBaseCurrency || null,
+            interest_payment_type: p.interestPaymentType || null,
+            interest_start_date: p.interestStartDate || null,
+            interest_rate_currency: p.interestRateCurrency || null,
+            display_config: p.displayConfig || null,
+            public_note: p.note === undefined ? (parseFunderParticipantSnapshot(existing?.order_snapshot)?.public_note ?? null) : p.note,
+          };
+          if (existing) {
+            await conn.execute(
+              `UPDATE ledger_order_participants SET role = COALESCE(previous_role, 'funder'), previous_role = NULL, amount = ?, amount_currency = ?, interest_rate = ?, interest_base = ?,
+                interest_base_currency = ?, interest_payment_type = ?, interest_start_date = ?, interest_rate_currency = ?,
+                display_config = ?, note = COALESCE(?, note), order_snapshot = ?, sort_order = ?, updated_at = NOW()
+               WHERE order_id = ? AND ledger_id = ? AND user_id = ?`,
+              [
+                p.amount || null, p.amountCurrency || null,
+                p.interestRate === undefined || p.interestRate === '' ? null : p.interestRate, p.interestBase || null, p.interestBaseCurrency || null,
+                p.interestPaymentType || null, p.interestStartDate || null, p.interestRateCurrency || null,
+                p.displayConfig || null, p.note === undefined ? null : p.note, JSON.stringify(snapshot),
+                p.sortOrder ?? i, input.orderId, input.ledgerId, p.userId,
+              ]
+            );
+          } else {
+            await conn.execute(
+              `INSERT INTO ledger_order_participants
+                (order_id, ledger_id, user_id, role, amount, amount_currency, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, note, order_snapshot, sort_order)
+               VALUES (?, ?, ?, 'funder', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                input.orderId, input.ledgerId, p.userId,
+                p.amount || null, p.amountCurrency || null,
+                p.interestRate === undefined || p.interestRate === '' ? null : p.interestRate, p.interestBase || null, p.interestBaseCurrency || null,
+                p.interestPaymentType || null, p.interestStartDate || null, p.interestRateCurrency || null,
+                p.displayConfig || null, p.note || null, JSON.stringify(snapshot),
+                p.sortOrder ?? i,
+              ]
+            );
+          }
         }
         return { success: true };
       }),
@@ -18667,6 +19030,30 @@ ${klinesSummary}
         const { getDbConnection } = await import('./db');
         const conn = await getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        await ensureFunderParticipantSnapshotColumns();
+        const [snapshotRows] = await conn.execute(
+          `SELECT p.order_snapshot, o.* FROM ledger_order_participants p
+           INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
+           WHERE p.order_id = ? AND p.ledger_id = ? AND p.user_id = ? AND p.role <> 'inactive' LIMIT 1`,
+          [input.orderId, input.ledgerId, input.userId]
+        ) as any;
+        const snapshotSource = Array.isArray(snapshotRows) ? snapshotRows[0] : null;
+        if (!snapshotSource) throw new TRPCError({ code: 'NOT_FOUND', message: '参与者子订单不存在或已停用' });
+        const syncedSnapshot = {
+          ...buildFunderParticipantSnapshot(snapshotSource),
+          ...(parseFunderParticipantSnapshot(snapshotSource.order_snapshot) || {}),
+          interest_rate_annual: input.interestRate === undefined || input.interestRate === '' ? null : input.interestRate,
+          interest_base: input.interestBase || null,
+          interest_base_currency: input.interestBaseCurrency || null,
+          interest_payment_type: input.interestPaymentType || null,
+          interest_start_date: input.interestStartDate || null,
+          interest_rate_currency: input.interestRateCurrency || null,
+          display_config: input.displayConfig || null,
+          buy_date: input.buyDateOverride || null,
+          broker_name: input.brokerNameOverride || null,
+          broker_account: input.brokerAccountOverride || null,
+          public_note: input.note || null,
+        };
         await conn.execute(
           `UPDATE ledger_order_participants SET
             commission_rate = ?, commission_base = ?, commission_start_date = ?,
@@ -18675,9 +19062,9 @@ ${klinesSummary}
             display_config = ?, note = ?,
             order_no_override = ?, buy_date_override = ?,
             broker_name_override = ?, broker_account_override = ?,
-            paid_interest = ?,
+            paid_interest = ?, order_snapshot = ?,
             updated_at = NOW()
-           WHERE order_id = ? AND ledger_id = ? AND user_id = ?`,
+           WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> 'inactive'`,
           [
             input.commissionRate === undefined || input.commissionRate === '' ? null : input.commissionRate, input.commissionBase || null, input.commissionStartDate || null,
             input.interestRate === undefined || input.interestRate === '' ? null : input.interestRate, input.interestBase || null, input.interestBaseCurrency || null,
@@ -18685,8 +19072,59 @@ ${klinesSummary}
             input.displayConfig || null, input.note || null,
             input.orderNoOverride || null, input.buyDateOverride || null,
             input.brokerNameOverride || null, input.brokerAccountOverride || null,
-            input.paidInterest || null,
+            input.paidInterest || null, JSON.stringify(syncedSnapshot),
             input.orderId, input.ledgerId, input.userId
+          ]
+        );
+        return { success: true };
+      }),
+    // 更新参与者独立子订单的全部业务字段；仅修改记账快照，不触发任何钱包流水。
+    funderUpdateParticipantOrder: protectedProcedure
+      .input(z.object({
+        orderId: z.number(),
+        ledgerId: z.number(),
+        userId: z.number(),
+        snapshot: z.record(z.string(), z.any()),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可编辑参与者子订单' });
+        await ensureFunderParticipantSnapshotColumns();
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const [rows] = await conn.execute(
+          `SELECT p.order_snapshot, o.* FROM ledger_order_participants p
+           INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
+           WHERE p.order_id = ? AND p.ledger_id = ? AND p.user_id = ? AND p.role <> 'inactive' LIMIT 1`,
+          [input.orderId, input.ledgerId, input.userId]
+        ) as any;
+        const row = Array.isArray(rows) ? rows[0] : null;
+        if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: '参与者子订单不存在或已停用' });
+        const mergedSnapshot = {
+          ...buildFunderParticipantSnapshot(row),
+          ...(parseFunderParticipantSnapshot(row.order_snapshot) || {}),
+          ...buildFunderParticipantSnapshot(input.snapshot),
+        };
+        await conn.execute(
+          `UPDATE ledger_order_participants SET
+             order_snapshot = ?, amount = ?, amount_currency = ?, interest_rate = ?, interest_base = ?,
+             interest_base_currency = ?, interest_payment_type = ?, interest_start_date = ?, interest_rate_currency = ?,
+             display_config = ?, note = ?, buy_date_override = ?, broker_name_override = ?, broker_account_override = ?, updated_at = NOW()
+           WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> 'inactive'`,
+          [
+            JSON.stringify(mergedSnapshot),
+            mergedSnapshot.amount ?? null, mergedSnapshot.amount_currency ?? null,
+            mergedSnapshot.interest_rate_annual ?? null, mergedSnapshot.interest_base ?? null,
+            mergedSnapshot.interest_base_currency ?? null, mergedSnapshot.interest_payment_type ?? null,
+            mergedSnapshot.interest_start_date ?? null, mergedSnapshot.interest_rate_currency ?? null,
+            typeof mergedSnapshot.display_config === 'string' ? mergedSnapshot.display_config : JSON.stringify(mergedSnapshot.display_config ?? null),
+            mergedSnapshot.public_note ?? null, mergedSnapshot.buy_date ?? null,
+            mergedSnapshot.broker_name ?? null, mergedSnapshot.broker_account ?? null,
+            input.orderId, input.ledgerId, input.userId,
           ]
         );
         return { success: true };
@@ -18711,7 +19149,7 @@ ${klinesSummary}
         const conn = await getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         await conn.execute(
-          'UPDATE ledger_order_participants SET paid_commission = ?, updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND user_id = ?',
+          'UPDATE ledger_order_participants SET paid_commission = ?, updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> \'inactive\'',
           [input.paidCommission, input.orderId, input.ledgerId, input.userId]
         );
         return { success: true };
@@ -18746,7 +19184,7 @@ ${klinesSummary}
               FROM ledger_order_participants p
               LEFT JOIN users u ON u.id = p.user_id
               LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
-              WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId}
+              WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId} AND p.role <> 'inactive'
               ORDER BY p.sort_order ASC, p.id ASC`
         ) as any;
         const memberRows = await db.execute(
@@ -18796,12 +19234,41 @@ ${klinesSummary}
           INDEX fop_ledger_idx (ledger_id),
           INDEX fop_user_idx (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
-        await conn.execute('DELETE FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ?', [input.orderId, input.ledgerId]);
-        for (const p of input.participants) {
+        await ensureFunderParticipantSnapshotColumns();
+        const participantUserIds = input.participants.map(p => Number(p.userId)).filter(Boolean);
+        if (participantUserIds.length > 0) {
+          const placeholders = participantUserIds.map(() => '?').join(',');
           await conn.execute(
-            'INSERT INTO ledger_order_participants (order_id, ledger_id, user_id, role, sort_order) VALUES (?, ?, ?, ?, ?)',
-            [input.orderId, input.ledgerId, p.userId, p.role, p.sortOrder ?? 0]
+            `UPDATE ledger_order_participants SET previous_role = IF(role = 'inactive', previous_role, role), role = 'inactive', updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND user_id NOT IN (${placeholders})`,
+            [input.orderId, input.ledgerId, ...participantUserIds]
           );
+        } else {
+          await conn.execute("UPDATE ledger_order_participants SET previous_role = IF(role = 'inactive', previous_role, role), role = 'inactive', updated_at = NOW() WHERE order_id = ? AND ledger_id = ?", [input.orderId, input.ledgerId]);
+        }
+        const [parentRows] = await conn.execute(
+          'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? LIMIT 1',
+          [input.orderId, input.ledgerId]
+        ) as any;
+        const parentOrder = Array.isArray(parentRows) ? parentRows[0] : null;
+        if (!parentOrder) throw new TRPCError({ code: 'NOT_FOUND', message: '主订单不存在' });
+        const defaultSnapshot = JSON.stringify(buildFunderParticipantSnapshot(parentOrder));
+        const [existingRows] = await conn.execute(
+          'SELECT user_id FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ?',
+          [input.orderId, input.ledgerId]
+        ) as any;
+        const existingUserIds = new Set((Array.isArray(existingRows) ? existingRows : []).map((r: any) => Number(r.user_id)));
+        for (const p of input.participants) {
+          if (existingUserIds.has(Number(p.userId))) {
+            await conn.execute(
+              'UPDATE ledger_order_participants SET role = ?, previous_role = NULL, order_snapshot = COALESCE(order_snapshot, ?), sort_order = ?, updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND user_id = ?',
+              [p.role, defaultSnapshot, p.sortOrder ?? 0, input.orderId, input.ledgerId, p.userId]
+            );
+          } else {
+            await conn.execute(
+              'INSERT INTO ledger_order_participants (order_id, ledger_id, user_id, role, order_snapshot, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+              [input.orderId, input.ledgerId, p.userId, p.role, defaultSnapshot, p.sortOrder ?? 0]
+            );
+          }
         }
         return { success: true };
       }),
@@ -19000,7 +19467,7 @@ ${klinesSummary}
               FROM ledger_order_participants p
               LEFT JOIN users u ON u.id = p.user_id
               LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
-              WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId}
+              WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId} AND p.role <> 'inactive'
               ORDER BY p.sort_order ASC, p.id ASC`
         ) as any;
         const participants = ((participantRows[0] || participantRows) as any[]) || [];

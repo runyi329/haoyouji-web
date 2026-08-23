@@ -2566,7 +2566,7 @@ export default function LedgerDetail() {
   }, [JSON.stringify(freshPrices)]);
   const funderOrderIds = useMemo(() => (funderAssetOrders as any[]).map((o: any) => Number(o.id)), [funderAssetOrders]);
   const { data: interestSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
-    { ledgerId: Number(ledgerId), orderIds: funderOrderIds },
+    { ledgerId: Number(ledgerId), orderIds: funderOrderIds, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF && funderOrderIds.length > 0, staleTime: 5000, refetchInterval: 15000 }
   );
   // 后端返回数组格式 [{orderId, currency, total, exchangeRate}]，按 orderId 分组，每个订单可能有多个币种

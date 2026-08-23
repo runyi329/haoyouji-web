@@ -1080,7 +1080,7 @@ export function FunderOrderCardV2Silver({
   const [clickedOrderNo, setClickedOrderNo] = useState<string | null>(null);
   const [showInterestDetail, setShowInterestDetail] = useState(false);
   const [showInterestHistory, setShowInterestHistory] = useState(false);
-  const _v2IsParticipant = (order as any).order_perspective === 'other';
+  const _v2IsParticipant = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder || (order as any).order_perspective === 'other';
   const _v2ParticipantUserId = _v2IsParticipant ? ((order as any).participantInfo?.userId || undefined) : undefined;
   const { data: interestPaymentsData } = trpc.ledger.funderGetInterestPayments.useQuery(
     { orderId: order.id as number, ledgerId: ledgerId as number, participantUserId: _v2ParticipantUserId },
@@ -1103,7 +1103,7 @@ export function FunderOrderCardV2Silver({
     setNoteSaving(true);
     try {
       const raw = JSON.stringify(newItems);
-      await updateNoteM.mutateAsync({ id: order.id as number, ledgerId, publicNote: raw });
+      await updateNoteM.mutateAsync({ id: order.id as number, ledgerId, publicNote: raw, participantUserId: _v2ParticipantUserId });
       setNoteItems(newItems);
       order.public_note = raw;
       toast.success('备注已保存');
@@ -2641,7 +2641,7 @@ export function FunderLenderCardSilver({
     setNoteSaving(true);
     try {
       const raw = JSON.stringify(newItems);
-      await updateNoteM.mutateAsync({ id: order.id as number, ledgerId, publicNote: raw });
+      await updateNoteM.mutateAsync({ id: order.id as number, ledgerId, publicNote: raw, participantUserId: _lnParticipantUserId });
       setNoteItems(newItems);
       order.public_note = raw;
       toast.success('备注已保存');
@@ -2651,7 +2651,7 @@ export function FunderLenderCardSilver({
   };
   const [showInterestHistory, setShowInterestHistory] = useState(false);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
-  const _lnIsParticipant = (order as any).order_perspective === 'other';
+  const _lnIsParticipant = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder || (order as any).order_perspective === 'other';
   const _lnParticipantUserId = _lnIsParticipant ? ((order as any).participantInfo?.userId || undefined) : undefined;
   const interestHistoryQuery = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId: ledgerId ?? 0, orderId: order.id as number, participantUserId: _lnParticipantUserId },

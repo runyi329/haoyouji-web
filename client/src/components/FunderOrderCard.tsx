@@ -199,19 +199,24 @@ export function NoteAvatar({ name, avatar }: { name?: string; avatar?: string })
   const color = colors[name.charCodeAt(0) % colors.length] || '#6366F1';
   return <div className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: color }}>{initials}</div>;
 }
-export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, isAdmin, membersData }: { orderId: number; ledgerId: number; initialNote: string; onSaved: (note: string) => void; currentUser?: { id: number; name?: string; username?: string; avatar?: string }; isAdmin?: boolean; membersData?: any[] }) {
+export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, isAdmin, membersData, participantUserId }: { orderId: number; ledgerId: number; initialNote: string; onSaved: (note: string) => void; currentUser?: { id: number; name?: string; username?: string; avatar?: string }; isAdmin?: boolean; membersData?: any[]; participantUserId?: number }) {
   const [notes, setNotes] = useState<NoteItem[]>(() => parseNotes(initialNote));
   const [expanded, setExpanded] = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    setNotes(parseNotes(initialNote));
+    setEditingIdx(null);
+    setEditValue('');
+  }, [initialNote, participantUserId]);
   const updateNote = trpc.ledger.funderUpdatePublicNote.useMutation();
   const canEdit = (note: NoteItem) => isAdmin || (currentUser && note.userId && note.userId === currentUser.id);
   const saveNotes = async (newNotes: NoteItem[]) => {
     setSaving(true);
     try {
       const raw = JSON.stringify(newNotes);
-      await updateNote.mutateAsync({ id: orderId, ledgerId, publicNote: raw });
+      await updateNote.mutateAsync({ id: orderId, ledgerId, publicNote: raw, participantUserId });
       setNotes(newNotes);
       onSaved(raw);
     } finally { setSaving(false); }
@@ -479,6 +484,10 @@ export function FunderOrderCard({
     onSuccess: () => { toast.success('显示设置已保存'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
     onError: (err) => toast.error(err.message),
   });
+  const _intSaveParticipantDisplayMutation = trpc.ledger.funderUpdateParticipantOrder.useMutation({
+    onSuccess: () => { toast.success('参与者显示设置已保存'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onError: (err) => toast.error(err.message),
+  });
   // 已结利息历史浮层
   const [showInterestHistory, setShowInterestHistory] = useState(false);
   // 参与者身份独立于本人/他人归属；仅真实参与者才查询参与者专属结息数据。
@@ -505,7 +514,7 @@ export function FunderOrderCard({
   const _activeShowPaymentPanelForQuery = showPaymentPanel !== undefined ? showPaymentPanel : _intShowPayment;
   const { data: _intInterestPayments, refetch: _intRefetchPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId, orderId: _activeShowPaymentPanelForQuery!, participantUserId: _participantUserId },
-    { enabled: interestPayments === undefined && _activeShowPaymentPanelForQuery === order.id }
+    { enabled: _activeShowPaymentPanelForQuery === order.id && (_participantUserId !== undefined || interestPayments === undefined) }
   );
   const _intAddPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
     onSuccess: () => { toast.success('结息记录已添加'); _intSetPaymentForm({ amount: '', currency: 'U', exchangeRate: String(cnyRate || 6.75), payDate: new Date().toISOString().slice(0, 10), note: '' }); _intRefetchPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
@@ -566,7 +575,9 @@ export function FunderOrderCard({
   const $setShowPaymentDatePicker = setShowPaymentDatePicker !== undefined ? setShowPaymentDatePicker : _intSetShowPaymentDatePicker;
   const $addPaymentMutation = addPaymentMutation !== undefined ? addPaymentMutation : _intAddPaymentMutation;
   const $deletePaymentMutation = deletePaymentMutation !== undefined ? deletePaymentMutation : _intDeletePaymentMutation;
-  const $interestPayments = interestPayments !== undefined ? interestPayments : (_intInterestPayments as any[] | undefined);
+  const $interestPayments = _participantUserId !== undefined
+    ? (_intInterestPayments as any[] | undefined)
+    : (interestPayments !== undefined ? interestPayments : (_intInterestPayments as any[] | undefined));
   const $updateMutation = updateMutation !== undefined ? updateMutation : _intUpdateMutation;
   const $showParticipantsPanel = showParticipantsPanel !== undefined ? showParticipantsPanel : _intShowParticipants;
   const $participantsList = participantsList !== undefined ? participantsList : _intParticipantsList;
@@ -968,7 +979,7 @@ export function FunderOrderCard({
 
         {/* 状态：仅非持有中时显示（圆点 + 文字） */}
         {order.status !== 'active' && (
-          isAdmin ? (
+          isAdmin && !isInvited ? (
             <button
               onClick={() => setShowStatusSheet(true)}
               className="flex items-center gap-1 transition-opacity hover:opacity-60 shrink-0"
@@ -2119,15 +2130,15 @@ export function FunderOrderCard({
       )}
 
       {/* 底部操作栏：仅管理员可见 */}
-      {!previewMode && !isInvited && isAdmin && (
+      {!previewMode && isAdmin && (
         <div className="flex items-center gap-1.5 px-4 py-2.5 border-t overflow-x-auto" style={{ borderColor: '#F3F4F6', backgroundColor: '#FAFBFF', flexWrap: 'nowrap' }}>
-          <button
+          {!isInvited && <button
             onClick={() => handleOpenEdit && handleOpenEdit(order, 'participants')}
             className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
             style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}
           >
             参与者{participantCount > 0 ? ` ${participantCount}` : ''}
-          </button>
+          </button>}
           <button
             onClick={() => {
               const isOpening = $showPaymentPanel !== order.id;
@@ -2147,13 +2158,13 @@ export function FunderOrderCard({
           >
             {$showPaymentPanel === order.id ? '收起' : '记录结息'}
           </button>
-          <button
+          {!isInvited && <button
             onClick={handleOpenCollateralPanel}
             className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
             style={{ backgroundColor: showCollateralPanel ? '#1A2340' : '#EDEEF5', color: showCollateralPanel ? '#fff' : '#4B5563' }}
           >
             {showCollateralPanel ? '收起' : '担保'}
-          </button>
+          </button>}
           <div className="flex-1" />
           <button
             onClick={() => $handleOpenEdit(order)}
@@ -2162,7 +2173,7 @@ export function FunderOrderCard({
           >
             编辑
           </button>
-          {!isSettled && (
+          {!isInvited && !isSettled && (
             <button
               onClick={() => $onConfirmSettle?.(order.id)}
               className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
@@ -2171,8 +2182,12 @@ export function FunderOrderCard({
               结清
             </button>
           )}
-          <button
+          {!isInvited && <button
             onClick={() => {
+              if (handleDelete !== undefined) {
+                $handleDelete(order.id);
+                return;
+              }
               if (!window.confirm('确认删除这张订单？')) return;
               if (!window.confirm('再次确认：订单将移入回收站，可随时恢复。确定删除？')) return;
               $handleDelete(order.id);
@@ -2181,7 +2196,7 @@ export function FunderOrderCard({
             style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}
           >
             删除
-          </button>
+          </button>}
         </div>
       )}
 
@@ -2561,7 +2576,7 @@ export function FunderOrderCard({
             <button
               onClick={() => {
                 if (!$paymentForm.amount || parseFloat($paymentForm.amount) <= 0) { toast.error('请填写结息金额'); return; }
-                $addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat($paymentForm.amount), currency: $paymentForm.currency || 'U', exchangeRate: parseFloat($paymentForm.exchangeRate || String(cnyRate || 6.75)), payDate: $paymentForm.payDate || new Date().toISOString().slice(0, 10), note: $paymentForm.note || undefined, periodStart: ($paymentForm as any).periodStart || undefined, periodEnd: ($paymentForm as any).periodEnd || undefined, participantUserId: (order as any).order_perspective === 'other' ? ((order as any).participantInfo?.userId || undefined) : undefined });
+                $addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat($paymentForm.amount), currency: $paymentForm.currency || 'U', exchangeRate: parseFloat($paymentForm.exchangeRate || String(cnyRate || 6.75)), payDate: $paymentForm.payDate || new Date().toISOString().slice(0, 10), note: $paymentForm.note || undefined, periodStart: ($paymentForm as any).periodStart || undefined, periodEnd: ($paymentForm as any).periodEnd || undefined, participantUserId: _participantUserId });
               }}
               disabled={$addPaymentMutation.isPending}
               className="w-full py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50"
@@ -2608,13 +2623,20 @@ export function FunderOrderCard({
                 try { const rawDC = order.display_config; newDC = rawDC ? (typeof rawDC === 'string' ? JSON.parse(rawDC) : { ...rawDC }) : {}; } catch {}
                 newDC.approxInterest = interestApproxConfig.approxInterest;
                 newDC.approxPaid = interestApproxConfig.approxPaid;
-                _intSaveInterestApproxMutation.mutate({ id: Number(order.id), ledgerId, displayConfig: newDC });
+                if (_participantUserId) {
+                  _intSaveParticipantDisplayMutation.mutate({
+                    orderId: Number(order.id), ledgerId, userId: Number(_participantUserId),
+                    snapshot: { display_config: JSON.stringify(newDC) },
+                  });
+                } else {
+                  _intSaveInterestApproxMutation.mutate({ id: Number(order.id), ledgerId, displayConfig: newDC });
+                }
               }}
-              disabled={_intSaveInterestApproxMutation.isPending}
+              disabled={_intSaveInterestApproxMutation.isPending || _intSaveParticipantDisplayMutation.isPending}
               className="w-full py-1.5 rounded-lg text-white text-xs font-medium disabled:opacity-50"
               style={{ background: '#3B82F6' }}
             >
-              {_intSaveInterestApproxMutation.isPending ? '保存中...' : '保存显示设置'}
+              {(_intSaveInterestApproxMutation.isPending || _intSaveParticipantDisplayMutation.isPending) ? '保存中...' : '保存显示设置'}
             </button>
           </div>
         )}
@@ -2761,6 +2783,7 @@ export function FunderOrderCard({
           currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar || (membersData as any[])?.find((u: any) => u.userId === (currentUser as any).id)?.avatar || undefined } : undefined}
           isAdmin={isAdmin}
           membersData={membersData as any[]}
+          participantUserId={_participantUserId}
         />}
       </div>
 
@@ -2793,6 +2816,11 @@ export function FunderOrderCard({
               </button>
               <button
                 onClick={() => {
+                  if (handleDelete !== undefined) {
+                    $handleDelete(order.id);
+                    setShowStatusSheet(false);
+                    return;
+                  }
                   if (window.confirm('确认删除这张订单？订单将移入回收站，可随时恢复。')) {
                     $handleDelete(order.id);
                     setShowStatusSheet(false);

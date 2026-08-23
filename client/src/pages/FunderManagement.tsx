@@ -262,6 +262,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   );
   // funderGetAssetOrders 返回 { orders, livePrices }，取 orders 数组
   const assetOrders = (assetOrdersData as any)?.orders ?? assetOrdersData ?? [];
+  const getParticipantUserIdForOrder = (order: any): number | undefined => {
+    const isParticipantOrder = !!order?.participantInfo || !!order?._isParticipant || !!order?._fromFunder || order?.order_perspective === 'other';
+    return isParticipantOrder ? (Number(order?.participantInfo?.userId) || undefined) : undefined;
+  };
   const formLivePrices: Record<string, number> = (assetOrdersData as any)?.livePrices ?? {};
   // 共享担保池数据（编辑表单中选择共享模式时用于确认提示）
   const sharedCollateralUserId = editingOrder?.user_id ?? (formData as any)?.userId;
@@ -366,22 +370,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   // 强制转成数字，避免 MySQL 返回字符串导致 tRPC z.number() 校验失败
   // 编辑面板专用：查询当前编辑订单的结息记录列表
   // enabled 只依赖 editingOrderId，不加 participantInfo 限制，确保管理员编辑任何订单都能查到
+  const editingParticipantUserId = getParticipantUserIdForOrder(editingOrder);
   const { data: editingOrderPayments, refetch: refetchEditingPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
-    { ledgerId, orderId: editingOrderId! },
+    { ledgerId, orderId: editingOrderId!, participantUserId: editingParticipantUserId },
     { enabled: !!editingOrderId && ledgerId > 0, staleTime: 0 }
   );
-  // 直接从 editingOrderPayments 前端计算已结利息总额和最新币种
-  // 受邀订单（participantInfo）的已结佣金不走此逻辑，显示为 0
-  const previewPaidInterest: number = editingOrder?.participantInfo
-    ? 0
-    : (Array.isArray(editingOrderPayments) && (editingOrderPayments as any[]).length > 0
-        ? (editingOrderPayments as any[]).reduce((sum: number, p: any) => sum + parseFloat(p.amount || '0'), 0)
-        : 0);
-  const previewPaidInterestCurrency: string = editingOrder?.participantInfo
-    ? 'U'
-    : (Array.isArray(editingOrderPayments) && (editingOrderPayments as any[]).length > 0
-        ? ((editingOrderPayments as any[])[0]?.currency || 'U')
-        : 'U');
+  // 直接从当前视角的独立结息流水计算已结利息总额和最新币种。
+  const previewPaidInterest: number = Array.isArray(editingOrderPayments) && (editingOrderPayments as any[]).length > 0
+    ? (editingOrderPayments as any[]).reduce((sum: number, p: any) => sum + parseFloat(p.amount || '0'), 0)
+    : 0;
+  const previewPaidInterestCurrency: string = Array.isArray(editingOrderPayments) && (editingOrderPayments as any[]).length > 0
+    ? ((editingOrderPayments as any[])[0]?.currency || 'U')
+    : 'U';
   // refetchAllPaidSummary 兼容旧引用（mutation onSuccess 中调用）
   const refetchAllPaidSummary = refetchEditingPayments;
 
@@ -592,6 +592,19 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     },
     onError: (err) => toast.error(err.message),
   });
+  const updateParticipantOrderMutation = trpc.ledger.funderUpdateParticipantOrder.useMutation({
+    onSuccess: () => {
+      toast.success('参与者子订单已保存');
+      setShowForm(false);
+      setEditingOrder(null);
+      setParticipants([]);
+      participantsLoadedRef.current = null;
+      refetchOrders();
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+      trpcUtils.ledger.financeGetOrders.invalidate({ ledgerId });
+    },
+    onError: (err) => toast.error(err.message),
+  });
   const saveParticipantsMutation = trpc.ledger.funderSaveOrderParticipants.useMutation({
     onSuccess: async () => {
       toast.success('参与方配置已保存');
@@ -663,9 +676,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     });
   };
 
-  // 结息记录相关
+  // 结息记录相关：按当前展开订单的拥有者/参与者视角独立查询。
+  const paymentPanelOrder = showPaymentPanel !== null
+    ? (assetOrders as any[]).find((o: any) => Number(o.id) === Number(showPaymentPanel))
+    : null;
+  const paymentPanelParticipantUserId = getParticipantUserIdForOrder(paymentPanelOrder);
   const { data: interestPayments, refetch: refetchPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
-    { ledgerId, orderId: showPaymentPanel! },
+    { ledgerId, orderId: showPaymentPanel!, participantUserId: paymentPanelParticipantUserId },
     { enabled: showPaymentPanel !== null }
   );
 
@@ -924,35 +941,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   };
 
   const handleSubmit = () => {
-    // 受邀订单：仅保存佣金配置
-    if (editingOrder?.participantInfo) {
-      const participantUserId = editingOrder.participantInfo.userId ?? editingOrder.participantInfo.user_id;
-      if (!participantUserId) {
-        toast.error('无法确定参与方用户ID');
-        return;
-      }
-      updateParticipantConfigMutation.mutate({
-        orderId: editingOrder.id,
-        ledgerId,
-        userId: participantUserId,
-        commissionRate: formData.commissionRate === '' ? undefined : formData.commissionRate,
-        commissionBase: formData.commissionBase === '' ? undefined : formData.commissionBase,
-        commissionStartDate: formData.commissionStartDate || undefined,
-        // 参与者独立可编辑字段
-        interestRate: formData.interestRateAnnual === '' ? undefined : formData.interestRateAnnual,
-        interestBase: formData.interestBase === '' ? undefined : formData.interestBase,
-        interestBaseCurrency: formData.interestBaseCurrency || undefined,
-        interestPaymentType: formData.interestPaymentType || undefined,
-        interestStartDate: formData.interestStartDate || undefined,
-        interestRateCurrency: formData.interestRateCurrency || undefined,
-        displayConfig: formData.displayConfig ? JSON.stringify(formData.displayConfig) : undefined,
-        buyDateOverride: formData.buyDate || undefined,
-        brokerNameOverride: formData.brokerName || undefined,
-        brokerAccountOverride: formData.brokerAccount || undefined,
-        note: formData.note || undefined,
-      });
-      return;
-    }
     // 新建模式必须选择用户
     if (!editingOrder && !formData.userId) {
       toast.error('请选择用户');
@@ -1044,7 +1032,53 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         buyQty: optionFormData.buyQty || undefined,
       } : undefined,
     };
-    if (editingOrder) {
+    if (editingOrder?.participantInfo) {
+      const participantUserId = editingOrder.participantInfo.userId ?? editingOrder.participantInfo.user_id;
+      if (!participantUserId) {
+        toast.error('无法确定参与者用户ID');
+        return;
+      }
+      updateParticipantOrderMutation.mutate({
+        orderId: Number(editingOrder.id),
+        ledgerId,
+        userId: Number(participantUserId),
+        snapshot: {
+          coin: payload.coin,
+          amount: payload.amount,
+          amount_currency: payload.amountCurrency || null,
+          buy_price: payload.buyPrice || null,
+          buy_date: payload.buyDate || null,
+          buy_quantity: payload.buyQuantity || null,
+          storage_account: payload.storageAccount || null,
+          status: formData.status,
+          admin_note: payload.adminNote || null,
+          public_note: payload.publicNote || null,
+          interest_rate_annual: payload.interestRateAnnual || null,
+          interest_payment_type: payload.interestPaymentType || null,
+          interest_base: payload.interestBase || null,
+          interest_base_currency: payload.interestBaseCurrency || null,
+          interest_rate_currency: payload.interestRateCurrency || null,
+          interest_start_date: payload.interestStartDate || null,
+          collateral_assets: payload.collateralAssets ? JSON.stringify(payload.collateralAssets) : null,
+          show_profit_share: payload.showProfitShare ? 1 : 0,
+          commission_share: payload.commissionShare || null,
+          display_config: JSON.stringify(payload.displayConfig || {}),
+          asset_type: payload.assetType || null,
+          tags: payload.tags ? JSON.stringify(payload.tags) : null,
+          collateral_share_mode: payload.collateralShareMode || 'none',
+          collateral_source: payload.collateralSource ? JSON.stringify(payload.collateralSource) : null,
+          principal_lent_out: payload.principalLentOut ? 1 : 0,
+          trading_fee_rate_per_mille: payload.tradingFeeRate ?? null,
+          trading_fee_status: payload.tradingFeeStatus || null,
+          order_fill_status: payload.orderFillStatus || 'filled',
+          order_perspective: payload.orderPerspective || 'self',
+          broker_name: payload.brokerName || null,
+          broker_account: payload.brokerAccount || null,
+          option_info: payload.optionInfo ? JSON.stringify(payload.optionInfo) : null,
+          trade_direction: payload.tradeDirection || null,
+        },
+      });
+    } else if (editingOrder) {
       updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...(formData.userId > 0 ? { userId: formData.userId } : {}), ...payload });
     } else {
       // 根据所选用户在账本中的角色自动判断归属：
@@ -1062,11 +1096,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   };
 
   const handleDelete = (orderId: number) => {
-    deleteMutation.mutate({ id: orderId, ledgerId });
+    setConfirmDeleteId(orderId);
   };
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = (participantAction: 'retain' | 'settle_all') => {
     if (confirmDeleteId === null) return;
-    deleteMutation.mutate({ id: confirmDeleteId, ledgerId });
+    deleteMutation.mutate({ id: confirmDeleteId, ledgerId, participantAction });
     setConfirmDeleteId(null);
   };
 
@@ -2824,7 +2858,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             </div>
 
             {/* ===== 订单参与者管理 ===== */}
-            {editingOrder && (
+            {editingOrder && !editingOrder?.participantInfo && (
               <div className="px-5 pb-4" ref={participantsSectionRef}>
                 {/* 分隔线 */}
                 <div className="flex items-center gap-3 mb-3">
@@ -3072,18 +3106,19 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 const ownerM = allM.find((m: any) => m.userId === editingOrder?.user_id);
                                 return ownerM ? (ownerM.nickname || ownerM.username) : (editingOrder?.owner_label || editingOrder?.username || null);
                               })(),
-                              coin: formData.coin,
+                              coin: (p.coin || formData.coin),
                               asset_type: formData.assetType || null,
                               buy_price: formData.buyPrice || null,
                               buy_quantity: formData.assetType === 'stock' ? null : (formData.buyQuantity || null),
-                              amount: formData.assetType === 'stock' ? (amountInputValue || null) : null,
+                              amount: p.amount || (formData.assetType === 'stock' ? (amountInputValue || null) : (computedAmount || null)),
+                              amount_currency: p.amountCurrency || formData.amountCurrency || 'USDT',
                               buy_date: formData.buyDate || null,
                               status: formData.status || 'active',
                               broker_name: formData.brokerName || null,
                               broker_account: formData.brokerAccount || null,
-                              interest_rate_annual: p.interestRateAnnual || formData.interestRateAnnual || null,
+                              interest_rate_annual: p.interestRateAnnual !== '' ? p.interestRateAnnual : (formData.interestRateAnnual || null),
                               interest_payment_type: p.interestPaymentType || formData.interestPaymentType || null,
-                              interest_base: p.interestBase || formData.interestBase || null,
+                              interest_base: p.interestBase !== '' ? p.interestBase : (formData.interestBase || null),
                               interest_base_currency: p.interestBaseCurrency || formData.interestBaseCurrency || 'USDT',
                               interest_rate_currency: p.interestRateCurrency || formData.interestRateCurrency || 'USDT',
                               interest_start_date: p.interestStartDate || formData.interestStartDate || null,
@@ -3189,7 +3224,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               coin: formData.coin,
                               amount: formData.assetType === 'stock' ? amountInputValue : (computedAmount || ''),
                               amountCurrency: formData.amountCurrency || 'USDT',
-                              interestRateAnnual: '1',  // 参与者默认年化1%（正数），不继承主订单利率
+                              interestRateAnnual: formData.interestRateAnnual || '',  // 新增时完整继承主订单，之后独立修改
                               interestBase: formData.interestBase || '',
                               interestBaseCurrency: formData.interestBaseCurrency || 'USDT',
                               interestRateCurrency: formData.interestRateCurrency || 'USDT',
@@ -3218,16 +3253,58 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             <div className="flex-shrink-0 bg-white px-5 py-4 border-t border-gray-100">
               <button
                 onClick={handleSubmit}
-                disabled={createMutation.isPending || updateMutation.isPending}
+                disabled={createMutation.isPending || updateMutation.isPending || updateParticipantOrderMutation.isPending}
                 className="w-full py-3.5 rounded-xl text-white font-semibold text-base disabled:opacity-50"
                 style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
               >
-                {(createMutation.isPending || updateMutation.isPending) ? '提交中...' : (editingOrder ? '保存修改' : '确认添加')}
+                {(createMutation.isPending || updateMutation.isPending || updateParticipantOrderMutation.isPending) ? '提交中...' : (editingOrder ? '保存修改' : '确认添加')}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* 删除主订单确认：融资付息只改变记账展示，绝不触碰钱包 */}
+      {confirmDeleteId !== null && (() => {
+        const targetOrder = (assetOrders as any[]).find((o: any) => Number(o.id) === Number(confirmDeleteId));
+        const participantCount = Number(targetOrder?.participantCount ?? targetOrder?._participantCount ?? targetOrder?._participantUserIds?.length ?? 0);
+        return (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center px-4" onClick={() => setConfirmDeleteId(null)}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="relative bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+              <h3 className="text-base font-semibold text-gray-900 mb-2">删除融资付息订单</h3>
+              <p className="text-sm text-gray-600 mb-2">订单将移入回收站。本功能只改变记账状态和页面显示，<span className="font-semibold text-gray-800">不会产生任何钱包流水</span>。</p>
+              {participantCount > 0 ? (
+                <>
+                  <p className="text-sm text-indigo-600 mb-4">该主订单关联 {participantCount} 位参与者，请选择参与者子订单的处理方式。</p>
+                  <div className="space-y-2.5">
+                    <button
+                      onClick={() => handleConfirmDelete('retain')}
+                      className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left"
+                    >
+                      <div className="text-sm font-semibold text-emerald-700">仅删除订单拥有者，保留参与者</div>
+                      <div className="text-xs text-emerald-600 mt-1">参与者绿色子订单继续显示并独立计息、记账</div>
+                    </button>
+                    <button
+                      onClick={() => handleConfirmDelete('settle_all')}
+                      className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-left"
+                    >
+                      <div className="text-sm font-semibold text-red-700">主订单与参与者一起结算并删除</div>
+                      <div className="text-xs text-red-600 mt-1">全部标记为已结算并移入回收站，不操作钱包</div>
+                    </button>
+                    <button onClick={() => setConfirmDeleteId(null)} className="w-full py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex gap-3 mt-5">
+                  <button onClick={() => setConfirmDeleteId(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
+                  <button onClick={() => handleConfirmDelete('settle_all')} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white">确认删除</button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 结清确认弹窗 */}
       {confirmSettleId !== null && (
