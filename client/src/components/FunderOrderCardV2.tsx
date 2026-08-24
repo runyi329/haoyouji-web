@@ -1474,15 +1474,16 @@ export function FunderOrderCardV2Silver({
             : null;
           const showLivePrice = !isStockCard && coin !== 'CNY' && coin !== 'USDT';
           const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
-          const ownerNameClass = String(orderOwnerName ?? '').length > 10 ? 'text-[9px]' : String(orderOwnerName ?? '').length > 6 ? 'text-[10px]' : 'text-[11px]';
-          const participantNameClass = String(participantName ?? '').length > 10 ? 'text-[9px]' : String(participantName ?? '').length > 6 ? 'text-[10px]' : 'text-[11px]';
+          const ownerNameClass = String(orderOwnerName ?? '').length > 10 ? 'text-[8px]' : String(orderOwnerName ?? '').length > 6 ? 'text-[9px]' : 'text-[10px]';
+          const participantNameClass = String(participantName ?? '').length > 10 ? 'text-[8px]' : String(participantName ?? '').length > 6 ? 'text-[9px]' : 'text-[10px]';
           const metadataLength = String(buyDateStr ?? '').length + String(brokerText ?? '').length + (showLivePrice ? String(coin).length + 10 : 0);
-          const metadataClass = metadataLength > 24 ? 'text-[8px]' : metadataLength > 16 ? 'text-[9px]' : 'text-[10px]';
+          const metadataClass = metadataLength > 28 ? 'text-[9px]' : 'text-[11px]';
+          const identityMaxWidth = metadataLength > 24 ? '58px' : '70px';
           const hasMetadata = !!(buyDateStr || brokerText || showLivePrice);
           return (
-            <div className="flex min-w-0 items-center gap-1">
+            <div className="flex min-w-0 items-center">
               {orderOwnerName && (
-                <div className="min-w-0" style={{ flex: '1 1 0' }}>
+                <div className="min-w-0" style={{ flex: '0 1 auto', maxWidth: isParticipant ? identityMaxWidth : '108px' }}>
                   <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>拥有者</div>
                   <div className={`mt-0.5 truncate font-semibold leading-tight ${ownerNameClass}`} style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
                     {orderOwnerName}
@@ -1491,8 +1492,8 @@ export function FunderOrderCardV2Silver({
               )}
               {isParticipant && participantName && (
                 <div
-                  className="min-w-0 pl-1"
-                  style={{ flex: '1 1 0', borderLeft: orderOwnerName ? `1px solid ${DIVIDER}` : undefined }}
+                  className="ml-0.5 min-w-0 pl-1"
+                  style={{ flex: '0 1 auto', maxWidth: identityMaxWidth, borderLeft: orderOwnerName ? '1px solid rgba(255,255,255,0.5)' : undefined }}
                 >
                   <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>参与者</div>
                   <div className={`mt-0.5 truncate font-semibold leading-tight ${participantNameClass}`} style={{ color: TXT_PRI }} title={String(participantName)}>
@@ -1501,7 +1502,7 @@ export function FunderOrderCardV2Silver({
                 </div>
               )}
               {hasMetadata && (
-                <div className={`flex min-w-0 items-center gap-x-1 self-end overflow-hidden whitespace-nowrap leading-tight ${metadataClass}`} style={{ flex: '1.4 1 0', color: TXT_SEC }}>
+                <div className={`ml-1.5 flex min-w-0 flex-1 items-center gap-x-1 overflow-hidden whitespace-nowrap leading-tight ${metadataClass}`} style={{ color: TXT_SEC }}>
                   {buyDateStr && <span className="shrink-0 whitespace-nowrap">{buyDateStr}</span>}
                   {brokerText && <span className="min-w-0 flex-1 truncate" title={brokerText}>{brokerText}</span>}
                   {showLivePrice && (
@@ -1515,7 +1516,7 @@ export function FunderOrderCardV2Silver({
                 </div>
               )}
               {order.order_no && (
-                <span className="max-w-[54px] shrink-0 self-start truncate text-[8px] font-mono leading-tight" style={{ color: TXT_DIM, letterSpacing: '0.03em' }} title={String(order.order_no)}>
+                <span className="ml-1 max-w-[58px] shrink-0 truncate text-[10px] font-mono leading-tight" style={{ color: TXT_DIM, letterSpacing: '0.03em' }} title={String(order.order_no)}>
                   {order.order_no}
                 </span>
               )}
@@ -2899,15 +2900,16 @@ export function FunderLenderCardSilver({
             : null;
           const showLivePrice = coin !== 'CNY' && coin !== 'USDT';
           const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
-          const ownerNameClass = String(orderOwnerName ?? '').length > 10 ? 'text-[9px]' : String(orderOwnerName ?? '').length > 6 ? 'text-[10px]' : 'text-[11px]';
-          const participantNameClass = String(participantName ?? '').length > 10 ? 'text-[9px]' : String(participantName ?? '').length > 6 ? 'text-[10px]' : 'text-[11px]';
+          const ownerNameClass = String(orderOwnerName ?? '').length > 10 ? 'text-[8px]' : String(orderOwnerName ?? '').length > 6 ? 'text-[9px]' : 'text-[10px]';
+          const participantNameClass = String(participantName ?? '').length > 10 ? 'text-[8px]' : String(participantName ?? '').length > 6 ? 'text-[9px]' : 'text-[10px]';
           const metadataLength = String(buyDateStr ?? '').length + String(brokerText ?? '').length + (showLivePrice ? String(coin).length + 10 : 0);
-          const metadataClass = metadataLength > 24 ? 'text-[8px]' : metadataLength > 16 ? 'text-[9px]' : 'text-[10px]';
+          const metadataClass = metadataLength > 28 ? 'text-[9px]' : 'text-[11px]';
+          const identityMaxWidth = metadataLength > 24 ? '58px' : '70px';
           const hasMetadata = !!(buyDateStr || brokerText || showLivePrice);
           return (
-            <div className="flex min-w-0 items-center gap-1">
+            <div className="flex min-w-0 items-center">
               {orderOwnerName && (
-                <div className="min-w-0" style={{ flex: '1 1 0' }}>
+                <div className="min-w-0" style={{ flex: '0 1 auto', maxWidth: isParticipant ? identityMaxWidth : '108px' }}>
                   <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>拥有者</div>
                   <div className={`mt-0.5 truncate font-semibold leading-tight ${ownerNameClass}`} style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
                     {orderOwnerName}
@@ -2916,8 +2918,8 @@ export function FunderLenderCardSilver({
               )}
               {isParticipant && participantName && (
                 <div
-                  className="min-w-0 pl-1"
-                  style={{ flex: '1 1 0', borderLeft: orderOwnerName ? `1px solid ${DIVIDER}` : undefined }}
+                  className="ml-0.5 min-w-0 pl-1"
+                  style={{ flex: '0 1 auto', maxWidth: identityMaxWidth, borderLeft: orderOwnerName ? '1px solid rgba(255,255,255,0.5)' : undefined }}
                 >
                   <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>参与者</div>
                   <div className={`mt-0.5 truncate font-semibold leading-tight ${participantNameClass}`} style={{ color: TXT_PRI }} title={String(participantName)}>
@@ -2926,7 +2928,7 @@ export function FunderLenderCardSilver({
                 </div>
               )}
               {hasMetadata && (
-                <div className={`flex min-w-0 items-center gap-x-1 self-end overflow-hidden whitespace-nowrap leading-tight ${metadataClass}`} style={{ flex: '1.4 1 0', color: TXT_SEC }}>
+                <div className={`ml-1.5 flex min-w-0 flex-1 items-center gap-x-1 overflow-hidden whitespace-nowrap leading-tight ${metadataClass}`} style={{ color: TXT_SEC }}>
                   {buyDateStr && <span className="shrink-0 whitespace-nowrap">{buyDateStr}</span>}
                   {brokerText && <span className="min-w-0 flex-1 truncate" title={brokerText}>{brokerText}</span>}
                   {showLivePrice && (
@@ -2940,7 +2942,7 @@ export function FunderLenderCardSilver({
                 </div>
               )}
               {order.order_no && (
-                <span className="max-w-[54px] shrink-0 self-start truncate text-[8px] font-mono leading-tight" style={{ color: TXT_DIM, letterSpacing: '0.03em' }} title={String(order.order_no)}>
+                <span className="ml-1 max-w-[58px] shrink-0 truncate text-[10px] font-mono leading-tight" style={{ color: TXT_DIM, letterSpacing: '0.03em' }} title={String(order.order_no)}>
                   {order.order_no}
                 </span>
               )}
