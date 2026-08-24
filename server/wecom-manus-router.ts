@@ -481,11 +481,11 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
           await sendWeComMessage(userId, `绑定账号「${siteUsername}」数据异常，请联系管理员。`);
           break;
         }
-        // 查询网站余额：users.balance + af_manual_balances合计
+        // 查询网站余额：users.balance + 尚未写入基础余额的USDT流水。
         const [balRows] = await (conn as any).execute(
           `SELECT
              (SELECT COALESCE(balance, 0) FROM users WHERE id = ?) AS userBalance,
-             (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ?) AS manual`,
+             (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ? AND note NOT LIKE '[CNY]%' AND note NOT LIKE '[BALANCE_BASE]%') AS manual`,
           [siteUserId, siteUserId]
         ) as any;
         const row = (balRows as any[])[0] || {};

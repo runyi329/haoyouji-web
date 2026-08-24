@@ -13759,42 +13759,30 @@ ${klinesSummary}
         } catch (_) { /* 忽略 */ }
 
         // 4. 合并并按时间正序排列（从旧到新）。此处只保留一次实际影响 USDT 余额的事件。
-        let combinedAsc = [...rechargeList, ...manualList, ...bhList].sort(
+        const combinedAsc = [...rechargeList, ...manualList, ...bhList].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
 
-        // 5. 获取当前真实余额：users.balance + af_manual_balances（与 getBalance 接口保持一致）
-        const balRow = await db.execute(
-          sql`SELECT
-            (SELECT COALESCE(balance, 0) FROM users WHERE id = ${targetUserId}) AS userBalance,
-            (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${targetUserId} AND note NOT LIKE '[CNY]%' AND note NOT LIKE '[BALANCE_BASE]%') AS manual`
-        ) as any;
-        const balData = (balRow[0]?.[0] ?? balRow[0]) as any;
-        const currentBalance =
-          (parseFloat(balData?.userBalance ?? '0') || 0) +
-          (parseFloat(balData?.manual ?? '0') || 0);
-
-        // 6. 仅展示可追溯的真实资金事件；不再生成没有原始记录的虚拟期初余额。
-
-        // 7. 倒推余额：从当前真实余额开始，倒序遍历每条记录，记录发生后的余额快照
-        const combinedDesc = [...combinedAsc].reverse();
-        let running = currentBalance;
+        // 5. 从第一笔可追溯的真实事件开始正序累计余额。
+        // 禁止再使用“当前余额 - 历史流水合计”倒推，否则未入明细的差额会被静默塞进第一笔余额。
+        let running = 0;
         const balanceMap = new Map<string, number>();
-        for (const item of combinedDesc) {
+        for (const item of combinedAsc) {
           const amt = parseFloat(String((item as any).amount));
           const srcType = (item as any).sourceType;
           const status = (item as any).status;
-          // 只有实际影响余额的记录才参与倒推
           const affects =
             (srcType === 'recharge' && status === 'completed') ||
             srcType === 'manual' ||
             srcType === 'balance_history';
-          balanceMap.set(String((item as any).id), parseFloat(running.toFixed(8)));
           if (affects) {
-            running -= amt; // 倒推：当前余额减去该笔金额 = 该笔发生前的余额
+            running += amt;
           }
+          balanceMap.set(String((item as any).id), parseFloat(running.toFixed(8)));
         }
-        // 返回时按时间倒序（最新在前）展示给前端
+
+        // 页面仍按时间倒序（最新在前）展示，但每笔余额来自上面的正序真实累计。
+        const combinedDesc = [...combinedAsc].reverse();
         return combinedDesc.map(item => ({
           ...item,
           balanceAfter: balanceMap.get(String((item as any).id)) ?? null,

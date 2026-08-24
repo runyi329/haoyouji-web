@@ -833,21 +833,10 @@ export async function getUserBalance(userId: number, ledgerId?: number): Promise
   return userBalance + manual;
 }
 
-// 获取用户余额变动记录（合并 balance_history + af_manual_balances，统一倒推余额快照）
+// 获取用户余额变动记录（合并 balance_history + af_manual_balances，从最早真实流水正序累计余额快照）
 export async function getUserBalanceHistory(userId: number, limit: number = 50) {
   const conn = await getDbConnection();
   const pool = conn as any;
-
-  // 获取当前真实余额：users.balance + af_manual_balances 全部合计
-  const [balRows] = await pool.execute(
-    `SELECT
-       (SELECT COALESCE(balance, 0) FROM users WHERE id = ?) AS userBalance,
-       (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ? AND note NOT LIKE '[CNY]%' AND note NOT LIKE '[BALANCE_BASE]%') AS manual`,
-    [userId, userId]
-  ) as any[];
-  const userBalance = parseFloat((balRows as any[])[0]?.userBalance ?? '0') || 0;
-  const manual = parseFloat((balRows as any[])[0]?.manual ?? '0') || 0;
-  const currentBalance = parseFloat((userBalance + manual).toFixed(8));
 
   // 来源1：balance_history（充值/提现/奖励/佣金等）
   const [bhRows] = await pool.execute(
@@ -902,12 +891,12 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
 
-  // 倒推余额快照：从当前真实余额开始，倒序遍历
-  const reversed = [...allRows].reverse();
-  let running = currentBalance;
-  for (const row of reversed) {
+  // 从第一笔真实流水开始正序累计；列表最终仍按最新在前展示。
+  // 不再根据当前余额反推，避免未列出的历史差额被塞进第一笔余额。
+  let running = 0;
+  for (const row of allRows) {
+    running += row.amount;
     row.balanceAfter = parseFloat(running.toFixed(2));
-    running -= row.amount;
   }
 
   // 返回时倒序（最新在前），截取 limit 条
@@ -1822,7 +1811,7 @@ export async function adminRevokeRecharge(
       [orderId, userId]
     );
     await pool.execute(
-      `UPDATE users SET balance = GREATEST(0, COALESCE(balance, 0) - ?) WHERE id = ?`,
+      `UPDATE users SET balance = COALESCE(balance, 0) - ? WHERE id = ?`,
       [amount, userId]
     );
   }
@@ -1871,7 +1860,7 @@ export async function adminRevokeBalanceHistory(
     if (currency === 'CNY') {
       // CNY 余额写 users.cny_balance
       await pool.execute(
-        `UPDATE users SET cny_balance = GREATEST(0, COALESCE(cny_balance, 0) - ?) WHERE id = ?`,
+        `UPDATE users SET cny_balance = COALESCE(cny_balance, 0) - ? WHERE id = ?`,
         [amount, userId]
       );
       const [[userRow]] = await pool.execute(
@@ -1892,12 +1881,12 @@ export async function adminRevokeBalanceHistory(
     await pool.execute(`DELETE FROM balance_history WHERE id = ?`, [historyId]);
     if (currency === 'CNY') {
       await pool.execute(
-        `UPDATE users SET cny_balance = GREATEST(0, COALESCE(cny_balance, 0) - ?) WHERE id = ?`,
+        `UPDATE users SET cny_balance = COALESCE(cny_balance, 0) - ? WHERE id = ?`,
         [amount, userId]
       );
     } else {
       await pool.execute(
-        `UPDATE users SET balance = GREATEST(0, COALESCE(balance, 0) - ?) WHERE id = ?`,
+        `UPDATE users SET balance = COALESCE(balance, 0) - ? WHERE id = ?`,
         [amount, userId]
       );
     }
