@@ -1457,84 +1457,76 @@ export function FunderOrderCardV2Silver({
         />
       ))}
 
-      {/* ── 行1：名字 | 开仓日期 | 当前币价 + 订单号 ── */}
-      <div className="flex items-center px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
-        {/* 左侧：竖线分隔的标签组 */}
-        <div className="flex items-center text-xs" style={{ color: TXT_SEC, gap: 0 }}>
-          {(() => {
-            const member = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
-            const normalOwnerName = member?.nickname || (order as any).nickname || member?.username || order.owner_label || null;
-            const orderOwnerName = isParticipant ? (
-              (order as any).order_owner_name || (order as any).nickname || (order as any).username || normalOwnerName
-            ) : normalOwnerName;
-            const participantName = isParticipant ? (
-              (order as any).participant_name || order.owner_label || null
-            ) : null;
-            const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
-            // 参与者视角：拥有者名字紧跟在参与者名字后，无框白色字体
-            // 构建 items：[ownerName + ownerLabel, buyDateStr]
-            const items = [buyDateStr].filter(Boolean);
-            const priceDiff2 = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
-            const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
-            return (
-              <>
-                {/* 订单拥有者在前，当前参与者在后 */}
-                {orderOwnerName && (
-                  <span style={{ color: TXT_PRI, fontWeight: 500 }}>{isParticipant ? `拥有者 ${orderOwnerName}` : orderOwnerName}</span>
-                )}
-                {isParticipant && participantName && (
-                  <>
-                    {orderOwnerName && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
-                    <span style={{ color: SL_GREEN, fontWeight: 600 }}>参与者 {participantName}</span>
-                  </>
-                )}
-                {!orderOwnerName && isParticipant && !participantName && null}
-                {items.map((item, i) => (
-                  <React.Fragment key={i}>
-                    {(orderOwnerName || (isParticipant && participantName) || i > 0) && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
-                    <span style={{ color: TXT_SEC, fontWeight: 400 }}>{item}</span>
-                  </React.Fragment>
-                ))}
-                {/* 股票类：证券公司 + 证券账号，无标题，用竖线分隔 */}
-                {isStockCard && order.broker_name && (
-                  <>
-                    <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>
-                    <span style={{ color: TXT_SEC }}>{order.broker_name}</span>
-                  </>
-                )}
-                {isStockCard && order.broker_account && (
-                  <>
-                    <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>
-                    <span className="font-mono" style={{ color: TXT_SEC }}>{order.broker_account}</span>
-                  </>
-                )}
-                {/* 数字币类：实时币价 */}
-                {!isStockCard && coin !== 'CNY' && coin !== 'USDT' && (
-                  <>
-                    <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>
-                    <span className="flex items-center gap-0.5" style={{ fontWeight: 500 }}>
+      {/* ── 页眉：身份与订单号一行，日期/行情另起一行，避免移动端挤压重叠 ── */}
+      <div className="px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
+        {(() => {
+          const member = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
+          const normalOwnerName = member?.nickname || (order as any).nickname || member?.username || order.owner_label || null;
+          const orderOwnerName = isParticipant
+            ? ((order as any).order_owner_name || (order as any).nickname || (order as any).username || normalOwnerName)
+            : normalOwnerName;
+          const participantName = isParticipant
+            ? ((order as any).participant_name || order.owner_label || null)
+            : null;
+          const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
+          const brokerText = isStockCard
+            ? [order.broker_name, order.broker_account].filter(Boolean).join(' · ')
+            : null;
+          const showLivePrice = !isStockCard && coin !== 'CNY' && coin !== 'USDT';
+          const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
+          return (
+            <>
+              {(orderOwnerName || participantName || order.order_no) && (
+                <div className="flex items-start gap-2 min-w-0">
+                  {orderOwnerName && (
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[9px] leading-none" style={{ color: TXT_SEC }}>拥有者</div>
+                      <div className="mt-1 truncate text-xs font-semibold leading-tight" style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
+                        {orderOwnerName}
+                      </div>
+                    </div>
+                  )}
+                  {isParticipant && participantName && (
+                    <div
+                      className="min-w-0 flex-1 pl-2"
+                      style={{ borderLeft: orderOwnerName ? `1px solid ${DIVIDER}` : undefined }}
+                    >
+                      <div className="text-[9px] leading-none" style={{ color: TXT_SEC }}>参与者</div>
+                      <div className="mt-1 truncate text-xs font-semibold leading-tight" style={{ color: TXT_PRI }} title={String(participantName)}>
+                        {participantName}
+                      </div>
+                    </div>
+                  )}
+                  {order.order_no && (
+                    <span
+                      className="max-w-[76px] shrink-0 truncate text-[9px] font-mono leading-tight"
+                      style={{ color: TXT_DIM, letterSpacing: '0.04em' }}
+                      title={String(order.order_no)}
+                    >
+                      {order.order_no}
+                    </span>
+                  )}
+                </div>
+              )}
+              {(buyDateStr || brokerText || showLivePrice) && (
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]" style={{ color: TXT_SEC }}>
+                  {buyDateStr && <span className="whitespace-nowrap">{buyDateStr}</span>}
+                  {brokerText && (
+                    <span className="min-w-0 max-w-full truncate" title={brokerText}>{brokerText}</span>
+                  )}
+                  {showLivePrice && (
+                    <span className="inline-flex items-center gap-0.5 whitespace-nowrap font-medium">
                       {dir === 'up' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_GREEN, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                       {dir === 'down' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_RED, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
                       <span style={{ color: TXT_PRI }}>{coin}</span>
                       <span style={{ marginLeft: '3px', color: livePriceColor }}>{liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '---'}</span>
                     </span>
-                  </>
-                )}
-              </>
-            );
-          })()}
-        </div>
-        {/* 右侧：订单号 */}
-        <div className="ml-auto flex items-center gap-1.5">
-          {order.order_no && (
-            <span
-              className="text-[10px] font-mono"
-              style={{ color: TXT_DIM, letterSpacing: '0.05em' }}
-            >
-              {order.order_no}
-            </span>
-          )}
-        </div>
+                  )}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {/* ── 行2：主数据行（持有数量占宽，其侙3列均分）── */}
@@ -2895,64 +2887,76 @@ export function FunderLenderCardSilver({
         />
       ))}
 
-      {/* ── 行1：名字 | 开仓日期 | 当前币价 + 订单号 ── */}
-      <div className="flex items-center px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
-        <div className="flex items-center text-xs" style={{ color: TXT_SEC, gap: 0 }}>
-          {(() => {
-            const member = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
-            const normalOwnerName = member?.nickname || (order as any).nickname || member?.username || order.owner_label || null;
-            const orderOwnerName = isParticipant ? (
-              (order as any).order_owner_name || (order as any).nickname || (order as any).username || normalOwnerName
-            ) : normalOwnerName;
-            const participantName = isParticipant ? (
-              (order as any).participant_name || order.owner_label || null
-            ) : null;
-            const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
-            const brokerStr = order.asset_type === 'stock'
-              ? [order.broker_name, order.broker_account].filter(Boolean).join(' ')
-              : null;
-            const items = [buyDateStr, brokerStr].filter(Boolean);
-            // 当前币价（带红绿色+闪烁箭头）
-            const priceDiff2 = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
-            const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
-            return (
-              <>
-                {/* 订单拥有者在前，当前参与者在后 */}
-                {orderOwnerName && (
-                  <span style={{ color: TXT_PRI, fontWeight: 500 }}>{isParticipant ? `拥有者 ${orderOwnerName}` : orderOwnerName}</span>
-                )}
-                {isParticipant && participantName && (
-                  <>
-                    {orderOwnerName && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
-                    <span style={{ color: SL_GREEN, fontWeight: 600 }}>参与者 {participantName}</span>
-                  </>
-                )}
-                {items.map((item, i) => (
-                  <React.Fragment key={i}>
-                    {(orderOwnerName || (isParticipant && participantName) || i > 0) && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
-                    <span style={{ color: TXT_SEC, fontWeight: 400 }}>{item}</span>
-                  </React.Fragment>
-                ))}
-                {coin !== 'CNY' && coin !== 'USDT' && (
-                  <>
-                    <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>
-                    <span className="flex items-center gap-0.5" style={{ fontWeight: 500 }}>
+      {/* ── 页眉：身份与订单号一行，日期/行情另起一行，避免移动端挤压重叠 ── */}
+      <div className="px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
+        {(() => {
+          const member = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
+          const normalOwnerName = member?.nickname || (order as any).nickname || member?.username || order.owner_label || null;
+          const orderOwnerName = isParticipant
+            ? ((order as any).order_owner_name || (order as any).nickname || (order as any).username || normalOwnerName)
+            : normalOwnerName;
+          const participantName = isParticipant
+            ? ((order as any).participant_name || order.owner_label || null)
+            : null;
+          const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
+          const brokerText = order.asset_type === 'stock'
+            ? [order.broker_name, order.broker_account].filter(Boolean).join(' · ')
+            : null;
+          const showLivePrice = coin !== 'CNY' && coin !== 'USDT';
+          const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
+          return (
+            <>
+              {(orderOwnerName || participantName || order.order_no) && (
+                <div className="flex items-start gap-2 min-w-0">
+                  {orderOwnerName && (
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[9px] leading-none" style={{ color: TXT_SEC }}>拥有者</div>
+                      <div className="mt-1 truncate text-xs font-semibold leading-tight" style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
+                        {orderOwnerName}
+                      </div>
+                    </div>
+                  )}
+                  {isParticipant && participantName && (
+                    <div
+                      className="min-w-0 flex-1 pl-2"
+                      style={{ borderLeft: orderOwnerName ? `1px solid ${DIVIDER}` : undefined }}
+                    >
+                      <div className="text-[9px] leading-none" style={{ color: TXT_SEC }}>参与者</div>
+                      <div className="mt-1 truncate text-xs font-semibold leading-tight" style={{ color: TXT_PRI }} title={String(participantName)}>
+                        {participantName}
+                      </div>
+                    </div>
+                  )}
+                  {order.order_no && (
+                    <span
+                      className="max-w-[76px] shrink-0 truncate text-[9px] font-mono leading-tight"
+                      style={{ color: TXT_DIM, letterSpacing: '0.04em' }}
+                      title={String(order.order_no)}
+                    >
+                      {order.order_no}
+                    </span>
+                  )}
+                </div>
+              )}
+              {(buyDateStr || brokerText || showLivePrice) && (
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]" style={{ color: TXT_SEC }}>
+                  {buyDateStr && <span className="whitespace-nowrap">{buyDateStr}</span>}
+                  {brokerText && (
+                    <span className="min-w-0 max-w-full truncate" title={brokerText}>{brokerText}</span>
+                  )}
+                  {showLivePrice && (
+                    <span className="inline-flex items-center gap-0.5 whitespace-nowrap font-medium">
                       {dir === 'up' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_GREEN, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                       {dir === 'down' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_RED, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
                       <span style={{ color: TXT_PRI }}>{coin}</span>
                       <span style={{ marginLeft: '3px', color: livePriceColor }}>{liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '---'}</span>
                     </span>
-                  </>
-                )}
-              </>
-            );
-          })()}
-        </div>
-        {order.order_no && (
-          <span className="ml-auto text-[10px] font-mono" style={{ color: TXT_DIM, letterSpacing: '0.05em' }}>
-            {order.order_no}
-          </span>
-        )}
+                  )}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {/* ── 行2：应收利息大字（左）+ 年化利率（右）── */}

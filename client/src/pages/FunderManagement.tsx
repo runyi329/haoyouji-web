@@ -1222,7 +1222,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   >全部成员</button>
                   {(funderUsers as any[])?.filter((u: any) => {
                     if (!matchesUserSearch(u, userSearchText)) return false;
-                    // 过滤掉没有订单的用户
+                    // 中侧（管理）必须显示全部 owner/admin，即使尚无订单，方便管理员先选人再创建首张订单。
+                    if (adminOnly) return true;
+                    // 其他分栏继续只显示已有主订单或参与订单的用户，避免列表被空成员淹没。
                     const hasOrders = allOrders.some((o: any) => o.userId === u.userId || o.user_id === u.userId || (o._participantUserIds && o._participantUserIds.includes(u.userId)));
                     return hasOrders;
                   }).map((u: any) => {
