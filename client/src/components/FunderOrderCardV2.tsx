@@ -1457,8 +1457,8 @@ export function FunderOrderCardV2Silver({
         />
       ))}
 
-      {/* ── 页眉：身份与订单号一行，日期/行情另起一行，避免移动端挤压重叠 ── */}
-      <div className="px-3.5 pt-2 pb-1.5" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
+      {/* ── 页眉：身份、日期/行情与订单号同一行，左右预留铆钉安全距离 ── */}
+      <div className="px-5 pt-2 pb-1.5" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
         {(() => {
           const member = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
           const normalOwnerName = member?.nickname || (order as any).nickname || member?.username || order.owner_label || null;
@@ -2883,8 +2883,8 @@ export function FunderLenderCardSilver({
         />
       ))}
 
-      {/* ── 页眉：身份与订单号一行，日期/行情另起一行，避免移动端挤压重叠 ── */}
-      <div className="px-3.5 pt-2 pb-1.5" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
+      {/* ── 页眉：身份、日期/行情与订单号同一行，左右预留铆钉安全距离 ── */}
+      <div className="px-5 pt-2 pb-1.5" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
         {(() => {
           const member = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
           const normalOwnerName = member?.nickname || (order as any).nickname || member?.username || order.owner_label || null;
