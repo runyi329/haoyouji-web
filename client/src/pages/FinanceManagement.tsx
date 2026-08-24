@@ -1671,7 +1671,18 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     onError: (e) => toast.error(e.message),
   });
   const updateMutation = trpc.ledger.financeUpdateOrder.useMutation({
-    onSuccess: () => { toast.success('订单已更新'); refetchOrders(); closeForm(); },
+    onSuccess: (result, vars) => {
+      const syncedCount = Number((result as any)?.participantCount || 0);
+      if (vars.status === 'settled') {
+        toast.success(syncedCount > 0 ? `主订单及 ${syncedCount} 位参与者已同步结清` : '订单已结清');
+      } else if (vars.status === 'active') {
+        toast.success(syncedCount > 0 ? `主订单及 ${syncedCount} 位参与者已同步恢复` : '订单已恢复为持有中');
+      } else {
+        toast.success('订单已更新');
+      }
+      refetchOrders();
+      closeForm();
+    },
     onError: (e) => toast.error(e.message),
   });
   const updateParticipantConfigMutation = trpc.ledger.funderUpdateParticipantConfig.useMutation({
@@ -3256,29 +3267,33 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       )}
 
       {/* 删除二次确认弹窗 */}
-      {/* 结清确认弹窗 */}
-      {confirmSettleId !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setConfirmSettleId(null)}>
-          <div className="bg-white rounded-2xl p-6 mx-4 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
-            <div className="text-center mb-5">
-              <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
-                <span className="text-2xl">✔️</span>
+      {/* 结清确认：有关联参与者时必须随主订单统一结清 */}
+      {confirmSettleId !== null && (() => {
+        const targetOrder = (orders as any[]).find((o: any) => Number(o.id) === Number(confirmSettleId));
+        const participantCount = Number(targetOrder?.participantCount ?? targetOrder?._participantCount ?? targetOrder?._participantUserIds?.length ?? 0);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setConfirmSettleId(null)}>
+            <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+              <div className="text-base font-semibold text-gray-800 mb-2">确认统一结清</div>
+              {participantCount > 0 ? (
+                <div className="text-sm text-indigo-600 mb-2">该主订单关联 <span className="font-semibold">{participantCount}</span> 位参与者。确认后，订单拥有者与全部参与者子订单将使用同一时间一起结清。</div>
+              ) : (
+                <div className="text-sm text-gray-600 mb-2">结清后该订单利息将停止计算，状态变为「已结清」。</div>
+              )}
+              <div className="text-sm text-gray-600 mb-2">本功能只改变融资付息的记账状态和页面显示，<span className="font-semibold text-gray-800">不会产生任何钱包流水</span>。</div>
+              <div className="text-sm font-medium text-red-500 mb-5">统一结清后不能单独保留某位参与者为持有中，确定继续？</div>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmSettleId(null)} className="flex-1 py-3 rounded-xl text-sm font-medium" style={{ backgroundColor: '#F3F4F6', color: '#374151' }}>取消</button>
+                <button
+                  onClick={() => { updateMutation.mutate({ id: confirmSettleId, ledgerId, status: 'settled' }); setConfirmSettleId(null); }}
+                  className="flex-1 py-3 rounded-xl text-sm font-semibold text-white"
+                  style={{ backgroundColor: '#EF4444' }}
+                >{participantCount > 0 ? '全部结清' : '确认结清'}</button>
               </div>
-              <div className="text-base font-semibold text-gray-800 mb-1">确认结清订单</div>
-              <div className="text-sm text-gray-400 mb-1">结清后该订单利息将停止计算</div>
-              <div className="text-sm font-medium text-red-500">此操作不可撤销，确定继续？</div>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmSettleId(null)} className="flex-1 py-3 rounded-xl text-sm font-medium" style={{ backgroundColor: '#F3F4F6', color: '#374151' }}>取消</button>
-              <button
-                onClick={() => { updateMutation.mutate({ id: confirmSettleId, ledgerId, status: 'settled' }); setConfirmSettleId(null); }}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold text-white"
-                style={{ backgroundColor: '#EF4444' }}
-              >确认结清</button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {confirmDeleteId !== null && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setConfirmDeleteId(null)}>

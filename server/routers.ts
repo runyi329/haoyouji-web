@@ -186,6 +186,32 @@ async function ensureFunderParticipantSnapshotColumns(): Promise<void> {
     if (row.broker_account_override) snapshot.broker_account = row.broker_account_override;
     await (conn as any).execute('UPDATE ledger_order_participants SET order_snapshot = ? WHERE id = ?', [JSON.stringify(snapshot), row.participant_id]);
   }
+
+  // 历史一致性修复：关联关系继续保留，但主订单已结清时，参与者子订单不能继续计息。
+  // 只覆盖状态与结清时间，参与者独立金额、利率、备注、结息记录等原样保留。
+  const [settledParentRows] = await (conn as any).execute(
+    `SELECT p.id AS participant_id, p.order_snapshot, o.*
+     FROM ledger_order_participants p
+     INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
+     WHERE o.status = 'settled' AND p.role <> 'inactive'`
+  );
+  for (const row of (settledParentRows as any[])) {
+    const existingSnapshot = parseFunderParticipantSnapshot(row.order_snapshot);
+    const parentSettledAt = row.settled_at instanceof Date
+      ? row.settled_at.toISOString().slice(0, 19).replace('T', ' ')
+      : row.settled_at;
+    if (existingSnapshot?.status === 'settled' && String(existingSnapshot?.settled_at || '') === String(parentSettledAt || '')) continue;
+    const snapshot = {
+      ...buildFunderParticipantSnapshot(row),
+      ...(existingSnapshot || {}),
+      status: 'settled',
+      settled_at: parentSettledAt || null,
+    };
+    await (conn as any).execute(
+      'UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ?',
+      [JSON.stringify(snapshot), row.participant_id]
+    );
+  }
   funderParticipantSnapshotColumnsEnsured = true;
 }
 
@@ -16813,6 +16839,11 @@ ${klinesSummary}
           const snapshot = parseFunderParticipantSnapshot(pi?.order_snapshot);
           const result = { ...o, ...(snapshot || {}) };
           // 系统关联字段始终沿用主订单，业务字段则由参与者完整快照独立覆盖。
+          // 结清状态是主子订单的关联状态：历史数据即使子订单快照仍为 active，也必须继承主单结清时间。
+          if (o.status === 'settled') {
+            result.status = 'settled';
+            result.settled_at = o.settled_at;
+          }
           result.id = o.id;
           result.ledger_id = o.ledger_id;
           result.user_id = o.user_id;
@@ -18373,8 +18404,11 @@ ${klinesSummary}
           updateVals.push(input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null);
         }
         if (input.userId !== undefined) { updateCols.push('user_id = ?'); updateVals.push(input.userId); }
-        // 结清时记录 settled_at 时间戳，恢复（active）时清除
-        if (input.status === 'settled') { updateCols.push('settled_at = ?'); updateVals.push(new Date().toISOString().slice(0, 19).replace('T', ' ')); }
+        // 结清时记录统一时间戳；主订单与参与者子订单必须使用同一结清时间。
+        const statusChangedAt = input.status === 'settled'
+          ? new Date().toISOString().slice(0, 19).replace('T', ' ')
+          : null;
+        if (input.status === 'settled') { updateCols.push('settled_at = ?'); updateVals.push(statusChangedAt); }
         if (input.status === 'active') { updateCols.push('settled_at = ?'); updateVals.push(null); }
         // DECIMAL/数字列：空字符串需转为 null，否则 MySQL 报 Incorrect decimal value
         const decimalCols = new Set(['amount', 'buy_price', 'buy_quantity', 'interest_rate_annual', 'interest_base', 'collateral_qty']);
@@ -18419,9 +18453,48 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`).catch(() => {});
         } catch(e) {}
+        let participantCount = 0;
+        const shouldSyncParticipantStatus = input.status === 'settled' || input.status === 'active';
         try {
-                await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
+          if (shouldSyncParticipantStatus) await ensureFunderParticipantSnapshotColumns();
+          if (shouldSyncParticipantStatus) await conn.beginTransaction();
+
+          await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
+
+          // 融资付息仅为记账展示。主订单结清/恢复时，所有有效参与者子订单必须同步状态，
+          // 但参与者各自的金额、利率、备注和结息记录仍完整保留在独立快照中。
+          if (shouldSyncParticipantStatus) {
+            const [orderRows] = await conn.execute(
+              'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? LIMIT 1',
+              [input.id, input.ledgerId]
+            ) as any;
+            const updatedOrder = Array.isArray(orderRows) ? orderRows[0] : null;
+            if (!updatedOrder) throw new Error('订单不存在或已删除');
+
+            const [participantRows] = await conn.execute(
+              "SELECT id, order_snapshot FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive' FOR UPDATE",
+              [input.id, input.ledgerId]
+            ) as any;
+            const activeParticipants = Array.isArray(participantRows) ? participantRows : [];
+            participantCount = activeParticipants.length;
+            for (const participant of activeParticipants) {
+              const snapshot = {
+                ...buildFunderParticipantSnapshot(updatedOrder),
+                ...(parseFunderParticipantSnapshot(participant.order_snapshot) || {}),
+                status: input.status,
+                settled_at: input.status === 'settled' ? statusChangedAt : null,
+              };
+              await conn.execute(
+                'UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ?',
+                [JSON.stringify(snapshot), participant.id]
+              );
+            }
+            await conn.commit();
+          }
         } catch (e: any) {
+          if (shouldSyncParticipantStatus) {
+            try { await conn.rollback(); } catch {}
+          }
           console.error('[FUO-DEBUG] UPDATE失败:', e?.message, '| SQL:', `UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, '| VALS:', JSON.stringify(updateVals));
           await conn.end();
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '保存失败: ' + (e?.message || '未知错误') });
@@ -18461,7 +18534,7 @@ ${klinesSummary}
           } catch(e) { console.error('[OrderLog] 写入日志失败:', e); }
         }
         await conn.end();
-        return { success: true };
+        return { success: true, participantCount, participantStatusSynced: shouldSyncParticipantStatus };
       }),
     // 查询融资订单操作日志
     financeGetOrderLogs: protectedProcedure

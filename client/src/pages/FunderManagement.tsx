@@ -484,10 +484,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     onError: (err) => toast.error(err.message),
   });
   const updateMutation = trpc.ledger.financeUpdateOrder.useMutation({
-    onSuccess: (_, vars) => {
-      // 保存参与者（如果有）
+    onSuccess: (result, vars) => {
+      const isLinkedStatusUpdate = vars.status === 'settled' || vars.status === 'active';
+      // 普通编辑继续保存参与者独立配置；结清/恢复由后端原子级联，避免旧表单覆盖同步状态。
       const orderId = (vars as any).id;
-      if (orderId && participants.length > 0) {
+      if (!isLinkedStatusUpdate && orderId && participants.length > 0) {
         saveParticipantFormMutation.mutate({
           orderId: Number(orderId),
           ledgerId,
@@ -505,11 +506,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             displayConfig: JSON.stringify({ ...p.displayConfig, marginAlertThreshold: p.marginAlertThreshold || undefined }),
           })),
         });
-      } else if (orderId && participants.length === 0 && existingParticipantsData?.participants?.length) {
+      } else if (!isLinkedStatusUpdate && orderId && participants.length === 0 && existingParticipantsData?.participants?.length) {
         // 删除所有参与者
         saveParticipantFormMutation.mutate({ orderId: Number(orderId), ledgerId, participants: [] });
       }
-      toast.success('更新成功');
+      const syncedCount = Number((result as any)?.participantCount || 0);
+      if (vars.status === 'settled') {
+        toast.success(syncedCount > 0 ? `主订单及 ${syncedCount} 位参与者已同步结清` : '订单已结清');
+      } else if (vars.status === 'active') {
+        toast.success(syncedCount > 0 ? `主订单及 ${syncedCount} 位参与者已同步恢复` : '订单已恢复为持有中');
+      } else {
+        toast.success('更新成功');
+      }
       setShowForm(false);
       setEditingOrder(null);
       setParticipants([]);
@@ -3311,27 +3319,37 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         );
       })()}
 
-      {/* 结清确认弹窗 */}
-      {confirmSettleId !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setConfirmSettleId(null)}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div className="relative bg-white rounded-2xl p-6 mx-4 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-base font-semibold text-gray-900 mb-2">确认结清订单</h3>
-            <p className="text-sm text-gray-500 mb-1">结清后该订单利息将停止计算，状态变为「已结清」。</p>
-            <p className="text-sm font-medium text-red-600 mb-5">此操作不可撤销，确定继续？</p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmSettleId(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
-              <button
-                onClick={() => {
-                  updateMutation.mutate({ id: confirmSettleId, ledgerId, status: 'settled' });
-                  setConfirmSettleId(null);
-                }}
-                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white"
-              >确认结清</button>
+      {/* 结清确认：有关联参与者时必须随主订单统一结清 */}
+      {confirmSettleId !== null && (() => {
+        const targetOrder = (assetOrders as any[]).find((o: any) => Number(o.id) === Number(confirmSettleId));
+        const participantCount = Number(targetOrder?.participantCount ?? targetOrder?._participantCount ?? targetOrder?._participantUserIds?.length ?? 0);
+        return (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center px-4" onClick={() => setConfirmSettleId(null)}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="relative bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+              <h3 className="text-base font-semibold text-gray-900 mb-2">确认统一结清</h3>
+              {participantCount > 0 ? (
+                <p className="text-sm text-indigo-600 mb-2">该主订单关联 <span className="font-semibold">{participantCount}</span> 位参与者。确认后，订单拥有者与全部参与者子订单将使用同一时间一起结清。</p>
+              ) : (
+                <p className="text-sm text-gray-600 mb-2">结清后该订单利息将停止计算，状态变为「已结清」。</p>
+              )}
+              <p className="text-sm text-gray-600 mb-2">本功能只改变融资付息的记账状态和页面显示，<span className="font-semibold text-gray-800">不会产生任何钱包流水</span>。</p>
+              <p className="text-sm font-medium text-red-600 mb-5">统一结清后不能单独保留某位参与者为持有中，确定继续？</p>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmSettleId(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
+                <button
+                  onClick={() => {
+                    updateMutation.mutate({ id: confirmSettleId, ledgerId, status: 'settled' });
+                    setConfirmSettleId(null);
+                  }}
+                  disabled={updateMutation.isPending}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white disabled:opacity-50"
+                >{updateMutation.isPending ? '结清中...' : participantCount > 0 ? '全部结清' : '确认结清'}</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 共享担保确认弹窗 */}
       {shareConfirmModal && (

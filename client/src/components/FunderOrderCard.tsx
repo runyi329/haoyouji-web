@@ -499,7 +499,17 @@ export function FunderOrderCard({
   );
   // 内部 mutations
   const _intUpdateMutation = trpc.ledger.financeUpdateOrder.useMutation({
-    onSuccess: () => { toast.success('更新成功'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onSuccess: (result, vars) => {
+      const syncedCount = Number((result as any)?.participantCount || 0);
+      if (vars.status === 'settled') {
+        toast.success(syncedCount > 0 ? `主订单及 ${syncedCount} 位参与者已同步结清` : '订单已结清');
+      } else if (vars.status === 'active') {
+        toast.success(syncedCount > 0 ? `主订单及 ${syncedCount} 位参与者已同步恢复` : '订单已恢复为持有中');
+      } else {
+        toast.success('更新成功');
+      }
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+    },
     onError: (err) => toast.error(err.message),
   });
   const _intDeleteMutation = trpc.ledger.funderDeleteAssetOrder.useMutation({
@@ -2864,7 +2874,7 @@ export function FunderOrderCard({
               </button>
               <button
                 onClick={() => {
-                  $updateMutation.mutate({ id: order.id, ledgerId, status: 'settled' });
+                  $onConfirmSettle?.(order.id);
                   setShowStatusSheet(false);
                 }}
                 className="w-full py-3 rounded-xl text-sm font-medium transition-colors"
@@ -2895,26 +2905,34 @@ export function FunderOrderCard({
       )}
     </div>
     {/* 内部结清确认弹窗（仅当父组件未传入 onConfirmSettle 时使用） */}
-    {onConfirmSettle === undefined && _intConfirmSettleId !== null && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => _intSetConfirmSettleId(null)}>
-        <div className="absolute inset-0 bg-black/50" />
-        <div className="relative bg-white rounded-2xl p-6 mx-4 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
-          <h3 className="text-base font-semibold text-gray-900 mb-2">确认结清订单</h3>
-          <p className="text-sm text-gray-500 mb-1">结清后该订单利息将停止计算，状态变为「已结清」。</p>
-          <p className="text-sm font-medium text-red-600 mb-5">此操作不可撤销，确定继续？</p>
-          <div className="flex gap-3">
-            <button onClick={() => _intSetConfirmSettleId(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
-            <button
-              onClick={() => {
-                $updateMutation.mutate({ id: _intConfirmSettleId, ledgerId, status: 'settled' });
-                _intSetConfirmSettleId(null);
-              }}
-              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white"
-            >确认结清</button>
+    {onConfirmSettle === undefined && _intConfirmSettleId !== null && (() => {
+      const participantCount = Number((order as any).participantCount ?? (order as any)._participantCount ?? (order as any)._participantUserIds?.length ?? 0);
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => _intSetConfirmSettleId(null)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-gray-900 mb-2">确认统一结清</h3>
+            {participantCount > 0 ? (
+              <p className="text-sm text-indigo-600 mb-2">该主订单关联 <span className="font-semibold">{participantCount}</span> 位参与者。确认后，订单拥有者与全部参与者子订单将使用同一时间一起结清。</p>
+            ) : (
+              <p className="text-sm text-gray-600 mb-2">结清后该订单利息将停止计算，状态变为「已结清」。</p>
+            )}
+            <p className="text-sm text-gray-600 mb-2">本功能只改变融资付息的记账状态和页面显示，<span className="font-semibold text-gray-800">不会产生任何钱包流水</span>。</p>
+            <p className="text-sm font-medium text-red-600 mb-5">统一结清后不能单独保留某位参与者为持有中，确定继续？</p>
+            <div className="flex gap-3">
+              <button onClick={() => _intSetConfirmSettleId(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
+              <button
+                onClick={() => {
+                  $updateMutation.mutate({ id: _intConfirmSettleId, ledgerId, status: 'settled' });
+                  _intSetConfirmSettleId(null);
+                }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white"
+              >{participantCount > 0 ? '全部结清' : '确认结清'}</button>
+            </div>
           </div>
         </div>
-      </div>
-    )}
+      );
+    })()}
   </>);
 }
 // ===== END FunderOrderCard =====
