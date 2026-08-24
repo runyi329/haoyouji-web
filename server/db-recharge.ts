@@ -840,7 +840,7 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
 
   // 来源1：balance_history（充值/提现/奖励/佣金等）
   const [bhRows] = await pool.execute(
-    `SELECT id, amount, type, description, created_at AS createdAt FROM balance_history
+    `SELECT id, amount, type, related_id AS relatedId, description, created_at AS createdAt FROM balance_history
      WHERE user_id = ?
      ORDER BY created_at ASC`,
     [userId]
@@ -850,6 +850,7 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
     id: `bh-${r.id}`,
     amount: parseFloat(r.amount ?? '0'),
     type: r.type,
+    relatedId: r.relatedId ?? null,
     description: r.description ?? '',
     createdAt: r.createdAt,
     balanceAfter: null as number | null,
@@ -878,11 +879,23 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
   // 1. 米伴订单扣款/退款：在 af_manual_balances 里已有对应条目
   // 2. 米伴订阅扣款/退款：在 af_manual_balances 里已有对应条目
   // 3. commission 类型：是 walletAdjust 额外写入的，与 af_manual_balances 里的调账记录完全重复
+  const manualTimes = manualList.map((r) => ({
+    time: new Date(r.createdAt).getTime(),
+    amount: Math.abs(r.amount),
+  }));
   const filteredBhList = bhList.filter((r) => {
     const desc = r.description || '';
     if (desc.includes('米伴订单扣款') || desc.includes('米伴订单退款')) return false;
     if (desc.includes('米伴订阅') && (desc.includes('扣款') || desc.includes('退款'))) return false;
     if (r.type === 'commission') return false; // af_manual_balances 里已有对应调账记录
+    // 提现申请会同时写入balance_history和af_manual_balances冻结流水；同金额同时间只保留手动冻结记录。
+    if (r.type === 'withdraw' && r.relatedId) {
+      const time = new Date(r.createdAt).getTime();
+      const amount = Math.abs(r.amount);
+      if (manualTimes.some((m) => Math.abs(m.time - time) <= 2000 && Math.abs(m.amount - amount) < 0.001)) {
+        return false;
+      }
+    }
     return true;
   });
 
