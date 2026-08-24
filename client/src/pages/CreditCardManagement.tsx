@@ -961,6 +961,10 @@ export default function CreditCardManagement() {
     onSuccess: () => { toast.success("已更新"); refetch(); setShowForm(false); setEditingId(null); setForm(emptyForm); },
     onError: () => toast.error("更新失败"),
   });
+  const adminUpdateMutation = trpc.creditCard.adminUpdate.useMutation({
+    onSuccess: () => { toast.success("已更新"); refetch(); setShowForm(false); setEditingId(null); setForm(emptyForm); },
+    onError: () => toast.error("更新失败"),
+  });
   const deleteMutation = trpc.creditCard.delete.useMutation({
     onSuccess: () => { toast.success("已删除"); refetch(); setDeleteConfirmId(null); },
     onError: () => toast.error("删除失败"),
@@ -1004,7 +1008,8 @@ export default function CreditCardManagement() {
     // 新增信用卡不传未启用的临时额度字段；编辑时可清空有效临时额度。
     // 已到期的临时额度则保留为历史快照，用于展示当时形成的真实已用金额。
     const editingExpiredTemp = editingId && form.tempLimit && form.tempLimitEnd && !isTempLimitActive(undefined, form.tempLimitEnd);
-    const clearedTempLimit = editingId && !editingExpiredTemp ? null : undefined;
+    const closingActiveTemp = !!(editingId && !form.hasTempLimit && form.tempLimit && form.tempLimitEnd && isTempLimitActive(undefined, form.tempLimitEnd));
+    const clearedTempLimit = editingId && !editingExpiredTemp && !closingActiveTemp ? null : undefined;
     const payload = {
       bankName: form.bankName,
       cardHolder: form.cardHolder || undefined,
@@ -1016,13 +1021,15 @@ export default function CreditCardManagement() {
       dueDay: form.dueDay ? parseInt(form.dueDay) : undefined,
       currency: form.currencies.join(','),
       note: form.note || undefined,
-      // 临时额度启用时开始日固定为当天；关闭时新增不传字段，编辑则显式清空数据库值。
-      tempLimit: hasCompleteTempLimit ? parseFloat(form.tempLimit) : clearedTempLimit,
-      tempLimitStart: hasCompleteTempLimit ? new Date().toISOString().slice(0, 10) : clearedTempLimit,
-      tempLimitEnd: hasCompleteTempLimit ? form.tempLimitEnd : clearedTempLimit,
+      // 临时额度启用时开始日固定为当天；手动关闭时保留金额快照并写入关闭标记，防止已用额度被错误重算。
+      tempLimit: hasCompleteTempLimit ? parseFloat(form.tempLimit) : closingActiveTemp ? parseFloat(form.tempLimit) : clearedTempLimit,
+      tempLimitStart: hasCompleteTempLimit ? new Date().toISOString().slice(0, 10) : closingActiveTemp ? undefined : clearedTempLimit,
+      // 手动关闭用固定哨兵日期标记：保留临时额度快照来计算真实已用金额，但前端不再显示临时额度标签。
+      tempLimitEnd: hasCompleteTempLimit ? form.tempLimitEnd : closingActiveTemp ? '1970-01-01' : clearedTempLimit,
     };
     if (editingId) {
-      updateMutation.mutate({ id: editingId, ...payload });
+      if (viewMode === 'admin' && isAdmin) adminUpdateMutation.mutate({ id: editingId, ...payload });
+      else updateMutation.mutate({ id: editingId, ...payload });
     } else if (isAdmin && targetUser) {
       adminCreateMutation.mutate({ targetUserId: targetUser.id, ...payload });
     } else {
@@ -1099,6 +1106,7 @@ export default function CreditCardManagement() {
     const swipe = card.billing_day && card.due_day ? calcBestSwipeDay(card.billing_day, card.due_day) : null;
     const capacity = getCreditCardCapacity(card);
     const { baseLimit: regularLimit, tempLimit: tempLimitValue, tempActive, tempExpired, totalLimit: activeLimit, availableLimit: currentAvailableLimit, usedLimit: currentUsedLimit, overBaseLimit } = capacity;
+    const tempClosed = String(card.temp_limit_end || '').slice(0, 10) === '1970-01-01';
     const tempEndLabel = card.temp_limit_end ? formatDateLabel(card.temp_limit_end) : '';
     const currencyLabel = String(card.currency || 'CNY').split(',').map((currency: string) => currency.trim() === 'CNY' ? '元' : currency.trim()).join(' / ');
     const formatCardAmount = (value: number) => Math.round(value).toLocaleString();
@@ -1436,7 +1444,7 @@ export default function CreditCardManagement() {
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="text-white/70">额度 <span className="font-semibold text-white">{formatCardAmount(regularLimit)}</span></span>
                     {currencyLabel !== '元' && <span className="text-white/60">{currencyLabel}</span>}
-                    {tempLimitValue != null && (
+                    {tempLimitValue != null && !tempClosed && (
                       <span className={`rounded-full px-2 py-0.5 font-medium ${tempActive ? 'bg-amber-300 text-amber-950' : 'bg-white/15 text-white/70'}`}>
                         {tempActive ? `临时额度 ${formatCardAmount(tempLimitValue)} · 至${tempEndLabel}` : `临时额度已到期 · ${tempEndLabel}`}
                       </span>
@@ -1468,7 +1476,7 @@ export default function CreditCardManagement() {
                 </button>
               </div>
               {card.credit_limit && (
-                <p className="text-gray-400 text-xs mb-3">当前总额度 {activeLimit.toLocaleString()} {currencyLabel}{tempActive && tempLimitValue != null ? '（临时额度有效）' : tempExpired ? '（临时额度已到期，已用金额已保留）' : ''}</p>
+                <p className="text-gray-400 text-xs mb-3">当前总额度 {activeLimit.toLocaleString()} {currencyLabel}{tempActive && tempLimitValue != null ? '（临时额度有效）' : tempClosed ? '（临时额度已关闭，已用金额已保留）' : tempExpired ? '（临时额度已到期，已用金额已保留）' : ''}</p>
               )}
               <input
                 type="number"
@@ -1488,7 +1496,7 @@ export default function CreditCardManagement() {
                     {' · '}
                     <span className="text-gray-700 font-medium">{Math.round((previewUsed / activeLimit) * 100)}%</span>
                     {tempActive && tempLimitValue != null && <span className="text-amber-600">（按临时额度计算）</span>}
-                    {tempExpired && <span className="text-rose-500">（临时额度已到期，保留临时额度期间已用金额）</span>}
+                    {tempExpired && <span className="text-rose-500">{tempClosed ? '（临时额度已关闭，保留临时额度期间已用金额）' : '（临时额度已到期，保留临时额度期间已用金额）'}</span>}
                   </p>
                 );
               })()}
@@ -1498,7 +1506,8 @@ export default function CreditCardManagement() {
                   if (isNaN(val) || val < 0) return;
                   try {
                     // 保留到期临时额度快照，用于持续展示该期间形成的真实已用金额。
-                    await updateMutation.mutateAsync({ id: card.id, availableLimit: val } as any);
+                    if (viewMode === 'admin' && isAdmin) await adminUpdateMutation.mutateAsync({ id: card.id, availableLimit: val } as any);
+                    else await updateMutation.mutateAsync({ id: card.id, availableLimit: val } as any);
                     await refetch();
                     setShowAvailableInput(false);
                     toast.success('可用额度已更新');
@@ -2451,7 +2460,7 @@ export default function CreditCardManagement() {
               </div>
 
               <button onClick={handleSubmit}
-                disabled={createMutation.isPending || updateMutation.isPending || adminCreateMutation.isPending}
+                disabled={createMutation.isPending || updateMutation.isPending || adminCreateMutation.isPending || adminUpdateMutation.isPending}
                 className="w-full py-3 rounded-xl text-white font-semibold text-sm flex items-center justify-center space-x-2"
                 style={{ background: 'linear-gradient(135deg, #1A2B4A 0%, #2d4a7a 100%)' }}>
                 <Check className="w-4 h-4" />

@@ -29608,6 +29608,56 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         );
         return { success: true };
       }),
+    // 管理员：更新任意用户的信用卡
+    adminUpdate: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        bankName: z.string().optional(),
+        cardName: z.string().optional(),
+        cardHolder: z.string().optional(),
+        cardNetwork: z.string().optional(),
+        expiryMonth: z.string().optional(),
+        cardLast4: z.string().max(23).optional(),
+        creditLimit: z.number().optional(),
+        billingDay: z.number().min(1).max(31).optional(),
+        dueDay: z.number().min(1).max(31).optional(),
+        currency: z.string().optional(),
+        color: z.string().optional(),
+        note: z.string().optional(),
+        tempLimit: z.number().nullable().optional(),
+        tempLimitStart: z.string().nullable().optional(),
+        tempLimitEnd: z.string().nullable().optional(),
+        availableLimit: z.number().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') throw new Error('no permission');
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new Error('db error');
+        const { id, ...fields } = input;
+        const sets: string[] = [];
+        const vals: any[] = [];
+        if (fields.bankName !== undefined) { sets.push('bank_name=?'); vals.push(fields.bankName); }
+        if (fields.cardName !== undefined) { sets.push('card_name=?'); vals.push(fields.cardName); }
+        if (fields.cardHolder !== undefined) { sets.push('card_holder=?'); vals.push(fields.cardHolder); }
+        if (fields.cardNetwork !== undefined) { sets.push('card_network=?'); vals.push(fields.cardNetwork); }
+        if (fields.expiryMonth !== undefined) { sets.push('expiry_month=?'); vals.push(fields.expiryMonth); }
+        if (fields.cardLast4 !== undefined) { sets.push('card_last4=?'); vals.push(fields.cardLast4); }
+        if (fields.creditLimit !== undefined) { sets.push('credit_limit=?'); vals.push(fields.creditLimit); }
+        if (fields.billingDay !== undefined) { sets.push('billing_day=?'); vals.push(fields.billingDay); }
+        if (fields.dueDay !== undefined) { sets.push('due_day=?'); vals.push(fields.dueDay); }
+        if (fields.currency !== undefined) { sets.push('currency=?'); vals.push(fields.currency); }
+        if (fields.color !== undefined) { sets.push('color=?'); vals.push(fields.color); }
+        if (fields.note !== undefined) { sets.push('note=?'); vals.push(fields.note); }
+        if (fields.tempLimit !== undefined) { sets.push('temp_limit=?'); vals.push(fields.tempLimit); }
+        if (fields.tempLimitStart !== undefined) { sets.push('temp_limit_start=?'); vals.push(fields.tempLimitStart); }
+        if (fields.tempLimitEnd !== undefined) { sets.push('temp_limit_end=?'); vals.push(fields.tempLimitEnd); }
+        if (fields.availableLimit !== undefined) { sets.push('available_limit=?'); vals.push(fields.availableLimit); sets.push('available_limit_updated_at=NOW()'); }
+        if (sets.length === 0) return { success: true };
+        vals.push(id);
+        const [result] = await conn.execute(`UPDATE credit_cards SET ${sets.join(',')} WHERE id=?`, vals) as any[];
+        if (!result?.affectedRows) throw new Error('card not found');
+        return { success: true };
+      }),
     // 管理员：删除任意用户的信用卡
     adminDelete: protectedProcedure
       .input(z.object({ id: z.number() }))
