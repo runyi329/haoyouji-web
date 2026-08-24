@@ -1458,7 +1458,7 @@ export function FunderOrderCardV2Silver({
       ))}
 
       {/* ── 页眉：身份与订单号一行，日期/行情另起一行，避免移动端挤压重叠 ── */}
-      <div className="px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
+      <div className="px-3.5 pt-2 pb-1.5" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
         {(() => {
           const member = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
           const normalOwnerName = member?.nickname || (order as any).nickname || member?.username || order.owner_label || null;
@@ -1477,29 +1477,29 @@ export function FunderOrderCardV2Silver({
           return (
             <>
               {(orderOwnerName || participantName || order.order_no) && (
-                <div className="flex items-start gap-2 min-w-0">
+                <div className="flex items-start gap-1.5 min-w-0">
                   {orderOwnerName && (
                     <div className="min-w-0 flex-1">
-                      <div className="text-[9px] leading-none" style={{ color: TXT_SEC }}>拥有者</div>
-                      <div className="mt-1 truncate text-xs font-semibold leading-tight" style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
+                      <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>拥有者</div>
+                      <div className="mt-0.5 truncate text-[11px] font-semibold leading-tight" style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
                         {orderOwnerName}
                       </div>
                     </div>
                   )}
                   {isParticipant && participantName && (
                     <div
-                      className="min-w-0 flex-1 pl-2"
+                      className="min-w-0 flex-1 pl-1.5"
                       style={{ borderLeft: orderOwnerName ? `1px solid ${DIVIDER}` : undefined }}
                     >
-                      <div className="text-[9px] leading-none" style={{ color: TXT_SEC }}>参与者</div>
-                      <div className="mt-1 truncate text-xs font-semibold leading-tight" style={{ color: TXT_PRI }} title={String(participantName)}>
+                      <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>参与者</div>
+                      <div className="mt-0.5 truncate text-[11px] font-semibold leading-tight" style={{ color: TXT_PRI }} title={String(participantName)}>
                         {participantName}
                       </div>
                     </div>
                   )}
                   {order.order_no && (
                     <span
-                      className="max-w-[76px] shrink-0 truncate text-[9px] font-mono leading-tight"
+                      className="max-w-[70px] shrink-0 truncate text-[8px] font-mono leading-tight"
                       style={{ color: TXT_DIM, letterSpacing: '0.04em' }}
                       title={String(order.order_no)}
                     >
@@ -1509,13 +1509,13 @@ export function FunderOrderCardV2Silver({
                 </div>
               )}
               {(buyDateStr || brokerText || showLivePrice) && (
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]" style={{ color: TXT_SEC }}>
-                  {buyDateStr && <span className="whitespace-nowrap">{buyDateStr}</span>}
+                <div className="mt-1 flex min-w-0 items-center gap-x-2 overflow-hidden whitespace-nowrap text-[10px] leading-tight" style={{ color: TXT_SEC }}>
+                  {buyDateStr && <span className="shrink-0 whitespace-nowrap">{buyDateStr}</span>}
                   {brokerText && (
-                    <span className="min-w-0 max-w-full truncate" title={brokerText}>{brokerText}</span>
+                    <span className="min-w-0 flex-1 truncate" title={brokerText}>{brokerText}</span>
                   )}
                   {showLivePrice && (
-                    <span className="inline-flex items-center gap-0.5 whitespace-nowrap font-medium">
+                    <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap font-medium">
                       {dir === 'up' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_GREEN, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                       {dir === 'down' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_RED, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
                       <span style={{ color: TXT_PRI }}>{coin}</span>
@@ -2888,7 +2888,7 @@ export function FunderLenderCardSilver({
       ))}
 
       {/* ── 页眉：身份与订单号一行，日期/行情另起一行，避免移动端挤压重叠 ── */}
-      <div className="px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
+      <div className="px-3.5 pt-2 pb-1.5" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
         {(() => {
           const member = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
           const normalOwnerName = member?.nickname || (order as any).nickname || member?.username || order.owner_label || null;
@@ -2907,29 +2907,29 @@ export function FunderLenderCardSilver({
           return (
             <>
               {(orderOwnerName || participantName || order.order_no) && (
-                <div className="flex items-start gap-2 min-w-0">
+                <div className="flex items-start gap-1.5 min-w-0">
                   {orderOwnerName && (
                     <div className="min-w-0 flex-1">
-                      <div className="text-[9px] leading-none" style={{ color: TXT_SEC }}>拥有者</div>
-                      <div className="mt-1 truncate text-xs font-semibold leading-tight" style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
+                      <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>拥有者</div>
+                      <div className="mt-0.5 truncate text-[11px] font-semibold leading-tight" style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
                         {orderOwnerName}
                       </div>
                     </div>
                   )}
                   {isParticipant && participantName && (
                     <div
-                      className="min-w-0 flex-1 pl-2"
+                      className="min-w-0 flex-1 pl-1.5"
                       style={{ borderLeft: orderOwnerName ? `1px solid ${DIVIDER}` : undefined }}
                     >
-                      <div className="text-[9px] leading-none" style={{ color: TXT_SEC }}>参与者</div>
-                      <div className="mt-1 truncate text-xs font-semibold leading-tight" style={{ color: TXT_PRI }} title={String(participantName)}>
+                      <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>参与者</div>
+                      <div className="mt-0.5 truncate text-[11px] font-semibold leading-tight" style={{ color: TXT_PRI }} title={String(participantName)}>
                         {participantName}
                       </div>
                     </div>
                   )}
                   {order.order_no && (
                     <span
-                      className="max-w-[76px] shrink-0 truncate text-[9px] font-mono leading-tight"
+                      className="max-w-[70px] shrink-0 truncate text-[8px] font-mono leading-tight"
                       style={{ color: TXT_DIM, letterSpacing: '0.04em' }}
                       title={String(order.order_no)}
                     >
@@ -2939,13 +2939,13 @@ export function FunderLenderCardSilver({
                 </div>
               )}
               {(buyDateStr || brokerText || showLivePrice) && (
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]" style={{ color: TXT_SEC }}>
-                  {buyDateStr && <span className="whitespace-nowrap">{buyDateStr}</span>}
+                <div className="mt-1 flex min-w-0 items-center gap-x-2 overflow-hidden whitespace-nowrap text-[10px] leading-tight" style={{ color: TXT_SEC }}>
+                  {buyDateStr && <span className="shrink-0 whitespace-nowrap">{buyDateStr}</span>}
                   {brokerText && (
-                    <span className="min-w-0 max-w-full truncate" title={brokerText}>{brokerText}</span>
+                    <span className="min-w-0 flex-1 truncate" title={brokerText}>{brokerText}</span>
                   )}
                   {showLivePrice && (
-                    <span className="inline-flex items-center gap-0.5 whitespace-nowrap font-medium">
+                    <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap font-medium">
                       {dir === 'up' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_GREEN, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                       {dir === 'down' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_RED, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
                       <span style={{ color: TXT_PRI }}>{coin}</span>
