@@ -3629,7 +3629,7 @@ export default function LedgerDetail() {
                     日志
                   </button>
                   <button
-                    onClick={handleLedgerBack}
+                    onClick={() => window.location.replace('/?from=ledger-shortcut')}
                     className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
                     style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
                   >
