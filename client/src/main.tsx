@@ -140,26 +140,43 @@ async function bootstrap() {
 
 bootstrap();
 
-// 注册 Service Worker 支持 PWA 功能
+// PWA 仅在生产环境启用；开发环境自动清理旧缓存，避免调试时持续加载旧代码。
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/sw.js')
-      .then((registration) => {
-        console.log('[PWA] Service Worker 注册成功:', registration.scope);
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          if (newWorker) {
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] 新版本可用，刷新页面以更新');
-              }
-            });
-          }
+    if (import.meta.env.PROD) {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((registration) => {
+          console.log('[PWA] Service Worker 注册成功:', registration.scope);
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            if (newWorker) {
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  console.log('[PWA] 新版本可用，刷新页面以更新');
+                }
+              });
+            }
+          });
+        })
+        .catch((error) => {
+          console.error('[PWA] Service Worker 注册失败:', error);
         });
-      })
-      .catch((error) => {
-        console.error('[PWA] Service Worker 注册失败:', error);
-      });
+      return;
+    }
+
+    // 本地开发：注销当前域名的旧 Service Worker，并只清理脉动自己的 PWA 缓存。
+    void navigator.serviceWorker.getRegistrations().then((registrations) =>
+      Promise.all(registrations.map((registration) => registration.unregister()))
+    );
+    if ('caches' in window) {
+      void caches.keys().then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith('maidong-cache-'))
+            .map((key) => caches.delete(key))
+        )
+      );
+    }
   });
 }

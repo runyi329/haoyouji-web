@@ -2180,10 +2180,11 @@ export default function LedgerDetail() {
   const handleLedgerBack = useCallback(() => {
     const fromSession = sessionStorage.getItem('ledger_back_from');
     const fromUrl = new URLSearchParams(window.location.search).get('from');
-    const from = fromSession || fromUrl;
+    // URL 是本次入口的明确信号，必须优先于可能残留的旧账本来源。
+    const from = fromUrl || fromSession;
     sessionStorage.removeItem('ledger_back_from');
     if (from === 'home') {
-      window.location.assign('/?from=ledger-shortcut');
+      window.location.replace('/?from=ledger-shortcut');
       return;
     }
     setLocation(from ? `/ledger/${from}` : '/ledger');
