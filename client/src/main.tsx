@@ -144,10 +144,18 @@ bootstrap();
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     if (import.meta.env.PROD) {
+      let refreshingForUpdate = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshingForUpdate) return;
+        refreshingForUpdate = true;
+        window.location.reload();
+      });
+
       navigator.serviceWorker
-        .register('/sw.js')
+        .register('/sw.js', { updateViaCache: 'none' })
         .then((registration) => {
           console.log('[PWA] Service Worker 注册成功:', registration.scope);
+          void registration.update();
           registration.addEventListener('updatefound', () => {
             const newWorker = registration.installing;
             if (newWorker) {

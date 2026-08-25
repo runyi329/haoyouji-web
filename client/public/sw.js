@@ -1,6 +1,6 @@
 // Service Worker for 脉动 PWA
 // 版本号：每次更新 SW 时需要修改此版本号以触发更新
-const CACHE_VERSION = 'v2.3.1';
+const CACHE_VERSION = 'v2.3.2';
 const CACHE_NAME = `maidong-cache-${CACHE_VERSION}`;
 
 // 需要缓存的静态资源（不缓存 index.html，避免部署后旧缓存导致白屏）
@@ -45,8 +45,12 @@ self.addEventListener('activate', (event) => {
         })
       );
     }).then(() => {
-      // 立即接管所有页面
-      return self.clients.claim();
+      // 立即接管并刷新所有已打开页面，确保新版本代码立刻替换旧PWA缓存。
+      return self.clients.claim().then(() =>
+        self.clients.matchAll({ type: 'window' }).then((clients) =>
+          Promise.all(clients.map((client) => client.navigate(client.url)))
+        )
+      );
     })
   );
 });
