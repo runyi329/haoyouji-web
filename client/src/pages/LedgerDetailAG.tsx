@@ -32,6 +32,7 @@ interface Props {
   ledgerData: any;
   membersData: any[];
   user: any;
+  onBack: () => void;
 }
 
 interface PromptImage {
@@ -159,7 +160,7 @@ function categorizeTags(tagCounts: Record<string, number>): Array<{group: string
     .map(([group, tags]) => ({ group, tags }));
 }
 
-export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user }: Props) {
+export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user, onBack }: Props) {
   const [, setLocation] = useLocation();
   const [showMembersDialog, setShowMembersDialog] = useState(false);
   const [selectedImage, setSelectedImage] = useState<PromptImage | null>(null);
@@ -347,7 +348,7 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
           </button>
           {/* 返回按钮 */}
           <button
-            onClick={() => setLocation("/ledger/list")}
+            onClick={onBack}
             className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium flex-1 justify-center"
             style={{
               backgroundColor: "rgba(255,255,255,0.15)",

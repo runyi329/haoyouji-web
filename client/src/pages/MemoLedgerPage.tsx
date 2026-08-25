@@ -994,11 +994,12 @@ interface PromptItem {
 }
 
 // ===== 主页面 =====
-export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = false }: {
+export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = false, onBack }: {
   ledgerId: number;
   ledgerData: any;
   user: any;
   isAdmin?: boolean;
+  onBack: () => void;
 }) {
   const [, setLocation] = useLocation();
   const [activeCategory, setActiveCategory] = useState("all");
@@ -1136,7 +1137,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
       <div className="text-white flex-shrink-0 z-10" style={{ backgroundColor: promptMode ? promptCatColor : "#D32F2F", transition: "background-color 0.3s" }}>
         {/* 标题栏 */}
         <div className="flex items-center justify-between px-4 h-12">
-          <button onClick={() => setLocation("/ledger")} className="p-1 -ml-2">
+          <button onClick={onBack} className="p-1 -ml-2">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <h1 className="text-base font-medium flex-1 text-center">{ledgerData?.name || "永忆"}</h1>

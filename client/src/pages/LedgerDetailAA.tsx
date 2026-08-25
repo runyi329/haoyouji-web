@@ -58,6 +58,7 @@ interface Props {
   transactionsData: DayGroup[];
   refetchTransactions: () => void;
   user: any;
+  onBack: () => void;
 }
 
 // A股2026年法定节假日（不含周末）
@@ -97,6 +98,7 @@ export default function LedgerDetailAA({
   user,
   membersData,
   refetchTransactions,
+  onBack,
 }: Props) {
   const [, setLocation] = useLocation();
 
@@ -1360,7 +1362,7 @@ export default function LedgerDetailAA({
                 <div
                   className="w-8 h-8 rounded-full cursor-pointer overflow-hidden flex-shrink-0"
                   style={{ border: '1.5px solid rgba(255,255,255,0.5)', position: 'relative' }}
-                  onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/52'); }}
+                  onClick={() => setLocation(`/ledger/52?fromLedger=${ledgerId}`)}
                   title="数字B"
                 >
                   <img
@@ -1390,7 +1392,7 @@ export default function LedgerDetailAA({
                 <div
                   className="w-8 h-8 rounded-full cursor-pointer overflow-hidden flex-shrink-0"
                   style={{ border: '1.5px solid rgba(255,255,255,0.5)', position: 'relative' }}
-                  onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/59'); }}
+                  onClick={() => setLocation(`/ledger/59?fromLedger=${ledgerId}`)}
                   title="蓄水池股东"
                 >
                   <img
@@ -1430,7 +1432,7 @@ export default function LedgerDetailAA({
               </button>
               {/* 返回按钮 */}
               <button
-                onClick={() => setLocation("/ledger")}
+                onClick={onBack}
                 className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",

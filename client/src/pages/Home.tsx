@@ -1156,7 +1156,6 @@ export default function Home() {
   }, [user, navigate]);
   const isJiang = Number((user as any)?.id) === 870413;
   const openLedgerFromHome = useCallback((targetLedgerId: 37 | 52) => {
-    sessionStorage.setItem('ledger_back_from', 'home');
     navigate(`/ledger/${targetLedgerId}?from=home`);
   }, [navigate]);
 

@@ -2175,19 +2175,20 @@ export default function LedgerDetail() {
   // 使用wouter的useSearch确保SPA路由下能正确读取URL参数
   const searchString = useSearch();
   const searchParams = new URLSearchParams(searchString);
-  // 返回时实时读取来源，避免SPA跳转后沿用首次渲染的旧闭包。
-  // 数字账本ID表示从另一个账本跳转；home表示从首页专属快捷入口进入。
+  // 所有账本统一按URL来源返回，避免sessionStorage残留导致不同账本走错路径。
+  // from=home：返回AI人脉首页；fromLedger=数字：返回来源账本；无来源：返回钱脉账本列表。
   const handleLedgerBack = useCallback(() => {
-    const fromSession = sessionStorage.getItem('ledger_back_from');
-    const fromUrl = new URLSearchParams(window.location.search).get('from');
-    // URL 是本次入口的明确信号，必须优先于可能残留的旧账本来源。
-    const from = fromUrl || fromSession;
-    sessionStorage.removeItem('ledger_back_from');
-    if (from === 'home') {
+    const currentParams = new URLSearchParams(window.location.search);
+    if (currentParams.get('from') === 'home') {
       window.location.replace('/?from=ledger-shortcut');
       return;
     }
-    setLocation(from ? `/ledger/${from}` : '/ledger');
+    const fromLedger = currentParams.get('fromLedger');
+    if (fromLedger && /^\d+$/.test(fromLedger)) {
+      setLocation(`/ledger/${fromLedger}`);
+      return;
+    }
+    setLocation('/ledger');
   }, [setLocation]);
   const filters: any = {
     ledgerId: Number(ledgerId),
@@ -3001,7 +3002,7 @@ export default function LedgerDetail() {
   if (!isLoading && !error && isCustomAD && ledgerData) {
     return (
       <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="text-gray-500">加载中...</div></div>}>
-        <MemoLedgerPage ledgerId={ledgerId} ledgerData={ledgerData} user={user} isAdmin={isOwner || isAdmin} />
+        <MemoLedgerPage ledgerId={ledgerId} ledgerData={ledgerData} user={user} isAdmin={isOwner || isAdmin} onBack={handleLedgerBack} />
       </Suspense>
     );
   }
@@ -3018,6 +3019,7 @@ export default function LedgerDetail() {
           transactionsData={transactionsData || []}
           refetchTransactions={refetchTransactions}
           user={user}
+          onBack={handleLedgerBack}
         />
       </Suspense>
     );
@@ -3033,6 +3035,7 @@ export default function LedgerDetail() {
           ledgerData={ledgerData}
           membersData={membersData || []}
           user={user}
+          onBack={handleLedgerBack}
         />
       </Suspense>
     );
@@ -3353,7 +3356,7 @@ export default function LedgerDetail() {
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
                         style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
-                        onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/37'); }}
+                        onClick={() => setLocation(`/ledger/37?fromLedger=${ledgerId}`)}
                         title="股票行情"
                       >
                         <img
@@ -3368,7 +3371,7 @@ export default function LedgerDetail() {
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
                         style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
-                        onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/52'); }}
+                        onClick={() => setLocation(`/ledger/52?fromLedger=${ledgerId}`)}
                         title="数字B"
                       >
                         <img
@@ -3383,7 +3386,7 @@ export default function LedgerDetail() {
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
                         style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
-                        onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/59'); }}
+                        onClick={() => setLocation(`/ledger/59?fromLedger=${ledgerId}`)}
                         title="蓄水池股东"
                       >
                         <img
@@ -3555,17 +3558,17 @@ export default function LedgerDetail() {
                       </div>
                     )}
                     {myShortcuts.stock && (
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/37'); }} title="股票行情">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => setLocation(`/ledger/37?fromLedger=${ledgerId}`)} title="股票行情">
                         <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ths-stock-icon-circle.png" alt="股票" className="w-full h-full object-cover rounded-full" />
                       </div>
                     )}
                     {myShortcuts.digitalB && (
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/52'); }} title="数字B">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => setLocation(`/ledger/52?fromLedger=${ledgerId}`)} title="数字B">
                         <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/btc-icon-trimmed.png" alt="数字B" className="w-full h-full object-cover rounded-full" />
                       </div>
                     )}
                     {myShortcuts.ledger59 && (
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/59'); }} title="蓄水池股东">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => setLocation(`/ledger/59?fromLedger=${ledgerId}`)} title="蓄水池股东">
                         <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/gZMsAzlHHuDFuUTJ.png" alt="蓄水池" className="w-full h-full object-cover rounded-full" />
                       </div>
                     )}
@@ -3629,7 +3632,7 @@ export default function LedgerDetail() {
                     日志
                   </button>
                   <button
-                    onClick={() => window.location.replace('/?from=ledger-shortcut')}
+                    onClick={handleLedgerBack}
                     className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
                     style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
                   >
