@@ -832,6 +832,21 @@ export function FunderOrderCard({
   const totalU = isStockOrder
     ? parseFloat(order.amount || '0')
     : (qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0'));
+  // 融资金额统一以 order.amount 的 USDT 基准值保存；amount_currency 只决定前端展示单位。
+  // 借出资产必须显示融资金额/融资币种，不能误用购买币种和 buy_quantity。
+  const storedAmount = parseFloat(order.amount || '0');
+  const rawAmountCurrency = String(order.amount_currency || (isStockOrder ? 'CNY' : 'USDT')).toUpperCase();
+  const amountCurrency = rawAmountCurrency === 'U' ? 'USDT' : rawAmountCurrency;
+  const financingAmountUsdt = isStockOrder
+    ? (storedAmount > 0 ? storedAmount / cnyRate : 0)
+    : (storedAmount > 0 ? storedAmount : (order.coin === 'CNY' ? totalU / cnyRate : totalU));
+  const amountCurrencyPrice = livePrices[amountCurrency];
+  const financingDisplayAmount = amountCurrency === 'USDT'
+    ? financingAmountUsdt
+    : amountCurrency === 'CNY'
+      ? financingAmountUsdt * cnyRate
+      : (amountCurrencyPrice && amountCurrencyPrice > 0 ? financingAmountUsdt / amountCurrencyPrice : financingAmountUsdt);
+  const financingDisplayUnit = amountCurrency === 'USDT' ? 'u' : amountCurrency === 'CNY' ? '元' : amountCurrency;
   // 利息货币逻辑与 LedgerDetail FunderOrderCardRight 完全一致
   const baseCur = order.interest_base_currency || 'USDT'; // 计息基数货币
   const rateCur = order.interest_rate_currency || 'USDT'; // 约定利息货币（决定主显示单位）
@@ -1126,8 +1141,8 @@ export function FunderOrderCard({
         <div className="w-1/2 p-4 pr-3">
           <div className="flex items-center gap-0.5 mb-0.5">
             <span className="text-[10px] font-medium" style={{ color: '#3B82F6' }}>
-              {(order.principal_lent_out === 1 || order.principal_lent_out === true)
-                ? `借出资产 (${isOptionOrder ? (optionInfo?.coin || 'ETH') : order.asset_type === 'stock' ? (baseCur === 'CNY' ? '元' : 'U') : order.coin})`
+              {principalLentOut
+                ? `借出资产 (${amountCurrency})`
                 : '持有资产'}
             </span>
             {(order as any).order_fill_status === 'pending' && (
@@ -1146,22 +1161,36 @@ export function FunderOrderCard({
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-1 flex-wrap">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                {order.asset_type === 'stock' ? (order.amount !== null && order.amount !== undefined && order.amount !== '' ? totalU.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0') : isOptionOrder ? (optionInfo?.buyQty ? String(optionInfo.buyQty) : '---') : (order.buy_quantity !== null && order.buy_quantity !== undefined && order.buy_quantity !== '' ? formatCoinQtyFunder(qty, order.coin) : '0')}
+                {principalLentOut
+                  ? financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                  : order.asset_type === 'stock'
+                    ? (order.amount !== null && order.amount !== undefined && order.amount !== '' ? totalU.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0')
+                    : isOptionOrder
+                      ? (optionInfo?.buyQty ? String(optionInfo.buyQty) : '---')
+                      : (order.buy_quantity !== null && order.buy_quantity !== undefined && order.buy_quantity !== '' ? formatCoinQtyFunder(qty, order.coin) : '0')}
               </span>
-              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{isOptionOrder ? '张' : (order.coin === 'CNY' ? '元' : order.coin)}</span>
+              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>
+                {principalLentOut ? financingDisplayUnit : isOptionOrder ? '张' : (order.coin === 'CNY' ? '元' : order.coin)}
+              </span>
 {(() => {
                 const approxHolding = dc?.approxHolding ?? 'U';
                 if (approxHolding === 'hidden') return null;
+                if (principalLentOut) {
+                  if (!(financingAmountUsdt > 0)) return null;
+                  if (amountCurrency === 'CNY') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{financingAmountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>;
+                  if (amountCurrency === 'USDT') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(financingAmountUsdt * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
+                  if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{financingAmountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>;
+                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(financingAmountUsdt * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
+                }
                 if (order.asset_type === 'stock') {
                   if (!(totalU > 0 && order.coin === 'CNY')) return null;
                   if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} u</span>;
                   return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{totalU.toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
-                } else {
-                  if (!liveP || !(qty > 0)) return null;
-                  const valU = qty * liveP;
-                  if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{valU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>;
-                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(valU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
                 }
+                if (!liveP || !(qty > 0)) return null;
+                const valU = qty * liveP;
+                if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{valU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>;
+                return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(valU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
               })()}
             </div>
           </div>
@@ -1216,13 +1245,13 @@ export function FunderOrderCard({
             {show('buyPrice') && price > 0 && !isStockOrder && !isOptionOrder && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">买入币价</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} u</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} {order.coin === 'CNY' ? '元' : 'u'}</span>
               </div>
             )}
             {show('buyValue') && totalU > 0 && !isStockOrder && !isOptionOrder && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">买入价值</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} {order.coin === 'CNY' ? '元' : 'u'}</span>
               </div>
             )}
             {/* 计息基数已移至右侧（已结利息与计息日期之间） */}
