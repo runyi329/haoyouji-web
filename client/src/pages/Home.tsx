@@ -1154,7 +1154,11 @@ export default function Home() {
     action?.();
     return true;
   }, [user, navigate]);
-  const isJiang = user?.username === 'jiang';
+  const isJiang = Number((user as any)?.id) === 870413;
+  const openLedgerFromHome = useCallback((targetLedgerId: 37 | 52) => {
+    sessionStorage.setItem('ledger_back_from', 'home');
+    navigate(`/ledger/${targetLedgerId}?from=home`);
+  }, [navigate]);
 
 
   // 获取基础统计数据
@@ -2044,9 +2048,31 @@ export default function Home() {
           <div className="absolute inset-x-0 top-0 h-0.5" style={{ background: 'linear-gradient(90deg, transparent 5%, #D32F2F 30%, #CBA471 55%, #D32F2F 75%, transparent 95%)', borderRadius: '2px 2px 0 0' }} />
           {/* 背景淡红暖光晓装饰 */}
           <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle at 15% 15%, rgba(211,47,47,0.04) 0%, transparent 55%), radial-gradient(circle at 85% 80%, rgba(203,164,113,0.05) 0%, transparent 50%)' }} />
-          {/* 卡片头部：标题 */}
-          <div className="flex items-center px-3 pt-3 pb-2 relative z-10">
-            <span className="text-xs font-semibold" style={{ color: '#D32F2F', letterSpacing: '0.08em' }}>AI 人脉</span>
+          {/* 卡片头部：标题；胡大叔专属37/52账本快捷入口 */}
+          <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2 relative z-10">
+            <span className="text-xs font-semibold whitespace-nowrap" style={{ color: '#D32F2F', letterSpacing: '0.08em' }}>AI 人脉</span>
+            {isJiang && (
+              <div className="flex items-center gap-1 flex-shrink-0" aria-label="常用账本快捷入口">
+                {([37, 52] as const).map((targetLedgerId) => (
+                  <button
+                    key={targetLedgerId}
+                    type="button"
+                    onClick={() => openLedgerFromHome(targetLedgerId)}
+                    className="h-5 min-w-6 px-1 rounded-full flex items-center justify-center text-[10px] font-bold leading-none active:scale-95 transition-transform"
+                    style={{
+                      color: targetLedgerId === 37 ? '#8B6914' : '#D32F2F',
+                      background: targetLedgerId === 37 ? 'rgba(203,164,113,0.12)' : 'rgba(211,47,47,0.08)',
+                      border: `1px solid ${targetLedgerId === 37 ? 'rgba(203,164,113,0.55)' : 'rgba(211,47,47,0.38)'}`,
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9)',
+                    }}
+                    aria-label={`进入${targetLedgerId}号账本`}
+                    title={`${targetLedgerId}号账本`}
+                  >
+                    {targetLedgerId}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
 

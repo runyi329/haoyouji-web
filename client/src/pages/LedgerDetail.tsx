@@ -2175,11 +2175,19 @@ export default function LedgerDetail() {
   // 使用wouter的useSearch确保SPA路由下能正确读取URL参数
   const searchString = useSearch();
   const searchParams = new URLSearchParams(searchString);
-  // 读取来源账本ID：优先从sessionStorage读取（点击图标跳转时写入），其次从URL参数读取
-  const fromLedgerIdSession = sessionStorage.getItem('ledger_back_from');
-  const fromLedgerIdUrl = searchParams.get('from');
-  const fromLedgerId = fromLedgerIdSession || fromLedgerIdUrl;
-  const backTarget = fromLedgerId ? `/ledger/${fromLedgerId}` : '/ledger';
+  // 返回时实时读取来源，避免SPA跳转后沿用首次渲染的旧闭包。
+  // 数字账本ID表示从另一个账本跳转；home表示从首页专属快捷入口进入。
+  const handleLedgerBack = useCallback(() => {
+    const fromSession = sessionStorage.getItem('ledger_back_from');
+    const fromUrl = new URLSearchParams(window.location.search).get('from');
+    const from = fromSession || fromUrl;
+    sessionStorage.removeItem('ledger_back_from');
+    if (from === 'home') {
+      window.location.assign('/?from=ledger-shortcut');
+      return;
+    }
+    setLocation(from ? `/ledger/${from}` : '/ledger');
+  }, [setLocation]);
   const filters: any = {
     ledgerId: Number(ledgerId),
     limit: 2000, // 加大limit确保加载全部历史记录（原100会截断早期数据）
@@ -3444,7 +3452,7 @@ export default function LedgerDetail() {
                       刷新
                     </button>
                     <button
-                      onClick={() => { sessionStorage.removeItem('ledger_back_from'); setLocation(backTarget); }}
+                      onClick={handleLedgerBack}
                       className="flex items-center justify-center text-xs font-medium text-white flex-shrink-0"
                       style={{ height: 32, padding: '0 12px', borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)' }}
                     >
@@ -3620,7 +3628,7 @@ export default function LedgerDetail() {
                     日志
                   </button>
                   <button
-                    onClick={() => { sessionStorage.removeItem('ledger_back_from'); setLocation(backTarget); }}
+                    onClick={handleLedgerBack}
                     className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
                     style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
                   >
@@ -3652,7 +3660,7 @@ export default function LedgerDetail() {
                     刷新
                   </button>
                   <button
-                    onClick={() => { sessionStorage.removeItem('ledger_back_from'); setLocation(backTarget); }}
+                    onClick={handleLedgerBack}
                     className="flex-1 h-9 rounded-full text-sm font-medium text-center"
                     style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.6)', color: '#fff' }}
                   >
@@ -3773,7 +3781,7 @@ export default function LedgerDetail() {
               )}
               {!isCustomAI && !isCustomAF && !isCustomAJ && (
                 <button
-                  onClick={() => { sessionStorage.removeItem('ledger_back_from'); setLocation(backTarget); }}
+                  onClick={handleLedgerBack}
                   className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
                   style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.6)', color: '#fff' }}
                 >
@@ -3787,7 +3795,7 @@ export default function LedgerDetail() {
             {/* 标题栏 */}
             <div className="px-4 pt-3 pb-2 flex items-center justify-between">
                 <button
-                onClick={() => { sessionStorage.removeItem('ledger_back_from'); setLocation(backTarget); }}
+                onClick={handleLedgerBack}
                 className="p-1 -ml-2"
               >
                 <ChevronLeft className="w-6 h-6" />
