@@ -1,4 +1,4 @@
-// 生成时间：2026-08-25
+// 生成时间：2026-08-26
 export const gitDayStats: Record<string, number> = {
   "2026-01-23": 72,
   "2026-01-24": 19,
@@ -208,4 +208,5 @@ export const gitDayStats: Record<string, number> = {
   "2026-08-22": 13,
   "2026-08-23": 6,
   "2026-08-24": 10,
+  "2026-08-25": 7,
 };

@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-25
+// 生成时间：2026-08-26
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8997,5 +8997,14 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-08-24T06:53:17Z", type: "fix", cleanMessage: "unify wallet balance calculations" },
     { date: "2026-08-24T09:58:41Z", type: "fix", cleanMessage: "deduplicate withdrawal balance history" },
     { date: "2026-08-24T11:05:49Z", type: "fix", cleanMessage: "allow admins to close temporary limits" },
+  ],
+  "2026-08-25": [
+    { date: "2026-08-24T18:19:29Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-25T00:58:58Z", type: "feat", cleanMessage: "add home ledger shortcuts" },
+    { date: "2026-08-25T01:15:55Z", type: "fix", cleanMessage: "stabilize home ledger return" },
+    { date: "2026-08-25T01:23:04Z", type: "fix", cleanMessage: "return ledger 37 to home" },
+    { date: "2026-08-25T01:29:51Z", type: "fix", cleanMessage: "force refresh updated PWA clients" },
+    { date: "2026-08-25T01:56:57Z", type: "fix", cleanMessage: "unify ledger back navigation sources" },
+    { date: "2026-08-25T13:31:05Z", type: "fix", cleanMessage: "show financing currency on lent asset cards" },
   ],
 };
