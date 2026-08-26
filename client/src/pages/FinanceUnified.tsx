@@ -28,6 +28,12 @@ export default function FinanceUnified() {
           </button>
           <h1 className="text-lg font-semibold text-white flex-1">融资付息订单管理</h1>
           <button
+            onClick={() => setLocation(`/ledger/${ledgerId}/af-recharge-manage?tab=adjust`)}
+            className="text-sm font-medium px-2.5 py-1 rounded-full"
+            style={{ color: 'rgba(255,255,255,0.95)', background: 'rgba(255,255,255,0.15)' }}
+            title="充值管理－手动调账"
+          >充值</button>
+          <button
             onClick={() => openRecycleBinRef.current?.()}
             className="p-1.5 rounded-full"
             style={{ background: 'rgba(255,255,255,0.15)' }}
