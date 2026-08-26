@@ -9,6 +9,7 @@ import { RightMarginDetail } from "@/components/RightMarginDetail";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
+import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 
 // 币种选项
 export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'MSTR', 'COIN', 'AAOI', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'PLUME', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'BZ'] as const;
@@ -804,7 +805,7 @@ export function FunderOrderCard({
   const participantCount = Number((order as any).participantCount ?? (order as any)._participantCount ?? 0);
   const rateStr = String(order.interest_rate_annual || '');
   const isNegRate = rateStr.startsWith('-');
-  const rateAbs = isNegRate ? parseFloat(rateStr.slice(1)).toFixed(0) : (rateStr ? parseFloat(rateStr).toFixed(0) : '');
+  const rateAbs = formatFunderAnnualRate(rateStr);
   const rateSign = isNegRate ? '-' : '+';
 
   // 左栏数值
@@ -1461,7 +1462,7 @@ export function FunderOrderCard({
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 计算公式</div>
                         <div>计息基数 × 年化利率 ÷ 365天 × 已过天数</div>
                         <div className="mt-1 font-mono">
-                          <span style={{ color: '#3B82F6' }}>{base.toLocaleString()}{baseCurLabel} × {rate}% ÷ 365天 × {elapsedDays}天</span>
+                          <span style={{ color: '#3B82F6' }}>{base.toLocaleString()}{baseCurLabel} × {formatFunderAnnualRate(rate)}% ÷ 365天 × {elapsedDays}天</span>
                         </div>
                       </div>
                       <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>

@@ -6,6 +6,7 @@ import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { RightMarginDetail } from "./RightMarginDetail";
 import { RightInterestDetail } from "./RightInterestDetail";
 import {
@@ -451,8 +452,7 @@ export function FunderOrderCardV2({
 
   // 利息计算
   const rateStr = getRateStr(order);
-  const isNegRate = rateStr.startsWith("-");
-  const rateAbs = rateStr ? parseFloat(isNegRate ? rateStr.slice(1) : rateStr).toFixed(0) : "";
+  const rateAbs = formatFunderAnnualRate(rateStr);
   const accrued = useAccruedInterestFunder(
     order.status === "active" ? order.interest_base : null,
     order.status === "active" ? order.interest_rate_annual : null,
@@ -782,8 +782,7 @@ export function FunderOrderCardV2Light({
   const priceColor = priceDiff === null ? LT_TEXT_PRI : priceDiff >= 0 ? LT_GREEN : LT_RED;
 
   const rateStr = getRateStr(order);
-  const isNegRate = rateStr.startsWith("-");
-  const rateAbs = rateStr ? parseFloat(isNegRate ? rateStr.slice(1) : rateStr).toFixed(0) : "";
+  const rateAbs = formatFunderAnnualRate(rateStr);
   const accrued = useAccruedInterestFunder(
     order.status === "active" ? order.interest_base : null,
     order.status === "active" ? order.interest_rate_annual : null,
@@ -1147,8 +1146,7 @@ export function FunderOrderCardV2Silver({
   const priceColor = priceDiff === null ? (_isOptCard ? OPT_TEXT_PRI : SL_TEXT_PRI) : priceDiff >= 0 ? SL_GREEN : SL_RED;
 
   const rateStr = getRateStr(order);
-  const isNegRate = rateStr.startsWith('-');
-  const rateAbs = rateStr ? parseFloat(isNegRate ? rateStr.slice(1) : rateStr).toFixed(0) : '';
+  const rateAbs = formatFunderAnnualRate(rateStr);
   const accrued = useAccruedInterestFunder(
     order.status === 'active' ? order.interest_base : null,
     order.status === 'active' ? order.interest_rate_annual : null,
@@ -2707,7 +2705,7 @@ export function FunderLenderCardSilver({
   const _participantInterestRate = _hasParticipantInterestRate ? String(_participantInterestRateValue) : '';
   const rateStr = _isParticipantLn && _hasParticipantInterestRate ? _participantInterestRate : getRateStr(order);
   const isNegRate = rateStr.startsWith('-');
-  const rateAbs = rateStr ? parseFloat(isNegRate ? rateStr.slice(1) : rateStr).toFixed(_isParticipantLn ? 2 : 0) : '';
+  const rateAbs = formatFunderAnnualRate(rateStr);
   const _effectiveInterestBase = _isParticipantLn ? ((order as any).participantInfo?.commissionBase || order.interest_base) : order.interest_base;
   const _effectiveInterestRate = _isParticipantLn && _hasParticipantInterestRate ? _participantInterestRate : order.interest_rate_annual;
   const accrued = useAccruedInterestFunder(

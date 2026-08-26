@@ -5,6 +5,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
+import { normalizeFunderAnnualRate } from "@/lib/funderAnnualRate";
 
 // 备注条目类型
 interface FOMNoteItem { text: string; time: string; userId?: number; userName?: string; userAvatar?: string; }
@@ -262,7 +263,7 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
                 ≈{(accrued / 7.15).toFixed(4)} USDT
               </div>
               <div className="text-xs text-gray-400">
-                基数 {parseFloat(order.interest_base).toLocaleString()} × {order.interest_rate_annual}% / 年
+                基数 {parseFloat(order.interest_base).toLocaleString()} × {normalizeFunderAnnualRate(order.interest_rate_annual)}% / 年
               </div>
               {order.interest_start_date && (
                 <div className="text-xs text-gray-400 mt-1">
@@ -302,7 +303,7 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
               <div className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">利息约定</div>
               <div className="bg-gray-50 rounded-2xl overflow-hidden">
                 {[
-                  { label: '约定年化利息', value: order.interest_rate_annual ? `${order.interest_rate_annual}% / 年` : null },
+                  { label: '约定年化利息', value: order.interest_rate_annual ? `${normalizeFunderAnnualRate(order.interest_rate_annual)}% / 年` : null },
                   { label: '计息基数', value: order.interest_base ? `${parseFloat(order.interest_base).toLocaleString()}` : null },
                   { label: '开始日期', value: order.interest_start_date || null },
                   { label: '支付方式', value: order.interest_payment_type ? PAYMENT_TYPE_MAP[order.interest_payment_type] || order.interest_payment_type : null },

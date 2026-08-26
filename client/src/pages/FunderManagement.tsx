@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, Chevr
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER } from "@/components/FunderOrderCard";
 import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
+import { formatFunderAnnualRate, limitFunderAnnualRateInput, normalizeFunderAnnualRate } from "@/lib/funderAnnualRate";
 
 
 
@@ -215,7 +216,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       coin: p.coin || formData.coin,
       amount: p.amount || '',
       amountCurrency: p.amount_currency || formData.amountCurrency || 'USDT',
-      interestRateAnnual: p.interest_rate || formData.interestRateAnnual || '',
+      interestRateAnnual: normalizeFunderAnnualRate(p.interest_rate || formData.interestRateAnnual || ''),
       interestBase: p.interest_base || formData.interestBase || '',
       interestBaseCurrency: p.interest_base_currency || formData.interestBaseCurrency || 'USDT',
       interestRateCurrency: p.interest_rate_currency || formData.interestRateCurrency || 'USDT',
@@ -497,7 +498,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             sortOrder: i,
             amount: p.amount || undefined,
             amountCurrency: p.amountCurrency || undefined,
-            interestRate: p.interestRateAnnual || undefined,
+            interestRate: normalizeFunderAnnualRate(p.interestRateAnnual) || undefined,
             interestBase: p.interestBase || undefined,
             interestBaseCurrency: p.interestBaseCurrency || undefined,
             interestPaymentType: p.interestPaymentType || undefined,
@@ -804,7 +805,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       interestRateAnnual: (() => {
         const r = String(order.interest_rate_annual ?? '');
         // 如果利率本身带负号（如-8），直接用
-        if (r.startsWith('-')) return r;
+        if (r.startsWith('-')) return normalizeFunderAnnualRate(r);
         // 如果利率是0或空，检查display_config里的rate_negative标记
         const rNum = parseFloat(r);
         if ((rNum === 0 || r === '' || r === '0') && !r.startsWith('-')) {
@@ -814,7 +815,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             if (parsed?.rate_negative === true) return '-0';
           } catch {}
         }
-        return r || '';
+        return normalizeFunderAnnualRate(r);
       })(),
       interestPaymentType: order.interest_payment_type || '',
       interestBase: order.interest_base || '',
@@ -988,7 +989,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       storageAccount: formData.storageAccount || undefined,
       adminNote: formData.adminNote || undefined,
       publicNote: formData.publicNote || undefined,
-      interestRateAnnual: formData.interestRateAnnual || undefined,
+      interestRateAnnual: normalizeFunderAnnualRate(formData.interestRateAnnual) || undefined,
       interestPaymentType: formData.interestPaymentType || undefined,
       interestBase: formData.interestBase || undefined,
       interestBaseCurrency: formData.interestBaseCurrency,
@@ -1013,7 +1014,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean' || typeof v === 'string')
         ),
         ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
-        rate_negative: formData.interestRateAnnual.startsWith('-'),
+        rate_negative: normalizeFunderAnnualRate(formData.interestRateAnnual).startsWith('-'),
       } as Record<string, boolean | number>,
       assetType: formData.assetType || undefined,
       tradeDirection: (['long', 'short'] as const).includes(formData.tradeDirection as any) ? (formData.tradeDirection as 'long' | 'short') : null,
@@ -2117,7 +2118,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     <button
                       type="button"
                       title="收"
-                      onClick={() => { const raw = formData.interestRateAnnual; const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setFormData(d => ({ ...d, interestRateAnnual: absVal })); }}
+                      onClick={() => { const raw = normalizeFunderAnnualRate(formData.interestRateAnnual); const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setFormData(d => ({ ...d, interestRateAnnual: absVal })); }}
                       className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-bold shrink-0 transition-all"
                       style={!isNeg
                         ? { background: '#FEE2E2', color: '#DC2626', border: '2px solid #DC2626' }
@@ -2126,7 +2127,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     <button
                       type="button"
                       title="付"
-                      onClick={() => { const raw = formData.interestRateAnnual; const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setFormData(d => ({ ...d, interestRateAnnual: '-' + absVal })); }}
+                      onClick={() => { const raw = normalizeFunderAnnualRate(formData.interestRateAnnual); const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setFormData(d => ({ ...d, interestRateAnnual: '-' + absVal })); }}
                       className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-bold shrink-0 transition-all"
                       style={isNeg
                         ? { background: '#DEF7EC', color: '#059669', border: '2px solid #059669' }
@@ -2139,11 +2140,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     inputMode="decimal"
                     value={formData.interestRateAnnual.startsWith('-') ? formData.interestRateAnnual.slice(1) : formData.interestRateAnnual}
                     onChange={e => {
-                      const val = e.target.value;
+                      const val = limitFunderAnnualRateInput(e.target.value);
+                      if (val === null) return;
                       const isNeg = formData.interestRateAnnual.startsWith('-');
-                      const newVal = isNeg ? ('-' + val) : val;
-                      setFormData(d => ({ ...d, interestRateAnnual: newVal }));
+                      setFormData(d => ({ ...d, interestRateAnnual: isNeg ? ('-' + val) : val }));
                     }}
+                    onBlur={() => setFormData(d => ({ ...d, interestRateAnnual: normalizeFunderAnnualRate(d.interestRateAnnual) }))}
                     className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
                     placeholder="如：8.5"
                     style={{ display: 'block', boxSizing: 'border-box' }}
@@ -2777,7 +2779,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   storage_account: formData.storageAccount || null,
                   broker_name: formData.brokerName || null,
                   broker_account: formData.brokerAccount || null,
-                  interest_rate_annual: (() => { const r = formData.interestRateAnnual; if (!r || r === '+' || r === '-') return (r === '-' ? '-0' : '0'); return r; })() || null,
+                  interest_rate_annual: (() => { const r = normalizeFunderAnnualRate(formData.interestRateAnnual); return r || '0'; })(),
                   interest_payment_type: formData.interestPaymentType || null,
                   interest_base: formData.interestBase || null,
                   interest_base_currency: formData.interestBaseCurrency || 'USDT',
@@ -2801,7 +2803,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   }) : null,
                   collateral_share_mode: collateralShareMode || 'none',
                   trade_direction: formData.tradeDirection || null,
-                  display_config: JSON.stringify({ ...displayConfig, marginAlertThreshold: marginAlertThreshold || undefined, rate_negative: formData.interestRateAnnual.startsWith('-') }),
+                  display_config: JSON.stringify({ ...displayConfig, marginAlertThreshold: marginAlertThreshold || undefined, rate_negative: normalizeFunderAnnualRate(formData.interestRateAnnual).startsWith('-') }),
                   tags: formData.tags && formData.tags.length > 0 ? JSON.stringify(formData.tags) : null,
                   public_note: null,
                   admin_note: null,
@@ -2919,12 +2921,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               {(() => { const isNeg = (p.interestRateAnnual || '').startsWith('-'); return (
                                 <>
                                   <button type="button" title="收"
-                                    onClick={() => { const raw = p.interestRateAnnual || ''; const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: absVal } : pp)); }}
+                                    onClick={() => { const raw = normalizeFunderAnnualRate(p.interestRateAnnual || ''); const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: absVal } : pp)); }}
                                     className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold shrink-0 transition-all"
                                     style={!isNeg ? { background: '#FEE2E2', color: '#DC2626', border: '2px solid #DC2626' } : { backgroundColor: '#F3F4F6', color: '#9CA3AF', border: '2px solid transparent' }}
                                   >+</button>
                                   <button type="button" title="付"
-                                    onClick={() => { const raw = p.interestRateAnnual || ''; const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: '-' + absVal } : pp)); }}
+                                    onClick={() => { const raw = normalizeFunderAnnualRate(p.interestRateAnnual || ''); const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: '-' + absVal } : pp)); }}
                                     className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold shrink-0 transition-all"
                                     style={isNeg ? { background: '#DEF7EC', color: '#059669', border: '2px solid #059669' } : { backgroundColor: '#F3F4F6', color: '#9CA3AF', border: '2px solid transparent' }}
                                   >−</button>
@@ -2932,7 +2934,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               ); })()}
                               <input type="text" inputMode="decimal"
                                 value={(p.interestRateAnnual || '').startsWith('-') ? (p.interestRateAnnual || '').slice(1) : (p.interestRateAnnual || '')}
-                                onChange={e => { const val = e.target.value; const isNeg = (p.interestRateAnnual || '').startsWith('-'); setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: isNeg ? '-' + val : val } : pp)); }}
+                                onChange={e => {
+                                  const val = limitFunderAnnualRateInput(e.target.value);
+                                  if (val === null) return;
+                                  const isNeg = (p.interestRateAnnual || '').startsWith('-');
+                                  setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: isNeg ? '-' + val : val } : pp));
+                                }}
+                                onBlur={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: normalizeFunderAnnualRate(pp.interestRateAnnual) } : pp))}
                                 className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white"
                                 placeholder="如：18" />
                               <div className="flex rounded-xl border border-gray-200 overflow-hidden text-xs shrink-0">
@@ -3129,7 +3137,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               status: formData.status || 'active',
                               broker_name: formData.brokerName || null,
                               broker_account: formData.brokerAccount || null,
-                              interest_rate_annual: p.interestRateAnnual !== '' ? p.interestRateAnnual : (formData.interestRateAnnual || null),
+                              interest_rate_annual: p.interestRateAnnual !== '' ? normalizeFunderAnnualRate(p.interestRateAnnual) : (normalizeFunderAnnualRate(formData.interestRateAnnual) || null),
                               interest_payment_type: p.interestPaymentType || formData.interestPaymentType || null,
                               interest_base: p.interestBase !== '' ? p.interestBase : (formData.interestBase || null),
                               interest_base_currency: p.interestBaseCurrency || formData.interestBaseCurrency || 'USDT',
@@ -3237,7 +3245,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               coin: formData.coin,
                               amount: formData.assetType === 'stock' ? amountInputValue : (computedAmount || ''),
                               amountCurrency: formData.amountCurrency || 'USDT',
-                              interestRateAnnual: formData.interestRateAnnual || '',  // 新增时完整继承主订单，之后独立修改
+                              interestRateAnnual: normalizeFunderAnnualRate(formData.interestRateAnnual),  // 新增时完整继承主订单，之后独立修改
                               interestBase: formData.interestBase || '',
                               interestBaseCurrency: formData.interestBaseCurrency || 'USDT',
                               interestRateCurrency: formData.interestRateCurrency || 'USDT',
@@ -3428,7 +3436,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     const rateCur = order.interest_rate_currency || 'USDT';
                     const interestUnit = rateCur === 'CNY' ? '元' : 'U';
                     const rateStr = order.interest_rate_annual || '';
-                    const rateAbs = rateStr ? parseFloat(rateStr).toFixed(0) : '';
+                    const rateAbs = formatFunderAnnualRate(rateStr);
                     const dc = (() => { try { const raw = order.display_config; if (!raw) return null; return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; } })();
                     const show = (key: string) => dc ? (dc[key] !== false) : true;
                     return (
