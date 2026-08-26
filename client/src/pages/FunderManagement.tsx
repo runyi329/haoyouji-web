@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { getUserDisplayName, getUserSearchLabel, matchesUserSearch } from "@/lib/userIdentity";
-import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
+import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER } from "@/components/FunderOrderCard";
 import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
@@ -197,18 +197,26 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   };
   const [participants, setParticipants] = useState<ParticipantForm[]>([]);
   const [participantUserSearch, setParticipantUserSearch] = useState('');
-  const saveParticipantFormMutation = trpc.ledger.funderSaveParticipantFullConfig.useMutation();
+  const [selectedParticipantUserIds, setSelectedParticipantUserIds] = useState<number[]>([]);
+  const saveParticipantFormMutation = trpc.ledger.funderSaveParticipantFullConfig.useMutation({
+    onSuccess: (_result, vars) => {
+      trpcUtils.ledger.funderGetOrderParticipants.invalidate({ orderId: vars.orderId, ledgerId: vars.ledgerId });
+      refetchOrders();
+    },
+    onError: (err) => toast.error(`参与者保存失败：${err.message}`),
+  });
   // 编辑已有订单时加载现有参与者
   const editingOrderId = editingOrder?.id ?? null;
-  const { data: existingParticipantsData } = trpc.ledger.funderGetOrderParticipants.useQuery(
+  const { data: existingParticipantsData, dataUpdatedAt: existingParticipantsUpdatedAt, isFetching: existingParticipantsLoading } = trpc.ledger.funderGetOrderParticipants.useQuery(
     { orderId: editingOrderId ?? 0, ledgerId },
-    { enabled: !!editingOrderId && ledgerId > 0, staleTime: 0 }
+    { enabled: !!editingOrderId && ledgerId > 0, staleTime: 0, refetchOnMount: 'always' }
   );
-  // 加载已有参与者到 state
-  const participantsLoadedRef = useRef<number | null>(null);
+  // 加载已有参与者到 state；同时区分缓存数据与最新请求结果，确保同一订单重复打开也能稳定回显。
+  const participantsLoadedRef = useRef<string | null>(null);
   React.useEffect(() => {
-    if (!existingParticipantsData || participantsLoadedRef.current === editingOrderId) return;
-    participantsLoadedRef.current = editingOrderId;
+    const loadKey = editingOrderId ? `${editingOrderId}:${existingParticipantsUpdatedAt}` : null;
+    if (existingParticipantsLoading || !existingParticipantsData || !loadKey || participantsLoadedRef.current === loadKey) return;
+    participantsLoadedRef.current = loadKey;
     const loaded = (existingParticipantsData.participants as any[]).map((p: any) => ({
       userId: p.user_id,
       userName: p.nickname || p.username || p.userName || String(p.user_id),
@@ -227,7 +235,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       expanded: false,
     }));
     setParticipants(loaded);
-  }, [existingParticipantsData, editingOrderId]);
+  }, [existingParticipantsData, editingOrderId, existingParticipantsUpdatedAt, existingParticipantsLoading]);
 
   // 融资金额输入状态：编辑时用本地值，非编辑时显示计算值
   const [amountEditing, setAmountEditing] = useState(false);
@@ -485,31 +493,36 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     onError: (err) => toast.error(err.message),
   });
   const updateMutation = trpc.ledger.financeUpdateOrder.useMutation({
-    onSuccess: (result, vars) => {
+    onSuccess: async (result, vars) => {
       const isLinkedStatusUpdate = vars.status === 'settled' || vars.status === 'active';
-      // 普通编辑继续保存参与者独立配置；结清/恢复由后端原子级联，避免旧表单覆盖同步状态。
+      // 普通编辑必须等待参与者独立配置全部写入后再关闭表单；结清/恢复由后端原子级联。
       const orderId = (vars as any).id;
-      if (!isLinkedStatusUpdate && orderId && participants.length > 0) {
-        saveParticipantFormMutation.mutate({
-          orderId: Number(orderId),
-          ledgerId,
-          participants: participants.map((p, i) => ({
-            userId: p.userId,
-            sortOrder: i,
-            amount: p.amount || undefined,
-            amountCurrency: p.amountCurrency || undefined,
-            interestRate: normalizeFunderAnnualRate(p.interestRateAnnual) || undefined,
-            interestBase: p.interestBase || undefined,
-            interestBaseCurrency: p.interestBaseCurrency || undefined,
-            interestPaymentType: p.interestPaymentType || undefined,
-            interestStartDate: p.interestStartDate || undefined,
-            interestRateCurrency: p.interestRateCurrency || undefined,
-            displayConfig: JSON.stringify({ ...p.displayConfig, marginAlertThreshold: p.marginAlertThreshold || undefined }),
-          })),
-        });
-      } else if (!isLinkedStatusUpdate && orderId && participants.length === 0 && existingParticipantsData?.participants?.length) {
-        // 删除所有参与者
-        saveParticipantFormMutation.mutate({ orderId: Number(orderId), ledgerId, participants: [] });
+      try {
+        if (!isLinkedStatusUpdate && orderId && participants.length > 0) {
+          await saveParticipantFormMutation.mutateAsync({
+            orderId: Number(orderId),
+            ledgerId,
+            participants: participants.map((p, i) => ({
+              userId: p.userId,
+              sortOrder: i,
+              amount: p.amount || undefined,
+              amountCurrency: p.amountCurrency || undefined,
+              interestRate: normalizeFunderAnnualRate(p.interestRateAnnual) || undefined,
+              interestBase: p.interestBase || undefined,
+              interestBaseCurrency: p.interestBaseCurrency || undefined,
+              interestPaymentType: p.interestPaymentType || undefined,
+              interestStartDate: p.interestStartDate || undefined,
+              interestRateCurrency: p.interestRateCurrency || undefined,
+              displayConfig: JSON.stringify({ ...p.displayConfig, marginAlertThreshold: p.marginAlertThreshold || undefined }),
+            })),
+          });
+        } else if (!isLinkedStatusUpdate && orderId && participants.length === 0 && existingParticipantsData?.participants?.length) {
+          // 删除所有参与者
+          await saveParticipantFormMutation.mutateAsync({ orderId: Number(orderId), ledgerId, participants: [] });
+        }
+      } catch {
+        // 参与者保存失败时保留表单，管理员可直接修正并重试。
+        return;
       }
       const syncedCount = Number((result as any)?.participantCount || 0);
       if (vars.status === 'settled') {
@@ -735,6 +748,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [formUserSearch, setFormUserSearch] = useState('');
 
   const handleOpenCreate = () => {
+    setParticipants([]);
+    setSelectedParticipantUserIds([]);
+    setParticipantUserSearch('');
+    participantsLoadedRef.current = null;
     setFormData({
       userId: 0,
       coin: 'BTC',
@@ -789,6 +806,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
   const participantsSectionRef = React.useRef<HTMLDivElement>(null);
   const handleOpenEdit = (order: any, scrollTo?: string) => {
+    // 每次打开都重新装载该订单的全部参与者，避免同一订单重复进入时沿用空状态或旧缓存。
+    setParticipants([]);
+    setSelectedParticipantUserIds([]);
+    setParticipantUserSearch('');
+    participantsLoadedRef.current = null;
+    trpcUtils.ledger.funderGetOrderParticipants.invalidate({ orderId: Number(order.id), ledgerId });
     // amount_currency 为 NULL/空表示老订单，按 USDT 口径兼容（amount 本就是 USDT 价值）
     const editAmountCurrency = (order.amount_currency && String(order.amount_currency).trim()) ? String(order.amount_currency) : 'USDT';
     setFormData({
@@ -1388,7 +1411,15 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 {editingOrder?.participantInfo ? '受邀订单配置' : editingOrder ? '编辑订单' : '添加订单'}
               </h3>
               <button
-                onClick={() => { setShowForm(false); setEditingOrder(null); setShowDatePicker(false); }}
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingOrder(null);
+                  setParticipants([]);
+                  setSelectedParticipantUserIds([]);
+                  setParticipantUserSearch('');
+                  participantsLoadedRef.current = null;
+                  setShowDatePicker(false);
+                }}
                 className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg leading-none"
               >
                 &times;
@@ -2875,12 +2906,24 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             {/* ===== 订单参与者管理 ===== */}
             {editingOrder && !editingOrder?.participantInfo && (
               <div className="px-5 pb-4" ref={participantsSectionRef}>
-                {/* 分隔线 */}
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="flex-1 h-px bg-gray-100" />
-                  <span className="text-xs text-gray-400 shrink-0">订单参与者</span>
-                  <div className="flex-1 h-px bg-gray-100" />
+                <div className="mb-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
+                      <Users2 className="h-4 w-4" />
+                      <span>订单参与者</span>
+                    </div>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-indigo-600 shadow-sm">
+                      {existingParticipantsLoading && participants.length === 0 ? '读取中' : `${participants.length} 人`}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-xs leading-5 text-indigo-500">可一次添加多人；每位参与者可单独展开设置，最后点击页面底部按钮统一保存。</p>
                 </div>
+
+                {participants.length === 0 && !existingParticipantsLoading && (
+                  <div className="mb-3 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-center text-xs text-gray-400">
+                    当前没有参与者，请在下方批量选择需要添加的成员。
+                  </div>
+                )}
 
                 {/* 参与者列表 */}
                 {participants.map((p, idx) => (
@@ -3220,54 +3263,117 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </div>
                 ))}
 
-                {/* 添加参与者区域 */}
-                <div className="rounded-xl border border-dashed border-gray-300 p-3">
-                  <div className="text-xs text-gray-400 mb-2">搜索并添加参与者</div>
-                  <input
-                    type="text"
-                    value={participantUserSearch}
-                    onChange={e => setParticipantUserSearch(e.target.value)}
-                    placeholder="输入姓名 / 账号搜索成员"
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white mb-2"
-                  />
-                  {participantUserSearch.trim() && (
-                    <div className="space-y-1 max-h-40 overflow-y-auto">
-                      {((ledgerData as any)?.members || funderUsers || []).filter((m: any) => {
-                        return matchesUserSearch(m, participantUserSearch) && !participantsList.some(p => p.userId === (m.userId || m.id));
-                      }).map((m: any) => (
-                        <button
-                          key={m.userId || m.id}
-                          type="button"
-                          onClick={() => {
-                            const newP: ParticipantForm = {
-                              userId: m.userId || m.id,
-                              userName: getUserDisplayName(m, String(m.userId || m.id)),
-                              avatar: m.avatar,
-                              coin: formData.coin,
-                              amount: formData.assetType === 'stock' ? amountInputValue : (computedAmount || ''),
-                              amountCurrency: formData.amountCurrency || 'USDT',
-                              interestRateAnnual: normalizeFunderAnnualRate(formData.interestRateAnnual),  // 新增时完整继承主订单，之后独立修改
-                              interestBase: formData.interestBase || '',
-                              interestBaseCurrency: formData.interestBaseCurrency || 'USDT',
-                              interestRateCurrency: formData.interestRateCurrency || 'USDT',
-                              interestPaymentType: formData.interestPaymentType || '',
-                              interestStartDate: formData.interestStartDate || '',
-                              displayConfig: { ...displayConfig },
-                              marginAlertThreshold: marginAlertThreshold || '',
-                              expanded: true,
-                            };
-                            setParticipants(prev => [...prev, newP]);
-                            setParticipantUserSearch('');
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-gray-100 hover:bg-indigo-50 text-left"
-                        >
-                          {m.avatar ? <img src={m.avatar} className="w-6 h-6 rounded-full object-cover shrink-0" /> : <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500 shrink-0">{getUserDisplayName(m, '?').slice(0,1).toUpperCase()}</div>}
-                          <span className="text-sm text-gray-700">{getUserSearchLabel(m)}</span>
-                        </button>
-                      ))}
+                {/* 批量添加参与者区域 */}
+                {(() => {
+                  const rawMembers = (((ledgerData as any)?.members || funderUsers || []) as any[]);
+                  const allMembers = rawMembers.filter((m: any, index: number, arr: any[]) => {
+                    const id = Number(m.userId || m.id);
+                    return id > 0 && arr.findIndex((candidate: any) => Number(candidate.userId || candidate.id) === id) === index;
+                  });
+                  const availableMembers = allMembers.filter((m: any) => {
+                    const id = Number(m.userId || m.id);
+                    return id !== Number(formData.userId) && !participants.some(p => p.userId === id);
+                  });
+                  const visibleMembers = availableMembers
+                    .filter((m: any) => !participantUserSearch.trim() || matchesUserSearch(m, participantUserSearch))
+                    .slice(0, 40);
+                  const selectedMembers = allMembers.filter((m: any) => selectedParticipantUserIds.includes(Number(m.userId || m.id)));
+                  const addSelectedParticipants = () => {
+                    const newParticipants: ParticipantForm[] = selectedMembers
+                      .filter((m: any) => {
+                        const id = Number(m.userId || m.id);
+                        return id !== Number(formData.userId) && !participants.some(p => p.userId === id);
+                      })
+                      .map((m: any, index: number) => ({
+                        userId: Number(m.userId || m.id),
+                        userName: getUserDisplayName(m, String(m.userId || m.id)),
+                        avatar: m.avatar,
+                        coin: formData.coin,
+                        amount: formData.assetType === 'stock' ? amountInputValue : (computedAmount || ''),
+                        amountCurrency: formData.amountCurrency || 'USDT',
+                        interestRateAnnual: normalizeFunderAnnualRate(formData.interestRateAnnual),
+                        interestBase: formData.interestBase || '',
+                        interestBaseCurrency: formData.interestBaseCurrency || 'USDT',
+                        interestRateCurrency: formData.interestRateCurrency || 'USDT',
+                        interestPaymentType: formData.interestPaymentType || '',
+                        interestStartDate: formData.interestStartDate || '',
+                        displayConfig: { ...displayConfig },
+                        marginAlertThreshold: marginAlertThreshold || '',
+                        expanded: index === 0,
+                      }));
+                    if (newParticipants.length === 0) return;
+                    setParticipants(prev => [...prev, ...newParticipants]);
+                    setSelectedParticipantUserIds([]);
+                    setParticipantUserSearch('');
+                    toast.success(`已加入 ${newParticipants.length} 位参与者，请在底部统一保存`);
+                  };
+                  return (
+                    <div className="rounded-xl border border-dashed border-indigo-200 bg-white p-3">
+                      <div className="mb-2 flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-gray-700">批量添加参与者</div>
+                          <div className="mt-0.5 text-xs text-gray-400">可连续勾选多人，再一次加入订单</div>
+                        </div>
+                        {selectedParticipantUserIds.length > 0 && (
+                          <button type="button" onClick={() => setSelectedParticipantUserIds([])} className="shrink-0 text-xs text-gray-400">清空</button>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={participantUserSearch}
+                        onChange={e => setParticipantUserSearch(e.target.value)}
+                        placeholder="输入姓名 / 账号搜索；也可直接勾选下方成员"
+                        className="mb-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
+                      />
+                      {selectedMembers.length > 0 && (
+                        <div className="mb-2 flex flex-wrap gap-1.5 rounded-xl bg-indigo-50 p-2">
+                          {selectedMembers.map((m: any) => {
+                            const id = Number(m.userId || m.id);
+                            return (
+                              <button key={id} type="button" onClick={() => setSelectedParticipantUserIds(prev => prev.filter(value => value !== id))} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-xs text-indigo-700 shadow-sm">
+                                <span className="max-w-[110px] truncate">{getUserDisplayName(m, String(id))}</span>
+                                <X className="h-3 w-3 text-indigo-400" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="max-h-48 space-y-1 overflow-y-auto pr-0.5">
+                        {visibleMembers.map((m: any) => {
+                          const id = Number(m.userId || m.id);
+                          const isSelected = selectedParticipantUserIds.includes(id);
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              onClick={() => setSelectedParticipantUserIds(prev => isSelected ? prev.filter(value => value !== id) : [...prev, id])}
+                              className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors ${isSelected ? 'border-indigo-300 bg-indigo-50' : 'border-gray-100 bg-white hover:bg-gray-50'}`}
+                            >
+                              {m.avatar ? <img src={m.avatar} className="h-7 w-7 shrink-0 rounded-full object-cover" /> : <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[10px] font-bold text-gray-500">{getUserDisplayName(m, '?').slice(0,1).toUpperCase()}</div>}
+                              <span className="min-w-0 flex-1 truncate text-sm text-gray-700">{getUserSearchLabel(m)}</span>
+                              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${isSelected ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-gray-300 bg-white'}`}>
+                                {isSelected && <Check className="h-3.5 w-3.5" />}
+                              </span>
+                            </button>
+                          );
+                        })}
+                        {visibleMembers.length === 0 && (
+                          <div className="py-5 text-center text-xs text-gray-400">没有可添加的成员</div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        disabled={selectedParticipantUserIds.length === 0}
+                        onClick={addSelectedParticipants}
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        style={{ background: 'linear-gradient(135deg, #4F46E5, #6366F1)' }}
+                      >
+                        <Plus className="h-4 w-4" />
+                        {selectedParticipantUserIds.length > 0 ? `一次加入 ${selectedParticipantUserIds.length} 位参与者` : '请先勾选参与者'}
+                      </button>
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -3279,7 +3385,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 className="w-full py-3.5 rounded-xl text-white font-semibold text-base disabled:opacity-50"
                 style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
               >
-                {(createMutation.isPending || updateMutation.isPending || updateParticipantOrderMutation.isPending) ? '提交中...' : (editingOrder ? '保存修改' : '确认添加')}
+                {(createMutation.isPending || updateMutation.isPending || updateParticipantOrderMutation.isPending)
+                  ? '提交中...'
+                  : editingOrder && !editingOrder?.participantInfo
+                    ? `保存订单与 ${participants.length} 位参与者`
+                    : editingOrder
+                      ? '保存修改'
+                      : '确认添加'}
               </button>
             </div>
           </div>
