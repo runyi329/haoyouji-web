@@ -88,6 +88,7 @@ export default function AfRechargeManage() {
   const [adjDirection, setAdjDirection] = useState<"add" | "sub">("add");
   const [adjAmount, setAdjAmount] = useState("");
   const [adjNote, setAdjNote] = useState("");
+  const [adjFlowTab, setAdjFlowTab] = useState<"user" | "global">("user");
   const [adjLogPage, setAdjLogPage] = useState(1);
   const ADJ_PAGE_SIZE = 10;
   // ===== 数据查询 =====
@@ -1022,7 +1023,7 @@ export default function AfRechargeManage() {
                       adjFilteredUsers.map((u: any) => (
                         <button
                           key={u.id}
-                          onMouseDown={() => { setAdjSelectedUser(u); setAdjSearch(""); setAdjShowDropdown(false); }}
+                          onMouseDown={() => { setAdjSelectedUser(u); setAdjFlowTab("user"); setAdjSearch(""); setAdjShowDropdown(false); }}
                           className="w-full text-left flex items-center justify-between px-4 py-3 hover:bg-orange-50 active:bg-orange-100 border-b border-gray-50 last:border-0"
                         >
                           <div>
@@ -1106,11 +1107,23 @@ export default function AfRechargeManage() {
             </button>
           </div>
 
-          {/* ③ 当前用户全局钱包明细：与用户自己进入钱包时使用同一接口和口径 */}
-          {adjSelectedUser && (
+          {/* 钱包流水左右 Tab */}
+          <div className="flex p-1 bg-gray-100 rounded-2xl">
+            <button
+              onClick={() => setAdjFlowTab("user")}
+              className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold transition-colors ${adjFlowTab === "user" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"}`}
+            >当前用户流水</button>
+            <button
+              onClick={() => setAdjFlowTab("global")}
+              className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold transition-colors ${adjFlowTab === "global" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"}`}
+            >全局流水</button>
+          </div>
+
+          {/* 当前用户全局钱包明细：与用户自己进入钱包时使用同一接口和口径 */}
+          {adjFlowTab === "user" && (adjSelectedUser ? (
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[13px] font-bold text-black">③ {adjSelectedUser.name || adjSelectedUser.username} 的全局钱包明细</p>
+                <p className="text-[13px] font-bold text-black">{adjSelectedUser.name || adjSelectedUser.username} 的全部钱包流水</p>
                 <span className="text-[11px] text-gray-400">共 {adjHistory.length} 条</span>
               </div>
               {adjHistoryQuery.isLoading ? (
@@ -1188,9 +1201,15 @@ export default function AfRechargeManage() {
                 </div>
               )}
             </div>
-          )}
+          ) : (
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center">
+              <p className="text-[13px] text-gray-500">请先在上方选择用户</p>
+              <p className="text-[11px] text-gray-300 mt-1">选择后显示该用户的全部钱包流水</p>
+            </div>
+          ))}
 
-          {/* 全局调账日志 */}
+          {/* 全局流水 */}
+          {adjFlowTab === "global" && (
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[13px] font-bold text-black">全局流水日志</p>
@@ -1261,6 +1280,7 @@ export default function AfRechargeManage() {
               </div>
             )}
           </div>
+          )}
         </div>
       )}
             {/* ===== 手动确认充值弹窗（充值记录Tab） ===== */}
