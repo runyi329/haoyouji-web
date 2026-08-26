@@ -40,8 +40,12 @@ export default function AfRechargeManage() {
     return 1;
   })();
 
-  // 主 Tab：records=充值记录 | monitor=充值监控
-  const [mainTab, setMainTab] = useState<"records" | "monitor" | "adjust">("records");
+  // 主 Tab：records=充值记录 | monitor=充值监控 | adjust=手动调账。
+  // 融资付息管理页的“充值”快捷入口通过 ?tab=adjust 直接打开手动调账。
+  const [mainTab, setMainTab] = useState<"records" | "monitor" | "adjust">(() => {
+    if (typeof window === 'undefined') return "records";
+    return new URLSearchParams(window.location.search).get('tab') === 'adjust' ? "adjust" : "records";
+  });
 
   // ===== 充值记录 Tab 状态 =====
   const [filterStatus, setFilterStatus] = useState<string>("all");

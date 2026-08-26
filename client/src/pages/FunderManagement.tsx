@@ -1123,16 +1123,26 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         className="sticky top-0 z-10"
         style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
       >
-        {/* 第一行：返回 + 标题 + 回收站 */}
+        {/* 第一行：返回 + 标题 + 充值快捷入口 + 回收站 */}
         <div className="px-4 py-3 flex items-center gap-3">
           <button onClick={() => setLocation(`/ledger/${ledgerId}/settings`)} className="p-1 -ml-2">
             <ChevronLeft className="w-6 h-6 text-white" />
           </button>
           <h1 className="text-lg font-semibold text-white flex-1">资方管理</h1>
           {isAdminUser && (
-            <button onClick={() => setShowRecycleBin(true)} className="p-1" title="回收站">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            </button>
+            <>
+              <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/af-recharge-manage?tab=adjust`)}
+                className="h-8 px-3 rounded-full text-sm font-medium text-white"
+                style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.32)' }}
+                title="充值管理－手动调账"
+              >
+                充值
+              </button>
+              <button onClick={() => setShowRecycleBin(true)} className="p-1" title="回收站">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
+            </>
           )}
         </div>
         {/* 合作资金总额 */}
