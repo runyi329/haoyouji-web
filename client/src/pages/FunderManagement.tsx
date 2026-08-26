@@ -238,12 +238,17 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setParticipants(loaded);
   }, [existingParticipantsData, editingOrderId, existingParticipantsUpdatedAt, existingParticipantsLoading]);
 
-  // 融资金额输入状态：编辑时用本地值，非编辑时显示计算值
-  const [amountEditing, setAmountEditing] = useState(false);
   // 计息基数是否被用户手动改过：手动后不再自动带入融资金额
   const interestBaseTouchedRef = useRef(false);
   const [amountInputValue, setAmountInputValue] = useState('');
-  // computedAmount 与同步 useEffect 已下移到 formLivePrices/cnyRate/折算函数定义之后（避免 TDZ）
+  type LinkedAmountField = 'amount' | 'price' | 'quantity';
+  const manualLinkedFieldsRef = useRef<LinkedAmountField[]>([]);
+  const [derivedLinkedField, setDerivedLinkedField] = useState<LinkedAmountField | null>(null);
+  const resetLinkedAmountFields = () => {
+    manualLinkedFieldsRef.current = [];
+    setDerivedLinkedField(null);
+  };
+  // 三字段联动函数已下移到 formLivePrices/cnyRate/折算函数定义之后（避免 TDZ）。
 
   // 员工名字筛选
   const [employeeNameFilter, setEmployeeNameFilter] = useState('');
@@ -310,38 +315,61 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     return usdtVal / p;
   };
 
-  // 自动折算总金额：买入价格以“融资币种/枚”计价，price × qty 先得到融资币种金额，再统一换算为 USDT 基准保存。
-  const computedAmount = useMemo(() => {
-    const price = parseFloat(formData.buyPrice);
-    const qty = parseFloat(formData.buyQuantity);
-    if (!isNaN(price) && !isNaN(qty) && price > 0 && qty > 0) {
-      const quotedAmount = price * qty;
-      const usdtBase = toUsdtBase(quotedAmount, formData.amountCurrency);
-      return usdtBase !== null ? usdtBase.toFixed(2) : '';
+  const formatLinkedAmountValue = (value: number, field: LinkedAmountField): string => {
+    if (!isFinite(value)) return '';
+    if (field === 'quantity' && INTEGER_COINS_FUNDER.has(formData.coin)) return String(Math.round(value));
+    const digits = field === 'amount' ? 2 : 6;
+    return parseFloat(value.toFixed(digits)).toString();
+  };
+
+  const handleLinkedAmountInput = (field: LinkedAmountField, rawValue: string) => {
+    const nextManualFields = [...manualLinkedFieldsRef.current.filter(item => item !== field), field].slice(-2) as LinkedAmountField[];
+    manualLinkedFieldsRef.current = nextManualFields;
+
+    if (nextManualFields.length < 2) {
+      setDerivedLinkedField(null);
+      return;
     }
-    return '';
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.buyPrice, formData.buyQuantity, formData.amountCurrency, cnyRate, JSON.stringify(formLivePrices)]);
-  // 当 computedAmount 变化且用户未在编辑时，同步到输入框
-  // computedAmount = 买入价×币数 = USDT 价值；融资金额输入框按出资币种(amountCurrency)折算显示
-  useEffect(() => {
-    if (!amountEditing && formData.assetType !== 'stock') {
-      if (computedAmount) {
-        const usdtVal = parseFloat(computedAmount);
-        const converted = fromUsdtBase(usdtVal, formData.amountCurrency);
-        if (converted !== null && !isNaN(converted)) {
-          setAmountInputValue(parseFloat(converted.toFixed(2)).toString());
-        }
-      }
+
+    const nextDerivedField = (['amount', 'price', 'quantity'] as LinkedAmountField[]).find(item => !nextManualFields.includes(item)) || null;
+    const amount = parseFloat(field === 'amount' ? rawValue : amountInputValue);
+    const price = parseFloat(field === 'price' ? rawValue : formData.buyPrice);
+    const quantity = parseFloat(field === 'quantity' ? rawValue : formData.buyQuantity);
+
+    if (!nextDerivedField) return;
+    if (nextDerivedField === 'amount' && price > 0 && quantity > 0) {
+      setAmountInputValue(formatLinkedAmountValue(price * quantity, 'amount'));
+      setDerivedLinkedField('amount');
+      return;
     }
+    if (nextDerivedField === 'price' && amount > 0 && quantity > 0) {
+      setFormData(current => ({ ...current, buyPrice: formatLinkedAmountValue(amount / quantity, 'price') }));
+      setDerivedLinkedField('price');
+      return;
+    }
+    if (nextDerivedField === 'quantity' && amount > 0 && price > 0) {
+      setFormData(current => ({ ...current, buyQuantity: formatLinkedAmountValue(amount / price, 'quantity') }));
+      setDerivedLinkedField('quantity');
+      return;
+    }
+    setDerivedLinkedField(null);
+  };
+
+  // 融资金额始终以输入框当前值为准；若它是第三个字段，则该值已由联动函数推算。
+  // 底层继续统一保存为USDT基准，融资币种仅控制输入和展示口径。
+  const financingAmountUsdt = useMemo(() => {
+    const amount = parseFloat(amountInputValue);
+    if (!isFinite(amount) || amount <= 0) return '';
+    const usdtBase = formData.assetType === 'stock' ? amount : toUsdtBase(amount, formData.amountCurrency);
+    return usdtBase !== null && isFinite(usdtBase) ? usdtBase.toFixed(2) : '';
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [computedAmount, amountEditing, formData.assetType, formData.amountCurrency, cnyRate, JSON.stringify(formLivePrices)]);
+  }, [amountInputValue, formData.assetType, formData.amountCurrency, cnyRate, JSON.stringify(formLivePrices)]);
 
   // 便捷操作：融资币种为 CNY 时计息基数默认按人民币带入；其余数字币融资仍按 USDT 基准带入。
   // 仅在用户未手动改过计息基数时生效；用户手动修改后不再覆盖。
   useEffect(() => {
     if (interestBaseTouchedRef.current) return;
-    const usdtVal = parseFloat(computedAmount || '0');
+    const usdtVal = parseFloat(financingAmountUsdt || '0');
     if (!usdtVal || usdtVal <= 0) return;
     const nextCurrency: 'USDT' | 'CNY' = formData.amountCurrency === 'CNY' ? 'CNY' : 'USDT';
     const nextValue = nextCurrency === 'CNY' ? fromUsdtBase(usdtVal, 'CNY') : usdtVal;
@@ -351,7 +379,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ? d
       : { ...d, interestBase: next, interestBaseCurrency: nextCurrency, interestRateCurrency: nextCurrency });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [computedAmount, formData.amountCurrency, cnyRate]);
+  }, [financingAmountUsdt, formData.amountCurrency, cnyRate]);
 
   // 涨跌方向计算：用 localStorage 存储上一次价格（与 LedgerDetail 一致）
   const PREV_PRICE_CACHE_KEY = `funder_prev_prices_p095_${ledgerId}`;
@@ -421,10 +449,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
   // 担保缺口 = 订单总金额 - 担保价值
   const computedCollateralGap = useMemo(() => {
-    const orderAmt = parseFloat(computedAmount || '0');
+    const orderAmt = parseFloat(financingAmountUsdt || '0');
     if (orderAmt <= 0) return null;
     return orderAmt - computedCollateralValue;
-  }, [computedCollateralValue, computedAmount]);
+  }, [computedCollateralValue, financingAmountUsdt]);
 
   // 预览卡片实时待结利息（每秒更新）
   const [previewAccrued, setPreviewAccrued] = useState<number>(0);
@@ -754,6 +782,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setParticipants([]);
     setSelectedParticipantUserIds([]);
     setParticipantUserSearch('');
+    resetLinkedAmountFields();
+    setAmountInputValue('');
     participantsLoadedRef.current = null;
     setFormData({
       userId: 0,
@@ -815,6 +845,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setSelectedParticipantUserIds([]);
     setParticipantUserSearch('');
     setParticipantsSectionExpanded(false);
+    resetLinkedAmountFields();
     participantsLoadedRef.current = null;
     trpcUtils.ledger.funderGetOrderParticipants.invalidate({ orderId: Number(order.id), ledgerId });
     // amount_currency 为 NULL/空表示老订单，按 USDT 口径兼容（amount 本就是 USDT 价值）
@@ -964,7 +995,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       const conv = fromUsdtBase(amtU, editAmountCurrency);
       setAmountInputValue(conv !== null && !isNaN(conv) ? parseFloat(conv.toFixed(2)).toString() : String(order.amount));
     })();
-    setAmountEditing(false);
     // 编辑已有订单：若已有计息基数则视为手动值，不被融资金额自动覆盖
     interestBaseTouchedRef.current = !!(order.interest_base && parseFloat(order.interest_base) > 0);
     setEditingOrder(order);
@@ -985,7 +1015,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       return;
     }
     // 底层 amount 统一存 USDT 价值（与老订单口径一致，下游计算零改动）；amountCurrency 另存出资币种供展示折算
-    // 股票类型：融资金额直接是 CNY 值，不折算；非股票用 computedAmount（已是 USDT 价值）
+    // 股票类型：融资金额直接是 CNY 值；非股票把融资金额输入值换算为USDT基准保存。
     // 期权类型：不需要买入价格和数量，用权利金×张数作为 amount
     let finalAmount: string;
     if (formData.assetType === 'crypto_option') {
@@ -1000,9 +1030,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         return;
       }
     } else {
-      finalAmount = computedAmount || (editingOrder ? formData.originalAmount : '');
-      if (!finalAmount || parseFloat(finalAmount) <= 0) {
-        toast.error('请填写买入价格和买入数量以自动计算总金额');
+      finalAmount = financingAmountUsdt || (editingOrder ? formData.originalAmount : '');
+      const price = parseFloat(formData.buyPrice || '0');
+      const quantity = parseFloat(formData.buyQuantity || '0');
+      if (!finalAmount || parseFloat(finalAmount) <= 0 || price <= 0 || quantity <= 0) {
+        toast.error('请手动输入任意两项，确认第三项已自动推算');
         return;
       }
     }
@@ -1423,6 +1455,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   setSelectedParticipantUserIds([]);
                   setParticipantUserSearch('');
                   setParticipantsSectionExpanded(false);
+                  resetLinkedAmountFields();
                   participantsLoadedRef.current = null;
                   setShowDatePicker(false);
                 }}
@@ -1457,6 +1490,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             toast.error('\u5df2\u521b\u5efa\u8ba2\u5355\u7684\u8d44\u4ea7\u7c7b\u578b\u4e0d\u53ef\u4fee\u6539');
                             return;
                           }
+                          resetLinkedAmountFields();
                           setFormData(d => {
                           const newType = d.assetType === opt.value ? '' : opt.value;
                           // 股票类型自动锁定币种为 CNY（购买币种 + 融资币种同步）
@@ -1738,37 +1772,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
               <div className="space-y-3" style={{ display: formData.assetType === 'crypto_option' ? 'none' : undefined, opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <span className="block text-xs text-gray-400">
-                  {formData.assetType === 'stock' ? '股票类型：只需输入融资金额' : '输入任意两个，第三个自动计算 · 买入价格按融资币种计价'}
+                  {formData.assetType === 'stock' ? '股票类型：只需输入融资金额' : '最后手动输入的两项保持不变，第三项显示“≈ 自动推算”'}
                 </span>
                 {/* 融资金额 + 融资币种（同行并排） */}
                 <div className="flex items-end gap-3">
                   <div className="flex-1 min-w-0">
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">融资金额</label>
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1.5">融资金额{derivedLinkedField === 'amount' && <span className="font-normal text-orange-500">≈ 自动推算</span>}</label>
                     <input
                       type="number"
                       inputMode="decimal"
                       value={amountInputValue}
-                      onFocus={() => setAmountEditing(true)}
-                      onChange={e => { setAmountInputValue(e.target.value); }}
-                      onBlur={e => {
-                        setAmountEditing(false);
-                        const amt = parseFloat(e.target.value);
-                        if (isNaN(amt) || amt <= 0) return;
-                        setFormData(d => {
-                          const price = parseFloat(d.buyPrice);
-                          const qty = parseFloat(d.buyQuantity);
-                          // 输入框金额与买入价格使用同一融资币种，三字段反算不应先换成USDT。
-                          if (!isNaN(price) && price > 0) {
-                            const calcQty = amt / price;
-                            return { ...d, buyQuantity: INTEGER_COINS_FUNDER.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
-                          }
-                          if (!isNaN(qty) && qty > 0) {
-                            return { ...d, buyPrice: parseFloat((amt / qty).toFixed(6)).toString() };
-                          }
-                          return d;
-                        });
-                      }}
-                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      onChange={e => { setAmountInputValue(e.target.value); handleLinkedAmountInput('amount', e.target.value); }}
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 ${derivedLinkedField === 'amount' ? 'border-orange-200 bg-orange-50/50' : 'border-gray-200'}`}
                       placeholder="如：100000"
                     />
                   </div>
@@ -1779,7 +1794,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     ) : (
                       <select
                         value={formData.amountCurrency}
-                        onChange={e => setFormData(d => ({ ...d, amountCurrency: e.target.value as CoinType }))}
+                        onChange={e => { resetLinkedAmountFields(); setFormData(d => ({ ...d, amountCurrency: e.target.value as CoinType })); }}
                         className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
                         style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.amountCurrency as keyof typeof COIN_COLORS] || '#1A2340' }}
                       >
@@ -1827,24 +1842,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 )}
                 {/* 买入价格 */}
                 <div style={{ opacity: formData.assetType === 'stock' || formData.assetType === 'crypto_option' ? 0.4 : 1 }}>
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">买入价格</label>
+                  <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1.5">买入价格{derivedLinkedField === 'price' && <span className="font-normal text-orange-500">≈ 自动推算</span>}</label>
                   <input
                     type="number"
                     inputMode="decimal"
                     value={formData.buyPrice}
-                    onChange={e => setFormData(d => ({ ...d, buyPrice: e.target.value }))}
-                    onBlur={e => {
-                      const price = e.target.value;
-                      setFormData(d => {
-                        const qty = parseFloat(d.buyQuantity);
-                        const p = parseFloat(price);
-                        if (!price || isNaN(p) || p <= 0) return d;
-                        if (!isNaN(qty) && qty > 0) return d;
-                        return d;
-                      });
-                    }}
+                    onChange={e => { setFormData(d => ({ ...d, buyPrice: e.target.value })); handleLinkedAmountInput('price', e.target.value); }}
                     disabled={formData.assetType === 'stock' || formData.assetType === 'crypto_option'}
-                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:text-gray-300"
+                    className={`w-full px-3 py-2.5 rounded-xl border text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:text-gray-300 ${derivedLinkedField === 'price' ? 'border-orange-200 bg-orange-50/50' : 'border-gray-200'}`}
                     placeholder="如：95000"
                     step="any"
                   />
@@ -1857,6 +1862,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       value={formData.coin}
                       onChange={e => {
                         if (editingOrder && !editingOrder.participantInfo) return;
+                        resetLinkedAmountFields();
                         setFormData(d => ({ ...d, coin: e.target.value as CoinType }));
                       }}
                       disabled={!!(editingOrder && !editingOrder.participantInfo) || formData.assetType === 'stock' || formData.assetType === 'crypto_option'}
@@ -1869,25 +1875,15 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     </select>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">币数</label>
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1.5">币数{derivedLinkedField === 'quantity' && <span className="font-normal text-orange-500">≈ 自动推算</span>}</label>
                     <input
                       type="number"
                       inputMode="decimal"
                       value={formData.buyQuantity}
-                      onChange={e => setFormData(d => ({ ...d, buyQuantity: e.target.value }))}
-                      onBlur={e => {
-                        const qty = e.target.value;
-                        setFormData(d => {
-                          const price = parseFloat(d.buyPrice);
-                          const q = parseFloat(qty);
-                          if (!qty || isNaN(q) || q <= 0) return d;
-                          if (!isNaN(price) && price > 0) return d;
-                          return d;
-                        });
-                      }}
+                      onChange={e => { setFormData(d => ({ ...d, buyQuantity: e.target.value })); handleLinkedAmountInput('quantity', e.target.value); }}
                       disabled={formData.assetType === 'stock' || formData.assetType === 'crypto_option'}
-                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:text-gray-300"
-                    placeholder="如：1.05"
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:text-gray-300 ${derivedLinkedField === 'quantity' ? 'border-orange-200 bg-orange-50/50' : 'border-gray-200'}`}
+                      placeholder="如：1.05"
                     />
                   </div>
                 </div>
@@ -2809,7 +2805,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   asset_type: formData.assetType || null,
                   buy_price: formData.buyPrice || null,
                   buy_quantity: formData.assetType === 'stock' ? null : (formData.buyQuantity || null),
-                  amount: formData.assetType === 'stock' ? (amountInputValue || null) : (computedAmount || null),
+                  amount: formData.assetType === 'stock' ? (amountInputValue || null) : (financingAmountUsdt || null),
                   amount_currency: formData.assetType === 'stock' ? 'CNY' : (formData.amountCurrency || 'USDT'),
                   buy_date: formData.buyDate || null,
                   status: formData.status || 'active',
@@ -3185,7 +3181,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               asset_type: formData.assetType || null,
                               buy_price: formData.buyPrice || null,
                               buy_quantity: formData.assetType === 'stock' ? null : (formData.buyQuantity || null),
-                              amount: p.amount || (formData.assetType === 'stock' ? (amountInputValue || null) : (computedAmount || null)),
+                              amount: p.amount || (formData.assetType === 'stock' ? (amountInputValue || null) : (financingAmountUsdt || null)),
                               amount_currency: p.amountCurrency || formData.amountCurrency || 'USDT',
                               buy_date: formData.buyDate || null,
                               status: formData.status || 'active',
@@ -3299,7 +3295,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         userName: getUserDisplayName(m, String(m.userId || m.id)),
                         avatar: m.avatar,
                         coin: formData.coin,
-                        amount: formData.assetType === 'stock' ? amountInputValue : (computedAmount || ''),
+                        amount: formData.assetType === 'stock' ? amountInputValue : (financingAmountUsdt || ''),
                         amountCurrency: formData.amountCurrency || 'USDT',
                         interestRateAnnual: normalizeFunderAnnualRate(formData.interestRateAnnual),
                         interestBase: formData.interestBase || '',
