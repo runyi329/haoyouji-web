@@ -58,7 +58,12 @@ export default function AfRechargeManage() {
   const [showBulkClearConfirm, setShowBulkClearConfirm] = useState(false);
   // ===== 撤回相关状态 =====
   const [showRevokeDialog, setShowRevokeDialog] = useState(false);
-  const [revokeTarget, setRevokeTarget] = useState<{ type: 'order'; orderId: number; amount: number } | { type: 'history'; historyId: number; amount: number; currency: string } | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<
+    | { type: 'order'; orderId: number; amount: number }
+    | { type: 'manual'; manualId: number; amount: number; currency: string }
+    | { type: 'history'; historyId: number; amount: number; currency: string }
+    | null
+  >(null);
   // ===== 编辑备注相关状态 =====
   const [showNoteDialog, setShowNoteDialog] = useState(false);
   const [noteTarget, setNoteTarget] = useState<{ historyId?: number; manualId?: number; currentNote: string } | null>(null);
@@ -101,10 +106,13 @@ export default function AfRechargeManage() {
   // ===== 内嵌调账 Tab 数据查询 =====
   const adjUtils = mtrpc.useUtils();
   const { data: adjAllUsers = [] } = mtrpc.adminUser.list.useQuery();
-  const { data: adjHistory = [], refetch: refetchAdjHistory } = mtrpc.adminUser.walletHistory.useQuery(
-    { userId: adjSelectedUser?.id ?? 0 },
-    { enabled: !!adjSelectedUser }
+  // 与用户自己进入全局钱包看到的明细使用完全相同的合并、去重和逐笔余额口径。
+  const adjHistoryQuery = trpc.ledger.afGetMyRechargeHistory.useQuery(
+    { ...(adjSelectedUser?.id ? { viewAsUserId: Number(adjSelectedUser.id) } : {}) },
+    { enabled: !!adjSelectedUser, staleTime: 0 }
   );
+  const adjHistory = (adjHistoryQuery.data as any[]) ?? [];
+  const refetchAdjHistory = adjHistoryQuery.refetch;
   const { data: adjGlobalLog, refetch: refetchAdjGlobal } = mtrpc.adminUser.walletGlobalHistory.useQuery(
     { page: adjLogPage, pageSize: ADJ_PAGE_SIZE }
   );
@@ -194,6 +202,19 @@ export default function AfRechargeManage() {
       setRevokeTarget(null);
       ordersQuery.refetch();
       statsQuery.refetch();
+      refetchAdjHistory();
+      adjUtils.adminUser.list.invalidate();
+    },
+    onError: (e: any) => toast.error(e.message || '撤回失败'),
+  });
+  const revokeManualMutation = trpc.recharge.adminRevokeManualBalance.useMutation({
+    onSuccess: () => {
+      toast.success('撤回成功，余额已还原');
+      setShowRevokeDialog(false);
+      setRevokeTarget(null);
+      refetchAdjHistory();
+      refetchAdjGlobal();
+      adjUtils.adminUser.list.invalidate();
     },
     onError: (e: any) => toast.error(e.message || '撤回失败'),
   });
@@ -204,6 +225,7 @@ export default function AfRechargeManage() {
       setRevokeTarget(null);
       refetchAdjHistory();
       refetchAdjGlobal();
+      adjUtils.adminUser.list.invalidate();
     },
     onError: (e: any) => toast.error(e.message || '撤回失败'),
   });
@@ -1084,46 +1106,80 @@ export default function AfRechargeManage() {
             </button>
           </div>
 
-          {/* ③ 当前用户调账历史 */}
+          {/* ③ 当前用户全局钱包明细：与用户自己进入钱包时使用同一接口和口径 */}
           {adjSelectedUser && (
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-              <p className="text-[13px] font-bold text-black mb-3">③ {adjSelectedUser.name || adjSelectedUser.username} 的调账记录</p>
-              {(adjHistory as any[]).length === 0 ? (
-                <p className="text-center text-[12px] text-gray-300 py-6">暂无调账记录</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[13px] font-bold text-black">③ {adjSelectedUser.name || adjSelectedUser.username} 的全局钱包明细</p>
+                <span className="text-[11px] text-gray-400">共 {adjHistory.length} 条</span>
+              </div>
+              {adjHistoryQuery.isLoading ? (
+                <p className="text-center text-[12px] text-gray-300 py-6">明细加载中...</p>
+              ) : adjHistory.length === 0 ? (
+                <p className="text-center text-[12px] text-gray-300 py-6">暂无钱包流水</p>
               ) : (
                 <div className="space-y-2">
-                  {(adjHistory as any[]).map((r: any, i: number) => {
-                    const typeLabel: Record<string, string> = { recharge: '充值', consume: '消费', refund: '退款', reward: '奖励', withdraw: '扣款', reward_clawback: '奖励回收', commission: '佣金' };
+                  {adjHistory.map((r: any, i: number) => {
+                    const typeLabel: Record<string, string> = { recharge: '充值到账', consume: '消费', refund: '退款', reward: '奖励', withdraw: '提现', reward_clawback: '奖励回收', commission: '佣金' };
+                    const sourceType = String(r.sourceType ?? '');
+                    const sourceId = Number(String(r.id ?? '').split('_')[1] || 0);
+                    const amount = Number(r.amount ?? 0);
+                    const noteText = String(r.note ?? r.description ?? '').replace(/\[.*?\]/g, '').trim();
+                    const label = sourceType === 'recharge'
+                      ? '充值到账'
+                      : sourceType === 'manual'
+                        ? '手动调账'
+                        : sourceType === 'opening'
+                          ? '历史期初余额'
+                          : typeLabel[r.type] ?? r.type ?? '系统流水';
+                    const historyId = sourceType === 'recharge' ? Number(r.historyId || 0) : sourceType === 'balance_history' ? sourceId : 0;
+                    const canRevoke = sourceId > 0 && sourceType !== 'opening' && !noteText.includes('撤回误操作');
+                    const canEdit = sourceType === 'manual' ? sourceId > 0 : historyId > 0;
                     return (
                       <div key={r.id ?? i} className="py-2 border-b border-gray-50 last:border-0">
                         <div className="flex items-center justify-between">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 mb-0.5">
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${r.currency === 'CNY' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>{r.currency}</span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{typeLabel[r.type] ?? r.type}</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600">USDT</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{label}</span>
                             </div>
-                            <p className="text-[12px] text-gray-600 truncate">{String(r.note ?? "").replace(/\[.*?\]/g, "").trim() || "—"}</p>
-                            <p className="text-[10px] text-gray-400">{new Date(r.createdAt).toLocaleString("zh-CN")}</p>
+                            <p className="text-[12px] text-gray-600 truncate">{noteText || '—'}</p>
+                            <p className="text-[10px] text-gray-400">{new Date(r.createdAt).toLocaleString('zh-CN')}</p>
+                            {r.balanceAfter != null && (
+                              <p className="text-[10px] text-gray-400 mt-0.5">余额 {Number(r.balanceAfter).toFixed(2)} USDT</p>
+                            )}
                           </div>
                           <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
-                            <p className={`text-[14px] font-bold ${Number(r.amount) >= 0 ? "text-green-600" : "text-red-500"}`}>
-                              {Number(r.amount) >= 0 ? "+" : ""}{r.currency === "CNY" ? "¥" : ""}{Number(r.amount).toFixed(r.currency === "CNY" ? 2 : 4)}
+                            <p className={`text-[14px] font-bold ${amount >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                              {amount >= 0 ? '+' : ''}{amount.toFixed(4)}
                             </p>
-                            {!String(r.note ?? '').includes('撤回误操作') && (
+                            {canRevoke && (
                               <button
-                                onClick={() => { setRevokeTarget({ type: 'history', historyId: r.id, amount: Math.abs(Number(r.amount)), currency: r.currency }); setShowRevokeDialog(true); }}
+                                onClick={() => {
+                                  if (sourceType === 'recharge') {
+                                    setRevokeTarget({ type: 'order', orderId: sourceId, amount: Math.abs(amount) });
+                                  } else if (sourceType === 'manual') {
+                                    setRevokeTarget({ type: 'manual', manualId: sourceId, amount: Math.abs(amount), currency: 'USDT' });
+                                  } else {
+                                    setRevokeTarget({ type: 'history', historyId: sourceId, amount: Math.abs(amount), currency: 'USDT' });
+                                  }
+                                  setShowRevokeDialog(true);
+                                }}
                                 className="text-[10px] text-purple-500 border border-purple-200 px-2 py-0.5 rounded-full hover:bg-purple-50"
                               >撤回</button>
                             )}
-                            <button
-                              onClick={() => {
-                                const raw = String(r.note ?? '').replace(/\[.*?\]/g, '').trim();
-                                setNoteTarget({ historyId: r.id, currentNote: raw });
-                                setNoteLines(raw ? raw.split('\n') : ['']);
-                                setShowNoteDialog(true);
-                              }}
-                              className="text-[10px] text-blue-500 border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-50"
-                            >编辑备注</button>
+                            {canEdit && (
+                              <button
+                                onClick={() => {
+                                  setNoteTarget(sourceType === 'manual'
+                                    ? { manualId: sourceId, currentNote: noteText }
+                                    : { historyId, currentNote: noteText });
+                                  setNoteLines(noteText ? noteText.split('\n') : ['']);
+                                  setShowNoteDialog(true);
+                                }}
+                                className="text-[10px] text-blue-500 border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-50"
+                              >编辑备注</button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1502,29 +1558,33 @@ export default function AfRechargeManage() {
                 onClick={() => {
                   if (revokeTarget.type === 'order') {
                     revokeMutation.mutate({ orderId: revokeTarget.orderId, mode: 'reverse' });
+                  } else if (revokeTarget.type === 'manual') {
+                    revokeManualMutation.mutate({ manualId: revokeTarget.manualId, mode: 'reverse' });
                   } else {
                     revokeHistoryMutation.mutate({ historyId: revokeTarget.historyId, mode: 'reverse' });
                   }
                 }}
-                disabled={revokeMutation.isPending || revokeHistoryMutation.isPending}
+                disabled={revokeMutation.isPending || revokeManualMutation.isPending || revokeHistoryMutation.isPending}
                 className="w-full py-3 text-sm font-medium text-green-700 border border-green-200 rounded-xl bg-green-50 hover:bg-green-100 active:scale-[0.98] transition-all text-left px-4"
               >
                 <div className="font-semibold">✅ 写入反向记录（推荐）</div>
-                <div className="text-xs text-green-600 mt-0.5">余额扣回，保留原记录 + 新增一条退款流水，可审计</div>
+                <div className="text-xs text-green-600 mt-0.5">余额还原，保留原记录并新增一条反向流水，可审计</div>
               </button>
               <button
                 onClick={() => {
                   if (revokeTarget.type === 'order') {
                     revokeMutation.mutate({ orderId: revokeTarget.orderId, mode: 'delete' });
+                  } else if (revokeTarget.type === 'manual') {
+                    revokeManualMutation.mutate({ manualId: revokeTarget.manualId, mode: 'delete' });
                   } else {
                     revokeHistoryMutation.mutate({ historyId: revokeTarget.historyId, mode: 'delete' });
                   }
                 }}
-                disabled={revokeMutation.isPending || revokeHistoryMutation.isPending}
+                disabled={revokeMutation.isPending || revokeManualMutation.isPending || revokeHistoryMutation.isPending}
                 className="w-full py-3 text-sm font-medium text-red-700 border border-red-200 rounded-xl bg-red-50 hover:bg-red-100 active:scale-[0.98] transition-all text-left px-4"
               >
                 <div className="font-semibold">❌ 直接删除原记录</div>
-                <div className="text-xs text-red-500 mt-0.5">余额扣回，删除原流水条目，不留痕迹</div>
+                <div className="text-xs text-red-500 mt-0.5">余额按原流水金额反向还原，删除原流水条目，不留痕迹</div>
               </button>
             </div>
             <button

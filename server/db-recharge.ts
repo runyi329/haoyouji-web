@@ -1838,9 +1838,51 @@ export async function adminRevokeRecharge(
   return { success: true, userId, amount, mode };
 }
 
-// ── 撤回一条 balance_history 流水记录 ──────────────────────────────────────────
+// ── 管理员撤回统一钱包流水 ─────────────────────────────────────────────────────
 /**
- * 撤回一条 balance_history 流水记录
+ * 撤回一条 af_manual_balances 手动来源流水。
+ * @param mode 'reverse' = 写反向记录；'delete' = 直接删除
+ */
+export async function adminRevokeManualBalance(
+  adminId: number,
+  manualId: number,
+  mode: 'reverse' | 'delete'
+) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const pool = conn as any;
+
+  const [[row]] = await pool.execute(
+    `SELECT id, ledger_id, user_id, amount, note FROM af_manual_balances WHERE id = ? LIMIT 1`,
+    [manualId]
+  ) as any[];
+  if (!row) throw new Error('手动来源流水不存在');
+
+  const note = String(row.note ?? '');
+  if (note.includes('撤回误操作')) {
+    throw new Error('该记录是撤回操作本身，不可再次撤回');
+  }
+
+  const ledgerId = Number(row.ledger_id);
+  const userId = Number(row.user_id);
+  const amount = parseFloat(row.amount ?? '0');
+
+  if (mode === 'reverse') {
+    const reverseNote = `撤回误操作（关联手动流水#${manualId}，操作人ID:${adminId}）`;
+    await pool.execute(
+      `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+       VALUES (?, ?, ?, ?, NOW(), NOW())`,
+      [ledgerId, userId, -amount, reverseNote]
+    );
+  } else {
+    await pool.execute(`DELETE FROM af_manual_balances WHERE id = ? LIMIT 1`, [manualId]);
+  }
+
+  return { success: true, ledgerId, userId, amount, currency: 'USDT', mode };
+}
+
+/**
+ * 撤回一条 balance_history 流水记录。
  * @param mode 'reverse' = 写反向记录；'delete' = 直接删除
  */
 export async function adminRevokeBalanceHistory(

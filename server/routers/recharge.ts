@@ -342,6 +342,19 @@ export const rechargeRouter = router({
       return await dbRecharge.adminRevokeRecharge(ctx.user.id, input.orderId, input.mode);
     }),
 
+  // 撤回一条 af_manual_balances 手动来源流水
+  adminRevokeManualBalance: protectedProcedure
+    .input(z.object({
+      manualId: z.number(),
+      mode: z.enum(['reverse', 'delete']),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      return await dbRecharge.adminRevokeManualBalance(ctx.user.id, input.manualId, input.mode);
+    }),
+
   // 撤回一条 balance_history 流水记录
   adminRevokeBalanceHistory: protectedProcedure
     .input(z.object({

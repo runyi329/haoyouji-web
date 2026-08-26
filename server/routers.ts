@@ -13656,6 +13656,7 @@ ${klinesSummary}
         // 1. 充値订单（recharge_orders，只显示已完成的充値到账记录，不显示待支付/确认中/过期/取消）
         const rechargeRows = await db.execute(
           sql`SELECT r.id,
+                     h.id AS history_id,
                      h.amount AS actual_amount,
                      r.status,
                      COALESCE(r.completed_at, r.created_at) AS occurred_at
@@ -13677,6 +13678,7 @@ ${klinesSummary}
         };
         const rechargeList = ((rechargeRows[0] || rechargeRows) as any[]).map((r: any) => ({
           id: `r_${r.id}`,
+          historyId: Number(r.history_id),
           amount: parseFloat(r.actual_amount),
           sourceType: 'recharge' as const,
           note: statusLabelMap[r.status] || r.status,
@@ -13687,7 +13689,7 @@ ${klinesSummary}
         let manualList: any[] = [];
         try {
           const manualRows = await db.execute(
-            sql`SELECT m.id, m.amount, m.note, m.created_at,
+            sql`SELECT m.id, m.ledger_id, m.amount, m.note, m.created_at,
                        o.id AS order_id, o.created_at AS order_created_at
                 FROM af_manual_balances m
                 LEFT JOIN af_orders o ON (
@@ -13711,6 +13713,7 @@ ${klinesSummary}
             }
             return {
               id: `m_${r.id}`,
+              ledgerId: Number(r.ledger_id),
               amount: parseFloat(r.amount),
               sourceType: 'manual' as const,
               note,
