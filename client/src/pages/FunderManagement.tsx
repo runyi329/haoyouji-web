@@ -198,6 +198,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [participants, setParticipants] = useState<ParticipantForm[]>([]);
   const [participantUserSearch, setParticipantUserSearch] = useState('');
   const [selectedParticipantUserIds, setSelectedParticipantUserIds] = useState<number[]>([]);
+  const [participantsSectionExpanded, setParticipantsSectionExpanded] = useState(false);
   const saveParticipantFormMutation = trpc.ledger.funderSaveParticipantFullConfig.useMutation({
     onSuccess: (_result, vars) => {
       trpcUtils.ledger.funderGetOrderParticipants.invalidate({ orderId: vars.orderId, ledgerId: vars.ledgerId });
@@ -801,6 +802,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setInterestTagName('');
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
     setEditingOrder(null);
+    setParticipantsSectionExpanded(true);
     setShowDatePicker(false);
     setShowInterestDatePicker(false);
     setShowForm(true);
@@ -808,10 +810,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
   const participantsSectionRef = React.useRef<HTMLDivElement>(null);
   const handleOpenEdit = (order: any, scrollTo?: string) => {
-    // 每次打开都重新装载该订单的全部参与者，避免同一订单重复进入时沿用空状态或旧缓存。
+    // 已有订单的参与者总区域默认收起，避免多人配置占满编辑界面。
     setParticipants([]);
     setSelectedParticipantUserIds([]);
     setParticipantUserSearch('');
+    setParticipantsSectionExpanded(false);
     participantsLoadedRef.current = null;
     trpcUtils.ledger.funderGetOrderParticipants.invalidate({ orderId: Number(order.id), ledgerId });
     // amount_currency 为 NULL/空表示老订单，按 USDT 口径兼容（amount 本就是 USDT 价值）
@@ -1419,6 +1422,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   setParticipants([]);
                   setSelectedParticipantUserIds([]);
                   setParticipantUserSearch('');
+                  setParticipantsSectionExpanded(false);
                   participantsLoadedRef.current = null;
                   setShowDatePicker(false);
                 }}
@@ -2908,19 +2912,23 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             {/* ===== 订单参与者管理 ===== */}
             {editingOrder && !editingOrder?.participantInfo && (
               <div className="px-5 pb-4" ref={participantsSectionRef}>
-                <div className="mb-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-3">
+                <button type="button" onClick={() => setParticipantsSectionExpanded(value => !value)} className="mb-3 w-full rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-3 text-left">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
                       <Users2 className="h-4 w-4" />
                       <span>订单参与者</span>
                     </div>
-                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-indigo-600 shadow-sm">
-                      {existingParticipantsLoading && participants.length === 0 ? '读取中' : `${participants.length} 人`}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-indigo-600 shadow-sm">
+                        {existingParticipantsLoading && participants.length === 0 ? '读取中' : `${participants.length} 人`}
+                      </span>
+                      <ChevronDown className={`h-4 w-4 text-indigo-400 transition-transform ${participantsSectionExpanded ? 'rotate-180' : ''}`} />
+                    </div>
                   </div>
-                  <p className="mt-1.5 text-xs leading-5 text-indigo-500">可一次添加多人；每位参与者可单独展开设置，最后点击页面底部按钮统一保存。</p>
-                </div>
+                  <p className="mt-1.5 text-xs leading-5 text-indigo-500">{participantsSectionExpanded ? '点击参与者可展开独立设置；最后在页面底部统一保存。' : '已收起，点击查看、编辑或批量添加参与者。'}</p>
+                </button>
 
+                {participantsSectionExpanded && (<>
                 {participants.length === 0 && !existingParticipantsLoading && (
                   <div className="mb-3 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-center text-xs text-gray-400">
                     当前没有参与者，请在下方批量选择需要添加的成员。
@@ -2931,11 +2939,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 {participants.map((p, idx) => (
                   <div key={p.userId} className="mb-3 rounded-xl border border-indigo-100 bg-indigo-50 overflow-hidden">
                     {/* 参与者头部 */}
-                    <div className="flex items-center gap-2 px-3 py-2.5 cursor-pointer" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, expanded: !pp.expanded } : pp))}>
+                    <div className="flex items-center gap-2 px-3 py-2.5 cursor-pointer" onClick={() => setParticipants(prev => prev.map((pp, i) => ({ ...pp, expanded: i === idx ? !pp.expanded : false })))}>
                       {p.avatar ? <img src={p.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" /> : <div className="w-7 h-7 rounded-full bg-indigo-200 flex items-center justify-center text-xs font-bold text-indigo-700 shrink-0">{p.userName.slice(0,1).toUpperCase()}</div>}
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-gray-800 truncate">{p.userName}</div>
-                        <div className="text-xs text-gray-400">参与者 {idx + 1}</div>
+                        <div className="truncate text-xs text-gray-400">{p.amount ? `${p.amount} ${p.amountCurrency === 'CNY' ? '元' : p.amountCurrency}` : `参与者 ${idx + 1}`}{p.interestRateAnnual ? ` · 年化 ${normalizeFunderAnnualRate(p.interestRateAnnual)}%` : ''}</div>
                       </div>
                       <button type="button" onClick={e => { e.stopPropagation(); setParticipants(prev => prev.filter((_, i) => i !== idx)); }} className="p-1 rounded-lg text-red-400 hover:bg-red-50">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -3304,7 +3312,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         expanded: index === 0,
                       }));
                     if (newParticipants.length === 0) return;
-                    setParticipants(prev => [...prev, ...newParticipants]);
+                    setParticipants(prev => [...prev.map(item => ({ ...item, expanded: false })), ...newParticipants]);
+                    setParticipantsSectionExpanded(true);
                     setSelectedParticipantUserIds([]);
                     setParticipantUserSearch('');
                     toast.success(`已加入 ${newParticipants.length} 位参与者，请在底部统一保存`);
@@ -3376,6 +3385,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     </div>
                   );
                 })()}
+                </>)}
               </div>
             )}
 
