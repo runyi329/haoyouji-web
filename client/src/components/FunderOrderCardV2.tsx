@@ -393,6 +393,22 @@ function getDisplayMode(order: any, key: string, fallback = 'U'): string {
   }
 }
 
+function getExactFinancingDisplayAmount(order: any, amountCurrency: string, calculatedAmount: number): number {
+  try {
+    const raw = order?.display_config;
+    const parsed = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
+    const savedAmount = Number(parsed?.financingInputAmount);
+    const savedCurrencyRaw = String(parsed?.financingInputCurrency || '').toUpperCase();
+    const savedCurrency = savedCurrencyRaw === 'U' ? 'USDT' : savedCurrencyRaw === 'RMB' ? 'CNY' : savedCurrencyRaw;
+    if (savedAmount > 0 && savedCurrency === amountCurrency) return savedAmount;
+  } catch {}
+  const interestBase = Number(order?.interest_base || 0);
+  const interestCurrencyRaw = String(order?.interest_base_currency || '').toUpperCase();
+  const interestCurrency = interestCurrencyRaw === 'U' ? 'USDT' : interestCurrencyRaw === 'RMB' ? 'CNY' : interestCurrencyRaw;
+  if (interestBase > 0 && interestCurrency === amountCurrency && Math.abs(interestBase - calculatedAmount) <= 0.05) return interestBase;
+  return calculatedAmount;
+}
+
 function getRateStr(order: any): string {
   const r = String(order.interest_rate_annual ?? '');
   if (r.startsWith('-')) return r;
@@ -1141,11 +1157,12 @@ export function FunderOrderCardV2Silver({
     : amountCurrency === 'USDT'
       ? buyPrice
       : (amountCurrencyPrice && amountCurrencyPrice > 0 ? buyPrice * amountCurrencyPrice : buyPrice);
-  const financingDisplayAmount = amountCurrency === 'CNY'
+  const calculatedFinancingDisplayAmount = amountCurrency === 'CNY'
     ? storedAmountUsdt * cnyRate
     : amountCurrency === 'USDT'
       ? storedAmountUsdt
       : (amountCurrencyPrice && amountCurrencyPrice > 0 ? storedAmountUsdt / amountCurrencyPrice : storedAmountUsdt);
+  const financingDisplayAmount = getExactFinancingDisplayAmount(order, amountCurrency, calculatedFinancingDisplayAmount);
   const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'U' : amountCurrency;
   const displayFinancingAsPrimary = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true || amountCurrency === 'CNY';
 
@@ -2715,11 +2732,12 @@ export function FunderLenderCardSilver({
     : amountCurrency === 'USDT'
       ? buyPrice
       : (amountCurrencyPrice && amountCurrencyPrice > 0 ? buyPrice * amountCurrencyPrice : buyPrice);
-  const financingDisplayAmount = amountCurrency === 'CNY'
+  const calculatedFinancingDisplayAmount = amountCurrency === 'CNY'
     ? storedAmountUsdt * cnyRate
     : amountCurrency === 'USDT'
       ? storedAmountUsdt
       : (amountCurrencyPrice && amountCurrencyPrice > 0 ? storedAmountUsdt / amountCurrencyPrice : storedAmountUsdt);
+  const financingDisplayAmount = getExactFinancingDisplayAmount(order, amountCurrency, calculatedFinancingDisplayAmount);
   const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'U' : amountCurrency;
 
   const currentValue = liveP !== null && qty > 0 ? liveP * qty : null;

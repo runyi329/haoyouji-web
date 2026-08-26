@@ -847,11 +847,27 @@ export function FunderOrderCard({
   const financingAmountUsdt = isStockOrder
     ? (storedAmount > 0 ? storedAmount / cnyRate : 0)
     : totalU;
-  const financingDisplayAmount = amountCurrency === 'USDT'
+  const financingDisplayConfig: Record<string, boolean | string | number> | null = (() => {
+    try {
+      const raw = order.display_config;
+      if (!raw) return null;
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch { return null; }
+  })();
+  const calculatedFinancingDisplayAmount = amountCurrency === 'USDT'
     ? financingAmountUsdt
     : amountCurrency === 'CNY'
       ? financingAmountUsdt * cnyRate
       : (amountCurrencyPrice && amountCurrencyPrice > 0 ? financingAmountUsdt / amountCurrencyPrice : financingAmountUsdt);
+  const savedFinancingInputAmount = Number(financingDisplayConfig?.financingInputAmount);
+  const savedFinancingInputCurrency = String(financingDisplayConfig?.financingInputCurrency || '').toUpperCase();
+  const legacyInterestBase = Number(order.interest_base || 0);
+  const legacyInterestBaseCurrency = String(order.interest_base_currency || '').toUpperCase();
+  const financingDisplayAmount = savedFinancingInputAmount > 0 && savedFinancingInputCurrency === amountCurrency
+    ? savedFinancingInputAmount
+    : legacyInterestBase > 0 && legacyInterestBaseCurrency === amountCurrency && Math.abs(legacyInterestBase - calculatedFinancingDisplayAmount) <= 0.05
+      ? legacyInterestBase
+      : calculatedFinancingDisplayAmount;
   const financingDisplayUnit = amountCurrency === 'USDT' ? 'u' : amountCurrency === 'CNY' ? '元' : amountCurrency;
   const principalLentOut = order.principal_lent_out === 1 || order.principal_lent_out === true;
   const displayFinancingAsPrimary = principalLentOut || amountCurrency === 'CNY';
@@ -895,13 +911,7 @@ export function FunderOrderCard({
   })();
 
   // 读取 display_config（与 LedgerDetail show() 函数一致：默认全部显示，除非明确设为 false）
-  const dc: Record<string, boolean | string | number> | null = (() => {
-    try {
-      const raw = order.display_config;
-      if (!raw) return null;
-      return typeof raw === 'string' ? JSON.parse(raw) : raw;
-    } catch { return null; }
-  })();
+  const dc = financingDisplayConfig;
   const show = (key: string) => dc ? (dc[key] !== false) : true;
   const [headerTagsExpanded, setHeaderTagsExpanded] = useState(false);
   const headerMember = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));

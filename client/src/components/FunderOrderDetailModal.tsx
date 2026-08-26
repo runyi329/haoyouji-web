@@ -192,7 +192,24 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
     : amountCurrency === 'CNY'
       ? (qty > 0 && price > 0 ? qty * price / cnyRate : 0)
       : (qty > 0 && price > 0 ? qty * price : 0);
-  const financingDisplayAmount = amountCurrency === 'CNY' ? totalU * cnyRate : totalU;
+  const calculatedFinancingDisplayAmount = amountCurrency === 'CNY' ? totalU * cnyRate : totalU;
+  const financingDisplayConfig = (() => {
+    try {
+      const raw = order.display_config;
+      return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
+    } catch { return {}; }
+  })();
+  const savedFinancingInputAmount = Number(financingDisplayConfig?.financingInputAmount);
+  const savedCurrencyRaw = String(financingDisplayConfig?.financingInputCurrency || '').toUpperCase();
+  const savedFinancingInputCurrency = savedCurrencyRaw === 'U' ? 'USDT' : savedCurrencyRaw === 'RMB' ? 'CNY' : savedCurrencyRaw;
+  const legacyInterestBase = Number(order.interest_base || 0);
+  const legacyInterestCurrencyRaw = String(order.interest_base_currency || '').toUpperCase();
+  const legacyInterestCurrency = legacyInterestCurrencyRaw === 'U' ? 'USDT' : legacyInterestCurrencyRaw === 'RMB' ? 'CNY' : legacyInterestCurrencyRaw;
+  const financingDisplayAmount = savedFinancingInputAmount > 0 && savedFinancingInputCurrency === amountCurrency
+    ? savedFinancingInputAmount
+    : legacyInterestBase > 0 && legacyInterestCurrency === amountCurrency && Math.abs(legacyInterestBase - calculatedFinancingDisplayAmount) <= 0.05
+      ? legacyInterestBase
+      : calculatedFinancingDisplayAmount;
   const baseCurrency = String(order.interest_base_currency || 'USDT').toUpperCase();
   const rateCurrency = String(order.interest_rate_currency || 'USDT').toUpperCase();
   const baseUnit = baseCurrency === 'CNY' ? '元' : baseCurrency === 'USDT' ? 'USDT' : baseCurrency;
