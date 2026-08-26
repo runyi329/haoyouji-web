@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-26
+// 生成时间：2026-08-27
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9006,5 +9006,20 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-08-25T01:29:51Z", type: "fix", cleanMessage: "force refresh updated PWA clients" },
     { date: "2026-08-25T01:56:57Z", type: "fix", cleanMessage: "unify ledger back navigation sources" },
     { date: "2026-08-25T13:31:05Z", type: "fix", cleanMessage: "show financing currency on lent asset cards" },
+  ],
+  "2026-08-26": [
+    { date: "2026-08-25T18:18:47Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-26T03:47:42Z", type: "feat", cleanMessage: "add recharge shortcut to funder management" },
+    { date: "2026-08-26T04:21:22Z", type: "fix", cleanMessage: "move recharge shortcut to visible finance header" },
+    { date: "2026-08-26T04:56:58Z", type: "feat", cleanMessage: "unify admin user wallet history" },
+    { date: "2026-08-26T06:01:13Z", type: "feat", cleanMessage: "switch wallet logs with tabs" },
+    { date: "2026-08-26T09:25:31Z", type: "fix", cleanMessage: "support decimal annual rates" },
+    { date: "2026-08-26T10:16:57Z", type: "fix", cleanMessage: "save participants on order edit" },
+    { date: "2026-08-26T10:34:45Z", type: "feat", cleanMessage: "improve participant batch editing" },
+    { date: "2026-08-26T13:25:17Z", type: "fix", cleanMessage: "correct CNY financing currency calculations" },
+    { date: "2026-08-26T13:58:48Z", type: "other", cleanMessage: "ui: collapse participant editor by default" },
+    { date: "2026-08-26T14:25:29Z", type: "fix", cleanMessage: "make financing fields derive the remaining value" },
+    { date: "2026-08-26T14:48:52Z", type: "fix", cleanMessage: "preserve exact financing input amount" },
+    { date: "2026-08-26T14:59:48Z", type: "feat", cleanMessage: "add settled order filter" },
   ],
 };
