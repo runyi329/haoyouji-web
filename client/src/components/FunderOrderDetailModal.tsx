@@ -178,7 +178,25 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
   const coinColor = COIN_COLORS[order.coin] || '#6B7280';
   const qty = parseFloat(order.buy_quantity || '0');
   const price = parseFloat(order.buy_price || '0');
-  const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
+  const { data: cnyRateData } = trpc.exchange.getRate.useQuery(
+    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
+    { staleTime: 3000 }
+  );
+  const cnyRate = parseFloat((cnyRateData as any)?.money ?? '6.8') || 6.8;
+  const rawAmountCurrency = String(order.amount_currency || (order.asset_type === 'stock' ? 'CNY' : 'USDT')).toUpperCase();
+  const amountCurrency = rawAmountCurrency === 'U' ? 'USDT' : rawAmountCurrency;
+  const amountUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'USDT' : amountCurrency;
+  const storedAmountUsdt = order.asset_type === 'stock' ? parseFloat(order.amount || '0') / cnyRate : parseFloat(order.amount || '0');
+  const totalU = storedAmountUsdt > 0
+    ? storedAmountUsdt
+    : amountCurrency === 'CNY'
+      ? (qty > 0 && price > 0 ? qty * price / cnyRate : 0)
+      : (qty > 0 && price > 0 ? qty * price : 0);
+  const financingDisplayAmount = amountCurrency === 'CNY' ? totalU * cnyRate : totalU;
+  const baseCurrency = String(order.interest_base_currency || 'USDT').toUpperCase();
+  const rateCurrency = String(order.interest_rate_currency || 'USDT').toUpperCase();
+  const baseUnit = baseCurrency === 'CNY' ? '元' : baseCurrency === 'USDT' ? 'USDT' : baseCurrency;
+  const interestUnit = rateCurrency === 'CNY' ? '元' : rateCurrency === 'USDT' ? 'USDT' : rateCurrency;
 
   const hasInterest = order.interest_base && order.interest_rate_annual && order.interest_start_date;
   const accrued = useAccruedInterest(
@@ -186,11 +204,15 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
     hasInterest ? order.interest_rate_annual : null,
     hasInterest ? order.interest_start_date : null
   );
-
-  // 每秒利息
-  const perSecond = hasInterest
-    ? (parseFloat(order.interest_base) * parseFloat(order.interest_rate_annual) / 100) / (365 * 24 * 3600)
-    : 0;
+  const displayAccrued = baseCurrency === rateCurrency
+    ? accrued
+    : baseCurrency === 'CNY' && rateCurrency === 'USDT'
+      ? accrued / cnyRate
+      : baseCurrency === 'USDT' && rateCurrency === 'CNY'
+        ? accrued * cnyRate
+        : accrued;
+  const alternateAccrued = rateCurrency === 'CNY' ? displayAccrued / cnyRate : displayAccrued * cnyRate;
+  const alternateInterestUnit = rateCurrency === 'CNY' ? 'USDT' : '元';
 
   return (
     <div
@@ -221,21 +243,21 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
             className="rounded-2xl p-4"
             style={{ background: `linear-gradient(135deg, ${coinColor} 0%, ${coinColor}BB 100%)` }}
           >
-            <div className="text-xs text-white/70 mb-1">持仓数量</div>
+            <div className="text-xs text-white/70 mb-1">{amountCurrency === 'CNY' ? '融资金额' : '持仓数量'}</div>
             <div className="flex items-baseline gap-2 mb-1">
               <span className="text-4xl font-bold text-white tabular-nums">
-                {qty > 0 ? qty : '—'}
+                {amountCurrency === 'CNY' ? financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 }) : (qty > 0 ? qty : '—')}
               </span>
-              <span className="text-xl font-semibold text-white/80">{order.coin}</span>
+              <span className="text-xl font-semibold text-white/80">{amountCurrency === 'CNY' ? '元' : order.coin}</span>
             </div>
             {price > 0 && (
               <div className="text-sm text-white/70 mb-2">
-                买入价 {price.toLocaleString()} USDT
+                买入价 {price.toLocaleString()} {amountUnit}
               </div>
             )}
             <div className="flex items-center justify-between">
               <div className="text-sm text-white/60">
-                折算 {totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT
+                {amountCurrency === 'CNY' ? `折算 ${totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT` : `买入价值 ${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${amountUnit}`}
               </div>
               <span className="text-xs px-2 py-0.5 rounded-full bg-white/20 text-white">
                 {order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : '已取消'}
@@ -255,12 +277,12 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
                   className="text-3xl font-bold tabular-nums"
                   style={{ color: '#1A56DB', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                 >
-                  {accrued.toFixed(2)}
+                  {displayAccrued.toFixed(2)}
                 </span>
-                <span className="text-base font-medium text-blue-400">元</span>
+                <span className="text-base font-medium text-blue-400">{interestUnit}</span>
               </div>
               <div className="text-xs text-gray-400 mb-0.5">
-                ≈{(accrued / 7.15).toFixed(4)} USDT
+                ≈{alternateAccrued.toFixed(rateCurrency === 'CNY' ? 4 : 2)} {alternateInterestUnit}
               </div>
               <div className="text-xs text-gray-400">
                 基数 {parseFloat(order.interest_base).toLocaleString()} × {normalizeFunderAnnualRate(order.interest_rate_annual)}% / 年
@@ -279,7 +301,7 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
             <div className="bg-gray-50 rounded-2xl overflow-hidden">
               {[
                 { label: '币种', value: order.coin },
-                { label: '买入价格', value: price > 0 ? `${price.toLocaleString()} USDT` : null },
+                { label: '买入价格', value: price > 0 ? `${price.toLocaleString()} ${amountUnit}` : null },
                 { label: '买入数量', value: qty > 0 ? `${qty} ${order.coin}` : null },
                 { label: '开仓时间', value: order.buy_date || null },
                 { label: '登记时间', value: order.created_at ? (typeof order.created_at === 'string' ? order.created_at.replace('T', ' ').slice(0, 16) : new Date(order.created_at).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })) : null },
@@ -304,7 +326,7 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
               <div className="bg-gray-50 rounded-2xl overflow-hidden">
                 {[
                   { label: '约定年化利息', value: order.interest_rate_annual ? `${normalizeFunderAnnualRate(order.interest_rate_annual)}% / 年` : null },
-                  { label: '计息基数', value: order.interest_base ? `${parseFloat(order.interest_base).toLocaleString()}` : null },
+                  { label: '计息基数', value: order.interest_base ? `${parseFloat(order.interest_base).toLocaleString()} ${baseUnit}` : null },
                   { label: '开始日期', value: order.interest_start_date || null },
                   { label: '支付方式', value: order.interest_payment_type ? PAYMENT_TYPE_MAP[order.interest_payment_type] || order.interest_payment_type : null },
                 ].filter(item => item.value !== null).map((item, idx, arr) => (

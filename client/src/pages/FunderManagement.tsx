@@ -309,18 +309,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     return usdtVal / p;
   };
 
-  // 自动折算总金额（买入价×币数 = USDT 价值）
+  // 自动折算总金额：买入价格以“融资币种/枚”计价，price × qty 先得到融资币种金额，再统一换算为 USDT 基准保存。
   const computedAmount = useMemo(() => {
     const price = parseFloat(formData.buyPrice);
     const qty = parseFloat(formData.buyQuantity);
     if (!isNaN(price) && !isNaN(qty) && price > 0 && qty > 0) {
-      const rawAmt = price * qty;
-      // 购买币种为 CNY 时，价格单位是 CNY/枚，需要按汇率转换为 USDT 基准
-      const usdtBase = formData.coin === 'CNY' ? rawAmt / cnyRate : rawAmt;
-      return usdtBase.toFixed(2);
+      const quotedAmount = price * qty;
+      const usdtBase = toUsdtBase(quotedAmount, formData.amountCurrency);
+      return usdtBase !== null ? usdtBase.toFixed(2) : '';
     }
     return '';
-  }, [formData.buyPrice, formData.buyQuantity, formData.coin, cnyRate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.buyPrice, formData.buyQuantity, formData.amountCurrency, cnyRate, JSON.stringify(formLivePrices)]);
   // 当 computedAmount 变化且用户未在编辑时，同步到输入框
   // computedAmount = 买入价×币数 = USDT 价值；融资金额输入框按出资币种(amountCurrency)折算显示
   useEffect(() => {
@@ -336,19 +336,21 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [computedAmount, amountEditing, formData.assetType, formData.amountCurrency, cnyRate, JSON.stringify(formLivePrices)]);
 
-  // 便捷操作：当融资金额（出资币种为 U/USDT）算出后，默认把计息基数带入该值
-  // 仅在用户未手动改过计息基数时生效；用户手动修改后不再覆盖
+  // 便捷操作：融资币种为 CNY 时计息基数默认按人民币带入；其余数字币融资仍按 USDT 基准带入。
+  // 仅在用户未手动改过计息基数时生效；用户手动修改后不再覆盖。
   useEffect(() => {
     if (interestBaseTouchedRef.current) return;
-    if (formData.amountCurrency !== 'USDT') return;
     const usdtVal = parseFloat(computedAmount || '0');
     if (!usdtVal || usdtVal <= 0) return;
-    const next = parseFloat(usdtVal.toFixed(2)).toString();
-    setFormData(d => (d.interestBase === next && d.interestBaseCurrency === 'USDT')
+    const nextCurrency: 'USDT' | 'CNY' = formData.amountCurrency === 'CNY' ? 'CNY' : 'USDT';
+    const nextValue = nextCurrency === 'CNY' ? fromUsdtBase(usdtVal, 'CNY') : usdtVal;
+    if (nextValue === null || !isFinite(nextValue)) return;
+    const next = parseFloat(nextValue.toFixed(2)).toString();
+    setFormData(d => (d.interestBase === next && d.interestBaseCurrency === nextCurrency && d.interestRateCurrency === nextCurrency)
       ? d
-      : { ...d, interestBase: next, interestBaseCurrency: 'USDT' });
+      : { ...d, interestBase: next, interestBaseCurrency: nextCurrency, interestRateCurrency: nextCurrency });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [computedAmount, formData.amountCurrency]);
+  }, [computedAmount, formData.amountCurrency, cnyRate]);
 
   // 涨跌方向计算：用 localStorage 存储上一次价格（与 LedgerDetail 一致）
   const PREV_PRICE_CACHE_KEY = `funder_prev_prices_p095_${ledgerId}`;
@@ -1732,7 +1734,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
               <div className="space-y-3" style={{ display: formData.assetType === 'crypto_option' ? 'none' : undefined, opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <span className="block text-xs text-gray-400">
-                  {formData.assetType === 'stock' ? '股票类型：只需输入融资金额' : '输入任意两个，第三个自动计算 · 融资金额 = 买入价格 × 币数'}
+                  {formData.assetType === 'stock' ? '股票类型：只需输入融资金额' : '输入任意两个，第三个自动计算 · 买入价格按融资币种计价'}
                 </span>
                 {/* 融资金额 + 融资币种（同行并排） */}
                 <div className="flex items-end gap-3">
@@ -1748,17 +1750,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         setAmountEditing(false);
                         const amt = parseFloat(e.target.value);
                         if (isNaN(amt) || amt <= 0) return;
-                        const usdtVal = toUsdtBase(amt, formData.amountCurrency);
-                        if (usdtVal === null) return;
                         setFormData(d => {
                           const price = parseFloat(d.buyPrice);
                           const qty = parseFloat(d.buyQuantity);
+                          // 输入框金额与买入价格使用同一融资币种，三字段反算不应先换成USDT。
                           if (!isNaN(price) && price > 0) {
-                            const calcQty = usdtVal / price;
+                            const calcQty = amt / price;
                             return { ...d, buyQuantity: INTEGER_COINS_FUNDER.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
                           }
                           if (!isNaN(qty) && qty > 0) {
-                            return { ...d, buyPrice: (usdtVal / qty).toFixed(2) };
+                            return { ...d, buyPrice: parseFloat((amt / qty).toFixed(6)).toString() };
                           }
                           return d;
                         });
@@ -1779,7 +1780,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.amountCurrency as keyof typeof COIN_COLORS] || '#1A2340' }}
                       >
                         {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
-                          <option key={c} value={c}>{c}</option>
+                          <option key={c} value={c}>{c === 'CNY' ? '人民币 CNY' : c}</option>
                         ))}
                       </select>
                     )}
@@ -2804,7 +2805,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   asset_type: formData.assetType || null,
                   buy_price: formData.buyPrice || null,
                   buy_quantity: formData.assetType === 'stock' ? null : (formData.buyQuantity || null),
-                  amount: formData.assetType === 'stock' ? (amountInputValue || null) : null,
+                  amount: formData.assetType === 'stock' ? (amountInputValue || null) : (computedAmount || null),
+                  amount_currency: formData.assetType === 'stock' ? 'CNY' : (formData.amountCurrency || 'USDT'),
                   buy_date: formData.buyDate || null,
                   status: formData.status || 'active',
                   order_fill_status: formData.orderFillStatus || 'filled',

@@ -1132,9 +1132,25 @@ export function FunderOrderCardV2Silver({
   const qty = _isOptCard && _optInfo?.buyQty ? parseFloat(_optInfo.buyQty) : parseFloat(order.buy_quantity || '0');
   const buyPrice = parseFloat(order.buy_price || '0');
   const liveP = livePrices[coin] ?? null;
+  const rawAmountCurrency = String((order as any).amount_currency || 'USDT').toUpperCase();
+  const amountCurrency = rawAmountCurrency === 'U' ? 'USDT' : rawAmountCurrency;
+  const storedAmountUsdt = parseFloat(order.amount || '0');
+  const amountCurrencyPrice = livePrices[amountCurrency as CoinType];
+  const buyPriceUsdt = amountCurrency === 'CNY'
+    ? buyPrice / cnyRate
+    : amountCurrency === 'USDT'
+      ? buyPrice
+      : (amountCurrencyPrice && amountCurrencyPrice > 0 ? buyPrice * amountCurrencyPrice : buyPrice);
+  const financingDisplayAmount = amountCurrency === 'CNY'
+    ? storedAmountUsdt * cnyRate
+    : amountCurrency === 'USDT'
+      ? storedAmountUsdt
+      : (amountCurrencyPrice && amountCurrencyPrice > 0 ? storedAmountUsdt / amountCurrencyPrice : storedAmountUsdt);
+  const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'U' : amountCurrency;
+  const displayFinancingAsPrimary = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true || amountCurrency === 'CNY';
 
   const currentValue = liveP !== null && qty > 0 ? liveP * qty : null;
-  const buyValue = qty > 0 && buyPrice > 0 ? qty * buyPrice : parseFloat(order.amount || '0');
+  const buyValue = storedAmountUsdt > 0 ? storedAmountUsdt : (qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : 0);
   const _isShortSl = (order as any).trade_direction === 'short';
   const floatPnl = currentValue !== null && buyValue > 0
     ? (_isShortSl ? buyValue - currentValue : currentValue - buyValue)
@@ -1142,7 +1158,7 @@ export function FunderOrderCardV2Silver({
   const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const dir = priceDirection?.[coin] ?? 'same';
   const pnlColor = floatPnl === null ? (_isOptCard ? OPT_TEXT_SEC : SL_TEXT_SEC) : floatPnl >= 0 ? SL_GREEN : SL_RED;
-  const priceDiff = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
+  const priceDiff = liveP !== null && buyPriceUsdt > 0 ? liveP - buyPriceUsdt : null;
   const priceColor = priceDiff === null ? (_isOptCard ? OPT_TEXT_PRI : SL_TEXT_PRI) : priceDiff >= 0 ? SL_GREEN : SL_RED;
 
   const rateStr = getRateStr(order);
@@ -1545,10 +1561,10 @@ export function FunderOrderCardV2Silver({
               </div>
             </>
           ) : (
-            // 数字币：显示持有数量
+            // 数字币：人民币融资时优先显示融资金额，其余保持显示持有数量。
             <>
               <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-                <span>{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? `借出资产 (${coin})` : `持有资产 (${coin})`}</span>
+                <span>{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? `借出资产 (${amountCurrency})` : `持有资产 (${displayFinancingAsPrimary ? amountCurrency : coin})`}</span>
                 {isParticipant && (
                   <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.7)' }}>参与</span>
                 )}
@@ -1563,8 +1579,11 @@ export function FunderOrderCardV2Silver({
               </div>
               <div style={{ lineHeight: 1 }}>
                 <span style={{ fontSize: '1.6rem', fontWeight: 700, color: TXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: TXT_SHADOW_LG }}>
-                  {fmt(qty, 2)}
+                  {displayFinancingAsPrimary ? fmt(financingDisplayAmount, 2) : fmt(qty, 2)}
                 </span>
+                {displayFinancingAsPrimary && storedAmountUsdt > 0 && amountCurrency === 'CNY' && (
+                  <div className="mt-1 text-[10px]" style={{ color: TXT_SEC }}>≈{fmt(storedAmountUsdt, 2)} U</div>
+                )}
               </div>
             </>
           )}
@@ -1608,7 +1627,7 @@ export function FunderOrderCardV2Silver({
 
             {/* 开仓价/权利金单价：靠右对齐 */}
             <div className="text-right" style={{ flex: 1 }}>
-              <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>{isOptionCard ? '权利金 (U)' : '开仓价 (U)'}</div>
+              <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>{isOptionCard ? '权利金 (U)' : `开仓价 (${buyQuoteUnit})`}</div>
               <div style={{ lineHeight: 1 }}>
                 <span className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
                   {isOptionCard
@@ -2687,16 +2706,31 @@ export function FunderLenderCardSilver({
   const qty = _lnIsOpt && _lnOptInfo?.buyQty ? parseFloat(_lnOptInfo.buyQty) : parseFloat(order.buy_quantity || '0');
   const buyPrice = parseFloat(order.buy_price || '0');
   const liveP = livePrices[coin] ?? null;
+  const rawAmountCurrency = String((order as any).amount_currency || 'USDT').toUpperCase();
+  const amountCurrency = rawAmountCurrency === 'U' ? 'USDT' : rawAmountCurrency;
+  const storedAmountUsdt = parseFloat(order.amount || '0');
+  const amountCurrencyPrice = livePrices[amountCurrency as CoinType];
+  const buyPriceUsdt = amountCurrency === 'CNY'
+    ? buyPrice / cnyRate
+    : amountCurrency === 'USDT'
+      ? buyPrice
+      : (amountCurrencyPrice && amountCurrencyPrice > 0 ? buyPrice * amountCurrencyPrice : buyPrice);
+  const financingDisplayAmount = amountCurrency === 'CNY'
+    ? storedAmountUsdt * cnyRate
+    : amountCurrency === 'USDT'
+      ? storedAmountUsdt
+      : (amountCurrencyPrice && amountCurrencyPrice > 0 ? storedAmountUsdt / amountCurrencyPrice : storedAmountUsdt);
+  const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'U' : amountCurrency;
 
   const currentValue = liveP !== null && qty > 0 ? liveP * qty : null;
-  const buyValue = qty > 0 && buyPrice > 0 ? qty * buyPrice : parseFloat(order.amount || '0');
+  const buyValue = storedAmountUsdt > 0 ? storedAmountUsdt : (qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : 0);
   const floatPnl = currentValue !== null && buyValue > 0 ? currentValue - buyValue : null;
   const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const dir = priceDirection?.[coin] ?? 'same';
   const isStock = order.asset_type === 'stock';
   const isOption = order.asset_type === 'crypto_option';
   const pnlColor = floatPnl === null ? (isOption ? OPT_TEXT_SEC : SL_TEXT_SEC) : floatPnl >= 0 ? SL_GREEN : SL_RED;
-  const priceDiff = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
+  const priceDiff = liveP !== null && buyPriceUsdt > 0 ? liveP - buyPriceUsdt : null;
   const priceColor = priceDiff === null ? (isOption ? OPT_TEXT_PRI : SL_TEXT_PRI) : priceDiff >= 0 ? SL_GREEN : SL_RED;
 
   const _isParticipantLn = (order as any).order_perspective === 'other';
@@ -3213,10 +3247,16 @@ export function FunderLenderCardSilver({
             {/* ── 担保物块 ── */}
             <div style={{ borderTop: `1px solid ${DIVIDER}`, marginTop: 6, paddingTop: 6 }}>
               {/* 持有资产 */}
-              {qty > 0 && (
-                <div className="flex justify-between mb-1">
+              {(qty > 0 || storedAmountUsdt > 0) && (
+                <div className="flex justify-between mb-1 gap-3">
                   <span style={{ color: TXT_SEC }}>持有资产</span>
-                  <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{buyPrice > 0 ? `（开仓价 ${fmt(buyPrice, 0)} U） ${fmtQty(qty)} ${coin}` : `${fmtQty(qty)} ${coin}`}</span>
+                  <span className="text-right" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+                    {amountCurrency === 'CNY' && storedAmountUsdt > 0
+                      ? `${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元（≈${storedAmountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} U）`
+                      : buyPrice > 0
+                        ? `（开仓价 ${fmt(buyPrice, 2)} ${buyQuoteUnit}） ${fmtQty(qty)} ${coin}`
+                        : `${fmtQty(qty)} ${coin}`}
+                  </span>
                 </div>
               )}
 
