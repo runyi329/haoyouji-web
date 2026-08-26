@@ -1089,7 +1089,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         },
       });
     } else if (editingOrder) {
-      updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...(formData.userId > 0 ? { userId: formData.userId } : {}), ...payload });
+      // 普通编辑不传 status；结清/恢复只允许走独立状态操作，避免普通保存被误判为状态联动并跳过参与者保存。
+      updateMutation.mutate({ id: editingOrder.id, ...(formData.userId > 0 ? { userId: formData.userId } : {}), ...payload });
     } else {
       // 根据所选用户在账本中的角色自动判断归属：
       // 资方/管理员(owner/admin) -> 左侧资方订单；普通成员(member) -> 右侧借方订单
