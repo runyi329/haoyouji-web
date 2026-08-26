@@ -252,8 +252,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
   // 员工名字筛选
   const [employeeNameFilter, setEmployeeNameFilter] = useState('');
-  // 资产类型筛选：'' = 全部, 'stock' = 股票, 'crypto' = 数字币
-  const [assetTypeFilter, setAssetTypeFilter] = useState<'' | 'stock' | 'crypto' | 'crypto_option'>();
+  // 类型筛选：资产类型或已结清状态；左侧用户筛选由订单查询接口先行处理。
+  const [assetTypeFilter, setAssetTypeFilter] = useState<'' | 'stock' | 'crypto' | 'crypto_option' | 'settled'>();
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [confirmSettleId, setConfirmSettleId] = useState<number | null>(null);
   // 弹窗状态提升：存储当前打开弹窗的 orderId，null 表示关闭（防止子组件因数据刷新重渲染导致弹窗自动关闭）
@@ -1329,10 +1329,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               </div>
             )}
           </div>
-          {/* 资产类型筛选框：全部 / 股票 / 数字币 */}
+          {/* 类型筛选框：全部 / 股票 / 数字币 / 期权 / 已结清 */}
           <select
             value={assetTypeFilter}
-            onChange={e => setAssetTypeFilter(e.target.value as '' | 'stock' | 'crypto' | 'crypto_option')}
+            onChange={e => setAssetTypeFilter(e.target.value as '' | 'stock' | 'crypto' | 'crypto_option' | 'settled')}
             className="shrink-0 px-2.5 py-2 rounded-full text-sm font-medium bg-white border border-gray-200 shadow-sm outline-none"
             style={{ color: assetTypeFilter ? '#1A56DB' : '#6B7280', minWidth: 72 }}
           >
@@ -1340,6 +1340,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             <option value="stock">股票</option>
             <option value="crypto">数字币</option>
             <option value="crypto_option">期权</option>
+            <option value="settled">已结清</option>
           </select>
           {/* 添加订单按钮：借方模式下隐藏，统一在左侧资方Tab添加 */}
           {!financeOnly && (
@@ -1370,6 +1371,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           ) : (() => {
             const filteredOrders = [...(assetOrders as any[])].filter((o: any) => {
               if (!assetTypeFilter) return true;
+              if (assetTypeFilter === 'settled') return o.status === 'settled';
               if (assetTypeFilter === 'stock') return o.asset_type === 'stock';
               if (assetTypeFilter === 'crypto') return o.asset_type === 'crypto' || !o.asset_type;
               if (assetTypeFilter === 'crypto_option') return o.asset_type === 'crypto_option';
