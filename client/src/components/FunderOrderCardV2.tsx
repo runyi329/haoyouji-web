@@ -1577,6 +1577,7 @@ export function FunderOrderCardV2Silver({
                     orderNo={order.order_no || order.id}
                     color={TXT_PRI}
                     outerPadding={32}
+                    captureFullContent
                   />
                 </span>
               )}
@@ -3046,6 +3047,7 @@ export function FunderLenderCardSilver({
                     orderNo={order.order_no || order.id}
                     color={TXT_PRI}
                     outerPadding={32}
+                    captureFullContent
                   />
                 </span>
               )}

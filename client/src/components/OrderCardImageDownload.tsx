@@ -18,6 +18,7 @@ interface OrderCardImageDownloadProps {
   orderNo?: string | number | null;
   color?: string;
   outerPadding?: number;
+  captureFullContent?: boolean;
 }
 
 type ImagePreview = {
@@ -122,7 +123,12 @@ async function waitForSnapshotAssets(root: HTMLElement) {
   await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 }
 
-function createExactSnapshotContainer(target: HTMLElement, watermarkText: string, outerPadding: number) {
+function createExactSnapshotContainer(
+  target: HTMLElement,
+  watermarkText: string,
+  outerPadding: number,
+  measureAfterAssets: boolean,
+) {
   const rect = target.getBoundingClientRect();
   const sourceFullHeight = Math.max(rect.height, target.scrollHeight);
   const clonedTarget = target.cloneNode(true) as HTMLElement;
@@ -163,62 +169,66 @@ function createExactSnapshotContainer(target: HTMLElement, watermarkText: string
   container.appendChild(clonedTarget);
   document.body.appendChild(container);
 
-  // 克隆进入真实DOM后重新读取完整高度，避免卡片模式备注沿用收起状态或可视区域高度而被裁切。
-  const fullHeight = Math.ceil(Math.max(
-    sourceFullHeight,
-    clonedTarget.scrollHeight,
-    clonedTarget.getBoundingClientRect().height,
-  ));
-  clonedTarget.style.height = `${fullHeight}px`;
-  clonedTarget.style.minHeight = `${fullHeight}px`;
-  clonedTarget.style.maxHeight = "none";
-  clonedTarget.style.overflow = "hidden";
-  container.style.height = `${fullHeight + outerPadding * 2}px`;
+  const finalizeSnapshot = () => {
+    // 卡片模式在字体、图片和两帧布局稳定后才锁定高度，避免底部控制行被过早测量的高度裁切。
+    const fullHeight = Math.ceil(Math.max(
+      sourceFullHeight,
+      clonedTarget.scrollHeight,
+      clonedTarget.getBoundingClientRect().height,
+    ));
+    clonedTarget.style.height = `${fullHeight}px`;
+    clonedTarget.style.minHeight = `${fullHeight}px`;
+    clonedTarget.style.maxHeight = "none";
+    clonedTarget.style.overflow = "hidden";
+    container.style.height = `${fullHeight + outerPadding * 2}px`;
 
-  const watermark = document.createElement("div");
-  watermark.setAttribute("data-card-export-watermark", "true");
-  Object.assign(watermark.style, {
-    position: "absolute",
-    inset: "0",
-    overflow: "hidden",
-    borderRadius: window.getComputedStyle(target).borderRadius,
-    pointerEvents: "none",
-    zIndex: "2147483646",
-  });
+    clonedTarget.querySelector<HTMLElement>("[data-card-export-watermark]")?.remove();
+    const watermark = document.createElement("div");
+    watermark.setAttribute("data-card-export-watermark", "true");
+    Object.assign(watermark.style, {
+      position: "absolute",
+      inset: "0",
+      overflow: "hidden",
+      borderRadius: window.getComputedStyle(target).borderRadius,
+      pointerEvents: "none",
+      zIndex: "2147483646",
+    });
 
-  const rowStep = 78;
-  const columnStep = 245;
-  for (let y = -45, row = 0; y < fullHeight + 80; y += rowStep, row += 1) {
-    const startX = row % 2 === 0 ? -120 : -245;
-    for (let x = startX; x < rect.width + 180; x += columnStep) {
-      const label = document.createElement("span");
-      label.textContent = watermarkText;
-      Object.assign(label.style, {
-        position: "absolute",
-        left: `${x}px`,
-        top: `${y}px`,
-        color: "rgba(51, 65, 85, 0.07)",
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        fontSize: "11px",
-        fontWeight: "600",
-        letterSpacing: "0.02em",
-        lineHeight: "1",
-        whiteSpace: "nowrap",
-        textShadow: "0 1px 0 rgba(255,255,255,0.45)",
-        transform: "rotate(-22deg)",
-        transformOrigin: "left top",
-      });
-      watermark.appendChild(label);
+    const rowStep = 78;
+    const columnStep = 245;
+    for (let y = -45, row = 0; y < fullHeight + 80; y += rowStep, row += 1) {
+      const startX = row % 2 === 0 ? -120 : -245;
+      for (let x = startX; x < rect.width + 180; x += columnStep) {
+        const label = document.createElement("span");
+        label.textContent = watermarkText;
+        Object.assign(label.style, {
+          position: "absolute",
+          left: `${x}px`,
+          top: `${y}px`,
+          color: "rgba(51, 65, 85, 0.07)",
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          fontSize: "11px",
+          fontWeight: "600",
+          letterSpacing: "0.02em",
+          lineHeight: "1",
+          whiteSpace: "nowrap",
+          textShadow: "0 1px 0 rgba(255,255,255,0.45)",
+          transform: "rotate(-22deg)",
+          transformOrigin: "left top",
+        });
+        watermark.appendChild(label);
+      }
     }
-  }
-  clonedTarget.appendChild(watermark);
+    clonedTarget.appendChild(watermark);
 
-  return {
-    container,
-    clonedTarget,
-    width: rect.width + outerPadding * 2,
-    height: fullHeight + outerPadding * 2,
+    return {
+      width: rect.width + outerPadding * 2,
+      height: fullHeight + outerPadding * 2,
+    };
   };
+
+  const initialSize = measureAfterAssets ? null : finalizeSnapshot();
+  return { container, clonedTarget, finalizeSnapshot, initialSize };
 }
 
 type SaveResult = "shared" | "downloaded" | "cancelled";
@@ -262,6 +272,7 @@ export function OrderCardImageDownload({
   orderNo,
   color = "#64748B",
   outerPadding = 16,
+  captureFullContent = false,
 }: OrderCardImageDownloadProps) {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -291,9 +302,10 @@ export function OrderCardImageDownload({
     let snapshotContainer: HTMLElement | null = null;
 
     try {
-      const snapshot = createExactSnapshotContainer(target, watermarkText, outerPadding);
+      const snapshot = createExactSnapshotContainer(target, watermarkText, outerPadding, captureFullContent);
       snapshotContainer = snapshot.container;
       await waitForSnapshotAssets(snapshot.clonedTarget);
+      const snapshotSize = snapshot.initialSize ?? snapshot.finalizeSnapshot();
 
       const canvas = await html2canvas(snapshot.container, {
         backgroundColor: null,
@@ -303,10 +315,10 @@ export function OrderCardImageDownload({
         allowTaint: false,
         imageTimeout: 8000,
         removeContainer: true,
-        width: Math.ceil(snapshot.width),
-        height: Math.ceil(snapshot.height),
-        windowWidth: Math.max(window.innerWidth, Math.ceil(snapshot.width)),
-        windowHeight: Math.max(window.innerHeight, Math.ceil(snapshot.height)),
+        width: Math.ceil(snapshotSize.width),
+        height: Math.ceil(snapshotSize.height),
+        windowWidth: Math.max(window.innerWidth, Math.ceil(snapshotSize.width)),
+        windowHeight: Math.max(window.innerHeight, Math.ceil(snapshotSize.height)),
         scrollX: 0,
         scrollY: 0,
       });
