@@ -1574,19 +1574,6 @@ export function FunderOrderCardV2Silver({
                   {order.order_no}
                 </span>
               )}
-              {allowImageDownload && (
-                <span className="ml-1 shrink-0">
-                  <OrderCardImageDownload
-                    targetRef={cardExportRef}
-                    currentUser={currentUser}
-                    orderNo={order.order_no || order.id}
-                    color={TXT_PRI}
-                    outerPadding={0}
-                    captureFullContent
-                    exportBackground={cardExportBackground}
-                  />
-                </span>
-              )}
             </div>
           );
         })()}
@@ -1901,17 +1888,35 @@ export function FunderOrderCardV2Silver({
           {/* 不顶天立地的垂直分隔线 */}
           <span style={{ position: 'absolute', right: 0, top: '20%', height: '60%', width: 1, background: DIVIDER }} />
         </button>
-        <button
-          className="flex-1 flex items-center justify-center gap-1 py-2"
+        <div
+          className="relative flex-1 flex items-center justify-center gap-1 py-0.5"
           style={{ background: noteExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
-          onClick={() => toggleTab('note')}
         >
-          <span style={{ color: noteExpanded ? TXT_PRI : TXT_DIM, fontSize: '0.7rem', fontWeight: noteExpanded ? 600 : 400 }}>备注</span>
-          {(() => { const cnt = parseNotes(order.public_note || '').length; return cnt > 0 ? <span style={{ color: TXT_DIM, fontSize: '0.65rem' }}>({cnt})</span> : null; })()}
+          <button
+            type="button"
+            className="absolute inset-0"
+            onClick={() => toggleTab('note')}
+            aria-label={noteExpanded ? '收起备注' : '展开备注'}
+          />
+          <span className="relative pointer-events-none" style={{ color: noteExpanded ? TXT_PRI : TXT_DIM, fontSize: '0.7rem', fontWeight: noteExpanded ? 600 : 400 }}>备注</span>
+          {allowImageDownload && (
+            <span className="relative z-10 shrink-0">
+              <OrderCardImageDownload
+                targetRef={cardExportRef}
+                currentUser={currentUser}
+                orderNo={order.order_no || order.id}
+                color={TXT_PRI}
+                outerPadding={0}
+                captureFullContent
+                exportBackground={cardExportBackground}
+              />
+            </span>
+          )}
+          {(() => { const cnt = parseNotes(order.public_note || '').length; return cnt > 0 ? <span className="relative pointer-events-none" style={{ color: TXT_DIM, fontSize: '0.65rem' }}>({cnt})</span> : null; })()}
           {noteExpanded
-            ? <ChevronUp className="w-3 h-3" style={{ color: TXT_DIM }} />
-            : <ChevronDown className="w-3 h-3" style={{ color: TXT_DIM }} />}
-        </button>
+            ? <ChevronUp className="relative pointer-events-none w-3 h-3" style={{ color: TXT_DIM }} />
+            : <ChevronDown className="relative pointer-events-none w-3 h-3" style={{ color: TXT_DIM }} />}
+        </div>
       </div>
 
       {feeExpanded && (() => {
@@ -3046,19 +3051,6 @@ export function FunderLenderCardSilver({
                   {order.order_no}
                 </span>
               )}
-              {allowImageDownload && (
-                <span className="ml-1 shrink-0">
-                  <OrderCardImageDownload
-                    targetRef={cardExportRef}
-                    currentUser={currentUser}
-                    orderNo={order.order_no || order.id}
-                    color={TXT_PRI}
-                    outerPadding={0}
-                    captureFullContent
-                    exportBackground={cardExportBackground}
-                  />
-                </span>
-              )}
             </div>
           );
         })()}
@@ -3176,17 +3168,35 @@ export function FunderLenderCardSilver({
           {/* 不顶天立地的垂直分隔线 */}
           <span style={{ position: 'absolute', right: 0, top: '20%', height: '60%', width: 1, background: DIVIDER }} />
         </button>
-        <button
-          className="flex-1 flex items-center justify-center gap-1 py-2"
+        <div
+          className="relative flex-1 flex items-center justify-center gap-1 py-0.5"
           style={{ background: noteExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
-          onClick={() => toggleTab('note')}
         >
-          <span style={{ color: noteExpanded ? TXT_PRI : TXT_DIM, fontSize: '0.7rem', fontWeight: noteExpanded ? 600 : 400 }}>备注</span>
-          {(() => { const cnt = parseNotes(order.public_note || '').length; return cnt > 0 ? <span style={{ color: TXT_DIM, fontSize: '0.65rem' }}>({cnt})</span> : null; })()}
+          <button
+            type="button"
+            className="absolute inset-0"
+            onClick={() => toggleTab('note')}
+            aria-label={noteExpanded ? '收起备注' : '展开备注'}
+          />
+          <span className="relative pointer-events-none" style={{ color: noteExpanded ? TXT_PRI : TXT_DIM, fontSize: '0.7rem', fontWeight: noteExpanded ? 600 : 400 }}>备注</span>
+          {allowImageDownload && (
+            <span className="relative z-10 shrink-0">
+              <OrderCardImageDownload
+                targetRef={cardExportRef}
+                currentUser={currentUser}
+                orderNo={order.order_no || order.id}
+                color={TXT_PRI}
+                outerPadding={0}
+                captureFullContent
+                exportBackground={cardExportBackground}
+              />
+            </span>
+          )}
+          {(() => { const cnt = parseNotes(order.public_note || '').length; return cnt > 0 ? <span className="relative pointer-events-none" style={{ color: TXT_DIM, fontSize: '0.65rem' }}>({cnt})</span> : null; })()}
           {noteExpanded
-            ? <ChevronUp className="w-3 h-3" style={{ color: TXT_DIM }} />
-            : <ChevronDown className="w-3 h-3" style={{ color: TXT_DIM }} />}
-        </button>
+            ? <ChevronUp className="relative pointer-events-none w-3 h-3" style={{ color: TXT_DIM }} />
+            : <ChevronDown className="relative pointer-events-none w-3 h-3" style={{ color: TXT_DIM }} />}
+        </div>
       </div>
 
       {/* ── 展开区 ── */}
