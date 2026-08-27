@@ -553,16 +553,16 @@ export default function GridTpSimulator() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs" style={{ color: TEXT_SUB }}>每档买入量（ETH）</span>
-                  <span className="text-sm font-bold" style={{ color: ACCENT }}>{params.qtyPerSlot.toFixed(1)}</span>
+                  <span className="text-sm font-bold" style={{ color: ACCENT }}>{params.qtyPerSlot.toFixed(2)}</span>
                 </div>
                 <input
-                  type="range" min={0.1} max={10} step={0.1}
+                  type="range" min={0.1} max={10} step={0.01}
                   value={params.qtyPerSlot}
                   onChange={e => updateParam('qtyPerSlot', Number(e.target.value))}
                   className="w-full" style={{ accentColor: ACCENT }}
                 />
                 <div className="flex justify-between text-xs mt-0.5" style={{ color: TEXT_MUTED }}>
-                  <span>0.1 ETH</span><span>10 ETH</span>
+                  <span>0.10 ETH</span><span>10.00 ETH</span>
                 </div>
               </div>
             </div>
