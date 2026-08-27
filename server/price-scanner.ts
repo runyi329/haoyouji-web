@@ -41,7 +41,7 @@ const CRYPTO_COINS = ['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'AAVE', 'SUI', 'ONDO',
 // 美股/指数化合约。优先走新浪美股，缺失才走 OKX SWAP。
 const STOCK_COINS = ['COIN', 'AAOI', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD'];
 // 商品与海外股票：新浪国内源优先，Yahoo 双域名兜底。
-const YAHOO_ONLY_COINS = ['COIN', 'AAOI', 'CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX'];
+const YAHOO_ONLY_COINS = ['COIN', 'AAOI', 'SLV', 'CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX'];
 // 代币化美股现货：系统统一显示基础股票代码，行情优先使用对应的X前缀交易对。
 const TOKENIZED_STOCK_SPOT_MAP: Record<string, string> = {
   AAOI: 'XAAOI-USDT',
