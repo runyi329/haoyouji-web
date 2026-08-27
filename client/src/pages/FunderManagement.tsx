@@ -167,6 +167,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     floatPnl: false,
     // 52号账本：交易手续费默认隐藏，由控制开关决定是否向前端展示
     tradingFee: false,
+    // 仅控制普通用户前端的下载箭头；管理员订单列表始终可下载
+    allowUserImageDownload: false,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | string>>(DEFAULT_DISPLAY_CONFIG);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
@@ -546,6 +548,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               interestRateCurrency: p.interestRateCurrency || undefined,
               displayConfig: JSON.stringify({
                 ...p.displayConfig,
+                allowUserImageDownload: Boolean(displayConfig.allowUserImageDownload),
                 marginAlertThreshold: p.marginAlertThreshold || undefined,
                 financingInputAmount: p.amount || '',
                 financingInputCurrency: p.amountCurrency || formData.amountCurrency || 'USDT',
@@ -2484,6 +2487,28 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
               {/* 字段开关面板 */}
               <div className="rounded-xl border border-gray-100 overflow-hidden" style={{ backgroundColor: '#FAFBFF' }}>
+                {/* 用户前端权限 */}
+                <div className="px-4 py-3">
+                  <div className="text-xs font-medium text-indigo-500 mb-2">用户前端权限</div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm text-gray-700">允许用户下载图片</div>
+                      <div className="mt-0.5 text-xs leading-5 text-gray-400">默认关闭；只控制用户前端，管理员订单列表始终可下载</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDisplayConfig(c => ({ ...c, allowUserImageDownload: !c.allowUserImageDownload }))}
+                      className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                        displayConfig.allowUserImageDownload ? 'bg-indigo-500' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                        displayConfig.allowUserImageDownload ? 'translate-x-5' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+                <div className="mx-4 h-px bg-gray-100" />
                 {/* 左栏字段 */}
                 <div className="px-4 pt-3 pb-1">
                   <div className="text-xs font-medium text-blue-500 mb-2">左栏：持有资产</div>
@@ -2905,6 +2930,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           priceDirection={priceDirection}
                           membersData={((ledgerData as any)?.members || funderUsers) as any[]}
                           currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
+                          isAdmin={isAdminUser}
                         />
                       ) : (
                         <FunderOrderCardV2Silver
@@ -2914,6 +2940,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           priceDirection={priceDirection}
                           membersData={((ledgerData as any)?.members || funderUsers) as any[]}
                           currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
+                          isAdmin={isAdminUser}
                         />
                       )
                     )}
@@ -3228,6 +3255,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               trade_direction: formData.tradeDirection || null,
                               display_config: JSON.stringify({
                                 ...p.displayConfig,
+                                allowUserImageDownload: Boolean(displayConfig.allowUserImageDownload),
                                 tradingFee: ledgerId === 52 ? Boolean(displayConfig.tradingFee) : false,
                                 marginAlertThreshold: p.marginAlertThreshold || undefined,
                                 financingInputAmount: p.amount || amountInputValue || '',
@@ -3253,6 +3281,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                       membersData={((ledgerData as any)?.members || funderUsers) as any[]}
                                       cnyRate={cnyRate}
                                       currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
+                                      isAdmin={isAdminUser}
                                     />
                                   ) : (
                                     <FunderOrderCardV2Silver
@@ -3263,6 +3292,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                       membersData={((ledgerData as any)?.members || funderUsers) as any[]}
                                       cnyRate={cnyRate}
                                       currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
+                                      isAdmin={isAdminUser}
                                     />
                                   )
                                 ) : (

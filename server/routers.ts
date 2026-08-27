@@ -16867,6 +16867,15 @@ ${klinesSummary}
             result.public_note = pi.note || null;
             result.note = pi.note || null;
           }
+          try {
+            const mainDisplayConfig = o.display_config ? (typeof o.display_config === 'string' ? JSON.parse(o.display_config) : o.display_config) : {};
+            const participantDisplayConfig = result.display_config ? (typeof result.display_config === 'string' ? JSON.parse(result.display_config) : result.display_config) : {};
+            result.display_config = JSON.stringify({
+              ...(participantDisplayConfig || {}),
+              // 下载权限按主订单统一控制，参与者不能拥有不同于主订单的下载权限。
+              allowUserImageDownload: mainDisplayConfig?.allowUserImageDownload === true,
+            });
+          } catch {}
           return result;
         });
         // 并行查询：已结利息汇总 + 参与方数量

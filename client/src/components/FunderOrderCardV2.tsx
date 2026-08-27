@@ -394,6 +394,16 @@ function getDisplayMode(order: any, key: string, fallback = 'U'): string {
   }
 }
 
+function getBooleanDisplayFlag(order: any, key: string, fallback = false): boolean {
+  try {
+    const raw = order?.display_config;
+    const parsed = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
+    return typeof parsed?.[key] === 'boolean' ? parsed[key] : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function getExactFinancingDisplayAmount(order: any, amountCurrency: string, calculatedAmount: number): number {
   try {
     const raw = order?.display_config;
@@ -433,6 +443,8 @@ interface FunderOrderCardV2Props {
   membersData?: any[];
   ledgerId?: number;
   currentUser?: { id: number; name?: string; username?: string; avatar?: string };
+  /** 管理员订单列表始终显示下载按钮；普通用户仍受逐单权限控制 */
+  isAdmin?: boolean;
   /** 共享担保弹窗点击订单号时，用于打开订单模式详情 */
   allOrders?: any[];
 }
@@ -1095,9 +1107,11 @@ export function FunderOrderCardV2Silver({
   membersData = [],
   ledgerId,
   currentUser,
+  isAdmin = false,
   allOrders,
 }: FunderOrderCardV2Props) {
   const cardExportRef = useRef<HTMLDivElement>(null);
+  const allowImageDownload = isAdmin || getBooleanDisplayFlag(order, 'allowUserImageDownload', false);
   const [activeTab, setActiveTab] = useState<'detail' | 'note' | null>(null);
   const feeExpanded = activeTab === 'detail';
   const noteExpanded = activeTab === 'note';
@@ -1554,14 +1568,16 @@ export function FunderOrderCardV2Silver({
                   {order.order_no}
                 </span>
               )}
-              <span className="ml-1 shrink-0">
-                <OrderCardImageDownload
-                  targetRef={cardExportRef}
-                  currentUser={currentUser}
-                  orderNo={order.order_no || order.id}
-                  color={TXT_PRI}
-                />
-              </span>
+              {allowImageDownload && (
+                <span className="ml-1 shrink-0">
+                  <OrderCardImageDownload
+                    targetRef={cardExportRef}
+                    currentUser={currentUser}
+                    orderNo={order.order_no || order.id}
+                    color={TXT_PRI}
+                  />
+                </span>
+              )}
             </div>
           );
         })()}
@@ -2678,8 +2694,10 @@ export function FunderLenderCardSilver({
   membersData = [],
   ledgerId,
   currentUser,
+  isAdmin = false,
 }: FunderOrderCardV2Props) {
   const cardExportRef = useRef<HTMLDivElement>(null);
+  const allowImageDownload = isAdmin || getBooleanDisplayFlag(order, 'allowUserImageDownload', false);
   const [activeTab, setActiveTab] = useState<'detail' | 'note' | null>(null);
   const feeExpanded = activeTab === 'detail';
   const noteExpanded = activeTab === 'note';
@@ -3009,14 +3027,16 @@ export function FunderLenderCardSilver({
                   {order.order_no}
                 </span>
               )}
-              <span className="ml-1 shrink-0">
-                <OrderCardImageDownload
-                  targetRef={cardExportRef}
-                  currentUser={currentUser}
-                  orderNo={order.order_no || order.id}
-                  color={TXT_PRI}
-                />
-              </span>
+              {allowImageDownload && (
+                <span className="ml-1 shrink-0">
+                  <OrderCardImageDownload
+                    targetRef={cardExportRef}
+                    currentUser={currentUser}
+                    orderNo={order.order_no || order.id}
+                    color={TXT_PRI}
+                  />
+                </span>
+              )}
             </div>
           );
         })()}

@@ -915,6 +915,7 @@ export function FunderOrderCard({
   // 读取 display_config（与 LedgerDetail show() 函数一致：默认全部显示，除非明确设为 false）
   const dc = financingDisplayConfig;
   const show = (key: string) => dc ? (dc[key] !== false) : true;
+  const allowImageDownload = isAdmin || dc?.allowUserImageDownload === true;
   const [headerTagsExpanded, setHeaderTagsExpanded] = useState(false);
   const headerMember = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
   const normalHeaderOwner = headerMember?.nickname || (order as any).nickname || headerMember?.username || (order as any).owner_label || null;
@@ -1154,12 +1155,14 @@ export function FunderOrderCard({
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${headerTagsExpanded ? 'rotate-180' : ''}`} />
           </button>
         )}
-        <OrderCardImageDownload
-          targetRef={cardExportRef}
-          currentUser={currentUser}
-          orderNo={order.order_no || order.id}
-          color="#64748B"
-        />
+        {allowImageDownload && (
+          <OrderCardImageDownload
+            targetRef={cardExportRef}
+            currentUser={currentUser}
+            orderNo={order.order_no || order.id}
+            color="#64748B"
+          />
+        )}
       </div>
 
       {/* 主体：左右两栏布局 */}
