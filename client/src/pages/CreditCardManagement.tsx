@@ -980,7 +980,8 @@ export default function CreditCardManagement() {
 
   const handleEdit = (card: any) => {
     setEditingId(card.id);
-    const hasTemp = !!(card.temp_limit && card.temp_limit_end) && isTempLimitActive(card.temp_limit_start, card.temp_limit_end);
+    const normalizedTempLimitEnd = toBillingDateValue(card.temp_limit_end);
+    const hasTemp = !!(card.temp_limit && normalizedTempLimitEnd) && normalizedTempLimitEnd !== '1970-01-01' && isTempLimitActive(card.temp_limit_start, card.temp_limit_end);
     setForm({
       bankName: card.bank_name || "", cardHolder: card.card_holder || "",
       cardLast4: card.card_last4 || "", creditLimit: card.credit_limit ? String(card.credit_limit) : "",
@@ -993,7 +994,7 @@ export default function CreditCardManagement() {
       hasTempLimit: hasTemp,
       tempLimit: card.temp_limit ? String(card.temp_limit) : "",
       tempLimitStart: "",
-      tempLimitEnd: card.temp_limit_end ? String(card.temp_limit_end).slice(0, 10) : "",
+      tempLimitEnd: normalizedTempLimitEnd === '1970-01-01' ? "" : normalizedTempLimitEnd,
     });
     setShowForm(true);
   };
@@ -1106,7 +1107,8 @@ export default function CreditCardManagement() {
     const swipe = card.billing_day && card.due_day ? calcBestSwipeDay(card.billing_day, card.due_day) : null;
     const capacity = getCreditCardCapacity(card);
     const { baseLimit: regularLimit, tempLimit: tempLimitValue, tempActive, tempExpired, totalLimit: activeLimit, availableLimit: currentAvailableLimit, usedLimit: currentUsedLimit, overBaseLimit } = capacity;
-    const tempClosed = String(card.temp_limit_end || '').slice(0, 10) === '1970-01-01';
+    const normalizedTempLimitEnd = toBillingDateValue(card.temp_limit_end);
+    const tempClosed = normalizedTempLimitEnd === '1970-01-01';
     const tempEndLabel = card.temp_limit_end ? formatDateLabel(card.temp_limit_end) : '';
     const currencyLabel = String(card.currency || 'CNY').split(',').map((currency: string) => currency.trim() === 'CNY' ? '元' : currency.trim()).join(' / ');
     const formatCardAmount = (value: number) => Math.round(value).toLocaleString();
@@ -1335,7 +1337,7 @@ export default function CreditCardManagement() {
       setAvailableInputVal(String(currentAvailableLimit));
       setTempLimitDraftEnabled(hasEditableTempLimit);
       setTempLimitInputVal(hasEditableTempLimit ? String(tempLimitValue) : '');
-      setTempLimitEndInputVal(hasEditableTempLimit && card.temp_limit_end ? String(card.temp_limit_end).slice(0, 10) : '');
+      setTempLimitEndInputVal(hasEditableTempLimit ? normalizedTempLimitEnd : '');
       setShowAvailableInput(true);
     };
 
@@ -1373,7 +1375,7 @@ export default function CreditCardManagement() {
           : Math.max(0, nextTempLimit - nextUsedLimit);
         payload.tempLimit = nextTempLimit;
         payload.tempLimitStart = card.temp_limit_start && !tempClosed
-          ? String(card.temp_limit_start).slice(0, 10)
+          ? toBillingDateValue(card.temp_limit_start)
           : new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
         payload.tempLimitEnd = tempLimitEndInputVal;
       } else if (tempLimitValue != null) {
@@ -1580,7 +1582,7 @@ export default function CreditCardManagement() {
                     setTempLimitDraftEnabled(nextEnabled);
                     if (nextEnabled) {
                       if (!tempLimitInputVal && tempLimitValue != null) setTempLimitInputVal(String(tempLimitValue));
-                      if (!tempLimitEndInputVal && card.temp_limit_end && !tempClosed) setTempLimitEndInputVal(String(card.temp_limit_end).slice(0, 10));
+                      if (!tempLimitEndInputVal && normalizedTempLimitEnd && !tempClosed) setTempLimitEndInputVal(normalizedTempLimitEnd);
                       const nextTotal = Number(tempLimitInputVal || tempLimitValue || 0);
                       if (nextTotal > 0) setAvailableInputVal(String(Math.max(0, nextTotal - currentUsedLimit)));
                     } else {
