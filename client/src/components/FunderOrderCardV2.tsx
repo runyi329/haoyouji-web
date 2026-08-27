@@ -1111,7 +1111,7 @@ export function FunderOrderCardV2Silver({
   allOrders,
 }: FunderOrderCardV2Props) {
   const cardExportRef = useRef<HTMLDivElement>(null);
-  const allowImageDownload = isAdmin || getBooleanDisplayFlag(order, 'allowUserImageDownload', false);
+  const allowImageDownload = isAdmin || getBooleanDisplayFlag(order, 'allowUserImageDownload', true);
   const [activeTab, setActiveTab] = useState<'detail' | 'note' | null>(null);
   const feeExpanded = activeTab === 'detail';
   const noteExpanded = activeTab === 'note';
@@ -2697,7 +2697,7 @@ export function FunderLenderCardSilver({
   isAdmin = false,
 }: FunderOrderCardV2Props) {
   const cardExportRef = useRef<HTMLDivElement>(null);
-  const allowImageDownload = isAdmin || getBooleanDisplayFlag(order, 'allowUserImageDownload', false);
+  const allowImageDownload = isAdmin || getBooleanDisplayFlag(order, 'allowUserImageDownload', true);
   const [activeTab, setActiveTab] = useState<'detail' | 'note' | null>(null);
   const feeExpanded = activeTab === 'detail';
   const noteExpanded = activeTab === 'note';

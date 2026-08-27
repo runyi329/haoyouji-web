@@ -168,7 +168,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     // 52号账本：交易手续费默认隐藏，由控制开关决定是否向前端展示
     tradingFee: false,
     // 仅控制普通用户前端的下载箭头；管理员订单列表始终可下载
-    allowUserImageDownload: false,
+    allowUserImageDownload: true,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | string>>(DEFAULT_DISPLAY_CONFIG);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
@@ -2493,7 +2493,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-sm text-gray-700">允许用户下载图片</div>
-                      <div className="mt-0.5 text-xs leading-5 text-gray-400">默认关闭；只控制用户前端，管理员订单列表始终可下载</div>
+                      <div className="mt-0.5 text-xs leading-5 text-gray-400">默认开启；只控制用户前端，管理员订单列表始终可下载</div>
                     </div>
                     <button
                       type="button"

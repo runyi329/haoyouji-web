@@ -915,7 +915,7 @@ export function FunderOrderCard({
   // 读取 display_config（与 LedgerDetail show() 函数一致：默认全部显示，除非明确设为 false）
   const dc = financingDisplayConfig;
   const show = (key: string) => dc ? (dc[key] !== false) : true;
-  const allowImageDownload = isAdmin || dc?.allowUserImageDownload === true;
+  const allowImageDownload = isAdmin || dc?.allowUserImageDownload !== false;
   const [headerTagsExpanded, setHeaderTagsExpanded] = useState(false);
   const headerMember = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
   const normalHeaderOwner = headerMember?.nickname || (order as any).nickname || headerMember?.username || (order as any).owner_label || null;

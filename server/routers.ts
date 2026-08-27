@@ -16873,7 +16873,7 @@ ${klinesSummary}
             result.display_config = JSON.stringify({
               ...(participantDisplayConfig || {}),
               // 下载权限按主订单统一控制，参与者不能拥有不同于主订单的下载权限。
-              allowUserImageDownload: mainDisplayConfig?.allowUserImageDownload === true,
+              allowUserImageDownload: mainDisplayConfig?.allowUserImageDownload !== false,
             });
           } catch {}
           return result;
