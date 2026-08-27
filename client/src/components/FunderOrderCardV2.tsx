@@ -1464,6 +1464,9 @@ export function FunderOrderCardV2Silver({
       className="rounded-2xl overflow-hidden silver-card"
       style={{
         position: 'relative',
+        height: 'auto',
+        maxHeight: 'none',
+        overflow: activeTab ? 'visible' : 'hidden',
         background: cardBg,
         border: cardBorder,
         boxShadow: cardShadow,
@@ -2929,6 +2932,9 @@ export function FunderLenderCardSilver({
       className="rounded-2xl overflow-hidden silver-card"
       style={{
         position: 'relative',
+        height: 'auto',
+        maxHeight: 'none',
+        overflow: activeTab ? 'visible' : 'hidden',
         background: isParticipant ? GRN_BG : isStock ? GOLD_BG : isOption ? OPT_BG : SL_BG,
         border: isParticipant ? GRN_BORDER : isStock ? GOLD_BORDER : isOption ? OPT_BORDER : SL_BORDER,
         boxShadow: isParticipant ? GRN_SHADOW : isStock ? GOLD_SHADOW : isOption ? OPT_SHADOW : SL_SHADOW,

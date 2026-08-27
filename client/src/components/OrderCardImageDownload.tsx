@@ -123,6 +123,7 @@ async function waitForSnapshotAssets(root: HTMLElement) {
 
 function createExactSnapshotContainer(target: HTMLElement, watermarkText: string) {
   const rect = target.getBoundingClientRect();
+  const sourceFullHeight = Math.max(rect.height, target.scrollHeight);
   const clonedTarget = target.cloneNode(true) as HTMLElement;
   copyRenderedStyles(target, clonedTarget);
 
@@ -131,16 +132,48 @@ function createExactSnapshotContainer(target: HTMLElement, watermarkText: string
     element.style.pointerEvents = "none";
   });
 
+  // 固定当前卡片宽度，但先释放源节点计算出的固定高度，允许备注等展开内容完整撑开。
   clonedTarget.style.width = `${rect.width}px`;
   clonedTarget.style.minWidth = `${rect.width}px`;
   clonedTarget.style.maxWidth = `${rect.width}px`;
-  clonedTarget.style.height = `${rect.height}px`;
-  clonedTarget.style.minHeight = `${rect.height}px`;
-  clonedTarget.style.maxHeight = `${rect.height}px`;
+  clonedTarget.style.height = "auto";
+  clonedTarget.style.minHeight = `${sourceFullHeight}px`;
+  clonedTarget.style.maxHeight = "none";
   clonedTarget.style.margin = "0";
   clonedTarget.style.position = "relative";
   clonedTarget.style.transform = "none";
   clonedTarget.style.transformOrigin = "top left";
+  clonedTarget.style.overflow = "visible";
+
+  const padding = 16;
+  const container = document.createElement("div");
+  Object.assign(container.style, {
+    position: "fixed",
+    left: "0",
+    top: "0",
+    zIndex: "-2147483647",
+    width: `${rect.width}px`,
+    height: "auto",
+    padding: `${padding}px`,
+    boxSizing: "content-box",
+    background: "transparent",
+    pointerEvents: "none",
+    overflow: "visible",
+  });
+  container.appendChild(clonedTarget);
+  document.body.appendChild(container);
+
+  // 克隆进入真实DOM后重新读取完整高度，避免卡片模式备注沿用收起状态或可视区域高度而被裁切。
+  const fullHeight = Math.ceil(Math.max(
+    sourceFullHeight,
+    clonedTarget.scrollHeight,
+    clonedTarget.getBoundingClientRect().height,
+  ));
+  clonedTarget.style.height = `${fullHeight}px`;
+  clonedTarget.style.minHeight = `${fullHeight}px`;
+  clonedTarget.style.maxHeight = "none";
+  clonedTarget.style.overflow = "hidden";
+  container.style.height = `${fullHeight}px`;
 
   const watermark = document.createElement("div");
   watermark.setAttribute("data-card-export-watermark", "true");
@@ -155,7 +188,7 @@ function createExactSnapshotContainer(target: HTMLElement, watermarkText: string
 
   const rowStep = 78;
   const columnStep = 245;
-  for (let y = -45, row = 0; y < rect.height + 80; y += rowStep, row += 1) {
+  for (let y = -45, row = 0; y < fullHeight + 80; y += rowStep, row += 1) {
     const startX = row % 2 === 0 ? -120 : -245;
     for (let x = startX; x < rect.width + 180; x += columnStep) {
       const label = document.createElement("span");
@@ -180,25 +213,7 @@ function createExactSnapshotContainer(target: HTMLElement, watermarkText: string
   }
   clonedTarget.appendChild(watermark);
 
-  const padding = 16;
-  const container = document.createElement("div");
-  Object.assign(container.style, {
-    position: "fixed",
-    left: "0",
-    top: "0",
-    zIndex: "-2147483647",
-    width: `${rect.width}px`,
-    height: `${rect.height}px`,
-    padding: `${padding}px`,
-    boxSizing: "content-box",
-    background: "transparent",
-    pointerEvents: "none",
-    overflow: "visible",
-  });
-  container.appendChild(clonedTarget);
-  document.body.appendChild(container);
-
-  return { container, clonedTarget, width: rect.width + padding * 2, height: rect.height + padding * 2 };
+  return { container, clonedTarget, width: rect.width + padding * 2, height: fullHeight + padding * 2 };
 }
 
 type SaveResult = "shared" | "downloaded" | "cancelled";
