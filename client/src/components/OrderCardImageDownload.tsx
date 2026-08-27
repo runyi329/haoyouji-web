@@ -298,7 +298,6 @@ export function OrderCardImageDownload({
         if (current?.url) URL.revokeObjectURL(current.url);
         return { blob, url, filename };
       });
-      toast.success("图片预览已生成");
     } catch (error) {
       console.error("生成订单图片预览失败", error);
       toast.error(`图片生成失败：${getErrorMessage(error)}`);
