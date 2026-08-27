@@ -19,6 +19,7 @@ interface OrderCardImageDownloadProps {
   color?: string;
   outerPadding?: number;
   captureFullContent?: boolean;
+  exportBackground?: string;
 }
 
 type ImagePreview = {
@@ -128,11 +129,13 @@ function createExactSnapshotContainer(
   watermarkText: string,
   outerPadding: number,
   measureAfterAssets: boolean,
+  exportBackground?: string,
 ) {
   const rect = target.getBoundingClientRect();
   const sourceFullHeight = Math.max(rect.height, target.scrollHeight);
   const clonedTarget = target.cloneNode(true) as HTMLElement;
   copyRenderedStyles(target, clonedTarget);
+  if (exportBackground) clonedTarget.style.background = exportBackground;
 
   clonedTarget.querySelectorAll<HTMLElement>(`[${EXPORT_HIDE_ATTRIBUTE}]`).forEach(element => {
     element.style.visibility = "hidden";
@@ -292,6 +295,7 @@ export function OrderCardImageDownload({
   color = "#64748B",
   outerPadding = 16,
   captureFullContent = false,
+  exportBackground,
 }: OrderCardImageDownloadProps) {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -321,7 +325,7 @@ export function OrderCardImageDownload({
     let snapshotContainer: HTMLElement | null = null;
 
     try {
-      const snapshot = createExactSnapshotContainer(target, watermarkText, outerPadding, captureFullContent);
+      const snapshot = createExactSnapshotContainer(target, watermarkText, outerPadding, captureFullContent, exportBackground);
       snapshotContainer = snapshot.container;
       await waitForSnapshotAssets(snapshot.clonedTarget);
       const snapshotSize = snapshot.initialSize ?? snapshot.finalizeSnapshot();
@@ -399,7 +403,7 @@ export function OrderCardImageDownload({
           </button>
         </div>
         <div
-          className={`min-h-0 flex-1 overflow-auto ${captureFullContent ? "p-0" : "p-4"}`}
+          className="min-h-0 flex-1 overflow-auto p-4"
           style={{
             backgroundColor: "#E2E8F0",
             backgroundImage: "linear-gradient(45deg, rgba(255,255,255,0.45) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.45) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.45) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.45) 75%)",

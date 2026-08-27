@@ -1025,6 +1025,7 @@ const SL_BG = [
   // 层4：冷銀底色（更饱和的銀色）
   'linear-gradient(160deg, #d8dadf 0%, #b8bcc4 20%, #cdd0d6 45%, #b0b4bc 65%, #c8cbd2 80%, #d2d5da 100%)',
 ].join(', ');
+const SL_EXPORT_BG = 'linear-gradient(160deg, #d8dadf 0%, #b8bcc4 20%, #cdd0d6 45%, #b0b4bc 65%, #c8cbd2 80%, #d2d5da 100%)';
 const SL_BORDER = '1.5px solid rgba(200,205,210,0.9)';
 const SL_SHADOW = [
   '0 6px 20px rgba(0,0,0,0.30)',          // 外部阴影
@@ -1042,6 +1043,7 @@ const OPT_BG = [
   'linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(255,255,255,0.16) 35%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0.08) 70%, rgba(0,0,0,0.10) 100%)',
   'linear-gradient(160deg, #5b21b6 0%, #7c3aed 18%, #8b5cf6 40%, #6d28d9 62%, #7c3aed 80%, #5b21b6 100%)',
 ].join(', ');
+const OPT_EXPORT_BG = 'linear-gradient(160deg, #5b21b6 0%, #7c3aed 18%, #8b5cf6 40%, #6d28d9 62%, #7c3aed 80%, #5b21b6 100%)';
 const OPT_BORDER = '1.5px solid rgba(109,40,217,0.90)';
 const OPT_SHADOW = [
   '0 6px 20px rgba(91,33,182,0.35)',
@@ -1083,6 +1085,8 @@ const GRN_BG = [
   'linear-gradient(180deg, rgba(0,0,0,0.06) 0%, rgba(255,255,255,0.14) 35%, rgba(255,255,255,0.20) 50%, rgba(255,255,255,0.06) 70%, rgba(0,0,0,0.08) 100%)',
   'linear-gradient(160deg, #064e3b 0%, #065f46 18%, #047857 40%, #059669 62%, #047857 80%, #064e3b 100%)',
 ].join(', ');
+const GRN_EXPORT_BG = 'linear-gradient(160deg, #064e3b 0%, #065f46 18%, #047857 40%, #059669 62%, #047857 80%, #064e3b 100%)';
+const GOLD_EXPORT_BG = 'linear-gradient(160deg, #9e7c28 0%, #c89e32 18%, #ddb545 40%, #c49030 62%, #ceA03c 80%, #9e7c28 100%)';
 const GRN_BORDER = '1.5px solid rgba(4,120,87,0.90)';
 const GRN_SHADOW = [
   '0 6px 20px rgba(4,120,87,0.35)',
@@ -1419,6 +1423,7 @@ export function FunderOrderCardV2Silver({
   // 本人 / 他人仅决定列表归属；绿色主题仅表达真实参与者身份。
   const isParticipant = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder;
   const cardBg = isParticipant ? GRN_BG : isStockCard ? GOLD_BG_SV : isOptionCard ? OPT_BG : SL_BG;
+  const cardExportBackground = isParticipant ? GRN_EXPORT_BG : isStockCard ? GOLD_EXPORT_BG : isOptionCard ? OPT_EXPORT_BG : SL_EXPORT_BG;
   const cardBorder = isParticipant ? GRN_BORDER : isStockCard ? GOLD_BORDER_SV : isOptionCard ? OPT_BORDER : SL_BORDER;
   const cardDisplayConfig = (() => {
     try {
@@ -1578,6 +1583,7 @@ export function FunderOrderCardV2Silver({
                     color={TXT_PRI}
                     outerPadding={0}
                     captureFullContent
+                    exportBackground={cardExportBackground}
                   />
                 </span>
               )}
@@ -2924,6 +2930,7 @@ export function FunderLenderCardSilver({
     'inset 1.5px 0 rgba(245,205,65,0.28)',
     'inset -1.5px 0 rgba(0,0,0,0.16)',
   ].join(', ');
+  const cardExportBackground = isParticipant ? GRN_EXPORT_BG : isStock ? GOLD_EXPORT_BG : isOption ? OPT_EXPORT_BG : SL_EXPORT_BG;
 
   return (
     <div
@@ -3048,6 +3055,7 @@ export function FunderLenderCardSilver({
                     color={TXT_PRI}
                     outerPadding={0}
                     captureFullContent
+                    exportBackground={cardExportBackground}
                   />
                 </span>
               )}
