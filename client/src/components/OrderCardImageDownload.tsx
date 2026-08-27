@@ -164,7 +164,7 @@ function createExactSnapshotContainer(target: HTMLElement, watermarkText: string
         position: "absolute",
         left: `${x}px`,
         top: `${y}px`,
-        color: "rgba(51, 65, 85, 0.14)",
+        color: "rgba(51, 65, 85, 0.07)",
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         fontSize: "11px",
         fontWeight: "600",
