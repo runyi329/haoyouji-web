@@ -858,6 +858,26 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     trpcUtils.ledger.funderGetOrderParticipants.invalidate({ orderId: Number(order.id), ledgerId });
     // amount_currency 为 NULL/空表示老订单，按 USDT 口径兼容（amount 本就是 USDT 价值）
     const editAmountCurrency = (order.amount_currency && String(order.amount_currency).trim()) ? String(order.amount_currency) : 'USDT';
+    const editDisplayConfig = (() => {
+      try {
+        const raw = order.display_config;
+        return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
+      } catch {
+        return {};
+      }
+    })();
+    const savedDerivedLinkedField = (['amount', 'price', 'quantity'] as LinkedAmountField[]).includes(editDisplayConfig?.linkedDerivedField)
+      ? editDisplayConfig.linkedDerivedField as LinkedAmountField
+      : null;
+    const savedManualLinkedFields = String(editDisplayConfig?.linkedManualFields || '')
+      .split(',')
+      .filter((field): field is LinkedAmountField => (['amount', 'price', 'quantity'] as string[]).includes(field));
+    manualLinkedFieldsRef.current = savedManualLinkedFields.length === 2
+      ? savedManualLinkedFields.slice(-2)
+      : savedDerivedLinkedField
+        ? (['amount', 'price', 'quantity'] as LinkedAmountField[]).filter(field => field !== savedDerivedLinkedField)
+        : [];
+    setDerivedLinkedField(savedDerivedLinkedField);
     setFormData({
       userId: order.user_id,
       coin: order.coin as CoinType,
@@ -991,16 +1011,24 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         setMarginAlertThreshold('');
       }
     } catch { setDisplayConfig(DEFAULT_DISPLAY_CONFIG); setMarginAlertThreshold(''); }
-    // 初始化融资金额输入值
-    // 股票类型：amount 就是 CNY 实际金额，直接显示，不做任何折算
-    // 数字币类型：amount 是 USDT 价值，若出资币种非 USDT 则折算到该币种显示
+    // 初始化融资金额输入值：优先恢复管理员上次手动输入的原值，避免实时汇率变化后重新反算。
+    // 老订单缺失原始输入快照时，才按既有 USDT 基准和当前币种兼容折算。
     (() => {
+      const savedInputRaw = editDisplayConfig?.financingInputAmount;
+      const savedInputAmount = Number(savedInputRaw);
+      const savedCurrencyRaw = String(editDisplayConfig?.financingInputCurrency || '').toUpperCase();
+      const savedCurrency = savedCurrencyRaw === 'U' ? 'USDT' : savedCurrencyRaw === 'RMB' ? 'CNY' : savedCurrencyRaw;
+      const normalizedEditCurrency = String(editAmountCurrency).toUpperCase() === 'U' ? 'USDT' : String(editAmountCurrency).toUpperCase() === 'RMB' ? 'CNY' : String(editAmountCurrency).toUpperCase();
+      if (savedInputAmount > 0 && savedCurrency === normalizedEditCurrency) {
+        setAmountInputValue(String(savedInputRaw));
+        return;
+      }
       const amtU = order.amount ? parseFloat(order.amount) : NaN;
       if (isNaN(amtU)) { setAmountInputValue(''); return; }
       // 股票类型：直接显示原始金额（CNY）
       if (order.asset_type === 'stock') { setAmountInputValue(String(order.amount)); return; }
-      if (editAmountCurrency === 'USDT') { setAmountInputValue(String(order.amount)); return; }
-      const conv = fromUsdtBase(amtU, editAmountCurrency);
+      if (normalizedEditCurrency === 'USDT') { setAmountInputValue(String(order.amount)); return; }
+      const conv = fromUsdtBase(amtU, normalizedEditCurrency);
       setAmountInputValue(conv !== null && !isNaN(conv) ? parseFloat(conv.toFixed(2)).toString() : String(order.amount));
     })();
     // 编辑已有订单：若已有计息基数则视为手动值，不被融资金额自动覆盖
@@ -1085,6 +1113,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         rate_negative: normalizeFunderAnnualRate(formData.interestRateAnnual).startsWith('-'),
         financingInputAmount: amountInputValue || '',
         financingInputCurrency: formData.assetType === 'stock' ? 'CNY' : (formData.amountCurrency || 'USDT'),
+        linkedManualFields: manualLinkedFieldsRef.current.join(','),
+        linkedDerivedField: derivedLinkedField || '',
       } as Record<string, boolean | number | string>,
       assetType: formData.assetType || undefined,
       tradeDirection: (['long', 'short'] as const).includes(formData.tradeDirection as any) ? (formData.tradeDirection as 'long' | 'short') : null,

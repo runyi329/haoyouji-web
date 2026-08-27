@@ -414,10 +414,13 @@ function getExactFinancingDisplayAmount(order: any, amountCurrency: string, calc
     const savedCurrency = savedCurrencyRaw === 'U' ? 'USDT' : savedCurrencyRaw === 'RMB' ? 'CNY' : savedCurrencyRaw;
     if (savedAmount > 0 && savedCurrency === amountCurrency) return savedAmount;
   } catch {}
+  // 老订单可能尚未保存融资输入快照；买入价格和币数均为订单固定值，优先于按实时汇率反算。
+  const linkedAmount = Number(order?.buy_price || 0) * Number(order?.buy_quantity || 0);
+  if (linkedAmount > 0) return linkedAmount;
   const interestBase = Number(order?.interest_base || 0);
   const interestCurrencyRaw = String(order?.interest_base_currency || '').toUpperCase();
   const interestCurrency = interestCurrencyRaw === 'U' ? 'USDT' : interestCurrencyRaw === 'RMB' ? 'CNY' : interestCurrencyRaw;
-  if (interestBase > 0 && interestCurrency === amountCurrency && Math.abs(interestBase - calculatedAmount) <= 0.05) return interestBase;
+  if (interestBase > 0 && interestCurrency === amountCurrency) return interestBase;
   return calculatedAmount;
 }
 

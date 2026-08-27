@@ -888,14 +888,19 @@ export function FunderOrderCard({
       ? financingAmountUsdt * cnyRate
       : (amountCurrencyPrice && amountCurrencyPrice > 0 ? financingAmountUsdt / amountCurrencyPrice : financingAmountUsdt);
   const savedFinancingInputAmount = Number(financingDisplayConfig?.financingInputAmount);
-  const savedFinancingInputCurrency = String(financingDisplayConfig?.financingInputCurrency || '').toUpperCase();
+  const savedFinancingInputCurrencyRaw = String(financingDisplayConfig?.financingInputCurrency || '').toUpperCase();
+  const savedFinancingInputCurrency = savedFinancingInputCurrencyRaw === 'U' ? 'USDT' : savedFinancingInputCurrencyRaw === 'RMB' ? 'CNY' : savedFinancingInputCurrencyRaw;
+  const linkedFinancingAmount = qty > 0 && price > 0 ? qty * price : 0;
   const legacyInterestBase = Number(order.interest_base || 0);
-  const legacyInterestBaseCurrency = String(order.interest_base_currency || '').toUpperCase();
+  const legacyInterestBaseCurrencyRaw = String(order.interest_base_currency || '').toUpperCase();
+  const legacyInterestBaseCurrency = legacyInterestBaseCurrencyRaw === 'U' ? 'USDT' : legacyInterestBaseCurrencyRaw === 'RMB' ? 'CNY' : legacyInterestBaseCurrencyRaw;
   const financingDisplayAmount = savedFinancingInputAmount > 0 && savedFinancingInputCurrency === amountCurrency
     ? savedFinancingInputAmount
-    : legacyInterestBase > 0 && legacyInterestBaseCurrency === amountCurrency && Math.abs(legacyInterestBase - calculatedFinancingDisplayAmount) <= 0.05
-      ? legacyInterestBase
-      : calculatedFinancingDisplayAmount;
+    : linkedFinancingAmount > 0
+      ? linkedFinancingAmount
+      : legacyInterestBase > 0 && legacyInterestBaseCurrency === amountCurrency
+        ? legacyInterestBase
+        : calculatedFinancingDisplayAmount;
   const financingDisplayUnit = amountCurrency === 'USDT' ? 'u' : amountCurrency === 'CNY' ? '元' : amountCurrency;
   const principalLentOut = order.principal_lent_out === 1 || order.principal_lent_out === true;
   const displayFinancingAsPrimary = principalLentOut || amountCurrency === 'CNY';
