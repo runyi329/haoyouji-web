@@ -1115,6 +1115,9 @@ export default function CreditCardManagement() {
     const [showMenu, setShowMenu] = useState(false);
     const [showAvailableInput, setShowAvailableInput] = useState(false);
     const [availableInputVal, setAvailableInputVal] = useState('');
+    const [tempLimitDraftEnabled, setTempLimitDraftEnabled] = useState(false);
+    const [tempLimitInputVal, setTempLimitInputVal] = useState('');
+    const [tempLimitEndInputVal, setTempLimitEndInputVal] = useState('');
     const [serviceContact, setServiceContact] = useState<LoanServiceContact | null>(null);
     const [showBillingStatementSheet, setShowBillingStatementSheet] = useState(false);
     const [billingStatementDrafts, setBillingStatementDrafts] = useState<Record<string, string>>({});
@@ -1327,6 +1330,83 @@ export default function CreditCardManagement() {
       }
     };
 
+    const openLimitEditor = () => {
+      const hasEditableTempLimit = tempLimitValue != null && !tempClosed;
+      setAvailableInputVal(String(currentAvailableLimit));
+      setTempLimitDraftEnabled(hasEditableTempLimit);
+      setTempLimitInputVal(hasEditableTempLimit ? String(tempLimitValue) : '');
+      setTempLimitEndInputVal(hasEditableTempLimit && card.temp_limit_end ? String(card.temp_limit_end).slice(0, 10) : '');
+      setShowAvailableInput(true);
+    };
+
+    const saveLimitSettings = async () => {
+      const availableLimit = Number(availableInputVal);
+      if (!availableInputVal.trim() || Number.isNaN(availableLimit) || availableLimit < 0) {
+        toast.error('请输入不小于 0 的当前可用额度');
+        return;
+      }
+
+      const payload: Record<string, unknown> = { id: card.id };
+      if (tempLimitDraftEnabled) {
+        const nextTempLimit = Number(tempLimitInputVal);
+        if (!tempLimitInputVal.trim() || Number.isNaN(nextTempLimit) || nextTempLimit <= 0) {
+          toast.error('请输入大于 0 的临时额度');
+          return;
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(tempLimitEndInputVal)) {
+          toast.error('请选择临时额度到期日');
+          return;
+        }
+        const nextTempActive = isTempLimitActive(undefined, tempLimitEndInputVal);
+        const nextTotalLimit = nextTempActive ? nextTempLimit : regularLimit;
+        if (availableLimit > nextTotalLimit) {
+          toast.error(`当前可用额度不能超过${nextTempActive ? '临时' : '基础'}额度`);
+          return;
+        }
+        const nextUsedLimit = Math.max(0, nextTotalLimit - availableLimit);
+        if (nextTempLimit < nextUsedLimit) {
+          toast.error(`临时额度不能低于当前已用额度 ${formatCardAmount(nextUsedLimit)}`);
+          return;
+        }
+        payload.availableLimit = nextTempActive
+          ? availableLimit
+          : Math.max(0, nextTempLimit - nextUsedLimit);
+        payload.tempLimit = nextTempLimit;
+        payload.tempLimitStart = card.temp_limit_start && !tempClosed
+          ? String(card.temp_limit_start).slice(0, 10)
+          : new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        payload.tempLimitEnd = tempLimitEndInputVal;
+      } else if (tempLimitValue != null) {
+        if (availableLimit > regularLimit) {
+          toast.error('当前可用额度不能超过基础额度');
+          return;
+        }
+        const nextUsedLimit = Math.max(0, regularLimit - availableLimit);
+        // 关闭后数据库继续保留临时额度期间的可用额度快照，以准确还原当时形成的已用金额。
+        payload.availableLimit = Math.max(0, tempLimitValue - nextUsedLimit);
+        payload.tempLimit = tempLimitValue;
+        payload.tempLimitEnd = '1970-01-01';
+      } else {
+        if (availableLimit > regularLimit) {
+          toast.error('当前可用额度不能超过基础额度');
+          return;
+        }
+        payload.availableLimit = availableLimit;
+        payload.tempLimit = null;
+        payload.tempLimitStart = null;
+        payload.tempLimitEnd = null;
+      }
+
+      try {
+        if (viewMode === 'admin' && isAdmin) await adminUpdateMutation.mutateAsync(payload as any);
+        else await updateMutation.mutateAsync(payload as any);
+        await refetch();
+        setShowAvailableInput(false);
+      } catch {
+        // mutation 已统一显示更新失败提示。
+      }
+    };
+
     return (
       <div className="overflow-hidden rounded-2xl border shadow-md" style={{ borderColor: brand.line, boxShadow: `0 8px 20px ${brand.border}24` }}>
         {/* 卡片主体：每家银行使用自身主色的渐变，而非统一深色。 */}
@@ -1415,14 +1495,13 @@ export default function CreditCardManagement() {
                       )}
                       <button
                         onClick={() => {
-                          setAvailableInputVal(String(currentAvailableLimit));
-                          setShowAvailableInput(true);
+                          openLimitEditor();
                           setShowMenu(false);
                         }}
                         className="w-full flex items-center space-x-2 px-4 py-3 text-sm text-gray-700 active:bg-gray-50"
                       >
                         <CreditCard className="w-4 h-4 text-gray-400" />
-                        <span>更新可用额度</span>
+                        <span>更新额度</span>
                       </button>
                       <button
                         onClick={() => { setDeleteConfirmId(card.id); setDeleteConfirmStep(1); setShowMenu(false); }}
@@ -1465,59 +1544,137 @@ export default function CreditCardManagement() {
           </div>
         </div>
 
-        {/* 可用额度输入弹出 */}
+        {/* 可用额度与临时额度编辑弹窗 */}
         {showAvailableInput && (
           <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
-            <div className="bg-white rounded-t-2xl w-full max-w-[480px] px-5 pt-5 pb-8">
+            <div className="max-h-[calc(100dvh-12px)] w-full max-w-[480px] overflow-y-auto rounded-t-2xl bg-white px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-5">
               <div className="flex items-center justify-between mb-4">
-                <p className="text-gray-900 font-semibold">更新可用额度</p>
+                <div>
+                  <p className="text-gray-900 font-semibold">更新额度</p>
+                  <p className="mt-0.5 text-xs text-gray-400">可用额度和临时额度可在这里一起修改</p>
+                </div>
                 <button onClick={() => setShowAvailableInput(false)} className="text-gray-400 active:text-gray-600">
                   <X className="w-5 h-5" />
                 </button>
               </div>
               {card.credit_limit && (
-                <p className="text-gray-400 text-xs mb-3">当前总额度 {activeLimit.toLocaleString()} {currencyLabel}{tempActive && tempLimitValue != null ? '（临时额度有效）' : tempClosed ? '（临时额度已关闭，已用金额已保留）' : tempExpired ? '（临时额度已到期，已用金额已保留）' : ''}</p>
+                <p className="text-gray-400 text-xs mb-3">基础额度 {regularLimit.toLocaleString()} {currencyLabel}{tempActive && tempLimitValue != null ? '（临时额度有效）' : tempClosed ? '（临时额度已关闭，已用金额已保留）' : tempExpired ? '（临时额度已到期，已用金额已保留）' : ''}</p>
               )}
+              <label className="mb-1.5 block text-xs font-medium text-gray-500">当前可用额度</label>
               <input
                 type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-lg font-semibold text-gray-900 mb-2 focus:outline-none focus:border-[#1A2B4A]"
                 placeholder="输入当前可用额度"
                 value={availableInputVal}
                 onChange={e => setAvailableInputVal(e.target.value)}
                 autoFocus
               />
+              <div className="mt-4 overflow-hidden rounded-xl border border-amber-200 bg-amber-50/60">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextEnabled = !tempLimitDraftEnabled;
+                    setTempLimitDraftEnabled(nextEnabled);
+                    if (nextEnabled) {
+                      if (!tempLimitInputVal && tempLimitValue != null) setTempLimitInputVal(String(tempLimitValue));
+                      if (!tempLimitEndInputVal && card.temp_limit_end && !tempClosed) setTempLimitEndInputVal(String(card.temp_limit_end).slice(0, 10));
+                      const nextTotal = Number(tempLimitInputVal || tempLimitValue || 0);
+                      if (nextTotal > 0) setAvailableInputVal(String(Math.max(0, nextTotal - currentUsedLimit)));
+                    } else {
+                      setAvailableInputVal(String(Math.max(0, regularLimit - currentUsedLimit)));
+                    }
+                  }}
+                  className="flex w-full items-center justify-between px-3 py-3 text-left active:bg-amber-100/70"
+                >
+                  <span className="flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-amber-600" />
+                    <span className="text-sm font-semibold text-gray-700">临时额度</span>
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${tempLimitDraftEnabled ? 'bg-amber-200 text-amber-800' : 'bg-white text-gray-400'}`}>{tempLimitDraftEnabled ? '已启用' : '未启用'}</span>
+                  </span>
+                  {tempLimitDraftEnabled ? <ToggleRight className="h-6 w-6 text-amber-500" /> : <ToggleLeft className="h-6 w-6 text-gray-300" />}
+                </button>
+                {tempLimitDraftEnabled ? (
+                  <div className="space-y-3 border-t border-amber-200 px-3 pb-3 pt-3">
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-amber-700">临时提升至</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={tempLimitInputVal}
+                        onChange={(event) => {
+                          const nextValue = event.target.value;
+                          setTempLimitInputVal(nextValue);
+                          const parsedValue = Number(nextValue);
+                          if (nextValue && Number.isFinite(parsedValue) && parsedValue > 0) {
+                            setAvailableInputVal(String(Math.max(0, parsedValue - currentUsedLimit)));
+                          }
+                        }}
+                        placeholder="如：56000"
+                        className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 outline-none focus:border-amber-400"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-amber-700">临时额度到期日</span>
+                      <input
+                        type="date"
+                        value={tempLimitEndInputVal}
+                        onChange={(event) => setTempLimitEndInputVal(event.target.value)}
+                        className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-amber-400"
+                      />
+                    </label>
+                    {tempLimitValue != null && !tempClosed && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempLimitDraftEnabled(false);
+                          setAvailableInputVal(String(Math.max(0, regularLimit - currentUsedLimit)));
+                        }}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white py-2.5 text-sm font-semibold text-rose-500 active:bg-rose-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        取消临时额度
+                      </button>
+                    )}
+                  </div>
+                ) : tempLimitValue != null && !tempClosed ? (
+                  <p className="border-t border-amber-200 px-3 py-2 text-xs font-medium text-rose-500">保存后将取消临时额度，卡片上的黄色标签会消失；已用金额继续保留。</p>
+                ) : (
+                  <p className="border-t border-amber-200 px-3 py-2 text-xs text-gray-400">打开后可填写临时额度和到期日。</p>
+                )}
+              </div>
               {availableInputVal && regularLimit > 0 && (() => {
-                const previewUsed = tempExpired && tempLimitValue != null
-                  ? Math.max(0, tempLimitValue - Number(availableInputVal))
-                  : Math.max(0, activeLimit - Number(availableInputVal));
+                const draftTempLimit = Number(tempLimitInputVal);
+                const previewTotalLimit = tempLimitDraftEnabled && Number.isFinite(draftTempLimit) && draftTempLimit > 0
+                  ? draftTempLimit
+                  : regularLimit;
+                const previewUsed = tempLimitDraftEnabled && Number.isFinite(draftTempLimit) && draftTempLimit > 0
+                  ? Math.max(0, draftTempLimit - Number(availableInputVal))
+                  : tempLimitValue != null && !tempClosed
+                    ? Math.max(0, tempLimitValue - Number(availableInputVal))
+                    : Math.max(0, regularLimit - Number(availableInputVal));
                 return (
-                  <p className="text-gray-400 text-xs mb-4">
-                    已用额度：<span className="text-gray-700 font-medium">{previewUsed.toLocaleString()}</span>
+                  <p className="mt-3 text-xs text-gray-400">
+                    已用额度：<span className="font-medium text-gray-700">{previewUsed.toLocaleString()}</span>
                     {' · '}
-                    <span className="text-gray-700 font-medium">{Math.round((previewUsed / activeLimit) * 100)}%</span>
-                    {tempActive && tempLimitValue != null && <span className="text-amber-600">（按临时额度计算）</span>}
-                    {tempExpired && <span className="text-rose-500">{tempClosed ? '（临时额度已关闭，保留临时额度期间已用金额）' : '（临时额度已到期，保留临时额度期间已用金额）'}</span>}
+                    <span className="font-medium text-gray-700">{previewTotalLimit > 0 ? Math.round((previewUsed / previewTotalLimit) * 100) : 0}%</span>
+                    {tempLimitDraftEnabled && <span className="text-amber-600">（按临时额度计算）</span>}
+                    {!tempLimitDraftEnabled && tempLimitValue != null && !tempClosed && <span className="text-rose-500">（保存后取消临时额度，保留已用金额）</span>}
+                    {!tempLimitDraftEnabled && tempClosed && <span className="text-rose-500">（临时额度已关闭，已用金额已保留）</span>}
                   </p>
                 );
               })()}
               <button
-                onClick={async () => {
-                  const val = Number(availableInputVal);
-                  if (isNaN(val) || val < 0) return;
-                  try {
-                    // 保留到期临时额度快照，用于持续展示该期间形成的真实已用金额。
-                    if (viewMode === 'admin' && isAdmin) await adminUpdateMutation.mutateAsync({ id: card.id, availableLimit: val } as any);
-                    else await updateMutation.mutateAsync({ id: card.id, availableLimit: val } as any);
-                    await refetch();
-                    setShowAvailableInput(false);
-                    toast.success('可用额度已更新');
-                  } catch (e: any) {
-                    toast.error('更新失败: ' + (e?.message || ''));
-                  }
-                }}
-                className="w-full py-3 rounded-xl bg-[#1A2B4A] text-white font-semibold text-sm active:opacity-80"
+                type="button"
+                disabled={updateMutation.isPending || adminUpdateMutation.isPending}
+                onClick={() => void saveLimitSettings()}
+                className="mt-4 w-full py-3 rounded-xl bg-[#1A2B4A] text-white font-semibold text-sm active:opacity-80 disabled:opacity-50"
               >
-                确认更新
+                {updateMutation.isPending || adminUpdateMutation.isPending ? '保存中' : '保存额度设置'}
               </button>
             </div>
           </div>
