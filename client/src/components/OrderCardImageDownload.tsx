@@ -399,7 +399,7 @@ export function OrderCardImageDownload({
           </button>
         </div>
         <div
-          className="min-h-0 flex-1 overflow-auto p-4"
+          className={`min-h-0 flex-1 overflow-auto ${captureFullContent ? "p-0" : "p-4"}`}
           style={{
             backgroundColor: "#E2E8F0",
             backgroundImage: "linear-gradient(45deg, rgba(255,255,255,0.45) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.45) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.45) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.45) 75%)",
