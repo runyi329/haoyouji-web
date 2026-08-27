@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { RightMarginDetail } from "./RightMarginDetail";
 import { RightInterestDetail } from "./RightInterestDetail";
+import { OrderCardImageDownload } from "./OrderCardImageDownload";
 import {
   COIN_COLORS,
   CoinType,
@@ -1096,6 +1097,7 @@ export function FunderOrderCardV2Silver({
   currentUser,
   allOrders,
 }: FunderOrderCardV2Props) {
+  const cardExportRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<'detail' | 'note' | null>(null);
   const feeExpanded = activeTab === 'detail';
   const noteExpanded = activeTab === 'note';
@@ -1443,6 +1445,7 @@ export function FunderOrderCardV2Silver({
 
   return (
     <div
+      ref={cardExportRef}
       className="rounded-2xl overflow-hidden silver-card"
       style={{
         position: 'relative',
@@ -1551,6 +1554,14 @@ export function FunderOrderCardV2Silver({
                   {order.order_no}
                 </span>
               )}
+              <span className="ml-1 shrink-0">
+                <OrderCardImageDownload
+                  targetRef={cardExportRef}
+                  currentUser={currentUser}
+                  orderNo={order.order_no || order.id}
+                  color={TXT_PRI}
+                />
+              </span>
             </div>
           );
         })()}
@@ -2668,6 +2679,7 @@ export function FunderLenderCardSilver({
   ledgerId,
   currentUser,
 }: FunderOrderCardV2Props) {
+  const cardExportRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<'detail' | 'note' | null>(null);
   const feeExpanded = activeTab === 'detail';
   const noteExpanded = activeTab === 'note';
@@ -2885,6 +2897,7 @@ export function FunderLenderCardSilver({
 
   return (
     <div
+      ref={cardExportRef}
       className="rounded-2xl overflow-hidden silver-card"
       style={{
         position: 'relative',
@@ -2996,6 +3009,14 @@ export function FunderLenderCardSilver({
                   {order.order_no}
                 </span>
               )}
+              <span className="ml-1 shrink-0">
+                <OrderCardImageDownload
+                  targetRef={cardExportRef}
+                  currentUser={currentUser}
+                  orderNo={order.order_no || order.id}
+                  color={TXT_PRI}
+                />
+              </span>
             </div>
           );
         })()}

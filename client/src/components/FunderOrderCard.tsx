@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
+import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 
 // 币种选项
 export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'MSTR', 'COIN', 'AAOI', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'PLUME', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'BZ'] as const;
@@ -459,6 +460,7 @@ export function FunderOrderCard({
   previewMode = false,
   allOrders,
 }: FunderOrderCardProps) {
+  const cardExportRef = useRef<HTMLDivElement>(null);
   // 共享担保弹窗：点击订单号弹出第二层订单详情
   const [clickedOrderNo, setClickedOrderNo] = useState<string | null>(null);
   // clickedOrder: 延迟计算，在 sharedPoolInfo 声明之后（见下方 clickedOrderResolved）
@@ -1052,6 +1054,7 @@ export function FunderOrderCard({
   return (
     <>
     <div
+      ref={cardExportRef}
       className="rounded-lg overflow-hidden relative"
       style={{
         background: isParticipantVisual ? '#F0FDF4' : '#ffffff',
@@ -1151,6 +1154,12 @@ export function FunderOrderCard({
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${headerTagsExpanded ? 'rotate-180' : ''}`} />
           </button>
         )}
+        <OrderCardImageDownload
+          targetRef={cardExportRef}
+          currentUser={currentUser}
+          orderNo={order.order_no || order.id}
+          color="#64748B"
+        />
       </div>
 
       {/* 主体：左右两栏布局 */}

@@ -2904,6 +2904,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           livePrices={formLivePrices}
                           priceDirection={priceDirection}
                           membersData={((ledgerData as any)?.members || funderUsers) as any[]}
+                          currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
                         />
                       ) : (
                         <FunderOrderCardV2Silver
@@ -2912,6 +2913,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           livePrices={formLivePrices}
                           priceDirection={priceDirection}
                           membersData={((ledgerData as any)?.members || funderUsers) as any[]}
+                          currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
                         />
                       )
                     )}
