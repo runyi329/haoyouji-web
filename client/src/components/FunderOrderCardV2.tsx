@@ -1025,7 +1025,7 @@ const SL_BG = [
   // 层4：冷銀底色（更饱和的銀色）
   'linear-gradient(160deg, #d8dadf 0%, #b8bcc4 20%, #cdd0d6 45%, #b0b4bc 65%, #c8cbd2 80%, #d2d5da 100%)',
 ].join(', ');
-const SL_EXPORT_BG = 'linear-gradient(160deg, #d8dadf 0%, #b8bcc4 20%, #cdd0d6 45%, #b0b4bc 65%, #c8cbd2 80%, #d2d5da 100%)';
+const SL_EXPORT_BG = '#C5C8CE';
 const SL_BORDER = '1.5px solid rgba(200,205,210,0.9)';
 const SL_SHADOW = [
   '0 6px 20px rgba(0,0,0,0.30)',          // 外部阴影
@@ -1043,7 +1043,7 @@ const OPT_BG = [
   'linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(255,255,255,0.16) 35%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0.08) 70%, rgba(0,0,0,0.10) 100%)',
   'linear-gradient(160deg, #5b21b6 0%, #7c3aed 18%, #8b5cf6 40%, #6d28d9 62%, #7c3aed 80%, #5b21b6 100%)',
 ].join(', ');
-const OPT_EXPORT_BG = 'linear-gradient(160deg, #5b21b6 0%, #7c3aed 18%, #8b5cf6 40%, #6d28d9 62%, #7c3aed 80%, #5b21b6 100%)';
+const OPT_EXPORT_BG = '#7C3AED';
 const OPT_BORDER = '1.5px solid rgba(109,40,217,0.90)';
 const OPT_SHADOW = [
   '0 6px 20px rgba(91,33,182,0.35)',
@@ -1085,8 +1085,8 @@ const GRN_BG = [
   'linear-gradient(180deg, rgba(0,0,0,0.06) 0%, rgba(255,255,255,0.14) 35%, rgba(255,255,255,0.20) 50%, rgba(255,255,255,0.06) 70%, rgba(0,0,0,0.08) 100%)',
   'linear-gradient(160deg, #064e3b 0%, #065f46 18%, #047857 40%, #059669 62%, #047857 80%, #064e3b 100%)',
 ].join(', ');
-const GRN_EXPORT_BG = 'linear-gradient(160deg, #064e3b 0%, #065f46 18%, #047857 40%, #059669 62%, #047857 80%, #064e3b 100%)';
-const GOLD_EXPORT_BG = 'linear-gradient(160deg, #9e7c28 0%, #c89e32 18%, #ddb545 40%, #c49030 62%, #ceA03c 80%, #9e7c28 100%)';
+const GRN_EXPORT_BG = '#047857';
+const GOLD_EXPORT_BG = '#C89E32';
 const GRN_BORDER = '1.5px solid rgba(4,120,87,0.90)';
 const GRN_SHADOW = [
   '0 6px 20px rgba(4,120,87,0.35)',

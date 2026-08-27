@@ -135,7 +135,10 @@ function createExactSnapshotContainer(
   const sourceFullHeight = Math.max(rect.height, target.scrollHeight);
   const clonedTarget = target.cloneNode(true) as HTMLElement;
   copyRenderedStyles(target, clonedTarget);
-  if (exportBackground) clonedTarget.style.background = exportBackground;
+  if (exportBackground) {
+    clonedTarget.style.background = exportBackground;
+    clonedTarget.style.boxShadow = "none";
+  }
 
   clonedTarget.querySelectorAll<HTMLElement>(`[${EXPORT_HIDE_ATTRIBUTE}]`).forEach(element => {
     element.style.visibility = "hidden";
