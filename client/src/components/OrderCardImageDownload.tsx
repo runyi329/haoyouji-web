@@ -170,16 +170,35 @@ function createExactSnapshotContainer(
   document.body.appendChild(container);
 
   const finalizeSnapshot = () => {
-    // 卡片模式在字体、图片和两帧布局稳定后才锁定高度，避免底部控制行被过早测量的高度裁切。
+    // 卡片模式在字体、图片和两帧布局稳定后再测量完整内容边界，避免底部控制行被过早测量裁切。
+    const renderedRect = clonedTarget.getBoundingClientRect();
+    const renderedContentBottom = measureAfterAssets
+      ? Array.from(clonedTarget.querySelectorAll<HTMLElement>("*")).reduce((bottom, element) => {
+          if (window.getComputedStyle(element).position === "fixed") return bottom;
+          const elementRect = element.getBoundingClientRect();
+          return Math.max(bottom, elementRect.bottom - renderedRect.top);
+        }, renderedRect.height)
+      : 0;
     const fullHeight = Math.ceil(Math.max(
       sourceFullHeight,
       clonedTarget.scrollHeight,
-      clonedTarget.getBoundingClientRect().height,
+      renderedRect.height,
+      renderedContentBottom,
     ));
-    clonedTarget.style.height = `${fullHeight}px`;
-    clonedTarget.style.minHeight = `${fullHeight}px`;
-    clonedTarget.style.maxHeight = "none";
-    clonedTarget.style.overflow = "hidden";
+
+    if (measureAfterAssets) {
+      // 卡片模式保持自然高度；只固定外层画布，避免把卡片根节点本身锁成偏小高度。
+      clonedTarget.style.height = "auto";
+      clonedTarget.style.minHeight = `${fullHeight}px`;
+      clonedTarget.style.maxHeight = "none";
+      clonedTarget.style.overflow = "hidden";
+    } else {
+      // 订单模式沿用原来的固定尺寸镜像逻辑。
+      clonedTarget.style.height = `${fullHeight}px`;
+      clonedTarget.style.minHeight = `${fullHeight}px`;
+      clonedTarget.style.maxHeight = "none";
+      clonedTarget.style.overflow = "hidden";
+    }
     container.style.height = `${fullHeight + outerPadding * 2}px`;
 
     clonedTarget.querySelector<HTMLElement>("[data-card-export-watermark]")?.remove();
