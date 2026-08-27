@@ -2770,9 +2770,9 @@ export default function CryptoPrediction() {
             {/* 委买模式：金额输入 + 进度条 + 可用余额 */}
             {orderSide === "buy" && (
               <>
-                {/* 金额输入框 */}
+                {/* 投资额输入框 */}
                 <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
-                  <span className="text-sm w-14" style={{ color: '#6B7A9A' }}>金额</span>
+                  <span className="text-sm w-14" style={{ color: '#6B7A9A' }}>投资额</span>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -2793,6 +2793,28 @@ export default function CryptoPrediction() {
                   />
                   <span className="text-sm" style={{ color: '#9CA3AF' }}>USDT</span>
                 </div>
+                {/* 名义交易本金 = 投资额 × 当前倍数 */}
+                {(() => {
+                  const investment = parseFloat(orderAmount);
+                  const notionalPrincipal = !isNaN(investment) && investment > 0
+                    ? investment * orderMultiplier
+                    : null;
+                  return (
+                    <div className="flex items-center justify-between px-4 py-2 rounded-xl" style={{ backgroundColor: '#F7F9FF', border: '1px solid #E1E8FF' }}>
+                      <span className="text-xs" style={{ color: '#6B7A9A' }}>名义交易本金</span>
+                      <div className="text-right">
+                        <span className="text-sm font-semibold" style={{ color: notionalPrincipal !== null ? '#1A2340' : '#9CA3AF' }}>
+                          {notionalPrincipal !== null
+                            ? notionalPrincipal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+                            : '--'} USDT
+                        </span>
+                        <span className="ml-1.5 text-[10px]" style={{ color: '#9CA3AF' }}>
+                          投资额 × {orderMultiplier}倍
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* 5档进度条 */}
                 <div className="px-0">
                   <div className="relative h-8 flex items-center select-none">

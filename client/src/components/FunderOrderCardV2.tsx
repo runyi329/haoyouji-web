@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { calcExpiryPnL } from '../../../shared/blackScholes';
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Copy } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
@@ -19,6 +19,7 @@ import {
   FunderNoteRow,
   parseNotes,
   formatNoteTime,
+  copyFunderNoteText,
   NoteAvatar,
   FunderOrderCard,
 } from "./FunderOrderCard";
@@ -2600,6 +2601,15 @@ export function FunderOrderCardV2Silver({
                     <div className="break-all" style={{ color: TXT_PRI, fontSize: '11px', lineHeight: '1.5' }}>{note.text}</div>
                   </div>
                   <div className="shrink-0 flex flex-row gap-1.5 self-start mt-0.5 items-center">
+                    <button
+                      type="button"
+                      onClick={() => copyFunderNoteText(note.text)}
+                      className="p-1 rounded"
+                      style={{ background: 'transparent', color: TXT_PRI, border: `1px solid ${TXT_PRI}` }}
+                      title="复制备注"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
                     {/* 编辑图标 */}
                     <button
                       type="button"
@@ -3668,6 +3678,15 @@ export function FunderLenderCardSilver({
                     {note.time && <div className="text-[10px] mb-0.5" style={{ color: TXT_DIM }}>{formatNoteTime(note.time)}</div>}
                     <div className="break-all" style={{ color: TXT_PRI, fontSize: '11px', lineHeight: '1.5' }}>{note.text}</div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => copyFunderNoteText(note.text)}
+                    className="shrink-0 p-1 rounded self-start mt-0.5"
+                    style={{ background: 'transparent', color: TXT_PRI, border: `1px solid ${TXT_PRI}` }}
+                    title="复制备注"
+                  >
+                    <Copy className="w-3 h-3" />
+                  </button>
                 </div>
               )}
             </div>
