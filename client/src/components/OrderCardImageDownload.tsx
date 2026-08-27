@@ -68,22 +68,137 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
-function addTransparentShadow(source: HTMLCanvasElement, scale: number): HTMLCanvasElement {
-  const padding = Math.round(14 * scale);
-  const output = document.createElement("canvas");
-  output.width = source.width + padding * 2;
-  output.height = source.height + padding * 2;
-  const context = output.getContext("2d");
-  if (!context) return source;
+function copyRenderedStyles(sourceRoot: HTMLElement, clonedRoot: HTMLElement) {
+  const sourceNodes = [sourceRoot, ...Array.from(sourceRoot.querySelectorAll<HTMLElement>("*"))];
+  const clonedNodes = [clonedRoot, ...Array.from(clonedRoot.querySelectorAll<HTMLElement>("*"))];
+  const count = Math.min(sourceNodes.length, clonedNodes.length);
 
-  context.clearRect(0, 0, output.width, output.height);
-  context.save();
-  context.shadowColor = "rgba(15, 23, 42, 0.22)";
-  context.shadowBlur = 10 * scale;
-  context.shadowOffsetY = 4 * scale;
-  context.drawImage(source, padding, padding);
-  context.restore();
-  return output;
+  for (let index = 0; index < count; index += 1) {
+    const source = sourceNodes[index];
+    const cloned = clonedNodes[index];
+    const computed = window.getComputedStyle(source);
+
+    for (let propertyIndex = 0; propertyIndex < computed.length; propertyIndex += 1) {
+      const property = computed.item(propertyIndex);
+      const value = computed.getPropertyValue(property);
+      if (value) cloned.style.setProperty(property, value, computed.getPropertyPriority(property));
+    }
+
+    cloned.style.animation = "none";
+    cloned.style.transition = "none";
+    cloned.style.caretColor = "transparent";
+
+    if (source instanceof HTMLInputElement && cloned instanceof HTMLInputElement) {
+      cloned.value = source.value;
+      cloned.checked = source.checked;
+    } else if (source instanceof HTMLTextAreaElement && cloned instanceof HTMLTextAreaElement) {
+      cloned.value = source.value;
+      cloned.textContent = source.value;
+    } else if (source instanceof HTMLSelectElement && cloned instanceof HTMLSelectElement) {
+      cloned.value = source.value;
+    }
+
+    if (source.scrollTop) cloned.scrollTop = source.scrollTop;
+    if (source.scrollLeft) cloned.scrollLeft = source.scrollLeft;
+  }
+}
+
+async function waitForSnapshotAssets(root: HTMLElement) {
+  if (document.fonts?.ready) await document.fonts.ready;
+  const images = Array.from(root.querySelectorAll<HTMLImageElement>("img"));
+  await Promise.all(images.map(async image => {
+    if (image.complete) {
+      try { await image.decode(); } catch { /* 已完成但浏览器不支持decode */ }
+      return;
+    }
+    await new Promise<void>(resolve => {
+      const done = () => resolve();
+      image.addEventListener("load", done, { once: true });
+      image.addEventListener("error", done, { once: true });
+      window.setTimeout(done, 5000);
+    });
+  }));
+  await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+}
+
+function createExactSnapshotContainer(target: HTMLElement, watermarkText: string) {
+  const rect = target.getBoundingClientRect();
+  const clonedTarget = target.cloneNode(true) as HTMLElement;
+  copyRenderedStyles(target, clonedTarget);
+
+  clonedTarget.querySelectorAll<HTMLElement>(`[${EXPORT_HIDE_ATTRIBUTE}]`).forEach(element => {
+    element.style.visibility = "hidden";
+    element.style.pointerEvents = "none";
+  });
+
+  clonedTarget.style.width = `${rect.width}px`;
+  clonedTarget.style.minWidth = `${rect.width}px`;
+  clonedTarget.style.maxWidth = `${rect.width}px`;
+  clonedTarget.style.height = `${rect.height}px`;
+  clonedTarget.style.minHeight = `${rect.height}px`;
+  clonedTarget.style.maxHeight = `${rect.height}px`;
+  clonedTarget.style.margin = "0";
+  clonedTarget.style.position = "relative";
+  clonedTarget.style.transform = "none";
+  clonedTarget.style.transformOrigin = "top left";
+
+  const watermark = document.createElement("div");
+  watermark.setAttribute("data-card-export-watermark", "true");
+  Object.assign(watermark.style, {
+    position: "absolute",
+    inset: "0",
+    overflow: "hidden",
+    borderRadius: window.getComputedStyle(target).borderRadius,
+    pointerEvents: "none",
+    zIndex: "2147483646",
+  });
+
+  const rowStep = 78;
+  const columnStep = 245;
+  for (let y = -45, row = 0; y < rect.height + 80; y += rowStep, row += 1) {
+    const startX = row % 2 === 0 ? -120 : -245;
+    for (let x = startX; x < rect.width + 180; x += columnStep) {
+      const label = document.createElement("span");
+      label.textContent = watermarkText;
+      Object.assign(label.style, {
+        position: "absolute",
+        left: `${x}px`,
+        top: `${y}px`,
+        color: "rgba(51, 65, 85, 0.14)",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        fontSize: "11px",
+        fontWeight: "600",
+        letterSpacing: "0.02em",
+        lineHeight: "1",
+        whiteSpace: "nowrap",
+        textShadow: "0 1px 0 rgba(255,255,255,0.45)",
+        transform: "rotate(-22deg)",
+        transformOrigin: "left top",
+      });
+      watermark.appendChild(label);
+    }
+  }
+  clonedTarget.appendChild(watermark);
+
+  const padding = 16;
+  const container = document.createElement("div");
+  Object.assign(container.style, {
+    position: "fixed",
+    left: "0",
+    top: "0",
+    zIndex: "-2147483647",
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+    padding: `${padding}px`,
+    boxSizing: "content-box",
+    background: "transparent",
+    pointerEvents: "none",
+    overflow: "visible",
+  });
+  container.appendChild(clonedTarget);
+  document.body.appendChild(container);
+
+  return { container, clonedTarget, width: rect.width + padding * 2, height: rect.height + padding * 2 };
 }
 
 type SaveResult = "shared" | "downloaded" | "cancelled";
@@ -149,16 +264,17 @@ export function OrderCardImageDownload({
     if (!target || generating) return;
 
     setGenerating(true);
-    const token = `order-card-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    target.setAttribute("data-card-export-target", token);
     const timestamp = formatBeijingTime(new Date());
     const watermarkText = `${getSaverLabel(currentUser || getStoredSnapshotUser())}｜${timestamp}`;
-    const rect = target.getBoundingClientRect();
     const scale = 2;
+    let snapshotContainer: HTMLElement | null = null;
 
     try {
-      if (document.fonts?.ready) await document.fonts.ready;
-      const canvas = await html2canvas(target, {
+      const snapshot = createExactSnapshotContainer(target, watermarkText);
+      snapshotContainer = snapshot.container;
+      await waitForSnapshotAssets(snapshot.clonedTarget);
+
+      const canvas = await html2canvas(snapshot.container, {
         backgroundColor: null,
         scale,
         logging: false,
@@ -166,55 +282,15 @@ export function OrderCardImageDownload({
         allowTaint: false,
         imageTimeout: 8000,
         removeContainer: true,
-        ignoreElements: element => element instanceof HTMLElement && element.hasAttribute(EXPORT_HIDE_ATTRIBUTE),
-        onclone: clonedDocument => {
-          const clonedTarget = clonedDocument.querySelector(`[data-card-export-target="${token}"]`) as HTMLElement | null;
-          if (!clonedTarget) return;
-          clonedTarget.querySelectorAll(`[${EXPORT_HIDE_ATTRIBUTE}]`).forEach(element => element.remove());
-          clonedTarget.style.position = "relative";
-
-          const watermark = clonedDocument.createElement("div");
-          watermark.setAttribute("data-card-export-watermark", "true");
-          Object.assign(watermark.style, {
-            position: "absolute",
-            inset: "0",
-            overflow: "hidden",
-            borderRadius: "inherit",
-            pointerEvents: "none",
-            zIndex: "1000",
-          });
-
-          const rowStep = 78;
-          const columnStep = 245;
-          for (let y = -45, row = 0; y < rect.height + 80; y += rowStep, row += 1) {
-            const startX = row % 2 === 0 ? -120 : -245;
-            for (let x = startX; x < rect.width + 180; x += columnStep) {
-              const label = clonedDocument.createElement("span");
-              label.textContent = watermarkText;
-              Object.assign(label.style, {
-                position: "absolute",
-                left: `${x}px`,
-                top: `${y}px`,
-                color: "rgba(51, 65, 85, 0.14)",
-                fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-                fontSize: "11px",
-                fontWeight: "600",
-                letterSpacing: "0.02em",
-                lineHeight: "1",
-                whiteSpace: "nowrap",
-                textShadow: "0 1px 0 rgba(255,255,255,0.45)",
-                transform: "rotate(-22deg)",
-                transformOrigin: "left top",
-              });
-              watermark.appendChild(label);
-            }
-          }
-          clonedTarget.appendChild(watermark);
-        },
+        width: Math.ceil(snapshot.width),
+        height: Math.ceil(snapshot.height),
+        windowWidth: Math.max(window.innerWidth, Math.ceil(snapshot.width)),
+        windowHeight: Math.max(window.innerHeight, Math.ceil(snapshot.height)),
+        scrollX: 0,
+        scrollY: 0,
       });
 
-      const output = addTransparentShadow(canvas, scale);
-      const blob = await canvasToBlob(output);
+      const blob = await canvasToBlob(canvas);
       const compactTime = timestamp.replace(/[-:]/g, "").replace(" ", "-");
       const filename = `订单-${sanitizeFilename(String(orderNo || "快照"))}-${compactTime}.png`;
       const url = URL.createObjectURL(blob);
@@ -227,7 +303,7 @@ export function OrderCardImageDownload({
       console.error("生成订单图片预览失败", error);
       toast.error(`图片生成失败：${getErrorMessage(error)}`);
     } finally {
-      target.removeAttribute("data-card-export-target");
+      snapshotContainer?.remove();
       setGenerating(false);
     }
   };
@@ -260,7 +336,7 @@ export function OrderCardImageDownload({
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <div>
             <div className="text-base font-semibold text-slate-800">订单图片预览</div>
-            <div className="mt-0.5 text-xs text-slate-400">确认水印和卡片内容后再保存</div>
+            <div className="mt-0.5 text-xs text-slate-400">预览与当前页面卡片使用同一张图片</div>
           </div>
           <button
             type="button"
