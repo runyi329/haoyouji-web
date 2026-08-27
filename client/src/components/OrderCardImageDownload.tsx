@@ -1,6 +1,7 @@
-import React, { useState } from "react";
-import html2canvas from "html2canvas";
-import { Download, LoaderCircle } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import html2canvas from "html2canvas-pro";
+import { Download, LoaderCircle, Share2, X } from "lucide-react";
 import { toast } from "sonner";
 
 type SnapshotUser = {
@@ -17,6 +18,12 @@ interface OrderCardImageDownloadProps {
   orderNo?: string | number | null;
   color?: string;
 }
+
+type ImagePreview = {
+  blob: Blob;
+  url: string;
+  filename: string;
+};
 
 const EXPORT_HIDE_ATTRIBUTE = "data-card-export-hide";
 
@@ -79,17 +86,21 @@ function addTransparentShadow(source: HTMLCanvasElement, scale: number): HTMLCan
   return output;
 }
 
-async function shareOrDownloadImage(blob: Blob, filename: string): Promise<void> {
+type SaveResult = "shared" | "downloaded" | "cancelled";
+
+async function shareOrDownloadImage(blob: Blob, filename: string): Promise<SaveResult> {
   const file = new File([blob], filename, { type: "image/png" });
   const shareData: ShareData = { files: [file], title: "订单快照" };
 
-  if (navigator.share && navigator.canShare?.(shareData)) {
+  if (navigator.share) {
     try {
-      await navigator.share(shareData);
-      toast.success("图片已生成");
-      return;
+      const canShareFile = typeof navigator.canShare !== "function" || navigator.canShare(shareData);
+      if (canShareFile) {
+        await navigator.share(shareData);
+        return "shared";
+      }
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (error instanceof DOMException && error.name === "AbortError") return "cancelled";
     }
   }
 
@@ -102,7 +113,12 @@ async function shareOrDownloadImage(blob: Blob, filename: string): Promise<void>
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  toast.success("图片已下载，请在下载内容中保存到相册");
+  return "downloaded";
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message.slice(0, 80);
+  return "未知错误";
 }
 
 export function OrderCardImageDownload({
@@ -111,15 +127,28 @@ export function OrderCardImageDownload({
   orderNo,
   color = "#64748B",
 }: OrderCardImageDownloadProps) {
+  const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState<ImagePreview | null>(null);
 
-  const handleSave = async (event: React.MouseEvent<HTMLButtonElement>) => {
+  const closePreview = () => {
+    setPreview(current => {
+      if (current?.url) URL.revokeObjectURL(current.url);
+      return null;
+    });
+  };
+
+  useEffect(() => () => {
+    if (preview?.url) URL.revokeObjectURL(preview.url);
+  }, [preview?.url]);
+
+  const handleGeneratePreview = async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
     const target = targetRef.current;
-    if (!target || saving) return;
+    if (!target || generating) return;
 
-    setSaving(true);
+    setGenerating(true);
     const token = `order-card-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     target.setAttribute("data-card-export-target", token);
     const timestamp = formatBeijingTime(new Date());
@@ -135,13 +164,14 @@ export function OrderCardImageDownload({
         logging: false,
         useCORS: true,
         allowTaint: false,
-        imageTimeout: 4000,
+        imageTimeout: 8000,
+        removeContainer: true,
         ignoreElements: element => element instanceof HTMLElement && element.hasAttribute(EXPORT_HIDE_ATTRIBUTE),
         onclone: clonedDocument => {
           const clonedTarget = clonedDocument.querySelector(`[data-card-export-target="${token}"]`) as HTMLElement | null;
           if (!clonedTarget) return;
           clonedTarget.querySelectorAll(`[${EXPORT_HIDE_ATTRIBUTE}]`).forEach(element => element.remove());
-          if (getComputedStyle(clonedTarget).position === "static") clonedTarget.style.position = "relative";
+          clonedTarget.style.position = "relative";
 
           const watermark = clonedDocument.createElement("div");
           watermark.setAttribute("data-card-export-watermark", "true");
@@ -187,32 +217,114 @@ export function OrderCardImageDownload({
       const blob = await canvasToBlob(output);
       const compactTime = timestamp.replace(/[-:]/g, "").replace(" ", "-");
       const filename = `订单-${sanitizeFilename(String(orderNo || "快照"))}-${compactTime}.png`;
-      await shareOrDownloadImage(blob, filename);
+      const url = URL.createObjectURL(blob);
+      setPreview(current => {
+        if (current?.url) URL.revokeObjectURL(current.url);
+        return { blob, url, filename };
+      });
+      toast.success("图片预览已生成");
     } catch (error) {
-      console.error("保存订单图片失败", error);
-      toast.error("图片生成失败，请重试");
+      console.error("生成订单图片预览失败", error);
+      toast.error(`图片生成失败：${getErrorMessage(error)}`);
     } finally {
       target.removeAttribute("data-card-export-target");
+      setGenerating(false);
+    }
+  };
+
+  const handleConfirmSave = async () => {
+    if (!preview || saving) return;
+    setSaving(true);
+    try {
+      const result = await shareOrDownloadImage(preview.blob, preview.filename);
+      if (result === "cancelled") return;
+      toast.success(result === "shared" ? "已打开系统分享" : "图片已下载，请在下载内容中保存到相册");
+      closePreview();
+    } catch (error) {
+      console.error("保存订单图片失败", error);
+      toast.error(`图片保存失败：${getErrorMessage(error)}`);
+    } finally {
       setSaving(false);
     }
   };
 
-  return (
-    <button
-      type="button"
-      onClick={handleSave}
-      disabled={saving}
-      data-card-export-hide="true"
-      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition active:scale-95 disabled:opacity-60"
-      style={{
-        color,
-        background: "rgba(255,255,255,0.35)",
-        border: "1px solid rgba(148,163,184,0.28)",
-      }}
-      title="保存为图片"
-      aria-label="保存订单图片"
+  const previewModal = preview && typeof document !== "undefined" ? createPortal(
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/65 px-4 py-6"
+      onClick={closePreview}
     >
-      {saving ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-    </button>
+      <div
+        className="flex max-h-[92vh] w-full max-w-[440px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        onClick={event => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <div>
+            <div className="text-base font-semibold text-slate-800">订单图片预览</div>
+            <div className="mt-0.5 text-xs text-slate-400">确认水印和卡片内容后再保存</div>
+          </div>
+          <button
+            type="button"
+            onClick={closePreview}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500"
+            aria-label="关闭图片预览"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div
+          className="min-h-0 flex-1 overflow-auto p-4"
+          style={{
+            backgroundColor: "#E2E8F0",
+            backgroundImage: "linear-gradient(45deg, rgba(255,255,255,0.45) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.45) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.45) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.45) 75%)",
+            backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
+            backgroundSize: "16px 16px",
+          }}
+        >
+          <img src={preview.url} alt="订单图片预览" className="mx-auto block h-auto max-w-full" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 border-t border-slate-100 p-4">
+          <button
+            type="button"
+            onClick={closePreview}
+            disabled={saving}
+            className="h-11 rounded-xl bg-slate-100 text-sm font-medium text-slate-600 disabled:opacity-50"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirmSave}
+            disabled={saving}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+            {saving ? "保存中" : "保存／分享"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  ) : null;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={handleGeneratePreview}
+        disabled={generating}
+        data-card-export-hide="true"
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition active:scale-95 disabled:opacity-60"
+        style={{
+          color,
+          background: "rgba(255,255,255,0.35)",
+          border: "1px solid rgba(148,163,184,0.28)",
+        }}
+        title="预览并保存图片"
+        aria-label="预览订单图片"
+      >
+        {generating ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+      </button>
+      {previewModal}
+    </>
   );
 }
