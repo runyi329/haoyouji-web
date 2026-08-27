@@ -17,6 +17,7 @@ interface OrderCardImageDownloadProps {
   currentUser?: SnapshotUser | null;
   orderNo?: string | number | null;
   color?: string;
+  outerPadding?: number;
 }
 
 type ImagePreview = {
@@ -121,7 +122,7 @@ async function waitForSnapshotAssets(root: HTMLElement) {
   await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 }
 
-function createExactSnapshotContainer(target: HTMLElement, watermarkText: string) {
+function createExactSnapshotContainer(target: HTMLElement, watermarkText: string, outerPadding: number) {
   const rect = target.getBoundingClientRect();
   const sourceFullHeight = Math.max(rect.height, target.scrollHeight);
   const clonedTarget = target.cloneNode(true) as HTMLElement;
@@ -145,17 +146,16 @@ function createExactSnapshotContainer(target: HTMLElement, watermarkText: string
   clonedTarget.style.transformOrigin = "top left";
   clonedTarget.style.overflow = "visible";
 
-  const padding = 16;
   const container = document.createElement("div");
   Object.assign(container.style, {
     position: "fixed",
     left: "0",
     top: "0",
     zIndex: "-2147483647",
-    width: `${rect.width}px`,
+    width: `${rect.width + outerPadding * 2}px`,
     height: "auto",
-    padding: `${padding}px`,
-    boxSizing: "content-box",
+    padding: `${outerPadding}px`,
+    boxSizing: "border-box",
     background: "transparent",
     pointerEvents: "none",
     overflow: "visible",
@@ -173,7 +173,7 @@ function createExactSnapshotContainer(target: HTMLElement, watermarkText: string
   clonedTarget.style.minHeight = `${fullHeight}px`;
   clonedTarget.style.maxHeight = "none";
   clonedTarget.style.overflow = "hidden";
-  container.style.height = `${fullHeight}px`;
+  container.style.height = `${fullHeight + outerPadding * 2}px`;
 
   const watermark = document.createElement("div");
   watermark.setAttribute("data-card-export-watermark", "true");
@@ -213,7 +213,12 @@ function createExactSnapshotContainer(target: HTMLElement, watermarkText: string
   }
   clonedTarget.appendChild(watermark);
 
-  return { container, clonedTarget, width: rect.width + padding * 2, height: fullHeight + padding * 2 };
+  return {
+    container,
+    clonedTarget,
+    width: rect.width + outerPadding * 2,
+    height: fullHeight + outerPadding * 2,
+  };
 }
 
 type SaveResult = "shared" | "downloaded" | "cancelled";
@@ -256,6 +261,7 @@ export function OrderCardImageDownload({
   currentUser,
   orderNo,
   color = "#64748B",
+  outerPadding = 16,
 }: OrderCardImageDownloadProps) {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -285,7 +291,7 @@ export function OrderCardImageDownload({
     let snapshotContainer: HTMLElement | null = null;
 
     try {
-      const snapshot = createExactSnapshotContainer(target, watermarkText);
+      const snapshot = createExactSnapshotContainer(target, watermarkText, outerPadding);
       snapshotContainer = snapshot.container;
       await waitForSnapshotAssets(snapshot.clonedTarget);
 
