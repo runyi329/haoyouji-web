@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-27
+// 生成时间：2026-08-28
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9021,5 +9021,32 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-08-26T14:25:29Z", type: "fix", cleanMessage: "make financing fields derive the remaining value" },
     { date: "2026-08-26T14:48:52Z", type: "fix", cleanMessage: "preserve exact financing input amount" },
     { date: "2026-08-26T14:59:48Z", type: "feat", cleanMessage: "add settled order filter" },
+  ],
+  "2026-08-27": [
+    { date: "2026-08-26T19:28:22Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-27T00:26:21Z", type: "feat", cleanMessage: "add watermarked order card image export" },
+    { date: "2026-08-27T01:20:43Z", type: "feat", cleanMessage: "control user order image downloads" },
+    { date: "2026-08-27T01:33:01Z", type: "fix", cleanMessage: "preview order card images before saving" },
+    { date: "2026-08-27T02:14:21Z", type: "fix", cleanMessage: "preserve exact card styles in image export" },
+    { date: "2026-08-27T02:23:37Z", type: "other", cleanMessage: "ui: soften order image watermark" },
+    { date: "2026-08-27T02:32:29Z", type: "feat", cleanMessage: "enable user image downloads by default" },
+    { date: "2026-08-27T02:43:59Z", type: "other", cleanMessage: "ui: open image preview without success toast" },
+    { date: "2026-08-27T02:58:02Z", type: "feat", cleanMessage: "add notional principal and note copy actions" },
+    { date: "2026-08-27T03:10:10Z", type: "fix", cleanMessage: "export full card mode notes" },
+    { date: "2026-08-27T03:17:01Z", type: "fix", cleanMessage: "preserve card mode outer edges" },
+    { date: "2026-08-27T03:44:59Z", type: "fix", cleanMessage: "capture full card after layout" },
+    { date: "2026-08-27T03:54:03Z", type: "fix", cleanMessage: "preserve full card mode bounds" },
+    { date: "2026-08-27T04:03:03Z", type: "fix", cleanMessage: "remove card mode white frame" },
+    { date: "2026-08-27T04:21:44Z", type: "fix", cleanMessage: "allow two-decimal grid quantities" },
+    { date: "2026-08-27T04:29:02Z", type: "fix", cleanMessage: "remove card snapshot white frame" },
+    { date: "2026-08-27T04:40:33Z", type: "fix", cleanMessage: "remove card preview image gutter" },
+    { date: "2026-08-27T05:06:59Z", type: "fix", cleanMessage: "replace card export inner white frame" },
+    { date: "2026-08-27T05:22:01Z", type: "fix", cleanMessage: "flatten card export frame background" },
+    { date: "2026-08-27T06:06:02Z", type: "fix", cleanMessage: "move card download beside notes" },
+    { date: "2026-08-27T06:28:25Z", type: "fix", cleanMessage: "persist exact financing input roles" },
+    { date: "2026-08-27T06:42:04Z", type: "feat", cleanMessage: "add SLV quote support" },
+    { date: "2026-08-27T08:15:35Z", type: "fix", cleanMessage: "manage temporary card limits" },
+    { date: "2026-08-27T11:09:24Z", type: "fix", cleanMessage: "hide closed temporary limits" },
+    { date: "2026-08-27T15:37:55Z", type: "feat", cleanMessage: "extend SOL sell price levels" },
   ],
 };
