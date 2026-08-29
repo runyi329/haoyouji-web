@@ -587,17 +587,41 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       setCollateralEditMode(false); // 保存成功后切回只读态
       refetchOrders();
       trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+      trpcUtils.ledger.funderGetSharedCollateralPool.invalidate();
     },
     onError: (err) => toast.error(err.message),
   });
-  // 把当前整组担保货币写回正在编辑的订单（仅更新 collateral_assets 字段）
+  // 参与者担保物独立保存：只写入该参与者的子订单快照，不修改主订单拥有者的担保物。
+  const saveParticipantCollateralMutation = trpc.ledger.funderUpdateParticipantOrder.useMutation({
+    onSuccess: () => {
+      toast.success('参与者担保货币已保存');
+      setCollateralEditMode(false);
+      refetchOrders();
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+      trpcUtils.ledger.financeGetOrders.invalidate({ ledgerId });
+      trpcUtils.ledger.funderGetSharedCollateralPool.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  // 把当前整组担保货币写回正在编辑的视角：参与者写子订单快照，拥有者写主订单。
   const persistCollateral = (assets: { coin: string; qty: string; note?: string }[]) => {
     const oid = editingOrder?.id ? Number(editingOrder.id) : null;
     if (!oid) return; // 新建态无订单 ID，跳过（随订单一起保存）
+    const cleanAssets = assets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)));
+    const participantUserId = editingOrder?.participantInfo?.userId ?? editingOrder?.participantInfo?.user_id;
+    if (participantUserId) {
+      saveParticipantCollateralMutation.mutate({
+        orderId: oid,
+        ledgerId,
+        userId: Number(participantUserId),
+        snapshot: { collateral_assets: JSON.stringify(cleanAssets) },
+      });
+      return;
+    }
     saveCollateralMutation.mutate({
       id: oid,
       ledgerId,
-      collateralAssets: assets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty))),
+      collateralAssets: cleanAssets,
     });
   };
   const deleteMutation = trpc.ledger.funderDeleteAssetOrder.useMutation({
@@ -664,6 +688,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       refetchOrders();
       trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
       trpcUtils.ledger.financeGetOrders.invalidate({ ledgerId });
+      trpcUtils.ledger.funderGetSharedCollateralPool.invalidate();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -2263,12 +2288,19 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 </select>
               </div>
 
-              {/* 分隔线：担保货币 - 受邀订单隐藏 */}
-              {!editingOrder?.participantInfo && <div className="flex items-center gap-3">
-                <div className="flex-1 h-px" style={{ background: collateralShareMode === 'self' ? '#FECACA' : '#F3F4F6' }} />
-                <span className="text-xs shrink-0" style={{ color: collateralShareMode === 'self' ? '#DC2626' : '#9CA3AF', fontWeight: collateralShareMode === 'self' ? 600 : 400 }}>{collateralShareMode === 'self' ? '共享担保' : '担保货币'}</span>
-                <div className="flex-1 h-px" style={{ background: collateralShareMode === 'self' ? '#FECACA' : '#F3F4F6' }} />
-              </div>}
+              {/* 担保货币分隔线：参与者使用自己的独立担保物，不继承订单拥有者。 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px" style={{ background: editingOrder?.participantInfo ? '#A7F3D0' : collateralShareMode === 'self' ? '#FECACA' : '#F3F4F6' }} />
+                <span className="text-xs shrink-0" style={{ color: editingOrder?.participantInfo ? '#047857' : collateralShareMode === 'self' ? '#DC2626' : '#9CA3AF', fontWeight: editingOrder?.participantInfo || collateralShareMode === 'self' ? 600 : 400 }}>
+                  {editingOrder?.participantInfo ? '参与者独立担保' : collateralShareMode === 'self' ? '共享担保' : '担保货币'}
+                </span>
+                <div className="flex-1 h-px" style={{ background: editingOrder?.participantInfo ? '#A7F3D0' : collateralShareMode === 'self' ? '#FECACA' : '#F3F4F6' }} />
+              </div>
+              {editingOrder?.participantInfo && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-700">
+                  这里添加或修改的是当前参与者自己的担保物，不会改变订单拥有者或其他参与者的担保物。
+                </div>
+              )}
 
               {/* 担保物来源切换 - 受邀订单隐藏 */}
               {!editingOrder?.participantInfo && formData.assetType === 'stock' && (
@@ -2345,8 +2377,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               </div>
               )}
 
-              {/* 担保货币列表 - 受邀订单隐藏，手动输入模式时显示 */}
-              {!editingOrder?.participantInfo && collateralSourceMode === 'manual' && (
+              {/* 担保货币列表：参与者始终编辑自己的快照；拥有者按所选来源编辑。 */}
+              {(editingOrder?.participantInfo || collateralSourceMode === 'manual') && (
               <div className="space-y-3">
                 {/* 只读态：编辑已有订单且未进入编辑模式时 */}
                 {editingOrder?.id && !collateralEditMode ? (
@@ -2425,10 +2457,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   <button
                     type="button"
                     onClick={() => persistCollateral(collateralAssets)}
-                    disabled={saveCollateralMutation.isPending}
+                    disabled={saveCollateralMutation.isPending || saveParticipantCollateralMutation.isPending}
                     className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60"
                     style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
-                  >{saveCollateralMutation.isPending ? '保存中…' : '保存担保货币'}</button>
+                  >{saveCollateralMutation.isPending || saveParticipantCollateralMutation.isPending ? '保存中…' : editingOrder?.participantInfo ? '保存参与者担保货币' : '保存担保货币'}</button>
                 )}
                 </>
                 )}
