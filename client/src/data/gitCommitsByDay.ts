@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-29
+// 生成时间：2026-08-30
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9056,5 +9056,8 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-08-29": [
     { date: "2026-08-29T00:19:40Z", type: "fix", cleanMessage: "isolate participant collateral pools" },
     { date: "2026-08-29T00:56:57Z", type: "fix", cleanMessage: "use participant buy cost for pnl" },
+    { date: "2026-08-29T01:11:17Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-29T02:36:53Z", type: "fix", cleanMessage: "import loan form landmark icon" },
+    { date: "2026-08-29T03:06:09Z", type: "fix", cleanMessage: "isolate participant collateral editing" },
   ],
 };
