@@ -16944,7 +16944,7 @@ ${klinesSummary}
         return { orders: ordersWithPaid, livePrices, _debug: { targetUserId, participantQueryUserIdEarly, participantOrderIds, viewAsUserId: input.viewAsUserId } };
       }),
 
-    // 获取本人名下共享担保池数据（用于担保缺口问号弹窗汇总展示）
+    // 获取目标视角用户的独立共享担保池（本人订单 + 该用户的参与者子订单）
     funderGetSharedCollateralPool: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
@@ -16975,30 +16975,87 @@ ${klinesSummary}
           // 确保字段存在
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_share_mode VARCHAR(10) DEFAULT 'none'`).catch(() => {});
 
-          // 查询该用户名下所有开启了本人共享的活跃订单
+          // 查询该用户本人名下订单及该用户作为参与者的关联订单。
+          // 参与者订单必须先应用其独立快照，再判断是否开启了「本人订单共享」；
+          // 不能继续使用主订单拥有者的担保物与共享设置。
           const [sharedRows] = await conn.execute(
-            `SELECT fo.id, fo.order_no, fo.coin, fo.amount, fo.buy_price, fo.buy_quantity, fo.interest_base, fo.interest_rate_annual,
-                    fo.interest_start_date, fo.collateral_assets, fo.collateral_share_mode,
-                    fo.interest_base_currency, fo.interest_rate_currency, fo.interest_payment_type,
-                    fo.principal_lent_out, fo.option_info, fo.asset_type
+            `SELECT fo.*,
+                    p.user_id AS participant_user_id,
+                    p.order_snapshot AS participant_order_snapshot,
+                    p.amount AS participant_amount,
+                    p.amount_currency AS participant_amount_currency,
+                    p.interest_rate AS participant_interest_rate,
+                    p.interest_base AS participant_interest_base,
+                    p.interest_base_currency AS participant_interest_base_currency,
+                    p.interest_payment_type AS participant_interest_payment_type,
+                    p.interest_start_date AS participant_interest_start_date,
+                    p.interest_rate_currency AS participant_interest_rate_currency,
+                    p.display_config AS participant_display_config,
+                    p.note AS participant_note,
+                    p.order_no_override AS participant_order_no_override,
+                    p.buy_date_override AS participant_buy_date_override,
+                    p.broker_name_override AS participant_broker_name_override,
+                    p.broker_account_override AS participant_broker_account_override
              FROM ledger_orders fo
-             WHERE fo.ledger_id = ? AND fo.user_id = ? AND fo.status = 'active'
-               AND fo.deleted_at IS NULL AND fo.collateral_share_mode = 'self'`,
-            [input.ledgerId, input.userId]
+             LEFT JOIN ledger_order_participants p
+               ON p.order_id = fo.id AND p.ledger_id = fo.ledger_id
+              AND p.user_id = ? AND p.role <> 'inactive'
+             WHERE fo.ledger_id = ?
+               AND ((fo.user_id = ? AND fo.status = 'active' AND fo.deleted_at IS NULL)
+                    OR p.user_id IS NOT NULL)`,
+            [input.userId, input.ledgerId, input.userId]
           ) as any[];
-          const orders = Array.isArray(sharedRows) ? sharedRows : [];
+          const rawOrders = Array.isArray(sharedRows) ? sharedRows : [];
+          const orders = rawOrders.map((row: any) => {
+            const isParticipantView = row.participant_user_id != null && Number(row.user_id) !== input.userId;
+            if (!isParticipantView) return { ...row, _sharedPoolParticipantUserId: null };
 
-          // 查询每个订单的已结利息
+            const snapshot = parseFunderParticipantSnapshot(row.participant_order_snapshot);
+            const result: any = { ...row, ...(snapshot || {}) };
+            // 主订单结清时参与者必须同步结清；主订单删除但选择保留参与者时，仍按参与者快照独立存在。
+            if (row.status === 'settled') {
+              result.status = 'settled';
+              result.settled_at = row.settled_at;
+            }
+            if (row.participant_amount != null && row.participant_amount !== '') result.amount = row.participant_amount;
+            if (row.participant_amount_currency) result.amount_currency = row.participant_amount_currency;
+            if (row.participant_interest_rate != null && row.participant_interest_rate !== '') result.interest_rate_annual = row.participant_interest_rate;
+            if (row.participant_interest_base != null && row.participant_interest_base !== '') result.interest_base = row.participant_interest_base;
+            if (row.participant_interest_base_currency) result.interest_base_currency = row.participant_interest_base_currency;
+            if (row.participant_interest_payment_type) result.interest_payment_type = row.participant_interest_payment_type;
+            if (row.participant_interest_start_date) result.interest_start_date = row.participant_interest_start_date;
+            if (row.participant_interest_rate_currency) result.interest_rate_currency = row.participant_interest_rate_currency;
+            if (row.participant_display_config) result.display_config = row.participant_display_config;
+            if (row.participant_note != null) result.public_note = row.participant_note;
+            if (row.participant_order_no_override) result.order_no = row.participant_order_no_override;
+            if (row.participant_buy_date_override) result.buy_date = row.participant_buy_date_override;
+            if (row.participant_broker_name_override) result.broker_name = row.participant_broker_name_override;
+            if (row.participant_broker_account_override) result.broker_account = row.participant_broker_account_override;
+            result.id = row.id;
+            result.ledger_id = row.ledger_id;
+            result.user_id = row.user_id;
+            result._sharedPoolParticipantUserId = input.userId;
+            return result;
+          }).filter((o: any) => o.status === 'active' && o.collateral_share_mode === 'self');
+
+          // 查询每个订单的已结利息明细；后续按当前视角身份筛选。
+          // 主订单使用 participant_user_id IS NULL，参与者子订单只使用该参与者自己的记录。
           const orderIds = orders.map((o: any) => Number(o.id));
-          let paidMap: Record<number, number> = {};
+          const paymentRowsMap: Record<number, any[]> = {};
           if (orderIds.length > 0) {
             const placeholders = orderIds.map(() => '?').join(',');
             const [paidRows] = await conn.execute(
-              `SELECT order_id, SUM(amount) as total_paid FROM ledger_order_payments WHERE order_id IN (${placeholders}) GROUP BY order_id`,
+              `SELECT order_id, participant_user_id, amount, IFNULL(currency, 'U') AS currency,
+                      IFNULL(exchange_rate, 6.75) AS exchange_rate
+               FROM ledger_order_payments WHERE order_id IN (${placeholders})`,
               orderIds
             ) as any[];
             const paidArr = Array.isArray(paidRows) ? paidRows : [];
-            for (const r of paidArr) { paidMap[Number(r.order_id)] = parseFloat(r.total_paid || '0'); }
+            for (const r of paidArr) {
+              const orderId = Number(r.order_id);
+              if (!paymentRowsMap[orderId]) paymentRowsMap[orderId] = [];
+              paymentRowsMap[orderId].push(r);
+            }
           }
 
           // 获取实时价格及其健康状态；前端可据此标识长期未更新的报价
@@ -17042,7 +17099,21 @@ ${klinesSummary}
               return Math.max(0, nowDay - startDay + 1);
             })();
             const totalInterest = principal * (annualRate / 100) * holdDays / 365;
-            const paidInterest = paidMap[Number(o.id)] || 0;
+            const expectedParticipantUserId = o._sharedPoolParticipantUserId == null ? null : Number(o._sharedPoolParticipantUserId);
+            const baseCurrencyRaw = String(o.interest_base_currency || 'USDT').toUpperCase();
+            const baseCurrency = baseCurrencyRaw === 'CNY' ? 'CNY' : 'USDT';
+            const paidInterest = (paymentRowsMap[Number(o.id)] || []).reduce((sum: number, payment: any) => {
+              const paymentParticipantUserId = payment.participant_user_id == null ? null : Number(payment.participant_user_id);
+              if (paymentParticipantUserId !== expectedParticipantUserId) return sum;
+              const amount = parseFloat(String(payment.amount || 0)) || 0;
+              const paymentCurrencyRaw = String(payment.currency || 'U').toUpperCase();
+              const paymentCurrency = paymentCurrencyRaw === 'CNY' ? 'CNY' : 'USDT';
+              const exchangeRate = parseFloat(String(payment.exchange_rate || 6.75)) || 6.75;
+              if (paymentCurrency === baseCurrency) return sum + amount;
+              if (paymentCurrency === 'CNY' && baseCurrency === 'USDT') return sum + amount / exchangeRate;
+              if (paymentCurrency === 'USDT' && baseCurrency === 'CNY') return sum + amount * exchangeRate;
+              return sum + amount;
+            }, 0);
             const pendingInterest = Math.max(0, totalInterest - paidInterest);
             // 担保需求 = 本金 + 待结利息
             // 期权订单：本金是否计入由 principal_lent_out 开关控制

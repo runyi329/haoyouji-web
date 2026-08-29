@@ -543,10 +543,11 @@ function FunderOrderCardLegacy({
 
 
 
-  // 共享担保池查询（仅当订单开启了本人订单共享时才查询）
+  // 共享担保池按当前视角用户隔离；参与者不能沿用主订单拥有者的担保体系。
   const orderShareMode = (order as any).collateral_share_mode;
+  const sharedCollateralViewUserId = Number((order as any).participantInfo?.userId || order.user_id);
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
-    { ledgerId, userId: Number(order.user_id) },
+    { ledgerId, userId: sharedCollateralViewUserId },
     { enabled: ledgerId > 0 && orderShareMode === 'self', staleTime: 10000 }
   );
   const [showInterestTip, setShowInterestTip] = useState(false);

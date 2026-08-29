@@ -1305,8 +1305,9 @@ export function FunderOrderCardV2Silver({
     const pct = marginBaseNum > 0 ? (remainingCNY / marginBaseNum * 100) : null;
     return { fc2977RemainingMarginU: remainingU, fc2977MarginBasePct: pct };
   })();
+  const sharedCollateralViewUserId = _v2ParticipantUserId ?? Number(order.user_id);
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
-    { ledgerId: (order as any).ledger_id ?? 0, userId: Number(order.user_id) },
+    { ledgerId: (order as any).ledger_id ?? 0, userId: sharedCollateralViewUserId },
     {
       enabled: isSharedMode && !!((order as any).ledger_id),
       staleTime: 5000,
@@ -1335,7 +1336,7 @@ export function FunderOrderCardV2Silver({
         principal_lent_out: poolOrder.principalLentOut ? 1 : 0,
         asset_type: poolOrder.assetType || 'crypto',
         status: 'active',
-        user_id: (order as any).user_id,
+        user_id: sharedCollateralViewUserId,
         ledger_id: ledgerId,
       };
     })()
@@ -2762,8 +2763,9 @@ export function FunderLenderCardSilver({
   // 共享担保池查询（仅当订单开启了本人订单共享时才查询）
   const orderShareMode = (order as any).collateral_share_mode;
   const isSharedMode = orderShareMode === 'self';
+  const sharedCollateralViewUserId = _lnParticipantUserId ?? Number(order.user_id);
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
-    { ledgerId: ledgerId ?? 0, userId: Number(order.user_id) },
+    { ledgerId: ledgerId ?? 0, userId: sharedCollateralViewUserId },
     {
       enabled: !!ledgerId && isSharedMode,
       staleTime: 5000,

@@ -285,8 +285,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     return isParticipantOrder ? (Number(order?.participantInfo?.userId) || undefined) : undefined;
   };
   const formLivePrices: Record<string, number> = (assetOrdersData as any)?.livePrices ?? {};
-  // 共享担保池数据（编辑表单中选择共享模式时用于确认提示）
-  const sharedCollateralUserId = editingOrder?.user_id ?? (formData as any)?.userId;
+  // 共享担保池数据按当前编辑视角隔离：参与者子订单使用参与者自己的池。
+  const sharedCollateralUserId = getParticipantUserIdForOrder(editingOrder) ?? editingOrder?.user_id ?? (formData as any)?.userId;
   const { data: sharedPoolData } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId, userId: Number(sharedCollateralUserId) },
     { enabled: ledgerId > 0 && !!sharedCollateralUserId && collateralShareMode === 'self', staleTime: 5000 }
