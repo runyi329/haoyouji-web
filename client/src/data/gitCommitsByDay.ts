@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-28
+// 生成时间：2026-08-29
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9048,5 +9048,13 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-08-27T08:15:35Z", type: "fix", cleanMessage: "manage temporary card limits" },
     { date: "2026-08-27T11:09:24Z", type: "fix", cleanMessage: "hide closed temporary limits" },
     { date: "2026-08-27T15:37:55Z", type: "feat", cleanMessage: "extend SOL sell price levels" },
+  ],
+  "2026-08-28": [
+    { date: "2026-08-28T01:47:58Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-28T12:43:09Z", type: "fix", cleanMessage: "restore SLV floating pnl price" },
+  ],
+  "2026-08-29": [
+    { date: "2026-08-29T00:19:40Z", type: "fix", cleanMessage: "isolate participant collateral pools" },
+    { date: "2026-08-29T00:56:57Z", type: "fix", cleanMessage: "use participant buy cost for pnl" },
   ],
 };
