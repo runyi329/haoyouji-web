@@ -1050,9 +1050,10 @@ export function FunderOrderCard({
   const liveP = livePrices[order.coin] ?? null;
   const currentValue = liveP !== null ? liveP * qty : null;
   const isShort = (order as any).trade_direction === 'short';
-  // 数字币现货的浮盈只比较资产市值与买入价值；计息基数可能是人民币，不能作为 U 成本。
+  // 数字币现货的浮盈只比较资产市值与买入价值；参与者融资金额和计息基数可独立修改，均不能代替持仓成本。
   // 期权和其他非数字币订单仍保留原有的风险敞口基准。
-  const floatPnlBase = !isStockOrder && !isOptionOrder ? totalU : interestBaseNum;
+  const spotBuyValueUsdt = qty > 0 && quotedPriceUsdt > 0 ? qty * quotedPriceUsdt : totalU;
+  const floatPnlBase = !isStockOrder && !isOptionOrder ? spotBuyValueUsdt : interestBaseNum;
   // 做空盈亏取反：跌了是盈，涨了是亏
   const floatPnl = currentValue !== null
     ? (isShort ? floatPnlBase - currentValue : currentValue - floatPnlBase)
@@ -2007,10 +2008,10 @@ export function FunderOrderCard({
                         <>
                           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                             <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动盈亏</div>
-                            <div>= 当前市值 - 计息基数（正数为浮盈，负数为亏损）</div>
+                            <div>= 当前市值 - 买入价值（正数为浮盈，负数为亏损）</div>
                             <div className="mt-1 font-mono">
                               {floatPnl !== null
-                                ? <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {interestBaseNum.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
+                                ? <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {floatPnlBase.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
                                 : <span className="text-gray-400">当前市值暂无实时价格，暂无法计算浮动盈亏</span>
                               }
                             </div>

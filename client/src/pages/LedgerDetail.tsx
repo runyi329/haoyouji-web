@@ -706,7 +706,8 @@ function FunderOrderCardLegacy({
     : (order.interest_base ? Number(order.interest_base) : totalU);
   const liveP = livePrices[order.coin] ?? null;
   const currentValue = liveP !== null ? liveP * qty : null;
-  const floatPnl = currentValue !== null ? currentValue - interestBaseNum : null;
+  // 浮动盈亏使用持仓买入成本；参与者计息基数可独立修改，不能替代买入价值。
+  const floatPnl = currentValue !== null ? currentValue - totalU : null;
   const exposure = floatPnl !== null
     ? collateralValue + floatPnl - accrued + totalPaid
     : collateralValue - accrued + totalPaid;
@@ -1139,10 +1140,10 @@ function FunderOrderCardLegacy({
                     <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
                       <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动盈亏</div>
-                        <div>= 当前市值 - 计息基数（正数为浮盈，负数为亏损）</div>
+                        <div>= 当前市值 - 买入价值（正数为浮盈，负数为亏损）</div>
                         <div className="mt-1 font-mono">
                           {floatPnl !== null
-                            ? <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {interestBaseNum.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} U{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
+                            ? <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {totalU.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} U{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
                             : <span className="text-gray-400">当前市值暂无实时价格，暂无法计算浮动盈亏</span>
                           }
                         </div>

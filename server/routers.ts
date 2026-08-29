@@ -19280,6 +19280,8 @@ ${klinesSummary}
           ...buildFunderParticipantSnapshot(row),
           ...(parseFunderParticipantSnapshot(row.order_snapshot) || {}),
           ...buildFunderParticipantSnapshot(input.snapshot),
+          // 参与者可独立调整金额、买入单价和币数，但标的币种始终继承主订单。
+          coin: row.coin,
         };
         await conn.execute(
           `UPDATE ledger_order_participants SET

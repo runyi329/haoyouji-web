@@ -1191,7 +1191,7 @@ export function FunderOrderCardV2Silver({
   const displayFinancingAsPrimary = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true || amountCurrency === 'CNY';
 
   const currentValue = liveP !== null && qty > 0 ? liveP * qty : null;
-  const buyValue = storedAmountUsdt > 0 ? storedAmountUsdt : (qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : 0);
+  const buyValue = qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : storedAmountUsdt;
   const _isShortSl = (order as any).trade_direction === 'short';
   const floatPnl = currentValue !== null && buyValue > 0
     ? (_isShortSl ? buyValue - currentValue : currentValue - buyValue)
@@ -2799,7 +2799,7 @@ export function FunderLenderCardSilver({
   const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'U' : amountCurrency;
 
   const currentValue = liveP !== null && qty > 0 ? liveP * qty : null;
-  const buyValue = storedAmountUsdt > 0 ? storedAmountUsdt : (qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : 0);
+  const buyValue = qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : storedAmountUsdt;
   const floatPnl = currentValue !== null && buyValue > 0 ? currentValue - buyValue : null;
   const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const dir = priceDirection?.[coin] ?? 'same';

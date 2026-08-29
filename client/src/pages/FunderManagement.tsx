@@ -1812,7 +1812,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   期权类型：融资金额由「权利金/张 × 张数」自动计算，无需填写买入价格和数量
                 </div>
               )}
-              <div className="space-y-3" style={{ display: formData.assetType === 'crypto_option' ? 'none' : undefined, opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
+              <div className="space-y-3" style={{ display: formData.assetType === 'crypto_option' ? 'none' : undefined }}>
                 <span className="block text-xs text-gray-400">
                   {formData.assetType === 'stock' ? '股票类型：只需输入融资金额' : '最后手动输入的两项保持不变，第三项显示“≈ 自动推算”'}
                 </span>
@@ -1899,15 +1899,15 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 {/* 购买币种 + 币数（同行并排） */}
                 <div className="flex items-end gap-3" style={{ opacity: formData.assetType === 'stock' || formData.assetType === 'crypto_option' ? 0.4 : 1 }}>
                   <div style={{ width: '40%' }}>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">购买币种{editingOrder && !editingOrder.participantInfo && <span className="ml-1 text-xs text-orange-500 font-normal">(不可改)</span>}</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">购买币种{editingOrder && <span className="ml-1 text-xs text-orange-500 font-normal">(不可改)</span>}</label>
                     <select
                       value={formData.coin}
                       onChange={e => {
-                        if (editingOrder && !editingOrder.participantInfo) return;
+                        if (editingOrder) return;
                         resetLinkedAmountFields();
                         setFormData(d => ({ ...d, coin: e.target.value as CoinType }));
                       }}
-                      disabled={!!(editingOrder && !editingOrder.participantInfo) || formData.assetType === 'stock' || formData.assetType === 'crypto_option'}
+                      disabled={!!editingOrder || formData.assetType === 'stock' || formData.assetType === 'crypto_option'}
                       className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none disabled:text-gray-300"
                       style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
                     >
