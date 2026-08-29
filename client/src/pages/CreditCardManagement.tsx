@@ -9,7 +9,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import {
   ChevronLeft, Plus, CreditCard, Pencil, Trash2, Copy,
   X, Check, Users, User, Search, ChevronDown, Lightbulb, ToggleLeft, ToggleRight,
-  Eye, EyeOff, ShieldCheck, PhoneCall, RefreshCw, SlidersHorizontal, Loader2, CalendarDays,
+  Eye, EyeOff, ShieldCheck, PhoneCall, RefreshCw, SlidersHorizontal, Loader2, CalendarDays, Landmark,
 } from "lucide-react";
 import { LoanServiceContactSheet } from "@/components/LoanServiceContactSheet";
 import { getCreditCardServiceContact, type LoanServiceContact } from "@/lib/loanServiceContacts";
