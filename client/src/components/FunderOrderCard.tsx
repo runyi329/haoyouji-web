@@ -948,6 +948,8 @@ export function FunderOrderCard({
   // 读取 display_config（与 LedgerDetail show() 函数一致：默认全部显示，除非明确设为 false）
   const dc = financingDisplayConfig;
   const show = (key: string) => dc ? (dc[key] !== false) : true;
+  // 管理端必须能识别期权订单归属和类型；用户端仍遵循逐单字段显示开关。
+  const forceAdminOptionHeader = isAdmin && isOptionOrder;
   const allowImageDownload = isAdmin || dc?.allowUserImageDownload !== false;
   const [headerTagsExpanded, setHeaderTagsExpanded] = useState(false);
   const headerMember = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
@@ -967,8 +969,8 @@ export function FunderOrderCard({
       return [];
     }
   })();
-  const headerTagCount = (show('showOwnerName') ? Number(Boolean(headerOwnerLabel)) + Number(Boolean(headerParticipantLabel)) : 0)
-    + Number(Boolean(order.asset_type && show('assetType')))
+  const headerTagCount = ((show('showOwnerName') || forceAdminOptionHeader) ? Number(Boolean(headerOwnerLabel)) + Number(Boolean(headerParticipantLabel)) : 0)
+    + Number(Boolean(order.asset_type && (show('assetType') || forceAdminOptionHeader)))
     + manualHeaderTags.length;
   const headerTagsRef = useRef<HTMLDivElement>(null);
   const [hasHeaderTagOverflow, setHasHeaderTagOverflow] = useState(false);
@@ -1131,17 +1133,17 @@ export function FunderOrderCard({
         )}
         {/* 标签区：默认仅显示一行，展开后显示全部；自动标签与手动标签均计数 */}
         <div ref={headerTagsRef} className={`relative flex items-center gap-1 flex-1 min-w-0 ${headerTagsExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden h-6'}`}>
-          {show('showOwnerName') && headerOwnerLabel && (
+          {(show('showOwnerName') || forceAdminOptionHeader) && headerOwnerLabel && (
             <span data-header-tag className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[130px] shrink-0" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
               {isParticipantVisual ? `拥有者 ${headerOwnerLabel}` : headerOwnerLabel}
             </span>
           )}
-          {show('showOwnerName') && isParticipantVisual && headerParticipantLabel && (
+          {(show('showOwnerName') || forceAdminOptionHeader) && isParticipantVisual && headerParticipantLabel && (
             <span data-header-tag className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[130px] shrink-0" style={{ backgroundColor: '#DCFCE7', color: '#15803D' }}>
               参与者 {headerParticipantLabel}
             </span>
           )}
-          {order.asset_type && show('assetType') && (
+          {order.asset_type && (show('assetType') || forceAdminOptionHeader) && (
             <span
               data-header-tag
               className="text-[11px] font-medium px-1.5 py-0.5 rounded shrink-0"
