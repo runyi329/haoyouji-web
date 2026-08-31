@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-31
+// 生成时间：2026-09-01
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9062,5 +9062,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-08-30": [
     { date: "2026-08-29T20:02:04Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+  ],
+  "2026-08-31": [
+    { date: "2026-08-30T20:07:40Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-31T06:24:53Z", type: "fix", cleanMessage: "show option order header labels" },
   ],
 };
