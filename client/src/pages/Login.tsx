@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { saveToken, saveCredentials, getSavedCredentials, clearCredentials } from "@/lib/tokenStorage";
+import { clearTransientIdentityState } from "@/lib/authIdentity";
 
 /**
  * 多版本登录页：账号密码登录/注册逻辑完全通用，仅登录页 UI 外观按版本切换。
@@ -124,28 +125,30 @@ export default function Login() {
   const queryClient = useQueryClient();
   const utils = trpc.useUtils();
 
-  // Bug修复：登录成功后不能 queryClient.clear()，否则会清空 auth.me 缓存，
-  // 导致跳转后 isAuthenticated=false，用户点「立即购买」被误判为未登录而踢回登录页。
-  // 修复方案：只清除业务数据缓存，保留 auth.me 缓存，让其在后台静默刷新。
-  const clearAllCacheAndNavigate = (token?: string) => {
+  // 新真实账号登录成功后，旧账号缓存和账本代看状态都不能继续保留。
+  const clearAllCacheAndNavigate = async (token?: string) => {
+    clearTransientIdentityState();
+    queryClient.clear();
+
     if (token) {
-      saveToken(token);
+      await saveToken(token);
     }
-    // 清除业务数据缓存（非 auth 相关），防止旧用户数据残留
-    queryClient.removeQueries({ predicate: (query) => {
-      const key = query.queryKey;
-      // 保留 auth.me 缓存，清除其他所有缓存
-      if (Array.isArray(key) && key[0] === 'trpc' && Array.isArray(key[1])) {
-        const path = key[1] as string[];
-        if (path[0] === 'auth' && path[1] === 'me') return false;
-      }
-      return true;
-    }});
-    // 让 auth.me 在后台静默刷新（不清除旧数据，不触发 isLoading=true）
-    utils.auth.me.invalidate();
-    // 登录成功后跳回原页面（支持 ?from= 参数，用于米拌等子项目登录后返回）
+
+    // 在跳转前主动写入新账号的 auth.me，避免个人中心短暂或持续显示上一位用户。
+    try {
+      await utils.auth.me.fetch();
+    } catch {
+      // 登录接口已经成功；若当前用户信息刷新偶发失败，目标页仍会按正常查询流程重试。
+    }
+
+    // 登录成功后跳回原页面；真实登录不能恢复旧的 viewAs URL 参数。
     const fromParam = new URLSearchParams(window.location.search).get('from');
-    const redirectTo = fromParam && fromParam.startsWith('/') ? fromParam : '/';
+    let redirectTo = '/';
+    if (fromParam && fromParam.startsWith('/')) {
+      const fromUrl = new URL(fromParam, window.location.origin);
+      fromUrl.searchParams.delete('viewAs');
+      redirectTo = `${fromUrl.pathname}${fromUrl.search}${fromUrl.hash}`;
+    }
     setTimeout(() => {
       setLocation(redirectTo);
     }, 200);
@@ -174,7 +177,7 @@ export default function Login() {
         }
       } catch (e) {}
       toast.success("登录成功！");
-      clearAllCacheAndNavigate(data.token);
+      await clearAllCacheAndNavigate(data.token);
     },
     onError: (error) => {
       toast.error(safeErrorMsg(error.message));
@@ -199,9 +202,9 @@ export default function Login() {
 
   // 游客模式：自动登录到游客账户
   const guestLoginMutation = trpc.auth.loginWithPassword.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast.success("已以游客身份登录！");
-      clearAllCacheAndNavigate(data.token);
+      await clearAllCacheAndNavigate(data.token);
     },
     onError: (error) => {
       toast.error("游客登录失败: " + safeErrorMsg(error.message));
@@ -230,9 +233,9 @@ export default function Login() {
   };
 
   const registerMutation = trpc.auth.registerWithPassword.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast.success("注册成功！");
-      clearAllCacheAndNavigate(data.token);
+      await clearAllCacheAndNavigate(data.token);
     },
     onError: (error) => {
       toast.error(safeErrorMsg(error.message));

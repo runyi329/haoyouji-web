@@ -1,6 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { clearLedgerViewAsState } from "@/lib/authIdentity";
+import { saveToken } from "@/lib/tokenStorage";
 
 // 超级视角悬浮返回条
 // 当 localStorage 中存在 super_admin_original_user 时显示
@@ -21,11 +23,12 @@ export function SuperViewBanner() {
 
   // 使用专门的 superViewReturn 接口，不受角色限制，只验证目标是超管
   const switchBackMutation = trpc.auth.superViewReturn.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      clearLedgerViewAsState();
+      if (data.sessionToken) {
+        await saveToken(data.sessionToken);
+      }
       try {
-        if (data.sessionToken) {
-          localStorage.setItem("auth-token", data.sessionToken);
-        }
         localStorage.removeItem("super_admin_original_user");
         localStorage.removeItem("manus-runtime-user-info");
       } catch {}

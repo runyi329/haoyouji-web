@@ -6,6 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Search, User, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { clearLedgerViewAsState } from "@/lib/authIdentity";
+import { saveToken } from "@/lib/tokenStorage";
 
 export default function SuperViewUserList() {
   const [, navigate] = useLocation();
@@ -26,11 +28,12 @@ export default function SuperViewUserList() {
   });
 
   const switchUserMutation = trpc.auth.quickLogin.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      clearLedgerViewAsState();
+      if (data.sessionToken) {
+        await saveToken(data.sessionToken);
+      }
       try {
-        if (data.sessionToken) {
-          localStorage.setItem("auth-token", data.sessionToken);
-        }
         localStorage.removeItem("manus-runtime-user-info");
       } catch {}
       queryClient.clear();

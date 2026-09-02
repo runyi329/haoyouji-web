@@ -41,6 +41,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { clearLedgerViewAsState } from "@/lib/authIdentity";
+import { saveToken } from "@/lib/tokenStorage";
 
 /**
  * 功能权限开关组件
@@ -334,14 +336,14 @@ export default function AccountRelationshipManager() {
   const queryClient = useQueryClient();
   // 一键登录mutation
   const quickLoginMutation = trpc.auth.quickLogin.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      clearLedgerViewAsState();
       toast.success(`已登录为 ${data.user.name || data.user.username}，正在跳转...`);
-      // 将新用户的sessionToken存入localStorage，覆盖旧的管理员token
-      // 这是关键：前端每次请求优先使用localStorage中的token作为Authorization header
+      // 新用户token必须同步覆盖localStorage、Cookie和IndexedDB三层存储。
+      if (data.sessionToken) {
+        await saveToken(data.sessionToken);
+      }
       try {
-        if (data.sessionToken) {
-          localStorage.setItem('auth-token', data.sessionToken);
-        }
         localStorage.removeItem('manus-runtime-user-info');
       } catch (e) {}
       // 清空所有tRPC/React Query缓存，确保新用户数据被重新获取

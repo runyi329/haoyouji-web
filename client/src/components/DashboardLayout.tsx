@@ -31,6 +31,8 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
+import { clearLedgerViewAsState } from "@/lib/authIdentity";
+import { saveToken } from "@/lib/tokenStorage";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Page 1", path: "/" },
@@ -327,12 +329,13 @@ function UserSwitcherDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const { data: users } = trpc.admin.getUsers.useQuery(undefined, { enabled: open });
   const queryClient = useQueryClient();
   const switchUserMutation = trpc.auth.quickLogin.useMutation({
-    onSuccess: (data) => {
-      // 将新用户的sessionToken存入localStorage，覆盖旧token
+    onSuccess: async (data) => {
+      clearLedgerViewAsState();
+      // 新用户token必须同步覆盖localStorage、Cookie和IndexedDB三层存储。
+      if (data.sessionToken) {
+        await saveToken(data.sessionToken);
+      }
       try {
-        if (data.sessionToken) {
-          localStorage.setItem('auth-token', data.sessionToken);
-        }
         localStorage.removeItem('manus-runtime-user-info');
       } catch (e) {}
       // 清空所有React Query缓存

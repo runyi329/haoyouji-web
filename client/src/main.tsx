@@ -10,6 +10,7 @@ import { getLoginUrl } from "./const";
 import "./index.css";
 import "./styles/red-white-dual-engine.css";
 import { restoreToken } from "@/lib/tokenStorage";
+import { clearLedgerViewAsState } from "@/lib/authIdentity";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +44,8 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   toast.error('登录已过期，请重新登录', { duration: 3000 });
   _unauthorizedRedirectTimer = setTimeout(() => {
     _unauthorizedRedirectTimer = null;
+    // 登录失效后不能保留账本代看身份，否则重新登录仍会被旧用户视角覆盖。
+    clearLedgerViewAsState();
     // 带上 from 参数，登录后跳回原页面（米拌等子项目登录后可返回）
     const from = encodeURIComponent(window.location.pathname);
     const loginWithFrom = `${loginUrl}?from=${from}`;

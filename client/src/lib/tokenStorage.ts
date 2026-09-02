@@ -10,6 +10,8 @@
  * 使用场景：解决微信安卓小程序 WebView 上滑关闭后需要重新登录的问题
  */
 
+import { clearTransientIdentityState } from '@/lib/authIdentity';
+
 const IDB_DB_NAME = 'haoyouji_auth';
 const IDB_STORE_NAME = 'tokens';
 const IDB_KEY = 'auth_token';
@@ -182,6 +184,8 @@ export async function saveToken(token: string): Promise<void> {
  * 退出登录时调用
  */
 export async function clearToken(): Promise<void> {
+  // 真实会话退出时，必须同时结束账本代看和超级视角临时身份。
+  clearTransientIdentityState();
   try { localStorage.removeItem(LS_KEY); } catch {}
   cookieClearToken();
   await idbClearToken();
