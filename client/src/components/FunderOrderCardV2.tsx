@@ -2774,6 +2774,69 @@ export function FunderLenderCardSilver({
     }
   );
 
+  // 37号外部担保：正利率收息卡片也必须与订单模式、负利率卡片读取同一份标签数据。
+  const _lnParsedCollateralSource = useMemo(() => {
+    try {
+      const raw = (order as any).collateral_source;
+      if (!raw) return null;
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (parsed?.ledgerId && parsed?.tagName) {
+        return parsed as { ledgerId: number; tagName: string; interestTagName?: string };
+      }
+    } catch {}
+    return null;
+  }, [(order as any).collateral_source]);
+  const hasExternalCollateral = !!_lnParsedCollateralSource;
+  const { data: _lnExtTagConfig } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _lnParsedCollateralSource?.ledgerId ?? 0, tagName: _lnParsedCollateralSource?.tagName ?? '' },
+    { enabled: hasExternalCollateral, staleTime: 3000 }
+  );
+  const { data: _lnExtTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
+    { ledgerId: _lnParsedCollateralSource?.ledgerId ?? 0, tagName: _lnParsedCollateralSource?.tagName ?? '' },
+    { enabled: hasExternalCollateral, staleTime: 3000 }
+  );
+  const { data: _lnExtPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
+    enabled: hasExternalCollateral,
+    refetchInterval: 3000,
+    staleTime: 2000,
+  });
+  const { lnExtRemainingMarginU } = useMemo(() => {
+    if (!hasExternalCollateral || !_lnExtTagConfig) {
+      return { lnExtRemainingMarginU: null as number | null, lnExtMarginBasePct: null as number | null };
+    }
+    const extCnyRate = Number((_lnExtPricesRaw as any)?.usdtCnyRate ?? cnyRate ?? DEFAULT_CNY_RATE) || DEFAULT_CNY_RATE;
+    const rawPrices = (_lnExtPricesRaw as any)?.prices ?? {};
+    const pricesCny: Record<string, number> = {};
+    for (const [key, value] of Object.entries(rawPrices)) pricesCny[key] = Number(value) * extCnyRate;
+    pricesCny.USDT = extCnyRate;
+    const toCny = (amount: number, currency: string) => {
+      if (!currency || currency === '人民币' || currency === '元' || currency === 'CNY') return amount;
+      return amount * (pricesCny[currency] ?? 0);
+    };
+    let externalMarginCny = 0;
+    try {
+      const rawMargin = (_lnExtTagConfig as any).margin_by_coin;
+      const parsed = typeof rawMargin === 'string' ? JSON.parse(rawMargin) : rawMargin;
+      const items = Array.isArray(parsed)
+        ? parsed.map((item: any) => ({ currency: item.coin || '元', amount: Number(item.amount) }))
+        : Object.entries(parsed ?? {}).map(([currency, amount]) => ({ currency, amount: Number(amount) }));
+      externalMarginCny = items.reduce((sum: number, item: any) => sum + toCny(item.amount, item.currency), 0);
+    } catch {}
+    const latestBalance = (_lnExtTagSummary as any)?.latestBalance?.balance;
+    const balance = latestBalance === null || latestBalance === undefined ? null : Number(latestBalance);
+    if (balance === null || !Number.isFinite(balance)) {
+      return { lnExtRemainingMarginU: null, lnExtMarginBasePct: null };
+    }
+    const initial = Number((_lnExtTagConfig as any).initial_amount || 0);
+    const multiplier = Number((_lnExtTagConfig as any).account_multiplier || 1);
+    const remainingCny = (balance - initial) * multiplier + externalMarginCny;
+    const marginBase = Number((_lnExtTagConfig as any).margin_base || 0);
+    return {
+      lnExtRemainingMarginU: extCnyRate > 0 ? remainingCny / extCnyRate : null,
+      lnExtMarginBasePct: marginBase > 0 ? remainingCny / marginBase * 100 : null,
+    };
+  }, [hasExternalCollateral, _lnExtTagConfig, _lnExtTagSummary, _lnExtPricesRaw, cnyRate]);
+
   // 期权订单：标的资产以 option_info.coin 为准（此处 isOption 尚未定义，直接用 order.asset_type 判断）
   const _lnIsOpt = order.asset_type === 'crypto_option';
   const _lnOptInfo = (() => { try { const oi = (order as any).option_info; return typeof oi === 'string' ? JSON.parse(oi) : (oi || null); } catch { return null; } })();
@@ -3370,6 +3433,16 @@ export function FunderLenderCardSilver({
                   {showCollateralInfo && (
                     <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowCollateralInfo(false)}>
                       <div className="rounded-2xl p-5 mx-4 w-full max-w-xs overflow-y-auto" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+                        {hasExternalCollateral && _lnParsedCollateralSource ? (
+                          <>
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-sm font-bold" style={{ color: '#1A2340' }}>{_lnParsedCollateralSource.tagName}</span>
+                              <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
+                            </div>
+                            <RightMarginDetail ledgerId={_lnParsedCollateralSource.ledgerId} tagName={_lnParsedCollateralSource.tagName} />
+                          </>
+                        ) : (
+                        <>
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保缺口计算说明</span>
                           <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
@@ -3575,11 +3648,13 @@ export function FunderLenderCardSilver({
                             </>
                           )}
                         </div>
+                        </>
+                        )}
                       </div>
                     </div>
                   )}
-                  {/* 担保缺口行：共享模式显示共享池缺口，普通模式显示单订单缺口 */}
-                  {(isSharedMode || collateralGap !== null) && (
+                  {/* 担保缺口行：外部模式显示37号剩余保证金，共享模式显示共享池缺口，普通模式显示单订单缺口 */}
+                  {(hasExternalCollateral || isSharedMode || collateralGap !== null) && (
                     <div className="flex justify-between mb-1 items-center">
                       <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
                         担保缺口
@@ -3590,7 +3665,14 @@ export function FunderLenderCardSilver({
                           style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
                         >?</button>
                       </span>
-                      {isSharedMode ? (() => {
+                      {hasExternalCollateral ? (
+                        lnExtRemainingMarginU !== null ? (
+                          <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                            <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{lnExtRemainingMarginU >= 0 ? '充足' : '不足'}</span>
+                            <span style={{ color: TXT_PRI }}>{lnExtRemainingMarginU >= 0 ? '+' : '-'}{Math.abs(lnExtRemainingMarginU).toFixed(2)} U</span>
+                          </span>
+                        ) : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>加载中...</span>
+                      ) : isSharedMode ? (() => {
                         // 共享模式：用 livePrices 重算共享池缺口（与弹窗内①总计风险敞口同一口径）
                         if (!sharedPoolInfo) return <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>计算中...</span>;
                         const orders = (sharedPoolInfo as any).orders ?? [];
