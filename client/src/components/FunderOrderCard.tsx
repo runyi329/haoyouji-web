@@ -13,7 +13,7 @@ import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 
 // 币种选项
-export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'PLUME', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'BZ'] as const;
+export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'PLUME', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'BZ'] as const;
 export type CoinType = typeof COIN_OPTIONS[number];
 
 export const STATUS_OPTIONS = [
@@ -37,7 +37,17 @@ export const INTEREST_PAYMENT_OPTIONS = [
 export const COIN_COLORS: Record<CoinType, string> = {
   BTC: '#F7931A',
   ETH: '#627EEA',
-  SOL: '#9945FF',
+  HYPE: '#5C6BC0',
+  TRUMP: '#D71920',
+  PENGU: '#66C5E0',
+  XPL: '#6B5CFF',
+  WLFI: '#1F2937',
+  AVAX: '#E84142',
+  DOGE: '#C2A633',
+  XLM: '#14B8A6',
+  TIA: '#7C3AED',
+  EIGEN: '#8B5CF6',
+  FET: '#1A73E8',
   USDT: '#26A17B',
   CNY: '#DE2910',
   MSTR: '#F7931A',
