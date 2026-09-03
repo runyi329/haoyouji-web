@@ -21,7 +21,9 @@ export default function WalletAdjustPage() {
   const [search, setSearch] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [dropdownMaxHeight, setDropdownMaxHeight] = useState(280);
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchPanelRef = useRef<HTMLDivElement>(null);
 
   // Bug修复：当 allUsers 重新加载后，同步更新 selectedUser 的余额显示
   // 否则调账成功后，页面上显示的余额不会更新（selectedUser 是静态快照）
@@ -32,6 +34,37 @@ export default function WalletAdjustPage() {
       setSelectedUser(updated);
     }
   }, [allUsers]);
+
+  // 移动端软键盘会缩小可视视口：结果区始终限制在键盘上方，并保留足够高度滚动选择最后一项。
+  useEffect(() => {
+    if (!showDropdown || !search.trim()) return;
+    const visualViewport = window.visualViewport;
+    const updateDropdownHeight = () => {
+      const inputRect = inputRef.current?.getBoundingClientRect();
+      if (!inputRect) return;
+      const viewportHeight = visualViewport?.height ?? window.innerHeight;
+      const availableHeight = Math.floor(viewportHeight - inputRect.bottom - 12);
+      setDropdownMaxHeight(Math.max(150, Math.min(320, availableHeight)));
+    };
+    updateDropdownHeight();
+    window.addEventListener("resize", updateDropdownHeight);
+    visualViewport?.addEventListener("resize", updateDropdownHeight);
+    visualViewport?.addEventListener("scroll", updateDropdownHeight);
+    return () => {
+      window.removeEventListener("resize", updateDropdownHeight);
+      visualViewport?.removeEventListener("resize", updateDropdownHeight);
+      visualViewport?.removeEventListener("scroll", updateDropdownHeight);
+    };
+  }, [showDropdown, search]);
+
+  // 关闭软键盘会触发输入框失焦；结果只在点击到搜索区域外时才收起，避免无法选择底部用户。
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!searchPanelRef.current?.contains(event.target as Node)) setShowDropdown(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
 
   // 调账表单
   const [currency, setCurrency] = useState<"USDT" | "CNY">("USDT");
@@ -85,6 +118,7 @@ export default function WalletAdjustPage() {
     setSelectedUser(u);
     setSearch("");
     setShowDropdown(false);
+    inputRef.current?.blur();
   }
 
   function clearUser() {
@@ -148,7 +182,7 @@ export default function WalletAdjustPage() {
             </div>
           ) : (
             /* 搜索框 + 下拉 */
-            <div className="relative">
+            <div ref={searchPanelRef} className="relative">
               <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-gray-50 focus-within:border-orange-400">
                 <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 <input
@@ -157,7 +191,6 @@ export default function WalletAdjustPage() {
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setShowDropdown(true); }}
                   onFocus={() => setShowDropdown(true)}
-                  onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
                   placeholder="输入姓名 / 账号 / ID 搜索用户"
                   className="flex-1 text-[13px] bg-transparent focus:outline-none"
                 />
@@ -170,7 +203,10 @@ export default function WalletAdjustPage() {
 
               {/* 下拉结果 */}
               {showDropdown && search.trim().length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-lg z-50 overflow-hidden max-h-60 overflow-y-auto">
+                <div
+                  className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-lg z-50 overflow-y-auto overscroll-contain"
+                  style={{ maxHeight: `${dropdownMaxHeight}px` }}
+                >
                   {filteredUsers.length === 0 ? (
                     <p className="text-center text-[12px] text-gray-400 py-6">未找到匹配用户</p>
                   ) : (
