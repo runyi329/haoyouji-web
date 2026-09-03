@@ -39,12 +39,13 @@ let nextScanTimer: NodeJS.Timeout | null = null;
 // 已覆盖原有行情需求，并包含52号账本当前的全部加密资产。
 const CRYPTO_COINS = ['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'SEI', 'PLUME'];
 // 美股/指数化合约。优先走新浪美股，缺失才走 OKX SWAP。
-const STOCK_COINS = ['COIN', 'AAOI', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD'];
+const STOCK_COINS = ['COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD'];
 // 商品与海外股票：新浪国内源优先，Yahoo 双域名兜底。
-const YAHOO_ONLY_COINS = ['COIN', 'AAOI', 'SLV', 'CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX'];
+const YAHOO_ONLY_COINS = ['COIN', 'AAOI', 'HOOD', 'SLV', 'CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX'];
 // 代币化美股现货：系统统一显示基础股票代码，行情优先使用对应的X前缀交易对。
 const TOKENIZED_STOCK_SPOT_MAP: Record<string, string> = {
   AAOI: 'XAAOI-USDT',
+  HOOD: 'XHOOD-USDT',
 };
 const COMMODITY_COINS = ['BZ', 'CL', 'NG'];
 const KRW_COINS = new Set(['SKHYNIX']);
@@ -57,7 +58,7 @@ const YAHOO_CODE_MAP: Record<string, string> = {
 };
 
 const SINA_CODE_MAP: Record<string, string> = {
-  COIN: 'gb_coin', AAOI: 'gb_aaoi', SLV: 'gb_slv', TSLA: 'gb_tsla', NVDA: 'gb_nvda', AAPL: 'gb_aapl', MSFT: 'gb_msft',
+  COIN: 'gb_coin', AAOI: 'gb_aaoi', HOOD: 'gb_hood', SLV: 'gb_slv', TSLA: 'gb_tsla', NVDA: 'gb_nvda', AAPL: 'gb_aapl', MSFT: 'gb_msft',
   GOOGL: 'gb_googl', META: 'gb_meta', AMZN: 'gb_amzn', SPY: 'gb_spy',
   QQQ: 'gb_qqq', NFLX: 'gb_nflx', ORCL: 'gb_orcl', TSM: 'gb_tsm',
   AMD: 'gb_amd', CRCL: 'gb_crcl', DRAM: 'gb_dram', MU: 'gb_mu', MSTR: 'gb_mstr',
@@ -277,7 +278,7 @@ async function updateSecuritiesAndCommodities() {
     else markFailure(coin, '新浪财经及Yahoo Finance均无有效报价');
   }));
 
-  // XAAOI为AAOI的24/7代币化现货。可用时覆盖传统美股延迟报价；失败时保留新浪/Yahoo结果。
+  // XAAOI/XHOOD为对应美股的24/7代币化现货。可用时覆盖传统美股延迟报价；失败时保留新浪/Yahoo结果。
   await Promise.all(Object.entries(TOKENIZED_STOCK_SPOT_MAP).map(async ([coin, instId]) => {
     const quote = await fetchOkxSpotQuote(instId);
     if (quote) entryFromPrice(coin, quote.price, `OKX ${instId.replace('-', '/')}`, quote.patch);
