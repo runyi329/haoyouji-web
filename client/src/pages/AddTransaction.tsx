@@ -233,6 +233,9 @@ const AddTransaction = () => {
       return { text: `今天已有一笔相同金额的${typeLabel}（${d.amount}元）`, id: d.id };
     });
   }, [dupData, transactionType]);
+  const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false);
+  const [pendingDuplicatePayload, setPendingDuplicatePayload] = useState<any | null>(null);
+  const [pendingDuplicateMode, setPendingDuplicateMode] = useState<'add' | 'edit'>('add');
   // ===== 重复检测结束 =====
   
   // 图片上传相关
@@ -812,8 +815,11 @@ const AddTransaction = () => {
 
   // 添加记账mutation
   const addTransactionMutation = trpc.ledger.addTransaction.useMutation({
-    onSuccess: () => {
-      toast.success("记账成功！");
+    onSuccess: (result) => {
+      toast.success(result?.overwritten ? "已覆盖原记录，只保留一条数据" : "记账成功！");
+      setShowDuplicateConfirm(false);
+      setPendingDuplicatePayload(null);
+      setPendingDuplicateMode('add');
       // 使缓存失效，强制重新获取数据
       utils.ledger.getTransactions.invalidate({ ledgerId });
       if (fromPage === 'home') {
@@ -824,15 +830,24 @@ const AddTransaction = () => {
         setLocation(`/ledger/${id}`);
       }
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      if (isCustomAA && error.data?.code === 'CONFLICT' && !variables.overwriteExisting) {
+        setPendingDuplicatePayload(variables);
+        setPendingDuplicateMode('add');
+        setShowDuplicateConfirm(true);
+        return;
+      }
       toast.error("记账失败：" + error.message);
     },
   });
   
   // 更新记账mutation
   const updateTransactionMutation = trpc.ledger.updateTransaction.useMutation({
-    onSuccess: () => {
-      toast.success("账目修改成功！");
+    onSuccess: (result) => {
+      toast.success(result?.overwritten ? "已覆盖冲突记录，只保留一条数据" : "账目修改成功！");
+      setShowDuplicateConfirm(false);
+      setPendingDuplicatePayload(null);
+      setPendingDuplicateMode('add');
       utils.ledger.getTransactions.invalidate({ ledgerId });
       if (editTransactionId) {
         utils.ledger.getTransactionDetail.invalidate({ ledgerId, transactionId: editTransactionId });
@@ -841,7 +856,13 @@ const AddTransaction = () => {
       utils.ledger.getById.invalidate({ ledgerId });
       setLocation(`/ledger/${id}`);
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      if (isCustomAA && error.data?.code === 'CONFLICT' && !variables.overwriteExisting) {
+        setPendingDuplicatePayload(variables);
+        setPendingDuplicateMode('edit');
+        setShowDuplicateConfirm(true);
+        return;
+      }
       toast.error("修改失败：" + error.message);
     },
   });
@@ -849,8 +870,22 @@ const AddTransaction = () => {
   // 上传图片mutation
   const uploadImageMutation = trpc.ledger.uploadLedgerImage.useMutation();
 
+  const handleConfirmOverwrite = () => {
+    if (!pendingDuplicatePayload || addTransactionMutation.isPending || updateTransactionMutation.isPending) return;
+    const overwritePayload = {
+      ...pendingDuplicatePayload,
+      overwriteExisting: true,
+    };
+    if (pendingDuplicateMode === 'edit') {
+      updateTransactionMutation.mutate(overwritePayload);
+    } else {
+      addTransactionMutation.mutate(overwritePayload);
+    }
+  };
+
   // 处理保存
   const handleSave = () => {
+    if (addTransactionMutation.isPending || updateTransactionMutation.isPending) return;
     // 余额记录保存（底部按钮仅用于余额记录，提现/入金已在折叠面板中独立处理）
     if (selectedCategoryPath.length === 0) {
       toast.error("请选择分类");
@@ -2261,10 +2296,11 @@ const AddTransaction = () => {
       {/* 底部保存按鈕 */}
       <div className="flex-shrink-0 p-3 bg-white border-t">
         <button
-          className="w-full bg-[#D32F2F] text-white py-3 rounded-lg text-base font-semibold active:bg-[#B71C1C]"
+          className="w-full bg-[#D32F2F] text-white py-3 rounded-lg text-base font-semibold active:bg-[#B71C1C] disabled:opacity-50"
           onClick={handleSave}
+          disabled={addTransactionMutation.isPending || updateTransactionMutation.isPending}
         >
-          保存
+          {addTransactionMutation.isPending || updateTransactionMutation.isPending ? '保存中…' : '保存'}
         </button>
       </div>
       </>
@@ -2274,10 +2310,11 @@ const AddTransaction = () => {
       {isCustomAA && (
         <div className="flex-shrink-0 p-4 bg-white" style={{ borderTop: '1px solid #F0E8E0' }}>
           <button
-            className="w-full text-white py-4 rounded-2xl text-base font-semibold shadow-sm active:opacity-80 bg-[#D32F2F]"
+            className="w-full text-white py-4 rounded-2xl text-base font-semibold shadow-sm active:opacity-80 bg-[#D32F2F] disabled:opacity-50"
             onClick={handleSave}
+            disabled={addTransactionMutation.isPending || updateTransactionMutation.isPending}
           >
-            保存
+            {addTransactionMutation.isPending || updateTransactionMutation.isPending ? '保存中…' : '保存'}
           </button>
         </div>
       )}
@@ -2473,6 +2510,37 @@ const AddTransaction = () => {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* 37号账本：同一日期同一标签重复提交确认 */}
+      <AlertDialog open={showDuplicateConfirm} onOpenChange={setShowDuplicateConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-center">该标签今天已经填写过</AlertDialogTitle>
+            <AlertDialogDescription className="text-center leading-6">
+              同一日期、同一标签只能保留一条数据。你可以取消本次提交，或用刚填写的内容覆盖原记录。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row gap-2">
+            <AlertDialogCancel
+              className="flex-1"
+              onClick={() => {
+                setPendingDuplicatePayload(null);
+                setPendingDuplicateMode('add');
+              }}
+              disabled={addTransactionMutation.isPending || updateTransactionMutation.isPending}
+            >
+              取消本次
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C]"
+              onClick={handleConfirmOverwrite}
+              disabled={addTransactionMutation.isPending || updateTransactionMutation.isPending}
+            >
+              {addTransactionMutation.isPending || updateTransactionMutation.isPending ? '覆盖中…' : '覆盖原记录'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* 日期确认对话框 */}
       <AlertDialog open={showDateConfirm} onOpenChange={setShowDateConfirm}>

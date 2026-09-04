@@ -9815,6 +9815,7 @@ ${klinesSummary}
         ajCompanyId: z.number().optional(), // AJ账本开票企业ID
         ajCompanyName: z.string().optional(), // AJ账本开票企业名称
         stockCodes: z.array(z.object({ code: z.string(), name: z.string() })).optional(), // 股票代码
+        overwriteExisting: z.boolean().optional(), // 37号账本：用户确认后覆盖同日同标签记录
       }))
       .mutation(async ({ ctx, input }) => {
         const { viewAsUserId, ...rest } = input;
@@ -9823,10 +9824,20 @@ ${klinesSummary}
         if (viewAsUserId && (ctx.user.role === 'admin' || ctx.user.role === 'super_admin')) {
           effectiveUserId = viewAsUserId;
         }
-        return await dbLedger.addTransaction({
-          ...rest,
-          userId: effectiveUserId,
-        });
+        try {
+          return await dbLedger.addTransaction({
+            ...rest,
+            userId: effectiveUserId,
+          });
+        } catch (error: any) {
+          if (error?.message?.startsWith('AA_DUPLICATE_TRANSACTION:')) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: error.message.replace('AA_DUPLICATE_TRANSACTION:', ''),
+            });
+          }
+          throw error;
+        }
       }),
 
     // 获取记账记录列表（按日期分组）
@@ -10187,10 +10198,21 @@ ${klinesSummary}
         reimbursementStatus: z.enum(['none', 'pending', 'completed']).optional(),
         pendingType: z.enum(['receivable', 'payable']).nullable().optional(),
         pendingIncludeStats: z.number().min(0).max(1).nullable().optional(),
+        overwriteExisting: z.boolean().optional(), // 37号账本：编辑冲突时用户确认覆盖
       }))
       .mutation(async ({ ctx, input }) => {
         const { recordId, ...data } = input;
-        return await dbLedger.updateTransaction(recordId, ctx.user.id, data);
+        try {
+          return await dbLedger.updateTransaction(recordId, ctx.user.id, data);
+        } catch (error: any) {
+          if (error?.message?.startsWith('AA_DUPLICATE_TRANSACTION:')) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: error.message.replace('AA_DUPLICATE_TRANSACTION:', ''),
+            });
+          }
+          throw error;
+        }
       }),
 
     // 查询股票代码名称（本地数据库查询）

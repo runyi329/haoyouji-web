@@ -1,4 +1,4 @@
-import { getLedgerDb, getDbConnection } from "./db";
+import { getLedgerDb, getDbConnection, withDatabaseLock } from "./db";
 import { pinyin } from 'pinyin-pro';
 
 /**
@@ -40,7 +40,7 @@ function getCompanyInitials(companyName: string): string {
   return initials || 'EMP';
 }
 import { ledgers, ledgerMembers, ledgerCategories, ledgerRecords, users } from "../drizzle/schema";
-import { eq, and, desc, sql, isNull, isNotNull, asc, ne } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, isNotNull, asc, ne, inArray } from "drizzle-orm";
 import { encryptFields, decryptFields, decryptFieldsArray } from "./encryption";
 
 // 账目记录需要加密的字段
@@ -3065,9 +3065,17 @@ export async function addTransaction(data: {
   ajCompanyId?: number; // AJ账本开票企业ID
   ajCompanyName?: string; // AJ账本开票企业名称
   stockCodes?: Array<{code: string; name: string}>; // 股票代码
-}) {
+  overwriteExisting?: boolean; // 37号账本重复日期+标签时，仅在用户明确确认后覆盖
+  aaLockHeld?: boolean; // 内部标记：同日同标签命名锁已持有
+}): Promise<{ id: number; success: boolean; needApproval: boolean; approverIds: number[]; overwritten: boolean }> {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
+
+  // 37号余额记录必须按“日期+标签”串行处理，避免同秒双击或网络重试同时穿过先查后写。
+  if (data.ledgerId === 37 && data.type !== 'transfer' && !data.aaLockHeld) {
+    const lockName = `ledger37:${data.categoryId}:${data.transactionDate}`;
+    return withDatabaseLock(lockName, () => addTransaction({ ...data, aaLockHeld: true }));
+  }
   
   // 验证用户是否是账本成员
   const membership = await db
@@ -3115,9 +3123,9 @@ export async function addTransaction(data: {
     }
   }
   
-  // UPSERT逻辑：仅37号账本（日历型定制账本）同一标签同一日期只保留一条，后录入覆盖前一条
-  // 其他普通账本允许同一天同一类目多条记录
-  // transfer类型（历史提现/增减本金）不参与UPSERT，允许同一天多条
+  // 唯一性逻辑：仅37号账本（日历型定制账本）同一标签同一日期只保留一条。
+  // 发现已有记录时先返回冲突，只有用户在前端明确确认后才覆盖。
+  // 其他普通账本允许同一天同一类目多条；transfer（历史提现/增减本金）不受限制。
   const existingRecord = (data.ledgerId === 37 && data.type !== 'transfer') ? await db
     .select({ id: ledgerRecords.id })
     .from(ledgerRecords)
@@ -3129,7 +3137,11 @@ export async function addTransaction(data: {
         isNull(ledgerRecords.deletedAt)
       )
     )
-    .limit(1) : [];
+    .orderBy(desc(ledgerRecords.id)) : [];
+
+  if (existingRecord.length > 0 && !data.overwriteExisting) {
+    throw new Error('AA_DUPLICATE_TRANSACTION:该日期的这个标签已经填写过，请选择取消或覆盖原记录');
+  }
 
   // 插入记账记录（加密敏感字段）
   // 判断是否是AJ账本：账本类型为 custom_aj 或传入了 ajCompanyId
@@ -3197,8 +3209,9 @@ export async function addTransaction(data: {
   const encryptedRecordData = await encryptFields(db, 'ledger_records', recordData, LEDGER_RECORD_ENCRYPT_FIELDS);
 
   let result: any;
+  let overwritten = false;
   if (existingRecord.length > 0) {
-    // 已存在同标签同日期的记录，直接更新（覆盖）
+    // 仅在前端用户明确确认后覆盖；如果历史上已经重复，保留最新一条并软删除其余重复项。
     const existingId = existingRecord[0].id;
     await db
       .update(ledgerRecords)
@@ -3207,7 +3220,15 @@ export async function addTransaction(data: {
         updatedAt: sql`NOW()`,
       })
       .where(eq(ledgerRecords.id, existingId));
+    if (existingRecord.length > 1) {
+      const redundantIds = existingRecord.slice(1).map((record) => record.id);
+      await db
+        .update(ledgerRecords)
+        .set({ deletedAt: new Date(), deletedBy: data.userId })
+        .where(inArray(ledgerRecords.id, redundantIds));
+    }
     result = { insertId: existingId };
+    overwritten = true;
   } else {
     // 不存在，正常插入
     result = await db.insert(ledgerRecords).values(encryptedRecordData as any);
@@ -3223,6 +3244,7 @@ export async function addTransaction(data: {
     success: true,
     needApproval: approvalStatus === 'pending',
     approverIds,
+    overwritten,
   };
 }
 
@@ -4079,8 +4101,10 @@ export async function updateTransaction(
     reimbursementStatus?: 'none' | 'pending' | 'completed';
     pendingType?: 'receivable' | 'payable' | null;
     pendingIncludeStats?: number | null;
+    overwriteExisting?: boolean; // 37号账本：编辑冲突时用户确认覆盖
+    aaLockHeld?: boolean; // 内部标记：同日同标签命名锁已持有
   }
-) {
+): Promise<{ success: boolean; overwritten: boolean }> {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -4096,6 +4120,14 @@ export async function updateTransaction(
   }
   
   const oldRecord = oldRecords[0] as any;
+
+  const finalType = data.type ?? oldRecord.type;
+  const finalCategoryId = data.categoryId ?? oldRecord.categoryId;
+  const finalTransactionDate = data.transactionDate ?? oldRecord.recordDate;
+  if (oldRecord.ledgerId === 37 && finalType !== 'transfer' && !data.aaLockHeld) {
+    const lockName = `ledger37:${finalCategoryId}:${finalTransactionDate}`;
+    return withDatabaseLock(lockName, () => updateTransaction(recordId, userId, { ...data, aaLockHeld: true }));
+  }
   
   // 解密旧记录的敏感字段
   const decryptedOldRecord = await decryptFields(db, 'ledger_records', oldRecord, LEDGER_RECORD_ENCRYPT_FIELDS);
@@ -4114,6 +4146,26 @@ export async function updateTransaction(
   
   if (membership.length === 0) {
     throw new Error("您不是该账本的成员");
+  }
+
+  let duplicateRecordIds: number[] = [];
+  if (oldRecord.ledgerId === 37 && finalType !== 'transfer') {
+    const duplicateRecords = await db
+      .select({ id: ledgerRecords.id })
+      .from(ledgerRecords)
+      .where(
+        and(
+          eq(ledgerRecords.ledgerId, oldRecord.ledgerId),
+          eq(ledgerRecords.categoryId, finalCategoryId),
+          eq(ledgerRecords.recordDate, finalTransactionDate),
+          ne(ledgerRecords.id, recordId),
+          isNull(ledgerRecords.deletedAt)
+        )
+      );
+    duplicateRecordIds = duplicateRecords.map((record) => record.id);
+    if (duplicateRecordIds.length > 0 && !data.overwriteExisting) {
+      throw new Error('AA_DUPLICATE_TRANSACTION:该日期的这个标签已经有另一条记录，请选择取消或覆盖原记录');
+    }
   }
   
   // 构建更新数据，并对比旧值只记录真正变化的字段
@@ -4252,6 +4304,13 @@ export async function updateTransaction(
     .update(ledgerRecords)
     .set(encryptedUpdateData)
     .where(eq(ledgerRecords.id, recordId));
+
+  if (duplicateRecordIds.length > 0 && data.overwriteExisting) {
+    await db
+      .update(ledgerRecords)
+      .set({ deletedAt: new Date(), deletedBy: userId })
+      .where(inArray(ledgerRecords.id, duplicateRecordIds));
+  }
   
   // 只有真正有变化的字段才写入修改日志
   if (logChanges.length > 0) {
@@ -4271,7 +4330,7 @@ export async function updateTransaction(
     console.log('[updateTransaction] 没有字段变化，不写入日志');
   }
   
-  return { success: true };
+  return { success: true, overwritten: duplicateRecordIds.length > 0 && !!data.overwriteExisting };
 }
 
 // ==================== 审批相关函数 ====================

@@ -52,6 +52,7 @@ let _ledgerDb: ReturnType<typeof drizzle> | null = null;
 let _pool: mysql.Pool | null = null;
 let _connection: mysql.Connection | null = null;
 let _guestConnection: mysql.Connection | null = null;
+const _localDatabaseLocks = new Map<string, Promise<void>>();
 
 const GUEST_USER_ID = 5070293;
 
@@ -127,6 +128,52 @@ export async function getDb(forceGuest: boolean = false) {
  */
 export async function getLedgerDb() {
   return getDb();
+}
+
+/**
+ * 使用独占数据库连接获取MySQL命名锁，确保同一业务键的写入串行执行。
+ */
+export async function withDatabaseLock<T>(
+  lockName: string,
+  operation: () => Promise<T>,
+  timeoutSeconds: number = 5,
+): Promise<T> {
+  // 同一Node进程先排队，避免大量同键请求各占用一个连接等待MySQL锁。
+  const previous = _localDatabaseLocks.get(lockName) ?? Promise.resolve();
+  let releaseLocal!: () => void;
+  const current = new Promise<void>((resolve) => { releaseLocal = resolve; });
+  const queued = previous.catch(() => undefined).then(() => current);
+  _localDatabaseLocks.set(lockName, queued);
+  await previous.catch(() => undefined);
+
+  let connection: mysql.PoolConnection | null = null;
+  let acquired = false;
+  try {
+    await getDb(false);
+    // 开发环境若没有连接池，仍受进程内排队保护。
+    if (!_pool) return operation();
+
+    connection = await _pool.getConnection();
+    const [rows] = await connection.execute('SELECT GET_LOCK(?, ?) AS acquired', [lockName, timeoutSeconds]) as any;
+    acquired = Number(rows?.[0]?.acquired) === 1;
+    if (!acquired) {
+      throw new Error('系统正在处理同一标签的数据，请稍后重试');
+    }
+    return await operation();
+  } finally {
+    if (connection && acquired) {
+      try {
+        await connection.execute('SELECT RELEASE_LOCK(?)', [lockName]);
+      } catch (error) {
+        console.error('[Database] 释放命名锁失败:', error);
+      }
+    }
+    connection?.release();
+    releaseLocal();
+    if (_localDatabaseLocks.get(lockName) === queued) {
+      _localDatabaseLocks.delete(lockName);
+    }
+  }
 }
 
 /**
