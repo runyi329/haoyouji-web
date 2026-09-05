@@ -7,9 +7,16 @@
 export type SearchableUserIdentity = {
   nickname?: string | null;
   name?: string | null;
+  realName?: string | null;
+  accountName?: string | null;
+  displayName?: string | null;
   username?: string | null;
   userName?: string | null;
-  displayName?: string | null;
+  userId?: string | number | null;
+  id?: string | number | null;
+  phone?: string | null;
+  mobile?: string | null;
+  email?: string | null;
   wecom_user_id?: string | null;
   userid?: string | null;
 };
@@ -18,7 +25,7 @@ const normalize = (value: unknown) => String(value ?? "").trim();
 
 export function getUserDisplayName(user?: SearchableUserIdentity | null, fallback = "") {
   if (!user) return fallback;
-  return normalize(user.nickname) || normalize(user.name) || normalize(user.displayName) || normalize(user.username) || normalize(user.userName) || fallback;
+  return normalize(user.nickname) || normalize(user.name) || normalize(user.realName) || normalize(user.accountName) || normalize(user.displayName) || normalize(user.username) || normalize(user.userName) || fallback;
 }
 
 export function getUserSearchText(user?: SearchableUserIdentity | null) {
@@ -26,9 +33,16 @@ export function getUserSearchText(user?: SearchableUserIdentity | null) {
   return [
     user.nickname,
     user.name,
+    user.realName,
+    user.accountName,
+    user.displayName,
     user.username,
     user.userName,
-    user.displayName,
+    user.userId,
+    user.id,
+    user.phone,
+    user.mobile,
+    user.email,
     user.wecom_user_id,
     user.userid,
   ]
@@ -38,10 +52,12 @@ export function getUserSearchText(user?: SearchableUserIdentity | null) {
     .toLocaleLowerCase();
 }
 
-/** 支持用户名、昵称与任意连续片段的大小写不敏感匹配。 */
+/** 支持姓名、昵称、用户名、账号及任意位置片段的大小写不敏感匹配。 */
 export function matchesUserSearch(user: SearchableUserIdentity | null | undefined, query: string) {
-  const normalizedQuery = normalize(query).toLocaleLowerCase();
-  return !normalizedQuery || getUserSearchText(user).includes(normalizedQuery);
+  const normalizedQuery = normalize(query).replace(/^@+/, "").toLocaleLowerCase();
+  if (!normalizedQuery) return true;
+  const searchText = getUserSearchText(user);
+  return normalizedQuery.split(/\s+/).filter(Boolean).every((keyword) => searchText.includes(keyword));
 }
 
 /** 在候选列表中保留昵称主显示，同时在用户名不同时展示辅助用户名。 */

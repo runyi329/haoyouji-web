@@ -7603,7 +7603,7 @@ export default function LedgerDetail() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="搜索成员名称..."
+                  placeholder="搜索昵称、姓名、用户名或账号..."
                   value={viewAsSearch}
                   onChange={e => setViewAsSearch(e.target.value)}
                   className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
@@ -7691,7 +7691,7 @@ export default function LedgerDetail() {
                       </div>
                       <div className="flex-1 min-w-0 text-left">
                         <div className="text-xs font-medium text-gray-900 truncate">{displayName}</div>
-                        {(m as any).realName && (m as any).realName !== m.username && m.username && (
+                        {m.username && m.username !== displayName && (
                           <div className="text-[10px] text-blue-400 truncate">@{m.username}</div>
                         )}
                         <div className="text-[10px] text-gray-400">{roleName}{orderCount > 0 ? ` · ${orderCount}笔` : ''}</div>
