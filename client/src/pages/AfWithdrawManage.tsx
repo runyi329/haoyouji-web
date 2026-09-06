@@ -17,6 +17,14 @@ const SCOPE_LABEL: Record<string, string> = {
   user_and_downlines: "用户及下线",
 };
 
+const formatUsdt = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return "--";
+  const amount = Number(value);
+  return Number.isFinite(amount)
+    ? amount.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : "--";
+};
+
 export default function AfWithdrawManage() {
   const { id: ledgerIdStr } = useParams<{ id: string }>();
   const ledgerId = Number(ledgerIdStr) || 52;
@@ -26,7 +34,14 @@ export default function AfWithdrawManage() {
   const [statusFilter, setStatusFilter] = useState<string>("pending");
 
   // 审核弹窗状态
-  const [approveDialog, setApproveDialog] = useState<{ id: number; sntAmount: number; bscAddress: string } | null>(null);
+  const [approveDialog, setApproveDialog] = useState<{
+    id: number;
+    sntAmount: number;
+    bscAddress: string;
+    currentBalance: number | null;
+    balanceBefore: number | null;
+    balanceAfter: number | null;
+  } | null>(null);
   const [rejectDialog, setRejectDialog] = useState<{ id: number } | null>(null);
   const [txnHash, setTxnHash] = useState("");
   const [adminNote, setAdminNote] = useState("");
@@ -248,6 +263,20 @@ export default function AfWithdrawManage() {
             <div className="px-4 space-y-3">
               {withdrawals.map((w: any) => {
                 const status = STATUS_LABEL[w.status] || { text: w.status, color: "#6b7280", bg: "#f3f4f6" };
+                const withdrawAmount = Number(w.sntAmount);
+                const currentBalance = Number(w.currentBalance);
+                const balanceAfterSnapshot = w.balanceAfterSnapshot == null ? null : Number(w.balanceAfterSnapshot);
+                const refundBalanceSnapshot = w.refundBalanceSnapshot == null ? null : Number(w.refundBalanceSnapshot);
+                const hasWithdrawSnapshot = balanceAfterSnapshot !== null && Number.isFinite(balanceAfterSnapshot);
+                const balanceBeforeSnapshot = hasWithdrawSnapshot && Number.isFinite(withdrawAmount)
+                  ? balanceAfterSnapshot + withdrawAmount
+                  : null;
+                const resultBalance = w.status === "rejected" ? refundBalanceSnapshot : balanceAfterSnapshot;
+                const resultBalanceLabel = w.status === "rejected"
+                  ? "退款后余额"
+                  : w.status === "completed"
+                    ? "提现后余额"
+                    : "冻结后余额";
                 return (
                   <div key={w.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
                     <div className="px-4 py-3 flex items-center justify-between border-b border-gray-50">
@@ -269,9 +298,34 @@ export default function AfWithdrawManage() {
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">提现金额</span>
                         <span className="font-bold text-gray-800">
-                          {parseFloat(w.sntAmount).toFixed(2)} USDT
+                          {formatUsdt(withdrawAmount)} USDT
                         </span>
                       </div>
+
+                      <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
+                        <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-200/70">
+                          <span className="text-xs text-gray-500">当前全局钱包余额</span>
+                          <span className="text-sm font-bold text-gray-800">{formatUsdt(currentBalance)} USDT</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-lg bg-white px-2.5 py-2 border border-gray-100">
+                            <div className="text-[10px] text-gray-400 mb-0.5">提现前余额</div>
+                            <div className="text-xs font-semibold text-gray-700">
+                              {formatUsdt(balanceBeforeSnapshot)} <span className="font-normal text-gray-400">USDT</span>
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-white px-2.5 py-2 border border-gray-100">
+                            <div className="text-[10px] text-gray-400 mb-0.5">{resultBalanceLabel}</div>
+                            <div className={`text-xs font-semibold ${w.status === "rejected" ? "text-red-600" : "text-green-700"}`}>
+                              {formatUsdt(resultBalance)} <span className="font-normal text-gray-400">USDT</span>
+                            </div>
+                          </div>
+                        </div>
+                        {!hasWithdrawSnapshot && (
+                          <div className="mt-2 text-[10px] text-amber-600">早期订单未保存历史余额快照，不使用当前余额倒推</div>
+                        )}
+                      </div>
+
                       {w.network && (
                         <div className="flex justify-between text-xs">
                           <span className="text-gray-400">网络</span>
@@ -327,7 +381,14 @@ export default function AfWithdrawManage() {
                         )}
                         <button
                           onClick={() => {
-                            setApproveDialog({ id: w.id, sntAmount: w.sntAmount, bscAddress: w.bscAddress });
+                            setApproveDialog({
+                              id: w.id,
+                              sntAmount: withdrawAmount,
+                              bscAddress: w.bscAddress,
+                              currentBalance: Number.isFinite(currentBalance) ? currentBalance : null,
+                              balanceBefore: balanceBeforeSnapshot,
+                              balanceAfter: balanceAfterSnapshot,
+                            });
                             setTxnHash("");
                             setAdminNote("");
                           }}
@@ -440,12 +501,26 @@ export default function AfWithdrawManage() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
           <div className="bg-white w-full rounded-t-3xl p-5 max-w-md mx-auto">
             <div className="text-base font-semibold text-gray-800 mb-4">确认转账到账</div>
-            <div className="bg-gray-50 rounded-xl p-3 mb-4 text-sm">
-              <div className="flex justify-between mb-1">
-                <span className="text-gray-500">金额</span>
-                <span className="font-bold">{parseFloat(approveDialog.sntAmount as any).toFixed(2)} USDT</span>
+            <div className="bg-gray-50 rounded-xl p-3 mb-4 text-sm space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-gray-500">提现金额</span>
+                <span className="font-bold">{formatUsdt(approveDialog.sntAmount)} USDT</span>
               </div>
-              <div className="text-xs text-gray-400 font-mono break-all">{approveDialog.bscAddress}</div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400">当前全局钱包</span>
+                <span className="font-semibold text-gray-700">{formatUsdt(approveDialog.currentBalance)} USDT</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="rounded-lg bg-white px-2 py-1.5">
+                  <div className="text-[10px] text-gray-400">提现前</div>
+                  <div className="text-xs font-semibold text-gray-700">{formatUsdt(approveDialog.balanceBefore)} USDT</div>
+                </div>
+                <div className="rounded-lg bg-white px-2 py-1.5">
+                  <div className="text-[10px] text-gray-400">提现后</div>
+                  <div className="text-xs font-semibold text-green-700">{formatUsdt(approveDialog.balanceAfter)} USDT</div>
+                </div>
+              </div>
+              <div className="text-xs text-gray-400 font-mono break-all pt-1">{approveDialog.bscAddress}</div>
             </div>
             <div className="mb-3">
               <label className="text-xs text-gray-500 mb-1 block">交易哈希（TxHash，可选）</label>

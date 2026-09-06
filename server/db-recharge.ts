@@ -1390,10 +1390,35 @@ export async function adminGetAllSntWithdrawals(status?: string, limit: number =
   const conn = await getDbConnection();
   if (!conn) return [];
   let query = `
-    SELECT w.id, w.user_id as userId, u.username, u.name as userName, w.snt_amount as sntAmount, 
-           w.bsc_address as bscAddress, w.status, w.admin_note as adminNote, 
+    SELECT w.id, w.user_id as userId, u.username, u.name as userName, w.snt_amount as sntAmount,
+           w.bsc_address as bscAddress, w.status, w.admin_note as adminNote,
            w.txn_hash as txnHash, w.ledger_id as ledgerId, w.created_at as createdAt, w.updated_at as updatedAt,
-           COALESCE(dw.network, '') as network
+           COALESCE(dw.network, '') as network,
+           CAST(COALESCE(u.balance, 0) + COALESCE((
+             SELECT SUM(amb.amount)
+             FROM af_manual_balances amb
+             WHERE amb.user_id = w.user_id
+               AND amb.note NOT LIKE '[CNY]%'
+               AND amb.note NOT LIKE '[BALANCE_BASE]%'
+           ), 0) AS DECIMAL(20, 8)) as currentBalance,
+           (
+             SELECT bh.balance
+             FROM balance_history bh
+             WHERE bh.user_id = w.user_id
+               AND bh.type = 'withdraw'
+               AND bh.related_id = w.id
+             ORDER BY bh.id DESC
+             LIMIT 1
+           ) as balanceAfterSnapshot,
+           (
+             SELECT bh.balance
+             FROM balance_history bh
+             WHERE bh.user_id = w.user_id
+               AND bh.type = 'refund'
+               AND bh.related_id = w.id
+             ORDER BY bh.id DESC
+             LIMIT 1
+           ) as refundBalanceSnapshot
     FROM snt_withdrawals w
     LEFT JOIN users u ON w.user_id = u.id
     LEFT JOIN digital_wallets dw ON dw.wallet_address = w.bsc_address AND dw.user_id = w.user_id AND dw.wallet_type = 'blockchain'
