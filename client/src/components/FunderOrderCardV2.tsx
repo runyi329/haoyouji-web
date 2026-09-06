@@ -1172,10 +1172,17 @@ export function FunderOrderCardV2Silver({
   const qty = _isOptCard && _optInfo?.buyQty ? parseFloat(_optInfo.buyQty) : parseFloat(order.buy_quantity || '0');
   const buyPrice = parseFloat(order.buy_price || '0');
   const liveP = livePrices[coin] ?? null;
-  const rawAmountCurrency = String((order as any).amount_currency || 'USDT').toUpperCase();
+  const rawAmountCurrency = String((order as any).amount_currency || (order.asset_type === 'stock' ? 'CNY' : 'USDT')).toUpperCase();
   const amountCurrency = rawAmountCurrency === 'U' ? 'USDT' : rawAmountCurrency;
-  const storedAmountUsdt = parseFloat(order.amount || '0');
+  const storedAmount = parseFloat(order.amount || '0');
   const amountCurrencyPrice = livePrices[amountCurrency as CoinType];
+  const storedAmountUsdt = order.asset_type === 'stock'
+    ? amountCurrency === 'CNY'
+      ? storedAmount / cnyRate
+      : amountCurrency === 'USDT'
+        ? storedAmount
+        : (amountCurrencyPrice && amountCurrencyPrice > 0 ? storedAmount * amountCurrencyPrice : storedAmount)
+    : storedAmount;
   const buyPriceUsdt = amountCurrency === 'CNY'
     ? buyPrice / cnyRate
     : amountCurrency === 'USDT'
@@ -1188,7 +1195,7 @@ export function FunderOrderCardV2Silver({
       : (amountCurrencyPrice && amountCurrencyPrice > 0 ? storedAmountUsdt / amountCurrencyPrice : storedAmountUsdt);
   const financingDisplayAmount = getExactFinancingDisplayAmount(order, amountCurrency, calculatedFinancingDisplayAmount);
   const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'U' : amountCurrency;
-  const displayFinancingAsPrimary = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true || amountCurrency === 'CNY';
+  const displayFinancingAsPrimary = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true || order.asset_type === 'stock' || amountCurrency === 'CNY';
 
   const currentValue = liveP !== null && qty > 0 ? liveP * qty : null;
   const buyValue = qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : storedAmountUsdt;
@@ -1380,17 +1387,33 @@ export function FunderOrderCardV2Silver({
   // 金/银色：股票类用金色，数字币用银色
   const isStockCard = order.asset_type === 'stock';
   const isOptionCard = order.asset_type === 'crypto_option';
-  // 期权 Greeks：前端直连 Deribit，自动触发，每5分钟刷新
+  // Greeks 仅支持 Deribit 的 BTC/ETH；其他期权标的保留手动参数，不发起无效查询。
+  const optionGreeksSupported = coin === 'BTC' || coin === 'ETH';
+  const optionGreeksCurrency = (coin === 'ETH' ? 'ETH' : 'BTC') as 'BTC' | 'ETH';
+  const optionPremiumCurrencyRaw = String(_optInfo?.denomination || 'USDT').toUpperCase();
+  const optionPremiumCurrency = optionPremiumCurrencyRaw === 'B'
+    ? coin
+    : optionPremiumCurrencyRaw === 'U'
+      ? 'USDT'
+      : optionPremiumCurrencyRaw;
+  const optionPremiumUnitPrice = livePrices[optionPremiumCurrency as CoinType];
+  const optionPremiumUsdt = _optInfo?.premium
+    ? optionPremiumCurrency === 'CNY'
+      ? parseFloat(_optInfo.premium) / cnyRate
+      : optionPremiumCurrency === 'USDT'
+        ? parseFloat(_optInfo.premium)
+        : (optionPremiumUnitPrice && optionPremiumUnitPrice > 0 ? parseFloat(_optInfo.premium) * optionPremiumUnitPrice : null)
+    : null;
   const greeksResult = useOptionGreeks({
-    currency: (_isOptCard && _optInfo?.coin ? _optInfo.coin : (order.coin || 'ETH')) as 'BTC' | 'ETH',
+    currency: optionGreeksCurrency,
     exerciseDate: _optInfo?.exerciseDate || '',
     strikePrice: _optInfo?.strikePrice ? Number(_optInfo.strikePrice) : 0,
     direction: (_optInfo?.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
-    enabled: isOptionCard && !!_optInfo?.exerciseDate && !!_optInfo?.strikePrice,
+    enabled: isOptionCard && optionGreeksSupported && !!_optInfo?.exerciseDate && !!_optInfo?.strikePrice,
   });
-  // 期权浮动盈亏：用 markPrice（含时间价值）× 数量 - 权利金总成本
-  const optPremiumTotal = isOptionCard && _optInfo?.premium && qty > 0
-    ? parseFloat(_optInfo.premium) * qty
+  // 期权浮动盈亏：用 markPrice（含时间价值）× 数量 - 权利金总成本，统一按USDT比较。
+  const optPremiumTotal = isOptionCard && optionPremiumUsdt !== null && qty > 0
+    ? optionPremiumUsdt * qty
     : null;
   const optMarkPrice = greeksResult.data?.markPrice ?? null;
   // Gate.io 返回的 markPrice 单位已是 USDT，直接乘以张数
@@ -1948,7 +1971,7 @@ export function FunderOrderCardV2Silver({
 
           // 计算 P&L 曲线数据
           const optStrikeNum = _optInfo?.strikePrice ? Number(_optInfo.strikePrice) : null;
-          const optPremiumNum = _optInfo?.premium ? parseFloat(_optInfo.premium) : null;
+          const optPremiumNum = optionPremiumUsdt;
           const optQtyNum = _optInfo?.buyQty ? parseFloat(_optInfo.buyQty) : 1;
           const optDirRaw = _optInfo?.direction || 'long_call';
           const optContractType: 'call' | 'put' = optDirRaw.includes('put') ? 'put' : 'call';
@@ -2844,10 +2867,17 @@ export function FunderLenderCardSilver({
   const qty = _lnIsOpt && _lnOptInfo?.buyQty ? parseFloat(_lnOptInfo.buyQty) : parseFloat(order.buy_quantity || '0');
   const buyPrice = parseFloat(order.buy_price || '0');
   const liveP = livePrices[coin] ?? null;
-  const rawAmountCurrency = String((order as any).amount_currency || 'USDT').toUpperCase();
+  const rawAmountCurrency = String((order as any).amount_currency || (order.asset_type === 'stock' ? 'CNY' : 'USDT')).toUpperCase();
   const amountCurrency = rawAmountCurrency === 'U' ? 'USDT' : rawAmountCurrency;
-  const storedAmountUsdt = parseFloat(order.amount || '0');
+  const storedAmount = parseFloat(order.amount || '0');
   const amountCurrencyPrice = livePrices[amountCurrency as CoinType];
+  const storedAmountUsdt = order.asset_type === 'stock'
+    ? amountCurrency === 'CNY'
+      ? storedAmount / cnyRate
+      : amountCurrency === 'USDT'
+        ? storedAmount
+        : (amountCurrencyPrice && amountCurrencyPrice > 0 ? storedAmount * amountCurrencyPrice : storedAmount)
+    : storedAmount;
   const buyPriceUsdt = amountCurrency === 'CNY'
     ? buyPrice / cnyRate
     : amountCurrency === 'USDT'

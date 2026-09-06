@@ -863,13 +863,20 @@ export function FunderOrderCard({
       return typeof oi === 'string' ? JSON.parse(oi) : oi;
     } catch { return null; }
   })();
-  // Greeks 查询：前端直连 Deribit，自动触发，每5分钟刷新
+  // Greeks 仅支持 Deribit 的 BTC/ETH；其他期权标的保留手动参数，不发起无效查询。
+  const optionGreeksSupported = optionInfo?.coin === 'BTC' || optionInfo?.coin === 'ETH';
+  const optionGreeksCurrency = (optionInfo?.coin === 'ETH' ? 'ETH' : 'BTC') as 'BTC' | 'ETH';
+  const optionPremiumUnit = optionInfo?.denomination === 'B'
+    ? (optionInfo?.coin || 'BTC')
+    : optionInfo?.denomination === 'U'
+      ? 'USDT'
+      : (optionInfo?.denomination || 'USDT');
   const greeksResult = useOptionGreeks({
-    currency: (optionInfo?.coin || 'ETH') as 'BTC' | 'ETH',
+    currency: optionGreeksCurrency,
     exerciseDate: optionInfo?.exerciseDate || '',
     strikePrice: optionInfo?.strikePrice ? Number(optionInfo.strikePrice) : 0,
     direction: (optionInfo?.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
-    enabled: isOptionOrder && !!optionInfo?.exerciseDate && !!optionInfo?.strikePrice,
+    enabled: isOptionOrder && optionGreeksSupported && !!optionInfo?.exerciseDate && !!optionInfo?.strikePrice,
   });
   // 融资金额统一以 order.amount 的 USDT 基准值保存；amount_currency 表示买入价格和融资金额的计价币种。
   const storedAmount = parseFloat(order.amount || '0');
@@ -881,13 +888,18 @@ export function FunderOrderCard({
     : amountCurrency === 'USDT'
       ? price
       : (amountCurrencyPrice && amountCurrencyPrice > 0 ? price * amountCurrencyPrice : price);
+  const stockAmountUsdt = isStockOrder && storedAmount > 0
+    ? amountCurrency === 'CNY'
+      ? storedAmount / cnyRate
+      : amountCurrency === 'USDT'
+        ? storedAmount
+        : (amountCurrencyPrice && amountCurrencyPrice > 0 ? storedAmount * amountCurrencyPrice : storedAmount)
+    : 0;
   const totalU = isStockOrder
-    ? storedAmount
+    ? stockAmountUsdt
     : (storedAmount > 0 ? storedAmount : (qty > 0 && quotedPriceUsdt > 0 ? qty * quotedPriceUsdt : 0));
   // 借出资产必须显示融资金额/融资币种，不能误用购买币种和 buy_quantity。
-  const financingAmountUsdt = isStockOrder
-    ? (storedAmount > 0 ? storedAmount / cnyRate : 0)
-    : totalU;
+  const financingAmountUsdt = totalU;
   const financingDisplayConfig: Record<string, boolean | string | number> | null = (() => {
     try {
       const raw = order.display_config;
@@ -916,7 +928,7 @@ export function FunderOrderCard({
         : calculatedFinancingDisplayAmount;
   const financingDisplayUnit = amountCurrency === 'USDT' ? 'u' : amountCurrency === 'CNY' ? '元' : amountCurrency;
   const principalLentOut = order.principal_lent_out === 1 || order.principal_lent_out === true;
-  const displayFinancingAsPrimary = principalLentOut || amountCurrency === 'CNY';
+  const displayFinancingAsPrimary = principalLentOut || isStockOrder || amountCurrency === 'CNY';
   const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'u' : amountCurrency;
   const quotedBuyValue = qty > 0 && price > 0 ? qty * price : financingDisplayAmount;
   // 利息货币逻辑与 LedgerDetail FunderOrderCardRight 完全一致
@@ -1309,7 +1321,7 @@ export function FunderOrderCard({
                 {optionInfo.premium && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 shrink-0">权利金/张</span>
-                    <span className="font-medium" style={{ color: '#1A2340' }}>{parseFloat(optionInfo.premium).toFixed(2)} {optionInfo.denomination === 'B' ? (optionInfo.coin || 'BTC') : 'USDT'}</span>
+                    <span className="font-medium" style={{ color: '#1A2340' }}>{parseFloat(optionInfo.premium).toFixed(2)} {optionPremiumUnit}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
@@ -2247,7 +2259,7 @@ export function FunderOrderCard({
                         <div className="flex items-center justify-between"><span className="text-gray-400">Vega</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.vega)}</span></div>
                         <div className="flex items-center justify-between"><span className="text-gray-400">Theta</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.theta)}</span></div>
                         {d.iv != null && <div className="flex items-center justify-between"><span className="text-gray-400">IV</span><span className="font-medium" style={{ color: '#4B5563' }}>{(Number(d.iv) * 100).toFixed(1)}%</span></div>}
-                        {d.markPrice != null && <div className="flex items-center justify-between"><span className="text-gray-400">期权价格</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.markPrice)} {optionInfo?.denomination === 'B' ? (optionInfo?.coin || 'BTC') : 'USDT'}</span></div>}
+                        {d.markPrice != null && <div className="flex items-center justify-between"><span className="text-gray-400">期权价格</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.markPrice)} {optionPremiumUnit}</span></div>}
                       </>
                     );
                   })()}
