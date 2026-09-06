@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-09-06
+// 生成时间：2026-09-07
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9088,5 +9088,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-09-05": [
     { date: "2026-09-04T19:56:02Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-09-05T09:29:08Z", type: "fix", cleanMessage: "improve ledger view user search" },
+  ],
+  "2026-09-06": [
+    { date: "2026-09-05T19:35:42Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-09-06T09:34:20Z", type: "feat", cleanMessage: "show withdrawal balance snapshots" },
+    { date: "2026-09-06T10:28:30Z", type: "fix", cleanMessage: "unify amount price quantity linkage" },
   ],
 };
