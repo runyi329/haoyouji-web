@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-09-07
+// 生成时间：2026-09-08
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9093,5 +9093,27 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-09-05T19:35:42Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-09-06T09:34:20Z", type: "feat", cleanMessage: "show withdrawal balance snapshots" },
     { date: "2026-09-06T10:28:30Z", type: "fix", cleanMessage: "unify amount price quantity linkage" },
+  ],
+  "2026-09-07": [
+    { date: "2026-09-06T19:38:09Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-09-07T02:23:59Z", type: "feat", cleanMessage: "show settled user finance orders" },
+    { date: "2026-09-07T02:38:45Z", type: "feat", cleanMessage: "mark settled finance cards" },
+    { date: "2026-09-07T02:47:17Z", type: "refactor", cleanMessage: "unify settled order stamps" },
+    { date: "2026-09-07T02:58:17Z", type: "fix", cleanMessage: "preserve settled note history" },
+    { date: "2026-09-07T03:23:00Z", type: "fix", cleanMessage: "freeze funder interest at settlement date" },
+    { date: "2026-09-07T03:43:28Z", type: "fix", cleanMessage: "显示期权实时浮动盈亏" },
+    { date: "2026-09-07T03:56:09Z", type: "fix", cleanMessage: "同步期权预览浮盈开关" },
+    { date: "2026-09-07T04:17:11Z", type: "fix", cleanMessage: "correct option live pnl valuation display" },
+    { date: "2026-09-07T04:29:40Z", type: "fix", cleanMessage: "calculate option pnl from mark price" },
+    { date: "2026-09-07T04:46:11Z", type: "fix", cleanMessage: "compact option pnl display" },
+    { date: "2026-09-07T04:56:17Z", type: "fix", cleanMessage: "link option profit share to live pnl" },
+    { date: "2026-09-07T05:05:55Z", type: "style", cleanMessage: "simplify option profit share display" },
+    { date: "2026-09-07T05:19:06Z", type: "fix", cleanMessage: "keep option card strike price visible" },
+    { date: "2026-09-07T05:26:15Z", type: "style", cleanMessage: "reposition card download action" },
+    { date: "2026-09-07T09:38:38Z", type: "fix", cleanMessage: "ensure settlement interest end date column" },
+    { date: "2026-09-07T10:17:52Z", type: "fix", cleanMessage: "use compatible settlement schema query" },
+    { date: "2026-09-07T11:14:19Z", type: "feat", cleanMessage: "add funder order category tabs" },
+    { date: "2026-09-07T12:02:11Z", type: "feat", cleanMessage: "show funder category order counts" },
+    { date: "2026-09-07T12:18:20Z", type: "feat", cleanMessage: "remember funder order view mode" },
   ],
 };
