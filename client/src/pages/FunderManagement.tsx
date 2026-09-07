@@ -258,6 +258,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [assetTypeFilter, setAssetTypeFilter] = useState<'' | 'stock' | 'crypto' | 'crypto_option' | 'settled'>();
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [confirmSettleId, setConfirmSettleId] = useState<number | null>(null);
+  // 仅在转结清时使用；清空后默认回到当前北京日期。
+  const [settleInterestEndDate, setSettleInterestEndDate] = useState('');
   // 弹窗状态提升：存储当前打开弹窗的 orderId，null 表示关闭（防止子组件因数据刷新重渲染导致弹窗自动关闭）
   const [collateralInfoOrderId, setCollateralInfoOrderId] = useState<number | null>(null);
   const [interestTipOrderId, setInterestTipOrderId] = useState<number | null>(null);
@@ -1539,7 +1541,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     saveParticipantsMutation={saveParticipantsMutation}
                     participantsEditMode={participantsEditMode}
                     setParticipantsEditMode={setParticipantsEditMode}
-                    onConfirmSettle={setConfirmSettleId}
+                    onConfirmSettle={(id) => {
+                      setSettleInterestEndDate('');
+                      setConfirmSettleId(id);
+                    }}
                     showCollateralInfo={collateralInfoOrderId === order.id}
                     setShowCollateralInfo={(v) => setCollateralInfoOrderId(v ? order.id : null)}
                     showInterestTip={interestTipOrderId === order.id}
@@ -3642,14 +3647,27 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               ) : (
                 <p className="text-sm text-gray-600 mb-2">结清后该订单利息将停止计算，状态变为「已结清」。</p>
               )}
-              <p className="text-sm text-gray-600 mb-2">本功能只改变融资付息的记账状态和页面显示，<span className="font-semibold text-gray-800">不会产生任何钱包流水</span>。</p>
+              <p className="text-sm text-gray-600 mb-3">本功能只改变融资付息的记账状态和页面显示，<span className="font-semibold text-gray-800">不会产生任何钱包流水</span>。</p>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 mb-3">
+                <div className="text-sm font-semibold text-amber-900">利息结算截止日</div>
+                <p className="text-xs text-amber-800 mt-1">利息按北京时间自然日累计至该日。默认当天；若实际结清后才补录，可改为约定结息日期。</p>
+                <input
+                  type="date"
+                  value={settleInterestEndDate || getBeijingToday()}
+                  min={targetOrder?.interest_start_date ? String(targetOrder.interest_start_date).slice(0, 10) : undefined}
+                  max={getBeijingToday()}
+                  onChange={(e) => setSettleInterestEndDate(e.target.value)}
+                  className="mt-2 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-amber-500"
+                />
+              </div>
               <p className="text-sm font-medium text-red-600 mb-5">统一结清后不能单独保留某位参与者为持有中，确定继续？</p>
               <div className="flex gap-3">
-                <button onClick={() => setConfirmSettleId(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
+                <button onClick={() => { setConfirmSettleId(null); setSettleInterestEndDate(''); }} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
                 <button
                   onClick={() => {
-                    updateMutation.mutate({ id: confirmSettleId, ledgerId, status: 'settled' });
+                    updateMutation.mutate({ id: confirmSettleId, ledgerId, status: 'settled', interestEndDate: settleInterestEndDate || getBeijingToday() });
                     setConfirmSettleId(null);
+                    setSettleInterestEndDate('');
                   }}
                   disabled={updateMutation.isPending}
                   className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white disabled:opacity-50"

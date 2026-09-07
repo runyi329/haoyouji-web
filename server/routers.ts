@@ -193,19 +193,28 @@ async function ensureFunderParticipantSnapshotColumns(): Promise<void> {
     `SELECT p.id AS participant_id, p.order_snapshot, o.*
      FROM ledger_order_participants p
      INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
-     WHERE o.status = 'settled' AND p.role <> 'inactive'`
+     WHERE o.status IN ('settled', 'completed') AND p.role <> 'inactive'`
   );
   for (const row of (settledParentRows as any[])) {
     const existingSnapshot = parseFunderParticipantSnapshot(row.order_snapshot);
     const parentSettledAt = row.settled_at instanceof Date
       ? row.settled_at.toISOString().slice(0, 19).replace('T', ' ')
       : row.settled_at;
-    if (existingSnapshot?.status === 'settled' && String(existingSnapshot?.settled_at || '') === String(parentSettledAt || '')) continue;
+    const parentInterestEndDate = row.interest_end_date instanceof Date
+      ? row.interest_end_date.toISOString().slice(0, 10)
+      : (row.interest_end_date || (parentSettledAt ? String(parentSettledAt).slice(0, 10) : null));
+    if (
+      existingSnapshot?.status === 'settled'
+      && String(existingSnapshot?.settled_at || '') === String(parentSettledAt || '')
+      && String(existingSnapshot?.interest_end_date || '') === String(parentInterestEndDate || '')
+    ) continue;
     const snapshot = {
       ...buildFunderParticipantSnapshot(row),
       ...(existingSnapshot || {}),
       status: 'settled',
       settled_at: parentSettledAt || null,
+      // 旧结清单没有手动结息日期时，按实际结清时点冻结，绝不回退到当天继续计息。
+      interest_end_date: parentInterestEndDate,
     };
     await (conn as any).execute(
       'UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ?',
@@ -222,7 +231,7 @@ const FUNDER_PARTICIPANT_SNAPSHOT_FIELDS = [
   'finance_type', 'collateral_assets', 'lent_out_assets', 'show_profit_share', 'commission_share', 'display_config',
   'asset_type', 'tags', 'collateral_share_mode', 'principal_lent_out', 'broker_name', 'broker_account',
   'option_info', 'trade_direction', 'order_fill_status', 'order_perspective', 'trading_fee_rate_per_mille',
-  'trading_fee_status', 'collateral_source', 'settled_at'
+  'trading_fee_status', 'collateral_source', 'settled_at', 'interest_end_date'
 ] as const;
 
 function buildFunderParticipantSnapshot(source: any): Record<string, any> {
@@ -18148,6 +18157,8 @@ ${klinesSummary}
                   if (mainOrderStatus === 'settled' || mainOrderStatus === 'completed') {
                     o.status = mainOrderStatus;
                     o.settled_at = mainOrderSettledAt;
+                    // 参与者与主订单共用结息终点；历史快照不能把主单的新日期覆盖为空或旧值。
+                    o.interest_end_date = mainOrder.interest_end_date || mainOrderSettledAt || null;
                   }
                   (o as any)._participantParentDeleted = Boolean((o as any).deleted_at);
                   // 名称展示统一：昵称优先，用户名兜底。
@@ -18426,6 +18437,8 @@ ${klinesSummary}
         interestBase: z.string().optional(),
         interestBaseCurrency: z.string().optional(),
         interestStartDate: z.string().optional(),
+        // 结清时按北京自然日冻结利息；未传时默认结清当日。
+        interestEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
         counterparty: z.string().optional(),
         collateralCoin: z.string().optional(),
         collateralQty: z.string().optional(),
@@ -18528,12 +18541,22 @@ ${klinesSummary}
           updateVals.push(input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null);
         }
         if (input.userId !== undefined) { updateCols.push('user_id = ?'); updateVals.push(input.userId); }
-        // 结清时记录统一时间戳；主订单与参与者子订单必须使用同一结清时间。
+        // 结清时记录统一时间戳与结息截止日；主订单和参与者子订单必须使用同一口径。
         const statusChangedAt = input.status === 'settled'
           ? new Date().toISOString().slice(0, 19).replace('T', ' ')
           : null;
-        if (input.status === 'settled') { updateCols.push('settled_at = ?'); updateVals.push(statusChangedAt); }
-        if (input.status === 'active') { updateCols.push('settled_at = ?'); updateVals.push(null); }
+        const defaultInterestEndDate = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const interestEndDate = input.status === 'settled'
+          ? (input.interestEndDate || defaultInterestEndDate)
+          : null;
+        if (input.status === 'settled') {
+          updateCols.push('settled_at = ?'); updateVals.push(statusChangedAt);
+          updateCols.push('interest_end_date = ?'); updateVals.push(interestEndDate);
+        }
+        if (input.status === 'active') {
+          updateCols.push('settled_at = ?'); updateVals.push(null);
+          updateCols.push('interest_end_date = ?'); updateVals.push(null);
+        }
         // DECIMAL/数字列：空字符串需转为 null，否则 MySQL 报 Incorrect decimal value
         const decimalCols = new Set(['amount', 'buy_price', 'buy_quantity', 'interest_rate_annual', 'interest_base', 'collateral_qty']);
         for (const [key, col] of Object.entries(fieldMap)) {
@@ -18571,6 +18594,7 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS interest_rate_currency VARCHAR(20) DEFAULT 'USDT'`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS settled_at DATETIME DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS interest_end_date DATE DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS lent_out_assets TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_share_mode VARCHAR(10) DEFAULT 'none'`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trade_direction VARCHAR(10) DEFAULT NULL`).catch(() => {});
@@ -18580,6 +18604,16 @@ ${klinesSummary}
         let participantCount = 0;
         const shouldSyncParticipantStatus = input.status === 'settled' || input.status === 'active';
         try {
+          if (input.status === 'settled' && interestEndDate) {
+            const [interestRows] = await conn.execute(
+              'SELECT interest_start_date FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1',
+              [input.id, input.ledgerId]
+            ) as any;
+            const interestStartDate = Array.isArray(interestRows) && interestRows.length > 0 ? interestRows[0]?.interest_start_date : null;
+            if (interestStartDate && String(interestEndDate) < String(interestStartDate).slice(0, 10)) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: '结息截止日不能早于计息开始日' });
+            }
+          }
           if (shouldSyncParticipantStatus) await ensureFunderParticipantSnapshotColumns();
           if (shouldSyncParticipantStatus) await conn.beginTransaction();
 
@@ -18607,6 +18641,7 @@ ${klinesSummary}
                 ...(parseFunderParticipantSnapshot(participant.order_snapshot) || {}),
                 status: input.status,
                 settled_at: input.status === 'settled' ? statusChangedAt : null,
+                interest_end_date: input.status === 'settled' ? interestEndDate : null,
               };
               await conn.execute(
                 'UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ?',

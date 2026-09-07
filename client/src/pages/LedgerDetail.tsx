@@ -554,14 +554,17 @@ function FunderOrderCardLegacy({
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const [showMarginInfo, setShowMarginInfo] = useState(false);
   const [showStatusSheet, setShowStatusSheet] = useState(false);
+  const [settleInterestEndDate, setSettleInterestEndDate] = useState('');
   const [headerTagsExpanded, setHeaderTagsExpanded] = useState(false);
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
+  // 已结订单优先使用保存的结息截止日；老订单回退实际结清时间，绝不继续计算至今天。
+  const interestEndAt = (order as any).interest_end_date || order.settled_at || null;
   const accrued = useAccruedInterestFunder(
-    (order.status === 'active' || order.settled_at) ? order.interest_base : null,
-    (order.status === 'active' || order.settled_at) ? (isInvited ? order.participantInfo?.commissionRate : order.interest_rate_annual) : null,
-    (order.status === 'active' || order.settled_at) ? (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) : null,
-    order.settled_at
+    (order.status === 'active' || interestEndAt) ? order.interest_base : null,
+    (order.status === 'active' || interestEndAt) ? (isInvited ? order.participantInfo?.commissionRate : order.interest_rate_annual) : null,
+    (order.status === 'active' || interestEndAt) ? (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) : null,
+    interestEndAt
   );
 
   const statusLabel = STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status;
@@ -973,15 +976,14 @@ function FunderOrderCardLegacy({
             {showInterestTip && (() => {
               const startDate = (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) ? String(isInvited ? order.participantInfo.commissionStartDate : order.interest_start_date).slice(0, 10) : null;
               const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
-              const _tipEndTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
-              const elapsedMs = startDate ? Math.max(0, _tipEndTs - new Date(startDate + 'T00:00:00').getTime()) : 0;
-              const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
-              const elapsedHours = Math.floor((elapsedMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-              const elapsedMins = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
-              const elapsedSecs = Math.floor(elapsedMs / 1000);
-              const elapsedLabel = elapsedDays > 0
-                ? `${elapsedDays}天 ${elapsedHours}小时 ${elapsedMins}分`
-                : `${elapsedHours}小时 ${elapsedMins}分`;
+              const interestEndDate = (order as any).interest_end_date || order.settled_at || null;
+              const _tipEndTs = interestEndDate ? new Date(interestEndDate).getTime() : Date.now();
+              // 与 useAccruedInterestFunder 一致：按北京时间自然日，开始日与截止日均计入。
+              const endDateStr = new Date(_tipEndTs + 8 * 3600 * 1000).toISOString().slice(0, 10);
+              const startDay = startDate ? new Date(startDate + 'T00:00:00+08:00').getTime() : 0;
+              const endDay = startDate ? new Date(endDateStr + 'T00:00:00+08:00').getTime() : 0;
+              const elapsedDays = startDate ? Math.max(0, Math.floor((endDay - startDay) / (1000 * 60 * 60 * 24)) + 1) : 0;
+              const elapsedLabel = `${elapsedDays}天`;
               const base = order.interest_base ? parseFloat(order.interest_base) : 0;
               const rate = order.interest_rate_annual ? parseFloat(order.interest_rate_annual) : 0;
               const altAccruedTip = convertAlt(displayAccrued);
@@ -998,15 +1000,15 @@ function FunderOrderCardLegacy({
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 计息时间</div>
                         <div className="space-y-1">
                           <div className="flex justify-between"><span>开始日期</span><span className="font-mono font-medium">{startDate || '--'}</span></div>
-                          <div className="flex justify-between"><span>当前日期</span><span className="font-mono font-medium">{todayStr}</span></div>
+                          <div className="flex justify-between"><span>{interestEndDate ? '结息截止日' : '当前日期'}</span><span className="font-mono font-medium">{interestEndDate ? String(interestEndDate).slice(0, 10) : todayStr}</span></div>
                           <div className="flex justify-between"><span>已过时间</span><span className="font-mono font-medium">{elapsedLabel}</span></div>
                         </div>
                       </div>
                       <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 计算公式</div>
-                        <div>计息基数 × 年化利率 ÷ 365天 ÷ 24小时 ÷ 60分 ÷ 60秒 × 已过秒数</div>
+                        <div>计息基数 × 年化利率 ÷ 365天 × 计息天数</div>
                         <div className="mt-1 font-mono">
-                          <span style={{ color: '#3B82F6' }}>{base.toLocaleString()}{baseCurLabel} × {rate}% ÷ 365天 ÷ 24小时 ÷ 60分 ÷ 60秒 × {elapsedSecs.toLocaleString()}秒</span>
+                          <span style={{ color: '#3B82F6' }}>{base.toLocaleString()}{baseCurLabel} × {rate}% ÷ 365天 × {elapsedDays}天</span>
                         </div>
                       </div>
                       <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
@@ -1055,8 +1057,8 @@ function FunderOrderCardLegacy({
                 </span>
               </div>
             )}
-            {show('interestDuration') && order.interest_start_date && (order.status === 'active' || order.settled_at) && (() => {
-              const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+            {show('interestDuration') && order.interest_start_date && (order.status === 'active' || interestEndAt) && (() => {
+              const endTs = interestEndAt ? new Date(interestEndAt).getTime() : Date.now();
               const elapsed = endTs - new Date(String(order.interest_start_date).slice(0, 10) + 'T00:00:00').getTime();
               if (elapsed < 0) return null;
               const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
@@ -1668,6 +1670,20 @@ function FunderOrderCardLegacy({
             <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
             <div className="text-sm font-semibold text-gray-700 mb-4 text-center">订单操作</div>
             <div className="space-y-2">
+              {order.status !== 'settled' && order.status !== 'completed' && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                  <div className="text-sm font-semibold text-amber-900">利息结算截止日</div>
+                  <p className="text-xs text-amber-800 mt-1">默认当天，可按实际约定结息日期修改；利息按北京时间自然日冻结至该日。</p>
+                  <input
+                    type="date"
+                    value={settleInterestEndDate || getBeijingToday()}
+                    min={order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : undefined}
+                    max={getBeijingToday()}
+                    onChange={(e) => setSettleInterestEndDate(e.target.value)}
+                    className="mt-2 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-amber-500"
+                  />
+                </div>
+              )}
               <button
                 onClick={() => {
                   updateMutation.mutate({ id: order.id, ledgerId, status: 'active' });
@@ -1680,7 +1696,8 @@ function FunderOrderCardLegacy({
               </button>
               <button
                 onClick={() => {
-                  updateMutation.mutate({ id: order.id, ledgerId, status: 'settled' });
+                  updateMutation.mutate({ id: order.id, ledgerId, status: 'settled', interestEndDate: settleInterestEndDate || getBeijingToday() });
+                  setSettleInterestEndDate('');
                   setShowStatusSheet(false);
                 }}
                 className="w-full py-3 rounded-xl text-sm font-medium transition-colors"

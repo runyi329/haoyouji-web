@@ -537,6 +537,7 @@ export function FunderOrderCard({
   const [_intParticipantsEditMode, _intSetParticipantsEditMode] = useState(false);
   // 结清确认
   const [_intConfirmSettleId, _intSetConfirmSettleId] = useState<number | null>(null);
+  const [_intSettleInterestEndDate, _intSetSettleInterestEndDate] = useState('');
   // 结息面板：利息约等于快捷配置
   const [interestApproxConfig, setInterestApproxConfig] = useState<{ approxInterest: string; approxPaid: string }>({ approxInterest: 'U', approxPaid: 'U' });
   const _intSaveInterestApproxMutation = trpc.ledger.financeUpdateOrder.useMutation({
@@ -844,11 +845,13 @@ export function FunderOrderCard({
   const [showStatusSheet, setShowStatusSheet] = useState(false);
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
+  // 已结订单优先使用管理员保存的结息截止日；老订单回退至实际结清时点，绝不继续算至今天。
+  const interestEndAt = (order as any).interest_end_date || order.settled_at || null;
   const accrued = useAccruedInterestFunder(
-    (order.status === 'active' || order.settled_at) ? order.interest_base : null,
-    (order.status === 'active' || order.settled_at) ? order.interest_rate_annual : null,
-    (order.status === 'active' || order.settled_at) ? order.interest_start_date : null,
-    order.settled_at
+    (order.status === 'active' || interestEndAt) ? order.interest_base : null,
+    (order.status === 'active' || interestEndAt) ? order.interest_rate_annual : null,
+    (order.status === 'active' || interestEndAt) ? order.interest_start_date : null,
+    interestEndAt
   );
 
   const statusLabel = STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status;
@@ -1539,9 +1542,10 @@ export function FunderOrderCard({
             )}
             {showInterestTip && (() => {
               const startDate = (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) ? String(isInvited ? order.participantInfo.commissionStartDate : order.interest_start_date).slice(0, 10) : null;
-              // 当前日期（北京时间 YYYY-MM-DD）
+              // 已结订单显示冻结的结息日期；进行中订单显示当前北京日期。
               const todayStr = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-              const _tipEndTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+              const interestEndDate = (order as any).interest_end_date || order.settled_at || null;
+              const _tipEndTs = interestEndDate ? new Date(interestEndDate).getTime() : Date.now();
               // 按北京时间自然日计算天数：开始日期当天算1天，每过零点+1天
               const _endDateStr = new Date(_tipEndTs + 8 * 3600 * 1000).toISOString().slice(0, 10);
               const _startD = startDate ? new Date(startDate + 'T00:00:00+08:00').getTime() : 0;
@@ -1565,7 +1569,7 @@ export function FunderOrderCard({
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 计息时间</div>
                         <div className="space-y-1">
                           <div className="flex justify-between"><span>开始日期</span><span className="font-mono font-medium">{fmtDate(startDate)}</span></div>
-                          <div className="flex justify-between"><span>当前日期</span><span className="font-mono font-medium">{fmtDate(todayStr)}</span></div>
+                          <div className="flex justify-between"><span>{interestEndDate ? '结息截止日' : '当前日期'}</span><span className="font-mono font-medium">{fmtDate(interestEndDate ? String(interestEndDate).slice(0, 10) : todayStr)}</span></div>
                           <div className="flex justify-between"><span>已过时间</span><span className="font-mono font-medium">{elapsedLabel}</span></div>
                         </div>
                       </div>
@@ -1670,7 +1674,7 @@ export function FunderOrderCard({
               </div>
             )}
             {show('interestDuration') && (() => {
-              if (!order.interest_start_date || (order.status !== 'active' && !order.settled_at)) {
+              if (!order.interest_start_date || (order.status !== 'active' && !interestEndAt)) {
                 return (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400">计息时长</span>
@@ -1678,7 +1682,7 @@ export function FunderOrderCard({
                   </div>
                 );
               }
-              const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+              const endTs = interestEndAt ? new Date(interestEndAt).getTime() : Date.now();
               const elapsed = endTs - new Date(String(order.interest_start_date).slice(0, 10) + 'T00:00:00+08:00').getTime();
               const label = elapsed <= 0 ? '0小时' : (() => {
                 const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
@@ -3048,7 +3052,7 @@ export function FunderOrderCard({
     {onConfirmSettle === undefined && _intConfirmSettleId !== null && (() => {
       const participantCount = Number((order as any).participantCount ?? (order as any)._participantCount ?? (order as any)._participantUserIds?.length ?? 0);
       return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => _intSetConfirmSettleId(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => { _intSetConfirmSettleId(null); _intSetSettleInterestEndDate(''); }}>
           <div className="absolute inset-0 bg-black/50" />
           <div className="relative bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-gray-900 mb-2">确认统一结清</h3>
@@ -3057,14 +3061,27 @@ export function FunderOrderCard({
             ) : (
               <p className="text-sm text-gray-600 mb-2">结清后该订单利息将停止计算，状态变为「已结清」。</p>
             )}
-            <p className="text-sm text-gray-600 mb-2">本功能只改变融资付息的记账状态和页面显示，<span className="font-semibold text-gray-800">不会产生任何钱包流水</span>。</p>
+            <p className="text-sm text-gray-600 mb-3">本功能只改变融资付息的记账状态和页面显示，<span className="font-semibold text-gray-800">不会产生任何钱包流水</span>。</p>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 mb-3">
+              <div className="text-sm font-semibold text-amber-900">利息结算截止日</div>
+              <p className="text-xs text-amber-800 mt-1">按北京时间自然日计息至该日；默认当天，可按实际约定日期修改。</p>
+              <input
+                type="date"
+                value={_intSettleInterestEndDate || getBeijingToday()}
+                min={order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : undefined}
+                max={getBeijingToday()}
+                onChange={(e) => _intSetSettleInterestEndDate(e.target.value)}
+                className="mt-2 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-amber-500"
+              />
+            </div>
             <p className="text-sm font-medium text-red-600 mb-5">统一结清后不能单独保留某位参与者为持有中，确定继续？</p>
             <div className="flex gap-3">
-              <button onClick={() => _intSetConfirmSettleId(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
+              <button onClick={() => { _intSetConfirmSettleId(null); _intSetSettleInterestEndDate(''); }} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
               <button
                 onClick={() => {
-                  $updateMutation.mutate({ id: _intConfirmSettleId, ledgerId, status: 'settled' });
+                  $updateMutation.mutate({ id: _intConfirmSettleId, ledgerId, status: 'settled', interestEndDate: _intSettleInterestEndDate || getBeijingToday() });
                   _intSetConfirmSettleId(null);
+                  _intSetSettleInterestEndDate('');
                 }}
                 className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white"
               >{participantCount > 0 ? '全部结清' : '确认结清'}</button>
