@@ -14,6 +14,7 @@ import {
   COIN_COLORS,
   CoinType,
   fmtDate,
+  formatSettledTimestamp,
   formatCoinQtyFunder,
   useAccruedInterestFunder,
   FunderNoteRow,
@@ -24,33 +25,18 @@ import {
   FunderOrderCard,
 } from "./FunderOrderCard";
 
-/** 用户端卡片的结清状态标识：保留历史内容，同时与进行中订单明确区分。 */
+/** 用户端卡片的结清状态标识：与订单模式同等比例，居中但保持半透明。 */
 function SettledCardStamp({ settledAt }: { settledAt?: string | Date | null }) {
-  let settledDate = '';
-  if (settledAt) {
-    const date = new Date(settledAt);
-    if (!Number.isNaN(date.getTime())) {
-      settledDate = date.toLocaleDateString('zh-CN', {
-        timeZone: 'Asia/Shanghai',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).replace(/\//g, '.');
-    }
-  }
+  const settledTime = formatSettledTimestamp(settledAt);
   return (
     <div
-      aria-label={settledDate ? `已结清，结清日期 ${settledDate}` : '已结清'}
-      style={{
-        position: 'absolute', top: '43px', right: '14px', zIndex: 12,
-        pointerEvents: 'none', transform: 'rotate(-10deg)', textAlign: 'center',
-        border: '2px solid rgba(185, 42, 42, 0.68)', borderRadius: '7px',
-        color: 'rgba(165, 24, 24, 0.78)', background: 'rgba(255, 246, 246, 0.16)',
-        padding: '3px 7px 2px', lineHeight: 1, boxShadow: '0 1px 2px rgba(100,0,0,0.16)',
-      }}
+      aria-label={settledTime ? `已结清，结清时间 ${settledTime}` : '已结清'}
+      style={{ position: 'absolute', inset: 0, zIndex: 12, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
     >
-      <div style={{ fontSize: '15px', fontWeight: 800, letterSpacing: '2px', whiteSpace: 'nowrap' }}>已结清</div>
-      {settledDate && <div style={{ marginTop: '3px', fontSize: '7px', fontWeight: 700, letterSpacing: '0.3px', whiteSpace: 'nowrap' }}>结清 {settledDate}</div>}
+      <div style={{ border: '3px solid rgba(220,38,38,0.35)', color: 'rgba(220,38,38,0.35)', borderRadius: '8px', padding: '8px 24px', fontSize: '28px', fontWeight: 800, letterSpacing: '6px', lineHeight: '1.4', whiteSpace: 'nowrap', transform: 'rotate(-15deg)', textAlign: 'center' }}>
+        <div>已结清</div>
+        {settledTime && <div style={{ marginTop: '2px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.6px', lineHeight: 1.25 }}>结清 {settledTime}</div>}
+      </div>
     </div>
   );
 }

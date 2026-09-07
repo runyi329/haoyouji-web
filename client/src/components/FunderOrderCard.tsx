@@ -106,6 +106,23 @@ export function fmtDate(dateStr: string | null | undefined): string {
   return `${parts[0].slice(2)}.${parts[1]}.${parts[2]}`;
 }
 
+// 已结订单统一按北京时间显示结清时分秒，供卡片模式和订单模式共用。
+export function formatSettledTimestamp(settledAt?: string | Date | null): string {
+  if (!settledAt) return '';
+  const date = new Date(settledAt);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).replace(/\//g, '.');
+}
+
 // 简单日历选择器组件
 export function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   // 初始视图月份：优先跟随已选值，否则定位北京时间当月
@@ -836,7 +853,8 @@ export function FunderOrderCard({
   const statusLabel = STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status;
   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
   const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
-  const isSettled = order.status === 'settled';
+  const isSettled = order.status === 'settled' || order.status === 'completed';
+  const settledTimestamp = formatSettledTimestamp(order.settled_at);
   // “本人 / 他人”只决定列表归属；绿色主题只由真实参与关系决定。
   // order_perspective 不能作为颜色条件，避免“他人订单”被误标为参与订单。
   const isParticipantVisual = !!(order as any).participantInfo
@@ -1124,7 +1142,10 @@ export function FunderOrderCard({
     >
       {isSettled && (
         <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center" style={{ backgroundColor: 'rgba(220,38,38,0.06)', zIndex: 10 }}>
-          <div style={{ border: '3px solid rgba(220,38,38,0.35)', color: 'rgba(220,38,38,0.35)', borderRadius: '8px', padding: '8px 24px', fontSize: '28px', fontWeight: 800, letterSpacing: '6px', lineHeight: '1.4', whiteSpace: 'nowrap', transform: 'rotate(-15deg)' }}>已结清</div>
+          <div style={{ border: '3px solid rgba(220,38,38,0.35)', color: 'rgba(220,38,38,0.35)', borderRadius: '8px', padding: '8px 24px', fontSize: '28px', fontWeight: 800, letterSpacing: '6px', lineHeight: '1.4', whiteSpace: 'nowrap', transform: 'rotate(-15deg)', textAlign: 'center' }}>
+            <div>已结清</div>
+            {settledTimestamp && <div style={{ marginTop: '2px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.6px', lineHeight: 1.25 }}>结清 {settledTimestamp}</div>}
+          </div>
         </div>
       )}
 
