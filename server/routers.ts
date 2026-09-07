@@ -18584,12 +18584,24 @@ ${klinesSummary}
           password: decodeURIComponent(parsedUrl.password),
           database: parsedUrl.pathname.replace(/^\//, ''),
         });
-        // 生产旧库可能不支持 ALTER TABLE ... ADD COLUMN IF NOT EXISTS。
-        // 结清写入前必须先用元数据确认字段，再执行普通 ADD COLUMN，不能静默吞掉失败。
-        const ensureLedgerOrdersColumn = async (columnName: string, columnDefinition: string) => {
-          const [columns] = await conn.execute('SHOW COLUMNS FROM ledger_orders LIKE ?', [columnName]) as any;
+        // 生产旧库的 SHOW COLUMNS 不支持预编译占位符。结清前使用固定的信息架构查询，
+        // 缺失时再补列，不能静默吞掉失败。
+        const ensureInterestEndDateColumn = async () => {
+          const [columns] = await conn.query(`
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+              AND table_name = 'ledger_orders'
+              AND column_name = 'interest_end_date'
+            LIMIT 1
+          `) as any;
           if (!Array.isArray(columns) || columns.length === 0) {
-            await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN ${columnDefinition}`);
+            try {
+              await conn.query('ALTER TABLE ledger_orders ADD COLUMN interest_end_date DATE DEFAULT NULL');
+            } catch (error: any) {
+              // 并发结清时，若其他请求刚好已补列，则可安全继续；其他错误必须抛出。
+              if (error?.code !== 'ER_DUP_FIELDNAME') throw error;
+            }
           }
         };
         // 确保 collateral_assets 等新字段存在（兼容旧表结构）
@@ -18610,7 +18622,7 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`).catch(() => {});
         } catch(e) {}
         // 不依赖上方可能被旧版 MySQL 拒绝的 IF NOT EXISTS 语法；缺失时必须实际补齐。
-        await ensureLedgerOrdersColumn('interest_end_date', 'interest_end_date DATE DEFAULT NULL');
+        await ensureInterestEndDateColumn();
         let participantCount = 0;
         const shouldSyncParticipantStatus = input.status === 'settled' || input.status === 'active';
         try {
