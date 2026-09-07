@@ -1220,13 +1220,48 @@ export function FunderOrderCardV2Silver({
   const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'U' : amountCurrency;
   const displayFinancingAsPrimary = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true || order.asset_type === 'stock' || amountCurrency === 'CNY';
 
-  const currentValue = liveP !== null && qty > 0 ? liveP * qty : null;
-  const buyValue = qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : storedAmountUsdt;
-  const _isShortSl = (order as any).trade_direction === 'short';
-  const floatPnl = currentValue !== null && buyValue > 0
+  // BTC/ETH期权使用真实合约标记价；无可信合约报价时不以标的现货替代。
+  const optionGreeksSupported = coin === 'BTC' || coin === 'ETH';
+  const optionGreeksCurrency = (coin === 'ETH' ? 'ETH' : 'BTC') as 'BTC' | 'ETH';
+  const optionPremiumCurrencyRaw = String(_optInfo?.denomination || 'USDT').toUpperCase();
+  const optionPremiumCurrency = optionPremiumCurrencyRaw === 'B'
+    ? coin
+    : optionPremiumCurrencyRaw === 'U'
+      ? 'USDT'
+      : optionPremiumCurrencyRaw;
+  const optionPremiumUnitPrice = livePrices[optionPremiumCurrency as CoinType];
+  const optionPremiumUsdt = _optInfo?.premium
+    ? optionPremiumCurrency === 'CNY'
+      ? parseFloat(_optInfo.premium) / cnyRate
+      : optionPremiumCurrency === 'USDT'
+        ? parseFloat(_optInfo.premium)
+        : (optionPremiumUnitPrice && optionPremiumUnitPrice > 0 ? parseFloat(_optInfo.premium) * optionPremiumUnitPrice : null)
+    : null;
+  const optionPremiumTotalFromUnit = _isOptCard && optionPremiumUsdt !== null && qty > 0
+    ? optionPremiumUsdt * qty
+    : null;
+  // 新旧订单均以已保存的USDT总投入优先，避免历史单位标记不一致时错误折算权利金成本。
+  const optPremiumTotal = _isOptCard
+    ? (storedAmountUsdt > 0 ? storedAmountUsdt : optionPremiumTotalFromUnit)
+    : null;
+  const greeksResult = useOptionGreeks({
+    currency: optionGreeksCurrency,
+    exerciseDate: _optInfo?.exerciseDate || '',
+    strikePrice: _optInfo?.strikePrice ? Number(_optInfo.strikePrice) : 0,
+    direction: (_optInfo?.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
+    enabled: _isOptCard && optionGreeksSupported && !!_optInfo?.exerciseDate && !!_optInfo?.strikePrice,
+  });
+  // Gate.io主源和Deribit备用均由接口统一为USDT/张。
+  const optMarkPrice = greeksResult.data?.markPrice ?? null;
+  const optCurrentValue = optMarkPrice !== null && qty > 0 ? optMarkPrice * qty : null;
+  const optIsShort = _optInfo?.direction === 'short_call' || _optInfo?.direction === 'short_put';
+  const currentValue = _isOptCard ? optCurrentValue : (liveP !== null && qty > 0 ? liveP * qty : null);
+  const buyValue = _isOptCard ? optPremiumTotal : (qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : storedAmountUsdt);
+  const _isShortSl = _isOptCard ? optIsShort : (order as any).trade_direction === 'short';
+  const floatPnl = currentValue !== null && buyValue !== null && buyValue > 0
     ? (_isShortSl ? buyValue - currentValue : currentValue - buyValue)
     : null;
-  const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
+  const floatPct = floatPnl !== null && buyValue !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const dir = priceDirection?.[coin] ?? 'same';
   const pnlColor = floatPnl === null ? (_isOptCard ? OPT_TEXT_SEC : SL_TEXT_SEC) : floatPnl >= 0 ? SL_GREEN : SL_RED;
   const priceDiff = liveP !== null && buyPriceUsdt > 0 ? liveP - buyPriceUsdt : null;
@@ -1413,45 +1448,7 @@ export function FunderOrderCardV2Silver({
   // 金/银色：股票类用金色，数字币用银色
   const isStockCard = order.asset_type === 'stock';
   const isOptionCard = order.asset_type === 'crypto_option';
-  // Greeks 仅支持 Deribit 的 BTC/ETH；其他期权标的保留手动参数，不发起无效查询。
-  const optionGreeksSupported = coin === 'BTC' || coin === 'ETH';
-  const optionGreeksCurrency = (coin === 'ETH' ? 'ETH' : 'BTC') as 'BTC' | 'ETH';
-  const optionPremiumCurrencyRaw = String(_optInfo?.denomination || 'USDT').toUpperCase();
-  const optionPremiumCurrency = optionPremiumCurrencyRaw === 'B'
-    ? coin
-    : optionPremiumCurrencyRaw === 'U'
-      ? 'USDT'
-      : optionPremiumCurrencyRaw;
-  const optionPremiumUnitPrice = livePrices[optionPremiumCurrency as CoinType];
-  const optionPremiumUsdt = _optInfo?.premium
-    ? optionPremiumCurrency === 'CNY'
-      ? parseFloat(_optInfo.premium) / cnyRate
-      : optionPremiumCurrency === 'USDT'
-        ? parseFloat(_optInfo.premium)
-        : (optionPremiumUnitPrice && optionPremiumUnitPrice > 0 ? parseFloat(_optInfo.premium) * optionPremiumUnitPrice : null)
-    : null;
-  const greeksResult = useOptionGreeks({
-    currency: optionGreeksCurrency,
-    exerciseDate: _optInfo?.exerciseDate || '',
-    strikePrice: _optInfo?.strikePrice ? Number(_optInfo.strikePrice) : 0,
-    direction: (_optInfo?.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
-    enabled: isOptionCard && optionGreeksSupported && !!_optInfo?.exerciseDate && !!_optInfo?.strikePrice,
-  });
-  // 期权浮动盈亏：用 markPrice（含时间价值）× 数量 - 权利金总成本，统一按USDT比较。
-  const optPremiumTotal = isOptionCard && optionPremiumUsdt !== null && qty > 0
-    ? optionPremiumUsdt * qty
-    : null;
-  const optMarkPrice = greeksResult.data?.markPrice ?? null;
-  // Gate.io 返回的 markPrice 单位已是 USDT，直接乘以张数
-  const optCurrentValue = optMarkPrice != null && qty > 0
-    ? optMarkPrice * qty
-    : null;
-  const optFloatPnl = optCurrentValue !== null && optPremiumTotal !== null
-    ? optCurrentValue - optPremiumTotal
-    : null;
-  const optFloatPct = optFloatPnl !== null && optPremiumTotal !== null && optPremiumTotal > 0
-    ? (optFloatPnl / optPremiumTotal) * 100
-    : null;
+  // 期权合约价格、总投入和盈亏已在通用浮动盈亏分支中统一计算。
   // 内在价值：不依赖 Deribit，纯本地计算
   const optStrike = _optInfo?.strikePrice ? Number(_optInfo.strikePrice) : null;
   const optIsCall = !_optInfo?.direction || _optInfo.direction === 'long_call' || _optInfo.direction === 'short_call';
@@ -1834,9 +1831,9 @@ export function FunderOrderCardV2Silver({
           // 数字币类：浮动盈亏居右（期权对齐当前价列）
           <div className="text-right" style={{ flex: 1, minWidth: 0 }}>
             <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-              {isOptionCard ? '行权价 (U)' : '浮动盈亏 (U)'}
+              {isOptionCard && cardDisplayConfig.floatPnl === false ? '行权价 (U)' : '浮动盈亏 (U)'}
             </div>
-            {isOptionCard ? (
+            {isOptionCard && cardDisplayConfig.floatPnl === false ? (
               <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
                 {_optInfo?.strikePrice ? fmt(Number(_optInfo.strikePrice), 0) : '--'}
               </div>
@@ -1846,7 +1843,7 @@ export function FunderOrderCardV2Silver({
               <div className="text-sm font-semibold" style={{ color: pnlColor, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
                 {floatPnl !== null
                   ? `${floatPnl >= 0 ? '+' : ''}${fmt(floatPnl, 0)}${floatPct !== null ? ` (${floatPct >= 0 ? '+' : ''}${floatPct.toFixed(2)}%)` : ''}`
-                  : '--'}
+                  : (isOptionCard && greeksResult.loading ? '加载中...' : isOptionCard ? '暂无合约报价' : '--')}
               </div>
             )}
           </div>
@@ -2925,10 +2922,46 @@ export function FunderLenderCardSilver({
   const financingDisplayAmount = getExactFinancingDisplayAmount(order, amountCurrency, calculatedFinancingDisplayAmount);
   const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'U' : amountCurrency;
 
-  const currentValue = liveP !== null && qty > 0 ? liveP * qty : null;
-  const buyValue = qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : storedAmountUsdt;
-  const floatPnl = currentValue !== null && buyValue > 0 ? currentValue - buyValue : null;
-  const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
+  // BTC/ETH期权仅在已有可靠合约报价时计算；无报价时不使用标的现货价格替代。
+  const optionGreeksSupported = coin === 'BTC' || coin === 'ETH';
+  const optionGreeksCurrency = (coin === 'ETH' ? 'ETH' : 'BTC') as 'BTC' | 'ETH';
+  const optionPremiumCurrencyRaw = String(_lnOptInfo?.denomination || 'USDT').toUpperCase();
+  const optionPremiumCurrency = optionPremiumCurrencyRaw === 'B'
+    ? coin
+    : optionPremiumCurrencyRaw === 'U'
+      ? 'USDT'
+      : optionPremiumCurrencyRaw;
+  const optionPremiumUnitPrice = livePrices[optionPremiumCurrency as CoinType];
+  const optionPremiumUsdt = _lnOptInfo?.premium
+    ? optionPremiumCurrency === 'CNY'
+      ? parseFloat(_lnOptInfo.premium) / cnyRate
+      : optionPremiumCurrency === 'USDT'
+        ? parseFloat(_lnOptInfo.premium)
+        : (optionPremiumUnitPrice && optionPremiumUnitPrice > 0 ? parseFloat(_lnOptInfo.premium) * optionPremiumUnitPrice : null)
+    : null;
+  const optionPremiumTotalFromUnit = _lnIsOpt && optionPremiumUsdt !== null && qty > 0
+    ? optionPremiumUsdt * qty
+    : null;
+  const optionPremiumTotal = _lnIsOpt
+    ? (storedAmountUsdt > 0 ? storedAmountUsdt : optionPremiumTotalFromUnit)
+    : null;
+  const optionGreeksResult = useOptionGreeks({
+    currency: optionGreeksCurrency,
+    exerciseDate: _lnOptInfo?.exerciseDate || '',
+    strikePrice: _lnOptInfo?.strikePrice ? Number(_lnOptInfo.strikePrice) : 0,
+    direction: (_lnOptInfo?.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
+    enabled: _lnIsOpt && optionGreeksSupported && !!_lnOptInfo?.exerciseDate && !!_lnOptInfo?.strikePrice,
+  });
+  // 接口返回的期权标记价统一为USDT/张。
+  const optionMarkPrice = optionGreeksResult.data?.markPrice ?? null;
+  const optionCurrentValue = optionMarkPrice !== null && qty > 0 ? optionMarkPrice * qty : null;
+  const optionIsShort = _lnOptInfo?.direction === 'short_call' || _lnOptInfo?.direction === 'short_put';
+  const currentValue = _lnIsOpt ? optionCurrentValue : (liveP !== null && qty > 0 ? liveP * qty : null);
+  const buyValue = _lnIsOpt ? optionPremiumTotal : (qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : storedAmountUsdt);
+  const floatPnl = currentValue !== null && buyValue !== null && buyValue > 0
+    ? ((optionIsShort ? buyValue - currentValue : currentValue - buyValue))
+    : null;
+  const floatPct = floatPnl !== null && buyValue !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const dir = priceDirection?.[coin] ?? 'same';
   const isStock = order.asset_type === 'stock';
   const isOption = order.asset_type === 'crypto_option';
@@ -3217,6 +3250,16 @@ export function FunderLenderCardSilver({
               ≈{approxAccrued > 0 ? approxAccrued.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '--'} {approxUnit}
             </span>
           </div>
+          {_lnIsOpt && showField('floatPnl') && (
+            <div className="mt-1 flex items-center gap-1" style={{ fontSize: '0.65rem', color: TXT_SEC }}>
+              <span>期权浮动盈亏</span>
+              <span style={{ color: pnlColor, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                {floatPnl !== null
+                  ? `${floatPnl >= 0 ? '+' : ''}${fmt(floatPnl, 2)} U${floatPct !== null ? ` (${floatPct >= 0 ? '+' : ''}${floatPct.toFixed(2)}%)` : ''}`
+                  : (optionGreeksResult.loading ? '加载中...' : '暂无合约报价')}
+              </span>
+            </div>
+          )}
         </div>
         <div className="text-right" style={{ flex: 1 }}>
           <div className="text-[10px] mb-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>年化利率</div>

@@ -1095,14 +1095,35 @@ export function FunderOrderCard({
   const feeBase = Number(order.interest_base || totalU || 0);
   const referenceTradingFee = showTradingFee ? feeBase * tradingFeeRatePerMille / 1000 : 0;
   const liveP = livePrices[order.coin] ?? null;
-  const currentValue = liveP !== null ? liveP * qty : null;
-  const isShort = (order as any).trade_direction === 'short';
-  // 数字币现货的浮盈只比较资产市值与买入价值；参与者融资金额和计息基数可独立修改，均不能代替持仓成本。
-  // 期权和其他非数字币订单仍保留原有的风险敞口基准。
+  // 期权成本以权利金×张数为准，优先用订单保存的总投入（USDT基准）兼容历史记录。
+  const optionContractQty = isOptionOrder ? Number(optionInfo?.buyQty || 0) : qty;
+  const optionPremiumRaw = optionInfo?.premium != null ? Number(optionInfo.premium) : null;
+  const optionPremiumUnitPrice = livePrices[optionPremiumUnit as CoinType];
+  const optionPremiumUsdt = optionPremiumRaw === null || !Number.isFinite(optionPremiumRaw)
+    ? null
+    : optionPremiumUnit === 'CNY'
+      ? optionPremiumRaw / cnyRate
+      : optionPremiumUnit === 'USDT'
+        ? optionPremiumRaw
+        : (optionPremiumUnitPrice && optionPremiumUnitPrice > 0 ? optionPremiumRaw * optionPremiumUnitPrice : null);
+  const optionPremiumTotalFromUnit = optionPremiumUsdt !== null && optionContractQty > 0
+    ? optionPremiumUsdt * optionContractQty
+    : null;
+  const optionPremiumTotal = isOptionOrder
+    ? (storedAmount > 0 ? storedAmount : optionPremiumTotalFromUnit)
+    : null;
+  // deribitGetGreeks 已将主备来源的合约 markPrice 统一折算为 USDT/张。
+  const optionMarkPrice = greeksResult.data?.markPrice ?? null;
+  const optionCurrentValue = optionMarkPrice !== null && optionContractQty > 0
+    ? optionMarkPrice * optionContractQty
+    : null;
+  const isShortOption = optionInfo?.direction === 'short_call' || optionInfo?.direction === 'short_put';
+  const currentValue = isOptionOrder ? optionCurrentValue : (liveP !== null ? liveP * qty : null);
+  const isShort = isOptionOrder ? isShortOption : (order as any).trade_direction === 'short';
+  // 数字币现货使用资产市值与买入价值比较；期权使用合约标记价与权利金总成本比较。
   const spotBuyValueUsdt = qty > 0 && quotedPriceUsdt > 0 ? qty * quotedPriceUsdt : totalU;
-  const floatPnlBase = !isStockOrder && !isOptionOrder ? spotBuyValueUsdt : interestBaseNum;
-  // 做空盈亏取反：跌了是盈，涨了是亏
-  const floatPnl = currentValue !== null
+  const floatPnlBase = isOptionOrder ? optionPremiumTotal : (!isStockOrder ? spotBuyValueUsdt : interestBaseNum);
+  const floatPnl = currentValue !== null && floatPnlBase !== null && floatPnlBase > 0
     ? (isShort ? floatPnlBase - currentValue : currentValue - floatPnlBase)
     : null;
   const exposure = floatPnl !== null
@@ -1407,12 +1428,16 @@ export function FunderOrderCard({
                 </span>
               </div>
             )}
-            {show('floatPnl') && floatPnl !== null && (order as any).order_fill_status !== 'pending' && (
+            {show('floatPnl') && (isOptionOrder || floatPnl !== null) && (order as any).order_fill_status !== 'pending' && (
               <div className="flex items-center justify-between">
-                <span className="text-gray-400 shrink-0">浮动盈亏</span>
-                <span className="font-medium tabular-nums" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
-                  {floatPnl >= 0 ? '+' : ''}{floatPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })} u
-                </span>
+                <span className="text-gray-400 shrink-0">{isOptionOrder ? '期权浮动盈亏' : '浮动盈亏'}</span>
+                {floatPnl !== null ? (
+                  <span className="font-medium tabular-nums" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
+                    {floatPnl >= 0 ? '+' : ''}{floatPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })} u{isOptionOrder && floatPnlBase && floatPnlBase > 0 ? ` (${floatPnl >= 0 ? '+' : ''}${((floatPnl / floatPnlBase) * 100).toFixed(2)}%)` : ''}
+                  </span>
+                ) : (
+                  <span className="font-medium text-gray-400">{greeksResult.loading ? '加载中...' : '暂无合约报价'}</span>
+                )}
               </div>
             )}
             {show('buyDate') && order.buy_date && (
