@@ -893,6 +893,8 @@ export function FunderOrderCard({
     : optionInfo?.denomination === 'U'
       ? 'USDT'
       : (optionInfo?.denomination || 'USDT');
+  // 期权报价以USDT显示时统一采用项目内的小写u；其他实际计价币种保持原样。
+  const optionPremiumDisplayUnit = optionPremiumUnit === 'USDT' ? 'u' : optionPremiumUnit;
   const greeksResult = useOptionGreeks({
     currency: optionGreeksCurrency,
     exerciseDate: optionInfo?.exerciseDate || '',
@@ -1374,19 +1376,19 @@ export function FunderOrderCard({
                 {optionInfo.strikePrice && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 shrink-0">行权价</span>
-                    <span className="font-medium" style={{ color: '#1A2340' }}>{Number(optionInfo.strikePrice).toLocaleString()} USD</span>
+                    <span className="font-medium" style={{ color: '#1A2340' }}>{Number(optionInfo.strikePrice).toLocaleString()} u</span>
                   </div>
                 )}
                 {optionInfo.premium && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 shrink-0">权利金/张</span>
-                    <span className="font-medium" style={{ color: '#1A2340' }}>{parseFloat(optionInfo.premium).toFixed(2)} {optionPremiumUnit}</span>
+                    <span className="font-medium" style={{ color: '#1A2340' }}>{parseFloat(optionInfo.premium).toFixed(2)} {optionPremiumDisplayUnit}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400 shrink-0">期权价</span>
                   <span className="font-medium" style={{ color: '#1A2340' }}>
-                    {greeksResult.loading && !greeksResult.data ? '加载中...' : greeksResult.data?.markPrice != null ? `${greeksResult.data.markPrice.toFixed(2)} U` : '--'}
+                    {greeksResult.loading && !greeksResult.data ? '加载中...' : greeksResult.data?.markPrice != null ? `${greeksResult.data.markPrice.toFixed(2)} u` : '--'}
                   </span>
                 </div>
               </>
@@ -1443,10 +1445,10 @@ export function FunderOrderCard({
             )}
             {show('floatPnl') && (isOptionOrder || floatPnl !== null) && (order as any).order_fill_status !== 'pending' && (
               <div className="flex items-center justify-between">
-                <span className="text-gray-400 shrink-0">{isOptionOrder ? '期权浮动盈亏' : '浮动盈亏'}</span>
+                <span className="text-gray-400 shrink-0">浮动盈亏</span>
                 {floatPnl !== null ? (
-                  <span className="font-medium tabular-nums" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
-                    {floatPnl >= 0 ? '+' : ''}{floatPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })} u{isOptionOrder && floatPnlBase && floatPnlBase > 0 ? ` (${floatPnl >= 0 ? '+' : ''}${((floatPnl / floatPnlBase) * 100).toFixed(2)}%)` : ''}
+                  <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
+                    {floatPnl >= 0 ? '+' : ''}{floatPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })} u
                   </span>
                 ) : (
                   <span className="font-medium text-gray-400">{greeksResult.loading ? '加载中...' : '暂无合约报价'}</span>
@@ -2323,7 +2325,7 @@ export function FunderOrderCard({
                         <div className="flex items-center justify-between"><span className="text-gray-400">Vega</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.vega)}</span></div>
                         <div className="flex items-center justify-between"><span className="text-gray-400">Theta</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.theta)}</span></div>
                         {d.iv != null && <div className="flex items-center justify-between"><span className="text-gray-400">IV</span><span className="font-medium" style={{ color: '#4B5563' }}>{(Number(d.iv) * 100).toFixed(1)}%</span></div>}
-                        {d.markPrice != null && <div className="flex items-center justify-between"><span className="text-gray-400">期权价格</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.markPrice)} {optionPremiumUnit}</span></div>}
+                        {d.markPrice != null && <div className="flex items-center justify-between"><span className="text-gray-400">期权价格</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.markPrice)} u</span></div>}
                       </>
                     );
                   })()}
