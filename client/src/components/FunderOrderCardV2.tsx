@@ -24,6 +24,37 @@ import {
   FunderOrderCard,
 } from "./FunderOrderCard";
 
+/** 用户端卡片的结清状态标识：保留历史内容，同时与进行中订单明确区分。 */
+function SettledCardStamp({ settledAt }: { settledAt?: string | Date | null }) {
+  let settledDate = '';
+  if (settledAt) {
+    const date = new Date(settledAt);
+    if (!Number.isNaN(date.getTime())) {
+      settledDate = date.toLocaleDateString('zh-CN', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).replace(/\//g, '.');
+    }
+  }
+  return (
+    <div
+      aria-label={settledDate ? `已结清，结清日期 ${settledDate}` : '已结清'}
+      style={{
+        position: 'absolute', top: '43px', right: '14px', zIndex: 12,
+        pointerEvents: 'none', transform: 'rotate(-10deg)', textAlign: 'center',
+        border: '2px solid rgba(185, 42, 42, 0.68)', borderRadius: '7px',
+        color: 'rgba(165, 24, 24, 0.78)', background: 'rgba(255, 246, 246, 0.16)',
+        padding: '3px 7px 2px', lineHeight: 1, boxShadow: '0 1px 2px rgba(100,0,0,0.16)',
+      }}
+    >
+      <div style={{ fontSize: '15px', fontWeight: 800, letterSpacing: '2px', whiteSpace: 'nowrap' }}>已结清</div>
+      {settledDate && <div style={{ marginTop: '3px', fontSize: '7px', fontWeight: 700, letterSpacing: '0.3px', whiteSpace: 'nowrap' }}>结清 {settledDate}</div>}
+    </div>
+  );
+}
+
 // ===== P&L 曲线图组件（复用自 OptionAnalysisPage）=====
 function OptionPnlCanvas({
   data,
@@ -1449,6 +1480,7 @@ export function FunderOrderCardV2Silver({
   ].join(', ');
   // 本人 / 他人仅决定列表归属；绿色主题仅表达真实参与者身份。
   const isParticipant = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder;
+  const isSettledCard = order.status === 'settled' || order.status === 'completed';
   const cardBg = isParticipant ? GRN_BG : isStockCard ? GOLD_BG_SV : isOptionCard ? OPT_BG : SL_BG;
   const cardExportBackground = isParticipant ? GRN_EXPORT_BG : isStockCard ? GOLD_EXPORT_BG : isOptionCard ? OPT_EXPORT_BG : SL_EXPORT_BG;
   const cardBorder = isParticipant ? GRN_BORDER : isStockCard ? GOLD_BORDER_SV : isOptionCard ? OPT_BORDER : SL_BORDER;
@@ -1521,6 +1553,9 @@ export function FunderOrderCardV2Silver({
           mixBlendMode: 'overlay',
         }}
       />
+      {/* 已结清订单保留原卡片内容，以轻微中性色遮罩和红色印章区分历史状态。 */}
+      {isSettledCard && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none', background: 'rgba(86, 74, 64, 0.16)' }} />}
+      {isSettledCard && <SettledCardStamp settledAt={order.settled_at} />}
       {/* 四角铆钉 */}
       {rivets.map((pos, i) => (
         <div
@@ -3006,6 +3041,7 @@ export function FunderLenderCardSilver({
 
   // 本人 / 他人仅决定列表归属；绿色主题仅表达真实参与者身份。
   const isParticipant = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder;
+  const isSettledCard = order.status === 'settled' || order.status === 'completed';
   const GRN_POSITIVE_COLOR = LN_EARN;  // 暂时恢复原始颜色
   // 动态文字颜色：参与者和期权卡片用白色系列，其他用黑色系列
   const TXT_PRI = (isParticipant || isOption) ? (isParticipant ? GRN_TEXT_PRI : OPT_TEXT_PRI) : SL_TEXT_PRI;
@@ -3066,6 +3102,9 @@ export function FunderLenderCardSilver({
           mixBlendMode: 'overlay',
         }}
       />
+      {/* 已结清订单保留原卡片内容，以轻微中性色遮罩和红色印章区分历史状态。 */}
+      {isSettledCard && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none', background: 'rgba(86, 74, 64, 0.16)' }} />}
+      {isSettledCard && <SettledCardStamp settledAt={order.settled_at} />}
       {/* 四角铆钉 */}
       {rivets.map((pos, i) => (
         <div
