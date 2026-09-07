@@ -2340,15 +2340,23 @@ export function FunderOrderCard({
               const ratioMatch = cs.match(/(\d+(?:\.\d+)?)/);
               const ratioNum = ratioMatch ? parseFloat(ratioMatch[1]) : 0;
               const ratio = ratioNum / 100;
-              // 待分金额：利息分成 = 本金(计息基数)×比例；利润分成 = 浮动利润×比例
+              // 利息分成 = 计息基数×比例；利润分成 = 已实现的实时浮盈×比例。
+              // 期权必须使用“实时合约标记价 − 权利金”的专属浮盈，不能使用标的现货或行权价。
               let shareAmt: number | null = null;
+              let profitShareBase: number | null = null;
               if (!isCoin) {
                 if (interestBaseNum > 0 && ratio > 0) shareAmt = interestBaseNum * ratio;
-              } else {
-                if (liveP != null && price > 0 && qty > 0 && ratio > 0) {
-                  shareAmt = Math.max(0, liveP - price) * qty * ratio;
+              } else if (isOptionOrder) {
+                if (floatPnl !== null && ratio > 0) {
+                  profitShareBase = floatPnl;
+                  // 分成只从正利润中计提；亏损或持平时待分利润为0。
+                  shareAmt = Math.max(0, floatPnl) * ratio;
                 }
+              } else if (liveP != null && price > 0 && qty > 0 && ratio > 0) {
+                profitShareBase = (liveP - price) * qty;
+                shareAmt = Math.max(0, profitShareBase) * ratio;
               }
+              const shareAmountLabel = isCoin ? '待分利润' : '待分金额';
               return (
                 <div className="border-t mt-1 pt-1" style={{ borderColor: '#E8EFFF' }}>
                   <div className="h-4 flex items-center" style={{ color: '#3B82F6' }}>
@@ -2362,8 +2370,20 @@ export function FunderOrderCard({
                     <span className="text-gray-400 shrink-0">分成比例</span>
                     <span className="font-medium" style={{ color: '#4B5563' }}>{ratioNum > 0 ? `${ratioNum}%` : '---'}</span>
                   </div>
+                  {isCoin && isOptionOrder && (
+                    <div className="flex items-center justify-between mt-0.5">
+                      <span className="text-gray-400 shrink-0">分成基数（浮盈）</span>
+                      {profitShareBase !== null ? (
+                        <span className="font-medium tabular-nums" style={{ color: profitShareBase >= 0 ? '#DC2626' : '#16A34A' }}>
+                          {profitShareBase >= 0 ? '+' : ''}{profitShareBase.toLocaleString(undefined, { maximumFractionDigits: 2 })} u
+                        </span>
+                      ) : (
+                        <span className="font-medium text-gray-400">{greeksResult.loading ? '加载中...' : '暂无合约报价'}</span>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between mt-0.5">
-                    <span className="text-gray-400 shrink-0">待分金额</span>
+                    <span className="text-gray-400 shrink-0">{shareAmountLabel}</span>
                     <span className="font-medium" style={{ color: '#4B5563' }}>{shareAmt != null ? `≈ ${shareAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : '---'}</span>
                   </div>
                 </div>
