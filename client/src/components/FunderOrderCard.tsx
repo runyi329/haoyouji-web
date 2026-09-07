@@ -1323,6 +1323,12 @@ export function FunderOrderCard({
                   if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} u</span>;
                   return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{totalU.toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
                 }
+                // 期权持仓的近似价值只能使用实时合约标记价 × 张数，不能使用标的现货价或行权价。
+                if (isOptionOrder) {
+                  if (optionCurrentValue === null) return null;
+                  if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{optionCurrentValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>;
+                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(optionCurrentValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
+                }
                 if (!liveP || !(qty > 0)) return null;
                 const valU = qty * liveP;
                 if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{valU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>;

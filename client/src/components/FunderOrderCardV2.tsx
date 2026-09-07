@@ -3707,11 +3707,11 @@ export function FunderLenderCardSilver({
                               {/* 普通担保：原有三段式 */}
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                                 <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动盈亏</div>
-                                <div>= 当前市値 - 计息基数（正数为浮盈，负数为亏损）</div>
+                                <div>{isOption ? '期权当前市值 − 权利金总成本（正数为浮盈，负数为亏损）' : '= 当前市值 − 计息基数（正数为浮盈，负数为亏损）'}</div>
                                 <div className="mt-1 font-mono">
                                   {floatPnl !== null
-                                    ? <><span style={{ color: '#3B82F6' }}>= {(liveP! * qty).toFixed(2)} - {buyValue.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
-                                    : <span className="text-gray-400">当前市値暂无实时价格，暂无法计算浮动盈亏</span>
+                                    ? <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} − {buyValue!.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
+                                    : <span className="text-gray-400">{isOption ? '暂无期权合约报价，暂无法计算浮动盈亏' : '当前市值暂无实时价格，暂无法计算浮动盈亏'}</span>
                                   }
                                 </div>
                               </div>
