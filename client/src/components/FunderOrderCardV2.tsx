@@ -1831,7 +1831,7 @@ export function FunderOrderCardV2Silver({
           // 数字币类：浮动盈亏居右（期权对齐当前价列）
           <div className="text-right" style={{ flex: 1, minWidth: 0 }}>
             <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-              {isOptionCard && cardDisplayConfig.floatPnl === false ? '行权价 (U)' : '浮动盈亏 (U)'}
+              {isOptionCard && cardDisplayConfig.floatPnl === false ? '行权价 (U)' : isOptionCard ? '期权浮动盈亏 (U)' : '浮动盈亏 (U)'}
             </div>
             {isOptionCard && cardDisplayConfig.floatPnl === false ? (
               <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
@@ -3250,13 +3250,15 @@ export function FunderLenderCardSilver({
               ≈{approxAccrued > 0 ? approxAccrued.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '--'} {approxUnit}
             </span>
           </div>
-          {_lnIsOpt && showField('floatPnl') && (
-            <div className="mt-1 flex items-center gap-1" style={{ fontSize: '0.65rem', color: TXT_SEC }}>
-              <span>期权浮动盈亏</span>
-              <span style={{ color: pnlColor, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
-                {floatPnl !== null
-                  ? `${floatPnl >= 0 ? '+' : ''}${fmt(floatPnl, 2)} U${floatPct !== null ? ` (${floatPct >= 0 ? '+' : ''}${floatPct.toFixed(2)}%)` : ''}`
-                  : (optionGreeksResult.loading ? '加载中...' : '暂无合约报价')}
+          {_lnIsOpt && (
+            <div className="mt-2 flex items-center justify-between gap-2 rounded-md px-2 py-1" style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.11)', border: `1px solid ${DIVIDER}` }}>
+              <span style={{ color: TXT_SEC }}>{showField('floatPnl') ? '期权浮动盈亏 (U)' : '行权价 (U)'}</span>
+              <span style={{ color: showField('floatPnl') ? pnlColor : TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                {showField('floatPnl')
+                  ? (floatPnl !== null
+                    ? `${floatPnl >= 0 ? '+' : ''}${fmt(floatPnl, 2)}${floatPct !== null ? ` (${floatPct >= 0 ? '+' : ''}${floatPct.toFixed(2)}%)` : ''}`
+                    : (optionGreeksResult.loading ? '加载中...' : '暂无合约报价'))
+                  : (_lnOptInfo?.strikePrice ? fmt(Number(_lnOptInfo.strikePrice), 2) : '--')}
               </span>
             </div>
           )}

@@ -3021,6 +3021,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     : null,
                 };
                 const rateValPreview = parseFloat(String(previewOrder.interest_rate_annual || '0'));
+                // 字段展示开关改变时强制重建预览卡片，避免卡片内部状态保留旧配置。
+                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${String(displayConfig.floatPnl)}`;
                 return (
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -3038,6 +3040,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     </div>
                     {previewViewMode === 'order' ? (
                       <FunderOrderCard
+                        key={previewDisplayKey}
                         order={previewOrder}
                         livePrices={formLivePrices}
                         priceDirection={priceDirection}
@@ -3056,6 +3059,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     ) : (
                       rateValPreview > 0 ? (
                         <FunderLenderCardSilver
+                          key={previewDisplayKey}
                           order={previewOrder}
                           ledgerId={ledgerId}
                           livePrices={formLivePrices}
@@ -3066,6 +3070,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         />
                       ) : (
                         <FunderOrderCardV2Silver
+                          key={previewDisplayKey}
                           order={previewOrder}
                           ledgerId={ledgerId}
                           livePrices={formLivePrices}
