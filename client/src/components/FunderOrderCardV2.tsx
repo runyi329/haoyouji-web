@@ -1835,12 +1835,12 @@ export function FunderOrderCardV2Silver({
           </div>
         )}
         {!isStockCard && (
-          // 数字币类：浮动盈亏居右（期权对齐当前价列）
+          // 期权卡片固定展示行权价；浮动盈亏仅在订单模式展示，避免卡片内容过长遮挡。
           <div className="text-right" style={{ flex: 1, minWidth: 0 }}>
             <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-              {isOptionCard && cardDisplayConfig.floatPnl === false ? '行权价 (U)' : isOptionCard ? '期权浮动盈亏 (U)' : '浮动盈亏 (U)'}
+              {isOptionCard ? '行权价 (U)' : '浮动盈亏 (U)'}
             </div>
-            {isOptionCard && cardDisplayConfig.floatPnl === false ? (
+            {isOptionCard ? (
               <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
                 {_optInfo?.strikePrice ? fmt(Number(_optInfo.strikePrice), 0) : '--'}
               </div>
@@ -1850,7 +1850,7 @@ export function FunderOrderCardV2Silver({
               <div className="text-sm font-semibold" style={{ color: pnlColor, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
                 {floatPnl !== null
                   ? `${floatPnl >= 0 ? '+' : ''}${fmt(floatPnl, 0)}${floatPct !== null ? ` (${floatPct >= 0 ? '+' : ''}${floatPct.toFixed(2)}%)` : ''}`
-                  : (isOptionCard && greeksResult.loading ? '加载中...' : isOptionCard ? '暂无合约报价' : '--')}
+                  : '--'}
               </div>
             )}
           </div>
@@ -3265,13 +3265,9 @@ export function FunderLenderCardSilver({
           </div>
           {_lnIsOpt && (
             <div className="mt-2 flex items-center justify-between gap-2 rounded-md px-2 py-1" style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.11)', border: `1px solid ${DIVIDER}` }}>
-              <span style={{ color: TXT_SEC }}>{showField('floatPnl') ? '期权浮动盈亏 (U)' : '行权价 (U)'}</span>
-              <span style={{ color: showField('floatPnl') ? pnlColor : TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
-                {showField('floatPnl')
-                  ? (floatPnl !== null
-                    ? `${floatPnl >= 0 ? '+' : ''}${fmt(floatPnl, 2)}${floatPct !== null ? ` (${floatPct >= 0 ? '+' : ''}${floatPct.toFixed(2)}%)` : ''}`
-                    : (optionGreeksResult.loading ? '加载中...' : '暂无合约报价'))
-                  : (_lnOptInfo?.strikePrice ? fmt(Number(_lnOptInfo.strikePrice), 2) : '--')}
+              <span style={{ color: TXT_SEC }}>行权价 (U)</span>
+              <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                {_lnOptInfo?.strikePrice ? fmt(Number(_lnOptInfo.strikePrice), 2) : '--'}
               </span>
             </div>
           )}

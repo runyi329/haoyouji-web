@@ -163,8 +163,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     showTradeDirection: true,
     // 期权 Greeks 面板
     showGreeks: false,
-    // 浮动盈亏（默认关闭）
-    floatPnl: false,
+    // 浮动盈亏（后续新建订单默认开启；已存在订单继续使用各自保存的设置）
+    floatPnl: true,
     // 52号账本：交易手续费默认隐藏，由控制开关决定是否向前端展示
     tradingFee: false,
     // 仅控制普通用户前端的下载箭头；管理员订单列表始终可下载
