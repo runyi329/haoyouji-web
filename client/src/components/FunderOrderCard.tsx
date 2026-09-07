@@ -251,7 +251,7 @@ export function NoteAvatar({ name, avatar }: { name?: string; avatar?: string })
   const color = colors[name.charCodeAt(0) % colors.length] || '#6366F1';
   return <div className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: color }}>{initials}</div>;
 }
-export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, isAdmin, membersData, participantUserId }: { orderId: number; ledgerId: number; initialNote: string; onSaved: (note: string) => void; currentUser?: { id: number; name?: string; username?: string; avatar?: string }; isAdmin?: boolean; membersData?: any[]; participantUserId?: number }) {
+export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, isAdmin, membersData, participantUserId, isSettled = false }: { orderId: number; ledgerId: number; initialNote: string; onSaved: (note: string) => void; currentUser?: { id: number; name?: string; username?: string; avatar?: string }; isAdmin?: boolean; membersData?: any[]; participantUserId?: number; isSettled?: boolean }) {
   const [notes, setNotes] = useState<NoteItem[]>(() => parseNotes(initialNote));
   const [expanded, setExpanded] = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -274,7 +274,7 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
     } finally { setSaving(false); }
   };
   const handleSaveEdit = async (idx: number) => {
-    if (!editValue.trim()) return;
+    if (isSettled || !editValue.trim()) return;
     await saveNotes(notes.map((n, i) => i === idx ? { ...n, text: editValue.trim(), time: new Date().toISOString() } : n));
     setEditingIdx(null);
   };
@@ -288,6 +288,7 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
     setEditingIdx(null);
   };
   const handleDelete = async (idx: number) => {
+    if (isSettled) return;
     await saveNotes(notes.filter((_, i) => i !== idx));
   };
   return (
@@ -339,7 +340,7 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
                         <button type="button" onClick={() => copyFunderNoteText(note.text)} className="p-0.5" title="复制备注">
                           <Copy className="w-[11px] h-[11px]" style={{ color: '#9CA3AF' }} />
                         </button>
-                        {canEdit(note) && (
+                        {!isSettled && canEdit(note) && (
                           <>
                             <button onClick={() => { setEditingIdx(idx); setEditValue(note.text); }} className="p-0.5" title="编辑">
                               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -2990,6 +2991,7 @@ export function FunderOrderCard({
           isAdmin={isAdmin}
           membersData={membersData as any[]}
           participantUserId={_participantUserId}
+          isSettled={isSettled}
         />}
       </div>
 

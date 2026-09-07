@@ -1657,6 +1657,7 @@ function FunderOrderCardLegacy({
           currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar || (membersData as any[])?.find((u: any) => u.userId === (currentUser as any).id)?.avatar || undefined } : undefined}
           isAdmin={isAdmin}
           membersData={membersData as any[]}
+          isSettled={order.status === 'settled' || order.status === 'completed'}
         />
       </div>
 

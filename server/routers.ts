@@ -243,6 +243,26 @@ function parseFunderParticipantSnapshot(value: unknown): Record<string, any> | n
   }
 }
 
+/** 已结融资订单的既有备注只可保留或在末尾追加，避免历史内容被篡改或删除。 */
+function parseFunderNoteHistory(value: unknown): Record<string, unknown>[] {
+  if (value === null || value === undefined || value === '') return [];
+  const raw = String(value);
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item));
+    }
+  } catch {}
+  // 兼容历史纯文本备注：与前端 parseNotes 的标准化结果保持一致。
+  return [{ text: raw, time: '' }];
+}
+function areFunderSettledNotesAppendOnly(existingValue: unknown, nextValue: unknown): boolean {
+  const existingNotes = parseFunderNoteHistory(existingValue);
+  const nextNotes = parseFunderNoteHistory(nextValue);
+  return nextNotes.length >= existingNotes.length
+    && existingNotes.every((note, index) => JSON.stringify(note) === JSON.stringify(nextNotes[index]));
+}
+
 // ===== Deribit 数据库缓存（每天北京时间凌晨 00:00 刷新，跨实例共享）=====
 // 使用数据库存储缓存，解决 Autoscale 无状态环境下内存缓存失效的问题
 const DERIBIT_MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -18773,13 +18793,23 @@ ${klinesSummary}
               throw new TRPCError({ code: 'FORBIDDEN', message: '无权修改其他参与者备注' });
             }
             const [participantRows] = await conn.execute(
-              'SELECT id, order_snapshot FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> \'inactive\' LIMIT 1',
+              `SELECT p.id, p.note, p.order_snapshot, o.status AS order_status
+               FROM ledger_order_participants p
+               INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
+               WHERE p.order_id = ? AND p.ledger_id = ? AND p.user_id = ? AND p.role <> 'inactive' AND o.deleted_at IS NULL
+               LIMIT 1`,
               [input.id, input.ledgerId, input.participantUserId]
             ) as any;
             if (!Array.isArray(participantRows) || participantRows.length === 0) {
               throw new TRPCError({ code: 'NOT_FOUND', message: '参与关系不存在' });
             }
-            const snapshot = parseFunderParticipantSnapshot(participantRows[0].order_snapshot) || {};
+            const participant = participantRows[0];
+            const snapshot = parseFunderParticipantSnapshot(participant.order_snapshot) || {};
+            const isSettledOrder = input.ledgerId === 52 && (participant.order_status === 'settled' || participant.order_status === 'completed');
+            const existingNote = snapshot.public_note ?? participant.note ?? null;
+            if (isSettledOrder && !areFunderSettledNotesAppendOnly(existingNote, input.publicNote)) {
+              throw new TRPCError({ code: 'FORBIDDEN', message: '已结清订单的历史备注不可修改或删除，仅可追加新备注' });
+            }
             snapshot.public_note = input.publicNote || null;
             await conn.execute(
               'UPDATE ledger_order_participants SET note = ?, order_snapshot = ?, updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> \'inactive\'',
@@ -18787,13 +18817,18 @@ ${klinesSummary}
             );
           } else {
             const [orderRows] = await conn.execute(
-              'SELECT user_id FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1',
+              'SELECT user_id, public_note, status FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1',
               [input.id, input.ledgerId]
             ) as any;
             const orderOwnerId = Array.isArray(orderRows) && orderRows.length > 0 ? Number(orderRows[0].user_id) : 0;
             if (!orderOwnerId) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在' });
             if (!isManager && orderOwnerId !== ctx.user.id) {
               throw new TRPCError({ code: 'FORBIDDEN', message: '无权修改该订单备注' });
+            }
+            const order = orderRows[0];
+            const isSettledOrder = input.ledgerId === 52 && (order.status === 'settled' || order.status === 'completed');
+            if (isSettledOrder && !areFunderSettledNotesAppendOnly(order.public_note, input.publicNote)) {
+              throw new TRPCError({ code: 'FORBIDDEN', message: '已结清订单的历史备注不可修改或删除，仅可追加新备注' });
             }
             await conn.execute(
               'UPDATE ledger_orders SET public_note = ? WHERE id = ? AND ledger_id = ?',
