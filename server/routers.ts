@@ -18584,6 +18584,14 @@ ${klinesSummary}
           password: decodeURIComponent(parsedUrl.password),
           database: parsedUrl.pathname.replace(/^\//, ''),
         });
+        // 生产旧库可能不支持 ALTER TABLE ... ADD COLUMN IF NOT EXISTS。
+        // 结清写入前必须先用元数据确认字段，再执行普通 ADD COLUMN，不能静默吞掉失败。
+        const ensureLedgerOrdersColumn = async (columnName: string, columnDefinition: string) => {
+          const [columns] = await conn.execute('SHOW COLUMNS FROM ledger_orders LIKE ?', [columnName]) as any;
+          if (!Array.isArray(columns) || columns.length === 0) {
+            await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN ${columnDefinition}`);
+          }
+        };
         // 确保 collateral_assets 等新字段存在（兼容旧表结构）
         try {
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_assets TEXT DEFAULT NULL`);
@@ -18601,6 +18609,8 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`).catch(() => {});
         } catch(e) {}
+        // 不依赖上方可能被旧版 MySQL 拒绝的 IF NOT EXISTS 语法；缺失时必须实际补齐。
+        await ensureLedgerOrdersColumn('interest_end_date', 'interest_end_date DATE DEFAULT NULL');
         let participantCount = 0;
         const shouldSyncParticipantStatus = input.status === 'settled' || input.status === 'active';
         try {
