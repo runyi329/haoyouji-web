@@ -1381,12 +1381,12 @@ export function FunderOrderCard({
                 )}
                 {optionInfo.premium && (
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-400 shrink-0">权利金/张</span>
+                    <span className="text-gray-400 shrink-0">权利金</span>
                     <span className="font-medium" style={{ color: '#1A2340' }}>{parseFloat(optionInfo.premium).toFixed(2)} {optionPremiumDisplayUnit}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400 shrink-0">期权价</span>
+                  <span className="text-gray-400 shrink-0">期权价格</span>
                   <span className="font-medium" style={{ color: '#1A2340' }}>
                     {greeksResult.loading && !greeksResult.data ? '加载中...' : greeksResult.data?.markPrice != null ? `${greeksResult.data.markPrice.toFixed(2)} u` : '--'}
                   </span>
@@ -2325,7 +2325,7 @@ export function FunderOrderCard({
                         <div className="flex items-center justify-between"><span className="text-gray-400">Vega</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.vega)}</span></div>
                         <div className="flex items-center justify-between"><span className="text-gray-400">Theta</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.theta)}</span></div>
                         {d.iv != null && <div className="flex items-center justify-between"><span className="text-gray-400">IV</span><span className="font-medium" style={{ color: '#4B5563' }}>{(Number(d.iv) * 100).toFixed(1)}%</span></div>}
-                        {d.markPrice != null && <div className="flex items-center justify-between"><span className="text-gray-400">期权价格</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.markPrice)} u</span></div>}
+                        {d.markPrice != null && <div className="flex items-center justify-between"><span className="text-gray-400">期权价格</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.markPrice, 2)} u</span></div>}
                       </>
                     );
                   })()}
@@ -2343,18 +2343,15 @@ export function FunderOrderCard({
               // 利息分成 = 计息基数×比例；利润分成 = 已实现的实时浮盈×比例。
               // 期权必须使用“实时合约标记价 − 权利金”的专属浮盈，不能使用标的现货或行权价。
               let shareAmt: number | null = null;
-              let profitShareBase: number | null = null;
               if (!isCoin) {
                 if (interestBaseNum > 0 && ratio > 0) shareAmt = interestBaseNum * ratio;
               } else if (isOptionOrder) {
                 if (floatPnl !== null && ratio > 0) {
-                  profitShareBase = floatPnl;
                   // 分成只从正利润中计提；亏损或持平时待分利润为0。
                   shareAmt = Math.max(0, floatPnl) * ratio;
                 }
               } else if (liveP != null && price > 0 && qty > 0 && ratio > 0) {
-                profitShareBase = (liveP - price) * qty;
-                shareAmt = Math.max(0, profitShareBase) * ratio;
+                shareAmt = Math.max(0, (liveP - price) * qty) * ratio;
               }
               const shareAmountLabel = isCoin ? '待分利润' : '待分金额';
               return (
@@ -2370,21 +2367,9 @@ export function FunderOrderCard({
                     <span className="text-gray-400 shrink-0">分成比例</span>
                     <span className="font-medium" style={{ color: '#4B5563' }}>{ratioNum > 0 ? `${ratioNum}%` : '---'}</span>
                   </div>
-                  {isCoin && isOptionOrder && (
-                    <div className="flex items-center justify-between mt-0.5">
-                      <span className="text-gray-400 shrink-0">分成基数（浮盈）</span>
-                      {profitShareBase !== null ? (
-                        <span className="font-medium tabular-nums" style={{ color: profitShareBase >= 0 ? '#DC2626' : '#16A34A' }}>
-                          {profitShareBase >= 0 ? '+' : ''}{profitShareBase.toLocaleString(undefined, { maximumFractionDigits: 2 })} u
-                        </span>
-                      ) : (
-                        <span className="font-medium text-gray-400">{greeksResult.loading ? '加载中...' : '暂无合约报价'}</span>
-                      )}
-                    </div>
-                  )}
                   <div className="flex items-center justify-between mt-0.5">
                     <span className="text-gray-400 shrink-0">{shareAmountLabel}</span>
-                    <span className="font-medium" style={{ color: '#4B5563' }}>{shareAmt != null ? `≈ ${shareAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : '---'}</span>
+                    <span className="font-medium tabular-nums" style={{ color: isCoin ? '#DC2626' : '#4B5563' }}>{shareAmt != null ? `≈ ${shareAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : '---'}</span>
                   </div>
                 </div>
               );
