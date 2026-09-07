@@ -2266,7 +2266,7 @@ export default function CryptoPrediction() {
   // 融资订单子tab：全部 / 股 / 币 / 共享
   // 融资订单三层筛选
   const [financeL2Tab, setFinanceL2Tab] = useState<'mine' | 'shared'>('mine');
-  const [financeL3Tab, setFinanceL3Tab] = useState<'all' | 'stock' | 'crypto'>('all');
+  const [financeL3Tab, setFinanceL3Tab] = useState<'all' | 'stock' | 'crypto' | 'settled'>('all');
   // 融资付息视图模式：卡片模式（银色铭牌）/ 订单模式（原始）
   const [financeViewMode, setFinanceViewMode] = useState<'card' | 'order'>('card');
   // 融资付息：资产汇总
@@ -3462,37 +3462,35 @@ export default function CryptoPrediction() {
                 ))}
               </div>
             ) : (() => {
-              const activeOrders = financeOrders.filter((o: any) => o.status === 'active');
-                            // 前端现有两类位置：本人 / 参与。
+              // 前端现有两类位置：本人 / 参与。
               // 真实参与订单或订单设置为“他人”时，均进入“参与”Tab；本人仅显示本人且非参与的订单。
               const isParticipantOrder = (o: any) => !!o.participantInfo || !!o._isParticipant || !!o._fromFunder;
-              const mineOrders = activeOrders.filter((o: any) => !isParticipantOrder(o) && (o.order_perspective || 'self') !== 'other');
-              const sharedOrders = activeOrders.filter((o: any) => isParticipantOrder(o) || (o.order_perspective || 'self') === 'other');
-              // 参与 Tab 包含真实参与订单和设置为他人的订单；绿色主题仍仅由真实参与身份触发。
+              const isSettledOrder = (o: any) => o.status === 'settled' || o.status === 'completed';
+              const mineOrders = financeOrders.filter((o: any) => !isParticipantOrder(o) && (o.order_perspective || 'self') !== 'other');
+              const sharedOrders = financeOrders.filter((o: any) => isParticipantOrder(o) || (o.order_perspective || 'self') === 'other');
+              // 本人和参与使用同一套第3层分类；默认分类仅展示进行中订单，已结单独收纳历史记录。
               const l2Pool = financeL2Tab === 'shared' ? sharedOrders : mineOrders;
-              // 第3层：参与视角支持全部/股/币；本人视角直接显示全部。
-              const showL3 = financeL2Tab === 'shared';
-              // 共享担保：担保物选择为「共享担保」的订单（collateral_share_mode === 'self'）
-              const hasCollateral = (o: any) => o.collateral_share_mode === 'self';
-              const l3Pool = showL3
-                ? l2Pool.filter((o: any) => {
+              const activePool = l2Pool.filter((o: any) => o.status === 'active');
+              const settledPool = l2Pool.filter(isSettledOrder);
+              const l3Pool = financeL3Tab === 'settled'
+                ? settledPool
+                : activePool.filter((o: any) => {
                     if (financeL3Tab === 'stock') return o.asset_type === 'stock';
                     if (financeL3Tab === 'crypto') return o.asset_type !== 'stock';
-                    if (financeL3Tab === 'collateral') return hasCollateral(o);
                     return true;
-                  })
-                : l2Pool;
-              // 第2层计数
-              const cntMine = mineOrders.length;
-              const cntShared = sharedOrders.length;
-              // 第3层计数（基于当前l2Pool）
-              const cntL3All = l2Pool.length;
-              const cntL3Stock = l2Pool.filter((o: any) => o.asset_type === 'stock').length;
-              const cntL3Crypto = l2Pool.filter((o: any) => o.asset_type !== 'stock').length;
+                  });
+              // 第2层计数保持进行中口径；已结清数量在低调的第3层入口单独显示。
+              const cntMine = mineOrders.filter((o: any) => o.status === 'active').length;
+              const cntShared = sharedOrders.filter((o: any) => o.status === 'active').length;
+              const cntL3All = activePool.length;
+              const cntL3Stock = activePool.filter((o: any) => o.asset_type === 'stock').length;
+              const cntL3Crypto = activePool.filter((o: any) => o.asset_type !== 'stock').length;
+              const cntL3Settled = settledPool.length;
 
               const sortedOrders = [...l3Pool].sort((a: any, b: any) => {
-                const statusOrder: Record<string, number> = { active: 0, completed: 1, settled: 1, cancelled: 2 };
-                return (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
+                const aTime = new Date(financeL3Tab === 'settled' ? (a.settled_at || a.updated_at || a.created_at) : (a.created_at || a.buy_date || 0)).getTime();
+                const bTime = new Date(financeL3Tab === 'settled' ? (b.settled_at || b.updated_at || b.created_at) : (b.created_at || b.buy_date || 0)).getTime();
+                return bTime - aTime;
               });
 
               const tabBtnStyle = (active: boolean) => ({
@@ -3534,26 +3532,25 @@ export default function CryptoPrediction() {
                     ))}
                   </div>
 
-                  {/* 第3层：股票 / 数字币 */}
-                  {showL3 && (
-                    <div className="flex rounded p-1 gap-1 mb-4" style={{ backgroundColor: '#EEF2FF', border: '1px solid #C7D7FF' }}>
-                      {([
-                        ['all',    '全部',   cntL3All],
-                        ['stock',  '股票',   cntL3Stock],
-                        ['crypto', '数字币', cntL3Crypto],
-                      ] as const).map(([key, label, cnt]) => (
-                        <button key={key} onClick={() => setFinanceL3Tab(key as any)}
-                          style={subBtnStyle(financeL3Tab === key)}>
-                          {label} <span style={{ opacity: 0.75, fontSize: '11px' }}>{cnt}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {/* 第3层：本人和参与统一显示；已结清作为低调的历史入口。 */}
+                  <div className="flex rounded p-1 gap-1 mb-4" style={{ backgroundColor: '#EEF2FF', border: '1px solid #C7D7FF' }}>
+                    {([
+                      ['all',     '全部',   cntL3All],
+                      ['stock',   '股票',   cntL3Stock],
+                      ['crypto',  '数字币', cntL3Crypto],
+                      ['settled', '已结',   cntL3Settled],
+                    ] as const).map(([key, label, cnt]) => (
+                      <button key={key} onClick={() => setFinanceL3Tab(key)}
+                        style={subBtnStyle(financeL3Tab === key)}>
+                        {label} <span style={{ opacity: 0.75, fontSize: '11px' }}>{cnt}</span>
+                      </button>
+                    ))}
+                  </div>
 
                   {/* 订单列表 */}
                   {sortedOrders.length === 0 ? (
                     <div className="text-center py-12">
-                      <div className="text-gray-400 text-sm">该分类下暂无订单</div>
+                      <div className="text-gray-400 text-sm">{financeL3Tab === 'settled' ? '暂无已结清订单' : '该分类下暂无进行中订单'}</div>
                     </div>
                   ) : financeViewMode === 'card' ? (
                     <div className="space-y-3">

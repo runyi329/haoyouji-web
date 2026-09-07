@@ -18120,8 +18120,15 @@ ${klinesSummary}
                 };
                 // 参与者视角：完整业务字段由参与者子订单快照覆盖主订单。
                 if ((o as any)._isParticipant) {
+                  const mainOrderStatus = o.status;
+                  const mainOrderSettledAt = o.settled_at;
                   const snapshot = parseFunderParticipantSnapshot(pi.order_snapshot);
                   if (snapshot) Object.assign(o, snapshot);
+                  // 主订单与参与者订单共用结清状态；旧参与者快照可能仍为 active，不能覆盖主订单结清结果。
+                  if (mainOrderStatus === 'settled' || mainOrderStatus === 'completed') {
+                    o.status = mainOrderStatus;
+                    o.settled_at = mainOrderSettledAt;
+                  }
                   (o as any)._participantParentDeleted = Boolean((o as any).deleted_at);
                   // 名称展示统一：昵称优先，用户名兜底。
                   (o as any).order_owner_name = (o as any).nickname || o.owner_label || (o as any).username || null;
