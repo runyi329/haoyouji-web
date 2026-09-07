@@ -20,6 +20,8 @@ interface OrderCardImageDownloadProps {
   outerPadding?: number;
   captureFullContent?: boolean;
   exportBackground?: string;
+  /** 卡片页眉使用无圆形容器的纯下载箭头；其他入口保持默认样式。 */
+  variant?: "default" | "bare";
 }
 
 type ImagePreview = {
@@ -299,6 +301,7 @@ export function OrderCardImageDownload({
   outerPadding = 16,
   captureFullContent = false,
   exportBackground,
+  variant = "default",
 }: OrderCardImageDownloadProps) {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -447,12 +450,16 @@ export function OrderCardImageDownload({
         onClick={handleGeneratePreview}
         disabled={generating}
         data-card-export-hide="true"
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition active:scale-95 disabled:opacity-60"
-        style={{
-          color,
-          background: "rgba(255,255,255,0.35)",
-          border: "1px solid rgba(148,163,184,0.28)",
-        }}
+        className={variant === "bare"
+          ? "inline-flex h-5 w-5 shrink-0 items-center justify-center transition active:scale-95 disabled:opacity-60"
+          : "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition active:scale-95 disabled:opacity-60"}
+        style={variant === "bare"
+          ? { color }
+          : {
+              color,
+              background: "rgba(255,255,255,0.35)",
+              border: "1px solid rgba(148,163,184,0.28)",
+            }}
         title="预览并保存图片"
         aria-label="预览订单图片"
       >

@@ -1630,6 +1630,18 @@ export function FunderOrderCardV2Silver({
                   )}
                 </div>
               )}
+              {allowImageDownload && (
+                <OrderCardImageDownload
+                  targetRef={cardExportRef}
+                  currentUser={currentUser}
+                  orderNo={order.order_no || order.id}
+                  color={TXT_DIM}
+                  outerPadding={0}
+                  captureFullContent
+                  exportBackground={cardExportBackground}
+                  variant="bare"
+                />
+              )}
               {order.order_no && (
                 <span className="ml-1 max-w-[58px] shrink-0 truncate text-[10px] font-mono leading-tight" style={{ color: TXT_DIM, letterSpacing: '0.03em' }} title={String(order.order_no)}>
                   {order.order_no}
@@ -1960,19 +1972,6 @@ export function FunderOrderCardV2Silver({
             aria-label={noteExpanded ? '收起备注' : '展开备注'}
           />
           <span className="relative pointer-events-none" style={{ color: noteExpanded ? TXT_PRI : TXT_DIM, fontSize: '0.7rem', fontWeight: noteExpanded ? 600 : 400 }}>备注</span>
-          {allowImageDownload && (
-            <span className="relative z-10 shrink-0">
-              <OrderCardImageDownload
-                targetRef={cardExportRef}
-                currentUser={currentUser}
-                orderNo={order.order_no || order.id}
-                color={TXT_PRI}
-                outerPadding={0}
-                captureFullContent
-                exportBackground={cardExportBackground}
-              />
-            </span>
-          )}
           {(() => { const cnt = parseNotes(order.public_note || '').length; return cnt > 0 ? <span className="relative pointer-events-none" style={{ color: TXT_DIM, fontSize: '0.65rem' }}>({cnt})</span> : null; })()}
           {noteExpanded
             ? <ChevronUp className="relative pointer-events-none w-3 h-3" style={{ color: TXT_DIM }} />
@@ -3231,6 +3230,18 @@ export function FunderLenderCardSilver({
                   )}
                 </div>
               )}
+              {allowImageDownload && (
+                <OrderCardImageDownload
+                  targetRef={cardExportRef}
+                  currentUser={currentUser}
+                  orderNo={order.order_no || order.id}
+                  color={TXT_DIM}
+                  outerPadding={0}
+                  captureFullContent
+                  exportBackground={cardExportBackground}
+                  variant="bare"
+                />
+              )}
               {order.order_no && (
                 <span className="ml-1 max-w-[58px] shrink-0 truncate text-[10px] font-mono leading-tight" style={{ color: TXT_DIM, letterSpacing: '0.03em' }} title={String(order.order_no)}>
                   {order.order_no}
@@ -3372,19 +3383,6 @@ export function FunderLenderCardSilver({
             aria-label={noteExpanded ? '收起备注' : '展开备注'}
           />
           <span className="relative pointer-events-none" style={{ color: noteExpanded ? TXT_PRI : TXT_DIM, fontSize: '0.7rem', fontWeight: noteExpanded ? 600 : 400 }}>备注</span>
-          {allowImageDownload && (
-            <span className="relative z-10 shrink-0">
-              <OrderCardImageDownload
-                targetRef={cardExportRef}
-                currentUser={currentUser}
-                orderNo={order.order_no || order.id}
-                color={TXT_PRI}
-                outerPadding={0}
-                captureFullContent
-                exportBackground={cardExportBackground}
-              />
-            </span>
-          )}
           {(() => { const cnt = parseNotes(order.public_note || '').length; return cnt > 0 ? <span className="relative pointer-events-none" style={{ color: TXT_DIM, fontSize: '0.65rem' }}>({cnt})</span> : null; })()}
           {noteExpanded
             ? <ChevronUp className="relative pointer-events-none w-3 h-3" style={{ color: TXT_DIM }} />
