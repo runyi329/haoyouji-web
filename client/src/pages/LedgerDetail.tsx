@@ -2724,6 +2724,8 @@ export default function LedgerDetail() {
   // 资产订单视图模式：large=大图（单列放大），medium=中图（左右双栏），small=小图（紧凑列表）
   const [funderViewMode, setFunderViewMode] = useState<'card' | 'order'>('card');
   const [funderOrderTab, setFunderOrderTab] = useState<'mine' | 'participant'>('mine');
+  // 资方前端的本人/参与订单均使用统一资产分类；期权归入数字币。
+  const [funderAssetFilter, setFunderAssetFilter] = useState<'all' | 'stock' | 'crypto' | 'settled'>('all');
   // 本人 / 参与分组：真实参与身份（绿色卡片）和显式设置为“他人”的订单均归入参与。
   const isFunderParticipantOrder = (order: any) =>
     !!order?.participantInfo || !!order?._isParticipant || !!order?._fromFunder || order?.order_perspective === 'other';
@@ -2784,6 +2786,16 @@ export default function LedgerDetail() {
     }, 0);
     return { ...order, paidTotal: { amount: paidInBase, currency: baseCurrency } };
   }), [funderAssetOrders, interestSummaryMap, cnyRate]);
+  // 资方前端的全部/股票/数字币/已结算筛选。保留原“全部”仅展示未结清订单的口径；期权并入数字币。
+  const funderVisibleOrders = useMemo(() => funderDisplayOrders.filter((order: any) => {
+    const isParticipantOrder = isFunderParticipantOrder(order);
+    if (funderOrderTab === 'participant' ? !isParticipantOrder : isParticipantOrder) return false;
+    if (funderAssetFilter === 'settled') return order.status === 'settled';
+    if (order.status === 'settled') return false;
+    if (funderAssetFilter === 'stock') return order.asset_type === 'stock';
+    if (funderAssetFilter === 'crypto') return order.asset_type !== 'stock';
+    return true;
+  }), [funderDisplayOrders, funderOrderTab, funderAssetFilter]);
   // AF 账本：YJH邀请树（仅当弹窗打开时才加载）
   // 管理员/创建人点推荐时，强制以YJH(4957151)视角查询，无需切换视角
   const YJH_USER_ID = 4957151;
@@ -5421,9 +5433,20 @@ export default function LedgerDetail() {
                 </div>
               );
             })()}
+            <div className="flex rounded p-1 gap-1 mb-3" style={{ backgroundColor: '#F1F5FF', border: '1px solid #D7E2FF' }}>
+              {([['all', '全部'], ['stock', '股票'], ['crypto', '数字币'], ['settled', '已结算']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setFunderAssetFilter(key)}
+                  style={{ flex: 1, padding: '5px 0', borderRadius: '5px', fontSize: '13px', fontWeight: 700, transition: 'all 0.15s', backgroundColor: funderAssetFilter === key ? '#1A56DB' : 'transparent', color: funderAssetFilter === key ? '#fff' : '#6B7280', boxShadow: funderAssetFilter === key ? '0 1px 3px rgba(26,86,219,0.24)' : 'none' }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="flex items-center mb-3">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
-              <span className="text-xs text-gray-400 ml-1.5">共 {(funderAssetOrders as any[])?.filter((o: any) => o.status !== 'settled' && (funderOrderTab === 'participant' ? isFunderParticipantOrder(o) : !isFunderParticipantOrder(o))).length ?? 0} 笔</span>
+              <span className="text-xs text-gray-400 ml-1.5">共 {funderVisibleOrders.length} 笔</span>
               {/* 左右拨动开关 */}
               <div
                 className="ml-auto flex items-center"
@@ -5494,7 +5517,7 @@ export default function LedgerDetail() {
                 <div className="text-gray-400 text-base mb-1">暂无资产订单</div>
                 <div className="text-gray-400 text-sm">管理员将为您配置资产订单</div>
               </div>
-            ) : funderDisplayOrders.filter((order: any) => order.status !== 'settled' && (funderOrderTab === 'participant' ? isFunderParticipantOrder(order) : !isFunderParticipantOrder(order))).length === 0 ? (
+            ) : funderVisibleOrders.length === 0 ? (
               <div className="text-center py-12">
                 <Receipt className="w-14 h-14 text-gray-200 mx-auto mb-3" />
                 <div className="text-gray-400 text-base mb-1">{funderOrderTab === 'participant' ? '暂无参与订单' : '暂无本人订单'}</div>
@@ -5507,7 +5530,7 @@ export default function LedgerDetail() {
                 </div>
               }>
               <div className="space-y-3">
-                {funderDisplayOrders.filter((order: any) => order.status !== 'settled' && (funderOrderTab === 'participant' ? isFunderParticipantOrder(order) : !isFunderParticipantOrder(order))).map((order: any) => {
+                {funderVisibleOrders.map((order: any) => {
                   // 按利率符号判断布局：正号（rate>=0）→付息型（突出利息），负号（rate<0）→权益型（突出持有数量/浮动盈亏）
                   // 参与者视角：优先使用参与者专属利率；0% 是有效配置，不能回退主订单利率。
                   const isParticipantView = isFunderParticipantOrder(order);
@@ -5545,7 +5568,7 @@ export default function LedgerDetail() {
             ) : (
               /* 订单模式：原始 FunderOrderCard */
               <div className="space-y-3">
-                {funderDisplayOrders.filter((order: any) => order.status !== 'settled' && (funderOrderTab === 'participant' ? isFunderParticipantOrder(order) : !isFunderParticipantOrder(order))).map((order: any) => (
+                {funderVisibleOrders.map((order: any) => (
                   <FunderOrderCard
                     key={order.id}
                     order={order}
