@@ -5433,17 +5433,31 @@ export default function LedgerDetail() {
                 </div>
               );
             })()}
-            <div className="flex rounded p-1 gap-1 mb-3" style={{ backgroundColor: '#F1F5FF', border: '1px solid #D7E2FF' }}>
-              {([['all', '全部'], ['stock', '股票'], ['crypto', '数字币'], ['settled', '已结算']] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setFunderAssetFilter(key)}
-                  style={{ flex: 1, padding: '5px 0', borderRadius: '5px', fontSize: '13px', fontWeight: 700, transition: 'all 0.15s', backgroundColor: funderAssetFilter === key ? '#1A56DB' : 'transparent', color: funderAssetFilter === key ? '#fff' : '#6B7280', boxShadow: funderAssetFilter === key ? '0 1px 3px rgba(26,86,219,0.24)' : 'none' }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            {(() => {
+              // 数量与当前“本人 / 参与”身份页同步；期权归入数字币。
+              const currentTabOrders = funderDisplayOrders.filter((order: any) =>
+                funderOrderTab === 'participant' ? isFunderParticipantOrder(order) : !isFunderParticipantOrder(order)
+              );
+              const categoryCounts = {
+                all: currentTabOrders.filter((order: any) => order.status !== 'settled').length,
+                stock: currentTabOrders.filter((order: any) => order.status !== 'settled' && order.asset_type === 'stock').length,
+                crypto: currentTabOrders.filter((order: any) => order.status !== 'settled' && order.asset_type !== 'stock').length,
+                settled: currentTabOrders.filter((order: any) => order.status === 'settled').length,
+              };
+              return (
+                <div className="flex rounded p-1 gap-1 mb-3" style={{ backgroundColor: '#F1F5FF', border: '1px solid #D7E2FF' }}>
+                  {([['all', '全部'], ['stock', '股票'], ['crypto', '数字币'], ['settled', '已结算']] as const).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setFunderAssetFilter(key)}
+                      style={{ flex: 1, padding: '5px 0', borderRadius: '5px', fontSize: '13px', fontWeight: 700, transition: 'all 0.15s', backgroundColor: funderAssetFilter === key ? '#1A56DB' : 'transparent', color: funderAssetFilter === key ? '#fff' : '#6B7280', boxShadow: funderAssetFilter === key ? '0 1px 3px rgba(26,86,219,0.24)' : 'none' }}
+                    >
+                      {label} <span style={{ opacity: 0.75, fontSize: '10px' }}>{categoryCounts[key]}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
             <div className="flex items-center mb-3">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
               <span className="text-xs text-gray-400 ml-1.5">共 {funderVisibleOrders.length} 笔</span>
