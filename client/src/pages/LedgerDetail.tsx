@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, useMem
 
 import { FunderOrderCard, FunderNoteRow, formatCoinQtyFunder, useAccruedInterestFunder, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType } from "@/components/FunderOrderCard";
 import { matchesUserSearch } from "@/lib/userIdentity";
+import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
 
@@ -580,6 +581,49 @@ function FunderOrderCardLegacy({
   const qty = parseFloat(order.buy_quantity || '0');
   const price = parseFloat(order.buy_price || '0');
   const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
+  // 遗留卡片同样必须以真实期权合约标记价计算盈亏，不能回退到标的现货或行权价。
+  const isOptionOrder = order.asset_type === 'crypto_option';
+  const optionInfo = (() => {
+    try {
+      const raw = (order as any).option_info;
+      return typeof raw === 'string' ? JSON.parse(raw) : (raw || null);
+    } catch { return null; }
+  })();
+  const optionRawCoin = String(optionInfo?.coin || '').toUpperCase();
+  const optionGreeksSupported = optionRawCoin === 'BTC' || optionRawCoin === 'ETH';
+  const optionCoin = optionRawCoin === 'ETH' ? 'ETH' : 'BTC';
+  const optionQty = isOptionOrder ? Number(optionInfo?.buyQty || 0) : 0;
+  const optionPremiumCurrencyRaw = String(optionInfo?.denomination || 'USDT').toUpperCase();
+  const optionPremiumCurrency = optionPremiumCurrencyRaw === 'B'
+    ? optionCoin
+    : optionPremiumCurrencyRaw === 'U'
+      ? 'USDT'
+      : optionPremiumCurrencyRaw;
+  const optionPremiumRaw = optionInfo?.premium != null ? Number(optionInfo.premium) : null;
+  const optionPremiumUnitPrice = livePrices[optionPremiumCurrency as CoinType] ?? null;
+  const optionPremiumUsdt = optionPremiumRaw === null || !Number.isFinite(optionPremiumRaw)
+    ? null
+    : optionPremiumCurrency === 'CNY'
+      ? optionPremiumRaw / cnyRate
+      : optionPremiumCurrency === 'USDT'
+        ? optionPremiumRaw
+        : (optionPremiumUnitPrice && optionPremiumUnitPrice > 0 ? optionPremiumRaw * optionPremiumUnitPrice : null);
+  const optionPremiumTotal = isOptionOrder
+    ? (Number(order.amount || 0) > 0 ? Number(order.amount) : (optionPremiumUsdt !== null && optionQty > 0 ? optionPremiumUsdt * optionQty : null))
+    : null;
+  const optionGreeks = useOptionGreeks({
+    currency: optionCoin,
+    exerciseDate: optionInfo?.exerciseDate || '',
+    strikePrice: optionInfo?.strikePrice ? Number(optionInfo.strikePrice) : 0,
+    direction: (optionInfo?.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
+    enabled: isOptionOrder && optionGreeksSupported && !!optionInfo?.exerciseDate && !!optionInfo?.strikePrice,
+  });
+  const optionMarkPrice = optionGreeks.data?.markPrice ?? null;
+  const optionCurrentValue = optionMarkPrice !== null && optionQty > 0 ? optionMarkPrice * optionQty : null;
+  const optionIsShort = optionInfo?.direction === 'short_call' || optionInfo?.direction === 'short_put';
+  const optionFloatPnl = isOptionOrder && optionCurrentValue !== null && optionPremiumTotal !== null && optionPremiumTotal > 0
+    ? (optionIsShort ? optionPremiumTotal - optionCurrentValue : optionCurrentValue - optionPremiumTotal)
+    : null;
   // 利息货币逻辑与 LedgerDetail FunderOrderCardRight 完全一致
   const baseCur = order.interest_base_currency || 'USDT'; // 计息基数货币
   const rateCur = order.interest_rate_currency || 'USDT'; // 约定利息货币（决定主显示单位）
@@ -708,9 +752,9 @@ function FunderOrderCardLegacy({
     ? (order.participantInfo?.commissionBase ? parseFloat(order.participantInfo.commissionBase) : totalU)
     : (order.interest_base ? Number(order.interest_base) : totalU);
   const liveP = livePrices[order.coin] ?? null;
-  const currentValue = liveP !== null ? liveP * qty : null;
-  // 浮动盈亏使用持仓买入成本；参与者计息基数可独立修改，不能替代买入价值。
-  const floatPnl = currentValue !== null ? currentValue - totalU : null;
+  const currentValue = isOptionOrder ? optionCurrentValue : (liveP !== null ? liveP * qty : null);
+  // 期权使用合约标记价与权利金总成本的差额；其他订单保留原有持仓市值口径。
+  const floatPnl = isOptionOrder ? optionFloatPnl : (currentValue !== null ? currentValue - totalU : null);
   const exposure = floatPnl !== null
     ? collateralValue + floatPnl - accrued + totalPaid
     : collateralValue - accrued + totalPaid;
@@ -864,6 +908,10 @@ function FunderOrderCardLegacy({
             {order.asset_type === 'stock' ? (
               totalU > 0 && order.coin === 'CNY' && (
                 <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} U</div>
+              )
+            ) : isOptionOrder ? (
+              optionCurrentValue !== null && (
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>期权市值 ≈{optionCurrentValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
               )
             ) : (
               liveP && qty > 0 && (

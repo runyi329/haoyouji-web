@@ -1083,11 +1083,11 @@ export function FunderOrderCard({
   // 卖出(short_call/short_put) → 用计息基数（保证金）
   // 买入(long_call/long_put) → 用行权价 × 张数
   const optionDirection = isOptionOrder ? (optionInfo?.direction || '') : '';
-  const isShortOption = optionDirection === 'short_call' || optionDirection === 'short_put';
+  const isShortOptionForExposure = optionDirection === 'short_call' || optionDirection === 'short_put';
   const optionStrikePrice = isOptionOrder && optionInfo?.strikePrice ? Number(optionInfo.strikePrice) : 0;
   const optionBuyQty = isOptionOrder && optionInfo?.buyQty ? Number(optionInfo.buyQty) : 0;
   const interestBaseNum = isOptionOrder
-    ? (isShortOption
+    ? (isShortOptionForExposure
         ? (order.interest_base ? Number(order.interest_base) : totalU)
         : (optionStrikePrice > 0 && optionBuyQty > 0 ? optionStrikePrice * optionBuyQty : totalU))
     : (order.interest_base ? Number(order.interest_base) : totalU);
@@ -1118,14 +1118,21 @@ export function FunderOrderCard({
     ? optionMarkPrice * optionContractQty
     : null;
   const isShortOption = optionInfo?.direction === 'short_call' || optionInfo?.direction === 'short_put';
+  // 期权浮盈只允许使用“合约标记价 × 张数”与“权利金/张 × 张数”的差额；
+  // 行权价仅用于到期收益和风险敞口，标的现货价只用于非期权订单。
+  const optionFloatPnl = isOptionOrder && optionCurrentValue !== null && optionPremiumTotal !== null && optionPremiumTotal > 0
+    ? (isShortOption ? optionPremiumTotal - optionCurrentValue : optionCurrentValue - optionPremiumTotal)
+    : null;
   const currentValue = isOptionOrder ? optionCurrentValue : (liveP !== null ? liveP * qty : null);
   const isShort = isOptionOrder ? isShortOption : (order as any).trade_direction === 'short';
-  // 数字币现货使用资产市值与买入价值比较；期权使用合约标记价与权利金总成本比较。
+  // 数字币现货使用资产市值与买入价值比较；期权使用独立的合约标记价差额。
   const spotBuyValueUsdt = qty > 0 && quotedPriceUsdt > 0 ? qty * quotedPriceUsdt : totalU;
   const floatPnlBase = isOptionOrder ? optionPremiumTotal : (!isStockOrder ? spotBuyValueUsdt : interestBaseNum);
-  const floatPnl = currentValue !== null && floatPnlBase !== null && floatPnlBase > 0
-    ? (isShort ? floatPnlBase - currentValue : currentValue - floatPnlBase)
-    : null;
+  const floatPnl = isOptionOrder
+    ? optionFloatPnl
+    : (currentValue !== null && floatPnlBase !== null && floatPnlBase > 0
+      ? (isShort ? floatPnlBase - currentValue : currentValue - floatPnlBase)
+      : null);
   const exposure = floatPnl !== null
     ? collateralValue + floatPnl - accrued + totalPaid - (principalLentOut ? interestBaseNum : 0)
     : collateralValue - accrued + totalPaid - (principalLentOut ? interestBaseNum : 0);

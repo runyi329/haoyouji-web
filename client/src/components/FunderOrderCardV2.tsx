@@ -1255,12 +1255,19 @@ export function FunderOrderCardV2Silver({
   const optMarkPrice = greeksResult.data?.markPrice ?? null;
   const optCurrentValue = optMarkPrice !== null && qty > 0 ? optMarkPrice * qty : null;
   const optIsShort = _optInfo?.direction === 'short_call' || _optInfo?.direction === 'short_put';
+  // 期权浮盈与普通现货完全分离：只计算（合约标记价 − 权利金）× 张数。
+  // 行权价仅用于到期收益/风险敞口，不能进入实时浮盈。
+  const optionFloatPnl = _isOptCard && optCurrentValue !== null && optPremiumTotal !== null && optPremiumTotal > 0
+    ? (optIsShort ? optPremiumTotal - optCurrentValue : optCurrentValue - optPremiumTotal)
+    : null;
   const currentValue = _isOptCard ? optCurrentValue : (liveP !== null && qty > 0 ? liveP * qty : null);
   const buyValue = _isOptCard ? optPremiumTotal : (qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : storedAmountUsdt);
   const _isShortSl = _isOptCard ? optIsShort : (order as any).trade_direction === 'short';
-  const floatPnl = currentValue !== null && buyValue !== null && buyValue > 0
-    ? (_isShortSl ? buyValue - currentValue : currentValue - buyValue)
-    : null;
+  const floatPnl = _isOptCard
+    ? optionFloatPnl
+    : (currentValue !== null && buyValue !== null && buyValue > 0
+      ? (_isShortSl ? buyValue - currentValue : currentValue - buyValue)
+      : null);
   const floatPct = floatPnl !== null && buyValue !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const dir = priceDirection?.[coin] ?? 'same';
   const pnlColor = floatPnl === null ? (_isOptCard ? OPT_TEXT_SEC : SL_TEXT_SEC) : floatPnl >= 0 ? SL_GREEN : SL_RED;
@@ -2956,11 +2963,17 @@ export function FunderLenderCardSilver({
   const optionMarkPrice = optionGreeksResult.data?.markPrice ?? null;
   const optionCurrentValue = optionMarkPrice !== null && qty > 0 ? optionMarkPrice * qty : null;
   const optionIsShort = _lnOptInfo?.direction === 'short_call' || _lnOptInfo?.direction === 'short_put';
+  // 收息型期权同样只使用合约标记价与权利金成本；行权价不参与实时浮盈。
+  const optionFloatPnl = _lnIsOpt && optionCurrentValue !== null && optionPremiumTotal !== null && optionPremiumTotal > 0
+    ? (optionIsShort ? optionPremiumTotal - optionCurrentValue : optionCurrentValue - optionPremiumTotal)
+    : null;
   const currentValue = _lnIsOpt ? optionCurrentValue : (liveP !== null && qty > 0 ? liveP * qty : null);
   const buyValue = _lnIsOpt ? optionPremiumTotal : (qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : storedAmountUsdt);
-  const floatPnl = currentValue !== null && buyValue !== null && buyValue > 0
-    ? ((optionIsShort ? buyValue - currentValue : currentValue - buyValue))
-    : null;
+  const floatPnl = _lnIsOpt
+    ? optionFloatPnl
+    : (currentValue !== null && buyValue !== null && buyValue > 0
+      ? ((optionIsShort ? buyValue - currentValue : currentValue - buyValue))
+      : null);
   const floatPct = floatPnl !== null && buyValue !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const dir = priceDirection?.[coin] ?? 'same';
   const isStock = order.asset_type === 'stock';
