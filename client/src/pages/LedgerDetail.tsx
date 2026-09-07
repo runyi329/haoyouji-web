@@ -2721,8 +2721,22 @@ export default function LedgerDetail() {
   // 涨跌方向计算：用 localStorage 存储上一次价格，刷新页面后第一次加载就能显示筜头
   const PREV_PRICE_CACHE_KEY = `funder_prev_prices_${ledgerId}`;
   const [funderPriceDirection, setFunderPriceDirection] = useState<Record<string, 'up' | 'down' | 'same'>>({});
-  // 资产订单视图模式：large=大图（单列放大），medium=中图（左右双栏），small=小图（紧凑列表）
+  // 资产订单视图模式：按账本和当前查看用户隔离保存，避免不同用户或账本之间互相覆盖。
+  const funderViewModeStorageKey = `funder_view_mode_${ledgerId}_${viewAsUserId ?? (user as any)?.id ?? 'anonymous'}`;
   const [funderViewMode, setFunderViewMode] = useState<'card' | 'order'>('card');
+  useEffect(() => {
+    try {
+      const savedMode = localStorage.getItem(funderViewModeStorageKey);
+      setFunderViewMode(savedMode === 'order' ? 'order' : 'card');
+    } catch {
+      setFunderViewMode('card');
+    }
+  }, [funderViewModeStorageKey]);
+  const toggleFunderViewMode = () => {
+    const nextMode = funderViewMode === 'card' ? 'order' : 'card';
+    setFunderViewMode(nextMode);
+    try { localStorage.setItem(funderViewModeStorageKey, nextMode); } catch {}
+  };
   const [funderOrderTab, setFunderOrderTab] = useState<'mine' | 'participant'>('mine');
   // 资方前端的本人/参与订单均使用统一资产分类；期权归入数字币。
   const [funderAssetFilter, setFunderAssetFilter] = useState<'all' | 'stock' | 'crypto' | 'settled'>('all');
@@ -5474,7 +5488,7 @@ export default function LedgerDetail() {
                   width: '160px',
                   height: '26px',
                 }}
-                onClick={() => setFunderViewMode(funderViewMode === 'card' ? 'order' : 'card')}
+                onClick={toggleFunderViewMode}
               >
                 {/* 滑动块 */}
                 <div style={{
