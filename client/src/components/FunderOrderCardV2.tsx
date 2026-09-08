@@ -441,6 +441,11 @@ function getExactFinancingDisplayAmount(order: any, amountCurrency: string, calc
   return calculatedAmount;
 }
 
+function normalizeFunderCurrency(value: unknown): 'CNY' | 'USDT' {
+  const currency = String(value || '').trim().toUpperCase();
+  return ['CNY', 'RMB', '人民币'].includes(currency) ? 'CNY' : 'USDT';
+}
+
 function getRateStr(order: any): string {
   const r = String(order.interest_rate_annual ?? '');
   if (r.startsWith('-')) return r;
@@ -512,9 +517,10 @@ export function FunderOrderCardV2({
     hasInterestEnd ? order.interest_start_date : null,
     interestEndAt
   );
-  const baseCur = order.interest_base_currency || "USDT";
-  const rateCur = order.interest_rate_currency || "USDT";
+  const baseCur = normalizeFunderCurrency(order.interest_base_currency);
+  const rateCur = normalizeFunderCurrency(order.interest_rate_currency);
   const interestUnit = rateCur === "CNY" ? "元" : "U";
+  const baseUnit = baseCur === "CNY" ? "元" : "U";
   const convertAccrued = (val: number): number => {
     if (baseCur === rateCur) return val;
     if (baseCur === "USDT" && rateCur === "CNY") return val * cnyRate;
@@ -777,7 +783,7 @@ export function FunderOrderCardV2({
             <span style={{ color: OKX_TEXT_DIM }}>
               {order.interest_base
                 ? parseFloat(order.interest_base).toLocaleString(undefined, { maximumFractionDigits: 2 })
-                : "--"} {interestUnit}
+                : "--"} {baseUnit}
             </span>
           </div>
           {order.interest_start_date && (
@@ -845,9 +851,10 @@ export function FunderOrderCardV2Light({
     hasInterestEnd ? order.interest_start_date : null,
     interestEndAt
   );
-  const baseCur = order.interest_base_currency || "USDT";
-  const rateCur = order.interest_rate_currency || "USDT";
+  const baseCur = normalizeFunderCurrency(order.interest_base_currency);
+  const rateCur = normalizeFunderCurrency(order.interest_rate_currency);
   const interestUnit = rateCur === "CNY" ? "元" : "U";
+  const baseUnit = baseCur === "CNY" ? "元" : "U";
   const convertAccrued = (val: number): number => {
     if (baseCur === rateCur) return val;
     if (baseCur === "USDT" && rateCur === "CNY") return val * cnyRate;
@@ -1018,7 +1025,7 @@ export function FunderOrderCardV2Light({
           <div className="flex justify-between">
             <span style={{ color: LT_TEXT_DIM }}>计息基数</span>
             <span style={{ color: LT_TEXT_DIM }}>
-              {order.interest_base ? parseFloat(order.interest_base).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "--"} {interestUnit}
+              {order.interest_base ? parseFloat(order.interest_base).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "--"} {baseUnit}
             </span>
           </div>
           {order.interest_start_date && (
@@ -1285,8 +1292,8 @@ export function FunderOrderCardV2Silver({
     hasInterestEnd ? order.interest_start_date : null,
     interestEndAt
   );
-  const baseCur = order.interest_base_currency || 'USDT';
-  const rateCur = order.interest_rate_currency || 'USDT';
+  const baseCur = normalizeFunderCurrency(order.interest_base_currency);
+  const rateCur = normalizeFunderCurrency(order.interest_rate_currency);
   const interestUnit = rateCur === 'CNY' ? '元' : 'U';
   const convertAccrued = (val: number): number => {
     if (baseCur === rateCur) return val;
@@ -2999,8 +3006,8 @@ export function FunderLenderCardSilver({
     hasInterestEnd ? order.interest_start_date : null,
     interestEndAt
   );
-  const baseCur = order.interest_base_currency || 'USDT';
-  const rateCur = order.interest_rate_currency || 'USDT';
+  const baseCur = normalizeFunderCurrency(order.interest_base_currency);
+  const rateCur = normalizeFunderCurrency(order.interest_rate_currency);
   const interestUnit = rateCur === 'CNY' ? '元' : 'U';
   const baseUnit = baseCur === 'CNY' ? '元' : 'U';
   const convertAccrued = (val: number): number => {

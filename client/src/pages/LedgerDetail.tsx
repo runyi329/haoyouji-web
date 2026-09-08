@@ -624,9 +624,14 @@ function FunderOrderCardLegacy({
   const optionFloatPnl = isOptionOrder && optionCurrentValue !== null && optionPremiumTotal !== null && optionPremiumTotal > 0
     ? (optionIsShort ? optionPremiumTotal - optionCurrentValue : optionCurrentValue - optionPremiumTotal)
     : null;
-  // 利息货币逻辑与 LedgerDetail FunderOrderCardRight 完全一致
-  const baseCur = order.interest_base_currency || 'USDT'; // 计息基数货币
-  const rateCur = order.interest_rate_currency || 'USDT'; // 约定利息货币（决定主显示单位）
+  // 计息基数和利息展示币种可以不同，必须分别标准化后再计算和标注单位。
+  const normalizeFunderCurrency = (value: unknown): 'CNY' | 'USDT' => {
+    const currency = String(value || '').trim().toUpperCase();
+    return ['CNY', 'RMB', '人民币'].includes(currency) ? 'CNY' : 'USDT';
+  };
+  const baseCur = normalizeFunderCurrency(order.interest_base_currency); // 计息基数货币
+  const rateCur = normalizeFunderCurrency(order.interest_rate_currency); // 约定利息货币（决定主显示单位）
+  const baseUnit = baseCur === 'CNY' ? '元' : 'U';
   const interestUnit = rateCur === 'CNY' ? '元' : 'U';
   const altUnit = rateCur === 'CNY' ? 'U' : '元';
   // 折算：计息基数和利息货币不一致时按实时汇率折算
@@ -936,7 +941,7 @@ function FunderOrderCardLegacy({
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">{isInvited ? '计佣基数' : '计息基数'}</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>
-                  {parseFloat(order.interest_base).toLocaleString(undefined, { maximumFractionDigits: 2 })} {interestUnit}
+                  {parseFloat(order.interest_base).toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseUnit}
                 </span>
               </div>
             )}
