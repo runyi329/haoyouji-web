@@ -1903,8 +1903,11 @@ export function FunderOrderCard({
                               const oPrincipal = Number(o.principal ?? 0);
                               const oCoin = (o.coin || '').toUpperCase();
                               const isCNYr = oCoin === 'CNY';
-                              const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
-                              const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
+                              // 计息基数和待结利息须按各自保存的币种折算，不能以标的币种代替。
+                              const oInterestBaseCurrencyR = String(o.interestBaseCurrency || 'USDT').trim().toUpperCase();
+                              const oInterestBaseIsCNYR = ['CNY', 'RMB', '人民币'].includes(oInterestBaseCurrencyR);
+                              const oPrincipalUR = oInterestBaseIsCNYR ? oPrincipal / cnyRate : oPrincipal;
+                              const oPendingInterestR = oInterestBaseIsCNYR ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
                               const oPrincipalLentOutR = o.principalLentOut === true || o.principalLentOut === 1;
                               const oPrincipalDeductR = oPrincipalLentOutR ? oPrincipalUR : 0;
                               // 与逐单列表保持一致：期权或数量为0的借出本金订单没有可估值持仓，不能先按“市值0−本金”再扣本金。
@@ -1927,7 +1930,12 @@ export function FunderOrderCard({
                             }
                             const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
                             const diff = totalColl + totalRequired;
-                            const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;
+                            // 总买入价值统一为U后再计算保证金比例，避免人民币计价订单直接以人民币数额混入U分母。
+                            const totalBuyValue = orders.reduce((sum: number, o: any) => {
+                              const buyValue = Number(o.buyValue ?? 0);
+                              const buyValueCurrency = String(o.buyValueCurrency || 'USDT').trim().toUpperCase();
+                              return sum + (['CNY', 'RMB', '人民币'].includes(buyValueCurrency) ? buyValue / cnyRate : buyValue);
+                            }, 0);
                             const marginRatio = totalBuyValue > 0 ? (diff / totalBuyValue) * 100 : null;
                             const diffColor = diff < 0 ? '#16A34A' : '#DC2626';
                             const ratioColor = marginRatio === null ? '#9CA3AF' : (marginRatio < 0 ? '#16A34A' : '#DC2626');
@@ -1971,10 +1979,12 @@ export function FunderOrderCard({
                                     const oPrincipal = Number(o.principal ?? 0);
                                     const oCoin = (o.coin || '').toUpperCase();
                                     const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
-                                    // CNY 订单：金额单位是人民币，除以汇率换算成 U
+                                    // 标的为CNY仅影响市值；计息基数和待结利息必须按各自币种换算为U。
                                     const isCNY = oCoin === 'CNY';
+                                    const oInterestBaseCurrency = String(o.interestBaseCurrency || 'USDT').trim().toUpperCase();
+                                    const oInterestBaseIsCNY = ['CNY', 'RMB', '人民币'].includes(oInterestBaseCurrency);
                                     const oPendingInterestRaw = Number(o.pendingInterest ?? 0);
-                                    const oPendingInterest = isCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
+                                    const oPendingInterest = oInterestBaseIsCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
                                     // 期权订单且 quantity=0：无法计算浮动盈亏
                                     // 缺口 = 待结利息 + （借出开关开时加计息基数）
                                     const isOptionNoQty = o.assetType === 'crypto_option' || (oQty === 0 && o.principalLentOut);
@@ -1996,7 +2006,7 @@ export function FunderOrderCard({
                                       );
                                     }
                                     const oCurrentValue = isCNY ? oQty / cnyRate : (oLiveP !== null ? oLiveP * oQty : null);
-                                    const oPrincipalU = isCNY ? oPrincipal / cnyRate : oPrincipal;
+                                    const oPrincipalU = oInterestBaseIsCNY ? oPrincipal / cnyRate : oPrincipal;
                                     // 与订单详情保持一致：数字币浮盈 = 实时市值 − 买入价 × 数量，不能用计息基数代替买入成本。
                                     // 股票沿用详情页的计息基数成本口径；历史订单缺少买入值时安全回退计息基数。
                                     const oBuyValue = Number(o.buyValue ?? 0);
@@ -2034,12 +2044,14 @@ export function FunderOrderCard({
                                     const oPrincipal = Number(o.principal ?? 0);
                                     const oCoin = (o.coin || '').toUpperCase();
                                     const isCNYt = oCoin === 'CNY';
-                                    const oPendingInterestT = isCNYt ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
+                                    const oInterestBaseCurrencyT = String(o.interestBaseCurrency || 'USDT').trim().toUpperCase();
+                                    const oInterestBaseIsCNYT = ['CNY', 'RMB', '人民币'].includes(oInterestBaseCurrencyT);
+                                    const oPendingInterestT = oInterestBaseIsCNYT ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
                                     // 期权订单且 quantity=0：缺口 = 待结利息 + （借出开关开时加计息基数）
                                     const isOptionNoQtyT = o.assetType === 'crypto_option' || (oQty === 0 && o.principalLentOut);
                                     if (isOptionNoQtyT) {
                                       const oPrincipalLentOutT2 = o.principalLentOut === true || o.principalLentOut === 1;
-                                      const oPrincipalUT2 = isCNYt ? oPrincipal / cnyRate : oPrincipal;
+                                      const oPrincipalUT2 = oInterestBaseIsCNYT ? oPrincipal / cnyRate : oPrincipal;
                                       const oPrincipalDeductT2 = oPrincipalLentOutT2 ? oPrincipalUT2 : 0;
                                       totalGapLive += -(oPendingInterestT + oPrincipalDeductT2);
                                       continue;
@@ -2047,7 +2059,7 @@ export function FunderOrderCard({
                                     const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
                                     if (!isCNYt && oLiveP === null) { allKnown = false; continue; }
                                     const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
-                                    const oPrincipalUT = isCNYt ? oPrincipal / cnyRate : oPrincipal;
+                                    const oPrincipalUT = oInterestBaseIsCNYT ? oPrincipal / cnyRate : oPrincipal;
                                     // 合计必须与逐单行和订单详情共用同一成本口径。
                                     const oBuyValueT = Number(o.buyValue ?? 0);
                                     const oBuyValueCurrencyT = String(o.buyValueCurrency || 'USDT').trim().toUpperCase();
