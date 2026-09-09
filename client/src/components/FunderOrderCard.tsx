@@ -1916,7 +1916,13 @@ export function FunderOrderCard({
                               const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
                               if (!isCNYr && oLiveP === null) { allHaveGap = false; continue; }
                               const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
-                              const oFloatPnlR = oCurrentValueR - oPrincipalUR;
+                              // 与订单详情一致：数字币浮盈以买入价 × 数量为成本；计息基数只用于利息，不能替代持仓成本。
+                              // 股票订单继续沿用其详情页既有的计息基数成本口径；缺少历史买入值的旧单安全回退计息基数。
+                              const oBuyValueR = Number(o.buyValue ?? 0);
+                              const oBuyValueCurrencyR = String(o.buyValueCurrency || 'USDT').trim().toUpperCase();
+                              const oBuyValueUR = ['CNY', 'RMB', '人民币'].includes(oBuyValueCurrencyR) ? oBuyValueR / cnyRate : oBuyValueR;
+                              const oFloatBaseR = o.assetType === 'stock' ? oPrincipalUR : (oBuyValueUR > 0 ? oBuyValueUR : oPrincipalUR);
+                              const oFloatPnlR = oCurrentValueR - oFloatBaseR;
                               totalRequired += oFloatPnlR - oPendingInterestR - oPrincipalDeductR;
                             }
                             const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
@@ -1991,7 +1997,13 @@ export function FunderOrderCard({
                                     }
                                     const oCurrentValue = isCNY ? oQty / cnyRate : (oLiveP !== null ? oLiveP * oQty : null);
                                     const oPrincipalU = isCNY ? oPrincipal / cnyRate : oPrincipal;
-                                    const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipalU : null;
+                                    // 与订单详情保持一致：数字币浮盈 = 实时市值 − 买入价 × 数量，不能用计息基数代替买入成本。
+                                    // 股票沿用详情页的计息基数成本口径；历史订单缺少买入值时安全回退计息基数。
+                                    const oBuyValue = Number(o.buyValue ?? 0);
+                                    const oBuyValueCurrency = String(o.buyValueCurrency || 'USDT').trim().toUpperCase();
+                                    const oBuyValueU = ['CNY', 'RMB', '人民币'].includes(oBuyValueCurrency) ? oBuyValue / cnyRate : oBuyValue;
+                                    const oFloatBaseU = o.assetType === 'stock' ? oPrincipalU : (oBuyValueU > 0 ? oBuyValueU : oPrincipalU);
+                                    const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oFloatBaseU : null;
                                     // 借出本金：若勾选了「借出本金」，需从缺口中扣除本金（CNY 订单折算成 U）
                                     const oPrincipalLentOut = o.principalLentOut === true || o.principalLentOut === 1;
                                     const oPrincipalDeduct = oPrincipalLentOut ? oPrincipalU : 0;
@@ -2036,7 +2048,12 @@ export function FunderOrderCard({
                                     if (!isCNYt && oLiveP === null) { allKnown = false; continue; }
                                     const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
                                     const oPrincipalUT = isCNYt ? oPrincipal / cnyRate : oPrincipal;
-                                    const oFloatPnlT = oCurrentValueT - oPrincipalUT;
+                                    // 合计必须与逐单行和订单详情共用同一成本口径。
+                                    const oBuyValueT = Number(o.buyValue ?? 0);
+                                    const oBuyValueCurrencyT = String(o.buyValueCurrency || 'USDT').trim().toUpperCase();
+                                    const oBuyValueUT = ['CNY', 'RMB', '人民币'].includes(oBuyValueCurrencyT) ? oBuyValueT / cnyRate : oBuyValueT;
+                                    const oFloatBaseUT = o.assetType === 'stock' ? oPrincipalUT : (oBuyValueUT > 0 ? oBuyValueUT : oPrincipalUT);
+                                    const oFloatPnlT = oCurrentValueT - oFloatBaseUT;
                                     const oPrincipalLentOutT = o.principalLentOut === true || o.principalLentOut === 1;
                                     const oPrincipalDeductT = oPrincipalLentOutT ? oPrincipalUT : 0;
                                     totalGapLive += oFloatPnlT - oPendingInterestT - oPrincipalDeductT;

@@ -17195,6 +17195,8 @@ ${klinesSummary}
               quantity,
               buyPrice,
               buyValue,
+              // buyValue = buyPrice × quantity，保留原始计价币种，供共享担保前端换算为 U 后与订单详情统一比较。
+              buyValueCurrency: o.amount_currency || (o.asset_type === 'stock' ? 'CNY' : 'USDT'),
               principal,
               currentPrice,
               currentPriceUpdatedAt: quoteHealth?.lastSuccessAt || null,
