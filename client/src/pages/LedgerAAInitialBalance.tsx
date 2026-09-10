@@ -385,14 +385,20 @@ export default function LedgerAAInitialBalance() {
 
   const updateMarginEntry = (userId: number, tagName: string, index: number, patch: Partial<MarginEntry>) => {
     const current = editState[userId]?.[tagName] ?? defaultEntry();
-    const nextMargins = current.margins.length > 0 ? [...current.margins] : [createMarginEntry()];
+    // 空押金的首行也使用稳定ID，首次输入时不会因 key 变化重建 input 并丢失手机焦点。
+    const nextMargins = current.margins.length > 0
+      ? [...current.margins]
+      : [createMarginEntry({ id: `draft_margin_${userId}_${tagName}`, createdAt: new Date().toISOString() })];
     nextMargins[index] = { ...nextMargins[index], ...patch };
     updateEntry(userId, tagName, { margins: nextMargins });
   };
 
   const addMarginEntry = (userId: number, tagName: string) => {
     const current = editState[userId]?.[tagName] ?? defaultEntry();
-    updateEntry(userId, tagName, { margins: [...current.margins, createMarginEntry()] });
+    const currentMargins = current.margins.length > 0
+      ? current.margins
+      : [createMarginEntry({ id: `draft_margin_${userId}_${tagName}`, createdAt: new Date().toISOString() })];
+    updateEntry(userId, tagName, { margins: [...currentMargins, createMarginEntry()] });
   };
 
   const removeMarginEntry = (userId: number, tagName: string, index: number) => {
@@ -407,7 +413,9 @@ export default function LedgerAAInitialBalance() {
     accentColor: string;
     compact?: boolean;
   }) => {
-    const rows = entry.margins.length > 0 ? entry.margins : [createMarginEntry()];
+    const rows = entry.margins.length > 0
+      ? entry.margins
+      : [createMarginEntry({ id: `draft_margin_${userId}_${tagName}`, createdAt: '' })];
     const summary = summarizeMargins(entry.margins);
     const formatRecordedAt = (value: string) => {
       if (!value) return '历史记录';
@@ -1935,7 +1943,7 @@ export default function LedgerAAInitialBalance() {
 
                           {/* 行5：押金（可新增多笔，不同币种独立记录） */}
                           <div className="space-y-1.5">
-                            <MarginEntriesEditor userId={userId} tagName={cat.name} entry={entry} accentColor="#D32F2F" />
+                            {MarginEntriesEditor({ userId, tagName: cat.name, entry, accentColor: "#D32F2F" })}
                           </div>
                           </div>}
                         </div>
@@ -2247,7 +2255,7 @@ export default function LedgerAAInitialBalance() {
                   );
                 })()}
                 {/* 押金：与用户展开区使用同一套多笔多币种编辑器 */}
-                <MarginEntriesEditor userId={userId} tagName={tagName} entry={entry} accentColor={catColor} compact />
+                {MarginEntriesEditor({ userId, tagName, entry, accentColor: catColor, compact: true })}
               </div>
               {/* 弹窗底部保存按鈕 */}
               <div className="px-4 py-3 flex-shrink-0" style={{ borderTop: '1px solid #F0E8E0' }}>
