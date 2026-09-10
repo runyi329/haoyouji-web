@@ -4334,6 +4334,8 @@ export default function LedgerDetailAA({
           : 100;
         const ratio = ratioVal / 100;
         const currentCapital = initialBalance + capitalNet;
+        // 参考押金 = 当前本金 × 当前占比 × 20%，仅作为展示参考，不写入任何押金记录。
+        const referenceDeposit = currentCapital * ratio * 0.2;
         // 盈亏 = (当前本金 - 最新余额 - 累计提现) × ratio
         const rawPnl = currentCapital - latestBalance - totalWithdraw;
         const totalPnl = rawPnl * ratio;
@@ -4398,6 +4400,16 @@ export default function LedgerDetailAA({
                   <span className={`text-sm font-semibold ${stats.returnRate >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {stats.returnRate >= 0 ? '+' : ''}{stats.returnRate.toFixed(2)}%
                   </span>
+                </div>
+                <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5">
+                  <div className="flex items-center justify-between text-xs text-blue-700">
+                    <span className="font-semibold">参考押金</span>
+                    <span>当前本金 × 占比 × 20%</span>
+                  </div>
+                  <div className="mt-1 flex items-baseline justify-between border-t border-blue-100 pt-1.5">
+                    <span className="text-xs text-blue-600">建议押金达到</span>
+                    <span className="font-mono text-base font-bold text-blue-700">{fmtAbs(referenceDeposit)}</span>
+                  </div>
                 </div>
               </div>
             </div>
