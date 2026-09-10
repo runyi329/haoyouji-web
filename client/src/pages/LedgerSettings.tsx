@@ -452,14 +452,19 @@ export default function LedgerSettings() {
          onClick={() => setLocation(`/ledger/${ledgerId}/deposit-manage`)}
        />
        <SettingItem
+         label="利息管理"
+         showIcon
+         onClick={() => setLocation(`/ledger/${ledgerId}/interest-manage`)}
+       />
+       <SettingItem
          label="分类管理"
          showIcon
          onClick={() => setLocation(`/ledger/${ledgerId}/categories`)}
        />
        <SettingItem
-         label="利息管理"
+         label="分红管理"
          showIcon
-         onClick={() => setLocation(`/ledger/${ledgerId}/interest-manage`)}
+         onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage`)}
        />
      </>
    );
@@ -529,7 +534,7 @@ export default function LedgerSettings() {
     );
   })()}
  {/* (AA)分红管理：owner/admin可进入 */}
- {ledgerData?.type === 'custom_aa' && (() => {
+ {ledgerData?.type === 'custom_aa' && ledgerId !== 37 && (() => {
    const myMemberRole = members?.find((m: any) => m.userId === user?.id)?.role;
    const isOwnerOrAdmin = myMemberRole === 'owner' || myMemberRole === 'admin'
      || ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin';
