@@ -204,10 +204,11 @@ export default function InterestManagePage() {
         const dailyInterest = (!isManual && !pauseDate && principal > 0 && annualRate > 0) ? principal * annualRate / 100 / 365 : 0;
         return { ...p, principal, annualRate, days, interest, dailyInterest, isManual };
       });
+      const segmentCount = periodDetails.filter(p => !p.isManual).length;
       const autoInterest = periodDetails.filter(p => !p.isManual).reduce((sum, p) => sum + p.interest, 0);
       const manualTotal = periodDetails.filter(p => p.isManual).reduce((sum, p) => sum + p.interest, 0);
       const totalInterest = autoInterest + manualTotal;
-      return { tagName, periods: periodDetails, tagLogs, manualAdj: manualTotal, autoInterest, totalInterest, pauseDate };
+      return { tagName, periods: periodDetails, segmentCount, tagLogs, manualAdj: manualTotal, autoInterest, totalInterest, pauseDate };
     });
     // 暂停的标签排到最后
     return [
@@ -286,7 +287,7 @@ export default function InterestManagePage() {
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${tag.pauseDate ? 'bg-blue-300' : 'bg-blue-500'}`} />
                   <span className="text-sm font-bold text-gray-900">{tag.tagName}</span>
-                  <span className="text-xs text-gray-400">{tag.periods.length} 段</span>
+                  <span className="text-xs text-gray-400">{tag.segmentCount} 段</span>
                   {tag.pauseDate && (
                     <span className="text-xs text-blue-400 bg-blue-100 px-1.5 py-0.5 rounded-full">
                       已暂停 {tag.pauseDate.slice(5)}
