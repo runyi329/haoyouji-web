@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-09-10
+// 生成时间：2026-09-11
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9122,5 +9122,29 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-09-09": [
     { date: "2026-09-08T20:01:10Z", type: "fix", cleanMessage: "display funder interest base currency" },
     { date: "2026-09-08T20:21:13Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+  ],
+  "2026-09-10": [
+    { date: "2026-09-09T20:04:50Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-09-09T23:31:20Z", type: "fix", cleanMessage: "align shared collateral pnl basis" },
+    { date: "2026-09-09T23:59:46Z", type: "fix", cleanMessage: "normalize shared collateral currencies" },
+    { date: "2026-09-10T04:34:49Z", type: "fix", cleanMessage: "show zero margin note count" },
+    { date: "2026-09-10T05:06:04Z", type: "feat", cleanMessage: "collapse paused ledger tags" },
+    { date: "2026-09-10T05:16:40Z", type: "style", cleanMessage: "rename ledger margin column" },
+    { date: "2026-09-10T05:27:27Z", type: "fix", cleanMessage: "verify deploy target revision" },
+    { date: "2026-09-10T06:16:43Z", type: "feat", cleanMessage: "support multi-currency ledger margins" },
+    { date: "2026-09-10T06:26:32Z", type: "fix", cleanMessage: "default ledger margins to zero" },
+    { date: "2026-09-10T07:26:29Z", type: "feat", cleanMessage: "add ledger deposit detail notes" },
+    { date: "2026-09-10T07:39:27Z", type: "fix", cleanMessage: "keep ledger deposit input focused" },
+    { date: "2026-09-10T07:55:43Z", type: "fix", cleanMessage: "retain ledger deposit record time" },
+    { date: "2026-09-10T12:31:51Z", type: "feat", cleanMessage: "show ledger reference deposit" },
+    { date: "2026-09-10T12:41:15Z", type: "fix", cleanMessage: "show reference deposit in segment modal" },
+    { date: "2026-09-10T12:53:21Z", type: "feat", cleanMessage: "show ledger deposit gap summary" },
+    { date: "2026-09-10T12:59:05Z", type: "fix", cleanMessage: "initialize ledger deposit summary after capital data" },
+    { date: "2026-09-10T14:26:02Z", type: "fix", cleanMessage: "exclude manual interest from segment count" },
+    { date: "2026-09-10T14:34:35Z", type: "other", cleanMessage: "ui: move ledger interest management entry" },
+    { date: "2026-09-10T14:42:38Z", type: "fix", cleanMessage: "move ledger dividend management entry" },
+  ],
+  "2026-09-11": [
+    { date: "2026-09-10T17:00:43Z", type: "feat", cleanMessage: "refine ledger 37 interest management" },
   ],
 };
