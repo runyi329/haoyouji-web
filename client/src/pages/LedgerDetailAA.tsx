@@ -598,6 +598,11 @@ export default function LedgerDetailAA({
   }, []);
 
   const [overviewTab, setOverviewTab] = useState<'overview' | 'calendar' | 'chart'>('overview');
+  // 概览页默认将当前暂停中的标签折叠为一条汇总；切换离开概览后回到默认折叠状态。
+  const [showPausedTagDetails, setShowPausedTagDetails] = useState(false);
+  useEffect(() => {
+    if (overviewTab !== 'overview') setShowPausedTagDetails(false);
+  }, [overviewTab]);
   const overviewHeaderInnerRef = useRef<HTMLDivElement>(null); // 表头行内层div，用translateX同步横向位置
   const overviewBodyScrollRef = useRef<HTMLDivElement>(null); // 数据行横向滚动容器
   const [overviewSort, setOverviewSort] = useState<{ col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend'; dir: 'asc' | 'desc' } | null>(null);
@@ -2278,7 +2283,11 @@ export default function LedgerDetailAA({
               return (
                 <button
                   key={tab}
-                  onClick={() => setOverviewTab(tab)}
+                  onClick={() => {
+                    setOverviewTab(tab);
+                    // 概览标签再次被点选时恢复暂停人员的默认折叠状态。
+                    if (tab === 'overview') setShowPausedTagDetails(false);
+                  }}
                   className="flex-1 py-2.5 text-sm font-medium transition-all"
                   style={{
                     color: active ? '#D32F2F' : '#9E9E9E',
@@ -2441,6 +2450,18 @@ export default function LedgerDetailAA({
               return <span style={{ color: '#1565C0', fontSize: 7, marginLeft: 1 }}>{overviewSort.dir === 'desc' ? '▼' : '▲'}</span>;
             };
             const sortHeaderCls = cellCls + ' cursor-pointer select-none';
+            // 暂停标签默认合并为一条汇总行；展开后恢复逐标签行，汇总行随即隐藏。
+            const pausedTagData = sortedTagData.filter((td) => td.isPaused);
+            const showPausedSummary = !showPausedTagDetails && pausedTagData.length > 0;
+            const displayedTagData = showPausedSummary
+              ? sortedTagData.filter((td) => !td.isPaused)
+              : sortedTagData;
+            const pausedSummaryTodayItems = pausedTagData.filter((td) => td.todayPnl !== null);
+            const pausedSummaryHasToday = pausedSummaryTodayItems.length > 0;
+            const pausedSummaryTodayPnl = pausedSummaryTodayItems.reduce((sum, td) => sum + (td.todayPnl ?? 0), 0);
+            const pausedSummaryPnl = pausedTagData.reduce((sum, td) => sum + td.latestPnl, 0);
+            const pausedSummaryMargin = pausedTagData.reduce((sum, td) => sum + td.tag.marginCny, 0);
+            const pausedSummaryDividend = pausedTagData.reduce((sum, td) => sum + td.divAmt, 0);
             return (
               <>
               {/* 左右分栏布局：左侧固定104px名称列 + 右侧横向滚动区 */}
@@ -2452,8 +2473,8 @@ export default function LedgerDetailAA({
                     <span style={{ color: '#9E9E9E', fontSize: 12 }}>名称</span>
                   </div>
                   {/* 数据行名称格 */}
-                  {sortedTagData.map(({ tag, isLast }) => {
-                    const rowBorder2 = isLast ? 'none' : '1px solid #F9F9F9';
+                  {displayedTagData.map(({ tag }, displayedIndex) => {
+                    const rowBorder2 = displayedIndex === displayedTagData.length - 1 && !showPausedSummary ? 'none' : '1px solid #F9F9F9';
                     const tagAlias2 = (initialBalancesData?.balances as any)?.[`${tag.name}__alias`] ?? '';
                     const displayName2 = tagAlias2 || tag.name;
                     return (
@@ -2480,6 +2501,18 @@ export default function LedgerDetailAA({
                       </div>
                     );
                   })}
+                  {showPausedSummary && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPausedTagDetails(true)}
+                      className="flex items-center justify-start gap-1 text-left"
+                      style={{ border: 'none', borderBottom: '1px solid #F9F9F9', background: '#F3F7FF', flex: '0 0 auto', height: 36, paddingLeft: 6, paddingRight: 4, color: '#1565C0', cursor: 'pointer' }}
+                      aria-label={`展开 ${pausedTagData.length} 位已暂停人员的详情`}
+                    >
+                      <ChevronRight size={13} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>已暂停 {pausedTagData.length} 人</span>
+                    </button>
+                  )}
                   {/* 合计名称格 */}
                   {visibleTags.length > 0 && (
                     <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px', flex: '0 0 auto', height: 36 }}>
@@ -2507,7 +2540,7 @@ export default function LedgerDetailAA({
                   <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                   <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
                   {/* 数据行右侧各列 */}
-                {sortedTagData.map(({ tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, annualized, divAmt, isLast, isPaused, firstDate, endDate }) => {
+                {displayedTagData.map(({ tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, annualized, divAmt, isPaused, firstDate, endDate }, displayedIndex) => {
                       // 判断是否需要灰色：北京时间交易日 15:00后且最新数据不是今天
                       const _nowBJ = new Date(Date.now() + 8 * 3600 * 1000);
                       const _todayBJ = _nowBJ.toISOString().slice(0, 10);
@@ -2519,7 +2552,7 @@ export default function LedgerDetailAA({
                       const _isTodayNonTradeDay = false; // 已废弃交易日判断
                       const _isTagUpdatedToday = latestDate === _latestDataDate;
                       const _showTodayPnl = todayPnl !== null;
-                  const rowBorder = isLast ? 'none' : '1px solid #F9F9F9';
+                  const rowBorder = displayedIndex === displayedTagData.length - 1 && !showPausedSummary ? 'none' : '1px solid #F9F9F9';
                   return (
                     <>
                       {/* 今日变动：已更新彩色，未更新灰色显示数字；可点击展示计算过程 */}
@@ -2806,6 +2839,79 @@ export default function LedgerDetailAA({
                     </>
                   );
                 })}
+                  {showPausedSummary && (() => {
+                    const pausedSummaryBorder = '1px solid #DCE8FA';
+                    const pausedSummaryBackground = '#F3F7FF';
+                    const todayColor = !pausedSummaryHasToday || pausedSummaryTodayPnl === 0
+                      ? '#BDBDBD'
+                      : pausedSummaryTodayPnl > 0 ? '#D32F2F' : '#388E3C';
+                    const pnlColor = pausedSummaryPnl === 0 ? '#BDBDBD' : pausedSummaryPnl > 0 ? '#D32F2F' : '#388E3C';
+                    const formatNumber = (value: number) => Math.abs(value).toLocaleString('zh-CN', { maximumFractionDigits: 0 });
+                    return (
+                      <>
+                        {/* 已暂停人员折叠汇总：展开后整行与名称汇总一并隐藏，恢复逐人详情。 */}
+                        <button
+                          type="button"
+                          onClick={() => setShowPausedTagDetails(true)}
+                          className="px-1 text-center flex items-center justify-center"
+                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: todayColor, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                          aria-label={`展开 ${pausedTagData.length} 位已暂停人员的详情`}
+                        >
+                          {pausedSummaryHasToday && pausedSummaryTodayPnl !== 0 ? `${pausedSummaryTodayPnl < 0 ? '-' : ''}${formatNumber(pausedSummaryTodayPnl)}` : '--'}
+                        </button>
+                        <div style={{ backgroundColor: '#DCE8FA', width: 1, borderBottom: pausedSummaryBorder }} />
+                        <button
+                          type="button"
+                          onClick={() => setShowPausedTagDetails(true)}
+                          className="px-1 text-center flex items-center justify-center"
+                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: pnlColor, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                        >
+                          {pausedSummaryPnl !== 0 ? `${pausedSummaryPnl < 0 ? '-' : ''}${formatNumber(pausedSummaryPnl)}` : '--'}
+                        </button>
+                        <div style={{ backgroundColor: '#DCE8FA', width: 1, borderBottom: pausedSummaryBorder }} />
+                        <button
+                          type="button"
+                          onClick={() => setShowPausedTagDetails(true)}
+                          className="px-1 text-center flex items-center justify-center"
+                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: '#1565C0', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}
+                        >
+                          暂停中
+                        </button>
+                        <div style={{ backgroundColor: '#DCE8FA', width: 1, borderBottom: pausedSummaryBorder }} />
+                        <button
+                          type="button"
+                          onClick={() => setShowPausedTagDetails(true)}
+                          className="px-1 text-center flex items-center justify-center"
+                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: '#424242', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                        >
+                          {formatNumber(pausedSummaryMargin)}
+                        </button>
+                        <div style={{ backgroundColor: '#DCE8FA', width: 1, borderBottom: pausedSummaryBorder }} />
+                        <button
+                          type="button"
+                          onClick={() => setShowPausedTagDetails(true)}
+                          className="px-1 text-center flex items-center justify-center"
+                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: '#BDBDBD', cursor: 'pointer', fontSize: 13 }}
+                        >--</button>
+                        <div style={{ backgroundColor: '#DCE8FA', width: 1, borderBottom: pausedSummaryBorder }} />
+                        <button
+                          type="button"
+                          onClick={() => setShowPausedTagDetails(true)}
+                          className="px-1 text-center flex items-center justify-center"
+                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: pausedSummaryDividend > 0 ? '#D32F2F' : '#BDBDBD', cursor: 'pointer', fontSize: 13, fontWeight: pausedSummaryDividend > 0 ? 600 : 400 }}
+                        >
+                          {pausedSummaryDividend > 0 ? formatNumber(pausedSummaryDividend) : '--'}
+                        </button>
+                        <div style={{ backgroundColor: '#DCE8FA', width: 1, borderBottom: pausedSummaryBorder }} />
+                        <button
+                          type="button"
+                          onClick={() => setShowPausedTagDetails(true)}
+                          className="px-1 text-center flex items-center justify-center"
+                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: '#BDBDBD', cursor: 'pointer', fontSize: 13 }}
+                        >--</button>
+                      </>
+                    );
+                  })()}
                   {/* 汇总行右侧各列 */}
                 {visibleTags.length > 0 && (
                   <>
