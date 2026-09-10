@@ -481,6 +481,23 @@ export default function LedgerDetailAA({
     const knownNoteIds = new Set((firstEntry.notes ?? []).map((note) => note.id));
     return [{ ...firstEntry, notes: [...(firstEntry.notes ?? []), ...legacyNotes.filter((note) => !knownNoteIds.has(note.id))] }, ...entries.slice(1)];
   }, [marginNoteTag, initialBalancesData, aaCryptoPrices, marginNotesData]);
+  // 押金明细弹窗顶部汇总：参考押金 = 当前本金 × 当前占比 × 20%；实际押金仅加总有可靠人民币报价的逐笔明细。
+  const currentMarginDetailSummary = useMemo(() => {
+    if (!marginNoteTag || !initialBalancesData?.balances) return null;
+    const balances = initialBalancesData.balances as Record<string, any>;
+    const currentPrincipal = Number(balances[marginNoteTag] ?? 0) + (capitalByTag[marginNoteTag] || 0);
+    const ratioPercent = Number(balances[`${marginNoteTag}__ratio`] ?? 100);
+    const referenceDeposit = currentPrincipal * (ratioPercent / 100) * 0.2;
+    const actualDeposit = currentMarginDetailEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0);
+    return {
+      currentPrincipal,
+      ratioPercent,
+      referenceDeposit,
+      actualDeposit,
+      shortfall: referenceDeposit - actualDeposit,
+      hasUnpricedEntry: currentMarginDetailEntries.some((entry) => entry.cnyValue === null),
+    };
+  }, [marginNoteTag, initialBalancesData, capitalByTag, currentMarginDetailEntries]);
   // 各标签备注数量（用于在分红/押金旁显示条数）
   const { data: dividendNoteCountsData } = trpc.getAdminNoteCounts.useQuery(
     { ledgerId, type: 'dividend' as const, viewAsUserId: viewAsUserId ?? undefined },
@@ -4667,6 +4684,33 @@ export default function LedgerDetailAA({
               <button onClick={() => setMarginNoteTag(null)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
             </div>
             <div className="px-4 py-4 overflow-y-auto space-y-3" style={{ maxHeight: '61vh' }}>
+              {currentMarginDetailSummary && (() => {
+                const summary = currentMarginDetailSummary;
+                const formatCny = (value: number) => `¥${Math.abs(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const shortfallText = summary.shortfall > 0
+                  ? formatCny(summary.shortfall)
+                  : summary.shortfall < 0
+                    ? `已超出 ${formatCny(summary.shortfall)}`
+                    : '¥0.00（已达标）';
+                return (
+                  <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ backgroundColor: '#F4F8FF', border: '1px solid #D7E6FF' }}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold" style={{ color: '#1565C0' }}>参考押金</span>
+                      <span className="text-sm font-bold font-mono" style={{ color: '#1565C0' }}>{formatCny(summary.referenceDeposit)}</span>
+                    </div>
+                    <div className="text-[11px]" style={{ color: '#78909C' }}>当前本金 {formatCny(summary.currentPrincipal)} × 占比 {summary.ratioPercent.toFixed(2)}% × 20%</div>
+                    <div className="flex items-center justify-between" style={{ borderTop: '1px solid #D7E6FF', paddingTop: 7 }}>
+                      <span className="text-xs font-semibold" style={{ color: '#424242' }}>当前实际押金</span>
+                      <span className="text-sm font-bold font-mono" style={{ color: '#424242' }}>{formatCny(summary.actualDeposit)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold" style={{ color: summary.shortfall > 0 ? '#D32F2F' : '#388E3C' }}>押金缺口</span>
+                      <span className="text-sm font-bold font-mono" style={{ color: summary.shortfall > 0 ? '#D32F2F' : summary.shortfall < 0 ? '#388E3C' : '#757575' }}>{shortfallText}</span>
+                    </div>
+                    {summary.hasUnpricedEntry && <div className="text-[11px]" style={{ color: '#B26A00' }}>无可靠报价的外币明细未计入当前实际押金</div>}
+                  </div>
+                );
+              })()}
               {currentMarginDetailEntries.length === 0 ? (
                 <div className="text-center py-6" style={{ color: '#BDBDBD' }}>暂无押金记录</div>
               ) : (
