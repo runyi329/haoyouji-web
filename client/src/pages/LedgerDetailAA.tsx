@@ -481,23 +481,6 @@ export default function LedgerDetailAA({
     const knownNoteIds = new Set((firstEntry.notes ?? []).map((note) => note.id));
     return [{ ...firstEntry, notes: [...(firstEntry.notes ?? []), ...legacyNotes.filter((note) => !knownNoteIds.has(note.id))] }, ...entries.slice(1)];
   }, [marginNoteTag, initialBalancesData, aaCryptoPrices, marginNotesData]);
-  // 押金明细弹窗顶部汇总：参考押金 = 当前本金 × 当前占比 × 20%；实际押金仅加总有可靠人民币报价的逐笔明细。
-  const currentMarginDetailSummary = useMemo(() => {
-    if (!marginNoteTag || !initialBalancesData?.balances) return null;
-    const balances = initialBalancesData.balances as Record<string, any>;
-    const currentPrincipal = Number(balances[marginNoteTag] ?? 0) + (capitalByTag[marginNoteTag] || 0);
-    const ratioPercent = Number(balances[`${marginNoteTag}__ratio`] ?? 100);
-    const referenceDeposit = currentPrincipal * (ratioPercent / 100) * 0.2;
-    const actualDeposit = currentMarginDetailEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0);
-    return {
-      currentPrincipal,
-      ratioPercent,
-      referenceDeposit,
-      actualDeposit,
-      shortfall: referenceDeposit - actualDeposit,
-      hasUnpricedEntry: currentMarginDetailEntries.some((entry) => entry.cnyValue === null),
-    };
-  }, [marginNoteTag, initialBalancesData, capitalByTag, currentMarginDetailEntries]);
   // 各标签备注数量（用于在分红/押金旁显示条数）
   const { data: dividendNoteCountsData } = trpc.getAdminNoteCounts.useQuery(
     { ledgerId, type: 'dividend' as const, viewAsUserId: viewAsUserId ?? undefined },
@@ -754,6 +737,25 @@ export default function LedgerDetailAA({
     });
     return map;
   }, [transactionsData, categories]);
+
+  // 押金明细弹窗顶部汇总：参考押金 = 当前本金 × 当前占比 × 20%；实际押金仅加总有可靠人民币报价的逐笔明细。
+  // 必须定义在 capitalByTag 之后，避免页面首次渲染时访问未初始化的本金变动映射。
+  const currentMarginDetailSummary = useMemo(() => {
+    if (!marginNoteTag || !initialBalancesData?.balances) return null;
+    const balances = initialBalancesData.balances as Record<string, any>;
+    const currentPrincipal = Number(balances[marginNoteTag] ?? 0) + (capitalByTag[marginNoteTag] || 0);
+    const ratioPercent = Number(balances[`${marginNoteTag}__ratio`] ?? 100);
+    const referenceDeposit = currentPrincipal * (ratioPercent / 100) * 0.2;
+    const actualDeposit = currentMarginDetailEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0);
+    return {
+      currentPrincipal,
+      ratioPercent,
+      referenceDeposit,
+      actualDeposit,
+      shortfall: referenceDeposit - actualDeposit,
+      hasUnpricedEntry: currentMarginDetailEntries.some((entry) => entry.cnyValue === null),
+    };
+  }, [marginNoteTag, initialBalancesData, capitalByTag, currentMarginDetailEntries]);
 
   // ─── 全部模式：计算每个标签的每日盈亏数据（用于多线图表） ─────────────────
   const allTagsChartData = useMemo(() => {
