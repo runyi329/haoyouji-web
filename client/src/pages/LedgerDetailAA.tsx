@@ -3654,6 +3654,8 @@ export default function LedgerDetailAA({
         const fmtDate = (d: string) => { const [, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
         const pnlColor = totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD';
         const currentCapital = initialBalance + capitalChange;
+        // 参考押金 = 当前本金 × 当前占比 × 20%，仅用于本段回报弹窗提示，不写入押金记录。
+        const referenceDeposit = currentCapital * (ratio / 100) * 0.2;
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setPnlDetailModal(null)}>
             <div className="bg-white rounded-2xl shadow-xl mx-4 w-full max-w-sm" style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
@@ -3754,12 +3756,18 @@ export default function LedgerDetailAA({
                       <div style={{ borderTop: '1px dashed #E0E0E0', margin: '6px 0' }} />
                       {/* 本段回报 */}
                       {idx === 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold" style={{ color: '#555' }}>本段回报</span>
-                          <span className="text-sm font-bold" style={{ color: seg.pnl > 0 ? '#D32F2F' : seg.pnl < 0 ? '#388E3C' : '#BDBDBD' }}>
-                            {seg.pnl > 0 ? '+' : seg.pnl < 0 ? '−' : ''}￥{Math.abs(seg.pnl).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold" style={{ color: '#555' }}>本段回报</span>
+                            <span className="text-sm font-bold" style={{ color: seg.pnl > 0 ? '#D32F2F' : seg.pnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                              {seg.pnl > 0 ? '+' : seg.pnl < 0 ? '−' : ''}￥{Math.abs(seg.pnl).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div className="mt-1.5 flex items-center justify-between" style={{ borderTop: '1px solid #E0E0E0', paddingTop: 5 }}>
+                            <span className="text-xs font-semibold" style={{ color: '#1565C0' }}>参考押金 <span className="font-normal" style={{ color: '#90A4AE' }}>当前本金 × 占比 × 20%</span></span>
+                            <span className="text-sm font-bold font-mono" style={{ color: '#1565C0' }}>￥{Math.abs(referenceDeposit).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          </div>
+                        </>
                       )}
                       {idx > 0 && (
                         <div className="flex items-center justify-between" style={{ paddingTop: 2 }}>
@@ -4334,8 +4342,6 @@ export default function LedgerDetailAA({
           : 100;
         const ratio = ratioVal / 100;
         const currentCapital = initialBalance + capitalNet;
-        // 参考押金 = 当前本金 × 当前占比 × 20%，仅作为展示参考，不写入任何押金记录。
-        const referenceDeposit = currentCapital * ratio * 0.2;
         // 盈亏 = (当前本金 - 最新余额 - 累计提现) × ratio
         const rawPnl = currentCapital - latestBalance - totalWithdraw;
         const totalPnl = rawPnl * ratio;
@@ -4400,16 +4406,6 @@ export default function LedgerDetailAA({
                   <span className={`text-sm font-semibold ${stats.returnRate >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {stats.returnRate >= 0 ? '+' : ''}{stats.returnRate.toFixed(2)}%
                   </span>
-                </div>
-                <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5">
-                  <div className="flex items-center justify-between text-xs text-blue-700">
-                    <span className="font-semibold">参考押金</span>
-                    <span>当前本金 × 占比 × 20%</span>
-                  </div>
-                  <div className="mt-1 flex items-baseline justify-between border-t border-blue-100 pt-1.5">
-                    <span className="text-xs text-blue-600">建议押金达到</span>
-                    <span className="font-mono text-base font-bold text-blue-700">{fmtAbs(referenceDeposit)}</span>
-                  </div>
                 </div>
               </div>
             </div>
