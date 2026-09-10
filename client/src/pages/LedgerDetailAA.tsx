@@ -2762,7 +2762,7 @@ export default function LedgerDetailAA({
                           <span
                             onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
                             style={{ fontSize: 13, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                          >0</span>
+                          >0{(marginNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{marginNoteCounts[tag.name]}</sup>)}</span>
                         )}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
