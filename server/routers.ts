@@ -474,6 +474,72 @@ function toBeijingTimeStr(val: any): string | null {
   return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
 }
 
+// 标签利息的操作日志独立保存，避免业务记录被删除或修改后失去追溯依据。
+let interestOperationLogTableReady: Promise<void> | null = null;
+
+async function ensureInterestOperationLogTable(dbConn: any): Promise<void> {
+  if (!interestOperationLogTableReady) {
+    interestOperationLogTableReady = (async () => {
+      await dbConn.execute(sql`
+        CREATE TABLE IF NOT EXISTS tag_interest_operation_logs (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+          ledger_id INT NOT NULL,
+          tag_name VARCHAR(255) NOT NULL,
+          action_type VARCHAR(40) NOT NULL,
+          period_id BIGINT NULL,
+          summary VARCHAR(500) NOT NULL,
+          before_data TEXT NULL,
+          after_data TEXT NULL,
+          created_by INT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          KEY idx_interest_operation_ledger_tag_time (ledger_id, tag_name, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+    })().catch((error) => {
+      interestOperationLogTableReady = null;
+      throw error;
+    });
+  }
+  await interestOperationLogTableReady;
+}
+
+type InterestOperationLogInput = {
+  ledgerId: number;
+  tagName: string;
+  actionType: 'period_added' | 'period_updated' | 'period_deleted' | 'manual_added' | 'manual_updated' | 'manual_deleted' | 'interest_paused' | 'interest_resumed';
+  summary: string;
+  createdBy: number;
+  periodId?: number | null;
+  beforeData?: Record<string, unknown> | null;
+  afterData?: Record<string, unknown> | null;
+};
+
+async function writeInterestOperationLog(dbConn: any, input: InterestOperationLogInput): Promise<void> {
+  await ensureInterestOperationLogTable(dbConn);
+  const beforeData = input.beforeData ? JSON.stringify(input.beforeData) : null;
+  const afterData = input.afterData ? JSON.stringify(input.afterData) : null;
+  await dbConn.execute(sql`
+    INSERT INTO tag_interest_operation_logs
+      (ledger_id, tag_name, action_type, period_id, summary, before_data, after_data, created_by)
+    VALUES (
+      ${input.ledgerId}, ${input.tagName}, ${input.actionType}, ${input.periodId ?? null},
+      ${input.summary}, ${beforeData}, ${afterData}, ${input.createdBy}
+    )
+  `);
+}
+
+function formatInterestAmount(amount: number): string {
+  return Math.abs(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function summarizeInterestPeriod(period: { periodLabel?: string | null; principal: number | string; annualRate?: number | string | null; startDate?: string | null; endDate?: string | null }): string {
+  const label = period.periodLabel?.trim() || '未命名分段';
+  const rate = period.annualRate ?? 0;
+  const endDate = period.endDate || '至今';
+  return `${label}：计息基数 ¥${formatInterestAmount(Number(period.principal) || 0)}，年化 ${rate}% ，${period.startDate || '未填写'} 至 ${endDate}`;
+}
+
 export const appRouter = router({
   workLog: router({
     getWorkLogs: publicProcedure
@@ -12437,6 +12503,14 @@ ${klinesSummary}
             sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, pause_date, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.pauseDate}, ${ctx.user.id})`
           );
         }
+        await writeInterestOperationLog(db, {
+          ledgerId: input.ledgerId,
+          tagName: input.tagName,
+          actionType: input.pauseDate ? 'interest_paused' : 'interest_resumed',
+          summary: input.pauseDate ? `暂停计息，自 ${input.pauseDate} 起生效` : '恢复计息',
+          createdBy: ctx.user.id,
+          afterData: { pauseDate: input.pauseDate },
+        });
         return { success: true };
       }),
 
@@ -12874,6 +12948,58 @@ ${klinesSummary}
         }
         return (rows as any)[0] as any[];
       }),
+
+    // 标签利息统一操作日志：包含分段、手工调息及暂停/恢复；旧手工调息记录作为历史记录兼容展示。
+    getTagInterestOperationLogs: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看利息操作日志' });
+        }
+        const db = await getLedgerDb();
+        await ensureInterestOperationLogTable(db);
+        const tagCondition = input.tagName ? sql` AND l.tag_name = ${input.tagName}` : sql``;
+        const operationRows = await db.execute(sql`
+          SELECT l.id, l.ledger_id, l.tag_name, l.action_type, l.period_id, l.summary,
+                 l.before_data, l.after_data, l.created_by, l.created_at,
+                 u.username, u.name AS user_nickname
+          FROM tag_interest_operation_logs l
+          LEFT JOIN users u ON u.id = l.created_by
+          WHERE l.ledger_id = ${input.ledgerId}${tagCondition}
+          ORDER BY l.created_at DESC, l.id DESC
+          LIMIT 300
+        `);
+        const legacyTagCondition = input.tagName ? sql` AND p.tag_name = ${input.tagName}` : sql``;
+        const legacyRows = await db.execute(sql`
+          SELECT p.id, p.ledger_id, p.tag_name, p.principal AS amount, p.manual_remark AS remark,
+                 p.created_by, p.created_at, u.username, u.name AS user_nickname
+          FROM tag_interest_periods p
+          LEFT JOIN users u ON u.id = p.created_by
+          WHERE p.ledger_id = ${input.ledgerId} AND p.is_manual = 1${legacyTagCondition}
+            AND NOT EXISTS (
+              SELECT 1 FROM tag_interest_operation_logs l
+              WHERE l.period_id = p.id AND l.ledger_id = p.ledger_id
+            )
+          ORDER BY p.created_at DESC, p.id DESC
+          LIMIT 300
+        `);
+        const operations = (operationRows as any)[0] as any[];
+        const legacyManualLogs = ((legacyRows as any)[0] as any[]).map((row: any) => ({
+          ...row,
+          action_type: 'legacy_manual',
+          summary: `历史手工调息 ¥${formatInterestAmount(Number(row.amount) || 0)}${row.remark ? `；备注：${row.remark}` : ''}`,
+          period_id: row.id,
+        }));
+        return [...operations, ...legacyManualLogs]
+          .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 300);
+      }),
+
     // 手工调息：新增（写入tag_interest_periods，is_manual=1）
     addTagInterestManualLog: protectedProcedure
       .input(z.object({
@@ -12890,10 +13016,21 @@ ${klinesSummary}
         }
         const db = await getLedgerDb();
         const today = new Date().toISOString().slice(0, 10);
-        await db.execute(
+        const insertResult = await db.execute(
           sql`INSERT INTO tag_interest_periods (ledger_id, tag_name, period_label, principal, annual_rate, start_date, end_date, is_manual, manual_remark, created_by)
-              VALUES (${input.ledgerId}, ${input.tagName}, ${input.amount > 0 ? '手工加息' : '手工减息'}, ${input.amount}, 0, ${today}, ${today}, 1, ${input.remark ?? null}, ${ctx.user.id})`
+              VALUES (${input.ledgerId}, ${input.tagName}, '手工调息', ${input.amount}, 0, ${today}, ${today}, 1, ${input.remark ?? null}, ${ctx.user.id})`
         );
+        const periodId = Number((insertResult as any)?.[0]?.insertId ?? (insertResult as any)?.insertId ?? 0) || null;
+        const actionLabel = '手工调息';
+        await writeInterestOperationLog(db, {
+          ledgerId: input.ledgerId,
+          tagName: input.tagName,
+          actionType: 'manual_added',
+          periodId,
+          summary: `${actionLabel} ¥${formatInterestAmount(input.amount)}${input.remark ? `；备注：${input.remark}` : ''}`,
+          createdBy: ctx.user.id,
+          afterData: { amount: input.amount, remark: input.remark ?? null, date: today },
+        });
         return { success: true };
       }),
     // 手工调息：删除（从tag_interest_periods删除is_manual=1的记录）
@@ -12909,9 +13046,24 @@ ${klinesSummary}
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
         const db = await getLedgerDb();
+        const existingRows = await db.execute(
+          sql`SELECT id, tag_name, principal, manual_remark, start_date, end_date FROM tag_interest_periods
+              WHERE id = ${input.logId} AND ledger_id = ${input.ledgerId} AND is_manual = 1 LIMIT 1`
+        );
+        const existingLog = (existingRows as any)?.[0]?.[0];
+        if (!existingLog) throw new TRPCError({ code: 'NOT_FOUND', message: '手工调息记录不存在或已删除' });
         await db.execute(
           sql`DELETE FROM tag_interest_periods WHERE id = ${input.logId} AND ledger_id = ${input.ledgerId} AND is_manual = 1`
         );
+        await writeInterestOperationLog(db, {
+          ledgerId: input.ledgerId,
+          tagName: existingLog.tag_name,
+          actionType: 'manual_deleted',
+          periodId: input.logId,
+          summary: `删除手工调息 ¥${formatInterestAmount(Number(existingLog.principal) || 0)}${existingLog.manual_remark ? `；备注：${existingLog.manual_remark}` : ''}`,
+          createdBy: ctx.user.id,
+          beforeData: existingLog,
+        });
         return { success: true };
       }),
         // 获取标签所有利息分段
@@ -12965,10 +13117,20 @@ ${klinesSummary}
         );
         const maxOrder = (maxRows as any)[0][0]?.maxOrder ?? 0;
         const sortOrder = input.sortOrder ?? (maxOrder + 1);
-        await db.execute(
+        const insertResult = await db.execute(
           sql`INSERT INTO tag_interest_periods (ledger_id, tag_name, period_label, principal, annual_rate, start_date, end_date, sort_order, created_by)
               VALUES (${input.ledgerId}, ${input.tagName}, ${input.periodLabel ?? null}, ${input.principal}, ${input.annualRate}, ${input.startDate}, ${input.endDate ?? null}, ${sortOrder}, ${ctx.user.id})`
         );
+        const periodId = Number((insertResult as any)?.[0]?.insertId ?? (insertResult as any)?.insertId ?? 0) || null;
+        await writeInterestOperationLog(db, {
+          ledgerId: input.ledgerId,
+          tagName: input.tagName,
+          actionType: 'period_added',
+          periodId,
+          summary: `新增分段：${summarizeInterestPeriod(input)}`,
+          createdBy: ctx.user.id,
+          afterData: { ...input, sortOrder },
+        });
         return { success: true };
       }),
 
@@ -12991,6 +13153,12 @@ ${klinesSummary}
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
         const db = await getLedgerDb();
+        const existingRows = await db.execute(
+          sql`SELECT id, tag_name, period_label, principal, annual_rate, start_date, end_date, is_manual, manual_remark, sort_order
+              FROM tag_interest_periods WHERE id = ${input.periodId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+        );
+        const existingPeriod = (existingRows as any)?.[0]?.[0];
+        if (!existingPeriod) throw new TRPCError({ code: 'NOT_FOUND', message: '利息分段不存在或已删除' });
         await db.execute(
           sql`UPDATE tag_interest_periods SET
               period_label = ${input.periodLabel ?? null},
@@ -13001,6 +13169,20 @@ ${klinesSummary}
               manual_remark = ${input.remark ?? null}
               WHERE id = ${input.periodId} AND ledger_id = ${input.ledgerId}`
         );
+        const isManual = Number(existingPeriod.is_manual) === 1;
+        const updatedData = { ...input, isManual };
+        await writeInterestOperationLog(db, {
+          ledgerId: input.ledgerId,
+          tagName: existingPeriod.tag_name,
+          actionType: isManual ? 'manual_updated' : 'period_updated',
+          periodId: input.periodId,
+          summary: isManual
+            ? `更新手工调息 ¥${formatInterestAmount(input.principal)}${input.remark ? `；备注：${input.remark}` : ''}`
+            : `更新分段：${summarizeInterestPeriod(input)}`,
+          createdBy: ctx.user.id,
+          beforeData: existingPeriod,
+          afterData: updatedData,
+        });
         return { success: true };
       }),
 
@@ -13017,9 +13199,33 @@ ${klinesSummary}
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
         const db = await getLedgerDb();
+        const existingRows = await db.execute(
+          sql`SELECT id, tag_name, period_label, principal, annual_rate, start_date, end_date, is_manual, manual_remark, sort_order
+              FROM tag_interest_periods WHERE id = ${input.periodId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+        );
+        const existingPeriod = (existingRows as any)?.[0]?.[0];
+        if (!existingPeriod) throw new TRPCError({ code: 'NOT_FOUND', message: '利息分段不存在或已删除' });
         await db.execute(
           sql`DELETE FROM tag_interest_periods WHERE id = ${input.periodId} AND ledger_id = ${input.ledgerId}`
         );
+        const isManual = Number(existingPeriod.is_manual) === 1;
+        await writeInterestOperationLog(db, {
+          ledgerId: input.ledgerId,
+          tagName: existingPeriod.tag_name,
+          actionType: isManual ? 'manual_deleted' : 'period_deleted',
+          periodId: input.periodId,
+          summary: isManual
+            ? `删除手工调息 ¥${formatInterestAmount(Number(existingPeriod.principal) || 0)}${existingPeriod.manual_remark ? `；备注：${existingPeriod.manual_remark}` : ''}`
+            : `删除分段：${summarizeInterestPeriod({
+                periodLabel: existingPeriod.period_label,
+                principal: existingPeriod.principal,
+                annualRate: existingPeriod.annual_rate,
+                startDate: existingPeriod.start_date,
+                endDate: existingPeriod.end_date,
+              })}`,
+          createdBy: ctx.user.id,
+          beforeData: existingPeriod,
+        });
         return { success: true };
       }),
 

@@ -22,6 +22,8 @@ interface OrderCardImageDownloadProps {
   exportBackground?: string;
   /** 卡片页眉使用无圆形容器的纯下载箭头；其他入口保持默认样式。 */
   variant?: "default" | "bare";
+  /** 默认同时显示保存者和时间；可改为只显示截图时间。 */
+  watermarkMode?: "user-and-time" | "time-only";
 }
 
 type ImagePreview = {
@@ -302,6 +304,7 @@ export function OrderCardImageDownload({
   captureFullContent = false,
   exportBackground,
   variant = "default",
+  watermarkMode = "user-and-time",
 }: OrderCardImageDownloadProps) {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -326,7 +329,9 @@ export function OrderCardImageDownload({
 
     setGenerating(true);
     const timestamp = formatBeijingTime(new Date());
-    const watermarkText = `${getSaverLabel(currentUser || getStoredSnapshotUser())}｜${timestamp}`;
+    const watermarkText = watermarkMode === "time-only"
+      ? timestamp
+      : `${getSaverLabel(currentUser || getStoredSnapshotUser())}｜${timestamp}`;
     const scale = 2;
     let snapshotContainer: HTMLElement | null = null;
 

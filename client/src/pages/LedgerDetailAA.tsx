@@ -224,6 +224,8 @@ export default function LedgerDetailAA({
 
   // ── 视角切换（管理员/创建者可切换到其他成员视角）──
   const [viewAsUserId, setViewAsUserId] = useState<number | null>(null);
+  // 胡大叔（JiamG）超级管理员专属：仅本人在37号账本首页可见利息与保证金快捷入口。
+  const isJiamGSuperAdmin = ledgerId === 37 && Number(user?.id) === 870413 && !viewAsUserId;
   const [showViewAsPicker, setShowViewAsPicker] = useState(false);
   const [viewAsSearch, setViewAsSearch] = useState('');
   const trpcUtils = trpc.useUtils();
@@ -1494,12 +1496,12 @@ export default function LedgerDetailAA({
             </div>
           </div>
         </div>
-        {/* 第二行：刷新 + 返回 + AI数据（平铺整行） */}
-        <div className="px-4 pb-2 flex items-center gap-1.5">
+        {/* 第二行：刷新、返回、AI数据、细则及JiamG专属利息/保证金快捷入口 */}
+        <div className={`px-4 pb-2 flex items-center ${isJiamGSuperAdmin ? 'gap-1' : 'gap-1.5'}`}>
               {/* 刷新按钮 */}
               <button
                 onClick={() => window.location.reload()}
-                className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
+                className={`flex-1 flex items-center justify-center font-medium whitespace-nowrap ${isJiamGSuperAdmin ? 'h-8 rounded-lg text-xs' : 'h-9 rounded-full text-sm'}`}
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",
                   color: "#D32F2F",
@@ -1511,7 +1513,7 @@ export default function LedgerDetailAA({
               {/* 返回按钮 */}
               <button
                 onClick={onBack}
-                className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
+                className={`flex-1 flex items-center justify-center font-medium whitespace-nowrap ${isJiamGSuperAdmin ? 'h-8 rounded-lg text-xs' : 'h-9 rounded-full text-sm'}`}
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",
                   color: "#D32F2F",
@@ -1523,7 +1525,7 @@ export default function LedgerDetailAA({
               {/* AI数据按钮 */}
               <button
                 onClick={() => setLocation(`/ledger/${ledgerId}/ai-database`)}
-                className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
+                className={`flex-1 flex items-center justify-center font-medium whitespace-nowrap ${isJiamGSuperAdmin ? 'h-8 rounded-lg text-xs' : 'h-9 rounded-full text-sm'}`}
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",
                   color: "#D32F2F",
@@ -1535,7 +1537,7 @@ export default function LedgerDetailAA({
               {/* 细则按钮 */}
               <button
                 onClick={() => setShowRules(true)}
-                className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
+                className={`flex-1 flex items-center justify-center font-medium whitespace-nowrap ${isJiamGSuperAdmin ? 'h-8 rounded-lg text-xs' : 'h-9 rounded-full text-sm'}`}
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",
                   color: "#D32F2F",
@@ -1544,6 +1546,32 @@ export default function LedgerDetailAA({
               >
                 细则
               </button>
+              {isJiamGSuperAdmin && (
+                <>
+                  <button
+                    onClick={() => setLocation(`/ledger/${ledgerId}/interest-manage?from=ledger-home`)}
+                    className={`flex-1 flex items-center justify-center font-medium whitespace-nowrap ${isJiamGSuperAdmin ? 'h-8 rounded-lg text-xs' : 'h-9 rounded-full text-sm'}`}
+                    style={{
+                      backgroundColor: "rgba(255,255,255,0.9)",
+                      color: "#D32F2F",
+                      border: "1px solid rgba(255,255,255,0.4)",
+                    }}
+                  >
+                    利息
+                  </button>
+                  <button
+                    onClick={() => setLocation(`/ledger/${ledgerId}/deposit-manage?from=ledger-home`)}
+                    className={`flex-1 flex items-center justify-center font-medium whitespace-nowrap ${isJiamGSuperAdmin ? 'h-8 rounded-lg text-xs' : 'h-9 rounded-full text-sm'}`}
+                    style={{
+                      backgroundColor: "rgba(255,255,255,0.9)",
+                      color: "#D32F2F",
+                      border: "1px solid rgba(255,255,255,0.4)",
+                    }}
+                  >
+                    保证金
+                  </button>
+                </>
+              )}
         </div>
 
 
