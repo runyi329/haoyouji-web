@@ -2530,7 +2530,7 @@ export default function LedgerDetailAA({
                   <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                   <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
                   <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E' }}>金额￥</span><SortArrow col="amount" /></div>
+                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E' }}>押金￥</span><SortArrow col="amount" /></div>
                   <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                   <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
                   <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
