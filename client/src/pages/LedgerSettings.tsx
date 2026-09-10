@@ -452,14 +452,14 @@ export default function LedgerSettings() {
          onClick={() => setLocation(`/ledger/${ledgerId}/deposit-manage`)}
        />
        <SettingItem
-         label="利息管理"
-         showIcon
-         onClick={() => setLocation(`/ledger/${ledgerId}/interest-manage`)}
-       />
-       <SettingItem
          label="分类管理"
          showIcon
          onClick={() => setLocation(`/ledger/${ledgerId}/categories`)}
+       />
+       <SettingItem
+         label="利息管理"
+         showIcon
+         onClick={() => setLocation(`/ledger/${ledgerId}/interest-manage`)}
        />
      </>
    );
