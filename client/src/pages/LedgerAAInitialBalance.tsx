@@ -313,14 +313,14 @@ export default function LedgerAAInitialBalance() {
 
   const updateMarginEntry = (userId: number, tagName: string, index: number, patch: Partial<MarginEntry>) => {
     const current = editState[userId]?.[tagName] ?? defaultEntry();
-    const nextMargins = current.margins.length > 0 ? [...current.margins] : [{ coin: 'CNY', amount: '' }];
+    const nextMargins = current.margins.length > 0 ? [...current.margins] : [{ coin: 'CNY', amount: '0' }];
     nextMargins[index] = { ...nextMargins[index], ...patch };
     updateEntry(userId, tagName, { margins: nextMargins });
   };
 
   const addMarginEntry = (userId: number, tagName: string) => {
     const current = editState[userId]?.[tagName] ?? defaultEntry();
-    updateEntry(userId, tagName, { margins: [...current.margins, { coin: 'CNY', amount: '' }] });
+    updateEntry(userId, tagName, { margins: [...current.margins, { coin: 'CNY', amount: '0' }] });
   };
 
   const removeMarginEntry = (userId: number, tagName: string, index: number) => {
@@ -335,7 +335,7 @@ export default function LedgerAAInitialBalance() {
     accentColor: string;
     compact?: boolean;
   }) => {
-    const rows = entry.margins.length > 0 ? entry.margins : [{ coin: 'CNY', amount: '' }];
+    const rows = entry.margins.length > 0 ? entry.margins : [{ coin: 'CNY', amount: '0' }];
     const summary = summarizeMargins(entry.margins);
     return (
       <div className="space-y-1.5">
@@ -356,7 +356,7 @@ export default function LedgerAAInitialBalance() {
               type="number"
               inputMode="decimal"
               placeholder="0"
-              value={marginEntry.amount}
+              value={marginEntry.amount === '' ? '0' : marginEntry.amount}
               onChange={(event) => updateMarginEntry(userId, tagName, index, { amount: event.target.value })}
               className="min-w-0 flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
               style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
@@ -1754,6 +1754,18 @@ export default function LedgerAAInitialBalance() {
                                 : <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color || '#D32F2F' }} />
                               }
                               <span className="text-sm font-medium text-gray-800">{cat.name}</span>
+                              <button
+                                type="button"
+                                aria-label={entry.visible ? '隐藏该标签' : '显示该标签'}
+                                onClick={(event) => { event.stopPropagation(); updateEntry(userId, cat.name, { visible: !entry.visible }); }}
+                                className="relative inline-flex h-4.5 w-8 items-center rounded-full transition-colors flex-shrink-0"
+                                style={{ backgroundColor: entry.visible ? '#D32F2F' : '#D1D5DB' }}
+                              >
+                                <span
+                                  className="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform"
+                                  style={{ transform: entry.visible ? 'translateX(17px)' : 'translateX(2px)' }}
+                                />
+                              </button>
                               {!entry.visible && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#F5F5F5', color: '#9E9E9E' }}>隐藏</span>}
                             </div>
                             <div className="flex items-center gap-2">
@@ -1768,86 +1780,37 @@ export default function LedgerAAInitialBalance() {
                           </div>
                           {/* 展开内容 */}
                           {isCatExpanded && <div className="px-3 pb-3 space-y-2" style={{ borderTop: '1px solid #F0E8E0' }}>
-                          {/* 显示开关 */}
-                          <div className="flex items-center justify-between pt-2">
-                            <span className="text-xs text-gray-400">显示开关</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-400">{entry.visible ? "显示" : "隐藏"}</span>
-                              <button
-                                type="button"
-                                onClick={() => updateEntry(userId, cat.name, { visible: !entry.visible })}
-                                className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0"
-                                style={{ backgroundColor: entry.visible ? "#D32F2F" : "#D1D5DB" }}
-                              >
-                                <span
-                                  className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
-                                  style={{ transform: entry.visible ? "translateX(18px)" : "translateX(2px)" }}
+                          {/* 开始日期与暂停日期并排，减少移动端纵向占用 */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="min-w-0">
+                              <div className="text-xs text-gray-400 mb-1">开始日期</div>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="date"
+                                  value={entry.startDate}
+                                  onChange={(event) => updateEntry(userId, cat.name, { startDate: event.target.value })}
+                                  className="min-w-0 flex-1 text-xs border rounded-lg px-1.5 py-1 outline-none focus:border-red-400"
+                                  style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
                                 />
-                              </button>
+                                {entry.startDate && (
+                                  <button type="button" onClick={() => updateEntry(userId, cat.name, { startDate: '' })} className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100" style={{ fontSize: 11 }}>×</button>
+                                )}
+                              </div>
                             </div>
-                          </div>
-
-                          {/* 行2：开始日期 */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400 w-16 flex-shrink-0">
-                              开始日期
-                            </span>
-                            <div className="flex-1 flex items-center gap-1">
-                              <input
-                                type="date"
-                                value={entry.startDate}
-                                onChange={(e) =>
-                                  updateEntry(userId, cat.name, {
-                                    startDate: e.target.value,
-                                  })
-                                }
-                                className="flex-1 text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
-                                style={{
-                                  borderColor: "#E0E0E0",
-                                  backgroundColor: "#FFFFFF",
-                                  color: "#222222",
-                                }}
-                              />
-                              {entry.startDate && (
-                                <button
-                                  type="button"
-                                  onClick={() => updateEntry(userId, cat.name, { startDate: '' })}
-                                  className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                                  style={{ fontSize: 12 }}
-                                >×</button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* 行2b：暂停日期 */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs w-16 flex-shrink-0 font-medium" style={{ color: '#B45309' }}>
-                              暂停日期
-                            </span>
-                            <div className="flex-1 flex items-center gap-1">
-                              <input
-                                type="date"
-                                value={entry.pauseDate}
-                                onChange={(e) =>
-                                  updateEntry(userId, cat.name, {
-                                    pauseDate: e.target.value,
-                                  })
-                                }
-                                className="flex-1 text-sm border rounded-lg px-2 py-1 outline-none"
-                                style={{
-                                  borderColor: '#FDE68A',
-                                  backgroundColor: '#FFFBEB',
-                                  color: '#92400E',
-                                }}
-                              />
-                              {entry.pauseDate && (
-                                <button
-                                  type="button"
-                                  onClick={() => updateEntry(userId, cat.name, { pauseDate: '' })}
-                                  className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full hover:bg-amber-100"
-                                  style={{ fontSize: 12, color: '#B45309' }}
-                                >×</button>
-                              )}
+                            <div className="min-w-0">
+                              <div className="text-xs mb-1" style={{ color: '#B45309' }}>暂停日期</div>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="date"
+                                  value={entry.pauseDate}
+                                  onChange={(event) => updateEntry(userId, cat.name, { pauseDate: event.target.value })}
+                                  className="min-w-0 flex-1 text-xs border rounded-lg px-1.5 py-1 outline-none"
+                                  style={{ borderColor: '#FDE68A', backgroundColor: '#FFFBEB', color: '#92400E' }}
+                                />
+                                {entry.pauseDate && (
+                                  <button type="button" onClick={() => updateEntry(userId, cat.name, { pauseDate: '' })} className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full hover:bg-amber-100" style={{ fontSize: 11, color: '#B45309' }}>×</button>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -1947,29 +1910,21 @@ export default function LedgerAAInitialBalance() {
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: catColor }} />
                   <span className="text-sm font-semibold text-gray-800">{tagName}</span>
+                  <button
+                    type="button"
+                    aria-label={entry.visible ? '隐藏该标签' : '显示该标签'}
+                    onClick={() => updateEntry(userId, tagName, { visible: !entry.visible })}
+                    className="relative inline-flex h-4.5 w-8 items-center rounded-full transition-colors flex-shrink-0"
+                    style={{ backgroundColor: entry.visible ? catColor : '#D1D5DB' }}
+                  >
+                    <span className="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform" style={{ transform: entry.visible ? 'translateX(17px)' : 'translateX(2px)' }} />
+                  </button>
                   <span className="text-xs text-gray-400">· {member?.nickname || member?.username || `用户${userId}`}</span>
                 </div>
                 <button onClick={() => { setTagEditModal(null); setTargetTotalInput(''); }} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
               </div>
               {/* 内容区 */}
               <div className="overflow-y-auto flex-1 px-4 py-3 space-y-3">
-                {/* 显示开关 */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">显示开关</span>
-                  <span className="text-xs text-gray-400">{entry.visible ? '显示' : '隐藏'}</span>
-                  <button
-                    type="button"
-                    onClick={() => updateEntry(userId, tagName, { visible: !entry.visible })}
-                    className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0"
-                    style={{ backgroundColor: entry.visible ? catColor : '#D1D5DB' }}
-                  >
-                    <span
-                      className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
-                      style={{ transform: entry.visible ? 'translateX(18px)' : 'translateX(2px)' }}
-                    />
-                  </button>
-                </div>
-
                 {/* 开始日期 */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-400 w-16 flex-shrink-0">开始日期</span>
