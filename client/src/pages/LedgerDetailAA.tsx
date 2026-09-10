@@ -38,10 +38,43 @@ import {
   ReferenceLine,
 } from "recharts";
 
-// 数字币价格查询（用于保证金人民币折算显示）——使用OKX API格式
-// 数字币价格现已改为服务端缓存，通过 tRPC getCryptoPrices 接口获取
-// CRYPTO_COINS_AA 仅用于判断币种是否为数字币
-const CRYPTO_COINS_AA = ['BTC', 'ETH', 'SOL', 'LDO'];
+// 数字币价格现已改为服务端缓存，通过 tRPC getCryptoPrices 接口获取。
+type MarginEntry = { coin: string; amount: number };
+type ResolvedMarginEntry = MarginEntry & { cnyValue: number | null };
+
+const normalizeMarginCoin = (coin: unknown): string => {
+  const value = String(coin ?? '').trim().toUpperCase();
+  return value === '人民币' || value === 'RMB' || value === '' ? 'CNY' : value;
+};
+
+// 新格式优先读取 tagName__margins；未升级的历史单笔数据自动作为一笔保证金处理。
+const readMarginEntries = (balances: Record<string, any>, tagName: string): MarginEntry[] => {
+  const raw = balances[`${tagName}__margins`];
+  if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((item) => item && typeof item === 'object' && Number.isFinite(Number(item.amount)))
+          .map((item) => ({ coin: normalizeMarginCoin(item.coin), amount: Number(item.amount) }));
+      }
+    } catch {
+      // 新字段损坏时回退旧字段，保证历史页面仍可读取。
+    }
+  }
+  const legacyAmount = balances[`${tagName}__margin`];
+  if (legacyAmount === undefined || legacyAmount === null || !Number.isFinite(Number(legacyAmount))) return [];
+  return [{ coin: normalizeMarginCoin(balances[`${tagName}__marginCoin`]), amount: Number(legacyAmount) }];
+};
+
+const resolveMarginEntries = (balances: Record<string, any>, tagName: string, prices: Record<string, number>): ResolvedMarginEntry[] => {
+  return readMarginEntries(balances, tagName).map((entry) => {
+    const cnyValue = entry.coin === 'CNY'
+      ? entry.amount
+      : (Number.isFinite(prices[entry.coin]) && prices[entry.coin] > 0 ? entry.amount * prices[entry.coin] : null);
+    return { ...entry, cnyValue };
+  });
+};
 
 interface DayGroup {
   date: string;       // "YYYY-MM-DD"
@@ -667,19 +700,9 @@ export default function LedgerDetailAA({
       const color = COLORS[idx % COLORS.length];
       // 初始金额
       const initialBalance = Number(initialBalancesData.balances[tagName] ?? 0);
-      // 保证金
-      const marginRaw = initialBalancesData.balances[`${tagName}__margin`];
-      const coinRaw = (initialBalancesData.balances as any)[`${tagName}__marginCoin`];
-      const coin = coinRaw ? String(coinRaw) : '';
-      let marginCny = 0;
-      if (marginRaw !== undefined && marginRaw !== null) {
-        const num = Number(marginRaw);
-        if (coin && CRYPTO_COINS_AA.includes(coin)) {
-          marginCny = num * (aaCryptoPrices[coin] ?? 0);
-        } else {
-          marginCny = num;
-        }
-      }
+      // 保证金：新格式可包含多笔不同币种，逐项按实时人民币价格折算后汇总。
+      const marginEntries = resolveMarginEntries(initialBalancesData.balances, tagName, aaCryptoPrices);
+      const marginCny = marginEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0);
       // 权重比例
       const ratio = Number(initialBalancesData.balances[`${tagName}__ratio`] ?? 100) / 100;
       // 该标签的累计提现
@@ -718,7 +741,7 @@ export default function LedgerDetailAA({
         const pctMargin = marginCny > 0 ? ((effectiveInitial - d.balance - tagWithdraw) * ratio / marginCny) * 100 : 0;
         return { date: d.date, pnl, pctInitial, pctMargin, balance: d.balance };
       });
-      return { name: tagName, color, points, initialBalance, marginCny, marginRaw: marginRaw !== undefined && marginRaw !== null ? Number(marginRaw) : null, marginCoin: coin };
+      return { name: tagName, color, points, initialBalance, marginCny, marginEntries };
     });
   }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, withdrawByTag, capitalByTag]);
 
@@ -733,7 +756,7 @@ export default function LedgerDetailAA({
     const cryptoMap: Record<string, { amount: number, cnyValue: number }> = {};
     const perTagDetail: Array<{
       tagName: string;
-      margin: number; marginCoin: string; marginCny: number;
+      marginEntries: ResolvedMarginEntry[]; marginCny: number;
       initialBalance: number; capitalChange: number; effectiveInitial: number;
       latestBalance: number; latestDate: string;
       tagWithdraw: number;
@@ -743,28 +766,21 @@ export default function LedgerDetailAA({
     }> = [];
     categories.forEach((cat: any) => {
       const tagName = cat.name;
-      // 保证金
-      const margin = initialBalancesData.balances[`${tagName}__margin`];
-      const coinRaw = (initialBalancesData.balances as any)[`${tagName}__marginCoin`];
-      const coin = coinRaw ? String(coinRaw) : '';
-      if (margin !== undefined && margin !== null) {
-        const num = Number(margin);
-        if (coin && CRYPTO_COINS_AA.includes(coin)) {
-          // 数字币：按币种合并汇总
-          hasCrypto = true;
-          const price = aaCryptoPrices[coin] ?? 0;
-          const cnyValue = num * price;
-          totalMargin += cnyValue;
-          if (cryptoMap[coin]) {
-            cryptoMap[coin].amount += num;
-            cryptoMap[coin].cnyValue += cnyValue;
-          } else {
-            cryptoMap[coin] = { amount: num, cnyValue };
-          }
+      // 保证金：每笔按自身币种折算人民币后汇总；无可靠报价的数字币不虚构人民币值。
+      const marginEntries = resolveMarginEntries(initialBalancesData.balances, tagName, aaCryptoPrices);
+      const marginCny = marginEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0);
+      totalMargin += marginCny;
+      marginEntries.forEach((entry) => {
+        if (entry.coin === 'CNY') return;
+        hasCrypto = true;
+        const cnyValue = entry.cnyValue ?? 0;
+        if (cryptoMap[entry.coin]) {
+          cryptoMap[entry.coin].amount += entry.amount;
+          cryptoMap[entry.coin].cnyValue += cnyValue;
         } else {
-          totalMargin += num;
+          cryptoMap[entry.coin] = { amount: entry.amount, cnyValue };
         }
-      }
+      });
       // 盈亏：需要计算每个标签的 (initialBalance - latestBalance - totalWithdraw) * ratio
       const initialBalance = Number(initialBalancesData.balances[tagName] ?? 0);
       const ratio = Number(initialBalancesData.balances[`${tagName}__ratio`] ?? 100) / 100;
@@ -818,15 +834,10 @@ export default function LedgerDetailAA({
         if (effectiveInitial > 0) {
           totalPnl += tagPnl;
         }
-        const coinRaw2 = (initialBalancesData.balances as any)[`${tagName}__marginCoin`];
-        const coin2 = coinRaw2 ? String(coinRaw2) : '';
-        const marginNum = margin !== undefined && margin !== null ? Number(margin) : 0;
-        const price2 = coin2 && CRYPTO_COINS_AA.includes(coin2) ? (aaCryptoPrices[coin2] ?? 0) : 0;
         perTagDetail.push({
           tagName,
-          margin: marginNum,
-          marginCoin: coin2,
-          marginCny: coin2 && CRYPTO_COINS_AA.includes(coin2) ? marginNum * price2 : marginNum,
+          marginEntries,
+          marginCny,
           initialBalance,
           capitalChange: tagCapitalChange,
           effectiveInitial: initialBalance + tagCapitalChange,
@@ -838,15 +849,10 @@ export default function LedgerDetailAA({
           hasData: true,
         });
       } else {
-        const coinRaw2 = (initialBalancesData.balances as any)[`${tagName}__marginCoin`];
-        const coin2 = coinRaw2 ? String(coinRaw2) : '';
-        const marginNum = margin !== undefined && margin !== null ? Number(margin) : 0;
-        const price2 = coin2 && CRYPTO_COINS_AA.includes(coin2) ? (aaCryptoPrices[coin2] ?? 0) : 0;
         perTagDetail.push({
           tagName,
-          margin: marginNum,
-          marginCoin: coin2,
-          marginCny: coin2 && CRYPTO_COINS_AA.includes(coin2) ? marginNum * price2 : marginNum,
+          marginEntries,
+          marginCny,
           initialBalance,
           capitalChange: tagCapitalChange,
           effectiveInitial: initialBalance + tagCapitalChange,
@@ -1552,45 +1558,26 @@ export default function LedgerDetailAA({
                   </>
                 );
               }
-              const val = initialBalancesData.balances[`${tagName}__margin`];
-              const coinRaw = (initialBalancesData.balances as any)[`${tagName}__marginCoin`];
-              const coin = coinRaw ? String(coinRaw) : '';
+              const marginEntries = resolveMarginEntries(initialBalancesData.balances, tagName, aaCryptoPrices);
+              const marginCny = marginEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0);
               const ratioVal = initialBalancesData.balances[`${tagName}__ratio`];
-              const isCrypto = coin && CRYPTO_COINS_AA.includes(coin);
-              const num = val !== undefined && val !== null ? Number(val) : null;
-
-              if (isCrypto) {
-                // 数字币模式：标题行显示「保证金  比例X%」，主值显示数量+币种，副行显示约等于人民币
-                const price = aaCryptoPrices[coin];
-                const cnyText = price && num !== null
-                  ? '≈ ¥' + (num * price).toLocaleString('zh-CN', { maximumFractionDigits: 0 })
-                  : '≈ 获取中...';
-                return (
-                  <>
-                    <div className="text-xs opacity-75 mb-0.5 flex items-center gap-2">
-                      <span>保证金</span>
-                      {ratioVal !== undefined && ratioVal !== null && (
-                        <span className="opacity-80">比例 {Number(ratioVal).toFixed(1)}%</span>
-                      )}
-                    </div>
-                    <div className="text-base font-bold">{num !== null ? `${num} ${coin}` : '0'}</div>
-                    <div className="text-xs opacity-60 mt-0.5">{cnyText}</div>
-                  </>
-                );
-              } else {
-                // 法币模式：标题行只显示「保证金」，主值显示¥金额，副行显示比例
-                return (
-                  <>
-                    <div className="text-xs opacity-75 mb-0.5">保证金</div>
-                    <div className="text-base font-bold">
-                      {num !== null ? '¥' + num.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '¥0.00'}
-                    </div>
-                    <div className="text-xs opacity-60 mt-0.5">
-                      {ratioVal !== undefined && ratioVal !== null ? `比例 ${Number(ratioVal).toFixed(1)}%` : ''}
-                    </div>
-                  </>
-                );
-              }
+              const detailText = marginEntries.length === 0
+                ? ''
+                : marginEntries.slice(0, 2).map((entry) => entry.coin === 'CNY' ? `¥${entry.amount}` : `${entry.amount} ${entry.coin}`).join(' · ')
+                  + (marginEntries.length > 2 ? ` 等${marginEntries.length}笔` : '');
+              const hasUnpricedMargin = marginEntries.some((entry) => entry.cnyValue === null);
+              return (
+                <>
+                  <div className="text-xs opacity-75 mb-0.5 flex items-center gap-2">
+                    <span>保证金</span>
+                    {ratioVal !== undefined && ratioVal !== null && (
+                      <span className="opacity-80">比例 {Number(ratioVal).toFixed(1)}%</span>
+                    )}
+                  </div>
+                  <div className="text-base font-bold">¥{marginCny.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div className="text-xs opacity-60 mt-0.5">{hasUnpricedMargin ? '部分报价获取中' : (detailText || '未设置')}</div>
+                </>
+              );
             })()}
           </div>
 
@@ -2779,23 +2766,18 @@ export default function LedgerDetailAA({
                         })()}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
-                      {/* 金额（周期后面） */}
+                      {/* 押金（周期后面）：多笔明细按实时人民币价格汇总 */}
                       <div className="px-1 flex flex-col items-center justify-center" style={{ borderBottom: rowBorder, height: rowHeight }}>
-                        {tag.marginCny > 0 ? (
-                          <>
-                            <div
-                              onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
-                              style={{ fontSize: 13, lineHeight: 1, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                            >{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(marginNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{marginNoteCounts[tag.name]}</sup>)}</div>
-                            {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
-                              <div style={{ fontSize: 9, marginTop: 2, lineHeight: 1, color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
-                            )}
-                          </>
-                        ) : (
-                          <span
-                            onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
-                            style={{ fontSize: 13, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                          >0{(marginNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{marginNoteCounts[tag.name]}</sup>)}</span>
+                        <div
+                          onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
+                          style={{ fontSize: 13, lineHeight: 1, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
+                        >{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(marginNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{marginNoteCounts[tag.name]}</sup>)}</div>
+                        {tag.marginEntries.length > 0 && (
+                          <div style={{ fontSize: 9, marginTop: 2, lineHeight: 1, color: '#BDBDBD' }}>
+                            {tag.marginEntries.length === 1
+                              ? (tag.marginEntries[0].coin === 'CNY' ? '人民币' : `${tag.marginEntries[0].amount} ${tag.marginEntries[0].coin}`)
+                              : `${tag.marginEntries.length}笔`}
+                          </div>
                         )}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
@@ -4493,16 +4475,23 @@ export default function LedgerDetailAA({
                       <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">保证金是客户投入的本金，是计算盈亏和收益率的基准。下列为每个标签的保证金明细：</div>
                       {perTag.map((t) => (
                         <div key={t.tagName} className="bg-gray-50 rounded-lg px-3 py-2">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-gray-900 text-xs">标签「{t.tagName}」</span>
-                            <span className="font-mono text-sm font-bold text-gray-800">
-                              {t.marginCoin && CRYPTO_COINS_AA.includes(t.marginCoin)
-                                ? `${t.margin} ${t.marginCoin}`
-                                : fmtAbs(t.margin)}
-                            </span>
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="font-semibold text-gray-900 text-xs pt-0.5">标签「{t.tagName}」</span>
+                            <div className="text-right font-mono text-sm font-bold text-gray-800">
+                              {t.marginEntries.length === 0 ? (
+                                <div>{fmtAbs(0)}</div>
+                              ) : t.marginEntries.map((entry, index) => (
+                                <div key={`${entry.coin}-${index}`}>
+                                  {entry.coin === 'CNY' ? fmtAbs(entry.amount) : `${entry.amount} ${entry.coin}`}
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                          {t.marginCoin && CRYPTO_COINS_AA.includes(t.marginCoin) && (
-                            <div className="text-xs text-gray-400 mt-0.5">≈ {fmtAbs(t.marginCny)}（按实时价格折算）</div>
+                          {t.marginEntries.some((entry) => entry.coin !== 'CNY') && (
+                            <div className="text-xs text-gray-400 mt-0.5">合计 ≈ {fmtAbs(t.marginCny)}（按实时价格折算）</div>
+                          )}
+                          {t.marginEntries.some((entry) => entry.cnyValue === null) && (
+                            <div className="text-xs mt-0.5" style={{ color: '#B26A00' }}>部分币种暂无可靠报价，未计入合计</div>
                           )}
                           <div className="text-xs text-gray-400 mt-0.5">有效本金：{fmtAbs(t.effectiveInitial)}</div>
                         </div>
