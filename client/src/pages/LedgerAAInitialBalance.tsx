@@ -59,7 +59,7 @@ const normalizeMarginCoin = (coin: unknown): string => {
 };
 
 // 新格式优先读取 tagName__margins；历史单笔 margin/marginCoin 自动兼容为一笔明细。
-const readMarginEntries = (balances: Record<string, any>, tagName: string): MarginEntry[] => {
+const readMarginEntries = (balances: Record<string, any>, tagName: string, migratedAt?: string | null): MarginEntry[] => {
   const raw = balances[`${tagName}__margins`];
   if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
     try {
@@ -71,7 +71,11 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string): Marg
             id: typeof item.id === 'string' ? item.id : `legacy_${tagName}_${index}`,
             coin: normalizeMarginCoin(item.coin),
             amount: String(item.amount ?? '0'),
-            createdAt: typeof item.createdAt === 'string' ? item.createdAt : '',
+            // 已保存为新版明细、却保留 legacy ID 且缺失时间的记录，
+            // 使用成员配置的真实保存时间回填；真正旧单笔仍保留为空以明确降级。
+            createdAt: typeof item.createdAt === 'string' && item.createdAt
+              ? item.createdAt
+              : (typeof item.id === 'string' && item.id.startsWith('legacy_') && migratedAt ? migratedAt : ''),
             notes: Array.isArray(item.notes)
               ? item.notes
                 .filter((note: any) => note && typeof note.content === 'string')
@@ -192,7 +196,7 @@ export default function LedgerAAInitialBalance() {
       for (const cat of categories) {
         const n = cat.name;
         const legacyMarginNotes = ((allBalancesData as any).marginNotesMap?.[`${member.userId}|${n}`] ?? []) as Array<{ id: number; content: string; created_at: string }>;
-        let marginEntries = readMarginEntries(balances, n);
+        let marginEntries = readMarginEntries(balances, n, member.updatedAt ? new Date(member.updatedAt).toISOString() : null);
         if (legacyMarginNotes.length > 0) {
           const legacyNotes: MarginNote[] = legacyMarginNotes.map((note) => ({
             id: `legacy_note_${note.id}`,

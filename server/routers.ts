@@ -12287,7 +12287,12 @@ ${klinesSummary}
           }
         }
         const balances = await dbLedger.getMyInitialBalances(input.ledgerId, targetUserId);
-        return { balances: balances ?? {} };
+        const targetMembership = await dbLedger.getUserMembership(input.ledgerId, targetUserId);
+        return {
+          balances: balances ?? {},
+          // 新版押金明细若由旧单笔转换且缺失 createdAt，前端以此次成员配置的真实保存时间回填展示。
+          updatedAt: targetMembership?.updatedAt ? new Date(targetMembership.updatedAt).toISOString() : null,
+        };
       }),
     // 更新当前用户的初始金额配置（定制账本AA）
     updateMyInitialBalances: protectedProcedure

@@ -1689,6 +1689,7 @@ export async function getLedgerMembers(ledgerId: number, userId: number, userRol
       canDelete: ledgerMembers.canDelete,
       canInvite: ledgerMembers.canInvite,
       createdAt: ledgerMembers.createdAt,
+      updatedAt: ledgerMembers.updatedAt,
       memberType: ledgerMembers.memberType,
       username: users.username,
       avatar: users.avatar,
@@ -6248,6 +6249,7 @@ export async function getUserMembership(ledgerId: number, userId: number) {
       id: ledgerMembers.id,
       role: ledgerMembers.role,
       memberType: ledgerMembers.memberType,
+      updatedAt: ledgerMembers.updatedAt,
     })
     .from(ledgerMembers)
     .where(

@@ -49,7 +49,7 @@ const normalizeMarginCoin = (coin: unknown): string => {
 };
 
 // 新格式优先读取 tagName__margins；未升级的历史单笔数据自动作为一笔押金处理。
-const readMarginEntries = (balances: Record<string, any>, tagName: string): MarginEntry[] => {
+const readMarginEntries = (balances: Record<string, any>, tagName: string, migratedAt?: string | null): MarginEntry[] => {
   const raw = balances[`${tagName}__margins`];
   if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
     try {
@@ -61,8 +61,11 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string): Marg
             id: typeof item.id === 'string' ? item.id : `legacy_${tagName}_${index}`,
             coin: normalizeMarginCoin(item.coin),
             amount: Number(item.amount),
-            // 缺失时间的历史明细保持为空，由页面明确标为“历史押金”，不伪造时间。
-            createdAt: typeof item.createdAt === 'string' ? item.createdAt : '',
+            // 仅对已保存为新版JSON、却沿用 legacy ID 且缺失时间的迁移明细，
+            // 使用成员配置真实 updatedAt 回填；真正旧单笔记录仍保持“历史押金”。
+            createdAt: typeof item.createdAt === 'string' && item.createdAt
+              ? item.createdAt
+              : (typeof item.id === 'string' && item.id.startsWith('legacy_') && migratedAt ? migratedAt : ''),
             notes: Array.isArray(item.notes)
               ? item.notes
                 .filter((note: any) => note && typeof note.content === 'string')
@@ -89,8 +92,8 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string): Marg
   }];
 };
 
-const resolveMarginEntries = (balances: Record<string, any>, tagName: string, prices: Record<string, number>): ResolvedMarginEntry[] => {
-  return readMarginEntries(balances, tagName).map((entry) => {
+const resolveMarginEntries = (balances: Record<string, any>, tagName: string, prices: Record<string, number>, migratedAt?: string | null): ResolvedMarginEntry[] => {
+  return readMarginEntries(balances, tagName, migratedAt).map((entry) => {
     const cnyValue = entry.coin === 'CNY'
       ? entry.amount
       : (Number.isFinite(prices[entry.coin]) && prices[entry.coin] > 0 ? entry.amount * prices[entry.coin] : null);
@@ -459,7 +462,12 @@ export default function LedgerDetailAA({
   // 只作为第一笔押金的历史备注显示，避免错配到后续新增押金。
   const currentMarginDetailEntries = useMemo<ResolvedMarginEntry[]>(() => {
     if (!marginNoteTag || !initialBalancesData?.balances) return [];
-    const entries = resolveMarginEntries(initialBalancesData.balances as Record<string, any>, marginNoteTag, aaCryptoPrices);
+    const entries = resolveMarginEntries(
+      initialBalancesData.balances as Record<string, any>,
+      marginNoteTag,
+      aaCryptoPrices,
+      (initialBalancesData as any).updatedAt,
+    );
     const legacyNotes: MarginNote[] = ((marginNotesData?.notes ?? []) as any[])
       .map((note) => ({
         id: `legacy_note_${note.id}`,
