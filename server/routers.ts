@@ -12309,7 +12309,29 @@ ${klinesSummary}
         const members = await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id);
         const realMembers = members.filter((m: any) => m.memberType !== 'ai');
         const result = await dbLedger.getAllMembersInitialBalances(input.ledgerId);
-        return { members: realMembers, balancesMap: result };
+        const db = await getLedgerDb();
+        const marginNotesMap: Record<string, Array<{ id: number; content: string; created_at: string }>> = {};
+        if (db) {
+          const noteRows = await db.execute(sql`
+            SELECT id, user_id, tag_name, content, created_at
+            FROM ledger_admin_notes
+            WHERE ledger_id = ${input.ledgerId}
+              AND type = 'margin'
+              AND user_id <> 0
+              AND tag_name IS NOT NULL
+            ORDER BY created_at ASC, id ASC
+          `);
+          for (const note of ((noteRows as any)[0] ?? []) as any[]) {
+            const key = `${Number(note.user_id)}|${String(note.tag_name)}`;
+            if (!marginNotesMap[key]) marginNotesMap[key] = [];
+            marginNotesMap[key].push({
+              id: Number(note.id),
+              content: String(note.content ?? ''),
+              created_at: String(note.created_at ?? ''),
+            });
+          }
+        }
+        return { members: realMembers, balancesMap: result, marginNotesMap };
       }),
     // 管理员：设置指定成员的初始金额配置（定制账本AA）
     adminSetMemberInitialBalances: protectedProcedure
@@ -12317,6 +12339,8 @@ ${klinesSummary}
         ledgerId: z.number(),
         targetUserId: z.number(),
         balances: z.record(z.string(), z.union([z.number(), z.string()])),
+        // 已嵌入逐笔押金明细的历史标签备注；只在初始余额保存成功后删除旧行。
+        migratedMarginNoteIds: z.array(z.number().int().positive()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         // 验证操作者是owner或admin
@@ -12325,6 +12349,24 @@ ${klinesSummary}
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可设置初始金额' });
         }
         await dbLedger.updateMyInitialBalances(input.ledgerId, input.targetUserId, input.balances);
+
+        // 旧版保证金备注按“用户 + 标签”共享。新版已归入首笔押金的 notes，
+        // 只有初始余额更新成功后才删除对应旧行，避免失败时丢失历史备注。
+        const migratedIds = [...new Set(input.migratedMarginNoteIds ?? [])];
+        if (migratedIds.length > 0) {
+          const db = await getLedgerDb();
+          if (db) {
+            for (const noteId of migratedIds) {
+              await db.execute(sql`
+                DELETE FROM ledger_admin_notes
+                WHERE id = ${noteId}
+                  AND ledger_id = ${input.ledgerId}
+                  AND user_id = ${input.targetUserId}
+                  AND type = 'margin'
+              `);
+            }
+          }
+        }
         return { success: true };
       }),
 

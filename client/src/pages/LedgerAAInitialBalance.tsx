@@ -8,14 +8,14 @@
  *  - 开始日期（startDate）：该标签对该用户生效的起始日期
  *  - 初始比例（ratio）：0%~100%
  *  - 初始金额（amount）：¥
- *  - 初始保证金（margin）：数字币数量 or 人民币
- *  - 保证金币种（marginCoin）：BTC/ETH/SOL/LDO/""（空=人民币）
+ *  - 押金（margin）：数字币数量 or 人民币
+ *  - 押金币种（marginCoin）：BTC/ETH/SOL/LDO/""（空=人民币）
  *
  * JSON key 规则（存入 ledger_members.initial_balances）：
  *   tagName                → 初始金额（人民币）
  *   tagName__ratio         → 初始比例
- *   tagName__margin        → 初始保证金数量（数字币数量 or 人民币金额）
- *   tagName__marginCoin    → 保证金币种（BTC/ETH/SOL/LDO，空=人民币）
+ *   tagName__margin        → 押金数量（数字币数量 or 人民币金额）
+ *   tagName__marginCoin    → 押金币种（BTC/ETH/SOL/LDO，空=人民币）
  *   tagName__startDate     → 开始日期 (YYYY-MM-DD)
  *   tagName__visible       → 显示开关 (1 = 显示, 0 = 隐藏)
  */
@@ -30,10 +30,28 @@ import { COIN_OPTIONS } from "@/components/FunderOrderCard";
 // 与52号融资付息订单保持同一币种覆盖范围；CNY 统一表示人民币。
 const MARGIN_COIN_OPTIONS = ['CNY', ...COIN_OPTIONS.filter((coin) => coin !== 'CNY')];
 
+type MarginNote = {
+  id: string;
+  content: string;
+  createdAt: string;
+};
+
 type MarginEntry = {
+  id: string;
   coin: string;
   amount: string;
+  createdAt: string;
+  notes: MarginNote[];
 };
+
+const createMarginEntry = (seed?: Partial<MarginEntry>): MarginEntry => ({
+  id: seed?.id || `margin_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+  coin: normalizeMarginCoin(seed?.coin ?? 'CNY'),
+  amount: String(seed?.amount ?? '0'),
+  // 只有新建明细记录当前时间；历史单笔若无来源时间，明确保留为空而不伪造时间。
+  createdAt: seed && Object.prototype.hasOwnProperty.call(seed, 'createdAt') ? String(seed.createdAt ?? '') : new Date().toISOString(),
+  notes: Array.isArray(seed?.notes) ? seed.notes : [],
+});
 
 const normalizeMarginCoin = (coin: unknown): string => {
   const value = String(coin ?? '').trim().toUpperCase();
@@ -49,7 +67,21 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string): Marg
       if (Array.isArray(parsed)) {
         return parsed
           .filter((item) => item && typeof item === 'object')
-          .map((item) => ({ coin: normalizeMarginCoin(item.coin), amount: String(item.amount ?? '') }));
+          .map((item, index) => createMarginEntry({
+            id: typeof item.id === 'string' ? item.id : `legacy_${tagName}_${index}`,
+            coin: normalizeMarginCoin(item.coin),
+            amount: String(item.amount ?? '0'),
+            createdAt: typeof item.createdAt === 'string' ? item.createdAt : '',
+            notes: Array.isArray(item.notes)
+              ? item.notes
+                .filter((note: any) => note && typeof note.content === 'string')
+                .map((note: any, noteIndex: number) => ({
+                  id: typeof note.id === 'string' ? note.id : `legacy_note_${tagName}_${index}_${noteIndex}`,
+                  content: note.content,
+                  createdAt: typeof note.createdAt === 'string' ? note.createdAt : '',
+                }))
+              : [],
+          }));
       }
     } catch {
       // 新字段异常时继续兼容旧单笔字段，避免历史数据无法查看。
@@ -57,7 +89,13 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string): Marg
   }
   const legacyAmount = balances[`${tagName}__margin`];
   if (legacyAmount === undefined || legacyAmount === null || String(legacyAmount) === '') return [];
-  return [{ coin: normalizeMarginCoin(balances[`${tagName}__marginCoin`]), amount: String(legacyAmount) }];
+  return [createMarginEntry({
+    id: `legacy_${tagName}_0`,
+    coin: normalizeMarginCoin(balances[`${tagName}__marginCoin`]),
+    amount: String(legacyAmount),
+    createdAt: '',
+    notes: [],
+  })];
 };
 
 const CNY_RATE_FALLBACK = 6.8; // 居底备用，实际汇率从接口实时获取
@@ -73,6 +111,8 @@ interface TagEntry {
   margin: string;
   marginCoin: string;
   margins: MarginEntry[];
+  // 尚存于旧 ledger_admin_notes 表的按标签备注；本次成员保存成功后将归档至首笔押金。
+  legacyMarginNoteIds: number[];
   startDate: string;
   pauseDate: string;
   endDate: string;
@@ -87,6 +127,7 @@ const defaultEntry = (): TagEntry => ({
   margin: "",
   marginCoin: "",
   margins: [],
+  legacyMarginNoteIds: [],
   startDate: "",
   pauseDate: "",
   endDate: "",
@@ -125,6 +166,8 @@ export default function LedgerAAInitialBalance() {
   >({});
   const [dirtyUsers, setDirtyUsers] = useState<Set<number>>(new Set());
   const [savingUsers, setSavingUsers] = useState<Set<number>>(new Set());
+  // 逐笔押金备注的未提交输入，按用户、标签和押金明细ID隔离。
+  const [marginNoteDrafts, setMarginNoteDrafts] = useState<Record<string, string>>({});
 
   // 数字币价格（走服务器tRPC，price-scanner缓存，3秒刷新）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
@@ -148,6 +191,18 @@ export default function LedgerAAInitialBalance() {
       initial[member.userId] = {};
       for (const cat of categories) {
         const n = cat.name;
+        const legacyMarginNotes = ((allBalancesData as any).marginNotesMap?.[`${member.userId}|${n}`] ?? []) as Array<{ id: number; content: string; created_at: string }>;
+        let marginEntries = readMarginEntries(balances, n);
+        if (legacyMarginNotes.length > 0) {
+          const legacyNotes: MarginNote[] = legacyMarginNotes.map((note) => ({
+            id: `legacy_note_${note.id}`,
+            content: note.content,
+            createdAt: note.created_at,
+          }));
+          const firstEntry = marginEntries[0] ?? createMarginEntry({ id: `legacy_${n}_0`, createdAt: '', notes: [] });
+          const knownNoteIds = new Set((firstEntry.notes ?? []).map((note) => note.id));
+          marginEntries = [{ ...firstEntry, notes: [...(firstEntry.notes ?? []), ...legacyNotes.filter((note) => !knownNoteIds.has(note.id))] }, ...marginEntries.slice(1)];
+        }
         initial[member.userId][n] = {
           amount:
             balances[n] !== undefined ? String(balances[n]) : "",
@@ -160,7 +215,8 @@ export default function LedgerAAInitialBalance() {
               ? String(balances[`${n}__margin`])
               : "",
           marginCoin: balances[`${n}__marginCoin`] ?? "",
-          margins: readMarginEntries(balances, n),
+          margins: marginEntries,
+          legacyMarginNoteIds: legacyMarginNotes.map((note) => note.id),
           startDate: balances[`${n}__startDate`] ?? "",
           pauseDate: balances[`${n}__pauseDate`] ?? "",
           endDate: balances[`${n}__endDate`] ?? "",
@@ -244,11 +300,25 @@ export default function LedgerAAInitialBalance() {
         const num = parseFloat(entry.ratio);
         if (!isNaN(num)) balances[`${n}__ratio`] = Math.max(0, num);
       }
-      // 新格式：同一标签可保存多笔不同币种保证金。金额为0仍保留，避免管理员的零值记录被误删。
+      // 新格式：同一标签可保存多笔不同币种押金。金额为0仍保留，避免管理员的零值记录被误删。
       const marginEntries = (entry.margins ?? [])
-        .map((item) => ({ coin: normalizeMarginCoin(item.coin), amount: String(item.amount ?? '').trim() }))
+        .map((item) => ({
+          id: item.id || `margin_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          coin: normalizeMarginCoin(item.coin),
+          amount: String(item.amount ?? '').trim(),
+          createdAt: item.createdAt || '',
+          notes: (item.notes ?? [])
+            .filter((note) => note && note.content.trim() !== '')
+            .map((note) => ({ id: note.id, content: note.content.trim(), createdAt: note.createdAt || '' })),
+        }))
         .filter((item) => item.amount !== '' && Number.isFinite(Number(item.amount)));
-      balances[`${n}__margins`] = JSON.stringify(marginEntries.map((item) => ({ coin: item.coin, amount: Number(item.amount) })));
+      balances[`${n}__margins`] = JSON.stringify(marginEntries.map((item) => ({
+        id: item.id,
+        coin: item.coin,
+        amount: Number(item.amount),
+        createdAt: item.createdAt,
+        notes: item.notes,
+      })));
       // 旧字段保留为首笔明细，供尚未升级的历史读取入口安全兼容；新展示以 __margins 为准。
       const legacyMargin = marginEntries[0];
       balances[`${n}__margin`] = legacyMargin ? Number(legacyMargin.amount) : 0;
@@ -281,10 +351,12 @@ export default function LedgerAAInitialBalance() {
       }
     }
     setSavingUsers((prev) => new Set(prev).add(userId));
+    const migratedMarginNoteIds = categories.flatMap((cat: any) => userEdit[cat.name]?.legacyMarginNoteIds ?? []);
     setMutation.mutate({
       ledgerId,
       targetUserId: userId,
       balances: balances as Record<string, number>,
+      migratedMarginNoteIds,
     });
   };
 
@@ -313,14 +385,14 @@ export default function LedgerAAInitialBalance() {
 
   const updateMarginEntry = (userId: number, tagName: string, index: number, patch: Partial<MarginEntry>) => {
     const current = editState[userId]?.[tagName] ?? defaultEntry();
-    const nextMargins = current.margins.length > 0 ? [...current.margins] : [{ coin: 'CNY', amount: '0' }];
+    const nextMargins = current.margins.length > 0 ? [...current.margins] : [createMarginEntry()];
     nextMargins[index] = { ...nextMargins[index], ...patch };
     updateEntry(userId, tagName, { margins: nextMargins });
   };
 
   const addMarginEntry = (userId: number, tagName: string) => {
     const current = editState[userId]?.[tagName] ?? defaultEntry();
-    updateEntry(userId, tagName, { margins: [...current.margins, { coin: 'CNY', amount: '0' }] });
+    updateEntry(userId, tagName, { margins: [...current.margins, createMarginEntry()] });
   };
 
   const removeMarginEntry = (userId: number, tagName: string, index: number) => {
@@ -335,62 +407,95 @@ export default function LedgerAAInitialBalance() {
     accentColor: string;
     compact?: boolean;
   }) => {
-    const rows = entry.margins.length > 0 ? entry.margins : [{ coin: 'CNY', amount: '0' }];
+    const rows = entry.margins.length > 0 ? entry.margins : [createMarginEntry()];
     const summary = summarizeMargins(entry.margins);
+    const formatRecordedAt = (value: string) => {
+      if (!value) return '历史记录';
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? '历史记录' : date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+    };
+    const addNote = (index: number, marginEntry: MarginEntry) => {
+      const key = `${userId}|${tagName}|${marginEntry.id}`;
+      const content = (marginNoteDrafts[key] ?? '').trim();
+      if (!content) return;
+      const note: MarginNote = { id: `note_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, content, createdAt: new Date().toISOString() };
+      updateMarginEntry(userId, tagName, index, { notes: [...(marginEntry.notes ?? []), note] });
+      setMarginNoteDrafts((previous) => ({ ...previous, [key]: '' }));
+    };
     return (
-      <div className="space-y-1.5">
-        {rows.map((marginEntry, index) => (
-          <div key={`${tagName}-margin-${index}`} className="flex items-center gap-1.5 w-full min-w-0">
-            <span className="text-xs text-gray-400 w-16 flex-shrink-0">{index === 0 ? '初始保证金' : ''}</span>
-            <select
-              value={normalizeMarginCoin(marginEntry.coin)}
-              onChange={(event) => updateMarginEntry(userId, tagName, index, { coin: event.target.value })}
-              className="text-xs border rounded-lg px-1 py-1.5 outline-none flex-shrink-0"
-              style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: normalizeMarginCoin(marginEntry.coin) === 'CNY' ? '#9E9E9E' : accentColor, width: compact ? '66px' : '76px' }}
-            >
-              {MARGIN_COIN_OPTIONS.map((coin) => (
-                <option key={coin} value={coin}>{coin === 'CNY' ? '人民币' : coin}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              inputMode="decimal"
-              placeholder="0"
-              value={marginEntry.amount === '' ? '0' : marginEntry.amount}
-              onChange={(event) => updateMarginEntry(userId, tagName, index, { amount: event.target.value })}
-              className="min-w-0 flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
-              style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
-            />
-            {rows.length > 1 && (
-              <button
-                type="button"
-                aria-label="删除该笔保证金"
-                onClick={() => removeMarginEntry(userId, tagName, index)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0"
-                style={{ color: '#EF5350', backgroundColor: '#FFF5F5' }}
-              >
-                <Trash2 size={14} />
-              </button>
-            )}
-          </div>
-        ))}
-        <div className="flex items-center justify-between pl-16 gap-2">
-          <button
-            type="button"
-            onClick={() => addMarginEntry(userId, tagName)}
-            className="inline-flex items-center gap-1 text-xs font-medium"
-            style={{ color: accentColor }}
-          >
-            <Plus size={13} /> 添加一笔保证金
+      <div className="space-y-2">
+        {rows.map((marginEntry, index) => {
+          const noteKey = `${userId}|${tagName}|${marginEntry.id}`;
+          const cnyValue = getMarginEntryCNY(marginEntry);
+          return (
+            <div key={marginEntry.id || `${tagName}-margin-${index}`} className="rounded-xl px-2 py-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #F0F0F0' }}>
+              <div className="flex items-center gap-1.5 w-full min-w-0">
+                <span className="text-xs text-gray-400 w-10 flex-shrink-0">{index === 0 ? '押金' : `第${index + 1}笔`}</span>
+                <select
+                  value={normalizeMarginCoin(marginEntry.coin)}
+                  onChange={(event) => updateMarginEntry(userId, tagName, index, { coin: event.target.value })}
+                  className="text-xs border rounded-lg px-1 py-1.5 outline-none flex-shrink-0"
+                  style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: normalizeMarginCoin(marginEntry.coin) === 'CNY' ? '#9E9E9E' : accentColor, width: compact ? '66px' : '76px' }}
+                >
+                  {MARGIN_COIN_OPTIONS.map((coin) => (
+                    <option key={coin} value={coin}>{coin === 'CNY' ? '人民币' : coin}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={marginEntry.amount === '' ? '0' : marginEntry.amount}
+                  onChange={(event) => updateMarginEntry(userId, tagName, index, { amount: event.target.value })}
+                  className="min-w-0 flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
+                  style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
+                />
+                {rows.length > 1 && (
+                  <button type="button" aria-label="删除该笔押金" onClick={() => removeMarginEntry(userId, tagName, index)} className="w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0" style={{ color: '#EF5350', backgroundColor: '#FFF5F5' }}>
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+              <div className="ml-10 mt-1 flex items-center justify-between gap-2 text-xs">
+                <span style={{ color: '#9E9E9E' }}>记录时间：{formatRecordedAt(marginEntry.createdAt)}</span>
+                <span style={{ color: cnyValue === null ? '#B26A00' : '#757575' }}>{cnyValue === null ? '暂无可靠报价' : `≈ ¥${cnyValue.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`}</span>
+              </div>
+              <div className="ml-10 mt-1.5 space-y-1.5">
+                {(marginEntry.notes ?? []).map((note) => (
+                  <div key={note.id} className="flex items-start gap-1.5 rounded-lg px-2 py-1.5" style={{ backgroundColor: '#FFFFFF' }}>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs" style={{ color: '#9E9E9E' }}>{formatRecordedAt(note.createdAt)}</div>
+                      <div className="text-xs whitespace-pre-wrap" style={{ color: '#424242' }}>{note.content}</div>
+                    </div>
+                    <button type="button" aria-label="删除该笔押金备注" onClick={() => updateMarginEntry(userId, tagName, index, { notes: (marginEntry.notes ?? []).filter((item) => item.id !== note.id) })} className="p-0.5 flex-shrink-0" style={{ color: '#EF5350' }}><Trash2 size={12} /></button>
+                  </div>
+                ))}
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    value={marginNoteDrafts[noteKey] ?? ''}
+                    onChange={(event) => setMarginNoteDrafts((previous) => ({ ...previous, [noteKey]: event.target.value }))}
+                    onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addNote(index, marginEntry); } }}
+                    placeholder="添加本笔押金备注"
+                    className="min-w-0 flex-1 rounded-lg border px-2 py-1 text-xs outline-none focus:border-red-400"
+                    style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
+                  />
+                  <button type="button" onClick={() => addNote(index, marginEntry)} className="px-2 py-1 rounded-lg text-xs font-medium flex-shrink-0" style={{ backgroundColor: '#FFF0F0', color: accentColor }}>添加</button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        <div className="flex items-center justify-between pl-10 gap-2">
+          <button type="button" onClick={() => addMarginEntry(userId, tagName)} className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: accentColor }}>
+            <Plus size={13} /> 添加一笔押金
           </button>
-          {summary.validCount > 0 && (
-            <span className="text-xs px-2 py-0.5 rounded-full text-right" style={{ backgroundColor: '#FFF0F0', color: accentColor }}>
-              {summary.validCount}笔 · ≈ ¥{summary.totalCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-            </span>
-          )}
+          <span className="text-xs px-2 py-0.5 rounded-full text-right" style={{ backgroundColor: '#FFF0F0', color: accentColor }}>
+            {summary.validCount}笔 · ≈ ¥{summary.totalCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+          </span>
         </div>
         {summary.unpricedCoins.length > 0 && (
-          <div className="pl-16 text-xs" style={{ color: '#B26A00' }}>
+          <div className="pl-10 text-xs" style={{ color: '#B26A00' }}>
             {Array.from(new Set(summary.unpricedCoins)).join('、')} 暂无可靠报价，未计入人民币汇总
           </div>
         )}
@@ -420,41 +525,6 @@ export default function LedgerAAInitialBalance() {
   const [tagTargetTotalEditing, setTagTargetTotalEditing] = useState(false);
   const [tagTargetTotalInput, setTagTargetTotalInput] = useState('');
   const [tagTargetTotalSaved, setTagTargetTotalSaved] = useState<string | null>(null);
-
-  // 保证金备注功能
-  const [showMarginNoteModal, setShowMarginNoteModal] = useState<{ userId: number; userName: string; tagName: string } | null>(null);
-  const [newMarginNoteContent, setNewMarginNoteContent] = useState("");
-
-  const { data: marginNotesData, refetch: refetchMarginNotes } = trpc.getAdminNotes.useQuery(
-    { ledgerId, type: 'margin' as const, userId: showMarginNoteModal?.userId ?? 0, tagName: showMarginNoteModal?.tagName ?? '' },
-    { enabled: !!ledgerId && !!showMarginNoteModal }
-  );
-
-  // 全部成员各标签的保证金备注数量（key: `${userId}|${tagName}`）
-  const { data: marginNoteCountsData, refetch: refetchMarginNoteCounts } = trpc.getAdminNoteCounts.useQuery(
-    { ledgerId, type: 'margin' as const, allMembers: true },
-    { enabled: !!ledgerId }
-  );
-  const marginNoteCounts = (marginNoteCountsData?.counts ?? {}) as Record<string, number>;
-
-  const addMarginNoteMutation = trpc.adminAddNote.useMutation({
-    onSuccess: () => {
-      toast.success("备注已添加");
-      setNewMarginNoteContent("");
-      refetchMarginNotes();
-      refetchMarginNoteCounts();
-    },
-    onError: (err) => { toast.error((err as any).message || "添加失败"); },
-  });
-
-  const deleteMarginNoteMutation = trpc.adminDeleteNote.useMutation({
-    onSuccess: () => {
-      toast.success("备注已删除");
-      refetchMarginNotes();
-      refetchMarginNoteCounts();
-    },
-    onError: (err) => { toast.error((err as any).message || "删除失败"); },
-  });
 
   // 标签配置相关状态
   const [tagConfigForm, setTagConfigForm] = useState<{
@@ -487,7 +557,7 @@ export default function LedgerAAInitialBalance() {
   const [tagConfigSaving, setTagConfigSaving] = useState(false);
   // 标签配置是否处于编辑模式
   const [tagConfigEditing, setTagConfigEditing] = useState(false);
-  // 保证金手动编辑状态：{ coin: string, amount: string }[]
+  // 押金手动编辑状态：{ coin: string, amount: string }[]
   const [marginEdits, setMarginEdits] = useState<Array<{ coin: string; amount: string }>>([]);
 
   // 获取标签配置
@@ -496,7 +566,7 @@ export default function LedgerAAInitialBalance() {
     { enabled: !!ledgerId && !!selectedTagName }
   );
 
-  // 获取标签保证金汇总和最新市值
+  // 获取标签押金汇总和最新市值
   const { data: tagSummaryData } = trpc.ledger.getTagSummary.useQuery(
     { ledgerId, tagName: selectedTagName ?? '' },
     { enabled: !!ledgerId && !!selectedTagName }
@@ -584,7 +654,7 @@ export default function LedgerAAInitialBalance() {
 
   // 进入编辑模式时，初始化编辑数据
   const handleStartEditing = () => {
-    // 保证金：仅从已保存的配置读取（纯手动，不自动计算）
+    // 押金：仅从已保存的配置读取（纯手动，不自动计算）
     const savedMargin = tagConfigData?.margin_by_coin
       ? (() => { try { return JSON.parse(tagConfigData.margin_by_coin); } catch { return null; } })()
       : null;
@@ -1151,11 +1221,11 @@ export default function LedgerAAInitialBalance() {
                 </div>
 
                 <div className="px-4 py-3 space-y-4">
-                  {/* 保证金汇总 */}
+                  {/* 押金汇总 */}
                   <div>
-                    <div className="text-xs font-medium text-gray-500 mb-1.5">保证金汇总</div>
+                    <div className="text-xs font-medium text-gray-500 mb-1.5">押金汇总</div>
                     {!tagConfigEditing ? (
-                      /* 查看模式：仅显示手动录入的保证金 */
+                      /* 查看模式：仅显示手动录入的押金 */
                       <div className="rounded-xl px-3 py-2" style={{ backgroundColor: "#FAF3ED" }}>
                         {(() => {
                           const savedMargin = tagConfigData?.margin_by_coin
@@ -1177,7 +1247,7 @@ export default function LedgerAAInitialBalance() {
                               ))}
                             </div>
                           ) : (
-                            <span className="text-xs text-gray-400">暂无保证金数据，点「编辑」手动录入</span>
+                            <span className="text-xs text-gray-400">暂无押金数据，点「编辑」手动录入</span>
                           );
                         })()}
                       </div>
@@ -1863,18 +1933,9 @@ export default function LedgerAAInitialBalance() {
                             />
                           </div>
 
-                          {/* 行5：初始保证金（可新增多笔，不同币种独立记录） */}
+                          {/* 行5：押金（可新增多笔，不同币种独立记录） */}
                           <div className="space-y-1.5">
                             <MarginEntriesEditor userId={userId} tagName={cat.name} entry={entry} accentColor="#D32F2F" />
-                            {/* 保证金标签备注入口 */}
-                            <div className="flex justify-end">
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); setShowMarginNoteModal({ userId, userName: member.nickname || member.username || `用户${userId}`, tagName: cat.name }); }}
-                                className="text-xs font-medium"
-                                style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }}
-                              >保证金备注{(marginNoteCounts[`${userId}|${cat.name}`] ?? 0) > 0 ? ` (${marginNoteCounts[`${userId}|${cat.name}`]})` : ''}</button>
-                            </div>
                           </div>
                           </div>}
                         </div>
@@ -2185,7 +2246,7 @@ export default function LedgerAAInitialBalance() {
                     </div>
                   );
                 })()}
-                {/* 初始保证金：与用户展开区使用同一套多笔多币种编辑器 */}
+                {/* 押金：与用户展开区使用同一套多笔多币种编辑器 */}
                 <MarginEntriesEditor userId={userId} tagName={tagName} entry={entry} accentColor={catColor} compact />
               </div>
               {/* 弹窗底部保存按鈕 */}
@@ -2207,78 +2268,6 @@ export default function LedgerAAInitialBalance() {
         );
       })()}
 
-      {/* 保证金备注弹窗 */}
-      {showMarginNoteModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center"
-          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-          onClick={() => setShowMarginNoteModal(null)}
-        >
-          <div
-            className="w-full rounded-t-2xl overflow-hidden"
-            style={{ backgroundColor: '#FFFFFF', maxWidth: 480, maxHeight: '80vh' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
-              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>保证金备注 - {showMarginNoteModal.userName} · {showMarginNoteModal.tagName}</span>
-              <button onClick={() => setShowMarginNoteModal(null)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
-            </div>
-
-            <div className="px-4 py-4 overflow-y-auto" style={{ maxHeight: '50vh' }}>
-              {/* 添加新备注 */}
-              <div className="flex gap-2 mb-4 items-start">
-                <textarea
-                  placeholder="输入备注内容（可输入多行）"
-                  value={newMarginNoteContent}
-                  onChange={e => setNewMarginNoteContent(e.target.value)}
-                  rows={3}
-                  className="flex-1 px-3 py-2 rounded-xl text-sm outline-none border resize-y"
-                  style={{ borderColor: '#E0E0E0', color: '#1A1A1A', minHeight: 72, lineHeight: 1.5 }}
-                />
-                <button
-                  onClick={() => {
-                    if (!newMarginNoteContent.trim()) return toast.error("请输入备注内容");
-                    addMarginNoteMutation.mutate({ ledgerId, userId: showMarginNoteModal.userId, tagName: showMarginNoteModal.tagName, type: 'margin', content: newMarginNoteContent.trim() });
-                  }}
-                  disabled={addMarginNoteMutation.isPending}
-                  className="px-4 py-2 rounded-xl text-sm font-medium flex-shrink-0"
-                  style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
-                >
-                  添加
-                </button>
-              </div>
-
-              {/* 备注列表 */}
-              {(marginNotesData?.notes ?? []).length === 0 ? (
-                <div className="text-center py-6" style={{ color: '#BDBDBD' }}>暂无备注</div>
-              ) : (
-                <div className="space-y-2">
-                  {(marginNotesData?.notes ?? []).map((note: any) => (
-                    <div key={note.id} className="flex items-start gap-2 px-3 py-2 rounded-xl" style={{ backgroundColor: '#FAFAFA' }}>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs" style={{ color: '#9E9E9E' }}>
-                          {new Date(note.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
-                        </div>
-                        <div className="text-sm mt-0.5" style={{ color: '#1A1A1A', whiteSpace: 'pre-wrap' }}>{note.content}</div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          if (confirm('确认删除此备注？')) {
-                            deleteMarginNoteMutation.mutate({ ledgerId, noteId: note.id });
-                          }
-                        }}
-                        className="p-1 rounded flex-shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" style={{ color: '#EF5350' }} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

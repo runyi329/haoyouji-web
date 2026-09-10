@@ -39,7 +39,8 @@ import {
 } from "recharts";
 
 // 数字币价格现已改为服务端缓存，通过 tRPC getCryptoPrices 接口获取。
-type MarginEntry = { coin: string; amount: number };
+type MarginNote = { id: string; content: string; createdAt: string };
+type MarginEntry = { id?: string; coin: string; amount: number; createdAt?: string; notes?: MarginNote[] };
 type ResolvedMarginEntry = MarginEntry & { cnyValue: number | null };
 
 const normalizeMarginCoin = (coin: unknown): string => {
@@ -47,7 +48,7 @@ const normalizeMarginCoin = (coin: unknown): string => {
   return value === '人民币' || value === 'RMB' || value === '' ? 'CNY' : value;
 };
 
-// 新格式优先读取 tagName__margins；未升级的历史单笔数据自动作为一笔保证金处理。
+// 新格式优先读取 tagName__margins；未升级的历史单笔数据自动作为一笔押金处理。
 const readMarginEntries = (balances: Record<string, any>, tagName: string): MarginEntry[] => {
   const raw = balances[`${tagName}__margins`];
   if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
@@ -56,7 +57,22 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string): Marg
       if (Array.isArray(parsed)) {
         return parsed
           .filter((item) => item && typeof item === 'object' && Number.isFinite(Number(item.amount)))
-          .map((item) => ({ coin: normalizeMarginCoin(item.coin), amount: Number(item.amount) }));
+          .map((item, index) => ({
+            id: typeof item.id === 'string' ? item.id : `legacy_${tagName}_${index}`,
+            coin: normalizeMarginCoin(item.coin),
+            amount: Number(item.amount),
+            // 缺失时间的历史明细保持为空，由页面明确标为“历史押金”，不伪造时间。
+            createdAt: typeof item.createdAt === 'string' ? item.createdAt : '',
+            notes: Array.isArray(item.notes)
+              ? item.notes
+                .filter((note: any) => note && typeof note.content === 'string')
+                .map((note: any, noteIndex: number) => ({
+                  id: typeof note.id === 'string' ? note.id : `legacy_note_${tagName}_${index}_${noteIndex}`,
+                  content: note.content,
+                  createdAt: typeof note.createdAt === 'string' ? note.createdAt : '',
+                }))
+              : [],
+          }));
       }
     } catch {
       // 新字段损坏时回退旧字段，保证历史页面仍可读取。
@@ -64,7 +80,13 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string): Marg
   }
   const legacyAmount = balances[`${tagName}__margin`];
   if (legacyAmount === undefined || legacyAmount === null || !Number.isFinite(Number(legacyAmount))) return [];
-  return [{ coin: normalizeMarginCoin(balances[`${tagName}__marginCoin`]), amount: Number(legacyAmount) }];
+  return [{
+    id: `legacy_${tagName}_0`,
+    coin: normalizeMarginCoin(balances[`${tagName}__marginCoin`]),
+    amount: Number(legacyAmount),
+    createdAt: '',
+    notes: [],
+  }];
 };
 
 const resolveMarginEntries = (balances: Record<string, any>, tagName: string, prices: Record<string, number>): ResolvedMarginEntry[] => {
@@ -433,7 +455,25 @@ export default function LedgerDetailAA({
     { ledgerId, type: 'margin' as const, tagName: marginNoteTag ?? '', viewAsUserId: viewAsUserId ?? undefined },
     { enabled: !!ledgerId && !!marginNoteTag }
   );
-  // 各标签备注数量（用于在分红/金额旁显示条数）
+  // 押金明细优先读取新版每笔 notes；旧版按标签备注在尚未管理员保存迁移前，
+  // 只作为第一笔押金的历史备注显示，避免错配到后续新增押金。
+  const currentMarginDetailEntries = useMemo<ResolvedMarginEntry[]>(() => {
+    if (!marginNoteTag || !initialBalancesData?.balances) return [];
+    const entries = resolveMarginEntries(initialBalancesData.balances as Record<string, any>, marginNoteTag, aaCryptoPrices);
+    const legacyNotes: MarginNote[] = ((marginNotesData?.notes ?? []) as any[])
+      .map((note) => ({
+        id: `legacy_note_${note.id}`,
+        content: String(note.content ?? ''),
+        createdAt: String(note.created_at ?? ''),
+      }))
+      .filter((note) => note.content !== '')
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    if (legacyNotes.length === 0) return entries;
+    const firstEntry = entries[0] ?? { id: `legacy_${marginNoteTag}_0`, coin: 'CNY', amount: 0, createdAt: '', notes: [], cnyValue: 0 };
+    const knownNoteIds = new Set((firstEntry.notes ?? []).map((note) => note.id));
+    return [{ ...firstEntry, notes: [...(firstEntry.notes ?? []), ...legacyNotes.filter((note) => !knownNoteIds.has(note.id))] }, ...entries.slice(1)];
+  }, [marginNoteTag, initialBalancesData, aaCryptoPrices, marginNotesData]);
+  // 各标签备注数量（用于在分红/押金旁显示条数）
   const { data: dividendNoteCountsData } = trpc.getAdminNoteCounts.useQuery(
     { ledgerId, type: 'dividend' as const, viewAsUserId: viewAsUserId ?? undefined },
     { enabled: !!ledgerId }
@@ -700,7 +740,7 @@ export default function LedgerDetailAA({
       const color = COLORS[idx % COLORS.length];
       // 初始金额
       const initialBalance = Number(initialBalancesData.balances[tagName] ?? 0);
-      // 保证金：新格式可包含多笔不同币种，逐项按实时人民币价格折算后汇总。
+      // 押金：新格式可包含多笔不同币种，逐项按实时人民币价格折算后汇总。
       const marginEntries = resolveMarginEntries(initialBalancesData.balances, tagName, aaCryptoPrices);
       const marginCny = marginEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0);
       // 权重比例
@@ -722,7 +762,7 @@ export default function LedgerDetailAA({
         const balance = income > 0 ? income : expense;
         return { date: day.date, balance, income, expense };
       }).filter(Boolean).sort((a: any, b: any) => a.date.localeCompare(b.date));
-      // 计算每天的盈亏値（绝对金额、%初始、%保证金）
+      // 计算每天的盈亏値（绝对金额、%初始、%押金）
       // 如果该标签配置了 startDate，则只显示 startDate 前一个交易日及之后的数据
       const tagStartDate = initialBalancesData.balances[`${tagName}__startDate`];
       let filteredTagDays = tagDays;
@@ -745,7 +785,7 @@ export default function LedgerDetailAA({
     });
   }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, withdrawByTag, capitalByTag]);
 
-  // ─── 全部模式：计算所有标签的保证金总和和盈亏总和 ────────────────────────
+  // ─── 全部模式：计算所有标签的押金总和和盈亏总和 ────────────────────────
   const allTagsStats = useMemo(() => {
     if (!initialBalancesData?.balances || !categories || categories.length === 0) {
       return { totalMargin: 0, totalPnl: 0, diff: 0, hasCrypto: false, cryptoDetails: [] as {coin: string, amount: number, cnyValue: number}[] };
@@ -766,7 +806,7 @@ export default function LedgerDetailAA({
     }> = [];
     categories.forEach((cat: any) => {
       const tagName = cat.name;
-      // 保证金：每笔按自身币种折算人民币后汇总；无可靠报价的数字币不虚构人民币值。
+      // 押金：每笔按自身币种折算人民币后汇总；无可靠报价的数字币不虚构人民币值。
       const marginEntries = resolveMarginEntries(initialBalancesData.balances, tagName, aaCryptoPrices);
       const marginCny = marginEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0);
       totalMargin += marginCny;
@@ -1483,7 +1523,7 @@ export default function LedgerDetailAA({
         {/* 4个统计卡片 */}
         <div className={`px-4 pb-3 grid gap-1.5 ${selectedTagId === null ? 'grid-cols-3' : 'grid-cols-2'}`}>
           {selectedTagId === null ? (
-            /* ─── 全部模式：价値 + 盈亏总计 + 保证金 ─── */
+            /* ─── 全部模式：价値 + 盈亏总计 + 押金 ─── */
             <>
               {/* 价値（第一个） */}
               <div className="rounded-sm p-2 flex flex-col" style={{ backgroundColor: "rgba(15,23,42,0.45)" }}>
@@ -1507,9 +1547,9 @@ export default function LedgerDetailAA({
                   {overviewTotalPnlRef.current > 0 ? '+' : ''}￥{overviewTotalPnlRef.current.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </div>
               </div>
-              {/* 保证金（第三个） */}
+              {/* 押金（第三个） */}
               <div className="rounded-sm p-2 flex flex-col" style={{ backgroundColor: "rgba(15,23,42,0.45)" }}>
-                <div className="text-[10px] opacity-75 flex items-center justify-end gap-1 mb-1">历史保证金 <button onClick={() => setShowAllModeHelp('margin')} className="inline-flex items-center justify-center active:opacity-60"><HelpCircle className="w-3 h-3 text-white/60" /></button></div>
+                <div className="text-[10px] opacity-75 flex items-center justify-end gap-1 mb-1">历史押金 <button onClick={() => setShowAllModeHelp('margin')} className="inline-flex items-center justify-center active:opacity-60"><HelpCircle className="w-3 h-3 text-white/60" /></button></div>
                 {allTagsStats.hasCrypto ? (
                   <div className="text-sm font-bold leading-tight text-right">
                     {allTagsStats.cryptoDetails.map(d => `${d.amount.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} ${d.coin}`).join(' + ')}
@@ -1523,7 +1563,7 @@ export default function LedgerDetailAA({
 
             </>
           ) : (
-            /* ─── 单标签模式：最新余额 + 保证金 + 初始金额 + 累计盈亏 ─── */
+            /* ─── 单标签模式：最新余额 + 押金 + 初始金额 + 累计盈亏 ─── */
             <>
           {/* 最新余额（联动：原始余额 + 提现） */}
           <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
@@ -1546,14 +1586,14 @@ export default function LedgerDetailAA({
             )}
           </div>
 
-          {/* 保证金 + 比例 */}
+          {/* 押金 + 比例 */}
           <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
             {(() => {
               const tagName = selectedTag?.name;
               if (!tagName || !initialBalancesData?.balances) {
                 return (
                   <>
-                    <div className="text-xs opacity-75 mb-0.5">保证金</div>
+                    <div className="text-xs opacity-75 mb-0.5">押金</div>
                     <div className="text-base font-bold">¥0.00</div>
                   </>
                 );
@@ -1569,7 +1609,7 @@ export default function LedgerDetailAA({
               return (
                 <>
                   <div className="text-xs opacity-75 mb-0.5 flex items-center gap-2">
-                    <span>保证金</span>
+                    <span>押金</span>
                     {ratioVal !== undefined && ratioVal !== null && (
                       <span className="opacity-80">比例 {Number(ratioVal).toFixed(1)}%</span>
                     )}
@@ -2771,14 +2811,11 @@ export default function LedgerDetailAA({
                         <div
                           onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
                           style={{ fontSize: 13, lineHeight: 1, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                        >{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(marginNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{marginNoteCounts[tag.name]}</sup>)}</div>
-                        {tag.marginEntries.length > 0 && (
-                          <div style={{ fontSize: 9, marginTop: 2, lineHeight: 1, color: '#BDBDBD' }}>
-                            {tag.marginEntries.length === 1
-                              ? (tag.marginEntries[0].coin === 'CNY' ? '人民币' : `${tag.marginEntries[0].amount} ${tag.marginEntries[0].coin}`)
-                              : `${tag.marginEntries.length}笔`}
-                          </div>
-                        )}
+                        >{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(() => {
+                          const embeddedNoteCount = tag.marginEntries.reduce((sum, entry) => sum + (entry.notes?.length ?? 0), 0);
+                          const totalNoteCount = embeddedNoteCount + (marginNoteCounts[tag.name] ?? 0);
+                          return totalNoteCount > 0 ? <sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{totalNoteCount}</sup> : null;
+                        })()}</div>
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 年化 */}
@@ -3810,21 +3847,21 @@ export default function LedgerDetailAA({
               </div>
             </div>
 
-            {/* 第二块：保证金 */}
+            {/* 第二块：押金 */}
             <div className="flex items-center gap-2 mb-2" style={{ marginTop: 4 }}>
               <div className="flex items-center justify-center w-6 h-6 rounded-full text-white text-xs font-bold" style={{ backgroundColor: '#C62828', flexShrink: 0 }}>2</div>
-              <span className="text-sm font-bold" style={{ color: '#1A1A1A' }}>保证金要求</span>
+              <span className="text-sm font-bold" style={{ color: '#1A1A1A' }}>押金要求</span>
             </div>
             <div className="rounded-2xl bg-white mb-4" style={{ padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
               <div className="rounded-xl mb-3" style={{ background: '#F8F8F8', padding: '10px 12px' }}>
                 <div style={{ fontSize: 10, color: '#9E9E9E', fontWeight: 600, marginBottom: 4 }}>核心原则</div>
-                <div style={{ fontSize: 13, color: '#1A1A1A', fontWeight: 600 }}>当日买入满仓跌停金额 ≤ 保证金</div>
+                <div style={{ fontSize: 13, color: '#1A1A1A', fontWeight: 600 }}>当日买入满仓跌停金额 ≤ 押金</div>
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1.5px solid #F0F0F0' }}>
                     <th style={{ fontSize: 11, color: '#9E9E9E', fontWeight: 500, padding: '0 8px 8px', textAlign: 'left' }}>涨跌幅限制</th>
-                    <th style={{ fontSize: 11, color: '#9E9E9E', fontWeight: 500, padding: '0 8px 8px', textAlign: 'center' }}>保证金比例</th>
+                    <th style={{ fontSize: 11, color: '#9E9E9E', fontWeight: 500, padding: '0 8px 8px', textAlign: 'center' }}>押金比例</th>
                     <th style={{ fontSize: 11, color: '#9E9E9E', fontWeight: 500, padding: '0 8px 8px', textAlign: 'center' }}>100万账户</th>
                   </tr>
                 </thead>
@@ -3844,8 +3881,8 @@ export default function LedgerDetailAA({
               <div className="rounded-xl mt-3" style={{ background: '#FFF8F8', padding: '12px' }}>
                 <div style={{ fontSize: 11, color: '#C62828', fontWeight: 700, marginBottom: 8 }}>举例说明</div>
                 {[
-                  { label: '交 10 万保证金，做 ±20% 股票', value: '最多买 50 万' },
-                  { label: '50 万 × 20% 跌停', value: '= 10 万 ≤ 保证金 ✓' },
+                  { label: '交 10 万押金，做 ±20% 股票', value: '最多买 50 万' },
+                  { label: '50 万 × 20% 跌停', value: '= 10 万 ≤ 押金 ✓' },
                 ].map((row, i, arr) => (
                   <div key={row.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderBottom: i < arr.length - 1 ? '1px solid #FFE0E0' : 'none' }}>
                     <span style={{ fontSize: 12, color: '#757575' }}>{row.label}</span>
@@ -3854,7 +3891,7 @@ export default function LedgerDetailAA({
                 ))}
               </div>
               <div style={{ fontSize: 11, color: '#BDBDBD', lineHeight: 1.8, marginTop: 12 }}>
-                · 保证金不足时，可降低仓位至满足要求<br />
+                · 押金不足时，可降低仓位至满足要求<br />
                 · 满仓跌停损失 = 买入金额 × 涨跌幅限制
               </div>
             </div>
@@ -4367,7 +4404,7 @@ export default function LedgerDetailAA({
           <div className="relative bg-white rounded-2xl w-[88%] max-w-sm max-h-[80vh] overflow-hidden shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F0F0F0' }}>
               <div className="text-base font-bold text-gray-800">
-                {showAllModeHelp === 'value' ? '「实时价値」计算说明' : showAllModeHelp === 'pnl' ? '「实时波动」计算说明' : '「历史保证金」说明'}
+                {showAllModeHelp === 'value' ? '「实时价値」计算说明' : showAllModeHelp === 'pnl' ? '「实时波动」计算说明' : '「历史押金」说明'}
               </div>
               <button onClick={() => setShowAllModeHelp(null)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
                 <X className="w-4 h-4 text-gray-500" />
@@ -4384,8 +4421,8 @@ export default function LedgerDetailAA({
                   const value = allTagsStats.totalMargin + overviewTotalPnlRef.current - totalDividend;
                   return (
                     <>
-                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">公式：价値 = 保证金总和 + 盈亏总和 − 已分红总金额</div>
-                      <div className="font-semibold text-gray-900">① 保证金总和
+                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">公式：价値 = 押金总和 + 盈亏总和 − 已分红总金额</div>
+                      <div className="font-semibold text-gray-900">① 押金总和
                         <span className="ml-2 font-mono text-red-600">{fmtAbs(allTagsStats.totalMargin)}</span>
                         <span className="ml-1 text-xs font-normal text-gray-400">(客户投入的本金基数)</span>
                       </div>
@@ -4472,7 +4509,7 @@ export default function LedgerDetailAA({
                 if (showAllModeHelp === 'margin') {
                   return (
                     <>
-                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">保证金是客户投入的本金，是计算盈亏和收益率的基准。下列为每个标签的保证金明细：</div>
+                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">押金是客户投入的本金，是计算盈亏和收益率的基准。下列为每个标签的押金明细：</div>
                       {perTag.map((t) => (
                         <div key={t.tagName} className="bg-gray-50 rounded-lg px-3 py-2">
                           <div className="flex items-start justify-between gap-3">
@@ -4498,7 +4535,7 @@ export default function LedgerDetailAA({
                       ))}
                       <div className="pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-gray-900">保证金总和</span>
+                          <span className="font-bold text-gray-900">押金总和</span>
                           <span className="text-lg font-bold text-gray-900">{fmtAbs(allTagsStats.totalMargin)}</span>
                         </div>
                         {allTagsStats.hasCrypto && <div className="text-xs text-gray-400 mt-1">数字币已按实时价格折算为人民币加总</div>}
@@ -4594,7 +4631,7 @@ export default function LedgerDetailAA({
         </div>
       )}
 
-      {/* 保证金备注弹窗（客户端查看，按标签） */}
+      {/* 押金明细弹窗：每笔金额、人民币折算、记录时间及该笔备注 */}
       {marginNoteTag && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center px-6"
@@ -4603,27 +4640,65 @@ export default function LedgerDetailAA({
         >
           <div
             className="w-full rounded-2xl overflow-hidden"
-            style={{ backgroundColor: '#FFFFFF', maxWidth: 400, maxHeight: '70vh' }}
+            style={{ backgroundColor: '#FFFFFF', maxWidth: 400, maxHeight: '76vh' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
-              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>保证金备注 · {marginNoteTag}</span>
+              <div>
+                <div className="text-base font-semibold" style={{ color: '#1A1A1A' }}>押金明细 · {marginNoteTag}</div>
+                <div className="text-xs mt-0.5" style={{ color: '#9E9E9E' }}>每笔金额、时间与备注分别记录</div>
+              </div>
               <button onClick={() => setMarginNoteTag(null)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
             </div>
-            <div className="px-4 py-4 overflow-y-auto" style={{ maxHeight: '55vh' }}>
-              {(marginNotesData?.notes ?? []).length === 0 ? (
-                <div className="text-center py-6" style={{ color: '#BDBDBD' }}>暂无备注</div>
+            <div className="px-4 py-4 overflow-y-auto space-y-3" style={{ maxHeight: '61vh' }}>
+              {currentMarginDetailEntries.length === 0 ? (
+                <div className="text-center py-6" style={{ color: '#BDBDBD' }}>暂无押金记录</div>
               ) : (
-                <div className="space-y-3">
-                  {(marginNotesData?.notes ?? []).map((note: any) => (
-                    <div key={note.id} className="px-3 py-2 rounded-xl" style={{ backgroundColor: '#FAFAFA' }}>
-                      <div className="text-xs" style={{ color: '#9E9E9E' }}>
-                        {new Date(note.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                <>
+                  {currentMarginDetailEntries.map((entry, index) => {
+                    const formatRecordedAt = (value?: string) => {
+                      if (!value) return '历史押金（未记录时间）';
+                      const date = new Date(value);
+                      return Number.isNaN(date.getTime()) ? '历史押金（未记录时间）' : date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+                    };
+                    const amountLabel = entry.coin === 'CNY'
+                      ? `¥${entry.amount.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
+                      : `${entry.amount.toLocaleString('zh-CN', { maximumFractionDigits: 8 })} ${entry.coin}`;
+                    return (
+                      <div key={entry.id || `${entry.coin}-${index}`} className="rounded-xl p-3" style={{ backgroundColor: '#FAFAFA', border: '1px solid #F0F0F0' }}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-xs font-medium" style={{ color: '#9E9E9E' }}>第 {index + 1} 笔押金</div>
+                            <div className="text-base font-bold mt-0.5" style={{ color: '#1A1A1A' }}>{amountLabel}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-semibold" style={{ color: entry.cnyValue === null ? '#B26A00' : '#424242' }}>
+                              {entry.cnyValue === null ? '暂无可靠报价' : `≈ ¥${entry.cnyValue.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`}
+                            </div>
+                            <div className="text-xs mt-0.5" style={{ color: '#9E9E9E' }}>{formatRecordedAt(entry.createdAt)}</div>
+                          </div>
+                        </div>
+                        {(entry.notes ?? []).length > 0 && (
+                          <div className="mt-2.5 pt-2.5 space-y-2" style={{ borderTop: '1px solid #EAEAEA' }}>
+                            {(entry.notes ?? []).map((note) => (
+                              <div key={note.id}>
+                                <div className="text-xs" style={{ color: '#9E9E9E' }}>{formatRecordedAt(note.createdAt)}</div>
+                                <div className="text-sm mt-0.5 whitespace-pre-wrap" style={{ color: '#424242' }}>{note.content}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div className="text-sm mt-0.5" style={{ color: '#1A1A1A', whiteSpace: 'pre-wrap' }}>{note.content}</div>
-                    </div>
-                  ))}
-                </div>
+                    );
+                  })}
+                  <div className="flex items-center justify-between px-1 pt-1 text-sm" style={{ color: '#424242' }}>
+                    <span>押金人民币总额</span>
+                    <span className="font-bold">¥{currentMarginDetailEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</span>
+                  </div>
+                  {currentMarginDetailEntries.some((entry) => entry.cnyValue === null) && (
+                    <div className="text-xs px-1" style={{ color: '#B26A00' }}>无可靠报价的外币明细未计入人民币总额</div>
+                  )}
+                </>
               )}
             </div>
           </div>
