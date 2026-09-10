@@ -60,17 +60,37 @@ jobs:
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] === DEPLOY START ===" > $LOG
           cd /root/haoyouji-web || { echo "cd failed" >> $LOG; exit 1; }
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] git fetch..." >> $LOG
-          # 优先用 gh-proxy.com 镜像加速，避免国内服务器直连 GitHub 超时卡顿
+          # 优先用 gh-proxy.com 镜像加速；但镜像可能短暂滞后，必须严格部署本次工作流的目标提交。
           PROXY_URL="https://gh-proxy.com/https://github.com/runyi329/haoyouji-web.git"
           DIRECT_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/runyi329/haoyouji-web.git"
+          EXPECTED_SHA="${{ github.sha }}"
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] target commit: ${EXPECTED_SHA}" >> $LOG
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] 尝试镜像拉取..." >> $LOG
           if timeout 30 git fetch "$PROXY_URL" main:refs/remotes/origin/main >> $LOG 2>&1; then
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] 镜像拉取成功" >> $LOG
           else
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] 镜像失败，回退直连 GitHub..." >> $LOG
-            timeout 60 git fetch origin >> $LOG 2>&1 || echo "[$(date '+%Y-%m-%d %H:%M:%S')] 直连也失败，用本地缓存继续" >> $LOG
+            timeout 60 git fetch "$DIRECT_URL" main:refs/remotes/origin/main >> $LOG 2>&1 || true
           fi
           git reset --hard origin/main >> $LOG 2>&1
+          DEPLOYED_SHA=$(git rev-parse HEAD)
+          # 镜像拉到旧main时，按本次工作流SHA直连拉取；绝不把旧静态资源当作本次部署成功。
+          if [ "$DEPLOYED_SHA" != "$EXPECTED_SHA" ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 镜像提交 ${DEPLOYED_SHA} 不是目标 ${EXPECTED_SHA}，直连拉取目标提交..." >> $LOG
+            if ! timeout 60 git fetch "$DIRECT_URL" "$EXPECTED_SHA":refs/remotes/origin/deploy-target >> $LOG 2>&1; then
+              echo "[$(date '+%Y-%m-%d %H:%M:%S')] BUILD FAILED: 无法获取目标提交 ${EXPECTED_SHA}" >> $LOG
+              echo "[$(date '+%Y-%m-%d %H:%M:%S')] === DEPLOY DONE (FAILED) ===" >> $LOG
+              exit 1
+            fi
+            git reset --hard "$EXPECTED_SHA" >> $LOG 2>&1
+            DEPLOYED_SHA=$(git rev-parse HEAD)
+          fi
+          if [ "$DEPLOYED_SHA" != "$EXPECTED_SHA" ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] BUILD FAILED: 当前提交 ${DEPLOYED_SHA} 与目标 ${EXPECTED_SHA} 不一致" >> $LOG
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] === DEPLOY DONE (FAILED) ===" >> $LOG
+            exit 1
+          fi
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] 已锁定目标提交 ${DEPLOYED_SHA}" >> $LOG
           git clean -fd >> $LOG 2>&1
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] pnpm install..." >> $LOG
           rm -rf node_modules/.vite client/.vite
@@ -161,7 +181,13 @@ jobs:
             RESULT=$(ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
               'tail -3 /tmp/haoyouji-deploy.log 2>/dev/null || echo "log not ready"' 2>/dev/null || echo "ssh-fail")
             echo "[$i/24] $RESULT"
-            if echo "$RESULT" | grep -q "DEPLOY DONE"; then
+            if echo "$RESULT" | grep -q "DEPLOY DONE (FAILED)"; then
+              echo "Deploy failed; printing full deploy log..."
+              ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+                'cat /tmp/haoyouji-deploy.log' 2>/dev/null || true
+              exit 1
+            fi
+            if echo "$RESULT" | grep -q "=== DEPLOY DONE ==="; then
               echo "Deploy completed!"
               exit 0
             fi
