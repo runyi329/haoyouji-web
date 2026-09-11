@@ -13,7 +13,7 @@ import { trpc } from "@/lib/trpc";
 import {
   ChevronLeft, RefreshCw, TrendingUp, TrendingDown, Bitcoin,
   AlertCircle, WifiOff, CheckCircle2, Circle, Loader2, Users,
-  Wallet, ChevronDown, ChevronUp, ChevronsUpDown,
+  Wallet, ChevronDown, ChevronUp, ChevronsUpDown, Search, XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { WorldCupEmbedded } from "@/pages/WorldCup";
@@ -2267,6 +2267,11 @@ export default function CryptoPrediction() {
   // 融资订单三层筛选
   const [financeL2Tab, setFinanceL2Tab] = useState<'mine' | 'shared'>('mine');
   const [financeL3Tab, setFinanceL3Tab] = useState<'all' | 'stock' | 'crypto' | 'settled'>('all');
+  const [financeOrderSearch, setFinanceOrderSearch] = useState('');
+  const financeOrderSearchTokens = useMemo(
+    () => financeOrderSearch.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean),
+    [financeOrderSearch],
+  );
   // 融资付息视图模式：卡片模式（银色铭牌）/ 订单模式（原始）
   const [financeViewMode, setFinanceViewMode] = useState<'card' | 'order'>('card');
   // 融资付息：资产汇总
@@ -3487,7 +3492,23 @@ export default function CryptoPrediction() {
               const cntL3Crypto = activePool.filter((o: any) => o.asset_type !== 'stock').length;
               const cntL3Settled = settledPool.length;
 
+              // 查询覆盖订单全部可展示文字（订单号、币种、拥有者/参与者、备注、类型、金额等），但不改变本人/参与和分类筛选范围。
+              const doesFinanceOrderMatchSearch = (order: any) => {
+                if (financeOrderSearchTokens.length === 0) return false;
+                let searchableText = '';
+                try { searchableText = JSON.stringify(order).toLocaleLowerCase(); }
+                catch { searchableText = String(order ?? '').toLocaleLowerCase(); }
+                return financeOrderSearchTokens.every(token => searchableText.includes(token));
+              };
+              const matchedFinanceOrderCount = financeOrderSearchTokens.length === 0
+                ? 0
+                : l3Pool.filter(doesFinanceOrderMatchSearch).length;
               const sortedOrders = [...l3Pool].sort((a: any, b: any) => {
+                if (financeOrderSearchTokens.length > 0) {
+                  const aMatches = doesFinanceOrderMatchSearch(a);
+                  const bMatches = doesFinanceOrderMatchSearch(b);
+                  if (aMatches !== bMatches) return Number(bMatches) - Number(aMatches);
+                }
                 const aTime = new Date(financeL3Tab === 'settled' ? (a.settled_at || a.updated_at || a.created_at) : (a.created_at || a.buy_date || 0)).getTime();
                 const bTime = new Date(financeL3Tab === 'settled' ? (b.settled_at || b.updated_at || b.created_at) : (b.created_at || b.buy_date || 0)).getTime();
                 return bTime - aTime;
@@ -3520,16 +3541,40 @@ export default function CryptoPrediction() {
               return (
                 <>
                   {/* 第2层仅保留本人和参与：他人设置与真实参与订单统一进入参与。 */}
-                  <div className="flex rounded p-1 gap-1 mb-3" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
-                    {([
-                      ['mine',   '本人', cntMine],
-                      ['shared', '参与', cntShared],
-                    ] as const).map(([key, label, cnt]) => (
-                      <button key={key} onClick={() => { setFinanceL2Tab(key as any); setFinanceL3Tab('all'); }}
-                        style={tabBtnStyle(financeL2Tab === key)}>
-                        {label} <span style={{ opacity: 0.75, fontSize: '11px' }}>{cnt}</span>
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="flex min-w-0 flex-1 rounded p-1 gap-1" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
+                      {([
+                        ['mine',   '本人', cntMine],
+                        ['shared', '参与', cntShared],
+                      ] as const).map(([key, label, cnt]) => (
+                        <button key={key} onClick={() => { setFinanceL2Tab(key as any); setFinanceL3Tab('all'); }}
+                          style={tabBtnStyle(financeL2Tab === key)}>
+                          {label} <span style={{ opacity: 0.75, fontSize: '11px' }}>{cnt}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="relative flex-shrink-0" style={{ width: '92px' }}>
+                      <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: '#94A3B8' }} />
+                      <input
+                        value={financeOrderSearch}
+                        onChange={(event) => setFinanceOrderSearch(event.target.value)}
+                        placeholder="查询"
+                        aria-label="智能查询当前融资订单"
+                        className="h-[34px] w-full rounded border bg-white pl-7 pr-5 text-xs outline-none"
+                        style={{ borderColor: '#C7D7FF', color: '#1A2340' }}
+                      />
+                      {financeOrderSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setFinanceOrderSearch('')}
+                          aria-label="清空融资订单查询"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5"
+                          style={{ color: '#94A3B8' }}
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* 第3层：本人和参与统一显示；已结清作为低调的历史入口。 */}
@@ -3546,6 +3591,10 @@ export default function CryptoPrediction() {
                       </button>
                     ))}
                   </div>
+
+                  {financeOrderSearch.trim() && (
+                    <div className="mb-2 text-right text-[11px]" style={{ color: '#2F6F85' }}>匹配 {matchedFinanceOrderCount} 笔已置顶</div>
+                  )}
 
                   {/* 订单列表 */}
                   {sortedOrders.length === 0 ? (
