@@ -19,7 +19,7 @@
  *   tagName__startDate     → 开始日期 (YYYY-MM-DD)
  *   tagName__visible       → 显示开关 (1 = 显示, 0 = 隐藏)
  */
-import { useState, useMemo, useEffect } from "react";
+import { Fragment, useState, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, EyeOff, Pause, Plus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -47,7 +47,8 @@ type MarginEntry = {
 const createMarginEntry = (seed?: Partial<MarginEntry>): MarginEntry => ({
   id: seed?.id || `margin_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
   coin: normalizeMarginCoin(seed?.coin ?? 'CNY'),
-  amount: String(seed?.amount ?? '0'),
+  // 新建记录默认留空，避免移动端输入框被前端强制回填为 0；历史和手动输入的 0 仍原样保留。
+  amount: seed?.amount === undefined || seed?.amount === null ? '' : String(seed.amount),
   // 只有新建明细记录当前时间；历史单笔若无来源时间，明确保留为空而不伪造时间。
   createdAt: seed && Object.prototype.hasOwnProperty.call(seed, 'createdAt') ? String(seed.createdAt ?? '') : new Date().toISOString(),
   notes: Array.isArray(seed?.notes) ? seed.notes : [],
@@ -121,7 +122,8 @@ interface TagEntry {
   pauseDate: string;
   endDate: string;
   visible: boolean;
-  targetAmount: string; // 目标金额（用户级）
+  // 兼容既有 `${tagName}__targetAmount` 存储键：现用于记录该用户在本标签的实际占用金额。
+  targetAmount: string;
   pauseHistory: PauseHistoryItem[]; // 多次暂停/重启历史
 }
 
@@ -287,6 +289,119 @@ export default function LedgerAAInitialBalance() {
       },
     }));
     setDirtyUsers((prev) => new Set(prev).add(userId));
+  };
+
+  // 比例、初始金额、实际占用金额三联动：任意修改一项时，使用已存在的另一项反推第三项。
+  // 优先以“初始金额”为基数；空值只清空当前项，不覆盖用户尚未完成的输入。
+  const formatLinkedNumber = (value: number, maximumFractionDigits = 4) => {
+    if (!Number.isFinite(value)) return '';
+    return String(Number(value.toFixed(maximumFractionDigits)));
+  };
+
+  const allocationKey = (userId: number, tagName: string) => `${userId}__${tagName}`;
+  const isCloseAllocationValue = (left: number, right: number) => Math.abs(left - right) < 0.005;
+
+  // 用于展示：历史字段为空或保留旧零值时，直接展示可由另两项推算的实际结果。
+  // 推算只发生在界面层；用户再次输入任一字段时，仍通过 updateAllocationLink 写入正确的三联动值。
+  const resolveAllocationDisplay = (entry: TagEntry, userId: number, tagName: string) => {
+    const amount = Number(entry.amount);
+    const ratio = Number(entry.ratio);
+    const actualAmount = Number(entry.targetAmount);
+    const hasAmount = Number.isFinite(amount) && amount > 0;
+    const hasRatio = Number.isFinite(ratio) && ratio >= 0;
+    const hasActualAmount = Number.isFinite(actualAmount) && actualAmount >= 0;
+    const key = allocationKey(userId, tagName);
+    let derivedField = derivedAllocationFields[key] ?? null;
+    const display = { amount: entry.amount, ratio: entry.ratio, targetAmount: entry.targetAmount };
+
+    const canDeriveActual = hasAmount && hasRatio;
+    const canDeriveRatio = hasAmount && hasActualAmount;
+    const canDeriveAmount = hasRatio && ratio > 0 && hasActualAmount;
+    const applyDerived = (field: 'amount' | 'ratio' | 'targetAmount') => {
+      if (field === 'targetAmount' && canDeriveActual) display.targetAmount = formatLinkedNumber(amount * ratio / 100, 2);
+      if (field === 'ratio' && canDeriveRatio) display.ratio = formatLinkedNumber(actualAmount / amount * 100);
+      if (field === 'amount' && canDeriveAmount) display.amount = formatLinkedNumber(actualAmount / ratio * 100, 2);
+    };
+
+    if (derivedField === 'targetAmount' && canDeriveActual) applyDerived(derivedField);
+    else if (derivedField === 'ratio' && canDeriveRatio) applyDerived(derivedField);
+    else if (derivedField === 'amount' && canDeriveAmount) applyDerived(derivedField);
+    else {
+      derivedField = null;
+      // 兼容旧数据：优先使用初始金额与比例推算实际权益，解决历史 targetAmount 为 0 的显示差异。
+      if (canDeriveActual && (!hasActualAmount || !isCloseAllocationValue(actualAmount, amount * ratio / 100))) {
+        derivedField = 'targetAmount';
+        applyDerived(derivedField);
+      } else if (canDeriveRatio && (!hasRatio || !isCloseAllocationValue(ratio, actualAmount / amount * 100))) {
+        derivedField = 'ratio';
+        applyDerived(derivedField);
+      } else if (canDeriveAmount && (!hasAmount || !isCloseAllocationValue(amount, actualAmount / ratio * 100))) {
+        derivedField = 'amount';
+        applyDerived(derivedField);
+      }
+    }
+
+    return { ...display, derivedField };
+  };
+
+  const updateAllocationLink = (
+    userId: number,
+    tagName: string,
+    changedField: 'amount' | 'ratio' | 'targetAmount',
+    rawValue: string,
+  ) => {
+    const current = editState[userId]?.[tagName] ?? defaultEntry();
+    const next = { amount: current.amount, ratio: current.ratio, targetAmount: current.targetAmount, [changedField]: rawValue };
+    const key = allocationKey(userId, tagName);
+    if (rawValue.trim() === '') {
+      setDerivedAllocationFields(prev => {
+        const nextDerived = { ...prev };
+        delete nextDerived[key];
+        return nextDerived;
+      });
+      updateEntry(userId, tagName, { [changedField]: rawValue });
+      return;
+    }
+
+    const amount = Number(next.amount);
+    const ratio = Number(next.ratio);
+    const actualAmount = Number(next.targetAmount);
+    const hasAmount = Number.isFinite(amount) && amount > 0;
+    const hasRatio = Number.isFinite(ratio) && ratio >= 0;
+    const hasActualAmount = Number.isFinite(actualAmount) && actualAmount >= 0;
+    let derivedField: 'amount' | 'ratio' | 'targetAmount' | null = null;
+
+    if (changedField === 'amount') {
+      if (hasRatio) {
+        next.targetAmount = formatLinkedNumber(amount * ratio / 100, 2);
+        derivedField = 'targetAmount';
+      } else if (hasActualAmount) {
+        next.ratio = formatLinkedNumber(actualAmount / amount * 100);
+        derivedField = 'ratio';
+      }
+    } else if (changedField === 'ratio') {
+      if (hasAmount) {
+        next.targetAmount = formatLinkedNumber(amount * ratio / 100, 2);
+        derivedField = 'targetAmount';
+      } else if (hasActualAmount && ratio > 0) {
+        next.amount = formatLinkedNumber(actualAmount / ratio * 100, 2);
+        derivedField = 'amount';
+      }
+    } else if (hasAmount) {
+      next.ratio = formatLinkedNumber(actualAmount / amount * 100);
+      derivedField = 'ratio';
+    } else if (hasRatio && ratio > 0) {
+      next.amount = formatLinkedNumber(actualAmount / ratio * 100, 2);
+      derivedField = 'amount';
+    }
+
+    setDerivedAllocationFields(prev => {
+      const nextDerived = { ...prev };
+      if (derivedField) nextDerived[key] = derivedField;
+      else delete nextDerived[key];
+      return nextDerived;
+    });
+    updateEntry(userId, tagName, next);
   };
 
   const handleSaveMember = (userId: number) => {
@@ -457,7 +572,7 @@ export default function LedgerAAInitialBalance() {
                   type="number"
                   inputMode="decimal"
                   placeholder="0"
-                  value={marginEntry.amount === '' ? '0' : marginEntry.amount}
+                  value={marginEntry.amount}
                   onChange={(event) => updateMarginEntry(userId, tagName, index, { amount: event.target.value })}
                   className="min-w-0 flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
                   style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
@@ -521,6 +636,10 @@ export default function LedgerAAInitialBalance() {
   const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set()); // 默认全部折叠
   // 用户视图：每个用户下展开的标签，key = `${userId}__${catName}`
   const [expandedUserTags, setExpandedUserTags] = useState<Set<string>>(new Set());
+  // 用户视图：已关闭可见标签默认汇总，按用户按需展开。
+  const [expandedHiddenTagGroups, setExpandedHiddenTagGroups] = useState<Set<number>>(new Set());
+  // 三联动字段本次由系统反推的来源，仅影响当前编辑会话的展示颜色，不改变历史数据结构。
+  const [derivedAllocationFields, setDerivedAllocationFields] = useState<Record<string, 'amount' | 'ratio' | 'targetAmount'>>({});
   // 标签维度双击编辑弹窗
   const [tagEditModal, setTagEditModal] = useState<{ userId: number; tagName: string; catColor: string } | null>(null);
   // 批量选择模式
@@ -945,56 +1064,58 @@ export default function LedgerAAInitialBalance() {
               const share = !isNaN(totalAmt) && totalAmt !== 0 ? totalAmt * r.ratio / 100 : 0;
               return s + share;
             }, 0);
-            const totalShareStr = totalShareAmt > 0 ? `（${Math.round(totalShareAmt).toLocaleString('zh-CN')}）` : '';
+            const totalShareAmountText = `¥${Math.round(totalShareAmt).toLocaleString('zh-CN')}`;
             return (
               <>
               <div className="mx-4 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
-                {/* 标签头部 */}
+                {/* 标签头部：名称第一行，合计与金额第二行；批量操作单独右对齐。 */}
                 <div
-                  className="flex items-center justify-between px-4 py-3"
+                  className="flex items-end gap-3 px-4 py-3"
                   style={{ borderBottom: "1px solid #F0E8E0" }}
                 >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: cat?.color || "#D32F2F" }}
-                    />
-                    <span className="text-sm font-semibold text-gray-800">{selectedTagName}</span>
-                  </div>
-                  {/* 合计状态 + 批量按鈕 */}
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
-                      style={{
-                        backgroundColor: isComplete ? "#E8F5E9" : isOver ? "#FFEBEE" : "#FFF3E0",
-                        color: isComplete ? "#2E7D32" : isOver ? "#C62828" : "#E65100",
-                      }}
-                    >
-                      <span>合计 {total.toFixed(2)}%{totalShareStr}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: cat?.color || "#D32F2F" }}
+                      />
+                      <span className="text-sm font-semibold text-gray-800 truncate">{selectedTagName}</span>
                     </div>
-                    {/* 批量按鈕 */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (batchSelectMode) {
-                          // 退出批量模式，清空选中
-                          setBatchSelectMode(false);
-                          setBatchSelectedUsers(new Set());
-                        } else {
-                          setBatchSelectMode(true);
-                          setBatchSelectedUsers(new Set());
-                        }
-                      }}
-                      className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-all"
-                      style={{
-                        backgroundColor: batchSelectMode ? '#D32F2F' : '#FFF0F0',
-                        color: batchSelectMode ? '#FFFFFF' : '#D32F2F',
-                      }}
-                    >
-                      <CheckCircle2 size={12} />
-                      <span>{batchSelectMode ? '退出' : '批量'}</span>
-                    </button>
+                    <div className="mt-1.5 flex items-center gap-2 text-xs">
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold whitespace-nowrap"
+                        style={{
+                          backgroundColor: isComplete ? "#E8F5E9" : isOver ? "#FFEBEE" : "#FFF3E0",
+                          color: isComplete ? "#2E7D32" : isOver ? "#C62828" : "#E65100",
+                        }}
+                      >
+                        合计 {total.toFixed(2)}%
+                      </span>
+                      <span className="text-gray-500 tabular-nums whitespace-nowrap">金额 {totalShareAmountText}</span>
+                    </div>
                   </div>
+                  {/* 批量按钮：与第二行统计信息对齐，不干扰标签名称阅读。 */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (batchSelectMode) {
+                        // 退出批量模式，清空选中
+                        setBatchSelectMode(false);
+                        setBatchSelectedUsers(new Set());
+                      } else {
+                        setBatchSelectMode(true);
+                        setBatchSelectedUsers(new Set());
+                      }
+                    }}
+                    className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
+                    style={{
+                      backgroundColor: batchSelectMode ? '#D32F2F' : '#FFF0F0',
+                      color: batchSelectMode ? '#FFFFFF' : '#D32F2F',
+                    }}
+                  >
+                    <CheckCircle2 size={12} />
+                    <span>{batchSelectMode ? '退出' : '批量'}</span>
+                  </button>
                 </div>
 
                 {/* 各用户占比列表 */}
@@ -1709,6 +1830,29 @@ export default function LedgerAAInitialBalance() {
                 });
               };
               const isUserExpanded = expandedUsers.has(userId);
+              const hiddenTags = categories.filter((cat: any) => !(userEdit[cat.name] ?? defaultEntry()).visible);
+              const visibleTagCount = categories.length - hiddenTags.length;
+              const userTagStatusSummary = (() => {
+                let running = 0;
+                let paused = 0;
+                for (const cat of categories) {
+                  const entry = userEdit[(cat as any).name] ?? defaultEntry();
+                  if (!entry.visible) continue;
+                  const lastPause = entry.pauseHistory?.[entry.pauseHistory.length - 1];
+                  const isPaused = lastPause ? !lastPause.resumeDate : Boolean(entry.pauseDate);
+                  isPaused ? paused++ : running++;
+                }
+                const parts = [`共${visibleTagCount}个`];
+                if (running > 0) parts.push(`${running}个运行中`);
+                if (paused > 0) parts.push(`${paused}个暂停`);
+                return parts.join(' · ');
+              })();
+              const isHiddenTagGroupExpanded = expandedHiddenTagGroups.has(userId);
+              const toggleHiddenTagGroup = () => setExpandedHiddenTagGroups(prev => {
+                const next = new Set(prev);
+                next.has(userId) ? next.delete(userId) : next.add(userId);
+                return next;
+              });
               const toggleUserExpand = () => setExpandedUsers(prev => {
                 const s = new Set(prev);
                 s.has(userId) ? s.delete(userId) : s.add(userId);
@@ -1738,29 +1882,7 @@ export default function LedgerAAInitialBalance() {
                         <div className="text-sm font-semibold text-gray-800">
                           {member.nickname || member.username || "未知用户"}
                         </div>
-                        {!isUserExpanded ? (() => {
-                          let running = 0, paused = 0;
-                          for (const cat of categories) {
-                            const e = userEdit[(cat as any).name] ?? defaultEntry();
-                            if (!e.visible) continue;
-                            let isPaused = false;
-                            if (e.pauseHistory && e.pauseHistory.length > 0) {
-                              const last = e.pauseHistory[e.pauseHistory.length - 1];
-                              isPaused = !last.resumeDate;
-                            } else if (e.pauseDate) {
-                              isPaused = true;
-                            }
-                            isPaused ? paused++ : running++;
-                          }
-                          const parts = [];
-                          if (running > 0) parts.push(`${running}个运行中`);
-                          if (paused > 0) parts.push(`${paused}个暂停`);
-                          return <div className="text-xs text-gray-400 mt-0.5">{parts.length > 0 ? parts.join('·') : '无活跃标签'}</div>;
-                        })() : (
-                          <div className="text-xs text-gray-400">
-                            {member.role === "owner" ? "创建人" : member.role === "admin" ? "管理员" : "成员"}
-                          </div>
-                        )}
+                        <div className="text-xs text-gray-400 mt-0.5">{userTagStatusSummary}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1803,16 +1925,29 @@ export default function LedgerAAInitialBalance() {
                         return isPaused ? 1 : 0; // 暂停排中间，正常运行排最前
                       };
                       return getOrder(a.name) - getOrder(b.name);
-                    }).map((cat: any) => {
+                    }).filter((cat: any) => {
                       const entry = userEdit[cat.name] ?? defaultEntry();
+                      return entry.visible || isHiddenTagGroupExpanded;
+                    }).map((cat: any, renderedIndex: number) => {
+                      const entry = userEdit[cat.name] ?? defaultEntry();
+                      const allocationDisplay = resolveAllocationDisplay(entry, userId, cat.name);
+                      // 可见标签在排序结果中恒位于隐藏标签之前，因此编号仅随当前列表顺序连续变化。
+                      const visibleTagNumber = entry.visible ? renderedIndex + 1 : null;
+                      const isFirstHiddenTag = !entry.visible && cat.name === hiddenTags[0]?.name;
                       const tagKey = `${userId}__${cat.name}`;
                       const isCatExpanded = expandedUserTags.has(tagKey);
-                      const hasRatio = entry.ratio !== '' && entry.ratio !== '0';
-                      const hasAmount = entry.amount !== '' && entry.amount !== '0';
-                      const amtNum = parseFloat(entry.amount);
-                      const amtStr = !isNaN(amtNum)
-                        ? amtNum >= 10000 ? `¥${(amtNum / 10000).toFixed(1)}万` : `¥${amtNum.toLocaleString('zh-CN')}`
-                        : '';
+                      const ratioNum = parseFloat(entry.ratio);
+                      const amountNum = parseFloat(entry.amount);
+                      const hasRatio = Number.isFinite(ratioNum);
+                      const hasAmount = Number.isFinite(amountNum);
+                      const formatSummaryAmount = (value: number) => value >= 10000
+                        ? `${(value / 10000).toFixed(1)}万`
+                        : value.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+                      const amountText = hasAmount ? formatSummaryAmount(amountNum) : '—';
+                      const ratioText = hasRatio ? `${ratioNum.toFixed(2)}%` : '—';
+                      // 折叠行始终按“初始金额 × 比例”展示实际权益，保证与三联动口径一致。
+                      const allocatedAmount = hasAmount && hasRatio ? amountNum * ratioNum / 100 : NaN;
+                      const allocatedAmountText = Number.isFinite(allocatedAmount) ? formatSummaryAmount(allocatedAmount) : '—';
                       // 计算暂停状态
                       let catPauseStatus: 'paused' | 'running' | 'none' = 'none';
                       if (entry.pauseHistory && entry.pauseHistory.length > 0) {
@@ -1824,46 +1959,66 @@ export default function LedgerAAInitialBalance() {
                         catPauseStatus = 'running';
                       }
                       return (
-                        <div key={cat.id} className="mx-3 mb-2 rounded-xl overflow-hidden" style={{ backgroundColor: "#FAF3ED" }}>
-                          {/* 标签行头部：可点击展开该标签 */}
+                        <Fragment key={cat.id}>
+                          {isFirstHiddenTag && isHiddenTagGroupExpanded && (
+                            <button
+                              type="button"
+                              onClick={toggleHiddenTagGroup}
+                              className="mx-3 mt-1 mb-2 w-[calc(100%-1.5rem)] flex items-center justify-between rounded-lg px-3 py-2 text-xs"
+                              style={{ color: '#757575', backgroundColor: '#F7F7F7', border: '1px dashed #DADADA' }}
+                            >
+                              <span>收起已隐藏标签</span>
+                              <ChevronDown size={14} className="transition-transform" style={{ transform: 'rotate(180deg)' }} />
+                            </button>
+                          )}
+                          <div className="mx-3 mb-2 rounded-xl overflow-hidden" style={{ backgroundColor: "#FAF3ED" }}>
+                          {/* 标签折叠行：首行名称和开关，次行紧凑展示初始金额、占比与实际权益。 */}
                           <div
-                            className="flex items-center justify-between px-3 py-2.5 cursor-pointer"
+                            className="px-3 py-2.5 cursor-pointer"
                             onClick={() => toggleUserTag(cat.name)}
                           >
-                            <div className="flex items-center gap-2">
-                              {catPauseStatus === 'paused'
-                                ? <Pause size={12} className="flex-shrink-0" style={{ color: '#F59E0B' }} />
-                                : <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color || '#D32F2F' }} />
-                              }
-                              <span className="text-sm font-medium text-gray-800">{cat.name}</span>
-                              <button
-                                type="button"
-                                aria-label={entry.visible ? '隐藏该标签' : '显示该标签'}
-                                onClick={(event) => { event.stopPropagation(); updateEntry(userId, cat.name, { visible: !entry.visible }); }}
-                                className="relative inline-flex h-4.5 w-8 items-center rounded-full transition-colors flex-shrink-0"
-                                style={{ backgroundColor: entry.visible ? '#D32F2F' : '#D1D5DB' }}
-                              >
-                                <span
-                                  className="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform"
-                                  style={{ transform: entry.visible ? 'translateX(17px)' : 'translateX(2px)' }}
-                                />
-                              </button>
-                              {!entry.visible && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#F5F5F5', color: '#9E9E9E' }}>隐藏</span>}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {hasRatio && <span className="text-xs text-gray-500">{parseFloat(entry.ratio).toFixed(2)}%</span>}
-                              {hasAmount && amtStr && <span className="text-xs font-medium text-gray-700">{amtStr}</span>}
+                            <div className="flex items-center justify-between gap-2 min-w-0">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                {visibleTagNumber !== null && (
+                                  <span className="w-4 flex-shrink-0 text-right text-[11px] tabular-nums" style={{ color: '#9E9E9E' }}>{visibleTagNumber}</span>
+                                )}
+                                {catPauseStatus === 'paused'
+                                  ? <Pause size={12} className="flex-shrink-0" style={{ color: '#F59E0B' }} />
+                                  : <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color || '#D32F2F' }} />
+                                }
+                                <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800">{cat.name}</span>
+                                <button
+                                  type="button"
+                                  aria-label={entry.visible ? '隐藏该标签' : '显示该标签'}
+                                  onClick={(event) => { event.stopPropagation(); updateEntry(userId, cat.name, { visible: !entry.visible }); }}
+                                  className="relative inline-flex h-4.5 w-8 items-center rounded-full transition-colors flex-shrink-0"
+                                  style={{ backgroundColor: entry.visible ? '#D32F2F' : '#D1D5DB' }}
+                                >
+                                  <span
+                                    className="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform"
+                                    style={{ transform: entry.visible ? 'translateX(17px)' : 'translateX(2px)' }}
+                                  />
+                                </button>
+                                {!entry.visible && <span className="text-[11px] px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ backgroundColor: '#F5F5F5', color: '#9E9E9E' }}>隐藏</span>}
+                              </div>
                               <ChevronDown
                                 size={14}
                                 className="text-gray-400 transition-transform flex-shrink-0"
                                 style={{ transform: isCatExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
                               />
                             </div>
+                            <div className="mt-1.5 flex items-center gap-x-3 gap-y-1 text-xs tabular-nums whitespace-nowrap overflow-hidden">
+                              <span className="text-gray-400 flex-shrink-0">初始 <span className="text-gray-700">{amountText}</span></span>
+                              <span className="text-gray-400 flex-shrink-0">占比 <span className="text-gray-700">{ratioText}</span></span>
+                              <span className="min-w-0 truncate text-gray-400">实际权益 <span className="font-medium text-gray-800">{allocatedAmountText}</span></span>
+                            </div>
                           </div>
                           {/* 展开内容 */}
                           {isCatExpanded && <div className="px-3 pb-3 space-y-2" style={{ borderTop: '1px solid #F0E8E0' }}>
-                          {/* 开始日期与暂停日期并排，减少移动端纵向占用 */}
-                          <div className="grid grid-cols-2 gap-2">
+                          {/* 与标签视角头像弹窗一致的顶部日期区。 */}
+                          <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
+                            <div className="text-xs font-medium text-gray-700">日期设置</div>
+                            <div className="grid grid-cols-2 gap-2">
                             <div className="min-w-0">
                               <div className="text-xs text-gray-400 mb-1">开始日期</div>
                               <div className="flex items-center gap-1">
@@ -1893,66 +2048,91 @@ export default function LedgerAAInitialBalance() {
                                   <button type="button" onClick={() => updateEntry(userId, cat.name, { pauseDate: '' })} className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full hover:bg-amber-100" style={{ fontSize: 11, color: '#B45309' }}>×</button>
                                 )}
                               </div>
+                              </div>
                             </div>
-                          </div>
+                          </section>
 
-                          {/* 行3：初始比例 + 初始金额（同一行） */}
-                          <div className="flex items-center gap-1 w-full overflow-hidden">
-                            {/* 初始比例 */}
-                            <span className="text-xs text-gray-400 flex-shrink-0">比例</span>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              placeholder="0"
-                              min={0}
-                              max={100}
-                              value={entry.ratio}
-                              onChange={(e) =>
-                                updateEntry(userId, cat.name, {
-                                  ratio: e.target.value,
-                                })
-                              }
-                              className="text-right text-sm border rounded-lg px-1 py-1 outline-none focus:border-red-400"
-                              style={{
-                                borderColor: "#E0E0E0",
-                                backgroundColor: "#FFFFFF",
-                                color: "#222222",
-                                width: '52px',
-                                minWidth: 0,
-                              }}
-                            />
-                            <span className="text-xs text-gray-400 flex-shrink-0">%</span>
-                            {/* 分隔线 */}
-                            <div className="w-px h-4 bg-gray-200 flex-shrink-0 mx-1" />
-                            {/* 初始金额 */}
-                            <span className="text-xs text-gray-400 flex-shrink-0">金额¥</span>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              placeholder="0"
-                              value={entry.amount}
-                              onChange={(e) =>
-                                updateEntry(userId, cat.name, {
-                                  amount: e.target.value,
-                                })
-                              }
-                              className="flex-1 min-w-0 text-right text-sm border rounded-lg px-1 py-1 outline-none focus:border-red-400"
-                              style={{
-                                borderColor: "#E0E0E0",
-                                backgroundColor: "#FFFFFF",
-                                color: "#222222",
-                              }}
-                            />
-                          </div>
+                          {/* 与标签视角头像弹窗共用同一计算口径：初始金额、比例、实际权益任意两项反推第三项。 */}
+                          <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-xs font-medium text-gray-700">金额与比例</div>
+                              <span className="text-[11px] text-gray-400 whitespace-nowrap">任意两项自动反推第三项</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              <label className="min-w-0">
+                                <span className="block text-[11px] text-gray-400 mb-1">初始金额</span>
+                                <div className="flex items-center rounded-lg border bg-white px-2" style={{ borderColor: '#E0E0E0' }}>
+                                  <span className="text-xs text-gray-400 flex-shrink-0">¥</span>
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    placeholder="0"
+                                    value={allocationDisplay.amount}
+                                    onChange={e => updateAllocationLink(userId, cat.name, 'amount', e.target.value)}
+                                    className="min-w-0 w-full bg-transparent text-right text-sm py-1.5 outline-none"
+                                    style={{ color: allocationDisplay.derivedField === 'amount' ? '#2F6F85' : '#222222' }}
+                                  />
+                                </div>
+                              </label>
+                              <label className="min-w-0">
+                                <span className="block text-[11px] text-gray-400 mb-1">比例</span>
+                                <div className="flex items-center rounded-lg border bg-white px-2" style={{ borderColor: '#E0E0E0' }}>
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    placeholder="0"
+                                    min={0}
+                                    max={100}
+                                    value={allocationDisplay.ratio}
+                                    onChange={e => updateAllocationLink(userId, cat.name, 'ratio', e.target.value)}
+                                    className="min-w-0 w-full bg-transparent text-right text-sm py-1.5 outline-none"
+                                    style={{ color: allocationDisplay.derivedField === 'ratio' ? '#2F6F85' : '#222222' }}
+                                  />
+                                  <span className="text-xs text-gray-400 flex-shrink-0">%</span>
+                                </div>
+                              </label>
+                              <label className="min-w-0">
+                                <span className="block text-[11px] text-gray-400 mb-1">实际权益</span>
+                                <div className="flex items-center rounded-lg border bg-white px-2" style={{ borderColor: '#E0E0E0' }}>
+                                  <span className="text-xs text-gray-400 flex-shrink-0">¥</span>
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    placeholder="0"
+                                    value={allocationDisplay.targetAmount}
+                                    onChange={e => updateAllocationLink(userId, cat.name, 'targetAmount', e.target.value)}
+                                    className="min-w-0 w-full bg-transparent text-right text-sm py-1.5 outline-none"
+                                    style={{ color: allocationDisplay.derivedField === 'targetAmount' ? '#2F6F85' : '#222222' }}
+                                  />
+                                </div>
+                              </label>
+                            </div>
+                          </section>
 
                           {/* 行5：押金（可新增多笔，不同币种独立记录） */}
                           <div className="space-y-1.5">
-                            {MarginEntriesEditor({ userId, tagName: cat.name, entry, accentColor: "#D32F2F" })}
+                            {MarginEntriesEditor({ userId, tagName: cat.name, entry, accentColor: "#D32F2F", compact: true })}
                           </div>
                           </div>}
-                        </div>
+                          </div>
+                        </Fragment>
                       );
                     })}
+                    {hiddenTags.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={toggleHiddenTagGroup}
+                        className="mx-3 mt-1 w-[calc(100%-1.5rem)] flex items-center justify-between rounded-lg px-3 py-2 text-xs"
+                        style={{ color: '#757575', backgroundColor: '#F7F7F7', border: '1px dashed #DADADA' }}
+                      >
+                        <span>{isHiddenTagGroupExpanded ? '收起已隐藏标签' : `已隐藏 ${hiddenTags.length} 个标签`}</span>
+                        <ChevronDown
+                          size={14}
+                          className="transition-transform"
+                          style={{ transform: isHiddenTagGroupExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                        />
+                      </button>
+                    )}
                   </div>}
                 </div>
               );
@@ -1966,6 +2146,7 @@ export default function LedgerAAInitialBalance() {
         const { userId, tagName, catColor } = tagEditModal;
         const member = members.find((m: any) => m.userId === userId);
         const entry = editState[userId]?.[tagName] ?? defaultEntry();
+        const allocationDisplay = resolveAllocationDisplay(entry, userId, tagName);
         const isSaving = savingUsers.has(userId);
         return (
           <div
@@ -1998,42 +2179,65 @@ export default function LedgerAAInitialBalance() {
               </div>
               {/* 内容区 */}
               <div className="overflow-y-auto flex-1 px-4 py-3 space-y-3">
-                {/* 开始日期 */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 w-16 flex-shrink-0">开始日期</span>
-                  <div className="flex-1 flex items-center gap-1">
-                    <input
-                      type="date"
-                      value={entry.startDate}
-                      onChange={e => updateEntry(userId, tagName, { startDate: e.target.value })}
-                      className="flex-1 text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
-                      style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
-                    />
-                    {entry.startDate && (
-                      <button type="button" onClick={() => updateEntry(userId, tagName, { startDate: '' })} className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400" style={{ fontSize: 12 }}>×</button>
-                    )}
+                {/* 顶部日期区：先设置开始日期与暂停日期。 */}
+                <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
+                  <div className="text-xs font-medium text-gray-700">日期设置</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="min-w-0">
+                      <span className="block text-xs text-gray-400 mb-1">开始日期</span>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="date"
+                          value={entry.startDate}
+                          onChange={e => updateEntry(userId, tagName, { startDate: e.target.value })}
+                          className="min-w-0 flex-1 text-xs border rounded-lg px-1.5 py-1 outline-none focus:border-red-400"
+                          style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
+                        />
+                        {entry.startDate && (
+                          <button type="button" onClick={() => updateEntry(userId, tagName, { startDate: '' })} className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full text-gray-400" style={{ fontSize: 11 }}>×</button>
+                        )}
+                      </div>
+                    </label>
+                    <label className="min-w-0">
+                      <span className="block text-xs mb-1" style={{ color: '#B45309' }}>暂停日期</span>
+                      {(() => {
+                        const history = entry.pauseHistory ?? [];
+                        const latestIndex = history.length - 1;
+                        const latest = latestIndex >= 0 ? history[latestIndex] : null;
+                        return (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="date"
+                              value={latest?.pauseDate ?? entry.pauseDate ?? ''}
+                              onChange={e => {
+                                if (latest) {
+                                  const nextHistory = history.map((item, index) => index === latestIndex ? { ...item, pauseDate: e.target.value } : item);
+                                  updateEntry(userId, tagName, { pauseHistory: nextHistory });
+                                } else {
+                                  updateEntry(userId, tagName, { pauseDate: e.target.value });
+                                }
+                              }}
+                              className="min-w-0 flex-1 text-xs border rounded-lg px-1.5 py-1 outline-none"
+                              style={{ borderColor: '#FDE68A', backgroundColor: '#FFFBEB', color: '#92400E' }}
+                            />
+                            {(latest?.pauseDate || entry.pauseDate) && (
+                              <button type="button" onClick={() => {
+                                if (latest) {
+                                  const nextHistory = history.map((item, index) => index === latestIndex ? { ...item, pauseDate: '' } : item);
+                                  updateEntry(userId, tagName, { pauseHistory: nextHistory });
+                                } else {
+                                  updateEntry(userId, tagName, { pauseDate: '' });
+                                }
+                              }} className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full" style={{ fontSize: 11, color: '#B45309' }}>×</button>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </label>
                   </div>
-                </div>
-                {/* 目标金额 */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 w-16 flex-shrink-0">目标金额</span>
-                  <div className="flex items-center gap-1 flex-1">
-                    <span className="text-xs text-gray-400">¥</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      placeholder="0"
-                      value={entry.targetAmount}
-                      onChange={e => updateEntry(userId, tagName, { targetAmount: e.target.value })}
-                      className="flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
-                      style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
-                    />
-                  </div>
-                </div>
-                {/* 暂停/重启历史 */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium" style={{ color: '#B45309' }}>暂停/重启历史</span>
+                  {/* 暂停/重启记录 */}
+                  <div className="space-y-2 pt-1">
+                    <div className="flex justify-end">
                     {/* 操作按钮：根据当前状态显示不同按钮 */}
                     {(() => {
                       const history = entry.pauseHistory ?? [];
@@ -2126,138 +2330,64 @@ export default function LedgerAAInitialBalance() {
                       ))}
                     </div>
                   )}
-                </div>
-                {/* 初始比例 + 初始金额（同一行） */}
-                <div className="flex items-center gap-1 w-full overflow-hidden">
-                  <span className="text-xs text-gray-400 flex-shrink-0">比例</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    placeholder="0"
-                    min={0}
-                    max={100}
-                    value={entry.ratio}
-                    onChange={e => updateEntry(userId, tagName, { ratio: e.target.value })}
-                    className="text-right text-sm border rounded-lg px-1 py-1.5 outline-none focus:border-red-400"
-                    style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222', width: '52px', minWidth: 0 }}
-                  />
-                  <span className="text-xs text-gray-400 flex-shrink-0">%</span>
-                  <div className="w-px h-4 bg-gray-200 flex-shrink-0 mx-1" />
-                  <span className="text-xs text-gray-400 flex-shrink-0">金额¥</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={entry.amount}
-                    onChange={e => updateEntry(userId, tagName, { amount: e.target.value })}
-                    className="flex-1 min-w-0 text-right text-sm border rounded-lg px-1 py-1.5 outline-none focus:border-red-400"
-                    style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
-                  />
-                </div>
-                {/* 凑整工具：用目标金额计算剩余并填入比例 */}
-                {(() => {
-                  const tt = parseFloat(entry.targetAmount ?? '');
-                  const ttValid = !isNaN(tt) && tt > 0;
-                  const rows = tagRatioView[tagName] ?? [];
-                  const othersShareAmt = rows.reduce((s: number, r: any) => {
-                    if (r.member.userId === userId) return s;
-                    const rAmt = r.amount ? parseFloat(r.amount) : NaN;
-                    const share = !isNaN(rAmt) && rAmt !== 0 ? rAmt * r.ratio / 100 : 0;
-                    return s + share;
-                  }, 0);
-                  const remain = ttValid ? Math.max(0, tt - othersShareAmt) : 0;
-                  const myAmt = entry.amount ? parseFloat(String(entry.amount)) : NaN;
-                  const myAmtValid = !isNaN(myAmt) && myAmt > 0;
-                  return (
-                    <div className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#F8F8FF', border: '1px solid #E8E8FF' }}>
-                      <span className="text-xs font-medium" style={{ color: '#5C6BC0' }}>凑整工具</span>
-                      {/* 参考信息 */}
-                      {ttValid && (
-                        <div className="text-xs text-gray-500 space-y-1 pb-1" style={{ borderBottom: '1px solid #E0E0FF' }}>
-                          <div className="flex justify-between">
-                            <span>目标金额</span>
-                            <span className="font-medium" style={{ color: '#222' }}>¥{tt.toLocaleString('zh-CN')}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>其他人已分</span>
-                            <span>¥{Math.round(othersShareAmt).toLocaleString('zh-CN')}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>剩余</span>
-                            <span className="font-semibold" style={{ color: '#5C6BC0' }}>¥{Math.round(remain).toLocaleString('zh-CN')}</span>
-                          </div>
-                        </div>
-                      )}
-                      {/* 模式一：输入此人分配金额 → 反推比例 */}
-                      <div className="space-y-1">
-                        <div className="text-xs text-gray-400">模式一：输入分配金额 → 反推比例</div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs text-gray-400">¥</span>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            placeholder="此人分配金额"
-                            id={`roundAmt-${userId}-${tagName}`}
-                            className="flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-indigo-400"
-                            style={{ borderColor: '#C5CAE9', backgroundColor: '#FFFFFF', color: '#222' }}
-                          />
-                          <button
-                            type="button"
-                            className="text-xs px-2 py-1.5 rounded-lg flex-shrink-0"
-                            style={{ backgroundColor: ttValid ? '#5C6BC0' : '#BDBDBD', color: '#fff' }}
-                            onClick={() => {
-                              const el = document.getElementById(`roundAmt-${userId}-${tagName}`) as HTMLInputElement;
-                              const v = parseFloat(el?.value ?? '');
-                              if (!isNaN(v) && v > 0 && ttValid) {
-                                updateEntry(userId, tagName, { ratio: (v / tt * 100).toFixed(4) });
-                              }
-                            }}
-                          >填入比例</button>
-                        </div>
+                  </div>
+                </section>
+                {/* 比例、初始金额、实际权益三联动 */}
+                <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-medium text-gray-700">金额与比例</div>
+                    <span className="text-[11px] text-gray-400 whitespace-nowrap">任意两项自动反推第三项</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="min-w-0">
+                      <span className="block text-[11px] text-gray-400 mb-1">初始金额</span>
+                      <div className="flex items-center rounded-lg border bg-white px-2" style={{ borderColor: '#E0E0E0' }}>
+                        <span className="text-xs text-gray-400 flex-shrink-0">¥</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="0"
+                          value={allocationDisplay.amount}
+                          onChange={e => updateAllocationLink(userId, tagName, 'amount', e.target.value)}
+                          className="min-w-0 w-full bg-transparent text-right text-sm py-1.5 outline-none"
+                          style={{ color: allocationDisplay.derivedField === 'amount' ? '#2F6F85' : '#222222' }}
+                        />
                       </div>
-                      {/* 模式二：输入比例 → 反推分配金额 */}
-                      <div className="space-y-1">
-                        <div className="text-xs text-gray-400">模式二：输入比例 → 反推分配金额</div>
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            placeholder="比例%"
-                            id={`roundRatio-${userId}-${tagName}`}
-                            className="flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-indigo-400"
-                            style={{ borderColor: '#C5CAE9', backgroundColor: '#FFFFFF', color: '#222' }}
-                          />
-                          <span className="text-xs text-gray-400">%</span>
-                          <button
-                            type="button"
-                            className="text-xs px-2 py-1.5 rounded-lg flex-shrink-0"
-                            style={{ backgroundColor: '#5C6BC0', color: '#fff' }}
-                            onClick={() => {
-                              const el = document.getElementById(`roundRatio-${userId}-${tagName}`) as HTMLInputElement;
-                              const r = parseFloat(el?.value ?? '');
-                              if (!isNaN(r) && r > 0 && ttValid) {
-                                // 分配金额 = 目标金额 × 比例%
-                                updateEntry(userId, tagName, { ratio: String(r) });
-                              }
-                            }}
-                          >计算并填入</button>
-                        </div>
+                    </label>
+                    <label className="min-w-0">
+                      <span className="block text-[11px] text-gray-400 mb-1">比例</span>
+                      <div className="flex items-center rounded-lg border bg-white px-2" style={{ borderColor: '#E0E0E0' }}>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="0"
+                          min={0}
+                          max={100}
+                          value={allocationDisplay.ratio}
+                          onChange={e => updateAllocationLink(userId, tagName, 'ratio', e.target.value)}
+                          className="min-w-0 w-full bg-transparent text-right text-sm py-1.5 outline-none"
+                          style={{ color: allocationDisplay.derivedField === 'ratio' ? '#2F6F85' : '#222222' }}
+                        />
+                        <span className="text-xs text-gray-400 flex-shrink-0">%</span>
                       </div>
-                      {/* 快捷：剩余全部分给此人 */}
-                      {ttValid && myAmtValid && (
-                        <button
-                          type="button"
-                          className="w-full text-xs py-1.5 rounded-lg"
-                          style={{ backgroundColor: '#EEF0FF', color: '#5C6BC0' }}
-                          onClick={() => {
-                            const ratio = (remain / tt * 100);
-                            updateEntry(userId, tagName, { ratio: ratio.toFixed(4) });
-                          }}
-                        >剩余全部分给此人（¥{Math.round(remain).toLocaleString('zh-CN')}，占{(remain/tt*100).toFixed(2)}%）</button>
-                      )}
-                    </div>
-                  );
-                })()}
+                    </label>
+                    <label className="min-w-0">
+                      <span className="block text-[11px] text-gray-400 mb-1">实际权益</span>
+                      <div className="flex items-center rounded-lg border bg-white px-2" style={{ borderColor: '#E0E0E0' }}>
+                        <span className="text-xs text-gray-400 flex-shrink-0">¥</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="0"
+                          value={allocationDisplay.targetAmount}
+                          onChange={e => updateAllocationLink(userId, tagName, 'targetAmount', e.target.value)}
+                          className="min-w-0 w-full bg-transparent text-right text-sm py-1.5 outline-none"
+                          style={{ color: allocationDisplay.derivedField === 'targetAmount' ? '#2F6F85' : '#222222' }}
+                        />
+                      </div>
+                    </label>
+                  </div>
+                </section>
                 {/* 押金：与用户展开区使用同一套多笔多币种编辑器 */}
                 {MarginEntriesEditor({ userId, tagName, entry, accentColor: catColor, compact: true })}
               </div>
