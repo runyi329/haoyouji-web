@@ -1633,6 +1633,33 @@ export const afOrders = mysqlTable("af_orders", {
   index("af_orders_source_idx").on(table.sourceOrderId),
 ]);
 
+// AF 高级委托：独立记录提交现货价、撤单保护区与管理员手动成交状态。
+export const afAdvancedOrders = mysqlTable("af_advanced_orders", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),
+  userId: int('user_id').notNull(),
+  orderId: int('order_id').notNull(),
+  coin: varchar({ length: 10 }).notNull(),
+  limitPrice: decimal('limit_price', { precision: 20, scale: 8 }).notNull(),
+  submittedSpotPrice: decimal('submitted_spot_price', { precision: 20, scale: 8 }).notNull(),
+  amount: decimal({ precision: 20, scale: 8 }).notNull(),
+  quantity: decimal({ precision: 28, scale: 8 }).notNull(),
+  weeklyYieldRate: decimal('weekly_yield_rate', { precision: 10, scale: 8 }).notNull(),
+  status: varchar({ length: 20 }).default('active').notNull(),
+  reachedAt: datetime('reached_at', { mode: 'string' }),
+  fulfilledAt: datetime('fulfilled_at', { mode: 'string' }),
+  fulfilledByUserId: int('fulfilled_by_user_id'),
+  cancelledAt: datetime('cancelled_at', { mode: 'string' }),
+  cancelledSpotPrice: decimal('cancelled_spot_price', { precision: 20, scale: 8 }),
+  freezeBalanceId: int('freeze_balance_id'),
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex('af_advanced_order_unique').on(table.orderId),
+  index('af_advanced_user_status_idx').on(table.ledgerId, table.userId, table.status),
+  index('af_advanced_status_limit_idx').on(table.ledgerId, table.status, table.coin, table.limitPrice),
+]);
+
 // AF 无损合约收益权档位触发记录表
 export const afOrderTierTriggers = mysqlTable("af_order_tier_triggers", {
   id: int().autoincrement().notNull(),

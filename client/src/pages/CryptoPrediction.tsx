@@ -1435,6 +1435,16 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
     onSuccess: () => { toast.success('委托已撒销'); },
     onError: (e) => toast.error('撒单失败', { description: e.message }),
   });
+  const orderUtils = trpc.useUtils();
+  const cancelAdvancedMutation = trpc.ledger.afCancelAdvancedOrder.useMutation({
+    onSuccess: (result) => {
+      if (result.success) toast.success('高级委托已撤销', { description: '冻结金额已退回钱包可用余额。' });
+      else toast.error('暂不可撤单', { description: result.reason || '当前订单不满足撤单条件' });
+      orderUtils.ledger.afGetOrders.invalidate({ ledgerId });
+      orderUtils.ledger.afGetMyTotalAsset.invalidate({ ledgerId });
+    },
+    onError: (e) => toast.error('撤单失败', { description: e.message }),
+  });
 
   // 计算当前所在档位
   const triggeredTiers = new Set((tierData?.triggers || []).map((t: any) => t.tier));
@@ -1442,7 +1452,8 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
   const currentTier = maxTriggered; // 0 = 未触发任何档
 
   // 模拟订单复用真实的谷底增筹详情、费用和收益权展示，但不参与真实资金及汇总。
-  const isContract = !!(order as any).isSimulated || !order.orderType || order.orderType === '无损合约';
+  const isAdvanced = Boolean((order as any).isAdvanced || order.orderType === '高级委托');
+  const isContract = !isAdvanced && (!!(order as any).isSimulated || !order.orderType || order.orderType === '无损合约');
   const isCompleted = order.status === 'completed';
   // MySQL时间按北京时间写入；tRPC可能还原为Date对象，展示时使用UTC字段避免重复加8小时。
   const formatOrderDateTime = (value: any): string => {
@@ -1483,6 +1494,41 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
             {order.coin}
           </span>
         </div>
+
+        {isAdvanced && (() => {
+          const currentAdvancedPrice = Number((order as any).currentMarketPrice || livePrice || 0);
+          const yieldRate = Number((order as any).weeklyYieldRate || 0);
+          const advancedStatus = (order as any).advancedStatus || 'active';
+          const statusLabel = advancedStatus === 'fulfilled' ? '已成交'
+            : advancedStatus === 'cancelled' ? '已撤销'
+            : advancedStatus === 'reached' ? '已到价，待管理员确认'
+            : (order as any).advancedCancelable ? '当前可撤单' : '谷底增筹保护中';
+          const statusColor = advancedStatus === 'fulfilled' ? '#0EA56A'
+            : advancedStatus === 'cancelled' ? '#94A3B8'
+            : advancedStatus === 'reached' ? '#D97706'
+            : (order as any).advancedCancelable ? '#1A56DB' : '#B45309';
+          return <>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">订单类型</span>
+              <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold" style={{ backgroundColor: '#F1EEFF', color: '#5B47C9' }}>高级委托</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">提交时现货价 S</span>
+              <span className="text-[#1E293B]">{Number((order as any).submittedSpotPrice || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">当前ETH价格 P</span>
+              <span className="font-semibold" style={{ color: '#1A56DB' }}>{currentAdvancedPrice > 0 ? `${currentAdvancedPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT` : '行情暂不可用'}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">每周收益预估</span>
+              <span className="font-semibold" style={{ color: '#5B47C9' }}>{(yieldRate * 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}% · {(parseFloat(order.amount || '0') * yieldRate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
+            </div>
+            <div className="rounded-lg px-2.5 py-2 text-[11px] leading-5" style={{ backgroundColor: advancedStatus === 'reached' ? '#FFF7ED' : '#F7F6FF', color: statusColor, border: `1px solid ${advancedStatus === 'reached' ? '#FED7AA' : '#E3DFFF'}` }}>
+              <span className="font-semibold">{statusLabel}</span><span className="mx-1">·</span>{(order as any).advancedCancelReason || '服务端正在判断撤单资格'}
+            </div>
+          </>;
+        })()}
 
         {/* 赠送订单：类型 + 来源 */}
         {order.isGift && (() => {
@@ -1535,7 +1581,7 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
         ) : (
           <>
             <div className="flex justify-between items-center">
-              <span className="text-[#9CA3AF]">{(order as any).originalLimitPrice && (order as any).originalLimitPrice !== order.limitPrice ? '委托价格' : '成交价格'}</span>
+              <span className="text-[#9CA3AF]">{isAdvanced ? '高级委托价 L' : ((order as any).originalLimitPrice && (order as any).originalLimitPrice !== order.limitPrice ? '委托价格' : '成交价格')}</span>
               <span className="text-[#1E293B]">{parseFloat((order as any).originalLimitPrice || order.limitPrice).toLocaleString()} USDT</span>
             </div>
             {(order as any).originalLimitPrice && (order as any).originalLimitPrice !== order.limitPrice && (
@@ -1710,18 +1756,32 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           <span className="text-[#9CA3AF]">订单编号</span>
           <div className="flex items-center gap-2">
             <span className="font-mono text-[12px] text-[#64748B] tracking-wide">{orderNo}</span>
-            {(order.status === 'pending' || order.sellStatus === 'selling') && (
+            {isAdvanced ? (
+              order.status === 'pending' && (order as any).advancedCancelable && (
+                <button
+                  onClick={() => {
+                    if (window.confirm('确认撤销该高级委托？服务端将再次按当前ETH价格判断是否可撤。')) {
+                      cancelAdvancedMutation.mutate({ ledgerId: 52, orderId: order.id });
+                    }
+                  }}
+                  disabled={cancelAdvancedMutation.isPending}
+                  className="text-xs font-medium px-2 py-0.5 rounded border"
+                  style={{ color: '#EF4444', borderColor: '#FECACA', backgroundColor: '#FEF2F2' }}>
+                  {cancelAdvancedMutation.isPending ? '撤销中...' : '撤销'}
+                </button>
+              )
+            ) : ((order.status === 'pending' || order.sellStatus === 'selling') && (
               <button
-                onClick={() => { 
+                onClick={() => {
                   const msg = order.sellStatus === 'selling' ? '确认撒销委托卖出？' : '确认撒销该委托单？';
-                  if (window.confirm(msg)) { cancelMutation.mutate({ ledgerId, orderId: order.id }); } 
+                  if (window.confirm(msg)) { cancelMutation.mutate({ ledgerId, orderId: order.id }); }
                 }}
                 disabled={cancelMutation.isPending}
                 className="text-xs font-medium px-2 py-0.5 rounded border"
                 style={{ color: '#EF4444', borderColor: '#FECACA', backgroundColor: '#FEF2F2' }}>
                 {cancelMutation.isPending ? '撒销中...' : order.sellStatus === 'selling' ? '撒卖' : '撒单'}
               </button>
-            )}
+            ))}
           </div>
         </div>
 
@@ -2423,11 +2483,34 @@ export default function CryptoPrediction() {
     onError: (e) => toast.error("提交失败", { description: e.message }),
   });
 
+  // 高级委托真实提交：服务端会再次校验余额、价格档位与提交时ETH现货价，并在同一事务内冻结金额。
+  const submitAdvancedOrderMutation = trpc.ledger.afSubmitAdvancedOrder.useMutation({
+    onSuccess: (result) => {
+      setShowAdvancedPreviewConfirm(false);
+      setOrderAmount("");
+      setSliderPct(0);
+      toast.success("高级委托已提交", { description: `已冻结 ${Number(result.amount).toLocaleString('en-US', { maximumFractionDigits: 2 })} USDT，订单等待价格保护与管理员确认。` });
+      utils.ledger.afGetOrders.invalidate({ ledgerId });
+      utils.ledger.afGetMyTotalAsset.invalidate({ ledgerId });
+    },
+    onError: (e) => toast.error("高级委托提交失败", { description: e.message }),
+  });
+
   // 用户自助撤单
   const cancelOrderMutation = trpc.ledger.afCancelOrder.useMutation({
     onSuccess: () => {
       utils.ledger.afGetOrders.invalidate({ ledgerId });
       utils.ledger.afGetAvailableSell.invalidate({ ledgerId, coin: coin.name });
+      utils.ledger.afGetMyTotalAsset.invalidate({ ledgerId });
+    },
+    onError: (e) => toast.error("撤单失败", { description: e.message }),
+  });
+
+  const cancelAdvancedOrderMutation = trpc.ledger.afCancelAdvancedOrder.useMutation({
+    onSuccess: (result) => {
+      if (result.success) toast.success("高级委托已撤销", { description: "冻结金额已退回钱包可用余额。" });
+      else toast.error("暂不可撤单", { description: result.reason || "当前订单不满足撤单条件" });
+      utils.ledger.afGetOrders.invalidate({ ledgerId });
       utils.ledger.afGetMyTotalAsset.invalidate({ ledgerId });
     },
     onError: (e) => toast.error("撤单失败", { description: e.message }),
@@ -3181,7 +3264,7 @@ export default function CryptoPrediction() {
               </div>{/* end px-4 pb-6 space-y-3 */}
             </div>{/* end 建仓表单底部抽屉 */}
 
-            {/* 高级委托预览确认：此阶段只核验文案与交互，禁止提交任何真实订单。 */}
+            {/* 高级委托真实提交确认：确认后由服务端再次校验行情和余额，并原子冻结金额。 */}
             {showAdvancedPreviewConfirm && (() => {
               const previewAmount = parseFloat(orderAmount) || 0;
               const previewLimitPrice = parseFloat(orderPrice) || 0;
@@ -3194,10 +3277,10 @@ export default function CryptoPrediction() {
                     <div className="px-5 pt-5 pb-4" style={{ background: 'linear-gradient(135deg, #5140B8 0%, #7562D9 100%)' }}>
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-base font-bold text-white">高级委托确认预览</p>
+                          <p className="text-base font-bold text-white">确认提交高级委托</p>
                           <p className="text-[11px] mt-1" style={{ color: 'rgba(255,255,255,0.82)' }}>ETH · 管理员手动确认成交</p>
                         </div>
-                        <span className="text-[10px] px-2 py-1 rounded-full font-semibold" style={{ background: 'rgba(255,255,255,0.16)', color: '#FFFFFF', border: '1px solid rgba(255,255,255,0.24)' }}>预览模式</span>
+                        <span className="text-[10px] px-2 py-1 rounded-full font-semibold" style={{ background: 'rgba(255,255,255,0.16)', color: '#FFFFFF', border: '1px solid rgba(255,255,255,0.24)' }}>真实提交</span>
                       </div>
                     </div>
                     <div className="p-5 space-y-3">
@@ -3212,11 +3295,11 @@ export default function CryptoPrediction() {
                         <p className="text-[11px] leading-5" style={{ color: '#775D2C' }}>当 P &gt; S 时可撤销并退回冻结金额；当 L &lt; P ≤ S 时不可撤销；当 P ≤ L 时订单仅等待管理员手动确认成交，不会自动成交。</p>
                       </div>
                       <div className="rounded-xl px-3 py-2.5 text-[11px] leading-5" style={{ background: '#EEF6FF', color: '#2F5F91', border: '1px solid #CFE4FF' }}>
-                        当前为界面预览：点击下方按钮不会创建订单、不会冻结余额、不会写入任何流水。
+                        点击“确认提交”后将创建真实高级委托并立即冻结以上投资额；后续撤销资格和成交将由服务端按规则判断。
                       </div>
                       <div className="grid grid-cols-2 gap-3 pt-1">
-                        <button type="button" onClick={() => setShowAdvancedPreviewConfirm(false)} className="py-3 rounded-xl text-sm font-semibold" style={{ color: '#5D567F', background: '#F0EFF6' }}>返回修改</button>
-                        <button type="button" onClick={() => { setShowAdvancedPreviewConfirm(false); toast.success('高级委托预览完成', { description: '当前为预览模式，未提交订单，也未冻结余额。' }); }} className="py-3 rounded-xl text-sm font-semibold text-white" style={{ background: '#5B47C9' }}>确认预览</button>
+                        <button type="button" disabled={submitAdvancedOrderMutation.isPending} onClick={() => setShowAdvancedPreviewConfirm(false)} className="py-3 rounded-xl text-sm font-semibold disabled:opacity-50" style={{ color: '#5D567F', background: '#F0EFF6' }}>返回修改</button>
+                        <button type="button" disabled={submitAdvancedOrderMutation.isPending} onClick={() => submitAdvancedOrderMutation.mutate({ ledgerId: 52, limitPrice: previewLimitPrice, amount: previewAmount.toFixed(8) })} className="py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-50" style={{ background: '#5B47C9' }}>{submitAdvancedOrderMutation.isPending ? '提交中...' : '确认提交'}</button>
                       </div>
                     </div>
                   </div>
@@ -3356,7 +3439,7 @@ export default function CryptoPrediction() {
                             </td>
                             {/* 赠列 */}
                             <td className="py-2 px-1 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
-                              {(order as any).isGift ? <span className="text-[#ef5350] font-bold">赠</span> : <span className="text-[#1A56DB] font-bold">买</span>}
+                              {(order as any).isAdvanced ? <span className="font-bold" style={{ color: '#5B47C9' }}>高</span> : ((order as any).isGift ? <span className="text-[#ef5350] font-bold">赠</span> : <span className="text-[#1A56DB] font-bold">买</span>)}
                             </td>
                             {/* 档位列 */}
                             <td className="py-2 px-1 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
@@ -3388,16 +3471,21 @@ export default function CryptoPrediction() {
                             {/* 状态列 */}
                             <td className="py-2 px-2 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
                               <span className={`${
+                                (order as any).isAdvanced && (order as any).advancedStatus === 'reached' ? 'text-[#D97706]' :
+                                (order as any).isAdvanced && (order as any).advancedStatus === 'active' && (order as any).advancedCancelable ? 'text-[#1A56DB]' :
                                 (order as any).sellStatus === 'sold' ? 'text-[#6B7280]' :
                                 (order as any).sellStatus === 'selling' ? 'text-[#EF4444]' :
                                 order.status === 'completed' ? 'text-[#0EA56A]' :
                                 order.status === 'cancelled' ? 'text-gray-400' :
                                 'text-[#F59E0B]'
                               }`}>
-                                {(order as any).sellStatus === 'sold' ? '已卖' :
+                                {(order as any).isAdvanced && (order as any).advancedStatus === 'reached' ? '待确认' :
+                                 (order as any).isAdvanced && (order as any).advancedStatus === 'active' && (order as any).advancedCancelable ? '可撤' :
+                                 (order as any).isAdvanced && (order as any).advancedStatus === 'active' ? '保护中' :
+                                 (order as any).sellStatus === 'sold' ? '已卖' :
                                  (order as any).sellStatus === 'selling' ? '委卖' :
                                  order.status === 'completed' ? '持仓' :
-                                 order.status === 'cancelled' ? '已撒' :
+                                 order.status === 'cancelled' ? '已撤' :
                                  '委买'}
                               </span>
                             </td>

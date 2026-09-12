@@ -17,6 +17,12 @@ import { toast } from "sonner";
 
 // 综合状态标签（买入状态 + 卖出状态）
 const getStatusDisplay = (order: any) => {
+  if (order.isAdvanced) {
+    if (order.advancedStatus === 'reached') return { label: '已到价待确认', color: 'text-orange-600' };
+    if (order.advancedStatus === 'fulfilled') return { label: '已成交', color: 'text-green-500' };
+    if (order.advancedStatus === 'cancelled') return { label: '已撤销', color: 'text-gray-400' };
+    return { label: '高级委托保护中', color: 'text-purple-600' };
+  }
   if (order.sellStatus === 'sold') return { label: '已卖出', color: 'text-blue-600' };
   if (order.sellStatus === 'selling') return { label: '委卖中', color: 'text-red-500' };
   if (order.status === 'completed') return { label: '持仓中', color: 'text-green-500' };
@@ -324,6 +330,19 @@ export default function AfOrderManage() {
       utils.ledger.afAdminGetOrders.invalidate({ ledgerId });
     },
     onError: (e) => toast.error("更新失败：" + e.message),
+  });
+
+  const fulfillAdvancedMutation = trpc.ledger.afAdminFulfillAdvancedOrder.useMutation({
+    onSuccess: (result) => {
+      toast.success(result.alreadyFulfilled ? '高级委托此前已成交' : '高级委托已确认成交', {
+        description: result.alreadyFulfilled ? undefined : `成交价固定为 ${Number(result.fulfilledPrice).toLocaleString()} USDT。`,
+      });
+      setEditingId(null);
+      setEditState(null);
+      utils.ledger.afAdminGetOrders.invalidate({ ledgerId });
+      utils.ledger.afAdminGetStats.invalidate({ ledgerId });
+    },
+    onError: (e) => toast.error('确认高级委托失败：' + e.message),
   });
 
   const deleteMutation = trpc.ledger.afAdminDeleteOrder.useMutation({
@@ -1929,26 +1948,43 @@ export default function AfOrderManage() {
                         {order.sellStatus==='sold'&&order.sellConfirmedAt&&<span className="text-[10px] text-green-500"><span className="text-green-400 mr-1">确认</span>{formatDate(order.sellConfirmedAt)}</span>}
                       </div>
                       {!isEditing ? (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => startEdit(order)}
-                            className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"
-                          >
-                            <Pencil className="w-3 h-3" /> 编辑
-                          </button>
-                          <button
-                            onClick={() => {
-                              setDeleteTarget(order);
-                              const isGift = order.isGift === true || order.isGift === 1;
-                              setDeleteScope(isGift ? 'all' : 'all');
-                              setSelectedGiftIds([]);
-                              setRefundChecked(order.status === 'pending' && !isGift);
-                            }}
-                            className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"
-                          >
-                            <Trash2 className="w-3 h-3" /> 删除
-                          </button>
-                        </div>
+                        order.isAdvanced ? (
+                          order.advancedStatus === 'reached' ? (
+                            <button
+                              type="button"
+                              disabled={fulfillAdvancedMutation.isPending}
+                              onClick={() => {
+                                if (window.confirm(`确认以 ${Number(order.limitPrice).toLocaleString()} USDT 买入该高级委托？系统将再次核对当前ETH价格是否已到价。`)) {
+                                  fulfillAdvancedMutation.mutate({ ledgerId: 52, orderId: order.id });
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"
+                            >
+                              <Check className="w-3 h-3" /> {fulfillAdvancedMutation.isPending ? '确认中...' : '确认成交'}
+                            </button>
+                          ) : <span className="text-[10px] text-purple-500">高级委托受专用规则保护</span>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => startEdit(order)}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"
+                            >
+                              <Pencil className="w-3 h-3" /> 编辑
+                            </button>
+                            <button
+                              onClick={() => {
+                                setDeleteTarget(order);
+                                const isGift = order.isGift === true || order.isGift === 1;
+                                setDeleteScope(isGift ? 'all' : 'all');
+                                setSelectedGiftIds([]);
+                                setRefundChecked(order.status === 'pending' && !isGift);
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"
+                            >
+                              <Trash2 className="w-3 h-3" /> 删除
+                            </button>
+                          </div>
+                        )
                       ) : (
                         <div className="flex items-center gap-1.5">
                           <button

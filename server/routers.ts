@@ -126,6 +126,83 @@ async function ensureAfSimulationColumns(): Promise<void> {
   }
   afSimulationColumnsEnsured = true;
 }
+
+// ===== 谷底增筹高级委托：独立于普通委买的资金与状态记录 =====
+// 高级委托的冻结、撤单资格和管理员成交均由此表约束；不得只依赖前端状态。
+let afAdvancedOrdersTableReady: Promise<void> | null = null;
+async function ensureAfAdvancedOrdersTable(): Promise<void> {
+  if (!afAdvancedOrdersTableReady) {
+    afAdvancedOrdersTableReady = (async () => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error('数据库连接失败，无法初始化高级委托表');
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS af_advanced_orders (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL,
+          user_id INT NOT NULL,
+          order_id INT NOT NULL,
+          coin VARCHAR(10) NOT NULL,
+          limit_price DECIMAL(20,8) NOT NULL,
+          submitted_spot_price DECIMAL(20,8) NOT NULL,
+          amount DECIMAL(20,8) NOT NULL,
+          quantity DECIMAL(28,8) NOT NULL,
+          weekly_yield_rate DECIMAL(10,8) NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'active' COMMENT 'active=等待保护/可撤, reached=已到价待管理员, fulfilled=已成交, cancelled=已撤销',
+          reached_at DATETIME NULL,
+          fulfilled_at DATETIME NULL,
+          fulfilled_by_user_id INT NULL,
+          cancelled_at DATETIME NULL,
+          cancelled_spot_price DECIMAL(20,8) NULL,
+          freeze_balance_id INT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY af_advanced_order_unique (order_id),
+          KEY af_advanced_user_status_idx (ledger_id, user_id, status),
+          KEY af_advanced_status_limit_idx (ledger_id, status, coin, limit_price)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+    })().catch((error) => {
+      afAdvancedOrdersTableReady = null;
+      throw error;
+    });
+  }
+  await afAdvancedOrdersTableReady;
+}
+
+const AF_ADVANCED_WEEKLY_YIELD_RATE_BY_PRICE: Record<number, number> = {
+  2200: 0.01,
+  2100: 0.01,
+  2000: 0.0095,
+  1900: 0.009,
+  1800: 0.0085,
+};
+const AF_ADVANCED_LIMIT_PRICES = new Set([1800, 1900, 2000, 2100, 2200]);
+
+async function getFreshAfAdvancedEthPrice(): Promise<{ price: number; updatedAt: string }> {
+  const { getAllLatestPrices } = await import('./price-scanner');
+  const entry = getAllLatestPrices().ETH;
+  const price = Number(entry?.price || 0);
+  const updatedAt = String(entry?.updatedAt || '');
+  const ageMs = updatedAt ? Date.now() - new Date(updatedAt).getTime() : Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(ageMs) || ageMs > 75_000) {
+    throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'ETH行情暂不可用，请稍后重试' });
+  }
+  return { price, updatedAt };
+}
+
+async function getAfOrderMultiplierForLedger(conn: any, ledgerId: number): Promise<number> {
+  if (ledgerId !== 52) return 5.25;
+  try {
+    const [rows] = await conn.execute(
+      `SELECT enabled FROM af_525_switch WHERE ledger_id = 52 LIMIT 1`
+    );
+    const enabled = Boolean((rows as any[])?.[0]?.enabled);
+    return enabled ? 5 : 5.25;
+  } catch {
+    // 与普通委买一致：开关表不可用时回退标准5.25倍，不阻断真实下单。
+    return 5.25;
+  }
+}
 // ================================================================
 
 // ===== 融资付息参与者子订单字段兼容 =====
@@ -14330,6 +14407,172 @@ ${klinesSummary}
         }
         return { success: true };
       }),
+
+    // 高级委托：仅ETH固定五档，提交时由服务端冻结余额并记录现货快照S。
+    afSubmitAdvancedOrder: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        limitPrice: z.number(),
+        amount: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const limitPrice = Number(input.limitPrice);
+        const amount = Number(input.amount);
+        if (!AF_ADVANCED_LIMIT_PRICES.has(limitPrice)) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托价格仅支持1800、1900、2000、2100、2200 USDT' });
+        }
+        if (!Number.isFinite(amount) || amount <= 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '请输入有效投资额' });
+        }
+        await ensureAfAdvancedOrdersTable();
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
+
+        await (conn as any).beginTransaction();
+        try {
+          const [memberRows] = await (conn as any).execute(
+            `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
+            [input.ledgerId, ctx.user.id]
+          );
+          if (!(memberRows as any[])?.[0]) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员，不能提交高级委托' });
+          }
+          // 锁定用户余额行，避免两个并发下单请求同时透支同一钱包。
+          const [userRows] = await (conn as any).execute(
+            `SELECT COALESCE(balance, 0) AS balance FROM users WHERE id = ? FOR UPDATE`,
+            [ctx.user.id]
+          );
+          if (!(userRows as any[])?.[0]) throw new TRPCError({ code: 'NOT_FOUND', message: '用户不存在' });
+          const [manualRows] = await (conn as any).execute(
+            `SELECT amount FROM af_manual_balances
+             WHERE user_id = ? AND note NOT LIKE '[CNY]%' AND note NOT LIKE '[BALANCE_BASE]%'
+             FOR UPDATE`,
+            [ctx.user.id]
+          );
+          const manualTotal = (manualRows as any[]).reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
+          const available = Number((userRows as any[])[0].balance || 0) + manualTotal;
+          if (amount > available + 1e-8) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '投资额超过钱包可用余额' });
+          }
+
+          // 余额锁定后再读取同源ETH报价，防止客户端价格或过期行情绕过价格档位规则。
+          const market = await getFreshAfAdvancedEthPrice();
+          if (limitPrice >= market.price) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托价必须低于当前ETH实时价格' });
+          }
+          const multiplier = await getAfOrderMultiplierForLedger(conn, input.ledgerId);
+          const quantity = (amount * multiplier / limitPrice).toFixed(8);
+          const normalizedAmount = amount.toFixed(8);
+          const [orderResult] = await (conn as any).execute(
+            `INSERT INTO af_orders
+             (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, created_at, updated_at)
+             VALUES (?, ?, 'ETH', 'buy', ?, ?, ?, ?, 'pending', '高级委托', NOW(), NOW())`,
+            [input.ledgerId, ctx.user.id, String(limitPrice), String(limitPrice), normalizedAmount, quantity]
+          );
+          const orderId = Number((orderResult as any).insertId || 0);
+          if (!orderId) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '创建高级委托失败' });
+
+          const freezeNote = `高级委托冻结 ETH ${normalizedAmount} USDT #${orderId}`;
+          const [freezeResult] = await (conn as any).execute(
+            `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+             VALUES (?, ?, ?, ?, NOW(), NOW())`,
+            [input.ledgerId, ctx.user.id, -amount, freezeNote]
+          );
+          const weeklyYieldRate = AF_ADVANCED_WEEKLY_YIELD_RATE_BY_PRICE[limitPrice];
+          await (conn as any).execute(
+            `INSERT INTO af_advanced_orders
+             (ledger_id, user_id, order_id, coin, limit_price, submitted_spot_price, amount, quantity, weekly_yield_rate, status, freeze_balance_id, created_at, updated_at)
+             VALUES (?, ?, ?, 'ETH', ?, ?, ?, ?, ?, 'active', ?, NOW(), NOW())`,
+            [input.ledgerId, ctx.user.id, orderId, limitPrice, market.price, normalizedAmount, quantity, weeklyYieldRate, Number((freezeResult as any).insertId || 0) || null]
+          );
+          await (conn as any).commit();
+          return {
+            success: true,
+            orderId,
+            submittedSpotPrice: market.price,
+            limitPrice,
+            amount: normalizedAmount,
+            quantity,
+            weeklyYieldRate,
+          };
+        } catch (error) {
+          try { await (conn as any).rollback(); } catch {}
+          throw error;
+        }
+      }),
+
+    // 高级委托：只能在当前价P高于提交快照S且尚未到价时撤销；退款与状态在同一事务内完成。
+    afCancelAdvancedOrder: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52), orderId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await ensureAfAdvancedOrdersTable();
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
+        await (conn as any).beginTransaction();
+        try {
+          const [rows] = await (conn as any).execute(
+            `SELECT ao.id AS advanced_id, ao.status AS advanced_status, ao.limit_price, ao.submitted_spot_price, ao.amount,
+                    o.id AS order_id, o.status AS order_status
+             FROM af_advanced_orders ao
+             INNER JOIN af_orders o ON o.id = ao.order_id AND o.ledger_id = ao.ledger_id
+             WHERE ao.ledger_id = ? AND ao.order_id = ? AND ao.user_id = ?
+             FOR UPDATE`,
+            [input.ledgerId, input.orderId, ctx.user.id]
+          );
+          const advanced = (rows as any[])[0];
+          if (!advanced) throw new TRPCError({ code: 'NOT_FOUND', message: '高级委托不存在或无权限' });
+          if (advanced.advanced_status === 'cancelled') {
+            await (conn as any).commit();
+            return { success: true, alreadyCancelled: true };
+          }
+          if (advanced.advanced_status === 'fulfilled' || advanced.order_status === 'completed') {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托已成交，不能撤销' });
+          }
+
+          const market = await getFreshAfAdvancedEthPrice();
+          const limitPrice = Number(advanced.limit_price);
+          const submittedSpotPrice = Number(advanced.submitted_spot_price);
+          // 到价后永久进入管理员确认流程，即使后续价格反弹也不重新开放撤单。
+          if (advanced.advanced_status === 'reached' || market.price <= limitPrice) {
+            await (conn as any).execute(
+              `UPDATE af_advanced_orders
+               SET status = 'reached', reached_at = COALESCE(reached_at, NOW()), updated_at = NOW()
+               WHERE id = ? AND status IN ('active', 'reached')`,
+              [advanced.advanced_id]
+            );
+            await (conn as any).commit();
+            return { success: false, cancelable: false, reason: '已到达委托价，订单必须买进并等待管理员确认成交', currentPrice: market.price };
+          }
+          if (market.price <= submittedSpotPrice) {
+            await (conn as any).commit();
+            return { success: false, cancelable: false, reason: '当前币价已进入谷底增筹保护区，暂不可撤单', currentPrice: market.price };
+          }
+
+          const amount = Number(advanced.amount);
+          await (conn as any).execute(
+            `UPDATE af_advanced_orders
+             SET status = 'cancelled', cancelled_at = NOW(), cancelled_spot_price = ?, updated_at = NOW()
+             WHERE id = ? AND status = 'active'`,
+            [market.price, advanced.advanced_id]
+          );
+          await (conn as any).execute(
+            `UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
+             WHERE id = ? AND ledger_id = ? AND status = 'pending'`,
+            [advanced.order_id, input.ledgerId]
+          );
+          await (conn as any).execute(
+            `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+             VALUES (?, ?, ?, ?, NOW(), NOW())`,
+            [input.ledgerId, ctx.user.id, amount, `高级委托撤单退回 ETH ${amount.toFixed(8)} USDT #${advanced.order_id}`]
+          );
+          await (conn as any).commit();
+          return { success: true, cancelable: true, currentPrice: market.price };
+        } catch (error) {
+          try { await (conn as any).rollback(); } catch {}
+          throw error;
+        }
+      }),
+
     // AF 查询委托订单（该账本所有币种）
     afGetOrders: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
@@ -14337,6 +14580,7 @@ ${klinesSummary}
         
         const db = await getLedgerDb();
         await ensureAfSimulationColumns();
+        if (input.ledgerId === 52) await ensureAfAdvancedOrdersTable();
         // 视角切换
         let targetUserId = ctx.user.id;
         if (input.viewAsUserId) {
@@ -14361,8 +14605,12 @@ ${klinesSummary}
                      COALESCE(o.prepaid_fee, 0) as prepaid_fee,
                      COALESCE(o.tier_mode, 'step') as tier_mode,
                      o.simulation_order_no,
-                     COALESCE(o.is_simulated, 0) as is_simulated
+                     COALESCE(o.is_simulated, 0) as is_simulated,
+                     ao.id AS advanced_order_id, ao.status AS advanced_status,
+                     ao.submitted_spot_price, ao.weekly_yield_rate, ao.reached_at,
+                     ao.fulfilled_at, ao.cancelled_at, ao.cancelled_spot_price
               FROM af_orders o
+              LEFT JOIN af_advanced_orders ao ON ao.order_id = o.id AND ao.ledger_id = o.ledger_id
               LEFT JOIN users su ON su.id = o.source_user_id
               WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
                 AND o.side = 'buy'
@@ -14396,42 +14644,77 @@ ${klinesSummary}
             }
           } catch (_e) { /* 表不存在则忽略 */ }
         }
-        const list = allOrders.map((r: any) => ({
-          id: r.id,
-          coin: r.coin,
-          side: 'buy' as const,
-          limitPrice: r.limit_price,
-          originalLimitPrice: r.original_limit_price || r.limit_price,
-          amount: r.amount,
-          quantity: r.quantity,
-          status: r.status,
-          orderType: r.order_type || '',
-          createdAt: r.created_at,
-          updatedAt: r.updated_at,
-          isGift: !!r.is_gift,
-          giftMultiplier: r.gift_multiplier || '',
-          sourceOrderId: r.source_order_id || null,
-          sourceUsername: r.source_username || '',
-          sourceAmount: r.source_amount || '',
-          // 卖出字段（订单合并模型）
-          sellPrice: r.sell_price || null,
-          sellQuantity: r.sell_quantity || null,
-          sellAt: r.sell_at,
-          sellConfirmedAt: r.sell_confirmed_at,
-          sellStatus: r.sell_status || null,
-          confirmedAt: r.confirmed_at,
-          // 兼容旧字段：是否已在委托卖中
-          hasPendingSell: r.sell_status === 'selling',
-          // 档位信息
-          currentTier: tierMap[r.id] ?? 0,
-          // 预收管理费
-          prepaidFee: parseFloat(r.prepaid_fee || '0'),
-          // 档位计算模式
-          tierMode: (r.tier_mode || 'step') as 'step' | 'linear',
-          // 学习用模拟订单：只影响展示，不参与真实钱包和统计
-          isSimulated: Number(r.is_simulated || 0) === 1,
-          simulationOrderNo: r.simulation_order_no || null,
-        }));
+        let advancedMarketPrice: number | null = null;
+        if (input.ledgerId === 52) {
+          try {
+            const market = await getFreshAfAdvancedEthPrice();
+            advancedMarketPrice = market.price;
+            // 到价后固定等待管理员确认，后续价格反弹不重新开放撤单。
+            await db.execute(sql`UPDATE af_advanced_orders SET status = 'reached', reached_at = COALESCE(reached_at, NOW()), updated_at = NOW()
+              WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} AND status = 'active'
+                AND limit_price >= ${market.price}`);
+          } catch { /* 行情不可用时仅返回已经落库的状态 */ }
+        }
+        const list = allOrders.map((r: any) => {
+          const isAdvanced = Boolean(r.advanced_order_id);
+          const submittedSpotPrice = Number(r.submitted_spot_price || 0);
+          const limitPrice = Number(r.limit_price || 0);
+          const currentPrice = advancedMarketPrice;
+          const reachedByLivePrice = isAdvanced && currentPrice !== null && currentPrice <= limitPrice;
+          const advancedStatus = isAdvanced
+            ? (r.advanced_status === 'active' && reachedByLivePrice ? 'reached' : (r.advanced_status || 'active'))
+            : null;
+          const advancedCancelable = isAdvanced && advancedStatus === 'active' && currentPrice !== null && currentPrice > submittedSpotPrice;
+          const advancedCancelReason = !isAdvanced ? null
+            : advancedStatus === 'fulfilled' ? '已成交，不能撤单'
+            : advancedStatus === 'cancelled' ? '已撤单'
+            : advancedStatus === 'reached' ? '已到达委托价，必须买进并等待管理员确认'
+            : currentPrice === null ? '行情暂不可用，暂不能判断撤单资格'
+            : advancedCancelable ? '当前币价高于提交时实时价格，可撤单'
+            : '当前币价已进入谷底增筹保护区，暂不可撤单';
+          return ({
+            id: r.id,
+            coin: r.coin,
+            side: 'buy' as const,
+            limitPrice: r.limit_price,
+            originalLimitPrice: r.original_limit_price || r.limit_price,
+            amount: r.amount,
+            quantity: r.quantity,
+            status: r.status,
+            orderType: r.order_type || '',
+            isAdvanced,
+            advancedOrderId: r.advanced_order_id || null,
+            advancedStatus,
+            submittedSpotPrice: isAdvanced ? String(r.submitted_spot_price || '') : null,
+            weeklyYieldRate: isAdvanced ? Number(r.weekly_yield_rate || 0) : null,
+            reachedAt: r.reached_at || null,
+            fulfilledAt: r.fulfilled_at || null,
+            cancelledAt: r.cancelled_at || null,
+            cancelledSpotPrice: r.cancelled_spot_price ? String(r.cancelled_spot_price) : null,
+            currentMarketPrice: isAdvanced ? currentPrice : null,
+            advancedCancelable,
+            advancedCancelReason,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+            isGift: !!r.is_gift,
+            giftMultiplier: r.gift_multiplier || '',
+            sourceOrderId: r.source_order_id || null,
+            sourceUsername: r.source_username || '',
+            sourceAmount: r.source_amount || '',
+            sellPrice: r.sell_price || null,
+            sellQuantity: r.sell_quantity || null,
+            sellAt: r.sell_at,
+            sellConfirmedAt: r.sell_confirmed_at,
+            sellStatus: r.sell_status || null,
+            confirmedAt: r.confirmed_at,
+            hasPendingSell: r.sell_status === 'selling',
+            currentTier: tierMap[r.id] ?? 0,
+            prepaidFee: parseFloat(r.prepaid_fee || '0'),
+            tierMode: (r.tier_mode || 'step') as 'step' | 'linear',
+            isSimulated: Number(r.is_simulated || 0) === 1,
+            simulationOrderNo: r.simulation_order_no || null,
+          });
+        });
         return list;
       }),
     // AF 查询可卖数量（已成交买入的币种数量总和）
@@ -14529,12 +14812,21 @@ ${klinesSummary}
         
         const db = await getLedgerDb();
         await ensureAfSimulationColumns();
+        if (input.ledgerId === 52) await ensureAfAdvancedOrdersTable();
         // 验证是否是该账本成员（任意角色均可访问）
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role ?? roleRows?.rows?.[0]?.role ?? '';
         if (!role) throw new Error('无权限');
+        if (input.ledgerId === 52) {
+          try {
+            const market = await getFreshAfAdvancedEthPrice();
+            // 管理端同样刷新到价状态；无需等待用户端轮询，管理员可直接看到待确认订单。
+            await db.execute(sql`UPDATE af_advanced_orders SET status = 'reached', reached_at = COALESCE(reached_at, NOW()), updated_at = NOW()
+              WHERE ledger_id = ${input.ledgerId} AND status = 'active' AND limit_price >= ${market.price}`);
+          } catch { /* 行情不可用时不改变已落库状态 */ }
+        }
         // prepaid_fee 字段和 af_fee_prepaid_logs 表已在生产环境建好，无需每次 ALTER
         const [rows] = await db.execute(
           sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at,
@@ -14548,8 +14840,12 @@ ${klinesSummary}
                      COALESCE(o.prepaid_fee, 0) as prepaid_fee,
                      COALESCE(o.tier_mode, 'step') as tier_mode,
                      o.simulation_order_no,
-                     COALESCE(o.is_simulated, 0) as is_simulated
+                     COALESCE(o.is_simulated, 0) as is_simulated,
+                     ao.id AS advanced_order_id, ao.status AS advanced_status,
+                     ao.submitted_spot_price, ao.weekly_yield_rate, ao.reached_at,
+                     ao.fulfilled_at, ao.cancelled_at
               FROM af_orders o
+              LEFT JOIN af_advanced_orders ao ON ao.order_id = o.id AND ao.ledger_id = o.ledger_id
               LEFT JOIN users u ON u.id = o.user_id
               LEFT JOIN users su ON su.id = o.source_user_id
               WHERE o.ledger_id = ${input.ledgerId} AND o.side = 'buy'
@@ -14569,6 +14865,14 @@ ${klinesSummary}
           quantity: r.quantity,
           status: r.status,
           orderType: r.order_type || '',
+          isAdvanced: Boolean(r.advanced_order_id),
+          advancedOrderId: r.advanced_order_id || null,
+          advancedStatus: r.advanced_status || null,
+          submittedSpotPrice: r.submitted_spot_price ? String(r.submitted_spot_price) : null,
+          weeklyYieldRate: r.weekly_yield_rate ? Number(r.weekly_yield_rate) : null,
+          reachedAt: r.reached_at || null,
+          fulfilledAt: r.fulfilled_at || null,
+          cancelledAt: r.cancelled_at || null,
           createdAt: r.created_at,
           updatedAt: r.updated_at,
           isGift: !!r.is_gift,
@@ -14959,6 +15263,145 @@ ${klinesSummary}
 
         return { list, lowestScan };
       }),
+    // 管理员：高级委托到价后的专用手动成交。成交价固定为用户委托价L，不能由普通编辑接口覆盖。
+    afAdminFulfillAdvancedOrder: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52), orderId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await ensureAfAdvancedOrdersTable();
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
+        const [roleRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const role = (roleRows as any[])?.[0]?.role || '';
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可确认高级委托成交' });
+
+        await (conn as any).beginTransaction();
+        let fulfilledOrder: any = null;
+        try {
+          const [rows] = await (conn as any).execute(
+            `SELECT ao.id AS advanced_id, ao.status AS advanced_status, ao.limit_price AS advanced_limit_price,
+                    ao.amount AS advanced_amount, ao.quantity AS advanced_quantity,
+                    o.id AS order_id, o.user_id, o.coin, o.status AS order_status, o.limit_price, o.amount, o.quantity
+             FROM af_advanced_orders ao
+             INNER JOIN af_orders o ON o.id = ao.order_id AND o.ledger_id = ao.ledger_id
+             WHERE ao.ledger_id = ? AND ao.order_id = ?
+             FOR UPDATE`,
+            [input.ledgerId, input.orderId]
+          );
+          const advanced = (rows as any[])?.[0];
+          if (!advanced) throw new TRPCError({ code: 'NOT_FOUND', message: '高级委托不存在' });
+          if (advanced.advanced_status === 'cancelled') throw new TRPCError({ code: 'BAD_REQUEST', message: '已撤销的高级委托不能成交' });
+          if (advanced.advanced_status === 'fulfilled' || advanced.order_status === 'completed') {
+            await (conn as any).commit();
+            return { success: true, alreadyFulfilled: true, orderId: Number(advanced.order_id) };
+          }
+
+          const market = await getFreshAfAdvancedEthPrice();
+          const limitPrice = Number(advanced.advanced_limit_price);
+          if (market.price > limitPrice) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: `当前ETH价格${market.price.toFixed(2)}尚未到达委托价${limitPrice.toFixed(2)}，不能确认成交` });
+          }
+          await (conn as any).execute(
+            `UPDATE af_advanced_orders
+             SET status = 'fulfilled', reached_at = COALESCE(reached_at, NOW()), fulfilled_at = NOW(), fulfilled_by_user_id = ?, updated_at = NOW()
+             WHERE id = ? AND status IN ('active', 'reached')`,
+            [ctx.user.id, advanced.advanced_id]
+          );
+          await (conn as any).execute(
+            `UPDATE af_orders SET status = 'completed', confirmed_at = NOW(), updated_at = NOW()
+             WHERE id = ? AND ledger_id = ? AND status = 'pending'`,
+            [advanced.order_id, input.ledgerId]
+          );
+          fulfilledOrder = {
+            id: Number(advanced.order_id),
+            userId: Number(advanced.user_id),
+            coin: String(advanced.coin),
+            amount: Number(advanced.amount),
+            limitPrice,
+            quantity: String(advanced.quantity),
+          };
+          await (conn as any).commit();
+        } catch (error) {
+          try { await (conn as any).rollback(); } catch {}
+          throw error;
+        }
+
+        if (!fulfilledOrder) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '高级委托成交状态异常' });
+        // 以下联动沿用普通委买成交语义；每段均按来源订单查重，避免请求重放产生重复赠单。
+        setTimeout(async () => {
+          try {
+            const followConn = await getDbConnection();
+            if (!followConn) return;
+            const [ratioRows] = await (followConn as any).execute(
+              `SELECT beneficiary_user_id, ratio FROM af_payout_ratios WHERE ledger_id = ? AND source_user_id = ?`,
+              [input.ledgerId, fulfilledOrder.userId]
+            );
+            const actualSpend = fulfilledOrder.amount;
+            const baseGiftAmount = actualSpend * 10 * 0.75 * 0.3;
+            for (const ratioRow of (ratioRows as any[])) {
+              const ratio = Number(ratioRow.ratio || 0) / 100;
+              const giftAmount = Number((baseGiftAmount * ratio).toFixed(8));
+              const giftQuantity = Number((giftAmount / fulfilledOrder.limitPrice).toFixed(8));
+              if (giftAmount <= 0 || giftQuantity <= 0) continue;
+              const [existingRows] = await (followConn as any).execute(
+                `SELECT id FROM af_orders WHERE source_order_id = ? AND user_id = ? AND is_gift = 1 LIMIT 1`,
+                [fulfilledOrder.id, ratioRow.beneficiary_user_id]
+              );
+              const existing = (existingRows as any[])?.[0];
+              if (existing) {
+                await (followConn as any).execute(
+                  `UPDATE af_orders SET status = 'completed', amount = ?, quantity = ?, limit_price = ?, source_amount = ?, confirmed_at = COALESCE(confirmed_at, NOW()), updated_at = NOW() WHERE id = ?`,
+                  [giftAmount, giftQuantity, fulfilledOrder.limitPrice, actualSpend, existing.id]
+                );
+              } else {
+                await (followConn as any).execute(
+                  `INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, confirmed_at, created_at, updated_at)
+                   VALUES (?, ?, ?, 'buy', ?, ?, ?, 'completed', 1, ?, ?, ?, ?, NOW(), NOW(), NOW())`,
+                  [input.ledgerId, ratioRow.beneficiary_user_id, fulfilledOrder.coin, fulfilledOrder.limitPrice, giftAmount, giftQuantity, ratio.toFixed(4), fulfilledOrder.id, fulfilledOrder.userId, actualSpend]
+                );
+              }
+            }
+
+            const [switchRows] = await (followConn as any).execute(
+              `SELECT enabled, target_user_id, gift_ratio FROM af_525_switch WHERE ledger_id = 52 LIMIT 1`
+            );
+            const giftSwitch = (switchRows as any[])?.[0];
+            if (giftSwitch?.enabled) {
+              const [recordRows] = await (followConn as any).execute(
+                `SELECT id FROM af_525_gift_records WHERE source_order_id = ? LIMIT 1`,
+                [fulfilledOrder.id]
+              );
+              if (!(recordRows as any[])?.[0]) {
+                const giftAmount = Number((fulfilledOrder.amount * Number(giftSwitch.gift_ratio || 0)).toFixed(8));
+                const giftQuantity = Number((giftAmount / fulfilledOrder.limitPrice).toFixed(8));
+                if (giftAmount > 0 && giftQuantity > 0) {
+                  const [giftResult] = await (followConn as any).execute(
+                    `INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, confirmed_at, created_at, updated_at)
+                     VALUES (?, ?, ?, 'buy', ?, ?, ?, 'completed', 1, '0.2500', ?, ?, ?, NOW(), NOW(), NOW())`,
+                    [input.ledgerId, giftSwitch.target_user_id, fulfilledOrder.coin, fulfilledOrder.limitPrice, giftAmount, giftQuantity, fulfilledOrder.id, fulfilledOrder.userId, fulfilledOrder.amount]
+                  );
+                  const giftOrderId = Number((giftResult as any).insertId || 0);
+                  if (giftOrderId) {
+                    await (followConn as any).execute(
+                      `INSERT INTO af_525_gift_records (ledger_id, source_order_id, source_user_id, gift_order_id, gift_amount, gift_quantity, coin)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                      [input.ledgerId, fulfilledOrder.id, fulfilledOrder.userId, giftOrderId, giftAmount, giftQuantity, fulfilledOrder.coin]
+                    );
+                  }
+                }
+              }
+            }
+            const { triggerImmediateScan } = await import('./af-tier-scanner');
+            triggerImmediateScan(fulfilledOrder.id);
+          } catch (error) {
+            console.error('[高级委托] 成交后的赠单或扫描联动失败:', error);
+          }
+        }, 0);
+        return { success: true, orderId: fulfilledOrder.id, fulfilledPrice: fulfilledOrder.limitPrice };
+      }),
+
     // 管理员：修改订单参数和状态（含余额联动）
     afAdminUpdateOrder: protectedProcedure
       .input(z.object({
@@ -14990,6 +15433,16 @@ ${klinesSummary}
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
+        if (input.ledgerId === 52) {
+          await ensureAfAdvancedOrdersTable();
+          const [advancedRows] = await (await getDbConnection())!.execute(
+            `SELECT id FROM af_advanced_orders WHERE ledger_id = ? AND order_id = ? LIMIT 1`,
+            [input.ledgerId, input.orderId]
+          ) as any[];
+          if ((advancedRows as any[])?.[0]) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托请使用专用确认成交流程，不能通过普通订单编辑修改' });
+          }
+        }
         const oldStatus = order.status;
         const oldAmount = parseFloat(order.amount || '0');
         const newAmount = input.amount ? parseFloat(input.amount) : oldAmount;
@@ -15426,6 +15879,16 @@ ${klinesSummary}
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
+        if (input.ledgerId === 52) {
+          await ensureAfAdvancedOrdersTable();
+          const [advancedRows] = await (await getDbConnection())!.execute(
+            `SELECT id FROM af_advanced_orders WHERE ledger_id = ? AND order_id = ? LIMIT 1`,
+            [input.ledgerId, input.orderId]
+          ) as any[];
+          if ((advancedRows as any[])?.[0]) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托必须按价格保护规则撤销' });
+          }
+        }
         
         const cancelType = input.cancelType || (order.sell_status === 'selling' ? 'sell' : 'buy');
 
@@ -15502,11 +15965,21 @@ ${klinesSummary}
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         // 查询订单信息
         await ensureAfSimulationColumns();
+        if (input.ledgerId === 52) await ensureAfAdvancedOrdersTable();
         const orderRows = await db.execute(
           sql`SELECT id, user_id, coin, side, amount, quantity, status, is_gift, source_order_id, sell_status, COALESCE(is_simulated, 0) as is_simulated FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
+        if (input.ledgerId === 52) {
+          const [advancedRows] = await (await getDbConnection())!.execute(
+            `SELECT id FROM af_advanced_orders WHERE ledger_id = ? AND order_id = ? LIMIT 1`,
+            [input.ledgerId, input.orderId]
+          ) as any[];
+          if ((advancedRows as any[])?.[0]) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托不能通过删除操作处理；请按专用撤单规则或确认成交流程执行' });
+          }
+        }
         const userId = order.user_id;
         const amount = parseFloat(order.amount || '0');
         const isGift = parseInt(order.is_gift || '0') === 1;
