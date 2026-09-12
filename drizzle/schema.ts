@@ -1649,6 +1649,8 @@ export const afAdvancedOrders = mysqlTable("af_advanced_orders", {
   reachedAt: datetime('reached_at', { mode: 'string' }),
   fulfilledAt: datetime('fulfilled_at', { mode: 'string' }),
   fulfilledByUserId: int('fulfilled_by_user_id'),
+  fulfilledPrice: decimal('fulfilled_price', { precision: 20, scale: 8 }),
+  fulfilledQuantity: decimal('fulfilled_quantity', { precision: 28, scale: 8 }),
   cancelledAt: datetime('cancelled_at', { mode: 'string' }),
   cancelledSpotPrice: decimal('cancelled_spot_price', { precision: 20, scale: 8 }),
   freezeBalanceId: int('freeze_balance_id'),

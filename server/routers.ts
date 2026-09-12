@@ -151,6 +151,8 @@ async function ensureAfAdvancedOrdersTable(): Promise<void> {
           reached_at DATETIME NULL,
           fulfilled_at DATETIME NULL,
           fulfilled_by_user_id INT NULL,
+          fulfilled_price DECIMAL(20,8) NULL COMMENT '管理员实际确认成交价',
+          fulfilled_quantity DECIMAL(28,8) NULL COMMENT '按实际成交价重算的成交数量',
           cancelled_at DATETIME NULL,
           cancelled_spot_price DECIMAL(20,8) NULL,
           freeze_balance_id INT NULL,
@@ -161,6 +163,19 @@ async function ensureAfAdvancedOrdersTable(): Promise<void> {
           KEY af_advanced_status_limit_idx (ledger_id, status, coin, limit_price)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+      // 兼容已在生产环境创建的高级委托表：独立保存管理员实际成交价，不覆盖用户原委托价 L。
+      const [columnRows] = await (conn as any).execute(
+        `SELECT COLUMN_NAME FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'af_advanced_orders'
+           AND column_name IN ('fulfilled_price', 'fulfilled_quantity')`
+      );
+      const advancedColumns = new Set((columnRows as any[]).map((row: any) => String(row.COLUMN_NAME || row.column_name)));
+      if (!advancedColumns.has('fulfilled_price')) {
+        await (conn as any).execute(`ALTER TABLE af_advanced_orders ADD COLUMN fulfilled_price DECIMAL(20,8) NULL COMMENT '管理员实际确认成交价' AFTER fulfilled_by_user_id`);
+      }
+      if (!advancedColumns.has('fulfilled_quantity')) {
+        await (conn as any).execute(`ALTER TABLE af_advanced_orders ADD COLUMN fulfilled_quantity DECIMAL(28,8) NULL COMMENT '按实际成交价重算的成交数量' AFTER fulfilled_price`);
+      }
     })().catch((error) => {
       afAdvancedOrdersTableReady = null;
       throw error;
@@ -14607,9 +14622,9 @@ ${klinesSummary}
                      COALESCE(o.tier_mode, 'step') as tier_mode,
                      o.simulation_order_no,
                      COALESCE(o.is_simulated, 0) as is_simulated,
-                     ao.id AS advanced_order_id, ao.status AS advanced_status,
+                     ao.id AS advanced_order_id, ao.status AS advanced_status, ao.limit_price AS advanced_limit_price,
                      ao.submitted_spot_price, ao.weekly_yield_rate, ao.reached_at,
-                     ao.fulfilled_at, ao.cancelled_at, ao.cancelled_spot_price
+                     ao.fulfilled_at, ao.fulfilled_price, ao.fulfilled_quantity, ao.cancelled_at, ao.cancelled_spot_price
               FROM af_orders o
               LEFT JOIN af_advanced_orders ao ON ao.order_id = o.id AND ao.ledger_id = o.ledger_id
               LEFT JOIN users su ON su.id = o.source_user_id
@@ -14659,9 +14674,9 @@ ${klinesSummary}
         const list = allOrders.map((r: any) => {
           const isAdvanced = Boolean(r.advanced_order_id);
           const submittedSpotPrice = Number(r.submitted_spot_price || 0);
-          const limitPrice = Number(r.limit_price || 0);
+          const advancedLimitPrice = Number(r.advanced_limit_price || r.limit_price || 0);
           const currentPrice = advancedMarketPrice;
-          const reachedByLivePrice = isAdvanced && currentPrice !== null && currentPrice <= limitPrice;
+          const reachedByLivePrice = isAdvanced && currentPrice !== null && currentPrice <= advancedLimitPrice;
           const advancedStatus = isAdvanced
             ? (r.advanced_status === 'active' && reachedByLivePrice ? 'reached' : (r.advanced_status || 'active'))
             : null;
@@ -14686,10 +14701,13 @@ ${klinesSummary}
             isAdvanced,
             advancedOrderId: r.advanced_order_id || null,
             advancedStatus,
+            advancedLimitPrice: isAdvanced ? String(r.advanced_limit_price || r.original_limit_price || r.limit_price || '') : null,
             submittedSpotPrice: isAdvanced ? String(r.submitted_spot_price || '') : null,
             weeklyYieldRate: isAdvanced ? Number(r.weekly_yield_rate || 0) : null,
             reachedAt: r.reached_at || null,
             fulfilledAt: r.fulfilled_at || null,
+            fulfilledPrice: isAdvanced && r.fulfilled_price ? String(r.fulfilled_price) : null,
+            fulfilledQuantity: isAdvanced && r.fulfilled_quantity ? String(r.fulfilled_quantity) : null,
             cancelledAt: r.cancelled_at || null,
             cancelledSpotPrice: r.cancelled_spot_price ? String(r.cancelled_spot_price) : null,
             currentMarketPrice: isAdvanced ? currentPrice : null,
@@ -14842,9 +14860,9 @@ ${klinesSummary}
                      COALESCE(o.tier_mode, 'step') as tier_mode,
                      o.simulation_order_no,
                      COALESCE(o.is_simulated, 0) as is_simulated,
-                     ao.id AS advanced_order_id, ao.status AS advanced_status,
+                     ao.id AS advanced_order_id, ao.status AS advanced_status, ao.limit_price AS advanced_limit_price,
                      ao.submitted_spot_price, ao.weekly_yield_rate, ao.reached_at,
-                     ao.fulfilled_at, ao.cancelled_at
+                     ao.fulfilled_at, ao.fulfilled_price, ao.fulfilled_quantity, ao.cancelled_at
               FROM af_orders o
               LEFT JOIN af_advanced_orders ao ON ao.order_id = o.id AND ao.ledger_id = o.ledger_id
               LEFT JOIN users u ON u.id = o.user_id
@@ -14869,10 +14887,13 @@ ${klinesSummary}
           isAdvanced: Boolean(r.advanced_order_id),
           advancedOrderId: r.advanced_order_id || null,
           advancedStatus: r.advanced_status || null,
+          advancedLimitPrice: r.advanced_limit_price ? String(r.advanced_limit_price) : null,
           submittedSpotPrice: r.submitted_spot_price ? String(r.submitted_spot_price) : null,
           weeklyYieldRate: r.weekly_yield_rate ? Number(r.weekly_yield_rate) : null,
           reachedAt: r.reached_at || null,
           fulfilledAt: r.fulfilled_at || null,
+          fulfilledPrice: r.fulfilled_price ? String(r.fulfilled_price) : null,
+          fulfilledQuantity: r.fulfilled_quantity ? String(r.fulfilled_quantity) : null,
           cancelledAt: r.cancelled_at || null,
           createdAt: r.created_at,
           updatedAt: r.updated_at,
@@ -15322,10 +15343,14 @@ ${klinesSummary}
 
         return { list, lowestScan };
       }),
-    // 管理员：高级委托到价后的专用手动成交。成交价固定为用户委托价L，不能由普通编辑接口覆盖。
+    // 管理员：高级委托专用手动成交。原委托价 L 保留为审计记录，管理员录入实际成交价。
     afAdminFulfillAdvancedOrder: protectedProcedure
-      .input(z.object({ ledgerId: z.literal(52), orderId: z.number() }))
+      .input(z.object({ ledgerId: z.literal(52), orderId: z.number(), executionPrice: z.number().positive() }))
       .mutation(async ({ ctx, input }) => {
+        const executionPrice = Number(input.executionPrice);
+        if (!Number.isFinite(executionPrice) || executionPrice <= 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '请输入有效的实际成交价' });
+        }
         await ensureAfAdvancedOrdersTable();
         const conn = await getDbTransactionConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
@@ -15342,6 +15367,7 @@ ${klinesSummary}
           const [rows] = await (conn as any).execute(
             `SELECT ao.id AS advanced_id, ao.status AS advanced_status, ao.limit_price AS advanced_limit_price,
                     ao.amount AS advanced_amount, ao.quantity AS advanced_quantity,
+                    ao.fulfilled_price, ao.fulfilled_quantity,
                     o.id AS order_id, o.user_id, o.coin, o.status AS order_status, o.limit_price, o.amount, o.quantity
              FROM af_advanced_orders ao
              INNER JOIN af_orders o ON o.id = ao.order_id AND o.ledger_id = ao.ledger_id
@@ -15354,30 +15380,42 @@ ${klinesSummary}
           if (advanced.advanced_status === 'cancelled') throw new TRPCError({ code: 'BAD_REQUEST', message: '已撤销的高级委托不能成交' });
           if (advanced.advanced_status === 'fulfilled' || advanced.order_status === 'completed') {
             await (conn as any).commit();
-            return { success: true, alreadyFulfilled: true, orderId: Number(advanced.order_id) };
+            return {
+              success: true,
+              alreadyFulfilled: true,
+              orderId: Number(advanced.order_id),
+              fulfilledPrice: Number(advanced.fulfilled_price || advanced.limit_price || advanced.advanced_limit_price),
+              fulfilledQuantity: String(advanced.fulfilled_quantity || advanced.quantity || advanced.advanced_quantity || ''),
+            };
           }
 
-          const limitPrice = Number(advanced.advanced_limit_price);
+          const multiplier = await getAfOrderMultiplierForLedger(conn as any, input.ledgerId);
+          const executionQuantity = Number((Number(advanced.advanced_amount) * multiplier / executionPrice).toFixed(8));
+          if (!Number.isFinite(executionQuantity) || executionQuantity <= 0) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '实际成交价无法计算有效持仓数量' });
+          }
           // 管理员端沿用普通委买的人工确认权限：只要订单尚未撤销或成交，管理员可明确确认。
           // 价格保护仍限制用户撤单并完整保留在高级委托审计记录中，不再阻塞管理员的人工履约决定。
           await (conn as any).execute(
             `UPDATE af_advanced_orders
-             SET status = 'fulfilled', reached_at = COALESCE(reached_at, NOW()), fulfilled_at = NOW(), fulfilled_by_user_id = ?, updated_at = NOW()
+             SET status = 'fulfilled', reached_at = COALESCE(reached_at, NOW()), fulfilled_at = NOW(), fulfilled_by_user_id = ?,
+                 fulfilled_price = ?, fulfilled_quantity = ?, updated_at = NOW()
              WHERE id = ? AND status IN ('active', 'reached')`,
-            [ctx.user.id, advanced.advanced_id]
+            [ctx.user.id, executionPrice, executionQuantity, advanced.advanced_id]
           );
           await (conn as any).execute(
-            `UPDATE af_orders SET status = 'completed', confirmed_at = NOW(), updated_at = NOW()
+            `UPDATE af_orders
+             SET status = 'completed', limit_price = ?, quantity = ?, confirmed_at = NOW(), updated_at = NOW()
              WHERE id = ? AND ledger_id = ? AND status = 'pending'`,
-            [advanced.order_id, input.ledgerId]
+            [executionPrice, executionQuantity, advanced.order_id, input.ledgerId]
           );
           fulfilledOrder = {
             id: Number(advanced.order_id),
             userId: Number(advanced.user_id),
             coin: String(advanced.coin),
             amount: Number(advanced.amount),
-            limitPrice,
-            quantity: String(advanced.quantity),
+            limitPrice: executionPrice,
+            quantity: String(executionQuantity),
           };
           await (conn as any).commit();
         } catch (error) {

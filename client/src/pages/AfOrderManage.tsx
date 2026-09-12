@@ -260,6 +260,9 @@ export default function AfOrderManage() {
   const [deleteScope, setDeleteScope] = useState<'all' | 'mainOnly' | 'selected'>('all');
   const [selectedGiftIds, setSelectedGiftIds] = useState<number[]>([]);
   const [refundChecked, setRefundChecked] = useState(false);
+  // 高级委托由管理员录入实际买入价后确认成交；原委托价仍保留在独立审计记录中。
+  const [advancedFulfillTarget, setAdvancedFulfillTarget] = useState<any>(null);
+  const [advancedExecutionPrice, setAdvancedExecutionPrice] = useState('');
   // 状态筛选：all / pending(委买中) / holding(持仓中) / selling(委卖中) / sold(已卖出)
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'holding' | 'selling' | 'sold' | 'cancelled'>('all');
   // 分组维度：时间 / 人员
@@ -336,8 +339,10 @@ export default function AfOrderManage() {
   const fulfillAdvancedMutation = trpc.ledger.afAdminFulfillAdvancedOrder.useMutation({
     onSuccess: (result) => {
       toast.success(result.alreadyFulfilled ? '高级委托此前已成交' : '高级委托已确认成交', {
-        description: result.alreadyFulfilled ? undefined : `成交价固定为 ${Number(result.fulfilledPrice).toLocaleString()} USDT。`,
+        description: result.alreadyFulfilled ? undefined : `实际买入价 ${Number(result.fulfilledPrice).toLocaleString()} USDT，已按该价格重算持仓与赠单。`,
       });
+      setAdvancedFulfillTarget(null);
+      setAdvancedExecutionPrice('');
       setEditingId(null);
       setEditState(null);
       utils.ledger.afAdminGetOrders.invalidate({ ledgerId });
@@ -1963,12 +1968,8 @@ export default function AfOrderManage() {
                               type="button"
                               disabled={fulfillAdvancedMutation.isPending}
                               onClick={() => {
-                                const protectionText = order.advancedStatus === 'reached'
-                                  ? '该订单已到价待确认。'
-                                  : '该订单当前仍处于高级委托保护中。';
-                                if (window.confirm(`${protectionText}确认以 ${Number(order.limitPrice).toLocaleString()} USDT 买入后，将立即按普通谷底增筹成交并执行赠单联动。`)) {
-                                  fulfillAdvancedMutation.mutate({ ledgerId: 52, orderId: order.id });
-                                }
+                                setAdvancedFulfillTarget(order);
+                                setAdvancedExecutionPrice(String(order.advancedLimitPrice || order.originalLimitPrice || order.limitPrice || ''));
                               }}
                               className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"
                             >
@@ -2076,8 +2077,14 @@ export default function AfOrderManage() {
                       return <>
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400 w-12 shrink-0">委托价</span>
-                          <span className="font-medium text-purple-700">{Number(order.limitPrice || 0).toLocaleString()} <span className="text-gray-400">u</span></span>
+                          <span className="font-medium text-purple-700">{Number(order.advancedLimitPrice || order.originalLimitPrice || order.limitPrice || 0).toLocaleString()} <span className="text-gray-400">u</span></span>
                         </div>
+                        {order.fulfilledPrice && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400 w-12 shrink-0">实际买入</span>
+                            <span className="font-medium text-green-600">{Number(order.fulfilledPrice).toLocaleString()} <span className="text-gray-400">u</span></span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400 w-12 shrink-0">提交现价</span>
                           <span className="font-medium text-gray-700">{order.submittedSpotPrice ? `${Number(order.submittedSpotPrice).toLocaleString()} u` : '—'}</span>
@@ -2588,6 +2595,83 @@ export default function AfOrderManage() {
           </div>
         )}
       </div>
+
+      {/* 高级委托实际成交价确认：原委托价 L 不覆盖，管理员录入最终买入价。 */}
+      <AlertDialog
+        open={!!advancedFulfillTarget}
+        onOpenChange={(open) => {
+          if (!open && !fulfillAdvancedMutation.isPending) {
+            setAdvancedFulfillTarget(null);
+            setAdvancedExecutionPrice('');
+          }
+        }}
+      >
+        <AlertDialogContent className="mx-4 rounded-2xl max-h-[80vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认高级委托成交</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-gray-600">
+                <p>请录入管理员确认的实际买入价。原高级委托价会继续保留，作为该订单的审计与保护记录。</p>
+                <div className="rounded-xl border border-purple-100 bg-purple-50 p-3 space-y-2">
+                  <div className="flex justify-between gap-3">
+                    <span>币种</span>
+                    <span className="font-semibold text-gray-800">{advancedFulfillTarget?.coin || 'ETH'}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span>原高级委托价 L</span>
+                    <span className="font-semibold text-purple-700">{Number(advancedFulfillTarget?.advancedLimitPrice || advancedFulfillTarget?.originalLimitPrice || advancedFulfillTarget?.limitPrice || 0).toLocaleString()} USDT</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span>实际投入</span>
+                    <span className="font-semibold text-gray-800">{Number(advancedFulfillTarget?.amount || 0).toFixed(2)} USDT</span>
+                  </div>
+                </div>
+                <label className="block space-y-1.5">
+                  <span className="font-medium text-gray-700">实际买入价</span>
+                  <div className="flex items-center gap-2 rounded-xl border border-orange-300 bg-white px-3 py-2 focus-within:border-orange-500">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.00000001"
+                      autoFocus
+                      value={advancedExecutionPrice}
+                      onChange={(event) => setAdvancedExecutionPrice(event.target.value)}
+                      placeholder="输入实际成交价格"
+                      className="min-w-0 flex-1 bg-transparent text-base font-semibold text-gray-900 outline-none"
+                    />
+                    <span className="text-xs text-gray-400">USDT</span>
+                  </div>
+                </label>
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">确认后，主订单的买入价、持仓数量和后续赠单均按此实际买入价重新计算；原高级委托价 L 不会被覆盖。</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="rounded-xl"
+              disabled={fulfillAdvancedMutation.isPending}
+              onClick={() => {
+                setAdvancedFulfillTarget(null);
+                setAdvancedExecutionPrice('');
+              }}
+            >返回修改</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl bg-orange-600 hover:bg-orange-700"
+              disabled={fulfillAdvancedMutation.isPending || !advancedExecutionPrice.trim()}
+              onClick={(event) => {
+                event.preventDefault();
+                const price = Number(advancedExecutionPrice);
+                if (!advancedFulfillTarget || !Number.isFinite(price) || price <= 0) {
+                  toast.error('请输入有效的实际成交价');
+                  return;
+                }
+                fulfillAdvancedMutation.mutate({ ledgerId: 52, orderId: advancedFulfillTarget.id, executionPrice: price });
+              }}
+            >{fulfillAdvancedMutation.isPending ? '确认中...' : '确认成交'}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* 删除确认弹窗 */}
       <AlertDialog
