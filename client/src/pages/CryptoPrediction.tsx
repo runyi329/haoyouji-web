@@ -1436,6 +1436,12 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
     onError: (e) => toast.error('撒单失败', { description: e.message }),
   });
   const orderUtils = trpc.useUtils();
+  // 每分钟刷新一次详情中的委托时长与累计预估收益；实时行情查询仍保持原有3秒刷新。
+  const [advancedDetailNowMs, setAdvancedDetailNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setAdvancedDetailNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const cancelAdvancedMutation = trpc.ledger.afCancelAdvancedOrder.useMutation({
     onSuccess: (result) => {
       if (result.success) toast.success('高级委托已撤销', { description: '冻结金额已退回钱包可用余额。' });
@@ -1499,6 +1505,21 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           const currentAdvancedPrice = Number((order as any).currentMarketPrice || livePrice || 0);
           const yieldRate = Number((order as any).weeklyYieldRate || 0);
           const advancedStatus = (order as any).advancedStatus || 'active';
+          const submittedAtMs = new Date(order.createdAt).getTime();
+          const finalizedAtRaw = advancedStatus === 'fulfilled'
+            ? ((order as any).fulfilledAt || order.updatedAt)
+            : advancedStatus === 'cancelled'
+              ? ((order as any).cancelledAt || order.updatedAt)
+              : null;
+          const calculationEndMs = finalizedAtRaw ? new Date(finalizedAtRaw).getTime() : advancedDetailNowMs;
+          const elapsedMs = Number.isFinite(submittedAtMs) ? Math.max(0, calculationEndMs - submittedAtMs) : 0;
+          const elapsedMinutes = Math.floor(elapsedMs / 60_000);
+          const durationDays = Math.floor(elapsedMinutes / (24 * 60));
+          const durationHours = Math.floor((elapsedMinutes % (24 * 60)) / 60);
+          const durationMinutes = elapsedMinutes % 60;
+          const entrustDuration = elapsedMinutes < 1 ? '刚刚开始' : `${durationDays > 0 ? `${durationDays}天` : ''}${durationHours > 0 || durationDays > 0 ? `${durationHours}小时` : ''}${durationMinutes}分钟`;
+          const weeklyEstimate = parseFloat(order.amount || '0') * yieldRate;
+          const accumulatedEstimate = weeklyEstimate * elapsedMs / (7 * 24 * 60 * 60 * 1000);
           const statusLabel = advancedStatus === 'fulfilled' ? '已成交'
             : advancedStatus === 'cancelled' ? '已撤销'
             : advancedStatus === 'reached' ? '已到价，待管理员确认'
@@ -1522,7 +1543,15 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">每周收益预估</span>
-              <span className="font-semibold" style={{ color: '#5B47C9' }}>{(yieldRate * 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}% · {(parseFloat(order.amount || '0') * yieldRate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
+              <span className="font-semibold" style={{ color: '#5B47C9' }}>{(yieldRate * 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}% · {weeklyEstimate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">委托时长</span>
+              <span className="text-[#1E293B] font-medium">{entrustDuration}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">累计预估收益</span>
+              <span className="font-semibold" style={{ color: '#5B47C9' }}>{accumulatedEstimate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
             </div>
             <div className="rounded-lg px-2.5 py-2 text-[11px] leading-5" style={{ backgroundColor: advancedStatus === 'reached' ? '#FFF7ED' : '#F7F6FF', color: statusColor, border: `1px solid ${advancedStatus === 'reached' ? '#FED7AA' : '#E3DFFF'}` }}>
               <span className="font-semibold">{statusLabel}</span><span className="mx-1">·</span>{(order as any).advancedCancelReason || '服务端正在判断撤单资格'}
