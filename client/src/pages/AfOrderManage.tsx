@@ -1954,7 +1954,7 @@ export default function AfOrderManage() {
                               type="button"
                               disabled={fulfillAdvancedMutation.isPending}
                               onClick={() => {
-                                if (window.confirm(`确认以 ${Number(order.limitPrice).toLocaleString()} USDT 买入该高级委托？系统将再次核对当前ETH价格是否已到价。`)) {
+                                if (window.confirm(`确认以 ${Number(order.limitPrice).toLocaleString()} USDT 买入该高级委托？该订单已进入待确认状态，后续行情反弹不影响本次确认。`)) {
                                   fulfillAdvancedMutation.mutate({ ledgerId: 52, orderId: order.id });
                                 }
                               }}

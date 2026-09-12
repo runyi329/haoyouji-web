@@ -15299,10 +15299,14 @@ ${klinesSummary}
             return { success: true, alreadyFulfilled: true, orderId: Number(advanced.order_id) };
           }
 
-          const market = await getFreshAfAdvancedEthPrice();
           const limitPrice = Number(advanced.advanced_limit_price);
-          if (market.price > limitPrice) {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: `当前ETH价格${market.price.toFixed(2)}尚未到达委托价${limitPrice.toFixed(2)}，不能确认成交` });
+          // “reached”是服务端在首次P≤L时持久化的待确认状态：一旦进入，后续价格反弹不影响管理员履约。
+          // 若管理员通过接口直接确认尚未到价的active订单，才需要在此刻重新核验P≤L。
+          if (advanced.advanced_status !== 'reached') {
+            const market = await getFreshAfAdvancedEthPrice();
+            if (market.price > limitPrice) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: `当前ETH价格${market.price.toFixed(2)}尚未到达委托价${limitPrice.toFixed(2)}，不能确认成交` });
+            }
           }
           await (conn as any).execute(
             `UPDATE af_advanced_orders
