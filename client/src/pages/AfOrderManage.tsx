@@ -18,9 +18,10 @@ import { toast } from "sonner";
 // 综合状态标签（买入状态 + 卖出状态）
 const getStatusDisplay = (order: any) => {
   if (order.isAdvanced) {
+    if (order.advancedStatus === 'cancelled' || order.status === 'cancelled') return { label: '已撤单', color: 'text-gray-400' };
     if (order.advancedStatus === 'reached') return { label: '已到价待确认', color: 'text-orange-600' };
-    if (order.advancedStatus === 'fulfilled') return { label: '已成交', color: 'text-green-500' };
-    if (order.advancedStatus === 'cancelled') return { label: '已撤销', color: 'text-gray-400' };
+    // 高级委托成交后进入普通谷底增筹的持仓状态；高级标识仍作为审计信息保留。
+    if (order.advancedStatus === 'fulfilled' || order.status === 'completed') return { label: '持仓中', color: 'text-green-500' };
     return { label: '高级委托保护中', color: 'text-purple-600' };
   }
   if (order.sellStatus === 'sold') return { label: '已卖出', color: 'text-blue-600' };
@@ -341,6 +342,11 @@ export default function AfOrderManage() {
       setEditState(null);
       utils.ledger.afAdminGetOrders.invalidate({ ledgerId });
       utils.ledger.afAdminGetStats.invalidate({ ledgerId });
+      // 赠单由成交后的后台联动生成，稍后再刷新一次即可显示实际受益人。
+      window.setTimeout(() => {
+        utils.ledger.afAdminGetOrders.invalidate({ ledgerId });
+        utils.ledger.afAdminGetStats.invalidate({ ledgerId });
+      }, 1200);
     },
     onError: (e) => toast.error('确认高级委托失败：' + e.message),
   });
@@ -1913,6 +1919,9 @@ export default function AfOrderManage() {
                             ? `${order.username}/${order.nickname}`
                             : order.nickname || order.username || `用户${order.userId}`}
                         </span>
+                        {order.isAdvanced && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: '#F3EEFF', color: '#6D4CCB', border: '1px solid #DDD1FF' }}>高级委托</span>
+                        )}
                         {order.isGift && (
                           <span
                             className="inline-flex items-center justify-center font-black select-none shrink-0"
@@ -1949,12 +1958,15 @@ export default function AfOrderManage() {
                       </div>
                       {!isEditing ? (
                         order.isAdvanced ? (
-                          order.advancedStatus === 'reached' ? (
+                          order.status === 'pending' ? (
                             <button
                               type="button"
                               disabled={fulfillAdvancedMutation.isPending}
                               onClick={() => {
-                                if (window.confirm(`确认以 ${Number(order.limitPrice).toLocaleString()} USDT 买入该高级委托？该订单已进入待确认状态，后续行情反弹不影响本次确认。`)) {
+                                const protectionText = order.advancedStatus === 'reached'
+                                  ? '该订单已到价待确认。'
+                                  : '该订单当前仍处于高级委托保护中。';
+                                if (window.confirm(`${protectionText}确认以 ${Number(order.limitPrice).toLocaleString()} USDT 买入后，将立即按普通谷底增筹成交并执行赠单联动。`)) {
                                   fulfillAdvancedMutation.mutate({ ledgerId: 52, orderId: order.id });
                                 }
                               }}
@@ -1962,7 +1974,7 @@ export default function AfOrderManage() {
                             >
                               <Check className="w-3 h-3" /> {fulfillAdvancedMutation.isPending ? '确认中...' : '确认成交'}
                             </button>
-                          ) : <span className="text-[10px] text-purple-500">高级委托受专用规则保护</span>
+                          ) : <span className="text-[10px] text-green-600">高级委托已按普通持仓管理</span>
                         ) : (
                           <div className="flex items-center gap-1.5">
                             <button
@@ -2048,6 +2060,42 @@ export default function AfOrderManage() {
                         <span className={`font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>
                       )}
                     </div>
+                    {/* 高级委托专属审计信息；公共订单字段和管理费仍沿用普通谷底增筹布局。 */}
+                    {order.isAdvanced && (() => {
+                      const weeklyRate = Number(order.weeklyYieldRate || 0);
+                      const weeklyEstimate = Number(order.amount || 0) * weeklyRate;
+                      const startMs = new Date(order.createdAt).getTime();
+                      const terminalAt = order.advancedStatus === 'fulfilled'
+                        ? (order.fulfilledAt || order.confirmedAt)
+                        : order.advancedStatus === 'cancelled'
+                          ? order.cancelledAt
+                          : null;
+                      const endMs = terminalAt ? new Date(terminalAt).getTime() : Date.now();
+                      const chargedDays = Number.isFinite(startMs) ? Math.max(1, Math.ceil(Math.max(0, endMs - startMs) / (24 * 60 * 60 * 1000))) : 1;
+                      const accumulatedEstimate = weeklyEstimate * chargedDays / 7;
+                      return <>
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400 w-12 shrink-0">委托价</span>
+                          <span className="font-medium text-purple-700">{Number(order.limitPrice || 0).toLocaleString()} <span className="text-gray-400">u</span></span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400 w-12 shrink-0">提交现价</span>
+                          <span className="font-medium text-gray-700">{order.submittedSpotPrice ? `${Number(order.submittedSpotPrice).toLocaleString()} u` : '—'}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400 w-12 shrink-0">每周收益</span>
+                          <span className="font-medium text-purple-700">{(weeklyRate * 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}% · {weeklyEstimate.toFixed(2)} u</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400 w-12 shrink-0">委托时长</span>
+                          <span className="font-medium text-gray-700">{chargedDays}天</span>
+                        </div>
+                        <div className="flex items-center gap-1 col-span-2">
+                          <span className="text-gray-400 w-12 shrink-0">累计预估</span>
+                          <span className="font-medium text-purple-700">{accumulatedEstimate.toFixed(2)} u</span>
+                        </div>
+                      </>;
+                    })()}
                     {/* 档位计算方式（仅已成交订单显示） */}
                     {isEditing && editState!.status === 'completed' && (
                       <div className="flex items-center gap-1">
@@ -2358,19 +2406,29 @@ export default function AfOrderManage() {
                     );
                   })()}
 
-                  {/* 正单关联赠单状态标注 */}
+                  {/* 正单关联赠单：成交后显示实际赠单受益人；高级委托待成交时显示按当前配置预计的受益人。 */}
                   {!(order.isGift === true || order.isGift === 1) && (() => {
                     const giftOrders: any[] = (order as any).giftOrders || [];
-                    if (giftOrders.length === 0) return null;
+                    const advancedRecipients: any[] = (order as any).advancedGiftRecipients || [];
+                    const isAdvancedOrder = Boolean(order.isAdvanced);
+                    if (giftOrders.length === 0 && (!isAdvancedOrder || advancedRecipients.length === 0)) return null;
                     const soldCount = giftOrders.filter((g: any) => g.sellStatus === 'sold').length;
                     const sellingCount = giftOrders.filter((g: any) => g.sellStatus === 'selling').length;
                     const holdingCount = giftOrders.length - soldCount - sellingCount;
                     return (
-                      <div className="mt-2 text-xs rounded-lg px-3 py-1.5 border border-purple-100 bg-purple-50 flex items-center gap-2 flex-wrap">
-                        <span className="text-purple-600 font-medium">关联赠单 {giftOrders.length}笔</span>
-                        {soldCount > 0 && <span className="text-blue-500">已卖出 {soldCount}</span>}
-                        {sellingCount > 0 && <span className="text-red-500">委卖中 {sellingCount}</span>}
-                        {holdingCount > 0 && <span className="text-green-500">持仓中 {holdingCount}</span>}
+                      <div className="mt-2 text-xs rounded-lg px-3 py-2 border border-purple-100 bg-purple-50 space-y-1.5">
+                        {giftOrders.length > 0 ? <>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-purple-600 font-medium">关联赠单 {giftOrders.length}笔</span>
+                            {soldCount > 0 && <span className="text-blue-500">已卖出 {soldCount}</span>}
+                            {sellingCount > 0 && <span className="text-red-500">委卖中 {sellingCount}</span>}
+                            {holdingCount > 0 && <span className="text-green-500">持仓中 {holdingCount}</span>}
+                          </div>
+                          <div className="text-gray-600 leading-5">赠予：{giftOrders.map((g: any) => `${g.nickname || g.username || `用户${g.userId}`}${g.payoutRatio ? `（拨比${g.payoutRatio}%）` : g.giftMultiplier ? '（5.25赠单）' : ''}`).join('、')}</div>
+                        </> : <>
+                          <div className="text-purple-600 font-medium">确认后预计赠单受益人</div>
+                          <div className="text-gray-600 leading-5">{advancedRecipients.map((recipient: any) => `${recipient.username}（${recipient.type}${recipient.type === '5.25赠单' ? `${(Number(recipient.ratio || 0) * 100).toFixed(0)}%` : `${recipient.ratio}%`}）`).join('、')}</div>
+                        </>}
                       </div>
                     );
                   })()}

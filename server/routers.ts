@@ -15080,6 +15080,64 @@ ${klinesSummary}
           console.error('[afAdminGetOrders] 批量余额查询失败:', e);
         }
 
+        // 高级委托在确认前尚未生成实际赠单；管理员仍需看到确认后将赠给谁。
+        // 已生成赠单继续走上方giftOrders，以下字段只提供待确认阶段的受益人预览。
+        if (input.ledgerId === 52) {
+          const advancedMainOrders = list.filter((o: any) => o.isAdvanced && !o.isGift);
+          for (const order of advancedMainOrders) (order as any).advancedGiftRecipients = [];
+          if (advancedMainOrders.length > 0) {
+            try {
+              const conn = await (await import('./db')).getDbConnection();
+              if (conn) {
+                const sourceUserIds = [...new Set(advancedMainOrders.map((o: any) => Number(o.userId)))];
+                const sourcePlaceholders = sourceUserIds.map(() => '?').join(',');
+                const [ratioRows] = await (conn as any).execute(
+                  `SELECT pr.source_user_id, pr.beneficiary_user_id, pr.ratio,
+                          COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户', pr.beneficiary_user_id)) AS recipient_name
+                   FROM af_payout_ratios pr
+                   LEFT JOIN users u ON u.id = pr.beneficiary_user_id
+                   WHERE pr.ledger_id = ? AND pr.source_user_id IN (${sourcePlaceholders})`,
+                  [input.ledgerId, ...sourceUserIds]
+                );
+                const ratioMap: Record<number, any[]> = {};
+                for (const row of (ratioRows as any[])) {
+                  const sourceUserId = Number(row.source_user_id);
+                  if (!ratioMap[sourceUserId]) ratioMap[sourceUserId] = [];
+                  ratioMap[sourceUserId].push({
+                    type: '拨比赠单',
+                    userId: Number(row.beneficiary_user_id),
+                    username: String(row.recipient_name || `用户${row.beneficiary_user_id}`),
+                    ratio: Number(row.ratio || 0),
+                  });
+                }
+                const [switchRows] = await (conn as any).execute(
+                  `SELECT s.enabled, s.target_user_id, s.gift_ratio,
+                          COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户', s.target_user_id)) AS recipient_name
+                   FROM af_525_switch s
+                   LEFT JOIN users u ON u.id = s.target_user_id
+                   WHERE s.ledger_id = ? LIMIT 1`,
+                  [input.ledgerId]
+                );
+                const giftSwitch = (switchRows as any[])?.[0];
+                for (const order of advancedMainOrders) {
+                  const previews = [...(ratioMap[Number(order.userId)] || [])];
+                  if (giftSwitch?.enabled && Number(giftSwitch.target_user_id || 0) > 0 && Number(giftSwitch.gift_ratio || 0) > 0) {
+                    previews.push({
+                      type: '5.25赠单',
+                      userId: Number(giftSwitch.target_user_id),
+                      username: String(giftSwitch.recipient_name || `用户${giftSwitch.target_user_id}`),
+                      ratio: Number(giftSwitch.gift_ratio),
+                    });
+                  }
+                  (order as any).advancedGiftRecipients = previews;
+                }
+              }
+            } catch (e) {
+              console.error('[afAdminGetOrders] 查询高级委托赠单预览失败:', e);
+            }
+          }
+        }
+
         return list;
       }),
     // 管理员：订单和管理费统计
@@ -15300,14 +15358,8 @@ ${klinesSummary}
           }
 
           const limitPrice = Number(advanced.advanced_limit_price);
-          // “reached”是服务端在首次P≤L时持久化的待确认状态：一旦进入，后续价格反弹不影响管理员履约。
-          // 若管理员通过接口直接确认尚未到价的active订单，才需要在此刻重新核验P≤L。
-          if (advanced.advanced_status !== 'reached') {
-            const market = await getFreshAfAdvancedEthPrice();
-            if (market.price > limitPrice) {
-              throw new TRPCError({ code: 'BAD_REQUEST', message: `当前ETH价格${market.price.toFixed(2)}尚未到达委托价${limitPrice.toFixed(2)}，不能确认成交` });
-            }
-          }
+          // 管理员端沿用普通委买的人工确认权限：只要订单尚未撤销或成交，管理员可明确确认。
+          // 价格保护仍限制用户撤单并完整保留在高级委托审计记录中，不再阻塞管理员的人工履约决定。
           await (conn as any).execute(
             `UPDATE af_advanced_orders
              SET status = 'fulfilled', reached_at = COALESCE(reached_at, NOW()), fulfilled_at = NOW(), fulfilled_by_user_id = ?, updated_at = NOW()
