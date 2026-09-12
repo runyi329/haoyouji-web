@@ -193,14 +193,24 @@ export async function getDbConnection(forceGuest: boolean = false): Promise<mysq
 
   // 先调用 getDb() 确保连接已创建
   await getDb(false);
-  
+
   // 如果有连接池，直接使用池的 query 方法（不需要手动 release）
   // 返回一个代理对象，将 execute 委托给连接池
   if (_pool) {
     return _pool as unknown as mysql.Connection;
   }
-  
+
   // 统一返回腾讯云数据库连接，不再区分游客/真实用户
+  return _connection;
+}
+
+/**
+ * 获取一条独占的 mysql2 连接，专供需要 beginTransaction/commit/rollback 的资金操作使用。
+ * 调用方必须在 finally 中执行 release()（连接池场景）或 end() 前的适当清理。
+ */
+export async function getDbTransactionConnection(): Promise<mysql.PoolConnection | mysql.Connection | null> {
+  await getDb(false);
+  if (_pool) return _pool.getConnection();
   return _connection;
 }
 

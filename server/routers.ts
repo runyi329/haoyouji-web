@@ -8,7 +8,7 @@ import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./db";
-import { getDbConnection, getLedgerDb } from "./db";
+import { getDbConnection, getDbTransactionConnection, getLedgerDb } from "./db";
 import * as dbEthPosition from "./db-eth-position";
 import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
@@ -14424,10 +14424,9 @@ ${klinesSummary}
         if (!Number.isFinite(amount) || amount <= 0) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '请输入有效投资额' });
         }
-        await ensureAfAdvancedOrdersTable();
-        const conn = await getDbConnection();
+                await ensureAfAdvancedOrdersTable();
+        const conn = await getDbTransactionConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
-
         await (conn as any).beginTransaction();
         try {
           const [memberRows] = await (conn as any).execute(
@@ -14495,18 +14494,19 @@ ${klinesSummary}
             quantity,
             weeklyYieldRate,
           };
-        } catch (error) {
+                } catch (error) {
           try { await (conn as any).rollback(); } catch {}
           throw error;
+        } finally {
+          (conn as any).release?.();
         }
       }),
-
     // 高级委托：只能在当前价P高于提交快照S且尚未到价时撤销；退款与状态在同一事务内完成。
     afCancelAdvancedOrder: protectedProcedure
       .input(z.object({ ledgerId: z.literal(52), orderId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         await ensureAfAdvancedOrdersTable();
-        const conn = await getDbConnection();
+        const conn = await getDbTransactionConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
         await (conn as any).beginTransaction();
         try {
@@ -14567,12 +14567,13 @@ ${klinesSummary}
           );
           await (conn as any).commit();
           return { success: true, cancelable: true, currentPrice: market.price };
-        } catch (error) {
+                } catch (error) {
           try { await (conn as any).rollback(); } catch {}
           throw error;
+        } finally {
+          (conn as any).release?.();
         }
       }),
-
     // AF 查询委托订单（该账本所有币种）
     afGetOrders: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
@@ -15268,7 +15269,7 @@ ${klinesSummary}
       .input(z.object({ ledgerId: z.literal(52), orderId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         await ensureAfAdvancedOrdersTable();
-        const conn = await getDbConnection();
+        const conn = await getDbTransactionConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
         const [roleRows] = await (conn as any).execute(
           `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
@@ -15326,6 +15327,8 @@ ${klinesSummary}
         } catch (error) {
           try { await (conn as any).rollback(); } catch {}
           throw error;
+        } finally {
+          (conn as any).release?.();
         }
 
         if (!fulfilledOrder) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '高级委托成交状态异常' });
