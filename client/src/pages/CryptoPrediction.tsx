@@ -1513,13 +1513,11 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               : null;
           const calculationEndMs = finalizedAtRaw ? new Date(finalizedAtRaw).getTime() : advancedDetailNowMs;
           const elapsedMs = Number.isFinite(submittedAtMs) ? Math.max(0, calculationEndMs - submittedAtMs) : 0;
-          const elapsedMinutes = Math.floor(elapsedMs / 60_000);
-          const durationDays = Math.floor(elapsedMinutes / (24 * 60));
-          const durationHours = Math.floor((elapsedMinutes % (24 * 60)) / 60);
-          const durationMinutes = elapsedMinutes % 60;
-          const entrustDuration = elapsedMinutes < 1 ? '刚刚开始' : `${durationDays > 0 ? `${durationDays}天` : ''}${durationHours > 0 || durationDays > 0 ? `${durationHours}小时` : ''}${durationMinutes}分钟`;
+          // 委托时长与累计收益均按天向上取整：提交当天即记为第1天，不足一天也按一天计。
+          const chargedDays = Math.max(1, Math.ceil(elapsedMs / (24 * 60 * 60 * 1000)));
+          const entrustDuration = `${chargedDays}天`;
           const weeklyEstimate = parseFloat(order.amount || '0') * yieldRate;
-          const accumulatedEstimate = weeklyEstimate * elapsedMs / (7 * 24 * 60 * 60 * 1000);
+          const accumulatedEstimate = weeklyEstimate * chargedDays / 7;
           const statusLabel = advancedStatus === 'fulfilled' ? '已成交'
             : advancedStatus === 'cancelled' ? '已撤销'
             : advancedStatus === 'reached' ? '已到价，待管理员确认'
@@ -1550,7 +1548,7 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               <span className="text-[#1E293B] font-medium">{entrustDuration}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-[#9CA3AF]">累计预估收益</span>
+              <span className="text-[#9CA3AF]">累计收益预估</span>
               <span className="font-semibold" style={{ color: '#5B47C9' }}>{accumulatedEstimate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
             </div>
             <div className="rounded-lg px-2.5 py-2 text-[11px] leading-5" style={{ backgroundColor: advancedStatus === 'reached' ? '#FFF7ED' : '#F7F6FF', color: statusColor, border: `1px solid ${advancedStatus === 'reached' ? '#FED7AA' : '#E3DFFF'}` }}>
