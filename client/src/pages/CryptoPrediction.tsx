@@ -3,7 +3,7 @@
  * 布局：
  *   顶部导航栏（返回 + 币种名）
  *   K 线图区域（固定，不随 Tab 切换）
- *   三 Tab 切换：无损合约 / 无损现货 / 行情评估（含竞猜）
+ *   两个业务入口：谷底增筹 / 融资付息
  */
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { FunderOrderCard } from "@/components/FunderOrderCard";
@@ -16,7 +16,6 @@ import {
   Wallet, ChevronDown, ChevronUp, ChevronsUpDown, Search, XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { WorldCupEmbedded } from "@/pages/WorldCup";
 
 // ─── 币种配置 ──────────────────────────────────────────────────
 // 委买价格档位（低于市价，抄底用）
@@ -31,6 +30,17 @@ const SELL_PRICE_OPTIONS: Record<string, number[]> = {
   BTC: [100000, 99000, 98000, 97000, 96000, 95000, 94000, 93000, 92000, 91000, 90000, 89000, 88000, 87000, 86000, 85000, 84000, 83000, 82000, 81000, 80000, 79000, 78000, 77000, 76000, 75000],
   ETH: [5000, 4900, 4800, 4700, 4600, 4500, 4400, 4300, 4200, 4100, 4000, 3900, 3800, 3700, 3600, 3500, 3400, 3300, 3200, 3100, 3000, 2900, 2800, 2700, 2600, 2500, 2400, 2300],
   SOL: [150, 145, 140, 135, 130, 125, 120, 115, 110, 105, 100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50],
+};
+
+// 高级委托初期仅支持 ETH 的五档固定委托价。
+const ADVANCED_ETH_PRICE_OPTIONS = [2200, 2100, 2000, 1900, 1800] as const;
+// 高级委托每周收益率按用户确认的五档委托价固定计算。
+const ADVANCED_WEEKLY_YIELD_RATE_BY_PRICE: Record<number, number> = {
+  2200: 0.01,
+  2100: 0.01,
+  2000: 0.0095,
+  1900: 0.009,
+  1800: 0.0085,
 };
 
 const COIN_CONFIG: Record<string, {
@@ -2231,11 +2241,23 @@ export default function CryptoPrediction() {
   const [contractCoinFilter, setContractCoinFilter] = useState<'all'|'BTC'|'ETH'|'SOL'>('all');
 
   // 委托交易面板状态
-  const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
+  const [orderSide, setOrderSide] = useState<"buy" | "sell" | "advanced">("buy");
   const [orderAmount, setOrderAmount] = useState("");
   const [orderPrice, setOrderPrice] = useState("");
   const [priceMode, setPriceMode] = useState<'market' | 'limit'>('market'); // 委买价格模式：市价 or 限价
+  // 预览阶段仅展示高级委托确认信息，绝不调用真实下单接口。
+  const [showAdvancedPreviewConfirm, setShowAdvancedPreviewConfirm] = useState(false);
+  // 高级委托价格滚轮默认展开到2200 / 2100 / 2000三档，2100位于中间。
+  const [isAdvancedPriceWheelOpen, setIsAdvancedPriceWheelOpen] = useState(false);
+  const advancedPriceWheelRef = useRef<HTMLDivElement>(null);
   const [sliderPct, setSliderPct] = useState(0);
+  useEffect(() => {
+    if (!isAdvancedPriceWheelOpen || !advancedPriceWheelRef.current) return;
+    const selectedPrice = Number(orderPrice || 2100);
+    const selectedIndex = Math.max(0, ADVANCED_ETH_PRICE_OPTIONS.indexOf(selectedPrice as typeof ADVANCED_ETH_PRICE_OPTIONS[number]));
+    const frame = requestAnimationFrame(() => advancedPriceWheelRef.current?.scrollTo({ top: selectedIndex * 40, behavior: 'auto' }));
+    return () => cancelAnimationFrame(frame);
+  }, [isAdvancedPriceWheelOpen, orderPrice]);
   // 委卖时选中的买入订单 id（支持多选批量卖出）
   const [selectedSellOrderIds, setSelectedSellOrderIds] = useState<Set<number>>(new Set());
   // 订单详情展开状态
@@ -2331,29 +2353,6 @@ export default function CryptoPrediction() {
     }
   }, [isGuDiZengChouLedger, priceMode, isYJHOrAdmin, myMarketPermData]);
 
-  // 卖期权锁仓配置（52号账本 ETH 专用）
-  const { data: optionLocksData } = trpc.ledger.afGetActiveOptionLocks.useQuery(
-    { ledgerId, coin: coinKey },
-    { enabled: isGuDiZengChouLedger && coinKey === 'ETH', staleTime: 60000 }
-  );
-  const [lockChecked, setLockChecked] = useState(false);
-  // 当前选中价格对应的锁仓配置
-  const activeLockForPrice = useMemo(() => {
-    if (!isGuDiZengChouLedger || coinKey !== 'ETH' || !orderPrice) return null;
-    const price = parseFloat(orderPrice);
-    const locks = (optionLocksData as any)?.locks || [];
-    return locks.find((l: any) => Number(l.bind_buy_price) === price) || null;
-  }, [isGuDiZengChouLedger, coinKey, orderPrice, optionLocksData]);
-  // 所有价格的锁仓配置映射（用于价格列表显示“锁定收益”标签）
-  const activeLockForPriceMap = useMemo(() => {
-    const map: Record<number, any> = {};
-    const locks = (optionLocksData as any)?.locks || [];
-    for (const l of locks) map[Number(l.bind_buy_price)] = l;
-    return map;
-  }, [optionLocksData]);
-  // 切换价格时重置锁仓勾选
-  useEffect(() => { setLockChecked(false); }, [orderPrice]);
-
   // 可用余额（账本总资产）
   const { data: assetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
@@ -2439,8 +2438,15 @@ export default function CryptoPrediction() {
     trpc.ledger.getBinanceTicker.useQuery({ symbol: coin.symbol }, { staleTime: 30000, refetchInterval: 30000 });
   const { data: klinesData, isLoading: klinesLoading, refetch: refetchKlines } =
     trpc.ledger.getBinanceKlines.useQuery({ symbol: coin.symbol, interval, limit: 60 }, { staleTime: 30000 });
-  // 当前价格（走服务器tRPC，price-scanner缓存，3秒刷新）
+  // 当前价格（走服务器统一行情缓存，3秒读取一次）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
+  // 高级委托只需要 ETH，额外使用轻量的 ETH 专用接口以缩短首次报价等待；两者共享同一服务端行情缓存。
+  const { data: advancedEthTicker } = trpc.cryptoData.getEthPrice.useQuery(undefined, {
+    enabled: isGuDiZengChouLedger && (orderSide === 'advanced' || coinKey === 'ETH'),
+    refetchInterval: 3000,
+    staleTime: 1000,
+    refetchIntervalInBackground: true,
+  });
   const cryptoPrices = (cryptoPricesRaw as any)?.prices ?? {};
   const cryptoChanges = (cryptoPricesRaw as any)?.changes ?? {};
 
@@ -2451,6 +2457,15 @@ export default function CryptoPrediction() {
   const isUp = priceChange >= 0;
   // 当前价格优先用 getCryptoPrices，回落到 ticker.lastPrice
   const currentPrice = (coinKey && cryptoPrices?.[coinKey]) ? cryptoPrices[coinKey] : (ticker?.lastPrice ? parseFloat(ticker.lastPrice) : 0);
+  // 高级委托价格在接口短暂刷新时保留最后一笔有效 ETH 报价，避免界面反复显示“加载中”。
+  const [lastAdvancedEthPrice, setLastAdvancedEthPrice] = useState(0);
+  useEffect(() => {
+    const directEthPrice = (advancedEthTicker as any)?.success ? Number((advancedEthTicker as any)?.price) : 0;
+    const fallbackEthPrice = Number(cryptoPrices?.ETH || 0);
+    const nextPrice = directEthPrice > 0 ? directEthPrice : fallbackEthPrice;
+    if (nextPrice > 0) setLastAdvancedEthPrice(nextPrice);
+  }, [advancedEthTicker, cryptoPrices]);
+  const advancedCurrentPrice = lastAdvancedEthPrice > 0 ? lastAdvancedEthPrice : currentPrice;
 
   // 市价模式下，实时同步 currentPrice 到 orderPrice
   useEffect(() => {
@@ -2630,18 +2645,12 @@ export default function CryptoPrediction() {
           {(isCustomAF ? [
             { key: "contract", label: "谷底增筹" },
             { key: "finance", label: "融资付息" },
-            ...(isOwner ? [{ key: "market", label: "冠军预测" }] : []),
           ] : [
             { key: "contract", label: isCustomAF ? "谷底增瘨" : "无损合约" },
-            ...(isOwner ? [{ key: "market", label: "冠军预测" }] : []),
           ]).map((t) => (
             <button key={t.key} onClick={() => {
               if (t.key === "gujian") {
                 setLocation(`/ledger/${ledgerId}/gujian${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`);
-                return;
-              }
-              if (t.key === "market") {
-                setLocation('/world-cup');
                 return;
               }
               setTab(t.key as any);
@@ -2694,83 +2703,88 @@ export default function CryptoPrediction() {
                 </button>
               </div>
               <div className="px-4 pb-6 space-y-3">
-            {/* 委买 / 委卖 切换 */}
+            {/* 委买 / 委卖 / 高级委托切换 */}
             <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid #D0DBFF' }}>
               <button
-                onClick={() => { setOrderSide("buy"); setOrderAmount(""); setSliderPct(0); }}
-                className={`flex-1 py-2.5 text-sm font-semibold transition-all ${
-                  orderSide === "buy" ? "text-white" : "text-gray-500"
-                }`}
+                onClick={() => { setOrderSide("buy"); setOrderAmount(""); setSliderPct(0); setOrderPrice(""); }}
+                className={`flex-1 py-2.5 text-sm font-semibold transition-all ${orderSide === "buy" ? "text-white" : "text-gray-500"}`}
                 style={orderSide === "buy" ? { backgroundColor: '#1A56DB' } : { backgroundColor: '#F0F4FF' }}>
                 委买
               </button>
               <button
                 onClick={() => { setOrderSide("sell"); setOrderAmount(""); setSliderPct(0); setSelectedSellOrderIds(new Set()); setOrderPrice(""); }}
-                className={`flex-1 py-2.5 text-sm font-semibold transition-all ${
-                  orderSide === "sell" ? "text-white" : "text-gray-500"
-                }`}
+                className={`flex-1 py-2.5 text-sm font-semibold transition-all ${orderSide === "sell" ? "text-white" : "text-gray-500"}`}
                 style={orderSide === "sell" ? { backgroundColor: '#EF4444' } : { backgroundColor: '#F0F4FF' }}>
                 委卖
               </button>
+              <button
+                onClick={() => { setOrderSide("advanced"); setCoinKey("ETH"); setOrderAmount(""); setSliderPct(0); setOrderPrice("2100"); setPriceMode('limit'); setIsAdvancedPriceWheelOpen(false); }}
+                className={`flex-1 py-2.5 text-sm font-semibold transition-all ${orderSide === "advanced" ? "text-white" : "text-gray-500"}`}
+                style={orderSide === "advanced" ? { backgroundColor: '#5B47C9' } : { backgroundColor: '#F0F4FF' }}>
+                高级委托
+              </button>
             </div>
 
-            {/* 币种选择下拉 */}
-            <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
-              <img src={coin.imgUrl} alt={coin.name} className="w-5 h-5 rounded-full flex-shrink-0" />
-              <select
-                value={coinKey}
-                onChange={(e) => { setCoinKey(e.target.value); setOrderPrice(""); setOrderAmount(""); setSliderPct(0); }}
-                className="flex-1 bg-transparent text-sm outline-none"
-                style={{ color: '#1A2340', appearance: 'none', WebkitAppearance: 'none' }}
-              >
-                <option value="ETH">ETH</option>
-                <option value="BTC">BTC</option>
-                <option value="SOL">SOL</option>
-              </select>
-              <svg className="w-4 h-4 flex-shrink-0" style={{ color: '#9CA3AF' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-            </div>
+            {orderSide !== 'advanced' && (
+              <>
+                {/* 币种选择下拉 */}
+                <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
+                  <img src={coin.imgUrl} alt={coin.name} className="w-5 h-5 rounded-full flex-shrink-0" />
+                  <select
+                    value={coinKey}
+                    onChange={(e) => { setCoinKey(e.target.value); setOrderPrice(""); setOrderAmount(""); setSliderPct(0); }}
+                    className="flex-1 bg-transparent text-sm outline-none"
+                    style={{ color: '#1A2340', appearance: 'none', WebkitAppearance: 'none' }}
+                  >
+                    <option value="ETH">ETH</option>
+                    <option value="BTC">BTC</option>
+                    <option value="SOL">SOL</option>
+                  </select>
+                  <svg className="w-4 h-4 flex-shrink-0" style={{ color: '#9CA3AF' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </div>
 
-            {/* 委托价格选择器：委买时第一档为市价，委卖时仅限价 */}
-            <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
-              <span className="text-sm flex-shrink-0" style={{ color: '#6B7A9A', minWidth: '4rem' }}>
-                {isGuDiZengChouLedger || !(orderSide === 'buy' && priceMode === 'market') ? '限价委托' : '市价委托'}
-              </span>
-              <select
-                value={!isGuDiZengChouLedger && orderSide === 'buy' && priceMode === 'market' ? '__market__' : orderPrice}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (!isGuDiZengChouLedger && val === '__market__') {
-                    setPriceMode('market');
-                    setOrderPrice(currentPrice > 0 ? currentPrice.toFixed(2) : '');
-                  } else {
-                    setPriceMode('limit');
-                    setOrderPrice(val);
-                  }
-                }}
-                className="flex-1 bg-transparent text-sm outline-none"
-                style={{ color: (orderSide === 'buy' && priceMode === 'market') || orderPrice ? '#1A2340' : '#9CA3AF', appearance: 'none', WebkitAppearance: 'none' }}
-              >
-                {orderSide === 'buy' ? (
-                  <>
-                    {!isGuDiZengChouLedger && canUseMarketOrder && (
-                      <option value="__market__">市价· {currentPrice > 0 ? `$${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '加载中...'}</option>
+                {/* 委托价格选择器：委买时第一档为市价，委卖时仅限价 */}
+                <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
+                  <span className="text-sm flex-shrink-0" style={{ color: '#6B7A9A', minWidth: '4rem' }}>
+                    {isGuDiZengChouLedger || !(orderSide === 'buy' && priceMode === 'market') ? '限价委托' : '市价委托'}
+                  </span>
+                  <select
+                    value={!isGuDiZengChouLedger && orderSide === 'buy' && priceMode === 'market' ? '__market__' : orderPrice}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!isGuDiZengChouLedger && val === '__market__') {
+                        setPriceMode('market');
+                        setOrderPrice(currentPrice > 0 ? currentPrice.toFixed(2) : '');
+                      } else {
+                        setPriceMode('limit');
+                        setOrderPrice(val);
+                      }
+                    }}
+                    className="flex-1 bg-transparent text-sm outline-none"
+                    style={{ color: (orderSide === 'buy' && priceMode === 'market') || orderPrice ? '#1A2340' : '#9CA3AF', appearance: 'none', WebkitAppearance: 'none' }}
+                  >
+                    {orderSide === 'buy' ? (
+                      <>
+                        {!isGuDiZengChouLedger && canUseMarketOrder && (
+                          <option value="__market__">市价· {currentPrice > 0 ? `$${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '加载中...'}</option>
+                        )}
+                        {(BUY_PRICE_OPTIONS[coin.name] || []).map((p) => (
+                          <option key={p} value={p.toString()}>限价· {p.toLocaleString()} USDT</option>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <option value="">选择价格</option>
+                        {(SELL_PRICE_OPTIONS[coin.name] || []).map((p) => (
+                          <option key={p} value={p.toString()}>{p.toLocaleString()} USDT</option>
+                        ))}
+                      </>
                     )}
-                    {(BUY_PRICE_OPTIONS[coin.name] || []).map((p) => {
-                      const hasLock = isGuDiZengChouLedger && coinKey === 'ETH' && activeLockForPriceMap[p];
-                      return <option key={p} value={p.toString()}>限价· {p.toLocaleString()} USDT{hasLock ? ' · 锁定收益' : ''}</option>;
-                    })}
-                  </>
-                ) : (
-                  <>
-                    <option value="">选择价格</option>
-                    {(SELL_PRICE_OPTIONS[coin.name] || []).map((p) => (
-                      <option key={p} value={p.toString()}>{p.toLocaleString()} USDT</option>
-                    ))}
-                  </>
-                )}
-              </select>
-              <svg className="w-4 h-4 flex-shrink-0" style={{ color: '#9CA3AF' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-            </div>
+                  </select>
+                  <svg className="w-4 h-4 flex-shrink-0" style={{ color: '#9CA3AF' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </div>
+              </>
+            )}
 
             {/* 委买模式：金额输入 + 进度条 + 可用余额 */}
             {orderSide === "buy" && (
@@ -2902,30 +2916,113 @@ export default function CryptoPrediction() {
               </>
             )}
 
-            {/* 锁仓勾选框：仅 52 号账本 ETH 且当前价格档位已启用锁仓时显示 */}
-            {orderSide === 'buy' && activeLockForPrice && (
-              <div
-                className="rounded-xl px-4 py-3 cursor-pointer select-none"
-                style={{ backgroundColor: lockChecked ? '#EEF7ED' : '#FFF9E6', border: `1px solid ${lockChecked ? '#86EFAC' : '#FDE68A'}` }}
-                onClick={() => setLockChecked(!lockChecked)}
-              >
-                <div className="flex items-start gap-2.5">
-                  <div className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
-                    lockChecked ? 'bg-green-600 border-green-600' : 'border-amber-400 bg-white'
-                  }`}>
-                    {lockChecked && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+            {/* 高级委托预览：仅展示界面与确认文案，不调用真实下单接口。 */}
+            {orderSide === 'advanced' && (() => {
+              const amount = parseFloat(orderAmount);
+              const limitPrice = parseFloat(orderPrice);
+              const hasAmount = !Number.isNaN(amount) && amount > 0;
+              const hasLimitPrice = !Number.isNaN(limitPrice) && limitPrice > 0;
+              const weeklyYieldRate = hasLimitPrice ? ADVANCED_WEEKLY_YIELD_RATE_BY_PRICE[limitPrice] ?? null : null;
+              const weeklyYieldRateLabel = weeklyYieldRate === null ? '--' : `${(weeklyYieldRate * 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}%`;
+              const weeklyYield = hasAmount && weeklyYieldRate !== null ? amount * weeklyYieldRate : null;
+              const canPreview = hasAmount && hasLimitPrice && amount <= availableUsdt && advancedCurrentPrice > 0 && limitPrice < advancedCurrentPrice;
+              return (
+                <>
+                  <div className="rounded-xl px-4 py-4 flex items-center gap-3" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
+                    <img src={COIN_CONFIG.ETH.imgUrl} alt="ETH" className="w-6 h-6 rounded-full flex-shrink-0" />
+                    <select
+                      value="ETH"
+                      onChange={(e) => setCoinKey(e.target.value)}
+                      className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                      style={{ color: '#1A2340', appearance: 'none', WebkitAppearance: 'none' }}
+                    >
+                      <option value="ETH">ETH</option>
+                    </select>
+                    <span className="text-sm font-semibold whitespace-nowrap" style={{ color: advancedCurrentPrice > 0 ? '#1A2340' : '#9CA3AF' }}>
+                      <span className="mr-1 font-normal" style={{ color: '#8A84AA' }}>实时价格</span>
+                      {advancedCurrentPrice > 0 ? `${advancedCurrentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT` : '加载中...'}
+                    </span>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold" style={{ color: lockChecked ? '#166534' : '#92400E' }}>
-                      锁定至 {activeLockForPrice.expiry_date?.slice(0, 10)}  ·  获得 <span className="text-sm font-bold">{(Number(activeLockForPrice.monthly_yield) * 100).toFixed(1)}%</span> 月化收益
-                    </p>
-                    <p className="text-[10px] mt-0.5" style={{ color: '#78716C' }}>
-                      勾选后该订单将不可撤单，直到期权到期日自动解锁
-                    </p>
+
+                  <div className="relative">
+                    <button type="button" onClick={() => setIsAdvancedPriceWheelOpen((open) => !open)} aria-expanded={isAdvancedPriceWheelOpen}
+                      className="w-full rounded-xl px-4 py-4 flex items-center gap-3 text-left"
+                      style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
+                      <span className="text-sm flex-shrink-0" style={{ color: '#6B7A9A', minWidth: '5.5rem' }}>高级委托价</span>
+                      <span className="flex-1 text-right text-sm font-semibold" style={{ color: orderPrice ? '#1A2340' : '#9CA3AF' }}>{orderPrice ? `${Number(orderPrice).toLocaleString()} USDT` : '选择价格'}</span>
+                      <svg className={`w-5 h-5 flex-shrink-0 transition-transform ${isAdvancedPriceWheelOpen ? 'rotate-180' : ''}`} style={{ color: '#9CA3AF' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {isAdvancedPriceWheelOpen && (
+                      <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl overflow-hidden" style={{ background: '#FFFFFF', border: '1px solid #D0DBFF', boxShadow: '0 12px 28px rgba(35, 27, 91, 0.16)', touchAction: 'pan-y', overscrollBehaviorX: 'none' }}>
+                        <div className="relative h-[120px]">
+                          <div ref={advancedPriceWheelRef} onScroll={(event) => {
+                            const nextIndex = Math.min(ADVANCED_ETH_PRICE_OPTIONS.length - 1, Math.max(0, Math.round(event.currentTarget.scrollTop / 40)));
+                            const nextPrice = ADVANCED_ETH_PRICE_OPTIONS[nextIndex];
+                            if (nextPrice && orderPrice !== nextPrice.toString()) setOrderPrice(nextPrice.toString());
+                          }}
+                            className="h-[120px] overflow-x-hidden overflow-y-auto snap-y snap-mandatory py-10 [&::-webkit-scrollbar]:hidden"
+                            style={{ scrollbarWidth: 'none', touchAction: 'pan-y', overscrollBehaviorX: 'none' }}>
+                            {ADVANCED_ETH_PRICE_OPTIONS.map((price) => {
+                              const selected = orderPrice === price.toString();
+                              return (
+                                <button key={price} type="button" onClick={() => { setOrderPrice(price.toString()); setIsAdvancedPriceWheelOpen(false); }}
+                                  className={`block w-full h-10 snap-center transition-all duration-150 ${selected ? 'text-base' : 'text-xs'}`}
+                                  style={{ color: selected ? '#38298D' : '#9A94B7', fontWeight: selected ? 700 : 500, opacity: selected ? 1 : 0.68, transform: selected ? 'scale(1.06)' : 'scale(0.92)' }}>
+                                  {price.toLocaleString()} USDT
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="pointer-events-none absolute left-2 right-2 top-10 h-10 rounded-lg" style={{ borderTop: '1px solid #B7ACF1', borderBottom: '1px solid #B7ACF1', background: 'rgba(91, 71, 201, 0.045)' }} />
+                          <div className="pointer-events-none absolute inset-x-0 top-0 h-8" style={{ background: 'linear-gradient(180deg, #FFFFFF 0%, rgba(255,255,255,0.25) 100%)' }} />
+                          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8" style={{ background: 'linear-gradient(0deg, #FFFFFF 0%, rgba(255,255,255,0.25) 100%)' }} />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </div>
-            )}
+                  {hasLimitPrice && advancedCurrentPrice > 0 && limitPrice >= advancedCurrentPrice && (
+                    <p className="px-1 text-[11px]" style={{ color: '#DC2626' }}>高级委托价需低于当前现货价，才可进入预览确认。</p>
+                  )}
+
+                  <div className="rounded-xl px-4 py-4 flex items-center gap-2" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
+                    <span className="text-sm flex-shrink-0" style={{ color: '#6B7A9A' }}>投资额</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="请输入"
+                      value={orderAmount}
+                      onChange={(e) => setOrderAmount(e.target.value)}
+                      className="w-20 flex-none bg-transparent text-sm placeholder:text-xs outline-none"
+                      style={{ color: '#1A2340' }}
+                    />
+                    <div className="ml-auto flex items-center gap-1 whitespace-nowrap flex-shrink-0">
+                      <span className="text-sm font-normal" style={{ color: '#8A84AA' }}>可用余额</span>
+                      <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{availableUsdt > 0 ? `${availableUsdt.toLocaleString('en-US', { maximumFractionDigits: 2 })} USDT` : '--'}</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl px-4 py-4 flex items-center justify-between" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
+                    <span className="text-sm" style={{ color: '#6B7A9A' }}>每周收益预估</span>
+                    <span className="text-sm font-semibold whitespace-nowrap" style={{ color: weeklyYieldRate !== null ? '#1A2340' : '#9CA3AF' }}>{weeklyYieldRate !== null ? `${weeklyYieldRateLabel} · ${weeklyYield !== null ? `${weeklyYield.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT` : '--'}` : '--'}</span>
+                  </div>
+
+                  <div className="rounded-xl px-4 py-3 space-y-2.5" style={{ backgroundColor: '#FFF9ED', border: '1px solid #F5D58A' }}>
+                    <p className="text-xs font-semibold" style={{ color: '#915B00' }}>高级委托说明</p>
+                    <div className="flex items-start gap-2 text-[11px] leading-5" style={{ color: '#80632C' }}><span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#D59A20' }} /><span><strong>提交记录：</strong>下单时记录 ETH 实时价格 S、委托价 L 与投资额。</span></div>
+                    <div className="flex items-start gap-2 text-[11px] leading-5" style={{ color: '#80632C' }}><span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#D59A20' }} /><span><strong>可以撤单：</strong>当前币价 P 高于提交时实时价格 S 时，可撤销并退回冻结金额。</span></div>
+                    <div className="flex items-start gap-2 text-[11px] leading-5" style={{ color: '#80632C' }}><span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#D59A20' }} /><span><strong>不可撤单：</strong>当币价低于或等于提交时实时价格 S、但仍高于委托价 L 时（L &lt; P ≤ S），订单进入谷底增筹保护区。</span></div>
+                    <div className="flex items-start gap-2 text-[11px] leading-5" style={{ color: '#80632C' }}><span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#D59A20' }} /><span><strong>到达委托价：</strong>当 P ≤ L，订单必须买进，用户不可撤销，并进入管理员手动确认成交流程。</span></div>
+                  </div>
+
+                  <button type="button" disabled={!canPreview} onClick={() => setShowAdvancedPreviewConfirm(true)}
+                    className={`w-full py-3.5 rounded-2xl text-white font-semibold text-base transition-opacity ${canPreview ? 'opacity-100' : 'opacity-50'}`}
+                    style={{ background: 'linear-gradient(135deg, #5140B8 0%, #7663DB 100%)' }}>
+                    买入以太坊
+                  </button>
+                  {!canPreview && <p className="text-center text-[11px]" style={{ color: '#8A84AA' }}>请选择低于现货价的委托档位，并输入不超过可用余额的投资额。</p>}
+                </>
+              );
+            })()}
 
             {/* 委卖模式：已成交买入订单列表选择 */}
             {orderSide === "sell" && (() => {
@@ -3006,7 +3103,8 @@ export default function CryptoPrediction() {
               );
             })()}
 
-            {/* 确认按鈕 */}
+            {/* 普通委买 / 委卖确认按钮 */}
+            {orderSide !== 'advanced' && (
             <button
               style={orderSide === "buy" ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' } : { backgroundColor: '#EF4444' }}
               onClick={async () => {
@@ -3032,8 +3130,6 @@ export default function CryptoPrediction() {
                     quantity: qty,
                     orderType: '无损合约',
                     isMarketOrder: priceMode === 'market',
-                    // 勾选时仅声明参与锁仓；到期日、收益率和合约名称均由后端根据买入价绑定配置重新核验。
-                    ...(lockChecked && activeLockForPrice ? { isLocked: true } : {}),
                   });
                 } else {
                   // 委卖：批量提交选中的所有订单
@@ -3081,8 +3177,53 @@ export default function CryptoPrediction() {
             >
               {submitOrderMutation.isPending ? "提交中..." : orderSide === "buy" ? `买入 ${coin.name}` : selectedSellOrderIds.size > 1 ? `批量卖出 ${selectedSellOrderIds.size} 笔` : `卖出 ${coin.name}`}
             </button>
+            )}
               </div>{/* end px-4 pb-6 space-y-3 */}
             </div>{/* end 建仓表单底部抽屉 */}
+
+            {/* 高级委托预览确认：此阶段只核验文案与交互，禁止提交任何真实订单。 */}
+            {showAdvancedPreviewConfirm && (() => {
+              const previewAmount = parseFloat(orderAmount) || 0;
+              const previewLimitPrice = parseFloat(orderPrice) || 0;
+              const previewWeeklyYieldRate = ADVANCED_WEEKLY_YIELD_RATE_BY_PRICE[previewLimitPrice] ?? 0;
+              const previewWeeklyYieldRateLabel = `${(previewWeeklyYieldRate * 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}%`;
+              const previewWeeklyYield = previewAmount * previewWeeklyYieldRate;
+              return (
+                <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4" style={{ background: 'rgba(20, 16, 48, 0.56)' }}>
+                  <div className="w-full max-w-md rounded-3xl overflow-hidden" style={{ background: '#FCFBFF', boxShadow: '0 18px 60px rgba(32, 24, 82, 0.35)' }}>
+                    <div className="px-5 pt-5 pb-4" style={{ background: 'linear-gradient(135deg, #5140B8 0%, #7562D9 100%)' }}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-base font-bold text-white">高级委托确认预览</p>
+                          <p className="text-[11px] mt-1" style={{ color: 'rgba(255,255,255,0.82)' }}>ETH · 管理员手动确认成交</p>
+                        </div>
+                        <span className="text-[10px] px-2 py-1 rounded-full font-semibold" style={{ background: 'rgba(255,255,255,0.16)', color: '#FFFFFF', border: '1px solid rgba(255,255,255,0.24)' }}>预览模式</span>
+                      </div>
+                    </div>
+                    <div className="p-5 space-y-3">
+                      <div className="rounded-2xl p-3.5 space-y-2" style={{ background: '#F6F4FF', border: '1px solid #E3DFFF' }}>
+                        <div className="flex justify-between text-sm"><span style={{ color: '#6B648C' }}>提交时现货价 S</span><span className="font-semibold" style={{ color: '#292149' }}>{advancedCurrentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span></div>
+                        <div className="flex justify-between text-sm"><span style={{ color: '#6B648C' }}>高级委托价 L</span><span className="font-semibold" style={{ color: '#292149' }}>{previewLimitPrice.toLocaleString('en-US')} USDT</span></div>
+                        <div className="flex justify-between text-sm"><span style={{ color: '#6B648C' }}>冻结投资额</span><span className="font-semibold" style={{ color: '#292149' }}>{previewAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span></div>
+                        <div className="pt-2 mt-1 border-t flex justify-between text-sm" style={{ borderColor: '#E3DFFF' }}><span style={{ color: '#6B648C' }}>每周收益预估</span><span className="font-bold" style={{ color: '#5140B8' }}>{previewWeeklyYieldRateLabel} · {previewWeeklyYield.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span></div>
+                      </div>
+                      <div className="rounded-2xl p-3.5 space-y-1.5" style={{ background: '#FFF9ED', border: '1px solid #F3D48E' }}>
+                        <p className="text-xs font-bold" style={{ color: '#8B5B08' }}>请确认撤销与成交规则</p>
+                        <p className="text-[11px] leading-5" style={{ color: '#775D2C' }}>当 P &gt; S 时可撤销并退回冻结金额；当 L &lt; P ≤ S 时不可撤销；当 P ≤ L 时订单仅等待管理员手动确认成交，不会自动成交。</p>
+                      </div>
+                      <div className="rounded-xl px-3 py-2.5 text-[11px] leading-5" style={{ background: '#EEF6FF', color: '#2F5F91', border: '1px solid #CFE4FF' }}>
+                        当前为界面预览：点击下方按钮不会创建订单、不会冻结余额、不会写入任何流水。
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <button type="button" onClick={() => setShowAdvancedPreviewConfirm(false)} className="py-3 rounded-xl text-sm font-semibold" style={{ color: '#5D567F', background: '#F0EFF6' }}>返回修改</button>
+                        <button type="button" onClick={() => { setShowAdvancedPreviewConfirm(false); toast.success('高级委托预览完成', { description: '当前为预览模式，未提交订单，也未冻结余额。' }); }} className="py-3 rounded-xl text-sm font-semibold text-white" style={{ background: '#5B47C9' }}>确认预览</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* 当前委托订单列表 - 独立渲染，不依赖 K 线图加载状态 */}
             {/* 点击详情区域外关闭详情：透明覆盖层 */}
             {orderDetailId !== null && (
@@ -3655,10 +3796,6 @@ export default function CryptoPrediction() {
           </div>
         )}
 
-        {/* 冠军预测（足球首页，原行情评估内容已隐藏） */}
-        {tab === "market" && (
-          <WorldCupEmbedded />
-        )}
       </div>
 
     </div>

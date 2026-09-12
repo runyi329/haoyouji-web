@@ -87,11 +87,8 @@ if (import.meta.hot) {
 // 登录页直接加载
 import Login from "./pages/Login";
 import PetPlatform from "@/pages/PetPlatform";
-import WorldCup from "@/pages/WorldCup";
-import WcOddsAdmin from "@/pages/WcOddsAdmin";
 import NbaFinals from "@/pages/NbaFinals";
 import NbaOddsAdmin from "@/pages/NbaOddsAdmin";
-import WcTeams from "@/pages/WcTeams";
 
 // 首页Dashboard改为懒加载，避免在其他页面执行不必要的查询
 // const ContactsManagement = lazy(() => import("./pages/ContactsManagement")); - 已废弃
@@ -765,16 +762,11 @@ function Router() {
         <Route path="/stock/:tsCode" component={StockDetail} />
         {/* 宠物氢氧健康舱平台 */}
         <Route path="/pet-platform" component={PetPlatform} />
-        {/* FIFA World Cup 2026 */}
-        <Route path="/world-cup" component={WorldCup} />
-        <Route path="/world-cup/admin" component={WcOddsAdmin} />
         {/* NBA 总决赛页面暂时隐藏 */}
         {/* <Route path="/nba-finals" component={NbaFinals} /> */}
         {/* <Route path="/nba-admin" component={NbaOddsAdmin} /> */}
         {/* AI 旅行 */}
         <Route path="/ai-travel" component={AiTravel} />
-        <Route path="/world-cup/teams" component={WcTeams} />
-        <Route path="/world-cup/teams/:code" component={WcTeams} />
         {/* 牙伴齿科管理 */}
         <Route path="/yaban/intro" component={lazy(() => import("./pages/yaban/YabanIntro"))} />
         <Route path="/yaban" component={YabanHome} />
