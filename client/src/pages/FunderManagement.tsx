@@ -163,6 +163,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     showTradeDirection: true,
     // 期权 Greeks 面板
     showGreeks: false,
+    // 仅在管理员主动切换Greeks开关后置为true，用于保留明确关闭状态。
+    showGreeksManualOverride: false,
     // 浮动盈亏（后续新建订单默认开启；已存在订单继续使用各自保存的设置）
     floatPnl: true,
     // 52号账本：交易手续费默认隐藏，由控制开关决定是否向前端展示
@@ -1072,7 +1074,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         for (const [k, v] of Object.entries(parsed)) {
           if (typeof v === 'boolean' || typeof v === 'string') safeConfig[k] = v;
         }
-        setDisplayConfig({ ...DEFAULT_DISPLAY_CONFIG, ...safeConfig });
+        const mergedDisplayConfig = { ...DEFAULT_DISPLAY_CONFIG, ...safeConfig };
+        // 旧期权订单在新增资金属性前已有Greeks展示；资金属性只应增加标签，不能让默认配置误将其关闭。
+        const hasFundingAssetTag = mergedDisplayConfig.assetFundingType === 'self'
+          || mergedDisplayConfig.assetFundingType === 'financing'
+          || mergedDisplayConfig.selfFundedAsset === true
+          || mergedDisplayConfig.selfFundedAsset === 'true';
+        if (order.asset_type === 'crypto_option' && hasFundingAssetTag && safeConfig.showGreeksManualOverride !== true) {
+          mergedDisplayConfig.showGreeks = true;
+        }
+        setDisplayConfig(mergedDisplayConfig);
         // 回填保证金率预警阈值（数字字段，不在 safeConfig 中）
         if ((parsed as any).marginAlertThreshold !== undefined && (parsed as any).marginAlertThreshold !== null) {
           setMarginAlertThreshold(String((parsed as any).marginAlertThreshold));
@@ -2917,7 +2928,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       </div>
                       <button
                         type="button"
-                        onClick={() => setDisplayConfig(c => ({ ...c, showGreeks: !c.showGreeks }))}
+                        onClick={() => setDisplayConfig(c => ({ ...c, showGreeks: !c.showGreeks, showGreeksManualOverride: true }))}
                         className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
                           displayConfig.showGreeks !== false ? 'bg-purple-500' : 'bg-gray-200'
                         }`}

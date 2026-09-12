@@ -1008,6 +1008,11 @@ export function FunderOrderCard({
   // 读取 display_config（与 LedgerDetail show() 函数一致：默认全部显示，除非明确设为 false）
   const dc = financingDisplayConfig;
   const show = (key: string) => dc ? (dc[key] !== false) : true;
+  // 资金属性仅用于展示标签。对未明确手动关闭的旧期权订单，保持其既有Greeks可见，避免标签保存误触配置默认值。
+  const shouldShowOptionGreeks = isOptionOrder && optionInfo && (
+    show('showGreeks')
+    || (assetFundingType !== null && financingDisplayConfig?.showGreeksManualOverride !== true)
+  );
   // 管理端必须能识别期权订单归属和类型；用户端仍遵循逐单字段显示开关。
   const forceAdminOptionHeader = isAdmin && isOptionOrder;
   const allowImageDownload = isAdmin || dc?.allowUserImageDownload !== false;
@@ -2345,7 +2350,7 @@ export function FunderOrderCard({
             )}
 
             {/* 期权 Greeks 面板 */}
-            {isOptionOrder && optionInfo && show('showGreeks') && (
+            {shouldShowOptionGreeks && (
               <div className="border-t mt-1 pt-1" style={{ borderColor: '#E8EFFF' }}>
                 <div className="h-4 flex items-center justify-between">
                   <span className="text-xs font-medium" style={{ color: '#7C3AED' }}>Greeks</span>
