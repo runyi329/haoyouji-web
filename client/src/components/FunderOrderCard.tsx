@@ -932,7 +932,12 @@ export function FunderOrderCard({
     } catch { return null; }
   })();
   // 仅用于前端资产标题旁的展示标签，不影响订单、利息或担保计算。
-  const isSelfFundedAsset = financingDisplayConfig?.selfFundedAsset === true || financingDisplayConfig?.selfFundedAsset === 'true';
+  // 旧订单的 selfFundedAsset 继续视为“自有资产”。
+  const assetFundingType = financingDisplayConfig?.assetFundingType === 'financing'
+    ? 'financing'
+    : financingDisplayConfig?.assetFundingType === 'self' || financingDisplayConfig?.selfFundedAsset === true || financingDisplayConfig?.selfFundedAsset === 'true'
+      ? 'self'
+      : null;
   const calculatedFinancingDisplayAmount = amountCurrency === 'USDT'
     ? financingAmountUsdt
     : amountCurrency === 'CNY'
@@ -1304,8 +1309,15 @@ export function FunderOrderCard({
             {isParticipantVisual && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#16A34A', backgroundColor: '#fff', border: '1px solid #16A34A' }}>参与</span>
             )}
-            {isSelfFundedAsset && (
-              <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#047857', backgroundColor: '#ECFDF5', border: '1px solid #6EE7B7' }}>自有资产</span>
+            {assetFundingType && (
+              <span
+                className="ml-1 text-[10px] font-bold px-1.5 py-0"
+                style={assetFundingType === 'self'
+                  ? { borderRadius: '4px', color: '#047857', backgroundColor: '#ECFDF5', border: '1px solid #6EE7B7' }
+                  : { borderRadius: '4px', color: '#1D4ED8', backgroundColor: '#EFF6FF', border: '1px solid #93C5FD' }}
+              >
+                {assetFundingType === 'self' ? '自有资产' : '融资付息'}
+              </span>
             )}
             {order.asset_type === 'crypto' && show('showTradeDirection') && (order as any).trade_direction === 'long' && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#DC2626', border: '1px solid #DC2626' }}>多</span>
