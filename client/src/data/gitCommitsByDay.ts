@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-09-12
+// 生成时间：2026-09-13
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9149,5 +9149,21 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-09-10T20:07:17Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-09-11T01:55:24Z", type: "feat", cleanMessage: "refine ledger initial balance management" },
     { date: "2026-09-11T02:36:49Z", type: "feat", cleanMessage: "add finance order smart search" },
+  ],
+  "2026-09-12": [
+    { date: "2026-09-11T20:06:30Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-09-12T09:02:40Z", type: "feat", cleanMessage: "add self-funded asset label" },
+    { date: "2026-09-12T09:14:35Z", type: "feat", cleanMessage: "add financing asset label" },
+    { date: "2026-09-12T09:38:34Z", type: "fix", cleanMessage: "preserve option greeks with asset tags" },
+    { date: "2026-09-12T11:28:02Z", type: "feat", cleanMessage: "preview advanced entrustment and remove champion prediction" },
+    { date: "2026-09-12T11:46:07Z", type: "chore", cleanMessage: "retry advanced entrustment preview deploy" },
+    { date: "2026-09-12T12:25:05Z", type: "feat", cleanMessage: "enable advanced entrustment orders" },
+    { date: "2026-09-12T12:36:52Z", type: "fix", cleanMessage: "use dedicated connection for advanced orders" },
+    { date: "2026-09-12T12:44:00Z", type: "fix", cleanMessage: "use deploy token for source fetch" },
+    { date: "2026-09-12T12:52:02Z", type: "feat", cleanMessage: "show advanced order yield duration" },
+    { date: "2026-09-12T13:38:04Z", type: "fix", cleanMessage: "round advanced order yield by day" },
+    { date: "2026-09-12T14:22:40Z", type: "fix", cleanMessage: "honor reached advanced order confirmations" },
+    { date: "2026-09-12T14:42:17Z", type: "feat", cleanMessage: "unify advanced order admin management" },
+    { date: "2026-09-12T14:59:58Z", type: "feat", cleanMessage: "allow advanced order execution price" },
   ],
 };
