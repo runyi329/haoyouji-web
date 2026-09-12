@@ -62,7 +62,7 @@ jobs:
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] git fetch..." >> $LOG
           # 优先用 gh-proxy.com 镜像加速；但镜像可能短暂滞后，必须严格部署本次工作流的目标提交。
           PROXY_URL="https://gh-proxy.com/https://github.com/runyi329/haoyouji-web.git"
-          DIRECT_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/runyi329/haoyouji-web.git"
+          DIRECT_URL="https://x-access-token:${{ secrets.DEPLOY_GITHUB_TOKEN }}@github.com/runyi329/haoyouji-web.git"
           EXPECTED_SHA="${{ github.sha }}"
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] target commit: ${EXPECTED_SHA}" >> $LOG
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] 尝试镜像拉取..." >> $LOG
