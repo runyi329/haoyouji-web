@@ -169,6 +169,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     tradingFee: false,
     // 仅控制普通用户前端的下载箭头；管理员订单列表始终可下载
     allowUserImageDownload: true,
+    // 52号账本自有资金：仅控制前端“自有资产”标签展示，不参与任何计算
+    selfFundedAsset: false,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | string>>(DEFAULT_DISPLAY_CONFIG);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
@@ -1712,6 +1714,20 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       </button>
                     ))}
                   </div>
+                  {ledgerId === 52 && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-xs text-gray-500 shrink-0">资金属性</span>
+                      <button
+                        type="button"
+                        onClick={() => setDisplayConfig(config => ({ ...config, selfFundedAsset: !config.selfFundedAsset }))}
+                        className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${displayConfig.selfFundedAsset ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
+                        aria-pressed={Boolean(displayConfig.selfFundedAsset)}
+                      >
+                        自有资金
+                      </button>
+                      <span className="text-[11px] text-gray-400">仅标识前端展示</span>
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -1496,8 +1496,10 @@ export function FunderOrderCardV2Silver({
       return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
     } catch { return {}; }
   })();
-  const showTradeDirection = cardDisplayConfig.showTradeDirection !== false;
-  // 52号账本的手续费只有在订单控制区明确开启后才向前端展示。
+    const showTradeDirection = cardDisplayConfig.showTradeDirection !== false;
+  // 仅用于前端资产标题旁的展示标签，不影响订单、利息或担保计算。
+  const isSelfFundedAsset = cardDisplayConfig.selfFundedAsset === true || cardDisplayConfig.selfFundedAsset === 'true';
+  // 52号账本的手续费只有在订单控制区明确开启后才向前端展示
   const isLedger52 = Number(ledgerId ?? (order as any).ledger_id) === 52;
   const showTradingFee = isLedger52 && cardDisplayConfig.tradingFee === true;
   const tradingFeeRatePerMille = (() => {
@@ -1673,6 +1675,9 @@ export function FunderOrderCardV2Silver({
                 {isParticipant && (
                   <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.7)' }}>参与</span>
                 )}
+                {isSelfFundedAsset && (
+                  <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#047857', backgroundColor: '#ECFDF5', border: '1px solid #6EE7B7' }}>自有资产</span>
+                )}
               </div>
               <div style={{ lineHeight: 1 }}>
                 <span style={{ fontSize: '1.6rem', fontWeight: 700, color: TXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: TXT_SHADOW_LG }}>
@@ -1687,6 +1692,9 @@ export function FunderOrderCardV2Silver({
                 <span>{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? `借出资产 (${amountCurrency})` : `持有资产 (${displayFinancingAsPrimary ? amountCurrency : coin})`}</span>
                 {isParticipant && (
                   <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.7)' }}>参与</span>
+                )}
+                {isSelfFundedAsset && (
+                  <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#047857', backgroundColor: '#ECFDF5', border: '1px solid #6EE7B7' }}>自有资产</span>
                 )}
                 {showTradeDirection && ((order as any).trade_direction === 'long' || (order as any).trade_direction === 'short') && (
                   <span
@@ -3060,7 +3068,7 @@ export function FunderLenderCardSilver({
   const isSufficient = collateralGap !== null && collateralGap >= 0;
 
   // 读取 display_config 开关（与订单模式一致）
-  const dc: Record<string, boolean> | null = (() => {
+  const dc: Record<string, boolean | string> | null = (() => {
     try {
       const raw = order.display_config;
       if (!raw) return null;
@@ -3068,6 +3076,8 @@ export function FunderLenderCardSilver({
     } catch { return null; }
   })();
   const showField = (key: string) => dc ? (dc[key] !== false) : true;
+  // 仅用于前端资产标题旁的展示标签，不影响订单、利息或担保计算。
+  const isSelfFundedAsset = dc?.selfFundedAsset === true || dc?.selfFundedAsset === 'true';
 
   // 天数算法与 hook 一致：北京时间自然日，开始日算第1天
   const calcDays = (startDateStr: string, endTs: number): number => {
@@ -3540,7 +3550,12 @@ export function FunderLenderCardSilver({
               {/* 持有资产 */}
               {(qty > 0 || storedAmountUsdt > 0) && (
                 <div className="flex justify-between mb-1 gap-3">
-                  <span style={{ color: TXT_SEC }}>持有资产</span>
+                  <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
+                    <span>持有资产</span>
+                    {isSelfFundedAsset && (
+                      <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#047857', backgroundColor: '#ECFDF5', border: '1px solid #6EE7B7' }}>自有资产</span>
+                    )}
+                  </span>
                   <span className="text-right" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                     {amountCurrency === 'CNY' && storedAmountUsdt > 0
                       ? `${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元（≈${storedAmountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} U）`

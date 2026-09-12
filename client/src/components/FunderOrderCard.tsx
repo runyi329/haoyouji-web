@@ -931,6 +931,8 @@ export function FunderOrderCard({
       return typeof raw === 'string' ? JSON.parse(raw) : raw;
     } catch { return null; }
   })();
+  // 仅用于前端资产标题旁的展示标签，不影响订单、利息或担保计算。
+  const isSelfFundedAsset = financingDisplayConfig?.selfFundedAsset === true || financingDisplayConfig?.selfFundedAsset === 'true';
   const calculatedFinancingDisplayAmount = amountCurrency === 'USDT'
     ? financingAmountUsdt
     : amountCurrency === 'CNY'
@@ -1301,6 +1303,9 @@ export function FunderOrderCard({
             )}
             {isParticipantVisual && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#16A34A', backgroundColor: '#fff', border: '1px solid #16A34A' }}>参与</span>
+            )}
+            {isSelfFundedAsset && (
+              <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#047857', backgroundColor: '#ECFDF5', border: '1px solid #6EE7B7' }}>自有资产</span>
             )}
             {order.asset_type === 'crypto' && show('showTradeDirection') && (order as any).trade_direction === 'long' && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#DC2626', border: '1px solid #DC2626' }}>多</span>
