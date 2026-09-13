@@ -32,15 +32,14 @@ const SELL_PRICE_OPTIONS: Record<string, number[]> = {
   SOL: [150, 145, 140, 135, 130, 125, 120, 115, 110, 105, 100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50],
 };
 
-// 高级委托初期仅支持 ETH 的五档固定委托价。
-const ADVANCED_ETH_PRICE_OPTIONS = [2200, 2100, 2000, 1900, 1800] as const;
-// 高级委托每周收益率按用户确认的五档委托价固定计算。
+// 高级委托初期仅支持 ETH 的四档固定委托价。
+const ADVANCED_ETH_PRICE_OPTIONS = [2200, 2100, 2000, 1900] as const;
+// 高级委托每周收益率按用户确认的四档委托价固定计算。
 const ADVANCED_WEEKLY_YIELD_RATE_BY_PRICE: Record<number, number> = {
   2200: 0.01,
   2100: 0.01,
   2000: 0.0095,
   1900: 0.009,
-  1800: 0.0085,
 };
 
 const COIN_CONFIG: Record<string, {

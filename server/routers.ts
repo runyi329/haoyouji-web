@@ -201,9 +201,8 @@ const AF_ADVANCED_WEEKLY_YIELD_RATE_BY_PRICE: Record<number, number> = {
   2100: 0.01,
   2000: 0.0095,
   1900: 0.009,
-  1800: 0.0085,
 };
-const AF_ADVANCED_LIMIT_PRICES = new Set([1800, 1900, 2000, 2100, 2200]);
+const AF_ADVANCED_LIMIT_PRICES = new Set([1900, 2000, 2100, 2200]);
 
 async function getFreshAfAdvancedEthPrice(): Promise<{ price: number; updatedAt: string }> {
   const { getAllLatestPrices } = await import('./price-scanner');
@@ -14466,7 +14465,7 @@ ${klinesSummary}
         return { success: true };
       }),
 
-    // 高级委托：仅ETH固定五档，提交时由服务端冻结余额并记录现货快照S。
+    // 高级委托：仅ETH固定四档，提交时由服务端冻结余额并记录现货快照S。
     afSubmitAdvancedOrder: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),
@@ -14477,7 +14476,7 @@ ${klinesSummary}
         const limitPrice = Number(input.limitPrice);
         const amount = Number(input.amount);
         if (!AF_ADVANCED_LIMIT_PRICES.has(limitPrice)) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托价格仅支持1800、1900、2000、2100、2200 USDT' });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托价格仅支持1900、2000、2100、2200 USDT' });
         }
         if (!Number.isFinite(amount) || amount <= 0) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '请输入有效投资额' });
