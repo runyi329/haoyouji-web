@@ -85,7 +85,7 @@ function CardFundingAttributeBadge({
 
   return (
     <span
-      className="inline-flex items-center gap-1 rounded px-1.5 py-[1px] text-[10px] font-semibold leading-[14px] whitespace-nowrap"
+      className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-[1px] text-[10px] font-semibold leading-[14px] whitespace-nowrap"
       style={{ ...styles[surface], letterSpacing: '0.01em' }}
     >
       <span aria-hidden="true" className="h-1 w-1 shrink-0 rounded-full" style={{ backgroundColor: dotColor, boxShadow: `0 0 0 1px ${surface === 'purple' || surface === 'green' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'}` }} />
@@ -1730,7 +1730,7 @@ export function FunderOrderCardV2Silver({
             // 股票类：显示持有资产（计息基数，单位元）
             <>
               <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-                <span>{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true
+                <span className="shrink-0 whitespace-nowrap">{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true
                   ? `借出资产 (${baseCur === 'CNY' ? '元' : 'U'})`
                   : '仓位额度 (元)'}</span>
                 {isParticipant && (
@@ -1748,7 +1748,7 @@ export function FunderOrderCardV2Silver({
             // 数字币：人民币融资时优先显示融资金额，其余保持显示持有数量。
             <>
               <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-                <span>{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? `借出资产 (${amountCurrency})` : `持有资产 (${displayFinancingAsPrimary ? amountCurrency : coin})`}</span>
+                <span className="shrink-0 whitespace-nowrap">{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? `借出资产 (${amountCurrency})` : `持有资产 (${displayFinancingAsPrimary ? amountCurrency : coin})`}</span>
                 {isParticipant && (
                   <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.7)' }}>参与</span>
                 )}
