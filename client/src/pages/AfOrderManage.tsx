@@ -263,6 +263,9 @@ export default function AfOrderManage() {
   // 高级委托由管理员录入实际买入价后确认成交；原委托价仍保留在独立审计记录中。
   const [advancedFulfillTarget, setAdvancedFulfillTarget] = useState<any>(null);
   const [advancedExecutionPrice, setAdvancedExecutionPrice] = useState('');
+  // 管理员撤销高级委托：独立于普通订单删除，仅允许退回原冻结本金。
+  const [advancedCancelTarget, setAdvancedCancelTarget] = useState<any>(null);
+  const [advancedCancelReason, setAdvancedCancelReason] = useState('');
   // 状态筛选：all / pending(委买中) / holding(持仓中) / selling(委卖中) / sold(已卖出)
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'holding' | 'selling' | 'sold' | 'cancelled'>('all');
   // 分组维度：时间 / 人员
@@ -354,6 +357,21 @@ export default function AfOrderManage() {
       }, 1200);
     },
     onError: (e) => toast.error('确认高级委托失败：' + e.message),
+  });
+
+  const cancelAdvancedMutation = trpc.ledger.afAdminCancelAdvancedOrder.useMutation({
+    onSuccess: (result) => {
+      toast.success(result.alreadyCancelled ? '高级委托此前已撤销' : '高级委托已撤销', {
+        description: result.alreadyCancelled
+          ? '该订单此前已经完成撤销，不会重复退款。'
+          : `已退回冻结本金 ${Number(result.refundedAmount || 0).toFixed(2)} USDT；每周收益、累计预估收益及管理费均未支付。`,
+      });
+      setAdvancedCancelTarget(null);
+      setAdvancedCancelReason('');
+      utils.ledger.afAdminGetOrders.invalidate({ ledgerId });
+      utils.ledger.afAdminGetStats.invalidate({ ledgerId });
+    },
+    onError: (e) => toast.error('撤销高级委托失败：' + e.message),
   });
 
   const deleteMutation = trpc.ledger.afAdminDeleteOrder.useMutation({
@@ -1964,18 +1982,31 @@ export default function AfOrderManage() {
                       {!isEditing ? (
                         order.isAdvanced ? (
                           order.status === 'pending' ? (
-                            <button
-                              type="button"
-                              disabled={fulfillAdvancedMutation.isPending}
-                              onClick={() => {
-                                setAdvancedFulfillTarget(order);
-                                setAdvancedExecutionPrice(String(order.advancedLimitPrice || order.originalLimitPrice || order.limitPrice || ''));
-                              }}
-                              className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"
-                            >
-                              <Check className="w-3 h-3" /> {fulfillAdvancedMutation.isPending ? '确认中...' : '确认成交'}
-                            </button>
-                          ) : <span className="text-[10px] text-green-600">高级委托已按普通持仓管理</span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={fulfillAdvancedMutation.isPending || cancelAdvancedMutation.isPending}
+                                onClick={() => {
+                                  setAdvancedFulfillTarget(order);
+                                  setAdvancedExecutionPrice(String(order.advancedLimitPrice || order.originalLimitPrice || order.limitPrice || ''));
+                                }}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"
+                              >
+                                <Check className="w-3 h-3" /> {fulfillAdvancedMutation.isPending ? '确认中...' : '确认成交'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={fulfillAdvancedMutation.isPending || cancelAdvancedMutation.isPending}
+                                onClick={() => {
+                                  setAdvancedCancelTarget(order);
+                                  setAdvancedCancelReason('');
+                                }}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"
+                              >
+                                <X className="w-3 h-3" /> {cancelAdvancedMutation.isPending ? '撤销中...' : '撤销委托'}
+                              </button>
+                            </div>
+                          ) : order.status === 'cancelled' ? <span className="text-[10px] text-gray-500">高级委托已撤销</span> : <span className="text-[10px] text-green-600">高级委托已按普通持仓管理</span>
                         ) : (
                           <div className="flex items-center gap-1.5">
                             <button
@@ -2098,9 +2129,20 @@ export default function AfOrderManage() {
                           <span className="font-medium text-gray-700">{chargedDays}天</span>
                         </div>
                         <div className="flex items-center gap-1 col-span-2">
-                          <span className="text-gray-400 w-12 shrink-0">累计预估</span>
-                          <span className="font-medium text-purple-700">{accumulatedEstimate.toFixed(2)} u</span>
+                          <span className="text-gray-400 w-20 shrink-0">{order.advancedStatus === 'cancelled' ? '累计预估（不入账）' : '累计预估'}</span>
+                          <span className={`font-medium ${order.advancedStatus === 'cancelled' ? 'text-gray-500' : 'text-purple-700'}`}>{accumulatedEstimate.toFixed(2)} u</span>
                         </div>
+                        {order.advancedStatus === 'cancelled' && (
+                          <div className="col-span-2 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-[11px] text-gray-600 space-y-1">
+                            <div className="flex items-center justify-between gap-3">
+                              <span>撤销处理</span>
+                              <span className="font-medium text-gray-800">{order.cancelledByUserId ? `管理员#${order.cancelledByUserId}撤销` : '用户自主撤销'}</span>
+                            </div>
+                            <div className="leading-5">仅退冻结本金 {Number(order.amount || 0).toFixed(2)} u；每周收益、累计预估收益、管理费及赠单均未结算。</div>
+                            {order.cancelReason && <div className="leading-5 text-gray-500">原因：{order.cancelReason}</div>}
+                            {order.refundBalanceId && <div className="text-gray-400">退款流水 #{order.refundBalanceId}</div>}
+                          </div>
+                        )}
                       </>;
                     })()}
                     {/* 档位计算方式（仅已成交订单显示） */}
@@ -2669,6 +2711,79 @@ export default function AfOrderManage() {
                 fulfillAdvancedMutation.mutate({ ledgerId: 52, orderId: advancedFulfillTarget.id, executionPrice: price });
               }}
             >{fulfillAdvancedMutation.isPending ? '确认中...' : '确认成交'}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 高级委托管理员撤销：仅退回已冻结本金，不结算或支付收益。 */}
+      <AlertDialog
+        open={!!advancedCancelTarget}
+        onOpenChange={(open) => {
+          if (!open && !cancelAdvancedMutation.isPending) {
+            setAdvancedCancelTarget(null);
+            setAdvancedCancelReason('');
+          }
+        }}
+      >
+        <AlertDialogContent className="mx-4 rounded-2xl max-h-[80vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>撤销高级委托</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-gray-600">
+                <div className="rounded-xl border border-red-200 bg-red-50 p-3 space-y-2">
+                  <div className="flex justify-between gap-3">
+                    <span>客户</span>
+                    <span className="font-semibold text-gray-800">{advancedCancelTarget?.username && advancedCancelTarget?.nickname && advancedCancelTarget?.username !== advancedCancelTarget?.nickname ? `${advancedCancelTarget.username}/${advancedCancelTarget.nickname}` : advancedCancelTarget?.nickname || advancedCancelTarget?.username || '—'}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span>币种 / 原委托价</span>
+                    <span className="font-semibold text-gray-800">{advancedCancelTarget?.coin || 'ETH'} / {Number(advancedCancelTarget?.advancedLimitPrice || advancedCancelTarget?.originalLimitPrice || advancedCancelTarget?.limitPrice || 0).toLocaleString()} USDT</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span>退回金额</span>
+                    <span className="font-semibold text-red-700">{Number(advancedCancelTarget?.amount || 0).toFixed(2)} USDT</span>
+                  </div>
+                </div>
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">本操作仅退回该高级委托已冻结的本金。每周收益、累计预估收益、管理费和任何赠单均不会结算、支付或返还。</p>
+                <label className="block space-y-1.5">
+                  <span className="font-medium text-gray-700">撤销原因 <span className="text-red-600">*</span></span>
+                  <textarea
+                    value={advancedCancelReason}
+                    maxLength={300}
+                    rows={3}
+                    placeholder="请填写撤销原因，写入订单审计记录"
+                    onChange={(event) => setAdvancedCancelReason(event.target.value)}
+                    className="w-full resize-none rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-red-400"
+                  />
+                </label>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="rounded-xl"
+              disabled={cancelAdvancedMutation.isPending}
+              onClick={() => {
+                setAdvancedCancelTarget(null);
+                setAdvancedCancelReason('');
+              }}
+            >返回</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl bg-red-600 hover:bg-red-700"
+              disabled={cancelAdvancedMutation.isPending || !advancedCancelReason.trim()}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!advancedCancelTarget || !advancedCancelReason.trim()) {
+                  toast.error('请填写撤销原因');
+                  return;
+                }
+                cancelAdvancedMutation.mutate({
+                  ledgerId: 52,
+                  orderId: advancedCancelTarget.id,
+                  reason: advancedCancelReason.trim(),
+                });
+              }}
+            >{cancelAdvancedMutation.isPending ? '撤销中...' : '确认撤销并退回本金'}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -155,6 +155,9 @@ async function ensureAfAdvancedOrdersTable(): Promise<void> {
           fulfilled_quantity DECIMAL(28,8) NULL COMMENT '按实际成交价重算的成交数量',
           cancelled_at DATETIME NULL,
           cancelled_spot_price DECIMAL(20,8) NULL,
+          cancelled_by_user_id INT NULL COMMENT '撤销管理员；用户自主撤销时为空',
+          cancel_reason VARCHAR(300) NULL COMMENT '管理员撤销原因',
+          refund_balance_id INT NULL COMMENT '撤销本金退款对应的af_manual_balances记录',
           freeze_balance_id INT NULL,
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -167,7 +170,7 @@ async function ensureAfAdvancedOrdersTable(): Promise<void> {
       const [columnRows] = await (conn as any).execute(
         `SELECT COLUMN_NAME FROM information_schema.columns
          WHERE table_schema = DATABASE() AND table_name = 'af_advanced_orders'
-           AND column_name IN ('fulfilled_price', 'fulfilled_quantity')`
+           AND column_name IN ('fulfilled_price', 'fulfilled_quantity', 'cancelled_by_user_id', 'cancel_reason', 'refund_balance_id')`
       );
       const advancedColumns = new Set((columnRows as any[]).map((row: any) => String(row.COLUMN_NAME || row.column_name)));
       if (!advancedColumns.has('fulfilled_price')) {
@@ -175,6 +178,15 @@ async function ensureAfAdvancedOrdersTable(): Promise<void> {
       }
       if (!advancedColumns.has('fulfilled_quantity')) {
         await (conn as any).execute(`ALTER TABLE af_advanced_orders ADD COLUMN fulfilled_quantity DECIMAL(28,8) NULL COMMENT '按实际成交价重算的成交数量' AFTER fulfilled_price`);
+      }
+      if (!advancedColumns.has('cancelled_by_user_id')) {
+        await (conn as any).execute(`ALTER TABLE af_advanced_orders ADD COLUMN cancelled_by_user_id INT NULL COMMENT '撤销管理员；用户自主撤销时为空' AFTER cancelled_spot_price`);
+      }
+      if (!advancedColumns.has('cancel_reason')) {
+        await (conn as any).execute(`ALTER TABLE af_advanced_orders ADD COLUMN cancel_reason VARCHAR(300) NULL COMMENT '管理员撤销原因' AFTER cancelled_by_user_id`);
+      }
+      if (!advancedColumns.has('refund_balance_id')) {
+        await (conn as any).execute(`ALTER TABLE af_advanced_orders ADD COLUMN refund_balance_id INT NULL COMMENT '撤销本金退款对应的af_manual_balances记录' AFTER cancel_reason`);
       }
     })().catch((error) => {
       afAdvancedOrdersTableReady = null;
@@ -217,6 +229,33 @@ async function getAfOrderMultiplierForLedger(conn: any, ledgerId: number): Promi
     // 与普通委买一致：开关表不可用时回退标准5.25倍，不阻断真实下单。
     return 5.25;
   }
+}
+
+const AF_525_TARGET_USER_ID = 4957151;
+
+/**
+ * 0.25倍定向赠单只适用于YJH本人及其邀请链下的用户。
+ * 结算和预览均通过同一判断，避免普通订单与高级委托出现范围漂移。
+ */
+async function isAf525EligibleSourceUser(conn: any, userId: number): Promise<boolean> {
+  if (!Number.isFinite(userId) || userId <= 0) return false;
+  if (userId === AF_525_TARGET_USER_ID) return true;
+
+  let currentUserId = userId;
+  const visited = new Set<number>();
+  for (let depth = 0; depth < 20; depth++) {
+    if (visited.has(currentUserId)) return false;
+    visited.add(currentUserId);
+    const [rows] = await conn.execute(
+      `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
+      [currentUserId]
+    );
+    const inviterId = Number((rows as any[])?.[0]?.invited_by_user_id || 0);
+    if (!inviterId) return false;
+    if (inviterId === AF_525_TARGET_USER_ID) return true;
+    currentUserId = inviterId;
+  }
+  return false;
 }
 // ================================================================
 
@@ -14378,6 +14417,10 @@ ${klinesSummary}
             try {
               const conn525s = await (await import('./db')).getDbConnection();
               if (!conn525s) return;
+              if (!(await isAf525EligibleSourceUser(conn525s as any, ctx.user.id))) {
+                console.log(`[5.25定向] 下单人(${ctx.user.id})不在YJH推荐树内，跳过0.25赠单`);
+                return;
+              }
               const [sw525sRows] = await (conn525s as any).execute(
                 `SELECT enabled, target_user_id, gift_ratio FROM af_525_switch WHERE ledger_id = 52 LIMIT 1`
               );
@@ -14589,6 +14632,129 @@ ${klinesSummary}
           (conn as any).release?.();
         }
       }),
+    // 管理员：高级委托撤销。管理员可绕过用户价格保护，但只退回已冻结本金；不结算收益、不生成赠单。
+    afAdminCancelAdvancedOrder: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        orderId: z.number().int().positive(),
+        reason: z.string().trim().min(1, '请填写撤销原因').max(300, '撤销原因不能超过300个字符'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await ensureAfAdvancedOrdersTable();
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
+
+        const [roleRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const role = String((roleRows as any[])?.[0]?.role || '');
+        if (role !== 'owner' && role !== 'admin') {
+          (conn as any).release?.();
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可撤销高级委托' });
+        }
+
+        await (conn as any).beginTransaction();
+        try {
+          const [rows] = await (conn as any).execute(
+            `SELECT ao.id AS advanced_id, ao.status AS advanced_status, ao.amount AS advanced_amount,
+                    ao.freeze_balance_id, ao.refund_balance_id,
+                    o.id AS order_id, o.user_id, o.coin, o.status AS order_status
+             FROM af_advanced_orders ao
+             INNER JOIN af_orders o ON o.id = ao.order_id AND o.ledger_id = ao.ledger_id
+             WHERE ao.ledger_id = ? AND ao.order_id = ?
+             FOR UPDATE`,
+            [input.ledgerId, input.orderId]
+          );
+          const advanced = (rows as any[])?.[0];
+          if (!advanced) throw new TRPCError({ code: 'NOT_FOUND', message: '高级委托不存在' });
+
+          if (advanced.advanced_status === 'cancelled' || advanced.order_status === 'cancelled') {
+            await (conn as any).commit();
+            return {
+              success: true,
+              alreadyCancelled: true,
+              orderId: Number(advanced.order_id),
+              refundedAmount: 0,
+            };
+          }
+          if (advanced.advanced_status === 'fulfilled' || advanced.order_status === 'completed') {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托已成交，不能撤销' });
+          }
+          if (!['active', 'reached'].includes(String(advanced.advanced_status)) || advanced.order_status !== 'pending') {
+            throw new TRPCError({ code: 'CONFLICT', message: '高级委托当前状态不可撤销，请刷新后重试' });
+          }
+          if (Number(advanced.refund_balance_id || 0) > 0) {
+            throw new TRPCError({ code: 'CONFLICT', message: '该订单已存在退款审计流水，已阻止重复退款，请人工核查' });
+          }
+
+          const freezeBalanceId = Number(advanced.freeze_balance_id || 0);
+          if (!freezeBalanceId) {
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '未找到该高级委托的冻结本金流水，已阻止退款，请人工核查' });
+          }
+          const [freezeRows] = await (conn as any).execute(
+            `SELECT id, amount FROM af_manual_balances
+             WHERE id = ? AND ledger_id = ? AND user_id = ?
+             FOR UPDATE`,
+            [freezeBalanceId, input.ledgerId, advanced.user_id]
+          );
+          const freezeRecord = (freezeRows as any[])?.[0];
+          const frozenAmount = Number(freezeRecord?.amount || 0);
+          const refundAmount = Number((-frozenAmount).toFixed(8));
+          const expectedAmount = Number(advanced.advanced_amount || 0);
+          if (!freezeRecord || !Number.isFinite(refundAmount) || refundAmount <= 0 || Math.abs(refundAmount - expectedAmount) > 0.00000001) {
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '冻结本金流水校验失败，已阻止退款，请人工核查' });
+          }
+
+          const normalizedReason = input.reason.replace(/[\r\n]+/g, ' ').trim();
+          const refundNote = `管理员撤销高级委托，仅退冻结本金 ETH ${refundAmount.toFixed(8)} USDT #${advanced.order_id}（管理员#${ctx.user.id}；原因：${normalizedReason}）`;
+          const [refundResult] = await (conn as any).execute(
+            `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+             VALUES (?, ?, ?, ?, NOW(), NOW())`,
+            [input.ledgerId, advanced.user_id, refundAmount, refundNote]
+          );
+          const refundBalanceId = Number((refundResult as any).insertId || 0);
+          if (!refundBalanceId) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '退款流水写入失败，事务已回滚' });
+
+          const [advancedUpdate] = await (conn as any).execute(
+            `UPDATE af_advanced_orders
+             SET status = 'cancelled', cancelled_at = NOW(), cancelled_spot_price = NULL,
+                 cancelled_by_user_id = ?, cancel_reason = ?, refund_balance_id = ?, updated_at = NOW()
+             WHERE id = ? AND status IN ('active', 'reached')`,
+            [ctx.user.id, normalizedReason, refundBalanceId, advanced.advanced_id]
+          );
+          if (Number((advancedUpdate as any).affectedRows || 0) !== 1) {
+            throw new TRPCError({ code: 'CONFLICT', message: '高级委托状态已变化，退款已阻止' });
+          }
+          const [orderUpdate] = await (conn as any).execute(
+            `UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
+             WHERE id = ? AND ledger_id = ? AND status = 'pending'`,
+            [advanced.order_id, input.ledgerId]
+          );
+          if (Number((orderUpdate as any).affectedRows || 0) !== 1) {
+            throw new TRPCError({ code: 'CONFLICT', message: '主订单状态已变化，退款已阻止' });
+          }
+          // 高级委托尚未成交时只提供受益人预览，不应存在赠单；仍作防御性取消，避免遗留pending赠单日后被误处理。
+          await (conn as any).execute(
+            `UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
+             WHERE ledger_id = ? AND source_order_id = ? AND is_gift = 1 AND status = 'pending'`,
+            [input.ledgerId, advanced.order_id]
+          );
+
+          await (conn as any).commit();
+          return {
+            success: true,
+            alreadyCancelled: false,
+            orderId: Number(advanced.order_id),
+            refundedAmount: refundAmount,
+          };
+        } catch (error) {
+          try { await (conn as any).rollback(); } catch {}
+          throw error;
+        } finally {
+          (conn as any).release?.();
+        }
+      }),
     // AF 查询委托订单（该账本所有币种）
     afGetOrders: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
@@ -14624,7 +14790,8 @@ ${klinesSummary}
                      COALESCE(o.is_simulated, 0) as is_simulated,
                      ao.id AS advanced_order_id, ao.status AS advanced_status, ao.limit_price AS advanced_limit_price,
                      ao.submitted_spot_price, ao.weekly_yield_rate, ao.reached_at,
-                     ao.fulfilled_at, ao.fulfilled_price, ao.fulfilled_quantity, ao.cancelled_at, ao.cancelled_spot_price
+                     ao.fulfilled_at, ao.fulfilled_price, ao.fulfilled_quantity, ao.cancelled_at,
+                     ao.cancelled_by_user_id, ao.cancel_reason, ao.refund_balance_id, ao.cancelled_spot_price
               FROM af_orders o
               LEFT JOIN af_advanced_orders ao ON ao.order_id = o.id AND ao.ledger_id = o.ledger_id
               LEFT JOIN users su ON su.id = o.source_user_id
@@ -14862,7 +15029,8 @@ ${klinesSummary}
                      COALESCE(o.is_simulated, 0) as is_simulated,
                      ao.id AS advanced_order_id, ao.status AS advanced_status, ao.limit_price AS advanced_limit_price,
                      ao.submitted_spot_price, ao.weekly_yield_rate, ao.reached_at,
-                     ao.fulfilled_at, ao.fulfilled_price, ao.fulfilled_quantity, ao.cancelled_at
+                     ao.fulfilled_at, ao.fulfilled_price, ao.fulfilled_quantity, ao.cancelled_at,
+                     ao.cancelled_by_user_id, ao.cancel_reason, ao.refund_balance_id
               FROM af_orders o
               LEFT JOIN af_advanced_orders ao ON ao.order_id = o.id AND ao.ledger_id = o.ledger_id
               LEFT JOIN users u ON u.id = o.user_id
@@ -14895,6 +15063,9 @@ ${klinesSummary}
           fulfilledPrice: r.fulfilled_price ? String(r.fulfilled_price) : null,
           fulfilledQuantity: r.fulfilled_quantity ? String(r.fulfilled_quantity) : null,
           cancelledAt: r.cancelled_at || null,
+          cancelledByUserId: r.cancelled_by_user_id ? Number(r.cancelled_by_user_id) : null,
+          cancelReason: r.cancel_reason || null,
+          refundBalanceId: r.refund_balance_id ? Number(r.refund_balance_id) : null,
           createdAt: r.created_at,
           updatedAt: r.updated_at,
           isGift: !!r.is_gift,
@@ -15142,7 +15313,8 @@ ${klinesSummary}
                 const giftSwitch = (switchRows as any[])?.[0];
                 for (const order of advancedMainOrders) {
                   const previews = [...(ratioMap[Number(order.userId)] || [])];
-                  if (giftSwitch?.enabled && Number(giftSwitch.target_user_id || 0) > 0 && Number(giftSwitch.gift_ratio || 0) > 0) {
+                  const isYjhTreeSource = await isAf525EligibleSourceUser(conn as any, Number(order.userId));
+                  if (isYjhTreeSource && giftSwitch?.enabled && Number(giftSwitch.target_user_id || 0) > 0 && Number(giftSwitch.gift_ratio || 0) > 0) {
                     previews.push({
                       type: '5.25赠单',
                       userId: Number(giftSwitch.target_user_id),
@@ -15461,6 +15633,10 @@ ${klinesSummary}
               }
             }
 
+            if (!(await isAf525EligibleSourceUser(followConn as any, fulfilledOrder.userId))) {
+              console.log(`[5.25定向] 高级委托来源订单#${fulfilledOrder.id}的下单人(${fulfilledOrder.userId})不在YJH推荐树内，跳过0.25赠单`);
+              return;
+            }
             const [switchRows] = await (followConn as any).execute(
               `SELECT enabled, target_user_id, gift_ratio FROM af_525_switch WHERE ledger_id = 52 LIMIT 1`
             );
@@ -15912,6 +16088,10 @@ ${klinesSummary}
             try {
               const conn525 = await (await import('./db')).getDbConnection();
               if (!conn525) return;
+              if (!(await isAf525EligibleSourceUser(conn525 as any, userId))) {
+                console.log(`[5.25定向] 下单人(${userId})不在YJH推荐树内，跳过0.25赠单`);
+                return;
+              }
               // 查询开关状态
               const [switchRows] = await (conn525 as any).execute(
                 `SELECT enabled, target_user_id, gift_ratio FROM af_525_switch WHERE ledger_id = 52 LIMIT 1`
