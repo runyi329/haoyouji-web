@@ -1518,14 +1518,13 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           const entrustDuration = `${chargedDays}天`;
           const weeklyEstimate = parseFloat(order.amount || '0') * yieldRate;
           const accumulatedEstimate = weeklyEstimate * chargedDays / 7;
-          const statusLabel = advancedStatus === 'fulfilled' ? '已成交'
-            : advancedStatus === 'cancelled' ? '已撤销'
-            : advancedStatus === 'reached' ? '已到价，待管理员确认'
-            : (order as any).advancedCancelable ? '当前可撤单' : '谷底增筹保护中';
-          const statusColor = advancedStatus === 'fulfilled' ? '#0EA56A'
-            : advancedStatus === 'cancelled' ? '#94A3B8'
-            : advancedStatus === 'reached' ? '#D97706'
-            : (order as any).advancedCancelable ? '#1A56DB' : '#B45309';
+          const advancedLimitPrice = Number((order as any).advancedLimitPrice || (order as any).originalLimitPrice || order.limitPrice || 0);
+          const isProtectionZone = advancedStatus === 'active'
+            && !(order as any).advancedCancelable
+            && currentAdvancedPrice > advancedLimitPrice;
+          const priceStatusLabel = advancedStatus === 'reached'
+            ? '已到价·待确认'
+            : isProtectionZone ? '保护区·不可撤销' : null;
           return <>
             <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">订单类型</span>
@@ -1535,13 +1534,20 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               <span className="text-[#9CA3AF]">提交时现货价 S</span>
               <span className="text-[#1E293B]">{Number((order as any).submittedSpotPrice || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-[#9CA3AF]">当前ETH价格 P</span>
-              <span className="font-semibold" style={{ color: '#1A56DB' }}>{currentAdvancedPrice > 0 ? `${currentAdvancedPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT` : '行情暂不可用'}</span>
+            <div className="flex justify-between items-center gap-3">
+              <span className="text-[#9CA3AF] shrink-0">当前ETH价格 P</span>
+              <div className="flex items-center justify-end gap-1.5 min-w-0">
+                {priceStatusLabel && (
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${advancedStatus === 'reached' ? 'bg-amber-50 text-amber-700' : 'bg-orange-50 text-orange-700'}`}>
+                    {priceStatusLabel}
+                  </span>
+                )}
+                <span className="font-medium text-[#1E293B] whitespace-nowrap">{currentAdvancedPrice > 0 ? `${currentAdvancedPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT` : '行情暂不可用'}</span>
+              </div>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">每周收益预估</span>
-              <span className="font-semibold" style={{ color: '#5B47C9' }}>{(yieldRate * 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}% · {weeklyEstimate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
+              <span className="font-medium text-[#1E293B]">{(yieldRate * 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}% · {weeklyEstimate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">委托时长</span>
@@ -1549,10 +1555,7 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">累计收益预估</span>
-              <span className="font-semibold" style={{ color: '#5B47C9' }}>{accumulatedEstimate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
-            </div>
-            <div className="rounded-lg px-2.5 py-2 text-[11px] leading-5" style={{ backgroundColor: advancedStatus === 'reached' ? '#FFF7ED' : '#F7F6FF', color: statusColor, border: `1px solid ${advancedStatus === 'reached' ? '#FED7AA' : '#E3DFFF'}` }}>
-              <span className="font-semibold">{statusLabel}</span><span className="mx-1">·</span>{(order as any).advancedCancelReason || '服务端正在判断撤单资格'}
+              <span className="font-medium text-[#1E293B]">{accumulatedEstimate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
             </div>
           </>;
         })()}
@@ -1762,7 +1765,7 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
         {/* 登记时间（管理员确认成交的时间） */}
         <div className="flex justify-between items-center">
           <span className="text-[#9CA3AF]">登记时间</span>
-          <span className="text-[#64748B]">{formatOrderDateTime(order.confirmedAt)}</span>
+          <span className="text-[#64748B]">{order.confirmedAt ? formatOrderDateTime(order.confirmedAt) : '暂未登记'}</span>
         </div>
         {/* 委卖时间（仅挂单委卖中显示） */}
         {order.sellStatus === 'selling' && (
