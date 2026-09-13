@@ -41,6 +41,59 @@ function SettledCardStamp({ settledAt }: { settledAt?: string | Date | null }) {
   );
 }
 
+/**
+ * 卡片模式专用的资金属性标识。它采用低对比度材质色与细小色点区分属性，
+ * 避免把订单模式的白底高饱和标签直接放入金属、金色或紫色卡片中。
+ */
+function CardFundingAttributeBadge({
+  type,
+  surface,
+}: {
+  type: 'self' | 'financing';
+  surface: 'silver' | 'gold' | 'purple' | 'green';
+}) {
+  const label = type === 'self' ? '自有资产' : '融资付息';
+  const styles: Record<typeof surface, React.CSSProperties> = {
+    silver: {
+      color: type === 'self' ? 'rgba(13, 99, 78, 0.92)' : 'rgba(35, 71, 108, 0.92)',
+      background: 'rgba(255,255,255,0.15)',
+      border: '1px solid rgba(65, 80, 96, 0.25)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.52), 0 1px 0 rgba(42,54,68,0.08)',
+    },
+    gold: {
+      color: type === 'self' ? 'rgba(23, 82, 65, 0.95)' : 'rgba(77, 54, 12, 0.94)',
+      background: 'rgba(255, 235, 153, 0.14)',
+      border: '1px solid rgba(87, 58, 4, 0.28)',
+      boxShadow: 'inset 0 1px 0 rgba(255,245,181,0.48), 0 1px 0 rgba(91,60,0,0.11)',
+    },
+    purple: {
+      color: type === 'self' ? 'rgba(225, 255, 244, 0.98)' : 'rgba(242, 235, 255, 0.98)',
+      background: 'rgba(255,255,255,0.10)',
+      border: '1px solid rgba(255,255,255,0.26)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.19), 0 1px 0 rgba(42,14,101,0.16)',
+    },
+    green: {
+      color: type === 'self' ? 'rgba(233, 255, 246, 0.98)' : 'rgba(240, 255, 248, 0.98)',
+      background: 'rgba(255,255,255,0.09)',
+      border: '1px solid rgba(227,255,242,0.30)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18), 0 1px 0 rgba(3,68,49,0.16)',
+    },
+  };
+  const dotColor = type === 'self'
+    ? (surface === 'purple' || surface === 'green' ? 'rgba(150, 255, 214, 0.92)' : '#2D8C70')
+    : (surface === 'purple' || surface === 'green' ? 'rgba(231, 210, 255, 0.96)' : '#697A92');
+
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded px-1.5 py-[1px] text-[10px] font-semibold leading-[14px] whitespace-nowrap"
+      style={{ ...styles[surface], letterSpacing: '0.01em' }}
+    >
+      <span aria-hidden="true" className="h-1 w-1 shrink-0 rounded-full" style={{ backgroundColor: dotColor, boxShadow: `0 0 0 1px ${surface === 'purple' || surface === 'green' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'}` }} />
+      {label}
+    </span>
+  );
+}
+
 // ===== P&L 曲线图组件（复用自 OptionAnalysisPage）=====
 function OptionPnlCanvas({
   data,
@@ -1497,6 +1550,9 @@ export function FunderOrderCardV2Silver({
     } catch { return {}; }
   })();
     const showTradeDirection = cardDisplayConfig.showTradeDirection !== false;
+  const fundingBadgeSurface: 'silver' | 'gold' | 'purple' | 'green' = isParticipant
+    ? 'green'
+    : isStockCard ? 'gold' : isOptionCard ? 'purple' : 'silver';
   // 仅用于前端资产标题旁的展示标签，不影响订单、利息或担保计算。
   // 旧订单的 selfFundedAsset 继续视为“自有资产”。
   const assetFundingType = cardDisplayConfig.assetFundingType === 'financing'
@@ -1680,16 +1736,7 @@ export function FunderOrderCardV2Silver({
                 {isParticipant && (
                   <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.7)' }}>参与</span>
                 )}
-                {assetFundingType && (
-                  <span
-                    className="text-[10px] font-bold px-1.5 py-0"
-                    style={assetFundingType === 'self'
-                      ? { borderRadius: '4px', color: '#047857', backgroundColor: '#ECFDF5', border: '1px solid #6EE7B7' }
-                      : { borderRadius: '4px', color: '#1D4ED8', backgroundColor: '#EFF6FF', border: '1px solid #93C5FD' }}
-                  >
-                    {assetFundingType === 'self' ? '自有资产' : '融资付息'}
-                  </span>
-                )}
+                {assetFundingType && <CardFundingAttributeBadge type={assetFundingType} surface={fundingBadgeSurface} />}
               </div>
               <div style={{ lineHeight: 1 }}>
                 <span style={{ fontSize: '1.6rem', fontWeight: 700, color: TXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: TXT_SHADOW_LG }}>
@@ -1705,16 +1752,7 @@ export function FunderOrderCardV2Silver({
                 {isParticipant && (
                   <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.7)' }}>参与</span>
                 )}
-                {assetFundingType && (
-                  <span
-                    className="text-[10px] font-bold px-1.5 py-0"
-                    style={assetFundingType === 'self'
-                      ? { borderRadius: '4px', color: '#047857', backgroundColor: '#ECFDF5', border: '1px solid #6EE7B7' }
-                      : { borderRadius: '4px', color: '#1D4ED8', backgroundColor: '#EFF6FF', border: '1px solid #93C5FD' }}
-                  >
-                    {assetFundingType === 'self' ? '自有资产' : '融资付息'}
-                  </span>
-                )}
+                {assetFundingType && <CardFundingAttributeBadge type={assetFundingType} surface={fundingBadgeSurface} />}
                 {showTradeDirection && ((order as any).trade_direction === 'long' || (order as any).trade_direction === 'short') && (
                   <span
                     className="text-[10px] font-bold px-1 py-0"
@@ -3576,16 +3614,7 @@ export function FunderLenderCardSilver({
                 <div className="flex justify-between mb-1 gap-3">
                   <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
                     <span>持有资产</span>
-                    {assetFundingType && (
-                      <span
-                        className="text-[10px] font-bold px-1.5 py-0"
-                        style={assetFundingType === 'self'
-                          ? { borderRadius: '4px', color: '#047857', backgroundColor: '#ECFDF5', border: '1px solid #6EE7B7' }
-                          : { borderRadius: '4px', color: '#1D4ED8', backgroundColor: '#EFF6FF', border: '1px solid #93C5FD' }}
-                      >
-                        {assetFundingType === 'self' ? '自有资产' : '融资付息'}
-                      </span>
-                    )}
+                    {assetFundingType && <CardFundingAttributeBadge type={assetFundingType} surface="silver" />}
                   </span>
                   <span className="text-right" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                     {amountCurrency === 'CNY' && storedAmountUsdt > 0
