@@ -34,13 +34,6 @@ const SELL_PRICE_OPTIONS: Record<string, number[]> = {
 
 // 高级委托初期仅支持 ETH 的四档固定委托价。
 const ADVANCED_ETH_PRICE_OPTIONS = [2200, 2100, 2000, 1900] as const;
-// 高级委托每周收益率按用户确认的四档委托价固定计算。
-const ADVANCED_WEEKLY_YIELD_RATE_BY_PRICE: Record<number, number> = {
-  2200: 0.01,
-  2100: 0.01,
-  2000: 0.0095,
-  1900: 0.009,
-};
 
 const COIN_CONFIG: Record<string, {
   symbol: string; name: string; fullName: string; color: string; imgUrl: string;
@@ -1502,7 +1495,6 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 
         {isAdvanced && (() => {
           const currentAdvancedPrice = Number((order as any).currentMarketPrice || livePrice || 0);
-          const yieldRate = Number((order as any).weeklyYieldRate || 0);
           const advancedStatus = (order as any).advancedStatus || 'active';
           const submittedAtMs = new Date(order.createdAt).getTime();
           const finalizedAtRaw = advancedStatus === 'fulfilled'
@@ -1512,11 +1504,9 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               : null;
           const calculationEndMs = finalizedAtRaw ? new Date(finalizedAtRaw).getTime() : advancedDetailNowMs;
           const elapsedMs = Number.isFinite(submittedAtMs) ? Math.max(0, calculationEndMs - submittedAtMs) : 0;
-          // 委托时长与累计收益均按天向上取整：提交当天即记为第1天，不足一天也按一天计。
+          // 委托时长按天向上取整：提交当天即记为第1天，不足一天也按一天计。
           const chargedDays = Math.max(1, Math.ceil(elapsedMs / (24 * 60 * 60 * 1000)));
           const entrustDuration = `${chargedDays}天`;
-          const weeklyEstimate = parseFloat(order.amount || '0') * yieldRate;
-          const accumulatedEstimate = weeklyEstimate * chargedDays / 7;
           const advancedLimitPrice = Number((order as any).advancedLimitPrice || (order as any).originalLimitPrice || order.limitPrice || 0);
           const isProtectionZone = advancedStatus === 'active'
             && !(order as any).advancedCancelable
@@ -1545,16 +1535,8 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               </div>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-[#9CA3AF]">每周收益预估</span>
-              <span className="font-medium text-[#1E293B]">{(yieldRate * 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}% · {weeklyEstimate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
-            </div>
-            <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">委托时长</span>
               <span className="text-[#1E293B] font-medium">{entrustDuration}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-[#9CA3AF]">累计收益预估</span>
-              <span className="font-medium text-[#1E293B]">{accumulatedEstimate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
             </div>
           </>;
         })()}
@@ -3034,9 +3016,6 @@ export default function CryptoPrediction() {
               const limitPrice = parseFloat(orderPrice);
               const hasAmount = !Number.isNaN(amount) && amount > 0;
               const hasLimitPrice = !Number.isNaN(limitPrice) && limitPrice > 0;
-              const weeklyYieldRate = hasLimitPrice ? ADVANCED_WEEKLY_YIELD_RATE_BY_PRICE[limitPrice] ?? null : null;
-              const weeklyYieldRateLabel = weeklyYieldRate === null ? '--' : `${(weeklyYieldRate * 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}%`;
-              const weeklyYield = hasAmount && weeklyYieldRate !== null ? amount * weeklyYieldRate : null;
               const canPreview = hasAmount && hasLimitPrice && amount <= availableUsdt && advancedCurrentPrice > 0 && limitPrice < advancedCurrentPrice;
               return (
                 <>
@@ -3113,10 +3092,6 @@ export default function CryptoPrediction() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl px-4 py-4 flex items-center justify-between" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
-                    <span className="text-sm" style={{ color: '#6B7A9A' }}>每周收益预估</span>
-                    <span className="text-sm font-semibold whitespace-nowrap" style={{ color: weeklyYieldRate !== null ? '#1A2340' : '#9CA3AF' }}>{weeklyYieldRate !== null ? `${weeklyYieldRateLabel} · ${weeklyYield !== null ? `${weeklyYield.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT` : '--'}` : '--'}</span>
-                  </div>
 
                   <div className="rounded-xl px-4 py-3 space-y-2.5" style={{ backgroundColor: '#FFF9ED', border: '1px solid #F5D58A' }}>
                     <p className="text-xs font-semibold" style={{ color: '#915B00' }}>高级委托说明</p>
@@ -3297,9 +3272,6 @@ export default function CryptoPrediction() {
             {showAdvancedPreviewConfirm && (() => {
               const previewAmount = parseFloat(orderAmount) || 0;
               const previewLimitPrice = parseFloat(orderPrice) || 0;
-              const previewWeeklyYieldRate = ADVANCED_WEEKLY_YIELD_RATE_BY_PRICE[previewLimitPrice] ?? 0;
-              const previewWeeklyYieldRateLabel = `${(previewWeeklyYieldRate * 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}%`;
-              const previewWeeklyYield = previewAmount * previewWeeklyYieldRate;
               return (
                 <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4" style={{ background: 'rgba(20, 16, 48, 0.56)' }}>
                   <div className="w-full max-w-md rounded-3xl overflow-hidden" style={{ background: '#FCFBFF', boxShadow: '0 18px 60px rgba(32, 24, 82, 0.35)' }}>
@@ -3317,7 +3289,6 @@ export default function CryptoPrediction() {
                         <div className="flex justify-between text-sm"><span style={{ color: '#6B648C' }}>提交时现货价 S</span><span className="font-semibold" style={{ color: '#292149' }}>{advancedCurrentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span></div>
                         <div className="flex justify-between text-sm"><span style={{ color: '#6B648C' }}>高级委托价 L</span><span className="font-semibold" style={{ color: '#292149' }}>{previewLimitPrice.toLocaleString('en-US')} USDT</span></div>
                         <div className="flex justify-between text-sm"><span style={{ color: '#6B648C' }}>冻结投资额</span><span className="font-semibold" style={{ color: '#292149' }}>{previewAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span></div>
-                        <div className="pt-2 mt-1 border-t flex justify-between text-sm" style={{ borderColor: '#E3DFFF' }}><span style={{ color: '#6B648C' }}>每周收益预估</span><span className="font-bold" style={{ color: '#5140B8' }}>{previewWeeklyYieldRateLabel} · {previewWeeklyYield.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span></div>
                       </div>
                       <div className="rounded-2xl p-3.5 space-y-1.5" style={{ background: '#FFF9ED', border: '1px solid #F3D48E' }}>
                         <p className="text-xs font-bold" style={{ color: '#8B5B08' }}>请确认撤销与成交规则</p>

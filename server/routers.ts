@@ -196,12 +196,6 @@ async function ensureAfAdvancedOrdersTable(): Promise<void> {
   await afAdvancedOrdersTableReady;
 }
 
-const AF_ADVANCED_WEEKLY_YIELD_RATE_BY_PRICE: Record<number, number> = {
-  2200: 0.01,
-  2100: 0.01,
-  2000: 0.0095,
-  1900: 0.009,
-};
 const AF_ADVANCED_LIMIT_PRICES = new Set([1900, 2000, 2100, 2200]);
 
 async function getFreshAfAdvancedEthPrice(): Promise<{ price: number; updatedAt: string }> {
@@ -14465,7 +14459,7 @@ ${klinesSummary}
         return { success: true };
       }),
 
-    // 高级委托：仅ETH固定四档，提交时由服务端冻结余额并记录现货快照S。
+    // 高级委托：仅ETH固定四档，提交时由服务端冻结余额并记录现货快照S；收益由管理员另行手动发放。
     afSubmitAdvancedOrder: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),
@@ -14534,7 +14528,8 @@ ${klinesSummary}
              VALUES (?, ?, ?, ?, NOW(), NOW())`,
             [input.ledgerId, ctx.user.id, -amount, freezeNote]
           );
-          const weeklyYieldRate = AF_ADVANCED_WEEKLY_YIELD_RATE_BY_PRICE[limitPrice];
+          // 高级委托不再约定或自动计算固定周收益；保留既有非空字段，新增订单统一写0。
+          const weeklyYieldRate = 0;
           await (conn as any).execute(
             `INSERT INTO af_advanced_orders
              (ledger_id, user_id, order_id, coin, limit_price, submitted_spot_price, amount, quantity, weekly_yield_rate, status, freeze_balance_id, created_at, updated_at)
@@ -14549,7 +14544,7 @@ ${klinesSummary}
             limitPrice,
             amount: normalizedAmount,
             quantity,
-            weeklyYieldRate,
+            manualPayoutOnly: true,
           };
                 } catch (error) {
           try { await (conn as any).rollback(); } catch {}

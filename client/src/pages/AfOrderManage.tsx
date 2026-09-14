@@ -364,7 +364,7 @@ export default function AfOrderManage() {
       toast.success(result.alreadyCancelled ? '高级委托此前已撤销' : '高级委托已撤销', {
         description: result.alreadyCancelled
           ? '该订单此前已经完成撤销，不会重复退款。'
-          : `已退回冻结本金 ${Number(result.refundedAmount || 0).toFixed(2)} USDT；每周收益、累计预估收益及管理费均未支付。`,
+          : `已退回冻结本金 ${Number(result.refundedAmount || 0).toFixed(2)} USDT；本次未执行其他结算。`,
       });
       setAdvancedCancelTarget(null);
       setAdvancedCancelReason('');
@@ -2094,8 +2094,6 @@ export default function AfOrderManage() {
                     </div>
                     {/* 高级委托专属审计信息；公共订单字段和管理费仍沿用普通谷底增筹布局。 */}
                     {order.isAdvanced && (() => {
-                      const weeklyRate = Number(order.weeklyYieldRate || 0);
-                      const weeklyEstimate = Number(order.amount || 0) * weeklyRate;
                       const startMs = new Date(order.createdAt).getTime();
                       const terminalAt = order.advancedStatus === 'fulfilled'
                         ? (order.fulfilledAt || order.confirmedAt)
@@ -2104,7 +2102,6 @@ export default function AfOrderManage() {
                           : null;
                       const endMs = terminalAt ? new Date(terminalAt).getTime() : Date.now();
                       const chargedDays = Number.isFinite(startMs) ? Math.max(1, Math.ceil(Math.max(0, endMs - startMs) / (24 * 60 * 60 * 1000))) : 1;
-                      const accumulatedEstimate = weeklyEstimate * chargedDays / 7;
                       return <>
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400 w-12 shrink-0">委托价</span>
@@ -2121,16 +2118,8 @@ export default function AfOrderManage() {
                           <span className="font-medium text-gray-700">{order.submittedSpotPrice ? `${Number(order.submittedSpotPrice).toLocaleString()} u` : '—'}</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <span className="text-gray-400 w-12 shrink-0">每周收益</span>
-                          <span className="font-medium text-purple-700">{(weeklyRate * 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}% · {weeklyEstimate.toFixed(2)} u</span>
-                        </div>
-                        <div className="flex items-center gap-1">
                           <span className="text-gray-400 w-12 shrink-0">委托时长</span>
                           <span className="font-medium text-gray-700">{chargedDays}天</span>
-                        </div>
-                        <div className="flex items-center gap-1 col-span-2">
-                          <span className="text-gray-400 w-20 shrink-0">{order.advancedStatus === 'cancelled' ? '累计预估（不入账）' : '累计预估'}</span>
-                          <span className={`font-medium ${order.advancedStatus === 'cancelled' ? 'text-gray-500' : 'text-purple-700'}`}>{accumulatedEstimate.toFixed(2)} u</span>
                         </div>
                         {order.advancedStatus === 'cancelled' && (
                           <div className="col-span-2 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-[11px] text-gray-600 space-y-1">
@@ -2138,7 +2127,7 @@ export default function AfOrderManage() {
                               <span>撤销处理</span>
                               <span className="font-medium text-gray-800">{order.cancelledByUserId ? `管理员#${order.cancelledByUserId}撤销` : '用户自主撤销'}</span>
                             </div>
-                            <div className="leading-5">仅退冻结本金 {Number(order.amount || 0).toFixed(2)} u；每周收益、累计预估收益、管理费及赠单均未结算。</div>
+                            <div className="leading-5">仅退冻结本金 {Number(order.amount || 0).toFixed(2)} u；管理员此前另行手动发放至钱包的款项不退回，本次不新增任何收益、管理费或赠单。</div>
                             {order.cancelReason && <div className="leading-5 text-gray-500">原因：{order.cancelReason}</div>}
                             {order.refundBalanceId && <div className="text-gray-400">退款流水 #{order.refundBalanceId}</div>}
                           </div>
@@ -2744,7 +2733,7 @@ export default function AfOrderManage() {
                     <span className="font-semibold text-red-700">{Number(advancedCancelTarget?.amount || 0).toFixed(2)} USDT</span>
                   </div>
                 </div>
-                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">本操作仅退回该高级委托已冻结的本金。每周收益、累计预估收益、管理费和任何赠单均不会结算、支付或返还。</p>
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">本操作仅退回该高级委托已冻结的本金。管理员此前另行手动发放至钱包的款项不退回；本次不会新增任何收益、管理费或赠单。</p>
                 <label className="block space-y-1.5">
                   <span className="font-medium text-gray-700">撤销原因 <span className="text-red-600">*</span></span>
                   <textarea
