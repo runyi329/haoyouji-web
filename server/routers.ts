@@ -196,7 +196,7 @@ async function ensureAfAdvancedOrdersTable(): Promise<void> {
   await afAdvancedOrdersTableReady;
 }
 
-const AF_ADVANCED_LIMIT_PRICES = new Set([1900, 2000, 2100, 2200]);
+const AF_ADVANCED_LIMIT_PRICES = new Set([2000, 2100, 2200]);
 
 async function getFreshAfAdvancedEthPrice(): Promise<{ price: number; updatedAt: string }> {
   const { getAllLatestPrices } = await import('./price-scanner');
@@ -14470,7 +14470,7 @@ ${klinesSummary}
         const limitPrice = Number(input.limitPrice);
         const amount = Number(input.amount);
         if (!AF_ADVANCED_LIMIT_PRICES.has(limitPrice)) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托价格仅支持1900、2000、2100、2200 USDT' });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托价格仅支持2000、2100、2200 USDT' });
         }
         if (!Number.isFinite(amount) || amount <= 0) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '请输入有效投资额' });

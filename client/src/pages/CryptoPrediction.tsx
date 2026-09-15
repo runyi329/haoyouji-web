@@ -32,8 +32,8 @@ const SELL_PRICE_OPTIONS: Record<string, number[]> = {
   SOL: [150, 145, 140, 135, 130, 125, 120, 115, 110, 105, 100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50],
 };
 
-// 高级委托初期仅支持 ETH 的四档固定委托价。
-const ADVANCED_ETH_PRICE_OPTIONS = [2200, 2100, 2000, 1900] as const;
+// 高级委托仅支持 ETH 的三档固定委托价。
+const ADVANCED_ETH_PRICE_OPTIONS = [2200, 2100, 2000] as const;
 
 const COIN_CONFIG: Record<string, {
   symbol: string; name: string; fullName: string; color: string; imgUrl: string;
