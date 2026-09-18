@@ -1156,7 +1156,10 @@ export default function Home() {
   }, [user, navigate]);
   const isJiang = Number((user as any)?.id) === 870413;
   const openLedgerFromHome = useCallback((targetLedgerId: 37 | 52) => {
-    navigate(`/ledger/${targetLedgerId}?from=home`);
+    // 胡大叔的 52 号快捷入口直达设置中的「融资付息订单管理」；37 号保持原首页入口。
+    navigate(targetLedgerId === 52
+      ? '/ledger/52/finance-unified?from=home'
+      : `/ledger/${targetLedgerId}?from=home`);
   }, [navigate]);
 
 
