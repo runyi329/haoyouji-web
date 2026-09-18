@@ -25,6 +25,7 @@ import {
   Landmark,
   Globe,
   Building2,
+  TrendingUp,
   StickyNote,
   ChevronRight,
   ClipboardList,
@@ -71,6 +72,10 @@ const FIELD_LABEL_OPTIONS = [
   "手机",
   "手机号",
   "姓名",
+  "金额",
+  "券商",
+  "资金账号",
+  "融资融券",
   "地址",
   "APP",
   "自定义",
@@ -83,6 +88,7 @@ const CATEGORIES = [
   { key: "account", label: "账号密码", icon: KeyRound,   color: "#1E88E5" },
   { key: "address", label: "快递地址", icon: MapPin,     color: "#E53935" },
   { key: "website", label: "公司",   icon: Building2,  color: "#8E24AA" },
+  { key: "stock",   label: "股票",   icon: TrendingUp,  color: "#00897B" },
   { key: "other",   label: "其他",   icon: StickyNote,  color: "#FB8C00" },
 ];
 
@@ -92,6 +98,7 @@ const SUB_CATEGORIES: Record<string, string[]> = {
   account: ["苹果ID", "华为ID", "微软账号", "谷歌账号", "淘宝/天猫", "京东", "美团", "拼多多", "微信", "支付宝", "抖音", "快手", "欧易", "自定义"],
   address: ["家庭地址", "公司地址", "常用地址1", "常用地址2", "自定义"],
   website: [], // 公司分类直接进入字段填写，无需选子类
+  stock: ["股票账户", "自定义"],
   other: ["证件信息", "车牌/车险", "会员卡", "WiFi密码", "自定义"],
 };
 
@@ -125,6 +132,14 @@ const FIELD_TEMPLATES: Record<string, Array<{ label: string; sensitive?: boolean
   ],
   website: [
     { label: "公司名称" },
+  ],
+  stock: [
+    { label: "姓名" },
+    { label: "金额" },
+    { label: "券商" },
+    { label: "资金账号" },
+    { label: "密码", sensitive: true },
+    { label: "融资融券" },
   ],
   other: [
     { label: "内容" },
@@ -398,13 +413,36 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
         { label: '密码', value: '', sensitive: true },
       ];
     }
+    if (category === 'stock') {
+      return [
+        { label: '姓名', value: '' },
+        { label: '金额', value: '' },
+        { label: '券商', value: '' },
+        { label: '资金账号', value: '' },
+        { label: '密码', value: '', sensitive: true },
+        { label: '融资融券', value: '' },
+        { label: '__NOTE__', value: '' },
+      ];
+    }
     // other 及其他
     return [
       { label: '内容', value: '' },
     ];
   };
 
-  const addOuyiAccount = () => setOuyiAccounts(prev => [...prev, newOuyiAccount()]);
+  // 所有分类新增一条时，沿用当前上一条已经编辑过的字段标题、顺序和密码属性，
+  // 仅清空内容，避免账号、密码、金额、备注等数据被复制到新条目。
+  const addOuyiAccount = () => setOuyiAccounts(prev => {
+    const previousAccount = prev[prev.length - 1];
+    const nextAccount = previousAccount
+      ? previousAccount.map(field => ({
+          label: field.label,
+          value: '',
+          ...(field.sensitive ? { sensitive: true } : {}),
+        }))
+      : newOuyiAccount();
+    return [...prev, nextAccount];
+  });
   const removeOuyiAccount = (idx: number) => setOuyiAccounts(prev => prev.filter((_, i) => i !== idx));
   const updateOuyiField = (acctIdx: number, fieldIdx: number, key: keyof MemoField, value: any) =>
     setOuyiAccounts(prev => prev.map((acct, ai) =>
@@ -917,7 +955,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                     className="flex items-center gap-1.5 text-sm text-[#D32F2F] hover:bg-red-50 px-3 py-2 rounded-lg w-full justify-center border border-dashed border-red-200"
                   >
                     <Plus className="w-4 h-4" />
-                    {category === 'bank' ? '添加银行卡' : category === 'address' ? '添加地址' : category === 'website' ? '添加网站' : subLabel === '欧易' ? '添加欧易账户' : '添加账号'}
+                    {category === 'bank' ? '添加银行卡' : category === 'address' ? '添加地址' : category === 'website' ? '添加网站' : category === 'stock' ? '添加股票账户' : subLabel === '欧易' ? '添加欧易账户' : '添加账号'}
                   </button>
                 </div>
               </div>
