@@ -1311,8 +1311,8 @@ export function FunderOrderCard({
         <div className="w-1/2 p-4 pr-3">
           <div className="flex items-center gap-0.5 mb-0.5">
             <span className="text-[10px] font-medium" style={{ color: '#3B82F6' }}>
-              {principalLentOut && principalLentOutPrimary !== 'quantity'
-                ? `借出资产 (${amountCurrency})`
+              {principalLentOut
+                ? `借出本金 (${amountCurrency})`
                 : '持有资产'}
             </span>
             {(order as any).order_fill_status === 'pending' && (
@@ -3260,7 +3260,6 @@ function CollateralLogSection({ orderId, ledgerId, refreshKey }: { orderId: numb
     </div>
   );
 }
-
 
 
 
