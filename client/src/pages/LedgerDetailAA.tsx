@@ -605,6 +605,30 @@ export default function LedgerDetailAA({
     return cum;
   }, [filteredTransactions, withdrawRecords]);
 
+  // 单标签日回报：把同日追加/减少本金及提现视为资金流，而非收益或亏损。
+  // 余额记录与本金调整不论先后录入，均按同一业务日期合并计算。
+  const selectedDailyReturnMap = useMemo(() => {
+    const returns = new Map<string, number | null>();
+    const sorted = [...filteredTransactions].sort((left, right) => left.date.localeCompare(right.date));
+    sorted.forEach((day, index) => {
+      if (index === 0) {
+        returns.set(day.date, null);
+        return;
+      }
+      const previous = sorted[index - 1];
+      const previousBalance = previous.income > 0 ? previous.income : previous.expense;
+      const currentBalance = day.income > 0 ? day.income : day.expense;
+      const capitalChangeToday = capitalHistory
+        .filter((record: any) => record.recordDate === day.date)
+        .reduce((sum: number, record: any) => sum + (record.description?.startsWith('capital_add') ? Number(record.amount) || 0 : -(Number(record.amount) || 0)), 0);
+      const withdrawToday = withdrawRecords
+        .filter((record) => record.date === day.date)
+        .reduce((sum, record) => sum + record.amount, 0);
+      returns.set(day.date, previousBalance + capitalChangeToday - withdrawToday - currentBalance);
+    });
+    return returns;
+  }, [filteredTransactions, capitalHistory, withdrawRecords]);
+
   // ─── 变动日期集合（用于日历格子上显示黄色感叹号标记）───────────
   const changeDates = useMemo(() => {
     const dates = new Set<string>();
@@ -693,52 +717,58 @@ export default function LedgerDetailAA({
     setOverviewSort(prev => prev && prev.col === col ? { col, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' });
   };
 
-  // ─── 全部模式：按标签统计提现（从原始 transactionsData 中提取 transfer 记录）────
-  const withdrawByTag = useMemo(() => {
-    const map: Record<string, number> = {};
+  // ─── 全部模式：按标签保留资金流日期 ───────────────────────────────────────────
+  // 本金和提现都是资金流，必须仅从其登记日期起影响本金/回报。不能把当前累计本金
+  // 倒灌到历史日期，否则会把“追加本金”错误显示成当天巨额盈亏。
+  const tagCashFlows = useMemo(() => {
+    const map: Record<string, {
+      capitalEvents: Array<{ date: string; amount: number }>;
+      withdrawEvents: Array<{ date: string; amount: number }>;
+    }> = {};
     if (!categories || categories.length === 0) return map;
-    (transactionsData || []).forEach((day) => {
-      (day.records || []).forEach((r: any) => {
-        // 提现 = transfer 类型且非 capital_ 开头
-        if (r.type === 'transfer' && !r.description?.startsWith('capital_')) {
-          const cat = r.category || '';
-          if (!cat) return;
-          // 按标签名精确匹配（避免「612郭总8617P15」被误并入「郭总8617」）
-          categories.forEach((c: any) => {
-            if (cat === c.name) {
-              map[c.name] = (map[c.name] || 0) + (Number(r.amount) || 0);
-            }
+
+    categories.forEach((category: any) => {
+      map[category.name] = { capitalEvents: [], withdrawEvents: [] };
+    });
+    (transactionsData || []).forEach((day: any) => {
+      (day.records || []).forEach((record: any) => {
+        if (record.type !== 'transfer') return;
+        const tagName = record.category || '';
+        const flow = map[tagName];
+        if (!flow) return;
+        const date = String(record.recordDate || day.date || '');
+        const amount = Math.abs(Number(record.amount) || 0);
+        if (!date || amount <= 0) return;
+        if (record.description?.startsWith('capital_')) {
+          flow.capitalEvents.push({
+            date,
+            amount: record.description.startsWith('capital_add') ? amount : -amount,
           });
+        } else {
+          flow.withdrawEvents.push({ date, amount });
         }
       });
+    });
+    Object.values(map).forEach((flow) => {
+      flow.capitalEvents.sort((left, right) => left.date.localeCompare(right.date));
+      flow.withdrawEvents.sort((left, right) => left.date.localeCompare(right.date));
     });
     return map;
   }, [transactionsData, categories]);
 
-  // ─── 全部模式：按标签统计本金变动净额（从原始 transactionsData 中提取 capital_ 记录）────
-  const capitalByTag = useMemo(() => {
-    const map: Record<string, number> = {};
-    if (!categories || categories.length === 0) return map;
-    (transactionsData || []).forEach((day) => {
-      (day.records || []).forEach((r: any) => {
-        if (r.type === 'transfer' && r.description?.startsWith('capital_')) {
-          const cat = r.category || '';
-          if (!cat) return;
-          categories.forEach((c: any) => {
-            if (cat === c.name) {
-              const amt = Number(r.amount) || 0;
-              if (r.description?.startsWith('capital_add')) {
-                map[c.name] = (map[c.name] || 0) + amt;
-              } else {
-                map[c.name] = (map[c.name] || 0) - amt;
-              }
-            }
-          });
-        }
-      });
-    });
-    return map;
-  }, [transactionsData, categories]);
+  // 当前本金/累计提现仍使用完整累计额；历史点则在下方按日期从 tagCashFlows 取值。
+  const withdrawByTag = useMemo(() => Object.fromEntries(
+    Object.entries(tagCashFlows).map(([tagName, flow]) => [
+      tagName,
+      flow.withdrawEvents.reduce((sum, event) => sum + event.amount, 0),
+    ])
+  ) as Record<string, number>, [tagCashFlows]);
+  const capitalByTag = useMemo(() => Object.fromEntries(
+    Object.entries(tagCashFlows).map(([tagName, flow]) => [
+      tagName,
+      flow.capitalEvents.reduce((sum, event) => sum + event.amount, 0),
+    ])
+  ) as Record<string, number>, [tagCashFlows]);
 
   // 押金明细弹窗顶部汇总：参考押金 = 当前本金 × 当前占比 × 20%；实际押金仅加总有可靠人民币报价的逐笔明细。
   // 必须定义在 capitalByTag 之后，避免页面首次渲染时访问未初始化的本金变动映射。
@@ -774,10 +804,7 @@ export default function LedgerDetailAA({
       const marginCny = marginEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0);
       // 权重比例
       const ratio = Number(initialBalancesData.balances[`${tagName}__ratio`] ?? 100) / 100;
-      // 该标签的累计提现
-      const tagWithdraw = withdrawByTag[tagName] || 0;
-      // 该标签的本金变动净额
-      const tagCapitalChange = capitalByTag[tagName] || 0;
+      const cashFlows = tagCashFlows[tagName] || { capitalEvents: [], withdrawEvents: [] };
       // 该标签的所有每日余额记录（按日期升序）
       const tagDays = (activeMemberTransactions || []).map((day: any) => {
         const filtered = (day.records || []).filter((r: any) => r.category && r.category === tagName);
@@ -800,19 +827,40 @@ export default function LedgerDetailAA({
         filteredTagDays = tagDays.filter((d: any) => d.date >= effectiveStartStr);
       }
       const points = filteredTagDays.map((d: any) => {
-        // 盈亏 = (初始本金 + 增减本金 - 当日余额 - 累计提现) * ratio
-        // effectiveInitial = 当前本金（初始本金 + 中途追加/减少）
-        const effectiveInitial = initialBalance + tagCapitalChange;
-        // 盈亏 = (当前本金 - 填写余额 - 累计提现) × ratio
-        // 日历余额 = 填写余额 + 提现，所以盈亏公式需要减去 tagWithdraw
-        const pnl = (effectiveInitial - d.balance - tagWithdraw) * ratio;
-        const pctInitial = effectiveInitial > 0 ? ((effectiveInitial - d.balance - tagWithdraw) / effectiveInitial) * 100 * ratio : 0;
-        const pctMargin = marginCny > 0 ? ((effectiveInitial - d.balance - tagWithdraw) * ratio / marginCny) * 100 : 0;
-        return { date: d.date, pnl, pctInitial, pctMargin, balance: d.balance };
+        // 只纳入截至该日发生的资金流。按日期（而非当天录入的先后时刻）结算，
+        // 因此同一天“余额登记 + 追加本金”会被作为一个完整的当日净变动处理。
+        const capitalChange = cashFlows.capitalEvents
+          .filter((event) => event.date <= d.date)
+          .reduce((sum, event) => sum + event.amount, 0);
+        const withdrawToDate = cashFlows.withdrawEvents
+          .filter((event) => event.date <= d.date)
+          .reduce((sum, event) => sum + event.amount, 0);
+        const capitalChangeToday = cashFlows.capitalEvents
+          .filter((event) => event.date === d.date)
+          .reduce((sum, event) => sum + event.amount, 0);
+        const withdrawToday = cashFlows.withdrawEvents
+          .filter((event) => event.date === d.date)
+          .reduce((sum, event) => sum + event.amount, 0);
+        const effectiveInitial = initialBalance + capitalChange;
+        // 盈亏 = (截至当天的本金 - 当天余额 - 截至当天累计提现) × 占比
+        const pnl = (effectiveInitial - d.balance - withdrawToDate) * ratio;
+        const pctInitial = effectiveInitial > 0 ? ((effectiveInitial - d.balance - withdrawToDate) / effectiveInitial) * 100 * ratio : 0;
+        const pctMargin = marginCny > 0 ? ((effectiveInitial - d.balance - withdrawToDate) * ratio / marginCny) * 100 : 0;
+        return {
+          date: d.date,
+          pnl,
+          pctInitial,
+          pctMargin,
+          balance: d.balance,
+          capitalChange,
+          withdrawToDate,
+          capitalChangeToday,
+          withdrawToday,
+        };
       });
       return { name: tagName, color, points, initialBalance, marginCny, marginEntries };
     });
-  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, withdrawByTag, capitalByTag]);
+  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, tagCashFlows]);
 
   // ─── 全部模式：计算所有标签的押金总和和盈亏总和 ────────────────────────
   const allTagsStats = useMemo(() => {
@@ -1007,13 +1055,13 @@ export default function LedgerDetailAA({
       const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       // 建立当月有数据的日期映射
-      const monthDataMap = new Map<string, { balance: number | null; pnl: number }>();
+      const monthDataMap = new Map<string, { balance: number | null; pnl: number | null }>();
       sorted
         .filter((d) => d.date.startsWith(monthPrefix))
         .forEach((d) => {
           monthDataMap.set(d.date, {
             balance: cumulativeMap.get(d.date) ?? null,
-            pnl: d.income - d.expense,
+            pnl: selectedDailyReturnMap.get(d.date) ?? null,
           });
         });
       // 找到当月有数据的第一天和最后一天
@@ -1079,7 +1127,7 @@ export default function LedgerDetailAA({
       balance: cumulativeMap.get(d.date) ?? (d.income > 0 ? d.income : d.expense),
       pnl: d.income - d.expense,
     }));
-  }, [filteredTransactions, cumulativeMap, calendarMode, calendarDate, dayMap, chartEffectiveStartDate]);
+  }, [filteredTransactions, cumulativeMap, selectedDailyReturnMap, calendarMode, calendarDate, dayMap, chartEffectiveStartDate]);
 
   // ─── 当前月日历格子（按周分组，周一为第一列）────────────────────────────────
   // calendarWeeks: 每个元素是一周7天（周一到周日），null表示空位
@@ -1148,17 +1196,9 @@ export default function LedgerDetailAA({
     return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   };
 
-  // 获取某天相对上一个有数据日期的差値
+  // 获取某天剔除本金和提现资金流后的实际日回报
   const getDailyDiff = (dateStr: string): number | null => {
-    if (!cumulativeMap.has(dateStr)) return null;
-    const currentVal = cumulativeMap.get(dateStr)!;
-    // 按日期升序排列所有有数据的日期
-    const allDates = Array.from(cumulativeMap.keys()).sort();
-    const idx = allDates.indexOf(dateStr);
-    if (idx <= 0) return null; // 第一条数据无差値
-    const prevDate = allDates[idx - 1];
-    const prevVal = cumulativeMap.get(prevDate)!;
-    return currentVal - prevVal;
+    return selectedDailyReturnMap.get(dateStr) ?? null;
   };
 
   // 计算当前标签的有效开始日期：初始日期的前一天
@@ -1181,16 +1221,15 @@ export default function LedgerDetailAA({
       return formatMoney(linkedBalance);
     }
     if (calendarMode === "daily") {
-      // 联动后的当天余额 - 前一天联动余额的差值
+      // 日回报：剔除同日追加/减少本金及提现等资金流后，再展示实际账户变动。
       const todayLinked = cumulativeMap.get(dateStr);
       if (todayLinked === undefined) return null;
       // 找前一个有数据的日期
       const allDates = Array.from(cumulativeMap.keys()).sort();
       const idx = allDates.indexOf(dateStr);
       if (idx <= 0) return formatMoney(todayLinked); // 第一条数据直接显示联动余额
-      const prevDate = allDates[idx - 1];
-      const prevLinked = cumulativeMap.get(prevDate)!;
-      const diff = todayLinked - prevLinked;
+      const diff = getDailyDiff(dateStr);
+      if (diff === null) return formatMoney(todayLinked);
       const sign = diff > 0 ? "+" : diff < 0 ? "-" : "";
       return formatMoney(Math.abs(diff), sign);
     }
@@ -1920,16 +1959,8 @@ export default function LedgerDetailAA({
                       if (hasRecord) {
                         const dateStr = getDateStr(day);
                         if (calendarMode === "daily") {
-                          const todayData = dayMap.get(dateStr);
-                          const allDates = Array.from(dayMap.keys()).sort();
-                          const idx2 = allDates.indexOf(dateStr);
-                          if (todayData && idx2 > 0) {
-                            const prevData = dayMap.get(allDates[idx2 - 1])!;
-                            const diff = (todayData.expense + todayData.income) - (prevData.expense + prevData.income);
-                            valueColor = diff > 0 ? "#D32F2F" : diff < 0 ? "#4CAF50" : "#9E9E9E";
-                          } else {
-                            valueColor = "#9E9E9E";
-                          }
+                          const diff = getDailyDiff(dateStr);
+                          valueColor = diff === null ? "#9E9E9E" : diff > 0 ? "#D32F2F" : diff < 0 ? "#4CAF50" : "#9E9E9E";
                         } else {
                           const allDates = Array.from(dayMap.keys()).sort();
                           const idx2 = allDates.indexOf(dateStr);
@@ -2172,12 +2203,12 @@ export default function LedgerDetailAA({
           </div>
           {/* 日盈亏模式：显示当月所有交易日盈亏累加总和；月/年模式：显示区间变化；余额模式：不显示数字 */}
           {calendarMode === 'daily' && (() => {
-            // 日盈亏模式：当月所有交易日的 pnl 累加总和
+            // 日盈亏模式：当月所有交易日的实际回报合计（已剔除本金/提现资金流）。
             const { year, month } = calendarDate;
             const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
-            const totalPnl = filteredTransactions
-              .filter((d) => d.date.startsWith(monthPrefix))
-              .reduce((sum, d) => sum + (d.income - d.expense), 0);
+            const totalPnl = Array.from(selectedDailyReturnMap.entries())
+              .filter(([date]) => date.startsWith(monthPrefix))
+              .reduce((sum, [, dailyReturn]) => sum + (dailyReturn ?? 0), 0);
             const isUp = totalPnl >= 0;
             return (
               <div className="text-right">
@@ -2440,16 +2471,18 @@ export default function LedgerDetailAA({
               const prevBalance = (_prevPoint as any)?.balance ?? null;
               // 占比（用于今日变动计算）
               const _tagRatio = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${tag.name}__ratio`] ?? 0) : 0;
-              // 今日变动 = (昨日balance - 今日balance) × 占比%
-              // 用户与标签对赌，标签账户上升则用户亏，所以符号取反
+              // 今日回报 = (昨日余额 + 当日追加本金 − 当日减少本金 − 当日提现 − 今日余额) × 占比。
+              // 本金和提现是资金流，不计作盈亏；用户与标签对赌，标签余额下降才是用户收益。
+              const todayCapitalChange = Number((_latestPoint as any)?.capitalChangeToday ?? 0);
+              const todayWithdraw = Number((_latestPoint as any)?.withdrawToday ?? 0);
               const prevPnl = tag.points.length >= 2 ? (tag.points[tag.points.length - 2]?.pnl ?? 0) : 0;
               // 今日变动：有balance数据时乘以占比（ratio=0时结果为0）；无balance数据时fallback到pnl差值再乘ratio
               const todayPnl = (latestBalance !== null && prevBalance !== null)
-                ? (prevBalance - latestBalance) * (_tagRatio / 100)
+                ? (prevBalance + todayCapitalChange - todayWithdraw - latestBalance) * (_tagRatio / 100)
                 : (_tagRatio > 0 && tag.points.length > 0 ? (latestPnl - prevPnl) * (_tagRatio / 100) : (_tagRatio === 0 ? 0 : (tag.points.length > 0 ? latestPnl - prevPnl : null)));
               const annualized = tag.marginCny > 0 && days > 0 ? (latestPnl / tag.marginCny / days) * 365 * 100 : null;
               const divAmt = dividendByTag[tag.name] ?? 0;
-              return { tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
+              return { tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, todayCapitalChange, todayWithdraw, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
             });
             // 排序逻辑：默认（无手动排序）时暂停的排最下面；用户手动排序时参与全局排序
             const sortedTagData = overviewSort ? [...tagData].sort((a, b) => {
@@ -2607,7 +2640,7 @@ export default function LedgerDetailAA({
                   <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                   <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
                   {/* 数据行右侧各列 */}
-                {displayedTagData.map(({ tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, annualized, divAmt, isPaused, firstDate, endDate }, displayedIndex) => {
+                {displayedTagData.map(({ tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, todayCapitalChange, todayWithdraw, annualized, divAmt, isPaused, firstDate, endDate }, displayedIndex) => {
                       // 判断是否需要灰色：北京时间交易日 15:00后且最新数据不是今天
                       const _nowBJ = new Date(Date.now() + 8 * 3600 * 1000);
                       const _todayBJ = _nowBJ.toISOString().slice(0, 10);
@@ -2633,8 +2666,7 @@ export default function LedgerDetailAA({
                           : '--';
                         // 占比
                         const _ratioNum = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${tag.name}__ratio`] ?? 0) : 0;
-                        // 计算过程：(最新帐面值 - 上一天帐面值) × 占比%
-                        // 帐面值 = pnl（已是对应用户占比后的值）
+                        // 计算过程：资金流先从余额变动中剔除，再计算实际盈亏。
                         const _prevDate = tag.points.length >= 2 ? (tag.points[tag.points.length - 2]?.date ?? '') : '';
                         const _latestDateLabel = latestDate ? latestDate.slice(5).replace('-', '/') : '';
                         const _prevDateLabel = _prevDate ? _prevDate.slice(5).replace('-', '/') : '';
@@ -2655,7 +2687,11 @@ export default function LedgerDetailAA({
                                 <div>
                                   {latestBalance !== null && prevBalance !== null ? (
                                     <>
-                                      ({prevBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} − {latestBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })})
+                                      ({prevBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                                      {todayCapitalChange > 0 ? ` + 追加本金 ${todayCapitalChange.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : ''}
+                                      {todayCapitalChange < 0 ? ` − 减少本金 ${Math.abs(todayCapitalChange).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : ''}
+                                      {todayWithdraw > 0 ? ` − 提现 ${todayWithdraw.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : ''}
+                                      {` − ${latestBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`})
                                       {` × ${_ratioNum.toFixed(0)}%`}
                                     </>
                                   ) : (
@@ -3066,7 +3102,7 @@ export default function LedgerDetailAA({
 
           {/* ── 汇总日历（日历图 Tab）── */}
           {overviewTab === 'calendar' && allTagsChartData.filter(t => t.points.length > 0).length > 0 && (() => {
-            // 构建每日汇总数据：按日期聚合所有标签的当日变动（用户视角 = 昨日balance - 今日balance × ratio）
+            // 构建每日汇总数据：按日期聚合资金流剔除后的当日回报。
             // 只计入「该日有数据 且 前一日也有数据」的标签
             const summaryDayMap = new Map<string, { total: number; tags: { name: string; val: number }[] }>();
             allTagsChartData.filter(t => t.points.length > 0).forEach(tag => {
@@ -3076,7 +3112,9 @@ export default function LedgerDetailAA({
                 if (idx === 0) return; // 第一个点没有前一天，跳过
                 const prevPt = tag.points[idx - 1] as any;
                 if (prevPt.balance == null || pt.balance == null) return;
-                const val = (prevPt.balance - pt.balance) * (_ratio / 100);
+                const capitalChangeToday = Number(pt.capitalChangeToday ?? 0);
+                const withdrawToday = Number(pt.withdrawToday ?? 0);
+                const val = (prevPt.balance + capitalChangeToday - withdrawToday - pt.balance) * (_ratio / 100);
                 const dateStr = pt.date;
                 if (!summaryDayMap.has(dateStr)) summaryDayMap.set(dateStr, { total: 0, tags: [] });
                 const entry = summaryDayMap.get(dateStr)!;
