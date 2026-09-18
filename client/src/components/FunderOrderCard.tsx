@@ -959,7 +959,14 @@ export function FunderOrderCard({
         : calculatedFinancingDisplayAmount;
   const financingDisplayUnit = amountCurrency === 'USDT' ? 'u' : amountCurrency === 'CNY' ? '元' : amountCurrency;
   const principalLentOut = order.principal_lent_out === 1 || order.principal_lent_out === true;
-  const displayFinancingAsPrimary = principalLentOut || isStockOrder || amountCurrency === 'CNY';
+  // 借出本金时允许管理员决定左上角主展示：默认展示借出本金，也可保留标的币种数量。
+  // 该配置纯属展示，不参与计息、担保缺口或任何资金计算。
+  const principalLentOutPrimary = financingDisplayConfig?.principalLentOutPrimary === 'quantity'
+    ? 'quantity'
+    : 'principal';
+  const displayFinancingAsPrimary = principalLentOut
+    ? principalLentOutPrimary !== 'quantity'
+    : isStockOrder || amountCurrency === 'CNY';
   const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'u' : amountCurrency;
   const quotedBuyValue = qty > 0 && price > 0 ? qty * price : financingDisplayAmount;
   // 利息货币逻辑与 LedgerDetail FunderOrderCardRight 完全一致。
@@ -1304,7 +1311,7 @@ export function FunderOrderCard({
         <div className="w-1/2 p-4 pr-3">
           <div className="flex items-center gap-0.5 mb-0.5">
             <span className="text-[10px] font-medium" style={{ color: '#3B82F6' }}>
-              {principalLentOut
+              {principalLentOut && principalLentOutPrimary !== 'quantity'
                 ? `借出资产 (${amountCurrency})`
                 : '持有资产'}
             </span>
@@ -3253,8 +3260,6 @@ function CollateralLogSection({ orderId, ledgerId, refreshKey }: { orderId: numb
     </div>
   );
 }
-
-
 
 
 

@@ -175,6 +175,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     assetFundingType: '',
     // 兼容已保存的早期“自有资金”展示标记。
     selfFundedAsset: false,
+    // 开启借出本金后，左上角主数字默认展示借出本金；可按订单改为展示标的数量。
+    principalLentOutPrimary: 'principal',
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | string>>(DEFAULT_DISPLAY_CONFIG);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
@@ -2916,6 +2918,36 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       }`} />
                     </button>
                   </div>
+                  {formData.principalLentOut && formData.assetType !== 'stock' && (
+                    <div className="mt-3 rounded-xl border border-orange-100 bg-orange-50/40 p-2.5">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-xs font-medium text-gray-600">左上角主要展示</span>
+                        <span className="text-[11px] text-gray-400">仅影响展示，不改变资金计算</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {([
+                          { value: 'principal', label: '借出本金' },
+                          { value: 'quantity', label: '币种数量' },
+                        ] as const).map(({ value, label }) => {
+                          const active = (displayConfig.principalLentOutPrimary || 'principal') === value;
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setDisplayConfig(config => ({ ...config, principalLentOutPrimary: value }))}
+                              className={`rounded-lg border px-2 py-2 text-xs font-medium transition-colors ${
+                                active
+                                  ? 'border-orange-400 bg-white text-orange-700'
+                                  : 'border-gray-200 bg-white text-gray-500'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="mx-4 h-px bg-gray-100 my-2" />
                 {/* Greeks 开关（仅期权类型显示） */}
@@ -3381,6 +3413,35 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${p.displayConfig?.principalLentOut ? 'translate-x-4' : 'translate-x-0.5'}`} />
                               </button>
                             </div>
+                            {p.displayConfig?.principalLentOut && formData.assetType !== 'stock' && (
+                              <div className="mt-2 rounded-lg border border-orange-100 bg-orange-50/40 p-2">
+                                <div className="mb-1.5 text-xs text-gray-500">左上角主要展示</div>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  {([
+                                    { value: 'principal', label: '借出本金' },
+                                    { value: 'quantity', label: '币种数量' },
+                                  ] as const).map(({ value, label }) => {
+                                    const active = (p.displayConfig?.principalLentOutPrimary || 'principal') === value;
+                                    return (
+                                      <button
+                                        key={value}
+                                        type="button"
+                                        onClick={() => setParticipants(prev => prev.map((participant, index) => index === idx
+                                          ? { ...participant, displayConfig: { ...participant.displayConfig, principalLentOutPrimary: value } }
+                                          : participant))}
+                                        className={`rounded-md border px-1.5 py-1 text-xs transition-colors ${
+                                          active
+                                            ? 'border-orange-400 bg-white text-orange-700'
+                                            : 'border-gray-200 bg-white text-gray-500'
+                                        }`}
+                                      >
+                                        {label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -3953,7 +4014,3 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     </div>
   );
 }
-
-
-
-

@@ -1257,6 +1257,17 @@ export function FunderOrderCardV2Silver({
   const liveP = livePrices[coin] ?? null;
   const rawAmountCurrency = String((order as any).amount_currency || (order.asset_type === 'stock' ? 'CNY' : 'USDT')).toUpperCase();
   const amountCurrency = rawAmountCurrency === 'U' ? 'USDT' : rawAmountCurrency;
+  const cardDisplayConfig = (() => {
+    try {
+      const raw = (order as any).display_config;
+      return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
+    } catch { return {}; }
+  })();
+  const cardPrincipalLentOut = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true;
+  // 借出本金的左上角主展示可选择本金或标的数量；选择仅影响展示。
+  const cardPrincipalLentOutPrimary = cardDisplayConfig.principalLentOutPrimary === 'quantity'
+    ? 'quantity'
+    : 'principal';
   const storedAmount = parseFloat(order.amount || '0');
   const amountCurrencyPrice = livePrices[amountCurrency as CoinType];
   const storedAmountUsdt = order.asset_type === 'stock'
@@ -1278,7 +1289,9 @@ export function FunderOrderCardV2Silver({
       : (amountCurrencyPrice && amountCurrencyPrice > 0 ? storedAmountUsdt / amountCurrencyPrice : storedAmountUsdt);
   const financingDisplayAmount = getExactFinancingDisplayAmount(order, amountCurrency, calculatedFinancingDisplayAmount);
   const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'U' : amountCurrency;
-  const displayFinancingAsPrimary = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true || order.asset_type === 'stock' || amountCurrency === 'CNY';
+  const displayFinancingAsPrimary = cardPrincipalLentOut
+    ? cardPrincipalLentOutPrimary !== 'quantity'
+    : order.asset_type === 'stock' || amountCurrency === 'CNY';
 
   // BTC/ETH期权使用真实合约标记价；无可信合约报价时不以标的现货替代。
   const optionGreeksSupported = coin === 'BTC' || coin === 'ETH';
@@ -1543,13 +1556,7 @@ export function FunderOrderCardV2Silver({
   const cardBg = isParticipant ? GRN_BG : isStockCard ? GOLD_BG_SV : isOptionCard ? OPT_BG : SL_BG;
   const cardExportBackground = isParticipant ? GRN_EXPORT_BG : isStockCard ? GOLD_EXPORT_BG : isOptionCard ? OPT_EXPORT_BG : SL_EXPORT_BG;
   const cardBorder = isParticipant ? GRN_BORDER : isStockCard ? GOLD_BORDER_SV : isOptionCard ? OPT_BORDER : SL_BORDER;
-  const cardDisplayConfig = (() => {
-    try {
-      const raw = (order as any).display_config;
-      return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
-    } catch { return {}; }
-  })();
-    const showTradeDirection = cardDisplayConfig.showTradeDirection !== false;
+  const showTradeDirection = cardDisplayConfig.showTradeDirection !== false;
   const fundingBadgeSurface: 'silver' | 'gold' | 'purple' | 'green' = isParticipant
     ? 'green'
     : isStockCard ? 'gold' : isOptionCard ? 'purple' : 'silver';
@@ -1748,7 +1755,7 @@ export function FunderOrderCardV2Silver({
             // 数字币：人民币融资时优先显示融资金额，其余保持显示持有数量。
             <>
               <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-                <span className="shrink-0 whitespace-nowrap">{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? `借出资产 (${amountCurrency})` : `持有资产 (${displayFinancingAsPrimary ? amountCurrency : coin})`}</span>
+                <span className="shrink-0 whitespace-nowrap">{cardPrincipalLentOut && cardPrincipalLentOutPrimary !== 'quantity' ? `借出资产 (${amountCurrency})` : `持有资产 (${displayFinancingAsPrimary ? amountCurrency : coin})`}</span>
                 {isParticipant && (
                   <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.7)' }}>参与</span>
                 )}
@@ -3133,6 +3140,9 @@ export function FunderLenderCardSilver({
     } catch { return null; }
   })();
   const showField = (key: string) => dc ? (dc[key] !== false) : true;
+  const lenderPrincipalLentOut = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true;
+  const lenderShowsPrincipal = lenderPrincipalLentOut && dc?.principalLentOutPrimary !== 'quantity';
+  const lenderFinancingUnit = amountCurrency === 'USDT' ? 'U' : amountCurrency === 'CNY' ? '元' : amountCurrency;
   // 仅用于前端资产标题旁的展示标签，不影响订单、利息或担保计算。
   // 旧订单的 selfFundedAsset 继续视为“自有资产”。
   const assetFundingType = dc?.assetFundingType === 'financing'
@@ -3609,15 +3619,19 @@ export function FunderLenderCardSilver({
 
             {/* ── 担保物块 ── */}
             <div style={{ borderTop: `1px solid ${DIVIDER}`, marginTop: 6, paddingTop: 6 }}>
-              {/* 持有资产 */}
+              {/* 借出本金订单可配置主展示为本金或标的数量。 */}
               {(qty > 0 || storedAmountUsdt > 0) && (
                 <div className="flex justify-between mb-1 gap-3">
                   <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
-                    <span>持有资产</span>
+                    <span>{lenderShowsPrincipal ? `借出资产 (${amountCurrency})` : '持有资产'}</span>
                     {assetFundingType && <CardFundingAttributeBadge type={assetFundingType} surface="silver" />}
                   </span>
                   <span className="text-right" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
-                    {amountCurrency === 'CNY' && storedAmountUsdt > 0
+                    {lenderShowsPrincipal
+                      ? (amountCurrency === 'CNY' && storedAmountUsdt > 0
+                        ? `${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元（≈${storedAmountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} U）`
+                        : `${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${lenderFinancingUnit}`)
+                      : !lenderPrincipalLentOut && amountCurrency === 'CNY' && storedAmountUsdt > 0
                       ? `${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元（≈${storedAmountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} U）`
                       : buyPrice > 0
                         ? `（开仓价 ${fmt(buyPrice, 2)} ${buyQuoteUnit}） ${fmtQty(qty)} ${coin}`
@@ -4030,4 +4044,3 @@ export function FunderLenderCardSilver({
     </div>
   );
 }
-
