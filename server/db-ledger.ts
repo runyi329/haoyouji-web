@@ -3135,6 +3135,8 @@ export async function addTransaction(data: {
         eq(ledgerRecords.ledgerId, data.ledgerId),
         eq(ledgerRecords.categoryId, data.categoryId),
         eq(ledgerRecords.recordDate, data.transactionDate),
+        // 同日的提现、增加本金、减少本金均为独立流水，绝不能作为余额记录的覆盖对象。
+        ne(ledgerRecords.type, 'transfer'),
         isNull(ledgerRecords.deletedAt)
       )
     )
@@ -4159,6 +4161,8 @@ export async function updateTransaction(
           eq(ledgerRecords.ledgerId, oldRecord.ledgerId),
           eq(ledgerRecords.categoryId, finalCategoryId),
           eq(ledgerRecords.recordDate, finalTransactionDate),
+          // 只允许覆盖同标签、同日期的余额记录；保留独立的提现及增减本金历史流水。
+          ne(ledgerRecords.type, 'transfer'),
           ne(ledgerRecords.id, recordId),
           isNull(ledgerRecords.deletedAt)
         )
