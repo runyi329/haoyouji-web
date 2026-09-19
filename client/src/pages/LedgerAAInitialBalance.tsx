@@ -517,12 +517,13 @@ export default function LedgerAAInitialBalance() {
     updateEntry(userId, tagName, { margins: nextMargins });
   };
 
-  // 手机小数键盘通常没有负号；通过“存入/转出”切换预置正负号，同时仍允许物理键盘直接输入负数。
-  const toggleMarginEntryDirection = (userId: number, tagName: string, index: number, currentAmount: string) => {
+  // 手机小数键盘通常没有负号。方向由明确的“存入+/转出−”按钮决定，
+  // 输入框始终只接收绝对金额数字，系统在保存状态中自动写入正负号。
+  const setMarginEntryDirection = (userId: number, tagName: string, index: number, currentAmount: string, direction: 'inflow' | 'outflow') => {
     const raw = String(currentAmount ?? '').trim();
-    const isOutflow = raw.startsWith('-');
     const magnitude = raw.replace(/^-/, '');
-    updateMarginEntry(userId, tagName, index, { amount: isOutflow ? magnitude : `-${magnitude}` });
+    // 空白转出暂存为单独的负号，让本次输入状态保持“转出”；保存时会自动排除未填写金额的草稿。
+    updateMarginEntry(userId, tagName, index, { amount: direction === 'outflow' ? `-${magnitude}` : magnitude });
   };
 
   const addMarginEntry = (userId: number, tagName: string) => {
@@ -573,20 +574,31 @@ export default function LedgerAAInitialBalance() {
             <div key={marginEntry.id || `${tagName}-margin-${index}`} className="rounded-xl px-2 py-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #F0F0F0' }}>
               <div className="flex items-center gap-1.5 w-full min-w-0">
                 <span className="text-xs text-gray-400 w-10 flex-shrink-0">{index === 0 ? '押金' : `第${index + 1}笔`}</span>
-                <button
-                  type="button"
-                  onClick={() => toggleMarginEntryDirection(userId, tagName, index, rawAmount)}
-                  className="w-10 py-1.5 rounded-lg text-xs font-medium flex-shrink-0"
-                  style={isOutflow ? { backgroundColor: '#FFF1F2', color: '#D32F2F' } : { backgroundColor: '#EFF6FF', color: '#1565C0' }}
-                  title={isOutflow ? '转出：本笔金额为负数，点击改为存入' : '存入：本笔金额为正数，点击改为转出'}
-                >
-                  {isOutflow ? '转出' : '存入'}
-                </button>
+                <div className="flex rounded-lg overflow-hidden border flex-shrink-0" style={{ borderColor: '#E0E0E0' }} aria-label="选择押金方向">
+                  <button
+                    type="button"
+                    onClick={() => setMarginEntryDirection(userId, tagName, index, rawAmount, 'inflow')}
+                    className="h-7 px-1.5 text-[10px] font-medium"
+                    style={!isOutflow ? { backgroundColor: '#EAF3FF', color: '#1565C0' } : { backgroundColor: '#FFFFFF', color: '#9E9E9E' }}
+                    title="存入：本笔作为正数计入押金"
+                  >
+                    存入 +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMarginEntryDirection(userId, tagName, index, rawAmount, 'outflow')}
+                    className="h-7 px-1.5 text-[10px] font-medium border-l"
+                    style={isOutflow ? { borderColor: '#F3CDD1', backgroundColor: '#FFF1F2', color: '#D32F2F' } : { borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#9E9E9E' }}
+                    title="转出：本笔作为负数从押金中扣减或平移"
+                  >
+                    转出 −
+                  </button>
+                </div>
                 <select
                   value={normalizeMarginCoin(marginEntry.coin)}
                   onChange={(event) => updateMarginEntry(userId, tagName, index, { coin: event.target.value })}
                   className="text-xs border rounded-lg px-1 py-1.5 outline-none flex-shrink-0"
-                  style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: normalizeMarginCoin(marginEntry.coin) === 'CNY' ? '#9E9E9E' : accentColor, width: compact ? '60px' : '70px' }}
+                  style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: normalizeMarginCoin(marginEntry.coin) === 'CNY' ? '#9E9E9E' : accentColor, width: compact ? '56px' : '66px' }}
                 >
                   {MARGIN_COIN_OPTIONS.map((coin) => (
                     <option key={coin} value={coin}>{coin === 'CNY' ? '人民币' : coin}</option>
@@ -595,13 +607,13 @@ export default function LedgerAAInitialBalance() {
                 <input
                   type="text"
                   inputMode="decimal"
-                  pattern="-?[0-9]*[.]?[0-9]*"
+                  pattern="[0-9]*[.]?[0-9]*"
                   placeholder={isOutflow ? '输入转出金额' : '输入存入金额'}
-                  value={marginEntry.amount}
+                  value={rawAmount.replace(/^-/, '')}
                   onChange={(event) => {
-                    const nextAmount = event.target.value;
-                    if (/^-?(?:\d*\.?\d*)?$/.test(nextAmount)) {
-                      updateMarginEntry(userId, tagName, index, { amount: nextAmount });
+                    const nextMagnitude = event.target.value;
+                    if (/^(?:\d*\.?\d*)?$/.test(nextMagnitude)) {
+                      updateMarginEntry(userId, tagName, index, { amount: isOutflow ? `-${nextMagnitude}` : nextMagnitude });
                     }
                   }}
                   className="min-w-0 flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
