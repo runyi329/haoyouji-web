@@ -571,7 +571,7 @@ export default function Profile() {
                 {pointsData?.points || 0} 积分
               </span>
               {user.walletEnabled === 1 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white cursor-pointer" onClick={() => navigate('/recharge')}>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white cursor-pointer" onClick={() => navigate('/wallet')}>
                   {typeof balanceData === 'number' ? balanceData.toFixed(2) : '0.00'} USDT
                 </span>
               )}
