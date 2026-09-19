@@ -36,6 +36,7 @@ import {
   ArrowDown,
   History,
   RotateCcw,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1058,6 +1059,33 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
   // 账目排序状态
   const [sortedItems, setSortedItems] = useState<MemoItem[]>([]);
   const utils = trpc.useUtils();
+  // 密码显示状态按“账本 + 当前用户”分别记忆，避免不同用户共用设备时互相继承。
+  const passwordVisibilityPreferenceKey = useMemo(
+    () => `memo-ledger:${ledgerId}:user:${user?.id ?? "anonymous"}:show-all-passwords`,
+    [ledgerId, user?.id],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      setShowAllPasswords(window.localStorage.getItem(passwordVisibilityPreferenceKey) === "true");
+    } catch {
+      // 浏览器禁用本地存储时保留默认的密码保护状态。
+      setShowAllPasswords(false);
+    }
+  }, [passwordVisibilityPreferenceKey]);
+
+  const togglePasswordVisibility = useCallback(() => {
+    setShowAllPasswords(current => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(passwordVisibilityPreferenceKey, String(next));
+      } catch {
+        // 存储不可用不影响本次会话内的显示切换。
+      }
+      return next;
+    });
+  }, [passwordVisibilityPreferenceKey]);
 
   const { data: items = [], isLoading } = trpc.ledger.getMemoItems.useQuery({
     ledgerId,
@@ -1207,17 +1235,18 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
             >
               <History className="w-5 h-5 text-white" />
             </button>
-            {/* 全局编辑模式按钮 */}
+            {/* 排序模式按钮：点击进入排序，逐项使用左侧上下箭头调整；再次点击完成。 */}
             <button
               onClick={() => setEditMode(v => !v)}
               className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
               style={{ backgroundColor: editMode ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.15)" }}
-              title={editMode ? "退出编辑模式" : "编辑模式"}
+              title={editMode ? "完成调整顺序" : "调整顺序"}
+              aria-label={editMode ? "完成调整顺序" : "调整顺序"}
             >
-              <Pencil className="w-5 h-5 text-white" />
+              {editMode ? <Check className="w-5 h-5 text-white" /> : <GripVertical className="w-5 h-5 text-white" />}
             </button>
             <button
-              onClick={() => setShowAllPasswords(v => !v)}
+              onClick={togglePasswordVisibility}
               className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
               style={{ backgroundColor: showAllPasswords ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.15)" }}
               title={showAllPasswords ? "隐藏密码" : "显示密码"}
