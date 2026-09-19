@@ -155,7 +155,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     approxInterest: 'U',
     approxPaid: 'U',
     approxCollateralItem: 'U',
-    approxCollateralValue: 'hidden',
+    // 多笔担保物的合计价值独立控制；默认显示 USD，避免总值被误隐藏。
+    approxCollateralTotal: 'U',
     // 股票专属字段
     brokerName: true,
     brokerAccount: true,
@@ -2852,7 +2853,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       { key: 'approxInterest', label: '待结利息约等于' },
                       { key: 'approxPaid', label: '已结利息约等于' },
                       { key: 'approxCollateralItem', label: '担保货币约等于' },
-                      { key: 'approxCollateralValue', label: '担保价値约等于' },
+                      { key: 'approxCollateralTotal', label: '担保总值约等于' },
                     ] as { key: string; label: string }[]).map(({ key, label }) => (
                       <div key={key}>
                         <div className="text-sm text-gray-600 mb-1">{label}</div>
@@ -3384,7 +3385,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 { key: 'approxInterest', label: '待结利息约等于' },
                                 { key: 'approxPaid', label: '已结利息约等于' },
                                 { key: 'approxCollateralItem', label: '担保货币约等于' },
-                                { key: 'approxCollateralValue', label: '担保价値约等于' },
+                                { key: 'approxCollateralTotal', label: '担保总值约等于' },
                               ] as { key: string; label: string }[]).map(({ key, label }) => (
                                 <div key={key}>
                                   <div className="text-xs text-gray-600 mb-1">{label}</div>

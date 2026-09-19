@@ -787,10 +787,8 @@ export function FunderOrderCard({
   const [collateralEditItems, setCollateralEditItems] = useState<{ coin: string; qty: string; note?: string }[]>([]);
   // 每条担保物独立的约等于显示配置：{ "0": "U", "1": "hidden", ... }
   const [collateralItemApprox, setCollateralItemApprox] = useState<Record<string, string>>({});
-  // 担保价值约等于显示配置
-  const [collateralValueApprox, setCollateralValueApprox] = useState<string>('U');
-  // 担保价值行显示开关
-  const [collateralValueVisible, setCollateralValueVisible] = useState<boolean>(true);
+  // 多笔担保总值的独立约等于显示配置
+  const [collateralTotalApprox, setCollateralTotalApprox] = useState<string>('U');
   const _intSaveCollateralMutation = trpc.ledger.financeUpdateOrder.useMutation({
     onSuccess: () => { toast.success('担保已保存'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
     onError: (err) => toast.error(err.message),
@@ -823,9 +821,11 @@ export function FunderOrderCard({
       } else {
         setCollateralItemApprox({});
       }
-      setCollateralValueApprox(parsedDC.approxCollateralValue ?? 'U');
-      setCollateralValueVisible(parsedDC.collateralValue !== false);
-    } catch { setCollateralItemApprox({}); setCollateralValueApprox('U'); setCollateralValueVisible(true); }
+      const savedTotalApprox = parsedDC.approxCollateralTotal;
+      setCollateralTotalApprox(['hidden', 'U', 'CNY'].includes(savedTotalApprox)
+        ? savedTotalApprox
+        : parsedDC.approxCollateralValue === 'CNY' ? 'CNY' : 'U');
+    } catch { setCollateralItemApprox({}); setCollateralTotalApprox('U'); }
     setShowCollateralPanel(true);
   };
   const handleSaveCollateral = () => {
@@ -837,8 +837,7 @@ export function FunderOrderCard({
       newDC = rawDC ? (typeof rawDC === 'string' ? JSON.parse(rawDC) : { ...rawDC }) : {};
     } catch {}
     newDC.approxCollateralItem = collateralItemApprox;
-    newDC.approxCollateralValue = collateralValueApprox;
-    newDC.collateralValue = collateralValueVisible;
+    newDC.approxCollateralTotal = collateralTotalApprox;
     _intSaveCollateralMutation.mutate({ id: Number(order.id), ledgerId, collateralAssets: valid, displayConfig: newDC });
   };
   // ===== END 担保物快捷编辑面板 =====
@@ -1015,6 +1014,13 @@ export function FunderOrderCard({
   // 读取 display_config（与 LedgerDetail show() 函数一致：默认全部显示，除非明确设为 false）
   const dc = financingDisplayConfig;
   const show = (key: string) => dc ? (dc[key] !== false) : true;
+  // 担保总值独立于逐笔担保货币的约等于配置。历史订单未保存新字段时，
+  // 保留旧配置为“元”的明确选择；其他历史情形默认显示 USD，避免总值被隐藏。
+  const approxCollateralTotal = dc?.approxCollateralTotal === 'hidden'
+    || dc?.approxCollateralTotal === 'U'
+    || dc?.approxCollateralTotal === 'CNY'
+    ? dc.approxCollateralTotal
+    : dc?.approxCollateralValue === 'CNY' ? 'CNY' : 'U';
   // 资金属性仅用于展示标签。对未明确手动关闭的旧期权订单，保持其既有Greeks可见，避免标签保存误触配置默认值。
   const shouldShowOptionGreeks = isOptionOrder && optionInfo && (
     show('showGreeks')
@@ -1869,7 +1875,7 @@ export function FunderOrderCard({
                     ))
                 )
             )}
-            {show('collateralValue') && (() => {
+            {(collateralAssets.length > 1 ? approxCollateralTotal !== 'hidden' : show('collateralValue')) && (() => {
               if (hasExternalCollateral) {
                 // 有外部担保物绑定：显示剩余保证金U值
                 const val = extRemainingMarginU;
@@ -1887,11 +1893,11 @@ export function FunderOrderCard({
                 );
               }
               const approxCV = dc?.approxCollateralValue ?? 'U';
-              // 多笔担保物必须始终展示合计的 USDT 价值，不能被“约等于隐藏”配置留成空值。
-              // 单笔担保物继续保留现有展示配置，避免改变既有的卡片展示偏好。
               const cvDisplay = collateralAssets.length > 1
                 ? (collateralValueKnown
-                  ? `${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`
+                  ? (approxCollateralTotal === 'CNY'
+                    ? `≈ ${(collateralValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
+                    : `≈ ${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`)
                   : '实时价加载中...')
                 : approxCV === 'hidden' ? null
                   : approxCV === 'U' ? `${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`
@@ -2583,38 +2589,24 @@ export function FunderOrderCard({
               </div>
             </div>
           ))}
-          {/* 担保价值开关 + 约等于控制 */}
+          {/* 多笔担保总值约等于控制 */}
           <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="text-xs text-gray-500">担保价值</div>
-              <button
-                type="button"
-                onClick={() => setCollateralValueVisible(v => !v)}
-                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none ${collateralValueVisible ? 'bg-blue-500' : 'bg-gray-200'}`}
-              >
-                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${collateralValueVisible ? 'translate-x-4' : 'translate-x-0.5'}`} />
-              </button>
+            <div className="text-xs text-gray-500">担保总值约等于</div>
+            <div className="flex gap-2">
+              {(['hidden', 'U', 'CNY'] as const).map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setCollateralTotalApprox(opt)}
+                  className="flex-1 py-1 text-xs rounded-lg border transition-colors"
+                  style={{
+                    backgroundColor: collateralTotalApprox === opt ? '#3B82F6' : '#fff',
+                    color: collateralTotalApprox === opt ? '#fff' : '#6B7280',
+                    borderColor: collateralTotalApprox === opt ? '#3B82F6' : '#E5E7EB'
+                  }}
+                >{opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ u' : '≈ 元'}</button>
+              ))}
             </div>
-            {collateralValueVisible && (
-              <>
-                <div className="text-xs text-gray-400">约等于</div>
-                <div className="flex gap-2">
-                  {(['hidden', 'U', 'CNY'] as const).map(opt => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setCollateralValueApprox(opt)}
-                      className="flex-1 py-1 text-xs rounded-lg border transition-colors"
-                      style={{
-                        backgroundColor: collateralValueApprox === opt ? '#3B82F6' : '#fff',
-                        color: collateralValueApprox === opt ? '#fff' : '#6B7280',
-                        borderColor: collateralValueApprox === opt ? '#3B82F6' : '#E5E7EB'
-                      }}
-                    >{opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ u' : '≈ 元'}</button>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
           <button
             type="button"
@@ -3266,5 +3258,3 @@ function CollateralLogSection({ orderId, ledgerId, refreshKey }: { orderId: numb
     </div>
   );
 }
-
-

@@ -1263,6 +1263,11 @@ export function FunderOrderCardV2Silver({
       return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
     } catch { return {}; }
   })();
+  // 多笔担保总值单独配置。未保存新字段的历史订单默认显示 USD；
+  // 仅保留旧“显示元”作为兼容映射，避免默认 hidden 导致总值空白。
+  const cardCollateralTotalApprox = ['hidden', 'U', 'CNY'].includes(cardDisplayConfig.approxCollateralTotal)
+    ? cardDisplayConfig.approxCollateralTotal
+    : cardDisplayConfig.approxCollateralValue === 'CNY' ? 'CNY' : 'U';
   const cardPrincipalLentOut = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true;
   // 借出本金的左上角主展示可选择本金或标的数量；选择仅影响展示。
   const cardPrincipalLentOutPrimary = cardDisplayConfig.principalLentOutPrimary === 'quantity'
@@ -2590,10 +2595,14 @@ export function FunderOrderCardV2Silver({
                     )}
                   </div>
                 ))}
-                {collateralAssets.length > 1 && (
+                {collateralAssets.length > 1 && cardCollateralTotalApprox !== 'hidden' && (
                   <div className="flex justify-between" style={{ marginTop: 4 }}>
                     <span style={{ color: TXT_SEC }}>担保总值</span>
-                    <span style={{ color: TXT_PRI }}>{collateralValueKnown ? `${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : '计算中...'}</span>
+                    <span style={{ color: TXT_PRI }}>{collateralValueKnown
+                      ? (cardCollateralTotalApprox === 'CNY'
+                        ? `≈ ${(collateralValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
+                        : `≈ ${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`)
+                      : '实时价加载中...'}</span>
                   </div>
                 )}
                 <div className="flex justify-between" style={{ marginTop: 4 }}>
