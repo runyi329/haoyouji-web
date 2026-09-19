@@ -6,6 +6,9 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   ChevronLeft,
   Plus,
@@ -178,14 +181,13 @@ function copyText(text: string, label?: string) {
 }
 
 // ===== 单条备忘录卡片 =====
-function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, onMoveUp, onMoveDown }: {
+function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, dragHandleProps }: {
   item: MemoItem;
   onEdit: (item: MemoItem) => void;
   onDelete: (id: number) => void;
   showAllPasswords: boolean;
   editMode: boolean;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
+  dragHandleProps?: Record<string, any>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const cat = CATEGORIES.find(c => c.key === item.category) || CATEGORIES[CATEGORIES.length - 1];
@@ -220,26 +222,16 @@ function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, onMoveUp
     <div className={`rounded-xl shadow-sm overflow-hidden mb-1.5 transition-colors duration-200 ${expanded ? 'bg-amber-50 border border-amber-200' : 'bg-white border border-gray-100'}`}>
       {/* 卡片头部 */}
       <div className="flex items-center px-3 py-2">
-        {/* 编辑模式下显示上下移按钮 */}
+        {/* 排序模式下通过长按六点手柄拖动整条项目。 */}
         {editMode && (
-          <div className="flex flex-col gap-0.5 mr-1.5 flex-shrink-0">
-            <button
-              onClick={e => { e.stopPropagation(); onMoveUp?.(); }}
-              disabled={!onMoveUp}
-              className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
-              title="上移"
-            >
-              <ArrowUp className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={e => { e.stopPropagation(); onMoveDown?.(); }}
-              disabled={!onMoveDown}
-              className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
-              title="下移"
-            >
-              <ArrowDown className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          <button
+            {...dragHandleProps}
+            className="p-1.5 -ml-1 mr-1.5 rounded-lg text-gray-400 active:bg-gray-100 active:text-[#D32F2F] touch-none cursor-grab active:cursor-grabbing flex-shrink-0"
+            title="长按后拖动调整顺序"
+            aria-label="长按后拖动调整顺序"
+          >
+            <GripVertical className="w-5 h-5" />
+          </button>
         )}
         <div className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer" onClick={() => setExpanded(!expanded)}>
           <p className="font-medium text-gray-900 truncate flex-1">{getSubLabel(item)}</p>
@@ -345,6 +337,36 @@ function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, onMoveUp
 
         </div>
       )}
+    </div>
+  );
+}
+
+// ===== 可排序备忘录卡片 =====
+function SortableMemoCard({ item, onEdit, onDelete, showAllPasswords }: {
+  item: MemoItem;
+  onEdit: (item: MemoItem) => void;
+  onDelete: (id: number) => void;
+  showAllPasswords: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.45 : 1,
+    position: 'relative' as const,
+    zIndex: isDragging ? 10 : 'auto',
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <MemoCard
+        item={item}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        showAllPasswords={showAllPasswords}
+        editMode
+        dragHandleProps={{ ...attributes, ...listeners }}
+      />
     </div>
   );
 }
@@ -1059,6 +1081,12 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
   // 账目排序状态
   const [sortedItems, setSortedItems] = useState<MemoItem[]>([]);
   const utils = trpc.useUtils();
+  // 仅在长按六点手柄后激活拖动，避免普通点击或列表滚动被误判为排序。
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { delay: 220, tolerance: 6 },
+    }),
+  );
   // 密码显示状态按“账本 + 当前用户”分别记忆，避免不同用户共用设备时互相继承。
   const passwordVisibilityPreferenceKey = useMemo(
     () => `memo-ledger:${ledgerId}:user:${user?.id ?? "anonymous"}:show-all-passwords`,
@@ -1150,14 +1178,15 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
     setSortedItems(items as MemoItem[]);
   }, [items]);
 
-  // 上移/下移账目
-  const moveItem = useCallback((idx: number, dir: -1 | 1) => {
+  // 放手时一次性持久化拖拽后的完整顺序。
+  const handleMemoDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
     setSortedItems(prev => {
-      const next = [...prev];
-      const target = idx + dir;
-      if (target < 0 || target >= next.length) return prev;
-      [next[idx], next[target]] = [next[target], next[idx]];
-      // 保存新顺序到数据库
+      const oldIndex = prev.findIndex(item => item.id === active.id);
+      const newIndex = prev.findIndex(item => item.id === over.id);
+      if (oldIndex < 0 || newIndex < 0) return prev;
+      const next = arrayMove(prev, oldIndex, newIndex);
       reorderMutation.mutate({
         ledgerId,
         orderedIds: next.map(it => it.id),
@@ -1235,7 +1264,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
             >
               <History className="w-5 h-5 text-white" />
             </button>
-            {/* 排序模式按钮：点击进入排序，逐项使用左侧上下箭头调整；再次点击完成。 */}
+            {/* 排序模式按钮：点击进入后，长按每条左侧六点手柄拖动；再次点击完成。 */}
             <button
               onClick={() => setEditMode(v => !v)}
               className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
@@ -1349,18 +1378,39 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
             </div>
           ) : (
             <div>
-              {sortedItems.map((item, idx) => (
-                <MemoCard
-                  key={item.id}
-                  item={item}
-                  onEdit={item => { setEditItem(item); setShowForm(true); }}
-                  onDelete={id => { setDeleteId(id); setDeleteTitle(item.title || ""); }}
-                  showAllPasswords={showAllPasswords}
-                  editMode={editMode}
-                  onMoveUp={idx > 0 ? () => moveItem(idx, -1) : undefined}
-                  onMoveDown={idx < sortedItems.length - 1 ? () => moveItem(idx, 1) : undefined}
-                />
-              ))}
+              {editMode ? (
+                <>
+                  <p className="text-xs text-gray-400 mb-2 px-1">长按每条左侧六点手柄后上下拖动，松手即可保存顺序</p>
+                  <DndContext
+                    sensors={dragSensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleMemoDragEnd}
+                  >
+                    <SortableContext items={sortedItems.map(item => item.id)} strategy={verticalListSortingStrategy}>
+                      {sortedItems.map(item => (
+                        <SortableMemoCard
+                          key={item.id}
+                          item={item}
+                          onEdit={item => { setEditItem(item); setShowForm(true); }}
+                          onDelete={id => { setDeleteId(id); setDeleteTitle(item.title || ""); }}
+                          showAllPasswords={showAllPasswords}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                </>
+              ) : (
+                sortedItems.map(item => (
+                  <MemoCard
+                    key={item.id}
+                    item={item}
+                    onEdit={item => { setEditItem(item); setShowForm(true); }}
+                    onDelete={id => { setDeleteId(id); setDeleteTitle(item.title || ""); }}
+                    showAllPasswords={showAllPasswords}
+                    editMode={false}
+                  />
+                ))
+              )}
             </div>
           )
         ) : (
