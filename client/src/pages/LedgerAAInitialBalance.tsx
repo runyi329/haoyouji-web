@@ -59,6 +59,11 @@ const normalizeMarginCoin = (coin: unknown): string => {
   return value === '人民币' || value === 'RMB' || value === '' ? 'CNY' : value;
 };
 
+const formatSignedMarginAmount = (value: number, maximumFractionDigits = 2) => {
+  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+  return `${sign}${Math.abs(value).toLocaleString('zh-CN', { maximumFractionDigits })}`;
+};
+
 // 新格式优先读取 tagName__margins；历史单笔 margin/marginCoin 自动兼容为一笔明细。
 const readMarginEntries = (balances: Record<string, any>, tagName: string, migratedAt?: string | null): MarginEntry[] => {
   const raw = balances[`${tagName}__margins`];
@@ -512,6 +517,14 @@ export default function LedgerAAInitialBalance() {
     updateEntry(userId, tagName, { margins: nextMargins });
   };
 
+  // 手机小数键盘通常没有负号；通过“存入/转出”切换预置正负号，同时仍允许物理键盘直接输入负数。
+  const toggleMarginEntryDirection = (userId: number, tagName: string, index: number, currentAmount: string) => {
+    const raw = String(currentAmount ?? '').trim();
+    const isOutflow = raw.startsWith('-');
+    const magnitude = raw.replace(/^-/, '');
+    updateMarginEntry(userId, tagName, index, { amount: isOutflow ? magnitude : `-${magnitude}` });
+  };
+
   const addMarginEntry = (userId: number, tagName: string) => {
     const current = editState[userId]?.[tagName] ?? defaultEntry();
     const currentMargins = current.margins.length > 0
@@ -554,28 +567,45 @@ export default function LedgerAAInitialBalance() {
         {rows.map((marginEntry, index) => {
           const noteKey = `${userId}|${tagName}|${marginEntry.id}`;
           const cnyValue = getMarginEntryCNY(marginEntry);
+          const rawAmount = String(marginEntry.amount ?? '').trim();
+          const isOutflow = rawAmount.startsWith('-');
           return (
             <div key={marginEntry.id || `${tagName}-margin-${index}`} className="rounded-xl px-2 py-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #F0F0F0' }}>
               <div className="flex items-center gap-1.5 w-full min-w-0">
                 <span className="text-xs text-gray-400 w-10 flex-shrink-0">{index === 0 ? '押金' : `第${index + 1}笔`}</span>
+                <button
+                  type="button"
+                  onClick={() => toggleMarginEntryDirection(userId, tagName, index, rawAmount)}
+                  className="w-10 py-1.5 rounded-lg text-xs font-medium flex-shrink-0"
+                  style={isOutflow ? { backgroundColor: '#FFF1F2', color: '#D32F2F' } : { backgroundColor: '#EFF6FF', color: '#1565C0' }}
+                  title={isOutflow ? '转出：本笔金额为负数，点击改为存入' : '存入：本笔金额为正数，点击改为转出'}
+                >
+                  {isOutflow ? '转出' : '存入'}
+                </button>
                 <select
                   value={normalizeMarginCoin(marginEntry.coin)}
                   onChange={(event) => updateMarginEntry(userId, tagName, index, { coin: event.target.value })}
                   className="text-xs border rounded-lg px-1 py-1.5 outline-none flex-shrink-0"
-                  style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: normalizeMarginCoin(marginEntry.coin) === 'CNY' ? '#9E9E9E' : accentColor, width: compact ? '66px' : '76px' }}
+                  style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: normalizeMarginCoin(marginEntry.coin) === 'CNY' ? '#9E9E9E' : accentColor, width: compact ? '60px' : '70px' }}
                 >
                   {MARGIN_COIN_OPTIONS.map((coin) => (
                     <option key={coin} value={coin}>{coin === 'CNY' ? '人民币' : coin}</option>
                   ))}
                 </select>
                 <input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
-                  placeholder="0"
+                  pattern="-?[0-9]*[.]?[0-9]*"
+                  placeholder={isOutflow ? '输入转出金额' : '输入存入金额'}
                   value={marginEntry.amount}
-                  onChange={(event) => updateMarginEntry(userId, tagName, index, { amount: event.target.value })}
+                  onChange={(event) => {
+                    const nextAmount = event.target.value;
+                    if (/^-?(?:\d*\.?\d*)?$/.test(nextAmount)) {
+                      updateMarginEntry(userId, tagName, index, { amount: nextAmount });
+                    }
+                  }}
                   className="min-w-0 flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
-                  style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
+                  style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: isOutflow ? '#D32F2F' : '#222222' }}
                 />
                 {rows.length > 1 && (
                   <button type="button" aria-label="删除该笔押金" onClick={() => removeMarginEntry(userId, tagName, index)} className="w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0" style={{ color: '#EF5350', backgroundColor: '#FFF5F5' }}>
@@ -585,7 +615,7 @@ export default function LedgerAAInitialBalance() {
               </div>
               <div className="ml-10 mt-1 flex items-center justify-between gap-2 text-xs">
                 <span style={{ color: '#9E9E9E' }}>记录时间：{formatRecordedAt(marginEntry.createdAt)}</span>
-                <span style={{ color: cnyValue === null ? '#B26A00' : '#757575' }}>{cnyValue === null ? '暂无可靠报价' : `≈ ¥${cnyValue.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`}</span>
+                <span style={{ color: cnyValue === null ? '#B26A00' : isOutflow ? '#D32F2F' : '#757575' }}>{cnyValue === null ? '暂无可靠报价' : `≈ ¥${formatSignedMarginAmount(cnyValue, 0)}`}</span>
               </div>
               <div className="ml-10 mt-1.5 space-y-1.5">
                 {(marginEntry.notes ?? []).map((note) => (
@@ -615,12 +645,13 @@ export default function LedgerAAInitialBalance() {
         })}
         <div className="flex items-center justify-between pl-10 gap-2">
           <button type="button" onClick={() => addMarginEntry(userId, tagName)} className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: accentColor }}>
-            <Plus size={13} /> 添加一笔押金
+            <Plus size={13} /> 新增一笔押金流水
           </button>
           <span className="text-xs px-2 py-0.5 rounded-full text-right" style={{ backgroundColor: '#FFF0F0', color: accentColor }}>
-            {summary.validCount}笔 · ≈ ¥{summary.totalCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+            {summary.validCount}笔 · 净额 ≈ ¥{formatSignedMarginAmount(summary.totalCNY, 0)}
           </span>
         </div>
+        <div className="pl-10 text-xs" style={{ color: '#9E9E9E' }}>正数为存入，负数为转出或平移；每笔流水与备注均会保留。</div>
         {summary.unpricedCoins.length > 0 && (
           <div className="pl-10 text-xs" style={{ color: '#B26A00' }}>
             {Array.from(new Set(summary.unpricedCoins)).join('、')} 暂无可靠报价，未计入人民币汇总

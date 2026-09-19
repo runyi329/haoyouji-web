@@ -48,6 +48,17 @@ const normalizeMarginCoin = (coin: unknown): string => {
   return value === '人民币' || value === 'RMB' || value === '' ? 'CNY' : value;
 };
 
+// 押金是可正可负的流水：正数为存入，负数为转出/平移。展示必须保留方向，不能用绝对值掩盖。
+const formatSignedMarginNumber = (value: number, maximumFractionDigits = 2) => {
+  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+  return `${sign}${Math.abs(value).toLocaleString('zh-CN', { maximumFractionDigits })}`;
+};
+
+const formatSignedMarginCny = (value: number, maximumFractionDigits = 2) => {
+  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+  return `${sign}¥${Math.abs(value).toLocaleString('zh-CN', { minimumFractionDigits: Math.min(2, maximumFractionDigits), maximumFractionDigits })}`;
+};
+
 // 新格式优先读取 tagName__margins；未升级的历史单笔数据自动作为一笔押金处理。
 const readMarginEntries = (balances: Record<string, any>, tagName: string, migratedAt?: string | null): MarginEntry[] => {
   const raw = balances[`${tagName}__margins`];
@@ -1631,11 +1642,11 @@ export default function LedgerDetailAA({
                 <div className="text-[10px] opacity-75 flex items-center justify-end gap-1 mb-1">历史押金 <button onClick={() => setShowAllModeHelp('margin')} className="inline-flex items-center justify-center active:opacity-60"><HelpCircle className="w-3 h-3 text-white/60" /></button></div>
                 {allTagsStats.hasCrypto ? (
                   <div className="text-sm font-bold leading-tight text-right">
-                    {allTagsStats.cryptoDetails.map(d => `${d.amount.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} ${d.coin}`).join(' + ')}
+                    {allTagsStats.cryptoDetails.map(d => `${formatSignedMarginNumber(d.amount, 2)} ${d.coin}`).join(' · ')}
                   </div>
                 ) : (
                   <div className="text-sm font-bold leading-tight text-right">
-                    ￥{allTagsStats.totalMargin.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    {formatSignedMarginCny(allTagsStats.totalMargin, 0)}
                   </div>
                 )}
               </div>
@@ -1693,7 +1704,7 @@ export default function LedgerDetailAA({
                       <span className="opacity-80">比例 {Number(ratioVal).toFixed(1)}%</span>
                     )}
                   </div>
-                  <div className="text-base font-bold">¥{marginCny.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div className="text-base font-bold">{formatSignedMarginCny(marginCny)}</div>
                   <div className="text-xs opacity-60 mt-0.5">{hasUnpricedMargin ? '部分报价获取中' : (detailText || '未设置')}</div>
                 </>
               );
@@ -2887,7 +2898,7 @@ export default function LedgerDetailAA({
                         <div
                           onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
                           style={{ fontSize: 13, lineHeight: 1, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                        >{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(() => {
+                        >{formatSignedMarginNumber(tag.marginCny, 0)}{(() => {
                           const embeddedNoteCount = tag.marginEntries.reduce((sum, entry) => sum + (entry.notes?.length ?? 0), 0);
                           const totalNoteCount = embeddedNoteCount + (marginNoteCounts[tag.name] ?? 0);
                           return totalNoteCount > 0 ? <sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{totalNoteCount}</sup> : null;
@@ -4508,9 +4519,9 @@ export default function LedgerDetailAA({
                   return (
                     <>
                       <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">公式：价値 = 押金总和 + 盈亏总和 − 已分红总金额</div>
-                      <div className="font-semibold text-gray-900">① 押金总和
-                        <span className="ml-2 font-mono text-red-600">{fmtAbs(allTagsStats.totalMargin)}</span>
-                        <span className="ml-1 text-xs font-normal text-gray-400">(客户投入的本金基数)</span>
+                      <div className="font-semibold text-gray-900">① 押金净额
+                        <span className="ml-2 font-mono text-red-600">{formatSignedMarginCny(allTagsStats.totalMargin)}</span>
+                        <span className="ml-1 text-xs font-normal text-gray-400">(存入与转出平移后的净额)</span>
                       </div>
                       <div className="font-semibold text-gray-900">② 盈亏总和
                         <span className="ml-2 font-mono" style={{ color: overviewTotalPnlRef.current >= 0 ? '#D32F2F' : '#388E3C' }}>{fmt(overviewTotalPnlRef.current)}</span>
@@ -4525,7 +4536,7 @@ export default function LedgerDetailAA({
                           <span className="font-bold text-gray-900">价値</span>
                           <span className={`text-lg font-bold ${value >= 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(value)}</span>
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">{fmtAbs(allTagsStats.totalMargin)} + ({fmt(overviewTotalPnlRef.current)}) − {fmtAbs(totalDividend)} = {fmt(value)}</div>
+                        <div className="text-xs text-gray-400 mt-1">{formatSignedMarginCny(allTagsStats.totalMargin)} + ({fmt(overviewTotalPnlRef.current)}) − {fmtAbs(totalDividend)} = {fmt(value)}</div>
                       </div>
                     </>
                   );
@@ -4602,16 +4613,16 @@ export default function LedgerDetailAA({
                             <span className="font-semibold text-gray-900 text-xs pt-0.5">标签「{t.tagName}」</span>
                             <div className="text-right font-mono text-sm font-bold text-gray-800">
                               {t.marginEntries.length === 0 ? (
-                                <div>{fmtAbs(0)}</div>
+                                <div>{formatSignedMarginCny(0)}</div>
                               ) : t.marginEntries.map((entry, index) => (
                                 <div key={`${entry.coin}-${index}`}>
-                                  {entry.coin === 'CNY' ? fmtAbs(entry.amount) : `${entry.amount} ${entry.coin}`}
+                                  {entry.coin === 'CNY' ? formatSignedMarginCny(entry.amount) : `${formatSignedMarginNumber(entry.amount, 8)} ${entry.coin}`}
                                 </div>
                               ))}
                             </div>
                           </div>
                           {t.marginEntries.some((entry) => entry.coin !== 'CNY') && (
-                            <div className="text-xs text-gray-400 mt-0.5">合计 ≈ {fmtAbs(t.marginCny)}（按实时价格折算）</div>
+                            <div className="text-xs text-gray-400 mt-0.5">净额 ≈ {formatSignedMarginCny(t.marginCny)}（按实时价格折算）</div>
                           )}
                           {t.marginEntries.some((entry) => entry.cnyValue === null) && (
                             <div className="text-xs mt-0.5" style={{ color: '#B26A00' }}>部分币种暂无可靠报价，未计入合计</div>
@@ -4621,8 +4632,8 @@ export default function LedgerDetailAA({
                       ))}
                       <div className="pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-gray-900">押金总和</span>
-                          <span className="text-lg font-bold text-gray-900">{fmtAbs(allTagsStats.totalMargin)}</span>
+                          <span className="font-bold text-gray-900">押金净额</span>
+                          <span className="text-lg font-bold text-gray-900">{formatSignedMarginCny(allTagsStats.totalMargin)}</span>
                         </div>
                         {allTagsStats.hasCrypto && <div className="text-xs text-gray-400 mt-1">数字币已按实时价格折算为人民币加总</div>}
                       </div>
@@ -4739,11 +4750,12 @@ export default function LedgerDetailAA({
             <div className="px-4 py-4 overflow-y-auto space-y-3" style={{ maxHeight: '61vh' }}>
               {currentMarginDetailSummary && (() => {
                 const summary = currentMarginDetailSummary;
-                const formatCny = (value: number) => `¥${Math.abs(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const formatCny = (value: number) => formatSignedMarginCny(value);
+                const formatAbsoluteCny = (value: number) => `¥${Math.abs(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                 const shortfallText = summary.shortfall > 0
-                  ? formatCny(summary.shortfall)
+                  ? formatAbsoluteCny(summary.shortfall)
                   : summary.shortfall < 0
-                    ? `已超出 ${formatCny(summary.shortfall)}`
+                    ? `已超出 ${formatAbsoluteCny(summary.shortfall)}`
                     : '¥0.00（已达标）';
                 return (
                   <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ backgroundColor: '#F4F8FF', border: '1px solid #D7E6FF' }}>
@@ -4753,8 +4765,8 @@ export default function LedgerDetailAA({
                     </div>
                     <div className="text-[11px]" style={{ color: '#78909C' }}>当前本金 {formatCny(summary.currentPrincipal)} × 占比 {summary.ratioPercent.toFixed(2)}% × 20%</div>
                     <div className="flex items-center justify-between" style={{ borderTop: '1px solid #D7E6FF', paddingTop: 7 }}>
-                      <span className="text-xs font-semibold" style={{ color: '#424242' }}>当前实际押金</span>
-                      <span className="text-sm font-bold font-mono" style={{ color: '#424242' }}>{formatCny(summary.actualDeposit)}</span>
+                      <span className="text-xs font-semibold" style={{ color: '#424242' }}>当前实际押金净额</span>
+                      <span className="text-sm font-bold font-mono" style={{ color: summary.actualDeposit < 0 ? '#D32F2F' : '#424242' }}>{formatCny(summary.actualDeposit)}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold" style={{ color: summary.shortfall > 0 ? '#D32F2F' : '#388E3C' }}>押金缺口</span>
@@ -4774,19 +4786,23 @@ export default function LedgerDetailAA({
                       const date = new Date(value);
                       return Number.isNaN(date.getTime()) ? '历史押金（未记录时间）' : date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
                     };
+                    const isOutflow = entry.amount < 0;
                     const amountLabel = entry.coin === 'CNY'
-                      ? `¥${entry.amount.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
-                      : `${entry.amount.toLocaleString('zh-CN', { maximumFractionDigits: 8 })} ${entry.coin}`;
+                      ? formatSignedMarginCny(entry.amount)
+                      : `${formatSignedMarginNumber(entry.amount, 8)} ${entry.coin}`;
                     return (
                       <div key={entry.id || `${entry.coin}-${index}`} className="rounded-xl p-3" style={{ backgroundColor: '#FAFAFA', border: '1px solid #F0F0F0' }}>
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <div className="text-xs font-medium" style={{ color: '#9E9E9E' }}>第 {index + 1} 笔押金</div>
-                            <div className="text-base font-bold mt-0.5" style={{ color: '#1A1A1A' }}>{amountLabel}</div>
+                            <div className="text-xs font-medium flex items-center gap-1.5" style={{ color: '#9E9E9E' }}>
+                              第 {index + 1} 笔押金
+                              <span className="px-1.5 py-0.5 rounded" style={isOutflow ? { color: '#D32F2F', backgroundColor: '#FFF1F2' } : { color: '#1565C0', backgroundColor: '#EFF6FF' }}>{isOutflow ? '转出' : '存入'}</span>
+                            </div>
+                            <div className="text-base font-bold mt-0.5" style={{ color: isOutflow ? '#D32F2F' : '#1A1A1A' }}>{amountLabel}</div>
                           </div>
                           <div className="text-right">
-                            <div className="text-sm font-semibold" style={{ color: entry.cnyValue === null ? '#B26A00' : '#424242' }}>
-                              {entry.cnyValue === null ? '暂无可靠报价' : `≈ ¥${entry.cnyValue.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`}
+                            <div className="text-sm font-semibold" style={{ color: entry.cnyValue === null ? '#B26A00' : isOutflow ? '#D32F2F' : '#424242' }}>
+                              {entry.cnyValue === null ? '暂无可靠报价' : `≈ ${formatSignedMarginCny(entry.cnyValue)}`}
                             </div>
                             <div className="text-xs mt-0.5" style={{ color: '#9E9E9E' }}>{formatRecordedAt(entry.createdAt)}</div>
                           </div>
@@ -4805,8 +4821,8 @@ export default function LedgerDetailAA({
                     );
                   })}
                   <div className="flex items-center justify-between px-1 pt-1 text-sm" style={{ color: '#424242' }}>
-                    <span>押金人民币总额</span>
-                    <span className="font-bold">¥{currentMarginDetailEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</span>
+                    <span>押金人民币净额</span>
+                    <span className="font-bold">{formatSignedMarginCny(currentMarginDetailEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0))}</span>
                   </div>
                   {currentMarginDetailEntries.some((entry) => entry.cnyValue === null) && (
                     <div className="text-xs px-1" style={{ color: '#B26A00' }}>无可靠报价的外币明细未计入人民币总额</div>

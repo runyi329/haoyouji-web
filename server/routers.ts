@@ -12891,12 +12891,37 @@ ${klinesSummary}
             const balances = typeof row.initial_balances === 'string'
               ? JSON.parse(row.initial_balances)
               : (row.initial_balances ?? {});
-            const marginKey = `${input.tagName}__margin`;
-            const coinKey = `${input.tagName}__marginCoin`;
-            const margin = parseFloat(balances[marginKey] ?? 0);
-            const coin = balances[coinKey] ?? 'CNY';
-            if (margin > 0) {
-              marginByCoin[coin] = (marginByCoin[coin] ?? 0) + margin;
+            const marginsKey = `${input.tagName}__margins`;
+            let entries: Array<{ coin: string; amount: number }> = [];
+            if (balances[marginsKey] !== undefined && balances[marginsKey] !== null) {
+              try {
+                const parsed = typeof balances[marginsKey] === 'string'
+                  ? JSON.parse(balances[marginsKey])
+                  : balances[marginsKey];
+                if (Array.isArray(parsed)) {
+                  entries = parsed
+                    .map((item: any) => ({
+                      coin: String(item?.coin ?? 'CNY').trim().toUpperCase() || 'CNY',
+                      amount: Number(item?.amount),
+                    }))
+                    .filter((item) => Number.isFinite(item.amount));
+                }
+              } catch {
+                // 新版明细损坏时回退旧字段，确保汇总仍可读取历史记录。
+              }
+            }
+            // 没有新版逐笔明细时，才回退旧单笔字段；正负值均是有效流水。
+            if (entries.length === 0) {
+              const margin = Number(balances[`${input.tagName}__margin`]);
+              if (Number.isFinite(margin)) {
+                entries = [{
+                  coin: String(balances[`${input.tagName}__marginCoin`] ?? 'CNY').trim().toUpperCase() || 'CNY',
+                  amount: margin,
+                }];
+              }
+            }
+            for (const entry of entries) {
+              marginByCoin[entry.coin] = (marginByCoin[entry.coin] ?? 0) + entry.amount;
             }
           } catch {}
         }
