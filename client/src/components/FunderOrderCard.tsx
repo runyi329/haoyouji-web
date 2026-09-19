@@ -1887,12 +1887,18 @@ export function FunderOrderCard({
                 );
               }
               const approxCV = dc?.approxCollateralValue ?? 'U';
-              const cvDisplay = approxCV === 'hidden' ? null
-                : approxCV === 'U' ? `${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`
-                : `${(collateralValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`;
+              // 多笔担保物必须始终展示合计的 USDT 价值，不能被“约等于隐藏”配置留成空值。
+              // 单笔担保物继续保留现有展示配置，避免改变既有的卡片展示偏好。
+              const cvDisplay = collateralAssets.length > 1
+                ? (collateralValueKnown
+                  ? `${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`
+                  : '实时价加载中...')
+                : approxCV === 'hidden' ? null
+                  : approxCV === 'U' ? `${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`
+                  : `${(collateralValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`;
               return (
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400">{collateralAssets.length > 1 ? '担保总値' : '担保价値'}</span>
+                  <span className="text-gray-400">{collateralAssets.length > 1 ? '担保总值' : '担保价值'}</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>{cvDisplay ?? '---'}</span>
                 </div>
               );
@@ -3260,6 +3266,5 @@ function CollateralLogSection({ orderId, ledgerId, refreshKey }: { orderId: numb
     </div>
   );
 }
-
 
 
