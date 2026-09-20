@@ -130,6 +130,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     collateralTagName?: string;
     useFloatingPnl?: boolean;
     useCollateral?: boolean;
+    useInterest?: boolean;
   } | null>(null);
   const [interestTagName, setInterestTagName] = useState<string>(''); // 利息标签（与保证金标签联动）
   const isUsing37Collateral = collateralSourceMode === 'external'
@@ -1078,7 +1079,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             useFloatingPnl: !!floatingPnlTagName,
             useCollateral: !!collateralTagName,
           });
-          setInterestTagName(parsed.interestTagName || parsed.tagName || '');
+          setInterestTagName(parsed.interestTagName || (parsed.useInterest === true ? parsed.tagName : ''));
         } else {
           setCollateralSourceMode('manual');
           setCollateralSource(null);
@@ -1257,6 +1258,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           useFloatingPnl: !!floatingPnlTagName,
           useCollateral: !!collateralTagName,
           interestTagName: interestTagName || undefined,
+          useInterest: !!interestTagName,
         };
       })(),
       principalLentOut: formData.principalLentOut,
@@ -2555,18 +2557,19 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     onChange={e => {
                       const tag = e.target.value;
                       setInterestTagName(tag);
-                      // 利息标签是原有通用字段，保持独立，不再改动盈亏或担保标签。
+                      // 利息标签完全独立；选中后订单模式以37号累计利息为“已结利息”，并锁定52号手工结息。
                       if (tag) setCollateralSource(prev => prev || {
-                        ledgerId: 37, tagName: tag, floatingPnlTagName: '', collateralTagName: '', useFloatingPnl: false, useCollateral: false,
+                        ledgerId: 37, tagName: tag, floatingPnlTagName: '', collateralTagName: '', useFloatingPnl: false, useCollateral: false, useInterest: true,
                       });
                     }}
                     className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 appearance-none bg-white"
                   >
-                    <option value="">请选择标签</option>
+                    <option value="">不引用37号利息（保留手工结息）</option>
                     {(activeMarginTags as any[])?.map((t: any) => (
                       <option key={t.tagName} value={t.tagName}>{t.tagName}</option>
                     ))}
                   </select>
+                  <div className="text-[11px] text-blue-500">选中后，“已结利息”读取37号利息页累计合计；订单页尾的手工记录结息将锁定。</div>
                 </div>
                 {(collateralSource?.floatingPnlTagName || collateralSource?.collateralTagName || interestTagName) && (
                   <div className="text-xs text-blue-500 pt-0.5 leading-5">

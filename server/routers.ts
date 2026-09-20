@@ -664,6 +664,34 @@ function summarizeInterestPeriod(period: { periodLabel?: string | null; principa
   return `${label}：计息基数 ¥${formatInterestAmount(Number(period.principal) || 0)}，年化 ${rate}% ，${period.startDate || '未填写'} 至 ${endDate}`;
 }
 
+function getLinked37InterestTagName(rawSource: unknown): string | null {
+  try {
+    const source = Buffer.isBuffer(rawSource)
+      ? JSON.parse(rawSource.toString('utf8'))
+      : (typeof rawSource === 'string' ? JSON.parse(rawSource) : rawSource) as any;
+    if (Number(source?.ledgerId) !== 37) return null;
+    // 新订单以 interestTagName 为显式开关；仅兼容明确写过 useInterest=true 的过渡记录。
+    const tagName = source?.interestTagName || (source?.useInterest === true ? source?.tagName : '');
+    return typeof tagName === 'string' && tagName.trim() ? tagName.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function ensureManualFunderInterestAllowed(dbConn: any, ledgerId: number, orderId: number): Promise<void> {
+  const rows = await dbConn.execute(
+    sql`SELECT collateral_source FROM ledger_orders WHERE id = ${orderId} AND ledger_id = ${ledgerId} AND deleted_at IS NULL LIMIT 1`
+  ) as any;
+  const order = rows[0]?.[0] ?? rows[0];
+  if (!order) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在或已删除' });
+  if (getLinked37InterestTagName(order.collateral_source)) {
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message: '该订单已引用37号账本利息，不能同时手工记录、编辑或删除52号结息',
+    });
+  }
+}
+
 // 52号账本保留 YJH 推荐链的自动准入：这是成员进入账本的业务规则，不是成员管理权限。
 // 自动加入者固定为普通成员，不能查看设置、增减成员、修改成员角色或查看其他成员钱包。
 async function ensureLedger52YjhInviteeMember(userId: number): Promise<void> {
@@ -18266,7 +18294,8 @@ ${klinesSummary}
               const legacyTagName = String(source.tagName);
               const floatingPnlTagName = source.floatingPnlTagName || (source.useFloatingPnl !== false ? legacyTagName : '');
               const collateralTagName = source.collateralTagName || (source.useCollateral !== false ? legacyTagName : '');
-              return [floatingPnlTagName, collateralTagName].filter(Boolean);
+              const interestTagName = source.interestTagName || (source.useInterest === true ? legacyTagName : '');
+              return [floatingPnlTagName, collateralTagName, interestTagName].filter(Boolean);
             } catch { return []; }
           }))) as string[];
           const linkedTagConfigByName = new Map<string, any>();
@@ -18275,7 +18304,7 @@ ${klinesSummary}
           if (linked37Tags.length > 0) {
             const placeholders = linked37Tags.map(() => '?').join(',');
             const [configs] = await conn.execute(
-              `SELECT tag_name, margin_by_coin, initial_amount, account_multiplier
+              `SELECT tag_name, margin_by_coin, initial_amount, account_multiplier, pause_date
                FROM ledger_tag_config WHERE ledger_id = 37 AND tag_name IN (${placeholders})`,
               linked37Tags
             ) as any[];
@@ -18362,18 +18391,43 @@ ${klinesSummary}
             for (const row of (Array.isArray(latestBalances) ? latestBalances : [])) linkedTagBalanceByName.set(String(row.tag_name), Number(row.amount));
           }
 
-          const parseLinked37Source = (raw: unknown): { floatingPnlTagName: string; collateralTagName: string; useFloatingPnl: boolean; useCollateral: boolean } | null => {
+          // 37号利息页的分段均以人民币存储。共享池只读取，用于替代52号手工“已结利息”。
+          const linkedTagInterestPeriodsByName = new Map<string, any[]>();
+          if (linked37Tags.length > 0) {
+            try {
+              const interestPlaceholders = linked37Tags.map(() => '?').join(',');
+              const [interestPeriods] = await conn.execute(
+                `SELECT tag_name, principal, annual_rate, start_date, end_date, is_manual
+                 FROM tag_interest_periods
+                 WHERE ledger_id = 37 AND tag_name IN (${interestPlaceholders})`,
+                linked37Tags
+              ) as any[];
+              for (const period of (Array.isArray(interestPeriods) ? interestPeriods : [])) {
+                const tagName = String(period.tag_name);
+                const rows = linkedTagInterestPeriodsByName.get(tagName) ?? [];
+                rows.push(period);
+                linkedTagInterestPeriodsByName.set(tagName, rows);
+              }
+            } catch (error) {
+              console.warn('[SharedPool] 读取37号利息分段失败:', error);
+            }
+          }
+
+          const parseLinked37Source = (raw: unknown): { floatingPnlTagName: string; collateralTagName: string; interestTagName: string; useFloatingPnl: boolean; useCollateral: boolean; useInterest: boolean } | null => {
             try {
               const source = Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : (typeof raw === 'string' ? JSON.parse(raw) : raw);
               if (Number(source?.ledgerId) !== 37 || !source?.tagName) return null;
               const legacyTagName = String(source.tagName);
               const floatingPnlTagName = source.floatingPnlTagName || (source.useFloatingPnl !== false ? legacyTagName : '');
               const collateralTagName = source.collateralTagName || (source.useCollateral !== false ? legacyTagName : '');
-              return (floatingPnlTagName || collateralTagName) ? {
+              const interestTagName = source.interestTagName || (source.useInterest === true ? legacyTagName : '');
+              return (floatingPnlTagName || collateralTagName || interestTagName) ? {
                 floatingPnlTagName,
                 collateralTagName,
+                interestTagName,
                 useFloatingPnl: !!floatingPnlTagName,
                 useCollateral: !!collateralTagName,
+                useInterest: !!interestTagName,
               } : null;
             } catch { return null; }
           };
@@ -18405,14 +18459,38 @@ ${klinesSummary}
             const initialAmount = Number(pnlConfig?.initial_amount) || 0;
             const multiplier = Number(pnlConfig?.account_multiplier) || 1;
             const floatingPnl = source.useFloatingPnl && Number.isFinite(latestBalance) ? ((latestBalance! - initialAmount) * multiplier / usdtCnyRate) : null;
+            const interestConfig = source.interestTagName ? linkedTagConfigByName.get(source.interestTagName) : null;
+            const calcInterestDays = (startDate: unknown, endDate: unknown) => {
+              const startText = String(startDate || '').slice(0, 10);
+              const endText = String(endDate || new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)).slice(0, 10);
+              const [sy, sm, sd] = startText.split('-').map(Number);
+              const [ey, em, ed] = endText.split('-').map(Number);
+              const start = new Date(sy, sm - 1, sd).getTime();
+              const end = new Date(ey, em - 1, ed).getTime();
+              return Number.isFinite(start) && Number.isFinite(end) && end >= start ? Math.floor((end - start) / 86_400_000) + 1 : 0;
+            };
+            const linkedPaidInterestCny = source.useInterest
+              ? (linkedTagInterestPeriodsByName.get(source.interestTagName) ?? []).reduce((sum: number, period: any) => {
+                  const principal = Number(period.principal || 0);
+                  const annualRate = Number(period.annual_rate || 0);
+                  const isManual = period.is_manual === 1 || period.is_manual === '1' || period.is_manual === true;
+                  if (isManual) return sum + principal;
+                  const endDate = period.end_date || interestConfig?.pause_date || null;
+                  const days = calcInterestDays(period.start_date, endDate);
+                  return sum + (principal > 0 && annualRate > 0 && days > 0 ? principal * (annualRate / 100 / 365) * days : 0);
+                }, 0)
+              : null;
             return {
               floatingPnlTagName: source.floatingPnlTagName,
               collateralTagName: source.collateralTagName,
+              interestTagName: source.interestTagName,
               useFloatingPnl: source.useFloatingPnl,
               useCollateral: source.useCollateral,
+              useInterest: source.useInterest,
               collateralAssets: entries.map(entry => ({ coin: entry.coin, qty: entry.qty, note: entry.note })),
               collateralValue: allPricesKnown ? collateralValue : null,
               floatingPnl,
+              paidInterestCny: linkedPaidInterestCny,
               riskExposure: allPricesKnown && floatingPnl !== null ? collateralValue + floatingPnl : null,
             };
           };
@@ -18433,7 +18511,7 @@ ${klinesSummary}
               collateralValue += qty * price;
             }
             if (linked37Collateral?.useCollateral && linked37Collateral.collateralValue === null) collateralValue = 0;
-            else if (linked37Collateral?.useCollateral) collateralValue = linked37Collateral.collateralValue;
+            else if (linked37Collateral?.useCollateral && linked37Collateral.collateralValue !== null) collateralValue = linked37Collateral.collateralValue;
             // 计算待结利息（简化：本金 × 年利率 / 365 × 持有天数 - 已结利息）
             const principal = parseFloat(String(o.interest_base || o.amount || 0)) || 0;
             // 年利率取绝对值：负利率（付息型）和正利率（收息型）利息金额都是正数
@@ -18519,6 +18597,9 @@ ${klinesSummary}
               // 浮盈可单独引用37号标签，手工担保订单也应使用这个净值盈亏。
               linked37PnlTagName: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnlTagName : null,
               linked37FloatingPnl: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null,
+              // 已结利息也可独立引用37号利息页，金额固定为人民币，由前端统一折算为U。
+              linked37InterestTagName: linked37Collateral?.useInterest ? linked37Collateral.interestTagName : null,
+              linked37PaidInterestCny: linked37Collateral?.useInterest ? linked37Collateral.paidInterestCny : null,
               linked37RiskExposure: linked37Collateral?.useCollateral && linked37Collateral?.useFloatingPnl ? linked37Collateral.riskExposure : null,
               shareMode: o.collateral_share_mode,
               principalLentOut,
@@ -19008,6 +19089,7 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        await ensureManualFunderInterestAllowed(db, input.ledgerId, input.orderId);
         if (input.participantUserId) {
           const participantRows = await db.execute(
             sql`SELECT id FROM ledger_order_participants WHERE order_id=${input.orderId} AND ledger_id=${input.ledgerId} AND user_id=${input.participantUserId} AND role <> 'inactive' LIMIT 1`
@@ -19192,6 +19274,7 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        await ensureManualFunderInterestAllowed(db, input.ledgerId, input.orderId);
         // 取旧値用于日志
         const oldRows = await db.execute(sql`SELECT * FROM ledger_order_payments WHERE id=${input.paymentId} AND order_id=${input.orderId} AND ledger_id=${input.ledgerId} LIMIT 1`) as any;
         const oldRec = (oldRows[0]?.[0] ?? oldRows[0]) as any;
@@ -19231,6 +19314,7 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        await ensureManualFunderInterestAllowed(db, input.ledgerId, input.orderId);
         // 取旧値用于日志
         const oldRows2 = await db.execute(sql`SELECT * FROM ledger_order_payments WHERE id=${input.paymentId} AND order_id=${input.orderId} AND ledger_id=${input.ledgerId} LIMIT 1`) as any;
         const oldRec2 = (oldRows2[0]?.[0] ?? oldRows2[0]) as any;
@@ -19627,7 +19711,7 @@ ${klinesSummary}
         interestRateCurrency: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional() }).nullable().optional(),
         principalLentOut: z.boolean().optional(),
         tradingFeeRate: z.number().min(0).max(100).optional(),
         tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
@@ -19781,7 +19865,7 @@ ${klinesSummary}
         tradeDirection: z.enum(['long', 'short']).nullable().optional(),
         orderFillStatus: z.enum(['pending', 'filled']).optional(),
         orderPerspective: z.enum(['self', 'other']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional() }).nullable().optional(),
         optionInfo: z.object({
           premium: z.string().optional(),
           exerciseDate: z.string().optional(),
