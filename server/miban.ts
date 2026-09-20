@@ -2163,8 +2163,8 @@ export const mibanAdminUserRouter = router({
          FROM balance_history bh
          LEFT JOIN users u ON u.id = bh.user_id
          ${whereSql}
-         ORDER BY bh.created_at DESC, bh.id DESC LIMIT ? OFFSET ?`,
-        [...whereValues, pageSize, offset]
+         ORDER BY bh.created_at DESC, bh.id DESC LIMIT ${pageSize} OFFSET ${offset}`,
+        whereValues
       ) as any[];
       const rowList = Array.isArray(rows) ? rows : [];
       return {

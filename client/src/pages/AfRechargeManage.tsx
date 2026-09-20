@@ -301,7 +301,8 @@ export default function AfRechargeManage() {
     }
   );
   const { data: adjRecentHistory } = mtrpc.adminUser.walletGlobalHistory.useQuery(
-    { page: 1, pageSize: 10 },
+    // 从较宽的最新流水窗口中去重，确保下拉可稳定给出最近 10 位不同用户。
+    { page: 1, pageSize: 50 },
     { staleTime: 30_000 }
   );
   const adjLogItems = adjGlobalLog?.items ?? [];
