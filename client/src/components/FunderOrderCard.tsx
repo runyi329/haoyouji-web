@@ -776,6 +776,8 @@ export function FunderOrderCard({
   const [_intShowInterestTip, _intSetShowInterestTip] = useState(false);
   const [_intShowCollateralInfo, _intSetShowCollateralInfo] = useState(false);
   const [_intShowMarginInfo, _intSetShowMarginInfo] = useState(false);
+  // 股票订单的浮动盈亏详情：复用已绑定的 37 号账本标签明细，只在订单模式中打开。
+  const [_intShowExternalStockPnlInfo, _intSetShowExternalStockPnlInfo] = useState(false);
   const showInterestTip = _propShowInterestTip !== undefined ? _propShowInterestTip : _intShowInterestTip;
   const setShowInterestTip = _propSetShowInterestTip ?? _intSetShowInterestTip;
   const showCollateralInfo = _propShowCollateralInfo !== undefined ? _propShowCollateralInfo : _intShowCollateralInfo;
@@ -876,6 +878,20 @@ export function FunderOrderCard({
   // 股票类型：大数字直接用 amount（融资金额，单位 CNY），不走 qty×price 折算
   const isStockOrder = order.asset_type === 'stock';
   const isOptionOrder = order.asset_type === 'crypto_option';
+  // 股票没有可用的第三方行情报价时，已绑定的 37 号标签承担实时盈亏数据源。
+  // 这里与 RightMarginDetail 保持完全一致：盈亏净值 =（最新余额 − 初始金额）× 账号倍率。
+  const isExternalStockPnlSource = isStockOrder && Number(_parsedCollateralSource?.ledgerId) === 37;
+  const externalStockFloatPnlCny = useMemo(() => {
+    if (!isExternalStockPnlSource || !_extTagConfig) return null;
+    const rawBalance = (_extTagSummary as any)?.latestBalance?.balance;
+    if (rawBalance === undefined || rawBalance === null || rawBalance === '') return null;
+    const latestBalance = Number(rawBalance);
+    if (!Number.isFinite(latestBalance)) return null;
+    const initialAmount = Number((_extTagConfig as any).initial_amount ?? 0) || 0;
+    const accountMultiplier = Number((_extTagConfig as any).account_multiplier ?? 1) || 1;
+    return (latestBalance - initialAmount) * accountMultiplier;
+  }, [isExternalStockPnlSource, _extTagConfig, _extTagSummary]);
+  // 此值仅用于订单模式“浮动盈亏”一行及详情入口，不参与担保缺口、利息、本金或余额计算。
   // 解析期权信息
   const optionInfo = (() => {
     try {
@@ -1484,16 +1500,54 @@ export function FunderOrderCard({
                 </span>
               </div>
             )}
-            {show('floatPnl') && (isOptionOrder || floatPnl !== null) && (order as any).order_fill_status !== 'pending' && (
+            {show('floatPnl') && (isOptionOrder || isExternalStockPnlSource || floatPnl !== null) && (order as any).order_fill_status !== 'pending' && (
               <div className="flex items-center justify-between">
-                <span className="text-gray-400 shrink-0">浮动盈亏</span>
-                {floatPnl !== null ? (
+                <span className="flex items-center gap-1 text-gray-400 shrink-0">
+                  浮动盈亏
+                  {isExternalStockPnlSource && _parsedCollateralSource && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        _intSetShowExternalStockPnlInfo(true);
+                      }}
+                      aria-label="查看37号账本浮动盈亏详情"
+                      className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                      style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                    >!</button>
+                  )}
+                </span>
+                {isExternalStockPnlSource ? (
+                  externalStockFloatPnlCny !== null ? (
+                    <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: externalStockFloatPnlCny >= 0 ? '#DC2626' : '#16A34A' }}>
+                      {externalStockFloatPnlCny >= 0 ? '+' : ''}{externalStockFloatPnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元
+                    </span>
+                  ) : (
+                    <span className="font-medium text-gray-400">{_extTagSummary ? '暂无37号数据' : '加载37号数据...'}</span>
+                  )
+                ) : floatPnl !== null ? (
                   <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
                     {floatPnl >= 0 ? '+' : ''}{floatPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })} u
                   </span>
                 ) : (
                   <span className="font-medium text-gray-400">{greeksResult.loading ? '加载中...' : '暂无合约报价'}</span>
                 )}
+              </div>
+            )}
+            {show('floatPnl') && isExternalStockPnlSource && _parsedCollateralSource && _intShowExternalStockPnlInfo && (
+              <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => _intSetShowExternalStockPnlInfo(false)}>
+                <div className="rounded-2xl mx-4 w-full max-w-sm overflow-y-auto" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '85vh' }} onClick={event => event.stopPropagation()}>
+                  <div className="flex items-center justify-between px-5 pt-4 pb-2">
+                    <div>
+                      <div className="text-sm font-bold" style={{ color: '#1A2340' }}>浮动盈亏详情</div>
+                      <div className="text-xs mt-0.5" style={{ color: '#6B7280' }}>37号账本 · {_parsedCollateralSource.tagName}</div>
+                    </div>
+                    <button type="button" onClick={() => _intSetShowExternalStockPnlInfo(false)} className="text-gray-400 text-lg leading-none" aria-label="关闭浮动盈亏详情">×</button>
+                  </div>
+                  <div className="px-2 pb-4">
+                    <RightMarginDetail ledgerId={_parsedCollateralSource.ledgerId} tagName={_parsedCollateralSource.tagName} />
+                  </div>
+                </div>
               </div>
             )}
             {show('buyDate') && order.buy_date && (
