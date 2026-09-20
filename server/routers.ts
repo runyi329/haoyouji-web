@@ -18487,6 +18487,9 @@ ${klinesSummary}
               currentPriceStale: quoteHealth?.stale ?? !isStablecoinCoin,
               currentValue,
               principalLoss,
+              // 保留利息累计额与已结利息，前端共享担保公式需明确展示：
+              // 浮动盈亏 − 累计待结利息 + 已结利息，而不只返回已扣除付款的净待结额。
+              accruedInterest: totalInterest,
               pendingInterest,
               paidInterest,  // 已结利息，供前端弹窗第①部分缺口计算加回
               collateralRequired,
