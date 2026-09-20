@@ -875,6 +875,11 @@ export async function inviteMemberByUsername(ledgerId: number, inviterUserId: nu
     throw new Error("您不是该账本的成员");
   }
 
+  // 52号账本成员增减仅由账本创建人处理，不接受普通成员的 canInvite 权限例外。
+  if (ledgerId === 52 && inviterMember.role !== "owner") {
+    throw new Error("仅52号账本创建人可以添加成员");
+  }
+
   if (!inviterMember.canInvite && inviterMember.role !== "owner" && inviterMember.role !== "admin") {
     throw new Error("您没有权限邀请成员");
   }
@@ -1677,7 +1682,12 @@ export async function getLedgerMembers(ledgerId: number, userId: number, userRol
   if (membership.length === 0 && !isSysAdmin) {
     throw new Error("您不是此账本的成员");
   }
-  
+
+  // 52号账本的成员管理仅向创建人展示统一智能钱包余额。
+  // 这不是 52 账本内的订单金额，而是用户全局 USDT 钱包余额：基础余额 + 非 CNY/非基础快照调账。
+  const currentMemberRole = membership[0]?.role;
+  const canViewWalletBalance = ledgerId === 52 && currentMemberRole === 'owner';
+
   // 获取所有成员，关联users表获取username和avatar
   const members = await db
     .select({
@@ -1769,7 +1779,43 @@ export async function getLedgerMembers(ledgerId: number, userId: number, userRol
     return true;
   });
 
-  return deduped;
+  const walletBalanceByUserId = new Map<number, number>();
+  if (canViewWalletBalance) {
+    const memberUserIds = deduped
+      .filter((member) => member.memberType !== 'ai' && Number(member.userId) > 0)
+      .map((member) => Number(member.userId));
+    if (memberUserIds.length > 0) {
+      const conn = await getDbConnection();
+      if (conn) {
+        const placeholders = memberUserIds.map(() => '?').join(',');
+        const [balanceRows] = await (conn as any).execute(
+          `SELECT u.id AS user_id,
+                  CAST(u.balance AS DECIMAL(20,8)) + COALESCE(SUM(
+                    CASE
+                      WHEN COALESCE(m.note, '') NOT LIKE '[CNY]%'
+                       AND COALESCE(m.note, '') NOT LIKE '[BALANCE_BASE]%'
+                      THEN m.amount ELSE 0
+                    END
+                  ), 0) AS wallet_balance
+           FROM users u
+           LEFT JOIN af_manual_balances m ON m.user_id = u.id
+           WHERE u.id IN (${placeholders})
+           GROUP BY u.id, u.balance`,
+          memberUserIds,
+        ) as any[];
+        for (const row of (Array.isArray(balanceRows) ? balanceRows : [])) {
+          walletBalanceByUserId.set(Number(row.user_id), Number(row.wallet_balance ?? 0));
+        }
+      }
+    }
+  }
+
+  return deduped.map((member) => ({
+    ...member,
+    walletBalance: canViewWalletBalance && member.memberType !== 'ai'
+      ? (walletBalanceByUserId.get(Number(member.userId)) ?? 0)
+      : null,
+  }));
 }
 
 /**
@@ -1828,6 +1874,11 @@ export async function joinLedgerByToken(token: string, userId: number) {
 
   if (ledger.length === 0) {
     throw new Error("账本不存在");
+  }
+
+  // 52号账本成员只能由创建人在成员管理中逐个添加；不接受通用邀请链接自助加入。
+  if (ledgerId === 52) {
+    throw new Error("52号账本不支持通过邀请链接加入，请联系账本创建人添加成员");
   }
 
   // 检查用户是否已经是成员
@@ -5474,6 +5525,10 @@ export async function getLedgerSecretKey(ledgerId: number, userId: number) {
     throw new Error('只有管理员或创建人可以查看账本密钥');
   }
 
+  if (ledgerId === 52 && memberRows[0].role !== 'owner') {
+    throw new Error('仅52号账本创建人可以查看账本密钥');
+  }
+
   // 确保secret_key列存在
   try {
     await db.execute(sql`ALTER TABLE ledgers ADD COLUMN secret_key VARCHAR(130) NULL DEFAULT NULL`);
@@ -5530,6 +5585,11 @@ export async function joinLedgerBySecretKey(secretKey: string, userId: number) {
   }
 
   const ledgerId = ledgerRow.id;
+
+  // 52号账本不允许通过密钥绕过创建人的成员管理流程。
+  if (Number(ledgerId) === 52) {
+    throw new Error('52号账本不支持通过密钥加入，请联系账本创建人添加成员');
+  }
 
   // 检查用户是否已经是成员
   const existingMember = await db

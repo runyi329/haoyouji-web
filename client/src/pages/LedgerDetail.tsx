@@ -2488,6 +2488,8 @@ export default function LedgerDetail() {
   const effectiveIsAdmin = viewAsUserId ? viewAsRole === 'admin' : isAdmin;
   const effectiveIsFunder = viewAsUserId ? viewAsRole === 'funder' : isFunder;
   const effectiveIsManager = effectiveIsOwner || effectiveIsAdmin;
+  // 52号账本的设置及成员增减只允许创建人访问；管理员、普通成员及代理账号都不显示入口。
+  const canOpenSettings = Number(ledgerId) === 52 ? effectiveIsOwner : effectiveIsManager;
   const isDietCoach = isDiet && (isOwner || isAdmin);
   const isDietStudent = isDiet && !isDietCoach;
   const { data: user } = trpc.auth.me.useQuery();
@@ -3610,8 +3612,8 @@ export default function LedgerDetail() {
                   </button>
                 )}
 
-                {/* 设置按鈕：AJ账本仅owner可见，其他账本管理员可见 */}
-                {(isCustomAJ ? effectiveIsOwner : effectiveIsManager) && (
+                {/* 设置按鈕：AJ账本及52号账本仅创建人可见，其他账本管理员可见 */}
+                {(isCustomAJ ? effectiveIsOwner : canOpenSettings) && (
                   <div
                     className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0"
                     style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
@@ -3993,8 +3995,8 @@ export default function LedgerDetail() {
                     </svg>
                   </div>
                 )}
-                {/* 管理员或创建者：设置按鈕（视角切换时按目标角色显示） */}
-                {effectiveIsManager && (
+                {/* 管理员或创建者：设置按鈕；52号账本只允许创建人 */}
+                {canOpenSettings && (
                   <div 
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
                     style={{ backgroundColor: '#FFFFFF' }}
@@ -7856,4 +7858,3 @@ export default function LedgerDetail() {
     </div>
   );
 }
-

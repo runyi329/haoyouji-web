@@ -9425,6 +9425,54 @@ ${klinesSummary}
         return await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id, ctx.user.role);
       }),
 
+    // 52号账本成员管理：管理员搜索待加入的用户，并展示昵称、用户名与统一钱包余额。
+    // 该接口不用于普通用户搜索，避免泄露他人资金信息。
+    searchMemberCandidates: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        query: z.string().min(1).max(50),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (input.ledgerId !== 52) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '该搜索仅用于52号账本成员管理' });
+        }
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [membershipRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+          [input.ledgerId, ctx.user.id],
+        ) as any[];
+        const memberRole = (Array.isArray(membershipRows) ? membershipRows : [])[0]?.role;
+        if (memberRole !== 'owner') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本创建人可查看成员钱包余额' });
+        }
+        const like = `%${input.query.trim()}%`;
+        const [rows] = await (conn as any).execute(
+          `SELECT u.id, u.username, u.name, u.avatar,
+                  CAST(u.balance AS DECIMAL(20,8)) + COALESCE(SUM(
+                    CASE
+                      WHEN COALESCE(m.note, '') NOT LIKE '[CNY]%'
+                       AND COALESCE(m.note, '') NOT LIKE '[BALANCE_BASE]%'
+                      THEN m.amount ELSE 0
+                    END
+                  ), 0) AS wallet_balance
+           FROM users u
+           LEFT JOIN af_manual_balances m ON m.user_id = u.id
+           WHERE (COALESCE(u.username, '') LIKE ? OR COALESCE(u.name, '') LIKE ?)
+           GROUP BY u.id, u.username, u.name, u.avatar, u.balance
+           ORDER BY u.username ASC
+           LIMIT 20`,
+          [like, like],
+        ) as any[];
+        return (Array.isArray(rows) ? rows : []).map((row: any) => ({
+          id: Number(row.id),
+          username: row.username ?? '',
+          name: row.name ?? '',
+          avatar: row.avatar ?? null,
+          walletBalance: Number(row.wallet_balance ?? 0),
+        }));
+      }),
+
     // 获取账本金额范围
     getAmountRange: protectedProcedure
       .input(z.object({
@@ -11763,11 +11811,14 @@ ${klinesSummary}
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [ledger] = await db
-          .select({ id: ledgers.id, type: ledgers.type })
+          .select({ id: ledgers.id, type: ledgers.type, createdBy: ledgers.createdBy })
           .from(ledgers)
           .where(eq(ledgers.id, input.ledgerId));
         if (!ledger || ledger.type !== 'custom_af') {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '该账本不是AF定制账本' });
+        }
+        if (input.ledgerId === 52 && ledger.createdBy !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本创建人可以添加成员' });
         }
         return await dbLedger.inviteMemberByUsernameWithRole(input.ledgerId, ctx.user.id, input.username, input.role);
       }),

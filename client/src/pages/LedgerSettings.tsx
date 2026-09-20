@@ -54,6 +54,7 @@ export default function LedgerSettings() {
  const [showRemovePicker, setShowRemovePicker] = useState(false);
  const [showInviteDialog, setShowInviteDialog] = useState(false);
  const [searchUsername, setSearchUsername] = useState("");
+ const [removeMemberSearch, setRemoveMemberSearch] = useState("");
  const [inviteMessage, setInviteMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
  const [inviteRole, setInviteRole] = useState<'member' | 'funder' | 'admin'>('member');
  const [showExportDialog, setShowExportDialog] = useState(false);
@@ -93,8 +94,17 @@ export default function LedgerSettings() {
  // 
  const { data: searchResults } = trpc.sharing.searchUsers.useQuery(
  { query: searchUsername },
- { enabled: searchUsername.length > 0 }
+ { enabled: ledgerId !== 52 && searchUsername.length > 0 }
  );
+ const { data: afMemberSearchResults } = trpc.ledger.searchMemberCandidates.useQuery(
+ { ledgerId, query: searchUsername },
+ { enabled: ledgerId === 52 && searchUsername.length > 0 }
+ );
+ const inviteSearchResults = ledgerId === 52 ? afMemberSearchResults : searchResults;
+ const formatWalletBalance = (value: unknown) => Number(value ?? 0).toLocaleString('en-US', {
+ minimumFractionDigits: 2,
+ maximumFractionDigits: 4,
+ });
 
  // mutation
  const inviteMutation = trpc.ledger.inviteMember.useMutation({
@@ -329,6 +339,20 @@ export default function LedgerSettings() {
  );
  }
 
+ // 52号账本的成员增减及钱包余额只允许账本创建人处理。
+ // 普通成员即使手动输入 settings URL，也不会进入可操作的设置页。
+ if (ledgerId === 52 && ledgerData.userRole !== 'owner') {
+ return (
+ <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-6 text-center">
+ <div className="text-base font-semibold text-gray-800">此设置仅由52号账本创建人管理</div>
+ <p className="mt-2 text-sm text-gray-500">成员增减与成员钱包信息不对普通成员开放。</p>
+ <Button className="mt-5" variant="outline" onClick={() => setLocation(`/ledger/${ledgerId}`)}>返回账本</Button>
+ </div>
+ );
+ }
+
+ const canManage52Members = ledgerId !== 52 || ledgerData.userRole === 'owner';
+
  return (
  <div className="min-h-screen bg-gray-50 pb-20">
  {/* 导航栏 + 头像区域合并为一个白色卡片 */}
@@ -406,7 +430,7 @@ export default function LedgerSettings() {
  </button>
  )}
  {/* 添加按鈕 */}
- <button
+ {canManage52Members && <button
  type="button"
  onClick={() => setShowInviteDialog(true)}
  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
@@ -414,9 +438,9 @@ export default function LedgerSettings() {
  title="添加成员"
  >
  <span className="text-xl font-light leading-none" style={{ color: '#D32F2F' }}>+</span>
- </button>
+ </button>}
  {/* 移除按鈕（仅 owner/admin 可见） */}
- {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && members && members.some((m: any) => m.role !== 'owner') && (
+ {canManage52Members && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && members && members.some((m: any) => m.role !== 'owner') && (
  <button
  type="button"
  onClick={() => setShowRemovePicker(true)}
@@ -851,8 +875,8 @@ export default function LedgerSettings() {
  {/* */}
  {searchUsername && (
  <div className="max-h-60 overflow-y-auto space-y-2">
- {searchResults && searchResults.length > 0 ? (
- searchResults.map((user: any) => (
+ {inviteSearchResults && inviteSearchResults.length > 0 ? (
+ inviteSearchResults.map((user: any) => (
  <div
  key={user.id}
  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
@@ -864,9 +888,10 @@ export default function LedgerSettings() {
  size="sm"
  />
  <div>
- <div className="font-medium text-gray-900">{user.username}</div>
- {user.name && (
- <div className="text-sm text-gray-500">{user.name}</div>
+ <div className="text-sm font-semibold text-gray-900">{user.name || '未设置昵称'}</div>
+ <div className="mt-0.5 text-xs text-gray-500">用户名：@{user.username || '—'}</div>
+ {ledgerId === 52 && (
+ <div className="mt-0.5 text-xs font-medium text-emerald-700">钱包余额：{formatWalletBalance(user.walletBalance)} USDT</div>
  )}
  </div>
  </div>
@@ -919,8 +944,23 @@ export default function LedgerSettings() {
  <Dialog open={showRemovePicker} onOpenChange={setShowRemovePicker}>
  <DialogContent className="w-[90%] max-w-md rounded-lg" showCloseButton={false}>
  <DialogTitle className="text-lg font-semibold mb-4">选择要移除的成员</DialogTitle>
+ <div className="relative mb-3">
+ <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+ <Input
+ placeholder="搜索昵称或用户名"
+ value={removeMemberSearch}
+ onChange={(e) => setRemoveMemberSearch(e.target.value)}
+ className="pl-10"
+ />
+ </div>
  <div className="space-y-2 max-h-60 overflow-y-auto">
- {members?.filter((m: any) => m.role !== 'owner').map((member: any) => (
+ {members?.filter((member: any) => {
+ const keyword = removeMemberSearch.trim().toLowerCase();
+ if (member.role === 'owner') return false;
+ if (!keyword) return true;
+ return [member.nickname, member.realName, member.username]
+ .some((value) => String(value ?? '').toLowerCase().includes(keyword));
+ }).map((member: any) => (
  <div
  key={member.userId}
  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
@@ -934,8 +974,12 @@ export default function LedgerSettings() {
  className="w-10 h-10 rounded-full"
  />
  <div>
- <div className="font-medium text-gray-900">{member.nickname || member.username}</div>
- <div className="text-xs text-gray-400">
+ <div className="text-sm font-semibold text-gray-900">{member.nickname || member.realName || '未设置昵称'}</div>
+ <div className="mt-0.5 text-xs text-gray-500">用户名：@{member.username || '—'}</div>
+ {ledgerId === 52 && member.walletBalance != null && (
+ <div className="mt-0.5 text-xs font-medium text-emerald-700">钱包余额：{formatWalletBalance(member.walletBalance)} USDT</div>
+ )}
+ <div className="mt-0.5 text-[11px] text-gray-400">
  {member.role === 'admin' ? (ledgerData?.type === 'diet' ? '负责人' : '管理员') : '成员'}
  </div>
  </div>
@@ -953,11 +997,23 @@ export default function LedgerSettings() {
  </button>
  </div>
  ))}
+ {members?.filter((member: any) => {
+ const keyword = removeMemberSearch.trim().toLowerCase();
+ if (member.role === 'owner') return false;
+ if (!keyword) return true;
+ return [member.nickname, member.realName, member.username]
+ .some((value) => String(value ?? '').toLowerCase().includes(keyword));
+ }).length === 0 && (
+ <p className="py-6 text-center text-sm text-gray-400">未找到匹配成员</p>
+ )}
  </div>
  <Button
  variant="outline"
  className="w-full mt-3"
- onClick={() => setShowRemovePicker(false)}
+ onClick={() => {
+ setShowRemovePicker(false);
+ setRemoveMemberSearch("");
+ }}
  >
  取消
  </Button>
