@@ -711,107 +711,6 @@ async function getAllUsers() {
   }
 }
 
-/**
- * 以用户“当前钱包流水”页面相同的口径，重建指定 balance_history 记录写入后的 USDT 余额。
- * 不使用 balance_history.balance 快照，因为该快照可能来自旧口径，未必等于统一流水累计结果。
- */
-async function getUnifiedUsdtBalanceAfterByHistoryId(conn: any, userIds: number[]) {
-  const result = new Map<number, number>();
-  const ids = Array.from(new Set(userIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)));
-  if (ids.length === 0) return result;
-  const placeholders = ids.map(() => '?').join(',');
-  try {
-    const [rechargeRows] = await conn.execute(
-      `SELECT r.id AS order_id, r.user_id, h.id AS history_id, h.amount AS actual_amount,
-              r.status, COALESCE(r.completed_at, r.created_at) AS occurred_at
-       FROM recharge_orders r
-       INNER JOIN balance_history h ON h.user_id = r.user_id
-         AND h.type = 'recharge' AND h.related_id = r.id
-       WHERE r.user_id IN (${placeholders}) AND r.status = 'completed'
-       ORDER BY COALESCE(r.completed_at, r.created_at) ASC, r.id ASC`,
-      ids
-    ) as any[];
-    const [manualRows] = await conn.execute(
-      `SELECT id, user_id, amount, note, created_at
-       FROM af_manual_balances
-       WHERE user_id IN (${placeholders})
-         AND note NOT LIKE '[CNY]%'
-         AND note NOT LIKE '[BALANCE_BASE]%'
-       ORDER BY created_at ASC, id ASC`,
-      ids
-    ) as any[];
-    const [historyRows] = await conn.execute(
-      `SELECT id, user_id, amount, type, currency, related_id, description, created_at
-       FROM balance_history
-       WHERE user_id IN (${placeholders})
-         AND (currency IS NULL OR currency = '' OR UPPER(currency) = 'USDT')
-         AND (type <> 'withdraw' OR related_id IS NULL)
-       ORDER BY created_at ASC, id ASC`,
-      ids
-    ) as any[];
-
-    const rechargeList = Array.isArray(rechargeRows) ? rechargeRows : [];
-    const manualList = Array.isArray(manualRows) ? manualRows : [];
-    const historyList = Array.isArray(historyRows) ? historyRows : [];
-    for (const userId of ids) {
-      type UnifiedBalanceItem = { key: string; amount: number; createdAt: any; historyId?: number };
-      const userRecharges: UnifiedBalanceItem[] = rechargeList
-        .filter((row: any) => Number(row.user_id) === userId)
-        .map((row: any) => ({
-          key: `r_${row.order_id}`,
-          amount: Number(row.actual_amount ?? 0),
-          historyId: Number(row.history_id),
-          createdAt: row.occurred_at,
-        }));
-      const userManuals: UnifiedBalanceItem[] = manualList
-        .filter((row: any) => Number(row.user_id) === userId)
-        .map((row: any) => ({
-          key: `m_${row.id}`,
-          amount: Number(row.amount ?? 0),
-          createdAt: row.created_at,
-        }));
-      const manualDuplicateForHistory = new Map<number, string>();
-      const userHistory: UnifiedBalanceItem[] = historyList
-        .filter((row: any) => Number(row.user_id) === userId)
-        .filter((row: any) => !(String(row.type) === 'recharge' && row.related_id != null))
-        .filter((row: any) => !String(row.description ?? '').includes('[迁移自af_manual_balances'))
-        .filter((row: any) => {
-          const rowTime = new Date(row.created_at).getTime();
-          const duplicate = userManuals.find((manual) =>
-            Math.abs(new Date(manual.createdAt).getTime() - rowTime) <= 2000 &&
-            Math.abs(Math.abs(manual.amount) - Math.abs(Number(row.amount ?? 0))) < 0.001
-          );
-          if (duplicate) manualDuplicateForHistory.set(Number(row.id), duplicate.key);
-          return !duplicate;
-        })
-        .map((row: any) => ({
-          key: `bh_${row.id}`,
-          amount: Number(row.amount ?? 0),
-          historyId: Number(row.id),
-          createdAt: row.created_at,
-        }));
-      const merged = [...userRecharges, ...userManuals, ...userHistory].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      );
-      let running = 0;
-      const balanceByKey = new Map<string, number>();
-      for (const item of merged) {
-        running += item.amount;
-        const balanceAfter = Number(running.toFixed(8));
-        balanceByKey.set(item.key, balanceAfter);
-        if (item.historyId) result.set(item.historyId, balanceAfter);
-      }
-      for (const [historyId, manualKey] of Array.from(manualDuplicateForHistory.entries())) {
-        const balanceAfter = balanceByKey.get(manualKey);
-        if (balanceAfter != null) result.set(historyId, balanceAfter);
-      }
-    }
-  } catch (error) {
-    console.warn('[miban] getUnifiedUsdtBalanceAfterByHistoryId failed:', (error as any)?.message);
-  }
-  return result;
-}
-
 async function updateUserMibanRole(userId: number, role: "parent" | "baby") {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
@@ -2264,37 +2163,24 @@ export const mibanAdminUserRouter = router({
          FROM balance_history bh
          LEFT JOIN users u ON u.id = bh.user_id
          ${whereSql}
-         ORDER BY bh.created_at DESC LIMIT ? OFFSET ?`,
+         ORDER BY bh.created_at DESC, bh.id DESC LIMIT ? OFFSET ?`,
         [...whereValues, pageSize, offset]
       ) as any[];
       const rowList = Array.isArray(rows) ? rows : [];
-      const unifiedUsdtBalanceByHistoryId = await getUnifiedUsdtBalanceAfterByHistoryId(
-        conn,
-        rowList.map((row: any) => Number(row.user_id))
-      );
       return {
         total: Number(countRow?.total ?? 0),
-        items: rowList.map((r: any) => {
-          const currency = String(r.currency ?? 'USDT').toUpperCase() as 'USDT' | 'CNY';
-          const historyId = Number(r.id);
-          // USDT 与当前用户流水保持同一逐笔累计口径；CNY 暂保留该笔写入时的专属余额快照。
-          const unifiedUsdtBalance = currency === 'USDT' ? unifiedUsdtBalanceByHistoryId.get(historyId) : undefined;
-          return {
-            id: historyId,
-            userId: Number(r.user_id),
-            userName: r.user_name ?? r.username ?? `用户${r.user_id}`,
-            username: r.username ?? '',
-            amount: parseFloat(r.amount ?? '0'),
-            type: String(r.type ?? 'recharge'),
-            note: String(r.description ?? ''),
-            currency,
-            // 未纳入统一流水的旧 USDT 兼容记录不回退到旧快照，避免再次展示不同口径的余额。
-            balance: currency === 'USDT'
-              ? (unifiedUsdtBalance ?? null)
-              : parseFloat(r.balance ?? '0'),
-            createdAt: r.created_at ? String(r.created_at) : '',
-          };
-        }),
+        items: rowList.map((r: any) => ({
+          id: Number(r.id),
+          userId: Number(r.user_id),
+          userName: r.user_name ?? r.username ?? `用户${r.user_id}`,
+          username: r.username ?? '',
+          amount: parseFloat(r.amount ?? '0'),
+          type: String(r.type ?? 'recharge'),
+          note: String(r.description ?? ''),
+          currency: String(r.currency ?? 'USDT') as 'USDT' | 'CNY',
+          balance: parseFloat(r.balance ?? '0'),
+          createdAt: r.created_at ? String(r.created_at) : '',
+        })),
       };
     }),
 });

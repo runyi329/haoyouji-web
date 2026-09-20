@@ -285,7 +285,13 @@ export default function AfRechargeManage() {
     ].some((value) => String(value ?? '').toLocaleLowerCase().includes(adjUserKeyword));
   });
   const adjGlobalDateRange = getLedgerDateRange(adjGlobalFlowDatePreset, adjGlobalFlowCustomStart, adjGlobalFlowCustomEnd);
-  const { data: adjGlobalLog, refetch: refetchAdjGlobal } = mtrpc.adminUser.walletGlobalHistory.useQuery(
+  const {
+    data: adjGlobalLog,
+    refetch: refetchAdjGlobal,
+    isLoading: adjGlobalLogLoading,
+    isFetching: adjGlobalLogFetching,
+    error: adjGlobalLogError,
+  } = mtrpc.adminUser.walletGlobalHistory.useQuery(
     {
       page: adjLogPage,
       pageSize: ADJ_PAGE_SIZE,
@@ -321,6 +327,7 @@ export default function AfRechargeManage() {
       setAdjAmount("");
       setAdjNote("");
       adjUtils.adminUser.list.invalidate();
+      adjUtils.adminUser.walletGlobalHistory.invalidate();
       refetchAdjHistory();
       setAdjLogPage(1);
       refetchAdjGlobal();
@@ -330,10 +337,10 @@ export default function AfRechargeManage() {
   // 同步 adjSelectedUser 余额（调账后刷新）
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const adjUserList = adjAllUsers as any[];
-  // 先使用当前设备的成功调账记录；不足时补充全局流水里最近出现的用户。
+  // 以全局流水的最新用户为准；当前设备的成功调账记录仅在接口暂不可用时作补充。
   const adjRecentUserIds = Array.from(new Set([
-    ...recentAdjUserIds,
     ...adjRecentHistoryItems.map((record: any) => Number(record.userId)).filter((id: number) => Number.isInteger(id) && id > 0),
+    ...recentAdjUserIds,
   ]));
   const adjRecentRank = new Map(adjRecentUserIds.map((id, index) => [id, index]));
   const sortUsersByRecent = (users: any[]) => [...users].sort((a, b) => {
@@ -1452,7 +1459,11 @@ export default function AfRechargeManage() {
               className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold transition-colors ${adjFlowTab === "user" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"}`}
             >当前用户流水</button>
             <button
-              onClick={() => setAdjFlowTab("global")}
+              onClick={() => {
+                setAdjFlowTab("global");
+                setAdjLogPage(1);
+                void refetchAdjGlobal();
+              }}
               className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold transition-colors ${adjFlowTab === "global" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"}`}
             >全局流水</button>
           </div>
@@ -1591,12 +1602,24 @@ export default function AfRechargeManage() {
                 setAdjLogPage(1);
               }}
             />
-            {adjLogItems.length === 0 ? (
+            {adjGlobalLogError ? (
+              <div className="py-6 text-center">
+                <p className="text-[12px] text-red-400">流水暂时加载失败</p>
+                <button
+                  type="button"
+                  onClick={() => void refetchAdjGlobal()}
+                  className="mt-2 rounded-lg border border-orange-200 px-3 py-1 text-[11px] text-orange-600"
+                >重新加载</button>
+              </div>
+            ) : adjGlobalLogLoading && adjLogItems.length === 0 ? (
+              <p className="py-6 text-center text-[12px] text-gray-300">全局流水加载中...</p>
+            ) : adjLogItems.length === 0 ? (
               <p className="text-center text-[12px] text-gray-300 py-6">
                 {adjGlobalFlowKeyword.trim() || adjGlobalFlowDatePreset !== 'all' ? '未找到符合条件的流水' : '暂无调账记录'}
               </p>
             ) : (
               <div className="space-y-2">
+                {adjGlobalLogFetching && <p className="text-center text-[10px] text-gray-300">刷新中...</p>}
                 {adjLogItems.map((r: any, i: number) => {
                   const typeLabel: Record<string, string> = { recharge: '充值', consume: '消费', refund: '退款', reward: '奖励', withdraw: '扣款', reward_clawback: '奖励回收', commission: '佣金' };
                   return (
