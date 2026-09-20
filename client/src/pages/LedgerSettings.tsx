@@ -280,7 +280,9 @@ export default function LedgerSettings() {
  const response = await fetch(`/api/ledger/${ledgerId}/export`, {
  method: 'GET',
  headers: {
- 'X-User-Id': user.id.toString(),
+ ...(localStorage.getItem('auth-token')
+ ? { Authorization: `Bearer ${localStorage.getItem('auth-token')}` }
+ : {}),
  },
  });
  

@@ -1,6 +1,7 @@
 import express, { Request, Response, Router } from 'express';
 import ExcelJS from 'exceljs';
 import * as dbLedger from './db-ledger';
+import { sdk } from './_core/sdk';
 
 const router = Router();
 
@@ -8,14 +9,13 @@ const router = Router();
 router.get('/api/ledger/:ledgerId/export', async (req: Request, res: Response) => {
   try {
     const ledgerId = parseInt(req.params.ledgerId);
-    
-    // 从请求头中获取userId（由前端传递）
-    const userIdHeader = req.headers['x-user-id'];
-    if (!userIdHeader || typeof userIdHeader !== 'string') {
-      return res.status(401).json({ error: '未登录' });
+    if (!Number.isInteger(ledgerId) || ledgerId <= 0) {
+      return res.status(400).json({ error: '账本参数无效' });
     }
-    
-    const userId = parseInt(userIdHeader);    
+
+    // 只信任经服务端会话校验取得的身份，不能使用可伪造的 X-User-Id。
+    const currentUser = await sdk.authenticateRequest(req);
+    const userId = currentUser.id;
     console.log('[exportLedger] 开始导出:', { ledgerId, userId });
     
     // 获取账本信息
@@ -80,6 +80,9 @@ router.get('/api/ledger/:ledgerId/export', async (req: Request, res: Response) =
     
     console.log('[exportLedger] 导出成功');
   } catch (error: any) {
+    if (error?.message === 'Invalid session cookie' || error?.message === 'User not found') {
+      return res.status(401).json({ error: '登录已失效，请重新登录后再导出' });
+    }
     console.error('[exportLedger] 错误:', error);
     res.status(500).json({ error: `导出失败: ${error.message}` });
   }

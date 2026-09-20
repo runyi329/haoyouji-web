@@ -273,6 +273,9 @@ async function startServer() {
     res.json({ ok: true });
   });
 
+  // 临时调试端点默认不注册。只有受控的本地排障环境显式设置开关后才可用。
+  // 生产环境不得暴露用户、账本、订单或数据库结构的调试数据。
+  if (process.env.ENABLE_DEBUG_ENDPOINTS === 'true' && process.env.NODE_ENV !== 'production') {
   // 临时调试端点：查询59号账本equity_shares和ledger_members数据
   app.get('/api/debug/ledger59', async (_req: any, res: any) => {
     try {
@@ -455,6 +458,8 @@ async function startServer() {
       res.json({ error: e.message });
     }
   });
+
+  }
 
   // AI search router
   const aiSearchModule = await import('../ai-search.js');

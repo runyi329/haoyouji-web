@@ -24,9 +24,14 @@ import { ONE_YEAR_MS } from "@shared/const";
 import { getUserCnyBalance, adminAdjustCnyBalance, addUserBalance, getUserBalance } from "./db-recharge";
 import { getUsdtCnyRate } from "./price-scanner";
 
-// 管理员中间件：米伴只有 jiang 一个管理员
-// 管理员页面入口已在前端控制，后端只需要登录即可
-const mibanAdminProcedure = protectedProcedure;
+// 管理员中间件：米伴管理操作必须在服务端验证系统管理员身份。
+// 前端页面隐藏只改善体验，不能作为资金、订单和用户数据的授权边界。
+const mibanAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if ((ctx.user as any).role !== "super_admin") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "仅系统管理员可执行米伴管理操作" });
+  }
+  return next({ ctx });
+});
 
 // ─── DB 辅助函数 ─────────────────────────────────────────────────────────────
 
@@ -2461,10 +2466,8 @@ export const mibanImpersonateRouter = router({
       return { token, userId: u.id, name: u.name, username: u.username };
     }),
 
-  // 获取完整切换列表（hyy329/yunting 登录时可用，包括管理员入口）
-  fullSwitchList: protectedProcedure.query(async ({ ctx }) => {
-    const currentUsername = (ctx.user as any)?.username;
-    if (!ALL_SWITCH_USERNAMES.includes(currentUsername)) return null;
+  // 获取完整切换列表，仅系统管理员可使用。
+  fullSwitchList: mibanAdminProcedure.query(async () => {
     const db = await getDb();
     if (!db) return null;
     const result = [];
@@ -2477,14 +2480,10 @@ export const mibanImpersonateRouter = router({
     return result;
   }),
 
-  // 切换到任意账号（hyy329/yunting 互切）
-  switchToAny: protectedProcedure
+  // 切换到任意受控账号，仅系统管理员可使用。
+  switchToAny: mibanAdminProcedure
     .input(z.object({ username: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const currentUsername = (ctx.user as any)?.username;
-      if (!ALL_SWITCH_USERNAMES.includes(currentUsername)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "无切换权限" });
-      }
+    .mutation(async ({ input }) => {
       if (!ALL_SWITCH_USERNAMES.includes(input.username)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "目标账号不在切换列表中" });
       }
