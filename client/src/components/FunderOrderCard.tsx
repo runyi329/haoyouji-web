@@ -1099,17 +1099,22 @@ export function FunderOrderCard({
     || dc?.approxCollateralTotal === 'CNY'
     ? dc.approxCollateralTotal
     : dc?.approxCollateralValue === 'CNY' ? 'CNY' : 'U';
-  // 股票订单不论是手工担保还是绑定37号标签，担保价值与缺口均按人民币为默认主显示。
-  // 担保货币还可切回逐笔数字币或折算U；担保缺口是跨币种折算后的单一风险金额，故只允许元/U。
-  // 旧版的 hidden 配置不再用于股票订单，避免把关键担保信息误隐藏。
-  const externalCollateralValueDisplay = isStockOrder
+  // 仅绑定37号标签的股票订单，担保货币行展示标签汇总担保价值。
+  // 手工担保必须逐笔按实际录入内容展示，不能被股票默认人民币总值覆盖。
+  const externalCollateralValueDisplay = isExternalStockPnlSource
     && (dc?.externalCollateralValueDisplay === 'CRYPTO' || dc?.externalCollateralValueDisplay === 'U' || dc?.externalCollateralValueDisplay === 'CNY')
     ? dc.externalCollateralValueDisplay
-    : (isStockOrder ? 'CNY' : 'U');
+    : (isExternalStockPnlSource ? 'CNY' : 'U');
   const externalCollateralGapDisplay = isStockOrder
     && (dc?.externalCollateralGapDisplay === 'U' || dc?.externalCollateralGapDisplay === 'CNY')
     ? dc.externalCollateralGapDisplay
     : (isStockOrder ? 'CNY' : 'U');
+  // 股票手工担保的多笔合计默认按人民币显示，且可独立切换为U；
+  // 不读取历史订单的通用 approxCollateralTotal 默认值，避免旧默认U覆盖股票人民币默认。
+  const stockManualCollateralValueDisplay = isStockOrder && !hasExternalCollateral
+    && (dc?.stockManualCollateralValueDisplay === 'U' || dc?.stockManualCollateralValueDisplay === 'CNY')
+    ? dc.stockManualCollateralValueDisplay
+    : 'CNY';
   // 资金属性仅用于展示标签。对未明确手动关闭的旧期权订单，保持其既有Greeks可见，避免标签保存误触配置默认值。
   const shouldShowOptionGreeks = isOptionOrder && optionInfo && (
     show('showGreeks')
@@ -1963,35 +1968,7 @@ export function FunderOrderCard({
                 ) : <span style={{ color: '#9CA3AF' }}>{isSharedMode ? '共享担保加载中...' : '加载中...'}</span>}
               </div>
             )}
-            {show('collateralCoin') && !hasExternalCollateral && isStockOrder && (
-              <div className="flex items-start justify-between gap-1 text-xs mt-0.5">
-                <span className="flex items-center gap-1 shrink-0 whitespace-nowrap">
-                  <span className="text-gray-400 whitespace-nowrap">担保货币</span>
-                </span>
-                {(() => {
-                  if (externalCollateralValueDisplay === 'CRYPTO') {
-                    if (isSharedMode) return <span className="min-w-0 font-medium text-right" style={{ color: '#1A2340' }}>共享担保（按池合计）</span>;
-                    const currencyLabel = collateralAssets
-                      .filter((item) => item.coin && item.qty !== '' && Number.isFinite(Number(item.qty)))
-                      .map((item) => `${Number(item.qty) >= 0 ? '+' : ''}${Number(item.qty).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${item.coin === 'CNY' ? '元' : item.coin}`)
-                      .join(' · ');
-                    return <span className="min-w-0 font-medium text-right" style={{ color: '#1A2340' }}>{currencyLabel || '0'}</span>;
-                  }
-                  const totalU = isSharedMode
-                    ? (sharedPoolInfo ? Number((sharedPoolInfo as any).totalCollateralValue) : null)
-                    : (collateralValueKnown ? collateralValue : null);
-                  if (totalU === null || !Number.isFinite(totalU)) {
-                    return <span style={{ color: '#9CA3AF' }}>{isSharedMode ? '共享担保加载中...' : '实时价加载中...'}</span>;
-                  }
-                  return <span className="min-w-0 font-medium tabular-nums text-right whitespace-nowrap" style={{ color: '#1A2340' }}>
-                    {isSharedMode ? '共享合计 ' : ''}{externalCollateralValueDisplay === 'CNY'
-                      ? `${(totalU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
-                      : `${totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`}
-                  </span>;
-                })()}
-              </div>
-            )}
-            {show('collateralCoin') && !hasExternalCollateral && !isStockOrder && (
+            {show('collateralCoin') && !hasExternalCollateral && (
               orderShareMode === 'self'
                 ? (
                   // 开启了共享担保：标题改为红色“共享担保”
@@ -2061,13 +2038,24 @@ export function FunderOrderCard({
                     ))
                 )
             )}
-            {(collateralAssets.length > 1 ? approxCollateralTotal !== 'hidden' : show('collateralValue')) && (() => {
+            {(isStockOrder && !hasExternalCollateral
+              ? (collateralAssets.length > 0 && show('collateralValue'))
+              : (collateralAssets.length > 1 ? approxCollateralTotal !== 'hidden' : show('collateralValue'))) && (() => {
               if (hasExternalCollateral) {
                 // 37标签订单的担保价值已紧随“担保货币”展示，避免同一保证金总值重复两次。
                 return null;
               }
               const approxCV = dc?.approxCollateralValue ?? 'U';
-              const cvDisplay = collateralAssets.length > 1
+              const stockManualTotalU = isSharedMode
+                ? (sharedPoolInfo ? Number((sharedPoolInfo as any).totalCollateralValue) : null)
+                : (collateralValueKnown ? collateralValue : null);
+              const cvDisplay = isStockOrder
+                ? (stockManualTotalU !== null && Number.isFinite(stockManualTotalU)
+                  ? (stockManualCollateralValueDisplay === 'CNY'
+                    ? `≈ ${(stockManualTotalU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
+                    : `≈ ${stockManualTotalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`)
+                  : (isSharedMode ? '共享担保加载中...' : '实时价加载中...'))
+                : collateralAssets.length > 1
                 ? (collateralValueKnown
                   ? (approxCollateralTotal === 'CNY'
                     ? `≈ ${(collateralValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
@@ -2078,7 +2066,7 @@ export function FunderOrderCard({
                   : `${(collateralValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`;
               return (
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400">{collateralAssets.length > 1 ? '担保总值' : '担保价值'}</span>
+                  <span className="text-gray-400">{isStockOrder ? (isSharedMode ? '共享担保价值' : '担保价值') : (collateralAssets.length > 1 ? '担保总值' : '担保价值')}</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>{cvDisplay ?? '---'}</span>
                 </div>
               );

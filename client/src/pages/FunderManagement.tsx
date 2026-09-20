@@ -162,6 +162,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     // 缺口是已折算的单一风险金额，只支持U或人民币。
     externalCollateralValueDisplay: 'CNY',
     externalCollateralGapDisplay: 'CNY',
+    // 股票手工担保始终逐笔显示实际输入的担保物；本项只控制下方“担保价值”的合计单位。
+    stockManualCollateralValueDisplay: 'CNY',
     // 股票专属字段
     brokerName: true,
     brokerAccount: true,
@@ -2859,8 +2861,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       { key: 'approxPaid', label: '已结利息约等于' },
                       { key: 'approxCollateralItem', label: '担保货币约等于' },
                       { key: 'approxCollateralTotal', label: '担保总值约等于' },
-                      ...(formData.assetType === 'stock' ? [
-                        { key: 'externalCollateralValueDisplay', label: '担保货币主显示' },
+                      ...(formData.assetType === 'stock' && collateralSourceMode === 'manual' ? [
+                        { key: 'stockManualCollateralValueDisplay', label: '担保价值主显示' },
+                        { key: 'externalCollateralGapDisplay', label: '担保缺口主显示' },
+                      ] : formData.assetType === 'stock' ? [
+                        { key: 'externalCollateralValueDisplay', label: '37号担保货币主显示' },
                         { key: 'externalCollateralGapDisplay', label: '担保缺口主显示' },
                       ] : []),
                     ] as { key: string; label: string }[]).map(({ key, label }) => (
@@ -2869,7 +2874,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         <div className="flex gap-2">
                           {(key === 'externalCollateralValueDisplay'
                             ? ['CRYPTO', 'U', 'CNY']
-                            : key === 'externalCollateralGapDisplay'
+                            : key === 'externalCollateralGapDisplay' || key === 'stockManualCollateralValueDisplay'
                               ? ['U', 'CNY']
                               : ['hidden', 'U', 'CNY']).map(opt => (
                             <button
@@ -2881,6 +2886,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                   ? (['CRYPTO', 'U', 'CNY'].includes(String(displayConfig[key])) ? displayConfig[key] : 'CNY')
                                   : key === 'externalCollateralGapDisplay'
                                     ? (['U', 'CNY'].includes(String(displayConfig[key])) ? displayConfig[key] : 'CNY')
+                                    : key === 'stockManualCollateralValueDisplay'
+                                      ? (['U', 'CNY'].includes(String(displayConfig[key])) ? displayConfig[key] : 'CNY')
                                     : displayConfig[key]) === opt
                                   ? 'bg-blue-500 text-white border-blue-500'
                                   : 'bg-white text-gray-500 border-gray-200'
@@ -2890,10 +2897,15 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 ? (opt === 'CRYPTO' ? '数字币' : opt === 'U' ? '≈ U' : '≈ 元')
                                 : key === 'externalCollateralGapDisplay'
                                   ? (opt === 'U' ? '≈ U' : '≈ 元')
+                                  : key === 'stockManualCollateralValueDisplay'
+                                    ? (opt === 'U' ? '≈ U' : '≈ 元')
                                 : (opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ U' : '≈ 元')}
                             </button>
                           ))}
                         </div>
+                        {key === 'stockManualCollateralValueDisplay' && (
+                          <div className="text-[11px] text-gray-400 mt-1">手工担保物仍按实际输入逐笔展示；此处只控制下方担保价值合计。</div>
+                        )}
                         {key === 'externalCollateralGapDisplay' && (
                           <div className="text-[11px] text-gray-400 mt-1">担保缺口是多种担保物折算后的合并风险金额，因此仅可按人民币或 U 显示。</div>
                         )}
@@ -3410,8 +3422,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 { key: 'approxPaid', label: '已结利息约等于' },
                                 { key: 'approxCollateralItem', label: '担保货币约等于' },
                                 { key: 'approxCollateralTotal', label: '担保总值约等于' },
-                                ...(formData.assetType === 'stock' ? [
-                                  { key: 'externalCollateralValueDisplay', label: '担保货币主显示' },
+                                ...(formData.assetType === 'stock' && collateralSourceMode === 'manual' ? [
+                                  { key: 'stockManualCollateralValueDisplay', label: '担保价值主显示' },
+                                  { key: 'externalCollateralGapDisplay', label: '担保缺口主显示' },
+                                ] : formData.assetType === 'stock' ? [
+                                  { key: 'externalCollateralValueDisplay', label: '37号担保货币主显示' },
                                   { key: 'externalCollateralGapDisplay', label: '担保缺口主显示' },
                                 ] : []),
                               ] as { key: string; label: string }[]).map(({ key, label }) => (
@@ -3420,19 +3435,22 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                   <div className="flex gap-1">
                                     {(key === 'externalCollateralValueDisplay'
                                       ? ['CRYPTO', 'U', 'CNY']
-                                      : key === 'externalCollateralGapDisplay'
+                                      : key === 'externalCollateralGapDisplay' || key === 'stockManualCollateralValueDisplay'
                                         ? ['U', 'CNY']
                                         : ['hidden', 'U', 'CNY']).map(opt => (
                                       <button key={opt} type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, displayConfig: { ...pp.displayConfig, [key]: opt } } : pp))}
-                                        className={`flex-1 py-0.5 text-xs rounded-lg border transition-colors ${ (key === 'externalCollateralValueDisplay' ? (['CRYPTO', 'U', 'CNY'].includes(String(p.displayConfig?.[key])) ? p.displayConfig?.[key] : 'CNY') : key === 'externalCollateralGapDisplay' ? (['U', 'CNY'].includes(String(p.displayConfig?.[key])) ? p.displayConfig?.[key] : 'CNY') : (p.displayConfig?.[key] || 'hidden')) === opt ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200' }`}>
+                                        className={`flex-1 py-0.5 text-xs rounded-lg border transition-colors ${ (key === 'externalCollateralValueDisplay' ? (['CRYPTO', 'U', 'CNY'].includes(String(p.displayConfig?.[key])) ? p.displayConfig?.[key] : 'CNY') : key === 'externalCollateralGapDisplay' || key === 'stockManualCollateralValueDisplay' ? (['U', 'CNY'].includes(String(p.displayConfig?.[key])) ? p.displayConfig?.[key] : 'CNY') : (p.displayConfig?.[key] || 'hidden')) === opt ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200' }`}>
                                         {key === 'externalCollateralValueDisplay'
                                           ? (opt === 'CRYPTO' ? '数字币' : opt === 'U' ? '≈ U' : '≈ 元')
                                           : key === 'externalCollateralGapDisplay'
                                             ? (opt === 'U' ? '≈ U' : '≈ 元')
+                                            : key === 'stockManualCollateralValueDisplay'
+                                              ? (opt === 'U' ? '≈ U' : '≈ 元')
                                           : (opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ U' : '≈ 元')}
                                       </button>
                                     ))}
                                   </div>
+                                  {key === 'stockManualCollateralValueDisplay' && <div className="text-[10px] text-gray-400 mt-0.5">手工担保物按实际输入显示；此项只控制担保价值合计。</div>}
                                   {key === 'externalCollateralGapDisplay' && <div className="text-[10px] text-gray-400 mt-0.5">合并风险金额仅支持人民币或 U。</div>}
                                 </div>
                               ))}
