@@ -18241,9 +18241,11 @@ ${klinesSummary}
             }
           }
 
-          // 获取实时价格及其健康状态；前端可据此标识长期未更新的报价
-          const { getLatestPrice, getMarketPriceHealth } = await import('./price-scanner');
+          // 获取实时价格及其健康状态；前端可据此标识长期未更新的报价。
+          // 共享池中的人民币担保物必须按同一 USDT/CNY 汇率折算，不能将 1 元误当成 1 U。
+          const { getLatestPrice, getMarketPriceHealth, getUsdtCnyRate } = await import('./price-scanner');
           const marketPriceHealth = getMarketPriceHealth();
+          const usdtCnyRate = getUsdtCnyRate() || 6.8;
 
           console.log('[SharedPool] orders count:', orders.length, orders.map((o: any) => ({ id: o.id, no: o.order_no, raw_assets: o.collateral_assets, type: typeof o.collateral_assets, isBuffer: Buffer.isBuffer(o.collateral_assets) })));
 
@@ -18254,18 +18256,140 @@ ${klinesSummary}
             if (p) livePrices[coin] = p;
           }
 
+          // 37 号账本引用标签是股票订单的权威担保物和净值盈亏来源。
+          // 共享担保池也必须使用同一来源，避免单张订单与共享汇总出现两套担保价值。
+          const linked37Tags = Array.from(new Set(orders.map((o: any) => {
+            try {
+              const raw = o.collateral_source;
+              const source = Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : (typeof raw === 'string' ? JSON.parse(raw) : raw);
+              return Number(source?.ledgerId) === 37 && source?.tagName ? String(source.tagName) : null;
+            } catch { return null; }
+          }).filter(Boolean))) as string[];
+          const linkedTagConfigByName = new Map<string, any>();
+          const linkedTagBalanceByName = new Map<string, number>();
+          const linkedTagMarginByName = new Map<string, Record<string, number>>();
+          if (linked37Tags.length > 0) {
+            const placeholders = linked37Tags.map(() => '?').join(',');
+            const [configs] = await conn.execute(
+              `SELECT tag_name, margin_by_coin, initial_amount, account_multiplier
+               FROM ledger_tag_config WHERE ledger_id = 37 AND tag_name IN (${placeholders})`,
+              linked37Tags
+            ) as any[];
+            for (const config of (Array.isArray(configs) ? configs : [])) linkedTagConfigByName.set(String(config.tag_name), config);
+            // 与 ledger.getTagSummary 一致：成员 initial_balances 内的逐笔押金为运行时权威数据，
+            // 兼容新版 __margins 和旧版 __margin。共享担保不得仅读取可能滞后的标签配置。
+            for (const tagName of linked37Tags) linkedTagMarginByName.set(tagName, {});
+            const [memberMargins] = await conn.execute(
+              `SELECT initial_balances FROM ledger_members WHERE ledger_id = 37`
+            ) as any[];
+            for (const row of (Array.isArray(memberMargins) ? memberMargins : [])) {
+              try {
+                const balances = typeof row.initial_balances === 'string' ? JSON.parse(row.initial_balances) : (row.initial_balances ?? {});
+                for (const tagName of linked37Tags) {
+                  let entries: Array<{ coin: string; amount: number }> = [];
+                  const marginsKey = `${tagName}__margins`;
+                  if (balances[marginsKey] !== undefined && balances[marginsKey] !== null) {
+                    try {
+                      const parsed = typeof balances[marginsKey] === 'string' ? JSON.parse(balances[marginsKey]) : balances[marginsKey];
+                      if (Array.isArray(parsed)) entries = parsed.map((entry: any) => ({
+                        coin: String(entry?.coin ?? 'CNY').trim().toUpperCase() || 'CNY',
+                        amount: Number(entry?.amount),
+                      })).filter((entry: any) => Number.isFinite(entry.amount));
+                    } catch {}
+                  }
+                  if (entries.length === 0) {
+                    const legacyAmount = Number(balances[`${tagName}__margin`]);
+                    if (Number.isFinite(legacyAmount)) entries = [{
+                      coin: String(balances[`${tagName}__marginCoin`] ?? 'CNY').trim().toUpperCase() || 'CNY',
+                      amount: legacyAmount,
+                    }];
+                  }
+                  const summary = linkedTagMarginByName.get(tagName)!;
+                  for (const entry of entries) summary[entry.coin] = (summary[entry.coin] ?? 0) + entry.amount;
+                }
+              } catch {}
+            }
+            const [latestBalances] = await conn.execute(
+              `SELECT lc.name AS tag_name, lr.amount
+               FROM ledger_records lr
+               INNER JOIN ledger_categories lc ON lc.id = lr.categoryId
+               WHERE lr.ledgerId = 37
+                 AND lc.name IN (${placeholders})
+                 AND lr.type <> 'transfer'
+                 AND lr.deleted_at IS NULL
+                 AND lr.id IN (
+                   SELECT MAX(lr2.id)
+                   FROM ledger_records lr2
+                   INNER JOIN ledger_categories lc2 ON lc2.id = lr2.categoryId
+                   WHERE lr2.ledgerId = 37
+                     AND lc2.name IN (${placeholders})
+                     AND lr2.type <> 'transfer'
+                     AND lr2.deleted_at IS NULL
+                   GROUP BY lc2.name
+                 )`,
+              [...linked37Tags, ...linked37Tags]
+            ) as any[];
+            for (const row of (Array.isArray(latestBalances) ? latestBalances : [])) linkedTagBalanceByName.set(String(row.tag_name), Number(row.amount));
+          }
+
+          const parseLinked37Source = (raw: unknown): { tagName: string } | null => {
+            try {
+              const source = Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : (typeof raw === 'string' ? JSON.parse(raw) : raw);
+              return Number(source?.ledgerId) === 37 && source?.tagName ? { tagName: String(source.tagName) } : null;
+            } catch { return null; }
+          };
+          const calculateLinked37Collateral = (rawSource: unknown) => {
+            const source = parseLinked37Source(rawSource);
+            const config = source ? linkedTagConfigByName.get(source.tagName) : null;
+            if (!source || !config) return null;
+            let entries: Array<{ coin: string; qty: number; note: string }> = [];
+            try {
+              const rawMargins = linkedTagMarginByName.get(source.tagName) ?? {};
+              entries = Array.isArray(rawMargins)
+                ? rawMargins.map((entry: any) => ({ coin: String(entry?.coin ?? 'CNY'), qty: Number(entry?.amount), note: String(entry?.label ?? '') }))
+                : Object.entries(rawMargins ?? {}).map(([coin, qty]) => ({ coin: String(coin), qty: Number(qty), note: '' }));
+              entries = entries.filter(entry => Number.isFinite(entry.qty) && entry.qty !== 0);
+            } catch { entries = []; }
+            let allPricesKnown = true;
+            let collateralValue = 0;
+            for (const entry of entries) {
+              const coin = entry.coin.trim().toUpperCase();
+              const isCny = ['CNY', 'RMB', '人民币', '元'].includes(coin);
+              const isStablecoin = ['USDT', 'U', 'USDC', 'USDT.E', 'USDC.E', 'BUSD', 'DAI'].includes(coin);
+              const price = isCny ? (1 / usdtCnyRate) : (isStablecoin ? 1 : getLatestPrice(coin));
+              if (!price) { allPricesKnown = false; continue; }
+              collateralValue += entry.qty * price;
+            }
+            const latestBalance = linkedTagBalanceByName.get(source.tagName);
+            const initialAmount = Number(config.initial_amount) || 0;
+            const multiplier = Number(config.account_multiplier) || 1;
+            const floatingPnl = Number.isFinite(latestBalance) ? ((latestBalance! - initialAmount) * multiplier / usdtCnyRate) : null;
+            return {
+              tagName: source.tagName,
+              collateralAssets: entries.map(entry => ({ coin: entry.coin, qty: entry.qty, note: entry.note })),
+              collateralValue: allPricesKnown ? collateralValue : null,
+              floatingPnl,
+              riskExposure: allPricesKnown && floatingPnl !== null ? collateralValue + floatingPnl : null,
+            };
+          };
+
           // 汇总每张订单的担保物价值和担保需求
           const orderDetails = orders.map((o: any) => {
             const collateralAssets = (() => { try { const raw = o.collateral_assets; if (Array.isArray(raw)) return raw; if (Buffer.isBuffer(raw)) return JSON.parse(raw.toString('utf8')); if (typeof raw === 'string') return JSON.parse(raw || '[]'); return []; } catch { return []; } })();
+            const linked37Collateral = calculateLinked37Collateral(o.collateral_source);
             // 计算担保物总价值（U）
             let collateralValue = 0;
-            for (const asset of collateralAssets) {
+            const effectiveCollateralAssets = linked37Collateral ? linked37Collateral.collateralAssets : collateralAssets;
+            for (const asset of effectiveCollateralAssets) {
               const qty = parseFloat(asset.qty) || 0;
               const coin = (asset.coin || '').toUpperCase().replace(/\s+/g, '');
               const isStablecoin = coin === 'USDT' || coin === 'U' || coin === 'USDC' || coin === 'USDT.E' || coin === 'USDC.E' || coin === 'BUSD' || coin === 'DAI';
-              const price = isStablecoin ? 1 : (getLatestPrice(coin) || 0);
+              const isCny = coin === 'CNY' || coin === 'RMB' || coin === '人民币' || coin === '元';
+              const price = isCny ? (1 / usdtCnyRate) : (isStablecoin ? 1 : (getLatestPrice(coin) || 0));
               collateralValue += qty * price;
             }
+            if (linked37Collateral?.collateralValue === null) collateralValue = 0;
+            else if (linked37Collateral) collateralValue = linked37Collateral.collateralValue;
             // 计算待结利息（简化：本金 × 年利率 / 365 × 持有天数 - 已结利息）
             const principal = parseFloat(String(o.interest_base || o.amount || 0)) || 0;
             // 年利率取绝对值：负利率（付息型）和正利率（收息型）利息金额都是正数
@@ -18342,7 +18466,10 @@ ${klinesSummary}
               collateralRequired,
               collateralValue,
               collateralGap: collateralValue - collateralRequired,
-              collateralAssets,
+              collateralAssets: effectiveCollateralAssets,
+              linked37TagName: linked37Collateral?.tagName ?? null,
+              linked37FloatingPnl: linked37Collateral?.floatingPnl ?? null,
+              linked37RiskExposure: linked37Collateral?.riskExposure ?? null,
               shareMode: o.collateral_share_mode,
               principalLentOut,
               interestBaseCurrency: o.interest_base_currency || 'USDT',
@@ -18350,8 +18477,16 @@ ${klinesSummary}
             };
           });
 
-          // 汇总共享池总数据
-          const totalCollateralValue = orderDetails.reduce((s: number, o: any) => s + o.collateralValue, 0);
+          // 汇总共享池总数据。同一 37 号标签可被同一人的多张订单引用，
+          // 它代表同一组真实保证金，因此池内只能计入一次，不能随引用订单数重复放大。
+          const includedLinked37Tags = new Set<string>();
+          const totalCollateralValue = orderDetails.reduce((s: number, o: any) => {
+            if (o.linked37TagName) {
+              if (includedLinked37Tags.has(o.linked37TagName)) return s;
+              includedLinked37Tags.add(o.linked37TagName);
+            }
+            return s + o.collateralValue;
+          }, 0);
           const totalCollateralRequired = orderDetails.reduce((s: number, o: any) => s + o.collateralRequired, 0);
           const totalGap = totalCollateralValue - totalCollateralRequired;
           const totalBuyValue = orderDetails.reduce((s: number, o: any) => s + (o.buyValue || 0), 0);

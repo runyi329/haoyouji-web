@@ -12,8 +12,9 @@ const CNY_RATE_FALLBACK = 6.8;
 function toCNY(margin: string | number, coin: string, prices: Record<string, number>): number {
   const num = typeof margin === "number" ? margin : parseFloat(margin);
   if (isNaN(num) || num === 0) return 0;
-  if (!coin || coin === "人民币" || coin === "元") return num;
-  const price = prices[coin];
+  const normalizedCoin = String(coin || "").trim().toUpperCase();
+  if (!normalizedCoin || ["人民币", "元", "CNY", "RMB"].includes(normalizedCoin)) return num;
+  const price = prices[normalizedCoin] ?? prices[coin];
   if (!price) return 0;
   return num * price;
 }
@@ -87,12 +88,22 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
         }
       }
       result["USDT"] = cnyRate;
+      result["CNY"] = 1;
+      result["RMB"] = 1;
     }
     return result;
   }, [cryptoPricesRaw]);
 
   // ── 解析保证金数据 ──
   const rightMarginData = useMemo(() => {
+    // getTagSummary 汇总了成员逐笔押金（新版 __margins 及旧版 __margin），
+    // 是37标签在运行时的权威余额来源；旧标签尚未迁移时再回退配置字段。
+    const summaryMargins = (rightTagSummary as any)?.marginByCoin;
+    if (summaryMargins && typeof summaryMargins === "object") {
+      return Object.entries(summaryMargins)
+        .map(([coin, amount]) => ({ coin, amount: Number(amount), label: "", date: "" }))
+        .filter((item) => Number.isFinite(item.amount) && item.amount !== 0);
+    }
     if (!rightTagConfig?.margin_by_coin) return [];
     try {
       const parsed = JSON.parse(rightTagConfig.margin_by_coin as string);
@@ -101,7 +112,7 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
       }
       return Object.entries(parsed).map(([coin, amount]) => ({ coin, amount: Number(amount), label: "", date: "" }));
     } catch { return []; }
-  }, [rightTagConfig]);
+  }, [rightTagConfig, rightTagSummary]);
 
   const rightTotalCNY = useMemo(() => {
     return rightMarginData.reduce((sum, { coin, amount }) => sum + toCNY(String(amount), coin, cryptoPrices), 0);

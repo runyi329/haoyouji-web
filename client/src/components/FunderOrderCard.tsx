@@ -736,9 +736,10 @@ export function FunderOrderCard({
   const { data: _extCryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
     enabled: hasExternalCollateral, refetchInterval: 3000, staleTime: 0,
   });
-  // 计算剩余保证金U值和保证金率
-  const { extRemainingMarginU, extMarginBasePct } = useMemo(() => {
-    if (!hasExternalCollateral || !_extTagConfig) return { extRemainingMarginU: null as number | null, extMarginBasePct: null as number | null };
+  // 计算37标签详情中的“剩余保证金”：保证金总值 + 净值盈亏。
+  // 订单模式非共享担保缺口直接复用该值，不再误显示保证金率。
+  const { extRemainingMarginU } = useMemo(() => {
+    if (!hasExternalCollateral || !_extTagConfig) return { extRemainingMarginU: null as number | null };
     const _cnyR = (_extCryptoPricesRaw as any)?.usdtCnyRate ?? 7.0;
     const _pricesMap = (_extCryptoPricesRaw as any)?.prices ?? {};
     const _prices: Record<string, number> = {};
@@ -752,24 +753,79 @@ export function FunderOrderCard({
     };
     let rightTotalCNY = 0;
     try {
-      const parsed = JSON.parse((_extTagConfig as any).margin_by_coin as string);
-      const items = Array.isArray(parsed)
-        ? parsed.map((e: any) => ({ coin: e.coin || '元', amount: Number(e.amount) }))
-        : Object.entries(parsed).map(([coin, amount]) => ({ coin, amount: Number(amount) }));
+      // getTagSummary 汇总成员逐笔保证金，是37账本当前运行时的权威来源；
+      // 历史标签没有成员明细时才回退配置表中的旧格式。
+      const summaryMargins = (_extTagSummary as any)?.marginByCoin;
+      const rawMargins = summaryMargins && typeof summaryMargins === 'object'
+        ? summaryMargins
+        : (typeof (_extTagConfig as any).margin_by_coin === 'string'
+          ? JSON.parse((_extTagConfig as any).margin_by_coin)
+          : (_extTagConfig as any).margin_by_coin);
+      const items = Array.isArray(rawMargins)
+        ? rawMargins.map((e: any) => ({ coin: e.coin || '元', amount: Number(e.amount) }))
+        : Object.entries(rawMargins ?? {}).map(([coin, amount]) => ({ coin, amount: Number(amount) }));
       rightTotalCNY = items.reduce((s: number, { coin, amount }: any) => s + _toCNY(String(amount), coin), 0);
     } catch {}
     const latestBalance = (_extTagSummary as any)?.latestBalance;
     const balanceNum = latestBalance?.balance ? parseFloat(String(latestBalance.balance)) : null;
     const initialNum = parseFloat((_extTagConfig as any).initial_amount || '0') || 0;
     const multiplierNum = parseFloat((_extTagConfig as any).account_multiplier || '1') || 1;
-    if (balanceNum === null) return { extRemainingMarginU: null, extMarginBasePct: null };
+    if (balanceNum === null) return { extRemainingMarginU: null };
     const pnl = (balanceNum - initialNum) * multiplierNum;
     const remainingCNY = pnl + rightTotalCNY;
     const remainingU = _cnyR > 0 ? remainingCNY / _cnyR : null;
-    const marginBaseNum = parseFloat((_extTagConfig as any).margin_base || '0') || 0;
-    const pct = marginBaseNum > 0 ? (remainingCNY / marginBaseNum * 100) : null;
-    return { extRemainingMarginU: remainingU, extMarginBasePct: pct };
+    return { extRemainingMarginU: remainingU };
   }, [hasExternalCollateral, _extTagConfig, _extTagSummary, _extCryptoPricesRaw]);
+
+  // 绑定 37 号账本标签时，担保物必须以该标签内逐笔保证金为唯一来源。
+  // 这里与 RightMarginDetail 的展示口径一致：保留各币种净额，再按当前汇率汇总为 U / 人民币；
+  // 不把订单上的历史手填 collateral_assets 与第三方标签重复相加。
+  const externalCollateralSummary = useMemo(() => {
+    const empty = { entries: [] as Array<{ coin: string; amount: number }>, totalCny: null as number | null, totalU: null as number | null, currencyLabel: '' };
+    if (!hasExternalCollateral || !_extTagConfig) return empty;
+    let entries: Array<{ coin: string; amount: number }> = [];
+    try {
+      // 与37标签详情/剩余保证金同口径：优先使用服务端汇总的成员逐笔保证金。
+      const summaryMargins = (_extTagSummary as any)?.marginByCoin;
+      const raw = summaryMargins && typeof summaryMargins === 'object'
+        ? summaryMargins
+        : ((typeof (_extTagConfig as any).margin_by_coin === 'string')
+          ? JSON.parse((_extTagConfig as any).margin_by_coin)
+          : (_extTagConfig as any).margin_by_coin);
+      entries = Array.isArray(raw)
+        ? raw.map((item: any) => ({ coin: String(item?.coin ?? '元').trim() || '元', amount: Number(item?.amount) }))
+        : Object.entries(raw ?? {}).map(([coin, amount]) => ({ coin: String(coin).trim() || '元', amount: Number(amount) }));
+      entries = entries.filter(item => Number.isFinite(item.amount) && item.amount !== 0);
+    } catch {
+      return empty;
+    }
+    const rate = Number((_extCryptoPricesRaw as any)?.usdtCnyRate ?? cnyRate) || cnyRate;
+    const prices = (_extCryptoPricesRaw as any)?.prices ?? {};
+    const toCny = (coin: string, amount: number) => {
+      const normalized = coin.toUpperCase();
+      if (['元', '人民币', 'CNY', 'RMB'].includes(normalized)) return amount;
+      if (['USDT', 'USDC', 'BUSD', 'DAI', 'U'].includes(normalized)) return amount * rate;
+      const priceU = Number(prices[normalized] ?? prices[coin] ?? 0);
+      return priceU > 0 ? amount * priceU * rate : null;
+    };
+    let totalCny = 0;
+    let allKnown = true;
+    for (const entry of entries) {
+      const value = toCny(entry.coin, entry.amount);
+      if (value === null) allKnown = false;
+      else totalCny += value;
+    }
+    const netByCoin = entries.reduce((acc, item) => {
+      const label = ['CNY', 'RMB', '人民币'].includes(item.coin.toUpperCase()) ? '元' : item.coin.toUpperCase();
+      acc[label] = (acc[label] ?? 0) + item.amount;
+      return acc;
+    }, {} as Record<string, number>);
+    const currencyLabel = Object.entries(netByCoin)
+      .filter(([, amount]) => Math.abs(amount) > 0.0000001)
+      .map(([coin, amount]) => `${amount >= 0 ? '+' : ''}${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${coin}`)
+      .join(' · ');
+    return { entries, totalCny: allKnown ? totalCny : null, totalU: allKnown && rate > 0 ? totalCny / rate : null, currencyLabel };
+  }, [hasExternalCollateral, _extTagConfig, _extTagSummary, _extCryptoPricesRaw, cnyRate]);
 
   // 弹窗状态：优先使用父组件传入的 props，否则 fallback 到内部 state
   // （父组件提升状态可防止数据刷新导致弹窗自动关闭）
@@ -1196,6 +1252,56 @@ export function FunderOrderCard({
   // 亏损订单：缺口为负（需要担保物覆盖）
   // totalPaid（已结利息）加回来，与非共享模式公式保持一致
   const sharedExposureGap = floatPnl !== null ? floatPnl - accrued + totalPaid : -accrued + totalPaid;
+  // 共享池中的37标签订单使用服务端回传的标签净值盈亏，不能再按股票行情价推算。
+  // 同一标签的担保物与净值盈亏都只计一次；各订单的待结利息/借出本金仍分别计入。
+  const sharedPoolRemainingU = (() => {
+    if (!isSharedMode || !sharedPoolInfo) return null;
+    const poolOrders = (sharedPoolInfo as any).orders;
+    const totalCollateral = Number((sharedPoolInfo as any).totalCollateralValue);
+    if (!Array.isArray(poolOrders) || !Number.isFinite(totalCollateral)) return null;
+    const counted37Tags = new Set<string>();
+    let remaining = totalCollateral;
+    for (const poolOrder of poolOrders) {
+      const interestCurrency = String(poolOrder.interestBaseCurrency || 'USDT').trim().toUpperCase();
+      const isInterestCny = ['CNY', 'RMB', '人民币'].includes(interestCurrency);
+      const principalU = isInterestCny ? Number(poolOrder.principal ?? 0) / cnyRate : Number(poolOrder.principal ?? 0);
+      const pendingU = isInterestCny ? Number(poolOrder.pendingInterest ?? 0) / cnyRate : Number(poolOrder.pendingInterest ?? 0);
+      const principalDeductU = poolOrder.principalLentOut === true || poolOrder.principalLentOut === 1 ? principalU : 0;
+      const linkedTag = typeof poolOrder.linked37TagName === 'string' ? poolOrder.linked37TagName : '';
+      let floatingPnlU: number | null = null;
+      if (linkedTag) {
+        if (!counted37Tags.has(linkedTag)) {
+          counted37Tags.add(linkedTag);
+          const value = Number(poolOrder.linked37FloatingPnl);
+          if (!Number.isFinite(value)) return null;
+          floatingPnlU = value;
+        } else {
+          floatingPnlU = 0;
+        }
+      } else if (poolOrder.assetType === 'crypto_option' || (Number(poolOrder.quantity ?? 0) === 0 && (poolOrder.principalLentOut === true || poolOrder.principalLentOut === 1))) {
+        floatingPnlU = 0;
+      } else {
+        const coin = String(poolOrder.coin || '').toUpperCase();
+        const quantity = Number(poolOrder.quantity ?? 0);
+        const price = livePrices[coin] ?? (poolOrder.currentPrice !== null && poolOrder.currentPrice !== undefined ? Number(poolOrder.currentPrice) : null);
+        const currentValue = coin === 'CNY' ? quantity / cnyRate : (price !== null ? Number(price) * quantity : null);
+        if (currentValue === null || !Number.isFinite(currentValue)) return null;
+        const buyValue = Number(poolOrder.buyValue ?? 0);
+        const buyCurrency = String(poolOrder.buyValueCurrency || 'USDT').trim().toUpperCase();
+        const buyValueU = ['CNY', 'RMB', '人民币'].includes(buyCurrency) ? buyValue / cnyRate : buyValue;
+        const costBaseU = buyValueU > 0 ? buyValueU : principalU;
+        floatingPnlU = currentValue - costBaseU;
+      }
+      remaining += floatingPnlU - pendingU - principalDeductU;
+    }
+    return remaining;
+  })();
+  const externalCollateralValueU = isSharedMode
+    ? (sharedPoolInfo ? Number((sharedPoolInfo as any).totalCollateralValue) : null)
+    : externalCollateralSummary.totalU;
+  const externalCollateralValueCny = externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU)
+    ? externalCollateralValueU * cnyRate
+    : null;
   // 共享模式：effectiveExposure 直接用 sharedExposureGap（正=充足/盈余，负=缺口）
   // 非共享模式：使用原有 exposure 逻辑
   const effectiveExposure = isSharedMode ? sharedExposureGap : exposure;
@@ -1850,13 +1956,12 @@ export function FunderOrderCard({
                     onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
                   >!</button>
                 </span>
-                {extRemainingMarginU !== null ? (
-                  <span className="font-medium">
-                    <span style={{ color: extRemainingMarginU >= 0 ? '#B71C1C' : '#16A34A' }}>{extRemainingMarginU >= 0 ? '+' : '-'}</span>
-                    <span style={{ color: '#1A2340' }}>{Math.abs(extRemainingMarginU).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                    <span style={{ color: '#6B7280' }}> U</span>
+                {externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU) ? (
+                  <span className="font-medium tabular-nums text-right" style={{ color: '#1A2340' }}>
+                    {isSharedMode ? '共享合计 ' : ''}{externalCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u
+                    {externalCollateralValueCny !== null && <span className="ml-1 text-[10px]" style={{ color: '#9CA3AF' }}>≈{externalCollateralValueCny.toLocaleString(undefined, { maximumFractionDigits: 0 })}元</span>}
                   </span>
-                ) : <span style={{ color: '#9CA3AF' }}>加载中...</span>}
+                ) : <span style={{ color: '#9CA3AF' }}>{isSharedMode ? '共享担保加载中...' : '加载中...'}</span>}
               </div>
             )}
             {show('collateralCoin') && !hasExternalCollateral && (
@@ -1931,20 +2036,8 @@ export function FunderOrderCard({
             )}
             {(collateralAssets.length > 1 ? approxCollateralTotal !== 'hidden' : show('collateralValue')) && (() => {
               if (hasExternalCollateral) {
-                // 有外部担保物绑定：显示剩余保证金U值
-                const val = extRemainingMarginU;
-                return (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-400">担保价值</span>
-                    {val !== null ? (
-                      <span className="font-medium">
-                        <span style={{ color: val >= 0 ? '#B71C1C' : '#16A34A' }}>{val >= 0 ? '+' : '-'}</span>
-                        <span style={{ color: '#1A2340' }}>{Math.abs(val).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                        <span style={{ color: '#6B7280' }}> U</span>
-                      </span>
-                    ) : <span className="text-xs" style={{ color: '#9CA3AF' }}>加载中...</span>}
-                  </div>
-                );
+                // 37标签订单的担保价值已紧随“担保货币”展示，避免同一保证金总值重复两次。
+                return null;
               }
               const approxCV = dc?.approxCollateralValue ?? 'U';
               const cvDisplay = collateralAssets.length > 1
@@ -1963,7 +2056,7 @@ export function FunderOrderCard({
                 </div>
               );
             })()}
-            {show('collateral') && (
+            {(show('collateral') || hasExternalCollateral) && (
               <>
               {showCollateralInfo && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowCollateralInfo(false)}>
@@ -1991,40 +2084,10 @@ export function FunderOrderCard({
                           {/* ①② 总计风险敎口 + 保证金比例（移到最上面） */}
                           {sharedPoolInfo && (() => {
                             const orders = (sharedPoolInfo as any).orders ?? [];
-                            let totalRequired = 0;
-                            let allHaveGap = true;
-                            for (const o of orders) {
-                              const oQty = Number(o.quantity ?? 0);
-                              const oPrincipal = Number(o.principal ?? 0);
-                              const oCoin = (o.coin || '').toUpperCase();
-                              const isCNYr = oCoin === 'CNY';
-                              // 计息基数和待结利息须按各自保存的币种折算，不能以标的币种代替。
-                              const oInterestBaseCurrencyR = String(o.interestBaseCurrency || 'USDT').trim().toUpperCase();
-                              const oInterestBaseIsCNYR = ['CNY', 'RMB', '人民币'].includes(oInterestBaseCurrencyR);
-                              const oPrincipalUR = oInterestBaseIsCNYR ? oPrincipal / cnyRate : oPrincipal;
-                              const oPendingInterestR = oInterestBaseIsCNYR ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                              const oPrincipalLentOutR = o.principalLentOut === true || o.principalLentOut === 1;
-                              const oPrincipalDeductR = oPrincipalLentOutR ? oPrincipalUR : 0;
-                              // 与逐单列表保持一致：期权或数量为0的借出本金订单没有可估值持仓，不能先按“市值0−本金”再扣本金。
-                              const isOptionNoQtyR = o.assetType === 'crypto_option' || (oQty === 0 && oPrincipalLentOutR);
-                              if (isOptionNoQtyR) {
-                                totalRequired -= oPendingInterestR + oPrincipalDeductR;
-                                continue;
-                              }
-                              const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
-                              if (!isCNYr && oLiveP === null) { allHaveGap = false; continue; }
-                              const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
-                              // 与订单详情一致：数字币浮盈以买入价 × 数量为成本；计息基数只用于利息，不能替代持仓成本。
-                              // 股票订单继续沿用其详情页既有的计息基数成本口径；缺少历史买入值的旧单安全回退计息基数。
-                              const oBuyValueR = Number(o.buyValue ?? 0);
-                              const oBuyValueCurrencyR = String(o.buyValueCurrency || 'USDT').trim().toUpperCase();
-                              const oBuyValueUR = ['CNY', 'RMB', '人民币'].includes(oBuyValueCurrencyR) ? oBuyValueR / cnyRate : oBuyValueR;
-                              const oFloatBaseR = o.assetType === 'stock' ? oPrincipalUR : (oBuyValueUR > 0 ? oBuyValueUR : oPrincipalUR);
-                              const oFloatPnlR = oCurrentValueR - oFloatBaseR;
-                              totalRequired += oFloatPnlR - oPendingInterestR - oPrincipalDeductR;
-                            }
                             const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
-                            const diff = totalColl + totalRequired;
+                            const allHaveGap = sharedPoolRemainingU !== null;
+                            const diff = sharedPoolRemainingU ?? 0;
+                            const totalRequired = diff - totalColl;
                             // 总买入价值统一为U后再计算保证金比例，避免人民币计价订单直接以人民币数额混入U分母。
                             const totalBuyValue = orders.reduce((sum: number, o: any) => {
                               const buyValue = Number(o.buyValue ?? 0);
@@ -2108,7 +2171,11 @@ export function FunderOrderCard({
                                     const oBuyValueCurrency = String(o.buyValueCurrency || 'USDT').trim().toUpperCase();
                                     const oBuyValueU = ['CNY', 'RMB', '人民币'].includes(oBuyValueCurrency) ? oBuyValue / cnyRate : oBuyValue;
                                     const oFloatBaseU = o.assetType === 'stock' ? oPrincipalU : (oBuyValueU > 0 ? oBuyValueU : oPrincipalU);
-                                    const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oFloatBaseU : null;
+                                    // 绑定37标签的股票订单以标签净值盈亏为准，不使用股票行情推算。
+                                    const linked37Pnl = o.linked37TagName ? Number(o.linked37FloatingPnl) : null;
+                                    const oFloatPnl = linked37Pnl !== null && Number.isFinite(linked37Pnl)
+                                      ? linked37Pnl
+                                      : (oCurrentValue !== null ? oCurrentValue - oFloatBaseU : null);
                                     // 借出本金：若勾选了「借出本金」，需从缺口中扣除本金（CNY 订单折算成 U）
                                     const oPrincipalLentOut = o.principalLentOut === true || o.principalLentOut === 1;
                                     const oPrincipalDeduct = oPrincipalLentOut ? oPrincipalU : 0;
@@ -2130,41 +2197,10 @@ export function FunderOrderCard({
                                   })}
                                 </div>
                                 {(() => {
-                                  // 合计用 livePrices 重算，与各行完全一致
-                                  const orders = (sharedPoolInfo as any).orders ?? [];
-                                  let totalGapLive = 0;
-                                  let allKnown = true;
-                                  for (const o of orders) {
-                                    const oQty = Number(o.quantity ?? 0);
-                                    const oPrincipal = Number(o.principal ?? 0);
-                                    const oCoin = (o.coin || '').toUpperCase();
-                                    const isCNYt = oCoin === 'CNY';
-                                    const oInterestBaseCurrencyT = String(o.interestBaseCurrency || 'USDT').trim().toUpperCase();
-                                    const oInterestBaseIsCNYT = ['CNY', 'RMB', '人民币'].includes(oInterestBaseCurrencyT);
-                                    const oPendingInterestT = oInterestBaseIsCNYT ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                                    // 期权订单且 quantity=0：缺口 = 待结利息 + （借出开关开时加计息基数）
-                                    const isOptionNoQtyT = o.assetType === 'crypto_option' || (oQty === 0 && o.principalLentOut);
-                                    if (isOptionNoQtyT) {
-                                      const oPrincipalLentOutT2 = o.principalLentOut === true || o.principalLentOut === 1;
-                                      const oPrincipalUT2 = oInterestBaseIsCNYT ? oPrincipal / cnyRate : oPrincipal;
-                                      const oPrincipalDeductT2 = oPrincipalLentOutT2 ? oPrincipalUT2 : 0;
-                                      totalGapLive += -(oPendingInterestT + oPrincipalDeductT2);
-                                      continue;
-                                    }
-                                    const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
-                                    if (!isCNYt && oLiveP === null) { allKnown = false; continue; }
-                                    const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
-                                    const oPrincipalUT = oInterestBaseIsCNYT ? oPrincipal / cnyRate : oPrincipal;
-                                    // 合计必须与逐单行和订单详情共用同一成本口径。
-                                    const oBuyValueT = Number(o.buyValue ?? 0);
-                                    const oBuyValueCurrencyT = String(o.buyValueCurrency || 'USDT').trim().toUpperCase();
-                                    const oBuyValueUT = ['CNY', 'RMB', '人民币'].includes(oBuyValueCurrencyT) ? oBuyValueT / cnyRate : oBuyValueT;
-                                    const oFloatBaseUT = o.assetType === 'stock' ? oPrincipalUT : (oBuyValueUT > 0 ? oBuyValueUT : oPrincipalUT);
-                                    const oFloatPnlT = oCurrentValueT - oFloatBaseUT;
-                                    const oPrincipalLentOutT = o.principalLentOut === true || o.principalLentOut === 1;
-                                    const oPrincipalDeductT = oPrincipalLentOutT ? oPrincipalUT : 0;
-                                    totalGapLive += oFloatPnlT - oPendingInterestT - oPrincipalDeductT;
-                                  }
+                                  // 共享总计沿用上方已去重的37标签计算：总剩余保证金 − 共享担保物总值。
+                                  const totalCollateral = Number((sharedPoolInfo as any).totalCollateralValue ?? 0);
+                                  const allKnown = sharedPoolRemainingU !== null;
+                                  const totalGapLive = allKnown ? sharedPoolRemainingU! - totalCollateral : 0;
                                   return (
                                     <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                                       <span style={{ color: '#374151' }}>合计缺口需求</span>
@@ -2321,17 +2357,22 @@ export function FunderOrderCard({
               )}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-0.5">
-                  <span className="text-gray-400">{hasExternalCollateral ? '保证金率' : '担保缺口'}</span>
+                  <span className="text-gray-400">担保缺口</span>
                   <button
                     onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
                     className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
                     style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                  >{hasExternalCollateral ? '?' : '!'}</button>
+                  >!</button>
                 </div>
                 {hasExternalCollateral ? (
-                  extMarginBasePct !== null
-                    ? <span className="font-bold" style={{ color: extMarginBasePct >= 100 ? '#16A34A' : extMarginBasePct >= 50 ? '#D97706' : '#DC2626' }}>{extMarginBasePct.toFixed(1)}%</span>
-                    : <span className="text-xs" style={{ color: '#9CA3AF' }}>加载中...</span>
+                  (isSharedMode ? sharedPoolRemainingU : extRemainingMarginU) !== null
+                    ? (() => {
+                        const remaining = isSharedMode ? sharedPoolRemainingU! : extRemainingMarginU!;
+                        return <span className="font-medium tabular-nums" style={{ color: remaining >= 0 ? '#DC2626' : '#16A34A' }}>
+                          {remaining >= 0 ? '+' : ''}{remaining.toLocaleString(undefined, { maximumFractionDigits: 2 })} u
+                        </span>;
+                      })()
+                    : <span className="text-xs" style={{ color: '#9CA3AF' }}>{isSharedMode ? '共享担保加载中...' : '加载中...'}</span>
                 ) : (
                   showExposureLoading
                     ? <span className="text-xs" style={{ color: '#9CA3AF' }}>计算中...</span>
