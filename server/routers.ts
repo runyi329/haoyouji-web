@@ -18258,13 +18258,17 @@ ${klinesSummary}
 
           // 37号标签可以独立提供股票净值盈亏、担保物，旧订单无开关时兼容为两项都引用。
           // 共享池按实际被启用的用途汇总，避免手工担保物被37号保证金覆盖或重复计入。
-          const linked37Tags = Array.from(new Set(orders.map((o: any) => {
+          const linked37Tags = Array.from(new Set(orders.flatMap((o: any) => {
             try {
               const raw = o.collateral_source;
               const source = Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : (typeof raw === 'string' ? JSON.parse(raw) : raw);
-              return Number(source?.ledgerId) === 37 && source?.tagName ? String(source.tagName) : null;
-            } catch { return null; }
-          }).filter(Boolean))) as string[];
+              if (Number(source?.ledgerId) !== 37 || !source?.tagName) return [];
+              const legacyTagName = String(source.tagName);
+              const floatingPnlTagName = source.floatingPnlTagName || (source.useFloatingPnl !== false ? legacyTagName : '');
+              const collateralTagName = source.collateralTagName || (source.useCollateral !== false ? legacyTagName : '');
+              return [floatingPnlTagName, collateralTagName].filter(Boolean);
+            } catch { return []; }
+          }))) as string[];
           const linkedTagConfigByName = new Map<string, any>();
           const linkedTagBalanceByName = new Map<string, number>();
           const linkedTagMarginByName = new Map<string, Record<string, number>>();
@@ -18358,23 +18362,30 @@ ${klinesSummary}
             for (const row of (Array.isArray(latestBalances) ? latestBalances : [])) linkedTagBalanceByName.set(String(row.tag_name), Number(row.amount));
           }
 
-          const parseLinked37Source = (raw: unknown): { tagName: string; useFloatingPnl: boolean; useCollateral: boolean } | null => {
+          const parseLinked37Source = (raw: unknown): { floatingPnlTagName: string; collateralTagName: string; useFloatingPnl: boolean; useCollateral: boolean } | null => {
             try {
               const source = Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : (typeof raw === 'string' ? JSON.parse(raw) : raw);
-              return Number(source?.ledgerId) === 37 && source?.tagName ? {
-                tagName: String(source.tagName),
-                useFloatingPnl: source.useFloatingPnl !== false,
-                useCollateral: source.useCollateral !== false,
+              if (Number(source?.ledgerId) !== 37 || !source?.tagName) return null;
+              const legacyTagName = String(source.tagName);
+              const floatingPnlTagName = source.floatingPnlTagName || (source.useFloatingPnl !== false ? legacyTagName : '');
+              const collateralTagName = source.collateralTagName || (source.useCollateral !== false ? legacyTagName : '');
+              return (floatingPnlTagName || collateralTagName) ? {
+                floatingPnlTagName,
+                collateralTagName,
+                useFloatingPnl: !!floatingPnlTagName,
+                useCollateral: !!collateralTagName,
               } : null;
             } catch { return null; }
           };
           const calculateLinked37Collateral = (rawSource: unknown) => {
             const source = parseLinked37Source(rawSource);
-            const config = source ? linkedTagConfigByName.get(source.tagName) : null;
-            if (!source || !config) return null;
+            if (!source) return null;
+            const collateralConfig = source.collateralTagName ? linkedTagConfigByName.get(source.collateralTagName) : null;
+            const pnlConfig = source.floatingPnlTagName ? linkedTagConfigByName.get(source.floatingPnlTagName) : null;
+            if ((source.useCollateral && !collateralConfig) || (source.useFloatingPnl && !pnlConfig)) return null;
             let entries: Array<{ coin: string; qty: number; note: string }> = [];
             try {
-              const rawMargins = linkedTagMarginByName.get(source.tagName) ?? {};
+              const rawMargins = source.collateralTagName ? (linkedTagMarginByName.get(source.collateralTagName) ?? {}) : {};
               entries = Array.isArray(rawMargins)
                 ? rawMargins.map((entry: any) => ({ coin: String(entry?.coin ?? 'CNY'), qty: Number(entry?.amount), note: String(entry?.label ?? '') }))
                 : Object.entries(rawMargins ?? {}).map(([coin, qty]) => ({ coin: String(coin), qty: Number(qty), note: '' }));
@@ -18390,12 +18401,13 @@ ${klinesSummary}
               if (!price) { allPricesKnown = false; continue; }
               collateralValue += entry.qty * price;
             }
-            const latestBalance = linkedTagBalanceByName.get(source.tagName);
-            const initialAmount = Number(config.initial_amount) || 0;
-            const multiplier = Number(config.account_multiplier) || 1;
-            const floatingPnl = Number.isFinite(latestBalance) ? ((latestBalance! - initialAmount) * multiplier / usdtCnyRate) : null;
+            const latestBalance = source.floatingPnlTagName ? linkedTagBalanceByName.get(source.floatingPnlTagName) : null;
+            const initialAmount = Number(pnlConfig?.initial_amount) || 0;
+            const multiplier = Number(pnlConfig?.account_multiplier) || 1;
+            const floatingPnl = source.useFloatingPnl && Number.isFinite(latestBalance) ? ((latestBalance! - initialAmount) * multiplier / usdtCnyRate) : null;
             return {
-              tagName: source.tagName,
+              floatingPnlTagName: source.floatingPnlTagName,
+              collateralTagName: source.collateralTagName,
               useFloatingPnl: source.useFloatingPnl,
               useCollateral: source.useCollateral,
               collateralAssets: entries.map(entry => ({ coin: entry.coin, qty: entry.qty, note: entry.note })),
@@ -18503,9 +18515,9 @@ ${klinesSummary}
               collateralGap: collateralValue - collateralRequired,
               collateralAssets: effectiveCollateralAssets,
               // linked37TagName专指实际引用的37号担保物，供担保池去重。
-              linked37TagName: linked37Collateral?.useCollateral ? linked37Collateral.tagName : null,
+              linked37TagName: linked37Collateral?.useCollateral ? linked37Collateral.collateralTagName : null,
               // 浮盈可单独引用37号标签，手工担保订单也应使用这个净值盈亏。
-              linked37PnlTagName: linked37Collateral?.useFloatingPnl ? linked37Collateral.tagName : null,
+              linked37PnlTagName: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnlTagName : null,
               linked37FloatingPnl: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null,
               linked37RiskExposure: linked37Collateral?.useCollateral && linked37Collateral?.useFloatingPnl ? linked37Collateral.riskExposure : null,
               shareMode: o.collateral_share_mode,
@@ -18636,7 +18648,7 @@ ${klinesSummary}
         ownerLabel: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
         principalLentOut: z.boolean().optional(),
         tradingFeeRate: z.number().min(0).max(100).optional(),
         tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
@@ -19615,7 +19627,7 @@ ${klinesSummary}
         interestRateCurrency: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
         principalLentOut: z.boolean().optional(),
         tradingFeeRate: z.number().min(0).max(100).optional(),
         tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
@@ -19769,7 +19781,7 @@ ${klinesSummary}
         tradeDirection: z.enum(['long', 'short']).nullable().optional(),
         orderFillStatus: z.enum(['pending', 'filled']).optional(),
         orderPerspective: z.enum(['self', 'other']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
         optionInfo: z.object({
           premium: z.string().optional(),
           exerciseDate: z.string().optional(),

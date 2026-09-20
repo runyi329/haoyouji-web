@@ -126,11 +126,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [collateralSource, setCollateralSource] = useState<{
     ledgerId: number;
     tagName: string;
+    floatingPnlTagName?: string;
+    collateralTagName?: string;
     useFloatingPnl?: boolean;
     useCollateral?: boolean;
   } | null>(null);
   const [interestTagName, setInterestTagName] = useState<string>(''); // 利息标签（与保证金标签联动）
-  const isUsing37Collateral = collateralSourceMode === 'external' && collateralSource?.useCollateral !== false;
+  const isUsing37Collateral = collateralSourceMode === 'external'
+    && !!(collateralSource?.collateralTagName || (collateralSource?.tagName && collateralSource?.useCollateral !== false));
 
   // 字段展示配置（控制订单卡片各字段的显示/隐藏）
   const DEFAULT_DISPLAY_CONFIG: Record<string, boolean | string> = {
@@ -1064,12 +1067,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
         if (parsed && parsed.ledgerId && parsed.tagName) {
           setCollateralSourceMode('external');
+          const floatingPnlTagName = parsed.floatingPnlTagName || (parsed.useFloatingPnl !== false ? parsed.tagName : '');
+          const collateralTagName = parsed.collateralTagName || (parsed.useCollateral !== false ? parsed.tagName : '');
           setCollateralSource({
             ledgerId: parsed.ledgerId,
+            // tagName保留为旧字段回退，新的两个字段才是各自独立的数据来源。
             tagName: parsed.tagName,
-            // 历史订单没有开关时仍同时使用37号浮盈和37号担保物。
-            useFloatingPnl: parsed.useFloatingPnl !== false,
-            useCollateral: parsed.useCollateral !== false,
+            floatingPnlTagName,
+            collateralTagName,
+            useFloatingPnl: !!floatingPnlTagName,
+            useCollateral: !!collateralTagName,
           });
           setInterestTagName(parsed.interestTagName || parsed.tagName || '');
         } else {
@@ -1236,10 +1243,22 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ownerLabel: formData.ownerLabel || undefined,
       tags: formData.tags.length > 0 ? formData.tags : undefined,
       collateralShareMode: collateralShareMode !== 'none' ? collateralShareMode : undefined,
-      collateralSource: collateralSourceMode === 'external' && collateralSource
-        && (collateralSource.useFloatingPnl !== false || collateralSource.useCollateral !== false)
-        ? { ...collateralSource, interestTagName: interestTagName || collateralSource.tagName }
-        : null,
+      collateralSource: (() => {
+        if (collateralSourceMode !== 'external' || !collateralSource) return null;
+        const floatingPnlTagName = collateralSource.floatingPnlTagName || (collateralSource.useFloatingPnl !== false ? collateralSource.tagName : '');
+        const collateralTagName = collateralSource.collateralTagName || (collateralSource.useCollateral !== false ? collateralSource.tagName : '');
+        const legacyTagName = collateralTagName || floatingPnlTagName || interestTagName;
+        if (!legacyTagName) return null;
+        return {
+          ledgerId: 37,
+          tagName: legacyTagName,
+          floatingPnlTagName: floatingPnlTagName || undefined,
+          collateralTagName: collateralTagName || undefined,
+          useFloatingPnl: !!floatingPnlTagName,
+          useCollateral: !!collateralTagName,
+          interestTagName: interestTagName || undefined,
+        };
+      })(),
       principalLentOut: formData.principalLentOut,
       tradingFeeRate: ledgerId === 52 ? (Number.isFinite(Number(formData.tradingFeeRate)) ? Math.max(0, Number(formData.tradingFeeRate)) : 2) : undefined,
       tradingFeeStatus: ledgerId === 52 ? formData.tradingFeeStatus : undefined,
@@ -2470,57 +2489,65 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               </div>
               )}
 
-              {/* 调用37号数据：同一标签可只取浮盈，也可同时取保证金。 */}
+              {/* 股票订单：盈亏、担保物、利息标签分别选择，互不强制联动。 */}
               {!editingOrder?.participantInfo && formData.assetType === 'stock' && collateralSourceMode === 'external' && (
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-3">
-                {/* 37号标签 */}
                 <div className="space-y-1.5">
-                  <div className="text-xs font-medium text-blue-600">数据标签（37号账本）</div>
+                  <div className="text-xs font-medium text-blue-600">盈亏标签（37号账本）</div>
                   <select
-                    value={collateralSource?.tagName || ''}
+                    value={collateralSource?.floatingPnlTagName || ''}
                     onChange={e => {
                       const tag = e.target.value;
-                      setCollateralSource(tag ? { ledgerId: 37, tagName: tag, useFloatingPnl: true, useCollateral: true } : null);
-                      // 保持已有利息标签联动规则。
-                      if (tag) setInterestTagName(tag);
+                      setCollateralSource(prev => {
+                        if (!tag) return prev ? { ...prev, floatingPnlTagName: '', useFloatingPnl: false } : prev;
+                        const collateralTagName = prev?.collateralTagName || '';
+                        return {
+                          ledgerId: 37,
+                          tagName: collateralTagName || tag,
+                          floatingPnlTagName: tag,
+                          collateralTagName,
+                          useFloatingPnl: true,
+                          useCollateral: !!collateralTagName,
+                        };
+                      });
                     }}
                     className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 appearance-none bg-white"
                   >
-                    <option value="">请选择标签</option>
+                    <option value="">不读取37号浮动盈亏</option>
                     {(activeMarginTags as any[])?.map((t: any) => (
                       <option key={t.tagName} value={t.tagName}>{t.tagName}</option>
                     ))}
                   </select>
+                  <div className="text-[11px] text-blue-500">仅影响股票浮动盈亏和担保缺口中的净值盈亏项，不会自动引用保证金。</div>
                 </div>
-                {collateralSource && (
-                  <div className="rounded-lg border border-blue-100 bg-white px-3 py-2.5 space-y-2">
-                    <label className="flex items-center justify-between gap-3 cursor-pointer">
-                      <span>
-                        <span className="block text-sm font-medium text-gray-700">读取37号浮动盈亏</span>
-                        <span className="block text-[11px] text-gray-400 mt-0.5">用标签净值、初始金额和账号倍率计算股票浮盈</span>
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={collateralSource.useFloatingPnl !== false}
-                        onChange={e => setCollateralSource(prev => prev ? { ...prev, useFloatingPnl: e.target.checked } : prev)}
-                        className="w-4 h-4 accent-blue-600 shrink-0"
-                      />
-                    </label>
-                    <label className="flex items-center justify-between gap-3 cursor-pointer pt-2 border-t border-blue-50">
-                      <span>
-                        <span className="block text-sm font-medium text-gray-700">引用37号担保货币</span>
-                        <span className="block text-[11px] text-gray-400 mt-0.5">关闭后可在下方手工录入担保物，不与37号保证金叠加</span>
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={collateralSource.useCollateral !== false}
-                        onChange={e => setCollateralSource(prev => prev ? { ...prev, useCollateral: e.target.checked } : prev)}
-                        className="w-4 h-4 accent-blue-600 shrink-0"
-                      />
-                    </label>
-                  </div>
-                )}
-                {/* 利息标签 */}
+                <div className="space-y-1.5">
+                  <div className="text-xs font-medium text-blue-600">数据标签 / 担保标签（37号账本）</div>
+                  <select
+                    value={collateralSource?.collateralTagName || ''}
+                    onChange={e => {
+                      const tag = e.target.value;
+                      setCollateralSource(prev => {
+                        if (!tag) return prev ? { ...prev, collateralTagName: '', useCollateral: false } : prev;
+                        const floatingPnlTagName = prev?.floatingPnlTagName || '';
+                        return {
+                          ledgerId: 37,
+                          tagName: floatingPnlTagName || tag,
+                          floatingPnlTagName,
+                          collateralTagName: tag,
+                          useFloatingPnl: !!floatingPnlTagName,
+                          useCollateral: true,
+                        };
+                      });
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 appearance-none bg-white"
+                  >
+                    <option value="">不引用37号担保货币（下方手工录入）</option>
+                    {(activeMarginTags as any[])?.map((t: any) => (
+                      <option key={t.tagName} value={t.tagName}>{t.tagName}</option>
+                    ))}
+                  </select>
+                  <div className="text-[11px] text-blue-500">可与盈亏标签不同；未选择时，下方手工担保货币区域可直接使用。</div>
+                </div>
                 <div className="space-y-1.5">
                   <div className="text-xs font-medium text-blue-600">利息标签（37号账本）</div>
                   <select
@@ -2528,8 +2555,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     onChange={e => {
                       const tag = e.target.value;
                       setInterestTagName(tag);
-                      // 联动：利息选了，数据标签同步；默认两项都读取。
-                      if (tag) setCollateralSource({ ledgerId: 37, tagName: tag, useFloatingPnl: true, useCollateral: true });
+                      // 利息标签是原有通用字段，保持独立，不再改动盈亏或担保标签。
+                      if (tag) setCollateralSource(prev => prev || {
+                        ledgerId: 37, tagName: tag, floatingPnlTagName: '', collateralTagName: '', useFloatingPnl: false, useCollateral: false,
+                      });
                     }}
                     className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 appearance-none bg-white"
                   >
@@ -2539,10 +2568,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     ))}
                   </select>
                 </div>
-                {(collateralSource || interestTagName) && (
-                  <div className="text-xs text-blue-500 pt-0.5">
-                    {collateralSource && <span>数据标签：{collateralSource.tagName}</span>}
-                    {collateralSource && interestTagName && <span className="mx-1.5 text-blue-300">·</span>}
+                {(collateralSource?.floatingPnlTagName || collateralSource?.collateralTagName || interestTagName) && (
+                  <div className="text-xs text-blue-500 pt-0.5 leading-5">
+                    {collateralSource?.floatingPnlTagName && <span>盈亏：{collateralSource.floatingPnlTagName}</span>}
+                    {collateralSource?.floatingPnlTagName && (collateralSource?.collateralTagName || interestTagName) && <span className="mx-1.5 text-blue-300">·</span>}
+                    {collateralSource?.collateralTagName && <span>担保：{collateralSource.collateralTagName}</span>}
+                    {collateralSource?.collateralTagName && interestTagName && <span className="mx-1.5 text-blue-300">·</span>}
                     {interestTagName && <span>利息：{interestTagName}</span>}
                   </div>
                 )}

@@ -712,96 +712,107 @@ export function FunderOrderCard({
       };
     })()
   ) : null;
-  // 解析37号数据来源。浮动盈亏和担保货币可独立引用；旧订单缺省为两项都引用。
+  // 解析37号数据来源。盈亏标签、担保标签可分别选择；旧订单只存tagName时两项都回退到该标签。
   const _parsedCollateralSource = useMemo(() => {
     try {
       const cs = (order as any).collateral_source;
       if (!cs) return null;
       const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
       if (parsed && parsed.ledgerId && parsed.tagName) return parsed as {
-        ledgerId: number; tagName: string; useFloatingPnl?: boolean; useCollateral?: boolean;
+        ledgerId: number; tagName: string; floatingPnlTagName?: string; collateralTagName?: string;
+        useFloatingPnl?: boolean; useCollateral?: boolean;
       };
     } catch {}
     return null;
   }, [(order as any).collateral_source]);
-  const hasExternalDataSource = !!_parsedCollateralSource;
-  const hasExternalCollateral = hasExternalDataSource && _parsedCollateralSource?.useCollateral !== false;
+  const linkedPnlTagName = _parsedCollateralSource?.floatingPnlTagName
+    || (_parsedCollateralSource?.useFloatingPnl !== false ? _parsedCollateralSource?.tagName : '');
+  const linkedCollateralTagName = _parsedCollateralSource?.collateralTagName
+    || (_parsedCollateralSource?.useCollateral !== false ? _parsedCollateralSource?.tagName : '');
+  const hasExternalDataSource = !!(linkedPnlTagName || linkedCollateralTagName);
+  const hasExternalCollateral = !!linkedCollateralTagName;
 
-  // 动态查询绑定的保证金标签数据
-  const { data: _extTagConfig } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: _parsedCollateralSource?.tagName ?? '' },
-    { enabled: hasExternalDataSource, staleTime: 3000 }
+  // 两个标签独立查询：盈亏只读净值，担保只读逐笔保证金；若选了同一标签，数据口径仍相同。
+  const { data: _pnlTagConfig } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPnlTagName || '' },
+    { enabled: !!linkedPnlTagName, staleTime: 3000 }
   );
-  const { data: _extTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: _parsedCollateralSource?.tagName ?? '' },
-    { enabled: hasExternalDataSource, staleTime: 3000 }
+  const { data: _pnlTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPnlTagName || '' },
+    { enabled: !!linkedPnlTagName, staleTime: 3000 }
+  );
+  const { data: _collateralTagConfig } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '' },
+    { enabled: !!linkedCollateralTagName, staleTime: 3000 }
+  );
+  const { data: _collateralTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '' },
+    { enabled: !!linkedCollateralTagName, staleTime: 3000 }
   );
   const { data: _extCryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
     enabled: hasExternalDataSource, refetchInterval: 3000, staleTime: 0,
   });
-  // 读取37标签的两项担保缺口输入：逐笔保证金总值、净值盈亏。
-  // 这里不直接产出“担保缺口”，因为52订单还必须计入待结利息、已结利息和借出本金。
+  // 读取两份独立数据：担保标签的逐笔保证金总值、盈亏标签的净值盈亏。
+  // 52订单的利息和借出本金不属于37号标签，仍在风险公式中另行处理。
   const { extCollateralValueU: extTagCollateralValueU, extFloatingPnlU: extTagFloatingPnlU } = useMemo(() => {
-    if (!hasExternalDataSource || !_extTagConfig) {
-      return { extCollateralValueU: null as number | null, extFloatingPnlU: null as number | null };
-    }
     const _cnyR = (_extCryptoPricesRaw as any)?.usdtCnyRate ?? 7.0;
     const _pricesMap = (_extCryptoPricesRaw as any)?.prices ?? {};
     const _prices: Record<string, number> = {};
     for (const [k, v] of Object.entries(_pricesMap)) { _prices[k] = Number(v) * _cnyR; }
     _prices['USDT'] = _cnyR;
+    _prices['CNY'] = 1;
     const _toCNY = (m: string | number, coin: string) => {
       const n = typeof m === 'number' ? m : parseFloat(m as string);
       if (isNaN(n) || n === 0) return 0;
-      if (!coin || coin === '人民币' || coin === '元') return n;
-      return n * (_prices[coin] ?? 0);
+      const normalizedCoin = String(coin || 'CNY').trim().toUpperCase();
+      if (['CNY', 'RMB', '人民币', '元'].includes(normalizedCoin)) return n;
+      return n * (_prices[normalizedCoin] ?? 0);
     };
-    let rightTotalCNY = 0;
-    try {
-      // 37号保证金管理页面以标签配置中的逐笔 margin_by_coin 为准。
-      // 订单金额、详情弹窗及缺口必须优先用同一份记录；仅旧标签缺失时回退成员汇总。
-      const summaryMargins = (_extTagSummary as any)?.marginByCoin;
-      const configuredMargins = (typeof (_extTagConfig as any).margin_by_coin === 'string'
-        ? JSON.parse((_extTagConfig as any).margin_by_coin)
-        : (_extTagConfig as any).margin_by_coin);
-      const hasConfiguredMargins = Array.isArray(configuredMargins)
-        ? configuredMargins.length > 0
-        : !!configuredMargins && typeof configuredMargins === 'object' && Object.keys(configuredMargins).length > 0;
-      const rawMargins = hasConfiguredMargins
-        ? configuredMargins
-        : summaryMargins;
-      const items = Array.isArray(rawMargins)
-        ? rawMargins.map((e: any) => ({ coin: e.coin || '元', amount: Number(e.amount) }))
-        : Object.entries(rawMargins ?? {}).map(([coin, amount]) => ({ coin, amount: Number(amount) }));
-      rightTotalCNY = items.reduce((s: number, { coin, amount }: any) => s + _toCNY(String(amount), coin), 0);
-    } catch {}
-    const latestBalance = (_extTagSummary as any)?.latestBalance;
-    const balanceNum = latestBalance?.balance ? parseFloat(String(latestBalance.balance)) : null;
-    const initialNum = parseFloat((_extTagConfig as any).initial_amount || '0') || 0;
-    const multiplierNum = parseFloat((_extTagConfig as any).account_multiplier || '1') || 1;
-    if (balanceNum === null || _cnyR <= 0) {
-      return { extCollateralValueU: null as number | null, extFloatingPnlU: null as number | null };
-    }
-    const pnl = (balanceNum - initialNum) * multiplierNum;
+    const marginTotalCny = (() => {
+      if (!linkedCollateralTagName || !_collateralTagConfig || _cnyR <= 0) return null;
+      try {
+        const summaryMargins = (_collateralTagSummary as any)?.marginByCoin;
+        const configuredMargins = typeof (_collateralTagConfig as any).margin_by_coin === 'string'
+          ? JSON.parse((_collateralTagConfig as any).margin_by_coin)
+          : (_collateralTagConfig as any).margin_by_coin;
+        const hasConfiguredMargins = Array.isArray(configuredMargins)
+          ? configuredMargins.length > 0
+          : !!configuredMargins && typeof configuredMargins === 'object' && Object.keys(configuredMargins).length > 0;
+        const rawMargins = hasConfiguredMargins ? configuredMargins : summaryMargins;
+        const items = Array.isArray(rawMargins)
+          ? rawMargins.map((e: any) => ({ coin: e.coin || '元', amount: Number(e.amount) }))
+          : Object.entries(rawMargins ?? {}).map(([coin, amount]) => ({ coin, amount: Number(amount) }));
+        return items.reduce((sum: number, item: any) => sum + _toCNY(item.amount, item.coin), 0);
+      } catch { return null; }
+    })();
+    const floatingPnlCny = (() => {
+      if (!linkedPnlTagName || !_pnlTagConfig || _cnyR <= 0) return null;
+      const latestBalance = (_pnlTagSummary as any)?.latestBalance?.balance;
+      const balanceNum = latestBalance === undefined || latestBalance === null || latestBalance === '' ? null : Number(latestBalance);
+      if (balanceNum === null || !Number.isFinite(balanceNum)) return null;
+      const initialNum = Number((_pnlTagConfig as any).initial_amount || 0) || 0;
+      const multiplierNum = Number((_pnlTagConfig as any).account_multiplier || 1) || 1;
+      return (balanceNum - initialNum) * multiplierNum;
+    })();
     return {
-      extCollateralValueU: rightTotalCNY / _cnyR,
-      extFloatingPnlU: pnl / _cnyR,
+      extCollateralValueU: marginTotalCny === null ? null : marginTotalCny / _cnyR,
+      extFloatingPnlU: floatingPnlCny === null ? null : floatingPnlCny / _cnyR,
     };
-  }, [hasExternalDataSource, _extTagConfig, _extTagSummary, _extCryptoPricesRaw]);
+  }, [linkedPnlTagName, linkedCollateralTagName, _pnlTagConfig, _pnlTagSummary, _collateralTagConfig, _collateralTagSummary, _extCryptoPricesRaw]);
 
   // 绑定 37 号账本标签时，担保物必须以该标签内逐笔保证金为唯一来源。
   // 这里与 RightMarginDetail 的展示口径一致：保留各币种净额，再按当前汇率汇总为 U / 人民币；
   // 不把订单上的历史手填 collateral_assets 与第三方标签重复相加。
   const externalCollateralSummary = useMemo(() => {
     const empty = { entries: [] as Array<{ coin: string; amount: number }>, totalCny: null as number | null, totalU: null as number | null, currencyLabel: '' };
-    if (!hasExternalCollateral || !_extTagConfig) return empty;
+    if (!hasExternalCollateral || !_collateralTagConfig) return empty;
     let entries: Array<{ coin: string; amount: number }> = [];
     try {
       // 与37标签详情/剩余保证金同口径：逐笔标签配置优先，成员汇总仅兼容老标签。
-      const summaryMargins = (_extTagSummary as any)?.marginByCoin;
-      const configuredMargins = (typeof (_extTagConfig as any).margin_by_coin === 'string')
-        ? JSON.parse((_extTagConfig as any).margin_by_coin)
-        : (_extTagConfig as any).margin_by_coin;
+      const summaryMargins = (_collateralTagSummary as any)?.marginByCoin;
+      const configuredMargins = (typeof (_collateralTagConfig as any).margin_by_coin === 'string')
+        ? JSON.parse((_collateralTagConfig as any).margin_by_coin)
+        : (_collateralTagConfig as any).margin_by_coin;
       const hasConfiguredMargins = Array.isArray(configuredMargins)
         ? configuredMargins.length > 0
         : !!configuredMargins && typeof configuredMargins === 'object' && Object.keys(configuredMargins).length > 0;
@@ -841,7 +852,7 @@ export function FunderOrderCard({
       .map(([coin, amount]) => `${amount >= 0 ? '+' : ''}${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${coin}`)
       .join(' · ');
     return { entries, totalCny: allKnown ? totalCny : null, totalU: allKnown && rate > 0 ? totalCny / rate : null, currencyLabel };
-  }, [hasExternalCollateral, _extTagConfig, _extTagSummary, _extCryptoPricesRaw, cnyRate]);
+  }, [hasExternalCollateral, _collateralTagConfig, _collateralTagSummary, _extCryptoPricesRaw, cnyRate]);
 
   // 弹窗状态：优先使用父组件传入的 props，否则 fallback 到内部 state
   // （父组件提升状态可防止数据刷新导致弹窗自动关闭）
@@ -958,17 +969,17 @@ export function FunderOrderCard({
   // 这里与 RightMarginDetail 保持完全一致：盈亏净值 =（最新余额 − 初始金额）× 账号倍率。
   const isExternalStockPnlSource = isStockOrder
     && Number(_parsedCollateralSource?.ledgerId) === 37
-    && _parsedCollateralSource?.useFloatingPnl !== false;
+    && !!linkedPnlTagName;
   const externalStockFloatPnlCny = useMemo(() => {
-    if (!isExternalStockPnlSource || !_extTagConfig) return null;
-    const rawBalance = (_extTagSummary as any)?.latestBalance?.balance;
+    if (!isExternalStockPnlSource || !_pnlTagConfig) return null;
+    const rawBalance = (_pnlTagSummary as any)?.latestBalance?.balance;
     if (rawBalance === undefined || rawBalance === null || rawBalance === '') return null;
     const latestBalance = Number(rawBalance);
     if (!Number.isFinite(latestBalance)) return null;
-    const initialAmount = Number((_extTagConfig as any).initial_amount ?? 0) || 0;
-    const accountMultiplier = Number((_extTagConfig as any).account_multiplier ?? 1) || 1;
+    const initialAmount = Number((_pnlTagConfig as any).initial_amount ?? 0) || 0;
+    const accountMultiplier = Number((_pnlTagConfig as any).account_multiplier ?? 1) || 1;
     return (latestBalance - initialAmount) * accountMultiplier;
-  }, [isExternalStockPnlSource, _extTagConfig, _extTagSummary]);
+  }, [isExternalStockPnlSource, _pnlTagConfig, _pnlTagSummary]);
   // 此值仅用于订单模式“浮动盈亏”一行及详情入口，不参与担保缺口、利息、本金或余额计算。
   // 解析期权信息
   const optionInfo = (() => {
@@ -1286,15 +1297,17 @@ export function FunderOrderCard({
   const exposure = floatPnlForRisk !== null
     ? collateralValue + floatPnlForRisk - accruedForRisk + totalPaidForRisk - (principalLentOut ? interestBaseForRisk : 0)
     : collateralValue - accruedForRisk + totalPaidForRisk - (principalLentOut ? interestBaseForRisk : 0);
-  // 绑定37号标签的股票订单：浮动盈亏取37号标签；担保物可选择标签保证金或手工录入。
+  // 37号盈亏标签、担保标签均可独立使用；担保物也可完全手工录入。
   // 利息和借出本金属于52订单本身，始终按普通订单的风险公式处理。
   const linkedCollateralValueU = hasExternalCollateral
     ? extTagCollateralValueU
     : (collateralValueKnown ? collateralValue : null);
-  const externalNonSharedGapU = isExternalStockPnlSource
+  const linkedFloatingPnlU = isExternalStockPnlSource ? extTagFloatingPnlU : 0;
+  const usesLinked37RiskData = hasExternalCollateral || isExternalStockPnlSource;
+  const externalNonSharedGapU = usesLinked37RiskData
     && linkedCollateralValueU !== null
-    && extTagFloatingPnlU !== null
-    ? linkedCollateralValueU + extTagFloatingPnlU - accruedForRisk + totalPaidForRisk - (principalLentOut ? interestBaseForRisk : 0)
+    && linkedFloatingPnlU !== null
+    ? linkedCollateralValueU + linkedFloatingPnlU - accruedForRisk + totalPaidForRisk - (principalLentOut ? interestBaseForRisk : 0)
     : null;
   // 共享担保模式下，担保缺口 = 本金浮动亏损（亏了多少）+ 待结利息（没付的利息）
   // 即：每张订单单独计算，不使用共享池 totalGap
@@ -1678,7 +1691,7 @@ export function FunderOrderCard({
                       {externalStockFloatPnlCny >= 0 ? '+' : ''}{externalStockFloatPnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元
                     </span>
                   ) : (
-                    <span className="font-medium text-gray-400">{_extTagSummary ? '暂无37号数据' : '加载37号数据...'}</span>
+                    <span className="font-medium text-gray-400">{_pnlTagSummary ? '暂无37号数据' : '加载37号数据...'}</span>
                   )
                 ) : floatPnl !== null ? (
                   <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
@@ -2115,7 +2128,7 @@ export function FunderOrderCard({
                           <button onClick={closeCollateralInfoDialog} className="text-gray-400 text-lg leading-none">×</button>
                         </div>
                         <div className="px-2 pb-4">
-                          <RightMarginDetail ledgerId={_parsedCollateralSource.ledgerId} tagName={_parsedCollateralSource.tagName} />
+                          <RightMarginDetail ledgerId={_parsedCollateralSource.ledgerId} tagName={linkedCollateralTagName} />
                         </div>
                       </>
                     ) : (
