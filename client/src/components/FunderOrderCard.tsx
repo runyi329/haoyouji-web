@@ -832,8 +832,6 @@ export function FunderOrderCard({
   const [_intShowInterestTip, _intSetShowInterestTip] = useState(false);
   const [_intShowCollateralInfo, _intSetShowCollateralInfo] = useState(false);
   const [_intShowMarginInfo, _intSetShowMarginInfo] = useState(false);
-  // 股票订单的浮动盈亏详情：复用已绑定的 37 号账本标签明细，只在订单模式中打开。
-  const [_intShowExternalStockPnlInfo, _intSetShowExternalStockPnlInfo] = useState(false);
   const showInterestTip = _propShowInterestTip !== undefined ? _propShowInterestTip : _intShowInterestTip;
   const setShowInterestTip = _propSetShowInterestTip ?? _intSetShowInterestTip;
   const showCollateralInfo = _propShowCollateralInfo !== undefined ? _propShowCollateralInfo : _intShowCollateralInfo;
@@ -1608,21 +1606,7 @@ export function FunderOrderCard({
             )}
             {show('floatPnl') && (isOptionOrder || isExternalStockPnlSource || floatPnl !== null) && (order as any).order_fill_status !== 'pending' && (
               <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1 text-gray-400 shrink-0">
-                  浮动盈亏
-                  {isExternalStockPnlSource && _parsedCollateralSource && (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        _intSetShowExternalStockPnlInfo(true);
-                      }}
-                      aria-label="查看37号账本浮动盈亏详情"
-                      className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
-                      style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                    >!</button>
-                  )}
-                </span>
+                <span className="text-gray-400 shrink-0">浮动盈亏</span>
                 {isExternalStockPnlSource ? (
                   externalStockFloatPnlCny !== null ? (
                     <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: externalStockFloatPnlCny >= 0 ? '#DC2626' : '#16A34A' }}>
@@ -1638,22 +1622,6 @@ export function FunderOrderCard({
                 ) : (
                   <span className="font-medium text-gray-400">{greeksResult.loading ? '加载中...' : '暂无合约报价'}</span>
                 )}
-              </div>
-            )}
-            {show('floatPnl') && isExternalStockPnlSource && _parsedCollateralSource && _intShowExternalStockPnlInfo && (
-              <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => _intSetShowExternalStockPnlInfo(false)}>
-                <div className="rounded-2xl mx-4 w-full max-w-sm overflow-y-auto" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '85vh' }} onClick={event => event.stopPropagation()}>
-                  <div className="flex items-center justify-between px-5 pt-4 pb-2">
-                    <div>
-                      <div className="text-sm font-bold" style={{ color: '#1A2340' }}>浮动盈亏详情</div>
-                      <div className="text-xs mt-0.5" style={{ color: '#6B7280' }}>37号账本 · {_parsedCollateralSource.tagName}</div>
-                    </div>
-                    <button type="button" onClick={() => _intSetShowExternalStockPnlInfo(false)} className="text-gray-400 text-lg leading-none" aria-label="关闭浮动盈亏详情">×</button>
-                  </div>
-                  <div className="px-2 pb-4">
-                    <RightMarginDetail ledgerId={_parsedCollateralSource.ledgerId} tagName={_parsedCollateralSource.tagName} />
-                  </div>
-                </div>
               </div>
             )}
             {show('buyDate') && order.buy_date && (
@@ -1946,9 +1914,9 @@ export function FunderOrderCard({
             )}
             {/* 担保货币（与 LedgerDetail 前端完全一致：受 display_config 开关控制） */}
             {show('collateralCoin') && hasExternalCollateral && (
-              <div className="flex items-center justify-between text-xs mt-0.5">
-                <span className="flex items-center gap-1">
-                  <span className="text-gray-400">担保货币</span>
+              <div className="flex items-start justify-between gap-1 text-xs mt-0.5">
+                <span className="flex items-center gap-1 shrink-0 whitespace-nowrap">
+                  <span className="text-gray-400 whitespace-nowrap">担保货币</span>
                   <button
                     type="button"
                     className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
@@ -1957,9 +1925,9 @@ export function FunderOrderCard({
                   >!</button>
                 </span>
                 {externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU) ? (
-                  <span className="font-medium tabular-nums text-right" style={{ color: '#1A2340' }}>
-                    {isSharedMode ? '共享合计 ' : ''}{externalCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u
-                    {externalCollateralValueCny !== null && <span className="ml-1 text-[10px]" style={{ color: '#9CA3AF' }}>≈{externalCollateralValueCny.toLocaleString(undefined, { maximumFractionDigits: 0 })}元</span>}
+                  <span className="flex min-w-0 flex-col items-end font-medium tabular-nums text-right" style={{ color: '#1A2340' }}>
+                    <span className="whitespace-nowrap">{isSharedMode ? '共享合计 ' : ''}{externalCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
+                    {externalCollateralValueCny !== null && <span className="text-[10px] whitespace-nowrap" style={{ color: '#9CA3AF' }}>≈{externalCollateralValueCny.toLocaleString(undefined, { maximumFractionDigits: 0 })}元</span>}
                   </span>
                 ) : <span style={{ color: '#9CA3AF' }}>{isSharedMode ? '共享担保加载中...' : '加载中...'}</span>}
               </div>
