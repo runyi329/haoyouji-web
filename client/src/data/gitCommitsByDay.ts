@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-09-20
+// 生成时间：2026-09-21
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9209,5 +9209,25 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-09-20": [
     { date: "2026-09-19T16:09:32Z", type: "feat", cleanMessage: "configure collateral total display" },
+    { date: "2026-09-19T19:37:23Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-09-20T00:44:39Z", type: "feat", cleanMessage: "refine recharge management flows" },
+    { date: "2026-09-20T00:54:23Z", type: "fix", cleanMessage: "restore global flow loading" },
+    { date: "2026-09-20T01:01:04Z", type: "fix", cleanMessage: "use compatible global flow paging" },
+    { date: "2026-09-20T01:18:43Z", type: "fix", cleanMessage: "unify global flow balances" },
+    { date: "2026-09-20T02:03:53Z", type: "fix", cleanMessage: "restrict member controls to owner" },
+    { date: "2026-09-20T02:19:03Z", type: "fix", cleanMessage: "harden privileged routes and exports" },
+    { date: "2026-09-20T02:57:37Z", type: "fix", cleanMessage: "enforce 52 ledger resource isolation" },
+    { date: "2026-09-20T04:16:50Z", type: "fix", cleanMessage: "honor authorized 52 view-as balance" },
+    { date: "2026-09-20T05:55:30Z", type: "feat", cleanMessage: "display linked stock pnl in order mode" },
+    { date: "2026-09-20T06:36:30Z", type: "fix", cleanMessage: "show linked 37 collateral in finance orders" },
+    { date: "2026-09-20T06:47:59Z", type: "other", cleanMessage: "refine: simplify linked stock collateral labels" },
+    { date: "2026-09-20T07:00:31Z", type: "feat", cleanMessage: "configure stock collateral display units" },
+    { date: "2026-09-20T10:38:08Z", type: "fix", cleanMessage: "align linked collateral with 37 margin records" },
+    { date: "2026-09-20T11:07:55Z", type: "fix", cleanMessage: "default stock collateral displays to CNY" },
+    { date: "2026-09-20T12:07:14Z", type: "fix", cleanMessage: "preserve manual stock collateral items" },
+    { date: "2026-09-20T13:16:39Z", type: "fix", cleanMessage: "include interest in linked collateral gaps" },
+    { date: "2026-09-20T13:32:08Z", type: "feat", cleanMessage: "separate linked profit and collateral sources" },
+    { date: "2026-09-20T13:53:12Z", type: "feat", cleanMessage: "select linked profit and collateral tags independently" },
+    { date: "2026-09-20T14:20:10Z", type: "feat", cleanMessage: "link 37 interest in finance order mode" },
   ],
 };
