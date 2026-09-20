@@ -706,6 +706,50 @@ async function ensureLedger52YjhInviteeMember(userId: number): Promise<void> {
   }
 }
 
+// 52 号账本的“自动入会”与“跨成员资金/订单查看”是两类独立权限。
+// 推荐链成员可按业务规则自动入会，但绝不能因此获得全员资金、订单或设置权限。
+const LEDGER_52_ID = 52;
+const YJH_USER_ID = 4957151;
+
+async function isLedger52Creator(userId: number): Promise<boolean> {
+  const db = await getLedgerDb();
+  if (!db) return false;
+  const [ledger] = await db
+    .select({ createdBy: ledgers.createdBy })
+    .from(ledgers)
+    .where(eq(ledgers.id, LEDGER_52_ID))
+    .limit(1);
+  return Boolean(ledger && Number(ledger.createdBy) === Number(userId));
+}
+
+async function requireLedger52Creator(userId: number, ledgerId: number): Promise<void> {
+  if (Number(ledgerId) !== LEDGER_52_ID) return;
+  if (!await isLedger52Creator(userId)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本创建人可操作' });
+  }
+}
+
+// YJH 的推荐树运营页面保留专属只读入口；普通推荐链成员不因此获得权限。
+async function requireLedger52FinancialViewer(userId: number, userRole: string | undefined, ledgerId: number): Promise<void> {
+  if (Number(ledgerId) !== LEDGER_52_ID) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: '该资金视图仅支持52号账本' });
+  }
+  const isCreator = await isLedger52Creator(userId);
+  const isSystemAdmin = userRole === 'super_admin';
+  if (!isCreator && userId !== YJH_USER_ID && !isSystemAdmin) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看52号账本跨成员资金数据' });
+  }
+}
+
+// 拨比会影响后续赠单的受益人和金额。52号账本中只允许创建人、YJH运营人或系统超级管理员维护。
+async function requireLedger52PayoutManager(userId: number, userRole: string | undefined, ledgerId: number): Promise<void> {
+  if (Number(ledgerId) !== LEDGER_52_ID) return;
+  const isCreator = await isLedger52Creator(userId);
+  if (!isCreator && userId !== YJH_USER_ID && userRole !== 'super_admin') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: '无权管理52号账本拨比' });
+  }
+}
+
 export const appRouter = router({
   workLog: router({
     getWorkLogs: publicProcedure
@@ -1728,11 +1772,10 @@ ${klinesSummary}
         amount: z.number().min(1).max(100000),
         network: z.enum(['TRC20', 'ERC20', 'BEP20', 'APTOS', 'SOLANA']).default('TRC20'),
         ledgerId: z.number().optional(),  // 关联账本 ID，传入则充値记录关联到该账本
-        viewAsUserId: z.number().optional()  // 管理员视角代替用户创建订单
       }))
       .mutation(async ({ ctx, input }) => {
-        const targetUserId = input.viewAsUserId || ctx.user.id;
-        return await dbRecharge.createRechargeOrder(targetUserId, input.amount, input.network, input.ledgerId);
+        // 普通充值入口只可为本人建单；管理员代建必须使用单独、受审计的后台接口。
+        return await dbRecharge.createRechargeOrder(ctx.user.id, input.amount, input.network, input.ledgerId);
       }),
 
     // 用户提交转账确认
@@ -1744,8 +1787,8 @@ ${klinesSummary}
     // 查询充值订单
     getOrder: protectedProcedure
       .input(z.object({ orderNo: z.string() }))
-      .query(async ({ input }) => {
-        return await dbRecharge.getRechargeOrder(input.orderNo);
+      .query(async ({ ctx, input }) => {
+        return await dbRecharge.getRechargeOrderForUser(input.orderNo, ctx.user.id);
       }),
 
     // 获取用户充值订单列表
@@ -1755,23 +1798,20 @@ ${klinesSummary}
         return await dbRecharge.getUserRechargeOrders(ctx.user.id, input.limit);
       }),
 
-    // 获取用户余额（支持viewAsUserId和ledgerId）
-    // 如果传入 ledgerId，则按账本隔离计算余额（推荐）
+    // 获取当前用户余额。账本 ID 只影响计算口径，不能切换为其他用户。
     getBalance: protectedProcedure
       .input(z.object({ 
-        viewAsUserId: z.number().optional(),
         ledgerId: z.number().optional()  // 按账本隔离计算余额
       }).optional())
       .query(async ({ ctx, input }) => {
-        const targetUserId = input?.viewAsUserId || ctx.user.id;
-        return await dbRecharge.getUserBalance(targetUserId, input?.ledgerId);
+        return await dbRecharge.getUserBalance(ctx.user.id, input?.ledgerId);
       }),
 
-    // 批量获取多个用户的【全局】钱包余额（users.balance + 全部 af_manual_balances，不按账本隔离）
-    // 返回 { [userId]: balance } 映射，用于成员列表统一展示
+    // 批量获取52成员的【全局】钱包余额。仅52创建人可读取，并且服务端强制成员范围。
     getMembersBalance: protectedProcedure
-      .input(z.object({ userIds: z.array(z.number()) }))
-      .query(async ({ input }) => {
+      .input(z.object({ ledgerId: z.literal(52), userIds: z.array(z.number()).max(500) }))
+      .query(async ({ ctx, input }) => {
+        await requireLedger52Creator(ctx.user.id, input.ledgerId);
         const result: Record<number, number> = {};
         const ids = Array.from(new Set(input.userIds.filter((n) => Number.isFinite(n) && n > 0)));
         if (ids.length === 0) return result;
@@ -1781,8 +1821,10 @@ ${klinesSummary}
         const [rows] = await (conn as any).execute(
           `SELECT u.id AS userId,
                   (COALESCE(u.balance,0) + COALESCE((SELECT SUM(amount) FROM af_manual_balances WHERE user_id = u.id AND note NOT LIKE '[CNY]%' AND note NOT LIKE '[BALANCE_BASE]%'),0)) AS total
-           FROM users u WHERE u.id IN (${placeholders})`,
-          [...ids]
+           FROM users u
+           INNER JOIN ledger_members lm ON lm.userId = u.id AND lm.ledgerId = 52
+           WHERE u.id IN (${placeholders})`,
+          ids
         ) as any[];
         for (const r of (Array.isArray(rows) ? rows : [])) {
           result[Number(r.userId)] = parseFloat(r.total?.toString() || '0');
@@ -2469,18 +2511,16 @@ ${klinesSummary}
     // ─── CNY 子账户 ───
     // 获取当前用户 CNY 余额
     getCnyBalance: protectedProcedure
-      .input(z.object({ viewAsUserId: z.number().optional() }).optional())
-      .query(async ({ ctx, input }) => {
-        const targetUserId = input?.viewAsUserId || ctx.user.id;
-        return await dbRecharge.getUserCnyBalance(targetUserId);
+      .input(z.object({}).optional())
+      .query(async ({ ctx }) => {
+        return await dbRecharge.getUserCnyBalance(ctx.user.id);
       }),
 
     // 获取 CNY 流水记录
     getCnyHistory: protectedProcedure
-      .input(z.object({ limit: z.number().optional(), viewAsUserId: z.number().optional() }).optional())
+      .input(z.object({ limit: z.number().optional() }).optional())
       .query(async ({ ctx, input }) => {
-        const targetUserId = input?.viewAsUserId || ctx.user.id;
-        return await dbRecharge.getUserCnyHistory(targetUserId, input?.limit ?? 50);
+        return await dbRecharge.getUserCnyHistory(ctx.user.id, input?.limit ?? 50);
       }),
 
     // 管理员手动调整 CNY 余额（充値/提现）
@@ -12499,6 +12539,7 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         let targetUserId = ctx.user.id;
         if (input.viewAsUserId) {
+          await requireLedger52Creator(ctx.user.id, input.ledgerId);
           // 验证当前用户是否是owner/admin
           const members = await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id);
           const myMembership = (members as any[]).find((m: any) => m.userId === ctx.user.id);
@@ -12530,8 +12571,14 @@ ${klinesSummary}
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
-        // 只有owner/admin可操作
+        // 52 的全员保证金、备注与配置仅账本创建人可读取。
+        await requireLedger52Creator(ctx.user.id, input.ledgerId);
+        // 其他账本沿用 owner/admin 规则。
         const members = await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id);
+        const myMembership = (members as any[]).find((member: any) => Number(member.userId) === Number(ctx.user.id));
+        if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可查看初始金额配置' });
+        }
         const realMembers = members.filter((m: any) => m.memberType !== 'ai');
         const result = await dbLedger.getAllMembersInitialBalances(input.ledgerId);
         const db = await getLedgerDb();
@@ -12568,6 +12615,7 @@ ${klinesSummary}
         migratedMarginNoteIds: z.array(z.number().int().positive()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await requireLedger52Creator(ctx.user.id, input.ledgerId);
         // 验证操作者是owner或admin
         const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
         if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
@@ -14117,13 +14165,21 @@ ${klinesSummary}
         let targetUserId = ctx.user.id;
         if (input.viewAsUserId) {
           if (input.ledgerId) {
+            // 52 的跨成员资金流水仅账本创建人可查看；其他账本沿用 owner/admin。
+            await requireLedger52Creator(ctx.user.id, input.ledgerId);
             // 有账本 ID：校验当前用户在该账本的角色
             const memberCheck = await db.execute(
               sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
             ) as any;
             const myRole = (memberCheck as any)[0]?.[0]?.role || (memberCheck as any)[0]?.role;
-            if (myRole === 'owner' || myRole === 'admin') {
+            const targetMemberCheck = await db.execute(
+              sql`SELECT id FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${input.viewAsUserId} LIMIT 1`
+            ) as any;
+            const targetIsMember = Boolean((targetMemberCheck as any)[0]?.[0] ?? (targetMemberCheck as any)[0]);
+            if ((myRole === 'owner' || myRole === 'admin') && targetIsMember) {
               targetUserId = input.viewAsUserId;
+            } else {
+              throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看该成员的流水' });
             }
           } else {
             // 无账本 ID：仅系统管理员可切换视角
@@ -15048,12 +15104,14 @@ ${klinesSummary}
         const db = await getLedgerDb();
         await ensureAfSimulationColumns();
         if (input.ledgerId === 52) await ensureAfAdvancedOrdersTable();
-        // 验证是否是该账本成员（任意角色均可访问）
+        // 全员订单、赠单受益人和余额属于管理视图；普通成员不可枚举。
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role ?? roleRows?.rows?.[0]?.role ?? '';
-        if (!role) throw new Error('无权限');
+        if (role !== 'owner' && role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可查看全部订单' });
+        }
         if (input.ledgerId === 52) {
           try {
             const market = await getFreshAfAdvancedEthPrice();
@@ -17685,31 +17743,27 @@ ${klinesSummary}
         const conn = await getDbConnection();
         console.log(`[funderGetAssetOrders] t1_dbconn: ${Date.now()-_t0}ms`);
         const memberRoleFilter = input.financeOnly ? "'member'" : "'funder','owner','admin'";
-        // 并行查询角色（管理员角色确定前无法确定 targetUserId，先用 ctx.user.id 查参与订单）
+        // 管理员可显式切换成员视角；其余调用者一律只能查询本人参与关系。
         const [roleRows, pRowsEarly] = await Promise.all([
           db.execute(
             sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
           ) as Promise<any>,
           conn ? conn.execute(
             'SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND role <> \'inactive\'',
-            [input.ledgerId, input.viewAsUserId || input.userId || ctx.user.id]
+            [input.ledgerId, ctx.user.id]
           ).catch(() => null) as Promise<any> : Promise.resolve(null)
         ]);
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
         const isManager = role === 'owner' || role === 'admin';
         const isFunder = role === 'funder';
-        // 确定 targetUserId
-        let targetUserId: number | null = null;
-        if (input.viewAsUserId && isManager) {
-          targetUserId = input.viewAsUserId;
-        } else if (isFunder && !isManager) {
-          targetUserId = ctx.user.id;
-        } else if (input.userId) {
-          targetUserId = input.userId;
-        }
+        // 非管理员忽略所有 userId/viewAsUserId，阻止直接请求冒用其他参与者身份。
+        const targetUserId: number | null = isManager
+          ? (input.viewAsUserId || input.userId || null)
+          : ctx.user.id;
         const participantQueryUserIdEarly = targetUserId || ctx.user.id;
-        // 如果先前查询的 userId 和最终 participantQueryUserIdEarly 不一致，重新查询
-        const earlyQueryUserId = input.viewAsUserId || input.userId || ctx.user.id;
+        // 管理员切换视角时重新查询目标参与关系；普通成员始终使用自己的关系。
+        const earlyQueryUserId = ctx.user.id;
         let participantOrderIds: number[] = [];
         if (earlyQueryUserId === participantQueryUserIdEarly && pRowsEarly) {
           const pArr = Array.isArray(pRowsEarly[0]) ? pRowsEarly[0] : (Array.isArray(pRowsEarly) ? pRowsEarly : []);
@@ -19853,23 +19907,25 @@ ${klinesSummary}
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
-        // 验证用户是账本成员（任何成员均可修改公开备注）
+        // 公开备注影响所有可见用户：仅订单所有者或账本管理员可以修改。
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
-        const mysql = await import('mysql2/promise');
-        const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL || 'mysql://root:Miao@20190603@124.223.54.69:3306/crm_db';
-        const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
-        const conn = await mysql.createConnection({
-          host: parsedUrl.hostname,
-          port: parseInt(parsedUrl.port) || 3306,
-          user: decodeURIComponent(parsedUrl.username),
-          password: decodeURIComponent(parsedUrl.password),
-          database: parsedUrl.pathname.replace(/^\//, ''),
-        });
-        await conn.execute('UPDATE ledger_orders SET public_note = ? WHERE id = ? AND ledger_id = ?', [input.publicNote || null, input.id, input.ledgerId]);
-        await conn.end();
+        if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        const [order] = await db.execute(sql`
+          SELECT user_id FROM ledger_orders WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} LIMIT 1
+        `) as any;
+        const orderRow = Array.isArray(order) ? order[0] : order;
+        const isManager = role === 'owner' || role === 'admin';
+        if (!orderRow || (!isManager && Number(orderRow.user_id) !== Number(ctx.user.id))) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权修改该订单公开备注' });
+        }
+        await db.execute(sql`
+          UPDATE ledger_orders
+          SET public_note = ${input.publicNote.trim() || null}
+          WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}
+        `);
         return { success: true };
       }),
     // 资金方订单公开备注更新（任何成员均可修改）
@@ -20967,16 +21023,37 @@ ${klinesSummary}
 
     // 融资付息订单结息汇总
     financeGetInterestPaymentSummary: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), orderIds: z.array(z.number()) }))
+      .input(z.object({ ledgerId: z.number(), orderIds: z.array(z.number()).max(200) }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         if (!input.orderIds.length) return {};
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        const isManager = role === 'owner' || role === 'admin';
+        let visibleOrderIds = [...new Set(input.orderIds.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+        if (!isManager && visibleOrderIds.length > 0) {
+          const visibleRows = await db.execute(sql`
+            SELECT DISTINCT o.id
+            FROM ledger_orders o
+            LEFT JOIN ledger_order_participants p
+              ON p.order_id = o.id AND p.ledger_id = o.ledger_id
+              AND p.user_id = ${ctx.user.id} AND p.role <> 'inactive'
+            WHERE o.ledger_id = ${input.ledgerId}
+              AND o.id IN (${sql.raw(visibleOrderIds.join(','))})
+              AND (o.user_id = ${ctx.user.id} OR p.id IS NOT NULL)
+          `) as any;
+          visibleOrderIds = ((visibleRows[0] || visibleRows) as any[]).map((row: any) => Number(row.id)).filter(Boolean);
+        }
+        if (visibleOrderIds.length === 0) return [];
         // 按订单、原始币种与汇率分组返回；前端据订单利息币种做准确显示，避免把 CNY 手工结息误当 U。
         const rows = await db.execute(
           sql`SELECT order_id, IFNULL(currency, 'U') as currency, IFNULL(exchange_rate, 1) as exchange_rate,
                 SUM(amount) as total_paid
               FROM ledger_order_payments
-              WHERE ledger_id = ${input.ledgerId} AND order_id IN (${sql.raw(input.orderIds.join(','))})
+              WHERE ledger_id = ${input.ledgerId} AND order_id IN (${sql.raw(visibleOrderIds.join(','))})
               GROUP BY order_id, IFNULL(currency, 'U'), IFNULL(exchange_rate, 1)`
         ) as any;
         return ((rows[0] || rows) as any[]).map((row: any) => ({
@@ -21010,6 +21087,7 @@ ${klinesSummary}
     afGetPayoutRatios: protectedProcedure
       .input(z.object({ ledgerId: z.number(), sourceUserId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await requireLedger52PayoutManager(ctx.user.id, ctx.user.role, input.ledgerId);
         const db = await getLedgerDb();
         // 验证管理员权限
         const roleRows = await db.execute(
@@ -21054,6 +21132,7 @@ ${klinesSummary}
         ratio: z.number().min(0).max(100),
       }))
       .mutation(async ({ ctx, input }) => {
+        await requireLedger52PayoutManager(ctx.user.id, ctx.user.role, input.ledgerId);
         const db = await getLedgerDb();
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
@@ -21071,6 +21150,7 @@ ${klinesSummary}
     afDeletePayoutRatio: protectedProcedure
       .input(z.object({ ledgerId: z.number(), id: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        await requireLedger52PayoutManager(ctx.user.id, ctx.user.role, input.ledgerId);
         const db = await getLedgerDb();
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
@@ -21086,6 +21166,7 @@ ${klinesSummary}
     afGetMembersForPayout: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await requireLedger52PayoutManager(ctx.user.id, ctx.user.role, input.ledgerId);
         const db = await getLedgerDb();
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
@@ -22991,6 +23072,7 @@ ${klinesSummary}
     afGetTreeOrderStats: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await requireLedger52FinancialViewer(ctx.user.id, ctx.user.role, input.ledgerId);
         const YJH_USER_ID = 4957151;
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return { activeCount: 0, activeAmount: 0, completedCount: 0, completedAmount: 0, totalCount: 0, totalAmount: 0 };
@@ -23067,6 +23149,7 @@ ${klinesSummary}
         page: z.number().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await requireLedger52FinancialViewer(ctx.user.id, ctx.user.role, input.ledgerId);
         const YJH_USER_ID = 4957151;
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return { orders: [], total: 0 };
@@ -23273,6 +23356,7 @@ ${klinesSummary}
     afGetMarketOrderPermissions: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await requireLedger52FinancialViewer(ctx.user.id, ctx.user.role, input.ledgerId);
         const YJH_USER_ID = 4957151;
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return [];
@@ -23310,13 +23394,20 @@ ${klinesSummary}
 
     // ===== 试驾单权限：YJH设置某用户的权限 =====
     afSetMarketOrderPermission: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), userId: z.number(), enabled: z.boolean() }))
+      .input(z.object({ ledgerId: z.number().refine((value) => value === 52, '仅支持52号账本'), userId: z.number().int().positive(), enabled: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
         const YJH_USER_ID = 4957151;
         const JIANG_USER_ID = 870413;
         if (ctx.user.id !== YJH_USER_ID && ctx.user.id !== JIANG_USER_ID) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作' });
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+          [input.ledgerId, input.userId]
+        );
+        if (!(memberRows as any[])?.[0]) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '目标用户不是52号账本成员' });
+        }
         await (conn as any).execute(
           `INSERT INTO af_market_order_permissions (ledger_id, user_id, granted_by, enabled)
            VALUES (?, ?, ?, ?)
@@ -23344,6 +23435,7 @@ ${klinesSummary}
     afGetMemberPayoutRatios: protectedProcedure
       .input(z.object({ ledgerId: z.number(), sourceUserId: z.number() }))
       .query(async ({ ctx, input }) => {
+        await requireLedger52FinancialViewer(ctx.user.id, ctx.user.role, input.ledgerId);
         const YJH_USER_ID = 4957151;
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return [];
@@ -23365,15 +23457,9 @@ ${klinesSummary}
           username: r.username || '',
         });
         const list = (rows as any[]).map(mapRow);
-        // 如果该成员还没有任何拨比配置，自动初始化：继承直接邀请人的完整波比配置
+        // 查询必须保持只读。缺失配置由受控的入会/管理写入流程初始化，不能由读取请求隐式创建。
         if (list.length === 0) {
-          try {
-            await dbLedger.initAfPayoutRatiosFromInviter(input.ledgerId, input.sourceUserId, conn);
-          } catch (inheritErr) {
-            console.error('[afGetMemberPayoutRatios] 自动初始化波比失败:', inheritErr);
-          }
-          const [rows2] = await (conn as any).execute(querySQL, [input.ledgerId, input.sourceUserId, YJH_USER_ID]);
-          return (rows2 as any[]).map(mapRow);
+          return [];
         }
 
         // 追溯上级链（从 sourceUserId 往上，到 YJH 为止，YJH 是最顶层）
@@ -23436,15 +23522,26 @@ ${klinesSummary}
     // YJH专属：修改某个受益人的拨比（可修改任意受益人，总和不超过100%）
     afSetYjhPayoutRatio: protectedProcedure
       .input(z.object({
-        ledgerId: z.number(),
-        sourceUserId: z.number(),
-        beneficiaryUserId: z.number(), // 要修改的受益人ID
+        ledgerId: z.number().refine((value) => value === 52, '仅支持52号账本'),
+        sourceUserId: z.number().int().positive(),
+        beneficiaryUserId: z.number().int().positive(), // 要修改的受益人ID
         newRatio: z.number().min(0).max(100),
       }))
       .mutation(async ({ ctx, input }) => {
-        const YJH_USER_ID = 4957151;
+        await requireLedger52PayoutManager(ctx.user.id, ctx.user.role, input.ledgerId);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const [sourceMemberRows] = await (conn as any).execute(
+          `SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+          [input.ledgerId, input.sourceUserId]
+        );
+        const [beneficiaryMemberRows] = await (conn as any).execute(
+          `SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+          [input.ledgerId, input.beneficiaryUserId]
+        );
+        if (!(sourceMemberRows as any[])?.[0] || !(beneficiaryMemberRows as any[])?.[0]) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '下单人和受益人均须为52号账本成员' });
+        }
         // 查询当前所有受益人的拨比
         const [rows] = await (conn as any).execute(
           `SELECT beneficiary_user_id, ratio FROM af_payout_ratios WHERE ledger_id=? AND source_user_id=?`,
@@ -23470,7 +23567,7 @@ ${klinesSummary}
       }),
     // ===== 5.25 定向开关：查询开关状态 =====
     af525GetSwitch: protectedProcedure
-      .input(z.object({ ledgerId: z.number() }))
+      .input(z.object({ ledgerId: z.number().refine((value) => value === 52, '仅支持52号账本') }))
       .query(async ({ ctx, input }) => {
         const YJH_USER_ID = 4957151;
         const JIANG_USER_ID = 870413;
@@ -23492,7 +23589,7 @@ ${klinesSummary}
       }),
     // ===== 5.25 定向开关：设置开关状态 =====
     af525SetSwitch: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), enabled: z.boolean() }))
+      .input(z.object({ ledgerId: z.number().refine((value) => value === 52, '仅支持52号账本'), enabled: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
         const YJH_USER_ID = 4957151;
         const JIANG_USER_ID = 870413;
@@ -23514,7 +23611,7 @@ ${klinesSummary}
       }),
     // ===== 5.25 定向开关：查询历史记录 =====
     af525GetLogs: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), page: z.number().optional() }))
+      .input(z.object({ ledgerId: z.number().refine((value) => value === 52, '仅支持52号账本'), page: z.number().int().positive().optional() }))
       .query(async ({ ctx, input }) => {
         const YJH_USER_ID = 4957151;
         const JIANG_USER_ID = 870413;
@@ -31234,6 +31331,7 @@ export const adminFeatureRouter = router({
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
         try {
+          await requireLedger52FinancialViewer(ctx.user.id, ctx.user.role, input.ledgerId);
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
           const [rows] = await (conn as any).execute(
@@ -31257,6 +31355,7 @@ export const adminFeatureRouter = router({
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
         try {
+          await requireLedger52FinancialViewer(ctx.user.id, ctx.user.role, input.ledgerId);
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
           // 获取YJH邀请树下所有用户ID（包含YJH本人）
@@ -31294,6 +31393,7 @@ export const adminFeatureRouter = router({
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
         try {
+          await requireLedger52FinancialViewer(ctx.user.id, ctx.user.role, input.ledgerId);
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
           // 获取YJH邀请树下所有用户ID（包含YJH本人）
@@ -31360,6 +31460,7 @@ export const adminFeatureRouter = router({
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
         try {
+          await requireLedger52FinancialViewer(ctx.user.id, ctx.user.role, input.ledgerId);
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
           // 获取YJH邀请树下所有用户ID（包含YJH本人）
@@ -31406,16 +31507,11 @@ export const adminFeatureRouter = router({
         console.log('[afGetRecentDynamics] called ledgerId=' + input.ledgerId + ' userId=' + ctx.user.id + ' role=' + ctx.user.role);
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) { console.log('[afGetRecentDynamics] no db conn'); return []; }
-        const YJH_USER_ID = 4957151;
-        const [memberRows] = await (conn as any).execute(
-          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
-          [input.ledgerId, ctx.user.id]
-        );
-        const memberRole = (memberRows as any[])[0]?.role;
-        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-        const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
-        console.log('[afGetRecentDynamics] memberRole=' + memberRole + ' isSysAdmin=' + isSysAdmin + ' isAllowed=' + isAllowed);
-        if (!isAllowed) return [];
+        try {
+          await requireLedger52FinancialViewer(ctx.user.id, ctx.user.role, input.ledgerId);
+        } catch {
+          return [];
+        }
         // 查最近2条：新人充值（recharge_orders completed，按账本成员查）+ 订单变动（af_orders）
         // recharge_orders.ledger_id 可能为NULL（通用充值），改为查账本成员的充值记录
         const [memberUserRows] = await (conn as any).execute(
@@ -31870,6 +31966,9 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
   // 诊断接口：检查 users.balance 字段和 balance_history 表是否存在
   diagWalletDb: protectedProcedure
     .query(async ({ ctx }) => {
+      if (ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可运行钱包诊断' });
+      }
       const conn = await getDbConnection();
       if (!conn) return { error: 'no_db_conn' };
       try {
@@ -31885,20 +31984,11 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         const [userBal] = await (conn as any).execute(
           `SELECT id, name, balance FROM users WHERE id = ? LIMIT 1`, [ctx.user.id]
         );
-        // 查最近 5 条 balance_history
-        let recentHistory: any[] = [];
-        if ((bhTable as any[]).length > 0) {
-          const [hist] = await (conn as any).execute(
-            `SELECT * FROM balance_history ORDER BY created_at DESC LIMIT 5`
-          );
-          recentHistory = hist as any[];
-        }
         return {
           balanceColumnExists: (balCol as any[]).length > 0,
           balanceColumnInfo: (balCol as any[])[0] || null,
           balanceHistoryTableExists: (bhTable as any[]).length > 0,
           currentUser: (userBal as any[])[0] || null,
-          recentHistory,
         };
       } catch (e: any) {
         return { error: e?.message || String(e) };

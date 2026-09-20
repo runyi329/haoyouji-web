@@ -16,15 +16,12 @@ export default function Withdraw({ hideHeader, theme, onClose }: WithdrawProps) 
   const search = useSearch();
   const searchParams = new URLSearchParams(search);
   const fromLedgerId = searchParams.get('ledgerId');
-  const viewAsUserId = searchParams.get('viewAs');
-  const viewAsParam = viewAsUserId ? `&viewAs=${viewAsUserId}` : '';
 
   const [tab, setTab] = useState<"withdraw" | "records">("withdraw");
   const [amount, setAmount] = useState("");
   const [selectedWalletId, setSelectedWalletId] = useState<string | null>(null);
 
   const balanceQuery = trpc.recharge.getBalance.useQuery({
-    ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}),
     ...(fromLedgerId ? { ledgerId: Number(fromLedgerId) } : {}),
   });
 
@@ -96,7 +93,7 @@ export default function Withdraw({ hideHeader, theme, onClose }: WithdrawProps) 
   const handleBack = () => {
     if (isYaban && onClose) { onClose(); return; }
     if (fromLedgerId) {
-      setLocation(`/recharge?from=ledger&ledgerId=${fromLedgerId}${viewAsParam}`);
+      setLocation(`/recharge?from=ledger&ledgerId=${fromLedgerId}`);
     } else {
       window.history.back();
     }

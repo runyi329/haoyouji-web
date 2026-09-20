@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useLocation } from 'wouter';
+import { useLocation } from 'wouter';
 import { ChevronLeft, ToggleLeft, ToggleRight, Clock, Gift } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
@@ -7,9 +7,8 @@ import { toast } from 'sonner';
 const LEDGER_ID = 52;
 
 export default function Af525SwitchPage() {
-  const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
-  const ledgerId = parseInt(id || String(LEDGER_ID));
+  const ledgerId = LEDGER_ID;
 
   const utils = trpc.useUtils();
 

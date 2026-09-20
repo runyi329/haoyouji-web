@@ -304,8 +304,8 @@ export default function AfFeeDetail() {
     )
   );
   const { data: memberBalances } = trpc.recharge.getMembersBalance.useQuery(
-    { userIds: memberUserIds },
-    { enabled: memberUserIds.length > 0 }
+    { ledgerId: 52, userIds: memberUserIds },
+    { enabled: ledgerId === 52 && memberUserIds.length > 0 }
   );
 
   const totalOngoing = feeItems.filter(f => f.feeType === 'ongoing').reduce((s, f) => s + f.totalFee, 0);

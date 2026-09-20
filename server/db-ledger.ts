@@ -1244,6 +1244,7 @@ export async function addLedgerCategory(data: {
   if (memberCheck.length === 0) {
     throw new Error("权限不足：您不是此账本的成员，无法添加分类");
   }
+  await requireLedger52CreatorInDb(db, data.ledgerId, data.createdBy);
   
   // 如果没有指定排序，获取当前最大排序值+1
   let sortOrder = data.sortOrder;
@@ -1276,6 +1277,20 @@ export async function addLedgerCategory(data: {
   }).$returningId();
   
   return newCategory;
+}
+
+// 52号账本的分类、设置等全局结构只能由不可变的账本创建人维护。
+// YJH推荐链自动加入的普通成员仍可使用账本，但不获得这些管理权限。
+async function requireLedger52CreatorInDb(db: any, ledgerId: number, userId: number): Promise<void> {
+  if (Number(ledgerId) !== 52) return;
+  const [ledger] = await db
+    .select({ createdBy: ledgers.createdBy })
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+  if (!ledger || Number(ledger.createdBy) !== Number(userId)) {
+    throw new Error("仅52号账本创建人可以修改全局设置");
+  }
 }
 
 /**
@@ -1374,6 +1389,7 @@ export async function deleteLedgerCategory(categoryId: number, userId: number, c
   if (memberCheck.length === 0) {
     throw new Error("权限不足：您不是此账本的成员，无法删除分类");
   }
+  await requireLedger52CreatorInDb(db, category.ledgerId, userId);
   // 获取所有子分类ID（限制在同一账本内）
   const childIds = await getAllChildCategoryIds(db, categoryId, category.ledgerId);
   
@@ -1496,6 +1512,7 @@ export async function replaceLedgerCategory(
   if (member2.length === 0) {
     throw new Error("您不是该账本的成员");
   }
+  await requireLedger52CreatorInDb(db, ledgerId, userId);
   
   // 验证源分类和目标分类是否存在
   const sourceCategory = await db
@@ -1512,6 +1529,9 @@ export async function replaceLedgerCategory(
   
   if (!sourceCategory || !targetCategory) {
     throw new Error("分类不存在");
+  }
+  if (Number(sourceCategory.ledgerId) !== Number(ledgerId) || Number(targetCategory.ledgerId) !== Number(ledgerId)) {
+    throw new Error("分类必须属于同一账本");
   }
   
   // 执行批量更新
@@ -1587,6 +1607,7 @@ export async function updateLedgerCategory(
     if (memberCheck.length === 0) {
       throw new Error("权限不足：您不是此账本的成员，无法修改分类");
     }
+    await requireLedger52CreatorInDb(db, category.ledgerId, userId);
   }
   // 如果是改名，需要同步更新所有成员 initial_balances 里的旧标签名 key
   if (data.name) {
@@ -2435,6 +2456,7 @@ export async function updateLedger(
   if (membership.length === 0) {
     throw new Error("您不是该账本的成员");
   }
+  await requireLedger52CreatorInDb(db, ledgerId, requestUserId);
   
   // 更新账本信息
   const updateData: any = {};

@@ -314,6 +314,17 @@ export async function getRechargeOrder(orderNo: string) {
   return orders[0] || null;
 }
 
+// 用户侧订单查询必须同时绑定订单号和归属用户，避免已登录用户按订单号横向读取。
+export async function getRechargeOrderForUser(orderNo: string, userId: number) {
+  const db = await getDb();
+  const orders = await db
+    .select()
+    .from(rechargeOrders)
+    .where(and(eq(rechargeOrders.orderNo, orderNo), eq(rechargeOrders.userId, userId)))
+    .limit(1);
+  return orders[0] || null;
+}
+
 // 查询用户的充值订单列表
 export async function getUserRechargeOrders(userId: number, limit: number = 20) {
   const db = await getDb();
