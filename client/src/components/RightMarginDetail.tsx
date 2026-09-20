@@ -96,22 +96,43 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
 
   // ── 解析保证金数据 ──
   const rightMarginData = useMemo(() => {
-    // getTagSummary 汇总了成员逐笔押金（新版 __margins 及旧版 __margin），
-    // 是37标签在运行时的权威余额来源；旧标签尚未迁移时再回退配置字段。
+    // 37号“保证金管理”页面维护的 margin_by_coin 保存逐笔记录（币种、日期、备注）。
+    // 订单内的只读详情必须先使用这份标签原始明细，才能与37号页面完全一致；
+    // 仅老标签没有该字段时，才以成员初始金额汇总作为兼容回退。
+    const rawConfiguredMargins = (rightTagConfig as any)?.margin_by_coin;
+    if (rawConfiguredMargins !== undefined && rawConfiguredMargins !== null && rawConfiguredMargins !== '') {
+      try {
+        const parsed = typeof rawConfiguredMargins === 'string'
+          ? JSON.parse(rawConfiguredMargins)
+          : rawConfiguredMargins;
+        if (Array.isArray(parsed)) {
+          const entries = parsed
+            .map((entry: any) => ({
+              coin: String(entry?.coin ?? 'CNY').trim().toUpperCase() || 'CNY',
+              amount: Number(entry?.amount),
+              label: String(entry?.label ?? entry?.note ?? ''),
+              date: String(entry?.date ?? entry?.createdAt ?? ''),
+            }))
+            .filter((item) => Number.isFinite(item.amount));
+          if (entries.length > 0) return entries;
+        }
+        if (parsed && typeof parsed === 'object') {
+          const entries = Object.entries(parsed)
+            .map(([coin, amount]) => ({ coin: String(coin).trim().toUpperCase() || 'CNY', amount: Number(amount), label: '', date: '' }))
+            .filter((item) => Number.isFinite(item.amount));
+          if (entries.length > 0) return entries;
+        }
+      } catch {
+        // 配置损坏时继续走兼容汇总，避免只读详情完全空白。
+      }
+    }
     const summaryMargins = (rightTagSummary as any)?.marginByCoin;
-    if (summaryMargins && typeof summaryMargins === "object") {
+    if (summaryMargins && typeof summaryMargins === 'object') {
       return Object.entries(summaryMargins)
-        .map(([coin, amount]) => ({ coin, amount: Number(amount), label: "", date: "" }))
+        .map(([coin, amount]) => ({ coin: String(coin).trim().toUpperCase() || 'CNY', amount: Number(amount), label: '', date: '' }))
         .filter((item) => Number.isFinite(item.amount) && item.amount !== 0);
     }
-    if (!rightTagConfig?.margin_by_coin) return [];
-    try {
-      const parsed = JSON.parse(rightTagConfig.margin_by_coin as string);
-      if (Array.isArray(parsed)) {
-        return parsed.map((e: any) => ({ coin: e.coin || "元", amount: Number(e.amount), label: e.label || "", date: e.date || "" }));
-      }
-      return Object.entries(parsed).map(([coin, amount]) => ({ coin, amount: Number(amount), label: "", date: "" }));
-    } catch { return []; }
+    return [];
   }, [rightTagConfig, rightTagSummary]);
 
   const rightTotalCNY = useMemo(() => {

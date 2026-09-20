@@ -753,14 +753,18 @@ export function FunderOrderCard({
     };
     let rightTotalCNY = 0;
     try {
-      // getTagSummary 汇总成员逐笔保证金，是37账本当前运行时的权威来源；
-      // 历史标签没有成员明细时才回退配置表中的旧格式。
+      // 37号保证金管理页面以标签配置中的逐笔 margin_by_coin 为准。
+      // 订单金额、详情弹窗及缺口必须优先用同一份记录；仅旧标签缺失时回退成员汇总。
       const summaryMargins = (_extTagSummary as any)?.marginByCoin;
-      const rawMargins = summaryMargins && typeof summaryMargins === 'object'
-        ? summaryMargins
-        : (typeof (_extTagConfig as any).margin_by_coin === 'string'
-          ? JSON.parse((_extTagConfig as any).margin_by_coin)
-          : (_extTagConfig as any).margin_by_coin);
+      const configuredMargins = (typeof (_extTagConfig as any).margin_by_coin === 'string'
+        ? JSON.parse((_extTagConfig as any).margin_by_coin)
+        : (_extTagConfig as any).margin_by_coin);
+      const hasConfiguredMargins = Array.isArray(configuredMargins)
+        ? configuredMargins.length > 0
+        : !!configuredMargins && typeof configuredMargins === 'object' && Object.keys(configuredMargins).length > 0;
+      const rawMargins = hasConfiguredMargins
+        ? configuredMargins
+        : summaryMargins;
       const items = Array.isArray(rawMargins)
         ? rawMargins.map((e: any) => ({ coin: e.coin || '元', amount: Number(e.amount) }))
         : Object.entries(rawMargins ?? {}).map(([coin, amount]) => ({ coin, amount: Number(amount) }));
@@ -785,13 +789,17 @@ export function FunderOrderCard({
     if (!hasExternalCollateral || !_extTagConfig) return empty;
     let entries: Array<{ coin: string; amount: number }> = [];
     try {
-      // 与37标签详情/剩余保证金同口径：优先使用服务端汇总的成员逐笔保证金。
+      // 与37标签详情/剩余保证金同口径：逐笔标签配置优先，成员汇总仅兼容老标签。
       const summaryMargins = (_extTagSummary as any)?.marginByCoin;
-      const raw = summaryMargins && typeof summaryMargins === 'object'
-        ? summaryMargins
-        : ((typeof (_extTagConfig as any).margin_by_coin === 'string')
-          ? JSON.parse((_extTagConfig as any).margin_by_coin)
-          : (_extTagConfig as any).margin_by_coin);
+      const configuredMargins = (typeof (_extTagConfig as any).margin_by_coin === 'string')
+        ? JSON.parse((_extTagConfig as any).margin_by_coin)
+        : (_extTagConfig as any).margin_by_coin;
+      const hasConfiguredMargins = Array.isArray(configuredMargins)
+        ? configuredMargins.length > 0
+        : !!configuredMargins && typeof configuredMargins === 'object' && Object.keys(configuredMargins).length > 0;
+      const raw = hasConfiguredMargins
+        ? configuredMargins
+        : summaryMargins;
       entries = Array.isArray(raw)
         ? raw.map((item: any) => ({ coin: String(item?.coin ?? '元').trim() || '元', amount: Number(item?.amount) }))
         : Object.entries(raw ?? {}).map(([coin, amount]) => ({ coin: String(coin).trim() || '元', amount: Number(amount) }));

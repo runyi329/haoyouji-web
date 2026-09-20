@@ -18275,39 +18275,65 @@ ${klinesSummary}
                FROM ledger_tag_config WHERE ledger_id = 37 AND tag_name IN (${placeholders})`,
               linked37Tags
             ) as any[];
-            for (const config of (Array.isArray(configs) ? configs : [])) linkedTagConfigByName.set(String(config.tag_name), config);
-            // 与 ledger.getTagSummary 一致：成员 initial_balances 内的逐笔押金为运行时权威数据，
-            // 兼容新版 __margins 和旧版 __margin。共享担保不得仅读取可能滞后的标签配置。
-            for (const tagName of linked37Tags) linkedTagMarginByName.set(tagName, {});
-            const [memberMargins] = await conn.execute(
-              `SELECT initial_balances FROM ledger_members WHERE ledger_id = 37`
-            ) as any[];
-            for (const row of (Array.isArray(memberMargins) ? memberMargins : [])) {
+            for (const config of (Array.isArray(configs) ? configs : [])) {
+              const tagName = String(config.tag_name);
+              linkedTagConfigByName.set(tagName, config);
               try {
-                const balances = typeof row.initial_balances === 'string' ? JSON.parse(row.initial_balances) : (row.initial_balances ?? {});
-                for (const tagName of linked37Tags) {
-                  let entries: Array<{ coin: string; amount: number }> = [];
-                  const marginsKey = `${tagName}__margins`;
-                  if (balances[marginsKey] !== undefined && balances[marginsKey] !== null) {
-                    try {
-                      const parsed = typeof balances[marginsKey] === 'string' ? JSON.parse(balances[marginsKey]) : balances[marginsKey];
-                      if (Array.isArray(parsed)) entries = parsed.map((entry: any) => ({
-                        coin: String(entry?.coin ?? 'CNY').trim().toUpperCase() || 'CNY',
-                        amount: Number(entry?.amount),
-                      })).filter((entry: any) => Number.isFinite(entry.amount));
-                    } catch {}
-                  }
-                  if (entries.length === 0) {
-                    const legacyAmount = Number(balances[`${tagName}__margin`]);
-                    if (Number.isFinite(legacyAmount)) entries = [{
-                      coin: String(balances[`${tagName}__marginCoin`] ?? 'CNY').trim().toUpperCase() || 'CNY',
-                      amount: legacyAmount,
-                    }];
-                  }
-                  const summary = linkedTagMarginByName.get(tagName)!;
-                  for (const entry of entries) summary[entry.coin] = (summary[entry.coin] ?? 0) + entry.amount;
+                // 37号保证金管理维护的 margin_by_coin 是标签逐笔保证金的展示与结算来源。
+                // 共享池按其币种净额估值，避免成员初始金额中的旧兼容字段覆盖当前标签记录。
+                const rawMargins = typeof config.margin_by_coin === 'string'
+                  ? JSON.parse(config.margin_by_coin)
+                  : config.margin_by_coin;
+                const entries = Array.isArray(rawMargins)
+                  ? rawMargins.map((entry: any) => ({ coin: String(entry?.coin ?? 'CNY').trim().toUpperCase() || 'CNY', amount: Number(entry?.amount) }))
+                  : Object.entries(rawMargins ?? {}).map(([coin, amount]) => ({ coin: String(coin).trim().toUpperCase() || 'CNY', amount: Number(amount) }));
+                const summary: Record<string, number> = {};
+                for (const entry of entries) {
+                  if (!Number.isFinite(entry.amount)) continue;
+                  summary[entry.coin] = (summary[entry.coin] ?? 0) + entry.amount;
                 }
-              } catch {}
+                linkedTagMarginByName.set(tagName, summary);
+              } catch {
+                linkedTagMarginByName.set(tagName, {});
+              }
+            }
+            for (const tagName of linked37Tags) {
+              if (!linkedTagMarginByName.has(tagName)) linkedTagMarginByName.set(tagName, {});
+            }
+            // 仅当标签没有维护 margin_by_coin 时，兼容读取成员初始金额中的旧押金字段。
+            // 有当前逐笔标签记录时绝不与旧字段叠加，避免同一担保重复计入共享池。
+            const fallbackTags = linked37Tags.filter((tagName) => Object.keys(linkedTagMarginByName.get(tagName) ?? {}).length === 0);
+            if (fallbackTags.length > 0) {
+              const [memberMargins] = await conn.execute(
+                `SELECT initial_balances FROM ledger_members WHERE ledgerId = 37`
+              ) as any[];
+              for (const row of (Array.isArray(memberMargins) ? memberMargins : [])) {
+                try {
+                  const balances = typeof row.initial_balances === 'string' ? JSON.parse(row.initial_balances) : (row.initial_balances ?? {});
+                  for (const tagName of fallbackTags) {
+                    let entries: Array<{ coin: string; amount: number }> = [];
+                    const marginsKey = `${tagName}__margins`;
+                    if (balances[marginsKey] !== undefined && balances[marginsKey] !== null) {
+                      try {
+                        const parsed = typeof balances[marginsKey] === 'string' ? JSON.parse(balances[marginsKey]) : balances[marginsKey];
+                        if (Array.isArray(parsed)) entries = parsed.map((entry: any) => ({
+                          coin: String(entry?.coin ?? 'CNY').trim().toUpperCase() || 'CNY',
+                          amount: Number(entry?.amount),
+                        })).filter((entry: any) => Number.isFinite(entry.amount));
+                      } catch {}
+                    }
+                    if (entries.length === 0) {
+                      const legacyAmount = Number(balances[`${tagName}__margin`]);
+                      if (Number.isFinite(legacyAmount)) entries = [{
+                        coin: String(balances[`${tagName}__marginCoin`] ?? 'CNY').trim().toUpperCase() || 'CNY',
+                        amount: legacyAmount,
+                      }];
+                    }
+                    const summary = linkedTagMarginByName.get(tagName)!;
+                    for (const entry of entries) summary[entry.coin] = (summary[entry.coin] ?? 0) + entry.amount;
+                  }
+                } catch {}
+              }
             }
             const [latestBalances] = await conn.execute(
               `SELECT lc.name AS tag_name, lr.amount
