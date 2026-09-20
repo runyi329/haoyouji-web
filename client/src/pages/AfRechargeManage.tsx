@@ -295,6 +295,7 @@ export default function AfRechargeManage() {
     {
       page: adjLogPage,
       pageSize: ADJ_PAGE_SIZE,
+      includeUnifiedBalance: true,
       ...(adjGlobalFlowKeyword.trim() ? { keyword: adjGlobalFlowKeyword.trim() } : {}),
       ...(adjGlobalDateRange.startDate ? { startDate: adjGlobalDateRange.startDate } : {}),
       ...(adjGlobalDateRange.endDate ? { endDate: adjGlobalDateRange.endDate } : {}),
