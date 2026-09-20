@@ -18256,8 +18256,8 @@ ${klinesSummary}
             if (p) livePrices[coin] = p;
           }
 
-          // 37 号账本引用标签是股票订单的权威担保物和净值盈亏来源。
-          // 共享担保池也必须使用同一来源，避免单张订单与共享汇总出现两套担保价值。
+          // 37号标签可以独立提供股票净值盈亏、担保物，旧订单无开关时兼容为两项都引用。
+          // 共享池按实际被启用的用途汇总，避免手工担保物被37号保证金覆盖或重复计入。
           const linked37Tags = Array.from(new Set(orders.map((o: any) => {
             try {
               const raw = o.collateral_source;
@@ -18358,10 +18358,14 @@ ${klinesSummary}
             for (const row of (Array.isArray(latestBalances) ? latestBalances : [])) linkedTagBalanceByName.set(String(row.tag_name), Number(row.amount));
           }
 
-          const parseLinked37Source = (raw: unknown): { tagName: string } | null => {
+          const parseLinked37Source = (raw: unknown): { tagName: string; useFloatingPnl: boolean; useCollateral: boolean } | null => {
             try {
               const source = Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : (typeof raw === 'string' ? JSON.parse(raw) : raw);
-              return Number(source?.ledgerId) === 37 && source?.tagName ? { tagName: String(source.tagName) } : null;
+              return Number(source?.ledgerId) === 37 && source?.tagName ? {
+                tagName: String(source.tagName),
+                useFloatingPnl: source.useFloatingPnl !== false,
+                useCollateral: source.useCollateral !== false,
+              } : null;
             } catch { return null; }
           };
           const calculateLinked37Collateral = (rawSource: unknown) => {
@@ -18392,6 +18396,8 @@ ${klinesSummary}
             const floatingPnl = Number.isFinite(latestBalance) ? ((latestBalance! - initialAmount) * multiplier / usdtCnyRate) : null;
             return {
               tagName: source.tagName,
+              useFloatingPnl: source.useFloatingPnl,
+              useCollateral: source.useCollateral,
               collateralAssets: entries.map(entry => ({ coin: entry.coin, qty: entry.qty, note: entry.note })),
               collateralValue: allPricesKnown ? collateralValue : null,
               floatingPnl,
@@ -18405,7 +18411,7 @@ ${klinesSummary}
             const linked37Collateral = calculateLinked37Collateral(o.collateral_source);
             // 计算担保物总价值（U）
             let collateralValue = 0;
-            const effectiveCollateralAssets = linked37Collateral ? linked37Collateral.collateralAssets : collateralAssets;
+            const effectiveCollateralAssets = linked37Collateral?.useCollateral ? linked37Collateral.collateralAssets : collateralAssets;
             for (const asset of effectiveCollateralAssets) {
               const qty = parseFloat(asset.qty) || 0;
               const coin = (asset.coin || '').toUpperCase().replace(/\s+/g, '');
@@ -18414,8 +18420,8 @@ ${klinesSummary}
               const price = isCny ? (1 / usdtCnyRate) : (isStablecoin ? 1 : (getLatestPrice(coin) || 0));
               collateralValue += qty * price;
             }
-            if (linked37Collateral?.collateralValue === null) collateralValue = 0;
-            else if (linked37Collateral) collateralValue = linked37Collateral.collateralValue;
+            if (linked37Collateral?.useCollateral && linked37Collateral.collateralValue === null) collateralValue = 0;
+            else if (linked37Collateral?.useCollateral) collateralValue = linked37Collateral.collateralValue;
             // 计算待结利息（简化：本金 × 年利率 / 365 × 持有天数 - 已结利息）
             const principal = parseFloat(String(o.interest_base || o.amount || 0)) || 0;
             // 年利率取绝对值：负利率（付息型）和正利率（收息型）利息金额都是正数
@@ -18496,9 +18502,12 @@ ${klinesSummary}
               collateralValue,
               collateralGap: collateralValue - collateralRequired,
               collateralAssets: effectiveCollateralAssets,
-              linked37TagName: linked37Collateral?.tagName ?? null,
-              linked37FloatingPnl: linked37Collateral?.floatingPnl ?? null,
-              linked37RiskExposure: linked37Collateral?.riskExposure ?? null,
+              // linked37TagName专指实际引用的37号担保物，供担保池去重。
+              linked37TagName: linked37Collateral?.useCollateral ? linked37Collateral.tagName : null,
+              // 浮盈可单独引用37号标签，手工担保订单也应使用这个净值盈亏。
+              linked37PnlTagName: linked37Collateral?.useFloatingPnl ? linked37Collateral.tagName : null,
+              linked37FloatingPnl: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null,
+              linked37RiskExposure: linked37Collateral?.useCollateral && linked37Collateral?.useFloatingPnl ? linked37Collateral.riskExposure : null,
               shareMode: o.collateral_share_mode,
               principalLentOut,
               interestBaseCurrency: o.interest_base_currency || 'USDT',
@@ -18627,7 +18636,7 @@ ${klinesSummary}
         ownerLabel: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), interestTagName: z.string().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
         principalLentOut: z.boolean().optional(),
         tradingFeeRate: z.number().min(0).max(100).optional(),
         tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
@@ -19606,7 +19615,7 @@ ${klinesSummary}
         interestRateCurrency: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), interestTagName: z.string().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
         principalLentOut: z.boolean().optional(),
         tradingFeeRate: z.number().min(0).max(100).optional(),
         tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
@@ -19760,7 +19769,7 @@ ${klinesSummary}
         tradeDirection: z.enum(['long', 'short']).nullable().optional(),
         orderFillStatus: z.enum(['pending', 'filled']).optional(),
         orderPerspective: z.enum(['self', 'other']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), interestTagName: z.string().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
         optionInfo: z.object({
           premium: z.string().optional(),
           exerciseDate: z.string().optional(),
