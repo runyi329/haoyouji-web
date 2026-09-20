@@ -1091,6 +1091,16 @@ export function FunderOrderCard({
     || dc?.approxCollateralTotal === 'CNY'
     ? dc.approxCollateralTotal
     : dc?.approxCollateralValue === 'CNY' ? 'CNY' : 'U';
+  // 股票订单绑定37号标签后，担保货币和担保缺口按各自独立配置显示。
+  // 历史订单未保存配置时默认人民币；非股票外部担保继续维持U主显示的旧口径。
+  const externalCollateralValueDisplay = isExternalStockPnlSource
+    && (dc?.externalCollateralValueDisplay === 'hidden' || dc?.externalCollateralValueDisplay === 'U' || dc?.externalCollateralValueDisplay === 'CNY')
+    ? dc.externalCollateralValueDisplay
+    : (isExternalStockPnlSource ? 'CNY' : 'U');
+  const externalCollateralGapDisplay = isExternalStockPnlSource
+    && (dc?.externalCollateralGapDisplay === 'hidden' || dc?.externalCollateralGapDisplay === 'U' || dc?.externalCollateralGapDisplay === 'CNY')
+    ? dc.externalCollateralGapDisplay
+    : (isExternalStockPnlSource ? 'CNY' : 'U');
   // 资金属性仅用于展示标签。对未明确手动关闭的旧期权订单，保持其既有Greeks可见，避免标签保存误触配置默认值。
   const shouldShowOptionGreeks = isOptionOrder && optionInfo && (
     show('showGreeks')
@@ -1913,7 +1923,7 @@ export function FunderOrderCard({
               </div>
             )}
             {/* 担保货币（与 LedgerDetail 前端完全一致：受 display_config 开关控制） */}
-            {show('collateralCoin') && hasExternalCollateral && (
+            {show('collateralCoin') && hasExternalCollateral && externalCollateralValueDisplay !== 'hidden' && (
               <div className="flex items-start justify-between gap-1 text-xs mt-0.5">
                 <span className="flex items-center gap-1 shrink-0 whitespace-nowrap">
                   <span className="text-gray-400 whitespace-nowrap">担保货币</span>
@@ -1925,9 +1935,11 @@ export function FunderOrderCard({
                   >!</button>
                 </span>
                 {externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU) ? (
-                  <span className="flex min-w-0 flex-col items-end font-medium tabular-nums text-right" style={{ color: '#1A2340' }}>
-                    <span className="whitespace-nowrap">{isSharedMode ? '共享合计 ' : ''}{externalCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
-                    {externalCollateralValueCny !== null && <span className="text-[10px] whitespace-nowrap" style={{ color: '#9CA3AF' }}>≈{externalCollateralValueCny.toLocaleString(undefined, { maximumFractionDigits: 0 })}元</span>}
+                  <span className="min-w-0 font-medium tabular-nums text-right whitespace-nowrap" style={{ color: '#1A2340' }}>
+                    {isSharedMode ? '共享合计 ' : ''}
+                    {externalCollateralValueDisplay === 'CNY' && externalCollateralValueCny !== null
+                      ? `${externalCollateralValueCny.toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
+                      : `${externalCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`}
                   </span>
                 ) : <span style={{ color: '#9CA3AF' }}>{isSharedMode ? '共享担保加载中...' : '加载中...'}</span>}
               </div>
@@ -2323,6 +2335,7 @@ export function FunderOrderCard({
                   </div>
                 </div>
               )}
+              {(!hasExternalCollateral || externalCollateralGapDisplay !== 'hidden') && (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-0.5">
                   <span className="text-gray-400">担保缺口</span>
@@ -2335,9 +2348,11 @@ export function FunderOrderCard({
                 {hasExternalCollateral ? (
                   (isSharedMode ? sharedPoolRemainingU : extRemainingMarginU) !== null
                     ? (() => {
-                        const remaining = isSharedMode ? sharedPoolRemainingU! : extRemainingMarginU!;
+                        const remainingU = isSharedMode ? sharedPoolRemainingU! : extRemainingMarginU!;
+                        const remaining = externalCollateralGapDisplay === 'CNY' ? remainingU * cnyRate : remainingU;
+                        const unit = externalCollateralGapDisplay === 'CNY' ? '元' : 'u';
                         return <span className="font-medium tabular-nums" style={{ color: remaining >= 0 ? '#DC2626' : '#16A34A' }}>
-                          {remaining >= 0 ? '+' : ''}{remaining.toLocaleString(undefined, { maximumFractionDigits: 2 })} u
+                          {remaining >= 0 ? '+' : ''}{remaining.toLocaleString(undefined, { maximumFractionDigits: externalCollateralGapDisplay === 'CNY' ? 0 : 2 })} {unit}
                         </span>;
                       })()
                     : <span className="text-xs" style={{ color: '#9CA3AF' }}>{isSharedMode ? '共享担保加载中...' : '加载中...'}</span>
@@ -2349,6 +2364,7 @@ export function FunderOrderCard({
                       </span>
                 )}
               </div>
+              )}
               {/* 保证金率：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100% */}
               {show('marginRate') && !hasExternalCollateral && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && (() => {
                 const effectiveCollateral = floatPnl !== null

@@ -157,6 +157,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     approxCollateralItem: 'U',
     // 多笔担保物的合计价值独立控制；默认显示 USD，避免总值被误隐藏。
     approxCollateralTotal: 'U',
+    // 股票订单绑定37号标签时，担保货币与担保缺口的主显示单位；默认人民币。
+    externalCollateralValueDisplay: 'CNY',
+    externalCollateralGapDisplay: 'CNY',
     // 股票专属字段
     brokerName: true,
     brokerAccount: true,
@@ -2854,6 +2857,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       { key: 'approxPaid', label: '已结利息约等于' },
                       { key: 'approxCollateralItem', label: '担保货币约等于' },
                       { key: 'approxCollateralTotal', label: '担保总值约等于' },
+                      ...(formData.assetType === 'stock' ? [
+                        { key: 'externalCollateralValueDisplay', label: '担保货币显示' },
+                        { key: 'externalCollateralGapDisplay', label: '担保缺口显示' },
+                      ] : []),
                     ] as { key: string; label: string }[]).map(({ key, label }) => (
                       <div key={key}>
                         <div className="text-sm text-gray-600 mb-1">{label}</div>
@@ -2864,12 +2871,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               type="button"
                               onClick={() => setDisplayConfig(c => ({ ...c, [key]: opt }))}
                               className={`flex-1 py-1 text-xs rounded-lg border transition-colors ${
-                                displayConfig[key] === opt
+                                ((key === 'externalCollateralValueDisplay' || key === 'externalCollateralGapDisplay')
+                                  ? (displayConfig[key] ?? 'CNY')
+                                  : displayConfig[key]) === opt
                                   ? 'bg-blue-500 text-white border-blue-500'
                                   : 'bg-white text-gray-500 border-gray-200'
                               }`}
                             >
-                              {opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ U' : '≈ 元'}
+                              {key === 'externalCollateralValueDisplay' || key === 'externalCollateralGapDisplay'
+                                ? (opt === 'hidden' ? '不显示' : opt === 'U' ? '显示 U' : '显示元')
+                                : (opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ U' : '≈ 元')}
                             </button>
                           ))}
                         </div>
@@ -3386,14 +3397,20 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 { key: 'approxPaid', label: '已结利息约等于' },
                                 { key: 'approxCollateralItem', label: '担保货币约等于' },
                                 { key: 'approxCollateralTotal', label: '担保总值约等于' },
+                                ...(formData.assetType === 'stock' ? [
+                                  { key: 'externalCollateralValueDisplay', label: '担保货币显示' },
+                                  { key: 'externalCollateralGapDisplay', label: '担保缺口显示' },
+                                ] : []),
                               ] as { key: string; label: string }[]).map(({ key, label }) => (
                                 <div key={key}>
                                   <div className="text-xs text-gray-600 mb-1">{label}</div>
                                   <div className="flex gap-1">
                                     {(['hidden', 'U', 'CNY'] as const).map(opt => (
                                       <button key={opt} type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, displayConfig: { ...pp.displayConfig, [key]: opt } } : pp))}
-                                        className={`flex-1 py-0.5 text-xs rounded-lg border transition-colors ${ (p.displayConfig?.[key]||'hidden') === opt ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200' }`}>
-                                        {opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ U' : '≈ 元'}
+                                        className={`flex-1 py-0.5 text-xs rounded-lg border transition-colors ${ ((key === 'externalCollateralValueDisplay' || key === 'externalCollateralGapDisplay') ? (p.displayConfig?.[key] ?? 'CNY') : (p.displayConfig?.[key] || 'hidden')) === opt ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200' }`}>
+                                        {key === 'externalCollateralValueDisplay' || key === 'externalCollateralGapDisplay'
+                                          ? (opt === 'hidden' ? '不显示' : opt === 'U' ? '显示 U' : '显示元')
+                                          : (opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ U' : '≈ 元')}
                                       </button>
                                     ))}
                                   </div>
