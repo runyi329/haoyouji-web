@@ -1977,16 +1977,15 @@ export async function adminRevokeBalanceHistory(
 
 // ── 编辑备注（不涉及金额，只更新 description/note 字段）────────────────────────
 export async function adminUpdateNote(
-  adminId: number,
+  _adminId: number,
   historyId: number | undefined,
   manualId: number | undefined,
-  notes: string[]
+  note: string
 ) {
   const conn = await getDbConnection();
   if (!conn) throw new Error('数据库连接失败');
   const pool = conn as any;
-  const combined = notes.filter((n: string) => n.trim()).join('\n');
-  const suffix = `[编辑人:${adminId}]`;
+  const replacement = note.trim();
   if (historyId) {
     const [[row]] = await pool.execute(
       `SELECT id FROM balance_history WHERE id = ? LIMIT 1`,
@@ -1995,7 +1994,7 @@ export async function adminUpdateNote(
     if (!row) throw new Error('流水记录不存在');
     await pool.execute(
       `UPDATE balance_history SET description = ? WHERE id = ?`,
-      [combined ? `${combined} ${suffix}` : null, historyId]
+      [replacement || null, historyId]
     );
   }
   if (manualId) {
@@ -2011,7 +2010,7 @@ export async function adminUpdateNote(
     const origNote = String(orig?.note ?? '');
     const tagMatch = origNote.match(/^(\[[^\]]+\])+/);
     const prefix = tagMatch ? tagMatch[0] : '';
-    const newNote = `${prefix}${combined ? combined + ' ' + suffix : ''}`.trim();
+    const newNote = `${prefix}${replacement}`.trim();
     await pool.execute(
       `UPDATE af_manual_balances SET note = ? WHERE id = ?`,
       [newNote, manualId]

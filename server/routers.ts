@@ -2535,13 +2535,16 @@ ${klinesSummary}
       .input(z.object({
         historyId: z.number().optional(),
         manualId: z.number().optional(),
-        notes: z.array(z.string()),
+        // notes 保留为旧页面的短期兼容输入；新页面直接提交单条替换文本。
+        note: z.string().max(1000).optional(),
+        notes: z.array(z.string()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         }
-        return await dbRecharge.adminUpdateNote(ctx.user.id, input.historyId, input.manualId, input.notes);
+        const replacement = input.note ?? (input.notes ?? []).filter((note) => note.trim()).join('\n');
+        return await dbRecharge.adminUpdateNote(ctx.user.id, input.historyId, input.manualId, replacement);
       }),
   }),
   // 卡券系统

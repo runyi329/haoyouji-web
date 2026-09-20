@@ -5,7 +5,7 @@ import {
   Clock, CheckCircle2, XCircle, ExternalLink,
   Activity, AlertTriangle, TrendingUp, Wrench,
   ChevronLeft as PrevIcon, ChevronRight as NextIcon,
-  CheckCheck, Copy, User, Phone, Timer
+  CheckCheck, Copy, User, Phone, Timer, Minus
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "@/pages/miban/mibanTrpc";
@@ -29,6 +29,116 @@ import {
 } from "@/components/ui/alert-dialog";
 import { UserAvatar } from "@/components/UserAvatar";
 
+type LedgerDatePreset = "all" | "today" | "this_month" | "last_month" | "custom";
+
+const formatLedgerDate = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getLedgerDateRange = (preset: LedgerDatePreset, customStart: string, customEnd: string) => {
+  const now = new Date();
+  if (preset === "today") {
+    const today = formatLedgerDate(now);
+    return { startDate: today, endDate: today };
+  }
+  if (preset === "this_month") {
+    return {
+      startDate: formatLedgerDate(new Date(now.getFullYear(), now.getMonth(), 1)),
+      endDate: formatLedgerDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+    };
+  }
+  if (preset === "last_month") {
+    return {
+      startDate: formatLedgerDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+      endDate: formatLedgerDate(new Date(now.getFullYear(), now.getMonth(), 0)),
+    };
+  }
+  if (preset === "custom") {
+    return { startDate: customStart || undefined, endDate: customEnd || undefined };
+  }
+  return { startDate: undefined, endDate: undefined };
+};
+
+function LedgerFlowFilters({
+  keyword,
+  datePreset,
+  customStart,
+  customEnd,
+  onKeywordChange,
+  onDatePresetChange,
+  onCustomStartChange,
+  onCustomEndChange,
+  onClear,
+}: {
+  keyword: string;
+  datePreset: LedgerDatePreset;
+  customStart: string;
+  customEnd: string;
+  onKeywordChange: (value: string) => void;
+  onDatePresetChange: (preset: LedgerDatePreset) => void;
+  onCustomStartChange: (value: string) => void;
+  onCustomEndChange: (value: string) => void;
+  onClear: () => void;
+}) {
+  const isFiltered = keyword.trim().length > 0 || datePreset !== "all";
+  const dateOptions: Array<{ key: LedgerDatePreset; label: string }> = [
+    { key: "all", label: "全部" },
+    { key: "today", label: "今天" },
+    { key: "this_month", label: "本月" },
+    { key: "last_month", label: "上月" },
+    { key: "custom", label: "自定义" },
+  ];
+  return (
+    <div className="mb-3 rounded-xl border border-gray-100 bg-gray-50 p-2.5">
+      <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-2 focus-within:border-orange-400">
+        <Search className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+        <input
+          value={keyword}
+          onChange={(event) => onKeywordChange(event.target.value)}
+          placeholder="搜索备注、类型、金额…"
+          className="min-w-0 flex-1 bg-transparent text-[12px] text-gray-700 outline-none placeholder:text-gray-400"
+        />
+        {keyword && (
+          <button type="button" onClick={() => onKeywordChange("")} className="p-0.5 text-gray-400" aria-label="清除搜索">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+      <div className="mt-2 flex items-center gap-1 overflow-x-auto pb-0.5">
+        {dateOptions.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            onClick={() => onDatePresetChange(option.key)}
+            className={`shrink-0 rounded-md border px-2 py-1 text-[10px] font-medium transition-colors ${
+              datePreset === option.key
+                ? "border-orange-500 bg-orange-500 text-white"
+                : "border-gray-200 bg-white text-gray-500 hover:bg-gray-100"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+        {isFiltered && (
+          <button type="button" onClick={onClear} className="ml-auto shrink-0 px-1 text-[10px] text-orange-500">
+            清除
+          </button>
+        )}
+      </div>
+      {datePreset === "custom" && (
+        <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
+          <input type="date" value={customStart} onChange={(event) => onCustomStartChange(event.target.value)} className="min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-600 outline-none focus:border-orange-400" />
+          <span className="text-[10px] text-gray-400">至</span>
+          <input type="date" value={customEnd} onChange={(event) => onCustomEndChange(event.target.value)} className="min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-600 outline-none focus:border-orange-400" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AfRechargeManage() {
   const params = useParams();
   const [, setLocation] = useLocation();
@@ -40,11 +150,14 @@ export default function AfRechargeManage() {
     return 1;
   })();
 
-  // 主 Tab：records=充值记录 | monitor=充值监控 | adjust=手动调账。
-  // 融资付息管理页的“充值”快捷入口通过 ?tab=adjust 直接打开手动调账。
+  // 主 Tab：adjust=手动调账 | records=充值记录 | monitor=充值监控。
+  // 充值管理默认打开手动调账；若其他入口显式传入 tab，仍按其原有目标页签打开。
   const [mainTab, setMainTab] = useState<"records" | "monitor" | "adjust">(() => {
-    if (typeof window === 'undefined') return "records";
-    return new URLSearchParams(window.location.search).get('tab') === 'adjust' ? "adjust" : "records";
+    if (typeof window === 'undefined') return "adjust";
+    const requestedTab = new URLSearchParams(window.location.search).get('tab');
+    return requestedTab === 'records' || requestedTab === 'monitor' || requestedTab === 'adjust'
+      ? requestedTab
+      : 'adjust';
   });
 
   // ===== 充值记录 Tab 状态 =====
@@ -67,7 +180,8 @@ export default function AfRechargeManage() {
   // ===== 编辑备注相关状态 =====
   const [showNoteDialog, setShowNoteDialog] = useState(false);
   const [noteTarget, setNoteTarget] = useState<{ historyId?: number; manualId?: number; currentNote: string } | null>(null);
-  const [noteLines, setNoteLines] = useState<string[]>(['']);
+  const [noteContent, setNoteContent] = useState('');
+  const [noteSelectedCommonNote, setNoteSelectedCommonNote] = useState<string | null>(null);
 
   // ===== 充值监控 Tab 状态 =====
   const [showFixLogs, setShowFixLogs] = useState(false);
@@ -88,8 +202,43 @@ export default function AfRechargeManage() {
   const [adjDirection, setAdjDirection] = useState<"add" | "sub">("add");
   const [adjAmount, setAdjAmount] = useState("");
   const [adjNote, setAdjNote] = useState("");
+  const [adjSelectedCommonNote, setAdjSelectedCommonNote] = useState<string | null>(null);
+  // 成功调账过的用户保存在当前账本、当前设备，优先于普通用户列表展示。
+  const recentAdjUserStorageKey = `af-recharge-adjust-recent-users-v1:${ledgerId}`;
+  const [recentAdjUserIds, setRecentAdjUserIds] = useState<number[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(recentAdjUserStorageKey) || "[]");
+      return Array.isArray(stored)
+        ? stored.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0).slice(0, 10)
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  // 常用备注仅保存到当前账本、当前设备，避免额外管理页面和跨账本混用。
+  const commonAdjNoteStorageKey = `af-recharge-adjust-common-notes-v1:${ledgerId}`;
+  const [adjCommonNotes, setAdjCommonNotes] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(commonAdjNoteStorageKey) || "[]");
+      return Array.isArray(stored)
+        ? stored.filter((note): note is string => typeof note === "string" && note.trim().length > 0).slice(0, 8)
+        : [];
+    } catch {
+      return [];
+    }
+  });
   const [adjFlowTab, setAdjFlowTab] = useState<"user" | "global">("user");
   const [adjLogPage, setAdjLogPage] = useState(1);
+  const [adjUserFlowKeyword, setAdjUserFlowKeyword] = useState("");
+  const [adjUserFlowDatePreset, setAdjUserFlowDatePreset] = useState<LedgerDatePreset>("all");
+  const [adjUserFlowCustomStart, setAdjUserFlowCustomStart] = useState("");
+  const [adjUserFlowCustomEnd, setAdjUserFlowCustomEnd] = useState("");
+  const [adjGlobalFlowKeyword, setAdjGlobalFlowKeyword] = useState("");
+  const [adjGlobalFlowDatePreset, setAdjGlobalFlowDatePreset] = useState<LedgerDatePreset>("all");
+  const [adjGlobalFlowCustomStart, setAdjGlobalFlowCustomStart] = useState("");
+  const [adjGlobalFlowCustomEnd, setAdjGlobalFlowCustomEnd] = useState("");
   const ADJ_PAGE_SIZE = 10;
   // ===== 数据查询 =====
   const ordersQuery = trpc.recharge.adminGetAllOrders.useQuery({ limit: 200 }, {
@@ -114,15 +263,61 @@ export default function AfRechargeManage() {
   );
   const adjHistory = (adjHistoryQuery.data as any[]) ?? [];
   const refetchAdjHistory = adjHistoryQuery.refetch;
+  const adjUserDateRange = getLedgerDateRange(adjUserFlowDatePreset, adjUserFlowCustomStart, adjUserFlowCustomEnd);
+  const adjUserKeyword = adjUserFlowKeyword.trim().toLocaleLowerCase();
+  const adjFilteredHistory = adjHistory.filter((record: any) => {
+    const occurredAt = new Date(record.createdAt);
+    const occurredDate = Number.isNaN(occurredAt.getTime()) ? '' : formatLedgerDate(occurredAt);
+    const inDateRange =
+      (!adjUserDateRange.startDate || occurredDate >= adjUserDateRange.startDate) &&
+      (!adjUserDateRange.endDate || occurredDate <= adjUserDateRange.endDate);
+    if (!inDateRange) return false;
+    if (!adjUserKeyword) return true;
+    return [
+      record.note,
+      record.description,
+      record.type,
+      record.sourceType,
+      record.status,
+      record.currency,
+      record.amount,
+      record.balanceAfter,
+    ].some((value) => String(value ?? '').toLocaleLowerCase().includes(adjUserKeyword));
+  });
+  const adjGlobalDateRange = getLedgerDateRange(adjGlobalFlowDatePreset, adjGlobalFlowCustomStart, adjGlobalFlowCustomEnd);
   const { data: adjGlobalLog, refetch: refetchAdjGlobal } = mtrpc.adminUser.walletGlobalHistory.useQuery(
-    { page: adjLogPage, pageSize: ADJ_PAGE_SIZE }
+    {
+      page: adjLogPage,
+      pageSize: ADJ_PAGE_SIZE,
+      ...(adjGlobalFlowKeyword.trim() ? { keyword: adjGlobalFlowKeyword.trim() } : {}),
+      ...(adjGlobalDateRange.startDate ? { startDate: adjGlobalDateRange.startDate } : {}),
+      ...(adjGlobalDateRange.endDate ? { endDate: adjGlobalDateRange.endDate } : {}),
+    }
+  );
+  const { data: adjRecentHistory } = mtrpc.adminUser.walletGlobalHistory.useQuery(
+    { page: 1, pageSize: 10 },
+    { staleTime: 30_000 }
   );
   const adjLogItems = adjGlobalLog?.items ?? [];
+  const adjRecentHistoryItems = adjRecentHistory?.items ?? [];
   const adjLogTotal = adjGlobalLog?.total ?? 0;
   const adjLogTotalPages = Math.max(1, Math.ceil(adjLogTotal / ADJ_PAGE_SIZE));
+  const persistRecentAdjUsers = (nextIds: number[]) => {
+    const normalized = Array.from(new Set(nextIds.map(Number).filter((id) => Number.isInteger(id) && id > 0))).slice(0, 10);
+    setRecentAdjUserIds(normalized);
+    try {
+      window.localStorage.setItem(recentAdjUserStorageKey, JSON.stringify(normalized));
+    } catch {
+      // 本机存储不可用时仍在当前页面会话保留最近用户。
+    }
+  };
+  const rememberRecentAdjUser = (userId: number) => {
+    persistRecentAdjUsers([userId, ...recentAdjUserIds.filter((id) => id !== userId)]);
+  };
   const adjMutation = mtrpc.adminUser.walletAdjust.useMutation({
     onSuccess: () => {
       toast.success("调账成功");
+      if (adjSelectedUser?.id) rememberRecentAdjUser(Number(adjSelectedUser.id));
       setAdjAmount("");
       setAdjNote("");
       adjUtils.adminUser.list.invalidate();
@@ -134,23 +329,99 @@ export default function AfRechargeManage() {
   });
   // 同步 adjSelectedUser 余额（调账后刷新）
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const adjFilteredUsers = adjSearch.trim().length > 0
-    ? (adjAllUsers as any[]).filter((u: any) => {
-        const q = adjSearch.toLowerCase();
+  const adjUserList = adjAllUsers as any[];
+  // 先使用当前设备的成功调账记录；不足时补充全局流水里最近出现的用户。
+  const adjRecentUserIds = Array.from(new Set([
+    ...recentAdjUserIds,
+    ...adjRecentHistoryItems.map((record: any) => Number(record.userId)).filter((id: number) => Number.isInteger(id) && id > 0),
+  ]));
+  const adjRecentRank = new Map(adjRecentUserIds.map((id, index) => [id, index]));
+  const sortUsersByRecent = (users: any[]) => [...users].sort((a, b) => {
+    const aRank = adjRecentRank.get(Number(a.id));
+    const bRank = adjRecentRank.get(Number(b.id));
+    if (aRank != null && bRank != null) return aRank - bRank;
+    if (aRank != null) return -1;
+    if (bRank != null) return 1;
+    return 0;
+  });
+  const adjRecentUsers = adjRecentUserIds
+    .map((id) => adjUserList.find((user: any) => Number(user.id) === id))
+    .filter(Boolean) as any[];
+  const adjMatchedUsers = adjSearch.trim().length > 0
+    ? sortUsersByRecent(adjUserList.filter((u: any) => {
+        const q = adjSearch.trim().toLowerCase();
         return (
           String(u.name ?? "").toLowerCase().includes(q) ||
           String(u.username ?? "").toLowerCase().includes(q) ||
           String(u.id).includes(q)
         );
-      })
+      }))
     : [];
+  const adjDropdownUsers = (adjSearch.trim().length > 0
+    ? adjMatchedUsers
+    : (adjRecentUsers.length > 0 ? adjRecentUsers : adjUserList.slice(0, 10))
+  ).slice(0, 10);
   const handleAdjSubmit = () => {
     if (!adjSelectedUser) { toast.error("请先选择用户"); return; }
     const amt = parseFloat(adjAmount);
     if (isNaN(amt) || amt <= 0) { toast.error("请输入大于 0 的金额"); return; }
-    if (!adjNote.trim()) { toast.error("备注不能为空"); return; }
+    // 临时 Manus 预览复用生产 API；禁止在预览中误写真实钱包余额。
+    if (typeof window !== 'undefined' && window.location.hostname.endsWith('.manus.computer')) {
+      toast.info('临时预览仅用于查看界面，确认调账不会提交到生产数据。');
+      return;
+    }
     const finalAmt = adjDirection === "sub" ? -amt : amt;
+    // 备注允许留空；服务端会以审计默认说明补全空值。
     adjMutation.mutate({ userId: adjSelectedUser.id, currency: adjCurrency, amount: finalAmt, note: adjNote.trim() });
+  };
+  const persistAdjCommonNotes = (nextNotes: string[]) => {
+    const normalized = nextNotes.slice(0, 8);
+    setAdjCommonNotes(normalized);
+    try {
+      window.localStorage.setItem(commonAdjNoteStorageKey, JSON.stringify(normalized));
+    } catch {
+      // 本机存储不可用时仍保留当前页面会话内的常用备注。
+    }
+  };
+  const saveCurrentAdjNoteAsCommon = () => {
+    const note = adjNote.trim();
+    if (!note) return;
+    const alreadySaved = adjCommonNotes.includes(note);
+    persistAdjCommonNotes([note, ...adjCommonNotes.filter((item) => item !== note)]);
+    setAdjSelectedCommonNote(note);
+    toast.success(alreadySaved ? "已置顶到常用备注" : "已加入常用备注");
+  };
+  const removeAdjCommonNote = (note: string) => {
+    persistAdjCommonNotes(adjCommonNotes.filter((item) => item !== note));
+    setAdjSelectedCommonNote(null);
+    if (noteSelectedCommonNote === note) setNoteSelectedCommonNote(null);
+  };
+  const saveNoteContentAsCommon = () => {
+    const note = noteContent.trim();
+    if (!note) return;
+    const alreadySaved = adjCommonNotes.includes(note);
+    persistAdjCommonNotes([note, ...adjCommonNotes.filter((item) => item !== note)]);
+    setNoteSelectedCommonNote(note);
+    toast.success(alreadySaved ? '已置顶到常用备注' : '已加入常用备注');
+  };
+  const removeSelectedNoteCommon = () => {
+    if (!noteSelectedCommonNote) return;
+    persistAdjCommonNotes(adjCommonNotes.filter((item) => item !== noteSelectedCommonNote));
+    if (adjSelectedCommonNote === noteSelectedCommonNote) setAdjSelectedCommonNote(null);
+    setNoteSelectedCommonNote(null);
+  };
+  const saveNoteReplacement = () => {
+    if (!noteTarget) return;
+    // 临时 Manus 预览复用生产 API；禁止在预览中误写真实流水备注。
+    if (typeof window !== 'undefined' && window.location.hostname.endsWith('.manus.computer')) {
+      toast.info('临时预览仅用于查看界面，保存不会提交到生产数据。');
+      return;
+    }
+    updateNoteMutation.mutate({
+      historyId: noteTarget.historyId,
+      manualId: noteTarget.manualId,
+      note: noteContent,
+    });
   };
   const clearAdjUser = () => { setAdjSelectedUser(null); setAdjSearch(""); };
 
@@ -235,7 +506,7 @@ export default function AfRechargeManage() {
       toast.success('备注已更新');
       setShowNoteDialog(false);
       setNoteTarget(null);
-      setNoteLines(['']);
+      setNoteContent('');
       refetchAdjHistory();
       refetchAdjGlobal();
     },
@@ -430,9 +701,9 @@ export default function AfRechargeManage() {
         {/* 主 Tab 切换 */}
         <div className="flex border-b border-gray-100">
           {[
+            { key: "adjust", label: "手动调账" },
             { key: "records", label: "记录" },
             { key: "monitor", label: "监控" },
-            { key: "adjust", label: "手动调账" },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -971,11 +1242,16 @@ export default function AfRechargeManage() {
       {/* ===== 手动调账 Tab ===== */}
       {mainTab === "adjust" && (
         <div className="px-4 py-4 space-y-4">
-          {/* ① 选择用户 */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <p className="text-[13px] font-bold text-black mb-3">① 选择用户</p>
+          {/* 用户选择与调账参数合并为同一张紧凑表单卡。 */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[14px] font-bold text-black">手动调账</p>
+              <span className="text-[10px] text-gray-400">选择用户后填写金额</span>
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-400 mb-1">调账用户</p>
             {adjSelectedUser ? (
-              <div className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3">
+              <div className="bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-[14px] font-bold text-black">{adjSelectedUser.name || adjSelectedUser.username}</p>
@@ -985,12 +1261,12 @@ export default function AfRechargeManage() {
                     更换
                   </button>
                 </div>
-                <div className="flex gap-3 mt-3">
-                  <div className="flex-1 bg-white rounded-xl px-3 py-2 border border-orange-100">
+                <div className="flex gap-2 mt-2.5">
+                  <div className="flex-1 bg-white rounded-lg px-2.5 py-1.5 border border-orange-100">
                     <p className="text-[10px] text-gray-400 mb-0.5">USDT 余额</p>
                     <p className="text-[15px] font-bold text-orange-500">{Number(adjSelectedUser.usdtBalance ?? 0).toFixed(4)}</p>
                   </div>
-                  <div className="flex-1 bg-white rounded-xl px-3 py-2 border border-orange-100">
+                  <div className="flex-1 bg-white rounded-lg px-2.5 py-1.5 border border-orange-100">
                     <p className="text-[10px] text-gray-400 mb-0.5">CNY 余额</p>
                     <p className="text-[15px] font-bold text-green-600">¥{Number(adjSelectedUser.cnyBalance ?? 0).toFixed(2)}</p>
                   </div>
@@ -1005,8 +1281,9 @@ export default function AfRechargeManage() {
                     value={adjSearch}
                     onChange={(e) => { setAdjSearch(e.target.value); setAdjShowDropdown(true); }}
                     onFocus={() => setAdjShowDropdown(true)}
+                    onClick={() => setAdjShowDropdown(true)}
                     onBlur={() => setTimeout(() => setAdjShowDropdown(false), 150)}
-                    placeholder="输入姓名 / 账号 / ID 搜索用户"
+                    placeholder="点击查看最近用户，或搜索昵称 / 用户 / ID"
                     className="flex-1 text-[13px] bg-transparent focus:outline-none"
                   />
                   {adjSearch && (
@@ -1015,20 +1292,32 @@ export default function AfRechargeManage() {
                     </button>
                   )}
                 </div>
-                {adjShowDropdown && adjSearch.trim().length > 0 && (
+                {adjShowDropdown && (
                   <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-lg z-50 overflow-hidden max-h-60 overflow-y-auto">
-                    {adjFilteredUsers.length === 0 ? (
-                      <p className="text-center text-[12px] text-gray-400 py-6">未找到匹配用户</p>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100">
+                      <p className="text-[11px] font-medium text-gray-500">
+                        {adjSearch.trim() ? '匹配用户' : (adjRecentUsers.length > 0 ? '最近调账用户' : '用户列表')}
+                      </p>
+                      <span className="text-[10px] text-gray-400">最多显示 10 位</span>
+                    </div>
+                    {adjDropdownUsers.length === 0 ? (
+                      <p className="text-center text-[12px] text-gray-400 py-6">
+                        {adjSearch.trim() ? '未找到匹配用户' : '暂无可选用户'}
+                      </p>
                     ) : (
-                      adjFilteredUsers.map((u: any) => (
+                      adjDropdownUsers.map((u: any) => (
                         <button
                           key={u.id}
                           onMouseDown={() => { setAdjSelectedUser(u); setAdjFlowTab("user"); setAdjSearch(""); setAdjShowDropdown(false); }}
                           className="w-full text-left flex items-center justify-between px-4 py-3 hover:bg-orange-50 active:bg-orange-100 border-b border-gray-50 last:border-0"
                         >
-                          <div>
-                            <p className="text-[13px] font-semibold text-black">{u.name || u.username}</p>
-                            <p className="text-[10px] text-gray-400">ID: {u.id} · @{u.username}</p>
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-black">
+                              <span className="text-gray-400 font-normal">昵称：</span>{u.name || '未设置昵称'}
+                            </p>
+                            <p className="mt-0.5 truncate text-[11px] text-gray-500">
+                              <span className="text-gray-400">用户：</span>{u.username ? `@${u.username}` : `用户${u.id}`} <span className="text-gray-300">· ID {u.id}</span>
+                            </p>
                           </div>
                           <div className="text-right flex-shrink-0 ml-3">
                             <p className="text-[11px] text-orange-500 font-medium">USDT {Number(u.usdtBalance ?? 0).toFixed(2)}</p>
@@ -1041,37 +1330,34 @@ export default function AfRechargeManage() {
                 )}
               </div>
             )}
-          </div>
-
-          {/* ② 调账表单 */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
-            <p className="text-[13px] font-bold text-black">② 调账操作</p>
-            {/* 货币选择 */}
-            <div>
-              <p className="text-[11px] text-gray-400 mb-1.5">货币类型</p>
-              <div className="flex rounded-xl overflow-hidden border border-gray-200">
-                <button onClick={() => setAdjCurrency("USDT")}
-                  className={`flex-1 py-2.5 text-[13px] font-medium transition-colors ${adjCurrency === "USDT" ? "bg-orange-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
-                  USDT
-                </button>
-                <button onClick={() => setAdjCurrency("CNY")}
-                  className={`flex-1 py-2.5 text-[13px] font-medium transition-colors ${adjCurrency === "CNY" ? "bg-green-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
-                  人民币 CNY
-                </button>
-              </div>
             </div>
-            {/* 方向 */}
-            <div>
-              <p className="text-[11px] text-gray-400 mb-1.5">调账方向</p>
-              <div className="flex rounded-xl overflow-hidden border border-gray-200">
-                <button onClick={() => setAdjDirection("add")}
-                  className={`flex-1 py-2.5 text-[13px] font-medium transition-colors ${adjDirection === "add" ? "bg-green-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
-                  + 充值 / 增加
-                </button>
-                <button onClick={() => setAdjDirection("sub")}
-                  className={`flex-1 py-2.5 text-[13px] font-medium transition-colors ${adjDirection === "sub" ? "bg-red-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
-                  − 扣款 / 减少
-                </button>
+            {/* 货币与调账方向：手机端并列为一行，缩短表单高度。 */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] text-gray-400 mb-1">货币</p>
+                <div className="flex h-9 rounded-xl overflow-hidden border border-gray-200">
+                  <button onClick={() => setAdjCurrency("USDT")}
+                    className={`flex-1 min-w-0 text-[12px] font-medium transition-colors ${adjCurrency === "USDT" ? "bg-orange-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
+                    USDT
+                  </button>
+                  <button onClick={() => setAdjCurrency("CNY")}
+                    className={`flex-1 min-w-0 text-[12px] font-medium transition-colors ${adjCurrency === "CNY" ? "bg-green-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
+                    CNY
+                  </button>
+                </div>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-gray-400 mb-1">方向</p>
+                <div className="flex h-9 rounded-xl overflow-hidden border border-gray-200">
+                  <button onClick={() => setAdjDirection("add")}
+                    className={`flex-1 min-w-0 text-[12px] font-medium transition-colors ${adjDirection === "add" ? "bg-green-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
+                    + 增加
+                  </button>
+                  <button onClick={() => setAdjDirection("sub")}
+                    className={`flex-1 min-w-0 text-[12px] font-medium transition-colors ${adjDirection === "sub" ? "bg-red-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
+                    − 扣款
+                  </button>
+                </div>
               </div>
             </div>
             {/* 金额 */}
@@ -1083,19 +1369,71 @@ export default function AfRechargeManage() {
                 onChange={(e) => setAdjAmount(e.target.value)}
                 placeholder="请输入正数金额"
                 min="0"
-                className="w-full text-[13px] px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:border-orange-400"
+                className="w-full text-[16px] font-semibold px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:border-orange-400"
               />
             </div>
             {/* 备注 */}
             <div>
-              <p className="text-[11px] text-gray-400 mb-1.5">备注（必填）</p>
-              <input
-                type="text"
-                value={adjNote}
-                onChange={(e) => setAdjNote(e.target.value)}
-                placeholder="如：充值确认、手动退款等"
-                className="w-full text-[13px] px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:border-orange-400"
-              />
+              <p className="text-[11px] text-gray-400 mb-1.5">备注（选填）</p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={adjNote}
+                  onChange={(e) => {
+                    setAdjNote(e.target.value);
+                    if (e.target.value !== adjSelectedCommonNote) setAdjSelectedCommonNote(null);
+                  }}
+                  placeholder="如：充值确认、手动退款等（可不填）"
+                  className="w-full text-[13px] px-3 py-2.5 pr-[4.5rem] rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:border-orange-400"
+                />
+                <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={saveCurrentAdjNoteAsCommon}
+                    disabled={!adjNote.trim()}
+                    title="将当前备注加入常用"
+                    aria-label="将当前备注加入常用备注"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-orange-500 hover:bg-orange-100 active:bg-orange-200 disabled:text-gray-300 disabled:hover:bg-transparent transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => adjSelectedCommonNote && removeAdjCommonNote(adjSelectedCommonNote)}
+                    disabled={!adjSelectedCommonNote}
+                    title={adjSelectedCommonNote ? `移除常用备注：${adjSelectedCommonNote}` : "请先选择一个常用备注"}
+                    aria-label={adjSelectedCommonNote ? `移除常用备注：${adjSelectedCommonNote}` : "请先选择一个常用备注"}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-orange-500 hover:bg-orange-100 active:bg-orange-200 disabled:text-gray-300 disabled:hover:bg-transparent transition-colors"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              {adjCommonNotes.length > 0 && (
+                <div className="mt-1.5 flex items-start gap-1.5">
+                  <span className="pt-1 text-[10px] text-gray-400 shrink-0">常用</span>
+                  <div className="flex flex-wrap gap-1">
+                    {adjCommonNotes.map((note) => (
+                      <button
+                        key={note}
+                        type="button"
+                        onClick={() => {
+                          setAdjNote(note);
+                          setAdjSelectedCommonNote(note);
+                        }}
+                        title="填入并选中此备注"
+                        className={`max-w-[180px] truncate rounded-md border px-1.5 py-0.5 text-[10px] leading-4 transition-colors ${
+                          adjSelectedCommonNote === note
+                            ? "border-orange-500 bg-orange-500 text-white"
+                            : "border-orange-100 bg-orange-50 text-orange-700 hover:bg-orange-100"
+                        }`}
+                      >
+                        {note}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <button
               onClick={handleAdjSubmit}
@@ -1124,15 +1462,35 @@ export default function AfRechargeManage() {
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[13px] font-bold text-black">{adjSelectedUser.name || adjSelectedUser.username} 的全部钱包流水</p>
-                <span className="text-[11px] text-gray-400">共 {adjHistory.length} 条</span>
+                <span className="text-[11px] text-gray-400">
+                  {adjFilteredHistory.length === adjHistory.length ? `共 ${adjHistory.length} 条` : `${adjFilteredHistory.length} / ${adjHistory.length} 条`}
+                </span>
               </div>
+              <LedgerFlowFilters
+                keyword={adjUserFlowKeyword}
+                datePreset={adjUserFlowDatePreset}
+                customStart={adjUserFlowCustomStart}
+                customEnd={adjUserFlowCustomEnd}
+                onKeywordChange={setAdjUserFlowKeyword}
+                onDatePresetChange={setAdjUserFlowDatePreset}
+                onCustomStartChange={setAdjUserFlowCustomStart}
+                onCustomEndChange={setAdjUserFlowCustomEnd}
+                onClear={() => {
+                  setAdjUserFlowKeyword("");
+                  setAdjUserFlowDatePreset("all");
+                  setAdjUserFlowCustomStart("");
+                  setAdjUserFlowCustomEnd("");
+                }}
+              />
               {adjHistoryQuery.isLoading ? (
                 <p className="text-center text-[12px] text-gray-300 py-6">明细加载中...</p>
-              ) : adjHistory.length === 0 ? (
-                <p className="text-center text-[12px] text-gray-300 py-6">暂无钱包流水</p>
+              ) : adjFilteredHistory.length === 0 ? (
+                <p className="text-center text-[12px] text-gray-300 py-6">
+                  {adjHistory.length === 0 ? '暂无钱包流水' : '未找到符合条件的流水'}
+                </p>
               ) : (
                 <div className="space-y-2">
-                  {adjHistory.map((r: any, i: number) => {
+                  {adjFilteredHistory.map((r: any, i: number) => {
                     const typeLabel: Record<string, string> = { recharge: '充值到账', consume: '消费', refund: '退款', reward: '奖励', withdraw: '提现', reward_clawback: '奖励回收', commission: '佣金' };
                     const sourceType = String(r.sourceType ?? '');
                     const sourceId = Number(String(r.id ?? '').split('_')[1] || 0);
@@ -1187,7 +1545,8 @@ export default function AfRechargeManage() {
                                   setNoteTarget(sourceType === 'manual'
                                     ? { manualId: sourceId, currentNote: noteText }
                                     : { historyId, currentNote: noteText });
-                                  setNoteLines(noteText ? noteText.split('\n') : ['']);
+                                  setNoteContent(noteText);
+                                  setNoteSelectedCommonNote(adjCommonNotes.includes(noteText) ? noteText : null);
                                   setShowNoteDialog(true);
                                 }}
                                 className="text-[10px] text-blue-500 border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-50"
@@ -1215,8 +1574,27 @@ export default function AfRechargeManage() {
               <p className="text-[13px] font-bold text-black">全局流水日志</p>
               <span className="text-[11px] text-gray-400">共 {adjLogTotal} 条</span>
             </div>
+            <LedgerFlowFilters
+              keyword={adjGlobalFlowKeyword}
+              datePreset={adjGlobalFlowDatePreset}
+              customStart={adjGlobalFlowCustomStart}
+              customEnd={adjGlobalFlowCustomEnd}
+              onKeywordChange={(value) => { setAdjGlobalFlowKeyword(value); setAdjLogPage(1); }}
+              onDatePresetChange={(preset) => { setAdjGlobalFlowDatePreset(preset); setAdjLogPage(1); }}
+              onCustomStartChange={(value) => { setAdjGlobalFlowCustomStart(value); setAdjLogPage(1); }}
+              onCustomEndChange={(value) => { setAdjGlobalFlowCustomEnd(value); setAdjLogPage(1); }}
+              onClear={() => {
+                setAdjGlobalFlowKeyword("");
+                setAdjGlobalFlowDatePreset("all");
+                setAdjGlobalFlowCustomStart("");
+                setAdjGlobalFlowCustomEnd("");
+                setAdjLogPage(1);
+              }}
+            />
             {adjLogItems.length === 0 ? (
-              <p className="text-center text-[12px] text-gray-300 py-6">暂无调账记录</p>
+              <p className="text-center text-[12px] text-gray-300 py-6">
+                {adjGlobalFlowKeyword.trim() || adjGlobalFlowDatePreset !== 'all' ? '未找到符合条件的流水' : '暂无调账记录'}
+              </p>
             ) : (
               <div className="space-y-2">
                 {adjLogItems.map((r: any, i: number) => {
@@ -1233,6 +1611,11 @@ export default function AfRechargeManage() {
                           </div>
                           <p className="text-[11px] text-gray-500 truncate">{String(r.note ?? "").replace(/\[.*?\]/g, "").trim() || "—"}</p>
                           <p className="text-[10px] text-gray-400 mt-0.5">{new Date(r.createdAt).toLocaleString("zh-CN")}</p>
+                          {r.balance != null && (
+                            <p className="mt-0.5 text-[10px] text-gray-400">
+                              调后余额 {r.currency === "CNY" ? "¥" : ""}{Number(r.balance).toFixed(r.currency === "CNY" ? 2 : 4)} {r.currency === "CNY" ? "CNY" : "USDT"}
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
                           <p className={`text-[14px] font-bold ${Number(r.amount) >= 0 ? "text-green-600" : "text-red-500"}`}>
@@ -1248,7 +1631,8 @@ export default function AfRechargeManage() {
                             onClick={() => {
                               const raw = String(r.note ?? '').replace(/\[.*?\]/g, '').trim();
                               setNoteTarget({ historyId: r.id, currentNote: raw });
-                              setNoteLines(raw ? raw.split('\n') : ['']);
+                              setNoteContent(raw);
+                              setNoteSelectedCommonNote(adjCommonNotes.includes(raw) ? raw : null);
                               setShowNoteDialog(true);
                             }}
                             className="text-[10px] text-blue-500 border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-50"
@@ -1619,57 +2003,105 @@ export default function AfRechargeManage() {
 
       {/* ===== 编辑备注弹窗 ===== */}
       {showNoteDialog && noteTarget && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-center z-50">
-          <div className="bg-white rounded-t-2xl w-full max-w-lg p-5 pb-8">
-            <h3 className="text-[15px] font-bold text-gray-900 mb-3">编辑备注</h3>
-            <div className="space-y-2 mb-3">
-              {noteLines.map((line, idx) => (
-                <textarea
-                  key={idx}
-                  value={line}
-                  onChange={e => {
-                    const next = [...noteLines];
-                    next[idx] = e.target.value;
-                    setNoteLines(next);
-                    // 自动高度
-                    e.target.style.height = 'auto';
-                    e.target.style.height = e.target.scrollHeight + 'px';
-                  }}
-                  onInput={e => {
-                    const t = e.target as HTMLTextAreaElement;
-                    t.style.height = 'auto';
-                    t.style.height = t.scrollHeight + 'px';
-                  }}
-                  placeholder={`备注第 ${idx + 1} 条`}
-                  rows={1}
-                  className="w-full resize-none overflow-hidden border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 focus:outline-none focus:border-blue-400"
-                  style={{ minHeight: '38px' }}
-                />
-              ))}
-            </div>
+        <div className="fixed inset-0 z-50 flex flex-col bg-[#F7F8FA]" role="dialog" aria-modal="true" aria-label="编辑流水备注">
+          <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 shadow-sm">
             <button
-              onClick={() => setNoteLines(prev => [...prev, ''])}
-              className="text-[12px] text-blue-500 mb-4 flex items-center gap-1"
-            >+ 添加一条备注</button>
+              type="button"
+              onClick={() => { setShowNoteDialog(false); setNoteTarget(null); setNoteContent(''); setNoteSelectedCommonNote(null); }}
+              className="flex min-w-14 items-center gap-1 text-[14px] font-medium text-gray-600"
+            >
+              <ChevronLeft className="h-4 w-4" />返回
+            </button>
+            <h3 className="text-[17px] font-bold text-gray-900">编辑备注</h3>
+            <button
+              type="button"
+              onClick={saveNoteReplacement}
+              disabled={updateNoteMutation.isPending}
+              className="min-w-14 text-right text-[14px] font-semibold text-blue-600 disabled:text-gray-300"
+            >{updateNoteMutation.isPending ? '保存中' : '保存'}</button>
+          </header>
+          <main className="flex-1 overflow-y-auto px-4 py-5">
+            <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[16px] font-semibold text-gray-900">流水备注</p>
+                  <p className="mt-0.5 text-[12px] leading-5 text-gray-400">保存后直接替换当前备注，不再追加新的备注内容。</p>
+                </div>
+                <span className="shrink-0 text-[12px] text-gray-400">{noteContent.length}/1000</span>
+              </div>
+              <textarea
+                value={noteContent}
+                onChange={(e) => {
+                  const next = e.target.value.slice(0, 1000);
+                  setNoteContent(next);
+                  if (next !== noteSelectedCommonNote) setNoteSelectedCommonNote(null);
+                }}
+                placeholder="输入备注内容（可留空）"
+                rows={8}
+                autoFocus
+                className="min-h-56 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-[17px] leading-7 text-gray-800 outline-none transition-colors focus:border-blue-400 focus:bg-white"
+              />
+            </section>
+            <section className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[16px] font-semibold text-gray-900">常用备注</p>
+                  <p className="mt-0.5 text-[12px] text-gray-400">点标签填入并选中；选中后可点减号删除。</p>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <button
+                    type="button"
+                    onClick={saveNoteContentAsCommon}
+                    disabled={!noteContent.trim()}
+                    title="将当前备注加入常用"
+                    aria-label="将当前备注加入常用备注"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-orange-100 text-orange-500 hover:bg-orange-50 disabled:border-gray-100 disabled:text-gray-300"
+                  ><Plus className="h-4 w-4" /></button>
+                  <button
+                    type="button"
+                    onClick={removeSelectedNoteCommon}
+                    disabled={!noteSelectedCommonNote}
+                    title={noteSelectedCommonNote ? `移除常用备注：${noteSelectedCommonNote}` : '请先选择一个常用备注'}
+                    aria-label={noteSelectedCommonNote ? `移除常用备注：${noteSelectedCommonNote}` : '请先选择一个常用备注'}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-orange-100 text-orange-500 hover:bg-orange-50 disabled:border-gray-100 disabled:text-gray-300"
+                  ><Minus className="h-4 w-4" /></button>
+                </div>
+              </div>
+              {adjCommonNotes.length === 0 ? (
+                <p className="mt-3 text-[13px] text-gray-400">输入备注后点击右上角 +，即可收藏为常用备注。</p>
+              ) : (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {adjCommonNotes.map((note) => (
+                    <button
+                      key={note}
+                      type="button"
+                      onClick={() => { setNoteContent(note); setNoteSelectedCommonNote(note); }}
+                      className={`max-w-full rounded-lg border px-2.5 py-1.5 text-[13px] leading-5 transition-colors ${
+                        noteSelectedCommonNote === note
+                          ? 'border-orange-500 bg-orange-500 text-white'
+                          : 'border-orange-100 bg-orange-50 text-orange-700 hover:bg-orange-100'
+                      }`}
+                    >{note}</button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </main>
+          <footer className="border-t border-gray-200 bg-white px-4 py-3 pb-6">
             <div className="flex gap-3">
               <button
-                onClick={() => { setShowNoteDialog(false); setNoteTarget(null); setNoteLines(['']); }}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] text-gray-600"
+                type="button"
+                onClick={() => { setShowNoteDialog(false); setNoteTarget(null); setNoteContent(''); setNoteSelectedCommonNote(null); }}
+                className="flex-1 rounded-xl border border-gray-200 py-3 text-[15px] font-medium text-gray-600"
               >取消</button>
               <button
-                onClick={() => {
-                  if (!noteTarget) return;
-                  updateNoteMutation.mutate({
-                    historyId: noteTarget.historyId,
-                    manualId: noteTarget.manualId,
-                    notes: noteLines,
-                  });
-                }}
+                type="button"
+                onClick={saveNoteReplacement}
                 disabled={updateNoteMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl bg-blue-500 text-white text-[13px] font-medium disabled:opacity-50"
-              >{updateNoteMutation.isPending ? '保存中...' : '保存'}</button>
+                className="flex-1 rounded-xl bg-blue-500 py-3 text-[15px] font-semibold text-white disabled:opacity-50"
+              >{updateNoteMutation.isPending ? '保存中...' : '保存修改'}</button>
             </div>
-          </div>
+          </footer>
         </div>
       )}
 
