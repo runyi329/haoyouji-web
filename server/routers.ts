@@ -1798,13 +1798,39 @@ ${klinesSummary}
         return await dbRecharge.getUserRechargeOrders(ctx.user.id, input.limit);
       }),
 
-    // 获取当前用户余额。账本 ID 只影响计算口径，不能切换为其他用户。
+    // 获取统一钱包余额。普通用户只能读取本人；52 号账本创建人可在受控的成员查看视角读取目标成员。
     getBalance: protectedProcedure
-      .input(z.object({ 
-        ledgerId: z.number().optional()  // 按账本隔离计算余额
+      .input(z.object({
+        ledgerId: z.number().optional(),
+        viewAsUserId: z.number().int().positive().optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
-        return await dbRecharge.getUserBalance(ctx.user.id, input?.ledgerId);
+        let targetUserId = ctx.user.id;
+        const requestedViewAsUserId = input?.viewAsUserId;
+
+        if (requestedViewAsUserId && requestedViewAsUserId !== ctx.user.id) {
+          // 查看成员余额只能来自 52 号账本的“查看成员”入口，且仅账本创建人可使用。
+          // 不接受无账本上下文或任意 userId 的横向余额读取。
+          if (Number(input?.ledgerId) !== LEDGER_52_ID) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅可在52号账本查看成员钱包余额' });
+          }
+          await requireLedger52Creator(ctx.user.id, LEDGER_52_ID);
+
+          const conn = await getDbConnection();
+          if (!conn) {
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+          }
+          const [memberRows] = await (conn as any).execute(
+            `SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+            [LEDGER_52_ID, requestedViewAsUserId],
+          );
+          if (!Array.isArray(memberRows) || memberRows.length === 0) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '目标用户不是52号账本成员' });
+          }
+          targetUserId = requestedViewAsUserId;
+        }
+
+        return await dbRecharge.getUserBalance(targetUserId, input?.ledgerId);
       }),
 
     // 批量获取52成员的【全局】钱包余额。仅52创建人可读取，并且服务端强制成员范围。
