@@ -23,6 +23,7 @@ import {
   copyFunderNoteText,
   NoteAvatar,
   FunderOrderCard,
+  OwnerCollaborationInfoButton,
 } from "./FunderOrderCard";
 
 /** 用户端卡片的结清状态标识：与订单模式同等比例，居中但保持半透明。 */
@@ -1556,7 +1557,8 @@ export function FunderOrderCardV2Silver({
     'inset -1.5px 0 rgba(0,0,0,0.16)',
   ].join(', ');
   // 本人 / 他人仅决定列表归属；绿色主题仅表达真实参与者身份。
-  const isParticipant = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder;
+  const isOwnerView = (order as any).participantInfo?.role === 'owner';
+  const isParticipant = !isOwnerView && (!!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder);
   const isSettledCard = order.status === 'settled' || order.status === 'completed';
   const cardBg = isParticipant ? GRN_BG : isStockCard ? GOLD_BG_SV : isOptionCard ? OPT_BG : SL_BG;
   const cardExportBackground = isParticipant ? GRN_EXPORT_BG : isStockCard ? GOLD_EXPORT_BG : isOptionCard ? OPT_EXPORT_BG : SL_EXPORT_BG;
@@ -1682,8 +1684,8 @@ export function FunderOrderCardV2Silver({
               {orderOwnerName && (
                 <div className="min-w-0" style={{ flex: '0 1 auto', maxWidth: isParticipant ? identityMaxWidth : '108px' }}>
                   <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>拥有者</div>
-                  <div className={`mt-0.5 truncate font-semibold leading-tight ${ownerNameClass}`} style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
-                    {orderOwnerName}
+                  <div className={`mt-0.5 flex items-center gap-1 truncate font-semibold leading-tight ${ownerNameClass}`} style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
+                    <span className="truncate">{orderOwnerName}</span>{isOwnerView && <OwnerCollaborationInfoButton order={order} ledgerId={Number(ledgerId ?? (order as any).ledger_id)} />}
                   </div>
                 </div>
               )}
@@ -3185,7 +3187,8 @@ export function FunderLenderCardSilver({
   ];
 
   // 本人 / 他人仅决定列表归属；绿色主题仅表达真实参与者身份。
-  const isParticipant = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder;
+  const isOwnerView = (order as any).participantInfo?.role === 'owner';
+  const isParticipant = !isOwnerView && (!!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder);
   const isSettledCard = order.status === 'settled' || order.status === 'completed';
   const GRN_POSITIVE_COLOR = LN_EARN;  // 暂时恢复原始颜色
   // 动态文字颜色：参与者和期权卡片用白色系列，其他用黑色系列
@@ -3298,8 +3301,8 @@ export function FunderLenderCardSilver({
               {orderOwnerName && (
                 <div className="min-w-0" style={{ flex: '0 1 auto', maxWidth: isParticipant ? identityMaxWidth : '108px' }}>
                   <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>拥有者</div>
-                  <div className={`mt-0.5 truncate font-semibold leading-tight ${ownerNameClass}`} style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
-                    {orderOwnerName}
+                  <div className={`mt-0.5 flex items-center gap-1 truncate font-semibold leading-tight ${ownerNameClass}`} style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
+                    <span className="truncate">{orderOwnerName}</span>{isOwnerView && <OwnerCollaborationInfoButton order={order} ledgerId={Number(ledgerId ?? (order as any).ledger_id)} />}
                   </div>
                 </div>
               )}

@@ -267,7 +267,7 @@ async function ensureFunderParticipantSnapshotColumns(): Promise<void> {
   const [columnRows] = await (conn as any).execute(
     `SELECT COLUMN_NAME FROM information_schema.columns
      WHERE table_schema = DATABASE() AND table_name = 'ledger_order_participants'
-       AND column_name IN ('order_snapshot', 'previous_role', 'parent_archive_state')`
+       AND column_name IN ('order_snapshot', 'previous_role', 'parent_archive_state', 'visibility_mode', 'visible_owner_ids')`
   );
   const existing = new Set((columnRows as any[]).map((r: any) => String(r.COLUMN_NAME || r.column_name)));
   if (!existing.has('order_snapshot')) {
@@ -278,6 +278,14 @@ async function ensureFunderParticipantSnapshotColumns(): Promise<void> {
   }
   if (!existing.has('parent_archive_state')) {
     try { await (conn as any).execute(`ALTER TABLE ledger_order_participants ADD COLUMN parent_archive_state VARCHAR(20) NULL COMMENT '主订单删除时参与者的保留或统一结算状态'`); } catch {}
+  }
+  // 多拥有者订单中，每位拥有者保留各自的可见范围。它只影响前端「其他信息」详情，
+  // 不改变主订单、钱包、余额或任何历史流水。
+  if (!existing.has('visibility_mode')) {
+    try { await (conn as any).execute(`ALTER TABLE ledger_order_participants ADD COLUMN visibility_mode VARCHAR(20) NULL COMMENT '拥有者协作信息可见范围'`); } catch {}
+  }
+  if (!existing.has('visible_owner_ids')) {
+    try { await (conn as any).execute(`ALTER TABLE ledger_order_participants ADD COLUMN visible_owner_ids TEXT NULL COMMENT '指定可见的其他拥有者用户ID JSON列表'`); } catch {}
   }
   // 旧参与关系首次升级时，以当前主订单为默认快照，并叠加已经存在的参与者独立字段。
   const [backfillRows] = await (conn as any).execute(
@@ -17978,7 +17986,7 @@ ${klinesSummary}
             ).catch(() => null) as Promise<any>,
             // 2. 参与者独立字段（只有有参与订单时才查）
             ph2 ? conn.execute(
-              `SELECT order_id, amount, amount_currency, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, buy_date_override, broker_name_override, broker_account_override, order_no_override, paid_interest, note, order_snapshot FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND role <> 'inactive' AND order_id IN (${ph2})`,
+              `SELECT order_id, role, amount, amount_currency, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, buy_date_override, broker_name_override, broker_account_override, order_no_override, paid_interest, note, order_snapshot FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND role <> 'inactive' AND order_id IN (${ph2})`,
               [input.ledgerId, participantQueryUserId, ...participantOrderIds]
             ).catch((e: any) => { console.error('[funderGetAssetOrders] piDetail error:', e); return null; }) as Promise<any> : Promise.resolve(null),
             // 3. 参与者名字（只有有参与订单时才查）
@@ -18035,9 +18043,11 @@ ${klinesSummary}
           return o;
         });
         const ordersWithParticipantView = ordersWithParticipant.map((o: any) => {
-          const isParticipantOrder = participantQueryUserIdSet.has(Number(o.id)) && Number(o.user_id) !== participantQueryUserId;
-          if (!isParticipantOrder) return o;
           const pi = piDetailMap[Number(o.id)];
+          // 共同拥有者即使也是主订单 user_id，也必须使用自己的独立订单快照。
+          const isParticipantOrder = participantQueryUserIdSet.has(Number(o.id))
+            && (Number(o.user_id) !== participantQueryUserId || pi?.role === 'owner');
+          if (!isParticipantOrder) return o;
           const snapshot = parseFunderParticipantSnapshot(pi?.order_snapshot);
           const result = { ...o, ...(snapshot || {}) };
           // 系统关联字段始终沿用主订单，业务字段则由参与者完整快照独立覆盖。
@@ -18116,7 +18126,8 @@ ${klinesSummary}
               const viewedOrder: any = orderMap.get(oid);
               if (!viewedOrder) continue;
               const scopedView = targetUserId !== null || !isManager;
-              const isParticipantViewForOrder = scopedView && participantOrderSet.has(oid) && Number(viewedOrder.user_id) !== participantQueryUserId;
+              const isParticipantViewForOrder = scopedView && participantOrderSet.has(oid)
+                && (Number(viewedOrder.user_id) !== participantQueryUserId || piDetailMap[oid]?.role === 'owner');
               const expectedParticipantId = isParticipantViewForOrder ? participantQueryUserId : null;
               const rowParticipantId = row.participant_user_id == null ? null : Number(row.participant_user_id);
               if (rowParticipantId !== expectedParticipantId) continue;
@@ -18192,6 +18203,7 @@ ${klinesSummary}
           const [sharedRows] = await conn.execute(
             `SELECT fo.*,
                     p.user_id AS participant_user_id,
+                    p.role AS participant_role,
                     p.order_snapshot AS participant_order_snapshot,
                     p.amount AS participant_amount,
                     p.amount_currency AS participant_amount_currency,
@@ -18218,7 +18230,8 @@ ${klinesSummary}
           ) as any[];
           const rawOrders = Array.isArray(sharedRows) ? sharedRows : [];
           const orders = rawOrders.map((row: any) => {
-            const isParticipantView = row.participant_user_id != null && Number(row.user_id) !== input.userId;
+            const isParticipantView = row.participant_user_id != null
+              && (Number(row.user_id) !== input.userId || row.participant_role === 'owner');
             if (!isParticipantView) return { ...row, _sharedPoolParticipantUserId: null };
 
             const snapshot = parseFunderParticipantSnapshot(row.participant_order_snapshot);
@@ -18789,7 +18802,7 @@ ${klinesSummary}
         if (newOrderId) {
           triggerFunderImmediateScan(newOrderId);
         }
-        return { success: true };
+        return { success: true, orderId: newOrderId ? Number(newOrderId) : null };
       }),
 
 
@@ -19813,11 +19826,12 @@ ${klinesSummary}
           const exists = ((existRows[0] || existRows) as any[]).length > 0;
           if (!exists) isUnique = true;
         }
-        await db.execute(
+        const insertResult = await db.execute(
           sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, collateral_source, principal_lent_out, broker_name, broker_account, option_info, trade_direction, order_fill_status, order_perspective, trading_fee_rate_per_mille, trading_fee_status, created_by)
               VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${(input.assetType === 'crypto_option' && input.optionInfo?.coin) ? input.optionInfo.coin : input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.collateralSource ? JSON.stringify(input.collateralSource) : null}, ${input.principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${input.orderFillStatus || 'filled'}, ${input.orderPerspective || 'self'}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
         );
-        return { success: true };
+        const newOrderId = (insertResult as any)?.insertId || ((insertResult as any)?.[0] as any)?.insertId;
+        return { success: true, orderId: newOrderId ? Number(newOrderId) : null };
       }),
 
     // 管理员更新融资付息订单
@@ -20495,7 +20509,7 @@ ${klinesSummary}
         ledgerId: z.number(),
         participants: z.array(z.object({
           userId: z.number(),
-          role: z.enum(['funder', 'borrower', 'broker']),
+          role: z.enum(['owner', 'funder', 'borrower', 'broker']),
           sortOrder: z.number().optional(),
           rate: z.string().optional(),
         })),
@@ -20579,6 +20593,84 @@ ${klinesSummary}
         }
         return { success: true };
       }),
+    // 多拥有者订单的受控协作信息。仅返回当前拥有者被授权查看的本金与利率摘要，
+    // 不暴露其他拥有者备注、担保物、钱包或结息流水。
+    funderGetOwnerCollaborationInfo: protectedProcedure
+      .input(z.object({ orderId: z.number(), ledgerId: z.number(), viewerUserId: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        await ensureFunderParticipantSnapshotColumns();
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const sessionRole = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (!sessionRole) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const isManager = sessionRole === 'owner' || sessionRole === 'admin';
+        const viewingUserId = isManager && input.viewerUserId ? Number(input.viewerUserId) : ctx.user.id;
+
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const [myRows] = await conn.execute(
+          `SELECT p.id, p.user_id, p.role, p.visibility_mode, p.visible_owner_ids
+           FROM ledger_order_participants p
+           WHERE p.order_id = ? AND p.ledger_id = ? AND p.user_id = ? AND p.role = 'owner'
+           LIMIT 1`,
+          [input.orderId, input.ledgerId, viewingUserId]
+        ) as any;
+        const myOwnerView = Array.isArray(myRows) ? myRows[0] : null;
+        if (!myOwnerView) return { configured: false };
+
+        const [ownerRows] = await conn.execute(
+          `SELECT p.user_id, p.role, p.amount, p.amount_currency, p.interest_rate, p.interest_base,
+                  p.interest_base_currency, p.interest_rate_currency, p.order_snapshot,
+                  u.username, u.name, lm.nickname
+           FROM ledger_order_participants p
+           LEFT JOIN users u ON u.id = p.user_id
+           LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = p.ledger_id
+           WHERE p.order_id = ? AND p.ledger_id = ? AND p.role = 'owner'
+           ORDER BY p.sort_order ASC, p.id ASC`,
+          [input.orderId, input.ledgerId]
+        ) as any;
+        const owners = (Array.isArray(ownerRows) ? ownerRows : []).map((row: any) => {
+          const snapshot = parseFunderParticipantSnapshot(row.order_snapshot) || {};
+          return {
+            userId: Number(row.user_id),
+            name: row.nickname || row.name || row.username || `用户${row.user_id}`,
+            amount: String(snapshot.amount ?? row.amount ?? ''),
+            amountCurrency: String(snapshot.amount_currency ?? row.amount_currency ?? 'USDT').toUpperCase() === 'CNY' ? 'CNY' : 'USDT',
+            interestRate: snapshot.interest_rate_annual ?? row.interest_rate ?? null,
+            interestBase: snapshot.interest_base ?? row.interest_base ?? null,
+            interestBaseCurrency: String(snapshot.interest_base_currency ?? row.interest_base_currency ?? 'USDT').toUpperCase() === 'CNY' ? 'CNY' : 'USDT',
+          };
+        });
+        const mode = ['self', 'total', 'breakdown', 'partners'].includes(String(myOwnerView.visibility_mode))
+          ? String(myOwnerView.visibility_mode)
+          : 'self';
+        let configuredVisibleIds: number[] = [];
+        try {
+          const parsed = myOwnerView.visible_owner_ids ? JSON.parse(myOwnerView.visible_owner_ids) : [];
+          configuredVisibleIds = Array.isArray(parsed) ? parsed.map(Number).filter(id => id > 0 && id !== viewingUserId) : [];
+        } catch {}
+        const totalByCurrency = ['USDT', 'CNY'].map(currency => ({
+          currency,
+          amount: owners
+            .filter((owner: any) => owner.amountCurrency === currency)
+            .reduce((sum: number, owner: any) => sum + (Number(owner.amount) || 0), 0),
+        })).filter(total => total.amount !== 0);
+        const visibleOwners = mode === 'breakdown'
+          ? owners
+          : mode === 'partners'
+            ? owners.filter((owner: any) => configuredVisibleIds.includes(owner.userId))
+            : [];
+        return {
+          configured: true,
+          mode,
+          ownerCount: owners.length,
+          totalByCurrency,
+          visibleOwners,
+          viewerName: owners.find((owner: any) => owner.userId === viewingUserId)?.name || null,
+        };
+      }),
     // 保存参与者完整参数（管理员在编辑订单时设置）
     funderSaveParticipantFullConfig: protectedProcedure
       .input(z.object({
@@ -20586,6 +20678,7 @@ ${klinesSummary}
         ledgerId: z.number(),
         participants: z.array(z.object({
           userId: z.number(),
+          role: z.enum(['owner', 'funder', 'borrower', 'broker']).optional(),
           sortOrder: z.number().optional(),
           // 完整订单参数（与主订单字段一一对应）
           amount: z.string().optional(),
@@ -20598,6 +20691,8 @@ ${klinesSummary}
           interestRateCurrency: z.string().optional(),
           displayConfig: z.string().optional(),
           note: z.string().optional(),
+          visibilityMode: z.enum(['self', 'total', 'breakdown', 'partners']).optional(),
+          visibleOwnerIds: z.array(z.number()).optional(),
         })),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -20626,8 +20721,24 @@ ${klinesSummary}
         for (const col of newCols) {
           try { await conn.execute(`ALTER TABLE ledger_order_participants ADD COLUMN ${col}`); } catch {}
         }
-        // 只删除明确移除的参与者，保留其余参与者的备注、结息、订单号和券商覆盖值。
-        const participantUserIds = input.participants.map(p => Number(p.userId)).filter(Boolean);
+        const [parentRows] = await conn.execute(
+          'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? LIMIT 1',
+          [input.orderId, input.ledgerId]
+        ) as any;
+        const parentOrder = Array.isArray(parentRows) ? parentRows[0] : null;
+        if (!parentOrder) throw new TRPCError({ code: 'NOT_FOUND', message: '主订单不存在' });
+
+        // 有共同拥有者时，将主订单原拥有者自动加入同一组独立视图。
+        // 这只新增一条订单展示快照，不会复制订单、写钱包或生成资金流水。
+        const participantsToSave = [...input.participants];
+        const hasOwnerView = participantsToSave.some(p => p.role === 'owner');
+        const primaryOwnerId = Number(parentOrder.user_id);
+        if (hasOwnerView && primaryOwnerId > 0 && !participantsToSave.some(p => Number(p.userId) === primaryOwnerId)) {
+          participantsToSave.push({ userId: primaryOwnerId, role: 'owner', sortOrder: -1 });
+        }
+
+        // 只删除管理员明确移除的关系，保留其余拥有者/参与者的备注、结息和独立快照。
+        const participantUserIds = participantsToSave.map(p => Number(p.userId)).filter(Boolean);
         if (participantUserIds.length > 0) {
           const placeholders = participantUserIds.map(() => '?').join(',');
           await conn.execute(
@@ -20637,60 +20748,65 @@ ${klinesSummary}
         } else {
           await conn.execute("UPDATE ledger_order_participants SET previous_role = IF(role = 'inactive', previous_role, role), role = 'inactive', updated_at = NOW() WHERE order_id = ? AND ledger_id = ?", [input.orderId, input.ledgerId]);
         }
-        const [parentRows] = await conn.execute(
-          'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? LIMIT 1',
-          [input.orderId, input.ledgerId]
-        ) as any;
-        const parentOrder = Array.isArray(parentRows) ? parentRows[0] : null;
-        if (!parentOrder) throw new TRPCError({ code: 'NOT_FOUND', message: '主订单不存在' });
         const parentSnapshot = buildFunderParticipantSnapshot(parentOrder);
         const [existingRows] = await conn.execute(
-          'SELECT user_id, order_snapshot FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ?',
+          'SELECT user_id, role, order_snapshot, visibility_mode, visible_owner_ids FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ?',
           [input.orderId, input.ledgerId]
         ) as any;
         const existingMap = new Map<number, any>((Array.isArray(existingRows) ? existingRows : []).map((r: any) => [Number(r.user_id), r]));
-        for (let i = 0; i < input.participants.length; i++) {
-          const p = input.participants[i];
+        for (let i = 0; i < participantsToSave.length; i++) {
+          const p = participantsToSave[i];
           const existing = existingMap.get(Number(p.userId));
+          const effectiveRole = p.role || existing?.role || 'funder';
+          const isOwnerRole = effectiveRole === 'owner';
+          const existingSnapshot = parseFunderParticipantSnapshot(existing?.order_snapshot) || {};
           const snapshot = {
             ...parentSnapshot,
-            ...(parseFunderParticipantSnapshot(existing?.order_snapshot) || {}),
-            amount: p.amount || null,
-            amount_currency: p.amountCurrency || null,
-            interest_rate_annual: p.interestRate === undefined || p.interestRate === '' ? null : p.interestRate,
-            interest_base: p.interestBase || null,
-            interest_base_currency: p.interestBaseCurrency || null,
-            interest_payment_type: p.interestPaymentType || null,
-            interest_start_date: p.interestStartDate || null,
-            interest_rate_currency: p.interestRateCurrency || null,
-            display_config: p.displayConfig || null,
-            public_note: p.note === undefined ? (parseFunderParticipantSnapshot(existing?.order_snapshot)?.public_note ?? null) : p.note,
+            ...existingSnapshot,
+            // 未在本次表单编辑的字段必须保留该拥有者已有快照；尤其是自动补齐的主订单拥有者。
+            amount: p.amount === undefined ? (existingSnapshot.amount ?? parentSnapshot.amount ?? null) : (p.amount || null),
+            amount_currency: p.amountCurrency === undefined ? (existingSnapshot.amount_currency ?? parentSnapshot.amount_currency ?? null) : (p.amountCurrency || null),
+            interest_rate_annual: p.interestRate === undefined ? (existingSnapshot.interest_rate_annual ?? parentSnapshot.interest_rate_annual ?? null) : (p.interestRate || null),
+            interest_base: p.interestBase === undefined ? (existingSnapshot.interest_base ?? parentSnapshot.interest_base ?? null) : (p.interestBase || null),
+            interest_base_currency: p.interestBaseCurrency === undefined ? (existingSnapshot.interest_base_currency ?? parentSnapshot.interest_base_currency ?? null) : (p.interestBaseCurrency || null),
+            interest_payment_type: p.interestPaymentType === undefined ? (existingSnapshot.interest_payment_type ?? parentSnapshot.interest_payment_type ?? null) : (p.interestPaymentType || null),
+            interest_start_date: p.interestStartDate === undefined ? (existingSnapshot.interest_start_date ?? parentSnapshot.interest_start_date ?? null) : (p.interestStartDate || null),
+            interest_rate_currency: p.interestRateCurrency === undefined ? (existingSnapshot.interest_rate_currency ?? parentSnapshot.interest_rate_currency ?? null) : (p.interestRateCurrency || null),
+            display_config: p.displayConfig === undefined ? (existingSnapshot.display_config ?? parentSnapshot.display_config ?? null) : (p.displayConfig || null),
+            public_note: p.note === undefined ? (existingSnapshot.public_note ?? null) : p.note,
           };
           if (existing) {
             await conn.execute(
-              `UPDATE ledger_order_participants SET role = COALESCE(previous_role, 'funder'), previous_role = NULL, amount = ?, amount_currency = ?, interest_rate = ?, interest_base = ?,
+              `UPDATE ledger_order_participants SET role = ?, previous_role = NULL, amount = ?, amount_currency = ?, interest_rate = ?, interest_base = ?,
                 interest_base_currency = ?, interest_payment_type = ?, interest_start_date = ?, interest_rate_currency = ?,
-                display_config = ?, note = COALESCE(?, note), order_snapshot = ?, sort_order = ?, updated_at = NOW()
+                display_config = ?, note = COALESCE(?, note), visibility_mode = ?, visible_owner_ids = ?, order_snapshot = ?, sort_order = ?, updated_at = NOW()
                WHERE order_id = ? AND ledger_id = ? AND user_id = ?`,
               [
-                p.amount || null, p.amountCurrency || null,
-                p.interestRate === undefined || p.interestRate === '' ? null : p.interestRate, p.interestBase || null, p.interestBaseCurrency || null,
-                p.interestPaymentType || null, p.interestStartDate || null, p.interestRateCurrency || null,
-                p.displayConfig || null, p.note === undefined ? null : p.note, JSON.stringify(snapshot),
+                effectiveRole,
+                snapshot.amount ?? null, snapshot.amount_currency ?? null,
+                snapshot.interest_rate_annual ?? null, snapshot.interest_base ?? null, snapshot.interest_base_currency ?? null,
+                snapshot.interest_payment_type ?? null, snapshot.interest_start_date ?? null, snapshot.interest_rate_currency ?? null,
+                snapshot.display_config ?? null, p.note === undefined ? null : p.note,
+                isOwnerRole ? (p.visibilityMode || existing.visibility_mode || 'self') : null,
+                isOwnerRole ? JSON.stringify((p.visibleOwnerIds || []).filter(id => Number(id) > 0 && Number(id) !== Number(p.userId))) : null,
+                JSON.stringify(snapshot),
                 p.sortOrder ?? i, input.orderId, input.ledgerId, p.userId,
               ]
             );
           } else {
             await conn.execute(
               `INSERT INTO ledger_order_participants
-                (order_id, ledger_id, user_id, role, amount, amount_currency, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, note, order_snapshot, sort_order)
-               VALUES (?, ?, ?, 'funder', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                (order_id, ledger_id, user_id, role, amount, amount_currency, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, note, visibility_mode, visible_owner_ids, order_snapshot, sort_order)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
-                input.orderId, input.ledgerId, p.userId,
-                p.amount || null, p.amountCurrency || null,
-                p.interestRate === undefined || p.interestRate === '' ? null : p.interestRate, p.interestBase || null, p.interestBaseCurrency || null,
-                p.interestPaymentType || null, p.interestStartDate || null, p.interestRateCurrency || null,
-                p.displayConfig || null, p.note || null, JSON.stringify(snapshot),
+                input.orderId, input.ledgerId, p.userId, effectiveRole,
+                snapshot.amount ?? null, snapshot.amount_currency ?? null,
+                snapshot.interest_rate_annual ?? null, snapshot.interest_base ?? null, snapshot.interest_base_currency ?? null,
+                snapshot.interest_payment_type ?? null, snapshot.interest_start_date ?? null, snapshot.interest_rate_currency ?? null,
+                snapshot.display_config ?? null, snapshot.public_note ?? null,
+                isOwnerRole ? (p.visibilityMode || 'self') : null,
+                isOwnerRole ? JSON.stringify((p.visibleOwnerIds || []).filter(id => Number(id) > 0 && Number(id) !== Number(p.userId))) : null,
+                JSON.stringify(snapshot),
                 p.sortOrder ?? i,
               ]
             );

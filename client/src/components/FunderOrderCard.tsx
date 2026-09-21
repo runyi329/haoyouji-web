@@ -412,6 +412,50 @@ export function useAccruedInterestFunder(interestBase: string | null, interestRa
   return accrued;
 }
 
+/** 共同拥有者才会看到的协作信息入口；详情严格由服务端按该拥有者的可见范围裁剪。 */
+export function OwnerCollaborationInfoButton({ order, ledgerId }: { order: any; ledgerId: number }) {
+  const [open, setOpen] = useState(false);
+  const ownerView = (order as any)?.participantInfo?.role === 'owner';
+  const viewerUserId = Number((order as any)?.participantInfo?.userId || (order as any)?.participantInfo?.user_id || 0);
+  const orderId = Number(order?.id || 0);
+  const infoQuery = trpc.ledger.funderGetOwnerCollaborationInfo.useQuery(
+    { orderId, ledgerId, ...(viewerUserId > 0 ? { viewerUserId } : {}) },
+    { enabled: open && ownerView && orderId > 0 && ledgerId > 0, staleTime: 0 }
+  );
+  if (!ownerView || orderId <= 0) return null;
+  const data: any = infoQuery.data;
+  const modeLabel: Record<string, string> = {
+    self: '仅本人金额', total: '订单总额', breakdown: '总额及拥有者明细', partners: '指定合作人',
+  };
+  return <>
+    <button type="button" onClick={(event) => { event.stopPropagation(); setOpen(true); }} aria-label="查看订单其他信息"
+      className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold"
+      style={{ color: '#6D28D9', background: '#EDE9FE', border: '1px solid #C4B5FD' }}>!</button>
+    {open && (
+      <div className="fixed inset-0 z-[650] flex items-end justify-center bg-black/45 sm:items-center" onClick={() => setOpen(false)}>
+        <div className="w-full max-w-md rounded-t-2xl bg-white p-4 shadow-2xl sm:rounded-2xl" onClick={event => event.stopPropagation()}>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div><h3 className="text-base font-semibold text-gray-900">订单其他信息</h3><p className="mt-0.5 text-xs text-gray-400">仅按当前拥有者的授权范围显示</p></div>
+            <button type="button" onClick={() => setOpen(false)} className="rounded-full bg-gray-100 p-2 text-gray-500" aria-label="关闭"><X className="h-4 w-4" /></button>
+          </div>
+          {infoQuery.isLoading ? <div className="py-10 text-center text-sm text-gray-400">加载中…</div>
+            : !data?.configured ? <div className="rounded-xl bg-gray-50 px-3 py-5 text-center text-sm text-gray-500">暂未配置共同拥有者视图。</div>
+            : <div className="space-y-3">
+              <div className="rounded-xl border border-violet-100 bg-violet-50/60 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3 text-xs"><span className="text-violet-700">可见范围</span><span className="font-medium text-violet-800">{modeLabel[data.mode] || '仅本人金额'}</span></div>
+                <div className="mt-1 flex items-center justify-between gap-3 text-xs"><span className="text-violet-700">共同拥有者</span><span className="font-medium text-violet-800">{data.ownerCount} 人</span></div>
+              </div>
+              {(data.totalByCurrency || []).length > 0 && data.mode !== 'self' && <div className="rounded-xl border border-gray-100 px-3 py-2.5"><div className="mb-1.5 text-xs font-medium text-gray-500">订单总体本金</div><div className="flex flex-wrap gap-x-4 gap-y-1">{data.totalByCurrency.map((total: any) => <span key={total.currency} className="text-sm font-semibold tabular-nums text-gray-800">{Number(total.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })} {total.currency === 'CNY' ? '元' : 'U'}</span>)}</div></div>}
+              {data.mode === 'self' && <div className="rounded-xl border border-gray-100 px-3 py-3 text-sm text-gray-500">当前设置仅显示本人独立订单数据；其他拥有者的金额不会显示。</div>}
+              {(data.visibleOwners || []).length > 0 && <div className="rounded-xl border border-gray-100 px-3 py-2.5"><div className="mb-2 text-xs font-medium text-gray-500">获授权可见的拥有者</div><div className="space-y-2">{data.visibleOwners.map((owner: any) => <div key={owner.userId} className="flex items-center justify-between gap-3 text-sm"><span className="truncate text-gray-700">{owner.name}{owner.userId === viewerUserId ? '（本人）' : ''}</span><span className="shrink-0 font-semibold tabular-nums text-gray-800">{Number(owner.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} {owner.amountCurrency === 'CNY' ? '元' : 'U'}</span></div>)}</div></div>}
+              <p className="px-1 text-[11px] leading-5 text-gray-400">不展示其他拥有者的备注、担保物、钱包及结息流水。结算后，本订单仍保留完整历史记录。</p>
+            </div>}
+        </div>
+      </div>
+    )}
+  </>;
+}
+
 // ===== FunderOrderCard 子组件（左右两栏布局，与 FinanceOrderCard 一致）=====
 export interface FunderOrderCardProps {
   order: any;
@@ -996,9 +1040,12 @@ export function FunderOrderCard({
   const settledTimestamp = formatSettledTimestamp(order.settled_at);
   // “本人 / 他人”只决定列表归属；绿色主题只由真实参与关系决定。
   // order_perspective 不能作为颜色条件，避免“他人订单”被误标为参与订单。
-  const isParticipantVisual = !!(order as any).participantInfo
+  const isOwnerView = (order as any).participantInfo?.role === 'owner';
+  const isParticipantVisual = !isOwnerView && (
+    !!(order as any).participantInfo
     || !!(order as any)._isParticipant
-    || !!(order as any)._fromFunder;
+    || !!(order as any)._fromFunder
+  );
   // 管理员列表接口返回 _participantCount，旧接口可能返回 participantCount，统一兼容。
   const participantCount = Number((order as any).participantCount ?? (order as any)._participantCount ?? 0);
   const rateStr = String(order.interest_rate_annual || '');
@@ -1520,6 +1567,11 @@ export function FunderOrderCard({
           {(show('showOwnerName') || forceAdminOptionHeader) && isParticipantVisual && headerParticipantLabel && (
             <span data-header-tag className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[130px] shrink-0" style={{ backgroundColor: '#DCFCE7', color: '#15803D' }}>
               参与者 {headerParticipantLabel}
+            </span>
+          )}
+          {isOwnerView && (
+            <span data-header-tag className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium shrink-0" style={{ backgroundColor: '#F3E8FF', color: '#6D28D9' }}>
+              订单信息 <OwnerCollaborationInfoButton order={order} ledgerId={ledgerId} />
             </span>
           )}
           {order.asset_type && (show('assetType') || forceAdminOptionHeader) && (
@@ -3485,7 +3537,7 @@ export function FunderOrderCard({
           <div className="relative bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-gray-900 mb-2">确认统一结清</h3>
             {participantCount > 0 ? (
-              <p className="text-sm text-indigo-600 mb-2">该主订单关联 <span className="font-semibold">{participantCount}</span> 位参与者。确认后，订单拥有者与全部参与者子订单将使用同一时间一起结清。</p>
+              <p className="text-sm text-indigo-600 mb-2">该主订单关联 <span className="font-semibold">{participantCount}</span> 位共同拥有者或参与者。确认后，主订单与全部独立订单视图将使用同一时间一起结清，并影响其各自的利息结算。</p>
             ) : (
               <p className="text-sm text-gray-600 mb-2">结清后该订单利息将停止计算，状态变为「已结清」。</p>
             )}
@@ -3502,7 +3554,7 @@ export function FunderOrderCard({
                 className="mt-2 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-amber-500"
               />
             </div>
-            <p className="text-sm font-medium text-red-600 mb-5">统一结清后不能单独保留某位参与者为持有中，确定继续？</p>
+            <p className="text-sm font-medium text-red-600 mb-5">统一结清后不能单独保留某位共同拥有者或参与者为持有中，确定继续？</p>
             <div className="flex gap-3">
               <button onClick={() => { _intSetConfirmSettleId(null); _intSetSettleInterestEndDate(''); }} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
               <button
