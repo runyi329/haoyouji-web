@@ -2855,7 +2855,7 @@ export function FunderOrderCard({
             className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
             style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}
           >
-            参与者{participantCount > 0 ? ` ${participantCount}` : ''}
+            {participantCount > 0 ? `拥有者/参与者 ${participantCount}` : '添加拥有者/参与者'}
           </button>}
           <button
             type="button"

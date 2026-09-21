@@ -910,6 +910,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setParticipants([]);
     setSelectedParticipantUserIds([]);
     setParticipantUserSearch('');
+    // 多拥有者只在管理员主动选择时配置；新订单仍按原有单拥有者表单打开。
+    setParticipantsSectionExpanded(false);
     resetLinkedAmountFields();
     setAmountInputValue('');
     participantsLoadedRef.current = null;
@@ -960,7 +962,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setInterestTagName('');
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
     setEditingOrder(null);
-    setParticipantsSectionExpanded(true);
     setShowDatePicker(false);
     setShowInterestDatePicker(false);
     setShowForm(true);
@@ -972,7 +973,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setParticipants([]);
     setSelectedParticipantUserIds([]);
     setParticipantUserSearch('');
-    setParticipantsSectionExpanded(false);
+    // 只有从订单底部的“拥有者/参与者”入口进入时才主动展开；普通编辑保持收起。
+    setParticipantsSectionExpanded(scrollTo === 'participants');
     resetLinkedAmountFields();
     participantsLoadedRef.current = null;
     trpcUtils.ledger.funderGetOrderParticipants.invalidate({ orderId: Number(order.id), ledgerId });
@@ -3316,7 +3318,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
                       <Users2 className="h-4 w-4" />
-                      <span>订单共同拥有者</span>
+                      <span>{participants.length > 0 ? '拥有者 / 参与者' : '添加拥有者 / 参与者（可选）'}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-indigo-600 shadow-sm">
@@ -3325,7 +3327,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       <ChevronDown className={`h-4 w-4 text-indigo-400 transition-transform ${participantsSectionExpanded ? 'rotate-180' : ''}`} />
                     </div>
                   </div>
-                  <p className="mt-1.5 text-xs leading-5 text-indigo-500">{participantsSectionExpanded ? '每位拥有者可独立设置本金、利率、备注与可见范围；最后统一保存。' : '已收起，点击查看、编辑或添加共同拥有者。'}</p>
+                  <p className="mt-1.5 text-xs leading-5 text-indigo-500">{participantsSectionExpanded ? '每位拥有者可独立设置本金、利率、备注与可见范围；最后统一保存。' : participants.length > 0 ? '已收起，点击查看或调整已关联的拥有者／参与者。' : '不需要多人协作时无需操作；点击后才会添加拥有者或参与者。'}</p>
                 </button>
 
                 {participantsSectionExpanded && (<>
