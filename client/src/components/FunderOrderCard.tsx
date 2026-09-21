@@ -13,8 +13,8 @@ import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 
-// 币种选项
-export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'PLUME', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'BZ'] as const;
+// 币种选项。数字币均由服务器行情扫描器实时拉取 USDT 现货报价。
+export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'BZ'] as const;
 export type CoinType = typeof COIN_OPTIONS[number];
 
 export const STATUS_OPTIONS = [
@@ -38,6 +38,8 @@ export const INTEREST_PAYMENT_OPTIONS = [
 export const COIN_COLORS: Record<CoinType, string> = {
   BTC: '#F7931A',
   ETH: '#627EEA',
+  SOL: '#9945FF',
+  BNB: '#F3BA2F',
   HYPE: '#5C6BC0',
   TRUMP: '#D71920',
   PENGU: '#66C5E0',
@@ -49,6 +51,14 @@ export const COIN_COLORS: Record<CoinType, string> = {
   TIA: '#7C3AED',
   EIGEN: '#8B5CF6',
   FET: '#1A73E8',
+  ADA: '#0033AD',
+  ZRO: '#111111',
+  WLD: '#111111',
+  LINK: '#2A5ADA',
+  POL: '#8247E5',
+  CRV: '#406C9A',
+  PEPE: '#479F53',
+  B2: '#F59E0B',
   USDT: '#26A17B',
   CNY: '#DE2910',
   MSTR: '#F7931A',
@@ -84,7 +94,7 @@ export const COIN_COLORS: Record<CoinType, string> = {
   LDO: '#F68B1E',
   ENA: '#00C4B4',
   ARKM: '#FF6B00',
-  HYPE: '#00E5FF',
+  BZ: '#8B4513',
 };
 
 // 获取北京时间（UTC+8）今天，返回 YYYY-MM-DD
