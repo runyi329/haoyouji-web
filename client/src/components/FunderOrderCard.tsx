@@ -2234,23 +2234,29 @@ export function FunderOrderCard({
                     ))
                 )
             )}
-            {(isStockOrder && !hasExternalCollateral
-              ? (collateralAssets.length > 0 && show('collateralValue'))
-              : (collateralAssets.length > 1 ? approxCollateralTotal !== 'hidden' : show('collateralValue'))) && (() => {
+            {(isSharedMode && !hasExternalCollateral
+              // 共享池只影响担保缺口统算；本订单的担保价值始终展示本订单实际录入的担保物。
+              // 即使本订单未录入担保物，也应明确显示 0，而不能把共享池合计代入此处。
+              ? show('collateralValue')
+              : (isStockOrder && !hasExternalCollateral
+                ? (collateralAssets.length > 0 && show('collateralValue'))
+                : (collateralAssets.length > 1 ? approxCollateralTotal !== 'hidden' : show('collateralValue')))) && (() => {
               if (hasExternalCollateral) {
                 // 37标签订单的担保价值已紧随“担保货币”展示，避免同一保证金总值重复两次。
                 return null;
               }
               const approxCV = dc?.approxCollateralValue ?? 'U';
-              const stockManualTotalU = isSharedMode
-                ? (sharedPoolInfo ? Number((sharedPoolInfo as any).totalCollateralValue) : null)
-                : (collateralValueKnown ? collateralValue : null);
-              const cvDisplay = isStockOrder
-                ? (stockManualTotalU !== null && Number.isFinite(stockManualTotalU)
-                  ? (stockManualCollateralValueDisplay === 'CNY'
-                    ? `≈ ${(stockManualTotalU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
-                    : `≈ ${stockManualTotalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`)
-                  : (isSharedMode ? '共享担保加载中...' : '实时价加载中...'))
+              const isManualSharedCollateral = isSharedMode && !hasExternalCollateral;
+              const orderCollateralValueU = collateralValueKnown ? collateralValue : null;
+              const localValueDisplay = isStockOrder
+                ? stockManualCollateralValueDisplay
+                : (approxCollateralTotal === 'CNY' ? 'CNY' : 'U');
+              const cvDisplay = isStockOrder || isManualSharedCollateral
+                ? (orderCollateralValueU !== null && Number.isFinite(orderCollateralValueU)
+                  ? (localValueDisplay === 'CNY'
+                    ? `≈ ${(orderCollateralValueU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
+                    : `≈ ${orderCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`)
+                  : '实时价加载中...')
                 : collateralAssets.length > 1
                 ? (collateralValueKnown
                   ? (approxCollateralTotal === 'CNY'
@@ -2262,7 +2268,7 @@ export function FunderOrderCard({
                   : `${(collateralValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`;
               return (
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400">{isStockOrder ? (isSharedMode ? '共享担保价值' : '担保价值') : (collateralAssets.length > 1 ? '担保总值' : '担保价值')}</span>
+                  <span className="text-gray-400">{(isStockOrder || isManualSharedCollateral) ? '担保价值' : (collateralAssets.length > 1 ? '担保总值' : '担保价值')}</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>{cvDisplay ?? '---'}</span>
                 </div>
               );
