@@ -3675,11 +3675,17 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               id: editingOrder?.id ?? -1,
                               order_no: editingOrder?.order_no ?? null,
                               user_id: p.userId,
+                              // 预览必须复用用户实际进入参与者视角时的身份字段：
+                              // 订单拥有者与参与者分别显示，历史参与者使用绿色主题。
                               owner_label: p.userName,
-                              // 订单拥有者名字（从 membersData 按 editingOrder.user_id 查）
+                              participant_name: p.userName,
+                              participantInfo: { userId: p.userId, role: p.role === 'owner' ? 'owner' : 'funder' },
+                              _isParticipant: p.role !== 'owner',
+                              // 订单拥有者名字（从 membersData 按主订单拥有者查）
                               order_owner_name: (() => {
                                 const allM = ((ledgerData as any)?.members || funderUsers || []) as any[];
-                                const ownerM = allM.find((m: any) => m.userId === editingOrder?.user_id);
+                                const ownerId = Number(editingOrder?.user_id || formData.userId || 0);
+                                const ownerM = allM.find((m: any) => Number(m.userId || m.id) === ownerId);
                                 return ownerM ? (ownerM.nickname || ownerM.username) : (editingOrder?.owner_label || editingOrder?.username || null);
                               })(),
                               coin: (p.coin || formData.coin),
@@ -3723,7 +3729,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 financingInputCurrency: p.amountCurrency || formData.amountCurrency || 'USDT',
                               }),
                               participantCount: 0,
-                              participantInfo: null,
                               paidTotal: null,
                               order_perspective: 'other',
                             };
