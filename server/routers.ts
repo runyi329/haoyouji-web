@@ -384,6 +384,30 @@ function parseFunderParticipantSnapshot(value: unknown): Record<string, any> | n
   }
 }
 
+// 默认情况下，参与者与主订单共用同一组担保物。参与者的金额、利率、展示配置、备注等
+// 仍然保留在其独立快照中；只有管理员在参与者视角明确单独保存担保物时，才允许其覆盖
+// 主订单的担保字段。这样主订单日后增加或删除担保物时，历史参与者不会继续展示旧快照。
+const FUNDER_PARTICIPANT_COLLATERAL_FIELDS = [
+  'collateral_coin', 'collateral_qty', 'collateral_assets', 'collateral_share_mode', 'collateral_source',
+] as const;
+
+function syncFunderParticipantCollateralSnapshot(snapshot: Record<string, any> | null | undefined, parentOrder: any): Record<string, any> {
+  const next = { ...(snapshot || {}) };
+  if (next.participant_collateral_override === true) return next;
+  for (const field of FUNDER_PARTICIPANT_COLLATERAL_FIELDS) {
+    if (parentOrder && parentOrder[field] !== undefined) {
+      next[field] = parentOrder[field];
+    } else {
+      delete next[field];
+    }
+  }
+  return next;
+}
+
+function hasFunderParticipantCollateralOverride(snapshot: Record<string, any> | null | undefined): boolean {
+  return !!snapshot && FUNDER_PARTICIPANT_COLLATERAL_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(snapshot, field));
+}
+
 /** 已结融资订单的既有备注只可保留或在末尾追加，避免历史内容被篡改或删除。 */
 function parseFunderNoteHistory(value: unknown): Record<string, unknown>[] {
   if (value === null || value === undefined || value === '') return [];
@@ -18050,7 +18074,10 @@ ${klinesSummary}
           const isParticipantOrder = participantQueryUserIdSet.has(Number(o.id))
             && (Number(o.user_id) !== participantQueryUserId || pi?.role === 'owner');
           if (!isParticipantOrder) return o;
-          const snapshot = parseFunderParticipantSnapshot(pi?.order_snapshot);
+          const snapshot = syncFunderParticipantCollateralSnapshot(
+            parseFunderParticipantSnapshot(pi?.order_snapshot),
+            o,
+          );
           const result = { ...o, ...(snapshot || {}) };
           // 系统关联字段始终沿用主订单，业务字段则由参与者完整快照独立覆盖。
           // 结清状态是主子订单的关联状态：历史数据即使子订单快照仍为 active，也必须继承主单结清时间。
@@ -18236,7 +18263,10 @@ ${klinesSummary}
               && (Number(row.user_id) !== input.userId || row.participant_role === 'owner');
             if (!isParticipantView) return { ...row, _sharedPoolParticipantUserId: null };
 
-            const snapshot = parseFunderParticipantSnapshot(row.participant_order_snapshot);
+            const snapshot = syncFunderParticipantCollateralSnapshot(
+              parseFunderParticipantSnapshot(row.participant_order_snapshot),
+              row,
+            );
             const result: any = { ...row, ...(snapshot || {}) };
             // 主订单结清时参与者必须同步结清；主订单删除但选择保留参与者时，仍按参与者快照独立存在。
             if (row.status === 'settled') {
@@ -19570,14 +19600,18 @@ ${klinesSummary}
                 if ((o as any)._isParticipant) {
                   const mainOrderStatus = o.status;
                   const mainOrderSettledAt = o.settled_at;
-                  const snapshot = parseFunderParticipantSnapshot(pi.order_snapshot);
+                  const mainOrderInterestEndDate = o.interest_end_date;
+                  const snapshot = syncFunderParticipantCollateralSnapshot(
+                    parseFunderParticipantSnapshot(pi.order_snapshot),
+                    o,
+                  );
                   if (snapshot) Object.assign(o, snapshot);
                   // 主订单与参与者订单共用结清状态；旧参与者快照可能仍为 active，不能覆盖主订单结清结果。
                   if (mainOrderStatus === 'settled' || mainOrderStatus === 'completed') {
                     o.status = mainOrderStatus;
                     o.settled_at = mainOrderSettledAt;
                     // 参与者与主订单共用结息终点；历史快照不能把主单的新日期覆盖为空或旧值。
-                    o.interest_end_date = mainOrder.interest_end_date || mainOrderSettledAt || null;
+                    o.interest_end_date = mainOrderInterestEndDate || mainOrderSettledAt || null;
                   }
                   (o as any)._participantParentDeleted = Boolean((o as any).deleted_at);
                   // 名称展示统一：昵称优先，用户名兜底。
@@ -20045,6 +20079,14 @@ ${klinesSummary}
         await ensureInterestEndDateColumn();
         let participantCount = 0;
         const shouldSyncParticipantStatus = input.status === 'settled' || input.status === 'active';
+        // 默认参与者跟随主订单的担保物；只有已明确设置独立担保物的参与者才保留自己的覆盖。
+        // 因此主订单新增、删除担保货币或切换共享/37号来源时，需要同步其默认快照。
+        const shouldSyncParticipantCollateral = input.collateralAssets !== undefined
+          || input.collateralCoin !== undefined
+          || input.collateralQty !== undefined
+          || input.collateralShareMode !== undefined
+          || input.collateralSource !== undefined;
+        const shouldSyncParticipantSnapshot = shouldSyncParticipantStatus || shouldSyncParticipantCollateral;
         try {
           if (input.status === 'settled' && interestEndDate) {
             const [interestRows] = await conn.execute(
@@ -20056,14 +20098,14 @@ ${klinesSummary}
               throw new TRPCError({ code: 'BAD_REQUEST', message: '结息截止日不能早于计息开始日' });
             }
           }
-          if (shouldSyncParticipantStatus) await ensureFunderParticipantSnapshotColumns();
-          if (shouldSyncParticipantStatus) await conn.beginTransaction();
+          if (shouldSyncParticipantSnapshot) await ensureFunderParticipantSnapshotColumns();
+          if (shouldSyncParticipantSnapshot) await conn.beginTransaction();
 
           await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
 
-          // 融资付息仅为记账展示。主订单结清/恢复时，所有有效参与者子订单必须同步状态，
-          // 但参与者各自的金额、利率、备注和结息记录仍完整保留在独立快照中。
-          if (shouldSyncParticipantStatus) {
+          // 融资付息仅为记账展示。主订单结清/恢复时同步状态；担保物更新时同步默认担保字段。
+          // 参与者各自的金额、利率、备注和结息记录仍完整保留在独立快照中。
+          if (shouldSyncParticipantSnapshot) {
             const [orderRows] = await conn.execute(
               'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? LIMIT 1',
               [input.id, input.ledgerId]
@@ -20078,13 +20120,18 @@ ${klinesSummary}
             const activeParticipants = Array.isArray(participantRows) ? participantRows : [];
             participantCount = activeParticipants.length;
             for (const participant of activeParticipants) {
-              const snapshot = {
+              let snapshot = syncFunderParticipantCollateralSnapshot({
                 ...buildFunderParticipantSnapshot(updatedOrder),
                 ...(parseFunderParticipantSnapshot(participant.order_snapshot) || {}),
-                status: input.status,
-                settled_at: input.status === 'settled' ? statusChangedAt : null,
-                interest_end_date: input.status === 'settled' ? interestEndDate : null,
-              };
+              }, updatedOrder);
+              if (shouldSyncParticipantStatus) {
+                snapshot = {
+                  ...snapshot,
+                  status: input.status,
+                  settled_at: input.status === 'settled' ? statusChangedAt : null,
+                  interest_end_date: input.status === 'settled' ? interestEndDate : null,
+                };
+              }
               await conn.execute(
                 'UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ?',
                 [JSON.stringify(snapshot), participant.id]
@@ -20093,7 +20140,7 @@ ${klinesSummary}
             await conn.commit();
           }
         } catch (e: any) {
-          if (shouldSyncParticipantStatus) {
+          if (shouldSyncParticipantSnapshot) {
             try { await conn.rollback(); } catch {}
           }
           console.error('[FUO-DEBUG] UPDATE失败:', e?.message, '| SQL:', `UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, '| VALS:', JSON.stringify(updateVals));
@@ -20135,7 +20182,12 @@ ${klinesSummary}
           } catch(e) { console.error('[OrderLog] 写入日志失败:', e); }
         }
         await conn.end();
-        return { success: true, participantCount, participantStatusSynced: shouldSyncParticipantStatus };
+        return {
+          success: true,
+          participantCount,
+          participantStatusSynced: shouldSyncParticipantStatus,
+          participantCollateralSynced: shouldSyncParticipantCollateral,
+        };
       }),
     // 查询融资订单操作日志
     financeGetOrderLogs: protectedProcedure
@@ -20762,7 +20814,7 @@ ${klinesSummary}
           const effectiveRole = p.role || existing?.role || 'funder';
           const isOwnerRole = effectiveRole === 'owner';
           const existingSnapshot = parseFunderParticipantSnapshot(existing?.order_snapshot) || {};
-          const snapshot = {
+          const snapshot = syncFunderParticipantCollateralSnapshot({
             ...parentSnapshot,
             ...existingSnapshot,
             // 未在本次表单编辑的字段必须保留该拥有者已有快照；尤其是自动补齐的主订单拥有者。
@@ -20776,7 +20828,7 @@ ${klinesSummary}
             interest_rate_currency: p.interestRateCurrency === undefined ? (existingSnapshot.interest_rate_currency ?? parentSnapshot.interest_rate_currency ?? null) : (p.interestRateCurrency || null),
             display_config: p.displayConfig === undefined ? (existingSnapshot.display_config ?? parentSnapshot.display_config ?? null) : (p.displayConfig || null),
             public_note: p.note === undefined ? (existingSnapshot.public_note ?? null) : p.note,
-          };
+          }, parentOrder);
           if (existing) {
             await conn.execute(
               `UPDATE ledger_order_participants SET role = ?, previous_role = NULL, amount = ?, amount_currency = ?, interest_rate = ?, interest_base = ?,
@@ -20860,7 +20912,7 @@ ${klinesSummary}
         ) as any;
         const snapshotSource = Array.isArray(snapshotRows) ? snapshotRows[0] : null;
         if (!snapshotSource) throw new TRPCError({ code: 'NOT_FOUND', message: '参与者子订单不存在或已停用' });
-        const syncedSnapshot = {
+        const syncedSnapshot = syncFunderParticipantCollateralSnapshot({
           ...buildFunderParticipantSnapshot(snapshotSource),
           ...(parseFunderParticipantSnapshot(snapshotSource.order_snapshot) || {}),
           interest_rate_annual: input.interestRate === undefined || input.interestRate === '' ? null : input.interestRate,
@@ -20874,7 +20926,7 @@ ${klinesSummary}
           broker_name: input.brokerNameOverride || null,
           broker_account: input.brokerAccountOverride || null,
           public_note: input.note || null,
-        };
+        }, snapshotSource);
         await conn.execute(
           `UPDATE ledger_order_participants SET
             commission_rate = ?, commission_base = ?, commission_start_date = ?,
@@ -20925,13 +20977,21 @@ ${klinesSummary}
         ) as any;
         const row = Array.isArray(rows) ? rows[0] : null;
         if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: '参与者子订单不存在或已停用' });
-        const mergedSnapshot = {
+        let mergedSnapshot = {
           ...buildFunderParticipantSnapshot(row),
           ...(parseFunderParticipantSnapshot(row.order_snapshot) || {}),
           ...buildFunderParticipantSnapshot(input.snapshot),
           // 参与者可独立调整金额、买入单价和币数，但标的币种始终继承主订单。
           coin: row.coin,
         };
+        // 只有从参与者编辑页明确提交担保字段时，才记录为该参与者的独立担保物。
+        // 普通金额、利率、备注等保存不能让历史担保快照重新覆盖主订单。
+        if ((input.snapshot as any).participant_collateral_override === false) {
+          mergedSnapshot.participant_collateral_override = false;
+        } else if (hasFunderParticipantCollateralOverride(input.snapshot)) {
+          mergedSnapshot.participant_collateral_override = true;
+        }
+        mergedSnapshot = syncFunderParticipantCollateralSnapshot(mergedSnapshot, row);
         await conn.execute(
           `UPDATE ledger_order_participants SET
              order_snapshot = ?, amount = ?, amount_currency = ?, interest_rate = ?, interest_base = ?,
