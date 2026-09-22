@@ -334,6 +334,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const { data: currentUser } = trpc.auth.me.useQuery();
   const { data: ledgerData } = trpc.ledger.getLedger.useQuery({ id: ledgerId }, { enabled: ledgerId > 0 });
   const isAdminUser = (ledgerData as any)?.userRole === 'owner' || (ledgerData as any)?.userRole === 'admin';
+  // 共同拥有者也会携带 participantInfo，以便加载其独立订单视图；这不能把拥有者误判成受限参与者。
+  // 仅历史参与者保留“只编辑自己的独立参数”的限制。管理员仍可从任一协作视图进入整组配置。
+  const editingCollaboratorRole = String((editingOrder as any)?.participantInfo?.role || '');
+  const editingCollaboratorUserId = Number((editingOrder as any)?.participantInfo?.userId || (editingOrder as any)?.participantInfo?.user_id || 0);
+  const isPrimaryOwnerEdit = editingCollaboratorRole === 'owner'
+    && editingCollaboratorUserId > 0
+    && editingCollaboratorUserId === Number((editingOrder as any)?.user_id || 0);
+  const isSnapshotScopedEdit = !!editingOrder?.participantInfo && !isPrimaryOwnerEdit;
+  const isRestrictedParticipantEdit = !!editingOrder?.participantInfo && editingCollaboratorRole !== 'owner';
+  const canManageCollaboratorsInEditor = !editingOrder || isAdminUser;
 
   const { data: funderUsers, isLoading: usersLoading } = trpc.ledger.funderGetFunderUsers.useQuery(
     { ledgerId, ...(adminOnly ? { roleFilter: "admin" as const } : {}), ...(financeOnly ? { financeOnly: true } : {}) },
@@ -702,7 +712,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     if (!oid) return; // 新建态无订单 ID，跳过（随订单一起保存）
     const cleanAssets = assets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)));
     const participantUserId = editingOrder?.participantInfo?.userId ?? editingOrder?.participantInfo?.user_id;
-    if (participantUserId) {
+    if (isSnapshotScopedEdit && participantUserId) {
       saveParticipantCollateralMutation.mutate({
         orderId: oid,
         ledgerId,
@@ -1309,7 +1319,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         buyQty: optionFormData.buyQty || undefined,
       } : undefined,
     };
-    if (editingOrder?.participantInfo) {
+    if (isSnapshotScopedEdit && editingOrder?.participantInfo) {
       const participantUserId = editingOrder.participantInfo.userId ?? editingOrder.participantInfo.user_id;
       if (!participantUserId) {
         toast.error('无法确定参与者用户ID');
@@ -1591,7 +1601,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             ) : (
             <div className="space-y-3">
               {filteredOrders.map((order: any) => {
-                const isInvited = !!order.participantInfo;
+                // 主拥有者自动加入协作组只是保存独立视图，不应被当作“受邀订单”而隐藏主单操作。
+                const isInvited = !!order.participantInfo && String(order.participantInfo?.role || '') !== 'owner';
                 return (
                   <FunderOrderCard
                     key={order.id}
@@ -1657,8 +1668,20 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col overflow-x-hidden" style={{ overscrollBehavior: 'contain' }}>
             <div className="flex-shrink-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl" style={{ zIndex: 10 }}>
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
-                {editingOrder?.participantInfo ? '受邀订单配置' : editingOrder ? '编辑订单' : '添加订单'}
+                {isRestrictedParticipantEdit ? '参与者独立配置' : editingOrder ? '编辑订单' : '添加订单'}
               </h3>
+              {editingOrder && canManageCollaboratorsInEditor && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setParticipantsSectionExpanded(true);
+                    setTimeout(() => participantsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+                  }}
+                  className="ml-auto mr-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700"
+                >
+                  拥有者／参与者{participants.length > 0 ? ` ${participants.length}人` : ''}
+                </button>
+              )}
               <button
                 onClick={() => {
                   setShowForm(false);
@@ -1678,18 +1701,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             </div>
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
-              {/* 受邀订单：只读提示 */}
-              {editingOrder?.participantInfo && (
+              {/* 历史参与者保留其独立视图限制；共同拥有者和主拥有者不显示此提示。 */}
+              {isRestrictedParticipantEdit && (
                 <div className="rounded-xl px-4 py-3 flex items-start gap-2" style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0' }}>
                   <span className="text-green-600 mt-0.5">✓</span>
                   <div>
-                    <div className="text-sm font-medium text-green-800">受邀订单</div>
-                    <div className="text-xs text-green-600 mt-0.5">订单基础信息为只读，仅可配置佣金相关参数</div>
+                    <div className="text-sm font-medium text-green-800">参与者独立视图</div>
+                    <div className="text-xs text-green-600 mt-0.5">当前参数仅影响该参与者；可通过顶部“拥有者／参与者”切换并配置整组视图。</div>
                   </div>
                 </div>
               )}
               {/* 类型 */}
-              {!editingOrder?.participantInfo && (
+              {!isRestrictedParticipantEdit && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">类型<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
                   <div className="flex gap-2 flex-wrap">
@@ -1723,7 +1746,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 做多/做空 — 仅数字币时显示 */}
-              {!editingOrder?.participantInfo && (formData.assetType === 'crypto' || formData.assetType === '') && (
+              {!isRestrictedParticipantEdit && (formData.assetType === 'crypto' || formData.assetType === '') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">方向<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，数字币专用</span></label>
                   <div className="flex gap-2">
@@ -1754,7 +1777,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 成交状态 */}
-              {!editingOrder?.participantInfo && (
+              {!isRestrictedParticipantEdit && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">成交状态</label>
                   <div className="flex gap-3">
@@ -1780,7 +1803,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 归属分类 */}
-              {!editingOrder?.participantInfo && (
+              {!isRestrictedParticipantEdit && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">归属分类</label>
                   <div className="flex gap-3">
@@ -1841,7 +1864,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 自定义标签 */}
-              {!editingOrder?.participantInfo && (
+              {!isRestrictedParticipantEdit && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">标签<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，可添加多个</span></label>
                   <div className="flex flex-wrap gap-1.5 mb-2">
@@ -1888,7 +1911,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
               {/* 用户选择（从账本所有成员中选）：根据所选用户角色自动判断订单归属左侧(资方)或右侧(借方) */}
               <div className="flex gap-3 items-start">
-              {!editingOrder?.participantInfo && (
+              {!isRestrictedParticipantEdit && (
                 <div className="flex-1 min-w-0">
                   <label className="block text-sm font-medium text-gray-600 mb-2">
                     订单拥有者 <span className="text-red-400 ml-0.5">*</span>
@@ -2327,8 +2350,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 </div>
               </div>
 
-              {/* 受邀订单专属：佣金配置区 */}
-              {editingOrder?.participantInfo && (
+              {/* 历史参与者专属：佣金配置区 */}
+              {isRestrictedParticipantEdit && (
                 <div className="rounded-2xl p-4 space-y-4" style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0' }}>
                   <div className="text-sm font-semibold text-green-800 mb-1">佣金配置</div>
                   {/* 佣金率 */}
@@ -2483,22 +2506,22 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 </select>
               </div>
 
-              {/* 担保货币分隔线：参与者使用自己的独立担保物，不继承订单拥有者。 */}
+              {/* 担保货币分隔线：历史参与者使用自己的独立担保物，不继承订单拥有者。 */}
               <div className="flex items-center gap-3">
-                <div className="flex-1 h-px" style={{ background: editingOrder?.participantInfo ? '#A7F3D0' : collateralShareMode === 'self' ? '#FECACA' : '#F3F4F6' }} />
-                <span className="text-xs shrink-0" style={{ color: editingOrder?.participantInfo ? '#047857' : collateralShareMode === 'self' ? '#DC2626' : '#9CA3AF', fontWeight: editingOrder?.participantInfo || collateralShareMode === 'self' ? 600 : 400 }}>
-                  {editingOrder?.participantInfo ? '参与者独立担保' : collateralShareMode === 'self' ? '共享担保' : '担保货币'}
+                <div className="flex-1 h-px" style={{ background: isRestrictedParticipantEdit ? '#A7F3D0' : collateralShareMode === 'self' ? '#FECACA' : '#F3F4F6' }} />
+                <span className="text-xs shrink-0" style={{ color: isRestrictedParticipantEdit ? '#047857' : collateralShareMode === 'self' ? '#DC2626' : '#9CA3AF', fontWeight: isRestrictedParticipantEdit || collateralShareMode === 'self' ? 600 : 400 }}>
+                  {isRestrictedParticipantEdit ? '参与者独立担保' : collateralShareMode === 'self' ? '共享担保' : '担保货币'}
                 </span>
-                <div className="flex-1 h-px" style={{ background: editingOrder?.participantInfo ? '#A7F3D0' : collateralShareMode === 'self' ? '#FECACA' : '#F3F4F6' }} />
+                <div className="flex-1 h-px" style={{ background: isRestrictedParticipantEdit ? '#A7F3D0' : collateralShareMode === 'self' ? '#FECACA' : '#F3F4F6' }} />
               </div>
-              {editingOrder?.participantInfo && (
+              {isRestrictedParticipantEdit && (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-700">
                   这里添加或修改的是当前参与者自己的担保物，不会改变订单拥有者或其他参与者的担保物。
                 </div>
               )}
 
               {/* 股票订单可选37号数据来源；浮动盈亏与担保货币分别控制。 */}
-              {!editingOrder?.participantInfo && formData.assetType === 'stock' && (
+              {!isRestrictedParticipantEdit && formData.assetType === 'stock' && (
               <div className="flex gap-2 mb-2">
                 <button
                   type="button"
@@ -2522,7 +2545,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 股票订单：盈亏、担保物、利息标签分别选择，互不强制联动。 */}
-              {!editingOrder?.participantInfo && formData.assetType === 'stock' && collateralSourceMode === 'external' && (
+              {!isRestrictedParticipantEdit && formData.assetType === 'stock' && collateralSourceMode === 'external' && (
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-3">
                 <div className="space-y-1.5">
                   <div className="text-xs font-medium text-blue-600">盈亏标签（37号账本）</div>
@@ -2614,7 +2637,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 担保货币列表：37号担保货币关闭时，即使仍使用37号浮盈也可手工录入。 */}
-              {(editingOrder?.participantInfo || collateralSourceMode === 'manual' || !isUsing37Collateral) && (
+              {(isRestrictedParticipantEdit || collateralSourceMode === 'manual' || !isUsing37Collateral) && (
               <div className="space-y-3">
                 {/* 只读态：编辑已有订单且未进入编辑模式时 */}
                 {editingOrder?.id && !collateralEditMode ? (
@@ -2696,7 +2719,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     disabled={saveCollateralMutation.isPending || saveParticipantCollateralMutation.isPending}
                     className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60"
                     style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
-                  >{saveCollateralMutation.isPending || saveParticipantCollateralMutation.isPending ? '保存中…' : editingOrder?.participantInfo ? '保存参与者担保货币' : '保存担保货币'}</button>
+                  >{saveCollateralMutation.isPending || saveParticipantCollateralMutation.isPending ? '保存中…' : isRestrictedParticipantEdit ? '保存参与者担保货币' : '保存担保货币'}</button>
                 )}
                 </>
                 )}
@@ -3312,7 +3335,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             </div>
 
             {/* ===== 共同拥有者与历史参与者管理 ===== */}
-            {!editingOrder?.participantInfo && (
+            {canManageCollaboratorsInEditor && (
               <div className="px-5 pb-4" ref={participantsSectionRef}>
                 <button type="button" onClick={() => setParticipantsSectionExpanded(value => !value)} className="mb-3 w-full rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-3 text-left">
                   <div className="flex items-center justify-between gap-3">
@@ -3339,12 +3362,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
                 {/* 共同拥有者 / 历史参与者列表 */}
                 {participants.map((p, idx) => (
-                  <div key={p.userId} className="mb-3 rounded-xl border border-indigo-100 bg-indigo-50 overflow-hidden">
+                  <div key={p.userId} className={`mb-3 overflow-hidden rounded-xl border ${p.role === 'owner' ? 'border-indigo-100 bg-indigo-50' : 'border-emerald-200 bg-emerald-50'}`}>
                     {/* 协作成员头部 */}
                     <div className="flex items-center gap-2 px-3 py-2.5 cursor-pointer" onClick={() => setParticipants(prev => prev.map((pp, i) => ({ ...pp, expanded: i === idx ? !pp.expanded : false })))}>
-                      {p.avatar ? <img src={p.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" /> : <div className="w-7 h-7 rounded-full bg-indigo-200 flex items-center justify-center text-xs font-bold text-indigo-700 shrink-0">{p.userName.slice(0,1).toUpperCase()}</div>}
+                      {p.avatar ? <img src={p.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" /> : <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${p.role === 'owner' ? 'bg-indigo-200 text-indigo-700' : 'bg-emerald-200 text-emerald-700'}`}>{p.userName.slice(0,1).toUpperCase()}</div>}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-800 truncate"><span className="truncate">{p.userName}</span><span className={`shrink-0 rounded px-1 py-0.5 text-[10px] ${p.role === 'owner' ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-500'}`}>{p.role === 'owner' ? '拥有者' : '参与者'}</span></div>
+                        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-800 truncate"><span className="truncate">{p.userName}</span><span className={`shrink-0 rounded px-1 py-0.5 text-[10px] ${p.role === 'owner' ? 'bg-violet-100 text-violet-700' : 'bg-emerald-100 text-emerald-700'}`}>{p.role === 'owner' ? '拥有者' : '参与者'}</span></div>
                         <div className="truncate text-xs text-gray-400">{p.amount ? `${p.amount} ${p.amountCurrency === 'CNY' ? '元' : p.amountCurrency}` : `协作成员 ${idx + 1}`}{p.interestRateAnnual ? ` · 年化 ${normalizeFunderAnnualRate(p.interestRateAnnual)}%` : ''}</div>
                       </div>
                       {!(p.role === 'owner' && Number(p.userId) === Number(formData.userId)) && (
@@ -3357,7 +3380,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
                     {/* 参与者完整参数面板 */}
                     {p.expanded && (
-                      <div className="border-t border-indigo-100">
+                      <div className={`border-t ${p.role === 'owner' ? 'border-indigo-100' : 'border-emerald-200'}`}>
                         {/* ===== 基础参数 ===== */}
                         <div className="px-3 pb-3 space-y-3">
                           <div className="pt-2">
@@ -3910,6 +3933,24 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     </div>
                   );
                 })()}
+                {editingOrder?.id && participants.length > 0 && (
+                  <button
+                    type="button"
+                    disabled={saveParticipantFormMutation.isPending}
+                    onClick={async () => {
+                      try {
+                        await persistParticipantViews(Number(editingOrder.id));
+                        toast.success('拥有者／参与者设置已保存');
+                      } catch {
+                        // 错误信息由 mutation 统一提示；保留当前编辑状态以便修正。
+                      }
+                    }}
+                    className="mt-3 w-full rounded-xl py-3 text-sm font-semibold text-white disabled:opacity-50"
+                    style={{ background: 'linear-gradient(135deg, #4F46E5, #6366F1)' }}
+                  >
+                    {saveParticipantFormMutation.isPending ? '保存成员设置中…' : `保存 ${participants.length} 位拥有者／参与者设置`}
+                  </button>
+                )}
                 </>)}
               </div>
             )}
@@ -3924,7 +3965,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               >
                 {(createMutation.isPending || updateMutation.isPending || updateParticipantOrderMutation.isPending)
                   ? '提交中...'
-                  : editingOrder && !editingOrder?.participantInfo
+                  : editingOrder && !isSnapshotScopedEdit
                     ? `保存订单与 ${participants.length} 位参与者`
                     : editingOrder
                       ? '保存修改'

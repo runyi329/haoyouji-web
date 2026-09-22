@@ -606,8 +606,12 @@ export function FunderOrderCard({
   // 已结利息历史浮层
   const [showInterestHistory, setShowInterestHistory] = useState(false);
   const [showLinkedInterestDetail, setShowLinkedInterestDetail] = useState(false);
-  // 参与者身份独立于本人/他人归属；仅真实参与者才查询参与者专属结息数据。
-  const _isParticipantOrder = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder;
+  // 共同拥有者会带 participantInfo 以支持独立快照，但主订单拥有者仍是主单的管理视角。
+  // 只有真实参与者才查询参与者专属结息数据，避免主拥有者被错误限制为“受邀订单”。
+  const _collaboratorRole = String((order as any).participantInfo?.role || '');
+  const _isParticipantOrder = _collaboratorRole !== 'owner' && (
+    !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder
+  );
   const _participantUserId = _isParticipantOrder ? ((order as any).participantInfo?.userId || undefined) : undefined;
   const interestHistoryQuery = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId, orderId: order.id as number, participantUserId: _participantUserId },
@@ -1050,12 +1054,13 @@ export function FunderOrderCard({
   const settledTimestamp = formatSettledTimestamp(order.settled_at);
   // “本人 / 他人”只决定列表归属；绿色主题只由真实参与关系决定。
   // order_perspective 不能作为颜色条件，避免“他人订单”被误标为参与订单。
-  const isOwnerView = (order as any).participantInfo?.role === 'owner';
-  const isParticipantVisual = !isOwnerView && (
-    !!(order as any).participantInfo
-    || !!(order as any)._isParticipant
-    || !!(order as any)._fromFunder
-  );
+  const collaboratorUserId = Number((order as any).participantInfo?.userId || (order as any).participantInfo?.user_id || 0);
+  const isPrimaryOwnerProjection = _collaboratorRole === 'owner'
+    && collaboratorUserId > 0
+    && collaboratorUserId === Number(order.user_id || 0);
+  // 主拥有者自动加入协作组只是为了统一保存成员配置，不应显示为“其他拥有者”视图。
+  const isOwnerView = _collaboratorRole === 'owner' && !isPrimaryOwnerProjection;
+  const isParticipantVisual = _isParticipantOrder && !isOwnerView;
   // 管理员列表接口返回 _participantCount，旧接口可能返回 participantCount，统一兼容。
   const participantCount = Number((order as any).participantCount ?? (order as any)._participantCount ?? 0);
   const rateStr = String(order.interest_rate_annual || '');

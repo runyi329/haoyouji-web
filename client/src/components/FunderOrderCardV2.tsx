@@ -1557,8 +1557,12 @@ export function FunderOrderCardV2Silver({
     'inset -1.5px 0 rgba(0,0,0,0.16)',
   ].join(', ');
   // 本人 / 他人仅决定列表归属；绿色主题仅表达真实参与者身份。
-  const isOwnerView = (order as any).participantInfo?.role === 'owner';
-  const isParticipant = !isOwnerView && (!!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder);
+  // 主拥有者加入协作组仅用于独立视图保存，不应被显示为参与者卡片。
+  const collaboratorRole = String((order as any).participantInfo?.role || '');
+  const collaboratorUserId = Number((order as any).participantInfo?.userId || (order as any).participantInfo?.user_id || 0);
+  const isPrimaryOwnerProjection = collaboratorRole === 'owner' && collaboratorUserId > 0 && collaboratorUserId === Number(order.user_id || 0);
+  const isOwnerView = collaboratorRole === 'owner' && !isPrimaryOwnerProjection;
+  const isParticipant = collaboratorRole !== 'owner' && (!!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder);
   const isSettledCard = order.status === 'settled' || order.status === 'completed';
   const cardBg = isParticipant ? GRN_BG : isStockCard ? GOLD_BG_SV : isOptionCard ? OPT_BG : SL_BG;
   const cardExportBackground = isParticipant ? GRN_EXPORT_BG : isStockCard ? GOLD_EXPORT_BG : isOptionCard ? OPT_EXPORT_BG : SL_EXPORT_BG;
@@ -3187,8 +3191,12 @@ export function FunderLenderCardSilver({
   ];
 
   // 本人 / 他人仅决定列表归属；绿色主题仅表达真实参与者身份。
-  const isOwnerView = (order as any).participantInfo?.role === 'owner';
-  const isParticipant = !isOwnerView && (!!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder);
+  // 主拥有者加入协作组仅用于独立视图保存，不应被显示为参与者卡片。
+  const collaboratorRole = String((order as any).participantInfo?.role || '');
+  const collaboratorUserId = Number((order as any).participantInfo?.userId || (order as any).participantInfo?.user_id || 0);
+  const isPrimaryOwnerProjection = collaboratorRole === 'owner' && collaboratorUserId > 0 && collaboratorUserId === Number(order.user_id || 0);
+  const isOwnerView = collaboratorRole === 'owner' && !isPrimaryOwnerProjection;
+  const isParticipant = collaboratorRole !== 'owner' && (!!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder);
   const isSettledCard = order.status === 'settled' || order.status === 'completed';
   const GRN_POSITIVE_COLOR = LN_EARN;  // 暂时恢复原始颜色
   // 动态文字颜色：参与者和期权卡片用白色系列，其他用黑色系列
