@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-09-22
+// 生成时间：2026-09-23
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9236,5 +9236,12 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-09-21T08:01:56Z", type: "feat", cleanMessage: "add requested 52 spot coins" },
     { date: "2026-09-21T08:44:40Z", type: "fix", cleanMessage: "return new coin prices to order cards" },
     { date: "2026-09-21T15:56:40Z", type: "fix", cleanMessage: "show local collateral value in shared orders" },
+  ],
+  "2026-09-22": [
+    { date: "2026-09-21T21:15:56Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-09-21T22:37:50Z", type: "fix", cleanMessage: "make co-owner setup optional on new orders" },
+    { date: "2026-09-22T01:45:48Z", type: "fix", cleanMessage: "sync default participant collateral with parent" },
+    { date: "2026-09-22T04:25:34Z", type: "fix", cleanMessage: "align participant preview identity and theme" },
+    { date: "2026-09-22T04:59:27Z", type: "fix", cleanMessage: "restore owner controls and collaboration editor" },
   ],
 };
