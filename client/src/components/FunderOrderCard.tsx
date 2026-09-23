@@ -979,6 +979,7 @@ export function FunderOrderCard({
   // ===== 担保物快捷编辑面板 =====
   const [showCollateralPanel, setShowCollateralPanel] = useState(false);
   const [collateralEditItems, setCollateralEditItems] = useState<{ coin: string; qty: string; note?: string }[]>([]);
+  const [initialCollateralSignature, setInitialCollateralSignature] = useState('[]');
   // 每条担保物独立的约等于显示配置：{ "0": "U", "1": "hidden", ... }
   const [collateralItemApprox, setCollateralItemApprox] = useState<Record<string, string>>({});
   // 多笔担保总值的独立约等于显示配置
@@ -998,6 +999,12 @@ export function FunderOrderCard({
     onSuccess: () => { toast.success('担保已保存'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
     onError: (err) => toast.error(err.message),
   });
+  // 有 participantInfo 表示当前卡片已经是某位共同拥有者或参与者的独立订单视图。
+  // 快捷保存必须写入该人的快照，不能回写主订单后再被个人快照覆盖。
+  const quickViewParticipantUserId = Number((order as any).participantInfo?.userId ?? (order as any).participantInfo?.user_id ?? 0) || null;
+  const normalizeQuickCollateralAssets = (assets: { coin: string; qty: string; note?: string }[]) => assets
+    .filter(asset => asset.coin && asset.qty !== '' && !isNaN(parseFloat(asset.qty)))
+    .map(asset => ({ coin: String(asset.coin), qty: String(asset.qty), note: asset.note || '' }));
   const handleOpenCollateralPanel = () => {
     if (showCollateralPanel) { setShowCollateralPanel(false); return; }
     // 初始化：从当前订单数据加载担保物列表
@@ -1009,7 +1016,9 @@ export function FunderOrderCard({
         if (Array.isArray(parsed)) items = parsed.map((a: any) => ({ coin: a.coin || 'BTC', qty: String(a.qty ?? ''), note: a.note || '' }));
       }
     } catch {}
-    setCollateralEditItems(items.length > 0 ? items : []);
+    const initialItems = items.length > 0 ? items : [];
+    setCollateralEditItems(initialItems);
+    setInitialCollateralSignature(JSON.stringify(normalizeQuickCollateralAssets(initialItems)));
     // 初始化担保物约等于配置（从 display_config 加载）
     try {
       const rawDC = order.display_config;
@@ -1060,7 +1069,7 @@ export function FunderOrderCard({
     setShowCollateralPanel(true);
   };
   const handleSaveCollateral = () => {
-    const valid = collateralEditItems.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)));
+    const valid = normalizeQuickCollateralAssets(collateralEditItems);
     // 构建新的 display_config：在现有基础上只更新担保相关字段
     let newDC: Record<string, any> = {};
     try {
@@ -1085,6 +1094,22 @@ export function FunderOrderCard({
       newDC.marginAlertThreshold = alertThreshold;
     } else {
       delete newDC.marginAlertThreshold;
+    }
+    const collateralAssetsChanged = JSON.stringify(valid) !== initialCollateralSignature;
+    if (quickViewParticipantUserId) {
+      // 显示控制永远属于当前个人视图；只有实际改动担保物时才将其标记为个人担保覆盖。
+      const snapshot: Record<string, any> = { display_config: newDC };
+      if (collateralAssetsChanged) {
+        snapshot.collateral_assets = valid;
+        snapshot.participant_collateral_override = true;
+      }
+      _intSaveParticipantDisplayMutation.mutate({
+        orderId: Number(order.id),
+        ledgerId,
+        userId: quickViewParticipantUserId,
+        snapshot,
+      });
+      return;
     }
     _intSaveCollateralMutation.mutate({ id: Number(order.id), ledgerId, collateralAssets: valid, displayConfig: newDC });
   };
@@ -3203,12 +3228,12 @@ export function FunderOrderCard({
           <button
             type="button"
             onClick={handleSaveCollateral}
-            disabled={_intSaveCollateralMutation.isPending}
+            disabled={_intSaveCollateralMutation.isPending || _intSaveParticipantDisplayMutation.isPending}
             className="w-full py-2 rounded-xl text-xs font-semibold text-white transition-all disabled:opacity-60"
             style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
-          >{_intSaveCollateralMutation.isPending ? '保存中…' : '保存担保'}</button>
+          >{(_intSaveCollateralMutation.isPending || _intSaveParticipantDisplayMutation.isPending) ? '保存中…' : '保存担保'}</button>
           {/* 操作日志区 */}
-          <CollateralLogSection orderId={Number(order.id)} ledgerId={ledgerId} refreshKey={_intSaveCollateralMutation.isSuccess} />
+          <CollateralLogSection orderId={Number(order.id)} ledgerId={ledgerId} refreshKey={_intSaveCollateralMutation.isSuccess || _intSaveParticipantDisplayMutation.isSuccess} />
         </div>
       )}
 
