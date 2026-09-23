@@ -1713,6 +1713,32 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           const profitRatio = actualInvestment > 0 ? (netProfit / actualInvestment) * 100 : 0;
           const priceGrowth = buyPrice > 0 ? ((sellPrice - buyPrice) / buyPrice) * 100 : 0;
           const isPositive = netProfit >= 0;
+          // 页面“利润 / 净利润”继续按上方原始持仓数量展示；下面单列出服务器钱包结算口径，
+          // 使客户无需自行在“收益权”和“管理费”之间反复换算。
+          let settlementRate = 1;
+          let settlementRateLabel = '100.00%';
+          if (tierData?.tierMode === 'linear') {
+            const allTimeLow = parseFloat(String(tierData?.allTimeLowPrice || '0'));
+            settlementRate = buyPrice > 0 && allTimeLow > 0
+              ? Math.max(0, 1 - (buyPrice - allTimeLow) / buyPrice)
+              : 1;
+            settlementRateLabel = `${(settlementRate * 100).toFixed(2)}%`;
+          } else {
+            const tier = TIER_LABELS.find((item) => item.tier === currentTier);
+            if (tier) {
+              // 与服务端卖出结算表完全一致；标签的 66.7% 是展示四舍五入值。
+              settlementRate = [0.6667, 0.4444, 0.3333, 0.2667, 0.2222, 0.1905, 0.1667, 0.1481, 0.1333][tier.tier - 1] ?? 1;
+              settlementRateLabel = `${(settlementRate * 100).toFixed(2)}%`;
+            }
+          }
+          const settlementQuantity = quantity * settlementRate;
+          const settlementProfit = Math.max(0, (sellPrice - buyPrice) * settlementQuantity);
+          const prepaidFee = Math.max(0, parseFloat(String((order as any).prepaidFee || 0)) || 0);
+          const dueManagementFee = Math.max(0, totalFee2 - prepaidFee);
+          const walletReturn = Math.max(0, (order.isGift ? 0 : actualInvestment) + settlementProfit - dueManagementFee);
+          const multiplier = actualInvestment > 0 && buyPrice > 0
+            ? (quantity * buyPrice / actualInvestment)
+            : (order.isGift ? 1 : 5.25);
           return (
             <>
               <div className="flex justify-between items-start">
@@ -1733,6 +1759,25 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               <div className="flex justify-between items-center">
                 <span className="text-[#9CA3AF]">涨幅</span>
                 <span className={`font-bold ${priceGrowth >= 0 ? 'text-[#0EA56A]' : 'text-[#EF4444]'}`}>{priceGrowth >= 0 ? '+' : ''}{priceGrowth.toFixed(2)}%</span>
+              </div>
+              <div className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2.5 text-xs text-[#475569]">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-semibold text-[#1A56DB]">成交结算明细</span>
+                  <span className="text-[10px] text-[#64748B]">卖出价按管理员确认价</span>
+                </div>
+                <div className="space-y-1.5 leading-5">
+                  <div>1. 成交价值：{actualInvestment.toFixed(4)} × {multiplier.toFixed(2)} = <span className="font-semibold text-[#1E293B]">{tradeValue2.toFixed(4)} U</span></div>
+                  <div>2. 名义持仓：{tradeValue2.toFixed(4)} ÷ {buyPrice.toFixed(4)} = <span className="font-semibold text-[#1E293B]">{quantity.toFixed(4)} {order.coin}</span></div>
+                  <div>3. 页面价差利润：({sellPrice.toFixed(4)} − {buyPrice.toFixed(4)}) × {quantity.toFixed(4)} = <span className="font-semibold text-[#1E293B]">{grossProfit.toFixed(4)} U</span></div>
+                  <div>4. 管理费：{dailyFee2.toFixed(4)} × {holdDays2} 天 = <span className="font-semibold text-[#1E293B]">{totalFee2.toFixed(4)} U</span></div>
+                  <div>5. 页面净利润：{grossProfit.toFixed(4)} − {totalFee2.toFixed(4)} = <span className="font-semibold text-[#1E293B]">{netProfit.toFixed(4)} U</span></div>
+                </div>
+                <div className="my-2 border-t border-[#BFDBFE]" />
+                <div className="space-y-1.5 leading-5">
+                  <div>6. 结算收益权：{quantity.toFixed(4)} × {settlementRateLabel} = <span className="font-semibold text-[#1E293B]">{settlementQuantity.toFixed(4)} {order.coin}</span></div>
+                  <div className="font-medium text-[#1A56DB]">7. 实际钱包回款：{order.isGift ? '0' : actualInvestment.toFixed(4)} + ({sellPrice.toFixed(4)} − {buyPrice.toFixed(4)}) × {settlementQuantity.toFixed(4)} − {dueManagementFee.toFixed(4)} = {walletReturn.toFixed(4)} U</div>
+                  <div className="text-[10px] leading-4 text-[#64748B]">{order.isGift ? '赠单未从钱包扣除本金，因此仅结算折后价差收益减管理费。' : '普通订单回款包含原始投入本金；收益权仅影响价差收益的结算数量。'}</div>
+                </div>
               </div>
             </>
           );
@@ -3890,7 +3935,6 @@ export default function CryptoPrediction() {
 
   );
 }
-
 
 
 
