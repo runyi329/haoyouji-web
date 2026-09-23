@@ -363,7 +363,7 @@ const FUNDER_PARTICIPANT_SNAPSHOT_FIELDS = [
   'finance_type', 'collateral_assets', 'lent_out_assets', 'show_profit_share', 'commission_share', 'display_config',
   'asset_type', 'tags', 'collateral_share_mode', 'principal_lent_out', 'broker_name', 'broker_account',
   'option_info', 'trade_direction', 'order_fill_status', 'order_perspective', 'trading_fee_rate_per_mille',
-  'trading_fee_status', 'collateral_source', 'settled_at', 'interest_end_date'
+  'trading_fee_status', 'collateral_source', 'personal_header_label', 'settled_at', 'interest_end_date'
 ] as const;
 
 function buildFunderParticipantSnapshot(source: any): Record<string, any> {
@@ -21031,6 +21031,13 @@ ${klinesSummary}
           mergedSnapshot.participant_collateral_override = false;
         } else if (hasFunderParticipantCollateralOverride(input.snapshot)) {
           mergedSnapshot.participant_collateral_override = true;
+        }
+        // 业务页眉只用于当前协作人的前端展示，绝不覆盖 users / owner_label / participant_name 等真实身份字段。
+        // 限制长度并压缩多余空白，避免异常长文本破坏移动端卡片布局。
+        if (mergedSnapshot.personal_header_label !== undefined && mergedSnapshot.personal_header_label !== null) {
+          mergedSnapshot.personal_header_label = typeof mergedSnapshot.personal_header_label === 'string'
+            ? mergedSnapshot.personal_header_label.replace(/\s+/g, ' ').trim().slice(0, 32)
+            : null;
         }
         mergedSnapshot = syncFunderParticipantSharedAssetSnapshot(
           syncFunderParticipantCollateralSnapshot(mergedSnapshot, row),

@@ -1272,9 +1272,13 @@ export function FunderOrderCard({
   const headerOwnerLabel = isParticipantVisual
     ? ((order as any).order_owner_name || (order as any).nickname || (order as any).username || normalHeaderOwner)
     : normalHeaderOwner;
-  const headerParticipantLabel = isParticipantVisual
+  const headerCollaboratorLabel = (isParticipantVisual || isOwnerView)
     ? ((order as any).participant_name || (order as any).owner_label || null)
     : null;
+  // 个人业务页眉由管理员配置在协作人独立快照内；真实拥有者/参与者姓名仍由服务端派生。
+  const personalHeaderLabel = typeof (order as any).personal_header_label === 'string'
+    ? (order as any).personal_header_label.trim().slice(0, 32)
+    : '';
   const manualHeaderTags: string[] = (() => {
     try {
       const raw = (order as any).tags;
@@ -1284,7 +1288,8 @@ export function FunderOrderCard({
       return [];
     }
   })();
-  const headerTagCount = ((show('showOwnerName') || forceAdminOptionHeader) ? Number(Boolean(headerOwnerLabel)) + Number(Boolean(headerParticipantLabel)) : 0)
+  const headerTagCount = ((show('showOwnerName') || forceAdminOptionHeader) ? Number(Boolean(headerOwnerLabel)) + Number(Boolean(headerCollaboratorLabel)) : 0)
+    + Number(Boolean(personalHeaderLabel))
     + Number(Boolean(order.asset_type && (show('assetType') || forceAdminOptionHeader)))
     + manualHeaderTags.length;
   const headerTagsRef = useRef<HTMLDivElement>(null);
@@ -1310,7 +1315,7 @@ export function FunderOrderCard({
       observer?.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [headerTagsExpanded, headerTagCount, headerOwnerLabel, headerParticipantLabel, order.asset_type, manualHeaderTags.join('\u0001')]);
+  }, [headerTagsExpanded, headerTagCount, headerOwnerLabel, headerCollaboratorLabel, order.asset_type, manualHeaderTags.join('\u0001')]);
   // 52号账本：手续费仅在订单控制区明确开启后，才在订单模式向前端展示。
   const isLedger52 = Number(ledgerId ?? (order as any).ledger_id) === 52;
   const showTradingFee = isLedger52 && dc?.tradingFee === true;
@@ -1579,9 +1584,14 @@ export function FunderOrderCard({
               {isParticipantVisual ? `拥有者 ${headerOwnerLabel}` : headerOwnerLabel}
             </span>
           )}
-          {(show('showOwnerName') || forceAdminOptionHeader) && isParticipantVisual && headerParticipantLabel && (
-            <span data-header-tag className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[130px] shrink-0" style={{ backgroundColor: '#DCFCE7', color: '#15803D' }}>
-              参与者 {headerParticipantLabel}
+          {(show('showOwnerName') || forceAdminOptionHeader) && (isParticipantVisual || isOwnerView) && headerCollaboratorLabel && (
+            <span data-header-tag className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[130px] shrink-0" style={isParticipantVisual ? { backgroundColor: '#DCFCE7', color: '#15803D' } : { backgroundColor: '#F3E8FF', color: '#6D28D9' }}>
+              {isOwnerView ? '共同拥有者' : '参与者'} {headerCollaboratorLabel}
+            </span>
+          )}
+          {personalHeaderLabel && (
+            <span data-header-tag className="text-[11px] font-semibold px-1.5 py-0.5 rounded truncate max-w-[150px] shrink-0" style={isParticipantVisual ? { backgroundColor: '#BBF7D0', color: '#166534' } : { backgroundColor: '#EDE9FE', color: '#6D28D9' }} title={personalHeaderLabel}>
+              {personalHeaderLabel}
             </span>
           )}
           {isOwnerView && (

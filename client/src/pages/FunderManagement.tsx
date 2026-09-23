@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { getUserDisplayName, getUserSearchLabel, matchesUserSearch } from "@/lib/userIdentity";
-import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check } from "lucide-react";
+import { ChevronLeft, ChevronDown, ChevronRight, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER } from "@/components/FunderOrderCard";
 import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
@@ -90,6 +90,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     tradeDirection: null as null | 'long' | 'short',
     ownerLabel: '',
     ownerLabelMode: 'member' as 'member' | 'manual',
+    // 参与者/共同拥有者的业务页眉。它是独立视图中的业务标题，不会覆盖真实账号或订单拥有者身份。
+    personalHeaderLabel: '',
     tags: [] as string[],
     principalLentOut: false,
     tradingFeeRate: '2',
@@ -224,6 +226,21 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     interestStartDate: string;
     displayConfig: Record<string, boolean | string>;
     marginAlertThreshold: string;
+    orderSnapshot: Record<string, any>;
+    // 仅用于管理员在协作人列表中的准确预览；完整编辑仍通过个人订单视图完成。
+    personalHeaderLabel: string;
+    tags: string[];
+    tradeDirection: null | 'long' | 'short';
+    orderFillStatus: 'pending' | 'filled';
+    orderPerspective: 'self' | 'other';
+    buyDate: string;
+    brokerName: string;
+    brokerAccount: string;
+    principalLentOut: boolean;
+    collateralShareMode: 'none' | 'self' | 'cross';
+    collateralSource: string | null;
+    tradingFeeRate: string;
+    tradingFeeStatus: 'unpaid' | 'half_paid' | 'paid';
     visibilityMode: 'self' | 'total' | 'breakdown' | 'partners';
     visibleOwnerIds: number[];
     expanded: boolean; // UI 折叠状态
@@ -297,11 +314,25 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       interestStartDate: p.interest_start_date || formData.interestStartDate || '',
       displayConfig: (() => { try { return p.display_config ? (typeof p.display_config === 'string' ? JSON.parse(p.display_config) : p.display_config) : { ...DEFAULT_DISPLAY_CONFIG }; } catch { return { ...DEFAULT_DISPLAY_CONFIG }; } })(),
       marginAlertThreshold: '',
+      orderSnapshot: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? snapshot : {}; } catch { return {}; } })(),
+      personalHeaderLabel: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return typeof snapshot?.personal_header_label === 'string' ? snapshot.personal_header_label : ''; } catch { return ''; } })(),
+      tags: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; const raw = snapshot?.tags; const tags = Array.isArray(raw) ? raw : (typeof raw === 'string' ? JSON.parse(raw) : []); return Array.isArray(tags) ? tags.filter((tag: unknown) => typeof tag === 'string') : []; } catch { return []; } })(),
+      tradeDirection: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.trade_direction === 'long' || snapshot?.trade_direction === 'short' ? snapshot.trade_direction : null; } catch { return null; } })(),
+      orderFillStatus: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.order_fill_status === 'pending' ? 'pending' : 'filled'; } catch { return 'filled'; } })(),
+      orderPerspective: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.order_perspective === 'other' ? 'other' : 'self'; } catch { return 'self'; } })(),
+      buyDate: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.buy_date ? String(snapshot.buy_date).slice(0, 10) : (formData.buyDate || ''); } catch { return formData.buyDate || ''; } })(),
+      brokerName: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.broker_name || ''; } catch { return ''; } })(),
+      brokerAccount: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.broker_account || ''; } catch { return ''; } })(),
+      principalLentOut: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.principal_lent_out === 1 || snapshot?.principal_lent_out === true; } catch { return false; } })(),
+      collateralShareMode: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.collateral_share_mode === 'self' || snapshot?.collateral_share_mode === 'cross' ? snapshot.collateral_share_mode : 'none'; } catch { return 'none'; } })(),
+      collateralSource: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.collateral_source || null; } catch { return null; } })(),
+      tradingFeeRate: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.trading_fee_rate_per_mille != null ? String(snapshot.trading_fee_rate_per_mille) : '2'; } catch { return '2'; } })(),
+      tradingFeeStatus: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return ['unpaid', 'half_paid', 'paid'].includes(snapshot?.trading_fee_status) ? snapshot.trading_fee_status : 'unpaid'; } catch { return 'unpaid'; } })(),
       visibilityMode: (['self', 'total', 'breakdown', 'partners'].includes(p.visibility_mode) ? p.visibility_mode : 'self') as ParticipantForm['visibilityMode'],
       visibleOwnerIds: (() => { try { const ids = p.visible_owner_ids ? (typeof p.visible_owner_ids === 'string' ? JSON.parse(p.visible_owner_ids) : p.visible_owner_ids) : []; return Array.isArray(ids) ? ids.map(Number).filter(Boolean) : []; } catch { return []; } })(),
       expanded: false,
     }));
-    setParticipants(loaded);
+    setParticipants(loaded as ParticipantForm[]);
   }, [existingParticipantsData, editingOrderId, existingParticipantsUpdatedAt, existingParticipantsLoading]);
 
   // 计息基数是否被用户手动改过：手动后不再自动带入融资金额
@@ -979,12 +1010,15 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       tradeDirection: null as null | 'long' | 'short',
       ownerLabel: '',
       ownerLabelMode: 'member' as 'member' | 'manual',
+      personalHeaderLabel: '',
       tags: [] as string[],
       principalLentOut: false,
       tradingFeeRate: '2',
       tradingFeeStatus: 'unpaid' as 'unpaid' | 'half_paid' | 'paid',
       brokerName: '',
       brokerAccount: '',
+      orderFillStatus: 'filled' as 'pending' | 'filled',
+      orderPerspective: 'self' as 'self' | 'other',
     });
     setTagInput('');
     setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'USDT', buyQty: '' });
@@ -1078,6 +1112,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       tradeDirection: (order.trade_direction as null | 'long' | 'short') || null,
       ownerLabel: order.owner_label || '',
       ownerLabelMode: (order.owner_label ? 'manual' : 'member') as 'member' | 'manual',
+      personalHeaderLabel: typeof (order as any).personal_header_label === 'string' ? (order as any).personal_header_label : '',
       tags: (() => { try { const t = order.tags; return Array.isArray(t) ? t : (typeof t === 'string' ? JSON.parse(t) : []); } catch { return []; } })(),
       principalLentOut: !!(order.principal_lent_out),
       tradingFeeRate: order.trading_fee_rate_per_mille != null ? String(order.trading_fee_rate_per_mille) : '2',
@@ -1224,6 +1259,62 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     }
   };
 
+  // 管理员从协作人列表进入个人配置时，必须把该协作人的完整快照交给同一套编辑表单。
+  // 身份、主订单 ID、共享标的和结清状态仍强制来自父订单，避免个人视图改写真实关联关系。
+  const openParticipantFullView = (participant: ParticipantForm) => {
+    if (!editingOrder?.id) return;
+    const snapshot = participant.orderSnapshot || {};
+    const participantOrder = {
+      ...editingOrder,
+      ...snapshot,
+      id: editingOrder.id,
+      ledger_id: editingOrder.ledger_id ?? ledgerId,
+      user_id: editingOrder.user_id,
+      status: editingOrder.status,
+      settled_at: editingOrder.settled_at,
+      interest_end_date: editingOrder.interest_end_date,
+      order_no: editingOrder.order_no,
+      amount: participant.amount || snapshot.amount || editingOrder.amount,
+      amount_currency: participant.amountCurrency || snapshot.amount_currency || editingOrder.amount_currency,
+      interest_rate_annual: participant.interestRateAnnual !== '' ? participant.interestRateAnnual : (snapshot.interest_rate_annual ?? editingOrder.interest_rate_annual),
+      interest_base: participant.interestBase !== '' ? participant.interestBase : (snapshot.interest_base ?? editingOrder.interest_base),
+      interest_base_currency: participant.interestBaseCurrency || snapshot.interest_base_currency || editingOrder.interest_base_currency,
+      interest_rate_currency: participant.interestRateCurrency || snapshot.interest_rate_currency || editingOrder.interest_rate_currency,
+      interest_payment_type: participant.interestPaymentType || snapshot.interest_payment_type || editingOrder.interest_payment_type,
+      interest_start_date: participant.interestStartDate || snapshot.interest_start_date || editingOrder.interest_start_date,
+      display_config: JSON.stringify({
+        ...(() => { try { const value = snapshot.display_config; return value ? (typeof value === 'string' ? JSON.parse(value) : value) : {}; } catch { return {}; } })(),
+        ...participant.displayConfig,
+        marginAlertThreshold: participant.marginAlertThreshold || undefined,
+      }),
+      personal_header_label: participant.personalHeaderLabel || snapshot.personal_header_label || '',
+      tags: JSON.stringify(participant.tags.length > 0 ? participant.tags : (() => { try { const value = snapshot.tags; return Array.isArray(value) ? value : (typeof value === 'string' ? JSON.parse(value) : []); } catch { return []; } })()),
+      trade_direction: participant.tradeDirection ?? snapshot.trade_direction ?? null,
+      order_fill_status: participant.orderFillStatus || snapshot.order_fill_status || 'filled',
+      order_perspective: participant.orderPerspective || snapshot.order_perspective || 'self',
+      buy_date: participant.buyDate || snapshot.buy_date || editingOrder.buy_date,
+      broker_name: participant.brokerName || snapshot.broker_name || '',
+      broker_account: participant.brokerAccount || snapshot.broker_account || '',
+      principal_lent_out: participant.principalLentOut ? 1 : (snapshot.principal_lent_out || 0),
+      collateral_share_mode: participant.collateralShareMode || snapshot.collateral_share_mode || 'none',
+      collateral_source: participant.collateralSource || snapshot.collateral_source || null,
+      trading_fee_rate_per_mille: participant.tradingFeeRate || snapshot.trading_fee_rate_per_mille || null,
+      trading_fee_status: participant.tradingFeeStatus || snapshot.trading_fee_status || 'unpaid',
+      participantInfo: {
+        userId: participant.userId,
+        role: participant.role,
+        commissionRate: snapshot.commission_rate ?? '',
+        commissionBase: snapshot.commission_base ?? '',
+        commissionStartDate: snapshot.commission_start_date ?? '',
+      },
+      participant_name: participant.userName,
+      owner_label: participant.userName,
+      order_owner_name: editingOrder.order_owner_name || editingOrder.owner_label || editingOrder.username || null,
+      _isParticipant: participant.role !== 'owner',
+    };
+    handleOpenEdit(participantOrder);
+  };
+
   const handleSubmit = () => {
     // 新建模式必须选择用户
     if (!editingOrder && !formData.userId) {
@@ -1307,6 +1398,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       assetType: formData.assetType || undefined,
       tradeDirection: (['long', 'short'] as const).includes(formData.tradeDirection as any) ? (formData.tradeDirection as 'long' | 'short') : null,
       ownerLabel: formData.ownerLabel || undefined,
+      personalHeaderLabel: formData.personalHeaderLabel.trim() || undefined,
       tags: formData.tags.length > 0 ? formData.tags : undefined,
       collateralShareMode: collateralShareMode !== 'none' ? collateralShareMode : undefined,
       collateralSource: (() => {
@@ -1388,6 +1480,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           broker_account: payload.brokerAccount || null,
           option_info: payload.optionInfo ? JSON.stringify(payload.optionInfo) : null,
           trade_direction: payload.tradeDirection || null,
+          personal_header_label: payload.personalHeaderLabel || null,
         },
       });
     } else if (editingOrder) {
@@ -1693,7 +1786,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col overflow-x-hidden" style={{ overscrollBehavior: 'contain' }}>
             <div className="flex-shrink-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl" style={{ zIndex: 10 }}>
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
-                {isRestrictedParticipantEdit ? '参与者独立配置' : editingOrder ? '编辑订单' : '添加订单'}
+                {isRestrictedParticipantEdit ? '参与者个人订单视图' : editingOrder ? '编辑订单' : '添加订单'}
               </h3>
               {editingOrder && canManageCollaboratorsInEditor && (
                 <button
@@ -1726,18 +1819,26 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             </div>
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
-              {/* 历史参与者保留其独立视图限制；共同拥有者和主拥有者不显示此提示。 */}
+              {/* 历史参与者使用独立业务快照；真实订单关系仍由主订单受控。 */}
               {isRestrictedParticipantEdit && (
                 <div className="rounded-xl px-4 py-3 flex items-start gap-2" style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0' }}>
                   <span className="text-green-600 mt-0.5">✓</span>
                   <div>
-                    <div className="text-sm font-medium text-green-800">参与者独立视图</div>
-                    <div className="text-xs text-green-600 mt-0.5">当前参数仅影响该参与者；可通过顶部“拥有者／参与者”切换并配置整组视图。</div>
+                    <div className="text-sm font-medium text-green-800">参与者完整个人视图</div>
+                    <div className="text-xs text-green-600 mt-0.5">页眉、业务标签、利息、担保、展示方式及个人备注只影响当前参与者；主订单身份、共享标的与结清状态保持一致。</div>
                   </div>
                 </div>
               )}
-              {/* 类型 */}
-              {!isRestrictedParticipantEdit && (
+              {/* 标的类型必须与主订单一致；参与者可以完整配置自己的业务展示，但不能把同一张主订单改成另一种实际标的。 */}
+              {isSnapshotScopedEdit ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                  <div className="text-xs font-semibold text-emerald-800">共享订单标的</div>
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-emerald-900">{formData.assetType === 'stock' ? '股票' : formData.assetType === 'crypto_option' ? '期权' : '数字币'}</span>
+                    <span className="text-[11px] leading-4 text-right text-emerald-700">币种、类型与期权合约由主订单统一维护</span>
+                  </div>
+                </div>
+              ) : (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">类型<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
                   <div className="flex gap-2 flex-wrap">
@@ -1770,8 +1871,23 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 </div>
               )}
 
+              {isSnapshotScopedEdit && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3">
+                  <label className="block text-sm font-semibold text-emerald-900">个人业务页眉</label>
+                  <p className="mt-1 text-xs leading-5 text-emerald-700">在订单和卡片页眉中显示给该协作人本人；真实拥有者与参与者姓名保持系统身份，不会被改名。</p>
+                  <input
+                    type="text"
+                    value={formData.personalHeaderLabel}
+                    onChange={event => setFormData(current => ({ ...current, personalHeaderLabel: event.target.value.slice(0, 32) }))}
+                    maxLength={32}
+                    placeholder="例如：本人融资视图、家庭资金安排"
+                    className="mt-2 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm font-medium text-emerald-950 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  />
+                </div>
+              )}
+
               {/* 做多/做空 — 仅数字币时显示 */}
-              {!isRestrictedParticipantEdit && (formData.assetType === 'crypto' || formData.assetType === '') && (
+              {(formData.assetType === 'crypto' || formData.assetType === '') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">方向<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，数字币专用</span></label>
                   <div className="flex gap-2">
@@ -1802,7 +1918,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 成交状态 */}
-              {!isRestrictedParticipantEdit && (
+              {(
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">成交状态</label>
                   <div className="flex gap-3">
@@ -1828,7 +1944,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 归属分类 */}
-              {!isRestrictedParticipantEdit && (
+              {(
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">归属分类</label>
                   <div className="flex gap-3">
@@ -1889,7 +2005,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 自定义标签 */}
-              {!isRestrictedParticipantEdit && (
+              {(
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">标签<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，可添加多个</span></label>
                   <div className="flex flex-wrap gap-1.5 mb-2">
@@ -1936,7 +2052,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
               {/* 用户选择（从账本所有成员中选）：根据所选用户角色自动判断订单归属左侧(资方)或右侧(借方) */}
               <div className="flex gap-3 items-start">
-              {!isRestrictedParticipantEdit && (
+              {isSnapshotScopedEdit ? (
+                <div className="flex-1 min-w-0">
+                  <label className="block text-sm font-medium text-gray-600 mb-2">个人订单对象</label>
+                  <div className="flex min-h-[48px] items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-200 text-xs font-bold text-emerald-700">{String((editingOrder as any)?.participant_name || (editingOrder as any)?.owner_label || '?').slice(0, 1).toUpperCase()}</div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-emerald-900">{(editingOrder as any)?.participant_name || (editingOrder as any)?.owner_label || '当前协作人'}</div>
+                      <div className="text-[11px] text-emerald-700">身份与主订单关系由管理员统一维护</div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
                 <div className="flex-1 min-w-0">
                   <label className="block text-sm font-medium text-gray-600 mb-2">
                     订单拥有者 <span className="text-red-400 ml-0.5">*</span>
@@ -2534,7 +2661,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 股票订单可选37号数据来源；浮动盈亏与担保货币分别控制。 */}
-              {!isRestrictedParticipantEdit && formData.assetType === 'stock' && (
+              {formData.assetType === 'stock' && (
               <div className="flex gap-2 mb-2">
                 <button
                   type="button"
@@ -2558,7 +2685,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 股票订单：盈亏、担保物、利息标签分别选择，互不强制联动。 */}
-              {!isRestrictedParticipantEdit && formData.assetType === 'stock' && collateralSourceMode === 'external' && (
+              {formData.assetType === 'stock' && collateralSourceMode === 'external' && (
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-3">
                 <div className="space-y-1.5">
                   <div className="text-xs font-medium text-blue-600">盈亏标签（37号账本）</div>
@@ -3227,7 +3354,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   id: editingOrder?.id ?? -1,
                   order_no: editingOrder?.order_no ?? null,
                   user_id: formData.userId,
-                  owner_label: ownerLabel,
+                  owner_label: isSnapshotScopedEdit ? ((editingOrder as any)?.owner_label || ownerLabel) : ownerLabel,
+                  participantInfo: isSnapshotScopedEdit ? (editingOrder as any)?.participantInfo : undefined,
+                  _isParticipant: isRestrictedParticipantEdit,
+                  participant_name: isSnapshotScopedEdit ? (editingOrder as any)?.participant_name : undefined,
+                  order_owner_name: isSnapshotScopedEdit ? (editingOrder as any)?.order_owner_name : undefined,
+                  personal_header_label: formData.personalHeaderLabel.trim() || null,
                   coin: formData.coin,
                   asset_type: formData.assetType || null,
                   buy_price: formData.buyPrice || null,
@@ -3276,7 +3408,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   admin_note: null,
                   settled_at: null,
                   participantCount: 0,
-                  participantInfo: null,
                   paidTotal: editingOrderPayments && (editingOrderPayments as any[]).length > 0
                     ? { amount: String((editingOrderPayments as any[]).reduce((s: number, p: any) => s + parseFloat(p.amount || '0'), 0)), currency: (editingOrderPayments as any[])[0]?.currency || 'U' }
                     : null,
@@ -3414,6 +3545,19 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             </div>
                             <p className="mt-1 text-[10px] text-gray-400">共同拥有者拥有独立订单视图；不会看到他人备注、担保物或资金流水。</p>
                           </div>
+                          {editingOrder?.id && (
+                            <button
+                              type="button"
+                              onClick={() => openParticipantFullView(p)}
+                              className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-xs font-semibold transition-colors ${p.role === 'owner' ? 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100' : 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50'}`}
+                            >
+                              <span className="min-w-0">
+                                <span className="block">配置 {p.userName} 的完整个人订单视图</span>
+                                <span className="mt-0.5 block font-normal leading-4 opacity-75">页眉、业务标签、方向、成交状态、展示方式与利息参数均独立保存</span>
+                              </span>
+                              <ChevronRight className="ml-2 h-4 w-4 shrink-0" />
+                            </button>
+                          )}
                           {p.role === 'owner' && (
                             <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-2.5">
                               <label className="block text-xs font-medium text-violet-700 mb-1.5">其他拥有者信息可见范围</label>
@@ -3707,6 +3851,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             ))}
                           </div>
                           {(() => {
+                            const pSnapshot = p.orderSnapshot || {};
                             const pPreviewOrder: any = {
                               id: editingOrder?.id ?? -1,
                               order_no: editingOrder?.order_no ?? null,
@@ -3724,26 +3869,28 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 const ownerM = allM.find((m: any) => Number(m.userId || m.id) === ownerId);
                                 return ownerM ? (ownerM.nickname || ownerM.username) : (editingOrder?.owner_label || editingOrder?.username || null);
                               })(),
-                              coin: (p.coin || formData.coin),
+                              personal_header_label: p.personalHeaderLabel || pSnapshot.personal_header_label || null,
+                              coin: (pSnapshot.coin || p.coin || formData.coin),
                               asset_type: formData.assetType || null,
-                              buy_price: formData.buyPrice || null,
-                              buy_quantity: formData.buyQuantity || null,
+                              buy_price: pSnapshot.buy_price ?? formData.buyPrice ?? null,
+                              buy_quantity: pSnapshot.buy_quantity ?? formData.buyQuantity ?? null,
                               amount: p.amount || (formData.assetType === 'stock' ? (amountInputValue || null) : (financingAmountUsdt || null)),
                               amount_currency: p.amountCurrency || formData.amountCurrency || 'USDT',
-                              buy_date: formData.buyDate || null,
+                              buy_date: p.buyDate || pSnapshot.buy_date || formData.buyDate || null,
                               status: formData.status || 'active',
-                              broker_name: formData.brokerName || null,
-                              broker_account: formData.brokerAccount || null,
+                              order_fill_status: p.orderFillStatus || pSnapshot.order_fill_status || 'filled',
+                              broker_name: p.brokerName || pSnapshot.broker_name || null,
+                              broker_account: p.brokerAccount || pSnapshot.broker_account || null,
                               interest_rate_annual: p.interestRateAnnual !== '' ? normalizeFunderAnnualRate(p.interestRateAnnual) : (normalizeFunderAnnualRate(formData.interestRateAnnual) || null),
                               interest_payment_type: p.interestPaymentType || formData.interestPaymentType || null,
                               interest_base: p.interestBase !== '' ? p.interestBase : (formData.interestBase || null),
                               interest_base_currency: p.interestBaseCurrency || formData.interestBaseCurrency || 'USDT',
                               interest_rate_currency: p.interestRateCurrency || formData.interestRateCurrency || 'USDT',
                               interest_start_date: p.interestStartDate || formData.interestStartDate || null,
-                              principal_lent_out: p.displayConfig?.principalLentOut ? 1 : 0,
-                              trading_fee_rate_per_mille: ledgerId === 52 ? (Number(formData.tradingFeeRate) || 2) : null,
-                              trading_fee_status: ledgerId === 52 ? formData.tradingFeeStatus : 'unpaid',
-                              collateral_assets: collateralAssets.length > 0 ? JSON.stringify(collateralAssets) : null,
+                              principal_lent_out: p.principalLentOut || p.displayConfig?.principalLentOut ? 1 : (pSnapshot.principal_lent_out ?? 0),
+                              trading_fee_rate_per_mille: ledgerId === 52 ? (Number(p.tradingFeeRate) || Number(pSnapshot.trading_fee_rate_per_mille) || 2) : null,
+                              trading_fee_status: ledgerId === 52 ? (p.tradingFeeStatus || pSnapshot.trading_fee_status || 'unpaid') : 'unpaid',
+                              collateral_assets: pSnapshot.collateral_assets || (collateralAssets.length > 0 ? JSON.stringify(collateralAssets) : null),
                               option_info: formData.assetType === 'crypto_option' ? JSON.stringify({
                                 coin: optionFormData.optionCurrency,
                                 direction: optionFormData.direction,
@@ -3754,8 +3901,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 denomination: optionFormData.premiumDenomination,
                                 buyQty: optionFormData.buyQty || null,
                               }) : null,
-                              collateral_share_mode: collateralShareMode || 'none',
-                              trade_direction: formData.tradeDirection || null,
+                              collateral_share_mode: p.collateralShareMode || pSnapshot.collateral_share_mode || 'none',
+                              collateral_source: p.collateralSource || pSnapshot.collateral_source || null,
+                              trade_direction: p.tradeDirection ?? pSnapshot.trade_direction ?? formData.tradeDirection ?? null,
                               display_config: JSON.stringify({
                                 ...p.displayConfig,
                                 allowUserImageDownload: Boolean(displayConfig.allowUserImageDownload),
@@ -3764,9 +3912,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 financingInputAmount: p.amount || amountInputValue || '',
                                 financingInputCurrency: p.amountCurrency || formData.amountCurrency || 'USDT',
                               }),
+                              tags: JSON.stringify(p.tags.length > 0 ? p.tags : (() => { try { const value = pSnapshot.tags; return Array.isArray(value) ? value : (typeof value === 'string' ? JSON.parse(value) : []); } catch { return []; } })()),
                               participantCount: 0,
                               paidTotal: null,
-                              order_perspective: 'other',
+                              order_perspective: p.orderPerspective || pSnapshot.order_perspective || 'other',
                             };
                             const pMode = (p as any).previewMode || 'order';
                             const rateVal = parseFloat(String(pPreviewOrder.interest_rate_annual || '0'));
@@ -3856,6 +4005,20 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       interestStartDate: formData.interestStartDate || '',
                       displayConfig: { ...displayConfig },
                       marginAlertThreshold: marginAlertThreshold || '',
+                      orderSnapshot: {},
+                      personalHeaderLabel: '',
+                      tags: [],
+                      tradeDirection: null,
+                      orderFillStatus: 'filled' as const,
+                      orderPerspective: 'self' as const,
+                      buyDate: formData.buyDate || '',
+                      brokerName: '',
+                      brokerAccount: '',
+                      principalLentOut: false,
+                      collateralShareMode: 'none' as const,
+                      collateralSource: null,
+                      tradingFeeRate: '2',
+                      tradingFeeStatus: 'unpaid' as const,
                       visibilityMode: 'self' as const,
                       visibleOwnerIds: [],
                       expanded: index === 0,

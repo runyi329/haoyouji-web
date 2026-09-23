@@ -1671,6 +1671,9 @@ export function FunderOrderCardV2Silver({
           const participantName = isParticipant
             ? ((order as any).participant_name || order.owner_label || null)
             : null;
+          const personalHeaderLabel = typeof (order as any).personal_header_label === 'string'
+            ? (order as any).personal_header_label.trim().slice(0, 32)
+            : '';
           const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
           const brokerText = isStockCard
             ? [order.broker_name, order.broker_account].filter(Boolean).join(' · ')
@@ -1679,26 +1682,26 @@ export function FunderOrderCardV2Silver({
           const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
           const ownerNameClass = String(orderOwnerName ?? '').length > 10 ? 'text-[8px]' : String(orderOwnerName ?? '').length > 6 ? 'text-[9px]' : 'text-[10px]';
           const participantNameClass = String(participantName ?? '').length > 10 ? 'text-[8px]' : String(participantName ?? '').length > 6 ? 'text-[9px]' : 'text-[10px]';
-          const metadataLength = String(buyDateStr ?? '').length + String(brokerText ?? '').length + (showLivePrice ? String(coin).length + 10 : 0);
+          const metadataLength = String(personalHeaderLabel).length + String(buyDateStr ?? '').length + String(brokerText ?? '').length + (showLivePrice ? String(coin).length + 10 : 0);
           const metadataClass = metadataLength > 28 ? 'text-[9px]' : 'text-[11px]';
           const identityMaxWidth = metadataLength > 24 ? '58px' : '70px';
-          const hasMetadata = !!(buyDateStr || brokerText || showLivePrice);
+          const hasMetadata = !!(personalHeaderLabel || buyDateStr || brokerText || showLivePrice);
           return (
             <div className="flex min-w-0 items-center">
               {orderOwnerName && (
-                <div className="min-w-0" style={{ flex: '0 1 auto', maxWidth: isParticipant ? identityMaxWidth : '108px' }}>
+                <div className="min-w-0" style={{ flex: '0 1 auto', maxWidth: (isParticipant || isOwnerView) ? identityMaxWidth : '108px' }}>
                   <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>拥有者</div>
                   <div className={`mt-0.5 flex items-center gap-1 truncate font-semibold leading-tight ${ownerNameClass}`} style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
                     <span className="truncate">{orderOwnerName}</span>{isOwnerView && <OwnerCollaborationInfoButton order={order} ledgerId={Number(ledgerId ?? (order as any).ledger_id)} />}
                   </div>
                 </div>
               )}
-              {isParticipant && participantName && (
+              {(isParticipant || isOwnerView) && participantName && (
                 <div
                   className="ml-0.5 min-w-0 pl-1"
                   style={{ flex: '0 1 auto', maxWidth: identityMaxWidth, borderLeft: orderOwnerName ? '1px solid rgba(255,255,255,0.5)' : undefined }}
                 >
-                  <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>参与者</div>
+                  <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>{isOwnerView ? '共同拥有者' : '参与者'}</div>
                   <div className={`mt-0.5 truncate font-semibold leading-tight ${participantNameClass}`} style={{ color: TXT_PRI }} title={String(participantName)}>
                     {participantName}
                   </div>
@@ -1706,6 +1709,7 @@ export function FunderOrderCardV2Silver({
               )}
               {hasMetadata && (
                 <div className={`ml-1.5 flex min-w-0 flex-1 items-center gap-x-1 overflow-hidden whitespace-nowrap leading-tight ${metadataClass}`} style={{ color: TXT_SEC }}>
+                  {personalHeaderLabel && <span className="min-w-0 shrink truncate rounded px-1 py-0.5 text-[9px] font-semibold" style={isParticipant ? { color: '#ECFDF5', background: 'rgba(255,255,255,0.16)', border: `1px solid ${DIVIDER}` } : { color: TXT_PRI, background: 'rgba(255,255,255,0.16)', border: `1px solid ${DIVIDER}` }} title={personalHeaderLabel}>{personalHeaderLabel}</span>}
                   {buyDateStr && <span className="shrink-0 whitespace-nowrap">{buyDateStr}</span>}
                   {brokerText && <span className="min-w-0 flex-1 truncate" title={brokerText}>{brokerText}</span>}
                   {showLivePrice && (
@@ -3292,6 +3296,9 @@ export function FunderLenderCardSilver({
           const participantName = isParticipant
             ? ((order as any).participant_name || order.owner_label || null)
             : null;
+          const personalHeaderLabel = typeof (order as any).personal_header_label === 'string'
+            ? (order as any).personal_header_label.trim().slice(0, 32)
+            : '';
           const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
           const brokerText = order.asset_type === 'stock'
             ? [order.broker_name, order.broker_account].filter(Boolean).join(' · ')
@@ -3300,26 +3307,26 @@ export function FunderLenderCardSilver({
           const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
           const ownerNameClass = String(orderOwnerName ?? '').length > 10 ? 'text-[8px]' : String(orderOwnerName ?? '').length > 6 ? 'text-[9px]' : 'text-[10px]';
           const participantNameClass = String(participantName ?? '').length > 10 ? 'text-[8px]' : String(participantName ?? '').length > 6 ? 'text-[9px]' : 'text-[10px]';
-          const metadataLength = String(buyDateStr ?? '').length + String(brokerText ?? '').length + (showLivePrice ? String(coin).length + 10 : 0);
+          const metadataLength = String(personalHeaderLabel).length + String(buyDateStr ?? '').length + String(brokerText ?? '').length + (showLivePrice ? String(coin).length + 10 : 0);
           const metadataClass = metadataLength > 28 ? 'text-[9px]' : 'text-[11px]';
           const identityMaxWidth = metadataLength > 24 ? '58px' : '70px';
-          const hasMetadata = !!(buyDateStr || brokerText || showLivePrice);
+          const hasMetadata = !!(personalHeaderLabel || buyDateStr || brokerText || showLivePrice);
           return (
             <div className="flex min-w-0 items-center">
               {orderOwnerName && (
-                <div className="min-w-0" style={{ flex: '0 1 auto', maxWidth: isParticipant ? identityMaxWidth : '108px' }}>
+                <div className="min-w-0" style={{ flex: '0 1 auto', maxWidth: (isParticipant || isOwnerView) ? identityMaxWidth : '108px' }}>
                   <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>拥有者</div>
                   <div className={`mt-0.5 flex items-center gap-1 truncate font-semibold leading-tight ${ownerNameClass}`} style={{ color: TXT_PRI }} title={String(orderOwnerName)}>
                     <span className="truncate">{orderOwnerName}</span>{isOwnerView && <OwnerCollaborationInfoButton order={order} ledgerId={Number(ledgerId ?? (order as any).ledger_id)} />}
                   </div>
                 </div>
               )}
-              {isParticipant && participantName && (
+              {(isParticipant || isOwnerView) && participantName && (
                 <div
                   className="ml-0.5 min-w-0 pl-1"
                   style={{ flex: '0 1 auto', maxWidth: identityMaxWidth, borderLeft: orderOwnerName ? '1px solid rgba(255,255,255,0.5)' : undefined }}
                 >
-                  <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>参与者</div>
+                  <div className="text-[8px] leading-none" style={{ color: TXT_SEC }}>{isOwnerView ? '共同拥有者' : '参与者'}</div>
                   <div className={`mt-0.5 truncate font-semibold leading-tight ${participantNameClass}`} style={{ color: TXT_PRI }} title={String(participantName)}>
                     {participantName}
                   </div>
@@ -3327,6 +3334,7 @@ export function FunderLenderCardSilver({
               )}
               {hasMetadata && (
                 <div className={`ml-1.5 flex min-w-0 flex-1 items-center gap-x-1 overflow-hidden whitespace-nowrap leading-tight ${metadataClass}`} style={{ color: TXT_SEC }}>
+                  {personalHeaderLabel && <span className="min-w-0 shrink truncate rounded px-1 py-0.5 text-[9px] font-semibold" style={isParticipant ? { color: '#ECFDF5', background: 'rgba(255,255,255,0.16)', border: `1px solid ${DIVIDER}` } : { color: TXT_PRI, background: 'rgba(255,255,255,0.16)', border: `1px solid ${DIVIDER}` }} title={personalHeaderLabel}>{personalHeaderLabel}</span>}
                   {buyDateStr && <span className="shrink-0 whitespace-nowrap">{buyDateStr}</span>}
                   {brokerText && <span className="min-w-0 flex-1 truncate" title={brokerText}>{brokerText}</span>}
                   {showLivePrice && (
