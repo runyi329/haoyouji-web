@@ -907,6 +907,137 @@ async function getUnifiedWalletBalanceAfterByEventKey(conn: any, userIds: number
   return result;
 }
 
+/**
+ * 以当前统一钱包余额倒推每日结束时的余额。
+ *
+ * 余额表的 USDT 口径为 users.balance + 非 CNY / 非 [BALANCE_BASE] 的手动账本；
+ * CNY 口径为 users.balance_cny + [CNY] 手动账本。这里按同一口径使用当前余额减去
+ * 后续真实变动，因此无需把历史数据库快照当作唯一事实，也不会把辅助日志重复计入。
+ */
+async function getWalletDailyBalanceTrend(conn: any, daysInput: number, userId?: number) {
+  const days = Math.max(7, Math.min(70, Math.floor(Number(daysInput) || 30)));
+  const normalizedUserId = Number.isInteger(Number(userId)) && Number(userId) > 0 ? Number(userId) : null;
+  const userWhereSql = normalizedUserId ? 'WHERE u.id = ?' : '';
+  const [currentRows] = await conn.execute(
+    `SELECT
+       COALESCE(SUM(COALESCE(u.balance, 0) + COALESCE(usdt_manual.manual_sum, 0)), 0) AS usdt_balance,
+       COALESCE(SUM(COALESCE(u.balance_cny, 0) + COALESCE(cny_manual.manual_sum, 0)), 0) AS cny_balance
+     FROM users u
+     LEFT JOIN (
+       SELECT user_id, SUM(amount) AS manual_sum
+       FROM af_manual_balances
+       WHERE COALESCE(note, '') NOT LIKE '[CNY]%'
+         AND COALESCE(note, '') NOT LIKE '[BALANCE_BASE]%'
+       GROUP BY user_id
+     ) usdt_manual ON usdt_manual.user_id = u.id
+     LEFT JOIN (
+       SELECT user_id, SUM(amount) AS manual_sum
+       FROM af_manual_balances
+       WHERE COALESCE(note, '') LIKE '[CNY]%'
+       GROUP BY user_id
+     ) cny_manual ON cny_manual.user_id = u.id
+     ${userWhereSql}`,
+    normalizedUserId ? [normalizedUserId] : [],
+  ) as any[];
+  const current = Array.isArray(currentRows) ? currentRows[0] : currentRows;
+  const currentUsdt = Number(current?.usdt_balance ?? 0);
+  const currentCny = Number(current?.cny_balance ?? 0);
+
+  // 与全局流水和用户流水相同的三源合并去重规则：实际充值、业务/手动账本、未重复的旧余额流水。
+  const usdtEventsSql = `
+    SELECT r.user_id, h.amount, COALESCE(r.completed_at, r.created_at) AS created_at
+    FROM recharge_orders r
+    INNER JOIN balance_history h ON h.user_id = r.user_id
+      AND h.type = 'recharge' AND h.related_id = r.id
+    WHERE r.status = 'completed'
+    UNION ALL
+    SELECT m.user_id, m.amount, m.created_at
+    FROM af_manual_balances m
+    WHERE COALESCE(m.note, '') NOT LIKE '[CNY]%'
+      AND COALESCE(m.note, '') NOT LIKE '[BALANCE_BASE]%'
+    UNION ALL
+    SELECT bh.user_id, bh.amount, bh.created_at
+    FROM balance_history bh
+    WHERE NOT (bh.type = 'recharge' AND bh.related_id IS NOT NULL)
+      AND COALESCE(bh.description, '') NOT LIKE '%[迁移自af_manual_balances%'
+      AND NOT (
+        (bh.currency IS NULL OR bh.currency = '' OR UPPER(bh.currency) = 'USDT')
+        AND EXISTS (
+          SELECT 1 FROM af_manual_balances duplicate_manual
+          WHERE duplicate_manual.user_id = bh.user_id
+            AND COALESCE(duplicate_manual.note, '') NOT LIKE '[CNY]%'
+            AND COALESCE(duplicate_manual.note, '') NOT LIKE '[BALANCE_BASE]%'
+            AND ABS(TIMESTAMPDIFF(SECOND, duplicate_manual.created_at, bh.created_at)) <= 2
+            AND ABS(ABS(duplicate_manual.amount) - ABS(bh.amount)) < 0.001
+        )
+      )
+  `;
+  // CNY 当前余额表只合并 [CNY] 手动账本，故趋势也严格沿用该口径。
+  const cnyEventsSql = `
+    SELECT m.user_id, m.amount, m.created_at
+    FROM af_manual_balances m
+    WHERE COALESCE(m.note, '') LIKE '[CNY]%'
+  `;
+  const scopedFilterSql = normalizedUserId ? 'AND wallet_event.user_id = ?' : '';
+  const [eventRows] = await conn.execute(
+    `SELECT DATE(wallet_event.created_at) AS day,
+            SUM(wallet_event.usdt_amount) AS usdt_delta,
+            SUM(wallet_event.cny_amount) AS cny_delta
+     FROM (
+       SELECT user_id, amount AS usdt_amount, 0 AS cny_amount, created_at FROM (${usdtEventsSql}) usdt_event
+       UNION ALL
+       SELECT user_id, 0 AS usdt_amount, amount AS cny_amount, created_at FROM (${cnyEventsSql}) cny_event
+     ) wallet_event
+     WHERE wallet_event.created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+       ${scopedFilterSql}
+     GROUP BY DATE(wallet_event.created_at)
+     ORDER BY day ASC`,
+    normalizedUserId ? [days - 1, normalizedUserId] : [days - 1],
+  ) as any[];
+  const [todayRows] = await conn.execute(`SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS today`) as any[];
+  const today = String((Array.isArray(todayRows) ? todayRows[0] : todayRows)?.today || '');
+  const dayToDelta = new Map((Array.isArray(eventRows) ? eventRows : []).map((row: any) => [
+    String(row.day instanceof Date ? row.day.toISOString().slice(0, 10) : row.day),
+    { usdt: Number(row.usdt_delta ?? 0), cny: Number(row.cny_delta ?? 0) },
+  ]));
+  const dates: string[] = [];
+  const anchor = new Date(`${today}T00:00:00`);
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    const date = new Date(anchor);
+    date.setDate(anchor.getDate() - offset);
+    dates.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`);
+  }
+
+  let usdtBalance = currentUsdt;
+  let cnyBalance = currentCny;
+  const reversed = [...dates].reverse().map((date) => {
+    const delta = dayToDelta.get(date) || { usdt: 0, cny: 0 };
+    const point = {
+      date,
+      usdt: Number(usdtBalance.toFixed(8)),
+      cny: Number(cnyBalance.toFixed(2)),
+      usdtDelta: Number(delta.usdt.toFixed(8)),
+      cnyDelta: Number(delta.cny.toFixed(2)),
+      isToday: date === today,
+    };
+    usdtBalance -= delta.usdt;
+    cnyBalance -= delta.cny;
+    return point;
+  });
+  const series = reversed.reverse();
+  const start = series[0] || { usdt: currentUsdt, cny: currentCny };
+  return {
+    days,
+    userId: normalizedUserId,
+    current: { usdt: Number(currentUsdt.toFixed(8)), cny: Number(currentCny.toFixed(2)) },
+    change: {
+      usdt: Number((currentUsdt - Number(start.usdt ?? currentUsdt)).toFixed(8)),
+      cny: Number((currentCny - Number(start.cny ?? currentCny)).toFixed(2)),
+    },
+    series,
+  };
+}
+
 async function updateUserMibanRole(userId: number, role: "parent" | "baby") {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
@@ -2306,6 +2437,17 @@ export const mibanAdminUserRouter = router({
         balance: parseFloat(r.balance ?? '0'),
         createdAt: r.created_at ? String(r.created_at) : '',
       }));
+    }),
+  // 钱包资金走势：返回每日结束时的余额，支持全部用户汇总或指定用户视角。
+  walletBalanceTrend: mibanAdminProcedure
+    .input(z.object({
+      days: z.union([z.literal(7), z.literal(30), z.literal(60), z.literal(70)]).default(30),
+      userId: z.number().int().positive().optional(),
+    }))
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return { days: input.days, userId: input.userId ?? null, current: { usdt: 0, cny: 0 }, change: { usdt: 0, cny: 0 }, series: [] };
+      return await getWalletDailyBalanceTrend(conn, input.days, input.userId);
     }),
   // 全局流水日志（不限用户，支持关键词与日期账本筛选后分页）
   walletGlobalHistory: mibanAdminProcedure

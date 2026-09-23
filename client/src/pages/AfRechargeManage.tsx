@@ -28,10 +28,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { UserAvatar } from "@/components/UserAvatar";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type LedgerDatePreset = "all" | "today" | "this_month" | "last_month" | "custom";
 type WalletBalanceSortKey = "usdt" | "cny" | "user";
 type WalletBalanceSortDirection = "asc" | "desc";
+type WalletTrendDays = 7 | 30 | 60 | 70;
+type WalletTrendCurrency = "USDT" | "CNY";
 
 const formatLedgerDate = (value: Date) => {
   const year = value.getFullYear();
@@ -141,6 +144,118 @@ function LedgerFlowFilters({
   );
 }
 
+function WalletBalanceTrendChart({
+  title,
+  subtitle,
+  trend,
+  isLoading,
+  days,
+  onDaysChange,
+}: {
+  title: string;
+  subtitle: string;
+  trend: any;
+  isLoading: boolean;
+  days: WalletTrendDays;
+  onDaysChange: (days: WalletTrendDays) => void;
+}) {
+  const [currency, setCurrency] = useState<WalletTrendCurrency>("USDT");
+  const valueKey = currency === "USDT" ? "usdt" : "cny";
+  const amountDigits = currency === "USDT" ? 2 : 0;
+  const suffix = currency === "USDT" ? " USDT" : " 元";
+  const current = Number(trend?.current?.[valueKey] ?? 0);
+  const change = Number(trend?.change?.[valueKey] ?? 0);
+  const series = (trend?.series ?? []).map((point: any) => ({
+    ...point,
+    label: String(point.date ?? "").slice(5).replace("-", "/"),
+    value: Number(point?.[valueKey] ?? 0),
+  }));
+  const formatAmount = (value: number) => value.toLocaleString("zh-CN", {
+    minimumFractionDigits: amountDigits,
+    maximumFractionDigits: amountDigits,
+  });
+  const formatAxisValue = (value: number) => {
+    const absolute = Math.abs(Number(value) || 0);
+    if (absolute >= 10000) return `${(Number(value) / 10000).toFixed(1)}万`;
+    if (absolute >= 1000) return `${(Number(value) / 1000).toFixed(1)}k`;
+    return Number(value).toFixed(0);
+  };
+  const interval = days <= 7 ? 0 : days <= 30 ? 4 : days <= 60 ? 9 : 11;
+  const periodLabel = `${days} 天`;
+
+  return (
+    <div className="mb-3 rounded-2xl border border-gray-100 bg-white p-3.5 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[13px] font-bold text-gray-900">{title}</p>
+          <p className="mt-0.5 text-[10px] leading-4 text-gray-400">{subtitle}</p>
+        </div>
+        <div className="flex shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+          {(["USDT", "CNY"] as WalletTrendCurrency[]).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setCurrency(item)}
+              className={`rounded-md px-2 py-1 text-[10px] font-semibold transition-colors ${currency === item ? "bg-white text-orange-600 shadow-sm" : "text-gray-400"}`}
+            >{item === "USDT" ? "USDT" : "人民币"}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-end justify-between gap-3 rounded-xl bg-gray-50 px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="text-[10px] text-gray-400">当前汇总余额</p>
+          <p className={`mt-0.5 truncate text-[18px] font-bold tabular-nums ${current < 0 ? "text-red-500" : currency === "USDT" ? "text-blue-700" : "text-green-700"}`}>
+            {currency === "CNY" ? "¥" : ""}{formatAmount(current)}
+            <span className="ml-1 text-[10px] font-medium">{currency}</span>
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-[10px] text-gray-400">较 {periodLabel} 前</p>
+          <p className={`mt-0.5 text-[12px] font-bold tabular-nums ${change > 0 ? "text-green-600" : change < 0 ? "text-red-500" : "text-gray-500"}`}>
+            {change > 0 ? "+" : ""}{currency === "CNY" ? "¥" : ""}{formatAmount(change)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center gap-1 overflow-x-auto pb-0.5">
+        {([7, 30, 60, 70] as WalletTrendDays[]).map((item) => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => onDaysChange(item)}
+            className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${days === item ? "border-orange-500 bg-orange-50 text-orange-600" : "border-gray-200 bg-white text-gray-500"}`}
+          >{item} 天</button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="flex h-[184px] items-center justify-center text-[12px] text-gray-300">资金走势加载中...</div>
+      ) : series.length === 0 ? (
+        <div className="flex h-[184px] items-center justify-center text-[12px] text-gray-300">暂无可用于计算走势的资金记录</div>
+      ) : (
+        <div className="mt-2 h-[184px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={series} margin={{ top: 8, right: 2, left: -20, bottom: 0 }} barCategoryGap={days <= 7 ? "22%" : "12%"}>
+              <CartesianGrid vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="label" interval={interval} tickLine={false} axisLine={false} tick={{ fill: "#9ca3af", fontSize: 9 }} />
+              <YAxis tickLine={false} axisLine={false} tick={{ fill: "#9ca3af", fontSize: 9 }} tickFormatter={formatAxisValue} />
+              <Tooltip
+                cursor={{ fill: "rgba(249,115,22,0.06)" }}
+                contentStyle={{ borderRadius: 10, border: "1px solid #fed7aa", fontSize: 11, padding: "7px 9px" }}
+                formatter={(value: number) => [`${currency === "CNY" ? "¥" : ""}${formatAmount(Number(value))}${suffix}`, currency === "USDT" ? "日末 USDT 余额" : "日末人民币余额"]}
+                labelFormatter={(label) => `日期 ${label}`}
+              />
+              <Bar dataKey="value" fill={currency === "USDT" ? "#60a5fa" : "#4ade80"} radius={[4, 4, 0, 0]} maxBarSize={28} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <p className="mt-1 text-[10px] leading-4 text-gray-400">柱状图为每天结束时的余额；当天显示当前实时余额。资金流水按钱包统一口径去重汇总。</p>
+    </div>
+  );
+}
+
 export default function AfRechargeManage() {
   const params = useParams();
   const [, setLocation] = useLocation();
@@ -237,6 +352,8 @@ export default function AfRechargeManage() {
   const [adjBalanceSearch, setAdjBalanceSearch] = useState("");
   const [adjBalanceSortKey, setAdjBalanceSortKey] = useState<WalletBalanceSortKey>("usdt");
   const [adjBalanceSortDirection, setAdjBalanceSortDirection] = useState<WalletBalanceSortDirection>("desc");
+  const [adjGlobalTrendDays, setAdjGlobalTrendDays] = useState<WalletTrendDays>(30);
+  const [adjUserTrendDays, setAdjUserTrendDays] = useState<WalletTrendDays>(30);
   const [adjUserFlowKeyword, setAdjUserFlowKeyword] = useState("");
   const [adjUserFlowDatePreset, setAdjUserFlowDatePreset] = useState<LedgerDatePreset>("all");
   const [adjUserFlowCustomStart, setAdjUserFlowCustomStart] = useState("");
@@ -313,6 +430,14 @@ export default function AfRechargeManage() {
     { page: 1, pageSize: 50, includeAllWalletEvents: true },
     { staleTime: 30_000 }
   );
+  const adjGlobalTrendQuery = mtrpc.adminUser.walletBalanceTrend.useQuery(
+    { days: adjGlobalTrendDays },
+    { enabled: adjFlowTab === "balances", staleTime: 30_000, refetchOnWindowFocus: false },
+  );
+  const adjUserTrendQuery = mtrpc.adminUser.walletBalanceTrend.useQuery(
+    { days: adjUserTrendDays, ...(adjSelectedUser?.id ? { userId: Number(adjSelectedUser.id) } : {}) },
+    { enabled: adjFlowTab === "user" && !!adjSelectedUser?.id, staleTime: 30_000, refetchOnWindowFocus: false },
+  );
   const adjLogItems = adjGlobalLog?.items ?? [];
   const adjRecentHistoryItems = adjRecentHistory?.items ?? [];
   const adjLogTotal = adjGlobalLog?.total ?? 0;
@@ -337,6 +462,7 @@ export default function AfRechargeManage() {
       setAdjNote("");
       adjUtils.adminUser.list.invalidate();
       adjUtils.adminUser.walletGlobalHistory.invalidate();
+      adjUtils.adminUser.walletBalanceTrend.invalidate();
       refetchAdjHistory();
       setAdjLogPage(1);
       refetchAdjGlobal();
@@ -1530,7 +1656,16 @@ export default function AfRechargeManage() {
 
           {/* 当前用户全局钱包明细：与用户自己进入钱包时使用同一接口和口径 */}
           {adjFlowTab === "user" && (adjSelectedUser ? (
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <>
+              <WalletBalanceTrendChart
+                title={`${adjSelectedUser.name || adjSelectedUser.username} 的余额走势`}
+                subtitle="查看该用户每日结束时的统一钱包余额"
+                trend={adjUserTrendQuery.data}
+                isLoading={adjUserTrendQuery.isLoading || adjUserTrendQuery.isFetching}
+                days={adjUserTrendDays}
+                onDaysChange={setAdjUserTrendDays}
+              />
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[13px] font-bold text-black">{adjSelectedUser.name || adjSelectedUser.username} 的全部钱包流水</p>
                 <span className="text-[11px] text-gray-400">
@@ -1633,7 +1768,8 @@ export default function AfRechargeManage() {
                   })}
                 </div>
               )}
-            </div>
+              </div>
+            </>
           ) : (
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center">
               <p className="text-[13px] text-gray-500">请先在上方选择用户</p>
@@ -1643,7 +1779,16 @@ export default function AfRechargeManage() {
 
           {/* 全部用户当前钱包余额 */}
           {adjFlowTab === "balances" && (
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <>
+              <WalletBalanceTrendChart
+                title="全部用户资金走势"
+                subtitle="全部用户每日结束时的统一钱包余额汇总"
+                trend={adjGlobalTrendQuery.data}
+                isLoading={adjGlobalTrendQuery.isLoading || adjGlobalTrendQuery.isFetching}
+                days={adjGlobalTrendDays}
+                onDaysChange={setAdjGlobalTrendDays}
+              />
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
                   <p className="text-[13px] font-bold text-black">用户钱包余额</p>
@@ -1763,7 +1908,8 @@ export default function AfRechargeManage() {
                 </div>
               )}
               <p className="mt-3 text-center text-[10px] text-gray-400">点击任意用户可直接查看该用户的全部钱包流水</p>
-            </div>
+              </div>
+            </>
           )}
 
           {/* 全局流水 */}
