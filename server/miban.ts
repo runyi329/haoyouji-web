@@ -654,8 +654,8 @@ async function getAllUsers() {
            SELECT user_id, SUM(amount) AS manualSum
             FROM af_manual_balances
             WHERE user_id IN (${placeholders})
-              AND note NOT LIKE '[CNY]%'
-              AND note NOT LIKE '[BALANCE_BASE]%'
+              AND COALESCE(note, '') NOT LIKE '[CNY]%'
+              AND COALESCE(note, '') NOT LIKE '[BALANCE_BASE]%'
             GROUP BY user_id
          ) m ON m.user_id = u.id
          WHERE u.id IN (${placeholders})`,

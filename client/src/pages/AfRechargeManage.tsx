@@ -30,6 +30,8 @@ import {
 import { UserAvatar } from "@/components/UserAvatar";
 
 type LedgerDatePreset = "all" | "today" | "this_month" | "last_month" | "custom";
+type WalletBalanceSortKey = "usdt" | "cny" | "user";
+type WalletBalanceSortDirection = "asc" | "desc";
 
 const formatLedgerDate = (value: Date) => {
   const year = value.getFullYear();
@@ -229,8 +231,12 @@ export default function AfRechargeManage() {
       return [];
     }
   });
-  const [adjFlowTab, setAdjFlowTab] = useState<"user" | "global">("user");
+  const [adjFlowTab, setAdjFlowTab] = useState<"user" | "global" | "balances">("user");
   const [adjLogPage, setAdjLogPage] = useState(1);
+  const [adjBalancePage, setAdjBalancePage] = useState(1);
+  const [adjBalanceSearch, setAdjBalanceSearch] = useState("");
+  const [adjBalanceSortKey, setAdjBalanceSortKey] = useState<WalletBalanceSortKey>("usdt");
+  const [adjBalanceSortDirection, setAdjBalanceSortDirection] = useState<WalletBalanceSortDirection>("desc");
   const [adjUserFlowKeyword, setAdjUserFlowKeyword] = useState("");
   const [adjUserFlowDatePreset, setAdjUserFlowDatePreset] = useState<LedgerDatePreset>("all");
   const [adjUserFlowCustomStart, setAdjUserFlowCustomStart] = useState("");
@@ -340,6 +346,50 @@ export default function AfRechargeManage() {
   // 同步 adjSelectedUser 余额（调账后刷新）
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const adjUserList = adjAllUsers as any[];
+  const formatWalletAmount = (value: unknown, digits: number) => Number(value ?? 0).toLocaleString("zh-CN", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+  const adjBalanceQuery = adjBalanceSearch.trim().toLocaleLowerCase();
+  const adjBalanceTotals = adjUserList.reduce((totals, user: any) => ({
+    userCount: totals.userCount + 1,
+    usdt: totals.usdt + Number(user.usdtBalance ?? 0),
+    cny: totals.cny + Number(user.cnyBalance ?? 0),
+  }), { userCount: 0, usdt: 0, cny: 0 });
+  const adjFilteredBalanceUsers = adjUserList.filter((user: any) => {
+    if (!adjBalanceQuery) return true;
+    return [user.name, user.username, user.id].some((value) => String(value ?? "").toLocaleLowerCase().includes(adjBalanceQuery));
+  });
+  const adjSortedBalanceUsers = [...adjFilteredBalanceUsers].sort((left: any, right: any) => {
+    let comparison = 0;
+    if (adjBalanceSortKey === "usdt") {
+      comparison = Number(left.usdtBalance ?? 0) - Number(right.usdtBalance ?? 0);
+    } else if (adjBalanceSortKey === "cny") {
+      comparison = Number(left.cnyBalance ?? 0) - Number(right.cnyBalance ?? 0);
+    } else {
+      const leftLabel = String(left.name || left.username || left.id || "");
+      const rightLabel = String(right.name || right.username || right.id || "");
+      comparison = leftLabel.localeCompare(rightLabel, "zh-CN");
+    }
+    if (comparison === 0) comparison = Number(left.id ?? 0) - Number(right.id ?? 0);
+    return adjBalanceSortDirection === "asc" ? comparison : -comparison;
+  });
+  const ADJ_BALANCE_PAGE_SIZE = 15;
+  const adjBalanceTotalPages = Math.max(1, Math.ceil(adjSortedBalanceUsers.length / ADJ_BALANCE_PAGE_SIZE));
+  const adjBalancePageSafe = Math.min(adjBalancePage, adjBalanceTotalPages);
+  const adjPagedBalanceUsers = adjSortedBalanceUsers.slice(
+    (adjBalancePageSafe - 1) * ADJ_BALANCE_PAGE_SIZE,
+    adjBalancePageSafe * ADJ_BALANCE_PAGE_SIZE,
+  );
+  const chooseBalanceSort = (key: WalletBalanceSortKey) => {
+    setAdjBalancePage(1);
+    if (key === adjBalanceSortKey) {
+      setAdjBalanceSortDirection((direction) => direction === "desc" ? "asc" : "desc");
+    } else {
+      setAdjBalanceSortKey(key);
+      setAdjBalanceSortDirection(key === "user" ? "asc" : "desc");
+    }
+  };
   // 以全局流水的最新用户为准；当前设备的成功调账记录仅在接口暂不可用时作补充。
   const adjRecentUserIds = Array.from(new Set([
     ...adjRecentHistoryItems.map((record: any) => Number(record.userId)).filter((id: number) => Number.isInteger(id) && id > 0),
@@ -1455,11 +1505,11 @@ export default function AfRechargeManage() {
             </button>
           </div>
 
-          {/* 钱包流水左右 Tab */}
+          {/* 钱包概览与流水 Tab */}
           <div className="flex p-1 bg-gray-100 rounded-2xl">
             <button
               onClick={() => setAdjFlowTab("user")}
-              className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold transition-colors ${adjFlowTab === "user" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"}`}
+              className={`min-w-0 flex-1 py-2.5 rounded-xl text-[12px] font-semibold transition-colors ${adjFlowTab === "user" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"}`}
             >当前用户流水</button>
             <button
               onClick={() => {
@@ -1467,8 +1517,15 @@ export default function AfRechargeManage() {
                 setAdjLogPage(1);
                 void refetchAdjGlobal();
               }}
-              className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold transition-colors ${adjFlowTab === "global" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"}`}
+              className={`min-w-0 flex-1 py-2.5 rounded-xl text-[12px] font-semibold transition-colors ${adjFlowTab === "global" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"}`}
             >全局流水</button>
+            <button
+              onClick={() => {
+                setAdjFlowTab("balances");
+                setAdjBalancePage(1);
+              }}
+              className={`min-w-0 flex-1 py-2.5 rounded-xl text-[12px] font-semibold transition-colors ${adjFlowTab === "balances" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"}`}
+            >用户余额</button>
           </div>
 
           {/* 当前用户全局钱包明细：与用户自己进入钱包时使用同一接口和口径 */}
@@ -1580,6 +1637,131 @@ export default function AfRechargeManage() {
               <p className="text-[11px] text-gray-300 mt-1">选择后显示该用户的全部钱包流水</p>
             </div>
           ))}
+
+          {/* 全部用户当前钱包余额 */}
+          {adjFlowTab === "balances" && (
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <p className="text-[13px] font-bold text-black">用户钱包余额</p>
+                  <p className="mt-0.5 text-[10px] text-gray-400">当前余额按用户钱包统一口径实时汇总</p>
+                </div>
+                <span className="shrink-0 text-[11px] text-gray-400">共 {adjBalanceTotals.userCount} 位</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
+                  <p className="text-[10px] text-blue-500">全部用户 USDT 总余额</p>
+                  <p className="mt-0.5 truncate text-[16px] font-bold text-blue-700">{formatWalletAmount(adjBalanceTotals.usdt, 4)}</p>
+                </div>
+                <div className="rounded-xl border border-green-100 bg-green-50 px-3 py-2.5">
+                  <p className="text-[10px] text-green-600">全部用户 CNY 总余额</p>
+                  <p className="mt-0.5 truncate text-[16px] font-bold text-green-700">¥{formatWalletAmount(adjBalanceTotals.cny, 2)}</p>
+                </div>
+              </div>
+
+              <div className="mb-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 focus-within:border-orange-400">
+                <Search className="h-4 w-4 shrink-0 text-gray-400" />
+                <input
+                  value={adjBalanceSearch}
+                  onChange={(event) => { setAdjBalanceSearch(event.target.value); setAdjBalancePage(1); }}
+                  placeholder="搜索昵称、用户名或 ID"
+                  className="min-w-0 flex-1 bg-transparent text-[12px] text-gray-700 outline-none placeholder:text-gray-400"
+                />
+                {adjBalanceSearch && (
+                  <button type="button" onClick={() => { setAdjBalanceSearch(""); setAdjBalancePage(1); }} className="p-0.5 text-gray-400" aria-label="清除用户余额搜索">
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              <div className="mb-3 flex items-center gap-1 overflow-x-auto pb-0.5">
+                {([
+                  ["usdt", "按 USDT"],
+                  ["cny", "按 CNY"],
+                  ["user", "按用户"],
+                ] as Array<[WalletBalanceSortKey, string]>).map(([key, label]) => {
+                  const selected = adjBalanceSortKey === key;
+                  const directionMark = selected ? (adjBalanceSortDirection === "desc" ? "↓" : "↑") : "";
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => chooseBalanceSort(key)}
+                      className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                        selected ? "border-orange-500 bg-orange-50 text-orange-600" : "border-gray-200 bg-white text-gray-500"
+                      }`}
+                    >{label} {directionMark}</button>
+                  );
+                })}
+                <span className="ml-auto shrink-0 text-[10px] text-gray-400">{adjSortedBalanceUsers.length} 位</span>
+              </div>
+
+              {adjUserList.length === 0 ? (
+                <p className="py-8 text-center text-[12px] text-gray-300">用户余额加载中...</p>
+              ) : adjPagedBalanceUsers.length === 0 ? (
+                <p className="py-8 text-center text-[12px] text-gray-300">未找到匹配用户</p>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-gray-100">
+                  <div className="grid grid-cols-[minmax(0,1fr)_76px_68px] gap-1 border-b border-gray-100 bg-gray-50 px-2.5 py-2 text-[10px] font-medium text-gray-400">
+                    <span>用户</span><span className="text-right">USDT</span><span className="text-right">CNY</span>
+                  </div>
+                  {adjPagedBalanceUsers.map((user: any) => {
+                    const name = String(user.name || "未设置昵称");
+                    const username = String(user.username || `用户${user.id}`);
+                    return (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => {
+                          setAdjSelectedUser(user);
+                          setAdjFlowTab("user");
+                          setAdjSearch("");
+                          setAdjShowDropdown(false);
+                        }}
+                        className="grid w-full grid-cols-[minmax(0,1fr)_76px_68px] gap-1 border-b border-gray-50 px-2.5 py-2.5 text-left last:border-0 hover:bg-orange-50 active:bg-orange-100"
+                        title="查看该用户的全部钱包流水"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-[12px] font-semibold text-gray-800">{name}</span>
+                          <span className="block truncate text-[10px] text-gray-400">@{username} · ID {user.id}</span>
+                        </span>
+                        <span className={`self-center text-right text-[11px] font-semibold ${Number(user.usdtBalance ?? 0) < 0 ? "text-red-500" : "text-blue-600"}`}>
+                          {formatWalletAmount(user.usdtBalance, 2)}
+                        </span>
+                        <span className={`self-center text-right text-[11px] font-semibold ${Number(user.cnyBalance ?? 0) < 0 ? "text-red-500" : "text-green-600"}`}>
+                          ¥{formatWalletAmount(user.cnyBalance, 2)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {adjBalanceTotalPages > 1 && (
+                <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setAdjBalancePage((page) => Math.max(1, page - 1))}
+                    disabled={adjBalancePageSafe <= 1}
+                    className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] text-gray-500 disabled:opacity-30"
+                  >
+                    <PrevIcon className="h-3.5 w-3.5" />上一页
+                  </button>
+                  <span className="text-[12px] text-gray-400">{adjBalancePageSafe} / {adjBalanceTotalPages}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAdjBalancePage((page) => Math.min(adjBalanceTotalPages, page + 1))}
+                    disabled={adjBalancePageSafe >= adjBalanceTotalPages}
+                    className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] text-gray-500 disabled:opacity-30"
+                  >
+                    下一页<NextIcon className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              <p className="mt-3 text-center text-[10px] text-gray-400">点击任意用户可直接查看该用户的全部钱包流水</p>
+            </div>
+          )}
 
           {/* 全局流水 */}
           {adjFlowTab === "global" && (
