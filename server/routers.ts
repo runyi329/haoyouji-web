@@ -1908,6 +1908,31 @@ ${klinesSummary}
         return await dbRecharge.getUserBalance(targetUserId, input?.ledgerId);
       }),
 
+    // 全局站内钱包划转：只接受完整用户名、昵称或名称，不暴露模糊搜索或完整用户列表。
+    lookupWalletTransferRecipient: protectedProcedure
+      .input(z.object({ identifier: z.string().trim().min(1, '请输入完整用户名或昵称').max(80, '输入内容过长') }))
+      .query(async ({ ctx, input }) => {
+        return await dbRecharge.lookupWalletTransferRecipient(ctx.user.id, input.identifier);
+      }),
+
+    // 全局站内钱包划转：入口当前只在52号账本的黑色钱包中展示，但转账双方不受账本成员关系限制。
+    transferWalletBalance: protectedProcedure
+      .input(z.object({
+        toUserId: z.number().int().positive(),
+        currency: z.enum(['USDT', 'CNY']),
+        amount: z.number().finite().positive().max(10_000_000),
+        requestId: z.string().regex(/^[A-Za-z0-9_-]{16,80}$/, '转账请求无效'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbRecharge.transferWalletBalance({
+          fromUserId: ctx.user.id,
+          toUserId: input.toUserId,
+          currency: input.currency,
+          amount: input.amount,
+          requestId: input.requestId,
+        });
+      }),
+
     // 批量获取52成员的【全局】钱包余额。仅52创建人可读取，并且服务端强制成员范围。
     getMembersBalance: protectedProcedure
       .input(z.object({ ledgerId: z.literal(52), userIds: z.array(z.number()).max(500) }))

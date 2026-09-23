@@ -1567,7 +1567,10 @@ export default function AfRechargeManage() {
                     const sourceId = Number(String(r.id ?? '').split('_')[1] || 0);
                     const amount = Number(r.amount ?? 0);
                     const noteText = String(r.note ?? r.description ?? '').replace(/\[.*?\]/g, '').trim();
-                    const label = sourceType === 'recharge'
+                    const isInternalTransfer = String(r.note ?? r.description ?? '').includes('[站内转账]');
+                    const label = isInternalTransfer
+                      ? (amount >= 0 ? '站内转账收款' : '站内转账汇款')
+                      : sourceType === 'recharge'
                       ? '充值到账'
                       : sourceType === 'manual'
                         ? '手动调账'
@@ -1575,8 +1578,8 @@ export default function AfRechargeManage() {
                           ? '历史期初余额'
                           : typeLabel[r.type] ?? r.type ?? '系统流水';
                     const historyId = sourceType === 'recharge' ? Number(r.historyId || 0) : sourceType === 'balance_history' ? sourceId : 0;
-                    const canRevoke = sourceId > 0 && sourceType !== 'opening' && !noteText.includes('撤回误操作');
-                    const canEdit = sourceType === 'manual' ? sourceId > 0 : historyId > 0;
+                    const canRevoke = !isInternalTransfer && sourceId > 0 && sourceType !== 'opening' && !noteText.includes('撤回误操作');
+                    const canEdit = !isInternalTransfer && (sourceType === 'manual' ? sourceId > 0 : historyId > 0);
                     return (
                       <div key={r.id ?? i} className="py-2 border-b border-gray-50 last:border-0">
                         <div className="flex items-center justify-between">
@@ -1824,10 +1827,12 @@ export default function AfRechargeManage() {
                   };
                   const sourceType = String(r.sourceType ?? 'balance_history');
                   const sourceId = Number(r.sourceId ?? r.id ?? 0);
+                  const isInternalTransfer = String(r.note ?? '').includes('[站内转账]');
                   const canRevoke = sourceId > 0
                     && !['order_buy', 'order_settlement', 'management_fee'].includes(String(r.type ?? ''))
-                    && !String(r.note ?? '').includes('撤回误操作');
-                  const canEditNote = sourceId > 0 && (sourceType === 'manual' || sourceType === 'balance_history');
+                    && !String(r.note ?? '').includes('撤回误操作')
+                    && !isInternalTransfer;
+                  const canEditNote = !isInternalTransfer && sourceId > 0 && (sourceType === 'manual' || sourceType === 'balance_history');
                   return (
                     <div key={r.id ?? i} className="py-2.5 border-b border-gray-50 last:border-0">
                       <div className="flex items-start justify-between">
@@ -1836,7 +1841,7 @@ export default function AfRechargeManage() {
                             <span className="text-[12px] font-semibold text-black">{r.userName}</span>
                             <span className="text-[10px] text-gray-400">@{r.username}</span>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${r.currency === 'CNY' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>{r.currency}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{typeLabel[r.type] ?? r.type}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{isInternalTransfer ? '站内转账' : (typeLabel[r.type] ?? r.type)}</span>
                           </div>
                           <p className="text-[11px] text-gray-500 truncate">{String(r.note ?? "").replace(/\[.*?\]/g, "").trim() || "—"}</p>
                           <p className="text-[10px] text-gray-400 mt-0.5">{new Date(r.createdAt).toLocaleString("zh-CN")}</p>

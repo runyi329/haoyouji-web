@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import {
   ArrowLeft,
   ArrowDownCircle,
@@ -13,6 +13,10 @@ import {
   RefreshCw,
   TrendingUp,
   Wallet as WalletIcon,
+  Send,
+  UserRound,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import Recharge from "./Recharge";
@@ -59,7 +63,7 @@ const G = {
   red: "#f87171",         // 出账红
 };
 
-type ModalType = "recharge" | "withdraw" | "cny-recharge" | "cny-withdraw" | null;
+type ModalType = "recharge" | "withdraw" | "cny-recharge" | "cny-withdraw" | "transfer" | null;
 
 function StatusIcon({ status }: { status: string }) {
   if (status === "completed" || status === "approved")
@@ -294,12 +298,199 @@ function CnyWithdrawContent({ cnyBalance, onClose }: { cnyBalance: number; onClo
   );
 }
 
+// 全局内部钱包划转：入口当前只从52号账本的黑色钱包开放；实际结算与审计由服务端统一处理。
+function WalletTransferContent({
+  currency,
+  availableBalance,
+  onClose,
+  onCompleted,
+}: {
+  currency: "USDT" | "CNY";
+  availableBalance: number;
+  onClose: () => void;
+  onCompleted: () => void;
+}) {
+  const [recipientInput, setRecipientInput] = useState("");
+  const [lookupIdentifier, setLookupIdentifier] = useState("");
+  const [amount, setAmount] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [requestId, setRequestId] = useState("");
+  const [completed, setCompleted] = useState<{ transferNo: string; amount: number } | null>(null);
+  const recipientQuery = trpc.recharge.lookupWalletTransferRecipient.useQuery(
+    { identifier: lookupIdentifier },
+    { enabled: lookupIdentifier.length > 0, retry: false, refetchOnWindowFocus: false },
+  );
+  const recipientResult = recipientQuery.data as any;
+  const recipient = recipientResult?.status === "found" ? recipientResult.recipient : null;
+  const transferMutation = trpc.recharge.transferWalletBalance.useMutation({
+    onSuccess: (result: any) => {
+      setCompleted({ transferNo: String(result.transferNo), amount: Number(result.amount) });
+      onCompleted();
+    },
+  });
+  const amountNumber = Number(amount);
+  const amountDigits = currency === "CNY" ? 2 : 4;
+  const amountValid = Number.isFinite(amountNumber) && amountNumber > 0 && amountNumber <= availableBalance + 1e-8;
+  const amountDisplay = amountValid ? amountNumber.toFixed(amountDigits) : "0";
+
+  const lookupRecipient = () => {
+    const identifier = recipientInput.trim();
+    setConfirming(false);
+    if (!identifier) return;
+    if (identifier === lookupIdentifier) {
+      void recipientQuery.refetch();
+    } else {
+      setLookupIdentifier(identifier);
+    }
+  };
+  const beginConfirm = () => {
+    if (!recipient) return;
+    if (!amountValid) return;
+    if (!requestId) {
+      setRequestId(typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID().replace(/-/g, "")
+        : `${Date.now()}${Math.random().toString(36).slice(2, 14)}`);
+    }
+    setConfirming(true);
+  };
+  const submitTransfer = () => {
+    if (!recipient || !amountValid || !requestId) return;
+    transferMutation.mutate({
+      toUserId: Number(recipient.id),
+      currency,
+      amount: amountNumber,
+      requestId,
+    });
+  };
+
+  if (completed) {
+    return (
+      <SuccessState
+        msg="转账完成"
+        sub={`已向 ${recipient?.name || "收款人"} 转账 ${completed.amount.toFixed(amountDigits)} ${currency}。转账编号：${completed.transferNo}`}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (confirming && recipient) {
+    return (
+      <div className="px-5 pb-8 pt-4 space-y-4">
+        <div className="rounded-2xl p-4 space-y-2" style={{ background: G.goldFaint, border: `1px solid rgba(201,168,76,0.3)` }}>
+          <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: G.goldLight }}>
+            <AlertTriangle className="w-4 h-4" /> 请再次核对转账信息
+          </div>
+          <div className="pt-1 space-y-1.5 text-xs" style={{ color: G.whiteDim }}>
+            <div className="flex justify-between gap-4"><span>收款人</span><span className="text-right" style={{ color: G.white }}>{recipient.name}</span></div>
+            <div className="flex justify-between gap-4"><span>用户名</span><span className="text-right" style={{ color: G.white }}>@{recipient.username}</span></div>
+            <div className="flex justify-between gap-4"><span>转账金额</span><span className="text-right font-bold" style={{ color: G.goldLight }}>{amountDisplay} {currency}</span></div>
+          </div>
+        </div>
+        <div className="rounded-xl px-3 py-2.5 text-xs leading-5" style={{ background: 'rgba(248,113,113,0.1)', color: '#fca5a5', border: '1px solid rgba(248,113,113,0.22)' }}>
+          转账一经确认将立即从您的钱包扣除并存入对方钱包，<strong>不可撤回</strong>。请确认收款人和金额无误。
+        </div>
+        {transferMutation.error && <p className="text-center text-xs text-red-300">{transferMutation.error.message || '转账失败，请稍后重试'}</p>}
+        <GoldBtn onClick={submitTransfer} disabled={transferMutation.isPending}>
+          {transferMutation.isPending ? "正在转账…" : `确认并立即转账 ${amountDisplay} ${currency}`}
+        </GoldBtn>
+        <button type="button" onClick={() => setConfirming(false)} className="w-full py-2 text-sm" style={{ color: G.whiteDim }}>返回修改</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-5 pb-8 pt-4 space-y-4">
+      <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.15)` }}>
+        <span className="text-sm" style={{ color: G.whiteDim }}>当前可转余额</span>
+        <span className="text-base font-bold" style={{ color: G.goldLight }}>{availableBalance.toFixed(amountDigits)} {currency}</span>
+      </div>
+
+      <div>
+        <div className="text-xs mb-1.5" style={{ color: G.whiteDim }}>收款人用户名或昵称</div>
+        <div className="flex gap-2">
+          <input
+            value={recipientInput}
+            onChange={(event) => {
+              setRecipientInput(event.target.value);
+              setLookupIdentifier("");
+              setConfirming(false);
+              setRequestId("");
+            }}
+            placeholder="请输入完整用户名或完整昵称"
+            autoComplete="off"
+            className="min-w-0 flex-1 rounded-xl px-3 py-3 text-sm outline-none"
+            style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.2)`, color: G.white }}
+          />
+          <button
+            type="button"
+            onClick={lookupRecipient}
+            disabled={!recipientInput.trim() || recipientQuery.isFetching}
+            className="shrink-0 rounded-xl px-3 text-xs font-semibold disabled:opacity-50"
+            style={{ background: G.goldFaint, border: `1px solid ${G.goldDim}`, color: G.goldLight }}
+          >{recipientQuery.isFetching ? "核验中" : "核验"}</button>
+        </div>
+        <p className="mt-1.5 text-[11px] leading-4" style={{ color: G.whiteDim }}>仅支持完整匹配，不提供联系人推荐或模糊搜索。</p>
+      </div>
+
+      {lookupIdentifier && !recipientQuery.isFetching && recipientResult?.status === "not_found" && (
+        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: 'rgba(248,113,113,0.1)', color: '#fca5a5' }}>未找到该用户，请核对完整用户名或昵称。</div>
+      )}
+      {lookupIdentifier && !recipientQuery.isFetching && recipientResult?.status === "self" && (
+        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: 'rgba(248,113,113,0.1)', color: '#fca5a5' }}>不能转账给自己，请输入其他用户。</div>
+      )}
+      {lookupIdentifier && !recipientQuery.isFetching && recipientResult?.status === "ambiguous" && (
+        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: 'rgba(251,191,36,0.1)', color: '#fde68a' }}>该昵称存在多个用户，请改用完整用户名核验。</div>
+      )}
+      {recipient && (
+        <div className="rounded-2xl p-4" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)' }}>
+          <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: G.green }}><UserRound className="w-4 h-4" />已确认收款用户</div>
+          <div className="mt-2 grid grid-cols-[56px_1fr] gap-y-1.5 text-xs">
+            <span style={{ color: G.whiteDim }}>名称</span><span style={{ color: G.white }}>{recipient.name}</span>
+            <span style={{ color: G.whiteDim }}>昵称</span><span style={{ color: G.white }}>{recipient.nickname}</span>
+            <span style={{ color: G.whiteDim }}>用户名</span><span style={{ color: G.white }}>@{recipient.username}</span>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div className="flex items-center justify-between text-xs mb-1.5" style={{ color: G.whiteDim }}>
+          <span>转账金额（{currency}）</span>
+          <button type="button" onClick={() => setAmount(availableBalance.toFixed(amountDigits))} style={{ color: G.gold }}>全部转出</button>
+        </div>
+        <div className="flex items-center rounded-xl px-4 py-3" style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.2)` }}>
+          <input
+            type="number"
+            min="0"
+            step={currency === 'CNY' ? '0.01' : '0.0001'}
+            value={amount}
+            onChange={(event) => { setAmount(event.target.value); setConfirming(false); setRequestId(""); }}
+            placeholder="0.00"
+            className="min-w-0 flex-1 bg-transparent text-xl font-bold outline-none tabular-nums"
+            style={{ color: G.white }}
+          />
+          <span className="ml-2 text-sm font-semibold" style={{ color: G.goldDim }}>{currency}</span>
+        </div>
+        {amount && !amountValid && <p className="mt-1.5 text-[11px] text-red-300">金额应大于 0 且不超过当前可转余额。</p>}
+      </div>
+
+      <div className="rounded-xl px-3 py-2.5 text-[11px] leading-5" style={{ background: 'rgba(248,113,113,0.08)', color: '#fca5a5', border: '1px solid rgba(248,113,113,0.18)' }}>
+        此为站内内部转账。确认后即时到账、不可撤回；双方资金明细都会显示汇款人、收款人和转账编号。
+      </div>
+      {recipientQuery.error && <p className="text-center text-xs text-red-300">{recipientQuery.error.message || '用户核验失败，请稍后重试'}</p>}
+      <GoldBtn onClick={beginConfirm} disabled={!recipient || !amountValid}>确认转账信息</GoldBtn>
+    </div>
+  );
+}
+
 // ─── 主页面 ──────────────────────────────────────────────────
 export default function Wallet() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
   const [modal, setModal] = useState<ModalType>(null);
   const [hideBalance, setHideBalance] = useState(false);
   const [activeTab, setActiveTab] = useState<"usdt" | "cny">("usdt");
+  // 转账能力是全局统一钱包能力；当前仅由52号账本首页以该上下文开放按钮。
+  const isLedger52WalletEntry = new URLSearchParams(search).get("fromLedger") === "52";
 
   const balanceQuery = trpc.recharge.getBalance.useQuery();
   const recentRechargeQuery = trpc.recharge.getMyOrders.useQuery({ limit: 5 });
@@ -326,14 +517,19 @@ export default function Wallet() {
     }));
     const manuals = (recentManualQuery.data ?? [])
       .filter((m: any) => !(m.note || "").startsWith("[CNY]"))
-      .map((m: any) => ({
-        id: `m-${m.id}`,
-        type: (Number(m.amount) > 0 ? "reward" : "deduct") as "reward" | "deduct",
-        amount: Math.abs(Number(m.amount)), status: "completed" as const,
-        note: m.note || "",
-        wcCode: extractWcTeamCode(m.note || ""),
-        createdAt: m.created_at,
-      }));
+      .map((m: any) => {
+        const note = String(m.note || "");
+        const amount = Number(m.amount);
+        const isInternalTransfer = note.includes('[站内转账]');
+        return {
+          id: `m-${m.id}`,
+          type: isInternalTransfer ? (amount > 0 ? "transfer_in" : "transfer_out") : (amount > 0 ? "reward" : "deduct"),
+          amount: Math.abs(amount), status: "completed" as const,
+          note,
+          wcCode: extractWcTeamCode(note),
+          createdAt: m.created_at,
+        };
+      });
     // balance_history 包含世界杯投注/退款记录（type: consume/refund）
     const balanceHistoryItems = (recentBalanceHistoryQuery.data ?? [])
       .filter((h: any) => h.type === 'consume' || h.type === 'refund')
@@ -364,11 +560,11 @@ export default function Wallet() {
   // 账户卡片通用渲染
   const AccountCard = ({
     icon, label, balance: bal, unit, subLine,
-    txPath, onRefresh, onRecharge, onWithdraw,
+    txPath, onRefresh, onRecharge, onWithdraw, onTransfer,
     txList, isUsdt,
   }: {
     icon: string; label: string; balance: string; unit: string; subLine?: React.ReactNode;
-    txPath: string; onRefresh: () => void; onRecharge: () => void; onWithdraw: () => void;
+    txPath: string; onRefresh: () => void; onRecharge: () => void; onWithdraw: () => void; onTransfer?: () => void;
     txList: React.ReactNode; isUsdt: boolean;
   }) => (
     <div
@@ -452,7 +648,7 @@ export default function Wallet() {
         {subLine && <div className="mb-4">{subLine}</div>}
 
         {/* 操作按钮 */}
-        <div className="grid grid-cols-2 gap-2.5 mb-1">
+        <div className={`grid gap-2.5 mb-1 ${onTransfer ? "grid-cols-3" : "grid-cols-2"}`}>
           <button
             onClick={onRecharge}
             className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-transform"
@@ -477,6 +673,16 @@ export default function Wallet() {
             <ArrowUpCircle className="w-4 h-4" />
             <span>提现</span>
           </button>
+          {onTransfer && (
+            <button
+              onClick={onTransfer}
+              className="flex items-center justify-center space-x-1 py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-transform"
+              style={{ background: G.goldFaint, border: `1px solid ${G.goldDim}`, color: G.goldLight }}
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>转账</span>
+            </button>
+          )}
         </div>
 
         {/* 流水 */}
@@ -546,6 +752,7 @@ export default function Wallet() {
           onRefresh={() => balanceQuery.refetch()}
           onRecharge={() => setModal("recharge")}
           onWithdraw={() => setModal("withdraw")}
+          onTransfer={isLedger52WalletEntry ? () => setModal("transfer") : undefined}
           isUsdt={true}
           txList={
             recentUsdtTx.length > 0 ? (
@@ -568,7 +775,7 @@ export default function Wallet() {
                       <div>
                         {!(tx as any).wcCode && (
                           <div className="text-xs font-medium" style={{ color: G.white }}>
-                            {tx.type === "recharge" ? "充值" : tx.type === "withdraw" ? "提现" : tx.type === "reward" ? "奖励" : "扣费"}
+                            {tx.type === "recharge" ? "充值" : tx.type === "withdraw" ? "提现" : tx.type === "transfer_in" ? "站内转账收款" : tx.type === "transfer_out" ? "站内转账汇款" : tx.type === "reward" ? "奖励" : "扣费"}
                           </div>
                         )}
                         <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(tx.createdAt)}</div>
@@ -576,8 +783,8 @@ export default function Wallet() {
                     </div>
                     <div className="text-right">
                       <div className="text-xs font-bold tabular-nums"
-                        style={{ color: (tx.type === "recharge" || tx.type === "reward") ? G.green : G.red }}>
-                        {(tx.type === "recharge" || tx.type === "reward") ? "+" : "-"}
+                        style={{ color: (tx.type === "recharge" || tx.type === "reward" || tx.type === "transfer_in") ? G.green : G.red }}>
+                        {(tx.type === "recharge" || tx.type === "reward" || tx.type === "transfer_in") ? "+" : "-"}
                         {mask(tx.amount.toFixed(2))} USDT
                       </div>
                       <div className="flex items-center justify-end space-x-0.5 mt-0.5">
@@ -605,6 +812,7 @@ export default function Wallet() {
           onRefresh={() => cnyBalanceQuery.refetch()}
           onRecharge={() => setModal("cny-recharge")}
           onWithdraw={() => setModal("cny-withdraw")}
+          onTransfer={isLedger52WalletEntry ? () => setModal("transfer") : undefined}
           isUsdt={false}
           txList={
             recentCnyTx.length > 0 ? (
@@ -671,6 +879,21 @@ export default function Wallet() {
       {modal === "cny-withdraw" && (
         <BottomSheet title="人民币提现" onClose={() => setModal(null)}>
           <CnyWithdrawContent cnyBalance={cnyBalance} onClose={() => setModal(null)} />
+        </BottomSheet>
+      )}
+      {modal === "transfer" && (
+        <BottomSheet title="站内转账" onClose={() => setModal(null)}>
+          <WalletTransferContent
+            currency={activeTab === "cny" ? "CNY" : "USDT"}
+            availableBalance={activeTab === "cny" ? cnyBalance : balance}
+            onClose={() => setModal(null)}
+            onCompleted={() => {
+              void balanceQuery.refetch();
+              void cnyBalanceQuery.refetch();
+              void recentManualQuery.refetch();
+              void recentBalanceHistoryQuery.refetch();
+            }}
+          />
         </BottomSheet>
       )}
     </div>

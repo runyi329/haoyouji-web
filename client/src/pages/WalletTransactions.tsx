@@ -119,7 +119,10 @@ export default function WalletTransactions() {
                 const isRecharge = item.sourceType === 'recharge';
                 const isManual = item.sourceType === 'manual';
                 const isBh = item.sourceType === 'balance_history';
-                const label = isRecharge
+                const isInternalTransfer = noteText.includes('[站内转账]');
+                const label = isInternalTransfer
+                  ? (amt >= 0 ? '站内转账收款' : '站内转账汇款')
+                  : isRecharge
                   ? '充值到账'
                   : isManual
                   ? '手动调账'
@@ -224,7 +227,10 @@ export default function WalletTransactions() {
               const isManual = item.sourceType === 'manual';
               const isBh = item.sourceType === 'balance_history';
               const isOpening = item.sourceType === 'opening';
-              const label = isRecharge
+              const isInternalTransfer = noteText.includes('[站内转账]');
+              const label = isInternalTransfer
+                ? (amt >= 0 ? '站内转账收款' : '站内转账汇款')
+                : isRecharge
                 ? '充值到账'
                 : isOpening
                 ? '历史期初余额'

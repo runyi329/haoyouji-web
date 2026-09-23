@@ -2655,7 +2655,7 @@ export default function Home() {
                 transition: 'transform 0.15s ease, box-shadow 0.15s ease',
                 padding: '6px 10px',
               }}
-              onClick={() => requireLogin(() => navigate('/wallet'))}
+              onClick={() => requireLogin(() => navigate('/wallet?fromLedger=52'))}
             >
               {/* 顶部金色高光线 */}
               <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />

@@ -1,5 +1,5 @@
 import { eq, and, gte, lte, sql } from "drizzle-orm";
-import { getDb, getDbConnection } from "./db";
+import { getDb, getDbConnection, getDbTransactionConnection } from "./db";
 import { rechargeOrders, balanceHistory, users, walletAddresses } from "../drizzle/schema";
 
 // ========== 短信通知（腾讯云SMS） ==========
@@ -720,6 +720,255 @@ const TYPE_LABEL: Record<string, string> = {
   refund:     '[退款]',
   withdraw:   '[提现]',
 };
+
+const INTERNAL_WALLET_TRANSFER_LEDGER_ID = 52;
+const INTERNAL_TRANSFER_NOTE_PREFIX = '[站内转账]';
+
+let internalWalletTransferTableReady: Promise<void> | null = null;
+
+/**
+ * 全局站内转账审计主表。
+ * 钱包余额仍由 users + af_manual_balances 的统一公式计算；此表只做不可篡改的双方关联审计，
+ * 因此不按任何账本成员关系限制转账双方。
+ */
+async function ensureInternalWalletTransferTable(): Promise<void> {
+  if (!internalWalletTransferTableReady) {
+    internalWalletTransferTableReady = (async () => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error('数据库连接失败');
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS wallet_internal_transfers (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          transfer_no VARCHAR(64) NOT NULL,
+          request_id VARCHAR(80) NOT NULL,
+          from_user_id INT NOT NULL,
+          to_user_id INT NOT NULL,
+          currency VARCHAR(10) NOT NULL,
+          amount DECIMAL(20,8) NOT NULL,
+          from_manual_balance_id BIGINT NULL,
+          to_manual_balance_id BIGINT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_wallet_internal_transfer_no (transfer_no),
+          UNIQUE KEY uq_wallet_internal_transfer_request (request_id),
+          KEY idx_wallet_internal_transfer_from (from_user_id, created_at),
+          KEY idx_wallet_internal_transfer_to (to_user_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='全局站内钱包用户互转审计表'
+      `);
+    })().catch((error) => {
+      internalWalletTransferTableReady = null;
+      throw error;
+    });
+  }
+  await internalWalletTransferTableReady;
+}
+
+const asRows = (rows: unknown): any[] => Array.isArray(rows) ? rows as any[] : [];
+
+function buildInternalTransferNumber(): string {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const tail = Math.random().toString(36).slice(2, 9).toUpperCase();
+  return `IT${yy}${mm}${dd}${tail}`;
+}
+
+function transferDisplayName(user: { name?: unknown; username?: unknown; id?: unknown }): string {
+  return String(user.name || user.username || `用户${user.id ?? ''}`).trim().slice(0, 80);
+}
+
+function transferUsername(user: { username?: unknown; id?: unknown }): string {
+  return String(user.username || `用户${user.id ?? ''}`).trim().slice(0, 80);
+}
+
+export type WalletTransferRecipientLookup =
+  | { status: 'found'; recipient: { id: number; name: string; nickname: string; username: string } }
+  | { status: 'not_found' | 'self' | 'ambiguous' };
+
+/** 只接受用户名、昵称或名称的完整匹配，不提供模糊联想或平台用户列表。 */
+export async function lookupWalletTransferRecipient(
+  requesterUserId: number,
+  identifier: string,
+): Promise<WalletTransferRecipientLookup> {
+  const normalized = identifier.trim();
+  if (!normalized) return { status: 'not_found' };
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const [rows] = await (conn as any).execute(
+    `SELECT id, username, name
+       FROM users
+      WHERE username = ? OR name = ?
+      ORDER BY id ASC
+      LIMIT 3`,
+    [normalized, normalized],
+  ) as any[];
+  const matches = asRows(rows);
+  if (matches.length === 0) return { status: 'not_found' };
+  if (matches.length > 1) return { status: 'ambiguous' };
+  const recipient = matches[0];
+  if (Number(recipient.id) === requesterUserId) return { status: 'self' };
+  return {
+    status: 'found',
+    recipient: {
+      id: Number(recipient.id),
+      name: transferDisplayName(recipient),
+      nickname: String(recipient.name || '未设置昵称').slice(0, 80),
+      username: transferUsername(recipient),
+    },
+  };
+}
+
+/**
+ * 原子执行全局站内钱包划转。
+ * 全程仅由服务端从锁定后的当前余额决定是否可扣款，客户端无法指定扣款人、余额或审计信息。
+ */
+export async function transferWalletBalance(params: {
+  fromUserId: number;
+  toUserId: number;
+  currency: 'USDT' | 'CNY';
+  amount: number;
+  requestId: string;
+}): Promise<{ success: true; transferNo: string; amount: number; currency: 'USDT' | 'CNY'; alreadyCompleted: boolean }> {
+  if (!Number.isFinite(params.amount) || params.amount <= 0) throw new Error('转账金额必须大于 0');
+  if (!Number.isInteger(params.fromUserId) || !Number.isInteger(params.toUserId) || params.fromUserId <= 0 || params.toUserId <= 0) {
+    throw new Error('收款用户无效');
+  }
+  if (params.fromUserId === params.toUserId) throw new Error('不能转账给自己');
+  await ensureInternalWalletTransferTable();
+
+  const conn = await getDbTransactionConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const transaction = conn as any;
+  const amount = Number(params.amount.toFixed(8));
+  const release = () => transaction.release?.();
+
+  try {
+    await transaction.beginTransaction();
+    const [existingRows] = await transaction.execute(
+      `SELECT transfer_no, amount, currency, from_user_id, to_user_id FROM wallet_internal_transfers WHERE request_id = ? LIMIT 1 FOR UPDATE`,
+      [params.requestId],
+    );
+    const existing = asRows(existingRows)[0];
+    if (existing) {
+      if (
+        Number(existing.from_user_id) !== params.fromUserId ||
+        Number(existing.to_user_id) !== params.toUserId ||
+        String(existing.currency).toUpperCase() !== params.currency ||
+        Math.abs(Number(existing.amount) - amount) > 1e-8
+      ) {
+        throw new Error('转账请求已被使用，请重新确认收款人和金额');
+      }
+      await transaction.commit();
+      return {
+        success: true,
+        transferNo: String(existing.transfer_no),
+        amount: Number(existing.amount),
+        currency: String(existing.currency).toUpperCase() === 'CNY' ? 'CNY' : 'USDT',
+        alreadyCompleted: true,
+      };
+    }
+
+    // 固定顺序锁定两位用户，避免相反方向同时转账时发生死锁。
+    const lockOrder = [params.fromUserId, params.toUserId].sort((a, b) => a - b);
+    const [userRows] = await transaction.execute(
+      `SELECT id, username, name, COALESCE(balance, 0) AS balance,
+              COALESCE(balance_cny, 0) AS balance_cny
+         FROM users WHERE id IN (?, ?) ORDER BY id ASC FOR UPDATE`,
+      lockOrder,
+    );
+    const usersById = new Map(asRows(userRows).map((row: any) => [Number(row.id), row]));
+    const sender = usersById.get(params.fromUserId);
+    const recipient = usersById.get(params.toUserId);
+    if (!sender || !recipient) throw new Error('收款用户不存在');
+
+    let senderAvailable: number;
+    if (params.currency === 'USDT') {
+      const [manualRows] = await transaction.execute(
+        `SELECT amount FROM af_manual_balances
+          WHERE user_id = ?
+            AND COALESCE(note, '') NOT LIKE '[CNY]%'
+            AND COALESCE(note, '') NOT LIKE '[BALANCE_BASE]%'
+          FOR UPDATE`,
+        [params.fromUserId],
+      );
+      const manualTotal = asRows(manualRows).reduce((total, row: any) => total + Number(row.amount || 0), 0);
+      senderAvailable = Number(sender.balance || 0) + manualTotal;
+    } else {
+      const [manualRows] = await transaction.execute(
+        `SELECT amount FROM af_manual_balances WHERE user_id = ? AND COALESCE(note, '') LIKE '[CNY]%' FOR UPDATE`,
+        [params.fromUserId],
+      );
+      const manualTotal = asRows(manualRows).reduce((total, row: any) => total + Number(row.amount || 0), 0);
+      senderAvailable = Number(sender.balance_cny || 0) + manualTotal;
+    }
+    if (amount > senderAvailable + 1e-8) {
+      throw new Error(`可用余额不足，当前可转 ${senderAvailable.toFixed(params.currency === 'CNY' ? 2 : 4)} ${params.currency}`);
+    }
+
+    const transferNo = buildInternalTransferNumber();
+    const senderName = transferDisplayName(sender);
+    const senderUsername = transferUsername(sender);
+    const recipientName = transferDisplayName(recipient);
+    const recipientUsername = transferUsername(recipient);
+    const amountText = amount.toFixed(params.currency === 'CNY' ? 2 : 4);
+    const transferDescription = `汇款人：${senderName}(@${senderUsername})；收款人：${recipientName}(@${recipientUsername})；金额：${amountText} ${params.currency}`;
+    const notePrefix = params.currency === 'CNY' ? `[CNY]${INTERNAL_TRANSFER_NOTE_PREFIX}` : INTERNAL_TRANSFER_NOTE_PREFIX;
+
+    const [transferResult] = await transaction.execute(
+      `INSERT INTO wallet_internal_transfers (transfer_no, request_id, from_user_id, to_user_id, currency, amount)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [transferNo, params.requestId, params.fromUserId, params.toUserId, params.currency, amount.toFixed(8)],
+    );
+    const transferId = Number((transferResult as any).insertId);
+    const [senderManualResult] = await transaction.execute(
+      `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+       VALUES (?, ?, ?, ?, NOW(), NOW())`,
+      [INTERNAL_WALLET_TRANSFER_LEDGER_ID, params.fromUserId, (-amount).toFixed(8), `${notePrefix}[转出][${transferNo}] ${transferDescription}`],
+    );
+    const [recipientManualResult] = await transaction.execute(
+      `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+       VALUES (?, ?, ?, ?, NOW(), NOW())`,
+      [INTERNAL_WALLET_TRANSFER_LEDGER_ID, params.toUserId, amount.toFixed(8), `${notePrefix}[转入][${transferNo}] ${transferDescription}`],
+    );
+    await transaction.execute(
+      `UPDATE wallet_internal_transfers
+          SET from_manual_balance_id = ?, to_manual_balance_id = ?
+        WHERE id = ?`,
+      [Number((senderManualResult as any).insertId), Number((recipientManualResult as any).insertId), transferId],
+    );
+    await transaction.commit();
+    return { success: true, transferNo, amount, currency: params.currency, alreadyCompleted: false };
+  } catch (error: any) {
+    try { await transaction.rollback(); } catch {}
+    if (String(error?.code || '') === 'ER_DUP_ENTRY') {
+      const [rows] = await transaction.execute(
+        `SELECT transfer_no, amount, currency, from_user_id, to_user_id FROM wallet_internal_transfers WHERE request_id = ? LIMIT 1`,
+        [params.requestId],
+      );
+      const existing = asRows(rows)[0];
+      if (existing) {
+        if (
+          Number(existing.from_user_id) !== params.fromUserId ||
+          Number(existing.to_user_id) !== params.toUserId ||
+          String(existing.currency).toUpperCase() !== params.currency ||
+          Math.abs(Number(existing.amount) - amount) > 1e-8
+        ) {
+          throw new Error('转账请求已被使用，请重新确认收款人和金额');
+        }
+        return {
+          success: true,
+          transferNo: String(existing.transfer_no),
+          amount: Number(existing.amount),
+          currency: String(existing.currency).toUpperCase() === 'CNY' ? 'CNY' : 'USDT',
+          alreadyCompleted: true,
+        };
+      }
+    }
+    throw error;
+  } finally {
+    release();
+  }
+}
 
 // 给用户添加余额 —— 全局统一资金入口
 // 所有类型均同时写入 af_manual_balances（全局流水账本），保证任何入口的钱包明细完整一致。
@@ -1898,6 +2147,9 @@ export async function adminRevokeManualBalance(
   if (note.includes('撤回误操作')) {
     throw new Error('该记录是撤回操作本身，不可再次撤回');
   }
+  if (note.includes(INTERNAL_TRANSFER_NOTE_PREFIX)) {
+    throw new Error('站内转账不可撤回；请由双方另行发起一笔新的转账处理');
+  }
 
   const ledgerId = Number(row.ledger_id);
   const userId = Number(row.user_id);
@@ -2019,6 +2271,9 @@ export async function adminUpdateNote(
       [manualId]
     ) as any[];
     const origNote = String(orig?.note ?? '');
+    if (origNote.includes(INTERNAL_TRANSFER_NOTE_PREFIX)) {
+      throw new Error('站内转账属于不可修改的资金审计记录');
+    }
     const tagMatch = origNote.match(/^(\[[^\]]+\])+/);
     const prefix = tagMatch ? tagMatch[0] : '';
     const newNote = `${prefix}${replacement}`.trim();
