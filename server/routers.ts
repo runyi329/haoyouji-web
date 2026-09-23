@@ -404,6 +404,21 @@ function syncFunderParticipantCollateralSnapshot(snapshot: Record<string, any> |
   return next;
 }
 
+// 所有协作视图都是同一张订单的不同记账视角，标的币种及期权标的必须继承主订单，
+// 不允许旧的参与者快照在主订单改币种后把旧币种重新覆盖回来。
+const FUNDER_PARTICIPANT_SHARED_ASSET_FIELDS = ['coin', 'asset_type', 'option_info'] as const;
+function syncFunderParticipantSharedAssetSnapshot(snapshot: Record<string, any> | null | undefined, parentOrder: any): Record<string, any> {
+  const next = { ...(snapshot || {}) };
+  for (const field of FUNDER_PARTICIPANT_SHARED_ASSET_FIELDS) {
+    if (parentOrder && parentOrder[field] !== undefined) {
+      next[field] = parentOrder[field];
+    } else {
+      delete next[field];
+    }
+  }
+  return next;
+}
+
 function hasFunderParticipantCollateralOverride(snapshot: Record<string, any> | null | undefined): boolean {
   return !!snapshot && FUNDER_PARTICIPANT_COLLATERAL_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(snapshot, field));
 }
@@ -20086,7 +20101,13 @@ ${klinesSummary}
           || input.collateralQty !== undefined
           || input.collateralShareMode !== undefined
           || input.collateralSource !== undefined;
-        const shouldSyncParticipantSnapshot = shouldSyncParticipantStatus || shouldSyncParticipantCollateral;
+        // 标的币种和期权标的是同一张订单的共有资产身份，不能在拥有者/参与者快照间分叉。
+        const shouldSyncParticipantSharedAsset = input.coin !== undefined
+          || input.assetType !== undefined
+          || input.optionInfo !== undefined;
+        const shouldSyncParticipantSnapshot = shouldSyncParticipantStatus
+          || shouldSyncParticipantCollateral
+          || shouldSyncParticipantSharedAsset;
         try {
           if (input.status === 'settled' && interestEndDate) {
             const [interestRows] = await conn.execute(
@@ -20120,10 +20141,13 @@ ${klinesSummary}
             const activeParticipants = Array.isArray(participantRows) ? participantRows : [];
             participantCount = activeParticipants.length;
             for (const participant of activeParticipants) {
-              let snapshot = syncFunderParticipantCollateralSnapshot({
-                ...buildFunderParticipantSnapshot(updatedOrder),
-                ...(parseFunderParticipantSnapshot(participant.order_snapshot) || {}),
-              }, updatedOrder);
+              let snapshot = syncFunderParticipantSharedAssetSnapshot(
+                syncFunderParticipantCollateralSnapshot({
+                  ...buildFunderParticipantSnapshot(updatedOrder),
+                  ...(parseFunderParticipantSnapshot(participant.order_snapshot) || {}),
+                }, updatedOrder),
+                updatedOrder,
+              );
               if (shouldSyncParticipantStatus) {
                 snapshot = {
                   ...snapshot,
@@ -20187,6 +20211,7 @@ ${klinesSummary}
           participantCount,
           participantStatusSynced: shouldSyncParticipantStatus,
           participantCollateralSynced: shouldSyncParticipantCollateral,
+          participantAssetSynced: shouldSyncParticipantSharedAsset,
         };
       }),
     // 查询融资订单操作日志
@@ -20814,21 +20839,24 @@ ${klinesSummary}
           const effectiveRole = p.role || existing?.role || 'funder';
           const isOwnerRole = effectiveRole === 'owner';
           const existingSnapshot = parseFunderParticipantSnapshot(existing?.order_snapshot) || {};
-          const snapshot = syncFunderParticipantCollateralSnapshot({
-            ...parentSnapshot,
-            ...existingSnapshot,
-            // 未在本次表单编辑的字段必须保留该拥有者已有快照；尤其是自动补齐的主订单拥有者。
-            amount: p.amount === undefined ? (existingSnapshot.amount ?? parentSnapshot.amount ?? null) : (p.amount || null),
-            amount_currency: p.amountCurrency === undefined ? (existingSnapshot.amount_currency ?? parentSnapshot.amount_currency ?? null) : (p.amountCurrency || null),
-            interest_rate_annual: p.interestRate === undefined ? (existingSnapshot.interest_rate_annual ?? parentSnapshot.interest_rate_annual ?? null) : (p.interestRate || null),
-            interest_base: p.interestBase === undefined ? (existingSnapshot.interest_base ?? parentSnapshot.interest_base ?? null) : (p.interestBase || null),
-            interest_base_currency: p.interestBaseCurrency === undefined ? (existingSnapshot.interest_base_currency ?? parentSnapshot.interest_base_currency ?? null) : (p.interestBaseCurrency || null),
-            interest_payment_type: p.interestPaymentType === undefined ? (existingSnapshot.interest_payment_type ?? parentSnapshot.interest_payment_type ?? null) : (p.interestPaymentType || null),
-            interest_start_date: p.interestStartDate === undefined ? (existingSnapshot.interest_start_date ?? parentSnapshot.interest_start_date ?? null) : (p.interestStartDate || null),
-            interest_rate_currency: p.interestRateCurrency === undefined ? (existingSnapshot.interest_rate_currency ?? parentSnapshot.interest_rate_currency ?? null) : (p.interestRateCurrency || null),
-            display_config: p.displayConfig === undefined ? (existingSnapshot.display_config ?? parentSnapshot.display_config ?? null) : (p.displayConfig || null),
-            public_note: p.note === undefined ? (existingSnapshot.public_note ?? null) : p.note,
-          }, parentOrder);
+          const snapshot = syncFunderParticipantSharedAssetSnapshot(
+            syncFunderParticipantCollateralSnapshot({
+              ...parentSnapshot,
+              ...existingSnapshot,
+              // 未在本次表单编辑的字段必须保留该拥有者已有快照；尤其是自动补齐的主订单拥有者。
+              amount: p.amount === undefined ? (existingSnapshot.amount ?? parentSnapshot.amount ?? null) : (p.amount || null),
+              amount_currency: p.amountCurrency === undefined ? (existingSnapshot.amount_currency ?? parentSnapshot.amount_currency ?? null) : (p.amountCurrency || null),
+              interest_rate_annual: p.interestRate === undefined ? (existingSnapshot.interest_rate_annual ?? parentSnapshot.interest_rate_annual ?? null) : (p.interestRate || null),
+              interest_base: p.interestBase === undefined ? (existingSnapshot.interest_base ?? parentSnapshot.interest_base ?? null) : (p.interestBase || null),
+              interest_base_currency: p.interestBaseCurrency === undefined ? (existingSnapshot.interest_base_currency ?? parentSnapshot.interest_base_currency ?? null) : (p.interestBaseCurrency || null),
+              interest_payment_type: p.interestPaymentType === undefined ? (existingSnapshot.interest_payment_type ?? parentSnapshot.interest_payment_type ?? null) : (p.interestPaymentType || null),
+              interest_start_date: p.interestStartDate === undefined ? (existingSnapshot.interest_start_date ?? parentSnapshot.interest_start_date ?? null) : (p.interestStartDate || null),
+              interest_rate_currency: p.interestRateCurrency === undefined ? (existingSnapshot.interest_rate_currency ?? parentSnapshot.interest_rate_currency ?? null) : (p.interestRateCurrency || null),
+              display_config: p.displayConfig === undefined ? (existingSnapshot.display_config ?? parentSnapshot.display_config ?? null) : (p.displayConfig || null),
+              public_note: p.note === undefined ? (existingSnapshot.public_note ?? null) : p.note,
+            }, parentOrder),
+            parentOrder,
+          );
           if (existing) {
             await conn.execute(
               `UPDATE ledger_order_participants SET role = ?, previous_role = NULL, amount = ?, amount_currency = ?, interest_rate = ?, interest_base = ?,
@@ -20912,21 +20940,24 @@ ${klinesSummary}
         ) as any;
         const snapshotSource = Array.isArray(snapshotRows) ? snapshotRows[0] : null;
         if (!snapshotSource) throw new TRPCError({ code: 'NOT_FOUND', message: '参与者子订单不存在或已停用' });
-        const syncedSnapshot = syncFunderParticipantCollateralSnapshot({
-          ...buildFunderParticipantSnapshot(snapshotSource),
-          ...(parseFunderParticipantSnapshot(snapshotSource.order_snapshot) || {}),
-          interest_rate_annual: input.interestRate === undefined || input.interestRate === '' ? null : input.interestRate,
-          interest_base: input.interestBase || null,
-          interest_base_currency: input.interestBaseCurrency || null,
-          interest_payment_type: input.interestPaymentType || null,
-          interest_start_date: input.interestStartDate || null,
-          interest_rate_currency: input.interestRateCurrency || null,
-          display_config: input.displayConfig || null,
-          buy_date: input.buyDateOverride || null,
-          broker_name: input.brokerNameOverride || null,
-          broker_account: input.brokerAccountOverride || null,
-          public_note: input.note || null,
-        }, snapshotSource);
+        const syncedSnapshot = syncFunderParticipantSharedAssetSnapshot(
+          syncFunderParticipantCollateralSnapshot({
+            ...buildFunderParticipantSnapshot(snapshotSource),
+            ...(parseFunderParticipantSnapshot(snapshotSource.order_snapshot) || {}),
+            interest_rate_annual: input.interestRate === undefined || input.interestRate === '' ? null : input.interestRate,
+            interest_base: input.interestBase || null,
+            interest_base_currency: input.interestBaseCurrency || null,
+            interest_payment_type: input.interestPaymentType || null,
+            interest_start_date: input.interestStartDate || null,
+            interest_rate_currency: input.interestRateCurrency || null,
+            display_config: input.displayConfig || null,
+            buy_date: input.buyDateOverride || null,
+            broker_name: input.brokerNameOverride || null,
+            broker_account: input.brokerAccountOverride || null,
+            public_note: input.note || null,
+          }, snapshotSource),
+          snapshotSource,
+        );
         await conn.execute(
           `UPDATE ledger_order_participants SET
             commission_rate = ?, commission_base = ?, commission_start_date = ?,
@@ -20981,8 +21012,6 @@ ${klinesSummary}
           ...buildFunderParticipantSnapshot(row),
           ...(parseFunderParticipantSnapshot(row.order_snapshot) || {}),
           ...buildFunderParticipantSnapshot(input.snapshot),
-          // 参与者可独立调整金额、买入单价和币数，但标的币种始终继承主订单。
-          coin: row.coin,
         };
         // 只有从参与者编辑页明确提交担保字段时，才记录为该参与者的独立担保物。
         // 普通金额、利率、备注等保存不能让历史担保快照重新覆盖主订单。
@@ -20991,7 +21020,10 @@ ${klinesSummary}
         } else if (hasFunderParticipantCollateralOverride(input.snapshot)) {
           mergedSnapshot.participant_collateral_override = true;
         }
-        mergedSnapshot = syncFunderParticipantCollateralSnapshot(mergedSnapshot, row);
+        mergedSnapshot = syncFunderParticipantSharedAssetSnapshot(
+          syncFunderParticipantCollateralSnapshot(mergedSnapshot, row),
+          row,
+        );
         await conn.execute(
           `UPDATE ledger_order_participants SET
              order_snapshot = ?, amount = ?, amount_currency = ?, interest_rate = ?, interest_base = ?,

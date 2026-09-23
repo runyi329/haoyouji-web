@@ -469,6 +469,31 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     }));
   };
 
+  // 编辑订单时也允许更正购买币种。买入价和币数属于旧币种的单位，不能在切币后继续沿用，
+  // 因此保留融资金额、清空这两项，并要求按新币种重新输入任意两项以恢复三字段联动。
+  // 期权订单的标的币种必须与主订单币种一致，切换时一并清空旧标的参数。
+  const handlePurchaseCoinChange = (nextCoin: CoinType) => {
+    if (nextCoin === formData.coin) return;
+    resetLinkedAmountFields();
+    setFormData(current => ({
+      ...current,
+      coin: nextCoin,
+      buyPrice: '',
+      buyQuantity: '',
+    }));
+    if (formData.assetType === 'crypto_option') {
+      setOptionFormData(current => ({
+        ...current,
+        optionCurrency: nextCoin,
+        deribitLabel: '',
+        exerciseDate: '',
+        strikePrice: '',
+        premium: '',
+        buyQty: '',
+      }));
+    }
+  };
+
   // 融资金额始终以输入框当前值为准；若它是第三个字段，则该值已由联动函数推算。
   // 底层统一保存为USDT基准，融资币种仅控制输入和展示口径。
   const financingAmountUsdt = useMemo(() => {
@@ -2115,19 +2140,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 {/* 购买币种 + 币数（同行并排） */}
                 <div className="flex items-end gap-3">
                   <div style={{ width: '40%' }}>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">购买币种{editingOrder && <span className="ml-1 text-xs text-orange-500 font-normal">(不可改)</span>}</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">购买币种</label>
                     <select
                       value={formData.coin}
-                      onChange={e => {
-                        if (editingOrder) return;
-                        const nextCoin = e.target.value as CoinType;
-                        setFormData(d => ({ ...d, coin: nextCoin }));
-                        if (formData.assetType === 'crypto_option') {
-                          setOptionFormData(d => ({ ...d, optionCurrency: nextCoin, deribitLabel: '', exerciseDate: '', strikePrice: '' }));
-                        }
-                      }}
-                      disabled={!!editingOrder}
-                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none disabled:text-gray-300"
+                      onChange={e => handlePurchaseCoinChange(e.target.value as CoinType)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
                       style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
                     >
                       {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
@@ -2159,11 +2176,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       <label className="block text-xs font-medium text-gray-500 mb-1.5">标的币种</label>
                       <select
                         value={optionFormData.optionCurrency}
-                        onChange={e => {
-                          const nextCoin = e.target.value as CoinType;
-                          setOptionFormData(d => ({ ...d, optionCurrency: nextCoin, deribitLabel: '', exerciseDate: '', strikePrice: '' }));
-                          if (!editingOrder) setFormData(d => ({ ...d, coin: nextCoin }));
-                        }}
+                        onChange={e => handlePurchaseCoinChange(e.target.value as CoinType)}
                         className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200 appearance-none bg-white"
                       >
                         {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
