@@ -4087,6 +4087,13 @@ export default function LedgerDetail() {
                         className="h-7 rounded-full text-xs font-semibold"
                         style={{ padding: '0 14px', background: 'transparent', border: '1px solid rgba(201,168,76,0.55)', color: '#F5D78E' }}
                       >提现</button>
+                      {!viewAsUserId && (
+                        <button
+                          onClick={() => setLocation('/wallet?fromLedger=52')}
+                          className="h-7 rounded-full text-xs font-semibold"
+                          style={{ padding: '0 12px', background: 'rgba(201,168,76,0.14)', border: '1px solid rgba(201,168,76,0.55)', color: '#F5D78E' }}
+                        >转账</button>
+                      )}
                     </div>
                   )}
                 </div>
