@@ -296,6 +296,7 @@ export default function AfRechargeManage() {
       page: adjLogPage,
       pageSize: ADJ_PAGE_SIZE,
       includeUnifiedBalance: true,
+      includeAllWalletEvents: true,
       ...(adjGlobalFlowKeyword.trim() ? { keyword: adjGlobalFlowKeyword.trim() } : {}),
       ...(adjGlobalDateRange.startDate ? { startDate: adjGlobalDateRange.startDate } : {}),
       ...(adjGlobalDateRange.endDate ? { endDate: adjGlobalDateRange.endDate } : {}),
@@ -303,7 +304,7 @@ export default function AfRechargeManage() {
   );
   const { data: adjRecentHistory } = mtrpc.adminUser.walletGlobalHistory.useQuery(
     // 从较宽的最新流水窗口中去重，确保下拉可稳定给出最近 10 位不同用户。
-    { page: 1, pageSize: 50 },
+    { page: 1, pageSize: 50, includeAllWalletEvents: true },
     { staleTime: 30_000 }
   );
   const adjLogItems = adjGlobalLog?.items ?? [];
@@ -1584,7 +1585,10 @@ export default function AfRechargeManage() {
           {adjFlowTab === "global" && (
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[13px] font-bold text-black">全局流水日志</p>
+              <div>
+                <p className="text-[13px] font-bold text-black">全局钱包流水</p>
+                <p className="mt-0.5 text-[10px] text-gray-400">含充值、提现、订单扣款/结算、管理费及手动调账</p>
+              </div>
               <span className="text-[11px] text-gray-400">共 {adjLogTotal} 条</span>
             </div>
             <LedgerFlowFilters
@@ -1617,13 +1621,31 @@ export default function AfRechargeManage() {
               <p className="py-6 text-center text-[12px] text-gray-300">全局流水加载中...</p>
             ) : adjLogItems.length === 0 ? (
               <p className="text-center text-[12px] text-gray-300 py-6">
-                {adjGlobalFlowKeyword.trim() || adjGlobalFlowDatePreset !== 'all' ? '未找到符合条件的流水' : '暂无调账记录'}
+                {adjGlobalFlowKeyword.trim() || adjGlobalFlowDatePreset !== 'all' ? '未找到符合条件的流水' : '暂无钱包资金流水'}
               </p>
             ) : (
               <div className="space-y-2">
                 {adjGlobalLogFetching && <p className="text-center text-[10px] text-gray-300">刷新中...</p>}
                 {adjLogItems.map((r: any, i: number) => {
-                  const typeLabel: Record<string, string> = { recharge: '充值', consume: '消费', refund: '退款', reward: '奖励', withdraw: '扣款', reward_clawback: '奖励回收', commission: '佣金' };
+                  const typeLabel: Record<string, string> = {
+                    recharge: '充值到账',
+                    consume: '消费',
+                    refund: '退款',
+                    reward: '奖励',
+                    withdraw: '提现',
+                    reward_clawback: '奖励回收',
+                    commission: '佣金',
+                    order_buy: '订单扣款',
+                    order_settlement: '订单结算',
+                    management_fee: '管理费',
+                    manual: '手动调账',
+                  };
+                  const sourceType = String(r.sourceType ?? 'balance_history');
+                  const sourceId = Number(r.sourceId ?? r.id ?? 0);
+                  const canRevoke = sourceId > 0
+                    && !['order_buy', 'order_settlement', 'management_fee'].includes(String(r.type ?? ''))
+                    && !String(r.note ?? '').includes('撤回误操作');
+                  const canEditNote = sourceId > 0 && (sourceType === 'manual' || sourceType === 'balance_history');
                   return (
                     <div key={r.id ?? i} className="py-2.5 border-b border-gray-50 last:border-0">
                       <div className="flex items-start justify-between">
@@ -1638,7 +1660,7 @@ export default function AfRechargeManage() {
                           <p className="text-[10px] text-gray-400 mt-0.5">{new Date(r.createdAt).toLocaleString("zh-CN")}</p>
                           {r.balance != null && (
                             <p className="mt-0.5 text-[10px] text-gray-400">
-                              调后余额 {r.currency === "CNY" ? "¥" : ""}{Number(r.balance).toFixed(r.currency === "CNY" ? 2 : 4)} {r.currency === "CNY" ? "CNY" : "USDT"}
+                              该笔后余额 {r.currency === "CNY" ? "¥" : ""}{Number(r.balance).toFixed(r.currency === "CNY" ? 2 : 4)} {r.currency === "CNY" ? "CNY" : "USDT"}
                             </p>
                           )}
                         </div>
@@ -1646,22 +1668,35 @@ export default function AfRechargeManage() {
                           <p className={`text-[14px] font-bold ${Number(r.amount) >= 0 ? "text-green-600" : "text-red-500"}`}>
                             {Number(r.amount) >= 0 ? "+" : ""}{r.currency === "CNY" ? "¥" : ""}{Number(r.amount).toFixed(r.currency === "CNY" ? 2 : 4)}
                           </p>
-                          {!String(r.note ?? '').includes('撤回误操作') && (
+                          {canRevoke && (
                             <button
-                              onClick={() => { setRevokeTarget({ type: 'history', historyId: r.id, amount: Math.abs(Number(r.amount)), currency: r.currency }); setShowRevokeDialog(true); }}
+                              onClick={() => {
+                                if (sourceType === 'recharge') {
+                                  setRevokeTarget({ type: 'order', orderId: sourceId, amount: Math.abs(Number(r.amount)) });
+                                } else if (sourceType === 'manual') {
+                                  setRevokeTarget({ type: 'manual', manualId: sourceId, amount: Math.abs(Number(r.amount)), currency: r.currency });
+                                } else {
+                                  setRevokeTarget({ type: 'history', historyId: sourceId, amount: Math.abs(Number(r.amount)), currency: r.currency });
+                                }
+                                setShowRevokeDialog(true);
+                              }}
                               className="text-[10px] text-purple-500 border border-purple-200 px-2 py-0.5 rounded-full hover:bg-purple-50"
                             >撤回</button>
                           )}
-                          <button
-                            onClick={() => {
-                              const raw = String(r.note ?? '').replace(/\[.*?\]/g, '').trim();
-                              setNoteTarget({ historyId: r.id, currentNote: raw });
-                              setNoteContent(raw);
-                              setNoteSelectedCommonNote(adjCommonNotes.includes(raw) ? raw : null);
-                              setShowNoteDialog(true);
-                            }}
-                            className="text-[10px] text-blue-500 border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-50"
-                          >编辑备注</button>
+                          {canEditNote && (
+                            <button
+                              onClick={() => {
+                                const raw = String(r.note ?? '').replace(/\[.*?\]/g, '').trim();
+                                setNoteTarget(sourceType === 'manual'
+                                  ? { manualId: sourceId, currentNote: raw }
+                                  : { historyId: sourceId, currentNote: raw });
+                                setNoteContent(raw);
+                                setNoteSelectedCommonNote(adjCommonNotes.includes(raw) ? raw : null);
+                                setShowNoteDialog(true);
+                              }}
+                              className="text-[10px] text-blue-500 border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-50"
+                            >编辑备注</button>
+                          )}
                         </div>
                       </div>
                     </div>

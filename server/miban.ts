@@ -816,6 +816,97 @@ async function getUnifiedUsdtBalanceAfterByHistoryId(conn: any, userIds: number[
   return result;
 }
 
+/**
+ * 为全局钱包流水的当前页重建每笔 USDT 事件后的累计余额。
+ *
+ * 全局流水不能只查询 balance_history：谷底增筹下单、卖出结算、管理费、撤单退款等
+ * 已实际影响钱包的事件主要写在 af_manual_balances。此函数与用户流水采用同一三源合并
+ * 原则：已完成充值、非基础余额的 af_manual_balances、去重后的 balance_history。
+ */
+async function getUnifiedWalletBalanceAfterByEventKey(conn: any, userIds: number[]) {
+  const result = new Map<string, number>();
+  const ids = Array.from(new Set(userIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)));
+  if (ids.length === 0) return result;
+  const placeholders = ids.map(() => '?').join(',');
+  try {
+    const [rechargeRows] = await conn.execute(
+      `SELECT r.id AS order_id, r.user_id, h.id AS history_id, h.amount AS actual_amount,
+              COALESCE(r.completed_at, r.created_at) AS occurred_at
+       FROM recharge_orders r
+       INNER JOIN balance_history h ON h.user_id = r.user_id
+         AND h.type = 'recharge' AND h.related_id = r.id
+       WHERE r.user_id IN (${placeholders}) AND r.status = 'completed'
+       ORDER BY COALESCE(r.completed_at, r.created_at) ASC, r.id ASC`,
+      ids,
+    ) as any[];
+    const [manualRows] = await conn.execute(
+      `SELECT id, user_id, amount, created_at
+       FROM af_manual_balances
+       WHERE user_id IN (${placeholders})
+         AND COALESCE(note, '') NOT LIKE '[CNY]%'
+         AND COALESCE(note, '') NOT LIKE '[BALANCE_BASE]%'
+       ORDER BY created_at ASC, id ASC`,
+      ids,
+    ) as any[];
+    const [historyRows] = await conn.execute(
+      `SELECT id, user_id, amount, type, currency, related_id, description, created_at
+       FROM balance_history
+       WHERE user_id IN (${placeholders})
+         AND (currency IS NULL OR currency = '' OR UPPER(currency) = 'USDT')
+       ORDER BY created_at ASC, id ASC`,
+      ids,
+    ) as any[];
+    const rechargeList = Array.isArray(rechargeRows) ? rechargeRows : [];
+    const manualList = Array.isArray(manualRows) ? manualRows : [];
+    const historyList = Array.isArray(historyRows) ? historyRows : [];
+    const toMs = (value: unknown) => new Date(String(value)).getTime();
+
+    for (const userId of ids) {
+      type WalletEvent = { key: string; amount: number; createdAt: unknown };
+      const userRecharges: WalletEvent[] = rechargeList
+        .filter((row: any) => Number(row.user_id) === userId)
+        .map((row: any) => ({
+          key: `r_${row.order_id}`,
+          amount: Number(row.actual_amount ?? 0),
+          createdAt: row.occurred_at,
+        }));
+      const userManuals: WalletEvent[] = manualList
+        .filter((row: any) => Number(row.user_id) === userId)
+        .map((row: any) => ({
+          key: `m_${row.id}`,
+          amount: Number(row.amount ?? 0),
+          createdAt: row.created_at,
+        }));
+      const userHistory: WalletEvent[] = historyList
+        .filter((row: any) => Number(row.user_id) === userId)
+        // 已完成充值在上面以 recharge_orders 的实际到账金额呈现，避免同一笔重复。
+        .filter((row: any) => !(String(row.type) === 'recharge' && row.related_id != null))
+        .filter((row: any) => !String(row.description ?? '').includes('[迁移自af_manual_balances'))
+        .filter((row: any) => !userManuals.some((manual) =>
+          Math.abs(toMs(manual.createdAt) - toMs(row.created_at)) <= 2000
+          && Math.abs(Math.abs(manual.amount) - Math.abs(Number(row.amount ?? 0))) < 0.001,
+        ))
+        .map((row: any) => ({
+          key: `bh_${row.id}`,
+          amount: Number(row.amount ?? 0),
+          createdAt: row.created_at,
+        }));
+      const merged = [...userRecharges, ...userManuals, ...userHistory].sort(
+        (a, b) => toMs(a.createdAt) - toMs(b.createdAt),
+      );
+      let running = 0;
+      for (const item of merged) {
+        running += item.amount;
+        result.set(item.key, Number(running.toFixed(8)));
+      }
+    }
+  } catch (error) {
+    // 单页余额重建失败时仍返回全部流水；前端将显示该条原始余额或“暂不可用”。
+    console.warn('[miban] unified global wallet event balance reconstruction failed:', (error as any)?.message);
+  }
+  return result;
+}
+
 async function updateUserMibanRole(userId: number, role: "parent" | "baby") {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
@@ -2225,6 +2316,8 @@ export const mibanAdminUserRouter = router({
       startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       includeUnifiedBalance: z.boolean().optional(),
+      // true 时按真实钱包事件合并：充值、提现、系统钱包流水及 AF 订单/结算/费用流水。
+      includeAllWalletEvents: z.boolean().optional(),
     }))
     .query(async ({ input }) => {
       const conn = await getDbConnection();
@@ -2232,6 +2325,149 @@ export const mibanAdminUserRouter = router({
       const page = Math.max(1, Math.floor(input.page ?? 1));
       const pageSize = Math.min(50, Math.max(1, Math.floor(input.pageSize ?? 20)));
       const offset = (page - 1) * pageSize;
+
+      // 充值管理的“全局流水”需要覆盖每一笔真实钱包变动，而不是只看 balance_history。
+      // AF 订单买入、卖出结算、管理费和退款会写入 af_manual_balances；已完成充值则以
+      // recharge_orders 关联的实际到账金额为准。三源按用户/时间/金额去重，严格对应用户端流水口径。
+      if (input.includeAllWalletEvents) {
+        const eventSourceSql = `
+          SELECT
+            CONCAT('r_', r.id) AS event_key,
+            r.id AS source_id,
+            'recharge' AS source_type,
+            r.user_id,
+            h.amount,
+            'recharge' AS event_type,
+            'USDT' AS currency,
+            '充值到账' AS note,
+            NULL AS raw_balance,
+            COALESCE(r.completed_at, r.created_at) AS created_at
+          FROM recharge_orders r
+          INNER JOIN balance_history h ON h.user_id = r.user_id
+            AND h.type = 'recharge' AND h.related_id = r.id
+          WHERE r.status = 'completed'
+
+          UNION ALL
+
+          SELECT
+            CONCAT('m_', m.id) AS event_key,
+            m.id AS source_id,
+            'manual' AS source_type,
+            m.user_id,
+            m.amount,
+            CASE
+              WHEN m.note LIKE '委托买入%' THEN 'order_buy'
+              WHEN m.note LIKE '卖出成交%' THEN 'order_settlement'
+              WHEN m.note LIKE '%管理费%' THEN 'management_fee'
+              WHEN m.note LIKE '%撤单%' OR m.note LIKE '%退款%' THEN 'refund'
+              WHEN m.note LIKE '%提现%' THEN 'withdraw'
+              ELSE 'manual'
+            END AS event_type,
+            'USDT' AS currency,
+            m.note,
+            NULL AS raw_balance,
+            m.created_at
+          FROM af_manual_balances m
+          WHERE COALESCE(m.note, '') NOT LIKE '[CNY]%'
+            AND COALESCE(m.note, '') NOT LIKE '[BALANCE_BASE]%'
+
+          UNION ALL
+
+          SELECT
+            CONCAT('bh_', bh.id) AS event_key,
+            bh.id AS source_id,
+            'balance_history' AS source_type,
+            bh.user_id,
+            bh.amount,
+            bh.type AS event_type,
+            COALESCE(NULLIF(UPPER(bh.currency), ''), 'USDT') AS currency,
+            bh.description AS note,
+            bh.balance AS raw_balance,
+            bh.created_at
+          FROM balance_history bh
+          WHERE NOT (bh.type = 'recharge' AND bh.related_id IS NOT NULL)
+            AND COALESCE(bh.description, '') NOT LIKE '%[迁移自af_manual_balances%'
+            AND NOT (
+              (bh.currency IS NULL OR bh.currency = '' OR UPPER(bh.currency) = 'USDT')
+              AND EXISTS (
+                SELECT 1 FROM af_manual_balances duplicate_manual
+                WHERE duplicate_manual.user_id = bh.user_id
+                  AND COALESCE(duplicate_manual.note, '') NOT LIKE '[CNY]%'
+                  AND COALESCE(duplicate_manual.note, '') NOT LIKE '[BALANCE_BASE]%'
+                  AND ABS(TIMESTAMPDIFF(SECOND, duplicate_manual.created_at, bh.created_at)) <= 2
+                  AND ABS(ABS(duplicate_manual.amount) - ABS(bh.amount)) < 0.001
+              )
+            )
+        `;
+        const whereParts: string[] = [];
+        const whereValues: unknown[] = [];
+        const keyword = input.keyword?.trim();
+        if (keyword) {
+          const like = `%${keyword}%`;
+          whereParts.push(`(
+            COALESCE(u.name, '') LIKE ?
+            OR COALESCE(u.username, '') LIKE ?
+            OR COALESCE(wallet_event.note, '') LIKE ?
+            OR COALESCE(wallet_event.event_type, '') LIKE ?
+            OR CAST(wallet_event.amount AS CHAR) LIKE ?
+          )`);
+          whereValues.push(like, like, like, like, like);
+        }
+        if (input.startDate) {
+          whereParts.push(`wallet_event.created_at >= ?`);
+          whereValues.push(`${input.startDate} 00:00:00`);
+        }
+        if (input.endDate) {
+          whereParts.push(`wallet_event.created_at < DATE_ADD(?, INTERVAL 1 DAY)`);
+          whereValues.push(input.endDate);
+        }
+        const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+        const [[countRow]] = await (conn as any).execute(
+          `SELECT COUNT(*) AS total
+           FROM (${eventSourceSql}) wallet_event
+           LEFT JOIN users u ON u.id = wallet_event.user_id
+           ${whereSql}`,
+          whereValues,
+        ) as any[];
+        const [rows] = await (conn as any).execute(
+          `SELECT wallet_event.*, u.name AS user_name, u.username
+           FROM (${eventSourceSql}) wallet_event
+           LEFT JOIN users u ON u.id = wallet_event.user_id
+           ${whereSql}
+           ORDER BY wallet_event.created_at DESC, wallet_event.event_key DESC
+           LIMIT ? OFFSET ?`,
+          [...whereValues, pageSize, offset],
+        ) as any[];
+        const rowList = Array.isArray(rows) ? rows : [];
+        const unifiedUsdtBalanceByEventKey = input.includeUnifiedBalance
+          ? await getUnifiedWalletBalanceAfterByEventKey(conn, rowList.map((row: any) => Number(row.user_id)))
+          : new Map<string, number>();
+        return {
+          total: Number(countRow?.total ?? 0),
+          items: rowList.map((r: any) => {
+            const currency = String(r.currency ?? 'USDT').toUpperCase() as 'USDT' | 'CNY';
+            const isUsdt = currency === 'USDT';
+            const eventKey = String(r.event_key);
+            return {
+              id: eventKey,
+              sourceId: Number(r.source_id),
+              sourceType: String(r.source_type),
+              userId: Number(r.user_id),
+              userName: r.user_name ?? r.username ?? `用户${r.user_id}`,
+              username: r.username ?? '',
+              amount: parseFloat(r.amount ?? '0'),
+              type: String(r.event_type ?? 'manual'),
+              note: String(r.note ?? ''),
+              currency,
+              balance: isUsdt && input.includeUnifiedBalance
+                ? (unifiedUsdtBalanceByEventKey.get(eventKey) ?? null)
+                : (r.raw_balance == null ? null : parseFloat(r.raw_balance ?? '0')),
+              createdAt: r.created_at ? String(r.created_at) : '',
+            };
+          }),
+        };
+      }
+
       const whereParts: string[] = [];
       const whereValues: unknown[] = [];
       const keyword = input.keyword?.trim();
