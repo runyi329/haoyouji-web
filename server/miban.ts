@@ -2435,8 +2435,8 @@ export const mibanAdminUserRouter = router({
            LEFT JOIN users u ON u.id = wallet_event.user_id
            ${whereSql}
            ORDER BY wallet_event.created_at DESC, wallet_event.event_key DESC
-           LIMIT ? OFFSET ?`,
-          [...whereValues, pageSize, offset],
+           LIMIT ${pageSize} OFFSET ${offset}`,
+          whereValues,
         ) as any[];
         const rowList = Array.isArray(rows) ? rows : [];
         const unifiedUsdtBalanceByEventKey = input.includeUnifiedBalance
