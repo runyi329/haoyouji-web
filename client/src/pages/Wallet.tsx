@@ -332,7 +332,7 @@ function WalletTransferContent({
   const addFavoriteMutation = trpc.recharge.addWalletTransferFavorite.useMutation({
     onSuccess: () => {
       void favoritesQuery.refetch();
-      toast.success('已加入常用转账人');
+      toast.success('已加入转账白名单');
     },
   });
   const transferMutation = trpc.recharge.transferWalletBalance.useMutation({
@@ -386,17 +386,6 @@ function WalletTransferContent({
         <div className="text-sm text-center leading-6" style={{ color: G.whiteDim }}>
           已向 {recipient?.nickname || recipient?.name || "收款人"} 转账 {completed.amount.toFixed(amountDigits)} {currency}。<br />转账编号：{completed.transferNo}
         </div>
-        {recipient && !recipientIsFavorite && (
-          <button
-            type="button"
-            onClick={() => addFavoriteMutation.mutate({ recipientUserId: Number(recipient.id) })}
-            disabled={addFavoriteMutation.isPending}
-            className="w-full py-3 rounded-xl text-sm font-semibold disabled:opacity-50"
-            style={{ background: G.goldFaint, border: `1px solid ${G.goldDim}`, color: G.goldLight }}
-          >{addFavoriteMutation.isPending ? '正在添加…' : '加为常用转账人'}</button>
-        )}
-        {recipientIsFavorite && <span className="text-xs" style={{ color: G.green }}>已在常用转账人中</span>}
-        {addFavoriteMutation.error && <p className="text-center text-xs text-red-300">{addFavoriteMutation.error.message || '添加失败，请稍后重试'}</p>}
         <button
           onClick={onClose}
           className="w-full py-3 rounded-xl text-sm font-medium"
@@ -414,7 +403,8 @@ function WalletTransferContent({
             <AlertTriangle className="w-4 h-4" /> 请再次核对转账信息
           </div>
           <div className="pt-1 space-y-1.5 text-xs" style={{ color: G.whiteDim }}>
-            <div className="flex justify-between gap-4"><span>收款人</span><span className="text-right" style={{ color: G.white }}>{recipient.name}</span></div>
+            <div className="flex justify-between gap-4"><span>收款 ID</span><span className="text-right font-mono tracking-[0.12em]" style={{ color: G.goldLight }}>{recipient.paymentId}</span></div>
+            <div className="flex justify-between gap-4"><span>昵称</span><span className="text-right" style={{ color: G.white }}>{recipient.nickname || recipient.name}</span></div>
             <div className="flex justify-between gap-4"><span>用户名</span><span className="text-right" style={{ color: G.white }}>@{recipient.username}</span></div>
             <div className="flex justify-between gap-4"><span>转账金额</span><span className="text-right font-bold" style={{ color: G.goldLight }}>{amountDisplay} {currency}</span></div>
           </div>
@@ -440,7 +430,10 @@ function WalletTransferContent({
 
       {favorites.length > 0 && (
         <div>
-          <div className="text-xs mb-1.5" style={{ color: G.whiteDim }}>常用转账人</div>
+          <div className="flex items-center justify-between text-xs mb-1.5" style={{ color: G.whiteDim }}>
+            <span>转账白名单</span>
+            <span className="text-[10px]">最近添加优先</span>
+          </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {favorites.map((favorite: any) => (
               <button
@@ -460,6 +453,7 @@ function WalletTransferContent({
               </button>
             ))}
           </div>
+          <p className="mt-1.5 text-[10px] leading-4" style={{ color: G.whiteDim }}>选择白名单用户后，仍须核验收款人、填写金额并再次确认，不会直接转账。</p>
         </div>
       )}
 
@@ -507,6 +501,21 @@ function WalletTransferContent({
             <span style={{ color: G.whiteDim }}>昵称</span><span style={{ color: G.white }}>{recipient.nickname || recipient.name}</span>
             <span style={{ color: G.whiteDim }}>用户名</span><span style={{ color: G.white }}>@{recipient.username}</span>
           </div>
+          <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3" style={{ borderColor: 'rgba(52,211,153,0.18)' }}>
+            <span className="text-[11px] leading-4" style={{ color: G.whiteDim }}>白名单仅用于下次快速带入收款人，仍需再次确认。</span>
+            {recipientIsFavorite ? (
+              <span className="shrink-0 text-xs font-medium" style={{ color: G.green }}>已在白名单</span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => addFavoriteMutation.mutate({ recipientUserId: Number(recipient.id) })}
+                disabled={addFavoriteMutation.isPending}
+                className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold disabled:opacity-50"
+                style={{ background: 'rgba(52,211,153,0.14)', border: '1px solid rgba(52,211,153,0.35)', color: G.green }}
+              >{addFavoriteMutation.isPending ? '添加中…' : '加入白名单'}</button>
+            )}
+          </div>
+          {addFavoriteMutation.error && <p className="mt-2 text-xs text-red-300">{addFavoriteMutation.error.message || '添加白名单失败，请稍后重试'}</p>}
         </div>
       )}
 

@@ -1921,7 +1921,7 @@ ${klinesSummary}
         return await dbRecharge.lookupWalletTransferRecipient(ctx.user.id, input.identifier);
       }),
 
-    // 常用转账人只由当前用户自行维护；仅返回其已主动保存的对象。
+    // 转账白名单只由当前用户自行维护；仅返回其已主动授权保存的对象。
     getWalletTransferFavorites: protectedProcedure
       .query(async ({ ctx }) => {
         return await dbRecharge.getWalletTransferFavorites(ctx.user.id);
