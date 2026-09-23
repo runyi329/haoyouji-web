@@ -12819,7 +12819,8 @@ ${klinesSummary}
         return list.length > 0 ? list[0] : null;
       }),
 
-    // 获取指定账本活跃的右侧保证金标签列表（margin_pause_date IS NULL）
+    // 获取指定账本可供融资订单引用的右侧保证金标签列表。
+    // 暂停只停止对应人员后续查询，不代表历史标签数据失效；52号订单仍可引用其既有盈亏、担保和利息数据。
     getActiveMarginTags: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
@@ -12829,10 +12830,16 @@ ${klinesSummary}
         if (!db) return [];
         try {
           const rows = await db.execute(
-            sql`SELECT tag_name FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND margin_pause_date IS NULL`
+            sql`SELECT tag_name, margin_pause_date
+                FROM ledger_tag_config
+                WHERE ledger_id = ${input.ledgerId}
+                ORDER BY (margin_pause_date IS NOT NULL), tag_name`
           );
           const list = (rows as any)[0] as any[];
-          return list.map((r: any) => ({ tagName: r.tag_name as string }));
+          return list.map((r: any) => ({
+            tagName: r.tag_name as string,
+            paused: r.margin_pause_date !== null && r.margin_pause_date !== undefined,
+          }));
         } catch (e: any) {
           console.error('[getActiveMarginTags] error:', e.message);
           return [];

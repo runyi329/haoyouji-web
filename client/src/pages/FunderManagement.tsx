@@ -399,7 +399,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     { enabled: ledgerId > 0 && !!sharedCollateralUserId && collateralShareMode === 'self', staleTime: 5000 }
   );
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
-  // 获取37号账本活跃的右侧保证金标签列表（供下拉框使用）
+  // 获取37号账本可引用的右侧保证金标签列表；暂停标签仍保留历史数据，允许在52号订单中引用。
   const { data: activeMarginTags } = trpc.ledger.getActiveMarginTags.useQuery(
     { ledgerId: 37 },
     { enabled: collateralSourceMode === 'external', staleTime: 30000 }
@@ -2705,6 +2705,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               {/* 股票订单：盈亏、担保物、利息标签分别选择，互不强制联动。 */}
               {formData.assetType === 'stock' && collateralSourceMode === 'external' && (
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-3">
+                <div className="rounded-lg border border-blue-100 bg-white/70 px-2.5 py-2 text-[11px] leading-4 text-blue-600">
+                  下拉列表包含已暂停的37号标签；暂停只停止对应人员后续查询，既有盈亏、担保和利息数据仍可引用。
+                </div>
                 <div className="space-y-1.5">
                   <div className="text-xs font-medium text-blue-600">盈亏标签（37号账本）</div>
                   <select
@@ -2728,7 +2731,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   >
                     <option value="">不读取37号浮动盈亏</option>
                     {(activeMarginTags as any[])?.map((t: any) => (
-                      <option key={t.tagName} value={t.tagName}>{t.tagName}</option>
+                      <option key={t.tagName} value={t.tagName}>{t.tagName}{t.paused ? '（已暂停，可引用历史数据）' : ''}</option>
                     ))}
                   </select>
                   <div className="text-[11px] text-blue-500">仅影响股票浮动盈亏和担保缺口中的净值盈亏项，不会自动引用保证金。</div>
@@ -2756,7 +2759,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   >
                     <option value="">不引用37号担保货币（下方手工录入）</option>
                     {(activeMarginTags as any[])?.map((t: any) => (
-                      <option key={t.tagName} value={t.tagName}>{t.tagName}</option>
+                      <option key={t.tagName} value={t.tagName}>{t.tagName}{t.paused ? '（已暂停，可引用历史数据）' : ''}</option>
                     ))}
                   </select>
                   <div className="text-[11px] text-blue-500">可与盈亏标签不同；未选择时，下方手工担保货币区域可直接使用。</div>
@@ -2777,7 +2780,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   >
                     <option value="">不引用37号利息（保留手工结息）</option>
                     {(activeMarginTags as any[])?.map((t: any) => (
-                      <option key={t.tagName} value={t.tagName}>{t.tagName}</option>
+                      <option key={t.tagName} value={t.tagName}>{t.tagName}{t.paused ? '（已暂停，可引用历史数据）' : ''}</option>
                     ))}
                   </select>
                   <div className="text-[11px] text-blue-500">选中后，“已结利息”读取37号利息页累计合计；订单页尾的手工记录结息将锁定。</div>
