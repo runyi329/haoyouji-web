@@ -607,12 +607,16 @@ export function FunderOrderCard({
   const [showInterestHistory, setShowInterestHistory] = useState(false);
   const [showLinkedInterestDetail, setShowLinkedInterestDetail] = useState(false);
   // 共同拥有者会带 participantInfo 以支持独立快照，但主订单拥有者仍是主单的管理视角。
-  // 只有真实参与者才查询参与者专属结息数据，避免主拥有者被错误限制为“受邀订单”。
+  // 结息与担保保存的参与者作用域只用于“非主拥有者”的协作视角：共同拥有者、历史参与者都独立；
+  // 主拥有者自动补齐的 owner 关系仍沿用主订单流水，避免保存后被查到另一个空作用域。
   const _collaboratorRole = String((order as any).participantInfo?.role || '');
-  const _isParticipantOrder = _collaboratorRole !== 'owner' && (
-    !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder
-  );
-  const _participantUserId = _isParticipantOrder ? ((order as any).participantInfo?.userId || undefined) : undefined;
+  const _collaboratorUserId = Number((order as any).participantInfo?.userId || (order as any).participantInfo?.user_id || 0);
+  const _parentOwnerUserId = Number((order as any).user_id || 0);
+  const _hasCollaboratorView = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder;
+  const _isParticipantOrder = _hasCollaboratorView
+    && _collaboratorUserId > 0
+    && (_collaboratorUserId !== _parentOwnerUserId || _collaboratorRole !== 'owner');
+  const _participantUserId = _isParticipantOrder ? _collaboratorUserId : undefined;
   const interestHistoryQuery = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId, orderId: order.id as number, participantUserId: _participantUserId },
     { enabled: showInterestHistory, staleTime: 0 }
@@ -705,9 +709,7 @@ export function FunderOrderCard({
   const $setShowPaymentDatePicker = setShowPaymentDatePicker !== undefined ? setShowPaymentDatePicker : _intSetShowPaymentDatePicker;
   const $addPaymentMutation = addPaymentMutation !== undefined ? addPaymentMutation : _intAddPaymentMutation;
   const $deletePaymentMutation = deletePaymentMutation !== undefined ? deletePaymentMutation : _intDeletePaymentMutation;
-  const $interestPayments = _participantUserId !== undefined
-    ? (_intInterestPayments as any[] | undefined)
-    : (interestPayments !== undefined ? interestPayments : (_intInterestPayments as any[] | undefined));
+  const $interestPayments = interestPayments !== undefined ? interestPayments : (_intInterestPayments as any[] | undefined);
   const $updateMutation = updateMutation !== undefined ? updateMutation : _intUpdateMutation;
   const $showParticipantsPanel = showParticipantsPanel !== undefined ? showParticipantsPanel : _intShowParticipants;
   const $participantsList = participantsList !== undefined ? participantsList : _intParticipantsList;

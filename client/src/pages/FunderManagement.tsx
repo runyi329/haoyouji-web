@@ -388,8 +388,17 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   // funderGetAssetOrders 返回 { orders, livePrices }，取 orders 数组
   const assetOrders = (assetOrdersData as any)?.orders ?? assetOrdersData ?? [];
   const getParticipantUserIdForOrder = (order: any): number | undefined => {
-    const isParticipantOrder = !!order?.participantInfo || !!order?._isParticipant || !!order?._fromFunder || order?.order_perspective === 'other';
-    return isParticipantOrder ? (Number(order?.participantInfo?.userId) || undefined) : undefined;
+    const collaboratorUserId = Number(order?.participantInfo?.userId ?? order?.participantInfo?.user_id ?? 0);
+    const parentOwnerUserId = Number(order?.user_id ?? 0);
+    const collaboratorRole = String(order?.participantInfo?.role ?? '');
+    const hasCollaboratorView = !!order?.participantInfo || !!order?._isParticipant || !!order?._fromFunder;
+    // 主拥有者即使被自动加入 owner 协作组，仍读取主订单（NULL）结息流水；
+    // 其他共同拥有者与历史参与者则读取自己独立的结息流水。
+    return hasCollaboratorView
+      && collaboratorUserId > 0
+      && (collaboratorUserId !== parentOwnerUserId || collaboratorRole !== 'owner')
+      ? collaboratorUserId
+      : undefined;
   };
   const formLivePrices: Record<string, number> = (assetOrdersData as any)?.livePrices ?? {};
   // 共享担保池数据按当前编辑视角隔离：参与者子订单使用参与者自己的池。

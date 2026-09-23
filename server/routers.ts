@@ -18239,8 +18239,11 @@ ${klinesSummary}
               const viewedOrder: any = orderMap.get(oid);
               if (!viewedOrder) continue;
               const scopedView = targetUserId !== null || !isManager;
+              // 主拥有者被自动补齐为 owner 协作关系时仍使用主订单的 NULL 结息流水；
+              // 其他共同拥有者与历史参与者才使用其 participant_user_id 专属流水。
+              // 订单快照是否独立与结息流水作用域是两件事，不能仅凭 role='owner' 判为子流水。
               const isParticipantViewForOrder = scopedView && participantOrderSet.has(oid)
-                && (Number(viewedOrder.user_id) !== participantQueryUserId || piDetailMap[oid]?.role === 'owner');
+                && Number(viewedOrder.user_id) !== participantQueryUserId;
               const expectedParticipantId = isParticipantViewForOrder ? participantQueryUserId : null;
               const rowParticipantId = row.participant_user_id == null ? null : Number(row.participant_user_id);
               if (rowParticipantId !== expectedParticipantId) continue;
