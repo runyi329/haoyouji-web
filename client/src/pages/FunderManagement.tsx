@@ -577,6 +577,25 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     { enabled: ledgerId > 0, staleTime: 30000 }
   );
   const allOrders: any[] = (allOrdersData as any)?.orders ?? allOrdersData ?? [];
+  // 右侧借方列表会先于全量统计请求拿到卡片数据；在此期间以已显示订单兜底，避免下拉框只剩“全部成员”。
+  const memberSelectorOrders: any[] = allOrders.length > 0 ? allOrders : assetOrders;
+  const getMemberSelectorId = (member: any): number => Number(member?.userId ?? member?.user_id ?? member?.id ?? 0);
+  const isOrderRelatedToMember = (order: any, memberId: number): boolean => {
+    if (!memberId) return false;
+    const ownerId = Number(order?.userId ?? order?.user_id ?? 0);
+    const participantId = Number(order?.participantInfo?.userId ?? order?.participantInfo?.user_id ?? order?._participantUserId ?? 0);
+    const participantIds = Array.isArray(order?._participantUserIds) ? order._participantUserIds : [];
+    return ownerId === memberId
+      || participantId === memberId
+      || participantIds.some((id: unknown) => Number(id) === memberId);
+  };
+  // 成员目录同时使用账本成员和融资专用列表：前者避免专用请求短暂空载时丢失搜索入口，后者提供完整用户名资料。
+  const memberSelectorUsers = Array.from(new Map(
+    [
+      ...((((ledgerData as any)?.members || []) as any[])),
+      ...(((funderUsers as any[]) || [])),
+    ].map((member: any) => [getMemberSelectorId(member), member] as const).filter(([userId]) => userId > 0)
+  ).values());
 
   // 强制转成数字，避免 MySQL 返回字符串导致 tRPC z.number() 校验失败
   // 编辑面板专用：查询当前编辑订单的结息记录列表
@@ -1599,49 +1618,48 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               <span>
                 {selectedUserId === null
                   ? '全部成员'
-                  : (funderUsers as any[])?.find((u: any) => u.userId === selectedUserId)
-                    ? (() => { const _u = (funderUsers as any[]).find((u: any) => u.userId === selectedUserId); return getUserDisplayName(_u, '成员'); })()
+                  : memberSelectorUsers.find((u: any) => getMemberSelectorId(u) === Number(selectedUserId))
+                    ? (() => { const _u = memberSelectorUsers.find((u: any) => getMemberSelectorId(u) === Number(selectedUserId)); return getUserDisplayName(_u, '成员'); })()
                     : '选择成员'}
               </span>
               <ChevronDown className="w-4 h-4 text-gray-400 ml-1 shrink-0" />
             </button>
             {showUserDropdown && (
               <div className="absolute top-full left-0 mt-1 bg-white rounded-2xl shadow-lg border border-gray-100 z-50 overflow-hidden" style={{ minWidth: '240px', width: 'max-content', maxWidth: '90vw' }}>
-                {(funderUsers as any[])?.length > 10 && (
-                  <div className="px-3 pt-2 pb-1">
-                    <input
-                      type="text"
-                      value={userSearchText}
-                      onChange={e => setUserSearchText(e.target.value)}
-                      placeholder="搜索成员..."
-                      className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none"
-                      autoFocus
-                    />
-                  </div>
-                )}
+                <div className="px-3 pt-2 pb-1">
+                  <input
+                    type="text"
+                    value={userSearchText}
+                    onChange={e => setUserSearchText(e.target.value)}
+                    placeholder="搜索成员、用户名或昵称..."
+                    className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none"
+                    autoFocus
+                  />
+                </div>
                 <div className="max-h-52 overflow-y-auto overflow-x-hidden">
                   <button
                     onClick={() => { setSelectedUserId(null); setShowUserDropdown(false); }}
                     className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors"
                     style={{ color: selectedUserId === null ? '#1A56DB' : '#374151', fontWeight: selectedUserId === null ? 600 : 400 }}
                   >全部成员</button>
-                  {(funderUsers as any[])?.filter((u: any) => {
+                  {memberSelectorUsers.filter((u: any) => {
                     if (!matchesUserSearch(u, userSearchText)) return false;
                     // 中侧（管理）必须显示全部 owner/admin，即使尚无订单，方便管理员先选人再创建首张订单。
                     if (adminOnly) return true;
                     // 其他分栏继续只显示已有主订单或参与订单的用户，避免列表被空成员淹没。
-                    const hasOrders = allOrders.some((o: any) => o.userId === u.userId || o.user_id === u.userId || (o._participantUserIds && o._participantUserIds.includes(u.userId)));
+                    const hasOrders = memberSelectorOrders.some((o: any) => isOrderRelatedToMember(o, getMemberSelectorId(u)));
                     return hasOrders;
                   }).map((u: any) => {
-                    const userOrders = allOrders.filter((o: any) => o.userId === u.userId || o.user_id === u.userId || (o._participantUserIds && o._participantUserIds.includes(u.userId)));
+                    const memberId = getMemberSelectorId(u);
+                    const userOrders = memberSelectorOrders.filter((o: any) => isOrderRelatedToMember(o, memberId));
                     const activeCount = userOrders.filter((o: any) => o.status === 'active').length;
                     const settledCount = userOrders.filter((o: any) => o.status === 'settled' || o.status === 'cancelled').length;
                     return (
                     <button
-                      key={u.userId}
-                      onClick={() => { setSelectedUserId(u.userId); setShowUserDropdown(false); }}
+                      key={memberId}
+                      onClick={() => { setSelectedUserId(memberId); setShowUserDropdown(false); }}
                       className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
-                      style={{ color: selectedUserId === u.userId ? '#1A56DB' : '#374151', fontWeight: selectedUserId === u.userId ? 600 : 400 }}
+                      style={{ color: Number(selectedUserId) === memberId ? '#1A56DB' : '#374151', fontWeight: Number(selectedUserId) === memberId ? 600 : 400 }}
                     >
                       <span className="whitespace-nowrap">{getUserSearchLabel(u)}</span>
                       <span className="text-xs ml-2 shrink-0" style={{ color: '#9CA3AF', fontWeight: 400 }}>
