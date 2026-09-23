@@ -1,4 +1,5 @@
 import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { randomInt } from "crypto";
 import { getDb, getDbConnection, getDbTransactionConnection } from "./db";
 import { rechargeOrders, balanceHistory, users, walletAddresses } from "../drizzle/schema";
 
@@ -723,6 +724,102 @@ const TYPE_LABEL: Record<string, string> = {
 
 const INTERNAL_WALLET_TRANSFER_LEDGER_ID = 52;
 const INTERNAL_TRANSFER_NOTE_PREFIX = '[站内转账]';
+const WALLET_PAYMENT_ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const WALLET_PAYMENT_ID_PATTERN = /^[A-Z0-9]{6}$/;
+
+let walletPaymentInfrastructureReady: Promise<void> | null = null;
+
+/**
+ * 收款 ID 直接复用用户的专属邀请码。为让其可安全作为收款标识，数据库必须保证全局唯一；
+ * 常用收款人表仅保存当前用户主动添加过的对象，不暴露其他用户目录。
+ */
+async function ensureWalletPaymentInfrastructure(): Promise<void> {
+  if (!walletPaymentInfrastructureReady) {
+    walletPaymentInfrastructureReady = (async () => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error('数据库连接失败');
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS wallet_transfer_favorites (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          owner_user_id INT NOT NULL,
+          recipient_user_id INT NOT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_wallet_transfer_favorite (owner_user_id, recipient_user_id),
+          KEY idx_wallet_transfer_favorite_owner (owner_user_id, updated_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户常用站内收款人'
+      `);
+      // 历史空字符串统一转为 NULL，使唯一索引仍允许尚未生成收款 ID 的多位旧用户存在。
+      await (conn as any).execute(
+        `UPDATE users SET invite_code = NULL
+          WHERE invite_code IS NOT NULL AND TRIM(invite_code) = ''`,
+      );
+      const [indexRows] = await (conn as any).execute(
+        `SELECT 1 FROM information_schema.statistics
+          WHERE table_schema = DATABASE() AND table_name = 'users'
+            AND index_name = 'users_invite_code_unique'
+          LIMIT 1`,
+      );
+      if (asRows(indexRows).length === 0) {
+        // 只允许一个非空邀请码；MySQL 允许多条 NULL，因此不影响尚未生成收款 ID 的多位旧用户。
+        await (conn as any).execute('CREATE UNIQUE INDEX users_invite_code_unique ON users (invite_code)');
+      }
+      // 收款 ID 是全体用户的公开收款标识；补齐历史空值，绝不覆盖已有的邀请码。
+      const [missingRows] = await (conn as any).execute(
+        `SELECT id FROM users WHERE invite_code IS NULL OR TRIM(invite_code) = '' ORDER BY id ASC`,
+      );
+      for (const user of asRows(missingRows)) {
+        await ensureUserWalletPaymentId(conn as any, Number(user.id));
+      }
+    })().catch((error) => {
+      walletPaymentInfrastructureReady = null;
+      throw error;
+    });
+  }
+  await walletPaymentInfrastructureReady;
+}
+
+function normalizeWalletPaymentId(value: unknown): string {
+  return String(value ?? '').trim().toUpperCase();
+}
+
+function createWalletPaymentId(): string {
+  let result = '';
+  for (let index = 0; index < 6; index += 1) {
+    result += WALLET_PAYMENT_ID_ALPHABET.charAt(randomInt(WALLET_PAYMENT_ID_ALPHABET.length));
+  }
+  return result;
+}
+
+/** 确保单个用户拥有稳定邀请码／收款 ID；一经创建绝不因收款或收藏而变更。 */
+async function ensureUserWalletPaymentId(conn: any, userId: number): Promise<string> {
+  const [initialRows] = await conn.execute(
+    'SELECT invite_code FROM users WHERE id = ? LIMIT 1',
+    [userId],
+  );
+  const existing = normalizeWalletPaymentId(asRows(initialRows)[0]?.invite_code);
+  if (WALLET_PAYMENT_ID_PATTERN.test(existing)) return existing;
+
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const candidate = createWalletPaymentId();
+    try {
+      const [result] = await conn.execute(
+        `UPDATE users
+            SET invite_code = ?, invite_link = ?
+          WHERE id = ? AND (invite_code IS NULL OR TRIM(invite_code) = '')`,
+        [candidate, `https://jiangyuchen.cn/login?invite=${candidate}`, userId],
+      );
+      if (Number((result as any).affectedRows || 0) > 0) return candidate;
+      const [currentRows] = await conn.execute('SELECT invite_code FROM users WHERE id = ? LIMIT 1', [userId]);
+      const current = normalizeWalletPaymentId(asRows(currentRows)[0]?.invite_code);
+      if (WALLET_PAYMENT_ID_PATTERN.test(current)) return current;
+    } catch (error: any) {
+      if (String(error?.code || '') === 'ER_DUP_ENTRY') continue;
+      throw error;
+    }
+  }
+  throw new Error('生成收款 ID 失败，请稍后重试');
+}
 
 let internalWalletTransferTableReady: Promise<void> | null = null;
 
@@ -782,40 +879,131 @@ function transferUsername(user: { username?: unknown; id?: unknown }): string {
 }
 
 export type WalletTransferRecipientLookup =
-  | { status: 'found'; recipient: { id: number; name: string; nickname: string; username: string } }
+  | { status: 'found'; recipient: { id: number; paymentId: string; name: string; nickname: string; username: string } }
   | { status: 'not_found' | 'self' | 'ambiguous' };
 
-/** 只接受用户名、昵称或名称的完整匹配，不提供模糊联想或平台用户列表。 */
+export type WalletPaymentIdentity = { paymentId: string; name: string; nickname: string; username: string };
+
+/** 获取当前用户稳定的收款 ID；该 ID 即邀请码，不再额外创建第二套账号。 */
+export async function getMyWalletPaymentIdentity(userId: number): Promise<WalletPaymentIdentity> {
+  await ensureWalletPaymentInfrastructure();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const paymentId = await ensureUserWalletPaymentId(conn as any, userId);
+  const [rows] = await (conn as any).execute('SELECT username, name FROM users WHERE id = ? LIMIT 1', [userId]);
+  const user = asRows(rows)[0];
+  if (!user) throw new Error('用户不存在');
+  return {
+    paymentId,
+    name: transferDisplayName(user),
+    nickname: String(user.name || '未设置昵称').slice(0, 80),
+    username: transferUsername(user),
+  };
+}
+
+/** 只接受收款 ID 或用户名／昵称的完整匹配，不提供模糊联想或平台用户列表。 */
 export async function lookupWalletTransferRecipient(
   requesterUserId: number,
   identifier: string,
 ): Promise<WalletTransferRecipientLookup> {
   const normalized = identifier.trim();
   if (!normalized) return { status: 'not_found' };
+  await ensureWalletPaymentInfrastructure();
   const conn = await getDbConnection();
   if (!conn) throw new Error('数据库连接失败');
-  const [rows] = await (conn as any).execute(
-    `SELECT id, username, name
-       FROM users
-      WHERE username = ? OR name = ?
-      ORDER BY id ASC
-      LIMIT 3`,
-    [normalized, normalized],
-  ) as any[];
+  const normalizedPaymentId = normalizeWalletPaymentId(normalized);
+  let rows: any[];
+  if (WALLET_PAYMENT_ID_PATTERN.test(normalizedPaymentId)) {
+    const [paymentIdRows] = await (conn as any).execute(
+      `SELECT id, username, name, invite_code
+         FROM users
+        WHERE UPPER(TRIM(invite_code)) = ?
+        LIMIT 2`,
+      [normalizedPaymentId],
+    ) as any[];
+    rows = asRows(paymentIdRows);
+  } else {
+    const [identityRows] = await (conn as any).execute(
+      `SELECT id, username, name, invite_code
+         FROM users
+        WHERE username = ? OR name = ?
+        ORDER BY id ASC
+        LIMIT 3`,
+      [normalized, normalized],
+    ) as any[];
+    rows = asRows(identityRows);
+  }
   const matches = asRows(rows);
   if (matches.length === 0) return { status: 'not_found' };
   if (matches.length > 1) return { status: 'ambiguous' };
   const recipient = matches[0];
   if (Number(recipient.id) === requesterUserId) return { status: 'self' };
+  const paymentId = await ensureUserWalletPaymentId(conn as any, Number(recipient.id));
   return {
     status: 'found',
     recipient: {
       id: Number(recipient.id),
+      paymentId,
       name: transferDisplayName(recipient),
       nickname: String(recipient.name || '未设置昵称').slice(0, 80),
       username: transferUsername(recipient),
     },
   };
+}
+
+export async function getWalletTransferFavorites(ownerUserId: number): Promise<Array<WalletPaymentIdentity & { id: number }>> {
+  await ensureWalletPaymentInfrastructure();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const [rows] = await (conn as any).execute(
+    `SELECT u.id, u.username, u.name, u.invite_code
+       FROM wallet_transfer_favorites favorite
+       INNER JOIN users u ON u.id = favorite.recipient_user_id
+      WHERE favorite.owner_user_id = ?
+      ORDER BY favorite.updated_at DESC, favorite.id DESC
+      LIMIT 20`,
+    [ownerUserId],
+  ) as any[];
+  const favorites: Array<WalletPaymentIdentity & { id: number }> = [];
+  for (const recipient of asRows(rows)) {
+    const paymentId = await ensureUserWalletPaymentId(conn as any, Number(recipient.id));
+    favorites.push({
+      id: Number(recipient.id),
+      paymentId,
+      name: transferDisplayName(recipient),
+      nickname: String(recipient.name || '未设置昵称').slice(0, 80),
+      username: transferUsername(recipient),
+    });
+  }
+  return favorites;
+}
+
+export async function addWalletTransferFavorite(ownerUserId: number, recipientUserId: number): Promise<{ success: true }> {
+  if (ownerUserId === recipientUserId) throw new Error('不能将自己添加为常用收款人');
+  await ensureWalletPaymentInfrastructure();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const [recipientRows] = await (conn as any).execute('SELECT id FROM users WHERE id = ? LIMIT 1', [recipientUserId]);
+  if (asRows(recipientRows).length === 0) throw new Error('收款用户不存在');
+  await ensureUserWalletPaymentId(conn as any, recipientUserId);
+  await (conn as any).execute(
+    `INSERT INTO wallet_transfer_favorites (owner_user_id, recipient_user_id)
+     VALUES (?, ?)
+     ON DUPLICATE KEY UPDATE updated_at = NOW()`,
+    [ownerUserId, recipientUserId],
+  );
+  return { success: true };
+}
+
+export async function removeWalletTransferFavorite(ownerUserId: number, recipientUserId: number): Promise<{ success: true }> {
+  await ensureWalletPaymentInfrastructure();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  await (conn as any).execute(
+    'DELETE FROM wallet_transfer_favorites WHERE owner_user_id = ? AND recipient_user_id = ?',
+    [ownerUserId, recipientUserId],
+  );
+  return { success: true };
 }
 
 /**

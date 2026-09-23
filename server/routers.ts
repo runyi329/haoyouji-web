@@ -1908,11 +1908,33 @@ ${klinesSummary}
         return await dbRecharge.getUserBalance(targetUserId, input?.ledgerId);
       }),
 
-    // 全局站内钱包划转：只接受完整用户名、昵称或名称，不暴露模糊搜索或完整用户列表。
+    // 获取本人收款 ID。该 ID 与专属邀请码完全复用，保证邀请和收款使用同一个稳定标识。
+    getMyWalletPaymentIdentity: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await dbRecharge.getMyWalletPaymentIdentity(ctx.user.id);
+      }),
+
+    // 全局站内钱包划转：只接受六码收款 ID 或完整用户名、昵称，不暴露模糊搜索或完整用户列表。
     lookupWalletTransferRecipient: protectedProcedure
-      .input(z.object({ identifier: z.string().trim().min(1, '请输入完整用户名或昵称').max(80, '输入内容过长') }))
+      .input(z.object({ identifier: z.string().trim().min(1, '请输入收款 ID、完整用户名或昵称').max(80, '输入内容过长') }))
       .query(async ({ ctx, input }) => {
         return await dbRecharge.lookupWalletTransferRecipient(ctx.user.id, input.identifier);
+      }),
+
+    // 常用转账人只由当前用户自行维护；仅返回其已主动保存的对象。
+    getWalletTransferFavorites: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await dbRecharge.getWalletTransferFavorites(ctx.user.id);
+      }),
+    addWalletTransferFavorite: protectedProcedure
+      .input(z.object({ recipientUserId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbRecharge.addWalletTransferFavorite(ctx.user.id, input.recipientUserId);
+      }),
+    removeWalletTransferFavorite: protectedProcedure
+      .input(z.object({ recipientUserId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbRecharge.removeWalletTransferFavorite(ctx.user.id, input.recipientUserId);
       }),
 
     // 全局站内钱包划转：入口当前只在52号账本的黑色钱包中展示，但转账双方不受账本成员关系限制。

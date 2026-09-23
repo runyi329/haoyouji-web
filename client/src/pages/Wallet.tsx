@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { trpc } from "../lib/trpc";
 import Recharge from "./Recharge";
 import Withdraw from "./Withdraw";
@@ -320,8 +321,20 @@ function WalletTransferContent({
     { identifier: lookupIdentifier },
     { enabled: lookupIdentifier.length > 0, retry: false, refetchOnWindowFocus: false },
   );
+  const favoritesQuery = trpc.recharge.getWalletTransferFavorites.useQuery(undefined, {
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
+  });
   const recipientResult = recipientQuery.data as any;
   const recipient = recipientResult?.status === "found" ? recipientResult.recipient : null;
+  const favorites = (favoritesQuery.data as any[] | undefined) || [];
+  const recipientIsFavorite = !!recipient && favorites.some((favorite: any) => Number(favorite.id) === Number(recipient.id));
+  const addFavoriteMutation = trpc.recharge.addWalletTransferFavorite.useMutation({
+    onSuccess: () => {
+      void favoritesQuery.refetch();
+      toast.success('已加入常用转账人');
+    },
+  });
   const transferMutation = trpc.recharge.transferWalletBalance.useMutation({
     onSuccess: (result: any) => {
       setCompleted({ transferNo: String(result.transferNo), amount: Number(result.amount) });
@@ -365,11 +378,31 @@ function WalletTransferContent({
 
   if (completed) {
     return (
-      <SuccessState
-        msg="转账完成"
-        sub={`已向 ${recipient?.name || "收款人"} 转账 ${completed.amount.toFixed(amountDigits)} ${currency}。转账编号：${completed.transferNo}`}
-        onClose={onClose}
-      />
+      <div className="px-5 py-10 flex flex-col items-center space-y-4">
+        <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: "rgba(52,211,153,0.12)" }}>
+          <CheckCircle2 className="w-9 h-9" style={{ color: G.green }} />
+        </div>
+        <div className="text-base font-semibold" style={{ color: G.white }}>转账完成</div>
+        <div className="text-sm text-center leading-6" style={{ color: G.whiteDim }}>
+          已向 {recipient?.nickname || recipient?.name || "收款人"} 转账 {completed.amount.toFixed(amountDigits)} {currency}。<br />转账编号：{completed.transferNo}
+        </div>
+        {recipient && !recipientIsFavorite && (
+          <button
+            type="button"
+            onClick={() => addFavoriteMutation.mutate({ recipientUserId: Number(recipient.id) })}
+            disabled={addFavoriteMutation.isPending}
+            className="w-full py-3 rounded-xl text-sm font-semibold disabled:opacity-50"
+            style={{ background: G.goldFaint, border: `1px solid ${G.goldDim}`, color: G.goldLight }}
+          >{addFavoriteMutation.isPending ? '正在添加…' : '加为常用转账人'}</button>
+        )}
+        {recipientIsFavorite && <span className="text-xs" style={{ color: G.green }}>已在常用转账人中</span>}
+        {addFavoriteMutation.error && <p className="text-center text-xs text-red-300">{addFavoriteMutation.error.message || '添加失败，请稍后重试'}</p>}
+        <button
+          onClick={onClose}
+          className="w-full py-3 rounded-xl text-sm font-medium"
+          style={{ background: G.whiteFaint, color: G.whiteDim }}
+        >关闭</button>
+      </div>
     );
   }
 
@@ -405,8 +438,33 @@ function WalletTransferContent({
         <span className="text-base font-bold" style={{ color: G.goldLight }}>{availableBalance.toFixed(amountDigits)} {currency}</span>
       </div>
 
+      {favorites.length > 0 && (
+        <div>
+          <div className="text-xs mb-1.5" style={{ color: G.whiteDim }}>常用转账人</div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {favorites.map((favorite: any) => (
+              <button
+                key={favorite.id}
+                type="button"
+                onClick={() => {
+                  setRecipientInput(String(favorite.paymentId));
+                  setLookupIdentifier(String(favorite.paymentId));
+                  setConfirming(false);
+                  setRequestId("");
+                }}
+                className="shrink-0 rounded-xl px-3 py-2 text-left active:scale-[0.98]"
+                style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.18)` }}
+              >
+                <div className="max-w-24 truncate text-xs font-semibold" style={{ color: G.white }}>{favorite.nickname || favorite.name}</div>
+                <div className="mt-0.5 font-mono text-[10px] tracking-[0.1em]" style={{ color: G.goldDim }}>{favorite.paymentId}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div>
-        <div className="text-xs mb-1.5" style={{ color: G.whiteDim }}>收款人用户名或昵称</div>
+        <div className="text-xs mb-1.5" style={{ color: G.whiteDim }}>收款 ID（邀请码）</div>
         <div className="flex gap-2">
           <input
             value={recipientInput}
@@ -416,7 +474,7 @@ function WalletTransferContent({
               setConfirming(false);
               setRequestId("");
             }}
-            placeholder="请输入完整用户名或完整昵称"
+            placeholder="请输入六码收款 ID"
             autoComplete="off"
             className="min-w-0 flex-1 rounded-xl px-3 py-3 text-sm outline-none"
             style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.2)`, color: G.white }}
@@ -429,24 +487,24 @@ function WalletTransferContent({
             style={{ background: G.goldFaint, border: `1px solid ${G.goldDim}`, color: G.goldLight }}
           >{recipientQuery.isFetching ? "核验中" : "核验"}</button>
         </div>
-        <p className="mt-1.5 text-[11px] leading-4" style={{ color: G.whiteDim }}>仅支持完整匹配，不提供联系人推荐或模糊搜索。</p>
+        <p className="mt-1.5 text-[11px] leading-4" style={{ color: G.whiteDim }}>收款 ID 与专属邀请码一致；也支持完整用户名或完整昵称核验，不提供模糊搜索。</p>
       </div>
 
       {lookupIdentifier && !recipientQuery.isFetching && recipientResult?.status === "not_found" && (
-        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: 'rgba(248,113,113,0.1)', color: '#fca5a5' }}>未找到该用户，请核对完整用户名或昵称。</div>
+        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: 'rgba(248,113,113,0.1)', color: '#fca5a5' }}>未找到该用户，请核对六码收款 ID、完整用户名或昵称。</div>
       )}
       {lookupIdentifier && !recipientQuery.isFetching && recipientResult?.status === "self" && (
         <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: 'rgba(248,113,113,0.1)', color: '#fca5a5' }}>不能转账给自己，请输入其他用户。</div>
       )}
       {lookupIdentifier && !recipientQuery.isFetching && recipientResult?.status === "ambiguous" && (
-        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: 'rgba(251,191,36,0.1)', color: '#fde68a' }}>该昵称存在多个用户，请改用完整用户名核验。</div>
+        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: 'rgba(251,191,36,0.1)', color: '#fde68a' }}>该昵称存在多个用户，请改用六码收款 ID 或完整用户名核验。</div>
       )}
       {recipient && (
         <div className="rounded-2xl p-4" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)' }}>
           <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: G.green }}><UserRound className="w-4 h-4" />已确认收款用户</div>
           <div className="mt-2 grid grid-cols-[56px_1fr] gap-y-1.5 text-xs">
-            <span style={{ color: G.whiteDim }}>名称</span><span style={{ color: G.white }}>{recipient.name}</span>
-            <span style={{ color: G.whiteDim }}>昵称</span><span style={{ color: G.white }}>{recipient.nickname}</span>
+            <span style={{ color: G.whiteDim }}>收款 ID</span><span className="font-mono tracking-[0.14em]" style={{ color: G.goldLight }}>{recipient.paymentId}</span>
+            <span style={{ color: G.whiteDim }}>昵称</span><span style={{ color: G.white }}>{recipient.nickname || recipient.name}</span>
             <span style={{ color: G.whiteDim }}>用户名</span><span style={{ color: G.white }}>@{recipient.username}</span>
           </div>
         </div>

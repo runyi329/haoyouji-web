@@ -39,19 +39,26 @@ export const inviteRouter = router({
     
     // 如果用户还没有邀请码,生成一个
     if (!user.inviteCode) {
-      const newCode = generateInviteCode();
-      const newLink = `https://jiangyuchen.cn/login?invite=${newCode}`;
-      
-      await db
-        .update(users)
-        .set({
-          inviteCode: newCode,
-          inviteLink: newLink,
-        })
-        .where(eq(users.id, userId));
-      
-      user.inviteCode = newCode;
-      user.inviteLink = newLink;
+      let generated = false;
+      for (let attempt = 0; attempt < 24 && !generated; attempt += 1) {
+        const newCode = generateInviteCode();
+        const newLink = `https://jiangyuchen.cn/login?invite=${newCode}`;
+        try {
+          await db
+            .update(users)
+            .set({
+              inviteCode: newCode,
+              inviteLink: newLink,
+            })
+            .where(eq(users.id, userId));
+          user.inviteCode = newCode;
+          user.inviteLink = newLink;
+          generated = true;
+        } catch (error: any) {
+          if (String(error?.code || '') !== 'ER_DUP_ENTRY') throw error;
+        }
+      }
+      if (!generated) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '生成邀请码失败，请稍后重试' });
     }
 
     // 实时统计实际推荐人数（避免 invite_count 缓存字段因删除用户等操作导致数据不一致）
@@ -169,6 +176,20 @@ export const inviteRouter = router({
           code: "FORBIDDEN",
           message: "只有管理员可以为其他用户重新生成邀请码",
         });
+      }
+
+      // 邀请码同时作为站内转账的收款 ID 后必须保持稳定；已有代码不再重新生成，避免旧收款信息失效。
+      const [existingUser] = await db
+        .select({ inviteCode: users.inviteCode, inviteLink: users.inviteLink })
+        .from(users)
+        .where(eq(users.id, targetUserId));
+      if (existingUser?.inviteCode) {
+        return {
+          success: true,
+          inviteCode: existingUser.inviteCode,
+          inviteLink: existingUser.inviteLink || `https://jiangyuchen.cn/login?invite=${existingUser.inviteCode}`,
+          unchanged: true,
+        };
       }
       
       let attempts = 0;

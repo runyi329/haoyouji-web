@@ -52,6 +52,7 @@ import {
   PackagePlus,
   Bot,
   FileText,
+  Copy,
 } from "lucide-react";
 import { UsdtIcon } from "@/components/icons/UsdtIcon";
 import {
@@ -182,6 +183,13 @@ export default function Profile() {
     staleTime: 30000,
   });
 
+  // 收款 ID 与专属邀请码复用；读取时会由服务端为历史用户补齐稳定的六码标识。
+  const { data: paymentIdentity } = trpc.recharge.getMyWalletPaymentIdentity.useQuery(undefined, {
+    enabled: !!user,
+    retry: 1,
+    staleTime: 30000,
+  });
+
   // 获取用户股权数据（用于显示节点等级光环）
   const { data: equityData } = trpc.equity.getMyEquity.useQuery(undefined, {
     enabled: !!user,
@@ -305,6 +313,22 @@ export default function Profile() {
   // 处理头像点击
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const copyPaymentId = async () => {
+    const paymentId = (paymentIdentity as any)?.paymentId;
+    if (!paymentId) return;
+    try {
+      await navigator.clipboard.writeText(String(paymentId));
+    } catch {
+      const input = document.createElement('input');
+      input.value = String(paymentId);
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+    }
+    toast.success('收款 ID 已复制');
   };
 
   // 处理文件选择
@@ -558,6 +582,22 @@ export default function Profile() {
             <h2 className="text-xl font-bold text-white truncate">
               {user.name || user.username}
             </h2>
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-white/85">
+              <span className="shrink-0">收款 ID</span>
+              <span className="font-mono tracking-[0.14em] font-semibold text-white">{(paymentIdentity as any)?.paymentId || '生成中'}</span>
+              {(paymentIdentity as any)?.paymentId && (
+                <button
+                  type="button"
+                  onClick={copyPaymentId}
+                  className="inline-flex items-center gap-0.5 rounded-md bg-white/15 px-1.5 py-0.5 active:scale-95"
+                  title="复制收款 ID"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>复制</span>
+                </button>
+              )}
+            </div>
+            <p className="mt-0.5 text-[10px] text-white/60">与专属邀请码一致，可用于站内转账收款</p>
             {((user as any).company || (user as any).business) && (
               <div className="mt-0.5 text-white/80 text-xs truncate">
                 {(user as any).company}{(user as any).company && (user as any).business ? " · " : ""}{(user as any).business}
