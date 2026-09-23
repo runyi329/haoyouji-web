@@ -17893,7 +17893,8 @@ ${klinesSummary}
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-               WHERE fo.ledger_id = ? AND lm.role IN (${memberRoleFilter}) AND ((fo.user_id = ? AND fo.deleted_at IS NULL) OR fo.id IN (${placeholders}))
+               WHERE fo.ledger_id = ? AND fo.deleted_at IS NULL
+                 AND ((fo.user_id = ? AND lm.role IN (${memberRoleFilter})) OR fo.id IN (${placeholders}))
                ORDER BY fo.created_at DESC`,
               [input.ledgerId, targetUserId, ...participantOrderIds]
             );
@@ -17945,7 +17946,8 @@ ${klinesSummary}
                  FROM ledger_orders fo
                  LEFT JOIN users u ON u.id = fo.user_id
                  LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-                 WHERE fo.ledger_id = ? AND lm.role IN (${memberRoleFilter}) AND ((fo.user_id = ? AND fo.deleted_at IS NULL) OR fo.id IN (${ph}))
+                 WHERE fo.ledger_id = ? AND fo.deleted_at IS NULL
+                   AND ((fo.user_id = ? AND lm.role IN (${memberRoleFilter})) OR fo.id IN (${ph}))
                  ORDER BY fo.created_at DESC`,
                 [input.ledgerId, targetUserId, ...targetParticipantOrderIds]
               );
@@ -19070,12 +19072,22 @@ ${klinesSummary}
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         if (input.financeOnly) {
-          // 借方模式：只返回账本角色为 member 的用户（普通成员）
+          // 借方模式默认列出普通成员；若用户被设为共同拥有者/参与者，也必须出现在筛选名单中，
+          // 否则其独立订单视图虽已保存，管理员却无法按该用户检索。
           const rows = await db.execute(
-            sql`SELECT lm.userId, lm.nickname, u.username, u.name, u.avatar
+            sql`SELECT DISTINCT lm.userId, lm.nickname, u.username, u.name, u.avatar
                 FROM ledger_members lm
                 LEFT JOIN users u ON u.id = lm.userId
-                WHERE lm.ledgerId = ${input.ledgerId} AND lm.role = 'member'
+                WHERE lm.ledgerId = ${input.ledgerId}
+                  AND (
+                    lm.role = 'member'
+                    OR EXISTS (
+                      SELECT 1 FROM ledger_order_participants lop
+                      WHERE lop.ledger_id = lm.ledgerId
+                        AND lop.user_id = lm.userId
+                        AND lop.role <> 'inactive'
+                    )
+                  )
                 ORDER BY lm.id ASC`
           ) as any;
           return ((rows[0] || rows) as any[]) || [];
