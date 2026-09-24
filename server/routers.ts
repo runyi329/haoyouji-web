@@ -80,7 +80,7 @@ import { yabanStaffRouter } from "./yaban-staff-router";
 import { yabanTreatmentRouter } from "./yaban-treatment-router";
 import { versionRouter } from "./version-router";
 import { aiWalletRouter, assertAiWalletOperationEnabled } from "./ai-wallet-router";
-
+import { AI_WALLET_MARKET_ASSETS } from "../shared/ai-wallet-assets";
 // // 在应用启动时初始化数据库
 // initDatabase().catch(err => {
 //   console.error("[DB Init] Failed to initialize database:", err);
@@ -13742,14 +13742,15 @@ ${klinesSummary}
               (SELECT COALESCE(balance, 0) FROM users WHERE id = ${targetUserId} LIMIT 1) as userBalance`
           ).catch(() => [[{ recharged: '0', manual: '0', userBalance: '0' }]]),
 
-          // 查询2：仓位（按订单逐条查询，应用权益折扣档位系数）
+          // 查询2：仓位（按订单逐条查询，应用权益折扣档位系数）。
+          // 范围与 AI 智能钱包的数字资产展示库一致；仍仅计算 52 号账本现有的订单仓位。
           db.execute(
             sql`SELECT o.id, o.coin, o.side, CAST(o.quantity AS DECIMAL(28,8)) as qty,
                        COALESCE(MAX(t.tier), 0) as max_tier
                 FROM af_orders o
                 LEFT JOIN af_order_tier_triggers t ON t.order_id = o.id
                 WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
-                  AND o.status = 'completed' AND o.coin IN ('BTC','ETH','SOL')
+                  AND o.status = 'completed' AND o.coin IN (${sql.join(AI_WALLET_MARKET_ASSETS.map((coin) => sql`${coin}`), sql`, `)})
                   AND (o.sell_status IS NULL OR o.sell_status != 'sold')
                 GROUP BY o.id, o.coin, o.side, o.quantity`
           ).catch(() => [[]]),
@@ -13772,9 +13773,9 @@ ${klinesSummary}
           5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
         };
         const posRows: any[] = (positionResult as any)[0] || (positionResult as any) || [];
-        const positions: Record<string, number> = { BTC: 0, ETH: 0, SOL: 0 };
+        const positions: Record<string, number> = Object.fromEntries(AI_WALLET_MARKET_ASSETS.map((coin) => [coin, 0]));
         for (const row of posRows) {
-          const coin = row.coin;
+          const coin = String(row.coin || '').toUpperCase();
           const side = row.side;
           const rawQty = parseFloat((row.qty ?? '0').toString());
           const tier = parseInt((row.max_tier ?? '0').toString()) || 0;
@@ -13785,7 +13786,7 @@ ${klinesSummary}
             else if (side === 'sell') positions[coin] -= effectiveQty;
           }
         }
-        for (const c of ['BTC', 'ETH', 'SOL']) positions[c] = Math.max(0, positions[c]);
+        for (const c of AI_WALLET_MARKET_ASSETS) positions[c] = Math.max(0, positions[c]);
 
         // 解析推荐人数
         const userRow = (userResult as any)[0]?.[0] ?? (userResult as any)[0];
@@ -13836,7 +13837,7 @@ ${klinesSummary}
         try {
           const { getAllLatestPrices } = await import('./price-scanner');
           const allPrices = getAllLatestPrices();
-          for (const coin of ['BTC', 'ETH', 'SOL']) {
+          for (const coin of AI_WALLET_MARKET_ASSETS) {
             if (allPrices[coin]?.price) livePrices[coin] = allPrices[coin].price;
           }
         } catch {}
@@ -16905,9 +16906,9 @@ ${klinesSummary}
           0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667,
           5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
         };
-        // 获取实时价格
+        // 获取实时价格：与 52号账本的数字资产展示库保持一致。
         const prices: Record<string, number> = {};
-        for (const coin of ['BTC', 'ETH', 'SOL']) {
+        for (const coin of AI_WALLET_MARKET_ASSETS) {
           const p = getLatestPrice(coin);
           if (p) prices[coin] = p;
         }
@@ -17006,8 +17007,8 @@ ${klinesSummary}
           totalMgmtFee: parseFloat(data.totalMgmtFee.toFixed(4)),
           orderDetails: data.orderDetails,
         });});
-        // 按 BTC > ETH > SOL 顺序排列
-        const coinOrder = ['BTC', 'ETH', 'SOL'];
+        // 使用全局数字资产库的稳定顺序；未持有的资产不会进入这一组。
+        const coinOrder = [...AI_WALLET_MARKET_ASSETS];
         coins.sort((a, b) => coinOrder.indexOf(a.coin) - coinOrder.indexOf(b.coin));
         const total = parseFloat(coins.reduce((sum, c) => sum + c.pnl, 0).toFixed(4));
 

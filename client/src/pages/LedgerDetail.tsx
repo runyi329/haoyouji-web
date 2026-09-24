@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
 
 import { FunderOrderCard, FunderNoteRow, formatCoinQtyFunder, useAccruedInterestFunder, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType } from "@/components/FunderOrderCard";
+import { AI_WALLET_ASSET_COLORS, AI_WALLET_MARKET_ASSETS } from "@shared/ai-wallet-assets";
 import { matchesUserSearch } from "@/lib/userIdentity";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import Lottie from "lottie-react";
@@ -4149,15 +4150,27 @@ export default function LedgerDetail() {
                   <span className="text-center py-0.5">浮盈</span>
                   <span></span>
                 </div>
-                {(['BTC', 'ETH', 'SOL'].slice().sort((a, b) => {
-                  const qtyA = (afTotalAsset as any)?.positions?.[a] ?? 0;
-                  const qtyB = (afTotalAsset as any)?.positions?.[b] ?? 0;
-                  const priceA = equityLivePrices[a] || 0;
-                  const priceB = equityLivePrices[b] || 0;
-                  const valA = priceA > 0 ? qtyA * priceA : qtyA;
-                  const valB = priceB > 0 ? qtyB * priceB : qtyB;
-                  return valB - valA;
-                })).map(coin => {
+                {(() => {
+                  // 只展示实际持有或仍存在进行中订单的数字资产，避免出现一排排 0 余额。
+                  const visiblePositionCoins = AI_WALLET_MARKET_ASSETS
+                    .filter((coin) => {
+                      const qty = Number((afTotalAsset as any)?.positions?.[coin] ?? 0);
+                      const coinData = pnlData?.coins?.find((item: any) => item.coin === coin);
+                      const activeCount = Number(coinData?.holdingCount ?? 0) + Number(coinData?.pendingCount ?? 0);
+                      return qty > 0 || activeCount > 0;
+                    })
+                    .slice()
+                    .sort((a, b) => {
+                      const qtyA = Number((afTotalAsset as any)?.positions?.[a] ?? 0);
+                      const qtyB = Number((afTotalAsset as any)?.positions?.[b] ?? 0);
+                      const priceA = equityLivePrices[a] || 0;
+                      const priceB = equityLivePrices[b] || 0;
+                      return (priceB > 0 ? qtyB * priceB : qtyB) - (priceA > 0 ? qtyA * priceA : qtyA);
+                    });
+                  if (!visiblePositionCoins.length) {
+                    return <div className="px-4 py-5 text-center text-[11px] text-white/35">暂无数字资产仓位；实际持有或存在进行中订单的币种会自动显示在这里。</div>;
+                  }
+                  return visiblePositionCoins.map(coin => {
                   const qty = (afTotalAsset as any)?.positions?.[coin] ?? 0;
                   const coinData = pnlData?.coins?.find((c: any) => c.coin === coin);
                   const activeCount = (coinData?.holdingCount ?? 0) + (coinData?.pendingCount ?? 0);
@@ -4178,7 +4191,7 @@ export default function LedgerDetail() {
                     return v.toFixed(decPlaces);
                   };
                   const fmtQty = fmtNum(qty) === '-' ? '0' : fmtNum(qty);
-                  const coinColor: Record<string, string> = { BTC: '#fb923c', ETH: '#60a5fa', SOL: '#a78bfa' };
+                  const coinColor = AI_WALLET_ASSET_COLORS;
                   // 浮盈为负时显示0，为正时正常显示
                   const displayPnl = unrealizedPnl < 0 ? 0 : unrealizedPnl;
                   const pnlColor = qty > 0 && livePrice > 0
@@ -4334,7 +4347,8 @@ export default function LedgerDetail() {
                       })()}
                     </div>
                   );
-                })}
+                  });
+                })()}
                 {/* 更新时间：左下角 */}
                 {pnlData?.updatedAt && (
                   <div className="mt-2 flex items-center gap-1 px-4">

@@ -2,8 +2,9 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDbConnection } from "./db";
+import { AI_WALLET_ASSET_CATALOG, AI_WALLET_ASSETS, type AiWalletAsset } from "../shared/ai-wallet-assets";
 
-const WALLET_ASSETS = ["CNY", "USDT"] as const;
+const WALLET_ASSETS = AI_WALLET_ASSETS;
 const PROFILE_TEMPLATES = ["cny_simple", "stablecoin", "blockchain", "hybrid", "custom"] as const;
 const RATE_POLICIES = ["not_required", "live_market", "order_snapshot"] as const;
 const TARGET_TYPES = ["ledger", "site_version"] as const;
@@ -43,8 +44,8 @@ type WalletProfile = {
   targetMeta: { ledgerId?: number; versionKey?: string; ledgerType?: string; primaryCurrency?: string; projectEnabled?: boolean };
   templateKey: (typeof PROFILE_TEMPLATES)[number];
   enabled: boolean;
-  visibleAssets: Array<(typeof WALLET_ASSETS)[number]>;
-  defaultAsset: (typeof WALLET_ASSETS)[number];
+  visibleAssets: AiWalletAsset[];
+  defaultAsset: AiWalletAsset;
   allowRecharge: boolean;
   allowWithdrawal: boolean;
   allowTransfer: boolean;
@@ -69,7 +70,7 @@ function toBool(value: unknown): boolean {
   return Number(value ?? 0) === 1;
 }
 
-function sanitizeAssets(value: unknown): Array<(typeof WALLET_ASSETS)[number]> {
+function sanitizeAssets(value: unknown): AiWalletAsset[] {
   let raw: unknown[] = [];
   try {
     raw = Array.isArray(value) ? value : JSON.parse(String(value || "[]"));
@@ -78,15 +79,17 @@ function sanitizeAssets(value: unknown): Array<(typeof WALLET_ASSETS)[number]> {
   }
   const assets = raw
     .map((asset) => String(asset).toUpperCase())
-    .filter((asset): asset is (typeof WALLET_ASSETS)[number] => (WALLET_ASSETS as readonly string[]).includes(asset));
+    .filter((asset): asset is AiWalletAsset => (WALLET_ASSETS as readonly string[]).includes(asset));
   return Array.from(new Set(assets));
 }
 
 function normalizeProfile(row: WalletProfileRow): WalletProfile {
   const visibleAssets = sanitizeAssets(row.visible_assets);
-  const fallbackAsset = visibleAssets.includes("CNY") ? "CNY" : "USDT";
+  const fallbackAsset: AiWalletAsset = visibleAssets.includes("CNY")
+    ? "CNY"
+    : (visibleAssets[0] || "CNY");
   const defaultAsset = (WALLET_ASSETS as readonly string[]).includes(String(row.default_asset).toUpperCase())
-    ? String(row.default_asset).toUpperCase() as (typeof WALLET_ASSETS)[number]
+    ? String(row.default_asset).toUpperCase() as AiWalletAsset
     : fallbackAsset;
   const targetName = String(row.project_name || row.target_name || row.target_key);
   return {
@@ -464,12 +467,7 @@ export const aiWalletRouter = router({
     const [profiles, targets] = await Promise.all([listProfiles(conn), listProjectTargets(conn)]);
     return {
       catalog: {
-        assets: WALLET_ASSETS.map((code) => ({
-          code,
-          name: code === "CNY" ? "人民币" : "泰达币",
-          currentSupport: true,
-          detail: code === "CNY" ? "现有余额、后台调账与站内转账已支持；用户端充值/提现申请闭环尚未接入。" : "现有余额、充值订单、提现审核、站内转账与链网络能力已接入。",
-        })),
+        assets: AI_WALLET_ASSET_CATALOG,
         templates: TEMPLATE_CATALOG,
         ratePolicies: [
           { key: "not_required", name: "不需要换算", description: "仅按原始币种展示与记账。" },
@@ -488,7 +486,7 @@ export const aiWalletRouter = router({
             title: "统一钱包底座",
             lines: [
               "用户资产目前以全局钱包余额和流水为唯一口径，项目不复制独立余额。",
-              "当前已投入使用的资产为 CNY 与 USDT；BTC、ETH、SOL、USDC、HKD 等尚未创建资产账户或资金通道。",
+              "当前已投入使用、可记账的资金资产为 CNY 与 USDT。52号账本的 32 种数字资产已进入全局行情与仓位展示库，但尚未创建独立钱包余额或资金通道。",
               "全局流水、用户余额、手动调账、充值监控和站内转账在现有后台模块中统一核对。",
             ],
           },
@@ -505,7 +503,7 @@ export const aiWalletRouter = router({
             title: "行情与汇率服务",
             lines: [
               "USDT/CNY 展示汇率优先使用 CoinGecko Tether/CNY，其次 OKX C2C，再回退到其他汇率服务和进程缓存。",
-              "数字资产行情缓存当前覆盖 BTC、ETH、SOL、LDO，优先 Gate.io，备用火币；新增资产前需建立资产、价格源和缓存规则。",
+              "数字资产行情缓存当前覆盖 52号账本可选的 32 种数字资产，优先 Gate.io，备用 HTX 与 OKX；行情资产只有在用户存在实际仓位或进行中订单时才会在 52号首页显示。",
               "展示估值与业务结算应分开保存：展示可使用实时价，订单结算应保存订单快照。",
             ],
           },

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { AI_WALLET_ASSET_COLORS, AI_WALLET_FUNDING_ASSETS, AI_WALLET_MARKET_ASSETS, type AiWalletAsset } from "@shared/ai-wallet-assets";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -21,7 +22,7 @@ import {
   X,
 } from "lucide-react";
 
-type Asset = "CNY" | "USDT";
+type Asset = AiWalletAsset;
 type TemplateKey = "cny_simple" | "stablecoin" | "blockchain" | "hybrid" | "custom";
 type RatePolicy = "not_required" | "live_market" | "order_snapshot";
 type TargetType = "ledger" | "site_version";
@@ -190,7 +191,7 @@ export default function AiWalletManager() {
   const profiles: Profile[] = (overviewQuery.data?.profiles ?? []) as Profile[];
   const targets: Target[] = (overviewQuery.data?.targets ?? []) as Target[];
   const templates: Template[] = (overviewQuery.data?.catalog?.templates ?? []) as Template[];
-  const assets: Array<{ code: Asset; name: string; currentSupport: boolean; detail: string }> = (overviewQuery.data?.catalog?.assets ?? []) as any;
+  const assets: Array<{ code: Asset; name: string; category: "funding" | "market"; currentSupport: boolean; detail: string }> = (overviewQuery.data?.catalog?.assets ?? []) as any;
   const ratePolicies: Array<{ key: RatePolicy; name: string; description: string }> = (overviewQuery.data?.catalog?.ratePolicies ?? []) as any;
 
   const selectedTarget = useMemo(() => targets.find((target) => target.key === form.targetKey), [form.targetKey, targets]);
@@ -199,6 +200,10 @@ export default function AiWalletManager() {
     const used = new Set(profiles.filter((profile) => profile.targetKey !== editingKey).map((profile) => profile.targetKey));
     return targets.filter((target) => !used.has(target.key));
   }, [form.id, profiles, targets]);
+  const assetNameByCode = useMemo(
+    () => new Map(assets.map((asset) => [asset.code, asset.name])),
+    [assets],
+  );
 
   useEffect(() => {
     if (!isEditing || form.targetKey || !editableTargets.length) return;
@@ -420,9 +425,21 @@ export default function AiWalletManager() {
 
               <section className="rounded-2xl border border-slate-100 p-4">
                 <h3 className="mb-3 text-[13px] font-bold text-slate-800">资产与展示</h3>
-                <div className="flex gap-2">{(["CNY", "USDT"] as Asset[]).map((asset) => <button type="button" key={asset} onClick={() => toggleAsset(asset)} className={`flex-1 rounded-xl border px-3 py-2.5 text-[13px] font-bold ${form.visibleAssets.includes(asset) ? "border-[#2358D9] bg-[#EEF3FF] text-[#2358D9]" : "border-slate-200 text-slate-400"}`}>{asset === "CNY" ? "人民币 CNY" : "泰达币 USDT"}</button>)}</div>
+                <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3">
+                  <div className="text-[12px] font-bold text-slate-800">资金账本资产</div>
+                  <p className="mt-1 text-[10px] leading-relaxed text-slate-500">具备余额、流水和资金操作能力。充值、提现、转账及人工调账仍只支持这里的 CNY / USDT。</p>
+                  <div className="mt-2 flex gap-2">{AI_WALLET_FUNDING_ASSETS.map((asset) => <button type="button" key={asset} onClick={() => toggleAsset(asset)} className={`flex-1 rounded-xl border px-3 py-2.5 text-[13px] font-bold ${form.visibleAssets.includes(asset) ? "border-[#2358D9] bg-white text-[#2358D9]" : "border-slate-200 bg-white text-slate-400"}`}>{asset === "CNY" ? "人民币 CNY" : "泰达币 USDT"}</button>)}</div>
+                </div>
+                <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/60 p-3">
+                  <div className="flex items-center justify-between gap-2"><div className="text-[12px] font-bold text-slate-800">52号账本数字资产库</div><span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-600">行情 / 仓位展示</span></div>
+                  <p className="mt-1 text-[10px] leading-relaxed text-slate-500">来源于融资付息订单可选币种和现有实时行情服务。选中后只允许项目展示实际仓位；不会产生 0 余额卡片，也不会开放资金通道。</p>
+                  <div className="mt-2 grid grid-cols-4 gap-1.5">{AI_WALLET_MARKET_ASSETS.map((asset) => {
+                    const selected = form.visibleAssets.includes(asset);
+                    return <button type="button" key={asset} onClick={() => toggleAsset(asset)} className={`rounded-lg border px-1 py-2 text-[10px] font-bold transition-colors ${selected ? "border-violet-400 bg-white" : "border-violet-100 bg-white/70 text-slate-400"}`} style={selected ? { color: AI_WALLET_ASSET_COLORS[asset] } : undefined}>{asset}</button>;
+                  })}</div>
+                </div>
                 <label className="mt-4 block text-[11px] font-medium text-slate-500">默认展示资产</label>
-                <select value={form.defaultAsset} onChange={(event) => setForm((previous) => ({ ...previous, defaultAsset: event.target.value as Asset }))} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-[13px] outline-none focus:border-[#2358D9]">{form.visibleAssets.map((asset) => <option key={asset} value={asset}>{asset}</option>)}</select>
+                <select value={form.defaultAsset} onChange={(event) => setForm((previous) => ({ ...previous, defaultAsset: event.target.value as Asset }))} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-[13px] outline-none focus:border-[#2358D9]">{form.visibleAssets.map((asset) => <option key={asset} value={asset}>{assetNameByCode.get(asset) || asset} · {asset}</option>)}</select>
                 <ToggleRow label="显示行情与估值" description="仅用于项目页面展示；业务结算仍遵循下方的结算口径。" checked={form.showMarket} onChange={(next) => setForm((previous) => ({ ...previous, showMarket: next }))} />
                 <ToggleRow label="显示链网络信息" description="只呈现系统当前已配置、已启用的网络与地址状态。" checked={form.showNetworks} onChange={(next) => setForm((previous) => ({ ...previous, showNetworks: next }))} />
               </section>
