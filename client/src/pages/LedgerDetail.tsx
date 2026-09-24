@@ -2748,9 +2748,15 @@ export default function LedgerDetail() {
   const [funderOrderTab, setFunderOrderTab] = useState<'mine' | 'participant'>('mine');
   // 资方前端的本人/参与订单均使用统一资产分类；期权归入数字币。
   const [funderAssetFilter, setFunderAssetFilter] = useState<'all' | 'stock' | 'crypto' | 'settled'>('all');
-  // 本人 / 参与分组：真实参与身份（绿色卡片）和显式设置为“他人”的订单均归入参与。
-  const isFunderParticipantOrder = (order: any) =>
-    !!order?.participantInfo || !!order?._isParticipant || !!order?._fromFunder || order?.order_perspective === 'other';
+  // 本人 / 参与分组：主订单拥有者的 owner 协作快照只用于独立配置，仍属于“本人”。
+  // 只有非 owner 的真实协作角色、明确参与标记或“他人”视角订单才归入参与。
+  const isFunderParticipantOrder = (order: any) => {
+    const participantRole = String(order?.participantInfo?.role || '').toLowerCase();
+    return (participantRole !== '' && participantRole !== 'owner')
+      || !!order?._isParticipant
+      || !!order?._fromFunder
+      || order?.order_perspective === 'other';
+  };
   useEffect(() => {
     if (!hasFreshPrices) return;
     let prevPrices: Record<string, number> = {};

@@ -18186,10 +18186,12 @@ ${klinesSummary}
               if (puArr.length > 0) participantUserName = puArr[0].nickname || puArr[0].name || puArr[0].username || '';
             }
         }
-        // 给每个订单附带 participantInfo（如果当前用户是参与方）
+        // 给每个订单附带 participantInfo（如果当前用户是参与方）。
+        // 主订单 user_id 相同的 owner 协作记录只是该拥有者的配置快照，不能把主拥有者误标成参与者。
         const ordersWithParticipant = orders.map((o: any) => {
           const pi = participantInfoMap[Number(o.id)];
-          if (pi) {
+          const isPrimaryOwner = Number(o.user_id) === participantQueryUserId;
+          if (pi && !isPrimaryOwner) {
             return {
               ...o,
               participantInfo: {
@@ -18210,9 +18212,10 @@ ${klinesSummary}
         });
         const ordersWithParticipantView = ordersWithParticipant.map((o: any) => {
           const pi = piDetailMap[Number(o.id)];
-          // 共同拥有者即使也是主订单 user_id，也必须使用自己的独立订单快照。
+          // 共同拥有者的 user_id 与主订单拥有者不同，仍使用独立订单快照；
+          // 主拥有者自身的 owner 快照仅用于编辑配置，列表必须保留为“本人”主订单。
           const isParticipantOrder = participantQueryUserIdSet.has(Number(o.id))
-            && (Number(o.user_id) !== participantQueryUserId || pi?.role === 'owner');
+            && Number(o.user_id) !== participantQueryUserId;
           if (!isParticipantOrder) return o;
           const snapshot = syncFunderParticipantCollateralSnapshot(
             parseFunderParticipantSnapshot(pi?.order_snapshot),
@@ -18402,8 +18405,8 @@ ${klinesSummary}
           ) as any[];
           const rawOrders = Array.isArray(sharedRows) ? sharedRows : [];
           const orders = rawOrders.map((row: any) => {
-            const isParticipantView = row.participant_user_id != null
-              && (Number(row.user_id) !== input.userId || row.participant_role === 'owner');
+          const isParticipantView = row.participant_user_id != null
+              && Number(row.user_id) !== input.userId;
             if (!isParticipantView) return { ...row, _sharedPoolParticipantUserId: null };
 
             const snapshot = syncFunderParticipantCollateralSnapshot(
