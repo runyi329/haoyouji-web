@@ -83,8 +83,17 @@ const trpcFetch: typeof globalThis.fetch = (input, init) => {
       document.cookie = `app_session_id=${token}; path=/; max-age=${365 * 24 * 60 * 60}; SameSite=Lax`;
     } catch (e) {}
   }
-  const viewAsUserId = sessionStorage.getItem('view-as-user-id');
-  if (viewAsUserId) {
+  // 账本页切换到钱包/明细页时，旧页面的卸载清理可能会先移除 sessionStorage。
+  // 因此优先使用 URL 中显式携带的 viewAs，确保 /wallet?viewAs=... 请求仍以被查看成员身份读取；
+  // 服务端会再次校验真实管理员角色和目标用户，前端参数不能提升权限。
+  let viewAsUserId: string | null = null;
+  try {
+    const urlViewAs = new URLSearchParams(window.location.search).get('viewAs');
+    viewAsUserId = urlViewAs && /^\d+$/.test(urlViewAs) ? urlViewAs : sessionStorage.getItem('view-as-user-id');
+  } catch {
+    viewAsUserId = sessionStorage.getItem('view-as-user-id');
+  }
+  if (viewAsUserId && /^\d+$/.test(viewAsUserId)) {
     headers.set('x-view-as-user-id', viewAsUserId);
   }
   // 牙伴多门店：注入当前选中门店 tenant_id（首页切店时写入 localStorage）
