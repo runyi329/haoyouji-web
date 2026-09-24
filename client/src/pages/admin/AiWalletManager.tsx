@@ -314,7 +314,7 @@ export default function AiWalletManager() {
               <h2 className="mt-2 text-[20px] font-bold">按需启用，统一审计</h2>
               <p className="mt-1.5 max-w-sm text-[12px] leading-relaxed text-blue-100">项目只看到获准资产与入口；每个项目档案由真实配置自动生成，不允许手写改动。</p>
             </div>
-            <div className="rounded-2xl bg-white/15 px-3 py-2 text-center backdrop-blur"><div className="text-xl font-bold">{profiles.filter((profile) => profile.enabled).length}</div><div className="text-[10px] text-blue-100">已启用档案</div></div>
+            <div className="rounded-2xl bg-white/15 px-3 py-2 text-center backdrop-blur"><div className="text-xl font-bold">{overviewQuery.isError ? "—" : profiles.filter((profile) => profile.enabled).length}</div><div className="text-[10px] text-blue-100">已启用档案</div></div>
           </div>
         </section>
 
@@ -332,6 +332,13 @@ export default function AiWalletManager() {
 
         {overviewQuery.isLoading ? (
           <div className="flex items-center justify-center py-20 text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>
+        ) : overviewQuery.isError ? (
+          <section className="rounded-2xl border border-red-100 bg-red-50 p-5 text-center">
+            <CircleAlert className="mx-auto h-6 w-6 text-red-500" />
+            <h2 className="mt-2 text-sm font-bold text-red-800">项目档案暂时无法读取</h2>
+            <p className="mt-1 text-[11px] leading-relaxed text-red-600">为避免把加载失败误显示成“0 个档案”，请点击重试。档案记录不会因本提示被删除。</p>
+            <button onClick={() => overviewQuery.refetch()} className="mt-3 rounded-full border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700 active:scale-95">重新读取</button>
+          </section>
         ) : activeView === "profiles" ? (
           <>
             <section className="rounded-2xl border border-amber-100 bg-amber-50 p-3.5 text-[11px] leading-relaxed text-amber-800">

@@ -157,9 +157,26 @@ async function ensureWalletProjectProfileTable(): Promise<void> {
           KEY idx_ai_wallet_enabled (enabled)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI智能钱包项目账户档案'
       `);
-      // 旧表是在本次新增“资金通道”前创建的；以兼容迁移补齐字段，绝不改写既有项目配置。
-      await (conn as any).execute(`ALTER TABLE ai_wallet_project_profiles ADD COLUMN IF NOT EXISTS allow_admin_adjustment TINYINT(1) NULL DEFAULT NULL AFTER allow_transfer`);
-      await (conn as any).execute(`ALTER TABLE ai_wallet_project_profiles ADD COLUMN IF NOT EXISTS allow_order_debit TINYINT(1) NULL DEFAULT NULL AFTER allow_admin_adjustment`);
+      // 旧表是在本次新增“资金通道”前创建的。生产库的 MySQL 版本不支持
+      // `ADD COLUMN IF NOT EXISTS`，因此先读元数据、再按缺失列迁移；绝不重建或清空档案表。
+      const [profileColumnRows] = await (conn as any).execute(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'ai_wallet_project_profiles'
+      `) as any[];
+      const existingProfileColumns = new Set((profileColumnRows as any[]).map((row) => String(row.column_name)));
+      const addProfileColumn = async (name: string, definition: string) => {
+        if (existingProfileColumns.has(name)) return;
+        try {
+          await (conn as any).execute(`ALTER TABLE ai_wallet_project_profiles ADD COLUMN ${name} ${definition}`);
+        } catch (error: any) {
+          // 多个实例同时升级时，另一个实例可能已成功补列；该重复列错误可安全忽略。
+          if (error?.code !== 'ER_DUP_FIELDNAME') throw error;
+        }
+        existingProfileColumns.add(name);
+      };
+      await addProfileColumn('allow_admin_adjustment', 'TINYINT(1) NULL DEFAULT NULL AFTER allow_transfer');
+      await addProfileColumn('allow_order_debit', 'TINYINT(1) NULL DEFAULT NULL AFTER allow_admin_adjustment');
       // 新字段首次上线时，只有既有真实资金项目继承当前已运行的能力；之后管理员保存的 0/1 不会被重写。
       await (conn as any).execute(`
         UPDATE ai_wallet_project_profiles
