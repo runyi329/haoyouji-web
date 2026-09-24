@@ -8,28 +8,30 @@ interface WithdrawProps {
   hideHeader?: boolean;
   theme?: "yaban";
   onClose?: () => void;
+  ledgerId?: number;
 }
 
-export default function Withdraw({ hideHeader, theme, onClose }: WithdrawProps) {
+export default function Withdraw({ hideHeader, theme, onClose, ledgerId }: WithdrawProps) {
   const isYaban = theme === "yaban";
   const [, setLocation] = useLocation();
   const search = useSearch();
   const searchParams = new URLSearchParams(search);
   const fromLedgerId = searchParams.get('ledgerId');
+  const effectiveLedgerId = ledgerId ?? (fromLedgerId ? Number(fromLedgerId) : undefined);
 
   const [tab, setTab] = useState<"withdraw" | "records">("withdraw");
   const [amount, setAmount] = useState("");
   const [selectedWalletId, setSelectedWalletId] = useState<string | null>(null);
 
   const balanceQuery = trpc.recharge.getBalance.useQuery({
-    ...(fromLedgerId ? { ledgerId: Number(fromLedgerId) } : {}),
+    ...(effectiveLedgerId ? { ledgerId: effectiveLedgerId } : {}),
   });
 
   const walletsQuery = trpc.paymentAccounts.getDigitalWallets.useQuery();
 
   const withdrawalsQuery = trpc.recharge.getMySntWithdrawals.useQuery({
     limit: 50,
-    ...(fromLedgerId ? { ledgerId: Number(fromLedgerId) } : {}),
+    ...(effectiveLedgerId ? { ledgerId: effectiveLedgerId } : {}),
   });
 
   const balance = useMemo(() => parseFloat(String(balanceQuery.data || 0)), [balanceQuery.data]);
@@ -68,7 +70,7 @@ export default function Withdraw({ hideHeader, theme, onClose }: WithdrawProps) 
     withdrawMutation.mutate({
       sntAmount: amountNum,
       bscAddress: selectedWallet.walletAddress,
-      ...(fromLedgerId ? { ledgerId: Number(fromLedgerId) } : {}),
+      ...(effectiveLedgerId ? { ledgerId: effectiveLedgerId } : {}),
     });
   };
 

@@ -79,7 +79,7 @@ import { yabanOpsRouter } from "./yaban-ops-router";
 import { yabanStaffRouter } from "./yaban-staff-router";
 import { yabanTreatmentRouter } from "./yaban-treatment-router";
 import { versionRouter } from "./version-router";
-import { aiWalletRouter } from "./ai-wallet-router";
+import { aiWalletRouter, assertAiWalletOperationEnabled } from "./ai-wallet-router";
 
 // // 在应用启动时初始化数据库
 // initDatabase().catch(err => {
@@ -1853,6 +1853,7 @@ ${klinesSummary}
       }))
       .mutation(async ({ ctx, input }) => {
         // 普通充值入口只可为本人建单；管理员代建必须使用单独、受审计的后台接口。
+        if (input.ledgerId) await assertAiWalletOperationEnabled(`ledger:${input.ledgerId}`, "recharge");
         return await dbRecharge.createRechargeOrder(ctx.user.id, input.amount, input.network, input.ledgerId);
       }),
 
@@ -1947,8 +1948,10 @@ ${klinesSummary}
         currency: z.enum(['USDT', 'CNY']),
         amount: z.number().finite().positive().max(10_000_000),
         requestId: z.string().regex(/^[A-Za-z0-9_-]{16,80}$/, '转账请求无效'),
+        sourceLedgerId: z.number().int().positive(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertAiWalletOperationEnabled(`ledger:${input.sourceLedgerId}`, "transfer");
         return await dbRecharge.transferWalletBalance({
           fromUserId: ctx.user.id,
           toUserId: input.toUserId,
@@ -2526,6 +2529,7 @@ ${klinesSummary}
         ledgerId: z.number().optional(),  // 账本 ID，默认 52
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertAiWalletOperationEnabled(`ledger:${input.ledgerId ?? 52}`, "withdrawal");
         return await dbRecharge.requestSntWithdraw(
           ctx.user.id,
           input.sntAmount,
@@ -2680,9 +2684,11 @@ ${klinesSummary}
         userId: z.number(),
         amount: z.number(),   // 正数=入账，负数=出账
         note: z.string().optional(),
+        ledgerId: z.number().int().positive().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') throw new Error('无权限');
+        await assertAiWalletOperationEnabled(`ledger:${input.ledgerId ?? 52}`, "admin_adjustment");
         return await dbRecharge.adminAdjustCnyBalance({
           userId: input.userId,
           amount: input.amount,
@@ -13662,7 +13668,7 @@ ${klinesSummary}
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
-        
+        await assertAiWalletOperationEnabled(`ledger:${input.ledgerId}`, "admin_adjustment");
         const db = await getLedgerDb();
         if (input.id) {
           await db.execute(
@@ -14519,7 +14525,7 @@ ${klinesSummary}
         lockYield: z.number().optional(), // 月化收益率
       }))
       .mutation(async ({ ctx, input }) => {
-        
+        if (input.side === 'buy') await assertAiWalletOperationEnabled(`ledger:${input.ledgerId}`, "order_debit");
         const db = await getLedgerDb();
 
         if (input.side === 'sell' && input.sourceOrderId) {
@@ -14749,6 +14755,7 @@ ${klinesSummary}
         amount: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertAiWalletOperationEnabled(`ledger:${input.ledgerId}`, "order_debit");
         const limitPrice = Number(input.limitPrice);
         const amount = Number(input.amount);
         if (!AF_ADVANCED_LIMIT_PRICES.has(limitPrice)) {

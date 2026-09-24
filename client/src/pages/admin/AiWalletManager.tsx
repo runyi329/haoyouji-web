@@ -46,6 +46,8 @@ type Profile = {
   allowRecharge: boolean;
   allowWithdrawal: boolean;
   allowTransfer: boolean;
+  allowAdminAdjustment: boolean;
+  allowOrderDebit: boolean;
   showMarket: boolean;
   showNetworks: boolean;
   ratePolicy: RatePolicy;
@@ -83,6 +85,8 @@ type FormState = {
   allowRecharge: boolean;
   allowWithdrawal: boolean;
   allowTransfer: boolean;
+  allowAdminAdjustment: boolean;
+  allowOrderDebit: boolean;
   showMarket: boolean;
   showNetworks: boolean;
   ratePolicy: RatePolicy;
@@ -98,6 +102,8 @@ const emptyForm = (): FormState => ({
   allowRecharge: false,
   allowWithdrawal: false,
   allowTransfer: false,
+  allowAdminAdjustment: false,
+  allowOrderDebit: false,
   showMarket: false,
   showNetworks: false,
   ratePolicy: "not_required",
@@ -231,6 +237,8 @@ export default function AiWalletManager() {
       allowRecharge: profile.allowRecharge,
       allowWithdrawal: profile.allowWithdrawal,
       allowTransfer: profile.allowTransfer,
+      allowAdminAdjustment: profile.allowAdminAdjustment,
+      allowOrderDebit: profile.allowOrderDebit,
       showMarket: profile.showMarket,
       showNetworks: profile.showNetworks,
       ratePolicy: profile.ratePolicy,
@@ -350,10 +358,17 @@ export default function AiWalletManager() {
                   <span className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] text-slate-500">{templates.find((item) => item.key === profile.templateKey)?.name || "自定义"}</span>
                   {profile.showMarket && <span className="rounded-lg bg-violet-50 px-2 py-1 text-[10px] text-violet-600">实时估值</span>}
                   {profile.allowTransfer && <span className="rounded-lg bg-emerald-50 px-2 py-1 text-[10px] text-emerald-600">站内转账</span>}
+                  {profile.allowAdminAdjustment && <span className="rounded-lg bg-amber-50 px-2 py-1 text-[10px] text-amber-700">手动调账</span>}
+                  {profile.allowOrderDebit && <span className="rounded-lg bg-rose-50 px-2 py-1 text-[10px] text-rose-600">订单扣款</span>}
                 </div>
                 <button onClick={() => setSheetArchive(profile.archive)} className="mt-3 flex w-full items-center gap-2 rounded-xl border border-slate-100 bg-[#FBFCFF] px-3 py-2.5 text-left text-[12px] font-semibold text-slate-600 active:scale-[0.99]">
                   <BookOpenText className="h-4 w-4 text-[#2358D9]" /><span className="flex-1">查看项目钱包档案（只读说明）</span><ChevronRight className="h-4 w-4 text-slate-300" />
                 </button>
+                {profile.targetKey === "ledger:52" && (
+                  <button onClick={() => navigate("/ledger/52/af-recharge-manage")} className="mt-2 flex w-full items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 text-left text-[12px] font-semibold text-amber-800 active:scale-[0.99]">
+                    <Settings2 className="h-4 w-4" /><span className="flex-1">进入管理员手动调账与全局流水</span><ChevronRight className="h-4 w-4 text-amber-400" />
+                  </button>
+                )}
               </section>
             ))}
           </>
@@ -411,6 +426,8 @@ export default function AiWalletManager() {
                 <ToggleRow label="允许充值入口" description="USDT 现有正式充值链路可复用；CNY 用户端申请链路尚未正式接入。" checked={form.allowRecharge} onChange={(next) => setForm((previous) => ({ ...previous, allowRecharge: next }))} />
                 <ToggleRow label="允许提现入口" description="USDT 现有审核链路可复用；CNY 用户端提现申请仍需建设。" checked={form.allowWithdrawal} onChange={(next) => setForm((previous) => ({ ...previous, allowWithdrawal: next }))} />
                 <ToggleRow label="允许站内转账" description="现有能力只支持 CNY/USDT；每笔操作不可撤回，只能反向转账纠正。" checked={form.allowTransfer} onChange={(next) => setForm((previous) => ({ ...previous, allowTransfer: next }))} />
+                <ToggleRow label="允许管理员手动调账" description="仅影响新增或编辑的人工加减余额；既有记录的撤销/纠正与客户应收退款保持可用，避免资金冻结。" checked={form.allowAdminAdjustment} onChange={(next) => setForm((previous) => ({ ...previous, allowAdminAdjustment: next }))} />
+                <ToggleRow label="允许业务订单扣款" description="控制新建业务订单从钱包扣款。关闭后不影响已创建订单的撤单退款、卖出结算回款或其他已产生应收款。" checked={form.allowOrderDebit} onChange={(next) => setForm((previous) => ({ ...previous, allowOrderDebit: next }))} />
               </section>
 
               <section className="rounded-2xl border border-slate-100 p-4">

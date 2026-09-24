@@ -303,11 +303,13 @@ function CnyWithdrawContent({ cnyBalance, onClose }: { cnyBalance: number; onClo
 function WalletTransferContent({
   currency,
   availableBalance,
+  sourceLedgerId,
   onClose,
   onCompleted,
 }: {
   currency: "USDT" | "CNY";
   availableBalance: number;
+  sourceLedgerId: number;
   onClose: () => void;
   onCompleted: () => void;
 }) {
@@ -373,6 +375,7 @@ function WalletTransferContent({
       currency,
       amount: amountNumber,
       requestId,
+      sourceLedgerId,
     });
   };
 
@@ -558,6 +561,14 @@ export default function Wallet() {
   const [activeTab, setActiveTab] = useState<"usdt" | "cny">("usdt");
   // 转账能力是全局统一钱包能力；当前仅由52号账本首页以该上下文开放按钮。
   const isLedger52WalletEntry = new URLSearchParams(search).get("fromLedger") === "52";
+  const walletPolicyQuery = trpc.aiWallet.runtimeProfile.useQuery(
+    { targetKey: "ledger:52" },
+    { enabled: isLedger52WalletEntry, staleTime: 30_000 },
+  );
+  // 非52入口沿用既有通用钱包显示；52入口严格按项目档案决定是否显示新资金入口。
+  const canRecharge = !isLedger52WalletEntry || walletPolicyQuery.data?.allowRecharge === true;
+  const canWithdraw = !isLedger52WalletEntry || walletPolicyQuery.data?.allowWithdrawal === true;
+  const canTransfer = isLedger52WalletEntry && walletPolicyQuery.data?.allowTransfer === true;
 
   const balanceQuery = trpc.recharge.getBalance.useQuery();
   const recentRechargeQuery = trpc.recharge.getMyOrders.useQuery({ limit: 5 });
@@ -631,7 +642,7 @@ export default function Wallet() {
     txList, isUsdt,
   }: {
     icon: string; label: string; balance: string; unit: string; subLine?: React.ReactNode;
-    txPath: string; onRefresh: () => void; onRecharge: () => void; onWithdraw: () => void; onTransfer?: () => void;
+    txPath: string; onRefresh: () => void; onRecharge?: () => void; onWithdraw?: () => void; onTransfer?: () => void;
     txList: React.ReactNode; isUsdt: boolean;
   }) => (
     <div
@@ -714,43 +725,49 @@ export default function Wallet() {
         </div>
         {subLine && <div className="mb-4">{subLine}</div>}
 
-        {/* 操作按钮 */}
-        <div className={`grid gap-2.5 mb-1 ${onTransfer ? "grid-cols-3" : "grid-cols-2"}`}>
-          <button
-            onClick={onRecharge}
-            className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-transform"
-            style={{
-              background: `linear-gradient(135deg, ${G.gold} 0%, ${G.goldLight} 50%, ${G.gold} 100%)`,
-              boxShadow: "0 4px 14px rgba(201,168,76,0.35)",
-              color: "#000",
-            }}
-          >
-            <ArrowDownCircle className="w-4 h-4" />
-            <span>充値</span>
-          </button>
-          <button
-            onClick={onWithdraw}
-            className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-transform"
-            style={{
-              background: "transparent",
-              border: `1px solid ${G.gold}`,
-              color: G.goldLight,
-            }}
-          >
-            <ArrowUpCircle className="w-4 h-4" />
-            <span>提现</span>
-          </button>
-          {onTransfer && (
-            <button
-              onClick={onTransfer}
-              className="flex items-center justify-center space-x-1 py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-transform"
-              style={{ background: G.goldFaint, border: `1px solid ${G.goldDim}`, color: G.goldLight }}
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>转账</span>
-            </button>
-          )}
-        </div>
+        {/* 操作按钮：项目档案关闭入口后不渲染，服务端仍会二次校验。 */}
+        {(onRecharge || onWithdraw || onTransfer) && (
+          <div className={`grid gap-2.5 mb-1 ${[onRecharge, onWithdraw, onTransfer].filter(Boolean).length === 3 ? "grid-cols-3" : [onRecharge, onWithdraw, onTransfer].filter(Boolean).length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+            {onRecharge && (
+              <button
+                onClick={onRecharge}
+                className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-transform"
+                style={{
+                  background: `linear-gradient(135deg, ${G.gold} 0%, ${G.goldLight} 50%, ${G.gold} 100%)`,
+                  boxShadow: "0 4px 14px rgba(201,168,76,0.35)",
+                  color: "#000",
+                }}
+              >
+                <ArrowDownCircle className="w-4 h-4" />
+                <span>充値</span>
+              </button>
+            )}
+            {onWithdraw && (
+              <button
+                onClick={onWithdraw}
+                className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-transform"
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${G.gold}`,
+                  color: G.goldLight,
+                }}
+              >
+                <ArrowUpCircle className="w-4 h-4" />
+                <span>提现</span>
+              </button>
+            )}
+            {onTransfer && (
+              <button
+                onClick={onTransfer}
+                className="flex items-center justify-center space-x-1 py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-transform"
+                style={{ background: G.goldFaint, border: `1px solid ${G.goldDim}`, color: G.goldLight }}
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>转账</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* 流水 */}
         {txList}
@@ -817,9 +834,9 @@ export default function Wallet() {
           )}
           txPath="/wallet/transactions"
           onRefresh={() => balanceQuery.refetch()}
-          onRecharge={() => setModal("recharge")}
-          onWithdraw={() => setModal("withdraw")}
-          onTransfer={isLedger52WalletEntry ? () => setModal("transfer") : undefined}
+          onRecharge={canRecharge ? () => setModal("recharge") : undefined}
+          onWithdraw={canWithdraw ? () => setModal("withdraw") : undefined}
+          onTransfer={canTransfer ? () => setModal("transfer") : undefined}
           isUsdt={true}
           txList={
             recentUsdtTx.length > 0 ? (
@@ -877,9 +894,9 @@ export default function Wallet() {
           )}
           txPath="/wallet/cny-transactions"
           onRefresh={() => cnyBalanceQuery.refetch()}
-          onRecharge={() => setModal("cny-recharge")}
-          onWithdraw={() => setModal("cny-withdraw")}
-          onTransfer={isLedger52WalletEntry ? () => setModal("transfer") : undefined}
+          onRecharge={canRecharge ? () => setModal("cny-recharge") : undefined}
+          onWithdraw={canWithdraw ? () => setModal("cny-withdraw") : undefined}
+          onTransfer={canTransfer ? () => setModal("transfer") : undefined}
           isUsdt={false}
           txList={
             recentCnyTx.length > 0 ? (
@@ -930,12 +947,12 @@ export default function Wallet() {
       {/* ── 弹窗 ── */}
       {modal === "recharge" && (
         <div className="fixed inset-0 z-50">
-          <Recharge onClose={() => setModal(null)} />
+          <Recharge ledgerId={isLedger52WalletEntry ? 52 : undefined} onClose={() => setModal(null)} />
         </div>
       )}
       {modal === "withdraw" && (
         <div className="fixed inset-0 z-50">
-          <Withdraw onClose={() => setModal(null)} />
+          <Withdraw ledgerId={isLedger52WalletEntry ? 52 : undefined} onClose={() => setModal(null)} />
         </div>
       )}
       {modal === "cny-recharge" && (
@@ -953,6 +970,7 @@ export default function Wallet() {
           <WalletTransferContent
             currency={activeTab === "cny" ? "CNY" : "USDT"}
             availableBalance={activeTab === "cny" ? cnyBalance : balance}
+            sourceLedgerId={52}
             onClose={() => setModal(null)}
             onCompleted={() => {
               void balanceQuery.refetch();

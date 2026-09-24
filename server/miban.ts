@@ -23,6 +23,7 @@ import { sdk } from "./_core/sdk";
 import { ONE_YEAR_MS } from "@shared/const";
 import { getUserCnyBalance, adminAdjustCnyBalance, addUserBalance, getUserBalance } from "./db-recharge";
 import { getUsdtCnyRate } from "./price-scanner";
+import { assertAiWalletOperationEnabled } from "./ai-wallet-router";
 
 // 管理员中间件：米伴管理操作必须在服务端验证系统管理员身份。
 // 前端页面隐藏只改善体验，不能作为资金、订单和用户数据的授权边界。
@@ -1570,6 +1571,7 @@ export const mibanOrderRouter = router({
       subscriptionMonths: z.union([z.literal(3), z.literal(6), z.literal(12)]).optional(), // 订阅期数
     }))
     .mutation(async ({ input, ctx }) => {
+      await assertAiWalletOperationEnabled("version:proj_hzxm2t", "order_debit");
       const userId = ctx.user!.id;
       const singleCny = input.totalPrice; // 单期金额（人民币）
       const subMonths = input.subscriptionMonths ?? null; // 订阅期数（null=单次）

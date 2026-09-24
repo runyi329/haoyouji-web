@@ -9,15 +9,17 @@ interface RechargeProps {
   hideBalance?: boolean;
   theme?: "yaban";
   onClose?: () => void;
+  ledgerId?: number;
 }
 
-export default function Recharge({ hideHeader = false, hideBalance = false, theme, onClose }: RechargeProps = {}) {
+export default function Recharge({ hideHeader = false, hideBalance = false, theme, onClose, ledgerId }: RechargeProps = {}) {
   const isYaban = theme === "yaban";
   const [, setLocation] = useLocation();
   const search = useSearch();
   const searchParams = new URLSearchParams(search);
   const fromLedger = searchParams.get('from') === 'ledger';
   const fromLedgerId = searchParams.get('ledgerId');
+  const effectiveLedgerId = ledgerId ?? (fromLedgerId ? Number(fromLedgerId) : undefined);
   const viewAsUserId = searchParams.get('viewAs');
   const returnTo = searchParams.get('returnTo');
   const handleBack = () => {
@@ -70,7 +72,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
       const result = await createOrderMutation.mutateAsync({
         amount: numAmount,
         network,
-        ...(fromLedgerId ? { ledgerId: Number(fromLedgerId) } : {}),
+        ...(effectiveLedgerId ? { ledgerId: effectiveLedgerId } : {}),
         ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}),
       });
       setOrder(result);

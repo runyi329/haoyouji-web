@@ -22,6 +22,8 @@ type WalletProfileRow = {
   allow_recharge: number;
   allow_withdrawal: number;
   allow_transfer: number;
+  allow_admin_adjustment: number;
+  allow_order_debit: number;
   show_market: number;
   show_networks: number;
   rate_policy: (typeof RATE_POLICIES)[number];
@@ -46,6 +48,8 @@ type WalletProfile = {
   allowRecharge: boolean;
   allowWithdrawal: boolean;
   allowTransfer: boolean;
+  allowAdminAdjustment: boolean;
+  allowOrderDebit: boolean;
   showMarket: boolean;
   showNetworks: boolean;
   ratePolicy: (typeof RATE_POLICIES)[number];
@@ -106,6 +110,8 @@ function normalizeProfile(row: WalletProfileRow): WalletProfile {
     allowRecharge: toBool(row.allow_recharge),
     allowWithdrawal: toBool(row.allow_withdrawal),
     allowTransfer: toBool(row.allow_transfer),
+    allowAdminAdjustment: toBool(row.allow_admin_adjustment),
+    allowOrderDebit: toBool(row.allow_order_debit),
     showMarket: toBool(row.show_market),
     showNetworks: toBool(row.show_networks),
     ratePolicy: (RATE_POLICIES as readonly string[]).includes(String(row.rate_policy))
@@ -136,6 +142,8 @@ async function ensureWalletProjectProfileTable(): Promise<void> {
           allow_recharge TINYINT(1) NOT NULL DEFAULT 0,
           allow_withdrawal TINYINT(1) NOT NULL DEFAULT 0,
           allow_transfer TINYINT(1) NOT NULL DEFAULT 0,
+          allow_admin_adjustment TINYINT(1) NULL DEFAULT NULL,
+          allow_order_debit TINYINT(1) NULL DEFAULT NULL,
           show_market TINYINT(1) NOT NULL DEFAULT 0,
           show_networks TINYINT(1) NOT NULL DEFAULT 0,
           rate_policy VARCHAR(32) NOT NULL DEFAULT 'not_required',
@@ -149,20 +157,30 @@ async function ensureWalletProjectProfileTable(): Promise<void> {
           KEY idx_ai_wallet_enabled (enabled)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI智能钱包项目账户档案'
       `);
+      // 旧表是在本次新增“资金通道”前创建的；以兼容迁移补齐字段，绝不改写既有项目配置。
+      await (conn as any).execute(`ALTER TABLE ai_wallet_project_profiles ADD COLUMN IF NOT EXISTS allow_admin_adjustment TINYINT(1) NULL DEFAULT NULL AFTER allow_transfer`);
+      await (conn as any).execute(`ALTER TABLE ai_wallet_project_profiles ADD COLUMN IF NOT EXISTS allow_order_debit TINYINT(1) NULL DEFAULT NULL AFTER allow_admin_adjustment`);
+      // 新字段首次上线时，只有既有真实资金项目继承当前已运行的能力；之后管理员保存的 0/1 不会被重写。
+      await (conn as any).execute(`
+        UPDATE ai_wallet_project_profiles
+        SET allow_admin_adjustment = CASE WHEN target_key = 'ledger:52' THEN 1 ELSE 0 END,
+            allow_order_debit = CASE WHEN target_key IN ('ledger:52', 'version:proj_hzxm2t') THEN 1 ELSE 0 END
+        WHERE allow_admin_adjustment IS NULL OR allow_order_debit IS NULL
+      `);
 
       // 为已实际使用统一钱包的两个项目写入首批可追溯配置。INSERT IGNORE 不覆盖人工更新。
       await (conn as any).execute(
         `INSERT IGNORE INTO ai_wallet_project_profiles
           (target_type, target_key, target_name, ledger_id, template_key, enabled, visible_assets, default_asset,
-           allow_recharge, allow_withdrawal, allow_transfer, show_market, show_networks, rate_policy)
-         VALUES ('ledger', 'ledger:52', '52号账本', 52, 'blockchain', 1, ?, 'USDT', 1, 1, 1, 1, 1, 'live_market')`,
+           allow_recharge, allow_withdrawal, allow_transfer, allow_admin_adjustment, allow_order_debit, show_market, show_networks, rate_policy)
+         VALUES ('ledger', 'ledger:52', '52号账本', 52, 'blockchain', 1, ?, 'USDT', 1, 1, 1, 1, 1, 1, 1, 'live_market')`,
         [JSON.stringify(["USDT", "CNY"])]
       );
       await (conn as any).execute(
         `INSERT IGNORE INTO ai_wallet_project_profiles
           (target_type, target_key, target_name, version_key, template_key, enabled, visible_assets, default_asset,
-           allow_recharge, allow_withdrawal, allow_transfer, show_market, show_networks, rate_policy)
-         VALUES ('site_version', 'version:proj_hzxm2t', '米伴', 'proj_hzxm2t', 'hybrid', 1, ?, 'CNY', 0, 0, 0, 0, 0, 'order_snapshot')`,
+           allow_recharge, allow_withdrawal, allow_transfer, allow_admin_adjustment, allow_order_debit, show_market, show_networks, rate_policy)
+         VALUES ('site_version', 'version:proj_hzxm2t', '米伴', 'proj_hzxm2t', 'hybrid', 1, ?, 'CNY', 0, 0, 0, 0, 1, 0, 0, 'order_snapshot')`,
         [JSON.stringify(["CNY", "USDT"])]
       );
     })().catch((error) => {
@@ -171,6 +189,42 @@ async function ensureWalletProjectProfileTable(): Promise<void> {
     });
   }
   await walletProfileTableReady;
+}
+
+export type AiWalletOperation = "recharge" | "withdrawal" | "transfer" | "admin_adjustment" | "order_debit";
+
+/**
+ * Service-side gate for newly initiated wallet actions. It deliberately excludes
+ * refunds, completed-order settlements, and audit corrections so a paused entry
+ * cannot freeze funds that are already owed to a user.
+ */
+export async function assertAiWalletOperationEnabled(targetKey: string, operation: AiWalletOperation): Promise<void> {
+  await ensureWalletProjectProfileTable();
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI 智能钱包配置服务暂不可用" });
+  const columnByOperation: Record<AiWalletOperation, string> = {
+    recharge: "allow_recharge",
+    withdrawal: "allow_withdrawal",
+    transfer: "allow_transfer",
+    admin_adjustment: "allow_admin_adjustment",
+    order_debit: "allow_order_debit",
+  };
+  const operationLabel: Record<AiWalletOperation, string> = {
+    recharge: "充值入口",
+    withdrawal: "提现入口",
+    transfer: "站内转账",
+    admin_adjustment: "管理员手动调账",
+    order_debit: "业务订单扣款",
+  };
+  const column = columnByOperation[operation];
+  const [rows] = await (conn as any).execute(
+    `SELECT enabled, ${column} AS operation_enabled FROM ai_wallet_project_profiles WHERE target_key = ? LIMIT 1`,
+    [targetKey],
+  ) as any[];
+  const profile = (rows as any[])?.[0];
+  if (!profile || Number(profile.enabled) !== 1 || Number(profile.operation_enabled) !== 1) {
+    throw new TRPCError({ code: "FORBIDDEN", message: `该项目的${operationLabel[operation]}当前未启用，请联系管理员在 AI 智能钱包配置中核对` });
+  }
 }
 
 const TEMPLATE_CATALOG = [
@@ -216,6 +270,7 @@ function getRuntimeFacts(profile: WalletProfile): string[] {
   const baseline = [
     "所有用户余额仍由现有全局钱包余额与流水体系承载；项目档案不复制或拆分用户资产。",
     "站内转账当前仅支持 CNY 与 USDT，服务端以原子双边记账、请求幂等与不可撤回审计处理。",
+    "订单退款、成交结算回款、系统奖励或佣金入账属于已产生业务义务，不作为可关闭的新资金入口；暂停项目入口不能阻断这类应收款。",
   ];
   if (profile.targetKey === "ledger:52") {
     return [
@@ -244,6 +299,8 @@ function buildArchive(profile: WalletProfile) {
     profile.allowRecharge ? "充值" : null,
     profile.allowWithdrawal ? "提现" : null,
     profile.allowTransfer ? "站内转账" : null,
+    profile.allowAdminAdjustment ? "管理员手动调账" : null,
+    profile.allowOrderDebit ? "业务订单扣款" : null,
   ].filter(Boolean).join("、") || "仅查看余额与流水";
   return {
     title: `${profile.targetName} · AI 智能钱包档案`,
@@ -272,6 +329,9 @@ function buildArchive(profile: WalletProfile) {
         title: "资金操作权限",
         lines: [
           `项目允许操作：${operationText}`,
+          `管理员手动调账：${profile.allowAdminAdjustment ? "已启用；仅具有既有管理员权限的后台人员可使用" : "未启用；不会新增人工加减余额"}`,
+          `业务订单扣款：${profile.allowOrderDebit ? "已启用；新建业务订单可从钱包扣款" : "未启用；新建业务订单不会发起钱包扣款"}`,
+          "退款、已成交订单结算回款和既有流水纠正不受上述新单入口开关限制，避免因暂停入口而冻结客户已有资金。",
           "说明：项目档案定义该项目计划开放的能力；所有实际资金操作仍必须经过既有服务端余额、角色、限额与审核校验。",
         ],
       },
@@ -371,6 +431,8 @@ const profileInput = z.object({
   allowRecharge: z.boolean(),
   allowWithdrawal: z.boolean(),
   allowTransfer: z.boolean(),
+  allowAdminAdjustment: z.boolean(),
+  allowOrderDebit: z.boolean(),
   showMarket: z.boolean(),
   showNetworks: z.boolean(),
   ratePolicy: z.enum(RATE_POLICIES),
@@ -419,6 +481,7 @@ export const aiWalletRouter = router({
               "USDT：现有充值订单、收款地址、链上扫描、人工确认、提现申请和审核链路已接入。",
               "CNY：现有后台调账与内部业务记账已接入；用户端法币充值/提现仍需建设正式申请、匹配和审核流程。",
               "站内转账：仅 CNY/USDT，采用双边原子记账、幂等键和不可撤回审计；需要纠正时应新建反向流水。",
+              "人工加减余额与新建业务订单扣款可由项目档案按项目暂停；退款、成交结算、奖励与佣金等既有资金义务不会被暂停，以避免用户资金冻结。",
             ],
           },
           {
@@ -440,6 +503,30 @@ export const aiWalletRouter = router({
       },
     };
   }),
+
+  runtimeProfile: protectedProcedure
+    .input(z.object({ targetKey: z.string().regex(/^(ledger:\d+|version:[a-z0-9_]+)$/) }))
+    .query(async ({ input }) => {
+      await ensureWalletProjectProfileTable();
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI 智能钱包配置服务暂不可用" });
+      const [rows] = await (conn as any).execute(
+        `SELECT enabled, allow_recharge, allow_withdrawal, allow_transfer, allow_admin_adjustment, allow_order_debit
+         FROM ai_wallet_project_profiles WHERE target_key = ? LIMIT 1`,
+        [input.targetKey],
+      ) as any[];
+      const row = (rows as any[])?.[0];
+      const enabled = Boolean(row && Number(row.enabled) === 1);
+      return {
+        configured: Boolean(row),
+        enabled,
+        allowRecharge: enabled && Number(row.allow_recharge) === 1,
+        allowWithdrawal: enabled && Number(row.allow_withdrawal) === 1,
+        allowTransfer: enabled && Number(row.allow_transfer) === 1,
+        allowAdminAdjustment: enabled && Number(row.allow_admin_adjustment) === 1,
+        allowOrderDebit: enabled && Number(row.allow_order_debit) === 1,
+      };
+    }),
 
   saveProfile: protectedProcedure.input(profileInput).mutation(async ({ ctx, input }) => {
     assertSuperAdmin(ctx);
@@ -465,6 +552,8 @@ export const aiWalletRouter = router({
       input.allowRecharge ? 1 : 0,
       input.allowWithdrawal ? 1 : 0,
       input.allowTransfer ? 1 : 0,
+      input.allowAdminAdjustment ? 1 : 0,
+      input.allowOrderDebit ? 1 : 0,
       input.showMarket ? 1 : 0,
       input.showNetworks ? 1 : 0,
       input.ratePolicy,
@@ -479,7 +568,7 @@ export const aiWalletRouter = router({
         `UPDATE ai_wallet_project_profiles SET
           target_type = ?, target_key = ?, target_name = ?, ledger_id = ?, version_key = ?, template_key = ?, enabled = ?,
           visible_assets = ?, default_asset = ?, allow_recharge = ?, allow_withdrawal = ?, allow_transfer = ?,
-          show_market = ?, show_networks = ?, rate_policy = ?, updated_by = ?, updated_at = NOW()
+          allow_admin_adjustment = ?, allow_order_debit = ?, show_market = ?, show_networks = ?, rate_policy = ?, updated_by = ?, updated_at = NOW()
          WHERE id = ?`,
         [...params.slice(0, -1), input.id]
       );
@@ -496,8 +585,8 @@ export const aiWalletRouter = router({
     const [result] = await conn.execute(
       `INSERT INTO ai_wallet_project_profiles
         (target_type, target_key, target_name, ledger_id, version_key, template_key, enabled, visible_assets, default_asset,
-         allow_recharge, allow_withdrawal, allow_transfer, show_market, show_networks, rate_policy, created_by, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         allow_recharge, allow_withdrawal, allow_transfer, allow_admin_adjustment, allow_order_debit, show_market, show_networks, rate_policy, created_by, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params
     ) as any[];
     return { success: true, id: Number((result as any).insertId) };
