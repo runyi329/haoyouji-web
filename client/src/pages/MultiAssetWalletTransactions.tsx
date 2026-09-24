@@ -30,7 +30,11 @@ export default function MultiAssetWalletTransactions() {
   const search = useSearch();
   const query = new URLSearchParams(search);
   const viewAsUserId = restoreLedgerViewAsState(query.get("viewAs"));
-  const walletQuery = viewAsUserId ? `?fromLedger=52&viewAs=${viewAsUserId}` : "?fromLedger=52";
+  // 从单币种明细返回时保持数字币账户选中，不回退到默认稳定币账户。
+  const walletQuery = viewAsUserId ? `?fromLedger=52&account=CRYPTO&viewAs=${viewAsUserId}` : "?fromLedger=52&account=CRYPTO";
+  const walletQueryForAccount = (account: "USDT" | "CNY" | "CRYPTO") => viewAsUserId
+    ? `?fromLedger=52&account=${account}&viewAs=${viewAsUserId}`
+    : `?fromLedger=52&account=${account}`;
   const requestedAsset = String(query.get("asset") || "BTC").toUpperCase();
   const assetCode = (AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(requestedAsset)
     ? requestedAsset as AiWalletSettlementAsset
@@ -50,8 +54,8 @@ export default function MultiAssetWalletTransactions() {
     .filter((code: string) => (AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(code));
 
   const handleAssetChange = (nextAsset: string) => {
-    if (nextAsset === "USDT") return setLocation(`/wallet/transactions${walletQuery}`);
-    if (nextAsset === "CNY") return setLocation(`/wallet/cny-transactions${walletQuery}`);
+    if (nextAsset === "USDT") return setLocation(`/wallet/transactions${walletQueryForAccount("USDT")}`);
+    if (nextAsset === "CNY") return setLocation(`/wallet/cny-transactions${walletQueryForAccount("CNY")}`);
     setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(nextAsset)}&fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
   };
 
@@ -116,7 +120,12 @@ export default function MultiAssetWalletTransactions() {
               {history.map((entry: any) => {
                 const change = Number(entry.amount ?? 0);
                 const incoming = change > 0;
-                const label = entry.eventType === "transfer_in" ? "站内转账收款" : entry.eventType === "transfer_out" ? "站内转账汇款" : "后台手动调账";
+                // 手工调整在成员视图中只显示真实资金方向，不暴露后台操作术语。
+                const label = entry.eventType === "transfer_in"
+                  ? "站内转账收款"
+                  : entry.eventType === "transfer_out"
+                    ? "站内转账汇款"
+                    : incoming ? "转入" : "转出";
                 return (
                   <div key={entry.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
                     <div className="flex min-w-0 items-center gap-3">

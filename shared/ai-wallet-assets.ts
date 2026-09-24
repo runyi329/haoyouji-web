@@ -17,10 +17,10 @@ export const AI_WALLET_MARKET_ASSETS = [
 ] as const;
 
 /**
- * 第二阶段首批启用“独立余额 + 手动加减 + 站内转账”的数字资产。
+ * 已启用“独立余额 + 手动加减 + 站内转账”的数字资产。
  * 其余行情资产仍仅用于 52 号账本的行情和仓位展示，未启用资金账本。
  */
-export const AI_WALLET_SETTLEMENT_ASSETS = ["BTC", "ETH", "SOL", "BNB"] as const;
+export const AI_WALLET_SETTLEMENT_ASSETS = ["BTC", "ETH", "SOL", "BNB", "SUI"] as const;
 export type AiWalletSettlementAsset = (typeof AI_WALLET_SETTLEMENT_ASSETS)[number];
 
 export const AI_WALLET_ASSETS = [...AI_WALLET_FUNDING_ASSETS, ...AI_WALLET_MARKET_ASSETS] as const;
@@ -87,7 +87,7 @@ export const AI_WALLET_ASSET_CATALOG: readonly AiWalletAssetDefinition[] = AI_WA
         ? "现有余额、后台调账与站内转账已支持；用户端法币充值/提现申请闭环尚未接入。"
         : "现有余额、充值订单、提现审核、站内转账与链网络能力已接入。")
       : ((AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(code)
-        ? "首批多资产钱包：已启用独立余额、不可变流水、后台手动加减和站内转账；链上充值地址须在配置完成后另行开放。"
+        ? "多资产钱包：已启用独立余额、不可变流水、后台手动加减和站内转账；链上充值地址须在配置完成后另行开放。"
         : "已接入 52 号账本的实时行情与仓位展示；加入项目档案只允许展示，暂不创建钱包余额或开放充值、提现、转账、手动调账。"),
   };
 });

@@ -42,11 +42,14 @@ export default function WalletCnyTransactions() {
   const params = new URLSearchParams(search);
   const isYaban = params.get("from") === "yaban";
   const viewAsUserId = restoreLedgerViewAsState(params.get("viewAs"));
-  const walletQuery = viewAsUserId ? `?fromLedger=52&viewAs=${viewAsUserId}` : "?fromLedger=52";
+  const walletQuery = viewAsUserId ? `?fromLedger=52&account=CNY&viewAs=${viewAsUserId}` : "?fromLedger=52&account=CNY";
+  const walletQueryForAccount = (account: "USDT" | "CNY" | "CRYPTO") => viewAsUserId
+    ? `?fromLedger=52&account=${account}&viewAs=${viewAsUserId}`
+    : `?fromLedger=52&account=${account}`;
   const switchAsset = (asset: string) => {
     if (asset === "CNY") return;
-    if (asset === "USDT") return setLocation(`/wallet/transactions${walletQuery}`);
-    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
+    if (asset === "USDT") return setLocation(`/wallet/transactions${walletQueryForAccount("USDT")}`);
+    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=52&account=CRYPTO${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
   };
   const [filter, setFilter] = useState<"all" | "in" | "out">("all");
 

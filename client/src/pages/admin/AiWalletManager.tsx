@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { AI_WALLET_ASSET_COLORS, AI_WALLET_FUNDING_ASSETS, AI_WALLET_MARKET_ASSETS, type AiWalletAsset } from "@shared/ai-wallet-assets";
+import { AI_WALLET_ASSET_COLORS, AI_WALLET_FUNDING_ASSETS, AI_WALLET_MARKET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS, type AiWalletAsset } from "@shared/ai-wallet-assets";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -203,6 +203,9 @@ export default function AiWalletManager() {
   const assetNameByCode = useMemo(
     () => new Map(assets.map((asset) => [asset.code, asset.name])),
     [assets],
+  );
+  const marketDisplayOnlyAssets = AI_WALLET_MARKET_ASSETS.filter(
+    (asset) => !(AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(asset),
   );
 
   useEffect(() => {
@@ -427,13 +430,13 @@ export default function AiWalletManager() {
                 <h3 className="mb-3 text-[13px] font-bold text-slate-800">资产与展示</h3>
                 <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3">
                   <div className="text-[12px] font-bold text-slate-800">资金账本资产</div>
-                  <p className="mt-1 text-[10px] leading-relaxed text-slate-500">具备余额、流水和资金操作能力。充值、提现、转账及人工调账仍只支持这里的 CNY / USDT。</p>
-                  <div className="mt-2 flex gap-2">{AI_WALLET_FUNDING_ASSETS.map((asset) => <button type="button" key={asset} onClick={() => toggleAsset(asset)} className={`flex-1 rounded-xl border px-3 py-2.5 text-[13px] font-bold ${form.visibleAssets.includes(asset) ? "border-[#2358D9] bg-white text-[#2358D9]" : "border-slate-200 bg-white text-slate-400"}`}>{asset === "CNY" ? "人民币 CNY" : "泰达币 USDT"}</button>)}</div>
+                  <p className="mt-1 text-[10px] leading-relaxed text-slate-500">具备独立余额、不可变流水、后台手动加减和站内转账。数字币链上充值、提现地址仍须完成网络配置后另行开放。</p>
+                  <div className="mt-2 grid grid-cols-3 gap-1.5">{[...AI_WALLET_FUNDING_ASSETS, ...AI_WALLET_SETTLEMENT_ASSETS].map((asset) => <button type="button" key={asset} onClick={() => toggleAsset(asset)} className={`rounded-xl border px-1 py-2.5 text-[11px] font-bold ${form.visibleAssets.includes(asset) ? "border-[#2358D9] bg-white text-[#2358D9]" : "border-slate-200 bg-white text-slate-400"}`}>{asset === "CNY" ? "CNY" : asset === "USDT" ? "USDT" : asset}</button>)}</div>
                 </div>
                 <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/60 p-3">
-                  <div className="flex items-center justify-between gap-2"><div className="text-[12px] font-bold text-slate-800">52号账本数字资产库</div><span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-600">行情 / 仓位展示</span></div>
+                  <div className="flex items-center justify-between gap-2"><div className="text-[12px] font-bold text-slate-800">其他52号账本数字资产库</div><span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-600">行情 / 仓位展示</span></div>
                   <p className="mt-1 text-[10px] leading-relaxed text-slate-500">来源于融资付息订单可选币种和现有实时行情服务。选中后只允许项目展示实际仓位；不会产生 0 余额卡片，也不会开放资金通道。</p>
-                  <div className="mt-2 grid grid-cols-4 gap-1.5">{AI_WALLET_MARKET_ASSETS.map((asset) => {
+                  <div className="mt-2 grid grid-cols-4 gap-1.5">{marketDisplayOnlyAssets.map((asset) => {
                     const selected = form.visibleAssets.includes(asset);
                     return <button type="button" key={asset} onClick={() => toggleAsset(asset)} className={`rounded-lg border px-1 py-2 text-[10px] font-bold transition-colors ${selected ? "border-violet-400 bg-white" : "border-violet-100 bg-white/70 text-slate-400"}`} style={selected ? { color: AI_WALLET_ASSET_COLORS[asset] } : undefined}>{asset}</button>;
                   })}</div>
@@ -447,9 +450,9 @@ export default function AiWalletManager() {
               <section className="rounded-2xl border border-slate-100 p-4">
                 <h3 className="mb-1 text-[13px] font-bold text-slate-800">项目计划开放的操作</h3>
                 <p className="mb-2 text-[10px] leading-relaxed text-slate-400">这里是项目授权开关，不会绕过实际余额、审核、限额与服务端权限校验。</p>
-                <ToggleRow label="允许充值入口" description="USDT 现有正式充值链路可复用；CNY 用户端申请链路尚未正式接入。" checked={form.allowRecharge} onChange={(next) => setForm((previous) => ({ ...previous, allowRecharge: next }))} />
-                <ToggleRow label="允许提现入口" description="USDT 现有审核链路可复用；CNY 用户端提现申请仍需建设。" checked={form.allowWithdrawal} onChange={(next) => setForm((previous) => ({ ...previous, allowWithdrawal: next }))} />
-                <ToggleRow label="允许站内转账" description="现有能力只支持 CNY/USDT；每笔操作不可撤回，只能反向转账纠正。" checked={form.allowTransfer} onChange={(next) => setForm((previous) => ({ ...previous, allowTransfer: next }))} />
+                <ToggleRow label="允许充值入口" description="USDT 现有正式充值链路可复用；CNY 用户端申请链路尚未正式接入。数字币链上充值地址须单独配置后开放。" checked={form.allowRecharge} onChange={(next) => setForm((previous) => ({ ...previous, allowRecharge: next }))} />
+                <ToggleRow label="允许提现入口" description="USDT 现有审核链路可复用；CNY 用户端提现申请仍需建设。数字币链上提现地址须单独配置后开放。" checked={form.allowWithdrawal} onChange={(next) => setForm((previous) => ({ ...previous, allowWithdrawal: next }))} />
+                <ToggleRow label="允许站内转账" description="CNY、USDT 与已启用的数字资产均可独立转账；每笔操作不可撤回，只能反向转账纠正。" checked={form.allowTransfer} onChange={(next) => setForm((previous) => ({ ...previous, allowTransfer: next }))} />
                 <ToggleRow label="允许管理员手动调账" description="仅影响新增或编辑的人工加减余额；既有记录的撤销/纠正与客户应收退款保持可用，避免资金冻结。" checked={form.allowAdminAdjustment} onChange={(next) => setForm((previous) => ({ ...previous, allowAdminAdjustment: next }))} />
                 <ToggleRow label="允许业务订单扣款" description="控制新建业务订单从钱包扣款。关闭后不影响已创建订单的撤单退款、卖出结算回款或其他已产生应收款。" checked={form.allowOrderDebit} onChange={(next) => setForm((previous) => ({ ...previous, allowOrderDebit: next }))} />
               </section>
