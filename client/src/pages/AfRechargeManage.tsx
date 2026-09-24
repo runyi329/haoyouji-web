@@ -497,6 +497,17 @@ export default function AfRechargeManage() {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
+  // 数字资产总持有 = 可用 + 担保冻结；冻结只限制操作，不应从钱包持有额中消失。
+  const getMultiAssetBreakdown = (asset: any) => {
+    const available = Number(asset?.availableBalance ?? 0);
+    const frozen = Number(asset?.frozenBalance ?? 0);
+    const reportedTotal = Number(asset?.totalBalance);
+    return {
+      available,
+      frozen,
+      total: Number.isFinite(reportedTotal) ? reportedTotal : available + frozen,
+    };
+  };
   const adjBalanceQuery = adjBalanceSearch.trim().toLocaleLowerCase();
   const adjBalanceTotals = adjUserList.reduce((totals, user: any) => ({
     userCount: totals.userCount + 1,
@@ -507,7 +518,16 @@ export default function AfRechargeManage() {
     for (const balance of (user.multiAssetBalances ?? [])) {
       const code = String(balance.assetCode || "").toUpperCase();
       if ((AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(code)) {
-        totals[code] = (totals[code] ?? 0) + Number(balance.availableBalance ?? 0);
+        totals[code] = (totals[code] ?? 0) + getMultiAssetBreakdown(balance).total;
+      }
+    }
+    return totals;
+  }, {});
+  const adjMultiAssetFrozenTotals = adjUserList.reduce((totals: Record<string, number>, user: any) => {
+    for (const balance of (user.multiAssetBalances ?? [])) {
+      const code = String(balance.assetCode || "").toUpperCase();
+      if ((AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(code)) {
+        totals[code] = (totals[code] ?? 0) + getMultiAssetBreakdown(balance).frozen;
       }
     }
     return totals;
@@ -1504,13 +1524,18 @@ export default function AfRechargeManage() {
                 </div>
                 {(adjSelectedUser.multiAssetBalances ?? []).length > 0 && (
                   <div className="mt-2 rounded-lg border border-violet-100 bg-violet-50 px-2.5 py-2">
-                    <p className="text-[10px] text-violet-500">已持有数字资产</p>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {(adjSelectedUser.multiAssetBalances ?? []).map((asset: any) => (
-                        <span key={asset.assetCode} className="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-100">
-                          {asset.assetCode} {Number(asset.availableBalance ?? 0).toLocaleString("zh-CN", { maximumFractionDigits: 8 })}
-                        </span>
-                      ))}
+                    <p className="text-[10px] text-violet-500">已持有数字资产（总持有 / 可用 / 担保冻结）</p>
+                    <div className="mt-1 grid grid-cols-2 gap-1.5">
+                      {(adjSelectedUser.multiAssetBalances ?? []).map((asset: any) => {
+                        const breakdown = getMultiAssetBreakdown(asset);
+                        return <div key={asset.assetCode} className="rounded-md bg-white px-2 py-1.5 ring-1 ring-violet-100">
+                          <div className="flex items-baseline justify-between gap-1">
+                            <span className="text-[10px] font-semibold text-violet-700">{asset.assetCode}</span>
+                            <span className="text-[11px] font-bold tabular-nums text-violet-800">{breakdown.total.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}</span>
+                          </div>
+                          <div className="mt-0.5 text-[9px] leading-3 text-gray-400">可用 {breakdown.available.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}{breakdown.frozen > 0 ? <span className="text-amber-600"> · 冻结 {breakdown.frozen.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}</span> : null}</div>
+                        </div>;
+                      })}
                     </div>
                   </div>
                 )}
@@ -1899,7 +1924,7 @@ export default function AfRechargeManage() {
                 </div>
               </div>
               <div className="mb-3 rounded-xl border border-violet-100 bg-violet-50 p-2.5">
-                <p className="text-[10px] font-medium text-violet-600">首批独立数字资产总余额</p>
+                <p className="text-[10px] font-medium text-violet-600">独立数字资产总持有（含担保冻结）</p>
                 <div className="mt-1.5 grid grid-cols-2 gap-1.5">
                   {AI_WALLET_SETTLEMENT_ASSETS.map((assetCode) => (
                     <div key={assetCode} className="rounded-lg bg-white px-2 py-1.5 ring-1 ring-violet-100">
@@ -1907,6 +1932,7 @@ export default function AfRechargeManage() {
                       <p className="mt-0.5 truncate text-[12px] font-bold text-violet-700">
                         {Number(adjMultiAssetTotals[assetCode] ?? 0).toLocaleString("zh-CN", { maximumFractionDigits: 8 })}
                       </p>
+                      {Number(adjMultiAssetFrozenTotals[assetCode] ?? 0) > 0 && <p className="mt-0.5 truncate text-[9px] text-amber-600">担保冻结 {Number(adjMultiAssetFrozenTotals[assetCode] ?? 0).toLocaleString("zh-CN", { maximumFractionDigits: 8 })}</p>}
                     </div>
                   ))}
                 </div>
@@ -1979,11 +2005,12 @@ export default function AfRechargeManage() {
                           <span className="block truncate text-[10px] text-gray-400">@{username} · ID {user.id}</span>
                           {(user.multiAssetBalances ?? []).length > 0 && (
                             <span className="mt-1 flex flex-wrap gap-1">
-                              {(user.multiAssetBalances ?? []).map((asset: any) => (
-                                <span key={asset.assetCode} className="rounded bg-violet-50 px-1 py-0.5 text-[9px] font-medium text-violet-600">
-                                  {asset.assetCode} {Number(asset.availableBalance ?? 0).toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
-                                </span>
-                              ))}
+                              {(user.multiAssetBalances ?? []).map((asset: any) => {
+                                const breakdown = getMultiAssetBreakdown(asset);
+                                return <span key={asset.assetCode} className="rounded bg-violet-50 px-1 py-0.5 text-[9px] font-medium text-violet-600">
+                                  {asset.assetCode} {breakdown.total.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}{breakdown.frozen > 0 ? <span className="text-amber-600">（冻 {breakdown.frozen.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}）</span> : null}
+                                </span>;
+                              })}
                             </span>
                           )}
                         </span>
