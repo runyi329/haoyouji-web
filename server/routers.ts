@@ -79,6 +79,7 @@ import { yabanOpsRouter } from "./yaban-ops-router";
 import { yabanStaffRouter } from "./yaban-staff-router";
 import { yabanTreatmentRouter } from "./yaban-treatment-router";
 import { versionRouter } from "./version-router";
+import { aiWalletRouter } from "./ai-wallet-router";
 
 // // 在应用启动时初始化数据库
 // initDatabase().catch(err => {
@@ -867,6 +868,8 @@ export const appRouter = router({
   yabanOps: yabanOpsRouter,
   yabanTreatment: yabanTreatmentRouter,
   version: versionRouter,
+  // 全局 AI 智能钱包：项目账户档案、模板与只读逻辑档案。
+  aiWallet: aiWalletRouter,
   prediction: predictionRouter,
   okxTrader: okxTraderRouter,
 

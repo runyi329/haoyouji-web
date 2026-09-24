@@ -38,6 +38,7 @@ import {
   ChevronRight,
   Hash,
   Trash2,
+  WalletCards,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -337,6 +338,23 @@ export default function ProjectConsole() {
             </div>
           </div>
           <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+        </button>
+
+        {/* 统一钱包配置：项目按需启用资产与能力，档案说明由配置自动生成。 */}
+        <button
+          onClick={() => navigate("/admin/ai-wallet")}
+          className="w-full rounded-2xl p-4 shadow-sm flex items-center gap-3 active:scale-[0.99] transition-transform text-left bg-gradient-to-r from-[#173B91] to-[#2358D9] text-white"
+        >
+          <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+            <WalletCards className="w-5 h-5 text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold">AI 智能钱包</div>
+            <div className="text-[11px] text-blue-100 mt-0.5 truncate">
+              项目资产、入口、估值口径与只读配置档案
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-blue-100 shrink-0" />
         </button>
 
         {/* 项目列表 */}

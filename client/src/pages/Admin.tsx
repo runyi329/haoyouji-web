@@ -478,6 +478,10 @@ export default function Admin() {
               <Wallet className="w-4 h-4 mr-1 hidden sm:inline" />
               充值监控
             </TabsTrigger>
+            <TabsTrigger value="aiWallet" className="text-xs sm:text-sm">
+              <Wallet className="w-4 h-4 mr-1 hidden sm:inline" />
+              AI 智能钱包
+            </TabsTrigger>
             <TabsTrigger value="customAA" className="text-xs sm:text-sm">
               <BookMarked className="w-4 h-4 mr-1 hidden sm:inline" />
               定制账本
@@ -1180,6 +1184,23 @@ export default function Admin() {
               >
                 <Wallet className="w-4 h-4 mr-2" />
                 进入监控页面
+              </Button>
+            </Card>
+          </TabsContent>
+
+          {/* 全局项目钱包档案 */}
+          <TabsContent value="aiWallet">
+            <Card className="p-6">
+              <h2 className="text-xl font-bold mb-3">AI 智能钱包设置管理</h2>
+              <p className="text-gray-600 mb-4 leading-relaxed">
+                按项目配置可见资产、资金入口、行情展示和结算口径；每个项目同时生成一份不可编辑的文字档案，便于日后核对实际规则。
+              </p>
+              <Button
+                onClick={() => setLocation('/admin/ai-wallet')}
+                className="bg-[#2358D9] hover:bg-[#173B91]"
+              >
+                <Wallet className="w-4 h-4 mr-2" />
+                进入设置管理
               </Button>
             </Card>
           </TabsContent>
