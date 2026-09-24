@@ -19759,15 +19759,24 @@ ${klinesSummary}
         if (!myRole) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         const amIManager = myRole === 'owner' || myRole === 'admin';
         console.log('[funderGetAssetOrders] 调用: userId=', ctx.user.id, 'myRole=', myRole, 'ledgerId=', input.ledgerId, 'viewAsUserId=', input.viewAsUserId);
+        const requestedViewAsUserId = input.viewAsUserId ? Number(input.viewAsUserId) : null;
+        const isCurrentViewAsTarget = requestedViewAsUserId !== null && requestedViewAsUserId === Number(ctx.user.id);
         // 观察视角：只有 owner/admin 才能使用 viewAsUserId
-        if (input.viewAsUserId && !amIManager) {
+        // context 层已将管理员身份代入目标成员时，ctx.user 正是同一个目标成员；
+        // 此时允许兼容旧入口随请求重复携带的 viewAsUserId。
+        if (requestedViewAsUserId !== null && !isCurrentViewAsTarget && !amIManager) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '无权限使用观察视角' });
         }
-        // 确定实际查询的目标用户角色
-        // 若有 viewAsUserId，以被观察用户的角色决定数据范围（模拟该用户视角）
+        // 确定实际查询的目标用户角色。
+        // 全局身份代入已由 x-view-as-user-id 在 context 层完成：此时 ctx.user
+        // 就是被观察成员。前端为兼容旧入口仍会附带同一个 viewAsUserId，不能再把
+        // 已代入的普通成员误判为「无权限使用观察视角」。
         let targetUserId = ctx.user.id;
         let targetIsManager = amIManager;
-        if (input.viewAsUserId) {
+        if (requestedViewAsUserId !== null && !isCurrentViewAsTarget) {
+          if (!amIManager) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '无权限使用观察视角' });
+          }
           targetUserId = input.viewAsUserId;
           const targetRoleRows = await db.execute(
             sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${input.viewAsUserId} LIMIT 1`
@@ -19898,8 +19907,9 @@ ${klinesSummary}
               ((participantRows[0] || participantRows) as any[]).map((r: any) => Number(r.order_id))
             );
             for (const o of allOrders) {
-              // 保留已有的 _isParticipant 标记，或根据参与者表查询结果设置
-              if (participantOrderIds.has(Number(o.id))) {
+              // 主拥有者也有 role='owner' 的配置快照，但它只承载独立配置，
+              // 不能因此把主订单归入“参与”。只有非主拥有者的真实协作关系才是参与订单。
+              if (participantOrderIds.has(Number(o.id)) && Number(o.user_id) !== Number(targetUserId)) {
                 (o as any)._isParticipant = true;
               }
             }
@@ -19941,7 +19951,9 @@ ${klinesSummary}
             }
             for (const o of allOrders) {
               const pi = piMap[Number(o.id)];
-              if (pi) {
+              // 主拥有者的 owner 快照用于编辑/展示配置，不能注入 participantInfo；
+              // 否则客户端会把本人订单错误收进“参与”标签。
+              if (pi && Number(o.user_id) !== Number(targetUserId)) {
                 (o as any).participantInfo = {
                   userId: targetUserId,
                   role: pi.role,
