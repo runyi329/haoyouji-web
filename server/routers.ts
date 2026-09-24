@@ -262,7 +262,26 @@ async function isAf525EligibleSourceUser(conn: any, userId: number): Promise<boo
 // ===== 融资付息参与者子订单字段兼容 =====
 // 参与者子订单只用于记账展示，绝不触发钱包、余额或充值流水。
 let funderParticipantSnapshotColumnsEnsured = false;
+// 生产实例刚启动时，多个成员可能同时打开订单页。初始化/历史快照补齐只能执行一次，
+// 否则重复的逐条回填会占满连接池，使普通成员的只读订单请求长期停在加载状态。
+let funderParticipantSnapshotEnsurePromise: Promise<void> | null = null;
 async function ensureFunderParticipantSnapshotColumns(): Promise<void> {
+  if (funderParticipantSnapshotColumnsEnsured) return;
+  if (!funderParticipantSnapshotEnsurePromise) {
+    const pending = ensureFunderParticipantSnapshotColumnsInternal();
+    funderParticipantSnapshotEnsurePromise = pending;
+    pending.finally(() => {
+      if (funderParticipantSnapshotEnsurePromise === pending) {
+        funderParticipantSnapshotEnsurePromise = null;
+      }
+    }).catch(() => {
+      // 调用点会按自身语义处理错误；此处仅避免 finally 链产生未处理拒绝。
+    });
+  }
+  await funderParticipantSnapshotEnsurePromise;
+}
+
+async function ensureFunderParticipantSnapshotColumnsInternal(): Promise<void> {
   if (funderParticipantSnapshotColumnsEnsured) return;
   const conn = await getDbConnection();
   if (!conn) throw new Error('数据库连接失败，无法初始化参与者子订单字段');

@@ -2393,9 +2393,17 @@ export default function CryptoPrediction() {
   const isOwner = (ledgerInfo as any)?.userRole === 'owner';
 
   // 融资付息：所有自定义账本成员均可在融资付息 Tab 查询自己的订单与参与订单
-  const { data: financeOrdersData, refetch: refetchFinanceOrders, isFetching: financeOrdersFetching } = trpc.ledger.financeGetOrders.useQuery(
+  // 52号账本是固定的 custom_af。普通成员首次进入时，getById 还会执行自动准入检查；
+  // 不应让这项元数据检查阻塞订单列表请求，否则会长期停在骨架屏。
+  const canLoadFinanceOrders = !!ledgerId && tab === 'finance' && (isCustomAF || ledgerId === 52);
+  const {
+    data: financeOrdersData,
+    refetch: refetchFinanceOrders,
+    isPending: financeOrdersPending,
+    error: financeOrdersError,
+  } = trpc.ledger.financeGetOrders.useQuery(
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: isCustomAF && tab === 'finance' }
+    { enabled: canLoadFinanceOrders, retry: 1 }
   );
   const financeOrders: any[] = (financeOrdersData as any)?.orders ?? [];
   const [sharedOrdersExpanded, setSharedOrdersExpanded] = useState(false);
@@ -2415,12 +2423,12 @@ export default function CryptoPrediction() {
   // 融资付息：资产汇总
   const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
     { ledgerId },
-    { enabled: isCustomAF && tab === 'finance' }
+    { enabled: canLoadFinanceOrders, retry: 1 }
   );
   // 融资付息：已结利息汇总
   const { data: financeInterestSummary } = trpc.ledger.financeGetInterestPaymentSummary.useQuery(
     { ledgerId, orderIds: financeOrders.map((o: any) => o.id) },
-    { enabled: isCustomAF && tab === 'finance' && financeOrders.length > 0 }
+    { enabled: canLoadFinanceOrders && financeOrders.length > 0, retry: 1 }
   );
   // 融资付息：实时价格（与资金方共用同一个 localStorage key）
   const FINANCE_PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
@@ -3720,7 +3728,7 @@ export default function CryptoPrediction() {
         {/* 融资付息 */}
         {tab === "finance" && (
           <div className="pb-4">
-            {(financeOrdersFetching || financeOrdersData === undefined) && financeOrders.length === 0 ? (
+            {financeOrdersPending ? (
               /* 加载中骨架屏，避免误以为暂无订单 */
               <div className="space-y-3 mt-2">
                 {[1, 2, 3].map(i => (
@@ -3739,6 +3747,16 @@ export default function CryptoPrediction() {
                     </div>
                   </div>
                 ))}
+              </div>
+            ) : financeOrdersError ? (
+              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-6 text-center">
+                <div className="text-sm font-semibold text-amber-900">订单暂时加载失败</div>
+                <div className="mt-1 text-xs leading-5 text-amber-700">未显示任何订单数据；请重试，不会修改订单或钱包。</div>
+                <button
+                  type="button"
+                  onClick={() => { void refetchFinanceOrders(); }}
+                  className="mt-3 rounded-full bg-amber-500 px-4 py-2 text-xs font-semibold text-white active:scale-[0.98]"
+                >重新加载</button>
               </div>
             ) : (() => {
               // 前端现有两类位置：本人 / 参与。
@@ -3928,16 +3946,7 @@ export default function CryptoPrediction() {
             })()}
           </div>
         )}
-
       </div>
-
     </div>
-
   );
 }
-
-
-
-
-
-
