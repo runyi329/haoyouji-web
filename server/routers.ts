@@ -18604,16 +18604,22 @@ ${klinesSummary}
             }
           }
 
-          const parseLinked37Source = (raw: unknown): { floatingPnlTagName: string; collateralTagName: string; interestTagName: string; useFloatingPnl: boolean; useCollateral: boolean; useInterest: boolean } | null => {
+          const parseLinked37Source = (raw: unknown): { floatingPnlTagName: string; floatingPnlCalculationMode: 'initial_minus_latest' | 'leveraged_net_pnl'; collateralTagName: string; interestTagName: string; useFloatingPnl: boolean; useCollateral: boolean; useInterest: boolean } | null => {
             try {
               const source = Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : (typeof raw === 'string' ? JSON.parse(raw) : raw);
               if (Number(source?.ledgerId) !== 37 || !source?.tagName) return null;
               const legacyTagName = String(source.tagName);
               const floatingPnlTagName = source.floatingPnlTagName || (source.useFloatingPnl !== false ? legacyTagName : '');
+              // 未选择计算口径时统一使用“初始金额 − 今日最新余额”；
+              // 仅显式选择后才跟随37号页面的倍率后净值盈亏。
+              const floatingPnlCalculationMode = source.floatingPnlCalculationMode === 'leveraged_net_pnl'
+                ? 'leveraged_net_pnl'
+                : 'initial_minus_latest';
               const collateralTagName = source.collateralTagName || (source.useCollateral !== false ? legacyTagName : '');
               const interestTagName = source.interestTagName || (source.useInterest === true ? legacyTagName : '');
               return (floatingPnlTagName || collateralTagName || interestTagName) ? {
                 floatingPnlTagName,
+                floatingPnlCalculationMode,
                 collateralTagName,
                 interestTagName,
                 useFloatingPnl: !!floatingPnlTagName,
@@ -18649,7 +18655,12 @@ ${klinesSummary}
             const latestBalance = source.floatingPnlTagName ? linkedTagBalanceByName.get(source.floatingPnlTagName) : null;
             const initialAmount = Number(pnlConfig?.initial_amount) || 0;
             const multiplier = Number(pnlConfig?.account_multiplier) || 1;
-            const floatingPnl = source.useFloatingPnl && Number.isFinite(latestBalance) ? ((latestBalance! - initialAmount) * multiplier / usdtCnyRate) : null;
+            const floatingPnlCny = source.useFloatingPnl && Number.isFinite(latestBalance)
+              ? (source.floatingPnlCalculationMode === 'leveraged_net_pnl'
+                ? (latestBalance! - initialAmount) * multiplier
+                : initialAmount - latestBalance!)
+              : null;
+            const floatingPnl = floatingPnlCny === null ? null : floatingPnlCny / usdtCnyRate;
             const interestConfig = source.interestTagName ? linkedTagConfigByName.get(source.interestTagName) : null;
             const calcInterestDays = (startDate: unknown, endDate: unknown) => {
               const startText = String(startDate || '').slice(0, 10);
@@ -18673,6 +18684,7 @@ ${klinesSummary}
               : null;
             return {
               floatingPnlTagName: source.floatingPnlTagName,
+              floatingPnlCalculationMode: source.floatingPnlCalculationMode,
               collateralTagName: source.collateralTagName,
               interestTagName: source.interestTagName,
               useFloatingPnl: source.useFloatingPnl,
@@ -18787,6 +18799,7 @@ ${klinesSummary}
               linked37TagName: linked37Collateral?.useCollateral ? linked37Collateral.collateralTagName : null,
               // 浮盈可单独引用37号标签，手工担保订单也应使用这个净值盈亏。
               linked37PnlTagName: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnlTagName : null,
+              linked37FloatingPnlCalculationMode: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnlCalculationMode : null,
               linked37FloatingPnl: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null,
               // 已结利息也可独立引用37号利息页，金额固定为人民币，由前端统一折算为U。
               linked37InterestTagName: linked37Collateral?.useInterest ? linked37Collateral.interestTagName : null,
@@ -18920,7 +18933,7 @@ ${klinesSummary}
         ownerLabel: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['initial_minus_latest', 'leveraged_net_pnl']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
         principalLentOut: z.boolean().optional(),
         tradingFeeRate: z.number().min(0).max(100).optional(),
         tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
@@ -19916,7 +19929,7 @@ ${klinesSummary}
         interestRateCurrency: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['initial_minus_latest', 'leveraged_net_pnl']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional() }).nullable().optional(),
         principalLentOut: z.boolean().optional(),
         tradingFeeRate: z.number().min(0).max(100).optional(),
         tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
@@ -20071,7 +20084,7 @@ ${klinesSummary}
         tradeDirection: z.enum(['long', 'short']).nullable().optional(),
         orderFillStatus: z.enum(['pending', 'filled']).optional(),
         orderPerspective: z.enum(['self', 'other']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['initial_minus_latest', 'leveraged_net_pnl']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional() }).nullable().optional(),
         optionInfo: z.object({
           premium: z.string().optional(),
           exerciseDate: z.string().optional(),

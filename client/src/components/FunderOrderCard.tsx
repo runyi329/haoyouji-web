@@ -781,7 +781,8 @@ export function FunderOrderCard({
       if (!cs) return null;
       const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
       if (parsed && parsed.ledgerId && parsed.tagName) return parsed as {
-        ledgerId: number; tagName: string; floatingPnlTagName?: string; collateralTagName?: string;
+        ledgerId: number; tagName: string; floatingPnlTagName?: string;
+        floatingPnlCalculationMode?: 'initial_minus_latest' | 'leveraged_net_pnl'; collateralTagName?: string;
         interestTagName?: string; useFloatingPnl?: boolean; useCollateral?: boolean; useInterest?: boolean;
       };
     } catch {}
@@ -789,6 +790,10 @@ export function FunderOrderCard({
   }, [(order as any).collateral_source]);
   const linkedPnlTagName = _parsedCollateralSource?.floatingPnlTagName
     || (_parsedCollateralSource?.useFloatingPnl !== false ? _parsedCollateralSource?.tagName : '');
+  // 未配置时按新版默认的“初始金额 − 今日余额”处理；倍数后的净值盈亏仅在管理员显式选择后使用。
+  const floatingPnlCalculationMode = _parsedCollateralSource?.floatingPnlCalculationMode === 'leveraged_net_pnl'
+    ? 'leveraged_net_pnl'
+    : 'initial_minus_latest';
   const linkedCollateralTagName = _parsedCollateralSource?.collateralTagName
     || (_parsedCollateralSource?.useCollateral !== false ? _parsedCollateralSource?.tagName : '');
   // 利息引用必须显式选择；历史订单没有 interestTagName 时继续使用52号手工结息，绝不因担保/盈亏引用而误切换。
@@ -867,13 +872,15 @@ export function FunderOrderCard({
       if (balanceNum === null || !Number.isFinite(balanceNum)) return null;
       const initialNum = Number((_pnlTagConfig as any).initial_amount || 0) || 0;
       const multiplierNum = Number((_pnlTagConfig as any).account_multiplier || 1) || 1;
-      return (balanceNum - initialNum) * multiplierNum;
+      return floatingPnlCalculationMode === 'leveraged_net_pnl'
+        ? (balanceNum - initialNum) * multiplierNum
+        : initialNum - balanceNum;
     })();
     return {
       extCollateralValueU: marginTotalCny === null ? null : marginTotalCny / _cnyR,
       extFloatingPnlU: floatingPnlCny === null ? null : floatingPnlCny / _cnyR,
     };
-  }, [linkedPnlTagName, linkedCollateralTagName, _pnlTagConfig, _pnlTagSummary, _collateralTagConfig, _collateralTagSummary, _extCryptoPricesRaw]);
+  }, [linkedPnlTagName, linkedCollateralTagName, floatingPnlCalculationMode, _pnlTagConfig, _pnlTagSummary, _collateralTagConfig, _collateralTagSummary, _extCryptoPricesRaw]);
 
   // 绑定 37 号账本标签时，担保物必须以该标签内逐笔保证金为唯一来源。
   // 这里与 RightMarginDetail 的展示口径一致：保留各币种净额，再按当前汇率汇总为 U / 人民币；
@@ -1155,8 +1162,8 @@ export function FunderOrderCard({
   // 股票类型：大数字直接用 amount（融资金额，单位 CNY），不走 qty×price 折算
   const isStockOrder = order.asset_type === 'stock';
   const isOptionOrder = order.asset_type === 'crypto_option';
-  // 股票没有可用的第三方行情报价时，已绑定的 37 号标签承担实时盈亏数据源。
-  // 这里与 RightMarginDetail 保持完全一致：盈亏净值 =（最新余额 − 初始金额）× 账号倍率。
+  // 股票没有可用的第三方行情报价时，已绑定的37号标签承担实时盈亏数据源。
+  // 默认显示初始金额 − 今日余额；管理员可显式切换为37号倍率后的净值盈亏。
   const isExternalStockPnlSource = isStockOrder
     && Number(_parsedCollateralSource?.ledgerId) === 37
     && !!linkedPnlTagName;
@@ -1168,8 +1175,10 @@ export function FunderOrderCard({
     if (!Number.isFinite(latestBalance)) return null;
     const initialAmount = Number((_pnlTagConfig as any).initial_amount ?? 0) || 0;
     const accountMultiplier = Number((_pnlTagConfig as any).account_multiplier ?? 1) || 1;
-    return (latestBalance - initialAmount) * accountMultiplier;
-  }, [isExternalStockPnlSource, _pnlTagConfig, _pnlTagSummary]);
+    return floatingPnlCalculationMode === 'leveraged_net_pnl'
+      ? (latestBalance - initialAmount) * accountMultiplier
+      : initialAmount - latestBalance;
+  }, [isExternalStockPnlSource, floatingPnlCalculationMode, _pnlTagConfig, _pnlTagSummary]);
   // 此值仅用于订单模式“浮动盈亏”一行及详情入口，不参与担保缺口、利息、本金或余额计算。
   // 解析期权信息
   const optionInfo = (() => {
@@ -2409,7 +2418,9 @@ export function FunderOrderCard({
                             <>
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                                 <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 37号浮动盈亏</div>
-                                <div>37标签净值 − 初始金额，按账号倍率计算</div>
+                                <div>{floatingPnlCalculationMode === 'leveraged_net_pnl'
+                                  ? '37标签最新余额 − 初始金额，按账号倍率计算（37号净值盈亏）'
+                                  : '37标签初始金额 − 今日最新余额（不使用账号倍率）'}</div>
                                 <div className="mt-1 font-mono">
                                   {floatingPnlU !== null
                                     ? <strong style={{ color: valueColor(floatingPnlU) }}>{formatValue(floatingPnlU)}</strong>
@@ -2692,8 +2703,10 @@ export function FunderOrderCard({
                         <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
                         {isExternalStockPnlSource && !isSharedMode ? (
                           <>
-                            <div>• <strong>担保缺口</strong> = {hasExternalCollateral ? '37号担保货币' : '手工担保货币'} + 37号净值盈亏 − 待结利息 + 已结利息（开启借出本金时再减去计息基数）</div>
-                            <div>• <strong>37号净值盈亏</strong> =（37号标签最新余额 − 初始金额）× 账号倍率，不使用股票实时市价。</div>
+                          <div>• <strong>担保缺口</strong> = {hasExternalCollateral ? '37号担保货币' : '手工担保货币'} + 37号浮动盈亏 − 待结利息 + 已结利息（开启借出本金时再减去计息基数）</div>
+                          <div>• <strong>37号浮动盈亏</strong> = {floatingPnlCalculationMode === 'leveraged_net_pnl'
+                            ? '（37号标签最新余额 − 初始金额）× 账号倍率，即37号“净值盈亏”数值。'
+                            : '37号标签初始金额 − 今日最新余额，不使用账号倍率。'}</div>
                           </>
                         ) : (
                           <>

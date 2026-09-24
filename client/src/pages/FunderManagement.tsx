@@ -129,6 +129,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     ledgerId: number;
     tagName: string;
     floatingPnlTagName?: string;
+    // 默认以37号初始金额减今日余额；只有管理员主动选择时才使用37号页的倍数后净值盈亏。
+    floatingPnlCalculationMode?: 'initial_minus_latest' | 'leveraged_net_pnl';
     collateralTagName?: string;
     useFloatingPnl?: boolean;
     useCollateral?: boolean;
@@ -1203,6 +1205,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             // tagName保留为旧字段回退，新的两个字段才是各自独立的数据来源。
             tagName: parsed.tagName,
             floatingPnlTagName,
+            floatingPnlCalculationMode: parsed.floatingPnlCalculationMode === 'leveraged_net_pnl'
+              ? 'leveraged_net_pnl'
+              : 'initial_minus_latest',
             collateralTagName,
             useFloatingPnl: !!floatingPnlTagName,
             useCollateral: !!collateralTagName,
@@ -1439,6 +1444,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           ledgerId: 37,
           tagName: legacyTagName,
           floatingPnlTagName: floatingPnlTagName || undefined,
+          // 未保存此字段的订单也会由读取端按初始金额 − 最新余额处理；
+          // 新保存的订单显式写入口径，避免后续规则调整影响历史展示。
+          floatingPnlCalculationMode: collateralSource.floatingPnlCalculationMode || 'initial_minus_latest',
           collateralTagName: collateralTagName || undefined,
           useFloatingPnl: !!floatingPnlTagName,
           useCollateral: !!collateralTagName,
@@ -2743,7 +2751,30 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       <option key={t.tagName} value={t.tagName}>{t.tagName}{t.paused ? '（已暂停，可引用历史数据）' : ''}</option>
                     ))}
                   </select>
-                  <div className="text-[11px] text-blue-500">仅影响股票浮动盈亏和担保缺口中的净值盈亏项，不会自动引用保证金。</div>
+                  {collateralSource?.floatingPnlTagName && (
+                    <div className="mt-2 space-y-1.5">
+                      <div className="text-xs font-medium text-blue-600">浮动盈亏计算口径</div>
+                      <select
+                        value={collateralSource.floatingPnlCalculationMode || 'initial_minus_latest'}
+                        onChange={e => {
+                          const mode = e.target.value === 'leveraged_net_pnl'
+                            ? 'leveraged_net_pnl'
+                            : 'initial_minus_latest';
+                          setCollateralSource(prev => prev ? { ...prev, floatingPnlCalculationMode: mode } : prev);
+                        }}
+                        className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 appearance-none bg-white"
+                      >
+                        <option value="initial_minus_latest">初始金额 − 今日最新余额（默认）</option>
+                        <option value="leveraged_net_pnl">37号净值盈亏（含账号倍率）</option>
+                      </select>
+                      <div className="text-[11px] leading-4 text-blue-500">
+                        {collateralSource.floatingPnlCalculationMode === 'leveraged_net_pnl'
+                          ? '与37号页面“净值盈亏”后的数字一致： （今日最新余额 − 初始金额）× 账号倍率。'
+                          : '初始金额 − 今日最新余额，不使用账号倍率；未选择口径的历史订单也按此默认值显示。'}
+                      </div>
+                    </div>
+                  )}
+                  <div className="text-[11px] text-blue-500">仅影响股票浮动盈亏和担保缺口中的浮盈项，不会自动引用保证金。</div>
                 </div>
                 <div className="space-y-1.5">
                   <div className="text-xs font-medium text-blue-600">数据标签 / 担保标签（37号账本）</div>

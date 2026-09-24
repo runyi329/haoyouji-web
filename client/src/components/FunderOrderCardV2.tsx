@@ -1409,11 +1409,18 @@ export function FunderOrderCardV2Silver({
       const cs = (order as any).collateral_source;
       if (!cs) return null;
       const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
-      if (parsed && parsed.ledgerId && parsed.tagName) return parsed as { ledgerId: number; tagName: string };
+      if (parsed && parsed.ledgerId && parsed.tagName) return parsed as {
+        ledgerId: number;
+        tagName: string;
+        floatingPnlCalculationMode?: 'initial_minus_latest' | 'leveraged_net_pnl';
+      };
     } catch {}
     return null;
   }, [(order as any).collateral_source]);
   const hasExternalCollateral = !!_parsedCollateralSource;
+  const externalFloatingPnlCalculationMode = _parsedCollateralSource?.floatingPnlCalculationMode === 'leveraged_net_pnl'
+    ? 'leveraged_net_pnl'
+    : 'initial_minus_latest';
   // 兼容别名，保留下游代码不变
   const isFC2977 = hasExternalCollateral;
   const { data: _fc2977TagConfig } = trpc.ledger.getTagConfig.useQuery(
@@ -1452,7 +1459,9 @@ export function FunderOrderCardV2Silver({
     const initialNum = parseFloat((_fc2977TagConfig as any).initial_amount || '0') || 0;
     const multiplierNum = parseFloat((_fc2977TagConfig as any).account_multiplier || '1') || 1;
     if (balanceNum === null) return { fc2977RemainingMarginU: null, fc2977MarginBasePct: null };
-    const pnl = (balanceNum - initialNum) * multiplierNum;
+    const pnl = externalFloatingPnlCalculationMode === 'leveraged_net_pnl'
+      ? (balanceNum - initialNum) * multiplierNum
+      : initialNum - balanceNum;
     const remainingCNY = pnl + rightTotalCNY;
     const remainingU = _cnyR > 0 ? remainingCNY / _cnyR : null;
     const marginBaseNum = parseFloat((_fc2977TagConfig as any).margin_base || '0') || 0;
@@ -2939,12 +2948,20 @@ export function FunderLenderCardSilver({
       if (!raw) return null;
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       if (parsed?.ledgerId && parsed?.tagName) {
-        return parsed as { ledgerId: number; tagName: string; interestTagName?: string };
+        return parsed as {
+          ledgerId: number;
+          tagName: string;
+          interestTagName?: string;
+          floatingPnlCalculationMode?: 'initial_minus_latest' | 'leveraged_net_pnl';
+        };
       }
     } catch {}
     return null;
   }, [(order as any).collateral_source]);
   const hasExternalCollateral = !!_lnParsedCollateralSource;
+  const lnExternalFloatingPnlCalculationMode = _lnParsedCollateralSource?.floatingPnlCalculationMode === 'leveraged_net_pnl'
+    ? 'leveraged_net_pnl'
+    : 'initial_minus_latest';
   const { data: _lnExtTagConfig } = trpc.ledger.getTagConfig.useQuery(
     { ledgerId: _lnParsedCollateralSource?.ledgerId ?? 0, tagName: _lnParsedCollateralSource?.tagName ?? '' },
     { enabled: hasExternalCollateral, staleTime: 3000 }
@@ -2987,13 +3004,16 @@ export function FunderLenderCardSilver({
     }
     const initial = Number((_lnExtTagConfig as any).initial_amount || 0);
     const multiplier = Number((_lnExtTagConfig as any).account_multiplier || 1);
-    const remainingCny = (balance - initial) * multiplier + externalMarginCny;
+    const floatingPnlCny = lnExternalFloatingPnlCalculationMode === 'leveraged_net_pnl'
+      ? (balance - initial) * multiplier
+      : initial - balance;
+    const remainingCny = floatingPnlCny + externalMarginCny;
     const marginBase = Number((_lnExtTagConfig as any).margin_base || 0);
     return {
       lnExtRemainingMarginU: extCnyRate > 0 ? remainingCny / extCnyRate : null,
       lnExtMarginBasePct: marginBase > 0 ? remainingCny / marginBase * 100 : null,
     };
-  }, [hasExternalCollateral, _lnExtTagConfig, _lnExtTagSummary, _lnExtPricesRaw, cnyRate]);
+  }, [hasExternalCollateral, lnExternalFloatingPnlCalculationMode, _lnExtTagConfig, _lnExtTagSummary, _lnExtPricesRaw, cnyRate]);
 
   // 期权订单：标的资产以 option_info.coin 为准（此处 isOption 尚未定义，直接用 order.asset_type 判断）
   const _lnIsOpt = order.asset_type === 'crypto_option';
