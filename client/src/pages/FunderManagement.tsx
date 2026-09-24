@@ -628,6 +628,26 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     { ledgerId, orderId: editingOrderId!, participantUserId: editingParticipantUserId },
     { enabled: !!editingOrderId && ledgerId > 0, staleTime: 0 }
   );
+  // 钱包担保首版曾覆盖手工担保字段。管理员打开钱包担保时，读取审计记录中的最近一份非钱包担保，供一键恢复。
+  const { data: collateralAuditData } = trpc.ledger.financeGetOrderLogs.useQuery(
+    { orderId: editingOrderId ?? 0, ledgerId, actionTypes: ['collateral_update', 'wallet_collateral_sync'] },
+    { enabled: ledgerId === 52 && !!editingOrderId && collateralSourceMode === 'wallet' && isAdminUser, staleTime: 0 }
+  );
+  const recoverableManualCollateral = useMemo(() => {
+    const logs = (collateralAuditData as any)?.logs;
+    if (!Array.isArray(logs)) return [] as { coin: string; qty: string; note?: string }[];
+    for (const log of logs) {
+      for (const payload of [log?.beforeData, log?.afterData]) {
+        try {
+          const assets = typeof payload === 'string' ? JSON.parse(payload) : payload;
+          if (!Array.isArray(assets)) continue;
+          const manualAssets = assets.filter((asset: any) => asset?.coin && asset?.qty !== '' && asset?.source !== 'wallet');
+          if (manualAssets.length > 0) return manualAssets.map((asset: any) => ({ coin: String(asset.coin), qty: String(asset.qty), ...(asset.note ? { note: String(asset.note) } : {}) }));
+        } catch {}
+      }
+    }
+    return [] as { coin: string; qty: string; note?: string }[];
+  }, [collateralAuditData]);
   // 直接从当前视角的独立结息流水计算已结利息总额和最新币种。
   const previewPaidInterest: number = Array.isArray(editingOrderPayments) && (editingOrderPayments as any[]).length > 0
     ? (editingOrderPayments as any[]).reduce((sum: number, p: any) => sum + parseFloat(p.amount || '0'), 0)
@@ -2911,6 +2931,25 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     <div className="text-sm font-semibold text-amber-800">从钱包冻结数字资产作为担保</div>
                     <p className="mt-1 text-xs leading-5 text-amber-700">冻结后总持币不变，但冻结部分不能提现、转账或再次担保；订单结清或移入回收站时自动恢复为可用余额。开启“本人订单共享”后，该订单已冻结资产可进入现有联合担保池。</p>
                   </div>
+                  {editingOrder?.id && collateralAssets.every((asset) => asset.source === 'wallet') && recoverableManualCollateral.length > 0 && (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
+                      <div className="text-xs font-semibold text-blue-800">检测到本订单历史手工担保：{recoverableManualCollateral.map((asset) => `${asset.qty} ${asset.coin}`).join('、')}</div>
+                      <p className="mt-1 text-[11px] leading-4 text-blue-600">钱包担保不会再替换手工担保。可恢复后与当前钱包冻结资产一并保留。</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const mergedAssets = [
+                            ...recoverableManualCollateral,
+                            ...collateralAssets.filter((asset) => asset.source === 'wallet'),
+                          ];
+                          setCollateralAssets(mergedAssets);
+                          persistCollateral(mergedAssets);
+                        }}
+                        disabled={saveCollateralMutation.isPending}
+                        className="mt-2 w-full rounded-lg border border-blue-300 bg-white py-2 text-xs font-semibold text-blue-700 disabled:opacity-60"
+                      >{saveCollateralMutation.isPending ? '恢复中…' : '恢复历史手工担保'}</button>
+                    </div>
+                  )}
                   {walletCollateralUserId <= 0 ? (
                     <div className="rounded-lg border border-amber-200 bg-white px-3 py-3 text-xs text-amber-700">请先选择订单拥有者，才能读取其钱包数字资产。</div>
                   ) : walletCollateralBalancesQuery.isLoading ? (

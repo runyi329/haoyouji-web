@@ -19102,7 +19102,7 @@ ${klinesSummary}
           const role = asRows(roleRows)[0]?.role;
           if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可配置钱包担保' });
           const [orderRows] = await transaction.execute(
-            `SELECT id, user_id, status, deleted_at
+            `SELECT id, user_id, status, deleted_at, collateral_assets
                FROM ledger_orders
               WHERE id = ? AND ledger_id = ?
               LIMIT 1 FOR UPDATE`,
@@ -19137,15 +19137,34 @@ ${klinesSummary}
             actorUserId: ctx.user.id,
             transaction,
           });
+          let collateralBeforeData: string | null = null;
+          let collateralAfterData: string | null = null;
           if (primaryOwnerId === input.userId) {
+            collateralBeforeData = order.collateral_assets ? String(order.collateral_assets) : null;
+            let existingAssets: any[] = [];
+            try { existingAssets = order.collateral_assets ? JSON.parse(String(order.collateral_assets)) : []; } catch {}
+            // 钱包担保只替换本订单的旧钱包条目；手动/37号来源担保必须原样保留。
+            const mergedAssets = [
+              ...existingAssets.filter((asset: any) => asset?.source !== 'wallet'),
+              ...normalizedAssets,
+            ];
+            collateralAfterData = mergedAssets.length > 0 ? JSON.stringify(mergedAssets) : null;
             await transaction.execute(
               `UPDATE ledger_orders SET collateral_assets = ? WHERE id = ? AND ledger_id = ?`,
-              [normalizedAssets.length > 0 ? JSON.stringify(normalizedAssets) : null, input.orderId, input.ledgerId],
+              [collateralAfterData, input.orderId, input.ledgerId],
             );
           } else {
             let snapshot: Record<string, unknown> = {};
             try { snapshot = participantRow?.order_snapshot ? JSON.parse(String(participantRow.order_snapshot)) : {}; } catch {}
-            snapshot.collateral_assets = normalizedAssets.length > 0 ? JSON.stringify(normalizedAssets) : null;
+            collateralBeforeData = snapshot.collateral_assets ? String(snapshot.collateral_assets) : null;
+            let existingAssets: any[] = [];
+            try { existingAssets = snapshot.collateral_assets ? JSON.parse(String(snapshot.collateral_assets)) : []; } catch {}
+            const mergedAssets = [
+              ...existingAssets.filter((asset: any) => asset?.source !== 'wallet'),
+              ...normalizedAssets,
+            ];
+            collateralAfterData = mergedAssets.length > 0 ? JSON.stringify(mergedAssets) : null;
+            snapshot.collateral_assets = collateralAfterData;
             await transaction.execute(
               `UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ?`,
               [JSON.stringify(snapshot), Number(participantRow.id)],
@@ -19157,9 +19176,9 @@ ${klinesSummary}
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_order_id (order_id), INDEX idx_ledger_id (ledger_id)
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
           await transaction.execute(
-            `INSERT INTO ledger_order_logs (ledger_id, order_id, operator_id, action, after_data, note)
-             VALUES (?, ?, ?, 'wallet_collateral_sync', ?, ?)`,
-            [input.ledgerId, input.orderId, ctx.user.id, JSON.stringify(normalizedAssets), `钱包担保同步：${normalizedAssets.map((asset) => `${asset.qty} ${asset.coin}`).join(', ') || '已解除'}`],
+            `INSERT INTO ledger_order_logs (ledger_id, order_id, operator_id, action, before_data, after_data, note)
+             VALUES (?, ?, ?, 'wallet_collateral_sync', ?, ?, ?)`,
+            [input.ledgerId, input.orderId, ctx.user.id, collateralBeforeData, collateralAfterData, `钱包担保同步：${normalizedAssets.map((asset) => `${asset.qty} ${asset.coin}`).join(', ') || '已解除'}`],
           );
           await transaction.commit();
           return { success: true, locks: result.locks };
