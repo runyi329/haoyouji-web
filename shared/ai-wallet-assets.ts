@@ -17,10 +17,11 @@ export const AI_WALLET_MARKET_ASSETS = [
 ] as const;
 
 /**
- * 52号账本融资付息订单下拉中全部数字货币，均启用“独立余额 + 手动加减 + 站内转账”。
- * 股票、ETF、商品期货等非数字资产不在本清单内，绝不混入数字币资金账本。
+ * 已启用“独立余额 + 手动加减 + 站内转账”的数字资产。
+ * SUI 是在 BTC / ETH / SOL / BNB 之后新增的第五种独立资金账户；其余行情资产
+ * 仍仅用于 52 号账本的行情和仓位展示，未启用资金账本。
  */
-export const AI_WALLET_SETTLEMENT_ASSETS = [...AI_WALLET_MARKET_ASSETS] as const;
+export const AI_WALLET_SETTLEMENT_ASSETS = ["BTC", "ETH", "SOL", "BNB", "SUI"] as const;
 export type AiWalletSettlementAsset = (typeof AI_WALLET_SETTLEMENT_ASSETS)[number];
 
 export const AI_WALLET_ASSETS = [...AI_WALLET_FUNDING_ASSETS, ...AI_WALLET_MARKET_ASSETS] as const;
