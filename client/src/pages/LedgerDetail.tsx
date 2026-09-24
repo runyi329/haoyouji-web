@@ -4135,20 +4135,16 @@ export default function LedgerDetail() {
                     </button>
                     <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>闲时自动赚费</span>
                   </div>
-                  {parseFloat(fundingRateStatus?.totalAccumulated || '0') > 0 ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.5)' }}>赚费累计</span>
-                      <span className="text-sm font-bold tabular-nums" style={{ color: '#F5D78E' }}>{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(2)}</span>
-                      <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.45)' }}>USDT</span>
-                      <button onClick={() => setShowFundingRateLogs(true)} className="flex items-center" title="查看自动赚费详情">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(201,168,76,0.55)" strokeWidth="2">
-                          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                        </svg>
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.2)' }}>该功能已停用</span>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.5)' }}>赚费累计</span>
+                    <span className="text-sm font-bold tabular-nums" style={{ color: '#F5D78E' }}>{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(2)}</span>
+                    <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.45)' }}>USDT</span>
+                    <button onClick={() => setShowFundingRateLogs(true)} className="flex items-center" title="查看自动赚费详情">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(201,168,76,0.55)" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -6933,10 +6929,17 @@ export default function LedgerDetail() {
                 <div>
                   {fundingRateAllLogs.map((log: any, idx: number) => {
                     const bjTime = new Date(log.created_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    const amount = parseFloat(log.amount || '0');
+                    const isSystemAdjustment = amount < 0;
                     return (
                     <div key={log.id ?? idx} className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
-                      <div className="text-xs text-gray-500">{bjTime}</div>
-                      <div className="text-sm font-semibold text-green-600">+{parseFloat(log.amount).toFixed(6)} USDT</div>
+                      <div>
+                        <div className="text-xs text-gray-500">{bjTime}</div>
+                        {isSystemAdjustment && <div className="mt-0.5 text-[11px] font-medium text-amber-600">系统调节</div>}
+                      </div>
+                      <div className={`text-sm font-semibold ${isSystemAdjustment ? 'text-red-500' : 'text-green-600'}`}>
+                        {isSystemAdjustment ? '' : '+'}{amount.toFixed(6)} USDT
+                      </div>
                     </div>
                     );
                   })}
