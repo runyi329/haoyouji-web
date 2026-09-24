@@ -17982,7 +17982,8 @@ ${klinesSummary}
       .input(z.object({ ledgerId: z.number(), userId: z.number().optional(), viewAsUserId: z.number().optional(), roleFilter: z.enum(["funder", "admin"]).optional(), financeOnly: z.boolean().optional() }))
       .query(async ({ ctx, input }) => {
         const _t0 = Date.now();
-        await ensureFunderParticipantSnapshotColumns();
+        // 列表读取必须始终保持只读、快速返回；历史快照补齐仅在管理员写操作中执行，
+        // 不能因首次补齐或旧记录异常而阻塞普通成员及观察视角的订单页。
         // 并行初始化：同时获取 DB 连接和 Drizzle DB
         const [db, { getDbConnection }] = await Promise.all([
           getLedgerDb(),
@@ -19747,7 +19748,8 @@ ${klinesSummary}
     financeGetOrders: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
-        await ensureFunderParticipantSnapshotColumns();
+        // 订单页为纯读取路径。参与者快照的结构补齐由创建、编辑、结算等写路径负责，
+        // 避免维护任务或历史异常让普通用户的订单列表整体失败。
         const db = await getLedgerDb();
         // 验证当前登录用户的权限
         const myRoleRows = await db.execute(
