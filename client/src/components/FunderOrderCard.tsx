@@ -782,7 +782,7 @@ export function FunderOrderCard({
       const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
       if (parsed && parsed.ledgerId && parsed.tagName) return parsed as {
         ledgerId: number; tagName: string; floatingPnlTagName?: string;
-        floatingPnlCalculationMode?: 'initial_minus_latest' | 'leveraged_net_pnl'; collateralTagName?: string;
+        floatingPnlCalculationMode?: 'raw_net_pnl' | 'initial_minus_latest' | 'leveraged_net_pnl'; collateralTagName?: string;
         interestTagName?: string; useFloatingPnl?: boolean; useCollateral?: boolean; useInterest?: boolean;
       };
     } catch {}
@@ -790,10 +790,10 @@ export function FunderOrderCard({
   }, [(order as any).collateral_source]);
   const linkedPnlTagName = _parsedCollateralSource?.floatingPnlTagName
     || (_parsedCollateralSource?.useFloatingPnl !== false ? _parsedCollateralSource?.tagName : '');
-  // 未配置时按新版默认的“初始金额 − 今日余额”处理；倍数后的净值盈亏仅在管理员显式选择后使用。
+  // 未配置时按新版默认的“今日余额 − 初始金额”处理；倍数后的净值盈亏仅在管理员显式选择后使用。
   const floatingPnlCalculationMode = _parsedCollateralSource?.floatingPnlCalculationMode === 'leveraged_net_pnl'
     ? 'leveraged_net_pnl'
-    : 'initial_minus_latest';
+    : 'raw_net_pnl';
   const linkedCollateralTagName = _parsedCollateralSource?.collateralTagName
     || (_parsedCollateralSource?.useCollateral !== false ? _parsedCollateralSource?.tagName : '');
   // 利息引用必须显式选择；历史订单没有 interestTagName 时继续使用52号手工结息，绝不因担保/盈亏引用而误切换。
@@ -874,7 +874,7 @@ export function FunderOrderCard({
       const multiplierNum = Number((_pnlTagConfig as any).account_multiplier || 1) || 1;
       return floatingPnlCalculationMode === 'leveraged_net_pnl'
         ? (balanceNum - initialNum) * multiplierNum
-        : initialNum - balanceNum;
+        : balanceNum - initialNum;
     })();
     return {
       extCollateralValueU: marginTotalCny === null ? null : marginTotalCny / _cnyR,
@@ -1163,7 +1163,8 @@ export function FunderOrderCard({
   const isStockOrder = order.asset_type === 'stock';
   const isOptionOrder = order.asset_type === 'crypto_option';
   // 股票没有可用的第三方行情报价时，已绑定的37号标签承担实时盈亏数据源。
-  // 默认显示初始金额 − 今日余额；管理员可显式切换为37号倍率后的净值盈亏。
+  // 默认显示今日余额 − 初始金额；余额低于初始金额时应为负数，表示亏损。
+  // 管理员也可显式切换为37号倍率后的净值盈亏。
   const isExternalStockPnlSource = isStockOrder
     && Number(_parsedCollateralSource?.ledgerId) === 37
     && !!linkedPnlTagName;
@@ -1177,7 +1178,7 @@ export function FunderOrderCard({
     const accountMultiplier = Number((_pnlTagConfig as any).account_multiplier ?? 1) || 1;
     return floatingPnlCalculationMode === 'leveraged_net_pnl'
       ? (latestBalance - initialAmount) * accountMultiplier
-      : initialAmount - latestBalance;
+      : latestBalance - initialAmount;
   }, [isExternalStockPnlSource, floatingPnlCalculationMode, _pnlTagConfig, _pnlTagSummary]);
   // 此值仅用于订单模式“浮动盈亏”一行及详情入口，不参与担保缺口、利息、本金或余额计算。
   // 解析期权信息
@@ -2420,7 +2421,7 @@ export function FunderOrderCard({
                                 <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 37号浮动盈亏</div>
                                 <div>{floatingPnlCalculationMode === 'leveraged_net_pnl'
                                   ? '37标签最新余额 − 初始金额，按账号倍率计算（37号净值盈亏）'
-                                  : '37标签初始金额 − 今日最新余额（不使用账号倍率）'}</div>
+                                  : '37标签今日最新余额 − 初始金额（不使用账号倍率；负数为亏损）'}</div>
                                 <div className="mt-1 font-mono">
                                   {floatingPnlU !== null
                                     ? <strong style={{ color: valueColor(floatingPnlU) }}>{formatValue(floatingPnlU)}</strong>
@@ -2706,7 +2707,7 @@ export function FunderOrderCard({
                           <div>• <strong>担保缺口</strong> = {hasExternalCollateral ? '37号担保货币' : '手工担保货币'} + 37号浮动盈亏 − 待结利息 + 已结利息（开启借出本金时再减去计息基数）</div>
                           <div>• <strong>37号浮动盈亏</strong> = {floatingPnlCalculationMode === 'leveraged_net_pnl'
                             ? '（37号标签最新余额 − 初始金额）× 账号倍率，即37号“净值盈亏”数值。'
-                            : '37号标签初始金额 − 今日最新余额，不使用账号倍率。'}</div>
+                            : '37号标签今日最新余额 − 初始金额，不使用账号倍率；结果为负数表示亏损。'}</div>
                           </>
                         ) : (
                           <>

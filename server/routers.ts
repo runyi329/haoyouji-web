@@ -18604,17 +18604,17 @@ ${klinesSummary}
             }
           }
 
-          const parseLinked37Source = (raw: unknown): { floatingPnlTagName: string; floatingPnlCalculationMode: 'initial_minus_latest' | 'leveraged_net_pnl'; collateralTagName: string; interestTagName: string; useFloatingPnl: boolean; useCollateral: boolean; useInterest: boolean } | null => {
+          const parseLinked37Source = (raw: unknown): { floatingPnlTagName: string; floatingPnlCalculationMode: 'raw_net_pnl' | 'leveraged_net_pnl'; collateralTagName: string; interestTagName: string; useFloatingPnl: boolean; useCollateral: boolean; useInterest: boolean } | null => {
             try {
               const source = Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : (typeof raw === 'string' ? JSON.parse(raw) : raw);
               if (Number(source?.ledgerId) !== 37 || !source?.tagName) return null;
               const legacyTagName = String(source.tagName);
               const floatingPnlTagName = source.floatingPnlTagName || (source.useFloatingPnl !== false ? legacyTagName : '');
-              // 未选择计算口径时统一使用“初始金额 − 今日最新余额”；
+              // 未选择计算口径时统一使用“今日最新余额 − 初始金额”；
               // 仅显式选择后才跟随37号页面的倍率后净值盈亏。
               const floatingPnlCalculationMode = source.floatingPnlCalculationMode === 'leveraged_net_pnl'
                 ? 'leveraged_net_pnl'
-                : 'initial_minus_latest';
+                : 'raw_net_pnl';
               const collateralTagName = source.collateralTagName || (source.useCollateral !== false ? legacyTagName : '');
               const interestTagName = source.interestTagName || (source.useInterest === true ? legacyTagName : '');
               return (floatingPnlTagName || collateralTagName || interestTagName) ? {
@@ -18658,7 +18658,7 @@ ${klinesSummary}
             const floatingPnlCny = source.useFloatingPnl && Number.isFinite(latestBalance)
               ? (source.floatingPnlCalculationMode === 'leveraged_net_pnl'
                 ? (latestBalance! - initialAmount) * multiplier
-                : initialAmount - latestBalance!)
+                : latestBalance! - initialAmount)
               : null;
             const floatingPnl = floatingPnlCny === null ? null : floatingPnlCny / usdtCnyRate;
             const interestConfig = source.interestTagName ? linkedTagConfigByName.get(source.interestTagName) : null;
@@ -18933,7 +18933,7 @@ ${klinesSummary}
         ownerLabel: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['initial_minus_latest', 'leveraged_net_pnl']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['raw_net_pnl', 'leveraged_net_pnl', 'initial_minus_latest']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional() }).nullable().optional(),
         principalLentOut: z.boolean().optional(),
         tradingFeeRate: z.number().min(0).max(100).optional(),
         tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
@@ -19929,7 +19929,7 @@ ${klinesSummary}
         interestRateCurrency: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['initial_minus_latest', 'leveraged_net_pnl']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['raw_net_pnl', 'leveraged_net_pnl', 'initial_minus_latest']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional() }).nullable().optional(),
         principalLentOut: z.boolean().optional(),
         tradingFeeRate: z.number().min(0).max(100).optional(),
         tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
@@ -20084,7 +20084,7 @@ ${klinesSummary}
         tradeDirection: z.enum(['long', 'short']).nullable().optional(),
         orderFillStatus: z.enum(['pending', 'filled']).optional(),
         orderPerspective: z.enum(['self', 'other']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['initial_minus_latest', 'leveraged_net_pnl']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['raw_net_pnl', 'leveraged_net_pnl', 'initial_minus_latest']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional() }).nullable().optional(),
         optionInfo: z.object({
           premium: z.string().optional(),
           exerciseDate: z.string().optional(),
