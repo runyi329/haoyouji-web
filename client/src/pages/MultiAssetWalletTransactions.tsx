@@ -66,6 +66,8 @@ export default function MultiAssetWalletTransactions() {
   const priceUsdt = Number(balance?.priceUsdt ?? 0);
   const history = useMemo(() => (historyQuery.data ?? [])
     .filter((item: any) => String(item.assetCode).toUpperCase() === assetCode)
+    // 冻结/解冻仅变更可用与冻结分层，不改变总持有，不放入用户资金流水。
+    .filter((item: any) => item.eventType !== "collateral_lock" && item.eventType !== "collateral_release")
     .filter((item: any) => filter === "all" ? true : filter === "in" ? Number(item.amount) > 0 : Number(item.amount) < 0), [historyQuery.data, assetCode, filter]);
   const availableAssets = (balancesQuery.data ?? [])
     .map((item: any) => String(item.assetCode).toUpperCase())

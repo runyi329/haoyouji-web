@@ -390,6 +390,9 @@ export default function AfRechargeManage() {
     { userId: Number(adjSelectedUser?.id || 0), limit: 100 },
     { enabled: !!adjSelectedUser?.id, staleTime: 0 },
   );
+  // 冻结与解冻保留在不可变审计账本中，但不作为管理员资金流水展示；余额卡仍显示冻结数量。
+  const adjVisibleMultiAssetHistory = ((adjMultiAssetHistoryQuery.data ?? []) as any[])
+    .filter((entry) => entry.eventType !== "collateral_lock" && entry.eventType !== "collateral_release");
   const adjHistory = (adjHistoryQuery.data as any[]) ?? [];
   const refetchAdjHistory = adjHistoryQuery.refetch;
   const adjUserDateRange = getLedgerDateRange(adjUserFlowDatePreset, adjUserFlowCustomStart, adjUserFlowCustomEnd);
@@ -1752,17 +1755,17 @@ export default function AfRechargeManage() {
                 days={adjUserTrendDays}
                 onDaysChange={setAdjUserTrendDays}
               />
-              {(adjMultiAssetHistoryQuery.data ?? []).length > 0 && (
+              {adjVisibleMultiAssetHistory.length > 0 && (
                 <div className="mb-3 rounded-2xl border border-violet-100 bg-white p-3.5 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <p className="text-[13px] font-bold text-gray-900">数字资产流水</p>
                       <p className="mt-0.5 text-[10px] text-gray-400">BTC、ETH、SOL、BNB 的独立不可变账本</p>
                     </div>
-                    <span className="text-[10px] text-violet-500">{adjMultiAssetHistoryQuery.data?.length ?? 0} 条</span>
+                    <span className="text-[10px] text-violet-500">{adjVisibleMultiAssetHistory.length} 条</span>
                   </div>
                   <div className="mt-2 divide-y divide-violet-50">
-                    {(adjMultiAssetHistoryQuery.data ?? []).slice(0, 8).map((entry: any) => {
+                    {adjVisibleMultiAssetHistory.slice(0, 8).map((entry: any) => {
                       const amount = Number(entry.amount ?? 0);
                       const label = entry.eventType === "transfer_in" ? "站内转账收款" : entry.eventType === "transfer_out" ? "站内转账汇款" : "后台手动调账";
                       return (

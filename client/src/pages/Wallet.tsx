@@ -779,6 +779,8 @@ export default function Wallet() {
   }));
   const recentDigitalTx = multiAssetHistory
     .filter((item: any) => configuredSettlementAssets.has(String(item.assetCode || "").toUpperCase()))
+    // 担保冻结/解冻属于余额内部状态搬移，不作为用户资金流水展示；冻结金额仍在资产卡片中可见。
+    .filter((item: any) => item.eventType !== "collateral_lock" && item.eventType !== "collateral_release")
     .filter((item: any) => digitalHistoryFilter === "ALL" || String(item.assetCode || "").toUpperCase() === digitalHistoryFilter)
     .sort((left: any, right: any) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
     .slice(0, 10);
