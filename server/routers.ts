@@ -19065,13 +19065,13 @@ ${klinesSummary}
         const conn = await getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         const [roleRows] = await (conn as any).execute(
-          `SELECT role FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1`,
+          `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
           [input.ledgerId, ctx.user.id],
         );
         const role = asRows(roleRows)[0]?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可查看钱包担保资产' });
         const [memberRows] = await (conn as any).execute(
-          `SELECT 1 FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1`,
+          `SELECT 1 FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
           [input.ledgerId, input.userId],
         );
         if (!asRows(memberRows)[0]) throw new TRPCError({ code: 'FORBIDDEN', message: '仅可选择52号账本成员的钱包资产' });
@@ -19096,7 +19096,7 @@ ${klinesSummary}
         try {
           await transaction.beginTransaction();
           const [roleRows] = await transaction.execute(
-            `SELECT role FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1 FOR UPDATE`,
+            `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
             [input.ledgerId, ctx.user.id],
           );
           const role = asRows(roleRows)[0]?.role;
