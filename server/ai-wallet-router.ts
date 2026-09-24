@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDbConnection } from "./db";
-import { AI_WALLET_ASSET_CATALOG, AI_WALLET_ASSETS, type AiWalletAsset } from "../shared/ai-wallet-assets";
+import { AI_WALLET_ASSET_CATALOG, AI_WALLET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS, type AiWalletAsset } from "../shared/ai-wallet-assets";
 
 const WALLET_ASSETS = AI_WALLET_ASSETS;
 const PROFILE_TEMPLATES = ["cny_simple", "stablecoin", "blockchain", "hybrid", "custom"] as const;
@@ -125,6 +125,36 @@ function normalizeProfile(row: WalletProfileRow): WalletProfile {
   };
 }
 
+/**
+ * 52号账本把融资付息订单中的全部数字币扩展为独立钱包资产。
+ * 仅为已完整启用旧四币的 52 号账本补齐新增数字币，避免已有余额被项目可见资产筛选隐藏；
+ * 不触碰余额、流水或任何其他项目档案，管理员之后仍可在配置中心自主移除任意币种。
+ */
+async function migrateLedger52SettlementVisibility(conn: any): Promise<void> {
+  const [rows] = await conn.execute(
+    `SELECT id, visible_assets
+       FROM ai_wallet_project_profiles
+      WHERE target_type = 'ledger' AND target_key = 'ledger:52'
+      LIMIT 1`,
+  ) as any[];
+  const row = (rows as any[])?.[0];
+  if (!row) return;
+
+  const visibleAssets = sanitizeAssets(row.visible_assets);
+  const legacySettlementAssets = ["BTC", "ETH", "SOL", "BNB"] as const;
+  const hasCompleteLegacySettlement = legacySettlementAssets.every((asset) => visibleAssets.includes(asset));
+  if (!hasCompleteLegacySettlement) return;
+  const missingSettlementAssets = AI_WALLET_SETTLEMENT_ASSETS.filter((asset) => !visibleAssets.includes(asset));
+  if (missingSettlementAssets.length === 0) return;
+
+  await conn.execute(
+    `UPDATE ai_wallet_project_profiles
+        SET visible_assets = ?, updated_at = NOW()
+      WHERE id = ?`,
+    [JSON.stringify([...visibleAssets, ...missingSettlementAssets]), Number(row.id)],
+  );
+}
+
 async function ensureWalletProjectProfileTable(): Promise<void> {
   if (!walletProfileTableReady) {
     walletProfileTableReady = (async () => {
@@ -203,6 +233,7 @@ async function ensureWalletProjectProfileTable(): Promise<void> {
          VALUES ('site_version', 'version:proj_hzxm2t', '米伴', 'proj_hzxm2t', 'hybrid', 1, ?, 'CNY', 0, 0, 0, 0, 1, 0, 0, 'order_snapshot')`,
         [JSON.stringify(["CNY", "USDT"])]
       );
+      await migrateLedger52SettlementVisibility(conn);
     })().catch((error) => {
       walletProfileTableReady = null;
       throw error;

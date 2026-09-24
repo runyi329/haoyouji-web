@@ -430,17 +430,17 @@ export default function AiWalletManager() {
                 <h3 className="mb-3 text-[13px] font-bold text-slate-800">资产与展示</h3>
                 <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3">
                   <div className="text-[12px] font-bold text-slate-800">资金账本资产</div>
-                  <p className="mt-1 text-[10px] leading-relaxed text-slate-500">具备独立余额、不可变流水、后台手动加减和站内转账。数字币链上充值、提现地址仍须完成网络配置后另行开放。</p>
-                  <div className="mt-2 grid grid-cols-3 gap-1.5">{[...AI_WALLET_FUNDING_ASSETS, ...AI_WALLET_SETTLEMENT_ASSETS].map((asset) => <button type="button" key={asset} onClick={() => toggleAsset(asset)} className={`rounded-xl border px-1 py-2.5 text-[11px] font-bold ${form.visibleAssets.includes(asset) ? "border-[#2358D9] bg-white text-[#2358D9]" : "border-slate-200 bg-white text-slate-400"}`}>{asset === "CNY" ? "CNY" : asset === "USDT" ? "USDT" : asset}</button>)}</div>
+                  <p className="mt-1 text-[10px] leading-relaxed text-slate-500">52号融资付息订单下拉中的全部数字币均为独立账户：各自余额、不可变流水、后台手动加减和站内转账互不混算。链上充值、提现地址仍须完成网络配置后另行开放。</p>
+                  <div className="mt-2 grid grid-cols-4 gap-1.5">{[...AI_WALLET_FUNDING_ASSETS, ...AI_WALLET_SETTLEMENT_ASSETS].map((asset) => <button type="button" key={asset} onClick={() => toggleAsset(asset)} className={`rounded-xl border px-1 py-2.5 text-[11px] font-bold ${form.visibleAssets.includes(asset) ? "border-[#2358D9] bg-white text-[#2358D9]" : "border-slate-200 bg-white text-slate-400"}`}>{asset}</button>)}</div>
                 </div>
-                <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/60 p-3">
+                {marketDisplayOnlyAssets.length > 0 && <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/60 p-3">
                   <div className="flex items-center justify-between gap-2"><div className="text-[12px] font-bold text-slate-800">其他52号账本数字资产库</div><span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-600">行情 / 仓位展示</span></div>
                   <p className="mt-1 text-[10px] leading-relaxed text-slate-500">来源于融资付息订单可选币种和现有实时行情服务。选中后只允许项目展示实际仓位；不会产生 0 余额卡片，也不会开放资金通道。</p>
                   <div className="mt-2 grid grid-cols-4 gap-1.5">{marketDisplayOnlyAssets.map((asset) => {
                     const selected = form.visibleAssets.includes(asset);
                     return <button type="button" key={asset} onClick={() => toggleAsset(asset)} className={`rounded-lg border px-1 py-2 text-[10px] font-bold transition-colors ${selected ? "border-violet-400 bg-white" : "border-violet-100 bg-white/70 text-slate-400"}`} style={selected ? { color: AI_WALLET_ASSET_COLORS[asset] } : undefined}>{asset}</button>;
                   })}</div>
-                </div>
+                </div>}
                 <label className="mt-4 block text-[11px] font-medium text-slate-500">默认展示资产</label>
                 <select value={form.defaultAsset} onChange={(event) => setForm((previous) => ({ ...previous, defaultAsset: event.target.value as Asset }))} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-[13px] outline-none focus:border-[#2358D9]">{form.visibleAssets.map((asset) => <option key={asset} value={asset}>{assetNameByCode.get(asset) || asset} · {asset}</option>)}</select>
                 <ToggleRow label="显示行情与估值" description="仅用于项目页面展示；业务结算仍遵循下方的结算口径。" checked={form.showMarket} onChange={(next) => setForm((previous) => ({ ...previous, showMarket: next }))} />
