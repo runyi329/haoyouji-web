@@ -2751,6 +2751,10 @@ export default function LedgerDetail() {
   // 本人 / 参与分组：主订单拥有者的 owner 协作快照只用于独立配置，仍属于“本人”。
   // 只有非 owner 的真实协作角色、明确参与标记或“他人”视角订单才归入参与。
   const isFunderParticipantOrder = (order: any) => {
+    const effectiveViewerId = Number(viewAsUserId ?? (user as any)?.id ?? 0);
+    // 无论后端补充了何种 owner 快照，订单主拥有者的视角必须稳定归入“本人”。
+    // 这也兼容旧接口曾把 owner 快照打成 _isParticipant 的历史响应。
+    if (effectiveViewerId > 0 && Number(order?.user_id) === effectiveViewerId) return false;
     const participantRole = String(order?.participantInfo?.role || '').toLowerCase();
     return (participantRole !== '' && participantRole !== 'owner')
       || !!order?._isParticipant

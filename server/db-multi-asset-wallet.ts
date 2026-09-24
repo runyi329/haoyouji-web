@@ -216,6 +216,21 @@ export async function ensureMultiAssetWalletInfrastructure(): Promise<void> {
           KEY idx_wallet_collateral_order_status (ledger_id, order_id, status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='52号融资订单的钱包数字资产担保冻结；余额不扣除，仅限制可用额'
       `);
+      // 兼容首版预览中已存在但缺少账本归属列的冻结表；查询前必须补齐，
+      // 否则钱包担保页会因 WHERE ledger_id 直接报错，且绝不能把不同账本的锁混在一起。
+      const [lockColumns] = await (conn as any).execute(`
+        SELECT column_name
+          FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'ai_wallet_asset_collateral_locks'
+      `) as any[];
+      const hasLockLedgerId = asRows(lockColumns).some((row) => String(row.column_name || row.COLUMN_NAME) === 'ledger_id');
+      if (!hasLockLedgerId) {
+        try {
+          await (conn as any).execute(`ALTER TABLE ai_wallet_asset_collateral_locks ADD COLUMN ledger_id INT NOT NULL DEFAULT 52 AFTER id`);
+        } catch (error: any) {
+          if (error?.code !== 'ER_DUP_FIELDNAME') throw error;
+        }
+      }
     })().catch((error) => {
       multiAssetWalletInfrastructureReady = null;
       throw error;

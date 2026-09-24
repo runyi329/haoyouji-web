@@ -634,6 +634,9 @@ export default function Wallet() {
     : path;
   // 钱包详情页会离开本组件；把账户类别保存在 URL 中，返回时才能保持原来的账户上下文。
   const accountFromRoute = searchParams.get("account");
+  // 外币独立账本尚未开通真实余额与流水；入口先保留为禁用态，后续接入 USD/HKD/JPY 等资产后再自动激活。
+  // 该常量必须在账户路由初始化之前声明，避免旧热更新模块引用未初始化的账户能力。
+  const foreignAccountsEnabled = false;
   const initialAccount: WalletAccountAsset = accountFromRoute === "CNY"
     ? "CNY"
     : accountFromRoute === "CRYPTO"
@@ -709,16 +712,14 @@ export default function Wallet() {
     (total, asset) => total + Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0))) * Number(asset.priceUsdt ?? 0),
     0,
   );
-  // 外币独立账本尚未开通真实余额与流水；入口先保留为禁用态，后续接入 USD/HKD/JPY 等资产后再自动激活。
-  const hasForeignAssets = false;
   const cryptoAccountLabel = hasDigitalAssets ? `数字币账户 · ${visibleMultiAssetBalances.length} 项` : "数字币账户 · 暂无资产";
-  const foreignAccountLabel = hasForeignAssets ? "外币账户" : "外币账户 · 暂无资产";
+  const foreignAccountLabel = foreignAccountsEnabled ? "外币账户" : "外币账户 · 暂无资产";
   const accountMenuItems: Array<{ value: WalletAccountAsset; label: string; enabled: boolean }> = [
     { value: "USDT", label: "稳定币账户 · USDT", enabled: true },
     { value: "CNY", label: "人民币账户 · CNY", enabled: true },
     ...(isLedger52WalletEntry ? [
       { value: "CRYPTO" as WalletAccountAsset, label: cryptoAccountLabel, enabled: hasDigitalAssets },
-      { value: "FOREIGN" as WalletAccountAsset, label: foreignAccountLabel, enabled: hasForeignAssets },
+      { value: "FOREIGN" as WalletAccountAsset, label: foreignAccountLabel, enabled: foreignAccountsEnabled },
     ] : []),
   ];
   const currentAccountLabel = accountMenuItems.find((item) => item.value === activeAsset)?.label || "稳定币账户 · USDT";
