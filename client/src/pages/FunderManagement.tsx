@@ -116,6 +116,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [tagInput, setTagInput] = useState('');
   // 担保货币列表：[{ coin: 'BTC', qty: '' }, ...]
   const [collateralAssets, setCollateralAssets] = useState<{ coin: string; qty: string; note?: string; source?: 'wallet' }[]>([]);
+  // 历史钱包担保有少量记录未带 source 字段；以固定冻结备注兼容识别，避免被误当作手工担保删除。
+  const isWalletCollateralAsset = (asset: { source?: string; note?: string }) => asset.source === 'wallet' || asset.note === '钱包担保冻结';
   // 担保货币编辑模式：编辑已有订单时默认只读，点「编辑」才可改；新建订单时恒为可编辑
   const [collateralEditMode, setCollateralEditMode] = useState(false);
   const [walletCollateralEditMode, setWalletCollateralEditMode] = useState(false);
@@ -643,7 +645,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         try {
           const assets = typeof payload === 'string' ? JSON.parse(payload) : payload;
           if (!Array.isArray(assets)) continue;
-          const manualAssets = assets.filter((asset: any) => asset?.coin && asset?.qty !== '' && asset?.source !== 'wallet');
+          const manualAssets = assets.filter((asset: any) => asset?.coin && asset?.qty !== '' && !isWalletCollateralAsset(asset));
           if (manualAssets.length > 0) return manualAssets.map((asset: any) => ({ coin: String(asset.coin), qty: String(asset.qty), ...(asset.note ? { note: String(asset.note) } : {}) }));
         } catch {}
       }
@@ -741,7 +743,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     onSuccess: async (result) => {
       try {
         const orderId = Number((result as any)?.orderId || 0);
-        if (orderId > 0 && collateralSourceMode === 'wallet' && collateralAssets.some((asset) => asset.source === 'wallet')) {
+        if (orderId > 0 && collateralAssets.some(isWalletCollateralAsset)) {
           await persistWalletCollateral(orderId, Number(formData.userId), collateralAssets);
         }
         if (orderId > 0 && participants.length > 0) await persistParticipantViews(orderId);
@@ -762,7 +764,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     onSuccess: async (result) => {
       try {
         const orderId = Number((result as any)?.orderId || 0);
-        if (orderId > 0 && collateralSourceMode === 'wallet' && collateralAssets.some((asset) => asset.source === 'wallet')) {
+        if (orderId > 0 && collateralAssets.some(isWalletCollateralAsset)) {
           await persistWalletCollateral(orderId, Number(formData.userId), collateralAssets);
         }
         if (orderId > 0 && participants.length > 0) await persistParticipantViews(orderId);
@@ -866,7 +868,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   };
   const persistWalletCollateral = async (orderId: number, holderUserId: number, assets: { coin: string; qty: string; source?: 'wallet' }[]) => {
     const walletAssets = assets
-      .filter((asset) => asset.source === 'wallet' && asset.coin && asset.qty !== '' && Number(asset.qty) > 0)
+      .filter((asset) => isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '' && Number(asset.qty) > 0)
       .map((asset) => ({ coin: asset.coin as any, qty: asset.qty }));
     if (ledgerId !== 52 || orderId <= 0 || holderUserId <= 0) return;
     await saveWalletCollateralMutation.mutateAsync({ ledgerId: 52, orderId, userId: holderUserId, assets: walletAssets });
@@ -1241,8 +1243,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       const ca = order.collateral_assets;
       if (ca) {
         const parsed = typeof ca === 'string' ? JSON.parse(ca) : ca;
-        setCollateralAssets(Array.isArray(parsed) ? parsed : []);
-        hasWalletCollateralSource = Array.isArray(parsed) && parsed.some((asset: any) => asset?.source === 'wallet');
+        const normalized = Array.isArray(parsed)
+          ? parsed.map((asset: any) => isWalletCollateralAsset(asset) ? { ...asset, source: 'wallet' as const } : asset)
+          : [];
+        setCollateralAssets(normalized);
+        hasWalletCollateralSource = normalized.some((asset: any) => asset?.source === 'wallet');
       } else {
         setCollateralAssets([]);
       }
@@ -1476,14 +1481,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         const ratio = (formData.profitShareRatio ?? '').toString().trim();
         return ratio ? `${typeLabel} ${ratio}%` : typeLabel;
       })(),
-      // 编辑模式：始终传 collateralAssets（空数组表示清空），新建模式：为空时传 undefined
-      // 钱包担保必须走专用原子冻结接口；普通订单保存不得绕过冻结直接写入来源标记。
-      collateralAssets: collateralSourceMode === 'wallet'
-        ? undefined
-        : editingOrder
+      // 新建订单仅先写入手工担保；钱包担保在订单创建后走原子冻结接口。
+      // 编辑订单保留全部既有担保，避免保存手工字段时丢失已冻结的钱包条目。
+      collateralAssets: editingOrder
         ? collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)))
-        : collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty))).length > 0
-          ? collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)))
+        : collateralAssets.filter(a => !isWalletCollateralAsset(a) && a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty))).length > 0
+          ? collateralAssets.filter(a => !isWalletCollateralAsset(a) && a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)))
           : undefined,
       // 提交前确保 displayConfig 所有値都是 boolean
       displayConfig: {
@@ -2799,6 +2802,23 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 )}
               </div>
 
+              {ledgerId === 52 && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <div className="text-xs font-semibold text-slate-600">当前担保汇总（两类担保均计入总值）</div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {collateralAssets.filter((asset) => !isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').map((asset, index) => (
+                      <span key={`manual-${index}`} className="rounded-md bg-blue-100 px-2 py-1 text-[11px] font-medium text-blue-700">手工 · {asset.qty} {asset.coin}</span>
+                    ))}
+                    {collateralAssets.filter((asset) => isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').map((asset, index) => (
+                      <span key={`wallet-${index}`} className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">钱包冻结 · {asset.qty} {asset.coin}</span>
+                    ))}
+                    {collateralAssets.filter((asset) => asset.coin && asset.qty !== '').length === 0 && (
+                      <span className="text-[11px] text-slate-400">暂无担保物</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* 股票订单：盈亏、担保物、利息标签分别选择，互不强制联动。 */}
               {formData.assetType === 'stock' && collateralSourceMode === 'external' && (
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-3">
@@ -2923,7 +2943,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     <div className="text-sm font-semibold text-amber-800">钱包担保物（可与下方手工担保并行）</div>
                     <p className="mt-1 text-xs leading-5 text-amber-700">冻结后总持币不变，但冻结部分不能提现、转账或再次担保；订单结清或移入回收站时自动恢复为可用余额。手工担保与钱包担保分别保存、互不覆盖。</p>
                   </div>
-                  {editingOrder?.id && collateralAssets.every((asset) => asset.source === 'wallet') && recoverableManualCollateral.length > 0 && (
+                  {editingOrder?.id && collateralAssets.every(isWalletCollateralAsset) && recoverableManualCollateral.length > 0 && (
                     <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
                       <div className="text-xs font-semibold text-blue-800">检测到本订单历史手工担保：{recoverableManualCollateral.map((asset) => `${asset.qty} ${asset.coin}`).join('、')}</div>
                       <p className="mt-1 text-[11px] leading-4 text-blue-600">钱包担保不会再替换手工担保。可恢复后与当前钱包冻结资产一并保留。</p>
@@ -2932,7 +2952,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         onClick={() => {
                           const mergedAssets = [
                             ...recoverableManualCollateral,
-                            ...collateralAssets.filter((asset) => asset.source === 'wallet'),
+                            ...collateralAssets.filter(isWalletCollateralAsset),
                           ];
                           setCollateralAssets(mergedAssets);
                           persistCollateral(mergedAssets);
@@ -2952,7 +2972,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     <div className="space-y-2">
                       {(walletCollateralBalancesQuery.data ?? []).map((asset: any) => {
                         const assetCode = String(asset.assetCode || '').toUpperCase();
-                        const selected = collateralAssets.find((item) => item.source === 'wallet' && item.coin === assetCode);
+                        const selected = collateralAssets.find((item) => isWalletCollateralAsset(item) && item.coin === assetCode);
                         const available = Number(asset.availableBalance ?? 0);
                         const frozen = Number(asset.frozenBalance ?? 0);
                         const selectedAmount = Number(selected?.qty ?? 0);
@@ -2968,7 +2988,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 <button
                                   type="button"
                                   disabled={!walletCollateralEditMode && !!editingOrder?.id}
-                                  onClick={() => setCollateralAssets((previous) => previous.filter((item) => !(item.source === 'wallet' && item.coin === assetCode)))}
+                                  onClick={() => setCollateralAssets((previous) => previous.filter((item) => !(isWalletCollateralAsset(item) && item.coin === assetCode)))}
                                   className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-500 disabled:opacity-50"
                                 >移除</button>
                               ) : (
@@ -2989,12 +3009,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                   step="0.00000001"
                                   value={selected.qty}
                                   disabled={!walletCollateralEditMode && !!editingOrder?.id}
-                                  onChange={(event) => setCollateralAssets((previous) => previous.map((item) => item.source === 'wallet' && item.coin === assetCode ? { ...item, qty: event.target.value } : item))}
+                                  onChange={(event) => setCollateralAssets((previous) => previous.map((item) => isWalletCollateralAsset(item) && item.coin === assetCode ? { ...item, qty: event.target.value, source: 'wallet' } : item))}
                                   placeholder={`最多 ${maximum.toLocaleString('zh-CN', { maximumFractionDigits: 8 })}`}
                                   className="min-w-0 flex-1 rounded-lg border border-amber-200 px-3 py-2 text-sm font-semibold outline-none focus:border-amber-500 disabled:bg-gray-50"
                                 />
                                 <span className="text-xs font-semibold text-amber-700">{assetCode}</span>
-                                <button type="button" disabled={!walletCollateralEditMode && !!editingOrder?.id} onClick={() => setCollateralAssets((previous) => previous.map((item) => item.source === 'wallet' && item.coin === assetCode ? { ...item, qty: String(maximum) } : item))} className="text-xs font-semibold text-amber-700 disabled:opacity-50">全部</button>
+                                <button type="button" disabled={!walletCollateralEditMode && !!editingOrder?.id} onClick={() => setCollateralAssets((previous) => previous.map((item) => isWalletCollateralAsset(item) && item.coin === assetCode ? { ...item, qty: String(maximum), source: 'wallet' } : item))} className="text-xs font-semibold text-amber-700 disabled:opacity-50">全部</button>
                               </div>
                             )}
                           </div>
@@ -3027,10 +3047,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 {/* 只读态：编辑已有订单且未进入编辑模式时 */}
                 {editingOrder?.id && !collateralEditMode ? (
                   <>
-                    {collateralAssets.filter(a => a.source !== 'wallet' && a.coin && a.qty !== '').length === 0 ? (
+                    {collateralAssets.filter(a => !isWalletCollateralAsset(a) && a.coin && a.qty !== '').length === 0 ? (
                       <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-4 text-center text-sm text-gray-400">暂无手工担保物</div>
                     ) : (
-                      collateralAssets.filter(a => a.source !== 'wallet' && a.coin && a.qty !== '').map((item, idx) => (
+                      collateralAssets.filter(a => !isWalletCollateralAsset(a) && a.coin && a.qty !== '').map((item, idx) => (
                         <div key={idx} className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 flex items-center justify-between">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="text-sm font-semibold shrink-0" style={{ color: COIN_COLORS[item.coin as keyof typeof COIN_COLORS] || '#1A2340' }}>{item.coin}</span>
@@ -3049,7 +3069,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </>
                 ) : (
                 <>
-                {collateralAssets.map((item, idx) => item.source === 'wallet' ? null : (
+                {collateralAssets.map((item, idx) => isWalletCollateralAsset(item) ? null : (
                   <div key={idx} className="rounded-xl border border-gray-200 p-3 space-y-2">
                     <div className="flex gap-2 items-center">
                       <select

@@ -19143,9 +19143,10 @@ ${klinesSummary}
             collateralBeforeData = order.collateral_assets ? String(order.collateral_assets) : null;
             let existingAssets: any[] = [];
             try { existingAssets = order.collateral_assets ? JSON.parse(String(order.collateral_assets)) : []; } catch {}
-            // 钱包担保只替换本订单的旧钱包条目；手动/37号来源担保必须原样保留。
+            // 钱包担保只替换本订单的旧钱包条目；兼容早期仅以固定备注标记的钱包条目。
+            const isWalletCollateral = (asset: any) => asset?.source === 'wallet' || asset?.note === '钱包担保冻结';
             const mergedAssets = [
-              ...existingAssets.filter((asset: any) => asset?.source !== 'wallet'),
+              ...existingAssets.filter((asset: any) => !isWalletCollateral(asset)),
               ...normalizedAssets,
             ];
             collateralAfterData = mergedAssets.length > 0 ? JSON.stringify(mergedAssets) : null;
@@ -19159,8 +19160,9 @@ ${klinesSummary}
             collateralBeforeData = snapshot.collateral_assets ? String(snapshot.collateral_assets) : null;
             let existingAssets: any[] = [];
             try { existingAssets = snapshot.collateral_assets ? JSON.parse(String(snapshot.collateral_assets)) : []; } catch {}
+            const isWalletCollateral = (asset: any) => asset?.source === 'wallet' || asset?.note === '钱包担保冻结';
             const mergedAssets = [
-              ...existingAssets.filter((asset: any) => asset?.source !== 'wallet'),
+              ...existingAssets.filter((asset: any) => !isWalletCollateral(asset)),
               ...normalizedAssets,
             ];
             collateralAfterData = mergedAssets.length > 0 ? JSON.stringify(mergedAssets) : null;
