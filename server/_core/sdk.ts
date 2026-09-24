@@ -17,7 +17,64 @@ export type SessionPayload = {
   name: string;
 };
 
+type CachedUser = {
+  user: User;
+  expiresAt: number;
+  lastSignedInWriteAt: number;
+};
+
 class SDKServer {
+  // 身份代入目标可短时复用，避免管理员连续切换页面时重复读取同一用户；
+  // 实际登录用户仍逐请求从数据库读取，确保角色/锁定状态立即生效。
+  private readonly userCache = new Map<number, CachedUser>();
+  private readonly userCacheTtlMs = 15_000;
+  private readonly lastSignedInWriteIntervalMs = 5 * 60_000;
+
+  private pruneUserCache(now: number) {
+    if (this.userCache.size < 2_048) return;
+    for (const [id, entry] of this.userCache) {
+      if (entry.expiresAt <= now) this.userCache.delete(id);
+    }
+  }
+
+  async getCachedUserById(userId: number): Promise<User | undefined> {
+    const now = Date.now();
+    const cached = this.userCache.get(userId);
+    if (cached && cached.expiresAt > now) return cached.user;
+
+    this.pruneUserCache(now);
+    const user = await db.getUserById(userId);
+    if (!user) return undefined;
+    this.userCache.set(userId, {
+      user,
+      expiresAt: now + this.userCacheTtlMs,
+      // 首次加载可立即记录；后续请求在限频窗口内不再等待写操作。
+      lastSignedInWriteAt: 0,
+    });
+    return user;
+  }
+
+  private cacheUser(user: User) {
+    const now = Date.now();
+    const prior = this.userCache.get(user.id);
+    this.userCache.set(user.id, {
+      user,
+      expiresAt: now + this.userCacheTtlMs,
+      lastSignedInWriteAt: prior?.lastSignedInWriteAt ?? 0,
+    });
+  }
+
+  private refreshLastSignedIn(userId: number) {
+    const now = Date.now();
+    const cached = this.userCache.get(userId);
+    if (!cached || now - cached.lastSignedInWriteAt < this.lastSignedInWriteIntervalMs) return;
+    cached.lastSignedInWriteAt = now;
+    // 活跃标记是辅助信息，不应阻塞受保护页面的读取路径。
+    void db.updateUserLastSignedIn(userId, new Date(now)).catch((error) => {
+      console.warn('[Auth] Failed to refresh last signed-in timestamp:', String(error));
+    });
+  }
+
   private parseCookies(cookieHeader: string | undefined) {
     if (!cookieHeader) {
       return new Map<string, string>();
@@ -113,8 +170,6 @@ class SDKServer {
     // 解决微信浏览器中 Cookie 残留旧用户 token 的问题
     let sessionCookie: string | undefined;
     const authHeader = req.headers.authorization;
-    console.log('[Auth-DEBUG] authorization header:', authHeader ? authHeader.substring(0, 30) + '...' : 'MISSING');
-    console.log('[Auth-DEBUG] cookie header:', req.headers.cookie ? req.headers.cookie.substring(0, 60) + '...' : 'MISSING');
     if (authHeader && authHeader.startsWith('Bearer ')) {
       sessionCookie = authHeader.substring(7); // 移除 "Bearer " 前缀
     }
@@ -125,23 +180,19 @@ class SDKServer {
       sessionCookie = cookies.get(COOKIE_NAME);
     }
     
-    console.log('[Auth-DEBUG2] sessionCookie:', sessionCookie ? sessionCookie.substring(0, 30) + '...' : 'UNDEFINED');
     const session = await this.verifySession(sessionCookie);
-    console.log('[Auth-DEBUG2] session result:', session ? JSON.stringify(session).substring(0, 60) : 'NULL');
 
     if (!session) {
       throw ForbiddenError("Invalid session cookie");
     }
 
-    const sessionUserId = session.userId;
-    const signedInAt = new Date();
-    console.log('[Auth-DEBUG3] looking up userId:', sessionUserId);
-    let user;
+    const sessionUserId = parseInt(session.userId, 10);
+    let user: User | undefined;
     try {
-      user = await db.getUserById(parseInt(sessionUserId));
-      console.log('[Auth-DEBUG3] getUserById result:', user ? user.username : 'NOT_FOUND');
+      user = await db.getUserById(sessionUserId);
+      if (user) this.cacheUser(user);
     } catch (e: any) {
-      console.error('[Auth-DEBUG3] getUserById ERROR:', e.message);
+      console.error('[Auth] User lookup failed:', e.message);
       throw e;
     }
 
@@ -149,7 +200,7 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
-    await db.updateUserLastSignedIn(user.id, signedInAt);
+    this.refreshLastSignedIn(user.id);
 
     return user;
   }

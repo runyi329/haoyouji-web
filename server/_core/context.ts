@@ -1,7 +1,6 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
-import * as db from "../db";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -72,7 +71,7 @@ export async function createContext(
     (user.role === 'super_admin' || user.role === 'admin' || user.role === 'parent')
   ) {
     try {
-      const targetUser = await db.getUserById(viewAsUserId);
+      const targetUser = await sdk.getCachedUserById(viewAsUserId);
       if (targetUser) {
         user = targetUser as User;
         isViewingAs = true;
