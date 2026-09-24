@@ -44,7 +44,9 @@ export default function MultiAssetWalletTransactions() {
   const historyQuery = trpc.recharge.getMultiAssetHistory.useQuery({ limit: 100 }, { staleTime: 15_000 });
   const asset = AI_WALLET_ASSET_CATALOG.find((item) => item.code === assetCode);
   const balance = (balancesQuery.data ?? []).find((item: any) => String(item.assetCode).toUpperCase() === assetCode) as any;
-  const amount = Number(balance?.availableBalance ?? 0);
+  const availableAmount = Number(balance?.availableBalance ?? 0);
+  const frozenAmount = Number(balance?.frozenBalance ?? 0);
+  const amount = Number(balance?.totalBalance ?? (availableAmount + frozenAmount));
   const priceUsdt = Number(balance?.priceUsdt ?? 0);
   const history = useMemo(() => (historyQuery.data ?? [])
     .filter((item: any) => String(item.assetCode).toUpperCase() === assetCode)
@@ -100,6 +102,7 @@ export default function MultiAssetWalletTransactions() {
           <p className="mt-2 text-xs" style={{ color: theme.muted }}>
             {priceUsdt > 0 ? `约等于 ${(amount * priceUsdt).toLocaleString("zh-CN", { maximumFractionDigits: 2 })} USDT · 行情仅用于展示` : `${asset?.name || assetCode} · 行情加载中`}
           </p>
+          {frozenAmount > 0 && <p className="mt-1 text-xs" style={{ color: theme.gold }}>可用 {availableAmount.toLocaleString("zh-CN", { maximumFractionDigits: 8 })} · 担保冻结 {frozenAmount.toLocaleString("zh-CN", { maximumFractionDigits: 8 })} {assetCode}</p>}
         </section>
 
         <div className="flex rounded-xl p-1" style={{ background: "rgba(255,255,255,.05)", border: `1px solid ${theme.border}` }}>

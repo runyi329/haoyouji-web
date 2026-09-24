@@ -82,6 +82,11 @@ import { versionRouter } from "./version-router";
 import { aiWalletRouter, assertAiWalletOperationEnabled } from "./ai-wallet-router";
 import { AI_WALLET_MARKET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
 import * as dbMultiAssetWallet from "./db-multi-asset-wallet";
+
+function asRows(result: any): any[] {
+  if (Array.isArray(result?.[0])) return result[0];
+  return Array.isArray(result) ? result : [];
+}
 // // 在应用启动时初始化数据库
 // initDatabase().catch(err => {
 //   console.error("[DB Init] Failed to initialize database:", err);
@@ -19053,6 +19058,120 @@ ${klinesSummary}
         };
       }),
 
+    // 52号融资订单的钱包担保：仅管理员可读取订单拥有者的可用/冻结数字资产，绝不暴露非成员资产。
+    funderGetWalletCollateralBalances: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52), userId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const [roleRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1`,
+          [input.ledgerId, ctx.user.id],
+        );
+        const role = asRows(roleRows)[0]?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可查看钱包担保资产' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT 1 FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1`,
+          [input.ledgerId, input.userId],
+        );
+        if (!asRows(memberRows)[0]) throw new TRPCError({ code: 'FORBIDDEN', message: '仅可选择52号账本成员的钱包资产' });
+        return await dbMultiAssetWallet.getUserMultiAssetBalances(input.userId);
+      }),
+
+    // 保存钱包担保：订单字段与“可用→冻结”在一个数据库事务中完成，禁止余额被重复担保或转出。
+    funderSaveWalletCollateral: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        orderId: z.number().int().positive(),
+        userId: z.number().int().positive(),
+        assets: z.array(z.object({
+          coin: z.enum(AI_WALLET_SETTLEMENT_ASSETS),
+          qty: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '担保数量格式无效，最多支持18位小数'),
+        })).max(AI_WALLET_SETTLEMENT_ASSETS.length),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const transaction = conn as any;
+        try {
+          await transaction.beginTransaction();
+          const [roleRows] = await transaction.execute(
+            `SELECT role FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1 FOR UPDATE`,
+            [input.ledgerId, ctx.user.id],
+          );
+          const role = asRows(roleRows)[0]?.role;
+          if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可配置钱包担保' });
+          const [orderRows] = await transaction.execute(
+            `SELECT id, user_id, status, deleted_at
+               FROM ledger_orders
+              WHERE id = ? AND ledger_id = ?
+              LIMIT 1 FOR UPDATE`,
+            [input.orderId, input.ledgerId],
+          );
+          const order = asRows(orderRows)[0];
+          if (!order || order.deleted_at) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在或已删除' });
+          if (String(order.status) !== 'active') throw new TRPCError({ code: 'BAD_REQUEST', message: '仅持有中的订单可冻结钱包担保物' });
+
+          const primaryOwnerId = Number(order.user_id);
+          let isOrderHolder = primaryOwnerId === input.userId;
+          let participantRow: any = null;
+          if (!isOrderHolder) {
+            const [participantRows] = await transaction.execute(
+              `SELECT id, order_snapshot
+                 FROM ledger_order_participants
+                WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> 'inactive'
+                LIMIT 1 FOR UPDATE`,
+              [input.orderId, input.ledgerId, input.userId],
+            );
+            participantRow = asRows(participantRows)[0];
+            isOrderHolder = Boolean(participantRow);
+          }
+          if (!isOrderHolder) throw new TRPCError({ code: 'FORBIDDEN', message: '钱包担保物必须属于本订单的拥有者或参与者' });
+
+          const normalizedAssets = input.assets.map((asset) => ({ coin: asset.coin, qty: asset.qty, source: 'wallet', note: '钱包担保冻结' }));
+          const result = await dbMultiAssetWallet.syncWalletCollateralLocks({
+            ledgerId: input.ledgerId,
+            orderId: input.orderId,
+            userId: input.userId,
+            assets: input.assets,
+            actorUserId: ctx.user.id,
+            transaction,
+          });
+          if (primaryOwnerId === input.userId) {
+            await transaction.execute(
+              `UPDATE ledger_orders SET collateral_assets = ? WHERE id = ? AND ledger_id = ?`,
+              [normalizedAssets.length > 0 ? JSON.stringify(normalizedAssets) : null, input.orderId, input.ledgerId],
+            );
+          } else {
+            let snapshot: Record<string, unknown> = {};
+            try { snapshot = participantRow?.order_snapshot ? JSON.parse(String(participantRow.order_snapshot)) : {}; } catch {}
+            snapshot.collateral_assets = normalizedAssets.length > 0 ? JSON.stringify(normalizedAssets) : null;
+            await transaction.execute(
+              `UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ?`,
+              [JSON.stringify(snapshot), Number(participantRow.id)],
+            );
+          }
+          await transaction.execute(`CREATE TABLE IF NOT EXISTS ledger_order_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY, ledger_id INT NOT NULL, order_id INT NOT NULL, operator_id INT NOT NULL,
+            action VARCHAR(50) NOT NULL, before_data TEXT DEFAULT NULL, after_data TEXT DEFAULT NULL, note TEXT DEFAULT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_order_id (order_id), INDEX idx_ledger_id (ledger_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+          await transaction.execute(
+            `INSERT INTO ledger_order_logs (ledger_id, order_id, operator_id, action, after_data, note)
+             VALUES (?, ?, ?, 'wallet_collateral_sync', ?, ?)`,
+            [input.ledgerId, input.orderId, ctx.user.id, JSON.stringify(normalizedAssets), `钱包担保同步：${normalizedAssets.map((asset) => `${asset.qty} ${asset.coin}`).join(', ') || '已解除'}`],
+          );
+          await transaction.commit();
+          return { success: true, locks: result.locks };
+        } catch (error: any) {
+          try { await transaction.rollback(); } catch {}
+          if (error instanceof TRPCError) throw error;
+          throw new TRPCError({ code: 'BAD_REQUEST', message: error?.message || '钱包担保保存失败' });
+        } finally {
+          transaction.release?.();
+        }
+      }),
+
     // 管理员删除资方资产订单
     funderDeleteAssetOrder: protectedProcedure
       .input(z.object({
@@ -19062,53 +19181,68 @@ ${klinesSummary}
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
-        // 验证管理员权限
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         await ensureFunderParticipantSnapshotColumns();
-        const conn = await getDbConnection();
+        const conn = await getDbTransactionConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-        const [orderRows] = await conn.execute(
-          'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1',
-          [input.id, input.ledgerId]
-        ) as any;
-        const order = Array.isArray(orderRows) ? orderRows[0] : null;
-        if (!order) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在或已删除' });
-        const [participantRows] = await conn.execute(
-          "SELECT id, user_id, role, order_snapshot FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive'",
-          [input.id, input.ledgerId]
-        ) as any;
-        const participants = Array.isArray(participantRows) ? participantRows : [];
-        if (input.participantAction === 'retain') {
-          await conn.execute(
-            "UPDATE ledger_order_participants SET parent_archive_state = 'retained', updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive'",
+        const transaction = conn as any;
+        try {
+          await transaction.beginTransaction();
+          const [orderRows] = await transaction.execute(
+            'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
             [input.id, input.ledgerId]
-          );
-          await conn.execute('UPDATE ledger_orders SET deleted_at = NOW() WHERE id = ? AND ledger_id = ?', [input.id, input.ledgerId]);
-        } else {
-          const settledAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-          for (const participant of participants) {
-            const snapshot = {
-              ...buildFunderParticipantSnapshot(order),
-              ...(parseFunderParticipantSnapshot(participant.order_snapshot) || {}),
-              status: 'settled',
-              settled_at: settledAt,
-            };
-            await conn.execute(
-              `UPDATE ledger_order_participants SET order_snapshot = ?, previous_role = role, role = 'inactive',
-               parent_archive_state = 'settled', updated_at = NOW() WHERE id = ?`,
-              [JSON.stringify(snapshot), participant.id]
+          ) as any;
+          const order = Array.isArray(orderRows) ? orderRows[0] : null;
+          if (!order) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在或已删除' });
+          const [participantRows] = await transaction.execute(
+            "SELECT id, user_id, role, order_snapshot FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive' FOR UPDATE",
+            [input.id, input.ledgerId]
+          ) as any;
+          const participants = Array.isArray(participantRows) ? participantRows : [];
+          if (input.participantAction === 'retain') {
+            await transaction.execute(
+              "UPDATE ledger_order_participants SET parent_archive_state = 'retained', updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive'",
+              [input.id, input.ledgerId]
+            );
+            await transaction.execute('UPDATE ledger_orders SET deleted_at = NOW() WHERE id = ? AND ledger_id = ?', [input.id, input.ledgerId]);
+          } else {
+            const settledAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+            for (const participant of participants) {
+              const snapshot = {
+                ...buildFunderParticipantSnapshot(order),
+                ...(parseFunderParticipantSnapshot(participant.order_snapshot) || {}),
+                status: 'settled',
+                settled_at: settledAt,
+              };
+              await transaction.execute(
+                `UPDATE ledger_order_participants SET order_snapshot = ?, previous_role = role, role = 'inactive',
+                 parent_archive_state = 'settled', updated_at = NOW() WHERE id = ?`,
+                [JSON.stringify(snapshot), participant.id]
+              );
+            }
+            await transaction.execute(
+              "UPDATE ledger_orders SET status = 'settled', settled_at = ?, deleted_at = NOW() WHERE id = ? AND ledger_id = ?",
+              [settledAt, input.id, input.ledgerId]
             );
           }
-          await conn.execute(
-            "UPDATE ledger_orders SET status = 'settled', settled_at = ?, deleted_at = NOW() WHERE id = ? AND ledger_id = ?",
-            [settledAt, input.id, input.ledgerId]
-          );
+          if (input.ledgerId === 52) {
+            await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
+              ledgerId: 52, orderId: input.id, actorUserId: ctx.user.id, reason: 'order_deleted', transaction,
+            });
+          }
+          await transaction.commit();
+          return { success: true, participantCount: participants.length, participantAction: input.participantAction };
+        } catch (error: any) {
+          try { await transaction.rollback(); } catch {}
+          if (error instanceof TRPCError) throw error;
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error?.message || '删除订单失败' });
+        } finally {
+          transaction.release?.();
         }
-        return { success: true, participantCount: participants.length, participantAction: input.participantAction };
       }),
 
     // 获取已删除的订单（回收站）
@@ -19152,6 +19286,17 @@ ${klinesSummary}
         await ensureFunderParticipantSnapshotColumns();
         const conn = await getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        if (input.ledgerId === 52) {
+          const [orderRows] = await (conn as any).execute(
+            'SELECT collateral_assets FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NOT NULL LIMIT 1',
+            [input.id, input.ledgerId],
+          );
+          let collateralAssets: any[] = [];
+          try { collateralAssets = asRows(orderRows)[0]?.collateral_assets ? JSON.parse(String(asRows(orderRows)[0].collateral_assets)) : []; } catch {}
+          if (collateralAssets.some((asset: any) => asset?.source === 'wallet')) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '该订单的钱包担保已在删除时解除；请先恢复订单，再重新选择并冻结钱包担保物' });
+          }
+        }
         await conn.execute('UPDATE ledger_orders SET deleted_at = NULL WHERE id = ? AND ledger_id = ?', [input.id, input.ledgerId]);
         const [archivedRows] = await conn.execute(
           "SELECT id, previous_role, order_snapshot, parent_archive_state FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ? AND parent_archive_state IN ('retained','settled')",
@@ -20277,6 +20422,30 @@ ${klinesSummary}
           if (shouldSyncParticipantSnapshot) await conn.beginTransaction();
 
           await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
+          if (input.ledgerId === 52 && input.status === 'settled') {
+            await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
+              ledgerId: 52,
+              orderId: input.id,
+              actorUserId: ctx.user.id,
+              reason: 'order_settled',
+              transaction: conn,
+            });
+          }
+          if (input.ledgerId === 52 && input.status === 'active') {
+            const [walletSourceRows] = await conn.execute(
+              'SELECT collateral_assets FROM ledger_orders WHERE id = ? AND ledger_id = ? LIMIT 1',
+              [input.id, input.ledgerId],
+            ) as any;
+            const walletSourceOrder = Array.isArray(walletSourceRows) ? walletSourceRows[0] : null;
+            let collateralAssets: any[] = [];
+            try { collateralAssets = walletSourceOrder?.collateral_assets ? JSON.parse(String(walletSourceOrder.collateral_assets)) : []; } catch {}
+            if (collateralAssets.some((asset: any) => asset?.source === 'wallet')) {
+              const activeLocks = await dbMultiAssetWallet.getActiveWalletCollateralLocks(52, input.id);
+              if (activeLocks.length === 0) {
+                throw new TRPCError({ code: 'BAD_REQUEST', message: '该订单的钱包担保已随结清解除；恢复持有前请重新绑定并冻结钱包担保物' });
+              }
+            }
+          }
 
           // 融资付息仅为记账展示。主订单结清/恢复时同步状态；担保物更新时同步默认担保字段。
           // 参与者各自的金额、利率、备注和结息记录仍完整保留在独立快照中。
@@ -21634,10 +21803,30 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-        await db.execute(
-          sql`UPDATE ledger_orders SET deleted_at = NOW() WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND deleted_at IS NULL`
-        );
-        return { success: true };
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const transaction = conn as any;
+        try {
+          await transaction.beginTransaction();
+          const [result] = await transaction.execute(
+            'UPDATE ledger_orders SET deleted_at = NOW() WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL',
+            [input.id, input.ledgerId],
+          );
+          if (Number((result as any).affectedRows || 0) !== 1) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在或已删除' });
+          if (input.ledgerId === 52) {
+            await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
+              ledgerId: 52, orderId: input.id, actorUserId: ctx.user.id, reason: 'order_deleted', transaction,
+            });
+          }
+          await transaction.commit();
+          return { success: true };
+        } catch (error: any) {
+          try { await transaction.rollback(); } catch {}
+          if (error instanceof TRPCError) throw error;
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error?.message || '删除订单失败' });
+        } finally {
+          transaction.release?.();
+        }
       }),
 
     // 融资付息订单结息记录 - 新增

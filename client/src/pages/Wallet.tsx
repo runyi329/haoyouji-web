@@ -645,10 +645,10 @@ export default function Wallet() {
   const configuredSettlementAssets = new Set(
     ((walletPolicyQuery.data?.visibleAssets ?? []) as string[]).map((asset) => String(asset).toUpperCase()),
   );
-  // 数字币账户只收纳项目允许且用户实际持有的币种，避免出现一排 0 余额账户。
+  // 数字币账户只收纳项目允许且用户实际持有的币种；冻结担保也属于持有资产，不能因可用额为0而消失。
   const visibleMultiAssetBalances = multiAssetBalances.filter((asset) =>
     configuredSettlementAssets.has(String(asset.assetCode || "").toUpperCase())
-    && Number(asset.availableBalance ?? 0) > 0,
+    && Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0))) > 0,
   );
   const hasDigitalAssets = visibleMultiAssetBalances.length > 0;
   const digitalHistoryAssetCodes = Array.from(new Set([
@@ -659,7 +659,7 @@ export default function Wallet() {
     && configuredSettlementAssets.has(asset)
   ));
   const cryptoTotalUsdt = visibleMultiAssetBalances.reduce(
-    (total, asset) => total + Number(asset.availableBalance ?? 0) * Number(asset.priceUsdt ?? 0),
+    (total, asset) => total + Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0))) * Number(asset.priceUsdt ?? 0),
     0,
   );
   // 外币独立账本尚未开通真实余额与流水；入口先保留为禁用态，后续接入 USD/HKD/JPY 等资产后再自动激活。
@@ -1096,7 +1096,9 @@ export default function Wallet() {
               {visibleMultiAssetBalances.map((asset: any, index: number) => {
                 const assetCode = String(asset.assetCode || "").toUpperCase() as AiWalletSettlementAsset;
                 const definition = AI_WALLET_ASSET_CATALOG.find((item) => item.code === assetCode);
-                const amount = Number(asset.availableBalance ?? 0);
+                const amount = Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0)));
+                const availableAmount = Number(asset.availableBalance ?? 0);
+                const frozenAmount = Number(asset.frozenBalance ?? 0);
                 const valueUsdt = amount * Number(asset.priceUsdt ?? 0);
                 return (
                   <div key={assetCode} className="py-3.5" style={{ borderBottom: index < visibleMultiAssetBalances.length - 1 ? `1px solid ${G.divider}` : "none" }}>
@@ -1112,6 +1114,7 @@ export default function Wallet() {
                         <div>
                         <div className="text-xl font-bold tabular-nums" style={{ color: G.goldLight }}>{mask(amount.toLocaleString("zh-CN", { maximumFractionDigits: 8 }))} <span className="text-xs font-semibold">{assetCode}</span></div>
                         <div className="text-[11px]" style={{ color: G.whiteDim }}>{Number(asset.priceUsdt ?? 0) > 0 ? `≈ ${mask(valueUsdt.toLocaleString("zh-CN", { maximumFractionDigits: 2 }))} U` : "行情加载中"}</div>
+                        {frozenAmount > 0 && <div className="mt-0.5 text-[10px]" style={{ color: G.goldDim }}>可用 {mask(availableAmount.toLocaleString("zh-CN", { maximumFractionDigits: 8 }))} · 担保冻结 {mask(frozenAmount.toLocaleString("zh-CN", { maximumFractionDigits: 8 }))}</div>}
                         </div>
                       </div>
                     </div>
@@ -1198,18 +1201,20 @@ export default function Wallet() {
             {visibleMultiAssetBalances.map((asset: any) => {
               const assetCode = String(asset.assetCode || "").toUpperCase() as AiWalletSettlementAsset;
               const amount = Number(asset.availableBalance ?? 0);
+              const frozenAmount = Number(asset.frozenBalance ?? 0);
               const valueUsdt = amount * Number(asset.priceUsdt ?? 0);
               return (
                 <button
                   key={`transfer-${assetCode}`}
                   type="button"
+                  disabled={amount <= 0}
                   onClick={() => { setTransferAsset(assetCode); setModal("transfer"); }}
-                  className="flex w-full items-center justify-between rounded-xl px-3.5 py-3 text-left active:scale-[0.99]"
+                  className="flex w-full items-center justify-between rounded-xl px-3.5 py-3 text-left active:scale-[0.99] disabled:opacity-45"
                   style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}` }}
                 >
                   <div>
                     <div className="text-sm font-semibold" style={{ color: G.white }}>{assetCode}</div>
-                    <div className="mt-0.5 text-[11px]" style={{ color: G.whiteDim }}>{Number(asset.priceUsdt ?? 0) > 0 ? `≈ ${valueUsdt.toLocaleString("zh-CN", { maximumFractionDigits: 2 })} U` : "行情加载中"}</div>
+                    <div className="mt-0.5 text-[11px]" style={{ color: G.whiteDim }}>{frozenAmount > 0 ? `可转 ${amount.toLocaleString("zh-CN", { maximumFractionDigits: 8 })} · 担保冻结 ${frozenAmount.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}` : Number(asset.priceUsdt ?? 0) > 0 ? `≈ ${valueUsdt.toLocaleString("zh-CN", { maximumFractionDigits: 2 })} U` : "行情加载中"}</div>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-lg font-bold tabular-nums" style={{ color: G.goldLight }}>{amount.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}</span>

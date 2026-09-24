@@ -15,6 +15,8 @@ export type MultiAssetBalance = {
   assetCode: MultiAssetWalletAsset;
   assetName: string;
   availableBalance: string;
+  frozenBalance: string;
+  totalBalance: string;
   updatedAt: string;
 };
 
@@ -26,10 +28,25 @@ export type MultiAssetHistoryItem = {
   assetName: string;
   amount: string;
   balanceAfter: string;
-  eventType: "admin_adjustment" | "transfer_in" | "transfer_out";
+  eventType: "admin_adjustment" | "transfer_in" | "transfer_out" | "collateral_lock" | "collateral_release";
   note: string;
   sourceLedgerId: number | null;
   createdAt: string;
+};
+
+export type WalletCollateralAssetInput = {
+  coin: string;
+  qty: string;
+};
+
+export type WalletCollateralLock = {
+  id: number;
+  ledgerId: number;
+  orderId: number;
+  userId: number;
+  assetCode: MultiAssetWalletAsset;
+  amount: string;
+  status: "active" | "released";
 };
 
 const DECIMAL_PATTERN = /^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/;
@@ -78,6 +95,10 @@ function buildTransferNo(): string {
   return `WAT${Date.now().toString(36).toUpperCase()}${randomInt(100_000, 999_999)}`;
 }
 
+function buildCollateralRequestId(): string {
+  return `WCL${Date.now().toString(36).toUpperCase()}${randomInt(100_000, 999_999)}`;
+}
+
 function entryResult(row: any): MultiAssetHistoryItem {
   const assetCode = normalizeMultiAssetWalletAsset(row.asset_code);
   const eventType = String(row.event_type);
@@ -89,7 +110,9 @@ function entryResult(row: any): MultiAssetHistoryItem {
     assetName: getAssetName(assetCode),
     amount: String(row.amount),
     balanceAfter: String(row.balance_after),
-    eventType: eventType === "transfer_in" || eventType === "transfer_out" ? eventType : "admin_adjustment",
+    eventType: eventType === "transfer_in" || eventType === "transfer_out" || eventType === "collateral_lock" || eventType === "collateral_release"
+      ? eventType
+      : "admin_adjustment",
     note: String(row.note || ""),
     sourceLedgerId: row.source_ledger_id == null ? null : Number(row.source_ledger_id),
     createdAt: row.created_at ? String(row.created_at) : "",
@@ -115,6 +138,19 @@ export async function ensureMultiAssetWalletInfrastructure(): Promise<void> {
           KEY idx_ai_wallet_asset_balance_updated (updated_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI智能钱包多资产当前余额；不含CNY与USDT历史余额'
       `);
+      const [balanceColumns] = await (conn as any).execute(`
+        SELECT column_name
+          FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'ai_wallet_asset_balances'
+      `) as any[];
+      const hasFrozenBalance = asRows(balanceColumns).some((row) => String(row.column_name || row.COLUMN_NAME) === 'frozen_balance');
+      if (!hasFrozenBalance) {
+        try {
+          await (conn as any).execute(`ALTER TABLE ai_wallet_asset_balances ADD COLUMN frozen_balance DECIMAL(36,18) NOT NULL DEFAULT 0 AFTER available_balance`);
+        } catch (error: any) {
+          if (error?.code !== 'ER_DUP_FIELDNAME') throw error;
+        }
+      }
       await (conn as any).execute(`
         CREATE TABLE IF NOT EXISTS ai_wallet_asset_entries (
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -159,6 +195,27 @@ export async function ensureMultiAssetWalletInfrastructure(): Promise<void> {
           KEY idx_ai_wallet_asset_transfer_asset (asset_code)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI智能钱包多资产站内转账主记录'
       `);
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ai_wallet_asset_collateral_locks (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+          ledger_id INT NOT NULL,
+          order_id BIGINT UNSIGNED NOT NULL,
+          user_id INT NOT NULL,
+          asset_code VARCHAR(16) NOT NULL,
+          amount DECIMAL(36,18) NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'active',
+          created_by INT NULL,
+          released_by INT NULL,
+          released_reason VARCHAR(64) NULL,
+          released_at DATETIME NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          UNIQUE KEY uk_wallet_collateral_active_order_asset (ledger_id, order_id, user_id, asset_code),
+          KEY idx_wallet_collateral_user_asset_status (user_id, asset_code, status),
+          KEY idx_wallet_collateral_order_status (ledger_id, order_id, status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='52号融资订单的钱包数字资产担保冻结；余额不扣除，仅限制可用额'
+      `);
     })().catch((error) => {
       multiAssetWalletInfrastructureReady = null;
       throw error;
@@ -178,7 +235,7 @@ async function ensureBalanceRow(transaction: any, userId: number, assetCode: Mul
 
 async function getLockedBalance(transaction: any, userId: number, assetCode: MultiAssetWalletAsset) {
   const [rows] = await transaction.execute(
-    `SELECT id, available_balance
+    `SELECT id, available_balance, frozen_balance
        FROM ai_wallet_asset_balances
       WHERE user_id = ? AND asset_code = ?
       LIMIT 1 FOR UPDATE`,
@@ -199,9 +256,11 @@ export async function getUserMultiAssetBalances(userId: number): Promise<MultiAs
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接失败");
   const [rows] = await (conn as any).execute(
-    `SELECT asset_code, available_balance, updated_at
+    `SELECT asset_code, available_balance, frozen_balance,
+            CAST(available_balance + frozen_balance AS CHAR) AS total_balance,
+            updated_at
        FROM ai_wallet_asset_balances
-      WHERE user_id = ? AND available_balance <> 0
+      WHERE user_id = ? AND (available_balance <> 0 OR frozen_balance <> 0)
       ORDER BY updated_at DESC, asset_code ASC`,
     [userId],
   );
@@ -211,6 +270,8 @@ export async function getUserMultiAssetBalances(userId: number): Promise<MultiAs
       assetCode,
       assetName: getAssetName(assetCode),
       availableBalance: String(row.available_balance),
+      frozenBalance: String(row.frozen_balance ?? 0),
+      totalBalance: String(row.total_balance ?? row.available_balance),
       updatedAt: row.updated_at ? String(row.updated_at) : "",
     };
   });
@@ -225,9 +286,11 @@ export async function getMultiAssetBalancesForUsers(userIds: number[]): Promise<
   if (!conn) throw new Error("数据库连接失败");
   const placeholders = ids.map(() => "?").join(",");
   const [rows] = await (conn as any).execute(
-    `SELECT user_id, asset_code, available_balance, updated_at
+    `SELECT user_id, asset_code, available_balance, frozen_balance,
+            CAST(available_balance + frozen_balance AS CHAR) AS total_balance,
+            updated_at
        FROM ai_wallet_asset_balances
-      WHERE user_id IN (${placeholders}) AND available_balance <> 0
+      WHERE user_id IN (${placeholders}) AND (available_balance <> 0 OR frozen_balance <> 0)
       ORDER BY updated_at DESC, asset_code ASC`,
     ids,
   );
@@ -239,6 +302,8 @@ export async function getMultiAssetBalancesForUsers(userIds: number[]): Promise<
       assetCode,
       assetName: getAssetName(assetCode),
       availableBalance: String(row.available_balance),
+      frozenBalance: String(row.frozen_balance ?? 0),
+      totalBalance: String(row.total_balance ?? row.available_balance),
       updatedAt: row.updated_at ? String(row.updated_at) : "",
     });
     result.set(userId, next);
@@ -340,6 +405,302 @@ export async function adjustMultiAssetBalance(params: {
   } finally {
     transaction.release?.();
   }
+}
+
+function normalizeWalletDecimal(value: unknown): string {
+  const input = String(value ?? "").trim();
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(input)) throw new Error("担保数量格式无效，最多支持 18 位小数");
+  const [integerPart, fractionalPart = ""] = input.split(".");
+  const normalizedInteger = integerPart.replace(/^0+(?=\d)/, "") || "0";
+  const normalizedFraction = fractionalPart.replace(/0+$/, "");
+  return normalizedFraction ? `${normalizedInteger}.${normalizedFraction}` : normalizedInteger;
+}
+
+function compareWalletDecimals(left: string, right: string): number {
+  const [leftInteger, leftFraction = ""] = normalizeWalletDecimal(left).split(".");
+  const [rightInteger, rightFraction = ""] = normalizeWalletDecimal(right).split(".");
+  if (leftInteger.length !== rightInteger.length) return leftInteger.length > rightInteger.length ? 1 : -1;
+  if (leftInteger !== rightInteger) return leftInteger > rightInteger ? 1 : -1;
+  const paddedLeft = leftFraction.padEnd(18, "0");
+  const paddedRight = rightFraction.padEnd(18, "0");
+  if (paddedLeft === paddedRight) return 0;
+  return paddedLeft > paddedRight ? 1 : -1;
+}
+
+function subtractWalletDecimals(larger: string, smaller: string): string {
+  if (compareWalletDecimals(larger, smaller) < 0) throw new Error("担保数量不能为负数");
+  const [largeInteger, largeFraction = ""] = normalizeWalletDecimal(larger).split(".");
+  const [smallInteger, smallFraction = ""] = normalizeWalletDecimal(smaller).split(".");
+  const left = `${largeInteger}${largeFraction.padEnd(18, "0")}`.padStart(36, "0");
+  const right = `${smallInteger}${smallFraction.padEnd(18, "0")}`.padStart(36, "0");
+  let borrow = 0;
+  let output = "";
+  for (let index = left.length - 1; index >= 0; index -= 1) {
+    let digit = Number(left[index]) - borrow - Number(right[index]);
+    if (digit < 0) { digit += 10; borrow = 1; } else borrow = 0;
+    output = String(digit) + output;
+  }
+  const integerPart = output.slice(0, -18).replace(/^0+(?=\d)/, "") || "0";
+  const fractionalPart = output.slice(-18).replace(/0+$/, "");
+  return fractionalPart ? `${integerPart}.${fractionalPart}` : integerPart;
+}
+
+function normalizeWalletCollateralAssets(items: WalletCollateralAssetInput[]): Array<{ assetCode: MultiAssetWalletAsset; amount: string }> {
+  const seen = new Set<string>();
+  return items.map((item) => {
+    const assetCode = normalizeMultiAssetWalletAsset(item.coin);
+    if (seen.has(assetCode)) throw new Error(`同一币种只能作为一条钱包担保物：${assetCode}`);
+    seen.add(assetCode);
+    const amount = normalizeWalletDecimal(item.qty);
+    if (compareWalletDecimals(amount, "0") <= 0) throw new Error(`${assetCode} 担保数量必须大于 0`);
+    return { assetCode, amount };
+  }).sort((left, right) => left.assetCode.localeCompare(right.assetCode));
+}
+
+async function appendCollateralEntry(transaction: any, params: {
+  userId: number;
+  assetCode: MultiAssetWalletAsset;
+  amount: string;
+  balanceAfter: string;
+  eventType: "collateral_lock" | "collateral_release";
+  ledgerId: number;
+  orderId: number;
+  actorUserId: number;
+  requestId: string;
+}) {
+  const entryNo = buildEntryNo();
+  const actionLabel = params.eventType === "collateral_lock" ? "担保冻结" : "担保解除";
+  await transaction.execute(
+    `INSERT INTO ai_wallet_asset_entries
+      (entry_no, request_id, user_id, asset_code, amount, balance_after, event_type, note, source_ledger_id, actor_user_id)
+     VALUES (?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), ?, ?, ?, ?, ?)`,
+    [
+      entryNo,
+      params.requestId,
+      params.userId,
+      params.assetCode,
+      params.amount,
+      params.balanceAfter,
+      params.eventType,
+      `${actionLabel}：52号融资订单 #${params.orderId}`,
+      params.ledgerId,
+      params.actorUserId,
+    ],
+  );
+}
+
+/**
+ * 将一张52号融资订单的钱包担保同步为目标数量。
+ * 仅在可用余额与冻结余额之间搬移，不会改变用户的总持币；同一币种不能同时锁给另一张订单。
+ * 传入 transaction 时由调用方与订单更新共用同一事务，避免出现订单已保存、担保未冻结的状态。
+ */
+export async function syncWalletCollateralLocks(params: {
+  ledgerId: number;
+  orderId: number;
+  userId: number;
+  assets: WalletCollateralAssetInput[];
+  actorUserId: number;
+  transaction?: any;
+}): Promise<{ locks: WalletCollateralLock[] }> {
+  if (params.ledgerId !== 52) throw new Error("钱包担保冻结仅支持 52 号账本");
+  if (!Number.isInteger(params.orderId) || params.orderId <= 0 || !Number.isInteger(params.userId) || params.userId <= 0) {
+    throw new Error("订单或担保用户无效");
+  }
+  const desiredAssets = normalizeWalletCollateralAssets(params.assets || []);
+  await ensureMultiAssetWalletInfrastructure();
+  const ownConnection = !params.transaction;
+  const conn = params.transaction || await getDbTransactionConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const transaction = conn as any;
+  try {
+    if (ownConnection) await transaction.beginTransaction();
+    await assertUserExists(transaction, params.userId);
+    const [lockRows] = await transaction.execute(
+      `SELECT id, asset_code, amount, status
+         FROM ai_wallet_asset_collateral_locks
+        WHERE ledger_id = ? AND order_id = ? AND user_id = ?
+        FOR UPDATE`,
+      [params.ledgerId, params.orderId, params.userId],
+    );
+    const existingByAsset = new Map<string, any>();
+    for (const row of asRows(lockRows)) existingByAsset.set(String(row.asset_code).toUpperCase(), row);
+    const desiredByAsset = new Map(desiredAssets.map((item) => [item.assetCode, item]));
+    const assetCodes = Array.from(new Set(Array.from(existingByAsset.keys()).concat(Array.from(desiredByAsset.keys()))))
+      .map((asset) => normalizeMultiAssetWalletAsset(asset))
+      .sort();
+
+    for (const assetCode of assetCodes) await ensureBalanceRow(transaction, params.userId, assetCode);
+    for (const assetCode of assetCodes) await getLockedBalance(transaction, params.userId, assetCode);
+
+    for (const assetCode of assetCodes) {
+      const existing = existingByAsset.get(assetCode);
+      const currentAmount = existing && String(existing.status) === "active" ? normalizeWalletDecimal(existing.amount) : "0";
+      const desiredAmount = desiredByAsset.has(assetCode) ? normalizeWalletDecimal(desiredByAsset.get(assetCode)!.amount) : "0";
+      const comparison = compareWalletDecimals(desiredAmount, currentAmount);
+      if (comparison > 0) {
+        const deltaText = subtractWalletDecimals(desiredAmount, currentAmount);
+        const [result] = await transaction.execute(
+          `UPDATE ai_wallet_asset_balances
+              SET available_balance = available_balance - CAST(? AS DECIMAL(36,18)),
+                  frozen_balance = frozen_balance + CAST(? AS DECIMAL(36,18)),
+                  updated_at = NOW()
+            WHERE user_id = ? AND asset_code = ?
+              AND available_balance >= CAST(? AS DECIMAL(36,18))`,
+          [deltaText, deltaText, params.userId, assetCode, deltaText],
+        );
+        if (Number((result as any).affectedRows || 0) !== 1) throw new Error(`${assetCode} 可用余额不足，无法冻结为担保物`);
+        const balance = await getLockedBalance(transaction, params.userId, assetCode);
+        await appendCollateralEntry(transaction, {
+          userId: params.userId, assetCode, amount: `-${deltaText}`, balanceAfter: String(balance.available_balance),
+          eventType: "collateral_lock", ledgerId: params.ledgerId, orderId: params.orderId,
+          actorUserId: params.actorUserId, requestId: `${buildCollateralRequestId()}_lock_${assetCode}`,
+        });
+      } else if (comparison < 0) {
+        const releaseText = subtractWalletDecimals(currentAmount, desiredAmount);
+        const [result] = await transaction.execute(
+          `UPDATE ai_wallet_asset_balances
+              SET available_balance = available_balance + CAST(? AS DECIMAL(36,18)),
+                  frozen_balance = frozen_balance - CAST(? AS DECIMAL(36,18)),
+                  updated_at = NOW()
+            WHERE user_id = ? AND asset_code = ?
+              AND frozen_balance >= CAST(? AS DECIMAL(36,18))`,
+          [releaseText, releaseText, params.userId, assetCode, releaseText],
+        );
+        if (Number((result as any).affectedRows || 0) !== 1) throw new Error(`${assetCode} 冻结余额异常，无法解除担保`);
+        const balance = await getLockedBalance(transaction, params.userId, assetCode);
+        await appendCollateralEntry(transaction, {
+          userId: params.userId, assetCode, amount: releaseText, balanceAfter: String(balance.available_balance),
+          eventType: "collateral_release", ledgerId: params.ledgerId, orderId: params.orderId,
+          actorUserId: params.actorUserId, requestId: `${buildCollateralRequestId()}_release_${assetCode}`,
+        });
+      }
+
+      if (compareWalletDecimals(desiredAmount, "0") > 0) {
+        if (existing) {
+          await transaction.execute(
+            `UPDATE ai_wallet_asset_collateral_locks
+                SET amount = CAST(? AS DECIMAL(36,18)), status = 'active', released_by = NULL, released_reason = NULL, released_at = NULL, updated_at = NOW()
+              WHERE id = ?`,
+            [desiredAmount, Number(existing.id)],
+          );
+        } else {
+          await transaction.execute(
+            `INSERT INTO ai_wallet_asset_collateral_locks
+              (ledger_id, order_id, user_id, asset_code, amount, status, created_by)
+             VALUES (?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), 'active', ?)`,
+            [params.ledgerId, params.orderId, params.userId, assetCode, desiredAmount, params.actorUserId],
+          );
+        }
+      } else if (existing && String(existing.status) === "active") {
+        await transaction.execute(
+          `UPDATE ai_wallet_asset_collateral_locks
+              SET status = 'released', released_by = ?, released_reason = 'collateral_changed', released_at = NOW(), updated_at = NOW()
+            WHERE id = ?`,
+          [params.actorUserId, Number(existing.id)],
+        );
+      }
+    }
+    if (ownConnection) await transaction.commit();
+    const [finalRows] = await transaction.execute(
+      `SELECT id, ledger_id, order_id, user_id, asset_code, amount, status
+         FROM ai_wallet_asset_collateral_locks
+        WHERE ledger_id = ? AND order_id = ? AND user_id = ? AND status = 'active'
+        ORDER BY asset_code ASC`,
+      [params.ledgerId, params.orderId, params.userId],
+    );
+    return {
+      locks: asRows(finalRows).map((row) => ({
+        id: Number(row.id), ledgerId: Number(row.ledger_id), orderId: Number(row.order_id), userId: Number(row.user_id),
+        assetCode: normalizeMultiAssetWalletAsset(row.asset_code), amount: String(row.amount), status: "active" as const,
+      })),
+    };
+  } catch (error) {
+    if (ownConnection) try { await transaction.rollback(); } catch {}
+    throw error;
+  } finally {
+    if (ownConnection) transaction.release?.();
+  }
+}
+
+/** 订单结清或移入回收站时释放全部钱包担保，不会改变总持币。 */
+export async function releaseWalletCollateralLocksForOrder(params: {
+  ledgerId: number;
+  orderId: number;
+  actorUserId: number;
+  reason: "order_settled" | "order_deleted";
+  transaction?: any;
+}): Promise<{ releasedCount: number }> {
+  if (params.ledgerId !== 52) return { releasedCount: 0 };
+  await ensureMultiAssetWalletInfrastructure();
+  const ownConnection = !params.transaction;
+  const conn = params.transaction || await getDbTransactionConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const transaction = conn as any;
+  try {
+    if (ownConnection) await transaction.beginTransaction();
+    const [lockRows] = await transaction.execute(
+      `SELECT id, user_id, asset_code, amount
+         FROM ai_wallet_asset_collateral_locks
+        WHERE ledger_id = ? AND order_id = ? AND status = 'active'
+        ORDER BY user_id ASC, asset_code ASC
+        FOR UPDATE`,
+      [params.ledgerId, params.orderId],
+    );
+    const locks = asRows(lockRows);
+    for (const lock of locks) {
+      const userId = Number(lock.user_id);
+      const assetCode = normalizeMultiAssetWalletAsset(lock.asset_code);
+      const amount = normalizeWalletDecimal(lock.amount);
+      await ensureBalanceRow(transaction, userId, assetCode);
+      await getLockedBalance(transaction, userId, assetCode);
+      const [result] = await transaction.execute(
+        `UPDATE ai_wallet_asset_balances
+            SET available_balance = available_balance + CAST(? AS DECIMAL(36,18)),
+                frozen_balance = frozen_balance - CAST(? AS DECIMAL(36,18)),
+                updated_at = NOW()
+          WHERE user_id = ? AND asset_code = ?
+            AND frozen_balance >= CAST(? AS DECIMAL(36,18))`,
+        [amount, amount, userId, assetCode, amount],
+      );
+      if (Number((result as any).affectedRows || 0) !== 1) throw new Error(`${assetCode} 冻结余额异常，无法随订单解除`);
+      const balance = await getLockedBalance(transaction, userId, assetCode);
+      await appendCollateralEntry(transaction, {
+        userId, assetCode, amount, balanceAfter: String(balance.available_balance), eventType: "collateral_release",
+        ledgerId: params.ledgerId, orderId: params.orderId, actorUserId: params.actorUserId,
+        requestId: `${buildCollateralRequestId()}_settled_${Number(lock.id)}`,
+      });
+      await transaction.execute(
+        `UPDATE ai_wallet_asset_collateral_locks
+            SET status = 'released', released_by = ?, released_reason = ?, released_at = NOW(), updated_at = NOW()
+          WHERE id = ?`,
+        [params.actorUserId, params.reason, Number(lock.id)],
+      );
+    }
+    if (ownConnection) await transaction.commit();
+    return { releasedCount: locks.length };
+  } catch (error) {
+    if (ownConnection) try { await transaction.rollback(); } catch {}
+    throw error;
+  } finally {
+    if (ownConnection) transaction.release?.();
+  }
+}
+
+export async function getActiveWalletCollateralLocks(ledgerId: number, orderId: number): Promise<WalletCollateralLock[]> {
+  await ensureMultiAssetWalletInfrastructure();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const [rows] = await (conn as any).execute(
+    `SELECT id, ledger_id, order_id, user_id, asset_code, amount, status
+       FROM ai_wallet_asset_collateral_locks
+      WHERE ledger_id = ? AND order_id = ? AND status = 'active'
+      ORDER BY user_id ASC, asset_code ASC`,
+    [ledgerId, orderId],
+  );
+  return asRows(rows).map((row) => ({
+    id: Number(row.id), ledgerId: Number(row.ledger_id), orderId: Number(row.order_id), userId: Number(row.user_id),
+    assetCode: normalizeMultiAssetWalletAsset(row.asset_code), amount: String(row.amount), status: "active" as const,
+  }));
 }
 
 export async function transferMultiAssetBalance(params: {

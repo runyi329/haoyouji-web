@@ -115,7 +115,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   // 标签输入状态
   const [tagInput, setTagInput] = useState('');
   // 担保货币列表：[{ coin: 'BTC', qty: '' }, ...]
-  const [collateralAssets, setCollateralAssets] = useState<{ coin: string; qty: string; note?: string }[]>([]);
+  const [collateralAssets, setCollateralAssets] = useState<{ coin: string; qty: string; note?: string; source?: 'wallet' }[]>([]);
   // 担保货币编辑模式：编辑已有订单时默认只读，点「编辑」才可改；新建订单时恒为可编辑
   const [collateralEditMode, setCollateralEditMode] = useState(false);
   // 共享担保模式：none=不共享, self=本人订单共享, cross=与他人共享（占位）
@@ -124,7 +124,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [shareConfirmModal, setShareConfirmModal] = useState<{ mode: 'self' | 'cross'; sharedOrders: any[] } | null>(null);
   // 37号标签可独立提供股票浮动盈亏和担保货币，二者不再互斥。
   // 未保存这两个开关的旧订单一律按 true 兼容，保持原有“同时引用”的行为。
-  const [collateralSourceMode, setCollateralSourceMode] = useState<'manual' | 'external'>('manual');
+  const [collateralSourceMode, setCollateralSourceMode] = useState<'manual' | 'wallet' | 'external'>('manual');
   const [collateralSource, setCollateralSource] = useState<{
     ledgerId: number;
     tagName: string;
@@ -381,6 +381,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const { data: funderUsers, isLoading: usersLoading } = trpc.ledger.funderGetFunderUsers.useQuery(
     { ledgerId, ...(adminOnly ? { roleFilter: "admin" as const } : {}), ...(financeOnly ? { financeOnly: true } : {}) },
     { enabled: ledgerId > 0 && isAdminUser }
+  );
+  const walletCollateralUserId = Number(
+    isSnapshotScopedEdit
+      ? (editingOrder?.participantInfo?.userId ?? editingOrder?.participantInfo?.user_id ?? 0)
+      : formData.userId,
+  );
+  const walletCollateralBalancesQuery = trpc.ledger.funderGetWalletCollateralBalances.useQuery(
+    { ledgerId: 52, userId: walletCollateralUserId || 1 },
+    {
+      enabled: ledgerId === 52 && showForm && collateralSourceMode === 'wallet' && walletCollateralUserId > 0 && isAdminUser,
+      staleTime: 5_000,
+    },
   );
 
   const { data: assetOrdersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.funderGetAssetOrders.useQuery(
@@ -703,13 +715,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       : computedCollateralValue - previewAccrued;
   }, [computedCollateralValue, formLivePrices, formData.coin, formData.buyQuantity, formData.buyPrice, previewAccrued]);
 
-   const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
+  const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
     onSuccess: async (result) => {
       try {
         const orderId = Number((result as any)?.orderId || 0);
+        if (orderId > 0 && collateralSourceMode === 'wallet' && collateralAssets.some((asset) => asset.source === 'wallet')) {
+          await persistWalletCollateral(orderId, Number(formData.userId), collateralAssets);
+        }
         if (orderId > 0 && participants.length > 0) await persistParticipantViews(orderId);
       } catch {
-        // 子视图保存失败时保持表单，避免管理员误以为共同拥有者已配置完成。
+        // 冻结或子视图保存失败时保持表单，避免管理员误以为担保已受控。
         return;
       }
       toast.success('创建成功');
@@ -725,6 +740,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     onSuccess: async (result) => {
       try {
         const orderId = Number((result as any)?.orderId || 0);
+        if (orderId > 0 && collateralSourceMode === 'wallet' && collateralAssets.some((asset) => asset.source === 'wallet')) {
+          await persistWalletCollateral(orderId, Number(formData.userId), collateralAssets);
+        }
         if (orderId > 0 && participants.length > 0) await persistParticipantViews(orderId);
       } catch {
         return;
@@ -780,6 +798,17 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     },
     onError: (err) => toast.error(err.message),
   });
+  const saveWalletCollateralMutation = trpc.ledger.funderSaveWalletCollateral.useMutation({
+    onSuccess: () => {
+      toast.success('钱包担保已冻结并保存');
+      setCollateralEditMode(false);
+      refetchOrders();
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+      trpcUtils.ledger.funderGetSharedCollateralPool.invalidate();
+      void walletCollateralBalancesQuery.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
   // 参与者担保物独立保存：只写入该参与者的子订单快照，不修改主订单拥有者的担保物。
   const saveParticipantCollateralMutation = trpc.ledger.funderUpdateParticipantOrder.useMutation({
     onSuccess: () => {
@@ -793,7 +822,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     onError: (err) => toast.error(err.message),
   });
   // 把当前整组担保货币写回正在编辑的视角：参与者写子订单快照，拥有者写主订单。
-  const persistCollateral = (assets: { coin: string; qty: string; note?: string }[]) => {
+  const persistCollateral = (assets: { coin: string; qty: string; note?: string; source?: 'wallet' }[]) => {
     const oid = editingOrder?.id ? Number(editingOrder.id) : null;
     if (!oid) return; // 新建态无订单 ID，跳过（随订单一起保存）
     const cleanAssets = assets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)));
@@ -812,6 +841,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ledgerId,
       collateralAssets: cleanAssets,
     });
+  };
+  const persistWalletCollateral = async (orderId: number, holderUserId: number, assets: { coin: string; qty: string; source?: 'wallet' }[]) => {
+    const walletAssets = assets
+      .filter((asset) => asset.source === 'wallet' && asset.coin && asset.qty !== '' && Number(asset.qty) > 0)
+      .map((asset) => ({ coin: asset.coin as any, qty: asset.qty }));
+    if (ledgerId !== 52 || orderId <= 0 || holderUserId <= 0) return;
+    await saveWalletCollateralMutation.mutateAsync({ ledgerId: 52, orderId, userId: holderUserId, assets: walletAssets });
   };
   const deleteMutation = trpc.ledger.funderDeleteAssetOrder.useMutation({
     onSuccess: () => {
@@ -1176,12 +1212,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'USDT', buyQty: '' });
       }
     } catch { setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'USDT', buyQty: '' }); }
-    // 加载担保货币
+    // 加载担保货币；钱包来源以 source=wallet 持久化，编辑时优先恢复冻结担保模式。
+    let hasWalletCollateralSource = false;
     try {
       const ca = order.collateral_assets;
       if (ca) {
         const parsed = typeof ca === 'string' ? JSON.parse(ca) : ca;
         setCollateralAssets(Array.isArray(parsed) ? parsed : []);
+        hasWalletCollateralSource = Array.isArray(parsed) && parsed.some((asset: any) => asset?.source === 'wallet');
       } else {
         setCollateralAssets([]);
       }
@@ -1194,7 +1232,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     // 加载调用其他账本担保物
     try {
       const cs = (order as any).collateral_source;
-      if (cs) {
+      if (hasWalletCollateralSource) {
+        setCollateralSourceMode('wallet');
+        setCollateralSource(null);
+        setInterestTagName('');
+      } else if (cs) {
         const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
         if (parsed && parsed.ledgerId && parsed.tagName) {
           setCollateralSourceMode('external');
@@ -1411,7 +1453,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         return ratio ? `${typeLabel} ${ratio}%` : typeLabel;
       })(),
       // 编辑模式：始终传 collateralAssets（空数组表示清空），新建模式：为空时传 undefined
-      collateralAssets: editingOrder
+      // 钱包担保必须走专用原子冻结接口；普通订单保存不得绕过冻结直接写入来源标记。
+      collateralAssets: collateralSourceMode === 'wallet'
+        ? undefined
+        : editingOrder
         ? collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)))
         : collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty))).length > 0
           ? collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)))
@@ -1499,7 +1544,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           interest_base_currency: payload.interestBaseCurrency || null,
           interest_rate_currency: payload.interestRateCurrency || null,
           interest_start_date: payload.interestStartDate || null,
-          collateral_assets: payload.collateralAssets ? JSON.stringify(payload.collateralAssets) : null,
+          ...(payload.collateralAssets !== undefined ? { collateral_assets: payload.collateralAssets ? JSON.stringify(payload.collateralAssets) : null } : {}),
           show_profit_share: payload.showProfitShare ? 1 : 0,
           commission_share: payload.commissionShare || null,
           display_config: JSON.stringify(payload.displayConfig || {}),
@@ -2695,29 +2740,52 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 </div>
               )}
 
-              {/* 股票订单可选37号数据来源；浮动盈亏与担保货币分别控制。 */}
-              {formData.assetType === 'stock' && (
+              {/* 担保物来源：52号订单可从钱包冻结；股票订单仍可独立引用37号数据。 */}
               <div className="flex gap-2 mb-2">
                 <button
                   type="button"
-                  onClick={() => { setCollateralSourceMode('manual'); setCollateralSource(null); }}
+                  onClick={() => {
+                    if (collateralAssets.some((asset) => asset.source === 'wallet')) {
+                      toast.error('请先在“钱包担保”中清空并保存，解除冻结后再切换来源');
+                      return;
+                    }
+                    setCollateralSourceMode('manual'); setCollateralSource(null);
+                  }}
                   className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
                     collateralSourceMode === 'manual'
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'bg-gray-100 text-gray-600'
                   }`}
                 >手工担保物</button>
+                {ledgerId === 52 && (
+                  <button
+                    type="button"
+                    onClick={() => { setCollateralSourceMode('wallet'); setCollateralSource(null); }}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
+                      collateralSourceMode === 'wallet'
+                        ? 'bg-amber-500 text-white shadow-sm'
+                        : 'bg-amber-50 text-amber-700'
+                    }`}
+                  >钱包担保</button>
+                )}
+                {formData.assetType === 'stock' && (
                 <button
                   type="button"
-                  onClick={() => setCollateralSourceMode('external')}
+                  onClick={() => {
+                    if (collateralAssets.some((asset) => asset.source === 'wallet')) {
+                      toast.error('请先在“钱包担保”中清空并保存，解除冻结后再切换来源');
+                      return;
+                    }
+                    setCollateralSourceMode('external');
+                  }}
                   className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
                     collateralSourceMode === 'external'
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'bg-gray-100 text-gray-600'
                   }`}
                 >调用37号数据</button>
+                )}
               </div>
-              )}
 
               {/* 股票订单：盈亏、担保物、利息标签分别选择，互不强制联动。 */}
               {formData.assetType === 'stock' && collateralSourceMode === 'external' && (
@@ -2837,8 +2905,92 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               </div>
               )}
 
+              {ledgerId === 52 && collateralSourceMode === 'wallet' && (
+                <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <div>
+                    <div className="text-sm font-semibold text-amber-800">从钱包冻结数字资产作为担保</div>
+                    <p className="mt-1 text-xs leading-5 text-amber-700">冻结后总持币不变，但冻结部分不能提现、转账或再次担保；订单结清或移入回收站时自动恢复为可用余额。开启“本人订单共享”后，该订单已冻结资产可进入现有联合担保池。</p>
+                  </div>
+                  {walletCollateralUserId <= 0 ? (
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-3 text-xs text-amber-700">请先选择订单拥有者，才能读取其钱包数字资产。</div>
+                  ) : walletCollateralBalancesQuery.isLoading ? (
+                    <div className="rounded-lg bg-white px-3 py-4 text-center text-xs text-gray-400">正在读取钱包可用余额…</div>
+                  ) : (walletCollateralBalancesQuery.data ?? []).length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-amber-300 bg-white px-3 py-4 text-center text-xs text-amber-700">该用户暂无可用于担保的数字资产。</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {(walletCollateralBalancesQuery.data ?? []).map((asset: any) => {
+                        const assetCode = String(asset.assetCode || '').toUpperCase();
+                        const selected = collateralAssets.find((item) => item.source === 'wallet' && item.coin === assetCode);
+                        const available = Number(asset.availableBalance ?? 0);
+                        const frozen = Number(asset.frozenBalance ?? 0);
+                        const selectedAmount = Number(selected?.qty ?? 0);
+                        const maximum = Math.max(0, available + selectedAmount);
+                        return (
+                          <div key={assetCode} className="rounded-lg border border-amber-100 bg-white px-3 py-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-gray-800">{assetCode} <span className="text-xs font-normal text-gray-400">{asset.assetName || ''}</span></div>
+                                <div className="mt-0.5 text-[11px] text-gray-500">可用 {available.toLocaleString('zh-CN', { maximumFractionDigits: 8 })} · 已冻结 {frozen.toLocaleString('zh-CN', { maximumFractionDigits: 8 })}</div>
+                              </div>
+                              {selected ? (
+                                <button
+                                  type="button"
+                                  disabled={!collateralEditMode && !!editingOrder?.id}
+                                  onClick={() => setCollateralAssets((previous) => previous.filter((item) => !(item.source === 'wallet' && item.coin === assetCode)))}
+                                  className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-500 disabled:opacity-50"
+                                >移除</button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={available <= 0 || (!collateralEditMode && !!editingOrder?.id)}
+                                  onClick={() => setCollateralAssets((previous) => [...previous, { coin: assetCode, qty: '', note: '钱包担保冻结', source: 'wallet' }])}
+                                  className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 disabled:opacity-50"
+                                >选择</button>
+                              )}
+                            </div>
+                            {selected && (
+                              <div className="mt-2 flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={maximum > 0 ? maximum : undefined}
+                                  step="0.00000001"
+                                  value={selected.qty}
+                                  disabled={!collateralEditMode && !!editingOrder?.id}
+                                  onChange={(event) => setCollateralAssets((previous) => previous.map((item) => item.source === 'wallet' && item.coin === assetCode ? { ...item, qty: event.target.value } : item))}
+                                  placeholder={`最多 ${maximum.toLocaleString('zh-CN', { maximumFractionDigits: 8 })}`}
+                                  className="min-w-0 flex-1 rounded-lg border border-amber-200 px-3 py-2 text-sm font-semibold outline-none focus:border-amber-500 disabled:bg-gray-50"
+                                />
+                                <span className="text-xs font-semibold text-amber-700">{assetCode}</span>
+                                <button type="button" disabled={!collateralEditMode && !!editingOrder?.id} onClick={() => setCollateralAssets((previous) => previous.map((item) => item.source === 'wallet' && item.coin === assetCode ? { ...item, qty: String(maximum) } : item))} className="text-xs font-semibold text-amber-700 disabled:opacity-50">全部</button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {editingOrder?.id && !collateralEditMode ? (
+                    <button type="button" onClick={() => setCollateralEditMode(true)} className="w-full rounded-xl border border-amber-300 bg-white py-2.5 text-sm font-semibold text-amber-700">编辑钱包担保</button>
+                  ) : (
+                    <>
+                      {editingOrder?.id && (
+                        <button
+                          type="button"
+                          onClick={() => void persistWalletCollateral(Number(editingOrder.id), walletCollateralUserId, collateralAssets)}
+                          disabled={saveWalletCollateralMutation.isPending || walletCollateralUserId <= 0}
+                          className="w-full rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                        >{saveWalletCollateralMutation.isPending ? '冻结保存中…' : '保存并冻结钱包担保'}</button>
+                      )}
+                      {!editingOrder?.id && <div className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-amber-700">新建订单保存成功后，所选资产会立即进入冻结担保；余额不足将不会创建担保冻结。</div>}
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* 担保货币列表：37号担保货币关闭时，即使仍使用37号浮盈也可手工录入。 */}
-              {(isRestrictedParticipantEdit || collateralSourceMode === 'manual' || !isUsing37Collateral) && (
+              {(isRestrictedParticipantEdit || collateralSourceMode === 'manual' || (collateralSourceMode === 'external' && !isUsing37Collateral)) && (
               <div className="space-y-3">
                 {/* 只读态：编辑已有订单且未进入编辑模式时 */}
                 {editingOrder?.id && !collateralEditMode ? (
