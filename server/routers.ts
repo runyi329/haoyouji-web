@@ -19784,8 +19784,11 @@ ${klinesSummary}
           const targetRole = (targetRoleRows[0]?.[0] ?? targetRoleRows[0])?.role;
           targetIsManager = targetRole === 'owner' || targetRole === 'admin';
         }
-        // 管理员看所有，普通用户看自己的订单 + 被添加为参与方的订单
+        // 管理员看所有，普通用户看自己的订单 + 被添加为参与方的订单。
+        // 已结利息总额在最终响应前按订单挂载；普通成员会在聚合查询内预加载，
+        // 管理员沿用下方完整管理视图的附带查询。
         let orders: any[] = [];
+        let paidTotalMap: Record<number, { amount: number; currency: string }> = {};
         if (targetIsManager) {
           const rows = await db.execute(
             sql`SELECT fo.*, u.username, u.name as nickname, u.username as userName, u.avatar as userAvatar,
@@ -19850,35 +19853,146 @@ ${klinesSummary}
             } catch (_e) { /* 表不存在则忽略 */ }
           }
         } else {
-          // 本人订单与参与订单彼此独立，必须并行读取。
-          // 生产数据库单次往返已有明显延迟，串行读取会让普通成员每次打开订单页
-          // 多等待一整轮；此处不改变任何筛选范围或权限规则。
-          const [myRowsResult, participantOrderRowsResult] = await Promise.all([
-            db.execute(
-              sql`SELECT fo.*, u.username, u.name as nickname, u.username as userName, u.avatar as userAvatar
-                  FROM ledger_orders fo
+          // 普通成员（以及管理员代入的普通成员）是移动端最高频入口。
+          // 旧实现会依次拉取本人订单、参与订单、参与者快照、姓名和结息汇总；
+          // 数据库跨网往返会叠加成数秒。下面用一个只读 CTE 聚合这些完全相同权限范围的数据，
+          // 不改变订单筛选、参与者快照覆盖或已结利息的业务口径。
+          const normalRows = await db.execute(
+            sql`WITH visible_order_ids AS (
+                  SELECT fo.id, 0 AS is_participant
+                    FROM ledger_orders fo
+                   WHERE fo.ledger_id = ${input.ledgerId}
+                     AND fo.order_role = 'finance'
+                     AND fo.deleted_at IS NULL
+                     AND fo.user_id = ${targetUserId}
+                  UNION ALL
+                  SELECT DISTINCT fo.id, 1 AS is_participant
+                    FROM ledger_orders fo
+                    INNER JOIN ledger_order_participants p ON p.order_id = fo.id
+                   WHERE fo.ledger_id = ${input.ledgerId}
+                     AND p.ledger_id = ${input.ledgerId}
+                     AND p.user_id = ${targetUserId}
+                     AND p.role <> 'inactive'
+                     AND fo.user_id != ${targetUserId}
+                ),
+                paid_totals AS (
+                  SELECT payment.order_id,
+                         SUM(payment.amount) AS total_paid,
+                         MIN(IFNULL(payment.currency, 'U')) AS currency
+                    FROM ledger_order_payments payment
+                    INNER JOIN visible_order_ids visible_payment ON visible_payment.id = payment.order_id
+                   GROUP BY payment.order_id
+                )
+                SELECT fo.*, u.username, u.name AS nickname, u.username AS userName, u.avatar AS userAvatar,
+                       visible.is_participant AS _isParticipant,
+                       pi.role AS _participant_role,
+                       pi.commission_rate AS _participant_commission_rate,
+                       pi.commission_base AS _participant_commission_base,
+                       pi.commission_start_date AS _participant_commission_start_date,
+                       pi.paid_commission AS _participant_paid_commission,
+                       pi.note AS _participant_note,
+                       pi.interest_rate AS _participant_interest_rate,
+                       pi.interest_base AS _participant_interest_base,
+                       pi.interest_base_currency AS _participant_interest_base_currency,
+                       pi.interest_payment_type AS _participant_interest_payment_type,
+                       pi.interest_start_date AS _participant_interest_start_date,
+                       pi.interest_rate_currency AS _participant_interest_rate_currency,
+                       pi.display_config AS _participant_display_config,
+                       pi.order_snapshot AS _participant_order_snapshot,
+                       COALESCE(viewer_member.nickname, viewer.name, viewer.username) AS _participant_name,
+                       paid.total_paid AS _paid_total,
+                       paid.currency AS _paid_currency
+                  FROM visible_order_ids visible
+                  INNER JOIN ledger_orders fo ON fo.id = visible.id
                   LEFT JOIN users u ON u.id = fo.user_id
-                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'finance' AND fo.deleted_at IS NULL AND fo.user_id = ${targetUserId}
-                  ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
-            ) as Promise<any>,
-            db.execute(
-              sql`SELECT fo.*, u.username, u.name as nickname, u.username as userName, u.avatar as userAvatar
-                 FROM ledger_orders fo
-                 LEFT JOIN users u ON u.id = fo.user_id
-                 INNER JOIN ledger_order_participants p ON p.order_id = fo.id
-                 WHERE fo.ledger_id = ${input.ledgerId} AND p.ledger_id = ${input.ledgerId} AND p.user_id = ${targetUserId} AND p.role <> 'inactive' AND fo.user_id != ${targetUserId}`
-            ) as Promise<any>,
-          ]);
-          orders = ((myRowsResult[0] || myRowsResult) as any[]) || [];
-          // 参与方订单（排除自己的订单，不限 order_role，资方订单也能看到）
-          try {
-            const participantOrders = ((participantOrderRowsResult[0] || participantOrderRowsResult) as any[]) || [];
-            // 标记这些订单为参与方订单
-            for (const o of participantOrders) {
-              (o as any)._isParticipant = true;
+                  LEFT JOIN ledger_order_participants pi
+                    ON pi.order_id = fo.id
+                   AND pi.ledger_id = ${input.ledgerId}
+                   AND pi.user_id = ${targetUserId}
+                   AND pi.role <> 'inactive'
+                  LEFT JOIN users viewer ON viewer.id = ${targetUserId}
+                  LEFT JOIN ledger_members viewer_member
+                    ON viewer_member.userId = viewer.id AND viewer_member.ledgerId = ${input.ledgerId}
+                  LEFT JOIN paid_totals paid ON paid.order_id = fo.id`
+          ) as any;
+          orders = ((normalRows[0] || normalRows) as any[]) || [];
+
+          for (const o of orders) {
+            const paidAmount = Number((o as any)._paid_total || 0);
+            if (paidAmount !== 0) {
+              paidTotalMap[Number(o.id)] = {
+                amount: paidAmount,
+                currency: (o as any)._paid_currency || 'U',
+              };
             }
-            orders = [...orders, ...participantOrders];
-          } catch (_e) { /* 如果表不存在则忽略 */ }
+
+            const participantRole = (o as any)._participant_role;
+            if ((o as any)._isParticipant && participantRole && Number(o.user_id) !== Number(targetUserId)) {
+              const pi = {
+                role: participantRole,
+                commission_rate: (o as any)._participant_commission_rate,
+                commission_base: (o as any)._participant_commission_base,
+                commission_start_date: (o as any)._participant_commission_start_date,
+                paid_commission: (o as any)._participant_paid_commission,
+                note: (o as any)._participant_note,
+                interest_rate: (o as any)._participant_interest_rate,
+                interest_base: (o as any)._participant_interest_base,
+                interest_base_currency: (o as any)._participant_interest_base_currency,
+                interest_payment_type: (o as any)._participant_interest_payment_type,
+                interest_start_date: (o as any)._participant_interest_start_date,
+                interest_rate_currency: (o as any)._participant_interest_rate_currency,
+                display_config: (o as any)._participant_display_config,
+                order_snapshot: (o as any)._participant_order_snapshot,
+              };
+              (o as any).participantInfo = {
+                userId: targetUserId,
+                role: pi.role,
+                commissionRate: pi.commission_rate != null ? pi.commission_rate : null,
+                commissionBase: pi.commission_base || o.interest_base || null,
+                commissionStartDate: pi.commission_start_date || o.interest_start_date || null,
+                paidCommission: pi.paid_commission || '0',
+                note: pi.note || null,
+                interestBaseCurrency: (['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes((pi.interest_base_currency || o.interest_base_currency || '')) ? 'CNY' : 'USDT'),
+              };
+              const mainOrderStatus = o.status;
+              const mainOrderSettledAt = o.settled_at;
+              const mainOrderInterestEndDate = o.interest_end_date;
+              const snapshot = syncFunderParticipantCollateralSnapshot(
+                parseFunderParticipantSnapshot(pi.order_snapshot),
+                o,
+              );
+              if (snapshot) Object.assign(o, snapshot);
+              if (mainOrderStatus === 'settled' || mainOrderStatus === 'completed') {
+                o.status = mainOrderStatus;
+                o.settled_at = mainOrderSettledAt;
+                o.interest_end_date = mainOrderInterestEndDate || mainOrderSettledAt || null;
+              }
+              (o as any)._participantParentDeleted = Boolean((o as any).deleted_at);
+              (o as any).order_owner_name = (o as any).nickname || o.owner_label || (o as any).username || null;
+              if ((o as any)._participant_name) {
+                (o as any).participant_name = (o as any)._participant_name;
+                (o as any).owner_label = (o as any)._participant_name;
+              }
+              if (pi.interest_rate != null && pi.interest_rate !== '') (o as any).interest_rate_annual = pi.interest_rate;
+              if (pi.interest_base) (o as any).interest_base = pi.interest_base;
+              if (pi.interest_base_currency) (o as any).interest_base_currency = pi.interest_base_currency;
+              if (pi.interest_payment_type) (o as any).interest_payment_type = pi.interest_payment_type;
+              if (pi.interest_start_date) (o as any).interest_start_date = pi.interest_start_date;
+              if (pi.interest_rate_currency) (o as any).interest_rate_currency = pi.interest_rate_currency;
+              if (pi.display_config) (o as any).display_config = pi.display_config;
+            }
+
+            for (const key of [
+              '_participant_role', '_participant_commission_rate', '_participant_commission_base',
+              '_participant_commission_start_date', '_participant_paid_commission', '_participant_note',
+              '_participant_interest_rate', '_participant_interest_base', '_participant_interest_base_currency',
+              '_participant_interest_payment_type', '_participant_interest_start_date', '_participant_interest_rate_currency',
+              '_participant_display_config', '_participant_order_snapshot', '_participant_name',
+              '_paid_total', '_paid_currency',
+            ]) {
+              delete (o as any)[key];
+            }
+          }
         }
 
         // 排序：已卖出下沉，未卖出按时间倒序（最新在最上面）
@@ -19897,12 +20011,10 @@ ${klinesSummary}
           const bTime = new Date(b.created_at).getTime();
           return bTime - aTime;
         });
-        // 为参与方订单组装 participantInfo：取该用户(targetUserId)在本订单的各自利率/计息基数/起息日
-        // 用于共享订单卡片按参与者各自利率显示「待结利息(年化X%)」
-        // 注意：不能只依赖 _isParticipant 标记——管理员/查看视角分支下 finance 订单不会被打标记，
-        // 因此这里对所有订单统一查 targetUserId 在该订单的参与方记录，查到即挂。
-        let paidTotalMap: Record<number, { amount: number; currency: string }> = {};
-        try {
+        // 管理员全量视图需要补充参与者配置；普通成员已在上方的单次聚合读取中完成，
+        // 绝不能再执行同一批查询，否则跨库往返会抵消首屏加速效果。
+        if (targetIsManager) {
+          try {
           const participantOrderIds = allOrders.map((o: any) => Number(o.id));
           if (participantOrderIds.length > 0) {
             const piPlaceholders = participantOrderIds.map(() => '?').join(',');
@@ -20000,7 +20112,8 @@ ${klinesSummary}
               }
             }
           }
-        } catch (_e) { console.error('[funderGetAssetOrders] piRows catch error:', _e); }
+          } catch (_e) { console.error('[funderGetAssetOrders] piRows catch error:', _e); }
+        }
         // 临时调试日志
         const participantDebug = allOrders.filter((o: any) => (o as any)._isParticipant);
         if (participantDebug.length > 0) {
