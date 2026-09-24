@@ -25,6 +25,22 @@ function formatTime(value: string) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function getDigitalFlowPresentation(entry: { eventType?: string; amount?: number }) {
+  const incoming = Number(entry.amount ?? 0) > 0;
+  switch (entry.eventType) {
+    case "collateral_lock":
+      return { label: "担保冻结", state: "已参与联合担保", incoming: false };
+    case "collateral_release":
+      return { label: "担保解冻", state: "已解冻入账", incoming: true };
+    case "transfer_in":
+      return { label: "站内转账收款", state: "已入账", incoming: true };
+    case "transfer_out":
+      return { label: "站内转账汇款", state: "已扣除", incoming: false };
+    default:
+      return { label: incoming ? "入账" : "扣除", state: incoming ? "已入账" : "已扣除", incoming };
+  }
+}
+
 export default function MultiAssetWalletTransactions() {
   const [, setLocation] = useLocation();
   const search = useSearch();
@@ -122,26 +138,21 @@ export default function MultiAssetWalletTransactions() {
             <div className="divide-y" style={{ borderColor: "rgba(255,255,255,.06)" }}>
               {history.map((entry: any) => {
                 const change = Number(entry.amount ?? 0);
-                const incoming = change > 0;
-                // 手工调整在成员视图中只显示真实资金方向，不暴露后台操作术语。
-                const label = entry.eventType === "transfer_in"
-                  ? "站内转账收款"
-                  : entry.eventType === "transfer_out"
-                    ? "站内转账汇款"
-                    : incoming ? "转入" : "转出";
+                const presentation = getDigitalFlowPresentation(entry);
                 return (
                   <div key={entry.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
                     <div className="flex min-w-0 items-center gap-3">
-                      <span className="rounded-full p-2" style={{ background: incoming ? "rgba(52,211,153,.12)" : "rgba(248,113,113,.12)" }}>
-                        {incoming ? <ArrowDownCircle className="h-4 w-4" style={{ color: theme.green }} /> : <ArrowUpCircle className="h-4 w-4" style={{ color: theme.red }} />}
+                      <span className="rounded-full p-2" style={{ background: presentation.incoming ? "rgba(52,211,153,.12)" : "rgba(248,113,113,.12)" }}>
+                        {presentation.incoming ? <ArrowDownCircle className="h-4 w-4" style={{ color: theme.green }} /> : <ArrowUpCircle className="h-4 w-4" style={{ color: theme.red }} />}
                       </span>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium" style={{ color: "rgba(255,255,255,.88)" }}>{label}</p>
+                        <p className="truncate text-sm font-medium" style={{ color: "rgba(255,255,255,.88)" }}>{presentation.label}</p>
                         <p className="mt-0.5 truncate text-[11px]" style={{ color: theme.muted }}>{formatTime(entry.createdAt)} · {String(entry.note || "—").replace(/\[.*?\]/g, "").trim()}</p>
+                        <p className="mt-1 text-[10px]" style={{ color: theme.muted }}>{presentation.state}</p>
                         <p className="mt-1 text-[10px]" style={{ color: theme.muted }}>该笔后余额 {Number(entry.balanceAfter ?? 0).toLocaleString("zh-CN", { maximumFractionDigits: 8 })} {assetCode}</p>
                       </div>
                     </div>
-                    <span className="shrink-0 text-right text-sm font-bold tabular-nums" style={{ color: incoming ? theme.green : theme.red }}>{incoming ? "+" : ""}{change.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}<span className="ml-1 text-[10px] font-medium">{assetCode}</span></span>
+                    <span className="shrink-0 text-right text-sm font-bold tabular-nums" style={{ color: presentation.incoming ? theme.green : theme.red }}>{presentation.incoming ? "+" : ""}{change.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}<span className="ml-1 text-[10px] font-medium">{assetCode}</span></span>
                   </div>
                 );
               })}

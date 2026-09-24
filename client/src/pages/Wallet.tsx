@@ -94,6 +94,53 @@ function formatTime(dateStr: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function cleanWalletFlowNote(value: unknown) {
+  return String(value || "")
+    .replace(/^\[CNY\]\s*/i, "")
+    .replace(/\[站内转账\]\s*/g, "")
+    .trim();
+}
+
+function hasOrderContext(note: string) {
+  return /(订单|谷底|征筹|增筹|净收益|卖出|成交|结算|委托|融资)/.test(note);
+}
+
+function getUsdtFlowPresentation(item: { sourceType?: string; type?: string; amount?: number; note?: string }) {
+  const amount = Number(item.amount ?? 0);
+  const isIn = amount >= 0;
+  const note = cleanWalletFlowNote(item.note);
+  const isInternalTransfer = String(item.note || "").includes("[站内转账]");
+  if (isInternalTransfer) return { label: isIn ? "站内转账收款" : "站内转账汇款", detail: note, isIn };
+  if (item.sourceType === "recharge") return { label: "充值到账", detail: note, isIn: true };
+  if (item.sourceType === "withdraw") return { label: "提现", detail: note, isIn: false };
+  if (item.sourceType === "opening") return { label: "历史期初余额", detail: note, isIn };
+  if (item.sourceType === "manual") {
+    return { label: isIn ? (hasOrderContext(note) ? "订单入账" : "入账") : (hasOrderContext(note) ? "订单扣除" : "扣除"), detail: note, isIn };
+  }
+  if (item.sourceType === "balance_history") {
+    if (hasOrderContext(note)) return { label: isIn ? "订单入账" : "订单扣除", detail: note, isIn };
+    const labels: Record<string, string> = { consume: "消费", refund: "退款", reward: "入账", withdraw: "提现", reward_clawback: "入账回退" };
+    return { label: labels[String(item.type || "")] || "资金流水", detail: note, isIn };
+  }
+  return { label: isIn ? "入账" : "扣除", detail: note, isIn };
+}
+
+function getDigitalFlowPresentation(item: { eventType?: string; amount?: number; note?: string }) {
+  const isIn = Number(item.amount ?? 0) > 0;
+  switch (item.eventType) {
+    case "collateral_lock":
+      return { label: "担保冻结", status: "已参与联合担保", isIn: false };
+    case "collateral_release":
+      return { label: "担保解冻", status: "已解冻入账", isIn: true };
+    case "transfer_in":
+      return { label: "站内转账收款", status: "已入账", isIn: true };
+    case "transfer_out":
+      return { label: "站内转账汇款", status: "已扣除", isIn: false };
+    default:
+      return { label: isIn ? "入账" : "扣除", status: isIn ? "已入账" : "已扣除", isIn };
+  }
+}
+
 // 底部弹窗（黑金风）
 function BottomSheet({ title, onClose, children }: {
   title: string; onClose: () => void; children: React.ReactNode;
@@ -683,13 +730,13 @@ export default function Wallet() {
 
   const recentUsdtTx = (() => {
     const recharges = (recentRechargeQuery.data ?? []).map((r: any) => ({
-      id: `r-${r.id}`, type: "recharge" as const,
+      id: `r-${r.id}`, sourceType: "recharge",
       amount: Number(r.amount), status: r.status, createdAt: r.createdAt,
       note: "", wcCode: null,
     }));
     const withdraws = (recentWithdrawQuery.data ?? []).map((w: any) => ({
-      id: `w-${w.id}`, type: "withdraw" as const,
-      amount: Number(w.amount), status: w.status, createdAt: w.createdAt,
+      id: `w-${w.id}`, sourceType: "withdraw",
+      amount: -Math.abs(Number(w.amount)), status: w.status, createdAt: w.createdAt,
       note: "", wcCode: null,
     }));
     const manuals = (recentManualQuery.data ?? [])
@@ -697,11 +744,10 @@ export default function Wallet() {
       .map((m: any) => {
         const note = String(m.note || "");
         const amount = Number(m.amount);
-        const isInternalTransfer = note.includes('[站内转账]');
         return {
           id: `m-${m.id}`,
-          type: isInternalTransfer ? (amount > 0 ? "transfer_in" : "transfer_out") : (amount > 0 ? "reward" : "deduct"),
-          amount: Math.abs(amount), status: "completed" as const,
+          sourceType: "manual",
+          amount, status: "completed" as const,
           note,
           wcCode: extractWcTeamCode(note),
           createdAt: m.created_at,
@@ -712,8 +758,8 @@ export default function Wallet() {
       .filter((h: any) => h.type === 'consume' || h.type === 'refund')
       .map((h: any) => ({
         id: `bh-${h.id}`,
-        type: (h.type === 'refund' ? "reward" : "deduct") as "reward" | "deduct",
-        amount: Math.abs(Number(h.amount)), status: "completed" as const,
+        sourceType: "balance_history", type: h.type,
+        amount: h.type === 'consume' ? -Math.abs(Number(h.amount)) : Math.abs(Number(h.amount)), status: "completed" as const,
         note: h.description || "",
         wcCode: extractWcTeamCode(h.description || ""),
         createdAt: h.createdAt,
@@ -963,8 +1009,9 @@ export default function Wallet() {
           txList={
             recentUsdtTx.length > 0 ? (
               <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${G.divider}` }}>
-                {recentUsdtTx.map((tx, idx) => (
-                  <div
+                {recentUsdtTx.map((tx, idx) => {
+                  const presentation = getUsdtFlowPresentation(tx);
+                  return <div
                     key={tx.id}
                     className="flex items-center justify-between py-2"
                     style={{ borderBottom: idx < recentUsdtTx.length - 1 ? `1px solid ${G.divider}` : "none" }}
@@ -981,25 +1028,26 @@ export default function Wallet() {
                       <div>
                         {!(tx as any).wcCode && (
                           <div className="text-xs font-medium" style={{ color: G.white }}>
-                            {tx.type === "recharge" ? "充值" : tx.type === "withdraw" ? "提现" : tx.type === "transfer_in" ? "站内转账收款" : tx.type === "transfer_out" ? "站内转账汇款" : tx.type === "reward" ? "奖励" : "扣费"}
+                            {presentation.label}
                           </div>
                         )}
                         <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(tx.createdAt)}</div>
+                        {presentation.detail && <div className="mt-0.5 max-w-48 truncate text-[10px]" style={{ color: G.whiteDim }}>{presentation.detail}</div>}
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold tabular-nums"
-                        style={{ color: (tx.type === "recharge" || tx.type === "reward" || tx.type === "transfer_in") ? G.green : G.red }}>
-                        {(tx.type === "recharge" || tx.type === "reward" || tx.type === "transfer_in") ? "+" : "-"}
-                        {mask(tx.amount.toFixed(2))} USDT
+                        style={{ color: presentation.isIn ? G.green : G.red }}>
+                        {presentation.isIn ? "+" : "-"}
+                        {mask(Math.abs(Number(tx.amount)).toFixed(2))} USDT
                       </div>
                       <div className="flex items-center justify-end space-x-0.5 mt-0.5">
                         <StatusIcon status={tx.status} />
                         <span className="text-xs" style={{ color: G.whiteDim }}>{statusText(tx.status)}</span>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  </div>;
+                })}
               </div>
             ) : null
           }
@@ -1137,14 +1185,8 @@ export default function Wallet() {
                 </div>
                 {recentDigitalTx.length > 0 ? recentDigitalTx.map((item: any, index: number) => {
                   const change = Number(item.amount ?? 0);
-                  const isIn = change > 0;
                   const assetCode = String(item.assetCode || "").toUpperCase();
-                  const label = item.eventType === "transfer_in"
-                    ? "站内转账收款"
-                    : item.eventType === "transfer_out"
-                      ? "站内转账汇款"
-                      // 人工入账/扣减也按真实资金方向展示，不向用户暴露后台操作术语。
-                      : isIn ? "转入" : "转出";
+                  const presentation = getDigitalFlowPresentation(item);
                   return (
                     <div
                       key={`digital-flow-${item.id ?? index}`}
@@ -1152,14 +1194,15 @@ export default function Wallet() {
                       style={{ borderBottom: index < recentDigitalTx.length - 1 ? `1px solid ${G.divider}` : "none" }}
                     >
                       <div className="min-w-0">
-                        <div className="text-xs font-medium" style={{ color: G.white }}>{label} · {assetCode}</div>
+                        <div className="text-xs font-medium" style={{ color: G.white }}>{presentation.label} · {assetCode}</div>
                         <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(item.createdAt)}</div>
+                        {cleanWalletFlowNote(item.note) && <div className="mt-0.5 max-w-48 truncate text-[10px]" style={{ color: G.whiteDim }}>{cleanWalletFlowNote(item.note)}</div>}
                       </div>
                       <div className="shrink-0 text-right">
-                        <div className="text-sm font-bold tabular-nums" style={{ color: isIn ? G.green : G.red }}>
-                          {isIn ? "+" : "-"}{mask(Math.abs(change).toLocaleString("zh-CN", { maximumFractionDigits: 8 }))} {assetCode}
+                        <div className="text-sm font-bold tabular-nums" style={{ color: presentation.isIn ? G.green : G.red }}>
+                          {presentation.isIn ? "+" : "-"}{mask(Math.abs(change).toLocaleString("zh-CN", { maximumFractionDigits: 8 }))} {assetCode}
                         </div>
-                        <div className="mt-0.5 text-[11px]" style={{ color: G.whiteDim }}>{isIn ? "已入账" : "已扣除"}</div>
+                        <div className="mt-0.5 text-[11px]" style={{ color: G.whiteDim }}>{presentation.status}</div>
                       </div>
                     </div>
                   );

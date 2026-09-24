@@ -469,7 +469,7 @@ async function appendCollateralEntry(transaction: any, params: {
   requestId: string;
 }) {
   const entryNo = buildEntryNo();
-  const actionLabel = params.eventType === "collateral_lock" ? "担保冻结" : "担保解除";
+  const actionLabel = params.eventType === "collateral_lock" ? "担保冻结" : "担保解冻";
   await transaction.execute(
     `INSERT INTO ai_wallet_asset_entries
       (entry_no, request_id, user_id, asset_code, amount, balance_after, event_type, note, source_ledger_id, actor_user_id)

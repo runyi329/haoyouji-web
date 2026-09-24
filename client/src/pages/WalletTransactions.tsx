@@ -29,6 +29,34 @@ function extractWcTeamCode(note: string): string | null {
   return null;
 }
 
+function cleanWalletFlowNote(value: unknown) {
+  return String(value || "")
+    .replace(/^\[CNY\]\s*/i, "")
+    .replace(/\[站内转账\]\s*/g, "")
+    .trim();
+}
+
+function hasOrderContext(note: string) {
+  return /(订单|谷底|征筹|增筹|净收益|卖出|成交|结算|委托|融资)/.test(note);
+}
+
+function getUsdtFlowLabel(item: { sourceType?: string; type?: string; amount?: string | number; note?: string; description?: string }) {
+  const amount = Number(item.amount ?? 0);
+  const isPositive = amount >= 0;
+  const rawNote = String(item.note || item.description || "");
+  const note = cleanWalletFlowNote(rawNote);
+  if (rawNote.includes('[站内转账]')) return isPositive ? '站内转账收款' : '站内转账汇款';
+  if (item.sourceType === 'recharge') return '充值到账';
+  if (item.sourceType === 'opening') return '历史期初余额';
+  if (item.sourceType === 'manual') return isPositive ? (hasOrderContext(note) ? '订单入账' : '入账') : (hasOrderContext(note) ? '订单扣除' : '扣除');
+  if (item.sourceType === 'balance_history') {
+    if (hasOrderContext(note)) return isPositive ? '订单入账' : '订单扣除';
+    const labels: Record<string, string> = { consume: '消费', refund: '退款', reward: '入账', withdraw: '提现', reward_clawback: '入账回退' };
+    return labels[String(item.type || '')] || '资金流水';
+  }
+  return isPositive ? '入账' : '扣除';
+}
+
 export default function WalletTransactions() {
   const [, setLocation] = useLocation();
   const search = useSearch();
@@ -64,11 +92,6 @@ export default function WalletTransactions() {
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
     return `${year}-${month}-${day} ${hours}:${minutes}`;
-  };
-
-  const bhTypeLabel: Record<string, string> = {
-    consume: '消费', refund: '退款', reward: '奖励', withdraw: '提现',
-    reward_clawback: '奖励回收',
   };
 
   const allItems: any[] = (historyQuery.data as any[]) || [];
@@ -132,19 +155,7 @@ export default function WalletTransactions() {
                 const isPositive = amt >= 0;
                 const noteText = item.note || item.description || '';
                 const wcCode = extractWcTeamCode(noteText);
-                const isRecharge = item.sourceType === 'recharge';
-                const isManual = item.sourceType === 'manual';
-                const isBh = item.sourceType === 'balance_history';
-                const isInternalTransfer = noteText.includes('[站内转账]');
-                const label = isInternalTransfer
-                  ? (amt >= 0 ? '站内转账收款' : '站内转账汇款')
-                  : isRecharge
-                  ? '充值到账'
-                  : isManual
-                  ? '手动调账'
-                  : isBh
-                  ? (bhTypeLabel[item.type] || item.type || '流水')
-                  : '系统结算';
+              const label = getUsdtFlowLabel(item);
                 return (
                   <div key={item.id} className="rounded-2xl p-4 bg-white" style={{ boxShadow: '0 4px 16px rgba(33,150,200,0.1)' }}>
                     <div className="flex items-start justify-between mb-2">
@@ -242,22 +253,7 @@ export default function WalletTransactions() {
               const isPositive = amt >= 0;
               const noteText = item.note || item.description || '';
               const wcCode = extractWcTeamCode(noteText);
-              const isRecharge = item.sourceType === 'recharge';
-              const isManual = item.sourceType === 'manual';
-              const isBh = item.sourceType === 'balance_history';
-              const isOpening = item.sourceType === 'opening';
-              const isInternalTransfer = noteText.includes('[站内转账]');
-              const label = isInternalTransfer
-                ? (amt >= 0 ? '站内转账收款' : '站内转账汇款')
-                : isRecharge
-                ? '充值到账'
-                : isOpening
-                ? '历史期初余额'
-                : isManual
-                ? '手动调账'
-                : isBh
-                ? (bhTypeLabel[item.type] || item.type || '流水')
-                : '系统结算';
+              const label = getUsdtFlowLabel(item);
               return (
                 <div
                   key={item.id}
