@@ -2403,7 +2403,8 @@ export default function CryptoPrediction() {
     error: financeOrdersError,
   } = trpc.ledger.financeGetOrders.useQuery(
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: canLoadFinanceOrders, retry: 1 }
+    // 订单页以列表优先；短暂缓存避免从「卡片 / 订单」或返回页面时重复拉取同一份数据。
+    { enabled: canLoadFinanceOrders, retry: 1, staleTime: 30000, refetchOnWindowFocus: false }
   );
   const financeOrders: any[] = (financeOrdersData as any)?.orders ?? [];
   const [sharedOrdersExpanded, setSharedOrdersExpanded] = useState(false);
@@ -2423,12 +2424,8 @@ export default function CryptoPrediction() {
   // 融资付息：资产汇总
   const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
     { ledgerId },
-    { enabled: canLoadFinanceOrders, retry: 1 }
-  );
-  // 融资付息：已结利息汇总
-  const { data: financeInterestSummary } = trpc.ledger.financeGetInterestPaymentSummary.useQuery(
-    { ledgerId, orderIds: financeOrders.map((o: any) => o.id) },
-    { enabled: canLoadFinanceOrders && financeOrders.length > 0, retry: 1 }
+    // 行情仅用于订单卡片的估值辅助展示；先显示订单，再补充实时价格。
+    { enabled: canLoadFinanceOrders && financeOrdersData !== undefined, retry: 1, staleTime: 30000, refetchOnWindowFocus: false }
   );
   // 融资付息：实时价格（与资金方共用同一个 localStorage key）
   const FINANCE_PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
@@ -2480,14 +2477,15 @@ export default function CryptoPrediction() {
   // 可用余额（账本总资产）
   const { data: assetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: !!ledgerId, staleTime: 30000 }
+    // 融资付息列表不依赖谷底增筹的钱包汇总；避免切入融资页时与订单读取争抢数据库连接。
+    { enabled: !!ledgerId && tab !== 'finance', staleTime: 30000 }
   );
   const availableUsdt = (assetData as any)?.total ?? 0;
   // 委托订单
   const utils = trpc.useUtils();
   const { data: ordersData, isLoading: ordersLoading } = trpc.ledger.afGetOrders.useQuery(
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: !!ledgerId, staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: 'always' }
+    { enabled: !!ledgerId && tab !== 'finance', staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: 'always' }
   );
   const orders: any[] = (ordersData as any[]) || [];
   // 订单列表排序计算
@@ -2531,7 +2529,7 @@ export default function CryptoPrediction() {
   // 可卖数量（已成交买入 - 已成交卖出）
   const { data: availableSellData } = trpc.ledger.afGetAvailableSell.useQuery(
     { ledgerId, coin: coin.name, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: !!ledgerId, staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: 'always' }
+    { enabled: !!ledgerId && tab !== 'finance', staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: 'always' }
   );
   const availableSellQty = (availableSellData as any)?.available ?? 0;
   const submitOrderMutation = trpc.ledger.afSubmitOrder.useMutation({

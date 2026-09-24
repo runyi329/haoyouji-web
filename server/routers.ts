@@ -19777,9 +19777,9 @@ ${klinesSummary}
           if (!amIManager) {
             throw new TRPCError({ code: 'FORBIDDEN', message: '无权限使用观察视角' });
           }
-          targetUserId = input.viewAsUserId;
+          targetUserId = requestedViewAsUserId;
           const targetRoleRows = await db.execute(
-            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${input.viewAsUserId} LIMIT 1`
+            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${requestedViewAsUserId} LIMIT 1`
           ) as any;
           const targetRole = (targetRoleRows[0]?.[0] ?? targetRoleRows[0])?.role;
           targetIsManager = targetRole === 'owner' || targetRole === 'admin';
@@ -19850,25 +19850,29 @@ ${klinesSummary}
             } catch (_e) { /* 表不存在则忽略 */ }
           }
         } else {
-          // 先查自己的订单
-          const myRows = await db.execute(
-            sql`SELECT fo.*, u.username, u.name as nickname, u.username as userName, u.avatar as userAvatar
-                FROM ledger_orders fo
-                LEFT JOIN users u ON u.id = fo.user_id
-                WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'finance' AND fo.deleted_at IS NULL AND fo.user_id = ${targetUserId}
-                ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
-          ) as any;
-          orders = ((myRows[0] || myRows) as any[]) || [];
-          // 再查参与方订单（排除自己的订单，不限 order_role，资方订单也能看到）
-          try {
-            const participantOrderRows = await db.execute(
+          // 本人订单与参与订单彼此独立，必须并行读取。
+          // 生产数据库单次往返已有明显延迟，串行读取会让普通成员每次打开订单页
+          // 多等待一整轮；此处不改变任何筛选范围或权限规则。
+          const [myRowsResult, participantOrderRowsResult] = await Promise.all([
+            db.execute(
               sql`SELECT fo.*, u.username, u.name as nickname, u.username as userName, u.avatar as userAvatar
-               FROM ledger_orders fo
-               LEFT JOIN users u ON u.id = fo.user_id
-               INNER JOIN ledger_order_participants p ON p.order_id = fo.id
-               WHERE fo.ledger_id = ${input.ledgerId} AND p.ledger_id = ${input.ledgerId} AND p.user_id = ${targetUserId} AND p.role <> 'inactive' AND fo.user_id != ${targetUserId}`
-            ) as any;
-            const participantOrders = ((participantOrderRows[0] || participantOrderRows) as any[]) || [];
+                  FROM ledger_orders fo
+                  LEFT JOIN users u ON u.id = fo.user_id
+                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'finance' AND fo.deleted_at IS NULL AND fo.user_id = ${targetUserId}
+                  ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
+            ) as Promise<any>,
+            db.execute(
+              sql`SELECT fo.*, u.username, u.name as nickname, u.username as userName, u.avatar as userAvatar
+                 FROM ledger_orders fo
+                 LEFT JOIN users u ON u.id = fo.user_id
+                 INNER JOIN ledger_order_participants p ON p.order_id = fo.id
+                 WHERE fo.ledger_id = ${input.ledgerId} AND p.ledger_id = ${input.ledgerId} AND p.user_id = ${targetUserId} AND p.role <> 'inactive' AND fo.user_id != ${targetUserId}`
+            ) as Promise<any>,
+          ]);
+          orders = ((myRowsResult[0] || myRowsResult) as any[]) || [];
+          // 参与方订单（排除自己的订单，不限 order_role，资方订单也能看到）
+          try {
+            const participantOrders = ((participantOrderRowsResult[0] || participantOrderRowsResult) as any[]) || [];
             // 标记这些订单为参与方订单
             for (const o of participantOrders) {
               (o as any)._isParticipant = true;
@@ -19893,40 +19897,19 @@ ${klinesSummary}
           const bTime = new Date(b.created_at).getTime();
           return bTime - aTime;
         });
-        // 查询当前用户是否是某些订单的参与方，并标记 _isParticipant
-        if (!targetIsManager && allOrders.length > 0) {
-          try {
-            const orderIds = allOrders.map((o: any) => o.id);
-            const placeholders = orderIds.map(() => '?').join(',');
-            const conn = await getLedgerDb();
-            const participantRows = await (conn as any).execute(
-              `SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND role <> 'inactive' AND order_id IN (${placeholders})`,
-              [input.ledgerId, targetUserId, ...orderIds]
-            ) as any;
-            const participantOrderIds = new Set(
-              ((participantRows[0] || participantRows) as any[]).map((r: any) => Number(r.order_id))
-            );
-            for (const o of allOrders) {
-              // 主拥有者也有 role='owner' 的配置快照，但它只承载独立配置，
-              // 不能因此把主订单归入“参与”。只有非主拥有者的真实协作关系才是参与订单。
-              if (participantOrderIds.has(Number(o.id)) && Number(o.user_id) !== Number(targetUserId)) {
-                (o as any)._isParticipant = true;
-              }
-            }
-          } catch (_e) { /* 如果表不存在则忽略 */ }
-        }
         // 为参与方订单组装 participantInfo：取该用户(targetUserId)在本订单的各自利率/计息基数/起息日
         // 用于共享订单卡片按参与者各自利率显示「待结利息(年化X%)」
         // 注意：不能只依赖 _isParticipant 标记——管理员/查看视角分支下 finance 订单不会被打标记，
         // 因此这里对所有订单统一查 targetUserId 在该订单的参与方记录，查到即挂。
+        let paidTotalMap: Record<number, { amount: number; currency: string }> = {};
         try {
           const participantOrderIds = allOrders.map((o: any) => Number(o.id));
           if (participantOrderIds.length > 0) {
             const piPlaceholders = participantOrderIds.map(() => '?').join(',');
             const piConnRaw = await getDbConnection();
             if (!piConnRaw) throw new Error('no db conn');
-            // 并行查询参与者字段和用户名
-            const [piRowsResult, puRowsResult] = await Promise.all([
+            // 三类附带数据彼此独立，放在同一轮并行读取，避免每一类都增加一次跨库往返。
+            const [piRowsResult, puRowsResult, ptRowsResult] = await Promise.all([
               piConnRaw.execute(
                 `SELECT order_id, role, commission_rate, commission_base, commission_start_date, paid_commission, note,
                  interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, order_snapshot
@@ -19939,11 +19922,27 @@ ${klinesSummary}
                  LEFT JOIN ledger_members lm ON lm.userId = u.id AND lm.ledgerId = ?
                  WHERE u.id = ? LIMIT 1`,
                 [input.ledgerId, targetUserId]
-              ).catch(() => null) as Promise<any>
+              ).catch(() => null) as Promise<any>,
+              piConnRaw.execute(
+                `SELECT order_id, IFNULL(currency, 'U') as currency, SUM(amount) as total_paid
+                 FROM ledger_order_payments
+                 WHERE order_id IN (${piPlaceholders})
+                 GROUP BY order_id, IFNULL(currency, 'U')`,
+                participantOrderIds
+              ).catch(() => null) as Promise<any>,
             ]);
             const piArr = piRowsResult ? ((piRowsResult[0] || piRowsResult) as any[]) || [] : [];
             const piMap: Record<number, any> = {};
             for (const pi of piArr) { piMap[Number(pi.order_id)] = pi; }
+            const ptArr = ptRowsResult ? (Array.isArray(ptRowsResult[0]) ? ptRowsResult[0] : (Array.isArray(ptRowsResult) ? ptRowsResult : [])) : [];
+            for (const row of ptArr) {
+              const orderId = Number(row.order_id);
+              if (!paidTotalMap[orderId]) {
+                paidTotalMap[orderId] = { amount: parseFloat(row.total_paid || '0'), currency: row.currency };
+              } else {
+                paidTotalMap[orderId].amount += parseFloat(row.total_paid || '0');
+              }
+            }
             let participantUserName = '';
             if (puRowsResult) {
               const puArr = ((puRowsResult[0] || puRowsResult) as any[]) || [];
@@ -20002,33 +20001,6 @@ ${klinesSummary}
             }
           }
         } catch (_e) { console.error('[funderGetAssetOrders] piRows catch error:', _e); }
-        // 附带已结利息汇总（paidTotal）
-        let paidTotalMap: Record<number, { amount: number; currency: string }> = {};
-        if (allOrders.length > 0) {
-          try {
-            const ptConn = await getDbConnection();
-            if (ptConn) {
-              const ptOrderIds = allOrders.map((o: any) => Number(o.id));
-              const ptPlaceholders = ptOrderIds.map(() => '?').join(',');
-              const ptRows = await ptConn.execute(
-                `SELECT order_id, IFNULL(currency, 'U') as currency, SUM(amount) as total_paid
-                 FROM ledger_order_payments
-                 WHERE order_id IN (${ptPlaceholders})
-                 GROUP BY order_id, IFNULL(currency, 'U')`,
-                ptOrderIds
-              ) as any;
-              const ptArr = Array.isArray(ptRows[0]) ? ptRows[0] : (Array.isArray(ptRows) ? ptRows : []);
-              for (const row of ptArr) {
-                const oid = Number(row.order_id);
-                if (!paidTotalMap[oid]) {
-                  paidTotalMap[oid] = { amount: parseFloat(row.total_paid || '0'), currency: row.currency };
-                } else {
-                  paidTotalMap[oid].amount += parseFloat(row.total_paid || '0');
-                }
-              }
-            }
-          } catch (_ptE) { /* 忽略错误 */ }
-        }
         // 临时调试日志
         const participantDebug = allOrders.filter((o: any) => (o as any)._isParticipant);
         if (participantDebug.length > 0) {
