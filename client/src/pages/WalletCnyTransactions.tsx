@@ -2,19 +2,14 @@ import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, RefreshCw } from "lucide-react";
 import { trpc } from "../lib/trpc";
+import { restoreLedgerViewAsState } from "../lib/authIdentity";
 import { AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
-  const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  const days = Math.floor(diff / 86400000);
-  if (days === 0)
-    return `今天 ${d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
-  if (days === 1)
-    return `昨天 ${d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
-  if (days < 7) return `${days}天前`;
-  return d.toLocaleDateString("zh-CN", { year: "numeric", month: "numeric", day: "numeric" });
+  if (Number.isNaN(d.getTime())) return "时间未知";
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 // 从交易备注中提取世界杯球队 code（大写），如 [ES] → 'es'
@@ -44,11 +39,14 @@ function extractWcTeamCode(note: string): string | null {
 export default function WalletCnyTransactions() {
   const [, setLocation] = useLocation();
   const search = useSearch();
-  const isYaban = new URLSearchParams(search).get("from") === "yaban";
+  const params = new URLSearchParams(search);
+  const isYaban = params.get("from") === "yaban";
+  const viewAsUserId = restoreLedgerViewAsState(params.get("viewAs"));
+  const walletQuery = viewAsUserId ? `?fromLedger=52&viewAs=${viewAsUserId}` : "?fromLedger=52";
   const switchAsset = (asset: string) => {
     if (asset === "CNY") return;
-    if (asset === "USDT") return setLocation("/wallet/transactions");
-    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=52`);
+    if (asset === "USDT") return setLocation(`/wallet/transactions${walletQuery}`);
+    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
   };
   const [filter, setFilter] = useState<"all" | "in" | "out">("all");
 
@@ -233,7 +231,7 @@ export default function WalletCnyTransactions() {
         }}
       >
         <button
-          onClick={() => setLocation("/wallet")}
+          onClick={() => setLocation(`/wallet${walletQuery}`)}
           className="flex items-center justify-center w-9 h-9 rounded-full"
           style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(229,57,53,0.3)" }}
         >

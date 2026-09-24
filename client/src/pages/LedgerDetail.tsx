@@ -4060,7 +4060,13 @@ export default function LedgerDetail() {
                 <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
                 {/* 余额+按鈕同行 */}
                 <div className="flex items-center justify-between mb-2">
-                  <div>
+                  <button
+                    type="button"
+                    onClick={() => setLocation(`/wallet?fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+                    className="-ml-1 flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1 py-1 text-left transition active:scale-[0.985]"
+                    title="查看智能钱包详情"
+                  >
+                    <div>
                     <div className="flex items-center gap-1.5 mb-1">
                       <div style={{ width: 14, height: 14, overflow: 'visible', position: 'relative', flexShrink: 0, marginLeft: -16 }}>
                         <div style={{ width: 400, height: 400, transform: 'scale(0.07)', transformOrigin: 'bottom left', position: 'absolute', bottom: -3, left: 0 }}>
@@ -4075,26 +4081,29 @@ export default function LedgerDetail() {
                       </span>
                       <span className="text-xs font-medium" style={{ color: 'rgba(201,168,76,0.55)' }}>USDT</span>
                     </div>
-                  </div>
+                    </div>
+                  </button>
                   {!effectiveIsFunder && (
-                    <div className="flex gap-1.5">
+                    <div className="grid shrink-0 grid-cols-3 gap-1.5">
                       <button
                         onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
-                        className="h-7 rounded-full text-xs font-semibold"
-                        style={{ padding: '0 14px', background: 'linear-gradient(135deg, #C9A84C 0%, #F5D78E 50%, #C9A84C 100%)', color: '#000', boxShadow: '0 1px 4px rgba(201,168,76,0.35)' }}
+                        disabled={!!viewAsUserId}
+                        className="h-7 rounded-full text-xs font-semibold disabled:opacity-45"
+                        style={{ minWidth: 52, background: 'linear-gradient(135deg, #C9A84C 0%, #F5D78E 50%, #C9A84C 100%)', color: '#000', boxShadow: '0 1px 4px rgba(201,168,76,0.35)' }}
                       >充値</button>
                       <button
                         onClick={() => setLocation(`/ledger/${ledgerId}/af-withdraw${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-                        className="h-7 rounded-full text-xs font-semibold"
-                        style={{ padding: '0 14px', background: 'transparent', border: '1px solid rgba(201,168,76,0.55)', color: '#F5D78E' }}
+                        disabled={!!viewAsUserId}
+                        className="h-7 rounded-full text-xs font-semibold disabled:opacity-45"
+                        style={{ minWidth: 52, background: 'transparent', border: '1px solid rgba(201,168,76,0.55)', color: '#F5D78E' }}
                       >提现</button>
-                      {!viewAsUserId && (
-                        <button
-                          onClick={() => setLocation('/wallet?fromLedger=52')}
-                          className="h-7 rounded-full text-xs font-semibold"
-                          style={{ padding: '0 12px', background: 'rgba(201,168,76,0.14)', border: '1px solid rgba(201,168,76,0.55)', color: '#F5D78E' }}
-                        >转账</button>
-                      )}
+                      <button
+                        onClick={() => setLocation(`/wallet?fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+                        disabled={!!viewAsUserId}
+                        title={viewAsUserId ? '查看他人钱包时不可代为转账' : '站内转账'}
+                        className="h-7 rounded-full text-xs font-semibold disabled:opacity-45"
+                        style={{ minWidth: 52, background: 'rgba(201,168,76,0.14)', border: '1px solid rgba(201,168,76,0.55)', color: '#F5D78E' }}
+                      >转账</button>
                     </div>
                   )}
                 </div>

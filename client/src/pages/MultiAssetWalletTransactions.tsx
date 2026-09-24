@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ArrowDownCircle, ArrowLeft, ArrowUpCircle, Loader2, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { restoreLedgerViewAsState } from "@/lib/authIdentity";
 import { AI_WALLET_ASSET_CATALOG, AI_WALLET_SETTLEMENT_ASSETS, type AiWalletSettlementAsset } from "@shared/ai-wallet-assets";
 
 type FlowFilter = "all" | "in" | "out";
@@ -19,17 +20,17 @@ const theme = {
 
 function formatTime(value: string) {
   const date = new Date(value);
-  const elapsedDays = Math.floor((Date.now() - date.getTime()) / 86400000);
-  if (elapsedDays === 0) return `今天 ${date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
-  if (elapsedDays === 1) return `昨天 ${date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
-  if (elapsedDays < 7) return `${elapsedDays}天前`;
-  return date.toLocaleDateString("zh-CN", { year: "numeric", month: "numeric", day: "numeric" });
+  if (Number.isNaN(date.getTime())) return "时间未知";
+  const pad = (entry: number) => String(entry).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 export default function MultiAssetWalletTransactions() {
   const [, setLocation] = useLocation();
   const search = useSearch();
   const query = new URLSearchParams(search);
+  const viewAsUserId = restoreLedgerViewAsState(query.get("viewAs"));
+  const walletQuery = viewAsUserId ? `?fromLedger=52&viewAs=${viewAsUserId}` : "?fromLedger=52";
   const requestedAsset = String(query.get("asset") || "BTC").toUpperCase();
   const assetCode = (AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(requestedAsset)
     ? requestedAsset as AiWalletSettlementAsset
@@ -49,16 +50,16 @@ export default function MultiAssetWalletTransactions() {
     .filter((code: string) => (AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(code));
 
   const handleAssetChange = (nextAsset: string) => {
-    if (nextAsset === "USDT") return setLocation("/wallet/transactions");
-    if (nextAsset === "CNY") return setLocation("/wallet/cny-transactions");
-    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(nextAsset)}&fromLedger=52`);
+    if (nextAsset === "USDT") return setLocation(`/wallet/transactions${walletQuery}`);
+    if (nextAsset === "CNY") return setLocation(`/wallet/cny-transactions${walletQuery}`);
+    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(nextAsset)}&fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
   };
 
   return (
     <div className="min-h-screen pb-12" style={{ background: theme.bg }}>
       <header className="sticky top-0 z-10 border-b px-4 py-3" style={{ background: "rgba(13,13,13,.97)", borderColor: theme.border }}>
         <div className="flex items-center justify-between gap-3">
-          <button onClick={() => setLocation("/wallet?fromLedger=52")} className="rounded-full p-1.5" aria-label="返回钱包">
+          <button onClick={() => setLocation(`/wallet${walletQuery}`)} className="rounded-full p-1.5" aria-label="返回钱包">
             <ArrowLeft className="h-6 w-6" style={{ color: theme.goldLight }} />
           </button>
           <div className="min-w-0 flex-1 text-center">

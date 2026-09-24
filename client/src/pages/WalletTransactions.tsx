@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, Loader2 } from "lucide-react";
 import { trpc } from "../lib/trpc";
+import { restoreLedgerViewAsState } from "../lib/authIdentity";
 import { AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
 
 // 从交易备注中提取世界杯球队 code（小写），如 [ES] → 'es'
@@ -33,12 +34,13 @@ export default function WalletTransactions() {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const isYaban = params.get("from") === "yaban";
-  const viewAsUserId = params.get("viewAs") ? parseInt(params.get("viewAs")!) : undefined;
-  const backTo = isYaban ? "/yaban/wallet" : "/wallet";
+  const viewAsUserId = restoreLedgerViewAsState(params.get("viewAs"));
+  const walletQuery = viewAsUserId ? `?fromLedger=52&viewAs=${viewAsUserId}` : "?fromLedger=52";
+  const backTo = isYaban ? "/yaban/wallet" : `/wallet${walletQuery}`;
   const switchAsset = (asset: string) => {
     if (asset === "USDT") return;
-    if (asset === "CNY") return setLocation("/wallet/cny-transactions");
-    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=52`);
+    if (asset === "CNY") return setLocation(`/wallet/cny-transactions${walletQuery}`);
+    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
   };
 
   type FilterType = "all" | "recharge" | "withdraw" | "manual";
@@ -52,11 +54,13 @@ export default function WalletTransactions() {
 
   const formatDate = (dateStr: string | Date) => {
     const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return '时间未知';
+    const year = date.getFullYear();
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${month}-${day} ${hours}:${minutes}`;
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
   };
 
   const bhTypeLabel: Record<string, string> = {

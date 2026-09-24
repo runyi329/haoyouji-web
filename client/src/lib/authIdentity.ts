@@ -13,6 +13,19 @@ export function clearLedgerViewAsState(): void {
 }
 
 /**
+ * 在账本子页面根据 URL 恢复受控的成员查看上下文。
+ * 真实权限仍由服务端请求头和角色校验决定；此处只保证离开账本页后不会丢失已授权的查看目标。
+ */
+export function restoreLedgerViewAsState(rawUserId: string | null | undefined): number | undefined {
+  const userId = Number(rawUserId);
+  if (!Number.isInteger(userId) || userId <= 0) return undefined;
+  try {
+    sessionStorage.setItem(LEDGER_VIEW_AS_KEY, String(userId));
+  } catch {}
+  return userId;
+}
+
+/**
  * 清除一次真实登录会话附带的临时身份状态。
  * 登录和退出时调用，确保 auth token 对应的用户成为默认本人视角。
  */
