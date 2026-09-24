@@ -4,6 +4,7 @@ import YabanProfile from "./pages/yaban/YabanProfile";
 import YabanWallet from "./pages/yaban/YabanWallet";
 import WalletTransactions from "./pages/WalletTransactions";
 import WalletCnyTransactions from "./pages/WalletCnyTransactions";
+import MultiAssetWalletTransactions from "./pages/MultiAssetWalletTransactions";
 import YabanSettings from "./pages/yaban/YabanSettings";
 import YabanDataManage from "./pages/yaban/YabanDataManage";
 import YabanBindEmail from "./pages/yaban/YabanBindEmail";
@@ -479,6 +480,7 @@ function Router() {
         <Route path="/wallet" component={lazy(() => import("./pages/Wallet"))} />
         <Route path="/wallet/transactions" component={WalletTransactions} />
         <Route path="/wallet/cny-transactions" component={WalletCnyTransactions} />
+        <Route path="/wallet/asset-transactions" component={MultiAssetWalletTransactions} />
         <Route path="/payment-accounts" component={lazy(() => import("./pages/PaymentAccounts"))} />
         <Route path="/recharge" component={lazy(() => import("./pages/Recharge"))} />
         <Route path="/recharge/history" component={lazy(() => import("./pages/RechargeHistory"))} />

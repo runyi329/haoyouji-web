@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, Loader2 } from "lucide-react";
 import { trpc } from "../lib/trpc";
+import { AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
 
 // 从交易备注中提取世界杯球队 code（小写），如 [ES] → 'es'
 function extractWcTeamCode(note: string): string | null {
@@ -34,6 +35,11 @@ export default function WalletTransactions() {
   const isYaban = params.get("from") === "yaban";
   const viewAsUserId = params.get("viewAs") ? parseInt(params.get("viewAs")!) : undefined;
   const backTo = isYaban ? "/yaban/wallet" : "/wallet";
+  const switchAsset = (asset: string) => {
+    if (asset === "USDT") return;
+    if (asset === "CNY") return setLocation("/wallet/cny-transactions");
+    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=52`);
+  };
 
   type FilterType = "all" | "recharge" | "withdraw" | "manual";
   const [activeType, setActiveType] = useState<FilterType>("all");
@@ -80,6 +86,9 @@ export default function WalletTransactions() {
               <ArrowLeft className="w-5 h-5 text-white" />
             </button>
             <h1 className="text-lg font-semibold text-white">交易明细</h1>
+            <select value="USDT" onChange={(event) => switchAsset(event.target.value)} className="ml-auto max-w-[118px] rounded-lg border border-white/30 bg-white/10 px-2 py-1 text-xs font-semibold text-white outline-none" aria-label="切换明细币种">
+              <option value="USDT">USDT</option><option value="CNY">CNY</option>{AI_WALLET_SETTLEMENT_ASSETS.map((asset) => <option key={asset} value={asset}>{asset}</option>)}
+            </select>
           </div>
         </div>
         <div className="sticky top-[56px] z-10 bg-white shadow-sm">
@@ -183,6 +192,9 @@ export default function WalletTransactions() {
             <ArrowLeft className="w-6 h-6 text-[#CBA471]" />
           </button>
           <h1 className="text-lg font-semibold text-[#CBA471] tracking-widest">交易明细</h1>
+          <select value="USDT" onChange={(event) => switchAsset(event.target.value)} className="ml-auto max-w-[118px] rounded-lg border border-[#5d4723] bg-[#1b1b1b] px-2 py-1 text-xs font-semibold text-[#e8c98a] outline-none" aria-label="切换明细币种">
+            <option value="USDT">USDT</option><option value="CNY">CNY</option>{AI_WALLET_SETTLEMENT_ASSETS.map((asset) => <option key={asset} value={asset}>{asset}</option>)}
+          </select>
         </div>
       </div>
 

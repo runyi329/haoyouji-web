@@ -10,6 +10,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "@/pages/miban/mibanTrpc";
 import { toast } from "sonner";
+import { AI_WALLET_ASSET_CATALOG, AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,6 +36,7 @@ type WalletBalanceSortKey = "usdt" | "cny" | "user";
 type WalletBalanceSortDirection = "asc" | "desc";
 type WalletTrendDays = 7 | 30 | 60 | 70;
 type WalletTrendCurrency = "USDT" | "CNY";
+type AdjustmentAsset = "USDT" | "CNY" | (typeof AI_WALLET_SETTLEMENT_ASSETS)[number];
 
 const formatLedgerDate = (value: Date) => {
   const year = value.getFullYear();
@@ -315,7 +317,7 @@ export default function AfRechargeManage() {
   const [adjSearch, setAdjSearch] = useState("");
   const [adjShowDropdown, setAdjShowDropdown] = useState(false);
   const [adjSelectedUser, setAdjSelectedUser] = useState<any>(null);
-  const [adjCurrency, setAdjCurrency] = useState<"USDT" | "CNY">("USDT");
+  const [adjCurrency, setAdjCurrency] = useState<AdjustmentAsset>("USDT");
   const [adjDirection, setAdjDirection] = useState<"add" | "sub">("add");
   const [adjAmount, setAdjAmount] = useState("");
   const [adjNote, setAdjNote] = useState("");
@@ -383,6 +385,10 @@ export default function AfRechargeManage() {
   const adjHistoryQuery = trpc.ledger.afGetMyRechargeHistory.useQuery(
     { ...(adjSelectedUser?.id ? { viewAsUserId: Number(adjSelectedUser.id) } : {}) },
     { enabled: !!adjSelectedUser, staleTime: 0 }
+  );
+  const adjMultiAssetHistoryQuery = mtrpc.adminUser.multiAssetWalletHistory.useQuery(
+    { userId: Number(adjSelectedUser?.id || 0), limit: 100 },
+    { enabled: !!adjSelectedUser?.id, staleTime: 0 },
   );
   const adjHistory = (adjHistoryQuery.data as any[]) ?? [];
   const refetchAdjHistory = adjHistoryQuery.refetch;
@@ -469,6 +475,21 @@ export default function AfRechargeManage() {
     },
     onError: (e: any) => toast.error(e.message || "调账失败"),
   });
+  const multiAssetAdjMutation = mtrpc.adminUser.multiAssetWalletAdjust.useMutation({
+    onSuccess: () => {
+      toast.success("数字资产调账成功");
+      if (adjSelectedUser?.id) rememberRecentAdjUser(Number(adjSelectedUser.id));
+      setAdjAmount("");
+      setAdjNote("");
+      adjUtils.adminUser.list.invalidate();
+      adjUtils.adminUser.walletGlobalHistory.invalidate();
+      adjUtils.adminUser.multiAssetWalletHistory.invalidate();
+      refetchAdjHistory();
+      setAdjLogPage(1);
+      refetchAdjGlobal();
+    },
+    onError: (e: any) => toast.error(e.message || "数字资产调账失败"),
+  });
   // 同步 adjSelectedUser 余额（调账后刷新）
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const adjUserList = adjAllUsers as any[];
@@ -482,6 +503,15 @@ export default function AfRechargeManage() {
     usdt: totals.usdt + Number(user.usdtBalance ?? 0),
     cny: totals.cny + Number(user.cnyBalance ?? 0),
   }), { userCount: 0, usdt: 0, cny: 0 });
+  const adjMultiAssetTotals = adjUserList.reduce((totals: Record<string, number>, user: any) => {
+    for (const balance of (user.multiAssetBalances ?? [])) {
+      const code = String(balance.assetCode || "").toUpperCase();
+      if ((AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(code)) {
+        totals[code] = (totals[code] ?? 0) + Number(balance.availableBalance ?? 0);
+      }
+    }
+    return totals;
+  }, {});
   const adjFilteredBalanceUsers = adjUserList.filter((user: any) => {
     if (!adjBalanceQuery) return true;
     return [user.name, user.username, user.id].some((value) => String(value ?? "").toLocaleLowerCase().includes(adjBalanceQuery));
@@ -549,16 +579,31 @@ export default function AfRechargeManage() {
   ).slice(0, 10);
   const handleAdjSubmit = () => {
     if (!adjSelectedUser) { toast.error("请先选择用户"); return; }
-    const amt = parseFloat(adjAmount);
+    const amountText = adjAmount.trim();
+    const amt = Number(amountText);
     if (isNaN(amt) || amt <= 0) { toast.error("请输入大于 0 的金额"); return; }
     // 临时 Manus 预览复用生产 API；禁止在预览中误写真实钱包余额。
     if (typeof window !== 'undefined' && window.location.hostname.endsWith('.manus.computer')) {
       toast.info('临时预览仅用于查看界面，确认调账不会提交到生产数据。');
       return;
     }
+    const isMultiAsset = (AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(adjCurrency);
+    if (isMultiAsset) {
+      const signedAmount = adjDirection === "sub" ? `-${amountText}` : amountText;
+      multiAssetAdjMutation.mutate({
+        userId: Number(adjSelectedUser.id),
+        assetCode: adjCurrency as (typeof AI_WALLET_SETTLEMENT_ASSETS)[number],
+        amount: signedAmount,
+        note: adjNote.trim(),
+        requestId: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID().replace(/-/g, "")
+          : `${Date.now()}${Math.random().toString(36).slice(2, 14)}`,
+      });
+      return;
+    }
     const finalAmt = adjDirection === "sub" ? -amt : amt;
     // 备注允许留空；服务端会以审计默认说明补全空值。
-    adjMutation.mutate({ userId: adjSelectedUser.id, currency: adjCurrency, amount: finalAmt, note: adjNote.trim() });
+    adjMutation.mutate({ userId: adjSelectedUser.id, currency: adjCurrency as "USDT" | "CNY", amount: finalAmt, note: adjNote.trim() });
   };
   const persistAdjCommonNotes = (nextNotes: string[]) => {
     const normalized = nextNotes.slice(0, 8);
@@ -1457,6 +1502,18 @@ export default function AfRechargeManage() {
                     <p className="text-[15px] font-bold text-green-600">¥{Number(adjSelectedUser.cnyBalance ?? 0).toFixed(2)}</p>
                   </div>
                 </div>
+                {(adjSelectedUser.multiAssetBalances ?? []).length > 0 && (
+                  <div className="mt-2 rounded-lg border border-violet-100 bg-violet-50 px-2.5 py-2">
+                    <p className="text-[10px] text-violet-500">已持有数字资产</p>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {(adjSelectedUser.multiAssetBalances ?? []).map((asset: any) => (
+                        <span key={asset.assetCode} className="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-100">
+                          {asset.assetCode} {Number(asset.availableBalance ?? 0).toLocaleString("zh-CN", { maximumFractionDigits: 8 })}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="relative">
@@ -1521,16 +1578,20 @@ export default function AfRechargeManage() {
             <div className="grid grid-cols-2 gap-2">
               <div className="min-w-0">
                 <p className="text-[10px] text-gray-400 mb-1">货币</p>
-                <div className="flex h-9 rounded-xl overflow-hidden border border-gray-200">
-                  <button onClick={() => setAdjCurrency("USDT")}
-                    className={`flex-1 min-w-0 text-[12px] font-medium transition-colors ${adjCurrency === "USDT" ? "bg-orange-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
-                    USDT
-                  </button>
-                  <button onClick={() => setAdjCurrency("CNY")}
-                    className={`flex-1 min-w-0 text-[12px] font-medium transition-colors ${adjCurrency === "CNY" ? "bg-green-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>
-                    CNY
-                  </button>
-                </div>
+                <select
+                  value={adjCurrency}
+                  onChange={(event) => setAdjCurrency(event.target.value as AdjustmentAsset)}
+                  className="h-9 w-full rounded-xl border border-gray-200 bg-white px-2 text-[12px] font-semibold text-gray-700 outline-none focus:border-orange-400"
+                >
+                  <option value="USDT">USDT · 泰达币（现有账户）</option>
+                  <option value="CNY">CNY · 人民币（现有账户）</option>
+                  <optgroup label="首批独立数字资产账户">
+                    {AI_WALLET_SETTLEMENT_ASSETS.map((assetCode) => {
+                      const asset = AI_WALLET_ASSET_CATALOG.find((item) => item.code === assetCode);
+                      return <option key={assetCode} value={assetCode}>{assetCode} · {asset?.name || assetCode}</option>;
+                    })}
+                  </optgroup>
+                </select>
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] text-gray-400 mb-1">方向</p>
@@ -1555,6 +1616,7 @@ export default function AfRechargeManage() {
                 onChange={(e) => setAdjAmount(e.target.value)}
                 placeholder="请输入正数金额"
                 min="0"
+                step={adjCurrency === "CNY" ? "0.01" : (AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(adjCurrency) ? "0.00000001" : "0.0001"}
                 className="w-full text-[16px] font-semibold px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:border-orange-400"
               />
             </div>
@@ -1623,11 +1685,11 @@ export default function AfRechargeManage() {
             </div>
             <button
               onClick={handleAdjSubmit}
-              disabled={adjMutation.isPending || !adjSelectedUser}
+              disabled={adjMutation.isPending || multiAssetAdjMutation.isPending || !adjSelectedUser}
               className="w-full py-3 rounded-2xl text-[14px] font-bold text-white disabled:opacity-40 transition-opacity"
               style={{ background: "#FF6900" }}
             >
-              {adjMutation.isPending ? "处理中..." : `确认${adjDirection === "add" ? "充值" : "扣款"} ${adjCurrency}`}
+              {adjMutation.isPending || multiAssetAdjMutation.isPending ? "处理中..." : `确认${adjDirection === "add" ? "增加" : "扣除"} ${adjCurrency}`}
             </button>
           </div>
 
@@ -1665,6 +1727,35 @@ export default function AfRechargeManage() {
                 days={adjUserTrendDays}
                 onDaysChange={setAdjUserTrendDays}
               />
+              {(adjMultiAssetHistoryQuery.data ?? []).length > 0 && (
+                <div className="mb-3 rounded-2xl border border-violet-100 bg-white p-3.5 shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[13px] font-bold text-gray-900">数字资产流水</p>
+                      <p className="mt-0.5 text-[10px] text-gray-400">BTC、ETH、SOL、BNB 的独立不可变账本</p>
+                    </div>
+                    <span className="text-[10px] text-violet-500">{adjMultiAssetHistoryQuery.data?.length ?? 0} 条</span>
+                  </div>
+                  <div className="mt-2 divide-y divide-violet-50">
+                    {(adjMultiAssetHistoryQuery.data ?? []).slice(0, 8).map((entry: any) => {
+                      const amount = Number(entry.amount ?? 0);
+                      const label = entry.eventType === "transfer_in" ? "站内转账收款" : entry.eventType === "transfer_out" ? "站内转账汇款" : "后台手动调账";
+                      return (
+                        <div key={entry.id} className="flex items-center justify-between gap-3 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-[11px] font-medium text-gray-700">{label} · {entry.assetCode}</p>
+                            <p className="truncate text-[10px] text-gray-400">{String(entry.note || "—").replace(/\[.*?\]/g, "").trim()} · {new Date(entry.createdAt).toLocaleString("zh-CN")}</p>
+                          </div>
+                          <div className={`shrink-0 text-right text-[12px] font-bold ${amount >= 0 ? "text-green-600" : "text-red-500"}`}>
+                            {amount >= 0 ? "+" : ""}{amount.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}
+                            <span className="ml-1 text-[9px] font-medium">{entry.assetCode}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[13px] font-bold text-black">{adjSelectedUser.name || adjSelectedUser.username} 的全部钱包流水</p>
@@ -1807,6 +1898,19 @@ export default function AfRechargeManage() {
                   <p className="mt-0.5 truncate text-[16px] font-bold text-green-700">¥{formatWalletAmount(adjBalanceTotals.cny, 2)}</p>
                 </div>
               </div>
+              <div className="mb-3 rounded-xl border border-violet-100 bg-violet-50 p-2.5">
+                <p className="text-[10px] font-medium text-violet-600">首批独立数字资产总余额</p>
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                  {AI_WALLET_SETTLEMENT_ASSETS.map((assetCode) => (
+                    <div key={assetCode} className="rounded-lg bg-white px-2 py-1.5 ring-1 ring-violet-100">
+                      <p className="text-[10px] text-violet-400">{assetCode}</p>
+                      <p className="mt-0.5 truncate text-[12px] font-bold text-violet-700">
+                        {Number(adjMultiAssetTotals[assetCode] ?? 0).toLocaleString("zh-CN", { maximumFractionDigits: 8 })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="mb-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 focus-within:border-orange-400">
                 <Search className="h-4 w-4 shrink-0 text-gray-400" />
@@ -1873,6 +1977,15 @@ export default function AfRechargeManage() {
                         <span className="min-w-0">
                           <span className="block truncate text-[12px] font-semibold text-gray-800">{name}</span>
                           <span className="block truncate text-[10px] text-gray-400">@{username} · ID {user.id}</span>
+                          {(user.multiAssetBalances ?? []).length > 0 && (
+                            <span className="mt-1 flex flex-wrap gap-1">
+                              {(user.multiAssetBalances ?? []).map((asset: any) => (
+                                <span key={asset.assetCode} className="rounded bg-violet-50 px-1 py-0.5 text-[9px] font-medium text-violet-600">
+                                  {asset.assetCode} {Number(asset.availableBalance ?? 0).toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
+                                </span>
+                              ))}
+                            </span>
+                          )}
                         </span>
                         <span className={`self-center text-right text-[11px] font-semibold ${Number(user.usdtBalance ?? 0) < 0 ? "text-red-500" : "text-blue-600"}`}>
                           {formatWalletAmount(user.usdtBalance, 2)}
@@ -1970,15 +2083,21 @@ export default function AfRechargeManage() {
                     order_settlement: '订单结算',
                     management_fee: '管理费',
                     manual: '手动调账',
+                    admin_adjustment: '数字资产手动调账',
+                    transfer_in: '站内转账收款',
+                    transfer_out: '站内转账汇款',
                   };
                   const sourceType = String(r.sourceType ?? 'balance_history');
                   const sourceId = Number(r.sourceId ?? r.id ?? 0);
                   const isInternalTransfer = String(r.note ?? '').includes('[站内转账]');
+                  const isMultiAssetLedger = sourceType === 'multi_asset';
                   const canRevoke = sourceId > 0
                     && !['order_buy', 'order_settlement', 'management_fee'].includes(String(r.type ?? ''))
                     && !String(r.note ?? '').includes('撤回误操作')
-                    && !isInternalTransfer;
-                  const canEditNote = !isInternalTransfer && sourceId > 0 && (sourceType === 'manual' || sourceType === 'balance_history');
+                    && !isInternalTransfer
+                    && !isMultiAssetLedger;
+                  const canEditNote = !isInternalTransfer && !isMultiAssetLedger && sourceId > 0 && (sourceType === 'manual' || sourceType === 'balance_history');
+                  const displayDigits = r.currency === 'CNY' ? 2 : (AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(String(r.currency ?? '').toUpperCase()) ? 8 : 4;
                   return (
                     <div key={r.id ?? i} className="py-2.5 border-b border-gray-50 last:border-0">
                       <div className="flex items-start justify-between">
@@ -1993,13 +2112,13 @@ export default function AfRechargeManage() {
                           <p className="text-[10px] text-gray-400 mt-0.5">{new Date(r.createdAt).toLocaleString("zh-CN")}</p>
                           {r.balance != null && (
                             <p className="mt-0.5 text-[10px] text-gray-400">
-                              该笔后余额 {r.currency === "CNY" ? "¥" : ""}{Number(r.balance).toFixed(r.currency === "CNY" ? 2 : 4)} {r.currency === "CNY" ? "CNY" : "USDT"}
+                              该笔后余额 {r.currency === "CNY" ? "¥" : ""}{Number(r.balance).toFixed(displayDigits)} {r.currency}
                             </p>
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
                           <p className={`text-[14px] font-bold ${Number(r.amount) >= 0 ? "text-green-600" : "text-red-500"}`}>
-                            {Number(r.amount) >= 0 ? "+" : ""}{r.currency === "CNY" ? "¥" : ""}{Number(r.amount).toFixed(r.currency === "CNY" ? 2 : 4)}
+                            {Number(r.amount) >= 0 ? "+" : ""}{r.currency === "CNY" ? "¥" : ""}{Number(r.amount).toFixed(displayDigits)}
                           </p>
                           {canRevoke && (
                             <button

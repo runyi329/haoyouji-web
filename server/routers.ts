@@ -80,7 +80,8 @@ import { yabanStaffRouter } from "./yaban-staff-router";
 import { yabanTreatmentRouter } from "./yaban-treatment-router";
 import { versionRouter } from "./version-router";
 import { aiWalletRouter, assertAiWalletOperationEnabled } from "./ai-wallet-router";
-import { AI_WALLET_MARKET_ASSETS } from "../shared/ai-wallet-assets";
+import { AI_WALLET_MARKET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
+import * as dbMultiAssetWallet from "./db-multi-asset-wallet";
 // // 在应用启动时初始化数据库
 // initDatabase().catch(err => {
 //   console.error("[DB Init] Failed to initialize database:", err);
@@ -1958,6 +1959,50 @@ ${klinesSummary}
           currency: input.currency,
           amount: input.amount,
           requestId: input.requestId,
+        });
+      }),
+
+    // 第二阶段首批数字资产钱包：BTC / ETH / SOL / BNB。
+    // 余额永远按币种独立保存；行情只用于展示估值，不参与扣款或结算。
+    getMultiAssetBalances: protectedProcedure
+      .query(async ({ ctx }) => {
+        const balances = await dbMultiAssetWallet.getUserMultiAssetBalances(ctx.user.id);
+        const { getLatestPrice, getUsdtCnyRate } = await import('./price-scanner');
+        const usdtCnyRate = Number(getUsdtCnyRate?.() || 0);
+        return balances.map((balance) => {
+          const priceUsdt = Number(getLatestPrice(balance.assetCode) || 0);
+          return {
+            ...balance,
+            priceUsdt,
+            priceCny: priceUsdt > 0 && usdtCnyRate > 0 ? priceUsdt * usdtCnyRate : 0,
+          };
+        });
+      }),
+
+    getMultiAssetHistory: protectedProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(100).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        return await dbMultiAssetWallet.getUserMultiAssetHistory(ctx.user.id, input?.limit ?? 30);
+      }),
+
+    transferMultiAssetBalance: protectedProcedure
+      .input(z.object({
+        toUserId: z.number().int().positive(),
+        assetCode: z.enum(AI_WALLET_SETTLEMENT_ASSETS),
+        // 不接收 JavaScript number，防止 BTC 等高精度资产在客户端到服务端之间产生浮点误差。
+        amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '金额格式无效，最多支持18位小数'),
+        requestId: z.string().regex(/^[A-Za-z0-9_-]{16,96}$/, '转账请求无效'),
+        sourceLedgerId: z.number().int().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await assertAiWalletOperationEnabled(`ledger:${input.sourceLedgerId}`, "transfer");
+        return await dbMultiAssetWallet.transferMultiAssetBalance({
+          fromUserId: ctx.user.id,
+          toUserId: input.toUserId,
+          assetCode: input.assetCode,
+          amount: input.amount,
+          requestId: input.requestId,
+          sourceLedgerId: input.sourceLedgerId,
         });
       }),
 
@@ -17008,7 +17053,7 @@ ${klinesSummary}
           orderDetails: data.orderDetails,
         });});
         // 使用全局数字资产库的稳定顺序；未持有的资产不会进入这一组。
-        const coinOrder = [...AI_WALLET_MARKET_ASSETS];
+        const coinOrder: readonly string[] = AI_WALLET_MARKET_ASSETS;
         coins.sort((a, b) => coinOrder.indexOf(a.coin) - coinOrder.indexOf(b.coin));
         const total = parseFloat(coins.reduce((sum, c) => sum + c.pnl, 0).toFixed(4));
 

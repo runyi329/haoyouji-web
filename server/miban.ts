@@ -22,6 +22,8 @@ import { getDb, getDbConnection } from "./db";
 import { sdk } from "./_core/sdk";
 import { ONE_YEAR_MS } from "@shared/const";
 import { getUserCnyBalance, adminAdjustCnyBalance, addUserBalance, getUserBalance } from "./db-recharge";
+import { adjustMultiAssetBalance, ensureMultiAssetWalletInfrastructure, getMultiAssetBalancesForUsers, getUserMultiAssetHistory } from "./db-multi-asset-wallet";
+import { AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
 import { getUsdtCnyRate } from "./price-scanner";
 import { assertAiWalletOperationEnabled } from "./ai-wallet-router";
 
@@ -692,6 +694,15 @@ async function getAllUsers() {
       console.warn('[miban] getAllUsers: CNY balance query failed:', (e as any)?.message);
     }
 
+    // 步骤5：第二阶段独立数字资产余额。只返回实际非零余额，避免在管理和用户端
+    // 制造一排 0.0000 的空资产；失败不影响既有 CNY / USDT 管理能力。
+    let multiAssetMap = new Map<number, any[]>();
+    try {
+      multiAssetMap = await getMultiAssetBalancesForUsers(ids);
+    } catch (e) {
+      console.warn('[miban] getAllUsers: multi-asset balance query failed:', (e as any)?.message);
+    }
+
     return userList.map((u: any) => ({
       id: u.id,
       name: u.name,
@@ -710,6 +721,7 @@ async function getAllUsers() {
       orderCount: orderCountMap.get(u.id) ?? 0,
       usdtBalance: usdtMap.get(u.id) ?? parseFloat(String(u.balance ?? '0')),
       cnyBalance: cnyMap.get(u.id) ?? 0,
+      multiAssetBalances: multiAssetMap.get(Number(u.id)) ?? [],
     }));
   } catch (e) {
     console.error('[miban] getAllUsers failed:', (e as any)?.message);
@@ -2416,6 +2428,37 @@ export const mibanAdminUserRouter = router({
       }
       return { ok: true };
     }),
+  // 首批 BTC / ETH / SOL / BNB 的手动加减。与历史 USDT / CNY 调账隔离，
+  // 使用不可变多资产流水且服务端禁止把余额扣为负数。
+  multiAssetWalletAdjust: mibanAdminProcedure
+    .input(z.object({
+      userId: z.number().int().positive(),
+      assetCode: z.enum(AI_WALLET_SETTLEMENT_ASSETS),
+      amount: z.string().trim().regex(/^-?(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '金额格式无效，最多支持18位小数'),
+      note: z.string().max(500).optional(),
+      requestId: z.string().regex(/^[A-Za-z0-9_-]{16,96}$/, '调账请求无效'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await assertAiWalletOperationEnabled('ledger:52', 'admin_adjustment');
+      try {
+        return await adjustMultiAssetBalance({
+          userId: input.userId,
+          assetCode: input.assetCode,
+          amount: input.amount,
+          note: input.note,
+          requestId: input.requestId,
+          actorUserId: ctx.user.id,
+          sourceLedgerId: 52,
+        });
+      } catch (error: any) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: error?.message || '数字资产调账失败' });
+      }
+    }),
+  multiAssetWalletHistory: mibanAdminProcedure
+    .input(z.object({ userId: z.number().int().positive(), limit: z.number().int().min(1).max(100).optional() }))
+    .query(async ({ input }) => {
+      return await getUserMultiAssetHistory(input.userId, input.limit ?? 100);
+    }),
   // 查询指定用户的调账历史（USDT + CNY 合并，最新50条）
   walletHistory: mibanAdminProcedure
     .input(z.object({ userId: z.number(), limit: z.number().optional() }))
@@ -2474,6 +2517,8 @@ export const mibanAdminUserRouter = router({
       // AF 订单买入、卖出结算、管理费和退款会写入 af_manual_balances；已完成充值则以
       // recharge_orders 关联的实际到账金额为准。三源按用户/时间/金额去重，严格对应用户端流水口径。
       if (input.includeAllWalletEvents) {
+        // 首次查询时创建第二阶段的独立多资产账本表；该步骤不会写入任何用户余额或流水。
+        await ensureMultiAssetWalletInfrastructure();
         const eventSourceSql = `
           SELECT
             CONCAT('r_', r.id) AS event_key,
@@ -2542,6 +2587,21 @@ export const mibanAdminUserRouter = router({
                   AND ABS(ABS(duplicate_manual.amount) - ABS(bh.amount)) < 0.001
               )
             )
+
+          UNION ALL
+
+          SELECT
+            CONCAT('ma_', mae.id) AS event_key,
+            mae.id AS source_id,
+            'multi_asset' AS source_type,
+            mae.user_id,
+            mae.amount,
+            mae.event_type,
+            mae.asset_code AS currency,
+            mae.note,
+            mae.balance_after AS raw_balance,
+            mae.created_at
+          FROM ai_wallet_asset_entries mae
         `;
         const whereParts: string[] = [];
         const whereValues: unknown[] = [];

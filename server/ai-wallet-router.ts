@@ -495,7 +495,7 @@ export const aiWalletRouter = router({
             lines: [
               "USDT：现有充值订单、收款地址、链上扫描、人工确认、提现申请和审核链路已接入。",
               "CNY：现有后台调账与内部业务记账已接入；用户端法币充值/提现仍需建设正式申请、匹配和审核流程。",
-              "站内转账：仅 CNY/USDT，采用双边原子记账、幂等键和不可撤回审计；需要纠正时应新建反向流水。",
+              "站内转账：CNY/USDT 及首批 BTC、ETH、SOL、BNB 采用双边原子记账、幂等键和不可撤回审计；需要纠正时应新建反向流水。",
               "人工加减余额与新建业务订单扣款可由项目档案按项目暂停；退款、成交结算、奖励与佣金等既有资金义务不会被暂停，以避免用户资金冻结。",
             ],
           },
@@ -526,12 +526,15 @@ export const aiWalletRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI 智能钱包配置服务暂不可用" });
       const [rows] = await (conn as any).execute(
-        `SELECT enabled, allow_recharge, allow_withdrawal, allow_transfer, allow_admin_adjustment, allow_order_debit
+        `SELECT enabled, visible_assets, allow_recharge, allow_withdrawal, allow_transfer, allow_admin_adjustment, allow_order_debit
          FROM ai_wallet_project_profiles WHERE target_key = ? LIMIT 1`,
         [input.targetKey],
       ) as any[];
       const row = (rows as any[])?.[0];
       const enabled = Boolean(row && Number(row.enabled) === 1);
+      const visibleAssets = Array.isArray(row?.visible_assets)
+        ? row.visible_assets
+        : (() => { try { return JSON.parse(String(row?.visible_assets || "[]")); } catch { return []; } })();
       return {
         configured: Boolean(row),
         enabled,
@@ -540,6 +543,7 @@ export const aiWalletRouter = router({
         allowTransfer: enabled && Number(row.allow_transfer) === 1,
         allowAdminAdjustment: enabled && Number(row.allow_admin_adjustment) === 1,
         allowOrderDebit: enabled && Number(row.allow_order_debit) === 1,
+        visibleAssets: enabled ? visibleAssets : [],
       };
     }),
 

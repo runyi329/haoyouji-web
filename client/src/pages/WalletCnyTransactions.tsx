@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, RefreshCw } from "lucide-react";
 import { trpc } from "../lib/trpc";
+import { AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -44,6 +45,11 @@ export default function WalletCnyTransactions() {
   const [, setLocation] = useLocation();
   const search = useSearch();
   const isYaban = new URLSearchParams(search).get("from") === "yaban";
+  const switchAsset = (asset: string) => {
+    if (asset === "CNY") return;
+    if (asset === "USDT") return setLocation("/wallet/transactions");
+    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=52`);
+  };
   const [filter, setFilter] = useState<"all" | "in" | "out">("all");
 
   const cnyBalanceQuery = trpc.recharge.getCnyBalance.useQuery();
@@ -90,6 +96,9 @@ export default function WalletCnyTransactions() {
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
           <span className="text-base font-bold text-white">人民币明细</span>
+          <select value="CNY" onChange={(event) => switchAsset(event.target.value)} className="ml-auto max-w-[104px] rounded-lg border border-white/30 bg-white/10 px-2 py-1 text-xs font-semibold text-white outline-none" aria-label="切换明细币种">
+            <option value="USDT">USDT</option><option value="CNY">CNY</option>{AI_WALLET_SETTLEMENT_ASSETS.map((asset) => <option key={asset} value={asset}>{asset}</option>)}
+          </select>
           <button
             onClick={() => { cnyBalanceQuery.refetch(); cnyHistoryQuery.refetch(); }}
             className="flex items-center justify-center w-9 h-9 rounded-full"
@@ -233,6 +242,9 @@ export default function WalletCnyTransactions() {
         <span className="text-base font-bold tracking-widest" style={{ color: "#ff8a80" }}>
           人民币明细
         </span>
+        <select value="CNY" onChange={(event) => switchAsset(event.target.value)} className="ml-auto max-w-[104px] rounded-lg border border-[#65302c] bg-[#1b1b1b] px-2 py-1 text-xs font-semibold text-[#ffb3ab] outline-none" aria-label="切换明细币种">
+          <option value="USDT">USDT</option><option value="CNY">CNY</option>{AI_WALLET_SETTLEMENT_ASSETS.map((asset) => <option key={asset} value={asset}>{asset}</option>)}
+        </select>
         <button
           onClick={() => { cnyBalanceQuery.refetch(); cnyHistoryQuery.refetch(); }}
           className="flex items-center justify-center w-9 h-9 rounded-full"

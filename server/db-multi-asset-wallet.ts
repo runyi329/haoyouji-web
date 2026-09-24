@@ -1,0 +1,454 @@
+import { randomInt } from "crypto";
+import { AI_WALLET_ASSET_CATALOG, AI_WALLET_SETTLEMENT_ASSETS, type AiWalletAsset } from "../shared/ai-wallet-assets";
+import { getDbConnection, getDbTransactionConnection } from "./db";
+
+/**
+ * 第二阶段多资产钱包账本。
+ *
+ * CNY / USDT 继续使用历史兼容余额模型；本模块只处理已经纳入 52 号行情库的
+ * 其他数字资产。每种资产各自独立记账，绝不折算、混写或用实时价格改变余额。
+ */
+export const MULTI_ASSET_WALLET_ASSETS = AI_WALLET_SETTLEMENT_ASSETS;
+export type MultiAssetWalletAsset = (typeof MULTI_ASSET_WALLET_ASSETS)[number];
+
+export type MultiAssetBalance = {
+  assetCode: MultiAssetWalletAsset;
+  assetName: string;
+  availableBalance: string;
+  updatedAt: string;
+};
+
+export type MultiAssetHistoryItem = {
+  id: number;
+  entryNo: string;
+  requestId: string;
+  assetCode: MultiAssetWalletAsset;
+  assetName: string;
+  amount: string;
+  balanceAfter: string;
+  eventType: "admin_adjustment" | "transfer_in" | "transfer_out";
+  note: string;
+  sourceLedgerId: number | null;
+  createdAt: string;
+};
+
+const DECIMAL_PATTERN = /^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/;
+const SIGNED_DECIMAL_PATTERN = /^-?(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/;
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{16,96}$/;
+
+let multiAssetWalletInfrastructureReady: Promise<void> | null = null;
+
+function asRows(value: any): any[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function getAssetName(assetCode: MultiAssetWalletAsset): string {
+  return AI_WALLET_ASSET_CATALOG.find((asset) => asset.code === assetCode)?.name || assetCode;
+}
+
+export function normalizeMultiAssetWalletAsset(value: unknown): MultiAssetWalletAsset {
+  const assetCode = String(value || "").trim().toUpperCase();
+  if (!(MULTI_ASSET_WALLET_ASSETS as readonly string[]).includes(assetCode)) {
+    throw new Error("该资产尚未启用独立钱包账本；CNY 与 USDT 请继续使用现有账户");
+  }
+  return assetCode as MultiAssetWalletAsset;
+}
+
+function normalizeUnsignedDecimal(value: string): string {
+  const input = String(value ?? "").trim();
+  if (!DECIMAL_PATTERN.test(input)) throw new Error("金额格式无效，最多支持 18 位小数");
+  const normalized = input.replace(/^0+(?=\d)/, "");
+  if (Number(normalized) <= 0) throw new Error("金额必须大于 0");
+  return normalized;
+}
+
+function normalizeSignedDecimal(value: string): string {
+  const input = String(value ?? "").trim();
+  if (!SIGNED_DECIMAL_PATTERN.test(input)) throw new Error("金额格式无效，最多支持 18 位小数");
+  const negative = input.startsWith("-");
+  const positive = normalizeUnsignedDecimal(negative ? input.slice(1) : input);
+  return negative ? `-${positive}` : positive;
+}
+
+function buildEntryNo(): string {
+  return `WAE${Date.now().toString(36).toUpperCase()}${randomInt(100_000, 999_999)}`;
+}
+
+function buildTransferNo(): string {
+  return `WAT${Date.now().toString(36).toUpperCase()}${randomInt(100_000, 999_999)}`;
+}
+
+function entryResult(row: any): MultiAssetHistoryItem {
+  const assetCode = normalizeMultiAssetWalletAsset(row.asset_code);
+  const eventType = String(row.event_type);
+  return {
+    id: Number(row.id),
+    entryNo: String(row.entry_no),
+    requestId: String(row.request_id),
+    assetCode,
+    assetName: getAssetName(assetCode),
+    amount: String(row.amount),
+    balanceAfter: String(row.balance_after),
+    eventType: eventType === "transfer_in" || eventType === "transfer_out" ? eventType : "admin_adjustment",
+    note: String(row.note || ""),
+    sourceLedgerId: row.source_ledger_id == null ? null : Number(row.source_ledger_id),
+    createdAt: row.created_at ? String(row.created_at) : "",
+  };
+}
+
+export async function ensureMultiAssetWalletInfrastructure(): Promise<void> {
+  if (!multiAssetWalletInfrastructureReady) {
+    multiAssetWalletInfrastructureReady = (async () => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败，无法初始化多资产钱包账本");
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ai_wallet_asset_balances (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+          user_id INT NOT NULL,
+          asset_code VARCHAR(16) NOT NULL,
+          available_balance DECIMAL(36,18) NOT NULL DEFAULT 0,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          UNIQUE KEY uk_ai_wallet_asset_balance_user_asset (user_id, asset_code),
+          KEY idx_ai_wallet_asset_balance_asset (asset_code),
+          KEY idx_ai_wallet_asset_balance_updated (updated_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI智能钱包多资产当前余额；不含CNY与USDT历史余额'
+      `);
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ai_wallet_asset_entries (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+          entry_no VARCHAR(48) NOT NULL,
+          request_id VARCHAR(112) NOT NULL,
+          user_id INT NOT NULL,
+          asset_code VARCHAR(16) NOT NULL,
+          amount DECIMAL(36,18) NOT NULL,
+          balance_after DECIMAL(36,18) NOT NULL,
+          event_type VARCHAR(32) NOT NULL,
+          note VARCHAR(500) NOT NULL DEFAULT '',
+          source_ledger_id INT NULL,
+          related_transfer_id BIGINT UNSIGNED NULL,
+          actor_user_id INT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          UNIQUE KEY uk_ai_wallet_asset_entry_no (entry_no),
+          UNIQUE KEY uk_ai_wallet_asset_entry_request (user_id, request_id),
+          KEY idx_ai_wallet_asset_entry_user_time (user_id, created_at),
+          KEY idx_ai_wallet_asset_entry_asset_time (asset_code, created_at),
+          KEY idx_ai_wallet_asset_entry_transfer (related_transfer_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI智能钱包多资产不可变流水'
+      `);
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ai_wallet_asset_transfers (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+          transfer_no VARCHAR(48) NOT NULL,
+          request_id VARCHAR(96) NOT NULL,
+          from_user_id INT NOT NULL,
+          to_user_id INT NOT NULL,
+          asset_code VARCHAR(16) NOT NULL,
+          amount DECIMAL(36,18) NOT NULL,
+          source_ledger_id INT NULL,
+          from_entry_id BIGINT UNSIGNED NULL,
+          to_entry_id BIGINT UNSIGNED NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          UNIQUE KEY uk_ai_wallet_asset_transfer_no (transfer_no),
+          UNIQUE KEY uk_ai_wallet_asset_transfer_request (request_id),
+          KEY idx_ai_wallet_asset_transfer_from_time (from_user_id, created_at),
+          KEY idx_ai_wallet_asset_transfer_to_time (to_user_id, created_at),
+          KEY idx_ai_wallet_asset_transfer_asset (asset_code)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI智能钱包多资产站内转账主记录'
+      `);
+    })().catch((error) => {
+      multiAssetWalletInfrastructureReady = null;
+      throw error;
+    });
+  }
+  await multiAssetWalletInfrastructureReady;
+}
+
+async function ensureBalanceRow(transaction: any, userId: number, assetCode: MultiAssetWalletAsset) {
+  await transaction.execute(
+    `INSERT INTO ai_wallet_asset_balances (user_id, asset_code, available_balance)
+     VALUES (?, ?, 0)
+     ON DUPLICATE KEY UPDATE updated_at = updated_at`,
+    [userId, assetCode],
+  );
+}
+
+async function getLockedBalance(transaction: any, userId: number, assetCode: MultiAssetWalletAsset) {
+  const [rows] = await transaction.execute(
+    `SELECT id, available_balance
+       FROM ai_wallet_asset_balances
+      WHERE user_id = ? AND asset_code = ?
+      LIMIT 1 FOR UPDATE`,
+    [userId, assetCode],
+  );
+  const row = asRows(rows)[0];
+  if (!row) throw new Error("资产余额初始化失败");
+  return row;
+}
+
+async function assertUserExists(transaction: any, userId: number) {
+  const [rows] = await transaction.execute(`SELECT id FROM users WHERE id = ? LIMIT 1`, [userId]);
+  if (!asRows(rows)[0]) throw new Error("目标用户不存在");
+}
+
+export async function getUserMultiAssetBalances(userId: number): Promise<MultiAssetBalance[]> {
+  await ensureMultiAssetWalletInfrastructure();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const [rows] = await (conn as any).execute(
+    `SELECT asset_code, available_balance, updated_at
+       FROM ai_wallet_asset_balances
+      WHERE user_id = ? AND available_balance <> 0
+      ORDER BY updated_at DESC, asset_code ASC`,
+    [userId],
+  );
+  return asRows(rows).map((row) => {
+    const assetCode = normalizeMultiAssetWalletAsset(row.asset_code);
+    return {
+      assetCode,
+      assetName: getAssetName(assetCode),
+      availableBalance: String(row.available_balance),
+      updatedAt: row.updated_at ? String(row.updated_at) : "",
+    };
+  });
+}
+
+export async function getMultiAssetBalancesForUsers(userIds: number[]): Promise<Map<number, MultiAssetBalance[]>> {
+  await ensureMultiAssetWalletInfrastructure();
+  const ids = Array.from(new Set(userIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)));
+  const result = new Map<number, MultiAssetBalance[]>();
+  if (ids.length === 0) return result;
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const placeholders = ids.map(() => "?").join(",");
+  const [rows] = await (conn as any).execute(
+    `SELECT user_id, asset_code, available_balance, updated_at
+       FROM ai_wallet_asset_balances
+      WHERE user_id IN (${placeholders}) AND available_balance <> 0
+      ORDER BY updated_at DESC, asset_code ASC`,
+    ids,
+  );
+  for (const row of asRows(rows)) {
+    const userId = Number(row.user_id);
+    const assetCode = normalizeMultiAssetWalletAsset(row.asset_code);
+    const next = result.get(userId) || [];
+    next.push({
+      assetCode,
+      assetName: getAssetName(assetCode),
+      availableBalance: String(row.available_balance),
+      updatedAt: row.updated_at ? String(row.updated_at) : "",
+    });
+    result.set(userId, next);
+  }
+  return result;
+}
+
+export async function getUserMultiAssetHistory(userId: number, limit = 20): Promise<MultiAssetHistoryItem[]> {
+  await ensureMultiAssetWalletInfrastructure();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const safeLimit = Math.min(100, Math.max(1, Math.floor(limit)));
+  const [rows] = await (conn as any).execute(
+    `SELECT id, entry_no, request_id, asset_code, amount, balance_after, event_type, note, source_ledger_id, created_at
+       FROM ai_wallet_asset_entries
+      WHERE user_id = ?
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${safeLimit}`,
+    [userId],
+  );
+  return asRows(rows).map(entryResult);
+}
+
+export async function adjustMultiAssetBalance(params: {
+  userId: number;
+  assetCode: MultiAssetWalletAsset | string;
+  amount: string;
+  note?: string;
+  requestId: string;
+  actorUserId: number;
+  sourceLedgerId?: number;
+}): Promise<{ success: true; entry: MultiAssetHistoryItem; alreadyCompleted: boolean }> {
+  if (!Number.isInteger(params.userId) || params.userId <= 0) throw new Error("调账用户无效");
+  if (!REQUEST_ID_PATTERN.test(params.requestId)) throw new Error("调账请求无效");
+  const assetCode = normalizeMultiAssetWalletAsset(params.assetCode);
+  const amount = normalizeSignedDecimal(params.amount);
+  const note = String(params.note || "").trim().slice(0, 500) || "管理员手动调账（未填写备注）";
+  await ensureMultiAssetWalletInfrastructure();
+
+  const conn = await getDbTransactionConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const transaction = conn as any;
+  try {
+    await transaction.beginTransaction();
+    const [existingRows] = await transaction.execute(
+      `SELECT id, entry_no, request_id, asset_code, amount, balance_after, event_type, note, source_ledger_id, created_at
+         FROM ai_wallet_asset_entries
+        WHERE user_id = ? AND request_id = ?
+        LIMIT 1 FOR UPDATE`,
+      [params.userId, params.requestId],
+    );
+    const existing = asRows(existingRows)[0];
+    if (existing) {
+      if (String(existing.asset_code).toUpperCase() !== assetCode || String(existing.amount) !== amount) {
+        throw new Error("调账请求已被使用，请刷新后重新填写金额");
+      }
+      await transaction.commit();
+      return { success: true, entry: entryResult(existing), alreadyCompleted: true };
+    }
+
+    await assertUserExists(transaction, params.userId);
+    await ensureBalanceRow(transaction, params.userId, assetCode);
+    await getLockedBalance(transaction, params.userId, assetCode);
+    const [updateResult] = await transaction.execute(
+      `UPDATE ai_wallet_asset_balances
+          SET available_balance = available_balance + CAST(? AS DECIMAL(36,18)), updated_at = NOW()
+        WHERE user_id = ? AND asset_code = ?
+          AND available_balance + CAST(? AS DECIMAL(36,18)) >= 0`,
+      [amount, params.userId, assetCode, amount],
+    );
+    if (Number((updateResult as any).affectedRows || 0) !== 1) {
+      throw new Error("扣除金额超过该资产可用余额，不能形成负数余额");
+    }
+    const balanceRow = await getLockedBalance(transaction, params.userId, assetCode);
+    const entryNo = buildEntryNo();
+    const [entryInsert] = await transaction.execute(
+      `INSERT INTO ai_wallet_asset_entries
+        (entry_no, request_id, user_id, asset_code, amount, balance_after, event_type, note, source_ledger_id, actor_user_id)
+       VALUES (?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), ?, 'admin_adjustment', ?, ?, ?)`,
+      [entryNo, params.requestId, params.userId, assetCode, amount, String(balanceRow.available_balance), note, params.sourceLedgerId ?? null, params.actorUserId],
+    );
+    const entry = {
+      id: Number((entryInsert as any).insertId),
+      entry_no: entryNo,
+      request_id: params.requestId,
+      asset_code: assetCode,
+      amount,
+      balance_after: String(balanceRow.available_balance),
+      event_type: "admin_adjustment",
+      note,
+      source_ledger_id: params.sourceLedgerId ?? null,
+      created_at: new Date().toISOString(),
+    };
+    await transaction.commit();
+    return { success: true, entry: entryResult(entry), alreadyCompleted: false };
+  } catch (error) {
+    try { await transaction.rollback(); } catch {}
+    throw error;
+  } finally {
+    transaction.release?.();
+  }
+}
+
+export async function transferMultiAssetBalance(params: {
+  fromUserId: number;
+  toUserId: number;
+  assetCode: MultiAssetWalletAsset | string;
+  amount: string;
+  requestId: string;
+  sourceLedgerId?: number;
+}): Promise<{ success: true; transferNo: string; amount: string; assetCode: MultiAssetWalletAsset; alreadyCompleted: boolean }> {
+  if (!Number.isInteger(params.fromUserId) || !Number.isInteger(params.toUserId) || params.fromUserId <= 0 || params.toUserId <= 0 || params.fromUserId === params.toUserId) {
+    throw new Error("收款用户无效");
+  }
+  if (!REQUEST_ID_PATTERN.test(params.requestId)) throw new Error("转账请求无效");
+  const assetCode = normalizeMultiAssetWalletAsset(params.assetCode);
+  const amount = normalizeUnsignedDecimal(params.amount);
+  await ensureMultiAssetWalletInfrastructure();
+
+  const conn = await getDbTransactionConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const transaction = conn as any;
+  try {
+    await transaction.beginTransaction();
+    const [existingRows] = await transaction.execute(
+      `SELECT transfer_no, from_user_id, to_user_id, asset_code, amount
+         FROM ai_wallet_asset_transfers WHERE request_id = ? LIMIT 1 FOR UPDATE`,
+      [params.requestId],
+    );
+    const existing = asRows(existingRows)[0];
+    if (existing) {
+      if (Number(existing.from_user_id) !== params.fromUserId || Number(existing.to_user_id) !== params.toUserId || String(existing.asset_code).toUpperCase() !== assetCode || String(existing.amount) !== amount) {
+        throw new Error("转账请求已被使用，请重新核验收款人和金额");
+      }
+      await transaction.commit();
+      return { success: true, transferNo: String(existing.transfer_no), amount: String(existing.amount), assetCode, alreadyCompleted: true };
+    }
+
+    const userOrder = [params.fromUserId, params.toUserId].sort((left, right) => left - right);
+    const [usersRows] = await transaction.execute(`SELECT id FROM users WHERE id IN (?, ?) ORDER BY id ASC FOR UPDATE`, userOrder);
+    if (asRows(usersRows).length !== 2) throw new Error("收款用户不存在");
+    await ensureBalanceRow(transaction, params.fromUserId, assetCode);
+    await ensureBalanceRow(transaction, params.toUserId, assetCode);
+    // 固定用户 ID 顺序锁定两行，避免反向转账产生死锁。
+    for (const userId of userOrder) await getLockedBalance(transaction, userId, assetCode);
+
+    const [senderUpdate] = await transaction.execute(
+      `UPDATE ai_wallet_asset_balances
+          SET available_balance = available_balance - CAST(? AS DECIMAL(36,18)), updated_at = NOW()
+        WHERE user_id = ? AND asset_code = ? AND available_balance >= CAST(? AS DECIMAL(36,18))`,
+      [amount, params.fromUserId, assetCode, amount],
+    );
+    if (Number((senderUpdate as any).affectedRows || 0) !== 1) throw new Error("可用余额不足，无法完成转账");
+    await transaction.execute(
+      `UPDATE ai_wallet_asset_balances
+          SET available_balance = available_balance + CAST(? AS DECIMAL(36,18)), updated_at = NOW()
+        WHERE user_id = ? AND asset_code = ?`,
+      [amount, params.toUserId, assetCode],
+    );
+    const senderBalance = await getLockedBalance(transaction, params.fromUserId, assetCode);
+    const recipientBalance = await getLockedBalance(transaction, params.toUserId, assetCode);
+    const transferNo = buildTransferNo();
+    const [transferInsert] = await transaction.execute(
+      `INSERT INTO ai_wallet_asset_transfers (transfer_no, request_id, from_user_id, to_user_id, asset_code, amount, source_ledger_id)
+       VALUES (?, ?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), ?)`,
+      [transferNo, params.requestId, params.fromUserId, params.toUserId, assetCode, amount, params.sourceLedgerId ?? null],
+    );
+    const transferId = Number((transferInsert as any).insertId);
+    const transferNote = `站内转账 ${assetCode}；转账编号：${transferNo}`;
+    const [senderEntry] = await transaction.execute(
+      `INSERT INTO ai_wallet_asset_entries
+        (entry_no, request_id, user_id, asset_code, amount, balance_after, event_type, note, source_ledger_id, related_transfer_id)
+       VALUES (?, ?, ?, ?, -CAST(? AS DECIMAL(36,18)), ?, 'transfer_out', ?, ?, ?)`,
+      [buildEntryNo(), `${params.requestId}_out`, params.fromUserId, assetCode, amount, String(senderBalance.available_balance), transferNote, params.sourceLedgerId ?? null, transferId],
+    );
+    const [recipientEntry] = await transaction.execute(
+      `INSERT INTO ai_wallet_asset_entries
+        (entry_no, request_id, user_id, asset_code, amount, balance_after, event_type, note, source_ledger_id, related_transfer_id)
+       VALUES (?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), ?, 'transfer_in', ?, ?, ?)`,
+      [buildEntryNo(), `${params.requestId}_in`, params.toUserId, assetCode, amount, String(recipientBalance.available_balance), transferNote, params.sourceLedgerId ?? null, transferId],
+    );
+    await transaction.execute(
+      `UPDATE ai_wallet_asset_transfers SET from_entry_id = ?, to_entry_id = ? WHERE id = ?`,
+      [Number((senderEntry as any).insertId), Number((recipientEntry as any).insertId), transferId],
+    );
+    await transaction.commit();
+    return { success: true, transferNo, amount, assetCode, alreadyCompleted: false };
+  } catch (error: any) {
+    try { await transaction.rollback(); } catch {}
+    if (String(error?.code || "") === "ER_DUP_ENTRY") {
+      const [rows] = await transaction.execute(
+        `SELECT transfer_no, from_user_id, to_user_id, asset_code, amount FROM ai_wallet_asset_transfers WHERE request_id = ? LIMIT 1`,
+        [params.requestId],
+      );
+      const existing = asRows(rows)[0];
+      if (existing && Number(existing.from_user_id) === params.fromUserId && Number(existing.to_user_id) === params.toUserId && String(existing.asset_code).toUpperCase() === assetCode && String(existing.amount) === amount) {
+        return { success: true, transferNo: String(existing.transfer_no), amount: String(existing.amount), assetCode, alreadyCompleted: true };
+      }
+    }
+    throw error;
+  } finally {
+    transaction.release?.();
+  }
+}
+
+export function isMultiAssetWalletAsset(value: unknown): value is MultiAssetWalletAsset {
+  return (MULTI_ASSET_WALLET_ASSETS as readonly string[]).includes(String(value || "").toUpperCase());
+}
+
+export function getMultiAssetWalletAssetDefinition(assetCode: MultiAssetWalletAsset | string) {
+  const normalized = normalizeMultiAssetWalletAsset(assetCode);
+  return AI_WALLET_ASSET_CATALOG.find((asset) => asset.code === normalized) || { code: normalized as AiWalletAsset, name: normalized };
+}

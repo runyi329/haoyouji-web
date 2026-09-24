@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { trpc } from "../lib/trpc";
 import Recharge from "./Recharge";
 import Withdraw from "./Withdraw";
+import { AI_WALLET_ASSET_CATALOG, AI_WALLET_SETTLEMENT_ASSETS, type AiWalletSettlementAsset } from "@shared/ai-wallet-assets";
 
 // 从交易备注中提取世界杯球队 code（小写），如 [ES] → 'es'
 function extractWcTeamCode(note: string): string | null {
@@ -65,6 +66,7 @@ const G = {
 };
 
 type ModalType = "recharge" | "withdraw" | "cny-recharge" | "cny-withdraw" | "transfer" | null;
+type WalletTransferAsset = "USDT" | "CNY" | AiWalletSettlementAsset;
 
 function StatusIcon({ status }: { status: string }) {
   if (status === "completed" || status === "approved")
@@ -307,7 +309,7 @@ function WalletTransferContent({
   onClose,
   onCompleted,
 }: {
-  currency: "USDT" | "CNY";
+  currency: WalletTransferAsset;
   availableBalance: number;
   sourceLedgerId: number;
   onClose: () => void;
@@ -318,7 +320,7 @@ function WalletTransferContent({
   const [amount, setAmount] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [requestId, setRequestId] = useState("");
-  const [completed, setCompleted] = useState<{ transferNo: string; amount: number } | null>(null);
+  const [completed, setCompleted] = useState<{ transferNo: string; amount: string } | null>(null);
   const recipientQuery = trpc.recharge.lookupWalletTransferRecipient.useQuery(
     { identifier: lookupIdentifier },
     { enabled: lookupIdentifier.length > 0, retry: false, refetchOnWindowFocus: false },
@@ -339,12 +341,19 @@ function WalletTransferContent({
   });
   const transferMutation = trpc.recharge.transferWalletBalance.useMutation({
     onSuccess: (result: any) => {
-      setCompleted({ transferNo: String(result.transferNo), amount: Number(result.amount) });
+      setCompleted({ transferNo: String(result.transferNo), amount: String(result.amount) });
+      onCompleted();
+    },
+  });
+  const multiAssetTransferMutation = trpc.recharge.transferMultiAssetBalance.useMutation({
+    onSuccess: (result: any) => {
+      setCompleted({ transferNo: String(result.transferNo), amount: String(result.amount) });
       onCompleted();
     },
   });
   const amountNumber = Number(amount);
-  const amountDigits = currency === "CNY" ? 2 : 4;
+  const isMultiAsset = (AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(currency);
+  const amountDigits = currency === "CNY" ? 2 : isMultiAsset ? 8 : 4;
   const amountValid = Number.isFinite(amountNumber) && amountNumber > 0 && amountNumber <= availableBalance + 1e-8;
   const amountDisplay = amountValid ? amountNumber.toFixed(amountDigits) : "0";
 
@@ -370,9 +379,19 @@ function WalletTransferContent({
   };
   const submitTransfer = () => {
     if (!recipient || !amountValid || !requestId) return;
+    if (isMultiAsset) {
+      multiAssetTransferMutation.mutate({
+        toUserId: Number(recipient.id),
+        assetCode: currency as AiWalletSettlementAsset,
+        amount: amount.trim(),
+        requestId,
+        sourceLedgerId,
+      });
+      return;
+    }
     transferMutation.mutate({
       toUserId: Number(recipient.id),
-      currency,
+      currency: currency as "CNY" | "USDT",
       amount: amountNumber,
       requestId,
       sourceLedgerId,
@@ -387,7 +406,7 @@ function WalletTransferContent({
         </div>
         <div className="text-base font-semibold" style={{ color: G.white }}>转账完成</div>
         <div className="text-sm text-center leading-6" style={{ color: G.whiteDim }}>
-          已向 {recipient?.nickname || recipient?.name || "收款人"} 转账 {completed.amount.toFixed(amountDigits)} {currency}。<br />转账编号：{completed.transferNo}
+          已向 {recipient?.nickname || recipient?.name || "收款人"} 转账 {Number(completed.amount).toFixed(amountDigits)} {currency}。<br />转账编号：{completed.transferNo}
         </div>
         <button
           onClick={onClose}
@@ -415,9 +434,9 @@ function WalletTransferContent({
         <div className="rounded-xl px-3 py-2.5 text-xs leading-5" style={{ background: 'rgba(248,113,113,0.1)', color: '#fca5a5', border: '1px solid rgba(248,113,113,0.22)' }}>
           转账一经确认将立即从您的钱包扣除并存入对方钱包，<strong>不可撤回</strong>。请确认收款人和金额无误。
         </div>
-        {transferMutation.error && <p className="text-center text-xs text-red-300">{transferMutation.error.message || '转账失败，请稍后重试'}</p>}
-        <GoldBtn onClick={submitTransfer} disabled={transferMutation.isPending}>
-          {transferMutation.isPending ? "正在转账…" : `确认并立即转账 ${amountDisplay} ${currency}`}
+        {(transferMutation.error || multiAssetTransferMutation.error) && <p className="text-center text-xs text-red-300">{transferMutation.error?.message || multiAssetTransferMutation.error?.message || '转账失败，请稍后重试'}</p>}
+        <GoldBtn onClick={submitTransfer} disabled={transferMutation.isPending || multiAssetTransferMutation.isPending}>
+          {transferMutation.isPending || multiAssetTransferMutation.isPending ? "正在转账…" : `确认并立即转账 ${amountDisplay} ${currency}`}
         </GoldBtn>
         <button type="button" onClick={() => setConfirming(false)} className="w-full py-2 text-sm" style={{ color: G.whiteDim }}>返回修改</button>
       </div>
@@ -531,7 +550,7 @@ function WalletTransferContent({
           <input
             type="number"
             min="0"
-            step={currency === 'CNY' ? '0.01' : '0.0001'}
+            step={currency === 'CNY' ? '0.01' : isMultiAsset ? '0.00000001' : '0.0001'}
             value={amount}
             onChange={(event) => { setAmount(event.target.value); setConfirming(false); setRequestId(""); }}
             placeholder="0.00"
@@ -559,6 +578,7 @@ export default function Wallet() {
   const [modal, setModal] = useState<ModalType>(null);
   const [hideBalance, setHideBalance] = useState(false);
   const [activeTab, setActiveTab] = useState<"usdt" | "cny">("usdt");
+  const [transferAsset, setTransferAsset] = useState<WalletTransferAsset>("USDT");
   // 转账能力是全局统一钱包能力；当前仅由52号账本首页以该上下文开放按钮。
   const isLedger52WalletEntry = new URLSearchParams(search).get("fromLedger") === "52";
   const walletPolicyQuery = trpc.aiWallet.runtimeProfile.useQuery(
@@ -577,10 +597,26 @@ export default function Wallet() {
   const recentBalanceHistoryQuery = trpc.recharge.getBalanceHistory.useQuery({ limit: 5 });
   const cnyBalanceQuery = trpc.recharge.getCnyBalance.useQuery();
   const cnyHistoryQuery = trpc.recharge.getCnyHistory.useQuery({ limit: 5 });
+  const multiAssetBalancesQuery = trpc.recharge.getMultiAssetBalances.useQuery(undefined, {
+    enabled: isLedger52WalletEntry,
+    staleTime: 15_000,
+  });
+  const multiAssetHistoryQuery = trpc.recharge.getMultiAssetHistory.useQuery({ limit: 30 }, {
+    enabled: isLedger52WalletEntry,
+    staleTime: 15_000,
+  });
 
   const balance = typeof balanceQuery.data === "number" ? balanceQuery.data : 0;
   const cnyBalance = typeof cnyBalanceQuery.data === "number" ? cnyBalanceQuery.data : 0;
   const usdtToCny = balance * 7.25;
+  const multiAssetBalances = (multiAssetBalancesQuery.data ?? []) as any[];
+  const multiAssetHistory = (multiAssetHistoryQuery.data ?? []) as any[];
+  const configuredSettlementAssets = new Set(
+    ((walletPolicyQuery.data?.visibleAssets ?? []) as string[]).map((asset) => String(asset).toUpperCase()),
+  );
+  const visibleMultiAssetBalances = multiAssetBalances.filter((asset) =>
+    configuredSettlementAssets.has(String(asset.assetCode || "").toUpperCase()),
+  );
 
   const recentUsdtTx = (() => {
     const recharges = (recentRechargeQuery.data ?? []).map((r: any) => ({
@@ -638,12 +674,12 @@ export default function Wallet() {
   // 账户卡片通用渲染
   const AccountCard = ({
     icon, label, balance: bal, unit, subLine,
-    txPath, onRefresh, onRecharge, onWithdraw, onTransfer,
-    txList, isUsdt,
+    txPath, onRefresh, onRecharge, onWithdraw, onTransfer, onDetails,
+    txList, isUsdt, showAssetTabs = true,
   }: {
     icon: string; label: string; balance: string; unit: string; subLine?: React.ReactNode;
-    txPath: string; onRefresh: () => void; onRecharge?: () => void; onWithdraw?: () => void; onTransfer?: () => void;
-    txList: React.ReactNode; isUsdt: boolean;
+    txPath: string; onRefresh: () => void; onRecharge?: () => void; onWithdraw?: () => void; onTransfer?: () => void; onDetails?: () => void;
+    txList: React.ReactNode; isUsdt: boolean; showAssetTabs?: boolean;
   }) => (
     <div
       className="rounded-2xl overflow-hidden"
@@ -684,8 +720,8 @@ export default function Wallet() {
               }
             </button>
           </div>
-          {/* 切换胶囊：卡片内右上角 */}
-          <div
+          {/* 切换胶囊：法币账户使用；独立数字资产卡片不显示。 */}
+          {showAssetTabs && <div
             className="flex items-center rounded-full p-0.5"
             style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}` }}
           >
@@ -705,7 +741,7 @@ export default function Wallet() {
                 {tab === "usdt" ? "USDT" : "CNY"}
               </button>
             ))}
-          </div>
+          </div>}
         </div>
 
         {/* 余额 */}
@@ -767,6 +803,15 @@ export default function Wallet() {
               </button>
             )}
           </div>
+        )}
+        {onDetails && (
+          <button
+            onClick={onDetails}
+            className="mt-2 flex w-full items-center justify-center rounded-xl py-2 text-xs font-semibold"
+            style={{ background: "rgba(255,255,255,.035)", border: `1px solid ${G.cardBorder}`, color: G.goldDim }}
+          >
+            查看 {unit} 独立明细
+          </button>
         )}
 
         {/* 流水 */}
@@ -836,7 +881,8 @@ export default function Wallet() {
           onRefresh={() => balanceQuery.refetch()}
           onRecharge={canRecharge ? () => setModal("recharge") : undefined}
           onWithdraw={canWithdraw ? () => setModal("withdraw") : undefined}
-          onTransfer={canTransfer ? () => setModal("transfer") : undefined}
+          onTransfer={canTransfer ? () => { setTransferAsset("USDT"); setModal("transfer"); } : undefined}
+          onDetails={() => setLocation("/wallet/transactions")}
           isUsdt={true}
           txList={
             recentUsdtTx.length > 0 ? (
@@ -896,7 +942,8 @@ export default function Wallet() {
           onRefresh={() => cnyBalanceQuery.refetch()}
           onRecharge={canRecharge ? () => setModal("cny-recharge") : undefined}
           onWithdraw={canWithdraw ? () => setModal("cny-withdraw") : undefined}
-          onTransfer={canTransfer ? () => setModal("transfer") : undefined}
+          onTransfer={canTransfer ? () => { setTransferAsset("CNY"); setModal("transfer"); } : undefined}
+          onDetails={() => setLocation("/wallet/cny-transactions")}
           isUsdt={false}
           txList={
             recentCnyTx.length > 0 ? (
@@ -942,6 +989,58 @@ export default function Wallet() {
           }
         />}
 
+        {/* 首批独立数字资产账户：仅在52入口且该用户实际持有时显示，不显示 0 余额空卡片。 */}
+        {isLedger52WalletEntry && visibleMultiAssetBalances.map((asset: any) => {
+          const assetCode = String(asset.assetCode || "").toUpperCase() as AiWalletSettlementAsset;
+          const definition = AI_WALLET_ASSET_CATALOG.find((item) => item.code === assetCode);
+          const amount = Number(asset.availableBalance ?? 0);
+          const history = multiAssetHistory.filter((item: any) => String(item.assetCode || "").toUpperCase() === assetCode).slice(0, 3);
+          return (
+            <AccountCard
+              key={assetCode}
+              icon={assetCode.slice(0, 1)}
+              label={`${assetCode} 账户`}
+              balance={mask(amount.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 8 }))}
+              unit={assetCode}
+              subLine={!hideBalance && (
+                <span className="text-xs" style={{ color: G.goldDim }}>
+                  {Number(asset.priceUsdt ?? 0) > 0
+                    ? `≈ ${(amount * Number(asset.priceUsdt)).toLocaleString("zh-CN", { maximumFractionDigits: 2 })} USDT · ${definition?.name || assetCode}`
+                    : `${definition?.name || assetCode} · 行情加载中`}
+                </span>
+              )}
+              txPath="/wallet/transactions"
+              onRefresh={() => { void multiAssetBalancesQuery.refetch(); void multiAssetHistoryQuery.refetch(); }}
+              onTransfer={canTransfer ? () => { setTransferAsset(assetCode); setModal("transfer"); } : undefined}
+              onDetails={() => setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(assetCode)}&fromLedger=52`)}
+              isUsdt={false}
+              showAssetTabs={false}
+              txList={history.length > 0 ? (
+                <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${G.divider}` }}>
+                  {history.map((item: any, index: number) => {
+                    const change = Number(item.amount ?? 0);
+                    const isIn = change > 0;
+                    const label = item.eventType === "transfer_in" ? "站内转账收款" : item.eventType === "transfer_out" ? "站内转账汇款" : "后台手动调账";
+                    return (
+                      <div key={item.id ?? index} className="flex items-center justify-between py-2" style={{ borderBottom: index < history.length - 1 ? `1px solid ${G.divider}` : "none" }}>
+                        <div>
+                          <div className="text-xs font-medium" style={{ color: G.white }}>{label}</div>
+                          <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(item.createdAt)}</div>
+                        </div>
+                        <div className="text-xs font-bold tabular-nums" style={{ color: isIn ? G.green : G.red }}>
+                          {isIn ? "+" : "-"}{mask(Math.abs(change).toLocaleString("zh-CN", { maximumFractionDigits: 8 }))} {assetCode}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mt-4 pt-3 text-center text-xs" style={{ borderTop: `1px solid ${G.divider}`, color: G.whiteDim }}>暂无资金记录</div>
+              )}
+            />
+          );
+        })}
+
       </div>
 
       {/* ── 弹窗 ── */}
@@ -968,8 +1067,12 @@ export default function Wallet() {
       {modal === "transfer" && (
         <BottomSheet title="站内转账" onClose={() => setModal(null)}>
           <WalletTransferContent
-            currency={activeTab === "cny" ? "CNY" : "USDT"}
-            availableBalance={activeTab === "cny" ? cnyBalance : balance}
+            currency={transferAsset}
+            availableBalance={transferAsset === "CNY"
+              ? cnyBalance
+              : transferAsset === "USDT"
+                ? balance
+                : Number(multiAssetBalances.find((asset: any) => String(asset.assetCode || "").toUpperCase() === transferAsset)?.availableBalance ?? 0)}
             sourceLedgerId={52}
             onClose={() => setModal(null)}
             onCompleted={() => {
@@ -977,6 +1080,8 @@ export default function Wallet() {
               void cnyBalanceQuery.refetch();
               void recentManualQuery.refetch();
               void recentBalanceHistoryQuery.refetch();
+              void multiAssetBalancesQuery.refetch();
+              void multiAssetHistoryQuery.refetch();
             }}
           />
         </BottomSheet>
