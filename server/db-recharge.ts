@@ -2207,11 +2207,15 @@ export async function getUserCnyBalance(userId: number): Promise<number> {
 export async function getUserCnyHistory(userId: number, limit = 50): Promise<any[]> {
   const conn = await getDbConnection();
   if (!conn) return [];
+  // 该生产 MySQL 对 server-side prepared statement 的 `LIMIT ?` 兼容性有问题，
+  // 会返回 ER_WRONG_ARGUMENTS / mysqld_stmt_execute。先钳制为安全整数后内联，
+  // 保持 userId 继续使用参数绑定，避免快照等只读查询整体失败。
+  const safeLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 50)));
   const [rows] = await conn.execute(
     `SELECT id, user_id, amount, note, created_at FROM af_manual_balances
      WHERE user_id = ? AND note LIKE '[CNY]%'
-     ORDER BY created_at DESC LIMIT ?`,
-    [userId, limit]
+     ORDER BY created_at DESC LIMIT ${safeLimit}`,
+    [userId]
   ) as any;
   return Array.isArray(rows) ? rows : [];
 }
