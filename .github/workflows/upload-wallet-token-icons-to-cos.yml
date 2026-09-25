@@ -1,0 +1,59 @@
+name: Upload wallet token icons to COS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upload verified token icons through deployment host
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          script: |
+            set -euo pipefail
+            cd /root/haoyouji-web
+            git pull --ff-only origin main
+            node --input-type=module <<'EOF'
+            import { createRequire } from 'module';
+            import dotenv from 'dotenv';
+
+            dotenv.config({ path: '/root/haoyouji-web/.env' });
+
+            const secretId = process.env.COS_SECRET_ID;
+            const secretKey = process.env.COS_SECRET_KEY;
+            const bucket = process.env.COS_BUCKET || 'haoyouji-images-1396946788';
+            const region = process.env.COS_REGION || 'ap-shanghai';
+            if (!secretId || !secretKey) {
+              throw new Error('COS credentials are not configured on the deployment host');
+            }
+
+            const require = createRequire(import.meta.url);
+            const COS = require('cos-nodejs-sdk-v5');
+            const cos = new COS({ SecretId: secretId, SecretKey: secretKey });
+            const iconCodes = ['usdt', 'btc', 'eth', 'sol', 'bnb', 'sui'];
+            const sourceBase = 'https://static.coinall.ltd/cdn/oksupport/asset/currency/icon';
+            const publicBase = `https://${bucket}.cos.${region}.myqcloud.com`;
+
+            for (const code of iconCodes) {
+              const response = await fetch(`${sourceBase}/${code}.png`);
+              if (!response.ok) throw new Error(`Unable to fetch ${code}: ${response.status}`);
+              const bytes = Buffer.from(await response.arrayBuffer());
+              const key = `assets/crypto-icons/${code}.png`;
+              await new Promise((resolve, reject) => {
+                cos.putObject({
+                  Bucket: bucket,
+                  Region: region,
+                  Key: key,
+                  Body: bytes,
+                  ContentType: 'image/png',
+                  CacheControl: 'public, max-age=31536000, immutable',
+                }, (error, result) => error ? reject(error) : resolve(result));
+              });
+              console.log(`Uploaded ${code}: ${publicBase}/${key}`);
+            }
+            EOF

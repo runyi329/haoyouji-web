@@ -4,6 +4,7 @@ import { ArrowDownCircle, ArrowLeft, ArrowUpCircle, Loader2, RefreshCw } from "l
 import { trpc } from "@/lib/trpc";
 import { restoreLedgerViewAsState } from "@/lib/authIdentity";
 import { getInternalTransferPresentation } from "@/lib/walletTransferPresentation";
+import { getCryptoAssetIconSrc } from "@/lib/cryptoAssetIcons";
 import { AI_WALLET_ASSET_CATALOG, AI_WALLET_SETTLEMENT_ASSETS, type AiWalletSettlementAsset } from "@shared/ai-wallet-assets";
 
 type FlowFilter = "all" | "in" | "out";
@@ -70,6 +71,7 @@ export default function MultiAssetWalletTransactions() {
   const balancesQuery = trpc.recharge.getMultiAssetBalances.useQuery(undefined, { staleTime: 15_000 });
   const historyQuery = trpc.recharge.getMultiAssetHistory.useQuery({ limit: 100 }, { staleTime: 15_000 });
   const asset = AI_WALLET_ASSET_CATALOG.find((item) => item.code === assetCode);
+  const assetIconSrc = getCryptoAssetIconSrc(assetCode);
   const balance = (balancesQuery.data ?? []).find((item: any) => String(item.assetCode).toUpperCase() === assetCode) as any;
   const availableAmount = Number(balance?.availableBalance ?? 0);
   const frozenAmount = Number(balance?.frozenBalance ?? 0);
@@ -123,7 +125,12 @@ export default function MultiAssetWalletTransactions() {
 
       <main className="space-y-3 px-4 pt-4">
         <section className="rounded-2xl p-4" style={{ background: theme.panel, border: `1px solid ${theme.border}` }}>
-          <p className="text-xs" style={{ color: theme.muted }}>当前 {assetCode} 余额</p>
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,.06)", border: `1px solid ${theme.border}` }}>
+              {assetIconSrc ? <img src={assetIconSrc} alt={`${assetCode} 币种图标`} className="h-full w-full object-contain" /> : <span className="text-xs font-bold" style={{ color: theme.goldLight }}>{assetCode.slice(0, 1)}</span>}
+            </div>
+            <p className="text-xs" style={{ color: theme.muted }}>当前 {assetCode} 余额</p>
+          </div>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-3xl font-bold tabular-nums" style={{ color: theme.goldLight }}>{amount.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}</span>
             <span className="text-sm font-medium" style={{ color: theme.gold }}>{assetCode}</span>

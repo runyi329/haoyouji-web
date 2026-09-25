@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { trpc } from "../lib/trpc";
 import { restoreLedgerViewAsState } from "../lib/authIdentity";
 import { getInternalTransferPresentation } from "../lib/walletTransferPresentation";
+import { getCryptoAssetIconSrc } from "../lib/cryptoAssetIcons";
 import Recharge from "./Recharge";
 import Withdraw from "./Withdraw";
 import { AI_WALLET_SETTLEMENT_ASSETS, type AiWalletSettlementAsset } from "@shared/ai-wallet-assets";
@@ -1210,12 +1211,15 @@ export default function Wallet() {
                 const frozenAmount = Number(asset.frozenBalance ?? 0);
                 const valueUsdt = amount * Number(asset.priceUsdt ?? 0);
                 const assetDigits = assetCode === "USDT" ? 2 : 8;
-                const assetAccent = assetCode === "USDT" ? "#26A17B" : assetCode === "ETH" ? "#627EEA" : assetCode === "BTC" ? "#F7931A" : assetCode === "SOL" ? "#A55CFF" : assetCode === "BNB" ? "#F3BA2F" : "#8AA0B8";
+                const assetAccent = assetCode === "USDT" ? "#26A17B" : assetCode === "ETH" ? "#627EEA" : assetCode === "BTC" ? "#F7931A" : assetCode === "SOL" ? "#A55CFF" : assetCode === "BNB" ? "#F3BA2F" : assetCode === "SUI" ? "#4DA2FF" : "#8AA0B8";
+                const assetIconSrc = getCryptoAssetIconSrc(assetCode);
                 return (
                   <div key={assetCode} className="px-3 py-3" style={{ borderBottom: index < visibleDigitalAssetBalances.length - 1 ? `1px solid ${G.divider}` : "none" }}>
                     <div className="flex w-full min-w-0 items-center justify-between gap-2 text-left">
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ background: `${assetAccent}25`, color: assetAccent, border: `1px solid ${assetAccent}55` }}>{assetCode.slice(0, 1)}</div>
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-bold" style={{ background: `${assetAccent}25`, color: assetAccent, border: `1px solid ${assetAccent}55` }}>
+                          {assetIconSrc ? <img src={assetIconSrc} alt={`${assetCode} 币种图标`} className="h-full w-full object-contain" /> : assetCode.slice(0, 1)}
+                        </div>
                         <div className="min-w-0">
                           <div className="text-sm font-semibold" style={{ color: G.white }}>{assetCode}</div>
                           <div className="mt-0.5 text-[10px]" style={{ color: G.whiteDim }}>可用 {mask(availableAmount.toLocaleString("zh-CN", { minimumFractionDigits: assetCode === "USDT" ? 2 : 0, maximumFractionDigits: assetDigits }))}</div>
@@ -1323,6 +1327,7 @@ export default function Wallet() {
               const frozenAmount = Number(asset.frozenBalance ?? 0);
               const valueUsdt = amount * Number(asset.priceUsdt ?? 0);
               const assetDigits = assetCode === "USDT" ? 2 : 8;
+              const assetIconSrc = getCryptoAssetIconSrc(assetCode);
               return (
                 <button
                   key={`transfer-${assetCode}`}
@@ -1332,9 +1337,14 @@ export default function Wallet() {
                   className="flex w-full items-center justify-between rounded-xl px-3.5 py-3 text-left active:scale-[0.99] disabled:opacity-45"
                   style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}` }}
                 >
-                  <div>
-                    <div className="text-sm font-semibold" style={{ color: G.white }}>{assetCode}</div>
-                    <div className="mt-0.5 text-[11px]" style={{ color: G.whiteDim }}>{frozenAmount > 0 ? `可转 ${amount.toLocaleString("zh-CN", { minimumFractionDigits: assetCode === "USDT" ? 2 : 0, maximumFractionDigits: assetDigits })} · 担保冻结 ${frozenAmount.toLocaleString("zh-CN", { minimumFractionDigits: assetCode === "USDT" ? 2 : 0, maximumFractionDigits: assetDigits })}` : Number(asset.priceUsdt ?? 0) > 0 ? `≈ ${valueUsdt.toLocaleString("zh-CN", { maximumFractionDigits: 2 })} u` : "行情加载中"}</div>
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)", border: `1px solid ${G.cardBorder}` }}>
+                      {assetIconSrc ? <img src={assetIconSrc} alt={`${assetCode} 币种图标`} className="h-full w-full object-contain" /> : <span className="text-xs font-bold" style={{ color: G.goldLight }}>{assetCode.slice(0, 1)}</span>}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold" style={{ color: G.white }}>{assetCode}</div>
+                      <div className="mt-0.5 text-[11px]" style={{ color: G.whiteDim }}>{frozenAmount > 0 ? `可转 ${amount.toLocaleString("zh-CN", { minimumFractionDigits: assetCode === "USDT" ? 2 : 0, maximumFractionDigits: assetDigits })} · 担保冻结 ${frozenAmount.toLocaleString("zh-CN", { minimumFractionDigits: assetCode === "USDT" ? 2 : 0, maximumFractionDigits: assetDigits })}` : Number(asset.priceUsdt ?? 0) > 0 ? `≈ ${valueUsdt.toLocaleString("zh-CN", { maximumFractionDigits: 2 })} u` : "行情加载中"}</div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-lg font-bold tabular-nums" style={{ color: G.goldLight }}>{amount.toLocaleString("zh-CN", { minimumFractionDigits: assetCode === "USDT" ? 2 : 0, maximumFractionDigits: assetDigits })}</span>
