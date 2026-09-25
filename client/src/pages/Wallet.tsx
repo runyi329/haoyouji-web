@@ -704,12 +704,18 @@ export default function Wallet() {
   const recentBalanceHistoryQuery = trpc.recharge.getBalanceHistory.useQuery({ limit: 20 });
   const cnyBalanceQuery = trpc.recharge.getCnyBalance.useQuery();
   const cnyHistoryQuery = trpc.recharge.getCnyHistory.useQuery({ limit: 20 });
-  const multiAssetBalancesQuery = trpc.recharge.getMultiAssetBalances.useQuery(undefined, {
+  const multiAssetBalancesQuery = trpc.recharge.getMultiAssetBalances.useQuery(
+    viewAsUserId ? { viewAsUserId } : undefined,
+    {
     enabled: isLedger52WalletEntry,
     staleTime: 15_000,
-  });
+    },
+  );
   // 多币种按币种分组显示各自最近 10 笔；取足够总量避免单币种被其他币种挤出。
-  const multiAssetHistoryQuery = trpc.recharge.getMultiAssetHistory.useQuery({ limit: 100 }, {
+  const multiAssetHistoryQuery = trpc.recharge.getMultiAssetHistory.useQuery({
+    limit: 100,
+    ...(viewAsUserId ? { viewAsUserId } : {}),
+  }, {
     enabled: isLedger52WalletEntry,
     staleTime: 15_000,
   });
@@ -785,7 +791,9 @@ export default function Wallet() {
     ? appendWalletAccount("/wallet/transactions?fromLedger=52", "USDT")
     : activeAsset === "CNY"
       ? appendWalletAccount("/wallet/cny-transactions?fromLedger=52", "CNY")
-      : "";
+      : activeAsset === "CRYPTO"
+        ? appendWalletAccount("/wallet/crypto-transactions?fromLedger=52", "CRYPTO")
+        : "";
 
   const recentUsdtTx = (() => {
     const recharges = (recentRechargeQuery.data ?? []).map((r: any) => ({
@@ -1213,7 +1221,7 @@ export default function Wallet() {
           onRecharge={canRecharge ? () => setModal("recharge") : undefined}
           onWithdraw={canWithdraw ? () => setModal("withdraw") : undefined}
           onTransfer={canTransfer ? () => setModal("crypto-transfer-select") : undefined}
-          onDetails={() => document.getElementById("digital-wallet-history")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          onDetails={() => setLocation(appendWalletAccount("/wallet/crypto-transactions?fromLedger=52", "CRYPTO"))}
           isUsdt={false}
           readOnly={isReadOnlyMemberView}
           transferProminent
@@ -1261,8 +1269,8 @@ export default function Wallet() {
               <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${G.divider}` }}>
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div>
-                    <span className="text-xs font-semibold" style={{ color: G.white }}>资金明细</span>
-                    <span className="ml-1.5 text-[10px]" style={{ color: G.whiteDim }}>最近 10 笔</span>
+                    <span className="text-xs font-semibold" style={{ color: G.white }}>最近资金明细</span>
+                    <span className="ml-1.5 text-[10px]" style={{ color: G.whiteDim }}>仅显示最近 10 笔</span>
                   </div>
                   <span className="rounded-full px-2 py-0.5 text-[10px]" style={{ background: G.whiteFaint, color: G.whiteDim }}>按币种筛选</span>
                 </div>

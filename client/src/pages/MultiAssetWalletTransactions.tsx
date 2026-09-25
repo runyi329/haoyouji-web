@@ -68,8 +68,8 @@ export default function MultiAssetWalletTransactions() {
     ? requestedAsset as AiWalletSettlementAsset
     : "BTC";
   const [filter, setFilter] = useState<FlowFilter>("all");
-  const balancesQuery = trpc.recharge.getMultiAssetBalances.useQuery(undefined, { staleTime: 15_000 });
-  const historyQuery = trpc.recharge.getMultiAssetHistory.useQuery({ limit: 100 }, { staleTime: 15_000 });
+  const balancesQuery = trpc.recharge.getMultiAssetBalances.useQuery(viewAsUserId ? { viewAsUserId } : undefined, { staleTime: 15_000 });
+  const historyQuery = trpc.recharge.getMultiAssetHistory.useQuery({ limit: 100, ...(viewAsUserId ? { viewAsUserId } : {}) }, { staleTime: 15_000 });
   const asset = AI_WALLET_ASSET_CATALOG.find((item) => item.code === assetCode);
   const assetIconSrc = getCryptoAssetIconSrc(assetCode);
   const balance = (balancesQuery.data ?? []).find((item: any) => String(item.assetCode).toUpperCase() === assetCode) as any;

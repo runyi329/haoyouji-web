@@ -1989,8 +1989,22 @@ ${klinesSummary}
     // 第二阶段首批数字资产钱包：BTC / ETH / SOL / BNB。
     // 余额永远按币种独立保存；行情只用于展示估值，不参与扣款或结算。
     getMultiAssetBalances: protectedProcedure
-      .query(async ({ ctx }) => {
-        const balances = await dbMultiAssetWallet.getUserMultiAssetBalances(ctx.user.id);
+      .input(z.object({ viewAsUserId: z.number().int().positive().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        let targetUserId = ctx.user.id;
+        if (input?.viewAsUserId) {
+          // 数字币账户与 USDT/CNY 账户遵循同一视角权限：仅52创建人可读取其账本成员的快照。
+          await requireLedger52Creator(ctx.user.id, 52);
+          const ledgerDb = await getLedgerDb();
+          const targetMember = await ledgerDb.execute(
+            sql`SELECT id FROM ledger_members WHERE ledgerId = 52 AND userId = ${input.viewAsUserId} LIMIT 1`,
+          ) as any;
+          if (!(targetMember as any)[0]?.[0] && !(targetMember as any)[0]) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看该成员的数字币账户' });
+          }
+          targetUserId = input.viewAsUserId;
+        }
+        const balances = await dbMultiAssetWallet.getUserMultiAssetBalances(targetUserId);
         const { getLatestPrice, getUsdtCnyRate } = await import('./price-scanner');
         const usdtCnyRate = Number(getUsdtCnyRate?.() || 0);
         return balances.map((balance) => {
@@ -2004,9 +2018,24 @@ ${klinesSummary}
       }),
 
     getMultiAssetHistory: protectedProcedure
-      .input(z.object({ limit: z.number().int().min(1).max(100).optional() }).optional())
+      .input(z.object({
+        limit: z.number().int().min(1).max(500).optional(),
+        viewAsUserId: z.number().int().positive().optional(),
+      }).optional())
       .query(async ({ ctx, input }) => {
-        return await dbMultiAssetWallet.getUserMultiAssetHistory(ctx.user.id, input?.limit ?? 30);
+        let targetUserId = ctx.user.id;
+        if (input?.viewAsUserId) {
+          await requireLedger52Creator(ctx.user.id, 52);
+          const ledgerDb = await getLedgerDb();
+          const targetMember = await ledgerDb.execute(
+            sql`SELECT id FROM ledger_members WHERE ledgerId = 52 AND userId = ${input.viewAsUserId} LIMIT 1`,
+          ) as any;
+          if (!(targetMember as any)[0]?.[0] && !(targetMember as any)[0]) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看该成员的数字币流水' });
+          }
+          targetUserId = input.viewAsUserId;
+        }
+        return await dbMultiAssetWallet.getUserMultiAssetHistory(targetUserId, input?.limit ?? 30);
       }),
 
     transferMultiAssetBalance: protectedProcedure

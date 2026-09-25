@@ -341,7 +341,8 @@ export async function getUserMultiAssetHistory(userId: number, limit = 20): Prom
   await ensureMultiAssetWalletInfrastructure();
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接失败");
-  const safeLimit = Math.min(100, Math.max(1, Math.floor(limit)));
+  // 总览只取最近流水；完整明细页可读取更长的只读审计窗口。
+  const safeLimit = Math.min(500, Math.max(1, Math.floor(limit)));
   const [rows] = await (conn as any).execute(
     `SELECT entry.id, entry.entry_no, entry.request_id, entry.asset_code, entry.amount, entry.balance_after,
             entry.event_type, entry.note, entry.source_ledger_id, entry.created_at,
