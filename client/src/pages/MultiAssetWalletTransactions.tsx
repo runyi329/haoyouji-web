@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
-import { ArrowDownCircle, ArrowLeft, ArrowUpCircle, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { restoreLedgerViewAsState } from "@/lib/authIdentity";
 import { getInternalTransferPresentation } from "@/lib/walletTransferPresentation";
@@ -163,8 +163,9 @@ export default function MultiAssetWalletTransactions() {
                 return (
                   <div key={entry.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
                     <div className="flex min-w-0 items-center gap-3">
-                      <span className="rounded-full p-2" style={{ background: presentation.incoming ? "rgba(52,211,153,.12)" : "rgba(248,113,113,.12)" }}>
-                        {presentation.incoming ? <ArrowDownCircle className="h-4 w-4" style={{ color: theme.green }} /> : <ArrowUpCircle className="h-4 w-4" style={{ color: theme.red }} />}
+                      <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,.06)", border: `1px solid ${theme.border}` }}>
+                        {assetIconSrc ? <img src={assetIconSrc} alt={`${assetCode} 币种图标`} className="h-full w-full object-contain" /> : <span className="text-xs font-bold" style={{ color: theme.goldLight }}>{assetCode.slice(0, 1)}</span>}
+                        <span className="absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full border-2" style={{ background: presentation.incoming ? theme.green : theme.red, borderColor: theme.panel }} />
                       </span>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium" style={{ color: "rgba(255,255,255,.88)" }}>{presentation.label}</p>
