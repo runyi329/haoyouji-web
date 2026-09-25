@@ -929,7 +929,7 @@ export default function AfInviteTreePage() {
                               </div>
                             </div>
                             {/* 中层：资产数据行 */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', borderTop: '1px solid #F0F0F0' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', borderTop: '1px solid #F0F0F0' }}>
                               {(() => {
                                 const totalRecharge = Number(u.totalRecharge ?? 0);
                                 const balance = Number(u.balance ?? 0);
@@ -958,6 +958,22 @@ export default function AfInviteTreePage() {
                                       <div style={{ fontSize: 11, fontWeight: 600, color: shortfall !== null ? shortfallColor : '#9E9E9E' }}>
                                         {shortfall !== null ? <>{shortfall.toFixed(0)}<span style={{ fontSize: 9, fontWeight: 400 }}>U</span></> : '-'}
                                       </div>
+                                    </div>
+                                    <div style={{ padding: '6px 4px', textAlign: 'center', borderLeft: '1px solid #F0F0F0' }}>
+                                      <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 3 }}>钱包</div>
+                                      {u.id !== YJH_USER_ID_CONST && canSeeInviteWalletSnapshots ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => setWalletSnapshotUser({ id: Number(u.id), name: u.name, username: u.username })}
+                                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold active:scale-95"
+                                          style={{ color: '#1D4ED8', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE' }}
+                                          aria-label={`查看 ${u.name} 的只读钱包快照`}
+                                        >
+                                          查看
+                                        </button>
+                                      ) : (
+                                        <span style={{ fontSize: 10, color: '#C4C4C4' }}>—</span>
+                                      )}
                                     </div>
                                   </>
                                 );

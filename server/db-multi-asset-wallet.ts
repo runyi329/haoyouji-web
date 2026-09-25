@@ -137,16 +137,16 @@ export async function ensureMultiAssetWalletInfrastructure(): Promise<void> {
           KEY idx_ai_wallet_asset_balance_asset (asset_code),
           KEY idx_ai_wallet_asset_balance_updated (updated_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI智能钱包多资产当前余额；不含CNY与USDT历史余额'
-      `);
+      `, []);
       const [balanceColumns] = await (conn as any).execute(`
         SELECT column_name
           FROM information_schema.columns
          WHERE table_schema = DATABASE() AND table_name = 'ai_wallet_asset_balances'
-      `) as any[];
+      `, []) as any[];
       const hasFrozenBalance = asRows(balanceColumns).some((row) => String(row.column_name || row.COLUMN_NAME) === 'frozen_balance');
       if (!hasFrozenBalance) {
         try {
-          await (conn as any).execute(`ALTER TABLE ai_wallet_asset_balances ADD COLUMN frozen_balance DECIMAL(36,18) NOT NULL DEFAULT 0 AFTER available_balance`);
+          await (conn as any).execute(`ALTER TABLE ai_wallet_asset_balances ADD COLUMN frozen_balance DECIMAL(36,18) NOT NULL DEFAULT 0 AFTER available_balance`, []);
         } catch (error: any) {
           if (error?.code !== 'ER_DUP_FIELDNAME') throw error;
         }
@@ -173,7 +173,7 @@ export async function ensureMultiAssetWalletInfrastructure(): Promise<void> {
           KEY idx_ai_wallet_asset_entry_asset_time (asset_code, created_at),
           KEY idx_ai_wallet_asset_entry_transfer (related_transfer_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI智能钱包多资产不可变流水'
-      `);
+      `, []);
       await (conn as any).execute(`
         CREATE TABLE IF NOT EXISTS ai_wallet_asset_transfers (
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -194,7 +194,7 @@ export async function ensureMultiAssetWalletInfrastructure(): Promise<void> {
           KEY idx_ai_wallet_asset_transfer_to_time (to_user_id, created_at),
           KEY idx_ai_wallet_asset_transfer_asset (asset_code)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI智能钱包多资产站内转账主记录'
-      `);
+      `, []);
       await (conn as any).execute(`
         CREATE TABLE IF NOT EXISTS ai_wallet_asset_collateral_locks (
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -215,18 +215,18 @@ export async function ensureMultiAssetWalletInfrastructure(): Promise<void> {
           KEY idx_wallet_collateral_user_asset_status (user_id, asset_code, status),
           KEY idx_wallet_collateral_order_status (ledger_id, order_id, status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='52号融资订单的钱包数字资产担保冻结；余额不扣除，仅限制可用额'
-      `);
+      `, []);
       // 兼容首版预览中已存在但缺少账本归属列的冻结表；查询前必须补齐，
       // 否则钱包担保页会因 WHERE ledger_id 直接报错，且绝不能把不同账本的锁混在一起。
       const [lockColumns] = await (conn as any).execute(`
         SELECT column_name
           FROM information_schema.columns
          WHERE table_schema = DATABASE() AND table_name = 'ai_wallet_asset_collateral_locks'
-      `) as any[];
+      `, []) as any[];
       const hasLockLedgerId = asRows(lockColumns).some((row) => String(row.column_name || row.COLUMN_NAME) === 'ledger_id');
       if (!hasLockLedgerId) {
         try {
-          await (conn as any).execute(`ALTER TABLE ai_wallet_asset_collateral_locks ADD COLUMN ledger_id INT NOT NULL DEFAULT 52 AFTER id`);
+          await (conn as any).execute(`ALTER TABLE ai_wallet_asset_collateral_locks ADD COLUMN ledger_id INT NOT NULL DEFAULT 52 AFTER id`, []);
         } catch (error: any) {
           if (error?.code !== 'ER_DUP_FIELDNAME') throw error;
         }
