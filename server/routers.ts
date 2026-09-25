@@ -1992,7 +1992,8 @@ ${klinesSummary}
       .input(z.object({ viewAsUserId: z.number().int().positive().optional() }).optional())
       .query(async ({ ctx, input }) => {
         let targetUserId = ctx.user.id;
-        if (input?.viewAsUserId) {
+        // 页面可携带本人的 viewAs 参数用于保持返回路径；它不是跨成员读取，不能因此误触发创建人权限。
+        if (input?.viewAsUserId && input.viewAsUserId !== ctx.user.id) {
           // 数字币账户与 USDT/CNY 账户遵循同一视角权限：仅52创建人可读取其账本成员的快照。
           await requireLedger52Creator(ctx.user.id, 52);
           const ledgerDb = await getLedgerDb();
@@ -2024,7 +2025,8 @@ ${klinesSummary}
       }).optional())
       .query(async ({ ctx, input }) => {
         let targetUserId = ctx.user.id;
-        if (input?.viewAsUserId) {
+        // 同上：本人携带 viewAs 只是路由上下文，跨成员读取才需要52创建人授权。
+        if (input?.viewAsUserId && input.viewAsUserId !== ctx.user.id) {
           await requireLedger52Creator(ctx.user.id, 52);
           const ledgerDb = await getLedgerDb();
           const targetMember = await ledgerDb.execute(
@@ -14439,7 +14441,8 @@ ${klinesSummary}
         const db = await getLedgerDb();
         // 视角切换（ledgerId 为可选，不传时走全局口径）
         let targetUserId = ctx.user.id;
-        if (input.viewAsUserId) {
+        // 本人 URL 中保留 viewAs 仅用于回到原账本上下文，不属于跨成员钱包读取。
+        if (input.viewAsUserId && input.viewAsUserId !== ctx.user.id) {
           if (input.ledgerId) {
             // 52 的跨成员资金流水仅账本创建人可查看；其他账本沿用 owner/admin。
             await requireLedger52Creator(ctx.user.id, input.ledgerId);

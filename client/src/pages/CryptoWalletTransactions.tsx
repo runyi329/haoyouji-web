@@ -227,6 +227,7 @@ export default function CryptoWalletTransactions() {
   const customRangeError = period === "custom" && customStartDate && customEndDate && dateStart(customStartDate)! > dateEnd(customEndDate)!;
 
   const isLoading = usdtHistoryQuery.isLoading || assetHistoryQuery.isLoading;
+  const historyError = usdtHistoryQuery.error || assetHistoryQuery.error;
   const refresh = () => {
     void usdtHistoryQuery.refetch();
     void assetHistoryQuery.refetch();
@@ -331,6 +332,11 @@ export default function CryptoWalletTransactions() {
         <section className="overflow-hidden rounded-2xl" style={{ background: theme.panel, border: `1px solid ${theme.border}` }}>
           {isLoading ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="h-7 w-7 animate-spin" style={{ color: theme.gold }} /></div>
+          ) : historyError ? (
+            <div className="px-5 py-16 text-center">
+              <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,.78)" }}>资金明细加载失败</p>
+              <p className="mt-1 text-xs" style={{ color: theme.muted }}>请点击右上角“刷新”重试；余额与流水不会因此被更改。</p>
+            </div>
           ) : entries.length === 0 ? (
             <div className="px-5 py-16 text-center">
               <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,.78)" }}>此筛选条件下暂无资金明细</p>
