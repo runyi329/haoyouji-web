@@ -22,6 +22,7 @@ import {
 import { toast } from "sonner";
 import { trpc } from "../lib/trpc";
 import { restoreLedgerViewAsState } from "../lib/authIdentity";
+import { getInternalTransferPresentation } from "../lib/walletTransferPresentation";
 import Recharge from "./Recharge";
 import Withdraw from "./Withdraw";
 import { AI_WALLET_SETTLEMENT_ASSETS, type AiWalletSettlementAsset } from "@shared/ai-wallet-assets";
@@ -119,7 +120,10 @@ function getUsdtFlowPresentation(item: { sourceType?: string; type?: string; amo
   const isIn = amount >= 0;
   const note = cleanWalletFlowNote(item.note);
   const isInternalTransfer = String(item.note || "").includes("[站内转账]");
-  if (isInternalTransfer) return { label: isIn ? "站内转账收款" : "站内转账汇款", detail: note, isIn };
+  if (isInternalTransfer) {
+    const transfer = getInternalTransferPresentation(item.note, isIn ? "in" : "out");
+    return { label: transfer?.primary || (isIn ? "站内转账收款" : "站内转账汇款"), detail: transfer?.secondary, isIn };
+  }
   if (item.sourceType === "recharge") return { label: "充值到账", detail: note, isIn: true };
   if (item.sourceType === "withdraw") return { label: "提现", detail: note, isIn: false };
   if (item.sourceType === "opening") return { label: "历史期初余额", detail: note, isIn };
@@ -134,7 +138,7 @@ function getUsdtFlowPresentation(item: { sourceType?: string; type?: string; amo
   return { label: isIn ? "入账" : "扣除", detail: note, isIn };
 }
 
-function getDigitalFlowPresentation(item: { eventType?: string; amount?: number; note?: string }): WalletFlowPresentation {
+function getDigitalFlowPresentation(item: { eventType?: string; amount?: number; note?: string; counterpartyName?: string | null }): WalletFlowPresentation {
   const isIn = Number(item.amount ?? 0) > 0;
   switch (item.eventType) {
     case "collateral_lock":
@@ -142,9 +146,15 @@ function getDigitalFlowPresentation(item: { eventType?: string; amount?: number;
     case "collateral_release":
       return { label: "担保解冻", status: "已解冻入账", isIn: true };
     case "transfer_in":
-      return { label: "站内转账收款", status: "已入账", isIn: true };
-    case "transfer_out":
-      return { label: "站内转账汇款", status: "已扣除", isIn: false };
+    case "transfer_out": {
+      const transfer = getInternalTransferPresentation(item.note, item.eventType === "transfer_in" ? "in" : "out", item.counterpartyName);
+      return {
+        label: transfer?.primary || (item.eventType === "transfer_in" ? "站内转账收款" : "站内转账汇款"),
+        detail: transfer?.secondary,
+        status: item.eventType === "transfer_in" ? "已入账" : "已扣除",
+        isIn: item.eventType === "transfer_in",
+      };
+    }
     default:
       return { label: isIn ? "入账" : "扣除", status: isIn ? "已入账" : "已扣除", isIn };
   }
@@ -1250,7 +1260,8 @@ export default function Wallet() {
                   const change = Number(item.amount ?? 0);
                   const assetCode = String(item.assetCode || "").toUpperCase();
                   const presentation = item.flowKind === "usdt" ? getUsdtFlowPresentation(item) : getDigitalFlowPresentation(item);
-                  const flowDetail = item.flowKind === "usdt" ? presentation.detail : cleanWalletFlowNote(item.note);
+                  // 转账对象已经提升到主标题；不要再把编号、金额等审计元数据挤到预览第一屏。
+                  const flowDetail = presentation.detail || (item.flowKind === "usdt" ? undefined : cleanWalletFlowNote(item.note));
                   const amountDigits = assetCode === "USDT" ? 2 : 8;
                   return (
                     <div

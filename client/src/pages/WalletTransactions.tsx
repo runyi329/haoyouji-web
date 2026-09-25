@@ -3,6 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, Loader2 } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import { restoreLedgerViewAsState } from "../lib/authIdentity";
+import { getInternalTransferPresentation } from "../lib/walletTransferPresentation";
 import { AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
 
 // 从交易备注中提取世界杯球队 code（小写），如 [ES] → 'es'
@@ -155,7 +156,9 @@ export default function WalletTransactions() {
                 const isPositive = amt >= 0;
                 const noteText = item.note || item.description || '';
                 const wcCode = extractWcTeamCode(noteText);
-              const label = getUsdtFlowLabel(item);
+                const transfer = getInternalTransferPresentation(noteText, isPositive ? "in" : "out");
+                const label = transfer?.primary || getUsdtFlowLabel(item);
+                const detail = transfer?.secondary || noteText;
                 return (
                   <div key={item.id} className="rounded-2xl p-4 bg-white" style={{ boxShadow: '0 4px 16px rgba(33,150,200,0.1)' }}>
                     <div className="flex items-start justify-between mb-2">
@@ -180,8 +183,8 @@ export default function WalletTransactions() {
                         </div>
                       </div>
                     </div>
-                    {!wcCode && noteText && (
-                      <div className="text-xs text-gray-500 mt-1 ml-10">{noteText}</div>
+                    {!wcCode && detail && (
+                      <div className="text-xs text-gray-500 mt-1 ml-10">{detail}</div>
                     )}
                     {item.balanceAfter != null && (
                       <div className="text-xs mt-2 pt-2 border-t border-gray-100 flex justify-between items-center">
@@ -253,7 +256,9 @@ export default function WalletTransactions() {
               const isPositive = amt >= 0;
               const noteText = item.note || item.description || '';
               const wcCode = extractWcTeamCode(noteText);
-              const label = getUsdtFlowLabel(item);
+              const transfer = getInternalTransferPresentation(noteText, isPositive ? "in" : "out");
+              const label = transfer?.primary || getUsdtFlowLabel(item);
+              const detail = transfer?.secondary || noteText;
               return (
                 <div
                   key={item.id}
@@ -293,8 +298,8 @@ export default function WalletTransactions() {
                   </div>
 
                   {/* 非世界杯才显示备注文字 */}
-                  {!wcCode && noteText && (
-                    <div className="text-xs text-gray-500 mt-1 ml-10">{noteText}</div>
+                  {!wcCode && detail && (
+                    <div className="text-xs text-gray-500 mt-1 ml-10">{detail}</div>
                   )}
 
                   {/* 余额快照 */}

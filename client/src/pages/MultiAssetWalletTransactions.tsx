@@ -3,6 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { ArrowDownCircle, ArrowLeft, ArrowUpCircle, Loader2, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { restoreLedgerViewAsState } from "@/lib/authIdentity";
+import { getInternalTransferPresentation } from "@/lib/walletTransferPresentation";
 import { AI_WALLET_ASSET_CATALOG, AI_WALLET_SETTLEMENT_ASSETS, type AiWalletSettlementAsset } from "@shared/ai-wallet-assets";
 
 type FlowFilter = "all" | "in" | "out";
@@ -25,7 +26,7 @@ function formatTime(value: string) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function getDigitalFlowPresentation(entry: { eventType?: string; amount?: number }) {
+function getDigitalFlowPresentation(entry: { eventType?: string; amount?: number; note?: string; counterpartyName?: string | null }) {
   const incoming = Number(entry.amount ?? 0) > 0;
   switch (entry.eventType) {
     case "collateral_lock":
@@ -33,9 +34,19 @@ function getDigitalFlowPresentation(entry: { eventType?: string; amount?: number
     case "collateral_release":
       return { label: "担保解冻", state: "已解冻入账", incoming: true };
     case "transfer_in":
-      return { label: "站内转账收款", state: "已入账", incoming: true };
-    case "transfer_out":
-      return { label: "站内转账汇款", state: "已扣除", incoming: false };
+    case "transfer_out": {
+      const transfer = getInternalTransferPresentation(
+        entry.note,
+        entry.eventType === "transfer_in" ? "in" : "out",
+        entry.counterpartyName,
+      );
+      return {
+        label: transfer?.primary || (entry.eventType === "transfer_in" ? "站内转账收款" : "站内转账汇款"),
+        detail: transfer?.secondary,
+        state: entry.eventType === "transfer_in" ? "已入账" : "已扣除",
+        incoming: entry.eventType === "transfer_in",
+      };
+    }
     default:
       return { label: incoming ? "入账" : "扣除", state: incoming ? "已入账" : "已扣除", incoming };
   }
@@ -141,6 +152,7 @@ export default function MultiAssetWalletTransactions() {
               {history.map((entry: any) => {
                 const change = Number(entry.amount ?? 0);
                 const presentation = getDigitalFlowPresentation(entry);
+                const previewNote = presentation.detail || String(entry.note || "—").replace(/\[.*?\]/g, "").trim();
                 return (
                   <div key={entry.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
                     <div className="flex min-w-0 items-center gap-3">
@@ -149,7 +161,7 @@ export default function MultiAssetWalletTransactions() {
                       </span>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium" style={{ color: "rgba(255,255,255,.88)" }}>{presentation.label}</p>
-                        <p className="mt-0.5 truncate text-[11px]" style={{ color: theme.muted }}>{formatTime(entry.createdAt)} · {String(entry.note || "—").replace(/\[.*?\]/g, "").trim()}</p>
+                        <p className="mt-0.5 truncate text-[11px]" style={{ color: theme.muted }}>{formatTime(entry.createdAt)}{previewNote ? ` · ${previewNote}` : ""}</p>
                         <p className="mt-1 text-[10px]" style={{ color: theme.muted }}>{presentation.state}</p>
                         <p className="mt-1 text-[10px]" style={{ color: theme.muted }}>该笔后余额 {Number(entry.balanceAfter ?? 0).toLocaleString("zh-CN", { maximumFractionDigits: 8 })} {assetCode}</p>
                       </div>

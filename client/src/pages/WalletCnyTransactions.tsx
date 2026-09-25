@@ -3,6 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, RefreshCw } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import { restoreLedgerViewAsState } from "../lib/authIdentity";
+import { getInternalTransferPresentation } from "../lib/walletTransferPresentation";
 import { AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
 
 function formatTime(dateStr: string) {
@@ -60,12 +61,16 @@ export default function WalletCnyTransactions() {
 
   const allTx = (cnyHistoryQuery.data ?? []).map((m: any) => {
     const rawNote = (m.note || "").replace(/^\[CNY\]/, "");
+    const isIn = Number(m.amount) > 0;
+    const transfer = getInternalTransferPresentation(rawNote, isIn ? "in" : "out");
     const wcCode = extractWcTeamCode(rawNote);
     return {
       id: m.id,
       amount: Math.abs(Number(m.amount)),
-      isIn: Number(m.amount) > 0,
+      isIn,
       note: rawNote,
+      primaryLabel: transfer?.primary || rawNote || (isIn ? "充值" : "提现"),
+      secondaryLabel: transfer?.secondary || "",
       wcCode,
       createdAt: m.created_at,
     };
@@ -199,10 +204,10 @@ export default function WalletCnyTransactions() {
                       <div>
                         {!tx.wcCode && (
                           <div className="text-sm font-medium text-gray-700">
-                            {tx.note || (tx.isIn ? "充值" : "提现")}
+                            {tx.primaryLabel}
                           </div>
                         )}
-                        <div className="text-xs mt-0.5 text-gray-400">{formatTime(tx.createdAt)}</div>
+                        <div className="text-xs mt-0.5 text-gray-400">{formatTime(tx.createdAt)}{tx.secondaryLabel ? ` · ${tx.secondaryLabel}` : ""}</div>
                       </div>
                     </div>
                     <div className="text-base font-bold tabular-nums" style={{ color: tx.isIn ? "#16a34a" : "#ef4444" }}>
@@ -370,12 +375,12 @@ export default function WalletCnyTransactions() {
                     </div>
                     <div>
                       {!tx.wcCode && (
-                        <div className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.85)" }}>
-                          {tx.note || (tx.isIn ? "充值" : "提现")}
-                        </div>
-                      )}
-                      <div className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>
-                        {formatTime(tx.createdAt)}
+                          <div className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.85)" }}>
+                          {tx.primaryLabel}
+                          </div>
+                        )}
+                        <div className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>
+                        {formatTime(tx.createdAt)}{tx.secondaryLabel ? ` · ${tx.secondaryLabel}` : ""}
                       </div>
                     </div>
                   </div>

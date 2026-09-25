@@ -31,6 +31,9 @@ export type MultiAssetHistoryItem = {
   eventType: "admin_adjustment" | "transfer_in" | "transfer_out" | "collateral_lock" | "collateral_release";
   note: string;
   sourceLedgerId: number | null;
+  /** 对手方仅在站内转账流水中返回，用于把“转给谁/谁转入”放在预览首行。 */
+  counterpartyName: string | null;
+  transferNo: string | null;
   createdAt: string;
 };
 
@@ -102,6 +105,12 @@ function buildCollateralRequestId(): string {
 function entryResult(row: any): MultiAssetHistoryItem {
   const assetCode = normalizeMultiAssetWalletAsset(row.asset_code);
   const eventType = String(row.event_type);
+  const isTransfer = eventType === "transfer_in" || eventType === "transfer_out";
+  const counterpartyName = isTransfer
+    ? String(eventType === "transfer_out"
+      ? (row.recipient_name || row.recipient_username || "")
+      : (row.sender_name || row.sender_username || "")).trim() || null
+    : null;
   return {
     id: Number(row.id),
     entryNo: String(row.entry_no),
@@ -115,6 +124,8 @@ function entryResult(row: any): MultiAssetHistoryItem {
       : "admin_adjustment",
     note: String(row.note || ""),
     sourceLedgerId: row.source_ledger_id == null ? null : Number(row.source_ledger_id),
+    counterpartyName,
+    transferNo: row.transfer_no ? String(row.transfer_no) : null,
     createdAt: row.created_at ? String(row.created_at) : "",
   };
 }
@@ -332,10 +343,17 @@ export async function getUserMultiAssetHistory(userId: number, limit = 20): Prom
   if (!conn) throw new Error("数据库连接失败");
   const safeLimit = Math.min(100, Math.max(1, Math.floor(limit)));
   const [rows] = await (conn as any).execute(
-    `SELECT id, entry_no, request_id, asset_code, amount, balance_after, event_type, note, source_ledger_id, created_at
-       FROM ai_wallet_asset_entries
-      WHERE user_id = ?
-      ORDER BY created_at DESC, id DESC
+    `SELECT entry.id, entry.entry_no, entry.request_id, entry.asset_code, entry.amount, entry.balance_after,
+            entry.event_type, entry.note, entry.source_ledger_id, entry.created_at,
+            transfer.transfer_no,
+            sender.name AS sender_name, sender.username AS sender_username,
+            recipient.name AS recipient_name, recipient.username AS recipient_username
+       FROM ai_wallet_asset_entries entry
+       LEFT JOIN ai_wallet_asset_transfers transfer ON transfer.id = entry.related_transfer_id
+       LEFT JOIN users sender ON sender.id = transfer.from_user_id
+       LEFT JOIN users recipient ON recipient.id = transfer.to_user_id
+      WHERE entry.user_id = ?
+      ORDER BY entry.created_at DESC, entry.id DESC
       LIMIT ${safeLimit}`,
     [userId],
   );
