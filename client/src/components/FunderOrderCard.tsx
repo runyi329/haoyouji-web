@@ -1588,19 +1588,46 @@ export function FunderOrderCard({
     && linkedPaidInterestForRisk !== null
     ? linkedCollateralValueU + linkedFloatingPnlU - accruedForRisk + paidInterestForRisk - (principalLentOut ? interestBaseForRisk : 0)
     : null;
-  // 共享担保模式下，担保缺口 = 本金浮动亏损（亏了多少）+ 待结利息（没付的利息）
-  // 即：每张订单单独计算，不使用共享池 totalGap
+  // 共享担保模式分为两层口径：
+  // 1) 卡片行内的「本订单担保缺口/余量」必须计入本订单实际选定的担保物；
+  // 2) 共享池弹窗才把同一人的全部订单、担保物统一汇总。
+  // 过去第 1 层只计算了持仓盈亏与利息，漏掉本订单的手工/37号担保物，
+  // 会让已有充足担保物的订单错误显示为大额缺口。
   const isSharedMode = orderShareMode === 'self';
   const sharedPoolLoading = isSharedMode && !sharedPoolInfo;
-  // 本金浮动亏损：亏损时取绝对值，盈利时为 0（盈利不算缺口）
-  const principalLoss = floatPnl !== null ? Math.max(0, -floatPnl) : 0; // 保留备用
-  // 共享担保缺口 = floatPnl - accrued + totalPaid（可正可负）
-  // 盈利订单：缺口为正（盈余，可抵消其他订单亏损）
-  // 亏损订单：缺口为负（需要担保物覆盖）
-  // totalPaid（已结利息）加回来，与非共享模式公式保持一致
-  const sharedExposureGap = floatPnlForRisk !== null
-    ? floatPnlForRisk - accruedForRisk + paidInterestForRisk
-    : -accruedForRisk + paidInterestForRisk;
+  // 本金浮动亏损：亏损时取绝对值，盈利时为 0（保留给风险提示扩展使用）。
+  const principalLoss = floatPnl !== null ? Math.max(0, -floatPnl) : 0;
+  // 共享池服务端已按当前市价计算每张订单的实际担保物价值；优先采用它，
+  // 以便37号担保物、人民币担保物和本地手工担保物使用一致口径。
+  const sharedOrderPoolDetail = isSharedMode
+    ? ((sharedPoolInfo as any)?.orders ?? []).find((poolOrder: any) => Number(poolOrder.orderId) === Number(order.id))
+    : null;
+  const sharedOrderCollateralValueU = (() => {
+    const serverValue = Number(sharedOrderPoolDetail?.collateralValue);
+    if (Number.isFinite(serverValue)) return serverValue;
+    if (hasExternalCollateral) return linkedCollateralValueU;
+    return collateralValueKnown ? collateralValue : null;
+  })();
+  // 37号标签订单在共享池中由服务端返回标签净值盈亏/已结利息；
+  // 行内展示也复用这一口径，避免与池总计出现不同的股票风险数值。
+  const sharedOrderFloatingPnlU = (() => {
+    const hasLinkedTag = Boolean(sharedOrderPoolDetail?.linked37PnlTagName || sharedOrderPoolDetail?.linked37TagName);
+    const serverValue = Number(sharedOrderPoolDetail?.linked37FloatingPnl);
+    if (hasLinkedTag && Number.isFinite(serverValue)) return serverValue;
+    return floatPnlForRisk;
+  })();
+  const sharedOrderPaidInterestU = (() => {
+    const serverCny = sharedOrderPoolDetail?.linked37PaidInterestCny;
+    if (serverCny !== null && serverCny !== undefined && Number.isFinite(Number(serverCny))) return Number(serverCny) / cnyRate;
+    return paidInterestForRisk;
+  })();
+  // 行内「担保缺口/余量」与非共享订单使用完全相同的单订单公式。
+  // 共享只改变担保物可以在池内共同覆盖的总计判断，不能抹掉该订单本身的担保物。
+  const sharedOrderExposure = sharedOrderCollateralValueU !== null
+    ? (sharedOrderFloatingPnlU !== null
+      ? sharedOrderCollateralValueU + sharedOrderFloatingPnlU - accruedForRisk + sharedOrderPaidInterestU - (principalLentOut ? interestBaseForRisk : 0)
+      : sharedOrderCollateralValueU - accruedForRisk + sharedOrderPaidInterestU - (principalLentOut ? interestBaseForRisk : 0))
+    : null;
   // 共享池中的37标签订单使用服务端回传的标签净值盈亏，不能再按股票行情价推算。
   // 同一标签的担保物与净值盈亏都只计一次；各订单的待结利息/借出本金仍分别计入。
   const sharedPoolRemainingU = (() => {
@@ -1668,19 +1695,21 @@ export function FunderOrderCard({
   const externalCollateralValueCny = externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU)
     ? externalCollateralValueU * cnyRate
     : null;
-  // 共享模式：effectiveExposure 直接用 sharedExposureGap（正=充足/盈余，负=缺口）。
+  // 共享模式：优先显示本订单含担保物的余量/缺口；担保物价格未就绪时保持加载状态，
+  // 不再退回成漏算担保物的数值。
   // 非共享的37号标签订单用含利息的外部担保公式，其他订单沿用原有 exposure 逻辑。
-  const effectiveExposure = isSharedMode ? sharedExposureGap : (externalNonSharedGapU ?? exposure);
+  const effectiveExposure = isSharedMode ? (sharedOrderExposure ?? 0) : (externalNonSharedGapU ?? exposure);
   const isSufficient = effectiveExposure >= 0;
   // 共享模式下缺口计算不再依赖 sharedPoolInfo，不需要显示「计算中...」
   // sharedPoolLoading 仅用于弹窗内共享池汇总区域的加载状态
-  const showExposureLoading = hasExternalInterest && linkedPaidInterestForRisk === null;
-  // 每次 sharedExposureGap 变化时上报给父组件，供弹窗第①部分实时读取
+  const showExposureLoading = (hasExternalInterest && linkedPaidInterestForRisk === null)
+    || (isSharedMode && sharedOrderExposure === null);
+  // 每次共享订单行内余量变化时上报给父组件，供扩展风险视图读取。
   useEffect(() => {
     if (isSharedMode && onExposureGapChange) {
-      onExposureGapChange(order.id, sharedExposureGap);
+      onExposureGapChange(order.id, sharedOrderExposure ?? 0);
     }
-  }, [sharedExposureGap, isSharedMode, order.id]);
+  }, [sharedOrderExposure, isSharedMode, order.id]);
 
   return (
     <>
@@ -2559,10 +2588,10 @@ export function FunderOrderCard({
                             );
                           })()}
 
-                          {/* ③ 所有共享订单的缺口汇总 */}
+                          {/* ③ 所有共享订单的净风险变动（不含担保物；担保物在第④项一次性汇总） */}
                           <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                            <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>③ 共享订单缺口汇总</div>
-                            <div className="mb-1" style={{ color: '#9CA3AF' }}>每张订单缺口 = 浮动盈亏 − 待结利息 + 已结利息</div>
+                            <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>③ 共享订单净风险变动</div>
+                            <div className="mb-1" style={{ color: '#9CA3AF' }}>此处不含担保物；卡片行内的担保缺口已计入本订单担保物</div>
                             {sharedPoolInfo ? (
                               <>
                                 <div className="space-y-1.5">
@@ -2646,7 +2675,7 @@ export function FunderOrderCard({
                                   const totalGapLive = allKnown ? sharedPoolRemainingU! - totalCollateral : 0;
                                   return (
                                     <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
-                                      <span style={{ color: '#374151' }}>合计缺口需求</span>
+                                  <span style={{ color: '#374151' }}>合计净风险变动</span>
                                       {allKnown
                                         ? <span className="font-mono" style={{ color: totalGapLive >= 0 ? '#DC2626' : '#16A34A' }}>{totalGapLive >= 0 ? '+' : ''}{totalGapLive.toFixed(2)} u</span>
                                         : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
@@ -2696,8 +2725,9 @@ export function FunderOrderCard({
                           {/* 共享担保计算说明 */}
                           <div className="mt-2 p-2.5 rounded-lg text-[10px] space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
                             <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
-                            <div>• <strong>每张订单缺口</strong> = 浮动盈亏 − 待结利息 + 已结利息，盈利订单缺口为正（盈余），亏损订单缺口为负</div>
-                            <div>• <strong>总计风险敎口</strong> = 共享担保物合计 + 各订单缺口合计（正数表示担保充足，负数表示担保不足）</div>
+                            <div>• <strong>卡片行内担保缺口/余量</strong> = 本订单担保物 + 浮动盈亏 − 待结利息 + 已结利息（借出本金订单再减本金）</div>
+                            <div>• <strong>本项净风险变动</strong> = 浮动盈亏 − 待结利息 + 已结利息（借出本金订单再减本金）；不含担保物，避免第④项重复相加</div>
+                            <div>• <strong>总计风险敎口</strong> = 共享担保物合计 + 各订单净风险变动合计（正数表示担保充足，负数表示担保不足）</div>
                             <div>• <strong>保证金比例</strong> = 风险敎口 ÷ 全部订单买入价值，负数表示担保不足需补仓</div>
                             <div>• <strong>期权订单缺口</strong>：开启「借出本金」开关→ 缺口 = 计息基数 + 待结利息；未开启→ 缺口 = 只有待结利息</div>
                           </div>
@@ -2819,16 +2849,17 @@ export function FunderOrderCard({
                   >!</button>
                 </div>
                 {isExternalStockPnlSource ? (
-                  (isSharedMode ? sharedPoolRemainingU : externalNonSharedGapU) !== null
+                  (isSharedMode ? (showExposureLoading ? null : effectiveExposure) : externalNonSharedGapU) !== null
                     ? (() => {
-                        const remainingU = isSharedMode ? sharedPoolRemainingU! : externalNonSharedGapU!;
+                        // 卡片行始终显示本订单的担保缺口/余量；共享池总计仅在说明弹窗中展示。
+                        const remainingU = isSharedMode ? effectiveExposure : externalNonSharedGapU!;
                         const remaining = externalCollateralGapDisplay === 'CNY' ? remainingU * cnyRate : remainingU;
                         const unit = externalCollateralGapDisplay === 'CNY' ? '元' : 'u';
                         return <span className="font-medium tabular-nums" style={{ color: remaining >= 0 ? '#DC2626' : '#16A34A' }}>
                           {remaining >= 0 ? '+' : ''}{remaining.toLocaleString(undefined, { maximumFractionDigits: externalCollateralGapDisplay === 'CNY' ? 0 : 2 })} {unit}
                         </span>;
                       })()
-                    : <span className="text-xs" style={{ color: '#9CA3AF' }}>{isSharedMode ? '共享担保加载中...' : '加载中...'}</span>
+                    : <span className="text-xs" style={{ color: '#9CA3AF' }}>{isSharedMode ? '担保物估值中...' : '加载中...'}</span>
                 ) : (
                   showExposureLoading
                     ? <span className="text-xs" style={{ color: '#9CA3AF' }}>计算中...</span>
