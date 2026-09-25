@@ -396,7 +396,7 @@ export default function AfInviteTreePage() {
   // 订单详情子视图
   const [orderView, setOrderView] = useState<'person' | 'order'>('person');
 
-  // 推荐树成员钱包：仅从人员视图的“钱包”入口打开，不与成员查看或资金操作混用。
+  // 推荐树成员钱包：仅从人员视图中下线成员的头像打开，不与成员查看或资金操作混用。
   const [walletSnapshotUser, setWalletSnapshotUser] = useState<{ id: number; name: string; username?: string } | null>(null);
   const walletSnapshotQuery = trpc.ledger.afGetInviteeWalletSnapshot.useQuery(
     { ledgerId, targetUserId: walletSnapshotUser?.id || 0 },
@@ -870,9 +870,23 @@ export default function AfInviteTreePage() {
                             {/* 上层：头像 + 基本信息 */}
                             <div className="flex items-start gap-3 pt-3 pb-2.5 px-3">
                               <div className="flex-shrink-0">
-                                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: u.layer === 1 ? '#D32F2F' : u.layer === 2 ? '#E57373' : '#EF9A9A' }}>
-                                  {u.name.charAt(0)}
-                                </div>
+                                {u.id !== YJH_USER_ID_CONST && canSeeInviteWalletSnapshots ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setWalletSnapshotUser({ id: Number(u.id), name: u.name, username: u.username })}
+                                    className="block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                                    title={`查看 ${u.name} 的只读钱包快照`}
+                                    aria-label={`查看 ${u.name} 的只读钱包快照`}
+                                  >
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold transition-transform active:scale-95" style={{ backgroundColor: u.layer === 1 ? '#D32F2F' : u.layer === 2 ? '#E57373' : '#EF9A9A', boxShadow: '0 0 0 2px #DBEAFE, 0 2px 5px rgba(30,64,175,.18)' }}>
+                                      {u.name.charAt(0)}
+                                    </div>
+                                  </button>
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: u.layer === 1 ? '#D32F2F' : u.layer === 2 ? '#E57373' : '#EF9A9A' }}>
+                                    {u.name.charAt(0)}
+                                  </div>
+                                )}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center justify-between gap-1">
@@ -915,7 +929,7 @@ export default function AfInviteTreePage() {
                               </div>
                             </div>
                             {/* 中层：资产数据行 */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', borderTop: '1px solid #F0F0F0' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', borderTop: '1px solid #F0F0F0' }}>
                               {(() => {
                                 const totalRecharge = Number(u.totalRecharge ?? 0);
                                 const balance = Number(u.balance ?? 0);
@@ -944,19 +958,6 @@ export default function AfInviteTreePage() {
                                       <div style={{ fontSize: 11, fontWeight: 600, color: shortfall !== null ? shortfallColor : '#9E9E9E' }}>
                                         {shortfall !== null ? <>{shortfall.toFixed(0)}<span style={{ fontSize: 9, fontWeight: 400 }}>U</span></> : '-'}
                                       </div>
-                                    </div>
-                                    <div style={{ padding: '5px 4px', textAlign: 'center', borderLeft: '1px solid #F0F0F0' }}>
-                                      <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 3 }}>钱包</div>
-                                      {u.id === YJH_USER_ID_CONST ? (
-                                        <div style={{ fontSize: 10, color: '#BDBDBD', paddingTop: 1 }}>本人</div>
-                                      ) : canSeeInviteWalletSnapshots ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => setWalletSnapshotUser({ id: Number(u.id), name: u.name, username: u.username })}
-                                          className="rounded-md px-1.5 py-1 text-[10px] font-semibold"
-                                          style={{ color: '#1D4ED8', background: '#EFF6FF', border: '1px solid #BFDBFE' }}
-                                        >查看</button>
-                                      ) : <div style={{ fontSize: 10, color: '#BDBDBD', paddingTop: 1 }}>—</div>}
                                     </div>
                                   </>
                                 );
