@@ -51,6 +51,13 @@ jobs:
               { file: 'eth-3d-icon.webp', key: 'assets/icons/eth-3d-icon.webp', mime: 'image/webp' },
               { file: 'sol-3d-icon.webp', key: 'assets/icons/sol-3d-icon.webp', mime: 'image/webp' },
               { file: 'btc-icon-trimmed.png', key: 'assets/icons/btc-icon-trimmed.png', mime: 'image/png' },
+              // 钱包币种图标：从 OKX 公共静态资源一次性导入，由 COS 对前端稳定供图。
+              { remoteUrl: 'https://static.coinall.ltd/cdn/oksupport/asset/currency/icon/usdt.png', key: 'assets/crypto-icons/usdt.png', mime: 'image/png', name: 'USDT' },
+              { remoteUrl: 'https://static.coinall.ltd/cdn/oksupport/asset/currency/icon/btc.png', key: 'assets/crypto-icons/btc.png', mime: 'image/png', name: 'BTC' },
+              { remoteUrl: 'https://static.coinall.ltd/cdn/oksupport/asset/currency/icon/eth.png', key: 'assets/crypto-icons/eth.png', mime: 'image/png', name: 'ETH' },
+              { remoteUrl: 'https://static.coinall.ltd/cdn/oksupport/asset/currency/icon/sol.png', key: 'assets/crypto-icons/sol.png', mime: 'image/png', name: 'SOL' },
+              { remoteUrl: 'https://static.coinall.ltd/cdn/oksupport/asset/currency/icon/bnb.png', key: 'assets/crypto-icons/bnb.png', mime: 'image/png', name: 'BNB' },
+              { remoteUrl: 'https://static.coinall.ltd/cdn/oksupport/asset/currency/icon/sui.png', key: 'assets/crypto-icons/sui.png', mime: 'image/png', name: 'SUI' },
               // 交易所 Logo（已上传的保持原路径）
               { file: 'okx-circle-icon.png', key: 'assets/logos/okx-circle-icon.png', mime: 'image/png' },
               { file: 'binance-circle-icon.png', key: 'assets/logos/binance-circle-icon.png', mime: 'image/png' },
@@ -98,21 +105,37 @@ jobs:
             const BASE_URL = `https://${BUCKET}.cos.${REGION}.myqcloud.com`;
             
             for (const img of images) {
-              const localPath = `${BASE}/${img.file}`;
-              if (!existsSync(localPath)) {
-                console.warn(`⚠️  文件不存在: ${img.file}`);
-                continue;
-              }
               try {
-                const buffer = readFileSync(localPath);
+                let buffer;
+                let sourceName;
+                if (img.remoteUrl) {
+                  const response = await fetch(img.remoteUrl);
+                  if (!response.ok) {
+                    throw new Error(`下载失败：HTTP ${response.status}`);
+                  }
+                  const contentType = response.headers.get('content-type') || '';
+                  if (!contentType.startsWith('image/')) {
+                    throw new Error(`下载响应不是图片：${contentType || '未知类型'}`);
+                  }
+                  buffer = Buffer.from(await response.arrayBuffer());
+                  sourceName = img.name || img.remoteUrl;
+                } else {
+                  const localPath = `${BASE}/${img.file}`;
+                  if (!existsSync(localPath)) {
+                    console.warn(`⚠️ 文件不存在: ${img.file}`);
+                    continue;
+                  }
+                  buffer = readFileSync(localPath);
+                  sourceName = img.file;
+                }
                 await new Promise((resolve, reject) => {
                   cos.putObject({ Bucket: BUCKET, Region: REGION, Key: img.key, Body: buffer, ContentType: img.mime }, (err, data) => {
                     if (err) reject(err); else resolve(data);
                   });
                 });
-                console.log(`✅ ${img.file} → ${BASE_URL}/${img.key}`);
+                console.log(`✅ ${sourceName} → ${BASE_URL}/${img.key}`);
               } catch (err) {
-                console.error(`❌ ${img.file} 上传失败:`, err.message);
+                console.error(`❌ ${img.name || img.file} 上传失败:`, err.message);
               }
             }
             
