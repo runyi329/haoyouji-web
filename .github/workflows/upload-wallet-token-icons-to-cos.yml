@@ -17,7 +17,6 @@ jobs:
           script: |
             set -euo pipefail
             cd /root/haoyouji-web
-            git pull --ff-only origin main
             node --input-type=module <<'EOF'
             import { createRequire } from 'module';
             import dotenv from 'dotenv';
