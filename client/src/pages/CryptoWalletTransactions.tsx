@@ -7,7 +7,7 @@ import { getCryptoAssetIconSrc } from "@/lib/cryptoAssetIcons";
 import { getInternalTransferPresentation } from "@/lib/walletTransferPresentation";
 import { AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
 
-type PeriodFilter = "7d" | "30d" | "90d" | "all";
+type PeriodFilter = "7d" | "30d" | "90d" | "custom" | "all";
 type TypeFilter = "all" | "recharge" | "transfer" | "order" | "reward" | "withdraw" | "adjustment";
 
 type HistoryEntry = {
@@ -38,6 +38,7 @@ const periodOptions: Array<{ value: PeriodFilter; label: string }> = [
   { value: "7d", label: "近 7 天" },
   { value: "30d", label: "近 30 天" },
   { value: "90d", label: "近 90 天" },
+  { value: "custom", label: "自定义" },
   { value: "all", label: "全部时间" },
 ];
 
@@ -56,6 +57,18 @@ function formatTime(value: string) {
   if (Number.isNaN(date.getTime())) return "时间未知";
   const pad = (entry: number) => String(entry).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function dateStart(value: string): number | null {
+  if (!value) return null;
+  const timestamp = new Date(`${value}T00:00:00`).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function dateEnd(value: string): number | null {
+  if (!value) return null;
+  const timestamp = new Date(`${value}T23:59:59.999`).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
 }
 
 function cleanNote(value: unknown) {
@@ -158,13 +171,16 @@ export default function CryptoWalletTransactions() {
   const [period, setPeriod] = useState<PeriodFilter>("all");
   const [assetFilter, setAssetFilter] = useState("ALL");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
 
   const usdtHistoryQuery = trpc.ledger.afGetMyRechargeHistory.useQuery(
     { ledgerId: 52, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { staleTime: 30_000 },
   );
   const assetHistoryQuery = trpc.recharge.getMultiAssetHistory.useQuery(
-    { limit: 100, ...(queryInput || {}) },
+    // 完整明细页读取更长的只读窗口；总览仍保留最近 10 笔，避免首页加载膨胀。
+    { limit: 500, ...(queryInput || {}) },
     { staleTime: 30_000 },
   );
 
@@ -188,16 +204,27 @@ export default function CryptoWalletTransactions() {
     const now = Date.now();
     const periodDays: Partial<Record<PeriodFilter, number>> = { "7d": 7, "30d": 30, "90d": 90 };
     const cutoff = periodDays[period] ? now - periodDays[period]! * 24 * 60 * 60 * 1000 : null;
+    const customStart = period === "custom" ? dateStart(customStartDate) : null;
+    const customEnd = period === "custom" ? dateEnd(customEndDate) : null;
+    const isCompleteCustomRange = period !== "custom" || (customStart != null && customEnd != null);
+    const isValidCustomRange = customStart == null || customEnd == null || customStart <= customEnd;
     return allEntries.filter((entry) => {
+      if (!isCompleteCustomRange || !isValidCustomRange) return false;
       if (assetFilter !== "ALL" && entry.assetCode !== assetFilter) return false;
       if (typeFilter !== "all" && entry.type !== typeFilter) return false;
       if (cutoff != null) {
         const timestamp = new Date(entry.createdAt).getTime();
         if (Number.isNaN(timestamp) || timestamp < cutoff) return false;
       }
+      if (customStart != null || customEnd != null) {
+        const timestamp = new Date(entry.createdAt).getTime();
+        if (Number.isNaN(timestamp) || (customStart != null && timestamp < customStart) || (customEnd != null && timestamp > customEnd)) return false;
+      }
       return true;
     });
-  }, [allEntries, assetFilter, period, typeFilter]);
+  }, [allEntries, assetFilter, customEndDate, customStartDate, period, typeFilter]);
+
+  const customRangeError = period === "custom" && customStartDate && customEndDate && dateStart(customStartDate)! > dateEnd(customEndDate)!;
 
   const isLoading = usdtHistoryQuery.isLoading || assetHistoryQuery.isLoading;
   const refresh = () => {
@@ -240,6 +267,40 @@ export default function CryptoWalletTransactions() {
                 return <button key={option.value} type="button" onClick={() => setPeriod(option.value)} className="h-7 shrink-0 rounded-full px-3 text-[11px] font-semibold" style={{ background: selected ? "linear-gradient(135deg, #F5D78E 0%, #C9A84C 100%)" : "rgba(255,255,255,.06)", color: selected ? "#15110A" : theme.muted, border: selected ? "1px solid transparent" : `1px solid ${theme.border}` }}>{option.label}</button>;
               })}
             </div>
+            {period === "custom" && (
+              <div className="mt-2.5 rounded-xl p-2.5" style={{ background: "rgba(255,255,255,.035)", border: `1px solid ${theme.border}` }}>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="min-w-0">
+                    <span className="mb-1 block text-[10px]" style={{ color: theme.muted }}>开始日期</span>
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      max={customEndDate || undefined}
+                      onChange={(event) => setCustomStartDate(event.target.value)}
+                      className="h-8 w-full min-w-0 rounded-lg border bg-[#111] px-2 text-[11px] outline-none"
+                      style={{ color: "rgba(255,255,255,.86)", borderColor: theme.border, colorScheme: "dark" }}
+                      aria-label="自定义开始日期"
+                    />
+                  </label>
+                  <label className="min-w-0">
+                    <span className="mb-1 block text-[10px]" style={{ color: theme.muted }}>结束日期</span>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      min={customStartDate || undefined}
+                      onChange={(event) => setCustomEndDate(event.target.value)}
+                      className="h-8 w-full min-w-0 rounded-lg border bg-[#111] px-2 text-[11px] outline-none"
+                      style={{ color: "rgba(255,255,255,.86)", borderColor: theme.border, colorScheme: "dark" }}
+                      aria-label="自定义结束日期"
+                    />
+                  </label>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="text-[10px]" style={{ color: customRangeError ? theme.red : theme.muted }}>{customRangeError ? "结束日期不能早于开始日期" : customStartDate && customEndDate ? "按完整自然日筛选" : "请选择开始和结束日期"}</span>
+                  {(customStartDate || customEndDate) && <button type="button" onClick={() => { setCustomStartDate(""); setCustomEndDate(""); }} className="shrink-0 text-[10px] font-medium" style={{ color: theme.goldLight }}>清除</button>}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mt-2">
