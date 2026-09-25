@@ -24085,7 +24085,15 @@ ${klinesSummary}
              SUM(CASE WHEN is_gift=0 AND status!='cancelled' THEN 1 ELSE 0 END) as normalCount,
              SUM(CASE WHEN is_gift=1 AND status!='cancelled' THEN 1 ELSE 0 END) as giftCount,
              SUM(CASE WHEN status!='cancelled' THEN 1 ELSE 0 END) as totalCount,
-             SUM(CASE WHEN status!='cancelled' THEN COALESCE(amount,0) ELSE 0 END) as totalAmount
+             SUM(CASE WHEN status!='cancelled' THEN COALESCE(amount,0) ELSE 0 END) as totalAmount,
+             SUM(CASE WHEN is_gift=0 AND status='completed' AND side='buy'
+                           AND (sell_status IS NULL OR sell_status='' OR sell_status IN ('pending','selling','sell_cancelled'))
+                      THEN 1 ELSE 0 END) as currentNormalHoldingCount,
+             SUM(CASE WHEN is_gift=1 AND status='completed' AND side='buy'
+                           AND (sell_status IS NULL OR sell_status='' OR sell_status IN ('pending','selling','sell_cancelled'))
+                      THEN 1 ELSE 0 END) as currentGiftHoldingCount,
+             SUM(CASE WHEN is_gift=0 AND status='pending' AND side='buy' THEN 1 ELSE 0 END) as currentNormalPendingBuyCount,
+             SUM(CASE WHEN is_gift=1 AND status='pending' AND side='buy' THEN 1 ELSE 0 END) as currentGiftPendingBuyCount
            FROM af_orders
            WHERE ledger_id=${input.ledgerId} AND user_id IN (${ph})`,
           ids
@@ -24131,6 +24139,124 @@ ${klinesSummary}
           totalAmount: parseFloat(r.totalAmount || 0),
           normalByCoins,
           giftByCoins,
+          // 当前口径：已成交仍持有/委卖的订单，另加尚未成交的委买订单。
+          // 与历史累计刻意分开，避免将历史已卖出订单误读为当前持仓。
+          currentNormalHoldingCount: Number(r.currentNormalHoldingCount || 0),
+          currentGiftHoldingCount: Number(r.currentGiftHoldingCount || 0),
+          currentNormalPendingBuyCount: Number(r.currentNormalPendingBuyCount || 0),
+          currentGiftPendingBuyCount: Number(r.currentGiftPendingBuyCount || 0),
+        };
+      }),
+
+    // YJH 推荐树成员的钱包只读快照。该专属运营入口不复用通用 view-as，
+    // 严格校验调用者、账本和目标成员的推荐链关系，且永不返回任何资金写入能力。
+    afGetInviteeWalletSnapshot: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        targetUserId: z.number().int().positive(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (Number(input.ledgerId) !== LEDGER_52_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '钱包快照仅支持52号账本' });
+        }
+        // 该页面是 YJH 的推荐树运营视图；系统超级管理员保留审计只读权限。
+        if (Number(ctx.user.id) !== YJH_USER_ID && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅YJH可查看推荐成员钱包快照' });
+        }
+        if (Number(input.targetUserId) === YJH_USER_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'YJH本人不适用推荐成员钱包快照' });
+        }
+
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+
+        // 沿邀请关系向上核验，避免仅凭前端传入用户 ID 横向读取非推荐链成员资金。
+        let cursorId = Number(input.targetUserId);
+        const visited = new Set<number>();
+        let isInvitee = false;
+        for (let depth = 0; depth < 32; depth += 1) {
+          if (visited.has(cursorId)) break;
+          visited.add(cursorId);
+          const [rows] = await (conn as any).execute(
+            `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
+            [cursorId],
+          );
+          const inviterId = Number((rows as any[])?.[0]?.invited_by_user_id || 0);
+          if (!inviterId) break;
+          if (inviterId === YJH_USER_ID) {
+            isInvitee = true;
+            break;
+          }
+          cursorId = inviterId;
+        }
+        if (!isInvitee) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅可查看YJH推荐树下成员的钱包快照' });
+        }
+
+        const targetUserId = Number(input.targetUserId);
+        const [userRows] = await (conn as any).execute(
+          `SELECT id, name, username FROM users WHERE id = ? LIMIT 1`,
+          [targetUserId],
+        );
+        const member = (userRows as any[])?.[0];
+        if (!member) throw new TRPCError({ code: 'NOT_FOUND', message: '成员不存在' });
+
+        const [manualRows] = await (conn as any).execute(
+          `SELECT id, ledger_id, user_id, amount, note, created_at, updated_at
+             FROM af_manual_balances
+            WHERE user_id = ? AND amount != 0 AND (note IS NULL OR note NOT LIKE '%[ERROR]%')
+            ORDER BY created_at DESC
+            LIMIT 30`,
+          [targetUserId],
+        );
+        const [profileRows] = await (conn as any).execute(
+          `SELECT enabled, visible_assets
+             FROM ai_wallet_project_profiles
+            WHERE target_key = 'ledger:52' LIMIT 1`,
+        );
+        const profile = (profileRows as any[])?.[0];
+        let visibleAssets: string[] = [];
+        try {
+          visibleAssets = Array.isArray(profile?.visible_assets)
+            ? profile.visible_assets
+            : JSON.parse(String(profile?.visible_assets || '[]'));
+        } catch { visibleAssets = []; }
+        if (!profile || Number(profile.enabled) !== 1) visibleAssets = [];
+
+        const [usdtBalance, recharges, withdrawals, balanceHistory, cnyBalance, cnyHistory, multiAssetBalances, multiAssetHistory] = await Promise.all([
+          dbRecharge.getUserBalance(targetUserId, input.ledgerId),
+          dbRecharge.getUserRechargeOrders(targetUserId, 20),
+          dbRecharge.getUserWithdrawHistory(targetUserId, 20),
+          dbRecharge.getUserBalanceHistory(targetUserId, 30),
+          dbRecharge.getUserCnyBalance(targetUserId),
+          dbRecharge.getUserCnyHistory(targetUserId, 20),
+          dbMultiAssetWallet.getUserMultiAssetBalances(targetUserId),
+          dbMultiAssetWallet.getUserMultiAssetHistory(targetUserId, 100),
+        ]);
+        const { getLatestPrice, getUsdtCnyRate } = await import('./price-scanner');
+        const usdtCnyRate = Number(getUsdtCnyRate?.() || 0);
+        const pricedMultiAssets = multiAssetBalances.map((balance) => {
+          const priceUsdt = Number(getLatestPrice(balance.assetCode) || 0);
+          return {
+            ...balance,
+            priceUsdt,
+            priceCny: priceUsdt > 0 && usdtCnyRate > 0 ? priceUsdt * usdtCnyRate : 0,
+          };
+        });
+
+        return {
+          member: { id: Number(member.id), name: member.name || member.username || '成员', username: member.username || '' },
+          visibleAssets: visibleAssets.map((asset) => String(asset).toUpperCase()),
+          usdtCnyRate: usdtCnyRate || 7.25,
+          usdtBalance,
+          cnyBalance,
+          recharges,
+          withdrawals,
+          manualBalances: Array.isArray(manualRows) ? manualRows : [],
+          balanceHistory,
+          cnyHistory,
+          multiAssetBalances: pricedMultiAssets,
+          multiAssetHistory,
         };
       }),
 

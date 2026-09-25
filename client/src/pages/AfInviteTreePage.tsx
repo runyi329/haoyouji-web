@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, GitBranch, ArrowUpDown, Settings, BarChart2, List, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, GitBranch, ArrowUpDown, Settings, BarChart2, List, ChevronDown, ChevronUp, Eye, WalletCards, X } from "lucide-react";
 import { OrderDetail } from "@/pages/CryptoPrediction";
 
 // 北京时间辅助函数（MySQL存储的是北京时间，服务端String()后UTC值即为北京时间值）
@@ -139,6 +139,120 @@ function StatusBadge({ status, sellStatus }: { status: string; sellStatus?: stri
   return <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, backgroundColor: '#F3F4F6', color: '#6B7280' }}>{status}</span>;
 }
 
+// 推荐树成员钱包快照：视觉沿用智能钱包的黑金信息层级，但不提供任何资金操作。
+// 数据来自专用只读接口，服务端会再次验证目标用户确属 YJH 推荐树下成员。
+function InviteeWalletSnapshot({ snapshot, onClose, onRefresh, refreshing }: {
+  snapshot: any;
+  onClose: () => void;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  const [account, setAccount] = useState<'CRYPTO' | 'CNY'>('CRYPTO');
+  const [flowFilter, setFlowFilter] = useState('USDT');
+  const usdtBalance = Number(snapshot?.usdtBalance || 0);
+  const cnyBalance = Number(snapshot?.cnyBalance || 0);
+  const usdtCnyRate = Number(snapshot?.usdtCnyRate || 7.25);
+  const visibleAssets = new Set((snapshot?.visibleAssets || []).map((asset: unknown) => String(asset).toUpperCase()));
+  const multiAssets = (snapshot?.multiAssetBalances || []).filter((asset: any) =>
+    visibleAssets.has(String(asset.assetCode || '').toUpperCase())
+    && Number(asset.totalBalance ?? (Number(asset.availableBalance || 0) + Number(asset.frozenBalance || 0))) > 0,
+  );
+  const digitalAssets = [
+    ...(usdtBalance > 0 ? [{ assetCode: 'USDT', totalBalance: usdtBalance, availableBalance: usdtBalance, frozenBalance: 0, priceUsdt: 1 }] : []),
+    ...multiAssets,
+  ];
+  const digitalTotalUsdt = usdtBalance + multiAssets.reduce((sum: number, asset: any) => sum + Number(asset.totalBalance || 0) * Number(asset.priceUsdt || 0), 0);
+  const multiHistory = (snapshot?.multiAssetHistory || [])
+    .filter((entry: any) => entry.eventType !== 'collateral_lock' && entry.eventType !== 'collateral_release');
+  const usdtFlows = (snapshot?.balanceHistory || [])
+    .filter((entry: any) => !String(entry.description || '').startsWith('[CNY]'))
+    .map((entry: any) => ({ ...entry, assetCode: 'USDT', flowType: 'usdt' }));
+  const flows = [
+    ...usdtFlows,
+    ...multiHistory.map((entry: any) => ({ ...entry, flowType: 'asset' })),
+  ].filter((entry: any) => flowFilter === 'ALL' || String(entry.assetCode || '').toUpperCase() === flowFilter)
+    .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 10);
+  const flowOptions = Array.from(new Set(['USDT', 'ALL', ...digitalAssets.map((asset: any) => String(asset.assetCode || '').toUpperCase())]));
+  const money = (value: number, decimals = 2) => value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  const assetAmount = (asset: any) => {
+    const code = String(asset.assetCode || '').toUpperCase();
+    const digits = code === 'USDT' ? 2 : code === 'BTC' ? 8 : 4;
+    return Number(asset.totalBalance || 0).toLocaleString('zh-CN', { maximumFractionDigits: digits });
+  };
+  const flowLabel = (entry: any) => {
+    if (entry.flowType === 'asset') {
+      if (entry.eventType === 'transfer_in') return '成员转入';
+      if (entry.eventType === 'transfer_out') return '成员转出';
+      return Number(entry.amount || 0) >= 0 ? '入账' : '扣除';
+    }
+    return String(entry.description || '').replace(/^\[[^\]]+\]/, '').trim() || (Number(entry.amount || 0) >= 0 ? '入账' : '扣除');
+  };
+  const cnyFlows = (snapshot?.cnyHistory || []).slice(0, 10);
+
+  return (
+    <div className="fixed inset-0 z-[220] flex items-end justify-center bg-black/65" onClick={onClose}>
+      <div className="w-full max-w-[480px] overflow-hidden rounded-t-[22px]" style={{ maxHeight: '88vh', background: 'linear-gradient(165deg,#181818 0%,#080808 100%)', border: '1px solid rgba(201,168,76,0.55)', boxShadow: '0 -12px 40px rgba(0,0,0,.5)' }} onClick={(event) => event.stopPropagation()}>
+        <div className="h-px" style={{ background: 'linear-gradient(90deg,transparent 5%,#c9a84c 40%,#f5d78e 60%,transparent 95%)' }} />
+        <div className="max-h-[calc(88vh-1px)] overflow-y-auto px-4 pb-7 pt-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-sm font-bold text-[#f5d78e]"><WalletCards className="h-4 w-4" />钱包实时快照</div>
+              <div className="mt-0.5 truncate text-[11px] text-white/55">{snapshot?.member?.name || '成员'} {snapshot?.member?.username ? `· @${snapshot.member.username}` : ''} · 仅查看</div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={onRefresh} className="rounded-lg border px-2.5 py-1.5 text-xs font-semibold" style={{ borderColor: 'rgba(201,168,76,.48)', background: 'rgba(201,168,76,.12)', color: '#f5d78e' }}>{refreshing ? '刷新中' : '刷新'}</button>
+              <button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: 'rgba(255,255,255,.08)', color: '#f5d78e' }} aria-label="关闭钱包快照"><X className="h-4 w-4" /></button>
+            </div>
+          </div>
+
+          <div className="mb-3 grid grid-cols-2 gap-2 rounded-xl p-1" style={{ background: 'rgba(255,255,255,.045)', border: '1px solid rgba(255,255,255,.1)' }}>
+            {([['CRYPTO', '数字币账户'], ['CNY', '人民币账户']] as const).map(([key, label]) => (
+              <button key={key} type="button" onClick={() => setAccount(key)} className="rounded-lg py-2 text-xs font-semibold transition-colors" style={{ background: account === key ? 'rgba(201,168,76,.2)' : 'transparent', color: account === key ? '#f5d78e' : 'rgba(255,255,255,.52)' }}>{label}</button>
+            ))}
+          </div>
+
+          {account === 'CRYPTO' ? <>
+            <div className="mb-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(201,168,76,.08)', border: '1px solid rgba(201,168,76,.24)' }}>
+              <div className="text-[10px] tracking-[.08em] text-[#a88942]">数字资产总估值</div>
+              <div className="mt-1 flex items-baseline gap-2"><span className="text-[28px] font-bold tabular-nums text-[#f5d78e]">{money(digitalTotalUsdt)}</span><span className="text-sm font-semibold text-[#a88942]">USDT</span></div>
+              <div className="mt-1 text-[11px] text-white/45">≈ ¥{money(digitalTotalUsdt * usdtCnyRate)} 人民币 · 实时行情估值</div>
+            </div>
+            <div className="overflow-hidden rounded-xl" style={{ border: '1px solid rgba(255,255,255,.1)', background: 'rgba(255,255,255,.025)' }}>
+              <div className="flex items-center justify-between border-b px-3 py-2 text-[11px]" style={{ borderColor: 'rgba(255,255,255,.09)', color: 'rgba(255,255,255,.52)' }}><span className="font-semibold text-white/85">数字资产</span><span>数量 / 估值（u）</span></div>
+              {digitalAssets.length ? digitalAssets.map((asset: any, index: number) => {
+                const available = Number(asset.availableBalance || 0);
+                const frozen = Number(asset.frozenBalance || 0);
+                const valuation = Number(asset.totalBalance || 0) * Number(asset.priceUsdt || 0);
+                return <div key={asset.assetCode} className="flex items-center justify-between px-3 py-3" style={{ borderBottom: index < digitalAssets.length - 1 ? '1px solid rgba(255,255,255,.08)' : 'none' }}>
+                  <div><div className="text-sm font-bold text-white">{asset.assetCode}</div>{frozen > 0 && <div className="mt-0.5 text-[10px] text-amber-200/75">可用 {assetAmount({ ...asset, totalBalance: available })} · 冻结 {assetAmount({ ...asset, totalBalance: frozen })}</div>}</div>
+                  <div className="text-right"><div className="text-base font-bold tabular-nums text-white">{assetAmount(asset)}</div><div className="mt-0.5 text-[11px] text-[#f5d78e]">≈ {money(valuation)} u</div></div>
+                </div>;
+              }) : <div className="px-3 py-7 text-center text-xs text-white/40">暂无数字资产</div>}
+            </div>
+            <div className="mt-3 rounded-xl px-3 py-2.5 text-[10px] leading-4" style={{ background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.09)', color: 'rgba(255,255,255,.52)' }}><Eye className="mr-1 inline h-3 w-3 text-[#a88942]" />只读快照：充值、提现、转账均仅成员本人可操作。</div>
+            <div className="mt-3 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,.1)' }}>
+              <div className="mb-2 flex items-center justify-between"><span className="text-xs font-semibold text-white">资金明细</span><span className="text-[10px] text-white/45">默认 USDT</span></div>
+              <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5">
+                {flowOptions.map((option) => <button key={option} type="button" onClick={() => setFlowFilter(option)} className="shrink-0 rounded-md px-2.5 py-1 text-[11px] font-semibold" style={{ background: flowFilter === option ? 'rgba(201,168,76,.2)' : 'rgba(255,255,255,.06)', color: flowFilter === option ? '#f5d78e' : 'rgba(255,255,255,.52)' }}>{option === 'ALL' ? '全部币种' : option}</button>)}
+              </div>
+              {flows.length ? flows.map((entry: any, index: number) => {
+                const amount = Number(entry.amount || 0);
+                const isIn = amount >= 0;
+                return <div key={`${entry.flowType}-${entry.id}`} className="flex items-center justify-between py-2.5" style={{ borderBottom: index < flows.length - 1 ? '1px solid rgba(255,255,255,.08)' : 'none' }}><div className="min-w-0 pr-3"><div className="truncate text-xs font-medium text-white">{flowLabel(entry)}</div><div className="mt-0.5 text-[10px] text-white/45">{fmtBJTime_Tree(entry.createdAt, true)}</div>{entry.note && <div className="mt-0.5 truncate text-[10px] text-white/40">{entry.note}</div>}</div><div className="shrink-0 text-right"><div className="text-sm font-bold tabular-nums" style={{ color: isIn ? '#6ee7b7' : '#fca5a5' }}>{isIn ? '+' : '-'}{Math.abs(amount).toLocaleString('zh-CN', { maximumFractionDigits: String(entry.assetCode || '').toUpperCase() === 'USDT' ? 2 : 8 })} {entry.assetCode}</div></div></div>;
+              }) : <div className="py-6 text-center text-xs text-white/40">暂无对应资金明细</div>}
+            </div>
+          </> : <>
+            <div className="mb-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(201,168,76,.08)', border: '1px solid rgba(201,168,76,.24)' }}><div className="text-[10px] tracking-[.08em] text-[#a88942]">人民币账户余额</div><div className="mt-1 flex items-baseline gap-2"><span className="text-[28px] font-bold tabular-nums text-[#f5d78e]">{money(cnyBalance)}</span><span className="text-sm font-semibold text-[#a88942]">CNY</span></div><div className="mt-1 text-[11px] text-white/45">≈ {money(cnyBalance / usdtCnyRate)} USDT</div></div>
+            <div className="rounded-xl px-3 py-2.5 text-[10px] leading-4" style={{ background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.09)', color: 'rgba(255,255,255,.52)' }}><Eye className="mr-1 inline h-3 w-3 text-[#a88942]" />只读快照：充值、提现、转账均仅成员本人可操作。</div>
+            <div className="mt-3 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,.1)' }}><div className="mb-2 text-xs font-semibold text-white">人民币资金明细</div>{cnyFlows.length ? cnyFlows.map((entry: any, index: number) => { const amount = Number(entry.amount || 0); return <div key={entry.id} className="flex items-center justify-between py-2.5" style={{ borderBottom: index < cnyFlows.length - 1 ? '1px solid rgba(255,255,255,.08)' : 'none' }}><div><div className="text-xs font-medium text-white">{String(entry.note || '').replace(/^\[CNY\]/, '') || (amount >= 0 ? '入账' : '扣除')}</div><div className="mt-0.5 text-[10px] text-white/45">{fmtBJTime_Tree(entry.created_at || entry.createdAt, true)}</div></div><div className="text-sm font-bold tabular-nums" style={{ color: amount >= 0 ? '#6ee7b7' : '#fca5a5' }}>{amount >= 0 ? '+' : '-'}{Math.abs(amount).toFixed(2)} CNY</div></div>; }) : <div className="py-6 text-center text-xs text-white/40">暂无人民币资金明细</div>}</div>
+          </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AfInviteTreePage() {
   const [, params] = useRoute("/ledger/:id/af-invite-tree");
   const [, setLocation] = useLocation();
@@ -157,6 +271,8 @@ export default function AfInviteTreePage() {
   const isSuperAdmin = (user as any)?.role === 'super_admin';
   const canAccessInviteTree = isCustomAF && (isYJH || isOwner || isAdmin || isSuperAdmin);
   const canSeeRecentDynamics = canAccessInviteTree;
+  // 钱包快照是 YJH 推荐体系的只读运营信息；普通账本管理员仍只保留原有统计权限。
+  const canSeeInviteWalletSnapshots = isYJH || isSuperAdmin;
   const JIANG_USER_ID = 870413;
   const canSetMarketPerm = (user as any)?.id === YJH_USER_ID_CONST || (user as any)?.id === JIANG_USER_ID;
 
@@ -280,6 +396,17 @@ export default function AfInviteTreePage() {
   // 订单详情子视图
   const [orderView, setOrderView] = useState<'person' | 'order'>('person');
 
+  // 推荐树成员钱包：仅从人员视图的“钱包”入口打开，不与成员查看或资金操作混用。
+  const [walletSnapshotUser, setWalletSnapshotUser] = useState<{ id: number; name: string; username?: string } | null>(null);
+  const walletSnapshotQuery = trpc.ledger.afGetInviteeWalletSnapshot.useQuery(
+    { ledgerId, targetUserId: walletSnapshotUser?.id || 0 },
+    {
+      enabled: !!walletSnapshotUser?.id && ledgerLoaded && canSeeInviteWalletSnapshots,
+      staleTime: 0,
+      refetchOnWindowFocus: false,
+    },
+  );
+
   // 试驾单权限搜索
   const [permSearch, setPermSearch] = useState('');
 
@@ -349,11 +476,14 @@ export default function AfInviteTreePage() {
             </div>
             {statsExpanded && (
               <>
-                {/* 数据行（单位内嵌，无需独立表头） */}
+                <div className="px-3 py-1.5 text-[10px] font-medium" style={{ color: '#64748B', background: '#F8FAFC', borderBottom: '1px solid #e5e7eb' }}>
+                  历史累计（不含已取消，含已卖出订单）
+                </div>
+                {/* 历史累计数据行 */}
                 <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid #e5e7eb' }}>
                   <div className="py-2.5 px-2 text-center tabular-nums font-bold" style={{ fontSize: 16, color: '#1e3a8a', borderRight: '1px solid #e5e7eb' }}>
                     {inviteTreeLoading ? '—' : (inviteTreeData?.users?.length ?? 0)}
-                    {!inviteTreeLoading && <span style={{ fontSize: 11, fontWeight: 400, color: '#6B7280', marginLeft: 2 }}>人</span>}
+                    {!inviteTreeLoading && <span style={{ fontSize: 11, fontWeight: 400, color: '#6B7280', marginLeft: 2 }}>成员</span>}
                   </div>
                   <div className="py-2.5 px-2 text-center tabular-nums font-bold" style={{ fontSize: 16, color: '#1e3a8a', borderRight: '1px solid #e5e7eb' }}>
                     {stats?.normalCount ?? '—'}
@@ -362,6 +492,23 @@ export default function AfInviteTreePage() {
                   <div className="py-2.5 px-2 text-center tabular-nums font-bold" style={{ fontSize: 16, color: '#1e3a8a' }}>
                     {stats?.giftCount ?? '—'}
                     <span style={{ fontSize: 11, fontWeight: 400, color: '#ef4444', marginLeft: 2 }}>赠单</span>
+                  </div>
+                </div>
+                <div className="px-3 py-1.5 text-[10px] font-medium" style={{ color: '#166534', background: '#F0FDF4', borderBottom: '1px solid #DCFCE7' }}>
+                  当前订单（截至现在）
+                </div>
+                <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid #e5e7eb' }}>
+                  <div className="px-2 py-2 text-center" style={{ borderRight: '1px solid #e5e7eb' }}>
+                    <div className="text-[10px] text-gray-400">持有 / 委卖</div>
+                    <div className="mt-0.5 text-sm font-bold tabular-nums text-[#166534]">{stats ? `${stats.currentNormalHoldingCount ?? 0}主 · ${stats.currentGiftHoldingCount ?? 0}赠` : '—'}</div>
+                  </div>
+                  <div className="px-2 py-2 text-center" style={{ borderRight: '1px solid #e5e7eb' }}>
+                    <div className="text-[10px] text-gray-400">委买中</div>
+                    <div className="mt-0.5 text-sm font-bold tabular-nums text-[#B45309]">{stats ? `${stats.currentNormalPendingBuyCount ?? 0}主 · ${stats.currentGiftPendingBuyCount ?? 0}赠` : '—'}</div>
+                  </div>
+                  <div className="px-2 py-2 text-center">
+                    <div className="text-[10px] text-gray-400">当前合计</div>
+                    <div className="mt-0.5 text-sm font-bold tabular-nums text-[#1e3a8a]">{stats ? (Number(stats.currentNormalHoldingCount || 0) + Number(stats.currentGiftHoldingCount || 0) + Number(stats.currentNormalPendingBuyCount || 0) + Number(stats.currentGiftPendingBuyCount || 0)) : '—'}<span className="ml-0.5 text-[10px] font-normal text-gray-500">单</span></div>
                   </div>
                 </div>
                 {/* 币种分布行：主单 + 赠单各自独立显示，风格与上方表格一致 */}
@@ -376,6 +523,7 @@ export default function AfInviteTreePage() {
                   if (coins.length === 0) return null;
                   return (
                     <div style={{ borderTop: '1px solid #e5e7eb' }}>
+                      <div className="px-3 py-1 text-[10px]" style={{ color: '#64748B', background: '#FAFAFA', borderBottom: '1px solid #e5e7eb' }}>当前持有 / 委卖数量（已按档位折算）</div>
                       {/* 币种数据行（单位已内嵌在数字后，无需独立表头） */}
                       <div className="grid" style={{ gridTemplateColumns: `repeat(${coins.length}, 1fr)` }}>
                         {coins.map((c, i) => {
@@ -767,7 +915,7 @@ export default function AfInviteTreePage() {
                               </div>
                             </div>
                             {/* 中层：资产数据行 */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderTop: '1px solid #F0F0F0' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', borderTop: '1px solid #F0F0F0' }}>
                               {(() => {
                                 const totalRecharge = Number(u.totalRecharge ?? 0);
                                 const balance = Number(u.balance ?? 0);
@@ -796,6 +944,19 @@ export default function AfInviteTreePage() {
                                       <div style={{ fontSize: 11, fontWeight: 600, color: shortfall !== null ? shortfallColor : '#9E9E9E' }}>
                                         {shortfall !== null ? <>{shortfall.toFixed(0)}<span style={{ fontSize: 9, fontWeight: 400 }}>U</span></> : '-'}
                                       </div>
+                                    </div>
+                                    <div style={{ padding: '5px 4px', textAlign: 'center', borderLeft: '1px solid #F0F0F0' }}>
+                                      <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 3 }}>钱包</div>
+                                      {u.id === YJH_USER_ID_CONST ? (
+                                        <div style={{ fontSize: 10, color: '#BDBDBD', paddingTop: 1 }}>本人</div>
+                                      ) : canSeeInviteWalletSnapshots ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => setWalletSnapshotUser({ id: Number(u.id), name: u.name, username: u.username })}
+                                          className="rounded-md px-1.5 py-1 text-[10px] font-semibold"
+                                          style={{ color: '#1D4ED8', background: '#EFF6FF', border: '1px solid #BFDBFE' }}
+                                        >查看</button>
+                                      ) : <div style={{ fontSize: 10, color: '#BDBDBD', paddingTop: 1 }}>—</div>}
                                     </div>
                                   </>
                                 );
@@ -1151,7 +1312,27 @@ export default function AfInviteTreePage() {
           </div>
         </div>
       )}
+
+      {walletSnapshotUser && (
+        walletSnapshotQuery.isLoading ? (
+          <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/65" onClick={() => setWalletSnapshotUser(null)}>
+            <div className="rounded-2xl px-6 py-5 text-center" style={{ background: '#151515', border: '1px solid rgba(201,168,76,.5)' }} onClick={(event) => event.stopPropagation()}>
+              <div className="text-sm font-semibold text-[#f5d78e]">正在读取钱包实时快照…</div>
+              <div className="mt-1 text-xs text-white/45">仅加载该推荐成员的只读资产与资金明细</div>
+            </div>
+          </div>
+        ) : walletSnapshotQuery.error ? (
+          <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/65 px-6" onClick={() => setWalletSnapshotUser(null)}>
+            <div className="w-full max-w-sm rounded-2xl px-5 py-5 text-center" style={{ background: '#151515', border: '1px solid rgba(248,113,113,.55)' }} onClick={(event) => event.stopPropagation()}>
+              <div className="text-sm font-semibold text-red-300">钱包快照暂时无法读取</div>
+              <div className="mt-1 text-xs leading-5 text-white/55">{walletSnapshotQuery.error.message || '请稍后重新打开，不会影响成员钱包或订单。'}</div>
+              <div className="mt-4 flex justify-center gap-2"><button type="button" onClick={() => walletSnapshotQuery.refetch()} className="rounded-lg bg-[#C9A84C] px-4 py-2 text-xs font-semibold text-[#151515]">重新读取</button><button type="button" onClick={() => setWalletSnapshotUser(null)} className="rounded-lg border border-white/20 px-4 py-2 text-xs font-semibold text-white/70">关闭</button></div>
+            </div>
+          </div>
+        ) : walletSnapshotQuery.data ? (
+          <InviteeWalletSnapshot snapshot={walletSnapshotQuery.data} onClose={() => setWalletSnapshotUser(null)} onRefresh={() => walletSnapshotQuery.refetch()} refreshing={walletSnapshotQuery.isFetching} />
+        ) : null
+      )}
     </div>
   );
 }
-
