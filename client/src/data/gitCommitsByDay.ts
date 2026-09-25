@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-09-25
+// 生成时间：2026-09-26
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9297,5 +9297,21 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-09-24T16:36:26Z", type: "perf", cleanMessage: "streamline protected request identity" },
     { date: "2026-09-24T16:46:50Z", type: "fix", cleanMessage: "preserve account and collateral context" },
     { date: "2026-09-24T17:37:30Z", type: "feat", cleanMessage: "refine unified digital asset view" },
+    { date: "2026-09-24T20:49:06Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-09-25T00:41:11Z", type: "feat", cleanMessage: "sync quick wallet collateral editor" },
+    { date: "2026-09-25T01:18:04Z", type: "feat", cleanMessage: "add history scope and wallet snapshots" },
+    { date: "2026-09-25T01:28:19Z", type: "fix", cleanMessage: "open wallet snapshots from member avatars" },
+    { date: "2026-09-25T01:38:09Z", type: "fix", cleanMessage: "bind wallet snapshot profile query" },
+    { date: "2026-09-25T01:51:30Z", type: "fix", cleanMessage: "restore wallet access and query bindings" },
+    { date: "2026-09-25T02:34:35Z", type: "fix", cleanMessage: "avoid CNY history prepared LIMIT" },
+    { date: "2026-09-25T04:01:05Z", type: "fix", cleanMessage: "prioritize transfer counterparties in history" },
+    { date: "2026-09-25T06:02:01Z", type: "feat", cleanMessage: "serve token icons from COS" },
+    { date: "2026-09-25T06:03:15Z", type: "fix", cleanMessage: "upload wallet token icons without pull" },
+    { date: "2026-09-25T06:10:58Z", type: "feat", cleanMessage: "refine digital asset logo navigation" },
+    { date: "2026-09-25T06:12:04Z", type: "chore", cleanMessage: "import wallet token icons into COS" },
+    { date: "2026-09-25T06:29:55Z", type: "feat", cleanMessage: "add filterable full digital history" },
+    { date: "2026-09-25T06:37:51Z", type: "feat", cleanMessage: "add custom history date range" },
+    { date: "2026-09-25T07:56:17Z", type: "fix", cleanMessage: "load self view history correctly" },
+    { date: "2026-09-25T09:00:47Z", type: "fix", cleanMessage: "include own collateral in shared order gap" },
   ],
 };
