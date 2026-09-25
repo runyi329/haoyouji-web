@@ -24213,6 +24213,7 @@ ${klinesSummary}
           `SELECT enabled, visible_assets
              FROM ai_wallet_project_profiles
             WHERE target_key = 'ledger:52' LIMIT 1`,
+          [],
         );
         const profile = (profileRows as any[])?.[0];
         let visibleAssets: string[] = [];
