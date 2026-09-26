@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
   ArrowLeft,
@@ -680,9 +680,10 @@ export default function Wallet() {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [transferAsset, setTransferAsset] = useState<WalletTransferAsset>("USDT");
   const [digitalHistoryFilter, setDigitalHistoryFilter] = useState<DigitalHistoryFilter>("USDT");
+  // 进入数字币账户时由最近一笔真实流水决定默认筛选；用户主动切换后不自动夺回选择权。
+  const autoDigitalHistoryFilterRef = useRef(true);
   useEffect(() => {
-    // 每次进入数字币账户均从 USDT 明细开始；用户可在当前浏览中自行切换全部或其他币种。
-    if (activeAsset === "CRYPTO") setDigitalHistoryFilter("USDT");
+    if (activeAsset !== "CRYPTO") autoDigitalHistoryFilterRef.current = true;
   }, [activeAsset]);
   // 转账能力是全局统一钱包能力；当前仅由52号账本首页以该上下文开放按钮。
   const walletReturnPath = appendViewAs(isLedger52WalletEntry ? "/ledger/52" : "/");
@@ -754,12 +755,6 @@ export default function Wallet() {
     asset === "USDT" || ((AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(asset)
       && configuredSettlementAssets.has(asset))
   ));
-  // USDT 默认第一位、全部第二位，其他实际币种随后展示，符合交易所式的资金流水筛选习惯。
-  const digitalHistoryFilterOptions: DigitalHistoryFilter[] = [
-    "USDT",
-    "ALL",
-    ...digitalHistoryAssetCodes.filter((code) => code !== "USDT"),
-  ];
   const cryptoTotalUsdt = visibleMultiAssetBalances.reduce(
     (total, asset) => total + Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0))) * Number(asset.priceUsdt ?? 0),
     0,
@@ -844,17 +839,31 @@ export default function Wallet() {
     wcCode: extractWcTeamCode((m.note || "").replace(/^\[CNY\]/, "")),
     createdAt: m.created_at,
   }));
-  // 资金明细默认只显示 USDT；选择“全部币种”或某一币种后再查看对应数字资产流水。
+  // 先合并、排序所有真实数字币流水：最近一笔决定首次打开时的智能筛选币种。
   // 担保冻结/解冻属于余额内部状态搬移，不作为用户资金流水展示；冻结金额仍在资产卡片中可见。
-  const recentDigitalTx = [
+  const allRecentDigitalTx = [
     ...recentUsdtTx.map((item) => ({ ...item, assetCode: "USDT", flowKind: "usdt" as const })),
     ...multiAssetHistory
       .filter((item: any) => configuredSettlementAssets.has(String(item.assetCode || "").toUpperCase()))
       .filter((item: any) => item.eventType !== "collateral_lock" && item.eventType !== "collateral_release")
       .map((item: any) => ({ ...item, flowKind: "asset" as const })),
   ]
+    .sort((left: any, right: any) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+  const latestDigitalHistoryAsset = String(allRecentDigitalTx[0]?.assetCode || "").toUpperCase() as DigitalAssetHistoryCode | "";
+  // 交易所式顺序：全部、USDT 固定在前；最近变动币种固定第三位，其余币种顺延。
+  const digitalHistoryFilterOptions: DigitalHistoryFilter[] = [
+    "ALL",
+    "USDT",
+    ...(latestDigitalHistoryAsset && latestDigitalHistoryAsset !== "USDT" ? [latestDigitalHistoryAsset] : []),
+    ...digitalHistoryAssetCodes.filter((code) => code !== "USDT" && code !== latestDigitalHistoryAsset),
+  ];
+  useEffect(() => {
+    if (activeAsset === "CRYPTO" && autoDigitalHistoryFilterRef.current) {
+      setDigitalHistoryFilter(latestDigitalHistoryAsset || "USDT");
+    }
+  }, [activeAsset, latestDigitalHistoryAsset]);
+  const recentDigitalTx = allRecentDigitalTx
     .filter((item: any) => digitalHistoryFilter === "ALL" || String(item.assetCode || "").toUpperCase() === digitalHistoryFilter)
-    .sort((left: any, right: any) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
     .slice(0, 10);
 
   const mask = (v: string) => hideBalance ? "••••••" : v;
@@ -1281,7 +1290,10 @@ export default function Wallet() {
                     return <button
                       key={code}
                       type="button"
-                      onClick={() => setDigitalHistoryFilter(code)}
+                      onClick={() => {
+                        autoDigitalHistoryFilterRef.current = false;
+                        setDigitalHistoryFilter(code);
+                      }}
                       className="flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-semibold transition-colors"
                       style={{
                         background: selected ? "linear-gradient(135deg, #F5D78E 0%, #C9A84C 100%)" : G.whiteFaint,

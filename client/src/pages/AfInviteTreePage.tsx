@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, GitBranch, ArrowUpDown, Settings, BarChart2, List, ChevronDown, ChevronUp, Eye, WalletCards, X } from "lucide-react";
@@ -171,6 +171,7 @@ function InviteeWalletSnapshot({ snapshot, onClose }: {
 }) {
   const [account, setAccount] = useState<'CRYPTO' | 'CNY'>('CRYPTO');
   const [flowFilter, setFlowFilter] = useState('USDT');
+  const autoFlowFilterRef = useRef(true);
   const usdtBalance = Number(snapshot?.usdtBalance || 0);
   const cnyBalance = Number(snapshot?.cnyBalance || 0);
   const usdtCnyRate = Number(snapshot?.usdtCnyRate || 7.25);
@@ -189,13 +190,27 @@ function InviteeWalletSnapshot({ snapshot, onClose }: {
   const usdtFlows = (snapshot?.balanceHistory || [])
     .filter((entry: any) => !String(entry.description || '').startsWith('[CNY]'))
     .map((entry: any) => ({ ...entry, assetCode: 'USDT', flowType: 'usdt' }));
-  const flows = [
+  const allFlows = [
     ...usdtFlows,
     ...multiHistory.map((entry: any) => ({ ...entry, flowType: 'asset' })),
-  ].filter((entry: any) => flowFilter === 'ALL' || String(entry.assetCode || '').toUpperCase() === flowFilter)
-    .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  ].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const latestFlowAsset = String(allFlows[0]?.assetCode || '').toUpperCase();
+  // 全部、USDT 固定在前；最近发生资金变动的币种固定第三位，其余币种随后排列。
+  const flowOptions = Array.from(new Set([
+    'ALL',
+    'USDT',
+    ...(latestFlowAsset && latestFlowAsset !== 'USDT' ? [latestFlowAsset] : []),
+    ...digitalAssets.map((asset: any) => String(asset.assetCode || '').toUpperCase()),
+    ...multiHistory.map((entry: any) => String(entry.assetCode || '').toUpperCase()),
+  ])).filter(Boolean);
+  useEffect(() => {
+    if (account === 'CRYPTO' && autoFlowFilterRef.current) {
+      setFlowFilter(latestFlowAsset || 'USDT');
+    }
+  }, [account, latestFlowAsset]);
+  const flows = allFlows
+    .filter((entry: any) => flowFilter === 'ALL' || String(entry.assetCode || '').toUpperCase() === flowFilter)
     .slice(0, 10);
-  const flowOptions = Array.from(new Set(['USDT', 'ALL', ...digitalAssets.map((asset: any) => String(asset.assetCode || '').toUpperCase())]));
   const money = (value: number, decimals = 2) => value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   const assetAmount = (asset: any) => {
     const code = String(asset.assetCode || '').toUpperCase();
@@ -227,23 +242,19 @@ function InviteeWalletSnapshot({ snapshot, onClose }: {
       <div className="w-full max-w-[480px] overflow-hidden rounded-t-[22px]" style={{ maxHeight: '88vh', background: 'linear-gradient(165deg,#181818 0%,#080808 100%)', border: '1px solid rgba(201,168,76,0.55)', boxShadow: '0 -12px 40px rgba(0,0,0,.5)' }} onClick={(event) => event.stopPropagation()}>
         <div className="h-px" style={{ background: 'linear-gradient(90deg,transparent 5%,#c9a84c 40%,#f5d78e 60%,transparent 95%)' }} />
         <div className="max-h-[calc(88vh-1px)] overflow-y-auto px-4 pb-7 pt-4">
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-[#f5d78e]">
-                <span className="flex items-center gap-1.5"><WalletCards className="h-4 w-4" />钱包实时快照</span>
-                <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold tracking-[.08em]" style={{ borderColor: 'rgba(248,113,113,.75)', background: 'rgba(248,113,113,.16)', color: '#fecaca' }}><Eye className="h-3 w-3" />仅查看</span>
+          <div className="mb-3 rounded-xl px-3 py-2.5" style={{ background: 'linear-gradient(135deg, rgba(201,168,76,.13), rgba(255,255,255,.035))', border: '1px solid rgba(201,168,76,.32)' }}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-[#f5d78e]">
+                <WalletCards className="h-4 w-4 shrink-0" />
+                <span className="truncate">钱包实时快照</span>
+                <span className="shrink-0 text-[10px] font-semibold text-white/55">·</span>
+                <span className="shrink-0 text-[10px] font-semibold text-[#f5d78e]">只读模式，请查看</span>
               </div>
-              <div className="mt-1.5 truncate text-sm font-semibold text-white">用户昵称：{snapshot?.member?.name || '成员'}</div>
-              <div className="mt-0.5 truncate text-[11px] text-white/55">用户名：{snapshot?.member?.username ? `@${snapshot.member.username}` : '未设置'}</div>
+              <button type="button" onClick={onClose} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ background: 'rgba(255,255,255,.08)', color: '#f5d78e', border: '1px solid rgba(201,168,76,.34)' }} aria-label="关闭钱包快照"><X className="h-4 w-4" /></button>
             </div>
-            <button type="button" onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: 'rgba(255,255,255,.08)', color: '#f5d78e', border: '1px solid rgba(201,168,76,.34)' }} aria-label="关闭钱包快照"><X className="h-4 w-4" /></button>
-          </div>
-
-          <div className="mb-3 flex items-start gap-2.5 rounded-xl px-3 py-2.5" style={{ background: 'rgba(248,113,113,.10)', border: '1px solid rgba(248,113,113,.40)' }}>
-            <Eye className="mt-0.5 h-4 w-4 shrink-0" style={{ color: '#fca5a5' }} />
-            <div>
-              <div className="text-xs font-bold tracking-wide text-red-200">只读模式 · 不可修改</div>
-              <div className="mt-0.5 text-[10px] leading-4 text-white/60">此页面仅用于查看该成员的实时钱包快照；无法充值、提现、转账、调账或修改任何信息。</div>
+            <div className="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-white/55">
+              <span className="truncate">用户昵称：{snapshot?.member?.name || '成员'}</span>
+              <span className="truncate">用户名：{snapshot?.member?.username ? `@${snapshot.member.username}` : '未设置'}</span>
             </div>
           </div>
 
@@ -272,9 +283,9 @@ function InviteeWalletSnapshot({ snapshot, onClose }: {
               }) : <div className="px-3 py-7 text-center text-xs text-white/40">暂无数字资产</div>}
             </div>
             <div className="mt-3 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,.1)' }}>
-              <div className="mb-2 flex items-center justify-between"><div><span className="text-xs font-semibold text-white">最近资金明细</span><span className="ml-1.5 text-[10px] text-white/45">仅显示最近 10 笔</span></div><span className="text-[10px] text-white/45">默认 USDT</span></div>
+              <div className="mb-2 flex items-center justify-between"><div><span className="text-xs font-semibold text-white">最近资金明细</span><span className="ml-1.5 text-[10px] text-white/45">仅显示最近 10 笔</span></div><span className="text-[10px] text-white/45">优先最近变动币种</span></div>
               <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5">
-                {flowOptions.map((option) => <button key={option} type="button" onClick={() => setFlowFilter(option)} className="flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-semibold" style={{ background: flowFilter === option ? 'linear-gradient(135deg, #F5D78E 0%, #C9A84C 100%)' : 'rgba(255,255,255,.06)', color: flowFilter === option ? '#15110A' : 'rgba(255,255,255,.52)', border: flowFilter === option ? '1px solid transparent' : '1px solid rgba(201,168,76,.25)' }}>{option !== 'ALL' && <SnapshotAssetIcon assetCode={option} size="sm" />}{option === 'ALL' ? '全部' : option}</button>)}
+                {flowOptions.map((option) => <button key={option} type="button" onClick={() => { autoFlowFilterRef.current = false; setFlowFilter(option); }} className="flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-semibold" style={{ background: flowFilter === option ? 'linear-gradient(135deg, #F5D78E 0%, #C9A84C 100%)' : 'rgba(255,255,255,.06)', color: flowFilter === option ? '#15110A' : 'rgba(255,255,255,.52)', border: flowFilter === option ? '1px solid transparent' : '1px solid rgba(201,168,76,.25)' }}>{option !== 'ALL' && <SnapshotAssetIcon assetCode={option} size="sm" />}{option === 'ALL' ? '全部' : option}</button>)}
               </div>
               {flows.length ? flows.map((entry: any, index: number) => {
                 const amount = Number(entry.amount || 0);
