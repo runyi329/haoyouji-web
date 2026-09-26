@@ -3,6 +3,8 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, GitBranch, ArrowUpDown, Settings, BarChart2, List, ChevronDown, ChevronUp, Eye, WalletCards, X } from "lucide-react";
 import { OrderDetail } from "@/pages/CryptoPrediction";
+import { getCryptoAssetIconSrc } from "@/lib/cryptoAssetIcons";
+import { getInternalTransferPresentation } from "@/lib/walletTransferPresentation";
 
 // 北京时间辅助函数（MySQL存储的是北京时间，服务端String()后UTC值即为北京时间值）
 const getBJDateOnly_Tree = (d: any): Date => {
@@ -139,13 +141,33 @@ function StatusBadge({ status, sellStatus }: { status: string; sellStatus?: stri
   return <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, backgroundColor: '#F3F4F6', color: '#6B7280' }}>{status}</span>;
 }
 
+const SNAPSHOT_ASSET_ACCENTS: Record<string, string> = {
+  USDT: '#26A17B',
+  BTC: '#F7931A',
+  ETH: '#627EEA',
+  SOL: '#A55CFF',
+  BNB: '#F3BA2F',
+  SUI: '#4DA2FF',
+  CNY: '#C9A84C',
+};
+
+function SnapshotAssetIcon({ assetCode, size = 'md' }: { assetCode: unknown; size?: 'sm' | 'md' }) {
+  const code = String(assetCode || '').trim().toUpperCase() || '—';
+  const iconSrc = getCryptoAssetIconSrc(code);
+  const accent = SNAPSHOT_ASSET_ACCENTS[code] || '#8AA0B8';
+  const dimension = size === 'sm' ? 'h-4 w-4 text-[8px]' : 'h-9 w-9 text-xs';
+  return (
+    <span className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold ${dimension}`} style={{ background: `${accent}25`, color: accent, border: `1px solid ${accent}55` }}>
+      {iconSrc ? <img src={iconSrc} alt={`${code} 币种图标`} className="h-full w-full object-contain" /> : (code === 'CNY' ? '¥' : code.slice(0, 1))}
+    </span>
+  );
+}
+
 // 推荐树成员钱包快照：视觉沿用智能钱包的黑金信息层级，但不提供任何资金操作。
 // 数据来自专用只读接口，服务端会再次验证目标用户确属 YJH 推荐树下成员。
-function InviteeWalletSnapshot({ snapshot, onClose, onRefresh, refreshing }: {
+function InviteeWalletSnapshot({ snapshot, onClose }: {
   snapshot: any;
   onClose: () => void;
-  onRefresh: () => void;
-  refreshing: boolean;
 }) {
   const [account, setAccount] = useState<'CRYPTO' | 'CNY'>('CRYPTO');
   const [flowFilter, setFlowFilter] = useState('USDT');
@@ -180,13 +202,23 @@ function InviteeWalletSnapshot({ snapshot, onClose, onRefresh, refreshing }: {
     const digits = code === 'USDT' ? 2 : code === 'BTC' ? 8 : 4;
     return Number(asset.totalBalance || 0).toLocaleString('zh-CN', { maximumFractionDigits: digits });
   };
-  const flowLabel = (entry: any) => {
-    if (entry.flowType === 'asset') {
-      if (entry.eventType === 'transfer_in') return '成员转入';
-      if (entry.eventType === 'transfer_out') return '成员转出';
-      return Number(entry.amount || 0) >= 0 ? '入账' : '扣除';
-    }
-    return String(entry.description || '').replace(/^\[[^\]]+\]/, '').trim() || (Number(entry.amount || 0) >= 0 ? '入账' : '扣除');
+  const flowPresentation = (entry: any) => {
+    const amount = Number(entry.amount || 0);
+    const incoming = amount >= 0;
+    const rawNote = String(entry.note || entry.description || '');
+    const isTransfer = entry.flowType === 'asset'
+      ? entry.eventType === 'transfer_in' || entry.eventType === 'transfer_out'
+      : rawNote.includes('[站内转账]');
+    const transfer = isTransfer
+      ? getInternalTransferPresentation(rawNote, entry.eventType === 'transfer_in' || (!entry.eventType && incoming) ? 'in' : 'out', entry.counterpartyName)
+      : null;
+    return {
+      primary: transfer?.primary || (entry.flowType === 'asset'
+        ? (incoming ? '入账' : '扣除')
+        : rawNote.replace(/^\[[^\]]+\]\s*/, '').trim() || (incoming ? '入账' : '扣除')),
+      detail: transfer?.secondary || rawNote.replace(/^\[[^\]]+\]\s*/, '').replace(/\[站内转账\]\s*/g, '').trim(),
+      incoming,
+    };
   };
   const cnyFlows = (snapshot?.cnyHistory || []).slice(0, 10);
 
@@ -195,14 +227,23 @@ function InviteeWalletSnapshot({ snapshot, onClose, onRefresh, refreshing }: {
       <div className="w-full max-w-[480px] overflow-hidden rounded-t-[22px]" style={{ maxHeight: '88vh', background: 'linear-gradient(165deg,#181818 0%,#080808 100%)', border: '1px solid rgba(201,168,76,0.55)', boxShadow: '0 -12px 40px rgba(0,0,0,.5)' }} onClick={(event) => event.stopPropagation()}>
         <div className="h-px" style={{ background: 'linear-gradient(90deg,transparent 5%,#c9a84c 40%,#f5d78e 60%,transparent 95%)' }} />
         <div className="max-h-[calc(88vh-1px)] overflow-y-auto px-4 pb-7 pt-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-3 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 text-sm font-bold text-[#f5d78e]"><WalletCards className="h-4 w-4" />钱包实时快照</div>
-              <div className="mt-0.5 truncate text-[11px] text-white/55">{snapshot?.member?.name || '成员'} {snapshot?.member?.username ? `· @${snapshot.member.username}` : ''} · 仅查看</div>
+              <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-[#f5d78e]">
+                <span className="flex items-center gap-1.5"><WalletCards className="h-4 w-4" />钱包实时快照</span>
+                <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold tracking-[.08em]" style={{ borderColor: 'rgba(248,113,113,.75)', background: 'rgba(248,113,113,.16)', color: '#fecaca' }}><Eye className="h-3 w-3" />仅查看</span>
+              </div>
+              <div className="mt-1.5 truncate text-sm font-semibold text-white">用户昵称：{snapshot?.member?.name || '成员'}</div>
+              <div className="mt-0.5 truncate text-[11px] text-white/55">用户名：{snapshot?.member?.username ? `@${snapshot.member.username}` : '未设置'}</div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <button type="button" onClick={onRefresh} className="rounded-lg border px-2.5 py-1.5 text-xs font-semibold" style={{ borderColor: 'rgba(201,168,76,.48)', background: 'rgba(201,168,76,.12)', color: '#f5d78e' }}>{refreshing ? '刷新中' : '刷新'}</button>
-              <button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: 'rgba(255,255,255,.08)', color: '#f5d78e' }} aria-label="关闭钱包快照"><X className="h-4 w-4" /></button>
+            <button type="button" onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: 'rgba(255,255,255,.08)', color: '#f5d78e', border: '1px solid rgba(201,168,76,.34)' }} aria-label="关闭钱包快照"><X className="h-4 w-4" /></button>
+          </div>
+
+          <div className="mb-3 flex items-start gap-2.5 rounded-xl px-3 py-2.5" style={{ background: 'rgba(248,113,113,.10)', border: '1px solid rgba(248,113,113,.40)' }}>
+            <Eye className="mt-0.5 h-4 w-4 shrink-0" style={{ color: '#fca5a5' }} />
+            <div>
+              <div className="text-xs font-bold tracking-wide text-red-200">只读模式 · 不可修改</div>
+              <div className="mt-0.5 text-[10px] leading-4 text-white/60">此页面仅用于查看该成员的实时钱包快照；无法充值、提现、转账、调账或修改任何信息。</div>
             </div>
           </div>
 
@@ -224,28 +265,27 @@ function InviteeWalletSnapshot({ snapshot, onClose, onRefresh, refreshing }: {
                 const available = Number(asset.availableBalance || 0);
                 const frozen = Number(asset.frozenBalance || 0);
                 const valuation = Number(asset.totalBalance || 0) * Number(asset.priceUsdt || 0);
-                return <div key={asset.assetCode} className="flex items-center justify-between px-3 py-3" style={{ borderBottom: index < digitalAssets.length - 1 ? '1px solid rgba(255,255,255,.08)' : 'none' }}>
-                  <div><div className="text-sm font-bold text-white">{asset.assetCode}</div>{frozen > 0 && <div className="mt-0.5 text-[10px] text-amber-200/75">可用 {assetAmount({ ...asset, totalBalance: available })} · 冻结 {assetAmount({ ...asset, totalBalance: frozen })}</div>}</div>
-                  <div className="text-right"><div className="text-base font-bold tabular-nums text-white">{assetAmount(asset)}</div><div className="mt-0.5 text-[11px] text-[#f5d78e]">≈ {money(valuation)} u</div></div>
+                return <div key={asset.assetCode} className="flex items-center justify-between gap-2 px-3 py-3" style={{ borderBottom: index < digitalAssets.length - 1 ? '1px solid rgba(255,255,255,.08)' : 'none' }}>
+                  <div className="flex min-w-0 items-center gap-2.5"><SnapshotAssetIcon assetCode={asset.assetCode} /><div className="min-w-0"><div className="text-sm font-bold text-white">{asset.assetCode}</div><div className="mt-0.5 text-[10px] text-white/45">可用 {assetAmount({ ...asset, totalBalance: available })}{frozen > 0 ? ` · 冻结 ${assetAmount({ ...asset, totalBalance: frozen })}` : ''}</div></div></div>
+                  <div className="shrink-0 text-right"><div className="text-base font-bold tabular-nums text-white">{assetAmount(asset)} <span className="text-[10px] text-white/50">{asset.assetCode}</span></div><div className="mt-0.5 text-[11px] text-[#f5d78e]">≈ {money(valuation)} u</div></div>
                 </div>;
               }) : <div className="px-3 py-7 text-center text-xs text-white/40">暂无数字资产</div>}
             </div>
-            <div className="mt-3 rounded-xl px-3 py-2.5 text-[10px] leading-4" style={{ background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.09)', color: 'rgba(255,255,255,.52)' }}><Eye className="mr-1 inline h-3 w-3 text-[#a88942]" />只读快照：充值、提现、转账均仅成员本人可操作。</div>
             <div className="mt-3 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,.1)' }}>
-              <div className="mb-2 flex items-center justify-between"><span className="text-xs font-semibold text-white">资金明细</span><span className="text-[10px] text-white/45">默认 USDT</span></div>
+              <div className="mb-2 flex items-center justify-between"><div><span className="text-xs font-semibold text-white">最近资金明细</span><span className="ml-1.5 text-[10px] text-white/45">仅显示最近 10 笔</span></div><span className="text-[10px] text-white/45">默认 USDT</span></div>
               <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5">
-                {flowOptions.map((option) => <button key={option} type="button" onClick={() => setFlowFilter(option)} className="shrink-0 rounded-md px-2.5 py-1 text-[11px] font-semibold" style={{ background: flowFilter === option ? 'rgba(201,168,76,.2)' : 'rgba(255,255,255,.06)', color: flowFilter === option ? '#f5d78e' : 'rgba(255,255,255,.52)' }}>{option === 'ALL' ? '全部币种' : option}</button>)}
+                {flowOptions.map((option) => <button key={option} type="button" onClick={() => setFlowFilter(option)} className="flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-semibold" style={{ background: flowFilter === option ? 'linear-gradient(135deg, #F5D78E 0%, #C9A84C 100%)' : 'rgba(255,255,255,.06)', color: flowFilter === option ? '#15110A' : 'rgba(255,255,255,.52)', border: flowFilter === option ? '1px solid transparent' : '1px solid rgba(201,168,76,.25)' }}>{option !== 'ALL' && <SnapshotAssetIcon assetCode={option} size="sm" />}{option === 'ALL' ? '全部' : option}</button>)}
               </div>
               {flows.length ? flows.map((entry: any, index: number) => {
                 const amount = Number(entry.amount || 0);
-                const isIn = amount >= 0;
-                return <div key={`${entry.flowType}-${entry.id}`} className="flex items-center justify-between py-2.5" style={{ borderBottom: index < flows.length - 1 ? '1px solid rgba(255,255,255,.08)' : 'none' }}><div className="min-w-0 pr-3"><div className="truncate text-xs font-medium text-white">{flowLabel(entry)}</div><div className="mt-0.5 text-[10px] text-white/45">{fmtBJTime_Tree(entry.createdAt, true)}</div>{entry.note && <div className="mt-0.5 truncate text-[10px] text-white/40">{entry.note}</div>}</div><div className="shrink-0 text-right"><div className="text-sm font-bold tabular-nums" style={{ color: isIn ? '#6ee7b7' : '#fca5a5' }}>{isIn ? '+' : '-'}{Math.abs(amount).toLocaleString('zh-CN', { maximumFractionDigits: String(entry.assetCode || '').toUpperCase() === 'USDT' ? 2 : 8 })} {entry.assetCode}</div></div></div>;
+                const presentation = flowPresentation(entry);
+                const assetCode = String(entry.assetCode || '').toUpperCase();
+                return <div key={`${entry.flowType}-${entry.id}`} className="flex items-start justify-between gap-3 py-2.5" style={{ borderBottom: index < flows.length - 1 ? '1px solid rgba(255,255,255,.08)' : 'none' }}><div className="flex min-w-0 items-start gap-2.5"><span className="relative mt-0.5"><SnapshotAssetIcon assetCode={assetCode} size="md" /><span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2" style={{ background: presentation.incoming ? '#6ee7b7' : '#fca5a5', borderColor: '#111' }} /></span><div className="min-w-0 pr-1"><div className="truncate text-xs font-medium text-white">{presentation.primary} <span className="font-normal text-white/45">· {assetCode}</span></div><div className="mt-0.5 text-[10px] text-white/45">{fmtBJTime_Tree(entry.createdAt, true)}</div>{presentation.detail && <div className="mt-0.5 max-w-48 truncate text-[10px] text-white/40">{presentation.detail}</div>}</div></div><div className="shrink-0 text-right"><div className="text-sm font-bold tabular-nums" style={{ color: presentation.incoming ? '#6ee7b7' : '#fca5a5' }}>{presentation.incoming ? '+' : '-'}{Math.abs(amount).toLocaleString('zh-CN', { maximumFractionDigits: assetCode === 'USDT' ? 2 : 8 })} {assetCode}</div></div></div>;
               }) : <div className="py-6 text-center text-xs text-white/40">暂无对应资金明细</div>}
             </div>
           </> : <>
             <div className="mb-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(201,168,76,.08)', border: '1px solid rgba(201,168,76,.24)' }}><div className="text-[10px] tracking-[.08em] text-[#a88942]">人民币账户余额</div><div className="mt-1 flex items-baseline gap-2"><span className="text-[28px] font-bold tabular-nums text-[#f5d78e]">{money(cnyBalance)}</span><span className="text-sm font-semibold text-[#a88942]">CNY</span></div><div className="mt-1 text-[11px] text-white/45">≈ {money(cnyBalance / usdtCnyRate)} USDT</div></div>
-            <div className="rounded-xl px-3 py-2.5 text-[10px] leading-4" style={{ background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.09)', color: 'rgba(255,255,255,.52)' }}><Eye className="mr-1 inline h-3 w-3 text-[#a88942]" />只读快照：充值、提现、转账均仅成员本人可操作。</div>
-            <div className="mt-3 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,.1)' }}><div className="mb-2 text-xs font-semibold text-white">人民币资金明细</div>{cnyFlows.length ? cnyFlows.map((entry: any, index: number) => { const amount = Number(entry.amount || 0); return <div key={entry.id} className="flex items-center justify-between py-2.5" style={{ borderBottom: index < cnyFlows.length - 1 ? '1px solid rgba(255,255,255,.08)' : 'none' }}><div><div className="text-xs font-medium text-white">{String(entry.note || '').replace(/^\[CNY\]/, '') || (amount >= 0 ? '入账' : '扣除')}</div><div className="mt-0.5 text-[10px] text-white/45">{fmtBJTime_Tree(entry.created_at || entry.createdAt, true)}</div></div><div className="text-sm font-bold tabular-nums" style={{ color: amount >= 0 ? '#6ee7b7' : '#fca5a5' }}>{amount >= 0 ? '+' : '-'}{Math.abs(amount).toFixed(2)} CNY</div></div>; }) : <div className="py-6 text-center text-xs text-white/40">暂无人民币资金明细</div>}</div>
+            <div className="mt-3 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,.1)' }}><div className="mb-2 flex items-center justify-between"><div><span className="text-xs font-semibold text-white">最近资金明细</span><span className="ml-1.5 text-[10px] text-white/45">仅显示最近 10 笔</span></div><span className="text-[10px] text-white/45">CNY</span></div>{cnyFlows.length ? cnyFlows.map((entry: any, index: number) => { const amount = Number(entry.amount || 0); const isIn = amount >= 0; return <div key={entry.id} className="flex items-start justify-between gap-3 py-2.5" style={{ borderBottom: index < cnyFlows.length - 1 ? '1px solid rgba(255,255,255,.08)' : 'none' }}><div className="flex min-w-0 items-start gap-2.5"><span className="relative mt-0.5"><SnapshotAssetIcon assetCode="CNY" /><span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2" style={{ background: isIn ? '#6ee7b7' : '#fca5a5', borderColor: '#111' }} /></span><div className="min-w-0"><div className="truncate text-xs font-medium text-white">{String(entry.note || '').replace(/^\[CNY\]\s*/, '') || (isIn ? '入账' : '扣除')} <span className="font-normal text-white/45">· CNY</span></div><div className="mt-0.5 text-[10px] text-white/45">{fmtBJTime_Tree(entry.created_at || entry.createdAt, true)}</div></div></div><div className="shrink-0 text-right"><div className="text-sm font-bold tabular-nums" style={{ color: isIn ? '#6ee7b7' : '#fca5a5' }}>{isIn ? '+' : '-'}{Math.abs(amount).toFixed(2)} CNY</div></div></div>; }) : <div className="py-6 text-center text-xs text-white/40">暂无人民币资金明细</div>}</div>
           </>}
         </div>
       </div>
@@ -1347,7 +1387,7 @@ export default function AfInviteTreePage() {
             </div>
           </div>
         ) : walletSnapshotQuery.data ? (
-          <InviteeWalletSnapshot snapshot={walletSnapshotQuery.data} onClose={() => setWalletSnapshotUser(null)} onRefresh={() => walletSnapshotQuery.refetch()} refreshing={walletSnapshotQuery.isFetching} />
+          <InviteeWalletSnapshot snapshot={walletSnapshotQuery.data} onClose={() => setWalletSnapshotUser(null)} />
         ) : null
       )}
     </div>
