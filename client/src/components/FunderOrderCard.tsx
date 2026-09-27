@@ -804,7 +804,7 @@ export function FunderOrderCard({
         floatingPnlCalculationMode?: 'raw_net_pnl' | 'initial_minus_latest' | 'leveraged_net_pnl'; collateralTagName?: string;
         pendingInterestTagName?: string; paidInterestTagName?: string; interestTagName?: string;
         useFloatingPnl?: boolean; useCollateral?: boolean; usePendingInterest?: boolean; usePaidInterest?: boolean; useInterest?: boolean;
-        stockPnlSource?: 'manual_positions'; stockPnlCalculationMode?: 'position_cost' | 'total_capital'; stockTotalCapital?: string | number; stockCapitalCurrency?: 'CNY' | 'USD'; stockPnlCoefficient?: number; stockPositions?: Array<{ name?: string; symbol?: string; buyPrice?: string; sellPrice?: string; quantity?: string }>;
+        stockPnlSource?: 'manual_positions'; stockPnlCalculationMode?: 'position_cost' | 'total_capital'; stockTotalCapital?: string | number; stockCapitalCurrency?: 'CNY' | 'USD'; stockPnlCoefficient?: number; stockPositions?: Array<{ name?: string; symbol?: string; buyPrice?: string; sellPrice?: string; quantity?: string; initialPrice?: string; initialPriceDate?: string }>;
       };
     } catch {}
     return null;
@@ -844,6 +844,8 @@ export function FunderOrderCard({
         buyPrice: Number(position?.buyPrice),
         sellPrice: position?.sellPrice === '' || position?.sellPrice === null || position?.sellPrice === undefined ? null : Number(position.sellPrice),
         quantity: Number(position?.quantity),
+        initialPrice: Number(position?.initialPrice),
+        initialPriceDate: String(position?.initialPriceDate || ''),
       }))
       .filter((position) => /^[A-Z][A-Z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/.test(position.symbol))
       .filter((position) => (manualStockPnlCalculationMode === 'total_capital' || (Number.isFinite(position.buyPrice) && position.buyPrice > 0)) && (position.sellPrice === null || (Number.isFinite(position.sellPrice) && position.sellPrice > 0)) && Number.isFinite(position.quantity) && position.quantity > 0)
@@ -2211,6 +2213,8 @@ export function FunderOrderCard({
                           </span>
                         </div>
                         <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                          <span>初始参考价：{Number.isFinite(position.initialPrice) && position.initialPrice > 0 ? `${position.initialPrice.toLocaleString()} 元` : '未记录'}</span>
+                          <span>初始价日期：{position.initialPriceDate || '未记录'}</span>
                           {manualStockPnlCalculationMode === 'position_cost' && <span>买入价：{position.buyPrice.toLocaleString()} {position.currency === 'CNY' ? '元' : 'USD'}</span>}
                           <span>盘尾价：{position.currentPrice === null ? '待更新' : `${position.currentPrice.toLocaleString()} ${position.currency === 'CNY' ? '元' : 'USD'}`}</span>
                           {manualStockPnlCalculationMode === 'position_cost' && <>

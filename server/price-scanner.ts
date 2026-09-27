@@ -216,6 +216,18 @@ type OnDemandStockQuote = {
   priceDate?: string;
 };
 
+export type ManualAshareStockSuggestion = {
+  /** 订单中统一保存的交易所代码，例如 600519.SH。 */
+  symbol: string;
+  /** 管理员识别用的六码股票代码。 */
+  code: string;
+  name: string;
+  /** 选中股票时的一次性初始参考价；后续订单计算只使用每日盘尾快照。 */
+  initialPrice?: number;
+  initialPriceDate?: string;
+  initialPriceUpdatedAt?: string;
+};
+
 /**
  * 针对融资订单里管理员临时录入的股票代码查询最新价格。
  * 常规扫描只覆盖项目预置的证券；这个入口允许安全地读取最多 20 个
@@ -246,14 +258,69 @@ async function fetchSinaOnDemandStockQuote(symbol: string): Promise<OnDemandStoc
     // 美股 gb_ 的第 2 项、A 股 sh/sz/bj 的第 4 项均为最近成交价。
     const price = Number(aShare ? parts[3] : parts[1]);
     if (!isValidPrice(price)) return null;
+    const dateIndex = parts.findIndex((part) => /^\d{4}-\d{2}-\d{2}$/.test(String(part).trim()));
     return {
       price,
       currency: aShare ? 'CNY' : 'USD',
       source: '新浪财经',
       updatedAt: nowIso(),
+      priceDate: dateIndex >= 0 ? String(parts[dateIndex]).trim() : undefined,
     };
   } catch {
     return null;
+  }
+}
+
+function expectedAshareSuffix(code: string): 'SH' | 'SZ' | 'BJ' | null {
+  if (/^(?:600|601|603|605|688)\d{3}$/.test(code)) return 'SH';
+  if (/^(?:000|001|002|003|300|301)\d{3}$/.test(code)) return 'SZ';
+  if (/^(?:4[3-9]|8[0-9]|9[02])\d{4}$/.test(code)) return 'BJ';
+  return null;
+}
+
+/**
+ * A 股检索可按六码、中文名称或拼音简称匹配；只接受可校验的沪深北代码。
+ * 选中时获取一次初始参考价，订单保存后由每日盘尾快照接管，不会产生盘中轮询。
+ */
+export async function searchManualAshareStocks(query: string): Promise<ManualAshareStockSuggestion[]> {
+  const normalizedQuery = String(query || '').trim();
+  if (normalizedQuery.length < 2 || normalizedQuery.length > 40) return [];
+  try {
+    const response = await fetch(`https://suggest3.sinajs.cn/suggest/type=11,12,13,14,15&key=${encodeURIComponent(normalizedQuery)}`, {
+      headers: { Referer: 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) return [];
+    const text = new TextDecoder('gbk').decode(await response.arrayBuffer());
+    const payload = text.match(/suggestvalue="([^"]*)"/)?.[1] || '';
+    const deduped = new Map<string, Omit<ManualAshareStockSuggestion, 'initialPrice' | 'initialPriceDate' | 'initialPriceUpdatedAt'>>();
+    for (const row of payload.split(';')) {
+      const fields = row.split(',').map((item) => item.trim());
+      const marketCode = fields[3] || fields[0] || '';
+      const match = marketCode.match(/^(sh|sz|bj)(\d{6})$/i);
+      if (!match) continue;
+      const code = match[2];
+      const suffix = expectedAshareSuffix(code);
+      if (!suffix || suffix !== match[1].toUpperCase()) continue;
+      const name = String(fields[4] || fields[0] || '').trim();
+      if (!name) continue;
+      const symbol = `${code}.${suffix}`;
+      deduped.set(symbol, { symbol, code, name });
+    }
+    const baseResults = Array.from(deduped.values()).slice(0, 8);
+    return await Promise.all(baseResults.map(async (result) => {
+      const quote = await fetchSinaOnDemandStockQuote(result.symbol);
+      return {
+        ...result,
+        ...(quote ? {
+          initialPrice: quote.price,
+          initialPriceDate: quote.priceDate,
+          initialPriceUpdatedAt: quote.updatedAt,
+        } : {}),
+      };
+    }));
+  } catch {
+    return [];
   }
 }
 

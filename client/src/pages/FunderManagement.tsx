@@ -24,6 +24,8 @@ type ManualStockPosition = {
   buyPrice: string;
   sellPrice: string;
   quantity: string;
+  initialPrice?: string;
+  initialPriceDate?: string;
 };
 
 export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, financeOnly, onRecycleBinRef }: FunderManagementProps = {}) {
@@ -155,6 +157,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [manualStockTotalCapital, setManualStockTotalCapital] = useState('');
   const [manualStockCapitalCurrency, setManualStockCapitalCurrency] = useState<'CNY' | 'USD'>('CNY');
   const [manualStockPnlCoefficient, setManualStockPnlCoefficient] = useState('1');
+  // A 股检索仅服务于编辑区：输入六码、名称或拼音简称后，管理员从校验结果中选中股票。
+  const [manualStockLookupRow, setManualStockLookupRow] = useState<number | null>(null);
+  const [manualStockLookupInput, setManualStockLookupInput] = useState('');
+  const [manualStockLookupQuery, setManualStockLookupQuery] = useState('');
   // 37号利息分为两条独立引用：待结引用应计部分，已结引用“计入已付”的手工负数分段。
   // 旧订单只保存 interestTagName，读取时一律兼容为“仅已结引用”。
   const [pendingInterestTagName, setPendingInterestTagName] = useState<string>('');
@@ -199,6 +205,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         buyPrice: manualStockPnlCalculationMode === 'total_capital' ? undefined : position.buyPrice.trim(),
         sellPrice: manualStockPnlCalculationMode === 'total_capital' ? undefined : sellPrice || undefined,
         quantity: position.quantity.trim(),
+        initialPrice: position.initialPrice && Number(position.initialPrice) > 0 ? position.initialPrice.trim() : undefined,
+        initialPriceDate: position.initialPriceDate || undefined,
       };
     })
     .filter((position) => /^[A-Z][A-Z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/.test(position.symbol))
@@ -220,6 +228,40 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     () => validManualStockPositions.map((position) => position.symbol),
     [validManualStockPositions],
   );
+  useEffect(() => {
+    if (manualStockLookupRow === null || manualStockLookupInput.trim().length < 2) {
+      setManualStockLookupQuery('');
+      return;
+    }
+    const timer = window.setTimeout(() => setManualStockLookupQuery(manualStockLookupInput.trim()), 280);
+    return () => window.clearTimeout(timer);
+  }, [manualStockLookupRow, manualStockLookupInput]);
+  const manualStockLookupQueryResult = (trpc as any).searchManualAshareStocks.useQuery(
+    { query: manualStockLookupQuery || 'xx' },
+    { enabled: formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions' && manualStockLookupRow !== null && manualStockLookupQuery.length >= 2, staleTime: 60_000 },
+  );
+  const manualStockLookupResults = ((manualStockLookupQueryResult.data as any)?.results ?? []) as Array<{
+    symbol: string; code: string; name: string; initialPrice?: number; initialPriceDate?: string;
+  }>;
+  const updateManualStockLookupInput = useCallback((rowIndex: number, field: 'name' | 'symbol', value: string) => {
+    setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === rowIndex
+      ? { ...item, [field]: field === 'symbol' ? value.toUpperCase() : value }
+      : item));
+    setManualStockLookupRow(rowIndex);
+    setManualStockLookupInput(value);
+  }, []);
+  const selectManualAshareStock = useCallback((rowIndex: number, suggestion: { symbol: string; name: string; initialPrice?: number; initialPriceDate?: string }) => {
+    setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === rowIndex ? {
+      ...item,
+      name: suggestion.name,
+      symbol: suggestion.symbol,
+      initialPrice: Number(suggestion.initialPrice) > 0 ? String(suggestion.initialPrice) : '',
+      initialPriceDate: suggestion.initialPriceDate || '',
+    } : item));
+    setManualStockLookupRow(null);
+    setManualStockLookupInput('');
+    setManualStockLookupQuery('');
+  }, []);
   // 编辑页只读展示已保存的盘尾价；不会在盘中额外拉取实时股票行情。
   const manualStockClosePreviewQuery = (trpc as any).getManualStockCloseSnapshots.useQuery(
     { symbols: manualStockPreviewSymbols },
@@ -1481,6 +1523,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               buyPrice: String(position?.buyPrice ?? ''),
               sellPrice: String(position?.sellPrice ?? ''),
               quantity: String(position?.quantity ?? ''),
+              initialPrice: position?.initialPrice === null || position?.initialPrice === undefined ? '' : String(position.initialPrice),
+              initialPriceDate: String(position?.initialPriceDate || ''),
             }))
           : [];
         setManualStockPositions(savedManualPositions);
@@ -3246,7 +3290,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           }
                           if (value === 'manual_positions') {
                             setCollateralSource(prev => prev ? { ...prev, floatingPnlTagName: '', useFloatingPnl: false } : prev);
-                            if (manualStockPositions.length === 0) setManualStockPositions([{ name: '', symbol: '', buyPrice: '', sellPrice: '', quantity: '' }]);
+                            if (manualStockPositions.length === 0) setManualStockPositions([{ name: '', symbol: '', buyPrice: '', sellPrice: '', quantity: '', initialPrice: '', initialPriceDate: '' }]);
                           }
                         }}
                         className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
@@ -3335,16 +3379,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         <div key={index} className={`grid grid-cols-2 gap-1.5 ${manualStockPnlCalculationMode === 'total_capital' ? 'sm:grid-cols-[1.2fr_1fr_1fr_auto]' : 'sm:grid-cols-[1.1fr_1fr_1fr_1fr_1fr_auto]'}`}>
                           <input
                             value={position.name}
-                            onChange={e => setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, name: e.target.value } : item))}
+                            onFocus={() => { setManualStockLookupRow(index); setManualStockLookupInput(position.name); }}
+                            onChange={e => updateManualStockLookupInput(index, 'name', e.target.value)}
                             className="min-w-0 rounded-md border border-violet-200 px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200"
-                            placeholder="股票名称"
+                            placeholder="名称 / 拼音简称"
                             aria-label={`第${index + 1}只股票名称`}
                           />
                           <input
                             value={position.symbol}
-                            onChange={e => setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, symbol: e.target.value.toUpperCase() } : item))}
+                            onFocus={() => { setManualStockLookupRow(index); setManualStockLookupInput(position.symbol); }}
+                            onChange={e => updateManualStockLookupInput(index, 'symbol', e.target.value)}
                             className="min-w-0 rounded-md border border-violet-200 px-2 py-2 text-xs font-semibold uppercase focus:outline-none focus:ring-2 focus:ring-violet-200"
-                            placeholder="代码，如 AAPL"
+                            placeholder="A 股六码，如 600519"
                             aria-label={`第${index + 1}只股票代码`}
                           />
                           {manualStockPnlCalculationMode === 'position_cost' && <>
@@ -3390,19 +3436,39 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             const unit = String(quote?.currency || 'USD').toUpperCase() === 'CNY' ? '元' : 'USD';
                             return (
                               <div className={`col-span-2 flex min-w-0 items-center justify-between rounded-md bg-violet-50 px-2 py-1.5 text-[11px] text-violet-700 ${manualStockPnlCalculationMode === 'total_capital' ? 'sm:col-span-4' : 'sm:col-span-6'}`}>
+                                <span>{position.initialPrice && Number(position.initialPrice) > 0 ? `初始参考价 ¥${Number(position.initialPrice).toLocaleString()}` : '初始价待检索'}</span>
                                 <span>盘尾现在价</span>
                                 <span className="font-semibold tabular-nums">{Number(quote?.price) > 0 ? `${Number(quote?.price).toLocaleString()} ${unit}` : '等待每日盘尾更新'}</span>
                                 <span className="text-violet-400">{quote?.priceDate ? `更新于 ${quote.priceDate}` : ''}</span>
                               </div>
                             );
                           })()}
+                          {manualStockLookupRow === index && (
+                            <div className={`col-span-2 rounded-md border border-violet-200 bg-white p-1.5 shadow-sm ${manualStockPnlCalculationMode === 'total_capital' ? 'sm:col-span-4' : 'sm:col-span-6'}`}>
+                              <div className="px-1 pb-1 text-[10px] text-violet-500">输入 A 股六码、名称或英文简写后，选择校验结果自动补全名称、代码和初始参考价</div>
+                              {manualStockLookupQueryResult.isFetching && <div className="px-1 py-1.5 text-xs text-violet-500">正在检索 A 股…</div>}
+                              {!manualStockLookupQueryResult.isFetching && manualStockLookupQuery.length >= 2 && manualStockLookupResults.length === 0 && <div className="px-1 py-1.5 text-xs text-slate-500">未找到可验证的沪深北 A 股，请检查名称、拼音或六码代码。</div>}
+                              {manualStockLookupResults.map((suggestion) => (
+                                <button
+                                  key={suggestion.symbol}
+                                  type="button"
+                                  onClick={() => selectManualAshareStock(index, suggestion)}
+                                  className="flex w-full items-center justify-between gap-2 rounded px-1.5 py-1.5 text-left text-xs hover:bg-violet-50"
+                                >
+                                  <span className="min-w-0 truncate font-semibold text-violet-900">{suggestion.name}</span>
+                                  <span className="shrink-0 font-mono text-violet-700">{suggestion.code}</span>
+                                  <span className="shrink-0 tabular-nums text-violet-600">{Number(suggestion.initialPrice) > 0 ? `初始 ¥${Number(suggestion.initialPrice).toLocaleString()}` : '初始价暂缺'}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                       <div className="flex items-center justify-between gap-2 pt-1">
                         <button
                           type="button"
                           disabled={manualStockPositions.length >= 20}
-                          onClick={() => setManualStockPositions(items => [...items, { name: '', symbol: '', buyPrice: '', sellPrice: '', quantity: '' }])}
+                          onClick={() => setManualStockPositions(items => [...items, { name: '', symbol: '', buyPrice: '', sellPrice: '', quantity: '', initialPrice: '', initialPriceDate: '' }])}
                           className="rounded-md border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-700 disabled:opacity-50"
                         >+ 添加股票</button>
                         {editingOrder?.id && (
