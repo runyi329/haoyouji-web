@@ -22,6 +22,15 @@ function Linked37BadgeText() {
   );
 }
 
+// 所有说明类 ! / ? 与 37 标记使用同一套可缩放的中心定位，避免字体基线造成偏移。
+function HelpMarkerText({ symbol }: { symbol: '!' | '?' }) {
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className="pointer-events-none absolute inset-0 h-full w-full">
+      <text x="12" y="12" textAnchor="middle" dominantBaseline="central" fontSize="14" fontWeight="700" fill="currentColor">{symbol}</text>
+    </svg>
+  );
+}
+
 // 币种选项。数字币均由服务器行情扫描器实时拉取 USDT 现货报价。
 export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'BZ'] as const;
 export type CoinType = typeof COIN_OPTIONS[number];
@@ -448,8 +457,8 @@ export function OwnerCollaborationInfoButton({ order, ledgerId }: { order: any; 
   };
   return <>
     <button type="button" onClick={(event) => { event.stopPropagation(); setOpen(true); }} aria-label="查看订单其他信息"
-      className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold"
-      style={{ color: '#6D28D9', background: '#EDE9FE', border: '1px solid #C4B5FD' }}>!</button>
+      className="relative inline-flex h-3.5 w-3.5 items-center justify-center rounded-full font-bold"
+      style={{ color: '#fff', background: '#3B82F6' }}><HelpMarkerText symbol="!" /></button>
     {open && (
       <div className="fixed inset-0 z-[650] flex items-end justify-center bg-black/45 sm:items-center" onClick={() => setOpen(false)}>
         <div className="w-full max-w-md rounded-t-2xl bg-white p-4 shadow-2xl sm:rounded-2xl" onClick={event => event.stopPropagation()}>
@@ -2157,11 +2166,11 @@ export function FunderOrderCard({
               }}
               className="relative w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"
               style={{
-                backgroundColor: hasExternalPendingInterest ? '#3B82F6' : '#E5E7EB',
-                color: hasExternalPendingInterest ? '#fff' : '#6B7280',
+                backgroundColor: '#3B82F6',
+                color: '#fff',
               }}
               title={hasExternalPendingInterest ? '查看37号账本待结利息明细' : '查看52号账本待结利息计算说明'}
-            >{hasExternalPendingInterest ? <Linked37BadgeText /> : '?'}</button>
+            >{hasExternalPendingInterest ? <Linked37BadgeText /> : <HelpMarkerText symbol="?" />}</button>
             {/* 已结利息历史浮层 */}
             {showInterestHistory && (
               <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestHistory(false)}>
@@ -2326,9 +2335,9 @@ export function FunderOrderCard({
                   type="button"
                   onClick={() => hasExternalPaidInterest ? setLinkedInterestDetailKind('paid') : setShowInterestHistory(v => !v)}
                   className="relative w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"
-                  style={{ backgroundColor: hasExternalPaidInterest ? '#3B82F6' : (showInterestHistory ? '#3B82F6' : '#DBEAFE'), color: hasExternalPaidInterest || showInterestHistory ? '#fff' : '#3B82F6' }}
+                  style={{ backgroundColor: '#3B82F6', color: '#fff' }}
                   title={hasExternalPaidInterest ? '查看37号账本已结利息明细' : '已结利息记录'}
-                >{hasExternalPaidInterest ? <Linked37BadgeText /> : '!'}</button>
+                >{hasExternalPaidInterest ? <Linked37BadgeText /> : <HelpMarkerText symbol="!" />}</button>
               </span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
                 {displayedPaidValue === null
@@ -2485,10 +2494,10 @@ export function FunderOrderCard({
                             {hasExternalCollateral && idx === 0 && (
                               <button
                                 type="button"
-                                className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
-                                style={{ backgroundColor: '#E5E7EB', color: '#6B7280' }}
+                                className="relative w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"
+                                style={{ backgroundColor: '#3B82F6', color: '#fff' }}
                                 onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
-                              >!</button>
+                              ><HelpMarkerText symbol="!" /></button>
                             )}
                           </span>
                           <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(a.qty).toLocaleString()} {a.coin === 'CNY' ? '元' : a.coin}</span>
@@ -2928,9 +2937,9 @@ export function FunderOrderCard({
                   <span className="text-gray-400">担保缺口</span>
                   <button
                     onClick={e => { e.stopPropagation(); setShowCollateralGapFormulaInfo(true); }}
-                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
-                    style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                  >!</button>
+                    className="relative w-3.5 h-3.5 rounded-full inline-flex items-center justify-center flex-shrink-0 font-bold leading-none"
+                    style={{ backgroundColor: '#3B82F6', color: '#fff', border: 'none', cursor: 'pointer' }}
+                  ><HelpMarkerText symbol="!" /></button>
                 </div>
                 {isExternalStockPnlSource ? (
                   (isSharedMode ? (showExposureLoading ? null : effectiveExposure) : externalNonSharedGapU) !== null
@@ -2976,9 +2985,9 @@ export function FunderOrderCard({
                         )}
                         <button
                           onClick={(e) => { e.stopPropagation(); setShowMarginInfo(true); }}
-                          className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
-                          style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                        >?</button>
+                          className="relative w-3.5 h-3.5 rounded-full inline-flex items-center justify-center flex-shrink-0 font-bold leading-none"
+                          style={{ backgroundColor: '#3B82F6', color: '#fff', border: 'none', cursor: 'pointer' }}
+                        ><HelpMarkerText symbol="?" /></button>
                       </div>
                       <span className="font-bold" style={{ color: isAlerting ? '#EF4444' : marginColor }}>{(marginRatio * 100).toFixed(1)}%{isAlerting ? ' ⚠' : ''}</span>
                     </div>
