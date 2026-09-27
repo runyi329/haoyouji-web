@@ -44,14 +44,14 @@ jobs:
             const sourceBase = 'https://static.coinall.ltd/cdn/oksupport/asset/currency/icon';
             const publicBase = `https://${bucket}.cos.${region}.myqcloud.com`;
 
-            const sourceUrlFor = (code) => code === 'b2'
-              // CoinMarketCap's asset CDN provides the B² Network token PNG (UCID 36352).
-              // The project homepage blocks requests from the deployment host, so do not use its favicon here.
-              ? 'https://s2.coinmarketcap.com/static/img/coins/64x64/36352.png'
-              : `${sourceBase}/${code}.png`;
+            // B² Network's public market icon was fetched and PNG-validated before this workflow was written.
+            // It is embedded because both the project site and public CDNs intermittently block the deployment host.
+            const embeddedB2PngBase64 = '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';
+            const sourceUrlFor = (code) => `${sourceBase}/${code}.png`;
             const keyFor = (code) => `assets/crypto-icons/${code}.png`;
 
             async function fetchIcon(code) {
+              if (code === 'b2') return Buffer.from(embeddedB2PngBase64, 'base64');
               let lastError = null;
               for (let attempt = 1; attempt <= 4; attempt += 1) {
                 try {
