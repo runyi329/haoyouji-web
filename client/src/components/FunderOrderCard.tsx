@@ -2131,7 +2131,6 @@ export function FunderOrderCard({
         <div className="w-1/2 p-4 pl-3 flex flex-col">
           {show('accruedInterest') && <div className="flex items-center gap-1 mb-0.5 relative" style={{ height: '16px' }}>
             <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
-            {hasExternalPendingInterest && <span className="text-[9px] text-blue-500">37号引用</span>}
             {rateAbs && <span className="text-[10px] text-gray-400">(年化 {rateAbs}%)</span>}
             <button
               ref={tipBtnRef}
@@ -2148,9 +2147,12 @@ export function FunderOrderCard({
                 setShowInterestTip(v => !v);
               }}
               className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
-              style={{ backgroundColor: '#E5E7EB', color: '#6B7280' }}
+              style={{
+                backgroundColor: hasExternalPendingInterest ? '#3B82F6' : '#E5E7EB',
+                color: hasExternalPendingInterest ? '#fff' : '#6B7280',
+              }}
               title={hasExternalPendingInterest ? '查看37号账本待结利息明细' : '查看52号账本待结利息计算说明'}
-            >?</button>
+            >{hasExternalPendingInterest ? '37' : '?'}</button>
             {/* 已结利息历史浮层 */}
             {showInterestHistory && (
               <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestHistory(false)}>
@@ -2311,14 +2313,13 @@ export function FunderOrderCard({
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1">
                 <span className="whitespace-nowrap">已结利息</span>
-                {hasExternalPaidInterest && <span className="text-[9px] text-blue-500">37号引用</span>}
                 <button
                   type="button"
                   onClick={() => hasExternalPaidInterest ? setLinkedInterestDetailKind('paid') : setShowInterestHistory(v => !v)}
                   className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
-                  style={{ backgroundColor: (hasExternalPaidInterest ? linkedInterestDetailKind === 'paid' : showInterestHistory) ? '#3B82F6' : '#DBEAFE', color: (hasExternalPaidInterest ? linkedInterestDetailKind === 'paid' : showInterestHistory) ? '#fff' : '#3B82F6' }}
+                  style={{ backgroundColor: hasExternalPaidInterest ? '#3B82F6' : (showInterestHistory ? '#3B82F6' : '#DBEAFE'), color: hasExternalPaidInterest || showInterestHistory ? '#fff' : '#3B82F6' }}
                   title={hasExternalPaidInterest ? '查看37号账本已结利息明细' : '已结利息记录'}
-                >!</button>
+                >{hasExternalPaidInterest ? '37' : '!'}</button>
               </span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
                 {displayedPaidValue === null
