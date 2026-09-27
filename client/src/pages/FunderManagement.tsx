@@ -148,9 +148,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     useInterest?: boolean;
   } | null>(null);
   // 股票浮动盈亏可独立选择：37号标签、管理员录入的股票组合，或不调用外部来源。
-  // 股票组合保存逐只仓位和一个可编辑计算系数；当前价统一由每日盘尾快照提供。
+  // 手工股票支持两种基准：逐只买入价，或账户初始总额度；当前价统一由每日盘尾快照提供。
   const [stockPnlSourceMode, setStockPnlSourceMode] = useState<'none' | 'reference37' | 'manual_positions'>('none');
+  const [manualStockPnlCalculationMode, setManualStockPnlCalculationMode] = useState<'position_cost' | 'total_capital'>('position_cost');
   const [manualStockPositions, setManualStockPositions] = useState<ManualStockPosition[]>([]);
+  const [manualStockTotalCapital, setManualStockTotalCapital] = useState('');
+  const [manualStockCapitalCurrency, setManualStockCapitalCurrency] = useState<'CNY' | 'USD'>('CNY');
   const [manualStockPnlCoefficient, setManualStockPnlCoefficient] = useState('1');
   // 37号利息分为两条独立引用：待结引用应计部分，已结引用“计入已付”的手工负数分段。
   // 旧订单只保存 interestTagName，读取时一律兼容为“仅已结引用”。
@@ -193,14 +196,19 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       return {
         name: position.name.trim().slice(0, 48),
         symbol: position.symbol.trim().toUpperCase(),
-        buyPrice: position.buyPrice.trim(),
-        sellPrice: sellPrice || undefined,
+        buyPrice: manualStockPnlCalculationMode === 'total_capital' ? undefined : position.buyPrice.trim(),
+        sellPrice: manualStockPnlCalculationMode === 'total_capital' ? undefined : sellPrice || undefined,
         quantity: position.quantity.trim(),
       };
     })
     .filter((position) => /^[A-Z][A-Z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/.test(position.symbol))
-    .filter((position) => Number(position.buyPrice) > 0 && Number(position.quantity) > 0 && (!position.sellPrice || Number(position.sellPrice) > 0))
-    .slice(0, 20), [manualStockPositions]);
+    .filter((position) => Number(position.quantity) > 0 && (!position.sellPrice || Number(position.sellPrice) > 0))
+    .filter((position) => manualStockPnlCalculationMode === 'total_capital' || Number(position.buyPrice) > 0)
+    .slice(0, 20), [manualStockPositions, manualStockPnlCalculationMode]);
+  const isManualStockTotalCapitalValid = useMemo(() => {
+    const value = Number(manualStockTotalCapital);
+    return Number.isFinite(value) && value > 0 && value <= 1_000_000_000_000;
+  }, [manualStockTotalCapital]);
   const isManualStockPnlCoefficientValid = useMemo(() => {
     const value = Number(manualStockPnlCoefficient);
     return Number.isFinite(value) && value > 0 && value <= 100000;
@@ -230,13 +238,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         floatingPnlTagName: undefined,
         useFloatingPnl: false,
         stockPnlSource: 'manual_positions' as const,
+        stockPnlCalculationMode: manualStockPnlCalculationMode,
         stockPositions: validManualStockPositions,
+        stockTotalCapital: manualStockPnlCalculationMode === 'total_capital' ? manualStockTotalCapital.trim() : undefined,
+        stockCapitalCurrency: manualStockPnlCalculationMode === 'total_capital' ? manualStockCapitalCurrency : undefined,
         // 先汇总每只股票的原始盈亏，再乘此系数；默认 1 表示不放大或缩小。
         stockPnlCoefficient: normalizedManualStockPnlCoefficient,
       };
     }
     return linkedInterestSourceDraft;
-  }, [formData.assetType, stockPnlSourceMode, validManualStockPositions, normalizedManualStockPnlCoefficient, linkedInterestSourceDraft]);
+  }, [formData.assetType, stockPnlSourceMode, validManualStockPositions, manualStockPnlCalculationMode, manualStockTotalCapital, manualStockCapitalCurrency, normalizedManualStockPnlCoefficient, linkedInterestSourceDraft]);
 
   // 字段展示配置（控制订单卡片各字段的显示/隐藏）
   const DEFAULT_DISPLAY_CONFIG: Record<string, boolean | string> = {
@@ -960,7 +971,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       return;
     }
     if (!orderCollateralSourceDraft || validManualStockPositions.length === 0) {
-      toast.error('请至少完整填写一只股票的代码、买入价和股数');
+      toast.error(manualStockPnlCalculationMode === 'total_capital'
+        ? '请至少完整填写一只股票的代码和当前持股数量'
+        : '请至少完整填写一只股票的代码、买入价和股数');
+      return;
+    }
+    if (manualStockPnlCalculationMode === 'total_capital' && !isManualStockTotalCapitalValid) {
+      toast.error('请输入大于 0 的股票账户初始总额度');
       return;
     }
     if (!isManualStockPnlCoefficientValid) {
@@ -1298,7 +1315,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setPendingInterestTagName('');
     setPaidInterestTagName('');
     setStockPnlSourceMode('none');
+    setManualStockPnlCalculationMode('position_cost');
     setManualStockPositions([]);
+    setManualStockTotalCapital('');
+    setManualStockCapitalCurrency('CNY');
     setManualStockPnlCoefficient('1');
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
     setEditingOrder(null);
@@ -1447,7 +1467,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         setPendingInterestTagName('');
         setPaidInterestTagName('');
         setStockPnlSourceMode('none');
+        setManualStockPnlCalculationMode('position_cost');
         setManualStockPositions([]);
+        setManualStockTotalCapital('');
+        setManualStockCapitalCurrency('CNY');
         setManualStockPnlCoefficient('1');
       } else if (cs) {
         const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
@@ -1461,6 +1484,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             }))
           : [];
         setManualStockPositions(savedManualPositions);
+        setManualStockPnlCalculationMode(parsed?.stockPnlCalculationMode === 'total_capital' ? 'total_capital' : 'position_cost');
+        setManualStockTotalCapital(parsed?.stockTotalCapital === null || parsed?.stockTotalCapital === undefined ? '' : String(parsed.stockTotalCapital));
+        setManualStockCapitalCurrency(String(parsed?.stockCapitalCurrency || '').toUpperCase() === 'USD' ? 'USD' : 'CNY');
         const savedStockCoefficient = Number(parsed?.stockPnlCoefficient);
         setManualStockPnlCoefficient(
           Number.isFinite(savedStockCoefficient) && savedStockCoefficient > 0 && savedStockCoefficient <= 100000
@@ -1501,7 +1527,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         setPendingInterestTagName('');
         setPaidInterestTagName('');
         setStockPnlSourceMode('none');
+        setManualStockPnlCalculationMode('position_cost');
         setManualStockPositions([]);
+        setManualStockTotalCapital('');
+        setManualStockCapitalCurrency('CNY');
         setManualStockPnlCoefficient('1');
       }
     } catch {
@@ -1510,7 +1539,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       setPendingInterestTagName('');
       setPaidInterestTagName('');
       setStockPnlSourceMode('none');
+      setManualStockPnlCalculationMode('position_cost');
       setManualStockPositions([]);
+      setManualStockTotalCapital('');
+      setManualStockCapitalCurrency('CNY');
       setManualStockPnlCoefficient('1');
     }
     // 加载字段展示配置
@@ -1668,6 +1700,22 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       finalAmount = financingAmountUsdt || (editingOrder ? formData.originalAmount : '');
       if (!finalAmount || parseFloat(finalAmount) <= 0 || price <= 0 || quantity <= 0) {
         toast.error('请手动输入任意两项，确认第三项已自动推算');
+        return;
+      }
+    }
+    if (formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions') {
+      if (validManualStockPositions.length === 0) {
+        toast.error(manualStockPnlCalculationMode === 'total_capital'
+          ? '请至少完整填写一只股票的代码和当前持股数量'
+          : '请至少完整填写一只股票的代码、买入价和股数');
+        return;
+      }
+      if (manualStockPnlCalculationMode === 'total_capital' && !isManualStockTotalCapitalValid) {
+        toast.error('请输入大于 0 的股票账户初始总额度');
+        return;
+      }
+      if (!isManualStockPnlCoefficientValid) {
+        toast.error('股票计算系数须大于 0，且不超过 100000');
         return;
       }
     }
@@ -3189,7 +3237,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         onClick={() => {
                           setStockPnlSourceMode(value);
                           if (value === 'none') {
+                            setManualStockPnlCalculationMode('position_cost');
                             setManualStockPositions([]);
+                            setManualStockTotalCapital('');
+                            setManualStockCapitalCurrency('CNY');
                             setManualStockPnlCoefficient('1');
                             setCollateralSource(prev => prev ? { ...prev, floatingPnlTagName: '', useFloatingPnl: false } : prev);
                           }
@@ -3212,9 +3263,53 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   {stockPnlSourceMode === 'manual_positions' && (
                     <div className="space-y-2 rounded-lg border border-violet-200 bg-white p-2.5">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="text-xs font-semibold text-violet-800">股票组合（买入价 × 股数）</div>
+                        <div className="text-xs font-semibold text-violet-800">股票组合（盘尾价每日 15:05 更新）</div>
                         <span className="text-[10px] text-violet-500">每日盘尾 15:05 更新</span>
                       </div>
+                      <div className="rounded-lg border border-violet-100 bg-violet-50 p-2">
+                        <div className="mb-1.5 text-[11px] font-semibold text-violet-800">盈亏计算方式</div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setManualStockPnlCalculationMode('position_cost')}
+                            className={`rounded-md border px-2 py-1.5 text-[11px] font-semibold ${manualStockPnlCalculationMode === 'position_cost' ? 'border-violet-600 bg-violet-600 text-white' : 'border-violet-200 bg-white text-violet-700'}`}
+                          >逐只买入价</button>
+                          <button
+                            type="button"
+                            onClick={() => setManualStockPnlCalculationMode('total_capital')}
+                            className={`rounded-md border px-2 py-1.5 text-[11px] font-semibold ${manualStockPnlCalculationMode === 'total_capital' ? 'border-violet-600 bg-violet-600 text-white' : 'border-violet-200 bg-white text-violet-700'}`}
+                          >账户初始总额度</button>
+                        </div>
+                        <p className="mt-1.5 text-[10px] leading-4 text-violet-600">
+                          {manualStockPnlCalculationMode === 'position_cost'
+                            ? '逐只输入买入价：各股票（盘尾价／卖出价 − 买入价）× 股数后汇总。'
+                            : '不需填写逐只买入价：盘尾持仓市值合计 − 账户初始总额度，最后再乘计算系数。'}
+                        </p>
+                      </div>
+                      {manualStockPnlCalculationMode === 'total_capital' && (
+                        <div className="grid grid-cols-[minmax(0,1fr)_86px] gap-1.5 rounded-lg border border-violet-100 bg-violet-50 px-2.5 py-2">
+                          <label className="col-span-2 text-xs font-semibold text-violet-800" htmlFor="manual-stock-total-capital">账户初始总额度</label>
+                          <input
+                            id="manual-stock-total-capital"
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={manualStockTotalCapital}
+                            onChange={event => setManualStockTotalCapital(event.target.value)}
+                            placeholder="例如 200000"
+                            className={`min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-violet-200 ${isManualStockTotalCapitalValid ? 'border-violet-200 bg-white text-violet-800' : 'border-red-300 bg-red-50 text-red-700'}`}
+                          />
+                          <select
+                            value={manualStockCapitalCurrency}
+                            onChange={event => setManualStockCapitalCurrency(event.target.value === 'USD' ? 'USD' : 'CNY')}
+                            className="rounded-md border border-violet-200 bg-white px-2 py-1.5 text-xs font-semibold text-violet-800 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                            aria-label="账户初始总额度币种"
+                          ><option value="CNY">人民币</option><option value="USD">美元</option></select>
+                          <p className={`col-span-2 text-[10px] leading-4 ${isManualStockTotalCapitalValid ? 'text-violet-600' : 'text-red-600'}`}>
+                            {isManualStockTotalCapitalValid ? '总额度只作为整体成本基准；每只股票只需录入名称、代码和当前持股数量。' : '请输入大于 0 的账户初始总额度'}
+                          </p>
+                        </div>
+                      )}
                       <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-lg border border-violet-100 bg-violet-50 px-2.5 py-2">
                         <label htmlFor="manual-stock-pnl-coefficient" className="text-xs font-semibold text-violet-800">计算系数</label>
                         <div className="min-w-0">
@@ -3237,7 +3332,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         </div>
                       </div>
                       {manualStockPositions.map((position, index) => (
-                        <div key={index} className="grid grid-cols-2 gap-1.5 sm:grid-cols-[1.1fr_1fr_1fr_1fr_1fr_auto]">
+                        <div key={index} className={`grid grid-cols-2 gap-1.5 ${manualStockPnlCalculationMode === 'total_capital' ? 'sm:grid-cols-[1.2fr_1fr_1fr_auto]' : 'sm:grid-cols-[1.1fr_1fr_1fr_1fr_1fr_auto]'}`}>
                           <input
                             value={position.name}
                             onChange={e => setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, name: e.target.value } : item))}
@@ -3252,26 +3347,28 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             placeholder="代码，如 AAPL"
                             aria-label={`第${index + 1}只股票代码`}
                           />
-                          <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            value={position.buyPrice}
-                            onChange={e => setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, buyPrice: e.target.value } : item))}
-                            className="min-w-0 rounded-md border border-violet-200 px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200"
-                            placeholder="买入价"
-                            aria-label={`第${index + 1}只股票买入价`}
-                          />
-                          <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            value={position.sellPrice}
-                            onChange={e => setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, sellPrice: e.target.value } : item))}
-                            className="min-w-0 rounded-md border border-violet-200 px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200"
-                            placeholder="卖出价（可选）"
-                            aria-label={`第${index + 1}只股票卖出价`}
-                          />
+                          {manualStockPnlCalculationMode === 'position_cost' && <>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={position.buyPrice}
+                              onChange={e => setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, buyPrice: e.target.value } : item))}
+                              className="min-w-0 rounded-md border border-violet-200 px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200"
+                              placeholder="买入价"
+                              aria-label={`第${index + 1}只股票买入价`}
+                            />
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={position.sellPrice}
+                              onChange={e => setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, sellPrice: e.target.value } : item))}
+                              className="min-w-0 rounded-md border border-violet-200 px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200"
+                              placeholder="卖出价（可选）"
+                              aria-label={`第${index + 1}只股票卖出价`}
+                            />
+                          </>}
                           <input
                             type="number"
                             min="0"
@@ -3292,7 +3389,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             const quote = manualStockPreviewQuotes[position.symbol.trim().toUpperCase()];
                             const unit = String(quote?.currency || 'USD').toUpperCase() === 'CNY' ? '元' : 'USD';
                             return (
-                              <div className="col-span-2 flex min-w-0 items-center justify-between rounded-md bg-violet-50 px-2 py-1.5 text-[11px] text-violet-700 sm:col-span-6">
+                              <div className={`col-span-2 flex min-w-0 items-center justify-between rounded-md bg-violet-50 px-2 py-1.5 text-[11px] text-violet-700 ${manualStockPnlCalculationMode === 'total_capital' ? 'sm:col-span-4' : 'sm:col-span-6'}`}>
                                 <span>盘尾现在价</span>
                                 <span className="font-semibold tabular-nums">{Number(quote?.price) > 0 ? `${Number(quote?.price).toLocaleString()} ${unit}` : '等待每日盘尾更新'}</span>
                                 <span className="text-violet-400">{quote?.priceDate ? `更新于 ${quote.priceDate}` : ''}</span>
@@ -3312,12 +3409,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           <button
                             type="button"
                             onClick={saveManualStockPnlSource}
-                            disabled={validManualStockPositions.length === 0 || !isManualStockPnlCoefficientValid || saveLinkedInterestSourceMutation.isPending || saveParticipantLinkedInterestSourceMutation.isPending}
+                            disabled={validManualStockPositions.length === 0 || !isManualStockPnlCoefficientValid || (manualStockPnlCalculationMode === 'total_capital' && !isManualStockTotalCapitalValid) || saveLinkedInterestSourceMutation.isPending || saveParticipantLinkedInterestSourceMutation.isPending}
                             className="rounded-md bg-violet-600 px-2.5 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-violet-300"
                           >{saveLinkedInterestSourceMutation.isPending || saveParticipantLinkedInterestSourceMutation.isPending ? '保存中…' : '保存股票组合'}</button>
                         )}
                       </div>
-                      <div className="text-[11px] leading-4 text-violet-600">字段依次为名称、代码、买入价、卖出价（可选）和持股数量。未填卖出价时，原始盈亏 = Σ（每日盘尾价 − 买入价）× 股数；填入卖出价后按卖出价锁定计算。最终浮动盈亏 = 原始盈亏合计 × 计算系数；点击订单里浮动盈亏后的说明按钮可逐只查看价格、更新时间与计算过程。</div>
+                      <div className="text-[11px] leading-4 text-violet-600">
+                        {manualStockPnlCalculationMode === 'total_capital'
+                          ? '字段依次为名称、代码和当前持股数量。原始盈亏 = Σ（每日盘尾价 × 股数）− 账户初始总额度；最终浮动盈亏 = 原始盈亏合计 × 计算系数。点击订单里浮动盈亏后的说明按钮可逐只查看盘尾价、持仓市值、更新时间与计算过程。'
+                          : '字段依次为名称、代码、买入价、卖出价（可选）和持股数量。未填卖出价时，原始盈亏 = Σ（每日盘尾价 − 买入价）× 股数；填入卖出价后按卖出价锁定计算。最终浮动盈亏 = 原始盈亏合计 × 计算系数；点击订单里浮动盈亏后的说明按钮可逐只查看价格、更新时间与计算过程。'}
+                      </div>
                     </div>
                   )}
                 </div>
