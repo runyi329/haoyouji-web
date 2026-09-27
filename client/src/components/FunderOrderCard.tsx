@@ -13,6 +13,15 @@ import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 
+// 以 SVG viewBox 的中心放置文本；无论父圆标缩放到何种尺寸，37 都保持几何居中。
+function Linked37BadgeText() {
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className="pointer-events-none absolute inset-0 h-full w-full">
+      <text x="12" y="12" textAnchor="middle" dominantBaseline="central" fontSize="11" fontWeight="700" letterSpacing="-0.65" fill="currentColor">37</text>
+    </svg>
+  );
+}
+
 // 币种选项。数字币均由服务器行情扫描器实时拉取 USDT 现货报价。
 export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'BZ'] as const;
 export type CoinType = typeof COIN_OPTIONS[number];
@@ -2146,13 +2155,13 @@ export function FunderOrderCard({
                 }
                 setShowInterestTip(v => !v);
               }}
-              className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"
+              className="relative w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"
               style={{
                 backgroundColor: hasExternalPendingInterest ? '#3B82F6' : '#E5E7EB',
                 color: hasExternalPendingInterest ? '#fff' : '#6B7280',
               }}
               title={hasExternalPendingInterest ? '查看37号账本待结利息明细' : '查看52号账本待结利息计算说明'}
-            >{hasExternalPendingInterest ? <span className="translate-y-[0.5px] text-[7px] leading-none tracking-[-0.1em]">37</span> : '?'}</button>
+            >{hasExternalPendingInterest ? <Linked37BadgeText /> : '?'}</button>
             {/* 已结利息历史浮层 */}
             {showInterestHistory && (
               <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestHistory(false)}>
@@ -2316,10 +2325,10 @@ export function FunderOrderCard({
                 <button
                   type="button"
                   onClick={() => hasExternalPaidInterest ? setLinkedInterestDetailKind('paid') : setShowInterestHistory(v => !v)}
-                  className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"
+                  className="relative w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"
                   style={{ backgroundColor: hasExternalPaidInterest ? '#3B82F6' : (showInterestHistory ? '#3B82F6' : '#DBEAFE'), color: hasExternalPaidInterest || showInterestHistory ? '#fff' : '#3B82F6' }}
                   title={hasExternalPaidInterest ? '查看37号账本已结利息明细' : '已结利息记录'}
-                >{hasExternalPaidInterest ? <span className="translate-y-[0.5px] text-[7px] leading-none tracking-[-0.1em]">37</span> : '!'}</button>
+                >{hasExternalPaidInterest ? <Linked37BadgeText /> : '!'}</button>
               </span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
                 {displayedPaidValue === null
@@ -2412,10 +2421,10 @@ export function FunderOrderCard({
                   <span className="text-gray-400 whitespace-nowrap">担保货币</span>
                   <button
                     type="button"
-                    className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"
+                    className="relative w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"
                     style={{ backgroundColor: '#3B82F6', color: '#fff' }}
                     onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
-                  ><span className="translate-y-[0.5px] text-[7px] leading-none tracking-[-0.1em]">37</span></button>
+                  ><Linked37BadgeText /></button>
                 </span>
                 {externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU) ? (
                   <span className="min-w-0 font-medium tabular-nums text-right whitespace-nowrap" style={{ color: '#1A2340' }}>
