@@ -45,9 +45,11 @@ jobs:
             const publicBase = `https://${bucket}.cos.${region}.myqcloud.com`;
 
             const sourceUrlFor = (code) => code === 'b2'
-              ? 'https://bsquared.network/favicon.ico'
+              // CoinMarketCap's asset CDN provides the B² Network token PNG (UCID 36352).
+              // The project homepage blocks requests from the deployment host, so do not use its favicon here.
+              ? 'https://s2.coinmarketcap.com/static/img/coins/64x64/36352.png'
               : `${sourceBase}/${code}.png`;
-            const keyFor = (code) => `assets/crypto-icons/${code}.${code === 'b2' ? 'ico' : 'png'}`;
+            const keyFor = (code) => `assets/crypto-icons/${code}.png`;
 
             async function fetchIcon(code) {
               let lastError = null;
@@ -76,7 +78,7 @@ jobs:
                   Region: region,
                   Key: key,
                   Body: bytes,
-                  ContentType: code === 'b2' ? 'image/x-icon' : 'image/png',
+                  ContentType: 'image/png',
                   CacheControl: 'public, max-age=31536000, immutable',
                 }, (error, result) => error ? reject(error) : resolve(result));
               });

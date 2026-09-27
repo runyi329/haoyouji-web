@@ -34,7 +34,7 @@ const CRYPTO_ASSET_ICON_SOURCES: Readonly<Record<string, string>> = {
   POL: `${COS_CRYPTO_ICON_BASE_URL}/pol.png`,
   CRV: `${COS_CRYPTO_ICON_BASE_URL}/crv.png`,
   PEPE: `${COS_CRYPTO_ICON_BASE_URL}/pepe.png`,
-  B2: `${COS_CRYPTO_ICON_BASE_URL}/b2.ico`,
+  B2: `${COS_CRYPTO_ICON_BASE_URL}/b2.png`,
 };
 
 export function getCryptoAssetIconSrc(assetCode: unknown): string | null {
