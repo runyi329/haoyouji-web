@@ -605,7 +605,7 @@ export function FunderOrderCard({
   });
   // 已结利息历史浮层
   const [showInterestHistory, setShowInterestHistory] = useState(false);
-  const [showLinkedInterestDetail, setShowLinkedInterestDetail] = useState(false);
+  const [linkedInterestDetailKind, setLinkedInterestDetailKind] = useState<'pending' | 'paid' | null>(null);
   // 共同拥有者会带 participantInfo 以支持独立快照，但主订单拥有者仍是主单的管理视角。
   // 结息与担保保存的参与者作用域只用于“非主拥有者”的协作视角：共同拥有者、历史参与者都独立；
   // 主拥有者自动补齐的 owner 关系仍沿用主订单流水，避免保存后被查到另一个空作用域。
@@ -774,7 +774,7 @@ export function FunderOrderCard({
       };
     })()
   ) : null;
-  // 解析37号数据来源。盈亏、担保、利息标签可分别选择；旧订单只存tagName时兼容回退。
+  // 解析37号数据来源。盈亏、担保、待结利息、已结利息标签均可分别选择；旧订单只存tagName时兼容回退。
   const _parsedCollateralSource = useMemo(() => {
     try {
       const cs = (order as any).collateral_source;
@@ -783,7 +783,8 @@ export function FunderOrderCard({
       if (parsed && parsed.ledgerId && parsed.tagName) return parsed as {
         ledgerId: number; tagName: string; floatingPnlTagName?: string;
         floatingPnlCalculationMode?: 'raw_net_pnl' | 'initial_minus_latest' | 'leveraged_net_pnl'; collateralTagName?: string;
-        interestTagName?: string; useFloatingPnl?: boolean; useCollateral?: boolean; useInterest?: boolean;
+        pendingInterestTagName?: string; paidInterestTagName?: string; interestTagName?: string;
+        useFloatingPnl?: boolean; useCollateral?: boolean; usePendingInterest?: boolean; usePaidInterest?: boolean; useInterest?: boolean;
       };
     } catch {}
     return null;
@@ -796,11 +797,17 @@ export function FunderOrderCard({
     : 'raw_net_pnl';
   const linkedCollateralTagName = _parsedCollateralSource?.collateralTagName
     || (_parsedCollateralSource?.useCollateral !== false ? _parsedCollateralSource?.tagName : '');
-  // 利息引用必须显式选择；历史订单没有 interestTagName 时继续使用52号手工结息，绝不因担保/盈亏引用而误切换。
-  const linkedInterestTagName = _parsedCollateralSource?.interestTagName
-    || (_parsedCollateralSource?.useInterest === true ? _parsedCollateralSource?.tagName : '');
-  const hasExternalInterest = Number(_parsedCollateralSource?.ledgerId) === 37 && !!linkedInterestTagName;
-  const hasExternalDataSource = !!(linkedPnlTagName || linkedCollateralTagName || linkedInterestTagName);
+  // 待结、已结利息必须显式选择。旧 interestTagName/useInterest 仅兼容为“已结引用”，
+  // 不会在升级后被误解为待结利息来源。
+  const linkedPendingInterestTagName = _parsedCollateralSource?.pendingInterestTagName
+    || (_parsedCollateralSource?.usePendingInterest === true ? _parsedCollateralSource?.tagName : '');
+  const linkedPaidInterestTagName = _parsedCollateralSource?.paidInterestTagName
+    || _parsedCollateralSource?.interestTagName
+    || ((_parsedCollateralSource?.usePaidInterest === true || _parsedCollateralSource?.useInterest === true) ? _parsedCollateralSource?.tagName : '');
+  const hasExternalPendingInterest = Number(_parsedCollateralSource?.ledgerId) === 37 && !!linkedPendingInterestTagName;
+  const hasExternalPaidInterest = Number(_parsedCollateralSource?.ledgerId) === 37 && !!linkedPaidInterestTagName;
+  const hasExternalInterest = hasExternalPendingInterest || hasExternalPaidInterest;
+  const hasExternalDataSource = !!(linkedPnlTagName || linkedCollateralTagName || linkedPendingInterestTagName || linkedPaidInterestTagName);
   const hasExternalCollateral = !!linkedCollateralTagName;
 
   // 两个标签独立查询：盈亏只读净值，担保只读逐笔保证金；若选了同一标签，数据口径仍相同。
@@ -820,10 +827,18 @@ export function FunderOrderCard({
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '' },
     { enabled: !!linkedCollateralTagName, staleTime: 3000 }
   );
-  // 与 RightInterestDetail 共用同一份标签分段；感叹号仍打开完整的只读明细。
-  const { data: _linkedInterestPeriods } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedInterestTagName },
-    { enabled: hasExternalInterest, staleTime: 3000 }
+  // 与 RightInterestDetail 共用同一份标签分段；待结、已结分别拉取，允许引用不同标签。
+  const { data: _linkedPendingInterestPeriods } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPendingInterestTagName },
+    { enabled: hasExternalPendingInterest, staleTime: 3000 }
+  );
+  const { data: _linkedPaidInterestPeriods } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPaidInterestTagName },
+    { enabled: hasExternalPaidInterest, staleTime: 3000 }
+  );
+  const { data: _pendingInterestTagConfig } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPendingInterestTagName || '' },
+    { enabled: hasExternalPendingInterest, staleTime: 3000 }
   );
   const { data: _extCryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
     enabled: hasExternalDataSource, refetchInterval: 3000, staleTime: 0,
@@ -932,22 +947,47 @@ export function FunderOrderCard({
     return { entries, totalCny: allKnown ? totalCny : null, totalU: allKnown && rate > 0 ? totalCny / rate : null, currencyLabel };
   }, [hasExternalCollateral, _collateralTagConfig, _collateralTagSummary, _extCryptoPricesRaw, cnyRate]);
 
-  // 37号标签同时记录“应收”和“已付”：普通自动分段与手工加息都属于待结/欠息，
+  // 37号标签同时记录“应收”和“已付”：普通自动分段与手工加息都属于待结，
   // 只有负数手工分段（37页的“计入已付”）才是52号订单可引用的已结利息。
-  // 因此绝不引用37页的净欠息（自动计息 + 手工调整后的余数）。
+  // 两者均不读取37号页面的净欠息/上欠，避免把已付后的余额错显示成任一独立字段。
+  const linked37PendingInterestCny = useMemo(() => {
+    if (!hasExternalPendingInterest) return null;
+    if (!Array.isArray(_linkedPendingInterestPeriods)) return null;
+    const pauseDate = (_pendingInterestTagConfig as any)?.pause_date || null;
+    const calcPeriodDays = (startDate: unknown, endDate: unknown) => {
+      const startText = String(startDate || '').slice(0, 10);
+      const beijingToday = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const endText = String(endDate || pauseDate || beijingToday).slice(0, 10);
+      const [sy, sm, sd] = startText.split('-').map(Number);
+      const [ey, em, ed] = endText.split('-').map(Number);
+      const start = new Date(sy, sm - 1, sd).getTime();
+      const end = new Date(ey, em - 1, ed).getTime();
+      return Number.isFinite(start) && Number.isFinite(end) && end >= start ? Math.floor((end - start) / 86_400_000) + 1 : 0;
+    };
+    return (_linkedPendingInterestPeriods as any[])
+      .filter((period: any) => period?.tag_name === linkedPendingInterestTagName)
+      .reduce((sum: number, period: any) => {
+        const principal = Number(period?.principal || 0);
+        const isManual = period?.is_manual === 1 || period?.is_manual === '1' || period?.is_manual === true;
+        if (isManual) return principal > 0 ? sum + principal : sum;
+        const annualRate = Number(period?.annual_rate || 0);
+        const days = calcPeriodDays(period?.start_date, period?.end_date || null);
+        return principal > 0 && annualRate > 0 && days > 0 ? sum + principal * (annualRate / 100 / 365) * days : sum;
+      }, 0);
+  }, [hasExternalPendingInterest, _linkedPendingInterestPeriods, _pendingInterestTagConfig, linkedPendingInterestTagName]);
   const linked37PaidInterestCny = useMemo(() => {
-    if (!hasExternalInterest) return null;
-    if (!Array.isArray(_linkedInterestPeriods)) return null;
-    return (_linkedInterestPeriods as any[])
+    if (!hasExternalPaidInterest) return null;
+    if (!Array.isArray(_linkedPaidInterestPeriods)) return null;
+    return (_linkedPaidInterestPeriods as any[])
       .filter((period: any) => {
         const isManual = period?.is_manual === 1 || period?.is_manual === '1' || period?.is_manual === true;
-        return period?.tag_name === linkedInterestTagName && isManual && Number(period?.principal || 0) < 0;
+        return period?.tag_name === linkedPaidInterestTagName && isManual && Number(period?.principal || 0) < 0;
       })
       .reduce((sum: number, period: any) => {
         const principal = Number(period?.principal || 0);
         return sum + Math.abs(principal);
       }, 0);
-  }, [hasExternalInterest, _linkedInterestPeriods, linkedInterestTagName]);
+  }, [hasExternalPaidInterest, _linkedPaidInterestPeriods, linkedPaidInterestTagName]);
 
   // 弹窗状态：优先使用父组件传入的 props，否则 fallback 到内部 state
   // （父组件提升状态可防止数据刷新导致弹窗自动关闭）
@@ -1343,11 +1383,17 @@ export function FunderOrderCard({
   const displayPaid = convertAccrued(totalPaid);
   const altAccrued = convertAlt(displayAccrued);
   const altPaid = convertAlt(displayPaid);
+  // 37号待结/已结是两个可独立启用的人民币口径来源；未启用的一边继续沿用52号订单自身计算。
+  const displayedAccruedValue = hasExternalPendingInterest ? linked37PendingInterestCny : displayAccrued;
+  const displayedAccruedUnit = hasExternalPendingInterest ? '元' : interestUnit;
+  const displayedAccruedAltValue = hasExternalPendingInterest && linked37PendingInterestCny !== null
+    ? linked37PendingInterestCny / cnyRate
+    : altAccrued;
   // 调用37号利息时，只以37号“计入已付”的手工调息累计作为本订单已结利息，固定人民币口径。
-  // 37号待结/欠息不进入这里；52号待结利息仍按本订单自身规则计算。两个已结来源只能二选一。
-  const displayedPaidValue = hasExternalInterest ? linked37PaidInterestCny : displayPaid;
-  const displayedPaidUnit = hasExternalInterest ? '元' : interestUnit;
-  const displayedPaidAltValue = hasExternalInterest && linked37PaidInterestCny !== null
+  // 37号待结/欠息不进入这里；待结引用是否启用由另一条独立配置决定。
+  const displayedPaidValue = hasExternalPaidInterest ? linked37PaidInterestCny : displayPaid;
+  const displayedPaidUnit = hasExternalPaidInterest ? '元' : interestUnit;
+  const displayedPaidAltValue = hasExternalPaidInterest && linked37PaidInterestCny !== null
     ? linked37PaidInterestCny / cnyRate
     : altPaid;
 
@@ -1543,11 +1589,15 @@ export function FunderOrderCard({
   // 内部担保和风险敞口统一以U计算。股票订单的本金/利息通常以人民币录入，
   // 必须先折为U，不能把“元”直接标为“u”。展示时再依所选单位反向换算。
   const stockRiskUsesCny = isStockOrder && baseCur === 'CNY';
-  const accruedForRisk = stockRiskUsesCny ? accrued / cnyRate : accrued;
+  const automaticAccruedForRisk = stockRiskUsesCny ? accrued / cnyRate : accrued;
+  const linkedPendingInterestForRisk = hasExternalPendingInterest
+    ? (linked37PendingInterestCny === null ? null : linked37PendingInterestCny / cnyRate)
+    : automaticAccruedForRisk;
+  const accruedForRisk = linkedPendingInterestForRisk ?? 0;
   const totalPaidForRisk = stockRiskUsesCny ? totalPaid / cnyRate : totalPaid;
   // 37号利息分段全部以人民币存储。风险敞口内部统一为U，避免把人民币直接当成U。
   // null 表示查询尚未返回，前端此时显示“加载中”而不是用0错误替代。
-  const linkedPaidInterestForRisk = hasExternalInterest
+  const linkedPaidInterestForRisk = hasExternalPaidInterest
     ? (linked37PaidInterestCny === null ? null : linked37PaidInterestCny / cnyRate)
     : totalPaidForRisk;
   const paidInterestForRisk = linkedPaidInterestForRisk ?? 0;
@@ -1566,6 +1616,7 @@ export function FunderOrderCard({
   const externalNonSharedGapU = usesLinked37RiskData
     && linkedCollateralValueU !== null
     && linkedFloatingPnlU !== null
+    && linkedPendingInterestForRisk !== null
     && linkedPaidInterestForRisk !== null
     ? linkedCollateralValueU + linkedFloatingPnlU - accruedForRisk + paidInterestForRisk - (principalLentOut ? interestBaseForRisk : 0)
     : null;
@@ -1597,6 +1648,11 @@ export function FunderOrderCard({
     if (hasLinkedTag && Number.isFinite(serverValue)) return serverValue;
     return floatPnlForRisk;
   })();
+  const sharedOrderPendingInterestU = (() => {
+    const serverCny = sharedOrderPoolDetail?.linked37PendingInterestCny;
+    if (serverCny !== null && serverCny !== undefined && Number.isFinite(Number(serverCny))) return Number(serverCny) / cnyRate;
+    return accruedForRisk;
+  })();
   const sharedOrderPaidInterestU = (() => {
     const serverCny = sharedOrderPoolDetail?.linked37PaidInterestCny;
     if (serverCny !== null && serverCny !== undefined && Number.isFinite(Number(serverCny))) return Number(serverCny) / cnyRate;
@@ -1606,8 +1662,8 @@ export function FunderOrderCard({
   // 共享只改变担保物可以在池内共同覆盖的总计判断，不能抹掉该订单本身的担保物。
   const sharedOrderExposure = sharedOrderCollateralValueU !== null
     ? (sharedOrderFloatingPnlU !== null
-      ? sharedOrderCollateralValueU + sharedOrderFloatingPnlU - accruedForRisk + sharedOrderPaidInterestU - (principalLentOut ? interestBaseForRisk : 0)
-      : sharedOrderCollateralValueU - accruedForRisk + sharedOrderPaidInterestU - (principalLentOut ? interestBaseForRisk : 0))
+      ? sharedOrderCollateralValueU + sharedOrderFloatingPnlU - sharedOrderPendingInterestU + sharedOrderPaidInterestU - (principalLentOut ? interestBaseForRisk : 0)
+      : sharedOrderCollateralValueU - sharedOrderPendingInterestU + sharedOrderPaidInterestU - (principalLentOut ? interestBaseForRisk : 0))
     : null;
   // 共享池中的37标签订单使用服务端回传的标签净值盈亏，不能再按股票行情价推算。
   // 同一标签的担保物与净值盈亏都只计一次；各订单的待结利息/借出本金仍分别计入。
@@ -1617,7 +1673,8 @@ export function FunderOrderCard({
     const totalCollateral = Number((sharedPoolInfo as any).totalCollateralValue);
     if (!Array.isArray(poolOrders) || !Number.isFinite(totalCollateral)) return null;
     const counted37Tags = new Set<string>();
-    const counted37InterestTags = new Set<string>();
+    const counted37PendingInterestTags = new Set<string>();
+    const counted37PaidInterestTags = new Set<string>();
     let remaining = totalCollateral;
     for (const poolOrder of poolOrders) {
       const interestCurrency = String(poolOrder.interestBaseCurrency || 'USDT').trim().toUpperCase();
@@ -1625,15 +1682,27 @@ export function FunderOrderCard({
       const principalU = isInterestCny ? Number(poolOrder.principal ?? 0) / cnyRate : Number(poolOrder.principal ?? 0);
       const accruedInterestRaw = Number(poolOrder.accruedInterest ?? ((Number(poolOrder.pendingInterest ?? 0)) + (Number(poolOrder.paidInterest ?? 0))));
       const paidInterestRaw = Number(poolOrder.paidInterest ?? 0);
+      const linkedPendingInterestCny = poolOrder.linked37PendingInterestCny;
       const linkedPaidInterestCny = poolOrder.linked37PaidInterestCny;
-      const accruedInterestU = isInterestCny ? accruedInterestRaw / cnyRate : accruedInterestRaw;
-      const linkedInterestTag = typeof poolOrder.linked37InterestTagName === 'string' ? poolOrder.linked37InterestTagName : '';
+      const linkedPendingInterestTag = typeof poolOrder.linked37PendingInterestTagName === 'string' ? poolOrder.linked37PendingInterestTagName : '';
+      const linkedPaidInterestTag = typeof poolOrder.linked37PaidInterestTagName === 'string'
+        ? poolOrder.linked37PaidInterestTagName
+        : (typeof poolOrder.linked37InterestTagName === 'string' ? poolOrder.linked37InterestTagName : '');
+      let accruedInterestU = isInterestCny ? accruedInterestRaw / cnyRate : accruedInterestRaw;
+      if (linkedPendingInterestCny !== null && linkedPendingInterestCny !== undefined) {
+        if (linkedPendingInterestTag && counted37PendingInterestTags.has(linkedPendingInterestTag)) {
+          accruedInterestU = 0;
+        } else {
+          if (linkedPendingInterestTag) counted37PendingInterestTags.add(linkedPendingInterestTag);
+          accruedInterestU = Number(linkedPendingInterestCny) / cnyRate;
+        }
+      }
       let paidInterestU = isInterestCny ? paidInterestRaw / cnyRate : paidInterestRaw;
       if (linkedPaidInterestCny !== null && linkedPaidInterestCny !== undefined) {
-        if (linkedInterestTag && counted37InterestTags.has(linkedInterestTag)) {
+        if (linkedPaidInterestTag && counted37PaidInterestTags.has(linkedPaidInterestTag)) {
           paidInterestU = 0;
         } else {
-          if (linkedInterestTag) counted37InterestTags.add(linkedInterestTag);
+          if (linkedPaidInterestTag) counted37PaidInterestTags.add(linkedPaidInterestTag);
           paidInterestU = Number(linkedPaidInterestCny) / cnyRate;
         }
       }
@@ -1683,7 +1752,8 @@ export function FunderOrderCard({
   const isSufficient = effectiveExposure >= 0;
   // 共享模式下缺口计算不再依赖 sharedPoolInfo，不需要显示「计算中...」
   // sharedPoolLoading 仅用于弹窗内共享池汇总区域的加载状态
-  const showExposureLoading = (hasExternalInterest && linkedPaidInterestForRisk === null)
+  const showExposureLoading = (hasExternalPendingInterest && linkedPendingInterestForRisk === null)
+    || (hasExternalPaidInterest && linkedPaidInterestForRisk === null)
     || (isSharedMode && sharedOrderExposure === null);
   // 每次共享订单行内余量变化时上报给父组件，供扩展风险视图读取。
   useEffect(() => {
@@ -2061,11 +2131,16 @@ export function FunderOrderCard({
         <div className="w-1/2 p-4 pl-3 flex flex-col">
           {show('accruedInterest') && <div className="flex items-center gap-1 mb-0.5 relative" style={{ height: '16px' }}>
             <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
+            {hasExternalPendingInterest && <span className="text-[9px] text-blue-500">37号引用</span>}
             {rateAbs && <span className="text-[10px] text-gray-400">(年化 {rateAbs}%)</span>}
             <button
               ref={tipBtnRef}
               type="button"
               onClick={() => {
+                if (hasExternalPendingInterest) {
+                  setLinkedInterestDetailKind('pending');
+                  return;
+                }
                 if (!showInterestTip && tipBtnRef.current) {
                   const rect = tipBtnRef.current.getBoundingClientRect();
                   setTipPos({ bottom: window.innerHeight - rect.top + 6, right: window.innerWidth - rect.right });
@@ -2074,6 +2149,7 @@ export function FunderOrderCard({
               }}
               className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
               style={{ backgroundColor: '#E5E7EB', color: '#6B7280' }}
+              title={hasExternalPendingInterest ? '查看37号账本待结利息明细' : '查看52号账本待结利息计算说明'}
             >?</button>
             {/* 已结利息历史浮层 */}
             {showInterestHistory && (
@@ -2137,15 +2213,23 @@ export function FunderOrderCard({
                 </div>
               </div>
             )}
-            {showLinkedInterestDetail && hasExternalInterest && _parsedCollateralSource && (
-              <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowLinkedInterestDetail(false)}>
+            {linkedInterestDetailKind && _parsedCollateralSource && (
+              <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setLinkedInterestDetailKind(null)}>
                 <div className="rounded-2xl mx-4 w-full max-w-sm overflow-y-auto" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
                   <div className="flex items-center justify-between px-5 pt-4 pb-2">
-                    <span className="text-sm font-bold" style={{ color: '#1A2340' }}>37号账本利息明细</span>
-                    <button onClick={() => setShowLinkedInterestDetail(false)} className="text-gray-400 text-lg leading-none">×</button>
+                    <span className="text-sm font-bold" style={{ color: '#1A2340' }}>37号账本{linkedInterestDetailKind === 'pending' ? '待结' : '已结'}利息明细</span>
+                    <button onClick={() => setLinkedInterestDetailKind(null)} className="text-gray-400 text-lg leading-none">×</button>
+                  </div>
+                  <div className="mx-4 mb-2 rounded-lg bg-blue-50 px-3 py-2 text-[11px] leading-4 text-blue-700">
+                    {linkedInterestDetailKind === 'pending'
+                      ? '本订单只引用自动计息与手工加息；“计入已付”的手工减息不从待结中扣除。'
+                      : '本订单只引用“计入已付”的手工减息绝对值；自动计息、手工加息与欠息/上欠均不计入已结。'}
                   </div>
                   <div className="px-2 pb-4">
-                    <RightInterestDetail ledgerId={_parsedCollateralSource.ledgerId} tagName={linkedInterestTagName} />
+                    <RightInterestDetail
+                      ledgerId={_parsedCollateralSource.ledgerId}
+                      tagName={linkedInterestDetailKind === 'pending' ? linkedPendingInterestTagName : linkedPaidInterestTagName}
+                    />
                   </div>
                 </div>
               </div>
@@ -2205,15 +2289,17 @@ export function FunderOrderCard({
           </div>}
           {show('accruedInterest') && (
           <div className="flex items-baseline gap-0.5 flex-wrap mb-1">
-                <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: displayAccrued === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                  {displayAccrued === 0 ? '' : (isNegRate ? '-' : '+')}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: displayedAccruedValue === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                  {displayedAccruedValue === null ? '加载中' : <>{displayedAccruedValue === 0 ? '' : (isNegRate ? '-' : '+')}{displayedAccruedValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>}
                 </span>
-                <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
+                <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{displayedAccruedUnit}</span>
                 {(() => {
                   const approxInterest = dc?.approxInterest ?? 'U';
-                  if (approxInterest === 'hidden') return null;
+                  if (approxInterest === 'hidden' || displayedAccruedValue === null) return null;
                   const showU = approxInterest === 'U';
-                  const val = showU ? (rateCur === 'CNY' ? displayAccrued / cnyRate : displayAccrued) : (rateCur === 'CNY' ? displayAccrued : displayAccrued * cnyRate);
+                  const val = hasExternalPendingInterest
+                    ? (showU ? displayedAccruedAltValue : displayedAccruedValue)
+                    : (showU ? (rateCur === 'CNY' ? displayAccrued / cnyRate : displayAccrued) : (rateCur === 'CNY' ? displayAccrued : displayAccrued * cnyRate));
                   const unit = showU ? 'u' : '元';
                   return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {unit}</span>;
                 })()}
@@ -2225,12 +2311,13 @@ export function FunderOrderCard({
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1">
                 <span className="whitespace-nowrap">已结利息</span>
+                {hasExternalPaidInterest && <span className="text-[9px] text-blue-500">37号引用</span>}
                 <button
                   type="button"
-                  onClick={() => hasExternalInterest ? setShowLinkedInterestDetail(true) : setShowInterestHistory(v => !v)}
+                  onClick={() => hasExternalPaidInterest ? setLinkedInterestDetailKind('paid') : setShowInterestHistory(v => !v)}
                   className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
-                  style={{ backgroundColor: (hasExternalInterest ? showLinkedInterestDetail : showInterestHistory) ? '#3B82F6' : '#DBEAFE', color: (hasExternalInterest ? showLinkedInterestDetail : showInterestHistory) ? '#fff' : '#3B82F6' }}
-                  title={hasExternalInterest ? '查看37号账本利息明细' : '已结利息记录'}
+                  style={{ backgroundColor: (hasExternalPaidInterest ? linkedInterestDetailKind === 'paid' : showInterestHistory) ? '#3B82F6' : '#DBEAFE', color: (hasExternalPaidInterest ? linkedInterestDetailKind === 'paid' : showInterestHistory) ? '#fff' : '#3B82F6' }}
+                  title={hasExternalPaidInterest ? '查看37号账本已结利息明细' : '已结利息记录'}
                 >!</button>
               </span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -2243,7 +2330,7 @@ export function FunderOrderCard({
               const approxPaid = (dc as any)?.approxPaid ?? 'U';
               if (approxPaid === 'hidden' || displayedPaidValue === null) return null;
               const showU = approxPaid === 'U';
-              const approxPaidVal = hasExternalInterest
+              const approxPaidVal = hasExternalPaidInterest
                 ? (showU ? displayedPaidAltValue : displayedPaidValue)
                 : (showU
                   ? (interestUnit === 'u' ? displayPaid : (displayPaid / cnyRate))
@@ -2588,9 +2675,15 @@ export function FunderOrderCard({
                                     const isCNY = oCoin === 'CNY';
                                     const oInterestBaseCurrency = String(o.interestBaseCurrency || 'USDT').trim().toUpperCase();
                                     const oInterestBaseIsCNY = ['CNY', 'RMB', '人民币'].includes(oInterestBaseCurrency);
-                                    const oAccruedInterestRaw = Number(o.accruedInterest ?? ((Number(o.pendingInterest ?? 0)) + (Number(o.paidInterest ?? 0))));
+                                    const oAutoAccruedInterestRaw = Number(o.accruedInterest ?? ((Number(o.pendingInterest ?? 0)) + (Number(o.paidInterest ?? 0))));
+                                    const oLinkedPendingInterestCny = o.linked37PendingInterestCny;
+                                    const oAccruedInterestRaw = oLinkedPendingInterestCny !== null && oLinkedPendingInterestCny !== undefined
+                                      ? Number(oLinkedPendingInterestCny)
+                                      : oAutoAccruedInterestRaw;
                                     const oPaidInterestRaw = Number(o.paidInterest ?? 0);
-                                    const oAccruedInterest = oInterestBaseIsCNY ? oAccruedInterestRaw / cnyRate : oAccruedInterestRaw;
+                                    const oAccruedInterest = oLinkedPendingInterestCny !== null && oLinkedPendingInterestCny !== undefined
+                                      ? oAccruedInterestRaw / cnyRate
+                                      : (oInterestBaseIsCNY ? oAccruedInterestRaw / cnyRate : oAccruedInterestRaw);
                                     const oLinkedPaidInterestCny = o.linked37PaidInterestCny;
                                     const oPaidInterest = oLinkedPaidInterestCny !== null && oLinkedPaidInterestCny !== undefined
                                       ? Number(oLinkedPaidInterestCny) / cnyRate
@@ -2857,8 +2950,8 @@ export function FunderOrderCard({
               {/* 保证金率：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100% */}
               {show('marginRate') && !hasExternalCollateral && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && (() => {
                 const effectiveCollateral = floatPnlForRisk !== null
-                  ? collateralValue + floatPnlForRisk - accruedForRisk + totalPaidForRisk
-                  : collateralValue - accruedForRisk + totalPaidForRisk;
+                  ? collateralValue + floatPnlForRisk - accruedForRisk + paidInterestForRisk
+                  : collateralValue - accruedForRisk + paidInterestForRisk;
                 const marginRatio = interestBaseForRisk > 0 ? effectiveCollateral / interestBaseForRisk : 0;
                 const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
                 const alertThreshold = (dc && typeof (dc as any).marginAlertThreshold === 'number') ? (dc as any).marginAlertThreshold as number : null;
@@ -3041,7 +3134,7 @@ export function FunderOrderCard({
           </button>}
           <button
             type="button"
-            disabled={hasExternalInterest}
+            disabled={hasExternalPaidInterest}
             onClick={() => {
               const isOpening = $showPaymentPanel !== order.id;
               $setShowPaymentPanel(isOpening ? order.id : null);
@@ -3055,11 +3148,11 @@ export function FunderOrderCard({
                 } catch { setInterestApproxConfig({ approxInterest: 'U', approxPaid: 'U' }); }
               }
             }}
-            title={hasExternalInterest ? '已引用37号账本利息，不能手工记录结息' : '记录手工结息'}
+            title={hasExternalPaidInterest ? '已引用37号账本已结利息，不能手工记录结息' : '记录手工结息'}
             className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0 disabled:cursor-not-allowed"
-            style={hasExternalInterest ? { backgroundColor: '#E5E7EB', color: '#9CA3AF' } : { backgroundColor: $showPaymentPanel === order.id ? '#1A2340' : '#EDEEF5', color: $showPaymentPanel === order.id ? '#fff' : '#4B5563' }}
+            style={hasExternalPaidInterest ? { backgroundColor: '#E5E7EB', color: '#9CA3AF' } : { backgroundColor: $showPaymentPanel === order.id ? '#1A2340' : '#EDEEF5', color: $showPaymentPanel === order.id ? '#fff' : '#4B5563' }}
           >
-            {hasExternalInterest ? '37号利息已引用' : ($showPaymentPanel === order.id ? '收起' : '记录结息')}
+            {hasExternalPaidInterest ? '37号已结已引用' : ($showPaymentPanel === order.id ? '收起' : '记录结息')}
           </button>
           {!isInvited && <button
             onClick={handleOpenCollateralPanel}
@@ -3585,7 +3678,7 @@ export function FunderOrderCard({
         style={{ backgroundColor: isParticipantVisual ? '#DCFCE7' : '#D0D6EE' }}
       >
 
-        {$showPaymentPanel === order.id && !hasExternalInterest && (
+        {$showPaymentPanel === order.id && !hasExternalPaidInterest && (
           <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
             <div className="flex gap-2 mb-1">
               <span className="text-xs text-gray-500 self-center">结息币种：</span>
@@ -3703,7 +3796,7 @@ export function FunderOrderCard({
         )}
 
         {/* 利息约等于快捷配置（结息面板展开时显示） */}
-        {$showPaymentPanel === order.id && !hasExternalInterest && (
+        {$showPaymentPanel === order.id && !hasExternalPaidInterest && (
           <div className="mt-2 mb-2 rounded-xl p-3 space-y-2" style={{ background: '#F0F4FF' }}>
             <div className="text-xs font-medium mb-1" style={{ color: '#3B82F6' }}>利息约等于显示</div>
             {([
@@ -3756,7 +3849,7 @@ export function FunderOrderCard({
           </div>
         )}
 
-        {$showPaymentPanel === order.id && !hasExternalInterest && Array.isArray($interestPayments) && $interestPayments.length > 0 && (
+        {$showPaymentPanel === order.id && !hasExternalPaidInterest && Array.isArray($interestPayments) && $interestPayments.length > 0 && (
           <div className="space-y-1.5">
             {$interestPayments.map((p: any) => (
               <div key={p.id}>

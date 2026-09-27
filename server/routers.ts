@@ -18532,7 +18532,8 @@ ${klinesSummary}
             if (p) livePrices[coin] = p;
           }
 
-          // 37号标签可以独立提供股票净值盈亏、担保物，旧订单无开关时兼容为两项都引用。
+          // 37号标签可以独立提供股票净值盈亏、担保物、待结利息、已结利息。
+          // 旧订单的 interestTagName 只兼容为已结利息，绝不误切换为待结引用。
           // 共享池按实际被启用的用途汇总，避免手工担保物被37号保证金覆盖或重复计入。
           const linked37Tags = Array.from(new Set(orders.flatMap((o: any) => {
             try {
@@ -18542,8 +18543,10 @@ ${klinesSummary}
               const legacyTagName = String(source.tagName);
               const floatingPnlTagName = source.floatingPnlTagName || (source.useFloatingPnl !== false ? legacyTagName : '');
               const collateralTagName = source.collateralTagName || (source.useCollateral !== false ? legacyTagName : '');
-              const interestTagName = source.interestTagName || (source.useInterest === true ? legacyTagName : '');
-              return [floatingPnlTagName, collateralTagName, interestTagName].filter(Boolean);
+              const pendingInterestTagName = source.pendingInterestTagName || (source.usePendingInterest === true ? legacyTagName : '');
+              const paidInterestTagName = source.paidInterestTagName || source.interestTagName
+                || ((source.usePaidInterest === true || source.useInterest === true) ? legacyTagName : '');
+              return [floatingPnlTagName, collateralTagName, pendingInterestTagName, paidInterestTagName].filter(Boolean);
             } catch { return []; }
           }))) as string[];
           const linkedTagConfigByName = new Map<string, any>();
@@ -18639,8 +18642,8 @@ ${klinesSummary}
             for (const row of (Array.isArray(latestBalances) ? latestBalances : [])) linkedTagBalanceByName.set(String(row.tag_name), Number(row.amount));
           }
 
-          // 37号利息页的分段均以人民币存储。共享池只读取其中“计入已付”的手工负数分段，
-          // 用于替代52号手工“已结利息”；自动分段、手工加息及37号净欠息都不属于已结利息。
+          // 37号利息页的分段均以人民币存储。待结只取自动分段和手工正数，
+          // 已结只取“计入已付”的手工负数绝对值；两者均不使用37号的净欠息/上欠。
           const linkedTagInterestPeriodsByName = new Map<string, any[]>();
           if (linked37Tags.length > 0) {
             try {
@@ -18662,7 +18665,7 @@ ${klinesSummary}
             }
           }
 
-          const parseLinked37Source = (raw: unknown): { floatingPnlTagName: string; floatingPnlCalculationMode: 'raw_net_pnl' | 'leveraged_net_pnl'; collateralTagName: string; interestTagName: string; useFloatingPnl: boolean; useCollateral: boolean; useInterest: boolean } | null => {
+          const parseLinked37Source = (raw: unknown): { floatingPnlTagName: string; floatingPnlCalculationMode: 'raw_net_pnl' | 'leveraged_net_pnl'; collateralTagName: string; pendingInterestTagName: string; paidInterestTagName: string; useFloatingPnl: boolean; useCollateral: boolean; usePendingInterest: boolean; usePaidInterest: boolean } | null => {
             try {
               const source = Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : (typeof raw === 'string' ? JSON.parse(raw) : raw);
               if (Number(source?.ledgerId) !== 37 || !source?.tagName) return null;
@@ -18674,15 +18677,20 @@ ${klinesSummary}
                 ? 'leveraged_net_pnl'
                 : 'raw_net_pnl';
               const collateralTagName = source.collateralTagName || (source.useCollateral !== false ? legacyTagName : '');
-              const interestTagName = source.interestTagName || (source.useInterest === true ? legacyTagName : '');
-              return (floatingPnlTagName || collateralTagName || interestTagName) ? {
+              const pendingInterestTagName = source.pendingInterestTagName || (source.usePendingInterest === true ? legacyTagName : '');
+              // 旧 useInterest/interestTagName 在此前只代表“已结引用”，必须保持此兼容口径。
+              const paidInterestTagName = source.paidInterestTagName || source.interestTagName
+                || ((source.usePaidInterest === true || source.useInterest === true) ? legacyTagName : '');
+              return (floatingPnlTagName || collateralTagName || pendingInterestTagName || paidInterestTagName) ? {
                 floatingPnlTagName,
                 floatingPnlCalculationMode,
                 collateralTagName,
-                interestTagName,
+                pendingInterestTagName,
+                paidInterestTagName,
                 useFloatingPnl: !!floatingPnlTagName,
                 useCollateral: !!collateralTagName,
-                useInterest: !!interestTagName,
+                usePendingInterest: !!pendingInterestTagName,
+                usePaidInterest: !!paidInterestTagName,
               } : null;
             } catch { return null; }
           };
@@ -18719,8 +18727,29 @@ ${klinesSummary}
                 : latestBalance! - initialAmount)
               : null;
             const floatingPnl = floatingPnlCny === null ? null : floatingPnlCny / usdtCnyRate;
-            const linkedPaidInterestCny = source.useInterest
-              ? (linkedTagInterestPeriodsByName.get(source.interestTagName) ?? []).reduce((sum: number, period: any) => {
+            const pendingInterestConfig = source.pendingInterestTagName ? linkedTagConfigByName.get(source.pendingInterestTagName) : null;
+            const calcInterestDays = (startDate: unknown, endDate: unknown) => {
+              const startText = String(startDate || '').slice(0, 10);
+              const beijingToday = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+              const endText = String(endDate || pendingInterestConfig?.pause_date || beijingToday).slice(0, 10);
+              const [sy, sm, sd] = startText.split('-').map(Number);
+              const [ey, em, ed] = endText.split('-').map(Number);
+              const start = new Date(sy, sm - 1, sd).getTime();
+              const end = new Date(ey, em - 1, ed).getTime();
+              return Number.isFinite(start) && Number.isFinite(end) && end >= start ? Math.floor((end - start) / 86_400_000) + 1 : 0;
+            };
+            const linkedPendingInterestCny = source.usePendingInterest
+              ? (linkedTagInterestPeriodsByName.get(source.pendingInterestTagName) ?? []).reduce((sum: number, period: any) => {
+                  const principal = Number(period.principal || 0);
+                  const isManual = period.is_manual === 1 || period.is_manual === '1' || period.is_manual === true;
+                  if (isManual) return principal > 0 ? sum + principal : sum;
+                  const annualRate = Number(period.annual_rate || 0);
+                  const days = calcInterestDays(period.start_date, period.end_date || null);
+                  return principal > 0 && annualRate > 0 && days > 0 ? sum + principal * (annualRate / 100 / 365) * days : sum;
+                }, 0)
+              : null;
+            const linkedPaidInterestCny = source.usePaidInterest
+              ? (linkedTagInterestPeriodsByName.get(source.paidInterestTagName) ?? []).reduce((sum: number, period: any) => {
                   const principal = Number(period.principal || 0);
                   const isManual = period.is_manual === 1 || period.is_manual === '1' || period.is_manual === true;
                   return isManual && principal < 0 ? sum + Math.abs(principal) : sum;
@@ -18730,13 +18759,16 @@ ${klinesSummary}
               floatingPnlTagName: source.floatingPnlTagName,
               floatingPnlCalculationMode: source.floatingPnlCalculationMode,
               collateralTagName: source.collateralTagName,
-              interestTagName: source.interestTagName,
+              pendingInterestTagName: source.pendingInterestTagName,
+              paidInterestTagName: source.paidInterestTagName,
               useFloatingPnl: source.useFloatingPnl,
               useCollateral: source.useCollateral,
-              useInterest: source.useInterest,
+              usePendingInterest: source.usePendingInterest,
+              usePaidInterest: source.usePaidInterest,
               collateralAssets: entries.map(entry => ({ coin: entry.coin, qty: entry.qty, note: entry.note })),
               collateralValue: allPricesKnown ? collateralValue : null,
               floatingPnl,
+              pendingInterestCny: linkedPendingInterestCny,
               paidInterestCny: linkedPaidInterestCny,
               riskExposure: allPricesKnown && floatingPnl !== null ? collateralValue + floatingPnl : null,
             };
@@ -18845,9 +18877,13 @@ ${klinesSummary}
               linked37PnlTagName: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnlTagName : null,
               linked37FloatingPnlCalculationMode: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnlCalculationMode : null,
               linked37FloatingPnl: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null,
-              // 已结利息也可独立引用37号利息页，金额固定为人民币，由前端统一折算为U。
-              linked37InterestTagName: linked37Collateral?.useInterest ? linked37Collateral.interestTagName : null,
-              linked37PaidInterestCny: linked37Collateral?.useInterest ? linked37Collateral.paidInterestCny : null,
+              // 待结、已结利息均可独立引用37号利息页，金额固定为人民币，由前端统一折算为U。
+              linked37PendingInterestTagName: linked37Collateral?.usePendingInterest ? linked37Collateral.pendingInterestTagName : null,
+              linked37PendingInterestCny: linked37Collateral?.usePendingInterest ? linked37Collateral.pendingInterestCny : null,
+              linked37PaidInterestTagName: linked37Collateral?.usePaidInterest ? linked37Collateral.paidInterestTagName : null,
+              // 旧字段保留给旧版前端兼容，始终等同新的已结标签。
+              linked37InterestTagName: linked37Collateral?.usePaidInterest ? linked37Collateral.paidInterestTagName : null,
+              linked37PaidInterestCny: linked37Collateral?.usePaidInterest ? linked37Collateral.paidInterestCny : null,
               linked37RiskExposure: linked37Collateral?.useCollateral && linked37Collateral?.useFloatingPnl ? linked37Collateral.riskExposure : null,
               shareMode: o.collateral_share_mode,
               principalLentOut,

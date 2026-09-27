@@ -139,7 +139,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     useCollateral?: boolean;
     useInterest?: boolean;
   } | null>(null);
-  const [interestTagName, setInterestTagName] = useState<string>(''); // 利息标签（与保证金标签联动）
+  // 37号利息分为两条独立引用：待结引用应计部分，已结引用“计入已付”的手工负数分段。
+  // 旧订单只保存 interestTagName，读取时一律兼容为“仅已结引用”。
+  const [pendingInterestTagName, setPendingInterestTagName] = useState<string>('');
+  const [paidInterestTagName, setPaidInterestTagName] = useState<string>('');
   const isUsing37Collateral = collateralSourceMode === 'external'
     && !!(collateralSource?.collateralTagName || (collateralSource?.tagName && collateralSource?.useCollateral !== false));
 
@@ -1119,7 +1122,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setCollateralShareMode('none');
     setCollateralSourceMode('manual');
     setCollateralSource(null);
-    setInterestTagName('');
+    setPendingInterestTagName('');
+    setPaidInterestTagName('');
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
     setEditingOrder(null);
     setShowDatePicker(false);
@@ -1264,7 +1268,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       if (hasWalletCollateralSource) {
         setCollateralSourceMode('wallet');
         setCollateralSource(null);
-        setInterestTagName('');
+        setPendingInterestTagName('');
+        setPaidInterestTagName('');
       } else if (cs) {
         const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
         if (parsed && parsed.ledgerId && parsed.tagName) {
@@ -1283,21 +1288,26 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             useFloatingPnl: !!floatingPnlTagName,
             useCollateral: !!collateralTagName,
           });
-          setInterestTagName(parsed.interestTagName || (parsed.useInterest === true ? parsed.tagName : ''));
+          setPendingInterestTagName(parsed.pendingInterestTagName || (parsed.usePendingInterest === true ? parsed.tagName : ''));
+          // 旧的 interestTagName/useInterest 在本次升级前只代表“已结利息”，不能误当成待结引用。
+          setPaidInterestTagName(parsed.paidInterestTagName || parsed.interestTagName || ((parsed.usePaidInterest === true || parsed.useInterest === true) ? parsed.tagName : ''));
         } else {
           setCollateralSourceMode('manual');
           setCollateralSource(null);
-          setInterestTagName('');
+          setPendingInterestTagName('');
+          setPaidInterestTagName('');
         }
       } else {
         setCollateralSourceMode('manual');
         setCollateralSource(null);
-        setInterestTagName('');
+        setPendingInterestTagName('');
+        setPaidInterestTagName('');
       }
     } catch {
       setCollateralSourceMode('manual');
       setCollateralSource(null);
-      setInterestTagName('');
+      setPendingInterestTagName('');
+      setPaidInterestTagName('');
     }
     // 加载字段展示配置
     try {
@@ -1510,7 +1520,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         if (collateralSourceMode !== 'external' || !collateralSource) return null;
         const floatingPnlTagName = collateralSource.floatingPnlTagName || (collateralSource.useFloatingPnl !== false ? collateralSource.tagName : '');
         const collateralTagName = collateralSource.collateralTagName || (collateralSource.useCollateral !== false ? collateralSource.tagName : '');
-        const legacyTagName = collateralTagName || floatingPnlTagName || interestTagName;
+        const legacyTagName = collateralTagName || floatingPnlTagName || pendingInterestTagName || paidInterestTagName;
         if (!legacyTagName) return null;
         return {
           ledgerId: 37,
@@ -1522,8 +1532,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           collateralTagName: collateralTagName || undefined,
           useFloatingPnl: !!floatingPnlTagName,
           useCollateral: !!collateralTagName,
-          interestTagName: interestTagName || undefined,
-          useInterest: !!interestTagName,
+          pendingInterestTagName: pendingInterestTagName || undefined,
+          usePendingInterest: !!pendingInterestTagName,
+          paidInterestTagName: paidInterestTagName || undefined,
+          usePaidInterest: !!paidInterestTagName,
+          // 保留旧字段，以便未升级的只读卡片仍能把“已结”正确识别出来。
+          interestTagName: paidInterestTagName || undefined,
+          useInterest: !!paidInterestTagName,
         };
       })(),
       principalLentOut: formData.principalLentOut,
@@ -2904,34 +2919,58 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </select>
                   <div className="text-[11px] text-blue-500">可与盈亏标签不同；未选择时，下方手工担保货币区域可直接使用。</div>
                 </div>
-                <div className="space-y-1.5">
-                  <div className="text-xs font-medium text-blue-600">利息标签（37号账本）</div>
-                  <select
-                    value={interestTagName}
-                    onChange={e => {
-                      const tag = e.target.value;
-                      setInterestTagName(tag);
-                      // 利息标签完全独立；选中后订单模式以37号累计利息为“已结利息”，并锁定52号手工结息。
-                      if (tag) setCollateralSource(prev => prev || {
-                        ledgerId: 37, tagName: tag, floatingPnlTagName: '', collateralTagName: '', useFloatingPnl: false, useCollateral: false, useInterest: true,
-                      });
-                    }}
-                    className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 appearance-none bg-white"
-                  >
-                    <option value="">不引用37号利息（保留手工结息）</option>
-                    {(activeMarginTags as any[])?.map((t: any) => (
-                      <option key={t.tagName} value={t.tagName}>{t.tagName}{t.paused ? '（已暂停，可引用历史数据）' : ''}</option>
-                    ))}
-                  </select>
-                  <div className="text-[11px] text-blue-500">选中后，“已结利息”只读取37号标签中“计入已付”的手工调息合计，不读取待结/欠息；订单页尾的手工记录结息将锁定。</div>
+                <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/50 p-2.5">
+                  <div className="text-xs font-semibold text-blue-700">利息引用（37号账本，可分别选择）</div>
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-medium text-blue-600">待结利息引用</div>
+                    <select
+                      value={pendingInterestTagName}
+                      onChange={e => {
+                        const tag = e.target.value;
+                        setPendingInterestTagName(tag);
+                        if (tag) setCollateralSource(prev => prev || {
+                          ledgerId: 37, tagName: tag, floatingPnlTagName: '', collateralTagName: '', useFloatingPnl: false, useCollateral: false,
+                        });
+                      }}
+                      className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 appearance-none bg-white"
+                    >
+                      <option value="">不引用（按52号账本自动计算）</option>
+                      {(activeMarginTags as any[])?.map((t: any) => (
+                        <option key={t.tagName} value={t.tagName}>{t.tagName}{t.paused ? '（已暂停，可引用历史数据）' : ''}</option>
+                      ))}
+                    </select>
+                    <div className="text-[11px] leading-4 text-blue-500">引用37号的自动计息与“手工加息”合计；不扣除已付金额，因此不会误把“欠息/上欠”当作待结。</div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-medium text-blue-600">已结利息引用</div>
+                    <select
+                      value={paidInterestTagName}
+                      onChange={e => {
+                        const tag = e.target.value;
+                        setPaidInterestTagName(tag);
+                        if (tag) setCollateralSource(prev => prev || {
+                          ledgerId: 37, tagName: tag, floatingPnlTagName: '', collateralTagName: '', useFloatingPnl: false, useCollateral: false,
+                        });
+                      }}
+                      className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 appearance-none bg-white"
+                    >
+                      <option value="">不引用（保留52号手工结息）</option>
+                      {(activeMarginTags as any[])?.map((t: any) => (
+                        <option key={t.tagName} value={t.tagName}>{t.tagName}{t.paused ? '（已暂停，可引用历史数据）' : ''}</option>
+                      ))}
+                    </select>
+                    <div className="text-[11px] leading-4 text-blue-500">只读取37号标签中“计入已付”的手工减息累计；选中后，订单页尾的52号手工记录结息会锁定。</div>
+                  </div>
                 </div>
-                {(collateralSource?.floatingPnlTagName || collateralSource?.collateralTagName || interestTagName) && (
+                {(collateralSource?.floatingPnlTagName || collateralSource?.collateralTagName || pendingInterestTagName || paidInterestTagName) && (
                   <div className="text-xs text-blue-500 pt-0.5 leading-5">
                     {collateralSource?.floatingPnlTagName && <span>盈亏：{collateralSource.floatingPnlTagName}</span>}
-                    {collateralSource?.floatingPnlTagName && (collateralSource?.collateralTagName || interestTagName) && <span className="mx-1.5 text-blue-300">·</span>}
+                    {collateralSource?.floatingPnlTagName && (collateralSource?.collateralTagName || pendingInterestTagName || paidInterestTagName) && <span className="mx-1.5 text-blue-300">·</span>}
                     {collateralSource?.collateralTagName && <span>担保：{collateralSource.collateralTagName}</span>}
-                    {collateralSource?.collateralTagName && interestTagName && <span className="mx-1.5 text-blue-300">·</span>}
-                    {interestTagName && <span>利息：{interestTagName}</span>}
+                    {collateralSource?.collateralTagName && (pendingInterestTagName || paidInterestTagName) && <span className="mx-1.5 text-blue-300">·</span>}
+                    {pendingInterestTagName && <span>待结：{pendingInterestTagName}</span>}
+                    {pendingInterestTagName && paidInterestTagName && <span className="mx-1.5 text-blue-300">·</span>}
+                    {paidInterestTagName && <span>已结：{paidInterestTagName}</span>}
                   </div>
                 )}
               </div>
