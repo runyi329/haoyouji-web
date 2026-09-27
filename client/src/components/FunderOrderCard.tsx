@@ -804,7 +804,7 @@ export function FunderOrderCard({
         floatingPnlCalculationMode?: 'raw_net_pnl' | 'initial_minus_latest' | 'leveraged_net_pnl'; collateralTagName?: string;
         pendingInterestTagName?: string; paidInterestTagName?: string; interestTagName?: string;
         useFloatingPnl?: boolean; useCollateral?: boolean; usePendingInterest?: boolean; usePaidInterest?: boolean; useInterest?: boolean;
-        stockPnlSource?: 'manual_positions'; stockPnlCalculationMode?: 'position_cost' | 'total_capital'; stockTotalCapital?: string | number; stockCapitalCurrency?: 'CNY' | 'USD'; stockPnlCoefficient?: number; stockPositions?: Array<{ name?: string; symbol?: string; buyPrice?: string; sellPrice?: string; quantity?: string; initialPrice?: string; initialPriceDate?: string }>;
+        stockPnlSource?: 'manual_positions'; stockPnlCalculationMode?: 'position_cost' | 'total_capital'; stockTotalCapital?: string | number; stockCapitalCurrency?: 'CNY' | 'USD'; stockPnlCoefficient?: number; stockPositions?: Array<{ name?: string; symbol?: string; buyPrice?: string; sellPrice?: string; quantity?: string; latestPrice?: string; latestPriceDate?: string; latestPriceUpdatedAt?: string; initialPrice?: string; initialPriceDate?: string }>;
       };
     } catch {}
     return null;
@@ -844,8 +844,10 @@ export function FunderOrderCard({
         buyPrice: Number(position?.buyPrice),
         sellPrice: position?.sellPrice === '' || position?.sellPrice === null || position?.sellPrice === undefined ? null : Number(position.sellPrice),
         quantity: Number(position?.quantity),
-        initialPrice: Number(position?.initialPrice),
-        initialPriceDate: String(position?.initialPriceDate || ''),
+        // 兼容刚上线阶段已存的 initialPrice：仅作为没有盘尾快照前的首笔最新价兜底。
+        latestPrice: Number(position?.latestPrice ?? position?.initialPrice),
+        latestPriceDate: String(position?.latestPriceDate || position?.initialPriceDate || ''),
+        latestPriceUpdatedAt: String(position?.latestPriceUpdatedAt || ''),
       }))
       .filter((position) => /^[A-Z][A-Z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/.test(position.symbol))
       .filter((position) => (manualStockPnlCalculationMode === 'total_capital' || (Number.isFinite(position.buyPrice) && position.buyPrice > 0)) && (position.sellPrice === null || (Number.isFinite(position.sellPrice) && position.sellPrice > 0)) && Number.isFinite(position.quantity) && position.quantity > 0)
@@ -1320,12 +1322,17 @@ export function FunderOrderCard({
     const quotes = (manualStockCloseQuery.data as any)?.quotes ?? {};
     return manualStockPositions.map((position) => {
       const quote = quotes[position.symbol];
-      const currentPrice = Number(quote?.price);
-      const currency = String(quote?.currency || 'USD').toUpperCase() === 'CNY' ? 'CNY' : 'USD';
+      const snapshotPrice = Number(quote?.price);
+      const storedLatestPrice = Number(position.latestPrice);
+      // 新增当日先用选股时带入的最新价；有已保存盘尾快照后，总是以盘尾价覆盖。
+      const currentPrice = Number.isFinite(snapshotPrice) && snapshotPrice > 0
+        ? snapshotPrice
+        : (Number.isFinite(storedLatestPrice) && storedLatestPrice > 0 ? storedLatestPrice : null);
+      const currency = String(quote?.currency || 'CNY').toUpperCase() === 'CNY' ? 'CNY' : 'USD';
       // “账户初始总额度”模式只使用第三方盘尾价和持股数量，不允许单只卖出价改变整体市值口径。
       const valuationPrice = manualStockPnlCalculationMode === 'total_capital'
-        ? (Number.isFinite(currentPrice) && currentPrice > 0 ? currentPrice : null)
-        : position.sellPrice ?? (Number.isFinite(currentPrice) && currentPrice > 0 ? currentPrice : null);
+        ? currentPrice
+        : position.sellPrice ?? currentPrice;
       const marketValueCny = valuationPrice !== null
         ? valuationPrice * position.quantity * (currency === 'CNY' ? 1 : cnyRate)
         : null;
@@ -1334,13 +1341,14 @@ export function FunderOrderCard({
         : null;
       return {
         ...position,
-        currentPrice: Number.isFinite(currentPrice) && currentPrice > 0 ? currentPrice : null,
+        currentPrice,
         valuationPrice,
         currency,
         marketValueCny,
         pnlCny,
-        priceDate: String(quote?.priceDate || ''),
-        updatedAt: String(quote?.updatedAt || ''),
+        priceDate: String(quote?.priceDate || position.latestPriceDate || ''),
+        updatedAt: String(quote?.updatedAt || position.latestPriceUpdatedAt || ''),
+        isCloseSnapshot: Number.isFinite(snapshotPrice) && snapshotPrice > 0,
       };
     });
   }, [manualStockPositions, manualStockCloseQuery.data, cnyRate, manualStockPnlCalculationMode]);
@@ -1359,7 +1367,11 @@ export function FunderOrderCard({
       : null);
   const manualStockFloatPnlCny = manualStockRawFloatPnlCny === null
     ? null
-    : manualStockRawFloatPnlCny * manualStockPnlCoefficient;
+    // 账户总额度模式：先将所有股票的最新市值求和并折算，再乘系数，最后扣除账户初始总额度。
+    // 逐只买入价模式仍保持“原始盈亏合计 × 系数”的既有口径。
+    : manualStockPnlCalculationMode === 'total_capital'
+      ? (manualStockMarketValueCny! * manualStockPnlCoefficient) - (manualStockTotalCapitalCny ?? 0)
+      : manualStockRawFloatPnlCny * manualStockPnlCoefficient;
   const configuredStockFloatPnlCny = isManualStockPnlSource ? manualStockFloatPnlCny : externalStockFloatPnlCny;
   const isConfiguredStockPnlSource = isExternalStockPnlSource || isManualStockPnlSource;
   // 此值仅用于订单模式“浮动盈亏”一行及担保缺口；手工组合使用每天盘尾快照。
@@ -2198,7 +2210,7 @@ export function FunderOrderCard({
                   </div>
                   <div className="mx-4 mb-3 rounded-lg bg-blue-50 px-3 py-2 text-[11px] leading-4 text-blue-700">
                     {manualStockPnlCalculationMode === 'total_capital'
-                      ? `每日盘尾 15:05 固定更新。盘尾持仓市值合计 − 账户初始总额度 = 原始盈亏；最后乘计算系数 ${manualStockPnlCoefficient}。美元股票按当日系统汇率折算为人民币。`
+                      ? `新增股票时先带入一笔最新价；每日盘尾 15:05 固定以盘尾价更新。最新持仓市值合计 × 计算系数 ${manualStockPnlCoefficient} − 账户初始总额度 = 股票组合浮动盈亏。美元股票按当日系统汇率折算为人民币。`
                       : `每日盘尾 15:05 固定更新。未填卖出价：原始盈亏 =（盘尾价 − 买入价）× 股数；填写卖出价后按卖出价锁定计算。所有股票原始盈亏先合计，再乘计算系数 ${manualStockPnlCoefficient}。美元股票按当日系统汇率折算为人民币。`}
                   </div>
                   <div className="px-4 pb-4">
@@ -2208,31 +2220,30 @@ export function FunderOrderCard({
                           <span className="font-semibold text-sm" style={{ color: '#1A2340' }}>{position.name ? `${position.name} · ` : ''}{position.symbol}</span>
                           <span className="text-sm font-semibold tabular-nums" style={{ color: manualStockPnlCalculationMode === 'total_capital' ? '#1A2340' : (position.pnlCny ?? 0) >= 0 ? '#DC2626' : '#16A34A' }}>
                             {manualStockPnlCalculationMode === 'total_capital'
-                              ? (position.marketValueCny === null ? '等待盘尾价' : `市值 ${position.marketValueCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`)
+                              ? (position.marketValueCny === null ? '暂未取得最新价' : `市值 ${position.marketValueCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`)
                               : (position.pnlCny === null ? '等待盘尾价' : `${position.pnlCny >= 0 ? '+' : ''}${position.pnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`)}
                           </span>
                         </div>
                         <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
-                          <span>初始参考价：{Number.isFinite(position.initialPrice) && position.initialPrice > 0 ? `${position.initialPrice.toLocaleString()} 元` : '未记录'}</span>
-                          <span>初始价日期：{position.initialPriceDate || '未记录'}</span>
                           {manualStockPnlCalculationMode === 'position_cost' && <span>买入价：{position.buyPrice.toLocaleString()} {position.currency === 'CNY' ? '元' : 'USD'}</span>}
-                          <span>盘尾价：{position.currentPrice === null ? '待更新' : `${position.currentPrice.toLocaleString()} ${position.currency === 'CNY' ? '元' : 'USD'}`}</span>
+                          <span>{position.isCloseSnapshot ? '最新盘尾价' : '最新价'}：{position.currentPrice === null ? '暂未取得' : `${position.currentPrice.toLocaleString()} ${position.currency === 'CNY' ? '元' : 'USD'}`}</span>
                           {manualStockPnlCalculationMode === 'position_cost' && <>
                             <span>卖出价：{position.sellPrice === null ? '未填写' : `${position.sellPrice.toLocaleString()} ${position.currency === 'CNY' ? '元' : 'USD'}`}</span>
                             <span>{position.sellPrice === null ? '计算价：盘尾价' : `计算价：${position.valuationPrice?.toLocaleString()} ${position.currency === 'CNY' ? '元' : 'USD'}`}</span>
                           </>}
                           <span>股数：{position.quantity.toLocaleString()}</span>
-                          {manualStockPnlCalculationMode === 'total_capital' && <span>盘尾市值：{position.marketValueCny === null ? '待更新' : `${position.marketValueCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`}</span>}
-                          <span>更新于：{position.updatedAt ? new Date(position.updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '待首次盘尾更新'}</span>
+                          {manualStockPnlCalculationMode === 'total_capital' && <span>当前市值：{position.marketValueCny === null ? '暂未取得' : `${position.marketValueCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`}</span>}
+                          <span>{position.priceDate ? `价格日期：${position.priceDate}` : '价格日期：待获取'}</span>
+                          <span>更新于：{position.updatedAt ? new Date(position.updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : position.isCloseSnapshot ? '待下次盘尾更新' : '选股时最新价'}</span>
                         </div>
                       </div>
                     ))}
                     <div className="mt-1 space-y-2 border-t border-gray-100 pt-3 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">{manualStockPnlCalculationMode === 'total_capital' ? '盘尾持仓市值合计' : '原始盈亏合计'}</span>
+                        <span className="text-gray-400">{manualStockPnlCalculationMode === 'total_capital' ? '最新持仓市值合计' : '原始盈亏合计'}</span>
                         <span className="font-semibold tabular-nums" style={{ color: (manualStockRawFloatPnlCny ?? 0) >= 0 ? '#DC2626' : '#16A34A' }}>
                           {manualStockPnlCalculationMode === 'total_capital'
-                            ? (manualStockMarketValueCny === null ? '等待盘尾价' : `${manualStockMarketValueCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`)
+                            ? (manualStockMarketValueCny === null ? '暂未取得最新价' : `${manualStockMarketValueCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`)
                             : (manualStockRawFloatPnlCny === null ? '等待盘尾价' : `${manualStockRawFloatPnlCny >= 0 ? '+' : ''}${manualStockRawFloatPnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`)}
                         </span>
                       </div>
@@ -2242,22 +2253,14 @@ export function FunderOrderCard({
                           <span className="font-semibold tabular-nums text-gray-700">− {manualStockTotalCapital.toLocaleString(undefined, { maximumFractionDigits: 2 })} {manualStockCapitalCurrency === 'CNY' ? '元' : 'USD'}{manualStockCapitalCurrency === 'USD' && manualStockTotalCapitalCny !== null ? `（约 ${manualStockTotalCapitalCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元）` : ''}</span>
                         </div>
                       )}
-                      {manualStockPnlCalculationMode === 'total_capital' && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-400">原始盈亏合计</span>
-                          <span className="font-semibold tabular-nums" style={{ color: (manualStockRawFloatPnlCny ?? 0) >= 0 ? '#DC2626' : '#16A34A' }}>
-                            {manualStockRawFloatPnlCny === null ? '等待盘尾价' : `${manualStockRawFloatPnlCny >= 0 ? '+' : ''}${manualStockRawFloatPnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`}
-                          </span>
-                        </div>
-                      )}
                       <div className="flex items-center justify-between text-violet-600">
                         <span>计算系数</span>
                         <span className="font-semibold tabular-nums">× {manualStockPnlCoefficient}</span>
                       </div>
                       <div className="flex items-center justify-between pt-0.5">
-                        <span className="font-semibold text-gray-600">股票组合浮动盈亏</span>
+                        <span className="font-semibold text-gray-600">{manualStockPnlCalculationMode === 'total_capital' ? '市值合计 × 系数 − 初始总额度' : '股票组合浮动盈亏'}</span>
                         <span className="font-bold tabular-nums" style={{ color: (manualStockFloatPnlCny ?? 0) >= 0 ? '#DC2626' : '#16A34A' }}>
-                          {manualStockFloatPnlCny === null ? '等待盘尾价' : `${manualStockFloatPnlCny >= 0 ? '+' : ''}${manualStockFloatPnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`}
+                          {manualStockFloatPnlCny === null ? '暂未取得最新价' : `${manualStockFloatPnlCny >= 0 ? '+' : ''}${manualStockFloatPnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`}
                         </span>
                       </div>
                     </div>

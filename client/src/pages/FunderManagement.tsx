@@ -24,8 +24,10 @@ type ManualStockPosition = {
   buyPrice: string;
   sellPrice: string;
   quantity: string;
-  initialPrice?: string;
-  initialPriceDate?: string;
+  // 账户总额度模式用作首次计算兜底；每日 15:05 的盘尾快照会优先覆盖它。
+  latestPrice?: string;
+  latestPriceDate?: string;
+  latestPriceUpdatedAt?: string;
 };
 
 export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, financeOnly, onRecycleBinRef }: FunderManagementProps = {}) {
@@ -205,8 +207,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         buyPrice: manualStockPnlCalculationMode === 'total_capital' ? undefined : position.buyPrice.trim(),
         sellPrice: manualStockPnlCalculationMode === 'total_capital' ? undefined : sellPrice || undefined,
         quantity: position.quantity.trim(),
-        initialPrice: position.initialPrice && Number(position.initialPrice) > 0 ? position.initialPrice.trim() : undefined,
-        initialPriceDate: position.initialPriceDate || undefined,
+        latestPrice: position.latestPrice && Number(position.latestPrice) > 0 ? position.latestPrice.trim() : undefined,
+        latestPriceDate: position.latestPriceDate || undefined,
+        latestPriceUpdatedAt: position.latestPriceUpdatedAt || undefined,
       };
     })
     .filter((position) => /^[A-Z][A-Z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/.test(position.symbol))
@@ -241,7 +244,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     { enabled: formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions' && manualStockLookupRow !== null && manualStockLookupQuery.length >= 2, staleTime: 60_000 },
   );
   const manualStockLookupResults = ((manualStockLookupQueryResult.data as any)?.results ?? []) as Array<{
-    symbol: string; code: string; name: string; initialPrice?: number; initialPriceDate?: string;
+    symbol: string; code: string; name: string; latestPrice?: number; latestPriceDate?: string; latestPriceUpdatedAt?: string;
   }>;
   const updateManualStockLookupInput = useCallback((rowIndex: number, field: 'name' | 'symbol', value: string) => {
     setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === rowIndex
@@ -250,13 +253,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setManualStockLookupRow(rowIndex);
     setManualStockLookupInput(value);
   }, []);
-  const selectManualAshareStock = useCallback((rowIndex: number, suggestion: { symbol: string; name: string; initialPrice?: number; initialPriceDate?: string }) => {
+  const selectManualAshareStock = useCallback((rowIndex: number, suggestion: { symbol: string; name: string; latestPrice?: number; latestPriceDate?: string; latestPriceUpdatedAt?: string }) => {
     setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === rowIndex ? {
       ...item,
       name: suggestion.name,
       symbol: suggestion.symbol,
-      initialPrice: Number(suggestion.initialPrice) > 0 ? String(suggestion.initialPrice) : '',
-      initialPriceDate: suggestion.initialPriceDate || '',
+      latestPrice: Number(suggestion.latestPrice) > 0 ? String(suggestion.latestPrice) : '',
+      latestPriceDate: suggestion.latestPriceDate || '',
+      latestPriceUpdatedAt: suggestion.latestPriceUpdatedAt || '',
     } : item));
     setManualStockLookupRow(null);
     setManualStockLookupInput('');
@@ -1523,8 +1527,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               buyPrice: String(position?.buyPrice ?? ''),
               sellPrice: String(position?.sellPrice ?? ''),
               quantity: String(position?.quantity ?? ''),
-              initialPrice: position?.initialPrice === null || position?.initialPrice === undefined ? '' : String(position.initialPrice),
-              initialPriceDate: String(position?.initialPriceDate || ''),
+              // 兼容上一版刚保存过的「初始参考价」：作为首次最新价兜底读取，
+              // 但在账户总额度模式中不会再以初始价/初始日期方式展示。
+              latestPrice: position?.latestPrice ?? position?.initialPrice ?? '',
+              latestPriceDate: String(position?.latestPriceDate || position?.initialPriceDate || ''),
+              latestPriceUpdatedAt: String(position?.latestPriceUpdatedAt || ''),
             }))
           : [];
         setManualStockPositions(savedManualPositions);
@@ -3290,7 +3297,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           }
                           if (value === 'manual_positions') {
                             setCollateralSource(prev => prev ? { ...prev, floatingPnlTagName: '', useFloatingPnl: false } : prev);
-                            if (manualStockPositions.length === 0) setManualStockPositions([{ name: '', symbol: '', buyPrice: '', sellPrice: '', quantity: '', initialPrice: '', initialPriceDate: '' }]);
+                            if (manualStockPositions.length === 0) setManualStockPositions([{ name: '', symbol: '', buyPrice: '', sellPrice: '', quantity: '', latestPrice: '', latestPriceDate: '', latestPriceUpdatedAt: '' }]);
                           }
                         }}
                         className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
@@ -3350,7 +3357,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             aria-label="账户初始总额度币种"
                           ><option value="CNY">人民币</option><option value="USD">美元</option></select>
                           <p className={`col-span-2 text-[10px] leading-4 ${isManualStockTotalCapitalValid ? 'text-violet-600' : 'text-red-600'}`}>
-                            {isManualStockTotalCapitalValid ? '总额度只作为整体成本基准；每只股票只需录入名称、代码和当前持股数量。' : '请输入大于 0 的账户初始总额度'}
+                            {isManualStockTotalCapitalValid ? '总额度只作为整体成本基准；每只股票只需录入名称、代码和当前持股数量，选中时自动带入一笔最新价。' : '请输入大于 0 的账户初始总额度'}
                           </p>
                         </div>
                       )}
@@ -3370,7 +3377,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           />
                           <div className={`mt-1 text-[10px] leading-4 ${isManualStockPnlCoefficientValid ? 'text-violet-600' : 'text-red-600'}`}>
                             {isManualStockPnlCoefficientValid
-                              ? `总浮动盈亏 = 各股票原始盈亏合计 × ${normalizedManualStockPnlCoefficient}`
+                              ? manualStockPnlCalculationMode === 'total_capital'
+                                ? `总浮动盈亏 = 最新持仓市值合计 × ${normalizedManualStockPnlCoefficient} − 账户初始总额度`
+                                : `总浮动盈亏 = 各股票原始盈亏合计 × ${normalizedManualStockPnlCoefficient}`
                               : '请输入大于 0 且不超过 100000 的计算系数'}
                           </div>
                         </div>
@@ -3433,19 +3442,24 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           >×</button>
                           {(() => {
                             const quote = manualStockPreviewQuotes[position.symbol.trim().toUpperCase()];
-                            const unit = String(quote?.currency || 'USD').toUpperCase() === 'CNY' ? '元' : 'USD';
+                            const snapshotPrice = Number(quote?.price);
+                            const fallbackPrice = Number(position.latestPrice);
+                            const price = snapshotPrice > 0 ? snapshotPrice : (fallbackPrice > 0 ? fallbackPrice : null);
+                            const unit = String(quote?.currency || 'CNY').toUpperCase() === 'CNY' ? '元' : 'USD';
+                            const priceDate = String(quote?.priceDate || position.latestPriceDate || '');
+                            const updatedAt = String(quote?.updatedAt || position.latestPriceUpdatedAt || '');
+                            const isCloseSnapshot = snapshotPrice > 0;
                             return (
                               <div className={`col-span-2 flex min-w-0 items-center justify-between rounded-md bg-violet-50 px-2 py-1.5 text-[11px] text-violet-700 ${manualStockPnlCalculationMode === 'total_capital' ? 'sm:col-span-4' : 'sm:col-span-6'}`}>
-                                <span>{position.initialPrice && Number(position.initialPrice) > 0 ? `初始参考价 ¥${Number(position.initialPrice).toLocaleString()}` : '初始价待检索'}</span>
-                                <span>盘尾现在价</span>
-                                <span className="font-semibold tabular-nums">{Number(quote?.price) > 0 ? `${Number(quote?.price).toLocaleString()} ${unit}` : '等待每日盘尾更新'}</span>
-                                <span className="text-violet-400">{quote?.priceDate ? `更新于 ${quote.priceDate}` : ''}</span>
+                                <span>{isCloseSnapshot ? '最新盘尾价' : '最新价'}</span>
+                                <span className="font-semibold tabular-nums">{price === null ? '正在获取最新价' : `${price.toLocaleString()} ${unit}`}</span>
+                                <span className="text-violet-400">{priceDate ? `价格日期 ${priceDate}` : updatedAt ? `更新于 ${new Date(updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}` : '选择股票后自动带入'}</span>
                               </div>
                             );
                           })()}
                           {manualStockLookupRow === index && (
                             <div className={`col-span-2 rounded-md border border-violet-200 bg-white p-1.5 shadow-sm ${manualStockPnlCalculationMode === 'total_capital' ? 'sm:col-span-4' : 'sm:col-span-6'}`}>
-                              <div className="px-1 pb-1 text-[10px] text-violet-500">输入 A 股六码、名称或英文简写后，选择校验结果自动补全名称、代码和初始参考价</div>
+                              <div className="px-1 pb-1 text-[10px] text-violet-500">输入 A 股六码、名称或英文简写后，选择校验结果自动补全名称、代码和最新价；每日 15:05 再以盘尾价更新。</div>
                               {manualStockLookupQueryResult.isFetching && <div className="px-1 py-1.5 text-xs text-violet-500">正在检索 A 股…</div>}
                               {!manualStockLookupQueryResult.isFetching && manualStockLookupQuery.length >= 2 && manualStockLookupResults.length === 0 && <div className="px-1 py-1.5 text-xs text-slate-500">未找到可验证的沪深北 A 股，请检查名称、拼音或六码代码。</div>}
                               {manualStockLookupResults.map((suggestion) => (
@@ -3457,7 +3471,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 >
                                   <span className="min-w-0 truncate font-semibold text-violet-900">{suggestion.name}</span>
                                   <span className="shrink-0 font-mono text-violet-700">{suggestion.code}</span>
-                                  <span className="shrink-0 tabular-nums text-violet-600">{Number(suggestion.initialPrice) > 0 ? `初始 ¥${Number(suggestion.initialPrice).toLocaleString()}` : '初始价暂缺'}</span>
+                                  <span className="shrink-0 tabular-nums text-violet-600">{Number(suggestion.latestPrice) > 0 ? `最新 ¥${Number(suggestion.latestPrice).toLocaleString()}` : '最新价暂缺'}</span>
                                 </button>
                               ))}
                             </div>
@@ -3468,7 +3482,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         <button
                           type="button"
                           disabled={manualStockPositions.length >= 20}
-                          onClick={() => setManualStockPositions(items => [...items, { name: '', symbol: '', buyPrice: '', sellPrice: '', quantity: '', initialPrice: '', initialPriceDate: '' }])}
+                          onClick={() => setManualStockPositions(items => [...items, { name: '', symbol: '', buyPrice: '', sellPrice: '', quantity: '', latestPrice: '', latestPriceDate: '', latestPriceUpdatedAt: '' }])}
                           className="rounded-md border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-700 disabled:opacity-50"
                         >+ 添加股票</button>
                         {editingOrder?.id && (
@@ -3482,7 +3496,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       </div>
                       <div className="text-[11px] leading-4 text-violet-600">
                         {manualStockPnlCalculationMode === 'total_capital'
-                          ? '字段依次为名称、代码和当前持股数量。原始盈亏 = Σ（每日盘尾价 × 股数）− 账户初始总额度；最终浮动盈亏 = 原始盈亏合计 × 计算系数。点击订单里浮动盈亏后的说明按钮可逐只查看盘尾价、持仓市值、更新时间与计算过程。'
+                          ? '字段依次为名称、代码和当前持股数量。选中股票时自动带入一笔最新价；每日 15:05 再由盘尾价覆盖。最终浮动盈亏 = Σ（最新价 × 股数）× 计算系数 − 账户初始总额度。点击订单里浮动盈亏后的说明按钮可逐只查看最新价、持仓市值、更新时间与计算过程。'
                           : '字段依次为名称、代码、买入价、卖出价（可选）和持股数量。未填卖出价时，原始盈亏 = Σ（每日盘尾价 − 买入价）× 股数；填入卖出价后按卖出价锁定计算。最终浮动盈亏 = 原始盈亏合计 × 计算系数；点击订单里浮动盈亏后的说明按钮可逐只查看价格、更新时间与计算过程。'}
                       </div>
                     </div>

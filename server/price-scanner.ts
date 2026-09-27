@@ -222,10 +222,10 @@ export type ManualAshareStockSuggestion = {
   /** 管理员识别用的六码股票代码。 */
   code: string;
   name: string;
-  /** 选中股票时的一次性初始参考价；后续订单计算只使用每日盘尾快照。 */
-  initialPrice?: number;
-  initialPriceDate?: string;
-  initialPriceUpdatedAt?: string;
+  /** 选中股票时写入一笔最新价；随后由每日 15:05 的盘尾快照覆盖。 */
+  latestPrice?: number;
+  latestPriceDate?: string;
+  latestPriceUpdatedAt?: string;
 };
 
 /**
@@ -280,7 +280,7 @@ function expectedAshareSuffix(code: string): 'SH' | 'SZ' | 'BJ' | null {
 
 /**
  * A 股检索可按六码、中文名称或拼音简称匹配；只接受可校验的沪深北代码。
- * 选中时获取一次初始参考价，订单保存后由每日盘尾快照接管，不会产生盘中轮询。
+ * 选中时获取一笔最新价，订单保存后由每日 15:05 盘尾快照接管，不会产生盘中轮询。
  */
 export async function searchManualAshareStocks(query: string): Promise<ManualAshareStockSuggestion[]> {
   const normalizedQuery = String(query || '').trim();
@@ -293,7 +293,7 @@ export async function searchManualAshareStocks(query: string): Promise<ManualAsh
     if (!response.ok) return [];
     const text = new TextDecoder('gbk').decode(await response.arrayBuffer());
     const payload = text.match(/suggestvalue="([^"]*)"/)?.[1] || '';
-    const deduped = new Map<string, Omit<ManualAshareStockSuggestion, 'initialPrice' | 'initialPriceDate' | 'initialPriceUpdatedAt'>>();
+    const deduped = new Map<string, Omit<ManualAshareStockSuggestion, 'latestPrice' | 'latestPriceDate' | 'latestPriceUpdatedAt'>>();
     for (const row of payload.split(';')) {
       const fields = row.split(',').map((item) => item.trim());
       const marketCode = fields[3] || fields[0] || '';
@@ -313,9 +313,9 @@ export async function searchManualAshareStocks(query: string): Promise<ManualAsh
       return {
         ...result,
         ...(quote ? {
-          initialPrice: quote.price,
-          initialPriceDate: quote.priceDate,
-          initialPriceUpdatedAt: quote.updatedAt,
+          latestPrice: quote.price,
+          latestPriceDate: quote.priceDate,
+          latestPriceUpdatedAt: quote.updatedAt,
         } : {}),
       };
     }));
