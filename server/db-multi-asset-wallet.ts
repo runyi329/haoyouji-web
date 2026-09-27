@@ -441,6 +441,162 @@ export async function adjustMultiAssetBalance(params: {
   }
 }
 
+const ADMIN_REVERSAL_MARKER = "[ADMIN_REVERSAL:";
+
+function buildAdminReversalRequestId(): string {
+  return `WREV${Date.now().toString(36).toUpperCase()}${randomInt(100_000, 999_999)}`;
+}
+
+function negateMultiAssetAmount(value: unknown): string {
+  const amount = normalizeSignedDecimal(String(value ?? ""));
+  return amount.startsWith("-") ? amount.slice(1) : `-${amount}`;
+}
+
+/**
+ * 撤回管理员手动调账。
+ *
+ * reverse 会新增一条反向的不可变流水；delete 是管理员明确选择的兼容操作，
+ * 只允许在尚未被撤回且可用余额足以抵扣时删除原手动流水。转账、担保冻结和解冻
+ * 均不经过本方法，避免破坏双边记账与订单担保审计。
+ */
+export async function revokeMultiAssetAdminAdjustment(params: {
+  entryId: number;
+  actorUserId: number;
+  mode: "reverse" | "delete";
+}): Promise<{ success: true; userId: number; assetCode: MultiAssetWalletAsset; amount: string; mode: "reverse" | "delete"; reversalEntryId?: number }> {
+  if (!Number.isInteger(params.entryId) || params.entryId <= 0) throw new Error("数字资产流水无效");
+  if (!Number.isInteger(params.actorUserId) || params.actorUserId <= 0) throw new Error("操作人无效");
+  await ensureMultiAssetWalletInfrastructure();
+  const conn = await getDbTransactionConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const transaction = conn as any;
+  try {
+    await transaction.beginTransaction();
+    const [entryRows] = await transaction.execute(
+      `SELECT id, user_id, asset_code, amount, event_type, note, source_ledger_id
+         FROM ai_wallet_asset_entries
+        WHERE id = ?
+        LIMIT 1 FOR UPDATE`,
+      [params.entryId],
+    );
+    const original = asRows(entryRows)[0];
+    if (!original) throw new Error("数字资产流水不存在");
+    if (String(original.event_type) !== "admin_adjustment") {
+      throw new Error("仅后台手动调账可撤回；转账和担保流水不可撤回");
+    }
+    const originalNote = String(original.note || "");
+    if (originalNote.startsWith(ADMIN_REVERSAL_MARKER)) {
+      throw new Error("该记录是撤回操作本身，不可再次撤回");
+    }
+
+    const reversalMarker = `${ADMIN_REVERSAL_MARKER}${params.entryId}]`;
+    const [reversalRows] = await transaction.execute(
+      `SELECT id FROM ai_wallet_asset_entries
+        WHERE user_id = ? AND note LIKE ?
+        LIMIT 1 FOR UPDATE`,
+      [Number(original.user_id), `${reversalMarker}%`],
+    );
+    if (asRows(reversalRows)[0]) {
+      throw new Error("该手动调账已撤回，不能重复处理");
+    }
+
+    const userId = Number(original.user_id);
+    const assetCode = normalizeMultiAssetWalletAsset(original.asset_code);
+    const amount = normalizeSignedDecimal(String(original.amount));
+    const restoringAmount = negateMultiAssetAmount(amount);
+    await ensureBalanceRow(transaction, userId, assetCode);
+    await getLockedBalance(transaction, userId, assetCode);
+    const [balanceResult] = await transaction.execute(
+      `UPDATE ai_wallet_asset_balances
+          SET available_balance = available_balance + CAST(? AS DECIMAL(36,18)), updated_at = NOW()
+        WHERE user_id = ? AND asset_code = ?
+          AND available_balance + CAST(? AS DECIMAL(36,18)) >= 0`,
+      [restoringAmount, userId, assetCode, restoringAmount],
+    );
+    if (Number((balanceResult as any).affectedRows || 0) !== 1) {
+      throw new Error("可用余额不足以撤回该笔调账；已冻结或已转出的资产不能直接撤回");
+    }
+    const balanceRow = await getLockedBalance(transaction, userId, assetCode);
+
+    let reversalEntryId: number | undefined;
+    if (params.mode === "reverse") {
+      const [insertResult] = await transaction.execute(
+        `INSERT INTO ai_wallet_asset_entries
+          (entry_no, request_id, user_id, asset_code, amount, balance_after, event_type, note, source_ledger_id, actor_user_id)
+         VALUES (?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), ?, 'admin_adjustment', ?, ?, ?)`,
+        [
+          buildEntryNo(),
+          buildAdminReversalRequestId(),
+          userId,
+          assetCode,
+          restoringAmount,
+          String(balanceRow.available_balance),
+          `${reversalMarker}撤回误操作（关联数字资产流水#${params.entryId}，操作人ID:${params.actorUserId}）`,
+          original.source_ledger_id == null ? null : Number(original.source_ledger_id),
+          params.actorUserId,
+        ],
+      );
+      reversalEntryId = Number((insertResult as any).insertId);
+    } else {
+      await transaction.execute(`DELETE FROM ai_wallet_asset_entries WHERE id = ? LIMIT 1`, [params.entryId]);
+    }
+
+    await transaction.commit();
+    return { success: true, userId, assetCode, amount, mode: params.mode, reversalEntryId };
+  } catch (error) {
+    try { await transaction.rollback(); } catch {}
+    throw error;
+  } finally {
+    transaction.release?.();
+  }
+}
+
+/** 仅允许编辑后台手动调账的展示备注，保留撤回关联标签以避免绕过重复撤回保护。 */
+export async function updateMultiAssetAdminAdjustmentNote(params: {
+  entryId: number;
+  actorUserId: number;
+  note: string;
+}): Promise<{ success: true }> {
+  if (!Number.isInteger(params.entryId) || params.entryId <= 0) throw new Error("数字资产流水无效");
+  if (!Number.isInteger(params.actorUserId) || params.actorUserId <= 0) throw new Error("操作人无效");
+  const replacement = String(params.note || "").trim().slice(0, 500) || "管理员手动调账（未填写备注）";
+  await ensureMultiAssetWalletInfrastructure();
+  const conn = await getDbTransactionConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const transaction = conn as any;
+  try {
+    await transaction.beginTransaction();
+    const [entryRows] = await transaction.execute(
+      `SELECT id, event_type, note
+         FROM ai_wallet_asset_entries
+        WHERE id = ?
+        LIMIT 1 FOR UPDATE`,
+      [params.entryId],
+    );
+    const entry = asRows(entryRows)[0];
+    if (!entry) throw new Error("数字资产流水不存在");
+    if (String(entry.event_type) !== "admin_adjustment") {
+      throw new Error("仅后台手动调账允许编辑备注；转账和担保流水不可修改");
+    }
+    const previousNote = String(entry.note || "");
+    if (previousNote.startsWith(ADMIN_REVERSAL_MARKER)) {
+      throw new Error("撤回流水属于审计记录，不允许编辑备注");
+    }
+    const preservedTags = previousNote.match(/^(\[[^\]]+\])+/)?.[0] || "";
+    await transaction.execute(
+      `UPDATE ai_wallet_asset_entries SET note = ?, actor_user_id = ? WHERE id = ?`,
+      [`${preservedTags}${replacement}`.trim(), params.actorUserId, params.entryId],
+    );
+    await transaction.commit();
+    return { success: true };
+  } catch (error) {
+    try { await transaction.rollback(); } catch {}
+    throw error;
+  } finally {
+    transaction.release?.();
+  }
+}
+
 function normalizeWalletDecimal(value: unknown): string {
   const input = String(value ?? "").trim();
   if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(input)) throw new Error("担保数量格式无效，最多支持 18 位小数");

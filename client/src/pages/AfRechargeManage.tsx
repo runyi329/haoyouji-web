@@ -294,11 +294,12 @@ export default function AfRechargeManage() {
     | { type: 'order'; orderId: number; amount: number }
     | { type: 'manual'; manualId: number; amount: number; currency: string }
     | { type: 'history'; historyId: number; amount: number; currency: string }
+    | { type: 'multi_asset'; entryId: number; amount: number; currency: string }
     | null
   >(null);
   // ===== 编辑备注相关状态 =====
   const [showNoteDialog, setShowNoteDialog] = useState(false);
-  const [noteTarget, setNoteTarget] = useState<{ historyId?: number; manualId?: number; currentNote: string } | null>(null);
+  const [noteTarget, setNoteTarget] = useState<{ historyId?: number; manualId?: number; multiAssetEntryId?: number; currentNote: string } | null>(null);
   const [noteContent, setNoteContent] = useState('');
   const [noteSelectedCommonNote, setNoteSelectedCommonNote] = useState<string | null>(null);
 
@@ -395,6 +396,7 @@ export default function AfRechargeManage() {
     .filter((entry) => entry.eventType !== "collateral_lock" && entry.eventType !== "collateral_release");
   const adjHistory = (adjHistoryQuery.data as any[]) ?? [];
   const refetchAdjHistory = adjHistoryQuery.refetch;
+  const refetchAdjMultiAssetHistory = adjMultiAssetHistoryQuery.refetch;
   const adjUserDateRange = getLedgerDateRange(adjUserFlowDatePreset, adjUserFlowCustomStart, adjUserFlowCustomEnd);
   const adjUserKeyword = adjUserFlowKeyword.trim().toLocaleLowerCase();
   const adjFilteredHistory = adjHistory.filter((record: any) => {
@@ -492,6 +494,32 @@ export default function AfRechargeManage() {
       refetchAdjGlobal();
     },
     onError: (e: any) => toast.error(e.message || "数字资产调账失败"),
+  });
+  const multiAssetRevokeMutation = mtrpc.adminUser.multiAssetWalletRevokeAdjustment.useMutation({
+    onSuccess: (_result: unknown, variables: { mode: "reverse" | "delete" }) => {
+      toast.success(variables.mode === "reverse" ? "撤回成功，已写入反向数字资产流水" : "已删除原数字资产流水并还原余额");
+      setShowRevokeDialog(false);
+      setRevokeTarget(null);
+      adjUtils.adminUser.list.invalidate();
+      adjUtils.adminUser.walletGlobalHistory.invalidate();
+      adjUtils.adminUser.multiAssetWalletHistory.invalidate();
+      refetchAdjMultiAssetHistory();
+      refetchAdjGlobal();
+    },
+    onError: (e: any) => toast.error(e.message || "数字资产撤回失败"),
+  });
+  const multiAssetUpdateNoteMutation = mtrpc.adminUser.multiAssetWalletUpdateAdjustmentNote.useMutation({
+    onSuccess: () => {
+      toast.success("数字资产备注已更新");
+      setShowNoteDialog(false);
+      setNoteTarget(null);
+      setNoteContent("");
+      adjUtils.adminUser.multiAssetWalletHistory.invalidate();
+      adjUtils.adminUser.walletGlobalHistory.invalidate();
+      refetchAdjMultiAssetHistory();
+      refetchAdjGlobal();
+    },
+    onError: (e: any) => toast.error(e.message || "数字资产备注更新失败"),
   });
   // 同步 adjSelectedUser 余额（调账后刷新）
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -671,11 +699,35 @@ export default function AfRechargeManage() {
       toast.info('临时预览仅用于查看界面，保存不会提交到生产数据。');
       return;
     }
-    updateNoteMutation.mutate({
-      historyId: noteTarget.historyId,
-      manualId: noteTarget.manualId,
-      note: noteContent,
+    if (noteTarget.multiAssetEntryId) {
+      multiAssetUpdateNoteMutation.mutate({ entryId: noteTarget.multiAssetEntryId, note: noteContent });
+    } else {
+      updateNoteMutation.mutate({
+        historyId: noteTarget.historyId,
+        manualId: noteTarget.manualId,
+        note: noteContent,
+      });
+    }
+  };
+  const isReversibleMultiAssetAdjustment = (entry: any) => (
+    String(entry?.eventType ?? entry?.type ?? "") === "admin_adjustment"
+    && !String(entry?.note ?? "").startsWith("[ADMIN_REVERSAL:")
+  );
+  const openMultiAssetRevoke = (entry: any) => {
+    setRevokeTarget({
+      type: "multi_asset",
+      entryId: Number(entry.id ?? entry.sourceId),
+      amount: Math.abs(Number(entry.amount ?? 0)),
+      currency: String(entry.assetCode ?? entry.currency ?? "").toUpperCase(),
     });
+    setShowRevokeDialog(true);
+  };
+  const openMultiAssetNoteEditor = (entry: any) => {
+    const currentNote = String(entry.note ?? "").replace(/^(\[[^\]]+\])+/, "").trim();
+    setNoteTarget({ multiAssetEntryId: Number(entry.id ?? entry.sourceId), currentNote });
+    setNoteContent(currentNote);
+    setNoteSelectedCommonNote(adjCommonNotes.includes(currentNote) ? currentNote : null);
+    setShowNoteDialog(true);
   };
   const clearAdjUser = () => { setAdjSelectedUser(null); setAdjSearch(""); };
 
@@ -1760,7 +1812,7 @@ export default function AfRechargeManage() {
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <p className="text-[13px] font-bold text-gray-900">数字资产流水</p>
-                      <p className="mt-0.5 text-[10px] text-gray-400">BTC、ETH、SOL、BNB 的独立不可变账本</p>
+                      <p className="mt-0.5 text-[10px] text-gray-400">独立不可变账本；后台手动调账可撤回或编辑备注</p>
                     </div>
                     <span className="text-[10px] text-violet-500">{adjVisibleMultiAssetHistory.length} 条</span>
                   </div>
@@ -1768,15 +1820,32 @@ export default function AfRechargeManage() {
                     {adjVisibleMultiAssetHistory.slice(0, 8).map((entry: any) => {
                       const amount = Number(entry.amount ?? 0);
                       const label = entry.eventType === "transfer_in" ? "站内转账收款" : entry.eventType === "transfer_out" ? "站内转账汇款" : "后台手动调账";
+                      const canManage = isReversibleMultiAssetAdjustment(entry);
                       return (
                         <div key={entry.id} className="flex items-center justify-between gap-3 py-2">
                           <div className="min-w-0">
                             <p className="truncate text-[11px] font-medium text-gray-700">{label} · {entry.assetCode}</p>
                             <p className="truncate text-[10px] text-gray-400">{String(entry.note || "—").replace(/\[.*?\]/g, "").trim()} · {new Date(entry.createdAt).toLocaleString("zh-CN")}</p>
                           </div>
-                          <div className={`shrink-0 text-right text-[12px] font-bold ${amount >= 0 ? "text-green-600" : "text-red-500"}`}>
-                            {amount >= 0 ? "+" : ""}{amount.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}
-                            <span className="ml-1 text-[9px] font-medium">{entry.assetCode}</span>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <div className={`text-right text-[12px] font-bold ${amount >= 0 ? "text-green-600" : "text-red-500"}`}>
+                              {amount >= 0 ? "+" : ""}{amount.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}
+                              <span className="ml-1 text-[9px] font-medium">{entry.assetCode}</span>
+                            </div>
+                            {canManage && (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => openMultiAssetRevoke(entry)}
+                                  className="rounded-full border border-purple-200 px-2 py-0.5 text-[10px] text-purple-500 hover:bg-purple-50"
+                                >撤回</button>
+                                <button
+                                  type="button"
+                                  onClick={() => openMultiAssetNoteEditor(entry)}
+                                  className="rounded-full border border-blue-200 px-2 py-0.5 text-[10px] text-blue-500 hover:bg-blue-50"
+                                >编辑备注</button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -2121,12 +2190,19 @@ export default function AfRechargeManage() {
                   const sourceId = Number(r.sourceId ?? r.id ?? 0);
                   const isInternalTransfer = String(r.note ?? '').includes('[站内转账]');
                   const isMultiAssetLedger = sourceType === 'multi_asset';
+                  const isMultiAssetAdminAdjustment = isMultiAssetLedger
+                    && String(r.type ?? '') === 'admin_adjustment'
+                    && !String(r.note ?? '').startsWith('[ADMIN_REVERSAL:');
                   const canRevoke = sourceId > 0
                     && !['order_buy', 'order_settlement', 'management_fee'].includes(String(r.type ?? ''))
                     && !String(r.note ?? '').includes('撤回误操作')
                     && !isInternalTransfer
-                    && !isMultiAssetLedger;
-                  const canEditNote = !isInternalTransfer && !isMultiAssetLedger && sourceId > 0 && (sourceType === 'manual' || sourceType === 'balance_history');
+                    && (!isMultiAssetLedger || isMultiAssetAdminAdjustment);
+                  const canEditNote = !isInternalTransfer && sourceId > 0 && (
+                    sourceType === 'manual'
+                    || sourceType === 'balance_history'
+                    || isMultiAssetAdminAdjustment
+                  );
                   const displayDigits = r.currency === 'CNY' ? 2 : (AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(String(r.currency ?? '').toUpperCase()) ? 8 : 4;
                   return (
                     <div key={r.id ?? i} className="py-2.5 border-b border-gray-50 last:border-0">
@@ -2153,7 +2229,9 @@ export default function AfRechargeManage() {
                           {canRevoke && (
                             <button
                               onClick={() => {
-                                if (sourceType === 'recharge') {
+                                if (isMultiAssetAdminAdjustment) {
+                                  openMultiAssetRevoke(r);
+                                } else if (sourceType === 'recharge') {
                                   setRevokeTarget({ type: 'order', orderId: sourceId, amount: Math.abs(Number(r.amount)) });
                                 } else if (sourceType === 'manual') {
                                   setRevokeTarget({ type: 'manual', manualId: sourceId, amount: Math.abs(Number(r.amount)), currency: r.currency });
@@ -2169,6 +2247,10 @@ export default function AfRechargeManage() {
                             <button
                               onClick={() => {
                                 const raw = String(r.note ?? '').replace(/\[.*?\]/g, '').trim();
+                                if (isMultiAssetAdminAdjustment) {
+                                  openMultiAssetNoteEditor(r);
+                                  return;
+                                }
                                 setNoteTarget(sourceType === 'manual'
                                   ? { manualId: sourceId, currentNote: raw }
                                   : { historyId: sourceId, currentNote: raw });
@@ -2495,7 +2577,7 @@ export default function AfRechargeManage() {
             <p className="text-sm text-gray-500 mb-1">
               {revokeTarget.type === 'order'
                 ? `订单金额：${revokeTarget.amount.toFixed(4)} USDT`
-                : `流水金额：${revokeTarget.amount.toFixed(revokeTarget.currency === 'CNY' ? 2 : 4)} ${revokeTarget.currency}`
+                : `流水金额：${revokeTarget.amount.toFixed(revokeTarget.currency === 'CNY' ? 2 : (revokeTarget.type === 'multi_asset' ? 8 : 4))} ${revokeTarget.currency}`
               }
             </p>
             <p className="text-xs text-gray-400 mb-4">请选择撤回方式：</p>
@@ -2506,11 +2588,13 @@ export default function AfRechargeManage() {
                     revokeMutation.mutate({ orderId: revokeTarget.orderId, mode: 'reverse' });
                   } else if (revokeTarget.type === 'manual') {
                     revokeManualMutation.mutate({ manualId: revokeTarget.manualId, mode: 'reverse' });
+                  } else if (revokeTarget.type === 'multi_asset') {
+                    multiAssetRevokeMutation.mutate({ entryId: revokeTarget.entryId, mode: 'reverse' });
                   } else {
                     revokeHistoryMutation.mutate({ historyId: revokeTarget.historyId, mode: 'reverse' });
                   }
                 }}
-                disabled={revokeMutation.isPending || revokeManualMutation.isPending || revokeHistoryMutation.isPending}
+                disabled={revokeMutation.isPending || revokeManualMutation.isPending || revokeHistoryMutation.isPending || multiAssetRevokeMutation.isPending}
                 className="w-full py-3 text-sm font-medium text-green-700 border border-green-200 rounded-xl bg-green-50 hover:bg-green-100 active:scale-[0.98] transition-all text-left px-4"
               >
                 <div className="font-semibold">✅ 写入反向记录（推荐）</div>
@@ -2522,11 +2606,13 @@ export default function AfRechargeManage() {
                     revokeMutation.mutate({ orderId: revokeTarget.orderId, mode: 'delete' });
                   } else if (revokeTarget.type === 'manual') {
                     revokeManualMutation.mutate({ manualId: revokeTarget.manualId, mode: 'delete' });
+                  } else if (revokeTarget.type === 'multi_asset') {
+                    multiAssetRevokeMutation.mutate({ entryId: revokeTarget.entryId, mode: 'delete' });
                   } else {
                     revokeHistoryMutation.mutate({ historyId: revokeTarget.historyId, mode: 'delete' });
                   }
                 }}
-                disabled={revokeMutation.isPending || revokeManualMutation.isPending || revokeHistoryMutation.isPending}
+                disabled={revokeMutation.isPending || revokeManualMutation.isPending || revokeHistoryMutation.isPending || multiAssetRevokeMutation.isPending}
                 className="w-full py-3 text-sm font-medium text-red-700 border border-red-200 rounded-xl bg-red-50 hover:bg-red-100 active:scale-[0.98] transition-all text-left px-4"
               >
                 <div className="font-semibold">❌ 直接删除原记录</div>
@@ -2558,9 +2644,9 @@ export default function AfRechargeManage() {
             <button
               type="button"
               onClick={saveNoteReplacement}
-              disabled={updateNoteMutation.isPending}
+              disabled={updateNoteMutation.isPending || multiAssetUpdateNoteMutation.isPending}
               className="min-w-14 text-right text-[14px] font-semibold text-blue-600 disabled:text-gray-300"
-            >{updateNoteMutation.isPending ? '保存中' : '保存'}</button>
+            >{updateNoteMutation.isPending || multiAssetUpdateNoteMutation.isPending ? '保存中' : '保存'}</button>
           </header>
           <main className="flex-1 overflow-y-auto px-4 py-5">
             <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
@@ -2639,9 +2725,9 @@ export default function AfRechargeManage() {
               <button
                 type="button"
                 onClick={saveNoteReplacement}
-                disabled={updateNoteMutation.isPending}
+                disabled={updateNoteMutation.isPending || multiAssetUpdateNoteMutation.isPending}
                 className="flex-1 rounded-xl bg-blue-500 py-3 text-[15px] font-semibold text-white disabled:opacity-50"
-              >{updateNoteMutation.isPending ? '保存中...' : '保存修改'}</button>
+              >{updateNoteMutation.isPending || multiAssetUpdateNoteMutation.isPending ? '保存中...' : '保存修改'}</button>
             </div>
           </footer>
         </div>

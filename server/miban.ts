@@ -22,7 +22,14 @@ import { getDb, getDbConnection } from "./db";
 import { sdk } from "./_core/sdk";
 import { ONE_YEAR_MS } from "@shared/const";
 import { getUserCnyBalance, adminAdjustCnyBalance, addUserBalance, getUserBalance } from "./db-recharge";
-import { adjustMultiAssetBalance, ensureMultiAssetWalletInfrastructure, getMultiAssetBalancesForUsers, getUserMultiAssetHistory } from "./db-multi-asset-wallet";
+import {
+  adjustMultiAssetBalance,
+  ensureMultiAssetWalletInfrastructure,
+  getMultiAssetBalancesForUsers,
+  getUserMultiAssetHistory,
+  revokeMultiAssetAdminAdjustment,
+  updateMultiAssetAdminAdjustmentNote,
+} from "./db-multi-asset-wallet";
 import { AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
 import { getUsdtCnyRate } from "./price-scanner";
 import { assertAiWalletOperationEnabled } from "./ai-wallet-router";
@@ -2458,6 +2465,33 @@ export const mibanAdminUserRouter = router({
     .input(z.object({ userId: z.number().int().positive(), limit: z.number().int().min(1).max(100).optional() }))
     .query(async ({ input }) => {
       return await getUserMultiAssetHistory(input.userId, input.limit ?? 100);
+    }),
+  // 数字资产采用独立不可变账本。仅允许撤回管理员手动调账；转账与担保冻结保持不可撤回。
+  multiAssetWalletRevokeAdjustment: mibanAdminProcedure
+    .input(z.object({ entryId: z.number().int().positive(), mode: z.enum(["reverse", "delete"]) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await revokeMultiAssetAdminAdjustment({
+          entryId: input.entryId,
+          actorUserId: ctx.user.id,
+          mode: input.mode,
+        });
+      } catch (error: any) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: error?.message || "数字资产撤回失败" });
+      }
+    }),
+  multiAssetWalletUpdateAdjustmentNote: mibanAdminProcedure
+    .input(z.object({ entryId: z.number().int().positive(), note: z.string().max(500) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await updateMultiAssetAdminAdjustmentNote({
+          entryId: input.entryId,
+          actorUserId: ctx.user.id,
+          note: input.note,
+        });
+      } catch (error: any) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: error?.message || "数字资产备注更新失败" });
+      }
     }),
   // 查询指定用户的调账历史（USDT + CNY 合并，最新50条）
   walletHistory: mibanAdminProcedure
