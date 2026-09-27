@@ -146,6 +146,34 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const isUsing37Collateral = collateralSourceMode === 'external'
     && !!(collateralSource?.collateralTagName || (collateralSource?.tagName && collateralSource?.useCollateral !== false));
 
+  // 同一份草稿同时供实时预览、底部订单保存和「保存37号引用」使用，
+  // 避免任一入口遗漏待结／已结的独立标签字段。
+  const linkedInterestSourceDraft = useMemo(() => {
+    if (collateralSourceMode !== 'external' || !collateralSource) return null;
+    const floatingPnlTagName = collateralSource.floatingPnlTagName
+      || (collateralSource.useFloatingPnl !== false ? collateralSource.tagName : '');
+    const collateralTagName = collateralSource.collateralTagName
+      || (collateralSource.useCollateral !== false ? collateralSource.tagName : '');
+    const legacyTagName = collateralTagName || floatingPnlTagName || pendingInterestTagName || paidInterestTagName;
+    if (!legacyTagName) return null;
+    return {
+      ledgerId: 37,
+      tagName: legacyTagName,
+      floatingPnlTagName: floatingPnlTagName || undefined,
+      floatingPnlCalculationMode: collateralSource.floatingPnlCalculationMode || 'raw_net_pnl',
+      collateralTagName: collateralTagName || undefined,
+      useFloatingPnl: !!floatingPnlTagName,
+      useCollateral: !!collateralTagName,
+      pendingInterestTagName: pendingInterestTagName || undefined,
+      usePendingInterest: !!pendingInterestTagName,
+      paidInterestTagName: paidInterestTagName || undefined,
+      usePaidInterest: !!paidInterestTagName,
+      // 兼容未升级卡片：旧字段始终只对应已结利息。
+      interestTagName: paidInterestTagName || undefined,
+      useInterest: !!paidInterestTagName,
+    };
+  }, [collateralSourceMode, collateralSource, pendingInterestTagName, paidInterestTagName]);
+
   // 字段展示配置（控制订单卡片各字段的显示/隐藏）
   const DEFAULT_DISPLAY_CONFIG: Record<string, boolean | string> = {
     buyPrice: true,
@@ -814,6 +842,54 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     },
     onError: (err) => toast.error(err.message),
   });
+  // 37号标签属于订单级只读引用配置，允许在编辑区直接保存，避免必须滚到页尾。
+  // 该动作只写 collateral_source，不改本金、担保物、利率或结息记录。
+  const saveLinkedInterestSourceMutation = trpc.ledger.financeUpdateOrder.useMutation({
+    onSuccess: () => {
+      toast.success('37号利息引用已保存');
+      refetchOrders();
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+    },
+    onError: (err) => toast.error(`37号利息引用保存失败：${err.message}`),
+  });
+  const saveParticipantLinkedInterestSourceMutation = trpc.ledger.funderUpdateParticipantOrder.useMutation({
+    onSuccess: () => {
+      toast.success('成员视图的37号利息引用已保存');
+      refetchOrders();
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+      trpcUtils.ledger.financeGetOrders.invalidate({ ledgerId });
+    },
+    onError: (err) => toast.error(`成员视图的37号利息引用保存失败：${err.message}`),
+  });
+  const saveLinkedInterestSource = () => {
+    if (!editingOrder?.id) {
+      toast.error('请先创建订单，再单独保存37号利息引用');
+      return;
+    }
+    if (!linkedInterestSourceDraft) {
+      toast.error('请至少选择一个37号引用标签');
+      return;
+    }
+    if (isSnapshotScopedEdit) {
+      const participantUserId = editingOrder.participantInfo?.userId ?? editingOrder.participantInfo?.user_id;
+      if (!participantUserId) {
+        toast.error('无法确定成员视图对应的用户');
+        return;
+      }
+      saveParticipantLinkedInterestSourceMutation.mutate({
+        orderId: Number(editingOrder.id),
+        ledgerId,
+        userId: Number(participantUserId),
+        snapshot: { collateral_source: JSON.stringify(linkedInterestSourceDraft) },
+      });
+      return;
+    }
+    saveLinkedInterestSourceMutation.mutate({
+      id: Number(editingOrder.id),
+      ledgerId,
+      collateralSource: linkedInterestSourceDraft,
+    });
+  };
   // 担保货币独立保存（编辑已有订单时，仅写回 collateral_assets，不动其他字段，不关闭表单）
   const saveCollateralMutation = trpc.ledger.financeUpdateOrder.useMutation({
     onSuccess: () => {
@@ -1516,31 +1592,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       personalHeaderLabel: formData.personalHeaderLabel.trim() || undefined,
       tags: formData.tags.length > 0 ? formData.tags : undefined,
       collateralShareMode: collateralShareMode !== 'none' ? collateralShareMode : undefined,
-      collateralSource: (() => {
-        if (collateralSourceMode !== 'external' || !collateralSource) return null;
-        const floatingPnlTagName = collateralSource.floatingPnlTagName || (collateralSource.useFloatingPnl !== false ? collateralSource.tagName : '');
-        const collateralTagName = collateralSource.collateralTagName || (collateralSource.useCollateral !== false ? collateralSource.tagName : '');
-        const legacyTagName = collateralTagName || floatingPnlTagName || pendingInterestTagName || paidInterestTagName;
-        if (!legacyTagName) return null;
-        return {
-          ledgerId: 37,
-          tagName: legacyTagName,
-          floatingPnlTagName: floatingPnlTagName || undefined,
-          // 未保存此字段的订单也会由读取端按今日最新余额 − 初始金额处理；
-          // 新保存的订单显式写入口径，避免后续规则调整影响历史展示。
-          floatingPnlCalculationMode: collateralSource.floatingPnlCalculationMode || 'raw_net_pnl',
-          collateralTagName: collateralTagName || undefined,
-          useFloatingPnl: !!floatingPnlTagName,
-          useCollateral: !!collateralTagName,
-          pendingInterestTagName: pendingInterestTagName || undefined,
-          usePendingInterest: !!pendingInterestTagName,
-          paidInterestTagName: paidInterestTagName || undefined,
-          usePaidInterest: !!paidInterestTagName,
-          // 保留旧字段，以便未升级的只读卡片仍能把“已结”正确识别出来。
-          interestTagName: paidInterestTagName || undefined,
-          useInterest: !!paidInterestTagName,
-        };
-      })(),
+      collateralSource: linkedInterestSourceDraft,
       principalLentOut: formData.principalLentOut,
       tradingFeeRate: ledgerId === 52 ? (Number.isFinite(Number(formData.tradingFeeRate)) ? Math.max(0, Number(formData.tradingFeeRate)) : 2) : undefined,
       tradingFeeStatus: ledgerId === 52 ? formData.tradingFeeStatus : undefined,
@@ -2973,6 +3025,19 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     {paidInterestTagName && <span>已结：{paidInterestTagName}</span>}
                   </div>
                 )}
+                {editingOrder?.id && (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-white px-2.5 py-2">
+                    <span className="text-[11px] leading-4 text-blue-600">标签修改可直接保存，不必滚到页尾。</span>
+                    <button
+                      type="button"
+                      onClick={saveLinkedInterestSource}
+                      disabled={!linkedInterestSourceDraft || saveLinkedInterestSourceMutation.isPending || saveParticipantLinkedInterestSourceMutation.isPending}
+                      className="shrink-0 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-blue-300"
+                    >
+                      {saveLinkedInterestSourceMutation.isPending || saveParticipantLinkedInterestSourceMutation.isPending ? '保存中…' : '保存37号引用'}
+                    </button>
+                  </div>
+                )}
               </div>
               )}
 
@@ -3714,6 +3779,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     buyQty: optionFormData.buyQty || null,
                   }) : null,
                   collateral_share_mode: collateralShareMode || 'none',
+                  // 预览使用与保存完全相同的引用草稿，选中标签后立即显示37标记与对应利息。
+                  collateral_source: linkedInterestSourceDraft ? JSON.stringify(linkedInterestSourceDraft) : null,
                   trade_direction: formData.tradeDirection || null,
                   display_config: JSON.stringify({
                     ...displayConfig,
@@ -3733,7 +3800,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 };
                 const rateValPreview = parseFloat(String(previewOrder.interest_rate_annual || '0'));
                 // 字段展示开关改变时强制重建预览卡片，避免卡片内部状态保留旧配置。
-                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${String(displayConfig.floatPnl)}`;
+                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${String(displayConfig.floatPnl)}-${JSON.stringify(linkedInterestSourceDraft)}`;
                 return (
                   <div>
                     <div className="flex items-center justify-between mb-2">

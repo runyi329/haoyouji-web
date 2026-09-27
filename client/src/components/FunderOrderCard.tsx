@@ -2146,13 +2146,13 @@ export function FunderOrderCard({
                 }
                 setShowInterestTip(v => !v);
               }}
-              className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
+              className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"
               style={{
                 backgroundColor: hasExternalPendingInterest ? '#3B82F6' : '#E5E7EB',
                 color: hasExternalPendingInterest ? '#fff' : '#6B7280',
               }}
               title={hasExternalPendingInterest ? '查看37号账本待结利息明细' : '查看52号账本待结利息计算说明'}
-            >{hasExternalPendingInterest ? '37' : '?'}</button>
+            >{hasExternalPendingInterest ? <span className="-mt-px text-[8px] leading-none tracking-[-0.08em]">37</span> : '?'}</button>
             {/* 已结利息历史浮层 */}
             {showInterestHistory && (
               <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestHistory(false)}>
@@ -2316,10 +2316,10 @@ export function FunderOrderCard({
                 <button
                   type="button"
                   onClick={() => hasExternalPaidInterest ? setLinkedInterestDetailKind('paid') : setShowInterestHistory(v => !v)}
-                  className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
+                  className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"
                   style={{ backgroundColor: hasExternalPaidInterest ? '#3B82F6' : (showInterestHistory ? '#3B82F6' : '#DBEAFE'), color: hasExternalPaidInterest || showInterestHistory ? '#fff' : '#3B82F6' }}
                   title={hasExternalPaidInterest ? '查看37号账本已结利息明细' : '已结利息记录'}
-                >{hasExternalPaidInterest ? '37' : '!'}</button>
+                >{hasExternalPaidInterest ? <span className="-mt-px text-[8px] leading-none tracking-[-0.08em]">37</span> : '!'}</button>
               </span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
                 {displayedPaidValue === null
