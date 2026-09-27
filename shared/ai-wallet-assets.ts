@@ -1,9 +1,9 @@
 /**
  * AI 智能钱包的全局资产目录。
  *
- * 说明：`funding` 资产已具备钱包余额、流水及资金通道；`market` 资产仅具备
- * 52 号账本现有的实时行情和仓位展示能力。后者不会因为被加入项目档案而创建
- * 可充值、可提现、可转账或可手动调账的钱包余额。
+ * 说明：`funding` 资产为历史兼容的 CNY / USDT 资金账户；52 号账本订单币种目录
+ * 中的 `market` 数字资产全部具备独立钱包余额、不可变流水、后台手动加减、站内
+ * 转账和钱包担保能力。链上充值、提现地址仍须按币种网络单独配置后才会开放。
  */
 export const AI_WALLET_FUNDING_ASSETS = ["CNY", "USDT"] as const;
 
@@ -17,11 +17,10 @@ export const AI_WALLET_MARKET_ASSETS = [
 ] as const;
 
 /**
- * 已启用“独立余额 + 手动加减 + 站内转账”的数字资产。
- * SUI 是在 BTC / ETH / SOL / BNB 之后新增的第五种独立资金账户；其余行情资产
- * 仍仅用于 52 号账本的行情和仓位展示，未启用资金账本。
+ * 52号账本融资付息订单下拉中的全部数字货币，均启用“独立余额 + 手动加减 +
+ * 站内转账 + 钱包担保”。股票、ETF、商品期货等非数字资产绝不混入数字币资金账本。
  */
-export const AI_WALLET_SETTLEMENT_ASSETS = ["BTC", "ETH", "SOL", "BNB", "SUI"] as const;
+export const AI_WALLET_SETTLEMENT_ASSETS = [...AI_WALLET_MARKET_ASSETS] as const;
 export type AiWalletSettlementAsset = (typeof AI_WALLET_SETTLEMENT_ASSETS)[number];
 
 export const AI_WALLET_ASSETS = [...AI_WALLET_FUNDING_ASSETS, ...AI_WALLET_MARKET_ASSETS] as const;
@@ -89,7 +88,7 @@ export const AI_WALLET_ASSET_CATALOG: readonly AiWalletAssetDefinition[] = AI_WA
         : "现有余额、充值订单、提现审核、站内转账与链网络能力已接入。")
       : ((AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(code)
         ? "多资产钱包：已启用独立余额、不可变流水、后台手动加减和站内转账；链上充值地址须在配置完成后另行开放。"
-        : "已接入 52 号账本的实时行情与仓位展示；加入项目档案只允许展示，暂不创建钱包余额或开放充值、提现、转账、手动调账。"),
+        : "已接入 52 号账本的实时行情与仓位展示；尚未纳入独立钱包资金账本。"),
   };
 });
 

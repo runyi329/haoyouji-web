@@ -34,22 +34,49 @@ jobs:
             const require = createRequire(import.meta.url);
             const COS = require('cos-nodejs-sdk-v5');
             const cos = new COS({ SecretId: secretId, SecretKey: secretKey });
-            const iconCodes = ['usdt', 'btc', 'eth', 'sol', 'bnb', 'sui'];
+            const iconCodes = [
+              'usdt', 'btc', 'eth', 'sol', 'bnb',
+              'hype', 'trump', 'pengu', 'xpl', 'wlfi',
+              'avax', 'doge', 'xlm', 'tia', 'eigen', 'fet', 'aave', 'sui',
+              'ondo', 'aster', 'ldo', 'ena', 'arkm', 'sei', 'plume', 'ada',
+              'zro', 'wld', 'link', 'pol', 'crv', 'pepe', 'b2',
+            ];
             const sourceBase = 'https://static.coinall.ltd/cdn/oksupport/asset/currency/icon';
             const publicBase = `https://${bucket}.cos.${region}.myqcloud.com`;
 
+            const sourceUrlFor = (code) => code === 'b2'
+              ? 'https://bsquared.network/favicon.ico'
+              : `${sourceBase}/${code}.png`;
+            const keyFor = (code) => `assets/crypto-icons/${code}.${code === 'b2' ? 'ico' : 'png'}`;
+
+            async function fetchIcon(code) {
+              let lastError = null;
+              for (let attempt = 1; attempt <= 4; attempt += 1) {
+                try {
+                  const response = await fetch(sourceUrlFor(code), {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HaoyoujiWalletAsset/1.0)' },
+                    signal: AbortSignal.timeout(45_000),
+                  });
+                  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                  return Buffer.from(await response.arrayBuffer());
+                } catch (error) {
+                  lastError = error;
+                  if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, attempt * 2_000));
+                }
+              }
+              throw new Error(`Unable to fetch ${code}: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+            }
+
             for (const code of iconCodes) {
-              const response = await fetch(`${sourceBase}/${code}.png`);
-              if (!response.ok) throw new Error(`Unable to fetch ${code}: ${response.status}`);
-              const bytes = Buffer.from(await response.arrayBuffer());
-              const key = `assets/crypto-icons/${code}.png`;
+              const bytes = await fetchIcon(code);
+              const key = keyFor(code);
               await new Promise((resolve, reject) => {
                 cos.putObject({
                   Bucket: bucket,
                   Region: region,
                   Key: key,
                   Body: bytes,
-                  ContentType: 'image/png',
+                  ContentType: code === 'b2' ? 'image/x-icon' : 'image/png',
                   CacheControl: 'public, max-age=31536000, immutable',
                 }, (error, result) => error ? reject(error) : resolve(result));
               });

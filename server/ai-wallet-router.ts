@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDbConnection } from "./db";
-import { AI_WALLET_ASSET_CATALOG, AI_WALLET_ASSETS, type AiWalletAsset } from "../shared/ai-wallet-assets";
+import { AI_WALLET_ASSET_CATALOG, AI_WALLET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS, type AiWalletAsset } from "../shared/ai-wallet-assets";
 
 const WALLET_ASSETS = AI_WALLET_ASSETS;
 const PROFILE_TEMPLATES = ["cny_simple", "stablecoin", "blockchain", "hybrid", "custom"] as const;
@@ -126,11 +126,25 @@ function normalizeProfile(row: WalletProfileRow): WalletProfile {
 }
 
 /**
- * SUI 是在 BTC / ETH / SOL / BNB 后新增的第五个独立数字资产账户。
- * 仅为已完整启用旧四币的 52 号账本补入 SUI，避免已有余额被项目可见资产筛选隐藏；
- * 不触碰余额、流水或任何其他项目档案，管理员之后仍可在配置中心自主移除 SUI。
+ * 将既有的五币 52 号账本档案扩展为全部订单数字币。
+ * 迁移只补全项目可见范围，不创建余额、不写资金流水，也不改变任何已有冻结或担保。
+ * 以独立迁移标记确保管理员日后从配置中主动隐藏某个币种时，不会被每次服务重启强行加回。
  */
-async function migrateLedger52SuiVisibility(conn: any): Promise<void> {
+async function migrateLedger52SettlementVisibility(conn: any): Promise<void> {
+  const migrationKey = "ledger52_settlement_assets_v2";
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS ai_wallet_profile_migrations (
+      migration_key VARCHAR(96) NOT NULL,
+      applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (migration_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI智能钱包项目档案一次性迁移标记'
+  `);
+  const [appliedRows] = await (conn as any).execute(
+    `SELECT migration_key FROM ai_wallet_profile_migrations WHERE migration_key = ? LIMIT 1`,
+    [migrationKey],
+  ) as any[];
+  if ((appliedRows as any[])?.[0]) return;
+
   const [rows] = await conn.execute(
     `SELECT id, visible_assets
        FROM ai_wallet_project_profiles
@@ -141,15 +155,22 @@ async function migrateLedger52SuiVisibility(conn: any): Promise<void> {
   if (!row) return;
 
   const visibleAssets = sanitizeAssets(row.visible_assets);
-  const legacySettlementAssets = ["BTC", "ETH", "SOL", "BNB"] as const;
+  const legacySettlementAssets = ["BTC", "ETH", "SOL", "BNB", "SUI"] as const;
   const hasCompleteLegacySettlement = legacySettlementAssets.every((asset) => visibleAssets.includes(asset));
-  if (!hasCompleteLegacySettlement || visibleAssets.includes("SUI")) return;
+  if (!hasCompleteLegacySettlement) return;
+  const missingSettlementAssets = AI_WALLET_SETTLEMENT_ASSETS.filter((asset) => !visibleAssets.includes(asset));
 
-  await conn.execute(
-    `UPDATE ai_wallet_project_profiles
-        SET visible_assets = ?, updated_at = NOW()
-      WHERE id = ?`,
-    [JSON.stringify([...visibleAssets, "SUI"]), Number(row.id)],
+  if (missingSettlementAssets.length > 0) {
+    await conn.execute(
+      `UPDATE ai_wallet_project_profiles
+          SET visible_assets = ?, updated_at = NOW()
+        WHERE id = ?`,
+      [JSON.stringify([...visibleAssets, ...missingSettlementAssets]), Number(row.id)],
+    );
+  }
+  await (conn as any).execute(
+    `INSERT IGNORE INTO ai_wallet_profile_migrations (migration_key) VALUES (?)`,
+    [migrationKey],
   );
 }
 
@@ -231,7 +252,7 @@ async function ensureWalletProjectProfileTable(): Promise<void> {
          VALUES ('site_version', 'version:proj_hzxm2t', '米伴', 'proj_hzxm2t', 'hybrid', 1, ?, 'CNY', 0, 0, 0, 0, 1, 0, 0, 'order_snapshot')`,
         [JSON.stringify(["CNY", "USDT"])]
       );
-      await migrateLedger52SuiVisibility(conn);
+      await migrateLedger52SettlementVisibility(conn);
     })().catch((error) => {
       walletProfileTableReady = null;
       throw error;
@@ -318,7 +339,7 @@ function getRatePolicyLabel(policy: WalletProfile["ratePolicy"]): string {
 function getRuntimeFacts(profile: WalletProfile): string[] {
   const baseline = [
     "所有用户余额仍由现有全局钱包余额与流水体系承载；项目档案不复制或拆分用户资产。",
-    "站内转账当前仅支持 CNY 与 USDT，服务端以原子双边记账、请求幂等与不可撤回审计处理。",
+    "站内转账支持 CNY、USDT 与52号账本全部订单数字币；服务端以原子双边记账、请求幂等与不可撤回审计处理。",
     "订单退款、成交结算回款、系统奖励或佣金入账属于已产生业务义务，不作为可关闭的新资金入口；暂停项目入口不能阻断这类应收款。",
   ];
   if (profile.targetKey === "ledger:52") {
@@ -515,7 +536,7 @@ export const aiWalletRouter = router({
             title: "统一钱包底座",
             lines: [
               "用户资产目前以全局钱包余额和流水为唯一口径，项目不复制独立余额。",
-              "当前已投入使用、可记账的资金资产为 CNY 与 USDT。52号账本的 32 种数字资产已进入全局行情与仓位展示库，但尚未创建独立钱包余额或资金通道。",
+              "当前已投入使用、可记账的资金资产为 CNY、USDT 与52号账本的全部32种订单数字币；每种数字币使用独立余额和不可变流水。",
               "全局流水、用户余额、手动调账、充值监控和站内转账在现有后台模块中统一核对。",
             ],
           },
@@ -524,7 +545,7 @@ export const aiWalletRouter = router({
             lines: [
               "USDT：现有充值订单、收款地址、链上扫描、人工确认、提现申请和审核链路已接入。",
               "CNY：现有后台调账与内部业务记账已接入；用户端法币充值/提现仍需建设正式申请、匹配和审核流程。",
-              "站内转账：CNY/USDT 及首批 BTC、ETH、SOL、BNB 采用双边原子记账、幂等键和不可撤回审计；需要纠正时应新建反向流水。",
+              "站内转账：CNY、USDT 与52号账本全部订单数字币均采用双边原子记账、幂等键和不可撤回审计；需要纠正时应新建反向流水。",
               "人工加减余额与新建业务订单扣款可由项目档案按项目暂停；退款、成交结算、奖励与佣金等既有资金义务不会被暂停，以避免用户资金冻结。",
             ],
           },

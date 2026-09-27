@@ -1613,7 +1613,7 @@ export default function AfRechargeManage() {
                 >
                   <option value="USDT">USDT · 泰达币（现有账户）</option>
                   <option value="CNY">CNY · 人民币（现有账户）</option>
-                  <optgroup label="首批独立数字资产账户">
+                  <optgroup label="52号账本数字资产账户">
                     {AI_WALLET_SETTLEMENT_ASSETS.map((assetCode) => {
                       const asset = AI_WALLET_ASSET_CATALOG.find((item) => item.code === assetCode);
                       return <option key={assetCode} value={assetCode}>{assetCode} · {asset?.name || assetCode}</option>;

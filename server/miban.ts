@@ -2428,7 +2428,7 @@ export const mibanAdminUserRouter = router({
       }
       return { ok: true };
     }),
-  // 首批 BTC / ETH / SOL / BNB 的手动加减。与历史 USDT / CNY 调账隔离，
+  // 52号账本订单数字币的手动加减。与历史 USDT / CNY 调账隔离，
   // 使用不可变多资产流水且服务端禁止把余额扣为负数。
   multiAssetWalletAdjust: mibanAdminProcedure
     .input(z.object({
