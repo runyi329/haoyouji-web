@@ -99,7 +99,7 @@ export function RightInterestDetail({ ledgerId, tagName }: Props) {
         <span className="text-xs text-gray-400">{periodDetails.length} 段</span>
         {pauseDate && (
           <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#DBEAFE', color: '#1D4ED8' }}>
-            已暂停 {pauseDate.slice(5)}
+            利息已暂停 {pauseDate.slice(5)}
           </span>
         )}
       </div>

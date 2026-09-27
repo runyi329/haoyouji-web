@@ -329,7 +329,7 @@ export default function InterestManagePage() {
                   <span className="text-xs tabular-nums text-gray-400">{tag.segmentCount} 段</span>
                   {tag.pauseDate && (
                     <span className="rounded px-1.5 py-0.5 text-xs font-medium text-blue-600 bg-blue-50">
-                      已暂停 {tag.pauseDate.slice(5)}
+                      利息已暂停 {tag.pauseDate.slice(5)}
                     </span>
                   )}
                 </div>
@@ -376,7 +376,7 @@ export default function InterestManagePage() {
                     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
                       <div className="flex items-center justify-between bg-gray-50 px-3 py-1.5 text-[11px]">
                         <span className="font-semibold tracking-wide text-gray-700">当前结算</span>
-                        <span className="text-gray-400">{tag.pauseDate ? `截至 ${tag.pauseDate.slice(5)}（已暂停）` : '截至今日'}</span>
+                        <span className="text-gray-400">{tag.pauseDate ? `截至 ${tag.pauseDate.slice(5)}（利息已暂停）` : '截至今日'}</span>
                       </div>
                       <div className="flex items-center justify-between border-t border-gray-200 px-3 py-2.5">
                         {tag.totalInterest > 0 ? (

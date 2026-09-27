@@ -578,11 +578,19 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     { enabled: ledgerId > 0 && !!sharedCollateralUserId && collateralShareMode === 'self', staleTime: 5000 }
   );
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
-  // 获取37号账本可引用的右侧保证金标签列表；暂停标签仍保留历史数据，允许在52号订单中引用。
+  // 获取37号账本可引用标签。利息暂停与保证金查询暂停是独立状态，均保留历史引用能力。
   const { data: activeMarginTags } = trpc.ledger.getActiveMarginTags.useQuery(
     { ledgerId: 37 },
     { enabled: collateralSourceMode === 'external', staleTime: 30000 }
   );
+  const get37ReferenceTagLabel = (tag: any) => {
+    const statuses: string[] = [];
+    if (tag?.interestPaused) statuses.push('利息已暂停');
+    if (tag?.marginPaused ?? tag?.paused) statuses.push('保证金查询已暂停');
+    return statuses.length > 0
+      ? `${tag?.tagName || ''}（${statuses.join('；')}，可引用历史数据）`
+      : String(tag?.tagName || '');
+  };
   const cnyRate = parseFloat((cnyRateData as any)?.money ?? "6.8") || 6.8;
   // 通用折算：任一币种数额 -> USDT 基准（CNY 用 cnyRate，USDT=1，其余按实时价 USDT/枚）
   const toUsdtBase = (val: number, cur: string): number | null => {
@@ -3117,7 +3125,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               {formData.assetType === 'stock' && collateralSourceMode === 'external' && (
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-3">
                 <div className="rounded-lg border border-blue-100 bg-white/70 px-2.5 py-2 text-[11px] leading-4 text-blue-600">
-                  下拉列表包含已暂停的37号标签；暂停只停止对应人员后续查询，既有盈亏、担保和利息数据仍可引用。
+                  下拉列表会分别标注“利息已暂停”和“保证金查询已暂停”；两者是37号账本的独立状态，暂停后既有盈亏、担保和利息数据仍可引用。
                 </div>
                 <div className="space-y-1.5">
                   <div className="text-xs font-medium text-blue-600">盈亏标签（37号账本）</div>
@@ -3144,7 +3152,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   >
                     <option value="">不读取37号浮动盈亏</option>
                     {(activeMarginTags as any[])?.map((t: any) => (
-                      <option key={t.tagName} value={t.tagName}>{t.tagName}{t.paused ? '（已暂停，可引用历史数据）' : ''}</option>
+                      <option key={t.tagName} value={t.tagName}>{get37ReferenceTagLabel(t)}</option>
                     ))}
                   </select>
                   {collateralSource?.floatingPnlTagName && (
@@ -3195,7 +3203,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   >
                     <option value="">不引用37号担保货币（下方手工录入）</option>
                     {(activeMarginTags as any[])?.map((t: any) => (
-                      <option key={t.tagName} value={t.tagName}>{t.tagName}{t.paused ? '（已暂停，可引用历史数据）' : ''}</option>
+                      <option key={t.tagName} value={t.tagName}>{get37ReferenceTagLabel(t)}</option>
                     ))}
                   </select>
                   <div className="text-[11px] text-blue-500">可与盈亏标签不同；未选择时，下方手工担保货币区域可直接使用。</div>
@@ -3217,7 +3225,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     >
                       <option value="">不引用（按52号账本自动计算）</option>
                       {(activeMarginTags as any[])?.map((t: any) => (
-                        <option key={t.tagName} value={t.tagName}>{t.tagName}{t.paused ? '（已暂停，可引用历史数据）' : ''}</option>
+                        <option key={t.tagName} value={t.tagName}>{get37ReferenceTagLabel(t)}</option>
                       ))}
                     </select>
                     <div className="text-[11px] leading-4 text-blue-500">引用37号的自动计息与“手工加息”合计；不扣除已付金额，因此不会误把“欠息/上欠”当作待结。</div>
@@ -3237,7 +3245,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     >
                       <option value="">不引用（保留52号手工结息）</option>
                       {(activeMarginTags as any[])?.map((t: any) => (
-                        <option key={t.tagName} value={t.tagName}>{t.tagName}{t.paused ? '（已暂停，可引用历史数据）' : ''}</option>
+                        <option key={t.tagName} value={t.tagName}>{get37ReferenceTagLabel(t)}</option>
                       ))}
                     </select>
                     <div className="text-[11px] leading-4 text-blue-500">只读取37号标签中“计入已付”的手工减息累计；选中后，订单页尾的52号手工记录结息会锁定。</div>

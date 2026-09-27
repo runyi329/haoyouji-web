@@ -12951,8 +12951,10 @@ ${klinesSummary}
         return list.length > 0 ? list[0] : null;
       }),
 
-    // 获取指定账本可供融资订单引用的右侧保证金标签列表。
-    // 暂停只停止对应人员后续查询，不代表历史标签数据失效；52号订单仍可引用其既有盈亏、担保和利息数据。
+    // 获取指定账本可供融资订单引用的标签列表。
+    // 利息暂停（pause_date）与保证金/余额查询暂停（margin_pause_date）是独立状态；
+    // 两者都返回，供52号订单明确标识，避免用一个笼统的“已暂停”造成歧义。
+    // 暂停不代表历史标签数据失效；52号订单仍可引用其既有盈亏、担保和利息数据。
     getActiveMarginTags: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
@@ -12962,14 +12964,19 @@ ${klinesSummary}
         if (!db) return [];
         try {
           const rows = await db.execute(
-            sql`SELECT tag_name, margin_pause_date
+            sql`SELECT tag_name, pause_date, margin_pause_date
                 FROM ledger_tag_config
                 WHERE ledger_id = ${input.ledgerId}
-                ORDER BY (margin_pause_date IS NOT NULL), tag_name`
+                ORDER BY (pause_date IS NOT NULL OR margin_pause_date IS NOT NULL), tag_name`
           );
           const list = (rows as any)[0] as any[];
           return list.map((r: any) => ({
             tagName: r.tag_name as string,
+            interestPaused: r.pause_date !== null && r.pause_date !== undefined,
+            interestPauseDate: r.pause_date ?? null,
+            marginPaused: r.margin_pause_date !== null && r.margin_pause_date !== undefined,
+            marginPauseDate: r.margin_pause_date ?? null,
+            // 保持旧字段，避免已有调用方把保证金查询暂停误认为活动状态。
             paused: r.margin_pause_date !== null && r.margin_pause_date !== undefined,
           }));
         } catch (e: any) {
