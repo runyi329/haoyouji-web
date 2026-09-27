@@ -2923,7 +2923,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       <option key={t.tagName} value={t.tagName}>{t.tagName}{t.paused ? '（已暂停，可引用历史数据）' : ''}</option>
                     ))}
                   </select>
-                  <div className="text-[11px] text-blue-500">选中后，“已结利息”读取37号利息页累计合计；订单页尾的手工记录结息将锁定。</div>
+                  <div className="text-[11px] text-blue-500">选中后，“已结利息”只读取37号标签中“计入已付”的手工调息合计，不读取待结/欠息；订单页尾的手工记录结息将锁定。</div>
                 </div>
                 {(collateralSource?.floatingPnlTagName || collateralSource?.collateralTagName || interestTagName) && (
                   <div className="text-xs text-blue-500 pt-0.5 leading-5">

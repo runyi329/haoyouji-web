@@ -820,11 +820,7 @@ export function FunderOrderCard({
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '' },
     { enabled: !!linkedCollateralTagName, staleTime: 3000 }
   );
-  // 与 RightInterestDetail 共用同一份标签分段：这里仅做总额计算，感叹号仍打开完整的只读明细。
-  const { data: _linkedInterestTagConfig } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedInterestTagName },
-    { enabled: hasExternalInterest, staleTime: 3000 }
-  );
+  // 与 RightInterestDetail 共用同一份标签分段；感叹号仍打开完整的只读明细。
   const { data: _linkedInterestPeriods } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedInterestTagName },
     { enabled: hasExternalInterest, staleTime: 3000 }
@@ -936,37 +932,22 @@ export function FunderOrderCard({
     return { entries, totalCny: allKnown ? totalCny : null, totalU: allKnown && rate > 0 ? totalCny / rate : null, currencyLabel };
   }, [hasExternalCollateral, _collateralTagConfig, _collateralTagSummary, _extCryptoPricesRaw, cnyRate]);
 
-  // 37号利息标签的口径必须与 RightInterestDetail 完全一致：
-  // 普通分段按本金 × 年化 ÷ 365 × 北京自然日，手工分段直接加减金额；暂停日作为未结束分段的截止日。
+  // 37号标签同时记录“应收”和“已付”：普通自动分段与手工加息都属于待结/欠息，
+  // 只有负数手工分段（37页的“计入已付”）才是52号订单可引用的已结利息。
+  // 因此绝不引用37页的净欠息（自动计息 + 手工调整后的余数）。
   const linked37PaidInterestCny = useMemo(() => {
     if (!hasExternalInterest) return null;
     if (!Array.isArray(_linkedInterestPeriods)) return null;
-    const pauseDate = (_linkedInterestTagConfig as any)?.pause_date ?? null;
-    const calcDays = (startDate: unknown, endDate?: unknown) => {
-      const startText = String(startDate || '').slice(0, 10);
-      if (!startText) return 0;
-      const [sy, sm, sd] = startText.split('-').map(Number);
-      if (!sy || !sm || !sd) return 0;
-      const startMs = new Date(sy, sm - 1, sd, 0, 0, 0, 0).getTime();
-      const endText = endDate ? String(endDate).slice(0, 10) : '';
-      const endMs = endText
-        ? (() => { const [ey, em, ed] = endText.split('-').map(Number); return new Date(ey, em - 1, ed, 0, 0, 0, 0).getTime(); })()
-        : (() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime(); })();
-      if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return 0;
-      return Math.floor((endMs - startMs) / 86_400_000) + 1;
-    };
     return (_linkedInterestPeriods as any[])
-      .filter((period: any) => period?.tag_name === linkedInterestTagName)
+      .filter((period: any) => {
+        const isManual = period?.is_manual === 1 || period?.is_manual === '1' || period?.is_manual === true;
+        return period?.tag_name === linkedInterestTagName && isManual && Number(period?.principal || 0) < 0;
+      })
       .reduce((sum: number, period: any) => {
         const principal = Number(period?.principal || 0);
-        const annualRate = Number(period?.annual_rate || 0);
-        const isManual = period?.is_manual === 1 || period?.is_manual === '1' || period?.is_manual === true;
-        if (isManual) return sum + principal;
-        const effectiveEndDate = (!period?.end_date && pauseDate) ? pauseDate : (period?.end_date || null);
-        const days = calcDays(period?.start_date, effectiveEndDate);
-        return sum + (principal > 0 && annualRate > 0 && days > 0 ? principal * (annualRate / 100 / 365) * days : 0);
+        return sum + Math.abs(principal);
       }, 0);
-  }, [hasExternalInterest, _linkedInterestPeriods, _linkedInterestTagConfig, linkedInterestTagName]);
+  }, [hasExternalInterest, _linkedInterestPeriods, linkedInterestTagName]);
 
   // 弹窗状态：优先使用父组件传入的 props，否则 fallback 到内部 state
   // （父组件提升状态可防止数据刷新导致弹窗自动关闭）
@@ -1362,8 +1343,8 @@ export function FunderOrderCard({
   const displayPaid = convertAccrued(totalPaid);
   const altAccrued = convertAlt(displayAccrued);
   const altPaid = convertAlt(displayPaid);
-  // 调用37号利息时，37号“累计利息合计”是本订单的已结利息，固定人民币口径。
-  // 不再混入52号手工结息记录，两个来源只能二选一。
+  // 调用37号利息时，只以37号“计入已付”的手工调息累计作为本订单已结利息，固定人民币口径。
+  // 37号待结/欠息不进入这里；52号待结利息仍按本订单自身规则计算。两个已结来源只能二选一。
   const displayedPaidValue = hasExternalInterest ? linked37PaidInterestCny : displayPaid;
   const displayedPaidUnit = hasExternalInterest ? '元' : interestUnit;
   const displayedPaidAltValue = hasExternalInterest && linked37PaidInterestCny !== null

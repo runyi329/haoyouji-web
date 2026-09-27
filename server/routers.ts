@@ -18639,7 +18639,8 @@ ${klinesSummary}
             for (const row of (Array.isArray(latestBalances) ? latestBalances : [])) linkedTagBalanceByName.set(String(row.tag_name), Number(row.amount));
           }
 
-          // 37号利息页的分段均以人民币存储。共享池只读取，用于替代52号手工“已结利息”。
+          // 37号利息页的分段均以人民币存储。共享池只读取其中“计入已付”的手工负数分段，
+          // 用于替代52号手工“已结利息”；自动分段、手工加息及37号净欠息都不属于已结利息。
           const linkedTagInterestPeriodsByName = new Map<string, any[]>();
           if (linked37Tags.length > 0) {
             try {
@@ -18718,25 +18719,11 @@ ${klinesSummary}
                 : latestBalance! - initialAmount)
               : null;
             const floatingPnl = floatingPnlCny === null ? null : floatingPnlCny / usdtCnyRate;
-            const interestConfig = source.interestTagName ? linkedTagConfigByName.get(source.interestTagName) : null;
-            const calcInterestDays = (startDate: unknown, endDate: unknown) => {
-              const startText = String(startDate || '').slice(0, 10);
-              const endText = String(endDate || new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)).slice(0, 10);
-              const [sy, sm, sd] = startText.split('-').map(Number);
-              const [ey, em, ed] = endText.split('-').map(Number);
-              const start = new Date(sy, sm - 1, sd).getTime();
-              const end = new Date(ey, em - 1, ed).getTime();
-              return Number.isFinite(start) && Number.isFinite(end) && end >= start ? Math.floor((end - start) / 86_400_000) + 1 : 0;
-            };
             const linkedPaidInterestCny = source.useInterest
               ? (linkedTagInterestPeriodsByName.get(source.interestTagName) ?? []).reduce((sum: number, period: any) => {
                   const principal = Number(period.principal || 0);
-                  const annualRate = Number(period.annual_rate || 0);
                   const isManual = period.is_manual === 1 || period.is_manual === '1' || period.is_manual === true;
-                  if (isManual) return sum + principal;
-                  const endDate = period.end_date || interestConfig?.pause_date || null;
-                  const days = calcInterestDays(period.start_date, endDate);
-                  return sum + (principal > 0 && annualRate > 0 && days > 0 ? principal * (annualRate / 100 / 365) * days : 0);
+                  return isManual && principal < 0 ? sum + Math.abs(principal) : sum;
                 }, 0)
               : null;
             return {
