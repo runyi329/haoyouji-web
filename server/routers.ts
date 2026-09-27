@@ -19013,7 +19013,7 @@ ${klinesSummary}
         ownerLabel: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['raw_net_pnl', 'leveraged_net_pnl', 'initial_minus_latest']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), pendingInterestTagName: z.string().optional(), paidInterestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional(), usePendingInterest: z.boolean().optional(), usePaidInterest: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['raw_net_pnl', 'leveraged_net_pnl', 'initial_minus_latest']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), pendingInterestTagName: z.string().optional(), paidInterestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional(), usePendingInterest: z.boolean().optional(), usePaidInterest: z.boolean().optional(), stockPnlSource: z.literal('manual_positions').optional(), stockPositions: z.array(z.object({ name: z.string().trim().max(48).optional(), symbol: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/), buyPrice: z.string().regex(/^\d+(?:\.\d+)?$/), sellPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(), quantity: z.string().regex(/^\d+(?:\.\d+)?$/) })).max(20).optional() }).nullable().optional(),
         principalLentOut: z.boolean().optional(),
         tradingFeeRate: z.number().min(0).max(100).optional(),
         tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
@@ -20268,7 +20268,7 @@ ${klinesSummary}
         interestRateCurrency: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['raw_net_pnl', 'leveraged_net_pnl', 'initial_minus_latest']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), pendingInterestTagName: z.string().optional(), paidInterestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional(), usePendingInterest: z.boolean().optional(), usePaidInterest: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['raw_net_pnl', 'leveraged_net_pnl', 'initial_minus_latest']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), pendingInterestTagName: z.string().optional(), paidInterestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional(), usePendingInterest: z.boolean().optional(), usePaidInterest: z.boolean().optional(), stockPnlSource: z.literal('manual_positions').optional(), stockPositions: z.array(z.object({ name: z.string().trim().max(48).optional(), symbol: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/), buyPrice: z.string().regex(/^\d+(?:\.\d+)?$/), sellPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(), quantity: z.string().regex(/^\d+(?:\.\d+)?$/) })).max(20).optional() }).nullable().optional(),
         principalLentOut: z.boolean().optional(),
         tradingFeeRate: z.number().min(0).max(100).optional(),
         tradingFeeStatus: z.enum(['unpaid', 'half_paid', 'paid']).optional(),
@@ -20423,7 +20423,7 @@ ${klinesSummary}
         tradeDirection: z.enum(['long', 'short']).nullable().optional(),
         orderFillStatus: z.enum(['pending', 'filled']).optional(),
         orderPerspective: z.enum(['self', 'other']).optional(),
-        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['raw_net_pnl', 'leveraged_net_pnl', 'initial_minus_latest']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), pendingInterestTagName: z.string().optional(), paidInterestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional(), usePendingInterest: z.boolean().optional(), usePaidInterest: z.boolean().optional() }).nullable().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['raw_net_pnl', 'leveraged_net_pnl', 'initial_minus_latest']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), pendingInterestTagName: z.string().optional(), paidInterestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional(), usePendingInterest: z.boolean().optional(), usePaidInterest: z.boolean().optional(), stockPnlSource: z.literal('manual_positions').optional(), stockPositions: z.array(z.object({ name: z.string().trim().max(48).optional(), symbol: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/), buyPrice: z.string().regex(/^\d+(?:\.\d+)?$/), sellPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(), quantity: z.string().regex(/^\d+(?:\.\d+)?$/) })).max(20).optional() }).nullable().optional(),
         optionInfo: z.object({
           premium: z.string().optional(),
           exerciseDate: z.string().optional(),
@@ -28242,6 +28242,18 @@ insights 数组每项包含：
     const usdtCnyRate = getUsdtCnyRate();
     return { prices, changes, opens, updatedAt, health: getMarketPriceHealth(), usdtCnyRate };
   }),
+
+  // 融资订单的手工股票组合：只读取每日盘尾已保存的收盘价快照。
+  // 前端不会在盘中触发第三方行情请求，也无法传入外部 URL 或行情密钥。
+  getManualStockCloseSnapshots: protectedProcedure
+    .input(z.object({
+      symbols: z.array(z.string().trim().min(1).max(20)).max(20),
+    }))
+    .query(async ({ input }) => {
+      const { getManualStockCloseSnapshots } = await import('./manual-stock-close-scheduler');
+      const quotes = await getManualStockCloseSnapshots(input.symbols);
+      return { quotes };
+    }),
 
   // 分红功能：获取某用户在某账本的分红汇总（按标签分组）
   getDividendSummary: protectedProcedure

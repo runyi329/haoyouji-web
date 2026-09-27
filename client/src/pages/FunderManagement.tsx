@@ -18,6 +18,14 @@ interface FunderManagementProps {
   onRecycleBinRef?: (openFn: () => void) => void;
 }
 
+type ManualStockPosition = {
+  name: string;
+  symbol: string;
+  buyPrice: string;
+  sellPrice: string;
+  quantity: string;
+};
+
 export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, financeOnly, onRecycleBinRef }: FunderManagementProps = {}) {
   const [, params] = useRoute("/ledger/:id/funder-management");
   const [, routeParams2] = useRoute("/ledger/:id/finance-unified");
@@ -139,6 +147,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     useCollateral?: boolean;
     useInterest?: boolean;
   } | null>(null);
+  // 股票浮动盈亏可独立选择：37号标签、管理员录入的股票组合，或不调用外部来源。
+  // 股票组合只保存代码、买入价和股数；当前价统一由每日盘尾快照提供。
+  const [stockPnlSourceMode, setStockPnlSourceMode] = useState<'none' | 'reference37' | 'manual_positions'>('none');
+  const [manualStockPositions, setManualStockPositions] = useState<ManualStockPosition[]>([]);
   // 37号利息分为两条独立引用：待结引用应计部分，已结引用“计入已付”的手工负数分段。
   // 旧订单只保存 interestTagName，读取时一律兼容为“仅已结引用”。
   const [pendingInterestTagName, setPendingInterestTagName] = useState<string>('');
@@ -173,6 +185,48 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       useInterest: !!paidInterestTagName,
     };
   }, [collateralSourceMode, collateralSource, pendingInterestTagName, paidInterestTagName]);
+
+  const validManualStockPositions = useMemo(() => manualStockPositions
+    .map((position) => {
+      const sellPrice = position.sellPrice.trim();
+      return {
+        name: position.name.trim().slice(0, 48),
+        symbol: position.symbol.trim().toUpperCase(),
+        buyPrice: position.buyPrice.trim(),
+        sellPrice: sellPrice || undefined,
+        quantity: position.quantity.trim(),
+      };
+    })
+    .filter((position) => /^[A-Z][A-Z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/.test(position.symbol))
+    .filter((position) => Number(position.buyPrice) > 0 && Number(position.quantity) > 0 && (!position.sellPrice || Number(position.sellPrice) > 0))
+    .slice(0, 20), [manualStockPositions]);
+  const manualStockPreviewSymbols = useMemo(
+    () => validManualStockPositions.map((position) => position.symbol),
+    [validManualStockPositions],
+  );
+  // 编辑页只读展示已保存的盘尾价；不会在盘中额外拉取实时股票行情。
+  const manualStockClosePreviewQuery = (trpc as any).getManualStockCloseSnapshots.useQuery(
+    { symbols: manualStockPreviewSymbols },
+    { enabled: formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions' && manualStockPreviewSymbols.length > 0, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false },
+  );
+  const manualStockPreviewQuotes = ((manualStockClosePreviewQuery.data as any)?.quotes ?? {}) as Record<string, { price?: number; currency?: string; priceDate?: string; updatedAt?: string }>;
+
+  // 与37号引用共用同一份 collateral_source JSON：允许37号担保/利息与手工股票浮盈并存，
+  // 但浮动盈亏本身只取一种来源，避免同一笔风险被重复计入。
+  const orderCollateralSourceDraft = useMemo(() => {
+    if (formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions' && validManualStockPositions.length > 0) {
+      return {
+        ...(linkedInterestSourceDraft || {}),
+        ledgerId: linkedInterestSourceDraft?.ledgerId ?? 0,
+        tagName: linkedInterestSourceDraft?.tagName || 'manual-stock-positions',
+        floatingPnlTagName: undefined,
+        useFloatingPnl: false,
+        stockPnlSource: 'manual_positions' as const,
+        stockPositions: validManualStockPositions,
+      };
+    }
+    return linkedInterestSourceDraft;
+  }, [formData.assetType, stockPnlSourceMode, validManualStockPositions, linkedInterestSourceDraft]);
 
   // 字段展示配置（控制订单卡片各字段的显示/隐藏）
   const DEFAULT_DISPLAY_CONFIG: Record<string, boolean | string> = {
@@ -846,7 +900,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   // 该动作只写 collateral_source，不改本金、担保物、利率或结息记录。
   const saveLinkedInterestSourceMutation = trpc.ledger.financeUpdateOrder.useMutation({
     onSuccess: () => {
-      toast.success('37号利息引用已保存');
+      toast.success('订单外部数据来源已保存');
       refetchOrders();
       trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
     },
@@ -854,7 +908,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   });
   const saveParticipantLinkedInterestSourceMutation = trpc.ledger.funderUpdateParticipantOrder.useMutation({
     onSuccess: () => {
-      toast.success('成员视图的37号利息引用已保存');
+      toast.success('成员视图的外部数据来源已保存');
       refetchOrders();
       trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
       trpcUtils.ledger.financeGetOrders.invalidate({ ledgerId });
@@ -888,6 +942,35 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       id: Number(editingOrder.id),
       ledgerId,
       collateralSource: linkedInterestSourceDraft,
+    });
+  };
+  const saveManualStockPnlSource = () => {
+    if (!editingOrder?.id) {
+      toast.error('请先创建订单，再单独保存股票组合');
+      return;
+    }
+    if (!orderCollateralSourceDraft || validManualStockPositions.length === 0) {
+      toast.error('请至少完整填写一只股票的代码、买入价和股数');
+      return;
+    }
+    if (isSnapshotScopedEdit) {
+      const participantUserId = editingOrder.participantInfo?.userId ?? editingOrder.participantInfo?.user_id;
+      if (!participantUserId) {
+        toast.error('无法确定成员视图对应的用户');
+        return;
+      }
+      saveParticipantLinkedInterestSourceMutation.mutate({
+        orderId: Number(editingOrder.id),
+        ledgerId,
+        userId: Number(participantUserId),
+        snapshot: { collateral_source: JSON.stringify(orderCollateralSourceDraft) },
+      });
+      return;
+    }
+    saveLinkedInterestSourceMutation.mutate({
+      id: Number(editingOrder.id),
+      ledgerId,
+      collateralSource: orderCollateralSourceDraft,
     });
   };
   // 担保货币独立保存（编辑已有订单时，仅写回 collateral_assets，不动其他字段，不关闭表单）
@@ -1200,6 +1283,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setCollateralSource(null);
     setPendingInterestTagName('');
     setPaidInterestTagName('');
+    setStockPnlSourceMode('none');
+    setManualStockPositions([]);
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
     setEditingOrder(null);
     setShowDatePicker(false);
@@ -1346,8 +1431,23 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         setCollateralSource(null);
         setPendingInterestTagName('');
         setPaidInterestTagName('');
+        setStockPnlSourceMode('none');
+        setManualStockPositions([]);
       } else if (cs) {
         const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
+        const savedManualPositions = parsed?.stockPnlSource === 'manual_positions' && Array.isArray(parsed?.stockPositions)
+          ? parsed.stockPositions.map((position: any) => ({
+              name: String(position?.name || '').trim(),
+              symbol: String(position?.symbol || '').trim().toUpperCase(),
+              buyPrice: String(position?.buyPrice ?? ''),
+              sellPrice: String(position?.sellPrice ?? ''),
+              quantity: String(position?.quantity ?? ''),
+            }))
+          : [];
+        setManualStockPositions(savedManualPositions);
+        setStockPnlSourceMode(savedManualPositions.length > 0
+          ? 'manual_positions'
+          : (parsed?.floatingPnlTagName || (parsed?.useFloatingPnl !== false && parsed?.tagName) ? 'reference37' : 'none'));
         if (parsed && parsed.ledgerId && parsed.tagName) {
           setCollateralSourceMode('external');
           const floatingPnlTagName = parsed.floatingPnlTagName || (parsed.useFloatingPnl !== false ? parsed.tagName : '');
@@ -1378,12 +1478,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         setCollateralSource(null);
         setPendingInterestTagName('');
         setPaidInterestTagName('');
+        setStockPnlSourceMode('none');
+        setManualStockPositions([]);
       }
     } catch {
       setCollateralSourceMode('manual');
       setCollateralSource(null);
       setPendingInterestTagName('');
       setPaidInterestTagName('');
+      setStockPnlSourceMode('none');
+      setManualStockPositions([]);
     }
     // 加载字段展示配置
     try {
@@ -1592,7 +1696,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       personalHeaderLabel: formData.personalHeaderLabel.trim() || undefined,
       tags: formData.tags.length > 0 ? formData.tags : undefined,
       collateralShareMode: collateralShareMode !== 'none' ? collateralShareMode : undefined,
-      collateralSource: linkedInterestSourceDraft,
+      collateralSource: orderCollateralSourceDraft,
       principalLentOut: formData.principalLentOut,
       tradingFeeRate: ledgerId === 52 ? (Number.isFinite(Number(formData.tradingFeeRate)) ? Math.max(0, Number(formData.tradingFeeRate)) : 2) : undefined,
       tradingFeeStatus: ledgerId === 52 ? formData.tradingFeeStatus : undefined,
@@ -2898,6 +3002,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     value={collateralSource?.floatingPnlTagName || ''}
                     onChange={e => {
                       const tag = e.target.value;
+                      setStockPnlSourceMode(tag ? 'reference37' : 'none');
+                      if (tag) setManualStockPositions([]);
                       setCollateralSource(prev => {
                         if (!tag) return prev ? { ...prev, floatingPnlTagName: '', useFloatingPnl: false } : prev;
                         const collateralTagName = prev?.collateralTagName || '';
@@ -3039,6 +3145,136 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </div>
                 )}
               </div>
+              )}
+
+              {formData.assetType === 'stock' && (
+                <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/70 px-4 py-3">
+                  <div>
+                    <div className="text-sm font-semibold text-violet-800">股票浮动盈亏来源</div>
+                    <p className="mt-1 text-[11px] leading-4 text-violet-600">三选一：不引用、37号账本标签，或管理员录入股票组合。手工组合只使用每日盘尾收盘价，不做盘中报价。</p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { value: 'none', label: '不引用' },
+                      { value: 'reference37', label: '37号标签' },
+                      { value: 'manual_positions', label: '手工股票' },
+                    ] as const).map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                          setStockPnlSourceMode(value);
+                          if (value === 'none') {
+                            setManualStockPositions([]);
+                            setCollateralSource(prev => prev ? { ...prev, floatingPnlTagName: '', useFloatingPnl: false } : prev);
+                          }
+                          if (value === 'manual_positions') {
+                            setCollateralSource(prev => prev ? { ...prev, floatingPnlTagName: '', useFloatingPnl: false } : prev);
+                            if (manualStockPositions.length === 0) setManualStockPositions([{ name: '', symbol: '', buyPrice: '', sellPrice: '', quantity: '' }]);
+                          }
+                        }}
+                        className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
+                          stockPnlSourceMode === value
+                            ? 'border-violet-600 bg-violet-600 text-white'
+                            : 'border-violet-200 bg-white text-violet-700'
+                        }`}
+                      >{label}</button>
+                    ))}
+                  </div>
+                  {stockPnlSourceMode === 'reference37' && !collateralSource?.floatingPnlTagName && (
+                    <div className="rounded-lg border border-dashed border-violet-300 bg-white px-3 py-2 text-xs text-violet-700">请在上方「调用37号数据」中选择盈亏标签。</div>
+                  )}
+                  {stockPnlSourceMode === 'manual_positions' && (
+                    <div className="space-y-2 rounded-lg border border-violet-200 bg-white p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs font-semibold text-violet-800">股票组合（买入价 × 股数）</div>
+                        <span className="text-[10px] text-violet-500">每日盘尾 15:05 更新</span>
+                      </div>
+                      {manualStockPositions.map((position, index) => (
+                        <div key={index} className="grid grid-cols-2 gap-1.5 sm:grid-cols-[1.1fr_1fr_1fr_1fr_1fr_auto]">
+                          <input
+                            value={position.name}
+                            onChange={e => setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, name: e.target.value } : item))}
+                            className="min-w-0 rounded-md border border-violet-200 px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200"
+                            placeholder="股票名称"
+                            aria-label={`第${index + 1}只股票名称`}
+                          />
+                          <input
+                            value={position.symbol}
+                            onChange={e => setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, symbol: e.target.value.toUpperCase() } : item))}
+                            className="min-w-0 rounded-md border border-violet-200 px-2 py-2 text-xs font-semibold uppercase focus:outline-none focus:ring-2 focus:ring-violet-200"
+                            placeholder="代码，如 AAPL"
+                            aria-label={`第${index + 1}只股票代码`}
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={position.buyPrice}
+                            onChange={e => setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, buyPrice: e.target.value } : item))}
+                            className="min-w-0 rounded-md border border-violet-200 px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200"
+                            placeholder="买入价"
+                            aria-label={`第${index + 1}只股票买入价`}
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={position.sellPrice}
+                            onChange={e => setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, sellPrice: e.target.value } : item))}
+                            className="min-w-0 rounded-md border border-violet-200 px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200"
+                            placeholder="卖出价（可选）"
+                            aria-label={`第${index + 1}只股票卖出价`}
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={position.quantity}
+                            onChange={e => setManualStockPositions(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: e.target.value } : item))}
+                            className="min-w-0 rounded-md border border-violet-200 px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200"
+                            placeholder="股数"
+                            aria-label={`第${index + 1}只股票股数`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setManualStockPositions(items => items.filter((_, itemIndex) => itemIndex !== index))}
+                            className="rounded-md border border-red-200 px-2 text-red-500 hover:bg-red-50"
+                            aria-label={`删除第${index + 1}只股票`}
+                          >×</button>
+                          {(() => {
+                            const quote = manualStockPreviewQuotes[position.symbol.trim().toUpperCase()];
+                            const unit = String(quote?.currency || 'USD').toUpperCase() === 'CNY' ? '元' : 'USD';
+                            return (
+                              <div className="col-span-2 flex min-w-0 items-center justify-between rounded-md bg-violet-50 px-2 py-1.5 text-[11px] text-violet-700 sm:col-span-6">
+                                <span>盘尾现在价</span>
+                                <span className="font-semibold tabular-nums">{Number(quote?.price) > 0 ? `${Number(quote?.price).toLocaleString()} ${unit}` : '等待每日盘尾更新'}</span>
+                                <span className="text-violet-400">{quote?.priceDate ? `更新于 ${quote.priceDate}` : ''}</span>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <button
+                          type="button"
+                          disabled={manualStockPositions.length >= 20}
+                          onClick={() => setManualStockPositions(items => [...items, { name: '', symbol: '', buyPrice: '', sellPrice: '', quantity: '' }])}
+                          className="rounded-md border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-700 disabled:opacity-50"
+                        >+ 添加股票</button>
+                        {editingOrder?.id && (
+                          <button
+                            type="button"
+                            onClick={saveManualStockPnlSource}
+                            disabled={validManualStockPositions.length === 0 || saveLinkedInterestSourceMutation.isPending || saveParticipantLinkedInterestSourceMutation.isPending}
+                            className="rounded-md bg-violet-600 px-2.5 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-violet-300"
+                          >{saveLinkedInterestSourceMutation.isPending || saveParticipantLinkedInterestSourceMutation.isPending ? '保存中…' : '保存股票组合'}</button>
+                        )}
+                      </div>
+                      <div className="text-[11px] leading-4 text-violet-600">字段依次为名称、代码、买入价、卖出价（可选）和持股数量。未填卖出价时，浮动盈亏 = Σ（每日盘尾价 − 买入价）× 股数；填入卖出价后按卖出价锁定计算。点击订单里浮动盈亏后的说明按钮可逐只查看价格与更新时点。</div>
+                    </div>
+                  )}
+                </div>
               )}
 
               {ledgerId === 52 && (
@@ -3779,8 +4015,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     buyQty: optionFormData.buyQty || null,
                   }) : null,
                   collateral_share_mode: collateralShareMode || 'none',
-                  // 预览使用与保存完全相同的引用草稿，选中标签后立即显示37标记与对应利息。
-                  collateral_source: linkedInterestSourceDraft ? JSON.stringify(linkedInterestSourceDraft) : null,
+                  // 预览使用与保存完全相同的来源草稿，37号引用和手工股票组合都会即时同步。
+                  collateral_source: orderCollateralSourceDraft ? JSON.stringify(orderCollateralSourceDraft) : null,
                   trade_direction: formData.tradeDirection || null,
                   display_config: JSON.stringify({
                     ...displayConfig,
@@ -3800,7 +4036,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 };
                 const rateValPreview = parseFloat(String(previewOrder.interest_rate_annual || '0'));
                 // 字段展示开关改变时强制重建预览卡片，避免卡片内部状态保留旧配置。
-                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${String(displayConfig.floatPnl)}-${JSON.stringify(linkedInterestSourceDraft)}`;
+                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${String(displayConfig.floatPnl)}-${JSON.stringify(orderCollateralSourceDraft)}`;
                 return (
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -3816,7 +4052,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         ))}
                       </div>
                     </div>
-                    {previewViewMode === 'order' ? (
+                    {previewViewMode === 'order' || (formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions') ? (
                       <FunderOrderCard
                         key={previewDisplayKey}
                         order={previewOrder}

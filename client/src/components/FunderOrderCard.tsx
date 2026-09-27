@@ -624,6 +624,7 @@ export function FunderOrderCard({
   // 已结利息历史浮层
   const [showInterestHistory, setShowInterestHistory] = useState(false);
   const [linkedInterestDetailKind, setLinkedInterestDetailKind] = useState<'pending' | 'paid' | null>(null);
+  const [showManualStockPnlDetail, setShowManualStockPnlDetail] = useState(false);
   // 共同拥有者会带 participantInfo 以支持独立快照，但主订单拥有者仍是主单的管理视角。
   // 结息与担保保存的参与者作用域只用于“非主拥有者”的协作视角：共同拥有者、历史参与者都独立；
   // 主拥有者自动补齐的 owner 关系仍沿用主订单流水，避免保存后被查到另一个空作用域。
@@ -798,35 +799,57 @@ export function FunderOrderCard({
       const cs = (order as any).collateral_source;
       if (!cs) return null;
       const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
-      if (parsed && parsed.ledgerId && parsed.tagName) return parsed as {
+      if (parsed && parsed.tagName && (parsed.ledgerId || parsed.stockPnlSource === 'manual_positions')) return parsed as {
         ledgerId: number; tagName: string; floatingPnlTagName?: string;
         floatingPnlCalculationMode?: 'raw_net_pnl' | 'initial_minus_latest' | 'leveraged_net_pnl'; collateralTagName?: string;
         pendingInterestTagName?: string; paidInterestTagName?: string; interestTagName?: string;
         useFloatingPnl?: boolean; useCollateral?: boolean; usePendingInterest?: boolean; usePaidInterest?: boolean; useInterest?: boolean;
+        stockPnlSource?: 'manual_positions'; stockPositions?: Array<{ name?: string; symbol?: string; buyPrice?: string; sellPrice?: string; quantity?: string }>;
       };
     } catch {}
     return null;
   }, [(order as any).collateral_source]);
+  const sourceIsLedger37 = Number(_parsedCollateralSource?.ledgerId) === 37;
   const linkedPnlTagName = _parsedCollateralSource?.floatingPnlTagName
-    || (_parsedCollateralSource?.useFloatingPnl !== false ? _parsedCollateralSource?.tagName : '');
+    || (sourceIsLedger37 && _parsedCollateralSource?.useFloatingPnl !== false ? _parsedCollateralSource?.tagName : '');
   // 未配置时按新版默认的“今日余额 − 初始金额”处理；倍数后的净值盈亏仅在管理员显式选择后使用。
   const floatingPnlCalculationMode = _parsedCollateralSource?.floatingPnlCalculationMode === 'leveraged_net_pnl'
     ? 'leveraged_net_pnl'
     : 'raw_net_pnl';
   const linkedCollateralTagName = _parsedCollateralSource?.collateralTagName
-    || (_parsedCollateralSource?.useCollateral !== false ? _parsedCollateralSource?.tagName : '');
+    || (sourceIsLedger37 && _parsedCollateralSource?.useCollateral !== false ? _parsedCollateralSource?.tagName : '');
   // 待结、已结利息必须显式选择。旧 interestTagName/useInterest 仅兼容为“已结引用”，
   // 不会在升级后被误解为待结利息来源。
   const linkedPendingInterestTagName = _parsedCollateralSource?.pendingInterestTagName
-    || (_parsedCollateralSource?.usePendingInterest === true ? _parsedCollateralSource?.tagName : '');
+    || (sourceIsLedger37 && _parsedCollateralSource?.usePendingInterest === true ? _parsedCollateralSource?.tagName : '');
   const linkedPaidInterestTagName = _parsedCollateralSource?.paidInterestTagName
     || _parsedCollateralSource?.interestTagName
-    || ((_parsedCollateralSource?.usePaidInterest === true || _parsedCollateralSource?.useInterest === true) ? _parsedCollateralSource?.tagName : '');
+    || (sourceIsLedger37 && (_parsedCollateralSource?.usePaidInterest === true || _parsedCollateralSource?.useInterest === true) ? _parsedCollateralSource?.tagName : '');
   const hasExternalPendingInterest = Number(_parsedCollateralSource?.ledgerId) === 37 && !!linkedPendingInterestTagName;
   const hasExternalPaidInterest = Number(_parsedCollateralSource?.ledgerId) === 37 && !!linkedPaidInterestTagName;
   const hasExternalInterest = hasExternalPendingInterest || hasExternalPaidInterest;
   const hasExternalDataSource = !!(linkedPnlTagName || linkedCollateralTagName || linkedPendingInterestTagName || linkedPaidInterestTagName);
   const hasExternalCollateral = !!linkedCollateralTagName;
+  const manualStockPositions = useMemo(() => Array.isArray(_parsedCollateralSource?.stockPositions)
+    ? _parsedCollateralSource.stockPositions
+      .map((position) => ({
+        name: String(position?.name || '').trim().slice(0, 48),
+        symbol: String(position?.symbol || '').trim().toUpperCase(),
+        buyPrice: Number(position?.buyPrice),
+        sellPrice: position?.sellPrice === '' || position?.sellPrice === null || position?.sellPrice === undefined ? null : Number(position.sellPrice),
+        quantity: Number(position?.quantity),
+      }))
+      .filter((position) => /^[A-Z][A-Z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/.test(position.symbol))
+      .filter((position) => Number.isFinite(position.buyPrice) && position.buyPrice > 0 && (position.sellPrice === null || (Number.isFinite(position.sellPrice) && position.sellPrice > 0)) && Number.isFinite(position.quantity) && position.quantity > 0)
+    : [], [_parsedCollateralSource]);
+  const isManualStockPnlSource = (order as any).asset_type === 'stock'
+    && _parsedCollateralSource?.stockPnlSource === 'manual_positions'
+    && manualStockPositions.length > 0;
+  const manualStockSymbols = useMemo(() => manualStockPositions.map((position) => position.symbol), [manualStockPositions]);
+  const manualStockCloseQuery = (trpc as any).getManualStockCloseSnapshots.useQuery(
+    { symbols: manualStockSymbols },
+    { enabled: isManualStockPnlSource && manualStockSymbols.length > 0, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false },
+  );
 
   // 两个标签独立查询：盈亏只读净值，担保只读逐笔保证金；若选了同一标签，数据口径仍相同。
   const { data: _pnlTagConfig } = trpc.ledger.getTagConfig.useQuery(
@@ -1279,7 +1302,33 @@ export function FunderOrderCard({
       ? (latestBalance - initialAmount) * accountMultiplier
       : latestBalance - initialAmount;
   }, [isExternalStockPnlSource, floatingPnlCalculationMode, _pnlTagConfig, _pnlTagSummary]);
-  // 此值仅用于订单模式“浮动盈亏”一行及详情入口，不参与担保缺口、利息、本金或余额计算。
+  const manualStockPnlDetail = useMemo(() => {
+    const quotes = (manualStockCloseQuery.data as any)?.quotes ?? {};
+    return manualStockPositions.map((position) => {
+      const quote = quotes[position.symbol];
+      const currentPrice = Number(quote?.price);
+      const currency = String(quote?.currency || 'USD').toUpperCase() === 'CNY' ? 'CNY' : 'USD';
+      const valuationPrice = position.sellPrice ?? (Number.isFinite(currentPrice) && currentPrice > 0 ? currentPrice : null);
+      const pnlCny = valuationPrice !== null
+        ? (valuationPrice - position.buyPrice) * position.quantity * (currency === 'CNY' ? 1 : cnyRate)
+        : null;
+      return {
+        ...position,
+        currentPrice: Number.isFinite(currentPrice) && currentPrice > 0 ? currentPrice : null,
+        valuationPrice,
+        currency,
+        pnlCny,
+        priceDate: String(quote?.priceDate || ''),
+        updatedAt: String(quote?.updatedAt || ''),
+      };
+    });
+  }, [manualStockPositions, manualStockCloseQuery.data, cnyRate]);
+  const manualStockFloatPnlCny = manualStockPnlDetail.every((position) => position.pnlCny !== null)
+    ? manualStockPnlDetail.reduce((sum, position) => sum + (position.pnlCny ?? 0), 0)
+    : null;
+  const configuredStockFloatPnlCny = isManualStockPnlSource ? manualStockFloatPnlCny : externalStockFloatPnlCny;
+  const isConfiguredStockPnlSource = isExternalStockPnlSource || isManualStockPnlSource;
+  // 此值仅用于订单模式“浮动盈亏”一行及担保缺口；手工组合使用每天盘尾快照。
   // 解析期权信息
   const optionInfo = (() => {
     try {
@@ -1629,9 +1678,13 @@ export function FunderOrderCard({
   const linkedCollateralValueU = hasExternalCollateral
     ? extTagCollateralValueU
     : (collateralValueKnown ? collateralValue : null);
-  const linkedFloatingPnlU = isExternalStockPnlSource ? extTagFloatingPnlU : 0;
-  const usesLinked37RiskData = hasExternalCollateral || isExternalStockPnlSource;
-  const externalNonSharedGapU = usesLinked37RiskData
+  const linkedFloatingPnlU = isExternalStockPnlSource
+    ? extTagFloatingPnlU
+    : isManualStockPnlSource
+      ? (manualStockFloatPnlCny === null ? null : manualStockFloatPnlCny / cnyRate)
+      : 0;
+  const usesConfiguredStockRiskData = hasExternalCollateral || isConfiguredStockPnlSource;
+  const externalNonSharedGapU = usesConfiguredStockRiskData
     && linkedCollateralValueU !== null
     && linkedFloatingPnlU !== null
     && linkedPendingInterestForRisk !== null
@@ -2080,16 +2133,18 @@ export function FunderOrderCard({
                 </span>
               </div>
             )}
-            {show('floatPnl') && (isOptionOrder || isExternalStockPnlSource || floatPnl !== null) && (order as any).order_fill_status !== 'pending' && (
+            {show('floatPnl') && (isOptionOrder || isConfiguredStockPnlSource || floatPnl !== null) && (order as any).order_fill_status !== 'pending' && (
               <div className="flex items-center justify-between">
-                <span className="text-gray-400 shrink-0">浮动盈亏</span>
-                {isExternalStockPnlSource ? (
-                  externalStockFloatPnlCny !== null ? (
-                    <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: externalStockFloatPnlCny >= 0 ? '#DC2626' : '#16A34A' }}>
-                      {externalStockFloatPnlCny >= 0 ? '+' : ''}{externalStockFloatPnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元
+                <span className="text-gray-400 shrink-0 inline-flex items-center gap-1">浮动盈亏
+                  {isManualStockPnlSource && <button type="button" onClick={() => setShowManualStockPnlDetail(true)} className="relative w-3.5 h-3.5 rounded-full inline-flex items-center justify-center flex-shrink-0 font-bold leading-none" style={{ backgroundColor: '#3B82F6', color: '#fff' }} title="查看股票组合盘尾价与浮动盈亏"><HelpMarkerText symbol="!" /></button>}
+                </span>
+                {isConfiguredStockPnlSource ? (
+                  configuredStockFloatPnlCny !== null ? (
+                    <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: configuredStockFloatPnlCny >= 0 ? '#DC2626' : '#16A34A' }}>
+                      {configuredStockFloatPnlCny >= 0 ? '+' : ''}{configuredStockFloatPnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元
                     </span>
                   ) : (
-                    <span className="font-medium text-gray-400">{_pnlTagSummary ? '暂无37号数据' : '加载37号数据...'}</span>
+                    <span className="font-medium text-gray-400">{isManualStockPnlSource ? (manualStockCloseQuery.isLoading ? '读取盘尾价...' : '等待盘尾价格') : (_pnlTagSummary ? '暂无37号数据' : '加载37号数据...')}</span>
                   )
                 ) : floatPnl !== null ? (
                   <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
@@ -2098,6 +2153,45 @@ export function FunderOrderCard({
                 ) : (
                   <span className="font-medium text-gray-400">{greeksResult.loading ? '加载中...' : '暂无合约报价'}</span>
                 )}
+              </div>
+            )}
+            {showManualStockPnlDetail && isManualStockPnlSource && (
+              <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowManualStockPnlDetail(false)}>
+                <div className="mx-4 w-full max-w-sm overflow-y-auto rounded-2xl bg-white" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '85vh' }} onClick={event => event.stopPropagation()}>
+                  <div className="flex items-center justify-between px-5 pb-2 pt-4">
+                    <span className="text-sm font-bold" style={{ color: '#1A2340' }}>股票浮动盈亏明细</span>
+                    <button onClick={() => setShowManualStockPnlDetail(false)} className="text-lg leading-none text-gray-400">×</button>
+                  </div>
+                  <div className="mx-4 mb-3 rounded-lg bg-blue-50 px-3 py-2 text-[11px] leading-4 text-blue-700">
+                    每日盘尾 15:05 固定更新。未填卖出价：浮动盈亏 =（盘尾价 − 买入价）× 股数；填写卖出价后按卖出价锁定计算。美元股票按当日系统汇率折算为人民币。
+                  </div>
+                  <div className="px-4 pb-4">
+                    {manualStockPnlDetail.map((position) => (
+                      <div key={position.symbol} className="border-b border-gray-100 py-3 last:border-0">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-semibold text-sm" style={{ color: '#1A2340' }}>{position.name ? `${position.name} · ` : ''}{position.symbol}</span>
+                          <span className="text-sm font-semibold tabular-nums" style={{ color: (position.pnlCny ?? 0) >= 0 ? '#DC2626' : '#16A34A' }}>
+                            {position.pnlCny === null ? '等待盘尾价' : `${position.pnlCny >= 0 ? '+' : ''}${position.pnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`}
+                          </span>
+                        </div>
+                        <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                          <span>买入价：{position.buyPrice.toLocaleString()} {position.currency === 'CNY' ? '元' : 'USD'}</span>
+                          <span>盘尾价：{position.currentPrice === null ? '待更新' : `${position.currentPrice.toLocaleString()} ${position.currency === 'CNY' ? '元' : 'USD'}`}</span>
+                          <span>卖出价：{position.sellPrice === null ? '未填写' : `${position.sellPrice.toLocaleString()} ${position.currency === 'CNY' ? '元' : 'USD'}`}</span>
+                          <span>{position.sellPrice === null ? '计算价：盘尾价' : `计算价：${position.valuationPrice?.toLocaleString()} ${position.currency === 'CNY' ? '元' : 'USD'}`}</span>
+                          <span>股数：{position.quantity.toLocaleString()}</span>
+                          <span>更新于：{position.updatedAt ? new Date(position.updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '待首次盘尾更新'}</span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between pt-3 text-xs">
+                      <span className="text-gray-400">合计浮动盈亏</span>
+                      <span className="font-bold tabular-nums" style={{ color: (manualStockFloatPnlCny ?? 0) >= 0 ? '#DC2626' : '#16A34A' }}>
+                        {manualStockFloatPnlCny === null ? '等待盘尾价' : `${manualStockFloatPnlCny >= 0 ? '+' : ''}${manualStockFloatPnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
             {show('buyDate') && order.buy_date && (
@@ -2555,7 +2649,7 @@ export function FunderOrderCard({
                 </div>
               );
             })()}
-            {(show('collateral') || hasExternalCollateral || isExternalStockPnlSource) && (
+            {(show('collateral') || hasExternalCollateral || isConfiguredStockPnlSource) && (
               <>
               {(showCollateralInfo || showCollateralGapFormulaInfo) && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={closeCollateralInfoDialog}>
@@ -2578,14 +2672,14 @@ export function FunderOrderCard({
                     </div>
                     <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
                       {/* 共享担保订单：新版三段式汇总版式 */}
-                      {isExternalStockPnlSource && !isSharedMode ? (
+                      {isConfiguredStockPnlSource && !isSharedMode ? (
                         (() => {
                           const showCny = externalCollateralGapDisplay === 'CNY';
                           const factor = showCny ? cnyRate : 1;
                           const unit = showCny ? '元' : 'u';
                           const formatValue = (value: number) => `${value >= 0 ? '+' : ''}${(value * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} ${unit}`;
                           const collateralU = linkedCollateralValueU;
-                          const floatingPnlU = extTagFloatingPnlU;
+                          const floatingPnlU = linkedFloatingPnlU;
                           const pendingInterestU = accruedForRisk;
                           const paidInterestU = paidInterestForRisk;
                           const lentPrincipalU = principalLentOut ? interestBaseForRisk : 0;
@@ -2594,14 +2688,16 @@ export function FunderOrderCard({
                           return (
                             <>
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 37号浮动盈亏</div>
-                                <div>{floatingPnlCalculationMode === 'leveraged_net_pnl'
-                                  ? '37标签最新余额 − 初始金额，按账号倍率计算（37号净值盈亏）'
-                                  : '37标签今日最新余额 − 初始金额（不使用账号倍率；负数为亏损）'}</div>
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① {isManualStockPnlSource ? '股票组合浮动盈亏' : '37号浮动盈亏'}</div>
+                                <div>{isManualStockPnlSource
+                                  ? '每只股票的（每日盘尾价 − 买入价）× 股数之和'
+                                  : floatingPnlCalculationMode === 'leveraged_net_pnl'
+                                    ? '37标签最新余额 − 初始金额，按账号倍率计算（37号净值盈亏）'
+                                    : '37标签今日最新余额 − 初始金额（不使用账号倍率；负数为亏损）'}</div>
                                 <div className="mt-1 font-mono">
                                   {floatingPnlU !== null
                                     ? <strong style={{ color: valueColor(floatingPnlU) }}>{formatValue(floatingPnlU)}</strong>
-                                    : <span className="text-gray-400">37号标签净值加载中...</span>}
+                                    : <span className="text-gray-400">{isManualStockPnlSource ? '盘尾价格加载中...' : '37号标签净值加载中...'}</span>}
                                 </div>
                               </div>
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
@@ -2625,7 +2721,7 @@ export function FunderOrderCard({
                                 <div className="mt-1 font-mono">
                                   {gapU !== null && collateralU !== null && floatingPnlU !== null
                                     ? <span style={{ color: '#3B82F6' }}>= {formatValue(collateralU)} + ({formatValue(floatingPnlU)}) − {(pendingInterestU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit} + {(paidInterestU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}{principalLentOut ? ` − ${(lentPrincipalU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} ${unit}` : ''} = <strong style={{ color: valueColor(gapU) }}>{formatValue(gapU)}</strong></span>
-                                    : <span className="text-gray-400">37号标签数据加载中...</span>}
+                                    : <span className="text-gray-400">{isManualStockPnlSource ? '盘尾价格数据加载中...' : '37号标签数据加载中...'}</span>}
                                 </div>
                                 {gapU !== null && <div className="mt-1.5" style={{ color: valueColor(gapU) }}>{gapU >= 0 ? `担保充足，尚有 ${formatValue(gapU)} 的余量` : `担保不足，还需补充 ${formatValue(Math.abs(gapU))} 才能覆盖风险`}</div>}
                               </div>
@@ -2885,7 +2981,7 @@ export function FunderOrderCard({
                       {/* 计算说明注释 */}
                       <div className="mt-3 p-2.5 rounded-lg text-[10px] space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
                         <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
-                        {isExternalStockPnlSource && !isSharedMode ? (
+                        {isConfiguredStockPnlSource && !isSharedMode ? (
                           <>
                           <div>• <strong>担保缺口</strong> = {hasExternalCollateral ? '37号担保货币' : '手工担保货币'} + 37号浮动盈亏 − 待结利息 + 已结利息（开启借出本金时再减去计息基数）</div>
                           <div>• <strong>37号浮动盈亏</strong> = {floatingPnlCalculationMode === 'leveraged_net_pnl'
@@ -2941,7 +3037,7 @@ export function FunderOrderCard({
                     style={{ backgroundColor: '#3B82F6', color: '#fff', border: 'none', cursor: 'pointer' }}
                   ><HelpMarkerText symbol="!" /></button>
                 </div>
-                {isExternalStockPnlSource ? (
+                {isConfiguredStockPnlSource ? (
                   (isSharedMode ? (showExposureLoading ? null : effectiveExposure) : externalNonSharedGapU) !== null
                     ? (() => {
                         // 卡片行始终显示本订单的担保缺口/余量；共享池总计仅在说明弹窗中展示。

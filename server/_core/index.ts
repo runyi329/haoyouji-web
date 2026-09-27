@@ -12,6 +12,7 @@ import { getDb } from "../db";
 import { startScanner } from "../blockchain-scanner";
 import { startTierScanner } from "../af-tier-scanner";
 import { startPriceScanner } from "../price-scanner";
+import { startManualStockCloseScheduler } from "../manual-stock-close-scheduler";
 import { startFunderScanner } from "../funder-price-scanner";
 import { startEnergyPriceScanner } from "../energy-price-scanner";
 import { smsService } from "../sms-service";
@@ -762,6 +763,9 @@ async function startServer() {
 
     // 启动实时价格扫描器（每60秒刷新 BTC/ETH/SOL 现货价格）
     startPriceScanner();
+
+    // 手工股票组合只使用每日北京时间 15:05 的盘尾收盘快照，不在盘中轮询报价。
+    startManualStockCloseScheduler();
 
     // 启动资金方订单收益权扫描器（每4小时扫描一次，对齐北京时间整点）
     startFunderScanner();

@@ -194,7 +194,9 @@ async function fetchSinaQuotes(coins: string[]): Promise<Record<string, number>>
     if (!response.ok) return {};
     const text = new TextDecoder('gbk').decode(await response.arrayBuffer());
     const result: Record<string, number> = {};
-    for (const match of text.matchAll(/var\s+hq_str_([^=]+)="([^"]*)"/g)) {
+    const quotePattern = /var\s+hq_str_([^=]+)="([^"]*)"/g;
+    let match: RegExpExecArray | null;
+    while ((match = quotePattern.exec(text)) !== null) {
       const code = match[1];
       const coin = reverse.get(code);
       if (!coin) continue;
@@ -204,6 +206,128 @@ async function fetchSinaQuotes(coins: string[]): Promise<Record<string, number>>
     }
     return result;
   } catch { return {}; }
+}
+
+type OnDemandStockQuote = {
+  price: number;
+  currency: 'USD' | 'CNY';
+  source: string;
+  updatedAt: string;
+  priceDate?: string;
+};
+
+/**
+ * 针对融资订单里管理员临时录入的股票代码查询最新价格。
+ * 常规扫描只覆盖项目预置的证券；这个入口允许安全地读取最多 20 个
+ * 合法的美股 / A 股代码，不会把任意 URL 交给外部请求。
+ */
+function normalizeOnDemandStockSymbol(raw: string): string | null {
+  const symbol = String(raw || '').trim().toUpperCase();
+  if (/^[A-Z][A-Z0-9.\-]{0,14}$/.test(symbol)) return symbol;
+  if (/^\d{6}\.(SH|SZ|BJ)$/.test(symbol)) return symbol;
+  return null;
+}
+
+async function fetchSinaOnDemandStockQuote(symbol: string): Promise<OnDemandStockQuote | null> {
+  const aShare = symbol.match(/^(\d{6})\.(SH|SZ|BJ)$/);
+  const sinaCode = aShare
+    ? `${aShare[2].toLowerCase()}${aShare[1]}`
+    : `gb_${symbol.toLowerCase()}`;
+  try {
+    const response = await fetch(`https://hq.sinajs.cn/list=${encodeURIComponent(sinaCode)}`, {
+      headers: { Referer: 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) return null;
+    const text = new TextDecoder('gbk').decode(await response.arrayBuffer());
+    const match = text.match(/var\s+hq_str_[^=]+="([^"]*)"/);
+    if (!match?.[1]) return null;
+    const parts = match[1].split(',');
+    // 美股 gb_ 的第 2 项、A 股 sh/sz/bj 的第 4 项均为最近成交价。
+    const price = Number(aShare ? parts[3] : parts[1]);
+    if (!isValidPrice(price)) return null;
+    return {
+      price,
+      currency: aShare ? 'CNY' : 'USD',
+      source: '新浪财经',
+      updatedAt: nowIso(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Tushare 仅作为日线收盘价兜底，令牌必须在服务端环境变量中配置。 */
+async function fetchTushareDailyClose(symbol: string): Promise<OnDemandStockQuote | null> {
+  const token = String(process.env.TUSHARE_TOKEN || process.env.TS_TOKEN || '').trim();
+  if (!token) return null;
+  const aShare = /^(\d{6})\.(SH|SZ|BJ)$/.test(symbol);
+  const apiName = aShare ? 'daily' : 'us_daily';
+  try {
+    const response = await fetch('https://api.tushare.pro', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_name: apiName,
+        token,
+        params: { ts_code: symbol },
+        fields: 'trade_date,close',
+      }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) return null;
+    const payload = await response.json() as any;
+    const fields: string[] = Array.isArray(payload?.data?.fields) ? payload.data.fields : [];
+    const row: unknown[] | undefined = Array.isArray(payload?.data?.items) ? payload.data.items[0] : undefined;
+    const closeIndex = fields.indexOf('close');
+    const tradeDateIndex = fields.indexOf('trade_date');
+    const price = Number(row?.[closeIndex]);
+    if (!isValidPrice(price)) return null;
+    return {
+      price,
+      currency: aShare ? 'CNY' : 'USD',
+      source: 'Tushare 日线收盘',
+      updatedAt: nowIso(),
+      priceDate: String(row?.[tradeDateIndex] || '').replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') || undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 盘尾任务使用的收盘价快照：Tushare 日线为首选，新浪为同日兜底，
+ * Yahoo 仅用于前两者均不可用时保留最近一个有效收盘参考。
+ * 此函数只由每日任务调用；前端页面不会在盘中触发外部报价请求。
+ */
+export async function fetchEndOfDayStockCloseSnapshots(symbols: string[]): Promise<Record<string, OnDemandStockQuote>> {
+  const uniqueSymbols = Array.from(new Set(symbols
+    .map(normalizeOnDemandStockSymbol)
+    .filter((symbol): symbol is string => !!symbol)))
+    .slice(0, 20);
+  const results: Record<string, OnDemandStockQuote> = {};
+
+  await Promise.all(uniqueSymbols.map(async (symbol) => {
+    const tushare = await fetchTushareDailyClose(symbol);
+    if (tushare) {
+      results[symbol] = tushare;
+      return;
+    }
+
+    const sina = await fetchSinaOnDemandStockQuote(symbol);
+    if (sina) {
+      results[symbol] = sina;
+      return;
+    }
+
+    const yahoo = await fetchYahooPrice(symbol);
+    if (yahoo) {
+      results[symbol] = { price: yahoo, currency: 'USD', source: 'Yahoo Finance', updatedAt: nowIso() };
+      return;
+    }
+  }));
+
+  return results;
 }
 
 async function fetchOkxSwap(coin: string): Promise<number | null> {
