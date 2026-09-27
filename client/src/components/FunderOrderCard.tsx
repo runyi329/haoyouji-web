@@ -2152,7 +2152,7 @@ export function FunderOrderCard({
                 color: hasExternalPendingInterest ? '#fff' : '#6B7280',
               }}
               title={hasExternalPendingInterest ? '查看37号账本待结利息明细' : '查看52号账本待结利息计算说明'}
-            >{hasExternalPendingInterest ? <span className="-mt-px text-[8px] leading-none tracking-[-0.08em]">37</span> : '?'}</button>
+            >{hasExternalPendingInterest ? <span className="translate-y-[0.5px] text-[7px] leading-none tracking-[-0.1em]">37</span> : '?'}</button>
             {/* 已结利息历史浮层 */}
             {showInterestHistory && (
               <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestHistory(false)}>
@@ -2319,7 +2319,7 @@ export function FunderOrderCard({
                   className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"
                   style={{ backgroundColor: hasExternalPaidInterest ? '#3B82F6' : (showInterestHistory ? '#3B82F6' : '#DBEAFE'), color: hasExternalPaidInterest || showInterestHistory ? '#fff' : '#3B82F6' }}
                   title={hasExternalPaidInterest ? '查看37号账本已结利息明细' : '已结利息记录'}
-                >{hasExternalPaidInterest ? <span className="-mt-px text-[8px] leading-none tracking-[-0.08em]">37</span> : '!'}</button>
+                >{hasExternalPaidInterest ? <span className="translate-y-[0.5px] text-[7px] leading-none tracking-[-0.1em]">37</span> : '!'}</button>
               </span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
                 {displayedPaidValue === null
@@ -2412,10 +2412,10 @@ export function FunderOrderCard({
                   <span className="text-gray-400 whitespace-nowrap">担保货币</span>
                   <button
                     type="button"
-                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
-                    style={{ backgroundColor: '#E5E7EB', color: '#6B7280' }}
+                    className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"
+                    style={{ backgroundColor: '#3B82F6', color: '#fff' }}
                     onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
-                  >!</button>
+                  ><span className="translate-y-[0.5px] text-[7px] leading-none tracking-[-0.1em]">37</span></button>
                 </span>
                 {externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU) ? (
                   <span className="min-w-0 font-medium tabular-nums text-right whitespace-nowrap" style={{ color: '#1A2340' }}>
