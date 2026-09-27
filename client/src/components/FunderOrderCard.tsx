@@ -804,7 +804,7 @@ export function FunderOrderCard({
         floatingPnlCalculationMode?: 'raw_net_pnl' | 'initial_minus_latest' | 'leveraged_net_pnl'; collateralTagName?: string;
         pendingInterestTagName?: string; paidInterestTagName?: string; interestTagName?: string;
         useFloatingPnl?: boolean; useCollateral?: boolean; usePendingInterest?: boolean; usePaidInterest?: boolean; useInterest?: boolean;
-        stockPnlSource?: 'manual_positions'; stockPositions?: Array<{ name?: string; symbol?: string; buyPrice?: string; sellPrice?: string; quantity?: string }>;
+        stockPnlSource?: 'manual_positions'; stockPnlCoefficient?: number; stockPositions?: Array<{ name?: string; symbol?: string; buyPrice?: string; sellPrice?: string; quantity?: string }>;
       };
     } catch {}
     return null;
@@ -845,6 +845,11 @@ export function FunderOrderCard({
   const isManualStockPnlSource = (order as any).asset_type === 'stock'
     && _parsedCollateralSource?.stockPnlSource === 'manual_positions'
     && manualStockPositions.length > 0;
+  // 系数作用于组合的原始盈亏合计，而非逐只股票；缺省/历史订单始终按 1 倍兼容。
+  const manualStockPnlCoefficient = useMemo(() => {
+    const coefficient = Number(_parsedCollateralSource?.stockPnlCoefficient);
+    return Number.isFinite(coefficient) && coefficient > 0 && coefficient <= 100000 ? coefficient : 1;
+  }, [_parsedCollateralSource]);
   const manualStockSymbols = useMemo(() => manualStockPositions.map((position) => position.symbol), [manualStockPositions]);
   const manualStockCloseQuery = (trpc as any).getManualStockCloseSnapshots.useQuery(
     { symbols: manualStockSymbols },
@@ -1323,9 +1328,12 @@ export function FunderOrderCard({
       };
     });
   }, [manualStockPositions, manualStockCloseQuery.data, cnyRate]);
-  const manualStockFloatPnlCny = manualStockPnlDetail.every((position) => position.pnlCny !== null)
+  const manualStockRawFloatPnlCny = manualStockPnlDetail.every((position) => position.pnlCny !== null)
     ? manualStockPnlDetail.reduce((sum, position) => sum + (position.pnlCny ?? 0), 0)
     : null;
+  const manualStockFloatPnlCny = manualStockRawFloatPnlCny === null
+    ? null
+    : manualStockRawFloatPnlCny * manualStockPnlCoefficient;
   const configuredStockFloatPnlCny = isManualStockPnlSource ? manualStockFloatPnlCny : externalStockFloatPnlCny;
   const isConfiguredStockPnlSource = isExternalStockPnlSource || isManualStockPnlSource;
   // 此值仅用于订单模式“浮动盈亏”一行及担保缺口；手工组合使用每天盘尾快照。
@@ -2163,7 +2171,7 @@ export function FunderOrderCard({
                     <button onClick={() => setShowManualStockPnlDetail(false)} className="text-lg leading-none text-gray-400">×</button>
                   </div>
                   <div className="mx-4 mb-3 rounded-lg bg-blue-50 px-3 py-2 text-[11px] leading-4 text-blue-700">
-                    每日盘尾 15:05 固定更新。未填卖出价：浮动盈亏 =（盘尾价 − 买入价）× 股数；填写卖出价后按卖出价锁定计算。美元股票按当日系统汇率折算为人民币。
+                    每日盘尾 15:05 固定更新。未填卖出价：原始盈亏 =（盘尾价 − 买入价）× 股数；填写卖出价后按卖出价锁定计算。所有股票原始盈亏先合计，再乘计算系数 {manualStockPnlCoefficient}。美元股票按当日系统汇率折算为人民币。
                   </div>
                   <div className="px-4 pb-4">
                     {manualStockPnlDetail.map((position) => (
@@ -2184,11 +2192,23 @@ export function FunderOrderCard({
                         </div>
                       </div>
                     ))}
-                    <div className="flex items-center justify-between pt-3 text-xs">
-                      <span className="text-gray-400">合计浮动盈亏</span>
-                      <span className="font-bold tabular-nums" style={{ color: (manualStockFloatPnlCny ?? 0) >= 0 ? '#DC2626' : '#16A34A' }}>
-                        {manualStockFloatPnlCny === null ? '等待盘尾价' : `${manualStockFloatPnlCny >= 0 ? '+' : ''}${manualStockFloatPnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`}
-                      </span>
+                    <div className="mt-1 space-y-2 border-t border-gray-100 pt-3 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400">原始盈亏合计</span>
+                        <span className="font-semibold tabular-nums" style={{ color: (manualStockRawFloatPnlCny ?? 0) >= 0 ? '#DC2626' : '#16A34A' }}>
+                          {manualStockRawFloatPnlCny === null ? '等待盘尾价' : `${manualStockRawFloatPnlCny >= 0 ? '+' : ''}${manualStockRawFloatPnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-violet-600">
+                        <span>计算系数</span>
+                        <span className="font-semibold tabular-nums">× {manualStockPnlCoefficient}</span>
+                      </div>
+                      <div className="flex items-center justify-between pt-0.5">
+                        <span className="font-semibold text-gray-600">股票组合浮动盈亏</span>
+                        <span className="font-bold tabular-nums" style={{ color: (manualStockFloatPnlCny ?? 0) >= 0 ? '#DC2626' : '#16A34A' }}>
+                          {manualStockFloatPnlCny === null ? '等待盘尾价' : `${manualStockFloatPnlCny >= 0 ? '+' : ''}${manualStockFloatPnlCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>

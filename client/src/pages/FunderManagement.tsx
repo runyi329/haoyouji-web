@@ -148,9 +148,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     useInterest?: boolean;
   } | null>(null);
   // 股票浮动盈亏可独立选择：37号标签、管理员录入的股票组合，或不调用外部来源。
-  // 股票组合只保存代码、买入价和股数；当前价统一由每日盘尾快照提供。
+  // 股票组合保存逐只仓位和一个可编辑计算系数；当前价统一由每日盘尾快照提供。
   const [stockPnlSourceMode, setStockPnlSourceMode] = useState<'none' | 'reference37' | 'manual_positions'>('none');
   const [manualStockPositions, setManualStockPositions] = useState<ManualStockPosition[]>([]);
+  const [manualStockPnlCoefficient, setManualStockPnlCoefficient] = useState('1');
   // 37号利息分为两条独立引用：待结引用应计部分，已结引用“计入已付”的手工负数分段。
   // 旧订单只保存 interestTagName，读取时一律兼容为“仅已结引用”。
   const [pendingInterestTagName, setPendingInterestTagName] = useState<string>('');
@@ -200,6 +201,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     .filter((position) => /^[A-Z][A-Z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/.test(position.symbol))
     .filter((position) => Number(position.buyPrice) > 0 && Number(position.quantity) > 0 && (!position.sellPrice || Number(position.sellPrice) > 0))
     .slice(0, 20), [manualStockPositions]);
+  const isManualStockPnlCoefficientValid = useMemo(() => {
+    const value = Number(manualStockPnlCoefficient);
+    return Number.isFinite(value) && value > 0 && value <= 100000;
+  }, [manualStockPnlCoefficient]);
+  const normalizedManualStockPnlCoefficient = isManualStockPnlCoefficientValid
+    ? Number(manualStockPnlCoefficient)
+    : 1;
   const manualStockPreviewSymbols = useMemo(
     () => validManualStockPositions.map((position) => position.symbol),
     [validManualStockPositions],
@@ -223,10 +231,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         useFloatingPnl: false,
         stockPnlSource: 'manual_positions' as const,
         stockPositions: validManualStockPositions,
+        // 先汇总每只股票的原始盈亏，再乘此系数；默认 1 表示不放大或缩小。
+        stockPnlCoefficient: normalizedManualStockPnlCoefficient,
       };
     }
     return linkedInterestSourceDraft;
-  }, [formData.assetType, stockPnlSourceMode, validManualStockPositions, linkedInterestSourceDraft]);
+  }, [formData.assetType, stockPnlSourceMode, validManualStockPositions, normalizedManualStockPnlCoefficient, linkedInterestSourceDraft]);
 
   // 字段展示配置（控制订单卡片各字段的显示/隐藏）
   const DEFAULT_DISPLAY_CONFIG: Record<string, boolean | string> = {
@@ -953,6 +963,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       toast.error('请至少完整填写一只股票的代码、买入价和股数');
       return;
     }
+    if (!isManualStockPnlCoefficientValid) {
+      toast.error('股票计算系数须大于 0，且不超过 100000');
+      return;
+    }
     if (isSnapshotScopedEdit) {
       const participantUserId = editingOrder.participantInfo?.userId ?? editingOrder.participantInfo?.user_id;
       if (!participantUserId) {
@@ -1285,6 +1299,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setPaidInterestTagName('');
     setStockPnlSourceMode('none');
     setManualStockPositions([]);
+    setManualStockPnlCoefficient('1');
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
     setEditingOrder(null);
     setShowDatePicker(false);
@@ -1433,6 +1448,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         setPaidInterestTagName('');
         setStockPnlSourceMode('none');
         setManualStockPositions([]);
+        setManualStockPnlCoefficient('1');
       } else if (cs) {
         const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
         const savedManualPositions = parsed?.stockPnlSource === 'manual_positions' && Array.isArray(parsed?.stockPositions)
@@ -1445,6 +1461,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             }))
           : [];
         setManualStockPositions(savedManualPositions);
+        const savedStockCoefficient = Number(parsed?.stockPnlCoefficient);
+        setManualStockPnlCoefficient(
+          Number.isFinite(savedStockCoefficient) && savedStockCoefficient > 0 && savedStockCoefficient <= 100000
+            ? String(savedStockCoefficient)
+            : '1',
+        );
         setStockPnlSourceMode(savedManualPositions.length > 0
           ? 'manual_positions'
           : (parsed?.floatingPnlTagName || (parsed?.useFloatingPnl !== false && parsed?.tagName) ? 'reference37' : 'none'));
@@ -1480,6 +1502,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         setPaidInterestTagName('');
         setStockPnlSourceMode('none');
         setManualStockPositions([]);
+        setManualStockPnlCoefficient('1');
       }
     } catch {
       setCollateralSourceMode('manual');
@@ -1488,6 +1511,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       setPaidInterestTagName('');
       setStockPnlSourceMode('none');
       setManualStockPositions([]);
+      setManualStockPnlCoefficient('1');
     }
     // 加载字段展示配置
     try {
@@ -3166,6 +3190,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           setStockPnlSourceMode(value);
                           if (value === 'none') {
                             setManualStockPositions([]);
+                            setManualStockPnlCoefficient('1');
                             setCollateralSource(prev => prev ? { ...prev, floatingPnlTagName: '', useFloatingPnl: false } : prev);
                           }
                           if (value === 'manual_positions') {
@@ -3189,6 +3214,27 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-xs font-semibold text-violet-800">股票组合（买入价 × 股数）</div>
                         <span className="text-[10px] text-violet-500">每日盘尾 15:05 更新</span>
+                      </div>
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-lg border border-violet-100 bg-violet-50 px-2.5 py-2">
+                        <label htmlFor="manual-stock-pnl-coefficient" className="text-xs font-semibold text-violet-800">计算系数</label>
+                        <div className="min-w-0">
+                          <input
+                            id="manual-stock-pnl-coefficient"
+                            type="number"
+                            min="0.000001"
+                            max="100000"
+                            step="any"
+                            value={manualStockPnlCoefficient}
+                            onChange={event => setManualStockPnlCoefficient(event.target.value)}
+                            className={`w-full rounded-md border px-2 py-1.5 text-xs font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-violet-200 ${isManualStockPnlCoefficientValid ? 'border-violet-200 bg-white text-violet-800' : 'border-red-300 bg-red-50 text-red-700'}`}
+                            aria-label="股票组合浮动盈亏计算系数"
+                          />
+                          <div className={`mt-1 text-[10px] leading-4 ${isManualStockPnlCoefficientValid ? 'text-violet-600' : 'text-red-600'}`}>
+                            {isManualStockPnlCoefficientValid
+                              ? `总浮动盈亏 = 各股票原始盈亏合计 × ${normalizedManualStockPnlCoefficient}`
+                              : '请输入大于 0 且不超过 100000 的计算系数'}
+                          </div>
+                        </div>
                       </div>
                       {manualStockPositions.map((position, index) => (
                         <div key={index} className="grid grid-cols-2 gap-1.5 sm:grid-cols-[1.1fr_1fr_1fr_1fr_1fr_auto]">
@@ -3266,12 +3312,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           <button
                             type="button"
                             onClick={saveManualStockPnlSource}
-                            disabled={validManualStockPositions.length === 0 || saveLinkedInterestSourceMutation.isPending || saveParticipantLinkedInterestSourceMutation.isPending}
+                            disabled={validManualStockPositions.length === 0 || !isManualStockPnlCoefficientValid || saveLinkedInterestSourceMutation.isPending || saveParticipantLinkedInterestSourceMutation.isPending}
                             className="rounded-md bg-violet-600 px-2.5 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-violet-300"
                           >{saveLinkedInterestSourceMutation.isPending || saveParticipantLinkedInterestSourceMutation.isPending ? '保存中…' : '保存股票组合'}</button>
                         )}
                       </div>
-                      <div className="text-[11px] leading-4 text-violet-600">字段依次为名称、代码、买入价、卖出价（可选）和持股数量。未填卖出价时，浮动盈亏 = Σ（每日盘尾价 − 买入价）× 股数；填入卖出价后按卖出价锁定计算。点击订单里浮动盈亏后的说明按钮可逐只查看价格与更新时点。</div>
+                      <div className="text-[11px] leading-4 text-violet-600">字段依次为名称、代码、买入价、卖出价（可选）和持股数量。未填卖出价时，原始盈亏 = Σ（每日盘尾价 − 买入价）× 股数；填入卖出价后按卖出价锁定计算。最终浮动盈亏 = 原始盈亏合计 × 计算系数；点击订单里浮动盈亏后的说明按钮可逐只查看价格、更新时间与计算过程。</div>
                     </div>
                   )}
                 </div>
