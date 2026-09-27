@@ -3378,7 +3378,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           <div className={`mt-1 text-[10px] leading-4 ${isManualStockPnlCoefficientValid ? 'text-violet-600' : 'text-red-600'}`}>
                             {isManualStockPnlCoefficientValid
                               ? manualStockPnlCalculationMode === 'total_capital'
-                                ? `总浮动盈亏 = 最新持仓市值合计 × ${normalizedManualStockPnlCoefficient} − 账户初始总额度`
+                                ? `总浮动盈亏 =（最新持仓市值合计 − 账户初始总额度）× ${normalizedManualStockPnlCoefficient}`
                                 : `总浮动盈亏 = 各股票原始盈亏合计 × ${normalizedManualStockPnlCoefficient}`
                               : '请输入大于 0 且不超过 100000 的计算系数'}
                           </div>
@@ -3496,7 +3496,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       </div>
                       <div className="text-[11px] leading-4 text-violet-600">
                         {manualStockPnlCalculationMode === 'total_capital'
-                          ? '字段依次为名称、代码和当前持股数量。选中股票时自动带入一笔最新价；每日 15:05 再由盘尾价覆盖。最终浮动盈亏 = Σ（最新价 × 股数）× 计算系数 − 账户初始总额度。点击订单里浮动盈亏后的说明按钮可逐只查看最新价、持仓市值、更新时间与计算过程。'
+                          ? '字段依次为名称、代码和当前持股数量。选中股票时自动带入一笔最新价；每日 15:05 再由盘尾价覆盖。差值 = Σ（最新价 × 股数）− 账户初始总额度；最终浮动盈亏 = 差值 × 计算系数。点击订单里浮动盈亏后的说明按钮可逐只查看最新价、持仓市值、更新时间与计算过程。'
                           : '字段依次为名称、代码、买入价、卖出价（可选）和持股数量。未填卖出价时，原始盈亏 = Σ（每日盘尾价 − 买入价）× 股数；填入卖出价后按卖出价锁定计算。最终浮动盈亏 = 原始盈亏合计 × 计算系数；点击订单里浮动盈亏后的说明按钮可逐只查看价格、更新时间与计算过程。'}
                       </div>
                     </div>
