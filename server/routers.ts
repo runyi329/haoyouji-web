@@ -18486,14 +18486,16 @@ ${klinesSummary}
           } catch {}
           return result;
         });
-        // 并行查询：已结利息汇总 + 参与方数量
+        // 并行查询：已结利息汇总 + 参与方数量 + 平级拥有者姓名。
+        // 订单本体 user_id 只是存储锚点；卡片名称必须能按每位拥有者的展示规则呈现完整拥有者组。
         let paidTotalMap: Record<number, { amount: number; currency: string }> = {};
         let participantCountMap: Record<number, number> = {};
         let participantUserIdsMap: Record<number, number[]> = {};
+        let ownerNamesMap: Record<number, Array<{ userId: number; name: string }>> = {};
         if (conn && ordersWithParticipantView.length > 0) {
           const orderIds = ordersWithParticipantView.map((o: any) => Number(o.id));
           const placeholders = orderIds.map(() => '?').join(',');
-          const [ptRowsResult, pcRowsResult] = await Promise.all([
+          const [ptRowsResult, pcRowsResult, ownerRowsResult] = await Promise.all([
             conn.execute(
               `SELECT order_id, participant_user_id, amount, IFNULL(currency, 'U') as currency, IFNULL(exchange_rate, 6.75) as exchange_rate
                FROM ledger_order_payments WHERE order_id IN (${placeholders})`,
@@ -18502,6 +18504,15 @@ ${klinesSummary}
             conn.execute(
               `SELECT order_id, user_id FROM ledger_order_participants WHERE role <> 'inactive' AND order_id IN (${placeholders})`,
               orderIds
+            ).catch(() => null) as Promise<any>,
+            conn.execute(
+              `SELECT p.order_id, p.user_id, p.sort_order, u.username, u.name, lm.nickname
+               FROM ledger_order_participants p
+               LEFT JOIN users u ON u.id = p.user_id
+               LEFT JOIN ledger_members lm ON lm.ledgerId = p.ledger_id AND lm.userId = p.user_id
+               WHERE p.ledger_id = ? AND p.role = 'owner' AND p.order_id IN (${placeholders})
+               ORDER BY p.order_id ASC, p.sort_order ASC, p.id ASC`,
+              [input.ledgerId, ...orderIds]
             ).catch(() => null) as Promise<any>
           ]);
           if (ptRowsResult) {
@@ -18544,6 +18555,17 @@ ${klinesSummary}
               participantUserIdsMap[oid].push(Number(row.user_id));
             }
           }
+          if (ownerRowsResult) {
+            const ownerRows = Array.isArray(ownerRowsResult[0]) ? ownerRowsResult[0] : (Array.isArray(ownerRowsResult) ? ownerRowsResult : []);
+            for (const row of ownerRows) {
+              const oid = Number(row.order_id);
+              if (!ownerNamesMap[oid]) ownerNamesMap[oid] = [];
+              ownerNamesMap[oid].push({
+                userId: Number(row.user_id),
+                name: String(row.nickname || row.name || row.username || `用户${row.user_id}`),
+              });
+            }
+          }
         }
         console.log(`[funderGetAssetOrders] t5_paid_participant: ${Date.now()-_t0}ms`);
         const ordersWithPaid = ordersWithParticipantView.map((o: any) => ({
@@ -18551,6 +18573,8 @@ ${klinesSummary}
           paidTotal: paidTotalMap[Number(o.id)] || null,
           participantCount: participantCountMap[Number(o.id)] || 0,
           _participantUserIds: participantUserIdsMap[Number(o.id)] || [],
+          // 仅用于拥有者组的卡片姓名展示；不包含金额、备注、担保或任何资金数据。
+          owner_display_names: ownerNamesMap[Number(o.id)] || [],
         }));
         console.log(`[funderGetAssetOrders] t_TOTAL: ${Date.now()-_t0}ms, orders: ${ordersWithPaid.length}`);
         return { orders: ordersWithPaid, livePrices, _debug: { targetUserId, participantQueryUserIdEarly, participantOrderIds, viewAsUserId: input.viewAsUserId } };
@@ -18981,12 +19005,6 @@ ${klinesSummary}
               return sum + amount;
             }, 0);
             const pendingInterest = Math.max(0, totalInterest - paidInterest);
-            // 担保需求 = 本金 + 待结利息
-            // 期权订单：本金是否计入由 principal_lent_out 开关控制
-            const isOptionAsset = o.asset_type === 'crypto_option';
-            const principalLentOut2 = o.principal_lent_out === 1 || o.principal_lent_out === true;
-            const effectivePrincipal = (isOptionAsset && !principalLentOut2) ? 0 : principal;
-            const collateralRequired = effectivePrincipal + pendingInterest;
             // 计算当前市值（数量 × 实时价）
             const quantity = parseFloat(String(o.buy_quantity ?? 0)) || 0;
             // 期权订单：实际标的币种在 option_info.coin，优先使用
@@ -19002,6 +19020,36 @@ ${klinesSummary}
             console.log('[BuyPrice Debug]', o.order_no, 'buy_price raw:', o.buy_price, 'type:', typeof o.buy_price, 'constructor:', o.buy_price?.constructor?.name, 'string:', String(o.buy_price ?? 0));
             const buyPrice = parseFloat(String(o.buy_price ?? 0)) || 0;
             const buyValue = buyPrice * quantity;
+            const buyValueCurrency = coinUpper === 'CNY' ? 'CNY' : (o.amount_currency || (o.asset_type === 'stock' ? 'CNY' : 'USDT'));
+            const buyValueIsCny = ['CNY', 'RMB', '人民币'].includes(String(buyValueCurrency).trim().toUpperCase());
+            const buyValueU = buyValueIsCny ? buyValue / usdtCnyRate : buyValue;
+            const principalU = baseCurrency === 'CNY' ? principal / usdtCnyRate : principal;
+            const pendingInterestU = baseCurrency === 'CNY' ? pendingInterest / usdtCnyRate : pendingInterest;
+            const displayConfig = (() => {
+              try {
+                const raw = o.display_config;
+                const value = Buffer.isBuffer(raw) ? raw.toString('utf8') : raw;
+                const parsed = typeof value === 'string' ? JSON.parse(value || '{}') : value;
+                return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+              } catch { return {}; }
+            })();
+            const collateralGapBaseMode = displayConfig.collateralGapBaseMode === 'interest_base'
+              ? 'interest_base'
+              : 'buy_value';
+            // 共享池和单订单卡片必须使用同一份订单配置：默认真实买入价值，也可按计息基数。
+            // 缺少买入价的历史订单安全回退到保存的计息基数，避免把有效风险基准错误写成 0。
+            const collateralGapBaseU = collateralGapBaseMode === 'interest_base'
+              ? principalU
+              : (buyValueU > 0 ? buyValueU : principalU);
+            const paidInterestU = baseCurrency === 'CNY' ? paidInterest / usdtCnyRate : paidInterest;
+            // 缺口为正表示仍需补足：所选基准 − 当前持有资产市值 + 待结 − 已结 − 担保物。
+            // 37 标签浮盈是“当前市值 − 买入价值”，需还原为当前市值后再与所选基准比较。
+            const fallbackHoldingValueU = buyValueU > 0 ? buyValueU : principalU;
+            const linkedFloatingPnlU = linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null;
+            const holdingValueU = linkedFloatingPnlU !== null && Number.isFinite(linkedFloatingPnlU)
+              ? fallbackHoldingValueU + linkedFloatingPnlU
+              : currentValue;
+            const collateralRequired = collateralGapBaseU - (holdingValueU ?? 0) + pendingInterestU - paidInterestU;
             const principalLentOut = o.principal_lent_out === 1 || o.principal_lent_out === true;
             return {
               orderId: Number(o.id),
@@ -19012,13 +19060,16 @@ ${klinesSummary}
               buyValue,
               // buyValue = buyPrice × quantity，保留原始计价币种，供共享担保前端换算为 U 后与订单详情统一比较。
               // CNY 标的的买入价与数量天然以人民币相乘，优先标记为CNY，不能误跟随历史amount_currency。
-              buyValueCurrency: coinUpper === 'CNY' ? 'CNY' : (o.amount_currency || (o.asset_type === 'stock' ? 'CNY' : 'USDT')),
+              buyValueCurrency,
               principal,
+              collateralGapBaseMode,
+              collateralGapBaseU,
               currentPrice,
               currentPriceUpdatedAt: quoteHealth?.lastSuccessAt || null,
               currentPriceSource: quoteHealth?.source || null,
               currentPriceStale: quoteHealth?.stale ?? !isStablecoinCoin,
               currentValue,
+              holdingValueU,
               principalLoss,
               // 保留利息累计额与已结利息，前端共享担保公式需明确展示：
               // 浮动盈亏 − 累计待结利息 + 已结利息，而不只返回已扣除付款的净待结额。
@@ -19027,7 +19078,7 @@ ${klinesSummary}
               paidInterest,  // 已结利息，供前端弹窗第①部分缺口计算加回
               collateralRequired,
               collateralValue,
-              collateralGap: collateralValue - collateralRequired,
+              collateralGap: collateralRequired - collateralValue,
               collateralAssets: effectiveCollateralAssets,
               // linked37TagName专指实际引用的37号担保物，供担保池去重。
               linked37TagName: linked37Collateral?.useCollateral ? linked37Collateral.collateralTagName : null,
@@ -19061,7 +19112,7 @@ ${klinesSummary}
             return s + o.collateralValue;
           }, 0);
           const totalCollateralRequired = orderDetails.reduce((s: number, o: any) => s + o.collateralRequired, 0);
-          const totalGap = totalCollateralValue - totalCollateralRequired;
+          const totalGap = totalCollateralRequired - totalCollateralValue;
           const totalBuyValue = orderDetails.reduce((s: number, o: any) => s + (o.buyValue || 0), 0);
 
           await conn.end();
@@ -21532,6 +21583,19 @@ ${klinesSummary}
             }, parentOrder),
             parentOrder,
           );
+          // 共同拥有者的个人订单页固定显示本人姓名；不再提供“显示全体拥有者”这一分支。
+          if (isOwnerRole) {
+            let ownerDisplayConfig: Record<string, any> = {};
+            try {
+              const raw = snapshot.display_config;
+              ownerDisplayConfig = raw && typeof raw === 'string'
+                ? JSON.parse(raw)
+                : (raw && typeof raw === 'object' ? raw : {});
+            } catch {
+              ownerDisplayConfig = {};
+            }
+            snapshot.display_config = JSON.stringify({ ...ownerDisplayConfig, ownerNameDisplay: 'self' });
+          }
           if (existing) {
             await conn.execute(
               `UPDATE ledger_order_participants SET role = ?, previous_role = NULL, amount = ?, amount_currency = ?, interest_rate = ?, interest_base = ?,
@@ -21676,7 +21740,7 @@ ${klinesSummary}
         const conn = await getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         const [rows] = await conn.execute(
-          `SELECT p.order_snapshot, o.* FROM ledger_order_participants p
+          `SELECT p.order_snapshot, p.role AS participant_role, o.* FROM ledger_order_participants p
            INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
            WHERE p.order_id = ? AND p.ledger_id = ? AND p.user_id = ? AND p.role <> 'inactive' LIMIT 1`,
           [input.orderId, input.ledgerId, input.userId]
@@ -21702,6 +21766,18 @@ ${klinesSummary}
             ? mergedSnapshot.personal_header_label.replace(/\s+/g, ' ').trim().slice(0, 32)
             : null;
         }
+        if (row.participant_role === 'owner') {
+          let ownerDisplayConfig: Record<string, any> = {};
+          try {
+            const raw = mergedSnapshot.display_config;
+            ownerDisplayConfig = raw && typeof raw === 'string'
+              ? JSON.parse(raw)
+              : (raw && typeof raw === 'object' ? raw : {});
+          } catch {
+            ownerDisplayConfig = {};
+          }
+          mergedSnapshot.display_config = JSON.stringify({ ...ownerDisplayConfig, ownerNameDisplay: 'self' });
+        }
         mergedSnapshot = syncFunderParticipantSharedAssetSnapshot(
           syncFunderParticipantCollateralSnapshot(mergedSnapshot, row),
           row,
@@ -21710,7 +21786,8 @@ ${klinesSummary}
           `UPDATE ledger_order_participants SET
              order_snapshot = ?, amount = ?, amount_currency = ?, interest_rate = ?, interest_base = ?,
              interest_base_currency = ?, interest_payment_type = ?, interest_start_date = ?, interest_rate_currency = ?,
-             display_config = ?, note = ?, buy_date_override = ?, broker_name_override = ?, broker_account_override = ?, updated_at = NOW()
+             display_config = ?, note = ?, buy_date_override = ?, broker_name_override = ?, broker_account_override = ?,
+             visibility_mode = ?, visible_owner_ids = ?, updated_at = NOW()
            WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> 'inactive'`,
           [
             JSON.stringify(mergedSnapshot),
@@ -21721,6 +21798,16 @@ ${klinesSummary}
             typeof mergedSnapshot.display_config === 'string' ? mergedSnapshot.display_config : JSON.stringify(mergedSnapshot.display_config ?? null),
             mergedSnapshot.public_note ?? null, mergedSnapshot.buy_date ?? null,
             mergedSnapshot.broker_name ?? null, mergedSnapshot.broker_account ?? null,
+            row.participant_role === 'owner'
+              ? (['self', 'total', 'breakdown', 'partners'].includes(String((input.snapshot as any).owner_visibility_mode))
+                ? (input.snapshot as any).owner_visibility_mode
+                : 'self')
+              : null,
+            row.participant_role === 'owner'
+              ? JSON.stringify(Array.isArray((input.snapshot as any).visible_owner_ids)
+                ? (input.snapshot as any).visible_owner_ids.map(Number).filter((id: number) => id > 0 && id !== Number(input.userId))
+                : [])
+              : null,
             input.orderId, input.ledgerId, input.userId,
           ]
         );

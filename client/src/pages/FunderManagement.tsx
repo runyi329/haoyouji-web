@@ -102,8 +102,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     tradeDirection: null as null | 'long' | 'short',
     ownerLabel: '',
     ownerLabelMode: 'member' as 'member' | 'manual',
-    // 参与者/共同拥有者的业务页眉。它是独立视图中的业务标题，不会覆盖真实账号或订单拥有者身份。
+    // 拥有者/参与者的业务页眉。它是独立视图中的业务标题，不会覆盖真实账号或订单拥有者身份。
     personalHeaderLabel: '',
+    ownerNameDisplay: 'self' as 'all' | 'self',
+    ownerVisibilityMode: 'self' as 'self' | 'total' | 'breakdown' | 'partners',
+    ownerVisibleOwnerIds: [] as number[],
     tags: [] as string[],
     principalLentOut: false,
     tradingFeeRate: '2',
@@ -124,8 +127,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     premiumDenomination: 'USDT' as CoinType,
     buyQty: '',
   });
-  // 标签输入状态
+  // 标签与个人订单页眉输入状态
   const [tagInput, setTagInput] = useState('');
+  const [personalHeaderDraft, setPersonalHeaderDraft] = useState('');
   // 担保货币列表：[{ coin: 'BTC', qty: '' }, ...]
   const [collateralAssets, setCollateralAssets] = useState<{ coin: string; qty: string; note?: string; source?: 'wallet' }[]>([]);
   // 历史钱包担保有少量记录未带 source 字段；以固定冻结备注兼容识别，避免被误当作手工担保删除。
@@ -334,6 +338,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     externalCollateralGapDisplay: 'CNY',
     // 股票手工担保始终逐笔显示实际输入的担保物；本项只控制下方“担保价值”的合计单位。
     stockManualCollateralValueDisplay: 'CNY',
+    // 担保缺口默认按真实买入价值计算；管理员可以逐单改为按计息基数。
+    // 该值随 display_config 保存到主订单或拥有者个人订单快照。
+    collateralGapBaseMode: 'buy_value',
     // 股票专属字段
     brokerName: true,
     brokerAccount: true,
@@ -349,6 +356,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     tradingFee: false,
     // 仅控制普通用户前端的下载箭头；管理员订单列表始终可下载
     allowUserImageDownload: true,
+    // 共同拥有者的个人订单视图固定显示本人姓名。
+    ownerNameDisplay: 'self',
     // 52号账本资金属性：仅控制前端标签展示，不参与任何计算；空值表示未标记。
     assetFundingType: '',
     // 兼容已保存的早期“自有资金”展示标记。
@@ -406,6 +415,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [participantUserSearch, setParticipantUserSearch] = useState('');
   const [selectedParticipantUserIds, setSelectedParticipantUserIds] = useState<number[]>([]);
   const [participantsSectionExpanded, setParticipantsSectionExpanded] = useState(false);
+  const [ownerAddPanelExpanded, setOwnerAddPanelExpanded] = useState(false);
+  const [primaryOwnerEditorExpanded, setPrimaryOwnerEditorExpanded] = useState(true);
   const saveParticipantFormMutation = trpc.ledger.funderSaveParticipantFullConfig.useMutation({
     onSuccess: (_result, vars) => {
       trpcUtils.ledger.funderGetOrderParticipants.invalidate({ orderId: vars.orderId, ledgerId: vars.ledgerId });
@@ -435,6 +446,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         visibleOwnerIds: p.role === 'owner' ? p.visibleOwnerIds : undefined,
         displayConfig: JSON.stringify({
           ...p.displayConfig,
+          ownerNameDisplay: 'self',
           allowUserImageDownload: Boolean(displayConfig.allowUserImageDownload),
           marginAlertThreshold: p.marginAlertThreshold || undefined,
           financingInputAmount: p.amount || '',
@@ -528,10 +540,35 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const editingCollaboratorUserId = Number((editingOrder as any)?.participantInfo?.userId || (editingOrder as any)?.participantInfo?.user_id || 0);
   const isPrimaryOwnerEdit = editingCollaboratorRole === 'owner'
     && editingCollaboratorUserId > 0
-    && editingCollaboratorUserId === Number((editingOrder as any)?.user_id || 0);
+    && editingCollaboratorUserId === Number((editingOrder as any)?.user_id || 0)
+    // 从拥有者组打开的“个人订单视图”即使恰好是最初存储锚点，也必须使用该拥有者自己的配置快照。
+    && !(editingOrder as any)?.participantInfo?.isPersonalOwnerView;
   const isSnapshotScopedEdit = !!editingOrder?.participantInfo && !isPrimaryOwnerEdit;
   const isRestrictedParticipantEdit = !!editingOrder?.participantInfo && editingCollaboratorRole !== 'owner';
+  const isOwnerPersonalView = isSnapshotScopedEdit && editingCollaboratorRole === 'owner';
+  const personalViewName = String((editingOrder as any)?.participant_name || (editingOrder as any)?.owner_label || '当前成员');
   const canManageCollaboratorsInEditor = !editingOrder || isAdminUser;
+
+  // 拥有者在业务上是平级关系：主订单仅是数据存储锚点，不能作为界面上的主次排序依据。
+  // 保留原数组索引给保存动作使用，展示层仅按角色和姓名做稳定排序。
+  const displayParticipants = useMemo(() => participants
+    .map((participant, index) => ({ participant, index }))
+    .sort((a, b) => {
+      const roleWeight = (value: ParticipantForm['role']) => value === 'owner' ? 0 : 1;
+      const roleDiff = roleWeight(a.participant.role) - roleWeight(b.participant.role);
+      if (roleDiff !== 0) return roleDiff;
+      const nameDiff = a.participant.userName.localeCompare(b.participant.userName, 'zh-Hans-CN');
+      return nameDiff !== 0 ? nameDiff : a.participant.userId - b.participant.userId;
+    }), [participants]);
+  const ownerGroupSize = participants.filter(participant => participant.role === 'owner').length;
+  // 第一位拥有者继续使用主订单编辑内容；多人时把它收成独立抽屉，避免与下方成员编辑重复。
+  const hasPrimaryOwnerDrawer = Boolean(editingOrder?.id) && !isSnapshotScopedEdit && ownerGroupSize > 1;
+  const editableParticipants = useMemo(() => displayParticipants.filter(({ participant }) => !(
+    participant.role === 'owner' && Number(participant.userId) === Number(formData.userId)
+  )), [displayParticipants, formData.userId]);
+  useEffect(() => {
+    setPrimaryOwnerEditorExpanded(!hasPrimaryOwnerDrawer);
+  }, [editingOrder?.id, hasPrimaryOwnerDrawer]);
 
   const { data: funderUsers, isLoading: usersLoading } = trpc.ledger.funderGetFunderUsers.useQuery(
     { ledgerId, ...(adminOnly ? { roleFilter: "admin" as const } : {}), ...(financeOnly ? { financeOnly: true } : {}) },
@@ -843,12 +880,34 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     return total; // 无担保物时返回 0，不返回 null
   }, [collateralAssets, formLivePrices, cnyRate]);
 
-  // 担保缺口 = 订单总金额 - 担保价值
+  // 担保缺口基准默认使用买入价值；管理员可逐单改为计息基数。
+  // 所有数值先统一折成 U，与担保物实时估值保持同一口径。
+  const collateralGapBaseMode = displayConfig.collateralGapBaseMode === 'interest_base'
+    ? 'interest_base'
+    : 'buy_value';
+  const collateralGapBaseValue = useMemo(() => {
+    if (collateralGapBaseMode === 'buy_value') {
+      return parseFloat(financingAmountUsdt || '0');
+    }
+    const base = parseFloat(formData.interestBase || '0');
+    if (!Number.isFinite(base) || base <= 0) return 0;
+    const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
+    return ['CNY', 'RMB', '人民币'].includes(currency) ? base / cnyRate : base;
+  }, [collateralGapBaseMode, financingAmountUsdt, formData.interestBase, formData.interestBaseCurrency, cnyRate]);
+
+  const previewCurrentHoldingValue = useMemo(() => {
+    const quantity = parseFloat(formData.buyQuantity || '0');
+    const coin = String(formData.coin || '').trim().toUpperCase();
+    const price = formLivePrices[coin];
+    if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(price) || price <= 0) return null;
+    return quantity * price;
+  }, [formData.buyQuantity, formData.coin, formLivePrices]);
+
+  // 编辑区先按“基准 − 当前持有资产 − 担保物”预览；订单卡片还会纳入待结/已结利息。
   const computedCollateralGap = useMemo(() => {
-    const orderAmt = parseFloat(financingAmountUsdt || '0');
-    if (orderAmt <= 0) return null;
-    return orderAmt - computedCollateralValue;
-  }, [computedCollateralValue, financingAmountUsdt]);
+    if (collateralGapBaseValue <= 0) return null;
+    return collateralGapBaseValue - (previewCurrentHoldingValue ?? 0) - computedCollateralValue;
+  }, [computedCollateralValue, collateralGapBaseValue, previewCurrentHoldingValue]);
 
   // 预览卡片实时待结利息（每秒更新）
   const [previewAccrued, setPreviewAccrued] = useState<number>(0);
@@ -961,6 +1020,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         toast.success(syncedCount > 0 ? `主订单及 ${syncedCount} 位参与者已同步恢复` : '订单已恢复为持有中');
       } else {
         toast.success('更新成功');
+      }
+      // 多拥有者订单中，顶部只代表第一位拥有者的主订单内容。
+      // 保存后留在同一编辑页并收起该抽屉，方便继续管理其余成员。
+      if (hasPrimaryOwnerDrawer && !isLinkedStatusUpdate) {
+        setPrimaryOwnerEditorExpanded(false);
+        setParticipantsSectionExpanded(false);
+        setOwnerAddPanelExpanded(false);
+        refetchOrders();
+        trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+        return;
       }
       setShowForm(false);
       setEditingOrder(null);
@@ -1348,6 +1417,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ownerLabel: '',
       ownerLabelMode: 'member' as 'member' | 'manual',
       personalHeaderLabel: '',
+      ownerNameDisplay: 'self' as 'all' | 'self',
+      ownerVisibilityMode: 'self' as 'self' | 'total' | 'breakdown' | 'partners',
+      ownerVisibleOwnerIds: [] as number[],
       tags: [] as string[],
       principalLentOut: false,
       tradingFeeRate: '2',
@@ -1358,6 +1430,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       orderPerspective: 'self' as 'self' | 'other',
     });
     setTagInput('');
+    setPersonalHeaderDraft('');
     setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'USDT', buyQty: '' });
     interestBaseTouchedRef.current = false; // 新建订单：允许融资金额(U)自动带入计息基数
     setCollateralAssets([]);
@@ -1458,6 +1531,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ownerLabel: order.owner_label || '',
       ownerLabelMode: (order.owner_label ? 'manual' : 'member') as 'member' | 'manual',
       personalHeaderLabel: typeof (order as any).personal_header_label === 'string' ? (order as any).personal_header_label : '',
+      ownerNameDisplay: 'self',
+      ownerVisibilityMode: (['self', 'total', 'breakdown', 'partners'].includes((order as any).owner_visibility_mode)
+        ? (order as any).owner_visibility_mode
+        : 'self') as 'self' | 'total' | 'breakdown' | 'partners',
+      ownerVisibleOwnerIds: Array.isArray((order as any).visible_owner_ids)
+        ? (order as any).visible_owner_ids.map(Number).filter(Boolean)
+        : (() => { try { const ids = typeof (order as any).visible_owner_ids === 'string' ? JSON.parse((order as any).visible_owner_ids) : []; return Array.isArray(ids) ? ids.map(Number).filter(Boolean) : []; } catch { return []; } })(),
       tags: (() => { try { const t = order.tags; return Array.isArray(t) ? t : (typeof t === 'string' ? JSON.parse(t) : []); } catch { return []; } })(),
       principalLentOut: !!(order.principal_lent_out),
       tradingFeeRate: order.trading_fee_rate_per_mille != null ? String(order.trading_fee_rate_per_mille) : '2',
@@ -1468,6 +1548,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       orderPerspective: (order.order_perspective === 'other' ? 'other' : 'self') as 'self' | 'other',
     });
     setTagInput('');
+    setPersonalHeaderDraft(typeof (order as any).personal_header_label === 'string' ? (order as any).personal_header_label : '');
     // 加载期权信息
     try {
       const oi = order.option_info;
@@ -1668,6 +1749,22 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     }
   };
 
+  // 管理员可从订单号深链直达编辑界面，便于移动端复核同一张订单的拥有者组配置。
+  // 使用一次性标记；关闭表单后不会因同一 URL 自动重新弹出。
+  const directEditHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined' || ledgerId !== 52 || !isAdminUser) return;
+    const params = new URLSearchParams(window.location.search);
+    const orderId = Number(params.get('orderId') || 0);
+    if (params.get('edit') !== '1' || !Number.isInteger(orderId) || orderId <= 0) return;
+    const key = `${ledgerId}:${orderId}`;
+    if (directEditHandledRef.current === key) return;
+    const target = (assetOrders as any[]).find((order: any) => Number(order?.id) === orderId);
+    if (!target) return;
+    directEditHandledRef.current = key;
+    handleOpenEdit(target);
+  }, [assetOrders, isAdminUser, ledgerId]);
+
   // 管理员从协作人列表进入个人配置时，必须把该协作人的完整快照交给同一套编辑表单。
   // 身份、主订单 ID、共享标的和结清状态仍强制来自父订单，避免个人视图改写真实关联关系。
   const openParticipantFullView = (participant: ParticipantForm) => {
@@ -1712,6 +1809,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       participantInfo: {
         userId: participant.userId,
         role: participant.role,
+        isPersonalOwnerView: participant.role === 'owner',
         commissionRate: snapshot.commission_rate ?? '',
         commissionBase: snapshot.commission_base ?? '',
         commissionStartDate: snapshot.commission_start_date ?? '',
@@ -1719,6 +1817,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       participant_name: participant.userName,
       owner_label: participant.userName,
       order_owner_name: editingOrder.order_owner_name || editingOrder.owner_label || editingOrder.username || null,
+      owner_visibility_mode: participant.visibilityMode,
+      visible_owner_ids: participant.visibleOwnerIds,
       _isParticipant: participant.role !== 'owner',
     };
     handleOpenEdit(participantOrder);
@@ -1816,6 +1916,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         ),
         ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
         rate_negative: normalizeFunderAnnualRate(formData.interestRateAnnual).startsWith('-'),
+        ownerNameDisplay: 'self',
         financingInputAmount: amountInputValue || '',
         financingInputCurrency: formData.amountCurrency || 'USDT',
         linkedManualFields: manualLinkedFieldsRef.current.join(','),
@@ -1825,6 +1926,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       tradeDirection: (['long', 'short'] as const).includes(formData.tradeDirection as any) ? (formData.tradeDirection as 'long' | 'short') : null,
       ownerLabel: formData.ownerLabel || undefined,
       personalHeaderLabel: formData.personalHeaderLabel.trim() || undefined,
+      ownerVisibilityMode: formData.ownerVisibilityMode,
+      ownerVisibleOwnerIds: formData.ownerVisibleOwnerIds,
       tags: formData.tags.length > 0 ? formData.tags : undefined,
       collateralShareMode: collateralShareMode !== 'none' ? collateralShareMode : undefined,
       collateralSource: orderCollateralSourceDraft,
@@ -1891,6 +1994,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           option_info: payload.optionInfo ? JSON.stringify(payload.optionInfo) : null,
           trade_direction: payload.tradeDirection || null,
           personal_header_label: payload.personalHeaderLabel || null,
+          owner_visibility_mode: editingCollaboratorRole === 'owner' ? payload.ownerVisibilityMode : null,
+          visible_owner_ids: editingCollaboratorRole === 'owner' ? payload.ownerVisibleOwnerIds : [],
         },
       });
     } else if (editingOrder) {
@@ -2195,7 +2300,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col overflow-x-hidden" style={{ overscrollBehavior: 'contain' }}>
             <div className="flex-shrink-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl" style={{ zIndex: 10 }}>
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
-                {isRestrictedParticipantEdit ? '参与者个人订单视图' : editingOrder ? '编辑订单' : '添加订单'}
+                {isSnapshotScopedEdit ? `配置 ${personalViewName} 的个人订单` : editingOrder ? '编辑订单' : '添加订单'}
               </h3>
               {editingOrder && canManageCollaboratorsInEditor && (
                 <button
@@ -2228,23 +2333,85 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             </div>
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
-              {/* 历史参与者使用独立业务快照；真实订单关系仍由主订单受控。 */}
-              {isRestrictedParticipantEdit && (
-                <div className="rounded-xl px-4 py-3 flex items-start gap-2" style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0' }}>
-                  <span className="text-green-600 mt-0.5">✓</span>
+              {hasPrimaryOwnerDrawer && (
+                <button
+                  type="button"
+                  onClick={() => setPrimaryOwnerEditorExpanded(expanded => !expanded)}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-left"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-blue-950">第一位拥有者的订单内容</span>
+                    <span className="mt-0.5 block truncate text-xs text-blue-700">{formData.ownerLabel || `用户 ${formData.userId}`} · 单独保存后自动收起</span>
+                  </span>
+                  <ChevronDown className={`h-5 w-5 shrink-0 text-blue-600 transition-transform ${primaryOwnerEditorExpanded ? 'rotate-180' : ''}`} />
+                </button>
+              )}
+              {(!hasPrimaryOwnerDrawer || primaryOwnerEditorExpanded) && (<>
+              {/* 每位共同拥有者或历史参与者均编辑自己的完整订单快照；真实订单关系仍由主订单受控。 */}
+              {isSnapshotScopedEdit && (
+                <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
+                  <User className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
                   <div>
-                    <div className="text-sm font-medium text-green-800">参与者完整个人视图</div>
-                    <div className="text-xs text-green-600 mt-0.5">页眉、业务标签、利息、担保、展示方式及个人备注只影响当前参与者；主订单身份、共享标的与结清状态保持一致。</div>
+                    <div className="text-sm font-medium text-blue-950">{personalViewName} 的完整个人订单视图</div>
+                    <div className="mt-0.5 text-xs leading-5 text-blue-700">所有金额、利息、担保、展示方式与备注均在此处独立保存；共享标的、真实身份与结清状态保持一致。</div>
                   </div>
+                </div>
+              )}
+              {isOwnerPersonalView && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <label className="block text-sm font-semibold text-slate-800">同组拥有者信息可见范围</label>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">此设置只影响 {personalViewName} 查看同组其他拥有者的信息范围；订单卡片固定显示本人姓名。</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {([
+                      { value: 'self', label: '仅本人金额' },
+                      { value: 'total', label: '仅订单总额' },
+                      { value: 'breakdown', label: '总额及明细' },
+                      { value: 'partners', label: '指定合作人' },
+                    ] as const).map(option => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setFormData(current => ({ ...current, ownerVisibilityMode: option.value }))}
+                        className={`rounded-xl border px-2 py-2 text-xs font-semibold transition-colors ${formData.ownerVisibilityMode === option.value ? 'border-slate-600 bg-white text-slate-900' : 'border-slate-200 bg-white text-slate-500'}`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  {formData.ownerVisibilityMode === 'partners' && (
+                    <div className="mt-2 border-t border-slate-200 pt-2">
+                      <div className="mb-1.5 text-[11px] text-slate-500">选择可见的同组拥有者（不显示订单总额）</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {participants.filter(owner => owner.role === 'owner' && Number(owner.userId) !== Number(editingCollaboratorUserId)).map(owner => {
+                          const active = formData.ownerVisibleOwnerIds.includes(Number(owner.userId));
+                          return (
+                            <button
+                              key={owner.userId}
+                              type="button"
+                              onClick={() => setFormData(current => ({
+                                ...current,
+                                ownerVisibleOwnerIds: active
+                                  ? current.ownerVisibleOwnerIds.filter(id => id !== Number(owner.userId))
+                                  : [...current.ownerVisibleOwnerIds, Number(owner.userId)],
+                              }))}
+                              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${active ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-200 bg-white text-slate-700'}`}
+                            >
+                              {owner.userName}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {/* 标的类型必须与主订单一致；参与者可以完整配置自己的业务展示，但不能把同一张主订单改成另一种实际标的。 */}
               {isSnapshotScopedEdit ? (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-                  <div className="text-xs font-semibold text-emerald-800">共享订单标的</div>
+                <div className="rounded-xl border border-blue-100 bg-blue-50/50 px-3 py-2.5">
+                  <div className="text-xs font-semibold text-blue-800">共享订单标的</div>
                   <div className="mt-1 flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium text-emerald-900">{formData.assetType === 'stock' ? '股票' : formData.assetType === 'crypto_option' ? '期权' : '数字币'}</span>
-                    <span className="text-[11px] leading-4 text-right text-emerald-700">币种、类型与期权合约由主订单统一维护</span>
+                    <span className="text-sm font-medium text-blue-950">{formData.assetType === 'stock' ? '股票' : formData.assetType === 'crypto_option' ? '期权' : '数字币'}</span>
+                    <span className="text-right text-[11px] leading-4 text-blue-700">币种、类型与期权合约由主订单统一维护</span>
                   </div>
                 </div>
               ) : (
@@ -2277,21 +2444,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       </button>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {isSnapshotScopedEdit && (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3">
-                  <label className="block text-sm font-semibold text-emerald-900">个人业务页眉</label>
-                  <p className="mt-1 text-xs leading-5 text-emerald-700">在订单和卡片页眉中显示给该协作人本人；真实拥有者与参与者姓名保持系统身份，不会被改名。</p>
-                  <input
-                    type="text"
-                    value={formData.personalHeaderLabel}
-                    onChange={event => setFormData(current => ({ ...current, personalHeaderLabel: event.target.value.slice(0, 32) }))}
-                    maxLength={32}
-                    placeholder="例如：本人融资视图、家庭资金安排"
-                    className="mt-2 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm font-medium text-emerald-950 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                  />
                 </div>
               )}
 
@@ -3735,6 +3887,37 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         </span>
                       </div>
                     )}
+                    {ledgerId === 52 && (
+                      <div className="mt-2 border-t border-blue-100 pt-2">
+                        <div className="mb-1.5 text-xs font-medium text-slate-600">担保缺口计算基准</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {([
+                            { value: 'buy_value', label: '买入价值', detail: '按实际买入总价值' },
+                            { value: 'interest_base', label: '计息基数', detail: '按约定计息基数' },
+                          ] as const).map(option => {
+                            const active = collateralGapBaseMode === option.value;
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => setDisplayConfig(current => ({ ...current, collateralGapBaseMode: option.value }))}
+                                className={`rounded-lg border px-2.5 py-2 text-left transition-colors ${active ? 'border-blue-500 bg-blue-600 text-white' : 'border-blue-100 bg-white text-slate-600'}`}
+                              >
+                                <span className="block text-xs font-semibold">{option.label}</span>
+                                <span className={`mt-0.5 block text-[10px] ${active ? 'text-blue-100' : 'text-slate-400'}`}>{option.detail}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-1.5 text-[11px] text-slate-500">
+                          当前基准：<span className="font-semibold text-slate-700">{collateralGapBaseMode === 'interest_base' ? '计息基数' : '买入价值'}</span>
+                          {collateralGapBaseValue > 0 && <> · {collateralGapBaseValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</>}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-slate-500">
+                          预览缺口 = 基准 − 当前持有资产{previewCurrentHoldingValue !== null ? `（${previewCurrentHoldingValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U）` : '（行情待获取）'} − 担保价值；待结、已结利息在订单卡片中继续计算。
+                        </div>
+                      </div>
+                    )}
                 </div>
 
                 {/* 共享担保模式选择 */}
@@ -4214,6 +4397,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   _isParticipant: isRestrictedParticipantEdit,
                   participant_name: isSnapshotScopedEdit ? (editingOrder as any)?.participant_name : undefined,
                   order_owner_name: isSnapshotScopedEdit ? (editingOrder as any)?.order_owner_name : undefined,
+                  owner_display_names: isSnapshotScopedEdit
+                    ? participants.filter(participant => participant.role === 'owner').map(participant => ({ userId: participant.userId, name: participant.userName }))
+                    : undefined,
                   personal_header_label: formData.personalHeaderLabel.trim() || null,
                   coin: formData.coin,
                   asset_type: formData.assetType || null,
@@ -4255,6 +4441,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   trade_direction: formData.tradeDirection || null,
                   display_config: JSON.stringify({
                     ...displayConfig,
+                    ownerNameDisplay: 'self',
                     marginAlertThreshold: marginAlertThreshold || undefined,
                     rate_negative: normalizeFunderAnnualRate(formData.interestRateAnnual).startsWith('-'),
                     financingInputAmount: amountInputValue || '',
@@ -4333,497 +4520,104 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </div>
                 );
               })()}
+              </>)}
             </div>
 
             {/* ===== 共同拥有者与历史参与者管理 ===== */}
             {canManageCollaboratorsInEditor && (
               <div className="px-5 pb-4" ref={participantsSectionRef}>
-                <button type="button" onClick={() => setParticipantsSectionExpanded(value => !value)} className="mb-3 w-full rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-3 text-left">
+                <button type="button" onClick={() => setParticipantsSectionExpanded(value => !value)} className="mb-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-left">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                       <Users2 className="h-4 w-4" />
-                      <span>{participants.length > 0 ? '拥有者 / 参与者' : '添加拥有者 / 参与者（可选）'}</span>
+                      <span>{hasPrimaryOwnerDrawer ? '其余拥有者 / 参与者' : participants.length > 0 ? '拥有者组 / 参与者' : '添加拥有者 / 参与者（可选）'}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-indigo-600 shadow-sm">
-                        {existingParticipantsLoading && participants.length === 0 ? '读取中' : `${participants.length} 人`}
+                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm">
+                        {existingParticipantsLoading && participants.length === 0 ? '读取中' : `${hasPrimaryOwnerDrawer ? editableParticipants.length : participants.length} 人`}
                       </span>
-                      <ChevronDown className={`h-4 w-4 text-indigo-400 transition-transform ${participantsSectionExpanded ? 'rotate-180' : ''}`} />
+                      <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${participantsSectionExpanded ? 'rotate-180' : ''}`} />
                     </div>
                   </div>
-                  <p className="mt-1.5 text-xs leading-5 text-indigo-500">{participantsSectionExpanded ? '每位拥有者可独立设置本金、利率、备注与可见范围；最后统一保存。' : participants.length > 0 ? '已收起，点击查看或调整已关联的拥有者／参与者。' : '不需要多人协作时无需操作；点击后才会添加拥有者或参与者。'}</p>
+                  <p className="mt-1.5 text-xs leading-5 text-slate-500">{participantsSectionExpanded ? (hasPrimaryOwnerDrawer ? '第一位拥有者已在上方单独编辑；此处仅列出其余成员，点击即可直接进入各自完整订单页。' : '同组拥有者完全平级；点击任一成员即可直接打开该成员的完整订单编辑页，保存后自动收起。') : participants.length > 0 ? '已收起，点击查看或调整已关联的拥有者／参与者。' : '不需要多人协作时无需操作；点击后才会添加拥有者或参与者。'}</p>
                 </button>
 
                 {participantsSectionExpanded && (<>
                 {participants.length === 0 && !existingParticipantsLoading && (
                   <div className="mb-3 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-center text-xs text-gray-400">
-                    当前没有共同拥有者；主单拥有者会在首次保存共同拥有者后自动纳入同一组独立视图。
+                    当前没有拥有者组；添加后，原订单拥有者会自动纳入同一组，并以平级成员方式显示和配置。
                   </div>
                 )}
 
-                {/* 共同拥有者 / 历史参与者列表 */}
-                {participants.map((p, idx) => (
-                  <div key={p.userId} className={`mb-3 overflow-hidden rounded-xl border ${p.role === 'owner' ? 'border-indigo-100 bg-indigo-50' : 'border-emerald-200 bg-emerald-50'}`}>
+                {/* 拥有者组 / 历史参与者列表。拥有者不用颜色或排序暗示主次。 */}
+                {editableParticipants.map(({ participant: p }) => (
+                  <div key={p.userId} className={`mb-3 overflow-hidden rounded-xl border ${p.role === 'owner' ? 'border-slate-200 bg-white' : 'border-emerald-200 bg-emerald-50'}`}>
                     {/* 协作成员头部 */}
-                    <div className="flex items-center gap-2 px-3 py-2.5 cursor-pointer" onClick={() => setParticipants(prev => prev.map((pp, i) => ({ ...pp, expanded: i === idx ? !pp.expanded : false })))}>
-                      {p.avatar ? <img src={p.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" /> : <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${p.role === 'owner' ? 'bg-indigo-200 text-indigo-700' : 'bg-emerald-200 text-emerald-700'}`}>{p.userName.slice(0,1).toUpperCase()}</div>}
+                    <div
+                      className="flex cursor-pointer items-center gap-2 px-3 py-2.5"
+                      onClick={() => {
+                        if (editingOrder?.id) {
+                          openParticipantFullView(p);
+                          return;
+                        }
+                        setParticipants(prev => prev.map(pp => ({ ...pp, expanded: pp.userId === p.userId ? !pp.expanded : false })));
+                      }}
+                    >
+                      {p.avatar ? <img src={p.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" /> : <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${p.role === 'owner' ? 'bg-slate-200 text-slate-700' : 'bg-emerald-200 text-emerald-700'}`}>{p.userName.slice(0,1).toUpperCase()}</div>}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-800 truncate"><span className="truncate">{p.userName}</span><span className={`shrink-0 rounded px-1 py-0.5 text-[10px] ${p.role === 'owner' ? 'bg-violet-100 text-violet-700' : 'bg-emerald-100 text-emerald-700'}`}>{p.role === 'owner' ? '拥有者' : '参与者'}</span></div>
-                        <div className="truncate text-xs text-gray-400">{p.amount ? `${p.amount} ${p.amountCurrency === 'CNY' ? '元' : p.amountCurrency}` : `协作成员 ${idx + 1}`}{p.interestRateAnnual ? ` · 年化 ${normalizeFunderAnnualRate(p.interestRateAnnual)}%` : ''}</div>
+                        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-800 truncate"><span className="truncate">{p.userName}</span><span className={`shrink-0 rounded px-1 py-0.5 text-[10px] ${p.role === 'owner' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-100 text-emerald-700'}`}>{p.role === 'owner' ? '拥有者' : '参与者'}</span></div>
+                        <div className="truncate text-xs text-gray-400">{p.amount ? `${p.amount} ${p.amountCurrency === 'CNY' ? '元' : p.amountCurrency}` : p.role === 'owner' ? '平级拥有者' : '历史参与者'}{p.interestRateAnnual ? ` · 年化 ${normalizeFunderAnnualRate(p.interestRateAnnual)}%` : ''}</div>
                       </div>
                       {!(p.role === 'owner' && Number(p.userId) === Number(formData.userId)) && (
-                        <button type="button" onClick={e => { e.stopPropagation(); setParticipants(prev => prev.filter((_, i) => i !== idx)); }} className="p-1 rounded-lg text-red-400 hover:bg-red-50" aria-label="移除协作成员">
+                        <button type="button" onClick={e => { e.stopPropagation(); setParticipants(prev => prev.filter(item => item.userId !== p.userId)); }} className="p-1 rounded-lg text-red-400 hover:bg-red-50" aria-label="移除协作成员">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
                       )}
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" style={{ transform: p.expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+                      {editingOrder?.id
+                        ? <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                        : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" style={{ transform: p.expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>}
                     </div>
 
-                    {/* 参与者完整参数面板 */}
-                    {p.expanded && (
-                      <div className={`border-t ${p.role === 'owner' ? 'border-indigo-100' : 'border-emerald-200'}`}>
-                        {/* ===== 基础参数 ===== */}
-                        <div className="px-3 pb-3 space-y-3">
-                          <div className="pt-2">
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5">订单关系</label>
-                            <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-white p-1.5 border border-indigo-100">
+                    {/* 新建订单尚未落库时保留关系确认；已有订单点击成员会直接进入完整编辑页。 */}
+                    {!editingOrder?.id && p.expanded && (
+                      <div className={`border-t ${p.role === 'owner' ? 'border-slate-200' : 'border-emerald-200'}`}>
+                        <div className="space-y-3 px-3 py-3">
+                          <div>
+                            <label className="mb-1.5 block text-xs font-medium text-gray-500">订单关系</label>
+                            <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-slate-200 bg-white p-1.5">
                               {([
-                                { value: 'owner', label: '共同拥有者' },
+                                { value: 'owner', label: '拥有者' },
                                 { value: 'funder', label: '历史参与者' },
                               ] as const).map(option => (
                                 <button
                                   key={option.value}
                                   type="button"
                                   disabled={Number(p.userId) === Number(formData.userId) && p.role === 'owner' && option.value !== 'owner'}
-                                  onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, role: option.value } : pp))}
-                                  className={`rounded-lg py-1.5 text-xs font-medium transition-colors ${p.role === option.value ? 'bg-violet-600 text-white' : 'bg-gray-50 text-gray-500'} disabled:opacity-45`}
-                                >{option.label}</button>
+                                  onClick={() => setParticipants(prev => prev.map(pp => pp.userId === p.userId ? { ...pp, role: option.value } : pp))}
+                                  className={`rounded-lg py-1.5 text-xs font-medium transition-colors ${p.role === option.value ? 'bg-slate-700 text-white' : 'bg-gray-50 text-gray-500'} disabled:opacity-45`}
+                                >
+                                  {option.label}
+                                </button>
                               ))}
                             </div>
-                            <p className="mt-1 text-[10px] text-gray-400">共同拥有者拥有独立订单视图；不会看到他人备注、担保物或资金流水。</p>
+                            <p className="mt-1.5 text-[11px] leading-4 text-gray-400">拥有者在同一组内完全平级；关系不会因编辑顺序产生主次。</p>
                           </div>
-                          {editingOrder?.id && (
+
+                          {editingOrder?.id ? (
                             <button
                               type="button"
                               onClick={() => openParticipantFullView(p)}
-                              className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-xs font-semibold transition-colors ${p.role === 'owner' ? 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100' : 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50'}`}
+                              className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left text-xs font-semibold transition-colors ${p.role === 'owner' ? 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100' : 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50'}`}
                             >
                               <span className="min-w-0">
                                 <span className="block">配置 {p.userName} 的完整个人订单视图</span>
-                                <span className="mt-0.5 block font-normal leading-4 opacity-75">页眉、业务标签、方向、成交状态、展示方式与利息参数均独立保存</span>
+                                <span className="mt-0.5 block font-normal leading-4 opacity-75">页眉、金额、利息、担保、展示方式、拥有者姓名与可见范围均在此处统一设置</span>
                               </span>
                               <ChevronRight className="ml-2 h-4 w-4 shrink-0" />
                             </button>
+                          ) : (
+                            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-2.5 text-xs leading-5 text-gray-500">请先保存订单，再打开此人的完整个人订单视图。</div>
                           )}
-                          {p.role === 'owner' && (
-                            <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-2.5">
-                              <label className="block text-xs font-medium text-violet-700 mb-1.5">其他拥有者信息可见范围</label>
-                              <div className="grid grid-cols-2 gap-1.5">
-                                {([
-                                  { value: 'self', label: '仅本人金额' },
-                                  { value: 'total', label: '仅订单总额' },
-                                  { value: 'breakdown', label: '总额及明细' },
-                                  { value: 'partners', label: '指定合作人' },
-                                ] as const).map(option => (
-                                  <button key={option.value} type="button"
-                                    onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, visibilityMode: option.value } : pp))}
-                                    className={`rounded-lg border px-1.5 py-1.5 text-xs ${p.visibilityMode === option.value ? 'border-violet-500 bg-white text-violet-700' : 'border-violet-100 bg-white text-gray-500'}`}
-                                  >{option.label}</button>
-                                ))}
-                              </div>
-                              {p.visibilityMode === 'partners' && (
-                                <div className="mt-2 border-t border-violet-100 pt-2">
-                                  <div className="mb-1 text-[10px] text-violet-600">选择可见的合作拥有者（不显示订单总额）</div>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {participants.filter(other => other.role === 'owner' && other.userId !== p.userId).map(other => {
-                                      const active = p.visibleOwnerIds.includes(other.userId);
-                                      return <button key={other.userId} type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, visibleOwnerIds: active ? pp.visibleOwnerIds.filter(id => id !== other.userId) : [...pp.visibleOwnerIds, other.userId] } : pp))}
-                                        className={`rounded-full border px-2 py-1 text-[11px] ${active ? 'border-violet-500 bg-violet-600 text-white' : 'border-violet-200 bg-white text-violet-700'}`}>{other.userName}</button>;
-                                    })}
-                                    {participants.filter(other => other.role === 'owner' && other.userId !== p.userId).length === 0 && <span className="text-[10px] text-gray-400">请先添加其他共同拥有者；保存后主单拥有者也会出现在这里。</span>}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          {/* 融资金额 */}
-                          <div className="pt-2">
-                            <label className="block text-xs font-medium text-gray-500 mb-1">融资金额</label>
-                            <div className="flex gap-2">
-                              <input type="number" inputMode="decimal" value={p.amount} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, amount: e.target.value } : pp))} className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" placeholder="如：10000" />
-                              <div className="flex rounded-xl border border-gray-200 overflow-hidden text-xs">
-                                {(['USDT','CNY'] as const).map(c => (
-                                  <button key={c} type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, amountCurrency: c } : pp))} className={`px-2 py-1 ${(p.amountCurrency||'USDT')===c ? 'bg-blue-500 text-white' : 'bg-white text-gray-500'}`}>{c==='CNY'?'元':c}</button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                          {/* 年利率 */}
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">年利率 (%)</label>
-                            <div className="flex items-center gap-2">
-                              {(() => { const isNeg = (p.interestRateAnnual || '').startsWith('-'); return (
-                                <>
-                                  <button type="button" title="收"
-                                    onClick={() => { const raw = normalizeFunderAnnualRate(p.interestRateAnnual || ''); const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: absVal } : pp)); }}
-                                    className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold shrink-0 transition-all"
-                                    style={!isNeg ? { background: '#FEE2E2', color: '#DC2626', border: '2px solid #DC2626' } : { backgroundColor: '#F3F4F6', color: '#9CA3AF', border: '2px solid transparent' }}
-                                  >+</button>
-                                  <button type="button" title="付"
-                                    onClick={() => { const raw = normalizeFunderAnnualRate(p.interestRateAnnual || ''); const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: '-' + absVal } : pp)); }}
-                                    className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold shrink-0 transition-all"
-                                    style={isNeg ? { background: '#DEF7EC', color: '#059669', border: '2px solid #059669' } : { backgroundColor: '#F3F4F6', color: '#9CA3AF', border: '2px solid transparent' }}
-                                  >−</button>
-                                </>
-                              ); })()}
-                              <input type="text" inputMode="decimal"
-                                value={(p.interestRateAnnual || '').startsWith('-') ? (p.interestRateAnnual || '').slice(1) : (p.interestRateAnnual || '')}
-                                onChange={e => {
-                                  const val = limitFunderAnnualRateInput(e.target.value);
-                                  if (val === null) return;
-                                  const isNeg = (p.interestRateAnnual || '').startsWith('-');
-                                  setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: isNeg ? '-' + val : val } : pp));
-                                }}
-                                onBlur={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: normalizeFunderAnnualRate(pp.interestRateAnnual) } : pp))}
-                                className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white"
-                                placeholder="如：18" />
-                              <div className="flex rounded-xl border border-gray-200 overflow-hidden text-xs shrink-0">
-                                {(['USDT','CNY'] as const).map(c => (
-                                  <button key={c} type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateCurrency: c } : pp))} className={`px-2 py-1 ${(p.interestRateCurrency||'USDT')===c ? 'bg-blue-500 text-white' : 'bg-white text-gray-500'}`}>{c==='CNY'?'元':c}</button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                          {/* 利息计价货币（大按钮，与主订单一致） */}
-                          <div className="flex gap-2">
-                            {(['USDT', 'CNY'] as const).map(cur => (
-                              <button
-                                key={cur}
-                                type="button"
-                                onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateCurrency: cur } : pp))}
-                                className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
-                                style={
-                                  (p.interestRateCurrency || 'USDT') === cur
-                                    ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
-                                    : { backgroundColor: '#F3F4F6', color: '#6B7280' }
-                                }
-                              >
-                                {cur === 'USDT' ? 'U（USDT）' : '人民币（元）'}
-                              </button>
-                            ))}
-                          </div>
-                          {/* 计息基数 */}
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">计息基数</label>
-                            <div className="flex gap-2">
-                              <input type="number" inputMode="decimal" value={p.interestBase} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestBase: e.target.value } : pp))} className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" placeholder="如：10000" />
-                              <div className="flex rounded-xl border border-gray-200 overflow-hidden text-xs">
-                                {(['USDT','CNY'] as const).map(c => (
-                                  <button key={c} type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestBaseCurrency: c } : pp))} className={`px-2 py-1 ${(p.interestBaseCurrency||'USDT')===c ? 'bg-blue-500 text-white' : 'bg-white text-gray-500'}`}>{c==='CNY'?'元':c}</button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                          {/* 付息方式 */}
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">付息方式</label>
-                            <select value={p.interestPaymentType} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestPaymentType: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white appearance-none">
-                              <option value="">请选择</option>
-                              {INTEREST_PAYMENT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                            </select>
-                          </div>
-                          {/* 起息日 */}
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">起息日</label>
-                            <input type="date" value={p.interestStartDate} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestStartDate: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" />
-                          </div>
-                        </div>
-
-                        {/* ===== 显示配置开关（与本人编辑表单完全一致） ===== */}
-                        <div className="mx-3 h-px bg-indigo-100 my-1" />
-                        <div className="rounded-xl border border-indigo-100 overflow-hidden mx-3 mb-3" style={{ backgroundColor: '#FAFBFF' }}>
-                          {/* 左栏字段 */}
-                          <div className="px-3 pt-3 pb-1">
-                            <div className="text-xs font-medium text-blue-500 mb-2">左栏：持有资产</div>
-                            <div className="space-y-2">
-                              {[
-                                { key: 'buyPrice', label: '买入币价' },
-                                { key: 'buyValue', label: '买入价値' },
-                                { key: 'buyDate', label: '开仓时间' },
-                                { key: 'openPrice', label: '开仓币价' },
-                                { key: 'todayPrice', label: '当前币价' },
-                                { key: 'floatPnl', label: '浮动盈亏' },
-                                { key: 'holdDuration', label: '持有时长' },
-                                { key: 'orderNo', label: '订单编号' },
-                                { key: 'aiIcon', label: 'AI图标' },
-                                { key: 'assetType', label: '资产类型标签' },
-                                { key: 'showOwnerName', label: '显示订单所有者名字' },
-                              ].map(({ key, label }) => (
-                                <div key={key} className="flex items-center justify-between">
-                                  <span className="text-xs text-gray-600">{label}</span>
-                                  <button type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, displayConfig: { ...pp.displayConfig, [key]: !pp.displayConfig?.[key] } } : pp))}
-                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none ${p.displayConfig?.[key] ? 'bg-blue-500' : 'bg-gray-200'}`}>
-                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${p.displayConfig?.[key] ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="mx-3 h-px bg-gray-100 my-2" />
-                          {/* 右栏上半：待结利息区 */}
-                          <div className="px-3 pb-2">
-                            <div className="text-xs font-medium text-blue-500 mb-2">右栏上半：待结利息区</div>
-                            <div className="space-y-2">
-                              {[
-                                { key: 'accruedInterest', label: '待结利息' },
-                                { key: 'paidInterest', label: '已结利息' },
-                                { key: 'interestBase', label: '计息基数' },
-                                { key: 'interestStartDate', label: '计息日期' },
-                                { key: 'interestDuration', label: '计息时长' },
-                                { key: 'interestPaymentType', label: '付息方式' },
-                                { key: 'collateralCoin', label: '担保货币' },
-                                { key: 'collateralValue', label: '担保价値' },
-                                { key: 'collateral', label: '担保缺口' },
-                                { key: 'marginRate', label: '保证金率' },
-                              ].map(({ key, label }) => (
-                                <div key={key}>
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs text-gray-600">{label}</span>
-                                    <button type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, displayConfig: { ...pp.displayConfig, [key]: !pp.displayConfig?.[key] } } : pp))}
-                                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none ${p.displayConfig?.[key] ? 'bg-blue-500' : 'bg-gray-200'}`}>
-                                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${p.displayConfig?.[key] ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                                    </button>
-                                  </div>
-                                  {key === 'marginRate' && p.displayConfig?.marginRate && (
-                                    <div className="mt-1 flex items-center gap-2 pl-1">
-                                      <span className="text-xs text-gray-400 shrink-0">低于</span>
-                                      <input type="number" min="0" max="200" step="1" value={p.marginAlertThreshold||''} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, marginAlertThreshold: e.target.value } : pp))} placeholder="如：80" className="w-14 text-xs text-center border border-gray-200 rounded-lg px-1 py-0.5 focus:outline-none focus:border-orange-400" style={{ color: '#D97706' }} />
-                                      <span className="text-xs text-gray-400 shrink-0">% 时预警</span>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="mx-3 h-px bg-gray-100 my-2" />
-                          {/* 约等于显示控制 */}
-                          <div className="px-3 pb-2">
-                            <div className="text-xs font-medium text-blue-500 mb-2">约等于显示控制</div>
-                            <div className="space-y-2">
-                              {([
-                                { key: 'approxHolding', label: '持有资产约等于' },
-                                { key: 'approxInterest', label: '待结利息约等于' },
-                                { key: 'approxPaid', label: '已结利息约等于' },
-                                { key: 'approxCollateralItem', label: '担保货币约等于' },
-                                { key: 'approxCollateralTotal', label: '担保总值约等于' },
-                                ...(formData.assetType === 'stock' && !isUsing37Collateral ? [
-                                  { key: 'stockManualCollateralValueDisplay', label: '担保价值主显示' },
-                                  { key: 'externalCollateralGapDisplay', label: '担保缺口主显示' },
-                                ] : formData.assetType === 'stock' ? [
-                                  { key: 'externalCollateralValueDisplay', label: '37号担保货币主显示' },
-                                  { key: 'externalCollateralGapDisplay', label: '担保缺口主显示' },
-                                ] : []),
-                              ] as { key: string; label: string }[]).map(({ key, label }) => (
-                                <div key={key}>
-                                  <div className="text-xs text-gray-600 mb-1">{label}</div>
-                                  <div className="flex gap-1">
-                                    {(key === 'externalCollateralValueDisplay'
-                                      ? ['CRYPTO', 'U', 'CNY']
-                                      : key === 'externalCollateralGapDisplay' || key === 'stockManualCollateralValueDisplay'
-                                        ? ['U', 'CNY']
-                                        : ['hidden', 'U', 'CNY']).map(opt => (
-                                      <button key={opt} type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, displayConfig: { ...pp.displayConfig, [key]: opt } } : pp))}
-                                        className={`flex-1 py-0.5 text-xs rounded-lg border transition-colors ${ (key === 'externalCollateralValueDisplay' ? (['CRYPTO', 'U', 'CNY'].includes(String(p.displayConfig?.[key])) ? p.displayConfig?.[key] : 'CNY') : key === 'externalCollateralGapDisplay' || key === 'stockManualCollateralValueDisplay' ? (['U', 'CNY'].includes(String(p.displayConfig?.[key])) ? p.displayConfig?.[key] : 'CNY') : (p.displayConfig?.[key] || 'hidden')) === opt ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200' }`}>
-                                        {key === 'externalCollateralValueDisplay'
-                                          ? (opt === 'CRYPTO' ? '数字币' : opt === 'U' ? '≈ U' : '≈ 元')
-                                          : key === 'externalCollateralGapDisplay'
-                                            ? (opt === 'U' ? '≈ U' : '≈ 元')
-                                            : key === 'stockManualCollateralValueDisplay'
-                                              ? (opt === 'U' ? '≈ U' : '≈ 元')
-                                          : (opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ U' : '≈ 元')}
-                                      </button>
-                                    ))}
-                                  </div>
-                                  {key === 'stockManualCollateralValueDisplay' && <div className="text-[10px] text-gray-400 mt-0.5">手工担保物按实际输入显示；此项只控制担保价值合计。</div>}
-                                  {key === 'externalCollateralGapDisplay' && <div className="text-[10px] text-gray-400 mt-0.5">合并风险金额仅支持人民币或 U。</div>}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="mx-3 h-px bg-gray-100 my-2" />
-                          {/* 借出本金开关 */}
-                          <div className="px-3 pb-3">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <span className="text-xs font-medium text-gray-700">借出本金</span>
-                                <p className="text-xs text-gray-400 mt-0.5">开启后担保缺口计算将扣除计息基数（本金）</p>
-                              </div>
-                              <button type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, displayConfig: { ...pp.displayConfig, principalLentOut: !pp.displayConfig?.principalLentOut } } : pp))}
-                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none ${p.displayConfig?.principalLentOut ? 'bg-orange-500' : 'bg-gray-200'}`}>
-                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${p.displayConfig?.principalLentOut ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                              </button>
-                            </div>
-                            {p.displayConfig?.principalLentOut && formData.assetType !== 'stock' && (
-                              <div className="mt-2 rounded-lg border border-orange-100 bg-orange-50/40 p-2">
-                                <div className="mb-1.5 text-xs text-gray-500">左上角主要展示</div>
-                                <div className="grid grid-cols-2 gap-1.5">
-                                  {([
-                                    { value: 'principal', label: '借出本金' },
-                                    { value: 'quantity', label: '币种数量' },
-                                  ] as const).map(({ value, label }) => {
-                                    const active = (p.displayConfig?.principalLentOutPrimary || 'principal') === value;
-                                    return (
-                                      <button
-                                        key={value}
-                                        type="button"
-                                        onClick={() => setParticipants(prev => prev.map((participant, index) => index === idx
-                                          ? { ...participant, displayConfig: { ...participant.displayConfig, principalLentOutPrimary: value } }
-                                          : participant))}
-                                        className={`rounded-md border px-1.5 py-1 text-xs transition-colors ${
-                                          active
-                                            ? 'border-orange-400 bg-white text-orange-700'
-                                            : 'border-gray-200 bg-white text-gray-500'
-                                        }`}
-                                      >
-                                        {label}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* ===== 参与者预览卡片（常驻展开） ===== */}
-                        <div className="mx-3 mb-3">
-                          {/* 模式切换 Tab */}
-                          <div className="flex items-center gap-1 mb-2 p-0.5 rounded-full bg-gray-100" style={{ width: 'fit-content' }}>
-                            {(['card', 'order'] as const).map(mode => (
-                              <button key={mode} type="button"
-                                onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, previewMode: mode } : pp))}
-                                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${ ((p as any).previewMode || 'order') === mode ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700' }`}>
-                                {mode === 'card' ? '卡片模式' : '订单模式'}
-                              </button>
-                            ))}
-                          </div>
-                          {(() => {
-                            const pSnapshot = p.orderSnapshot || {};
-                            const pPreviewOrder: any = {
-                              id: editingOrder?.id ?? -1,
-                              order_no: editingOrder?.order_no ?? null,
-                              user_id: p.userId,
-                              // 预览必须复用用户实际进入参与者视角时的身份字段：
-                              // 订单拥有者与参与者分别显示，历史参与者使用绿色主题。
-                              owner_label: p.userName,
-                              participant_name: p.userName,
-                              participantInfo: { userId: p.userId, role: p.role === 'owner' ? 'owner' : 'funder' },
-                              _isParticipant: p.role !== 'owner',
-                              // 订单拥有者名字（从 membersData 按主订单拥有者查）
-                              order_owner_name: (() => {
-                                const allM = ((ledgerData as any)?.members || funderUsers || []) as any[];
-                                const ownerId = Number(editingOrder?.user_id || formData.userId || 0);
-                                const ownerM = allM.find((m: any) => Number(m.userId || m.id) === ownerId);
-                                return ownerM ? (ownerM.nickname || ownerM.username) : (editingOrder?.owner_label || editingOrder?.username || null);
-                              })(),
-                              personal_header_label: p.personalHeaderLabel || pSnapshot.personal_header_label || null,
-                              coin: (pSnapshot.coin || p.coin || formData.coin),
-                              asset_type: formData.assetType || null,
-                              buy_price: pSnapshot.buy_price ?? formData.buyPrice ?? null,
-                              buy_quantity: pSnapshot.buy_quantity ?? formData.buyQuantity ?? null,
-                              amount: p.amount || (formData.assetType === 'stock' ? (amountInputValue || null) : (financingAmountUsdt || null)),
-                              amount_currency: p.amountCurrency || formData.amountCurrency || 'USDT',
-                              buy_date: p.buyDate || pSnapshot.buy_date || formData.buyDate || null,
-                              status: formData.status || 'active',
-                              order_fill_status: p.orderFillStatus || pSnapshot.order_fill_status || 'filled',
-                              broker_name: p.brokerName || pSnapshot.broker_name || null,
-                              broker_account: p.brokerAccount || pSnapshot.broker_account || null,
-                              interest_rate_annual: p.interestRateAnnual !== '' ? normalizeFunderAnnualRate(p.interestRateAnnual) : (normalizeFunderAnnualRate(formData.interestRateAnnual) || null),
-                              interest_payment_type: p.interestPaymentType || formData.interestPaymentType || null,
-                              interest_base: p.interestBase !== '' ? p.interestBase : (formData.interestBase || null),
-                              interest_base_currency: p.interestBaseCurrency || formData.interestBaseCurrency || 'USDT',
-                              interest_rate_currency: p.interestRateCurrency || formData.interestRateCurrency || 'USDT',
-                              interest_start_date: p.interestStartDate || formData.interestStartDate || null,
-                              principal_lent_out: p.principalLentOut || p.displayConfig?.principalLentOut ? 1 : (pSnapshot.principal_lent_out ?? 0),
-                              trading_fee_rate_per_mille: ledgerId === 52 ? (Number(p.tradingFeeRate) || Number(pSnapshot.trading_fee_rate_per_mille) || 2) : null,
-                              trading_fee_status: ledgerId === 52 ? (p.tradingFeeStatus || pSnapshot.trading_fee_status || 'unpaid') : 'unpaid',
-                              collateral_assets: pSnapshot.collateral_assets || (collateralAssets.length > 0 ? JSON.stringify(collateralAssets) : null),
-                              option_info: formData.assetType === 'crypto_option' ? JSON.stringify({
-                                coin: optionFormData.optionCurrency,
-                                direction: optionFormData.direction,
-                                exerciseDate: optionFormData.exerciseDate || null,
-                                deribitLabel: optionFormData.deribitLabel || null,
-                                strikePrice: optionFormData.strikePrice ? parseFloat(optionFormData.strikePrice) : null,
-                                premium: optionFormData.premium || null,
-                                denomination: optionFormData.premiumDenomination,
-                                buyQty: optionFormData.buyQty || null,
-                              }) : null,
-                              collateral_share_mode: p.collateralShareMode || pSnapshot.collateral_share_mode || 'none',
-                              collateral_source: p.collateralSource || pSnapshot.collateral_source || null,
-                              trade_direction: p.tradeDirection ?? pSnapshot.trade_direction ?? formData.tradeDirection ?? null,
-                              display_config: JSON.stringify({
-                                ...p.displayConfig,
-                                allowUserImageDownload: Boolean(displayConfig.allowUserImageDownload),
-                                tradingFee: ledgerId === 52 ? Boolean(displayConfig.tradingFee) : false,
-                                marginAlertThreshold: p.marginAlertThreshold || undefined,
-                                financingInputAmount: p.amount || amountInputValue || '',
-                                financingInputCurrency: p.amountCurrency || formData.amountCurrency || 'USDT',
-                              }),
-                              tags: JSON.stringify(p.tags.length > 0 ? p.tags : (() => { try { const value = pSnapshot.tags; return Array.isArray(value) ? value : (typeof value === 'string' ? JSON.parse(value) : []); } catch { return []; } })()),
-                              participantCount: 0,
-                              paidTotal: null,
-                              order_perspective: p.orderPerspective || pSnapshot.order_perspective || 'other',
-                            };
-                            const pMode = (p as any).previewMode || 'order';
-                            const rateVal = parseFloat(String(pPreviewOrder.interest_rate_annual || '0'));
-                            return (
-                              <div>
-                                {pMode === 'card' ? (
-                                  // 参与者视角：内部已处理绿色主题，无需在此强制切换
-                                  rateVal > 0 ? (
-                                    <FunderLenderCardSilver
-                                      order={pPreviewOrder}
-                                      ledgerId={ledgerId}
-                                      livePrices={formLivePrices}
-                                      priceDirection={priceDirection}
-                                      membersData={((ledgerData as any)?.members || funderUsers) as any[]}
-                                      cnyRate={cnyRate}
-                                      currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
-                                      isAdmin={isAdminUser}
-                                    />
-                                  ) : (
-                                    <FunderOrderCardV2Silver
-                                      order={pPreviewOrder}
-                                      ledgerId={ledgerId}
-                                      livePrices={formLivePrices}
-                                      priceDirection={priceDirection}
-                                      membersData={((ledgerData as any)?.members || funderUsers) as any[]}
-                                      cnyRate={cnyRate}
-                                      currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
-                                      isAdmin={isAdminUser}
-                                    />
-                                  )
-                                ) : (
-                                  <FunderOrderCard
-                                    order={pPreviewOrder}
-                                    livePrices={formLivePrices}
-                                    priceDirection={priceDirection}
-                                    currentUser={currentUser}
-                                    isAdmin={isAdminUser}
-                                    membersData={((ledgerData as any)?.members || funderUsers) as any[]}
-                                    ledgerId={ledgerId}
-                                    previewMode={true}
-                                    showCollateralInfo={false}
-                                    setShowCollateralInfo={() => {}}
-                                    showMarginInfo={false}
-                                    setShowMarginInfo={() => {}}
-                                    showInterestTip={false}
-                                    setShowInterestTip={() => {}}
-                                  />
-                                )}
-                              </div>
-                            );
-                          })()}
                         </div>
                       </div>
                     )}
@@ -4887,7 +4681,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       })
                       .map((m: any, index: number) => buildOwnerForm(m, index));
                     if (newParticipants.length === 0) return;
-                    // 第一次建立共同拥有者关系时，同步在编辑界面纳入主单拥有者，便于立即配置其独立视图和可见范围。
+                    // 第一次建立拥有者组时，同步纳入原订单拥有者，便于立即配置其独立视图和可见范围。
                     const primaryOwnerId = Number(formData.userId);
                     const primaryMember = allMembers.find((m: any) => Number(m.userId || m.id) === primaryOwnerId);
                     if (primaryMember && !participants.some(p => p.userId === primaryOwnerId)) {
@@ -4897,19 +4691,39 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     setParticipantsSectionExpanded(true);
                     setSelectedParticipantUserIds([]);
                     setParticipantUserSearch('');
-                    toast.success(`已加入 ${newParticipants.length} 位共同拥有者，请在底部统一保存`);
+                    setOwnerAddPanelExpanded(false);
+                    toast.success(`已加入 ${newParticipants.length} 位拥有者，请在底部统一保存`);
                   };
                   return (
-                    <div className="rounded-xl border border-dashed border-indigo-200 bg-white p-3">
-                      <div className="mb-2 flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-medium text-gray-700">添加共同拥有者</div>
-                          <div className="mt-0.5 text-xs text-gray-400">每位拥有者可独立设置本金、利率、备注和信息可见范围</div>
-                        </div>
-                        {selectedParticipantUserIds.length > 0 && (
-                          <button type="button" onClick={() => setSelectedParticipantUserIds([])} className="shrink-0 text-xs text-gray-400">清空</button>
-                        )}
-                      </div>
+                    <div className="overflow-hidden rounded-xl border border-dashed border-indigo-200 bg-white">
+                      <button
+                        type="button"
+                        onClick={() => setOwnerAddPanelExpanded(expanded => {
+                          if (expanded) {
+                            setSelectedParticipantUserIds([]);
+                            setParticipantUserSearch('');
+                          }
+                          return !expanded;
+                        })}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
+                      >
+                        <span>
+                          <span className="block text-sm font-medium text-gray-700">添加拥有者</span>
+                          <span className="mt-0.5 block text-xs text-gray-400">需要添加时再展开搜索与选择成员</span>
+                        </span>
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-indigo-600">
+                          {ownerAddPanelExpanded ? '收起' : '添加'}
+                          <ChevronDown className={`h-4 w-4 transition-transform ${ownerAddPanelExpanded ? 'rotate-180' : ''}`} />
+                        </span>
+                      </button>
+                      {ownerAddPanelExpanded && (
+                        <div className="border-t border-indigo-100 p-3">
+                          <div className="mb-2 flex items-start justify-between gap-3">
+                            <div className="text-xs leading-5 text-gray-500">每位拥有者可独立设置本金、利率、备注和信息可见范围。</div>
+                            {selectedParticipantUserIds.length > 0 && (
+                              <button type="button" onClick={() => setSelectedParticipantUserIds([])} className="shrink-0 text-xs text-gray-400">清空</button>
+                            )}
+                          </div>
                       <input
                         type="text"
                         value={participantUserSearch}
@@ -4961,8 +4775,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         style={{ background: 'linear-gradient(135deg, #4F46E5, #6366F1)' }}
                       >
                         <Plus className="h-4 w-4" />
-                        {selectedParticipantUserIds.length > 0 ? `加入 ${selectedParticipantUserIds.length} 位共同拥有者` : '请先勾选共同拥有者'}
+                        {selectedParticipantUserIds.length > 0 ? `加入 ${selectedParticipantUserIds.length} 位拥有者` : '请先勾选拥有者'}
                       </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -4981,14 +4797,15 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     className="mt-3 w-full rounded-xl py-3 text-sm font-semibold text-white disabled:opacity-50"
                     style={{ background: 'linear-gradient(135deg, #4F46E5, #6366F1)' }}
                   >
-                    {saveParticipantFormMutation.isPending ? '保存成员设置中…' : `保存 ${participants.length} 位拥有者／参与者设置`}
+                    {saveParticipantFormMutation.isPending ? '保存成员设置中…' : '保存拥有者／参与者设置'}
                   </button>
                 )}
                 </>)}
               </div>
             )}
 
-            {/* 提交按钮 */}
+            {/* 第一位拥有者的订单内容收起后，不显示其保存按钮；其他成员各自在个人订单页保存。 */}
+            {(!hasPrimaryOwnerDrawer || primaryOwnerEditorExpanded) && (
             <div className="flex-shrink-0 bg-white px-5 py-4 border-t border-gray-100">
               <button
                 onClick={handleSubmit}
@@ -5005,6 +4822,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       : '确认添加'}
               </button>
             </div>
+            )}
           </div>
         </div>
       )}
