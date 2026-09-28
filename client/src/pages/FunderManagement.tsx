@@ -3891,9 +3891,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     </div>
                     {computedCollateralGap !== null && (
                       <div className="flex items-center justify-between text-sm">
-                        <span style={{ color: '#6B7280' }}>担保余量 / 缺口</span>
+                        <span style={{ color: '#6B7280' }}>担保缺口</span>
                         <span className={`font-semibold ${
-                          computedCollateralGap >= 0 ? 'text-green-600' : 'text-red-500'
+                          computedCollateralGap < 0 ? 'text-green-600' : 'text-red-500'
                         }`}>
                           {computedCollateralGap > 0 ? '+' : ''}{computedCollateralGap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U
                         </span>

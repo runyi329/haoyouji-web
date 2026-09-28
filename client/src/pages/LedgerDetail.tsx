@@ -1262,8 +1262,8 @@ function FunderOrderCardLegacy({
                                     </div>
                                     <div className="flex justify-between items-center mt-0.5">
                                       <span className="text-gray-400">融资 {o.principal.toFixed(0)} U</span>
-                                      <span style={{ color: o.collateralGap >= 0 ? '#16A34A' : '#DC2626' }}>
-                                        余量/缺口 {o.collateralGap >= 0 ? '+' : ''}{o.collateralGap.toFixed(0)} U
+                                      <span style={{ color: o.collateralGap < 0 ? '#16A34A' : '#DC2626' }}>
+                                        担保缺口 {o.collateralGap >= 0 ? '+' : ''}{o.collateralGap.toFixed(0)} U
                                       </span>
                                     </div>
                                   </div>
@@ -1273,8 +1273,8 @@ function FunderOrderCardLegacy({
                                 <span style={{ color: '#C2410C' }}>共享池合计</span>
                                 <div className="text-right">
                                   <div className="text-blue-700">担保物 {((sharedPoolInfo as any).totalCollateralValue ?? 0).toFixed(0)} U</div>
-                                  <div style={{ color: ((sharedPoolInfo as any).totalGap ?? 0) >= 0 ? '#16A34A' : '#DC2626' }}>
-                                    余量/缺口 {((sharedPoolInfo as any).totalGap ?? 0) >= 0 ? '+' : ''}{((sharedPoolInfo as any).totalGap ?? 0).toFixed(0)} U
+                                  <div style={{ color: ((sharedPoolInfo as any).totalGap ?? 0) < 0 ? '#16A34A' : '#DC2626' }}>
+                                    担保缺口 {((sharedPoolInfo as any).totalGap ?? 0) >= 0 ? '+' : ''}{((sharedPoolInfo as any).totalGap ?? 0).toFixed(0)} U
                                   </div>
                                 </div>
                               </div>
