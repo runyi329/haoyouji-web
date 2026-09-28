@@ -6301,6 +6301,26 @@ export async function updateMyInitialBalances(
   }
   const mergedBalances = { ...existingBalances, ...balances };
 
+  // 37号股票持仓标签的收益由“全局股票批次 × 成员参与股数”计算，
+  // 不能使用原手工余额标签的初始金额、标签比例或实际权益字段。
+  // 清理历史误填值，但保留可见性、开始/暂停日期及押金等原页面配置。
+  if (ledgerId === 37) {
+    const stockTags = await db
+      .select({ name: ledgerCategories.name })
+      .from(ledgerCategories)
+      .where(and(
+        eq(ledgerCategories.ledgerId, ledgerId),
+        isNull(ledgerCategories.parentId),
+        eq(ledgerCategories.accountingMode, 'stock_portfolio'),
+      ));
+    for (const tag of stockTags) {
+      const name = String(tag.name);
+      delete mergedBalances[name];
+      delete mergedBalances[`${name}__ratio`];
+      delete mergedBalances[`${name}__targetAmount`];
+    }
+  }
+
   await db
     .update(ledgerMembers)
     .set({ initialBalances: JSON.stringify(mergedBalances) })

@@ -164,6 +164,43 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           INDEX idx_ledger_stock_daily_tag_date (category_id, snapshot_date)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+
+      // 每位成员对每个全局买入批次的参与股数。它不是标签“初始金额”：
+      // 进入后的盈亏只从该次分配的参考价开始计算，买卖资金本身不会被当成盈亏。
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ledger_stock_lot_participations (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL,
+          category_id INT NOT NULL,
+          lot_id BIGINT NOT NULL,
+          user_id INT NOT NULL,
+          allocated_quantity DECIMAL(24,8) NOT NULL,
+          remaining_quantity DECIMAL(24,8) NOT NULL,
+          entry_price DECIMAL(20,8) NOT NULL,
+          assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          assigned_by INT NOT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_ledger_stock_lot_participation (lot_id, user_id),
+          INDEX idx_ledger_stock_participation_tag_user (category_id, user_id),
+          INDEX idx_ledger_stock_participation_lot (lot_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      // 卖出只追加关闭明细；已卖出的参与股数永远不回到可编辑的分配行。
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ledger_stock_participation_closures (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          participation_id BIGINT NOT NULL,
+          sell_event_id BIGINT NOT NULL,
+          quantity DECIMAL(24,8) NOT NULL,
+          sale_price DECIMAL(20,8) NOT NULL,
+          closed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_ledger_stock_participation_closure (participation_id, sell_event_id),
+          INDEX idx_ledger_stock_participation_closure_event (sell_event_id),
+          INDEX idx_ledger_stock_participation_closure_participation (participation_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
     })().catch((error) => {
       tablesReady = null;
       throw error;
@@ -566,6 +603,7 @@ async function allocateFifo(
   categoryId: number,
   symbol: string,
   quantity: number,
+  salePrice: number,
 ) {
   const lots = await getActiveLots(categoryId, symbol);
   const available = lots.reduce((total, lot) => total + lot.remainingQuantity, 0);
@@ -581,6 +619,9 @@ async function allocateFifo(
         `INSERT INTO ledger_stock_event_lot_allocations (event_id, lot_id, quantity) VALUES (?, ?, ?)`,
         [eventId, lot.id, allocated],
       );
+      // The same FIFO sell closes participant lots in order. Historical sold parts remain
+      // in the closure ledger and cannot later be changed from initial-management settings.
+      await closeLotParticipationsFifo(conn, lot.id, eventId, salePrice, allocated);
       remaining -= allocated;
     }
   }
@@ -675,7 +716,7 @@ export async function createStockTagEvent(input: {
       );
     }
     if (type === "reduce" || type === "sell") {
-      await allocateFifo(tx, eventId, access.categoryId, stock!.symbol, quantity!);
+      await allocateFifo(tx, eventId, access.categoryId, stock!.symbol, quantity!, executionPrice!);
     }
     await (tx as any).commit();
     return { id: eventId };
@@ -721,6 +762,37 @@ export async function voidStockTagEvent(input: {
     if (Number((dependencyRows as any[])[0]?.count || 0) > 0) {
       throw new Error("该买入批次已有后续减仓/卖出记录，请先作废后续操作");
     }
+    const [participationRows] = await (conn as any).execute(
+      `SELECT COUNT(*) AS count FROM ledger_stock_lot_participations p
+       INNER JOIN ledger_stock_lots l ON l.id = p.lot_id
+       WHERE l.opened_event_id = ?`,
+      [input.eventId],
+    );
+    if (Number((participationRows as any[])[0]?.count || 0) > 0) {
+      throw new Error("该买入批次已分配给参与成员；请先在初始金额管理中移除未卖出的参与分配");
+    }
+  }
+  if (event.event_type === "reduce" || event.event_type === "sell") {
+    // The sale's participant closures are append-only evidence. Reversing an entire sale
+    // restores its quantities before the closure records are deleted, keeping the matrix
+    // consistent with the surviving stock transaction history.
+    const [closedRows] = await (conn as any).execute(
+      `SELECT participation_id, SUM(quantity) AS quantity
+       FROM ledger_stock_participation_closures
+       WHERE sell_event_id = ?
+       GROUP BY participation_id`,
+      [input.eventId],
+    );
+    for (const row of closedRows as any[]) {
+      await (conn as any).execute(
+        `UPDATE ledger_stock_lot_participations SET remaining_quantity = remaining_quantity + ? WHERE id = ?`,
+        [numberValue(row.quantity), Number(row.participation_id)],
+      );
+    }
+    await (conn as any).execute(
+      `DELETE FROM ledger_stock_participation_closures WHERE sell_event_id = ?`,
+      [input.eventId],
+    );
   }
   await (conn as any).execute(
     `UPDATE ledger_stock_events
@@ -862,5 +934,203 @@ export async function refreshLedgerStockTagCloseSnapshots(): Promise<{ categorie
     return { categories: categoryIds.length, symbols: allSymbols.size, updated };
   } finally {
     closeRefreshInProgress = false;
+  }
+}
+async function getStockLotParticipationMatrixInternal(categoryId: number) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  const [lotRows] = await (conn as any).execute(
+    `SELECT l.id, l.symbol, l.stock_name, l.opened_at, l.initial_quantity, l.unit_cost,
+            COALESCE(SUM(CASE WHEN e.status = 'active' THEN a.quantity ELSE 0 END), 0) AS globally_sold_quantity
+     FROM ledger_stock_lots l
+     INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
+     LEFT JOIN ledger_stock_event_lot_allocations a ON a.lot_id = l.id
+     LEFT JOIN ledger_stock_events e ON e.id = a.event_id
+     WHERE l.category_id = ? AND opening_event.status = 'active'
+     GROUP BY l.id
+     ORDER BY l.opened_at ASC, l.id ASC`,
+    [categoryId],
+  );
+  const [members] = await (conn as any).execute(
+    `SELECT lm.userId, lm.role, u.username, u.nickname, u.name
+     FROM ledger_members lm
+     LEFT JOIN users u ON u.id = lm.userId
+     WHERE lm.ledgerId = ?
+     ORDER BY CASE lm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, lm.id ASC`,
+    [STOCK_LEDGER_ID],
+  );
+  const [participationRows] = await (conn as any).execute(
+    `SELECT p.id, p.lot_id, p.user_id, p.allocated_quantity, p.remaining_quantity, p.entry_price,
+            p.assigned_at, p.assigned_by,
+            COALESCE(SUM(c.quantity), 0) AS closed_quantity,
+            COALESCE(SUM(c.quantity * (c.sale_price - p.entry_price)), 0) AS realized_pnl
+     FROM ledger_stock_lot_participations p
+     LEFT JOIN ledger_stock_participation_closures c ON c.participation_id = p.id
+     WHERE p.category_id = ?
+     GROUP BY p.id
+     ORDER BY p.assigned_at ASC, p.id ASC`,
+    [categoryId],
+  );
+  const [storedQuotes, referenceQuotes] = await Promise.all([
+    getLatestQuotes(categoryId, (lotRows as any[]).map((row) => String(row.symbol))),
+    getLatestReferenceQuotes(categoryId),
+  ]);
+  const quoteMap = { ...referenceQuotes, ...storedQuotes };
+  const byLot = new Map<number, any[]>();
+  for (const row of participationRows as any[]) {
+    const lotId = Number(row.lot_id);
+    const list = byLot.get(lotId) || [];
+    list.push({
+      id: Number(row.id), userId: Number(row.user_id),
+      allocatedQuantity: numberValue(row.allocated_quantity), remainingQuantity: numberValue(row.remaining_quantity),
+      closedQuantity: numberValue(row.closed_quantity), entryPrice: numberValue(row.entry_price),
+      assignedAt: toIso(row.assigned_at), assignedBy: Number(row.assigned_by), realizedPnl: numberValue(row.realized_pnl),
+    });
+    byLot.set(lotId, list);
+  }
+  const lots = (lotRows as any[]).map((row) => {
+    const initialQuantity = numberValue(row.initial_quantity);
+    const globallySoldQuantity = numberValue(row.globally_sold_quantity);
+    const currentQuantity = Math.max(0, initialQuantity - globallySoldQuantity);
+    const marketPrice = quoteMap[String(row.symbol)]?.price ?? null;
+    const participations = byLot.get(Number(row.id)) || [];
+    const activeAllocatedQuantity = participations.reduce((total, item) => total + item.remainingQuantity, 0);
+    return {
+      id: Number(row.id), symbol: String(row.symbol), stockName: String(row.stock_name), openedAt: toIso(row.opened_at),
+      unitCost: numberValue(row.unit_cost), initialQuantity, globallySoldQuantity, currentQuantity, marketPrice,
+      availableForParticipation: Math.max(0, currentQuantity - activeAllocatedQuantity),
+      status: currentQuantity > EPSILON ? "active" as const : "closed" as const,
+      participations: participations.map((item) => ({
+        ...item,
+        floatingPnl: marketPrice === null ? null : (marketPrice - item.entryPrice) * item.remainingQuantity,
+        totalPnl: marketPrice === null ? item.realizedPnl : item.realizedPnl + (marketPrice - item.entryPrice) * item.remainingQuantity,
+      })),
+    };
+  });
+  return {
+    members: (members as any[]).map((member) => ({
+      userId: Number(member.userId), role: member.role,
+      name: member.nickname || member.name || member.username || `用户${member.userId}`,
+    })),
+    lots,
+  };
+}
+
+export async function getStockLotParticipationMatrix(input: { ledgerId: number; categoryId: number; userId: number; systemRole?: string }) {
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
+  return { ...await getStockLotParticipationMatrixInternal(access.categoryId), canEdit: access.canEdit };
+}
+
+
+export async function setStockLotParticipation(input: {
+  ledgerId: number;
+  categoryId: number;
+  lotId: number;
+  targetUserId: number;
+  quantity: number;
+  userId: number;
+  systemRole?: string;
+}) {
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
+  const quantity = Number(input.quantity);
+  if (!Number.isFinite(quantity) || quantity < 0) throw new Error("参与股数必须为不小于 0 的数字");
+  const tx = await getDbTransactionConnection();
+  if (!tx) throw new Error("数据库连接不可用");
+  try {
+    await (tx as any).beginTransaction();
+    const [memberRows] = await (tx as any).execute(
+      `SELECT userId FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+      [access.ledgerId, input.targetUserId],
+    );
+    if ((memberRows as any[]).length === 0) throw new Error("该用户不是37号账本成员");
+    const [lotRows] = await (tx as any).execute(
+      `SELECT l.id, l.symbol, l.initial_quantity, l.unit_cost,
+              COALESCE(SUM(CASE WHEN e.status = 'active' THEN a.quantity ELSE 0 END), 0) AS globally_sold_quantity
+       FROM ledger_stock_lots l
+       INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
+       LEFT JOIN ledger_stock_event_lot_allocations a ON a.lot_id = l.id
+       LEFT JOIN ledger_stock_events e ON e.id = a.event_id
+       WHERE l.id = ? AND l.category_id = ? AND opening_event.status = 'active'
+       GROUP BY l.id FOR UPDATE`,
+      [input.lotId, access.categoryId],
+    );
+    const lot = (lotRows as any[])[0];
+    if (!lot) throw new Error("股票批次不存在或已作废");
+    const [existingRows] = await (tx as any).execute(
+      `SELECT p.id, COUNT(c.id) AS closure_count
+       FROM ledger_stock_lot_participations p
+       LEFT JOIN ledger_stock_participation_closures c ON c.participation_id = p.id
+       WHERE p.lot_id = ? AND p.user_id = ?
+       GROUP BY p.id FOR UPDATE`,
+      [input.lotId, input.targetUserId],
+    );
+    const existing = (existingRows as any[])[0];
+    if (existing && Number(existing.closure_count) > 0) {
+      throw new Error("该用户的此股票已发生卖出结算，分配记录仅可查看，不能再修改");
+    }
+    const [otherRows] = await (tx as any).execute(
+      `SELECT COALESCE(SUM(remaining_quantity), 0) AS allocated_quantity
+       FROM ledger_stock_lot_participations
+       WHERE lot_id = ? AND id <> ? FOR UPDATE`,
+      [input.lotId, existing?.id || 0],
+    );
+    const otherAllocated = numberValue((otherRows as any[])[0]?.allocated_quantity);
+    const remainingGlobal = Math.max(0, numberValue(lot.initial_quantity) - numberValue(lot.globally_sold_quantity));
+    if (quantity - (remainingGlobal - otherAllocated) > EPSILON) {
+      throw new Error(`可分配股数不足：当前最多可分配 ${Math.max(0, remainingGlobal - otherAllocated)}`);
+    }
+    if (quantity <= EPSILON) {
+      if (existing) await (tx as any).execute(`DELETE FROM ledger_stock_lot_participations WHERE id = ?`, [existing.id]);
+    } else if (existing) {
+      await (tx as any).execute(
+        `UPDATE ledger_stock_lot_participations SET allocated_quantity = ?, remaining_quantity = ? WHERE id = ?`,
+        [quantity, quantity, existing.id],
+      );
+    } else {
+      const [quoteRows] = await (tx as any).execute(
+        `SELECT price FROM ledger_stock_price_snapshots WHERE category_id = ? AND symbol = ? ORDER BY price_date DESC LIMIT 1`,
+        [access.categoryId, lot.symbol],
+      );
+      const entryPrice = numberValue((quoteRows as any[])[0]?.price) || numberValue(lot.unit_cost);
+      await (tx as any).execute(
+        `INSERT INTO ledger_stock_lot_participations
+         (ledger_id, category_id, lot_id, user_id, allocated_quantity, remaining_quantity, entry_price, assigned_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [access.ledgerId, access.categoryId, input.lotId, input.targetUserId, quantity, quantity, entryPrice, input.userId],
+      );
+    }
+    await (tx as any).commit();
+    return { success: true };
+  } catch (error) {
+    await (tx as any).rollback();
+    throw error;
+  } finally {
+    if (typeof (tx as any).release === "function") (tx as any).release();
+  }
+}
+
+
+async function closeLotParticipationsFifo(conn: any, lotId: number, sellEventId: number, salePrice: number, quantity: number) {
+  const [rows] = await conn.execute(
+    `SELECT id, remaining_quantity FROM ledger_stock_lot_participations
+     WHERE lot_id = ? AND remaining_quantity > 0
+     ORDER BY assigned_at ASC, id ASC FOR UPDATE`,
+    [lotId],
+  );
+  let remaining = quantity;
+  for (const row of rows as any[]) {
+    if (remaining <= EPSILON) break;
+    const closedQuantity = Math.min(remaining, numberValue(row.remaining_quantity));
+    if (closedQuantity <= EPSILON) continue;
+    await conn.execute(
+      `INSERT INTO ledger_stock_participation_closures (participation_id, sell_event_id, quantity, sale_price)
+       VALUES (?, ?, ?, ?)`,
+      [row.id, sellEventId, closedQuantity, salePrice],
+    );
+    await conn.execute(
+      `UPDATE ledger_stock_lot_participations SET remaining_quantity = remaining_quantity - ? WHERE id = ?`,
+      [closedQuantity, row.id],
+    );
+    remaining -= closedQuantity;
   }
 }

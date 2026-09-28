@@ -10038,6 +10038,24 @@ ${klinesSummary}
         const { getStockTagDailySnapshots } = await import('./ledger-stock-portfolio');
         return getStockTagDailySnapshots({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
+    getStockLotParticipationMatrix: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { getStockLotParticipationMatrix } = await import('./ledger-stock-portfolio');
+        return getStockLotParticipationMatrix({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
+    setStockLotParticipation: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        categoryId: z.number(),
+        lotId: z.number().int().positive(),
+        targetUserId: z.number().int().positive(),
+        quantity: z.number().min(0).max(1_000_000_000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { setStockLotParticipation } = await import('./ledger-stock-portfolio');
+        return setStockLotParticipation({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
     addStockTagEvent: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(37),
