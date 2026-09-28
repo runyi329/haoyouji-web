@@ -2601,8 +2601,15 @@ export default function LedgerDetailAA({
             const rightGridCols = 'minmax(52px,max-content) 1px minmax(52px,max-content) 1px minmax(52px,max-content) 1px minmax(64px,max-content) 1px minmax(64px,max-content) 1px 64px 1px 52px';
             // 右侧滚动区最小宽度：内容自动撑开，不换行
             const rightMinWidth = 'max-content';
-            // 列标题日期：取所有 tag 中最新一条数据的日期（不管是不是当天）
-            const _latestDataDate = visibleTags.reduce((maxDate, t) => {
+            // 股票标签已有有效15:05盘尾时，概览“当天”必须以该真实结算日为准。
+            // 不让休市日或旧手工标签的最后登记日期（如9/24、9/27）把已结算的9/28覆盖掉。
+            // latestSnapshot 是服务端从数据库快照日期原样返回，不经浏览器时区换算。
+            const _latestStockSettlementDate = stockTagOverview.reduce((maxDate, item: any) => {
+              const date = String(item?.summary?.latestSnapshot?.snapshotDate || '');
+              return date > maxDate ? date : maxDate;
+            }, '');
+            // 没有股票盘尾快照时，才回退到所有标签中最后一条记录的日期。
+            const _latestDataDate = _latestStockSettlementDate || visibleTags.reduce((maxDate, t) => {
               const d = t.points[t.points.length - 1]?.date ?? '';
               return d > maxDate ? d : maxDate;
             }, '');
