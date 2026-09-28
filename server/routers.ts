@@ -10027,6 +10027,13 @@ ${klinesSummary}
         const { getStockTagPortfolio } = await import('./ledger-stock-portfolio');
         return getStockTagPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
+    // 成员已获得该标签份额后，可只读查看标签整体 A 股持仓；不能获得任何写权限。
+    getStockTagPublicPortfolio: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { getStockTagPublicPortfolio } = await import('./ledger-stock-portfolio');
+        return getStockTagPublicPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
     // 普通成员及观察视角只读取本人按批次分配的份额；盈亏基准是该份额的入场参考价，
     // 不回退到股票标签的总市值或旧版初始金额。
     getMyStockTagParticipantPortfolio: protectedProcedure

@@ -580,6 +580,24 @@ export async function getStockTagPortfolio(input: {
 }
 
 /**
+ * Read-only tag-wide market view for a member who already has an eligible
+ * allocation.  This deliberately exposes aggregate holdings only; all write
+ * controls remain governed by the existing administrator procedure.
+ */
+export async function getStockTagPublicPortfolio(input: {
+  ledgerId: number;
+  categoryId: number;
+  userId: number;
+  systemRole?: string;
+}) {
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
+  const memberPortfolio = await buildMemberStockPortfolio(access.categoryId, input.userId);
+  if (!memberPortfolio.isEligible && !access.canEdit) throw new Error("该股票标签尚未对您开放");
+  const portfolio = await buildPortfolio(access.categoryId);
+  return { ...access, accountingMode: "stock_portfolio" as const, ...portfolio, history: [] as any[] };
+}
+
+/**
  * A member's view is deliberately separate from the administrator's tag-wide
  * portfolio.  A member's baseline is each allocated lot's entry price and
  * start date, never the tag's (non-existent) manual initial balance.
@@ -592,7 +610,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
             p.start_date, p.pause_date, p.assigned_at,
             l.symbol, l.stock_name, l.opened_at, l.initial_quantity, l.unit_cost,
             COALESCE(SUM(c.quantity), 0) AS closed_quantity,
-            COALESCE(SUM(c.quantity * (c.sale_price - p.entry_price)), 0) AS realized_pnl
+            COALESCE(SUM(c.quantity * (p.entry_price - c.sale_price)), 0) AS realized_pnl
      FROM ledger_stock_lot_participations p
      INNER JOIN ledger_stock_lots l ON l.id = p.lot_id
      LEFT JOIN ledger_stock_participation_closures c ON c.participation_id = p.id
@@ -670,7 +688,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       averageCost: position.quantity > EPSILON ? position.costValue / position.quantity : 0,
       marketPrice,
       marketValue,
-      floatingPnl: marketValue === null ? null : marketValue - position.costValue,
+      floatingPnl: marketValue === null ? null : position.costValue - marketValue,
       quoteDate: quote?.priceDate || null,
       quoteUpdatedAt: quote?.updatedAt || null,
       hasPrice: marketPrice !== null,
@@ -719,7 +737,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     const snapshotMarket = allPriced
       ? effective.reduce((total, item) => total + item.remainingQuantity * (priceBySymbol.get(item.symbol) || 0), 0)
       : null;
-    const snapshotFloating = snapshotMarket === null ? null : snapshotMarket - snapshotCost;
+    const snapshotFloating = snapshotMarket === null ? null : snapshotCost - snapshotMarket;
     return {
       snapshotDate,
       marketValue: snapshotMarket,
@@ -733,7 +751,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   const latestSnapshot = dailySnapshots[dailySnapshots.length - 1] || null;
   const priorSnapshot = dailySnapshots.length > 1 ? dailySnapshots[dailySnapshots.length - 2] : null;
   const dailyChange = latestSnapshot && priorSnapshot && latestSnapshot.marketValue !== null && priorSnapshot.marketValue !== null
-    ? latestSnapshot.marketValue - priorSnapshot.marketValue
+    ? priorSnapshot.marketValue - latestSnapshot.marketValue
     : null;
   const dailyChangePercent = dailyChange !== null && priorSnapshot && priorSnapshot.marketValue !== null && Math.abs(priorSnapshot.marketValue) > EPSILON
     ? dailyChange / priorSnapshot.marketValue
@@ -810,7 +828,8 @@ export async function getMyStockTagOverview(input: { ledgerId: number; userId: n
       pnl: snapshot.totalPnl ?? 0,
       dailyPnl: index > 0 && snapshot.totalPnl !== null && chronological[index - 1].totalPnl !== null
         ? snapshot.totalPnl - (chronological[index - 1].totalPnl as number)
-        : 0,
+        // 首个有效盘尾以入场时的 0 盈亏为基准；若此时已有盈亏，必须计入当天概览。
+        : (snapshot.totalPnl ?? 0),
       marketValue: snapshot.marketValue,
     }));
     // The tag must become visible immediately after a valid allocation, even before its first 15:05 close.
@@ -1246,7 +1265,7 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
             DATE_FORMAT(MAX(p.pause_date), '%Y-%m-%d') AS pause_date,
             p.assigned_at, p.assigned_by,
             COALESCE(SUM(c.quantity), 0) AS closed_quantity,
-            COALESCE(SUM(c.quantity * (c.sale_price - p.entry_price)), 0) AS realized_pnl
+            COALESCE(SUM(c.quantity * (p.entry_price - c.sale_price)), 0) AS realized_pnl
      FROM ledger_stock_lot_participations p
      INNER JOIN ledger_stock_lots l ON l.id = p.lot_id
      LEFT JOIN ledger_stock_participation_closures c ON c.participation_id = p.id
@@ -1290,8 +1309,8 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
       status: currentQuantity > EPSILON ? "active" as const : "closed" as const,
       participations: participations.map((item) => ({
         ...item,
-        floatingPnl: marketPrice === null ? null : (marketPrice - item.entryPrice) * item.remainingQuantity,
-        totalPnl: marketPrice === null ? item.realizedPnl : item.realizedPnl + (marketPrice - item.entryPrice) * item.remainingQuantity,
+        floatingPnl: marketPrice === null ? null : (item.entryPrice - marketPrice) * item.remainingQuantity,
+        totalPnl: marketPrice === null ? item.realizedPnl : item.realizedPnl + (item.entryPrice - marketPrice) * item.remainingQuantity,
       })),
     };
   });
@@ -1404,7 +1423,8 @@ export async function setStockLotParticipation(input: {
         ],
       );
     } else {
-      const entryPrice = specifiedEntryPrice ?? (numberValue(lot.market_reference_price) || numberValue(lot.unit_cost));
+      // 成员首次参与默认沿用该股票批次的实际买入价；管理员仍可在转让或中途加入时覆盖。
+      const entryPrice = specifiedEntryPrice ?? (numberValue(lot.unit_cost) || numberValue(lot.market_reference_price));
       await (tx as any).execute(
         `INSERT INTO ledger_stock_lot_participations
          (ledger_id, category_id, lot_id, user_id, allocated_quantity, remaining_quantity, entry_price, start_date, pause_date, assigned_by)

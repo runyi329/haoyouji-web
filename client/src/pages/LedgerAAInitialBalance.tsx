@@ -766,7 +766,8 @@ export default function LedgerAAInitialBalance() {
                   const maxQuantity = Math.max(0, Number(lot.currentQuantity || 0) - allocatedToOthers);
                   const maxPercentage = Math.max(0, Math.min(100, Math.floor(lot.currentQuantity > 0 ? maxQuantity / lot.currentQuantity * 100 : 0)));
                   const draftKey = `${lot.id}:${member.userId}`;
-                  const savedEntryPrice = Number(participation?.entryPrice || lot.openingReferencePrice || lot.unitCost || 0);
+                  // 首次分配默认沿用该股票批次的实际买入价；中途转让时仍可手动覆盖。
+                  const savedEntryPrice = Number(participation?.entryPrice || lot.unitCost || lot.openingReferencePrice || 0);
                   const defaultStartDate = dateInputValue(lot.actualTradedAt || lot.openedAt);
                   const savedStartDate = participation?.startDate || defaultStartDate;
                   const savedPauseDate = participation?.pauseDate || '';
@@ -834,7 +835,7 @@ export default function LedgerAAInitialBalance() {
                         当前比例折算 <b className="font-medium text-gray-600">{formatNumber(lot.currentQuantity * (Number(draft.percentage) || 0) / 100, 4)} 股</b> · 占比金额 <b className="font-medium text-gray-600">¥{formatNumber(lot.currentQuantity * (Number(draft.percentage) || 0) / 100 * draftEntryPrice, 2)}</b>
                       </div>
                       <div className="mt-1.5 flex items-center justify-between gap-2">
-                        <span className="text-[10px] text-gray-400">入场参考价</span>
+                        <span className="text-[10px] text-gray-400">我的买入价</span>
                         <div className="flex h-7 items-center overflow-hidden rounded-md border bg-white" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}>
                           <span className="pl-2 text-[10px] text-gray-400">¥</span>
                           <input
@@ -842,7 +843,7 @@ export default function LedgerAAInitialBalance() {
                             inputMode="decimal"
                             value={draft.entryPrice}
                             disabled={isReadonly}
-                            placeholder={savedEntryPrice ? String(savedEntryPrice) : '参考价'}
+                            placeholder={savedEntryPrice ? String(savedEntryPrice) : '买入价'}
                             onChange={(event) => {
                               const value = event.target.value;
                               if (/^(?:\d*\.?\d*)?$/.test(value)) setStockParticipationDraft(draftKey, { entryPrice: value }, fallbackDraft);
@@ -913,7 +914,7 @@ export default function LedgerAAInitialBalance() {
             </div>
           );
         })}
-        <div className="text-[11px] leading-4 text-gray-500">成员占比金额按“参与股数 × 入场参考价”记录；默认采用该股票登记时的市场参考价，管理员可在成员中途加入或转让时调整。已卖出的历史部分仅可查看。</div>
+        <div className="text-[11px] leading-4 text-gray-500">成员占比金额按“参与股数 × 我的买入价”记录；默认采用该股票批次的实际买入价，管理员可在成员中途加入或转让时调整。已卖出的历史部分仅可查看。</div>
       </section>
     );
   };
