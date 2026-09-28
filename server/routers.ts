@@ -10051,6 +10051,7 @@ ${klinesSummary}
         lotId: z.number().int().positive(),
         targetUserId: z.number().int().positive(),
         quantity: z.number().min(0).max(1_000_000_000),
+        entryPrice: z.number().positive().max(1_000_000_000).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { setStockLotParticipation } = await import('./ledger-stock-portfolio');

@@ -941,6 +941,8 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
   if (!conn) throw new Error("数据库连接不可用");
   const [lotRows] = await (conn as any).execute(
     `SELECT l.id, l.symbol, l.stock_name, l.opened_at, l.initial_quantity, l.unit_cost,
+            opening_event.market_reference_price AS opening_reference_price,
+            COALESCE(opening_event.actual_traded_at, l.opened_at) AS actual_traded_at,
             COALESCE(SUM(CASE WHEN e.status = 'active' THEN a.quantity ELSE 0 END), 0) AS globally_sold_quantity
      FROM ledger_stock_lots l
      INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
@@ -996,8 +998,11 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
     const participations = byLot.get(Number(row.id)) || [];
     const activeAllocatedQuantity = participations.reduce((total, item) => total + item.remainingQuantity, 0);
     return {
-      id: Number(row.id), symbol: String(row.symbol), stockName: String(row.stock_name), openedAt: toIso(row.opened_at),
-      unitCost: numberValue(row.unit_cost), initialQuantity, globallySoldQuantity, currentQuantity, marketPrice,
+      id: Number(row.id), symbol: String(row.symbol), stockName: String(row.stock_name),
+      // 使用管理员登记的实际成交/接单时间（精确到秒），不受后续日度估值影响。
+      openedAt: toIso(row.opened_at), actualTradedAt: toIso(row.actual_traded_at),
+      unitCost: numberValue(row.unit_cost), openingReferencePrice: numberValue(row.opening_reference_price) || null,
+      initialQuantity, globallySoldQuantity, currentQuantity, marketPrice,
       availableForParticipation: Math.max(0, currentQuantity - activeAllocatedQuantity),
       status: currentQuantity > EPSILON ? "active" as const : "closed" as const,
       participations: participations.map((item) => ({
@@ -1030,10 +1035,15 @@ export async function setStockLotParticipation(input: {
   quantity: number;
   userId: number;
   systemRole?: string;
+  entryPrice?: number;
 }) {
   const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
   const quantity = Number(input.quantity);
   if (!Number.isFinite(quantity) || quantity < 0) throw new Error("参与股数必须为不小于 0 的数字");
+  const specifiedEntryPrice = input.entryPrice === undefined ? undefined : Number(input.entryPrice);
+  if (specifiedEntryPrice !== undefined && (!Number.isFinite(specifiedEntryPrice) || specifiedEntryPrice <= 0)) {
+    throw new Error("成员入场参考价必须大于 0");
+  }
   const tx = await getDbTransactionConnection();
   if (!tx) throw new Error("数据库连接不可用");
   try {
@@ -1043,21 +1053,26 @@ export async function setStockLotParticipation(input: {
       [access.ledgerId, input.targetUserId],
     );
     if ((memberRows as any[]).length === 0) throw new Error("该用户不是37号账本成员");
+    // 先锁定股票批次主记录。每次同一批次的参与分配都会串行计算，避免并发编辑合计超出当前余量。
     const [lotRows] = await (tx as any).execute(
-      `SELECT l.id, l.symbol, l.initial_quantity, l.unit_cost,
-              COALESCE(SUM(CASE WHEN e.status = 'active' THEN a.quantity ELSE 0 END), 0) AS globally_sold_quantity
+      `SELECT l.id, l.symbol, l.initial_quantity, l.unit_cost, opening_event.market_reference_price
        FROM ledger_stock_lots l
        INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
-       LEFT JOIN ledger_stock_event_lot_allocations a ON a.lot_id = l.id
-       LEFT JOIN ledger_stock_events e ON e.id = a.event_id
        WHERE l.id = ? AND l.category_id = ? AND opening_event.status = 'active'
-       GROUP BY l.id FOR UPDATE`,
+       FOR UPDATE`,
       [input.lotId, access.categoryId],
     );
     const lot = (lotRows as any[])[0];
     if (!lot) throw new Error("股票批次不存在或已作废");
+    const [soldRows] = await (tx as any).execute(
+      `SELECT COALESCE(SUM(a.quantity), 0) AS globally_sold_quantity
+       FROM ledger_stock_event_lot_allocations a
+       INNER JOIN ledger_stock_events e ON e.id = a.event_id
+       WHERE a.lot_id = ? AND e.status = 'active'`,
+      [input.lotId],
+    );
     const [existingRows] = await (tx as any).execute(
-      `SELECT p.id, COUNT(c.id) AS closure_count
+      `SELECT p.id, p.entry_price, COUNT(c.id) AS closure_count
        FROM ledger_stock_lot_participations p
        LEFT JOIN ledger_stock_participation_closures c ON c.participation_id = p.id
        WHERE p.lot_id = ? AND p.user_id = ?
@@ -1075,7 +1090,7 @@ export async function setStockLotParticipation(input: {
       [input.lotId, existing?.id || 0],
     );
     const otherAllocated = numberValue((otherRows as any[])[0]?.allocated_quantity);
-    const remainingGlobal = Math.max(0, numberValue(lot.initial_quantity) - numberValue(lot.globally_sold_quantity));
+    const remainingGlobal = Math.max(0, numberValue(lot.initial_quantity) - numberValue((soldRows as any[])[0]?.globally_sold_quantity));
     if (quantity - (remainingGlobal - otherAllocated) > EPSILON) {
       throw new Error(`可分配股数不足：当前最多可分配 ${Math.max(0, remainingGlobal - otherAllocated)}`);
     }
@@ -1083,15 +1098,13 @@ export async function setStockLotParticipation(input: {
       if (existing) await (tx as any).execute(`DELETE FROM ledger_stock_lot_participations WHERE id = ?`, [existing.id]);
     } else if (existing) {
       await (tx as any).execute(
-        `UPDATE ledger_stock_lot_participations SET allocated_quantity = ?, remaining_quantity = ? WHERE id = ?`,
-        [quantity, quantity, existing.id],
+        `UPDATE ledger_stock_lot_participations
+         SET allocated_quantity = ?, remaining_quantity = ?, entry_price = COALESCE(?, entry_price), assigned_by = ?
+         WHERE id = ?`,
+        [quantity, quantity, specifiedEntryPrice ?? null, input.userId, existing.id],
       );
     } else {
-      const [quoteRows] = await (tx as any).execute(
-        `SELECT price FROM ledger_stock_price_snapshots WHERE category_id = ? AND symbol = ? ORDER BY price_date DESC LIMIT 1`,
-        [access.categoryId, lot.symbol],
-      );
-      const entryPrice = numberValue((quoteRows as any[])[0]?.price) || numberValue(lot.unit_cost);
+      const entryPrice = specifiedEntryPrice ?? (numberValue(lot.market_reference_price) || numberValue(lot.unit_cost));
       await (tx as any).execute(
         `INSERT INTO ledger_stock_lot_participations
          (ledger_id, category_id, lot_id, user_id, allocated_quantity, remaining_quantity, entry_price, assigned_by)

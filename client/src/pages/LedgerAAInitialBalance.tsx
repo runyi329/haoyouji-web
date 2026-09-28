@@ -21,7 +21,7 @@
  */
 import { Fragment, useState, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, EyeOff, Pause, Plus, ChartNoAxesCombined } from "lucide-react";
+import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, ChartNoAxesCombined } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -148,6 +148,8 @@ const defaultEntry = (): TagEntry => ({
 });
 
 export default function LedgerAAInitialBalance() {
+  // 本地热预览复用生产只读数据，不能把试填比例、价格或可见性写回正式账本。
+  const isLocalHotPreview = import.meta.env.DEV;
   const params = useParams();
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 0;
@@ -679,7 +681,7 @@ export default function LedgerAAInitialBalance() {
 
   // 股票标签没有标签级“初始金额”。此处是所有成员共享的“股票批次 × 参与股数”矩阵：
   // 从任意成员弹窗都可配置任意成员；一旦发生卖出，对应参与行自动转为只读历史。
-  const StockParticipationEditor = ({ selectedUserId, accentColor }: { selectedUserId: number; accentColor: string }) => {
+  const renderStockParticipationEditor = ({ selectedUserId, accentColor }: { selectedUserId: number; accentColor: string }) => {
     if (stockParticipationError) {
       return (
         <section className="rounded-xl p-3 text-xs" style={{ backgroundColor: '#FFF7F7', border: '1px solid #F5C2C7', color: '#A33A3A' }}>
@@ -693,6 +695,15 @@ export default function LedgerAAInitialBalance() {
     }
     const matrix = stockParticipationMatrix as any;
     const formatNumber = (value: number, digits = 2) => Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: digits });
+    const formatTradeTime = (value?: string | null) => {
+      if (!value) return '历史批次';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return new Intl.DateTimeFormat('zh-CN', {
+        timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+      }).format(date).replaceAll('/', '-');
+    };
     return (
       <section className="rounded-xl p-3 space-y-3" style={{ backgroundColor: '#F7FAFC', border: '1px solid #DCE7EE' }}>
         <div className="flex items-start gap-2">
@@ -711,9 +722,14 @@ export default function LedgerAAInitialBalance() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5"><span className="text-sm font-semibold text-gray-800 truncate">{lot.stockName}</span><span className="text-[11px] text-gray-400">{lot.symbol}</span></div>
-                  <div className="mt-0.5 text-[11px] text-gray-500">买入 {formatNumber(lot.initialQuantity, 4)} 股 · 成本 ¥{formatNumber(lot.unitCost, 4)} · {lot.openedAt ? new Date(lot.openedAt).toLocaleDateString('zh-CN') : '历史批次'}</div>
+                  <div className="mt-0.5 flex flex-wrap gap-x-1.5 gap-y-0.5 text-[11px] text-gray-500">
+                    <span>买入 {formatNumber(lot.initialQuantity, 4)} 股</span>
+                    <span>成本 ¥{formatNumber(lot.unitCost, 4)}</span>
+                    <span>总额 ¥{formatNumber(lot.initialQuantity * lot.unitCost, 2)}</span>
+                    <span>{formatTradeTime(lot.actualTradedAt || lot.openedAt)}</span>
+                  </div>
                 </div>
-                <span className="rounded-full px-1.5 py-0.5 text-[10px] whitespace-nowrap" style={globalClosed ? { color: '#8A5A00', backgroundColor: '#FFF3CD' } : { color: '#2F6F85', backgroundColor: '#EAF4F7' }}>{globalClosed ? '已结束' : `可分配 ${formatNumber(lot.availableForParticipation, 4)} 股`}</span>
+                <span className="rounded-full px-1.5 py-0.5 text-[10px] whitespace-nowrap" style={globalClosed ? { color: '#8A5A00', backgroundColor: '#FFF3CD' } : { color: '#2F6F85', backgroundColor: '#EAF4F7' }}>{globalClosed ? '已结束' : `剩余 ${formatNumber(lot.availableForParticipation, 4)} 股 · ${formatNumber(lot.currentQuantity > 0 ? lot.availableForParticipation / lot.currentQuantity * 100 : 0, 2)}%`}</span>
               </div>
               <div className="grid grid-cols-3 gap-1.5 rounded-lg px-2 py-1.5 text-[11px]" style={{ backgroundColor: '#F8FAFB' }}>
                 <span className="text-gray-500">当前余量 <b className="ml-0.5 text-gray-700">{formatNumber(lot.currentQuantity, 4)}</b></span>
@@ -721,40 +737,122 @@ export default function LedgerAAInitialBalance() {
                 <span className="text-gray-500">已卖 <b className="ml-0.5 text-gray-700">{formatNumber(lot.globallySoldQuantity, 4)}</b></span>
               </div>
               <div className="space-y-1.5">
-                {matrix.members.map((member: any) => {
+                {[...matrix.members].sort((left: any, right: any) => {
+                  // 只按已保存的份额排序：保存后自动刷新，避免输入中改变顺序导致移动端焦点跳失。
+                  const leftQuantity = Number(lot.participations.find((item: any) => Number(item.userId) === Number(left.userId))?.remainingQuantity || 0);
+                  const rightQuantity = Number(lot.participations.find((item: any) => Number(item.userId) === Number(right.userId))?.remainingQuantity || 0);
+                  return rightQuantity - leftQuantity;
+                }).map((member: any) => {
                   const participation = lot.participations.find((item: any) => Number(item.userId) === Number(member.userId));
                   const hasSoldHistory = Number(participation?.closedQuantity || 0) > 0;
                   const isReadonly = globalClosed || hasSoldHistory || !matrix.canEdit;
                   const currentQuantity = Number(participation?.remainingQuantity || 0);
                   const share = lot.currentQuantity > 0 ? currentQuantity / lot.currentQuantity * 100 : 0;
+                  const stockTagName = categories.find((category: any) => Number(category.id) === Number(activeStockParticipationCategoryId))?.name;
+                  const isMemberVisible = stockTagName ? (editState[Number(member.userId)]?.[stockTagName]?.visible ?? true) : true;
+                  const allocatedToOthers = lot.participations.reduce((total: number, item: any) => (
+                    Number(item.userId) === Number(member.userId) ? total : total + Number(item.remainingQuantity || 0)
+                  ), 0);
+                  const maxQuantity = Math.max(0, Number(lot.currentQuantity || 0) - allocatedToOthers);
+                  const maxPercentage = Math.max(0, Math.min(100, Math.floor(lot.currentQuantity > 0 ? maxQuantity / lot.currentQuantity * 100 : 0)));
+                  const draftKey = `${lot.id}:${member.userId}`;
+                  const savedEntryPrice = Number(participation?.entryPrice || lot.openingReferencePrice || lot.unitCost || 0);
+                  const fallbackDraft = { percentage: share ? String(Math.round(share)) : '', entryPrice: savedEntryPrice ? String(savedEntryPrice) : '' };
+                  const draft = stockParticipationDrafts[draftKey] ?? fallbackDraft;
+                  const draftEntryPrice = Number(draft.entryPrice) > 0 ? Number(draft.entryPrice) : savedEntryPrice;
+                  const setPercentage = (value: number, save = false) => {
+                    const normalized = Math.round(Math.max(0, Math.min(maxPercentage, value)));
+                    const quantity = lot.currentQuantity * normalized / 100;
+                    const next = { percentage: String(normalized) };
+                    setStockParticipationDraft(draftKey, next, fallbackDraft);
+                    if (save) saveStockParticipation(Number(lot.id), Number(member.userId), quantity, currentQuantity, draftEntryPrice, savedEntryPrice);
+                  };
+                  const saveTypedPercentage = () => {
+                    const value = Number(draft.percentage);
+                    if (!Number.isFinite(value)) return;
+                    setPercentage(value, true);
+                  };
+                  const saveTypedEntryPrice = () => {
+                    const nextPrice = Number(draft.entryPrice);
+                    if (!Number.isFinite(nextPrice) || nextPrice <= 0) {
+                      setStockParticipationDraft(draftKey, { entryPrice: String(savedEntryPrice) }, fallbackDraft);
+                      return;
+                    }
+                    const percentage = Math.round(Math.max(0, Math.min(maxPercentage, Number(draft.percentage) || 0)));
+                    const quantity = lot.currentQuantity * percentage / 100;
+                    setStockParticipationDraft(draftKey, { entryPrice: String(nextPrice) }, fallbackDraft);
+                    saveStockParticipation(Number(lot.id), Number(member.userId), quantity, currentQuantity, nextPrice, savedEntryPrice);
+                  };
                   return (
-                    <div key={member.userId} className="flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg px-2 py-1.5" style={{ backgroundColor: Number(member.userId) === Number(selectedUserId) ? '#F4FAFC' : '#FAFAFA' }}>
-                      <span className="min-w-0 flex-1 truncate text-xs" style={{ color: Number(member.userId) === Number(selectedUserId) ? accentColor : '#4B5563' }}>{member.name}{Number(member.userId) === Number(selectedUserId) ? '（当前）' : ''}</span>
-                      <span className="text-[10px] text-gray-400 whitespace-nowrap">基准 ¥{formatNumber(currentQuantity * Number(participation?.entryPrice || lot.unitCost), 2)}</span>
-                      <span className="text-[10px] text-gray-400 whitespace-nowrap">{formatNumber(share, 2)}%</span>
-                      <input
-                        key={`${lot.id}-${member.userId}-${participation?.id || 'new'}-${currentQuantity}`}
-                        type="number"
-                        min={0}
-                        step="any"
-                        defaultValue={currentQuantity || ''}
-                        disabled={isReadonly}
-                        placeholder="参与股数"
-                        onBlur={(event) => {
-                          const next = event.currentTarget.value.trim() === '' ? 0 : Number(event.currentTarget.value);
-                          if (!Number.isFinite(next) || Math.abs(next - currentQuantity) < 0.00000001) return;
-                          setStockParticipationMutation.mutate({ ledgerId: 37, categoryId: Number(activeStockParticipationCategoryId), lotId: Number(lot.id), targetUserId: Number(member.userId), quantity: next });
-                        }}
-                        className="w-20 rounded-md border bg-white px-1.5 py-1 text-right text-xs outline-none disabled:text-gray-400"
-                        style={{ borderColor: isReadonly ? '#ECECEC' : '#C9DCE5' }}
-                      />
-                      <span className="text-[10px] text-gray-400">股</span>
-                      {hasSoldHistory && <span className="text-[10px] whitespace-nowrap" style={{ color: '#8A5A00' }}>已卖 {formatNumber(participation.closedQuantity, 4)} · 只读</span>}
-                      {participation && (
-                        <div className="basis-full text-[10px] text-gray-400 text-right">
-                          浮动 {participation.floatingPnl === null ? '待报价' : `¥${formatNumber(participation.floatingPnl, 2)}`} · 已实现 ¥{formatNumber(participation.realizedPnl, 2)} · 本批累计 {participation.totalPnl === null ? '待报价' : `¥${formatNumber(participation.totalPnl, 2)}`}
+                    <div key={member.userId} className="rounded-lg px-2 py-2" style={{ backgroundColor: !isMemberVisible ? '#F7F7F7' : Number(member.userId) === Number(selectedUserId) ? '#F4FAFC' : '#FAFAFA', opacity: isMemberVisible ? 1 : 0.7 }}>
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex min-w-0 flex-1 items-center gap-1">
+                          <span className="min-w-0 truncate text-xs" style={{ color: Number(member.userId) === Number(selectedUserId) ? accentColor : '#4B5563' }}>{member.name}{Number(member.userId) === Number(selectedUserId) ? '（当前）' : ''}</span>
+                          <button
+                            type="button"
+                            disabled={!matrix.canEdit || !stockTagName || setMutation.isPending}
+                            aria-label={isMemberVisible ? `隐藏${member.name}的股票标签` : `显示${member.name}的股票标签`}
+                            title={isMemberVisible ? '对该成员可见，点击隐藏' : '对该成员不可见，点击显示'}
+                            onClick={() => stockTagName && saveStockTagVisibility(Number(member.userId), stockTagName, !isMemberVisible)}
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md disabled:cursor-not-allowed"
+                            style={{ color: isMemberVisible ? accentColor : '#A0A7AF', backgroundColor: isMemberVisible ? '#EAF4F7' : '#ECEFF1' }}
+                          >
+                            {isMemberVisible ? <Eye size={12} /> : <EyeOff size={12} />}
+                          </button>
                         </div>
-                      )}
+                        <span className="text-[10px] text-gray-400 whitespace-nowrap">{formatNumber(share, 0)}% · {formatNumber(currentQuantity, 4)} 股 · ¥{formatNumber(currentQuantity * savedEntryPrice, 2)}</span>
+                        {hasSoldHistory && <span className="text-[10px] whitespace-nowrap" style={{ color: '#8A5A00' }}>已卖 {formatNumber(participation.closedQuantity, 4)} · 只读</span>}
+                      </div>
+                      <div className="mt-1.5 text-[10px] text-gray-400">
+                        当前比例折算 <b className="font-medium text-gray-600">{formatNumber(lot.currentQuantity * (Number(draft.percentage) || 0) / 100, 4)} 股</b> · 占比金额 <b className="font-medium text-gray-600">¥{formatNumber(lot.currentQuantity * (Number(draft.percentage) || 0) / 100 * draftEntryPrice, 2)}</b>
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-gray-400">入场参考价</span>
+                        <div className="flex h-7 items-center overflow-hidden rounded-md border bg-white" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}>
+                          <span className="pl-2 text-[10px] text-gray-400">¥</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={draft.entryPrice}
+                            disabled={isReadonly}
+                            placeholder={savedEntryPrice ? String(savedEntryPrice) : '参考价'}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              if (/^(?:\d*\.?\d*)?$/.test(value)) setStockParticipationDraft(draftKey, { entryPrice: value }, fallbackDraft);
+                            }}
+                            onBlur={saveTypedEntryPrice}
+                            className="h-full w-24 bg-transparent px-1.5 text-right text-xs font-medium outline-none disabled:text-gray-400"
+                            style={{ color: isReadonly ? '#9CA3AF' : '#4B5563' }}
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between border-t pt-1.5" style={{ borderColor: '#E8EEF1' }}>
+                        <div>
+                          <div className="text-[11px] font-medium text-gray-600">参与比例</div>
+                          <div className="mt-0.5 text-[10px] text-gray-400">剩余可参与 {formatNumber(maxQuantity, 4)} 股（{maxPercentage}%）</div>
+                        </div>
+                        <div className="flex h-8 items-center overflow-hidden rounded-lg border bg-white shadow-sm" style={{ borderColor: isReadonly ? '#ECECEC' : '#9CCBDD' }}>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={draft.percentage}
+                            disabled={isReadonly}
+                            placeholder="0"
+                            maxLength={3}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              if (/^\d*$/.test(value)) {
+                                const clamped = value === '' ? '' : String(Math.min(maxPercentage, Math.max(0, Number(value))));
+                                setStockParticipationDraft(draftKey, { percentage: clamped }, fallbackDraft);
+                              }
+                            }}
+                            onBlur={saveTypedPercentage}
+                            className="h-full w-12 bg-transparent px-2 text-right text-sm font-semibold outline-none disabled:text-gray-400"
+                            style={{ color: isReadonly ? '#9CA3AF' : accentColor }}
+                          />
+                          <span className="flex h-full w-7 items-center justify-center border-l text-xs font-semibold text-gray-400" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}>%</span>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
@@ -762,7 +860,7 @@ export default function LedgerAAInitialBalance() {
             </div>
           );
         })}
-        <div className="text-[11px] leading-4 text-gray-500">分配时系统记录成员进入该股票批次的参考价；当前浮盈和卖出已实现盈亏都仅从该成员参与当刻开始计算。历史卖出部分保留查询，不可在此修改。</div>
+        <div className="text-[11px] leading-4 text-gray-500">成员占比金额按“参与股数 × 入场参考价”记录；默认采用该股票登记时的市场参考价，管理员可在成员中途加入或转让时调整。已卖出的历史部分仅可查看。</div>
       </section>
     );
   };
@@ -788,6 +886,47 @@ export default function LedgerAAInitialBalance() {
     onSuccess: () => { toast.success('股票参与分配已保存'); refetchStockParticipationMatrix(); },
     onError: (error) => toast.error(error.message || '保存股票参与分配失败'),
   });
+  // 移动端输入保持在本地草稿中，避免每次输入都触发查询重渲染而丢失键盘焦点。
+  const [stockParticipationDrafts, setStockParticipationDrafts] = useState<Record<string, { percentage: string; entryPrice: string }>>({});
+  const setStockParticipationDraft = (key: string, patch: Partial<{ percentage: string; entryPrice: string }>, fallback: { percentage: string; entryPrice: string }) => {
+    setStockParticipationDrafts((previous) => ({
+      ...previous,
+      [key]: { ...(previous[key] ?? fallback), ...patch },
+    }));
+  };
+  const saveStockParticipation = (lotId: number, targetUserId: number, quantity: number, previousQuantity: number, entryPrice: number, previousEntryPrice: number) => {
+    const priceChanged = Number.isFinite(entryPrice) && entryPrice > 0 && Math.abs(entryPrice - previousEntryPrice) >= 0.00000001;
+    if (!Number.isFinite(quantity) || quantity < 0 || (!priceChanged && Math.abs(quantity - previousQuantity) < 0.00000001)) return;
+    if (isLocalHotPreview) {
+      toast.info('热预览仅演示交互，不会写入正式股票数据');
+      return;
+    }
+    setStockParticipationMutation.mutate({
+      ledgerId: 37,
+      categoryId: Number(activeStockParticipationCategoryId),
+      lotId,
+      targetUserId,
+      quantity,
+      entryPrice: Number.isFinite(entryPrice) && entryPrice > 0 ? entryPrice : undefined,
+    });
+  };
+  const saveStockTagVisibility = (targetUserId: number, tagName: string, nextVisible: boolean) => {
+    const previousVisible = editState[targetUserId]?.[tagName]?.visible ?? true;
+    updateEntry(targetUserId, tagName, { visible: nextVisible });
+    if (isLocalHotPreview) {
+      toast.info('热预览仅切换本地显示，不会修改正式成员可见性');
+      return;
+    }
+    setSavingUsers((previous) => new Set(previous).add(targetUserId));
+    setMutation.mutate({
+      ledgerId,
+      targetUserId,
+      balances: { [`${tagName}__visible`]: nextVisible ? 1 : 0 },
+      migratedMarginNoteIds: [],
+    }, {
+      onError: () => updateEntry(targetUserId, tagName, { visible: previousVisible }),
+    });
+  };
   // 批量选择模式
   const [batchSelectMode, setBatchSelectMode] = useState(false);
   const [batchSelectedUsers, setBatchSelectedUsers] = useState<Set<number>>(new Set());
@@ -1215,7 +1354,7 @@ export default function LedgerAAInitialBalance() {
                     <span className="text-sm font-semibold text-gray-800">{selectedTagName}</span>
                     <span className="ml-auto text-xs" style={{ color: '#2F6F85' }}>股票批次参与管理</span>
                   </div>
-                  <div className="p-3"><StockParticipationEditor selectedUserId={0} accentColor={cat?.color || '#2F6F85'} /></div>
+                  <div className="p-3">{renderStockParticipationEditor({ selectedUserId: 0, accentColor: cat?.color || '#2F6F85' })}</div>
                 </div>
               );
             }
@@ -2226,7 +2365,7 @@ export default function LedgerAAInitialBalance() {
                             </div>
                           </section>
 
-                          {isStockTag ? <StockParticipationEditor selectedUserId={userId} accentColor={cat.color || '#2F6F85'} /> : <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
+                          {isStockTag ? renderStockParticipationEditor({ selectedUserId: userId, accentColor: cat.color || '#2F6F85' }) : <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
                             <div className="flex items-center justify-between gap-2">
                               <div className="text-xs font-medium text-gray-700">金额与比例</div>
                               <span className="text-[11px] text-gray-400 whitespace-nowrap">任意两项自动反推第三项</span>
@@ -2506,7 +2645,7 @@ export default function LedgerAAInitialBalance() {
                   )}
                   </div>
                 </section>
-                {isStockTag ? <StockParticipationEditor selectedUserId={userId} accentColor={catColor} /> : <>
+                {isStockTag ? renderStockParticipationEditor({ selectedUserId: userId, accentColor: catColor }) : <>
                 {/* 比例、初始金额、实际权益三联动 */}
                 <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
                   <div className="flex items-center justify-between gap-2">
