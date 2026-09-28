@@ -1765,17 +1765,17 @@ export function FunderOrderCard({
     ? interestBaseForRisk
     : buyValueForRisk;
   const floatPnlForRisk = isStockOrder && floatPnl !== null ? floatPnl / cnyRate : floatPnl;
-  // 担保缺口的方向固定为“还需补多少”：所选基准 − 当前持有资产市值 + 待结 − 已结 − 担保物。
-  // 浮盈本身是“当前市值 − 买入价值”，因此需先还原为当前持有资产市值，不能再次直接减基准。
+  // 担保余量/缺口固定为“当前持有资产价值 − 所选基准 − 待结 + 已结 + 担保物”。
+  // 正数为担保余量，负数为还需补足；浮盈需先还原为当前持有资产市值后再比较。
   const currentHoldingValueForRisk = currentValue !== null
     ? (isStockOrder ? currentValue / cnyRate : currentValue)
     : (floatPnlForRisk !== null ? buyValueForRisk + floatPnlForRisk : null);
   const holdingGapForRisk = currentHoldingValueForRisk !== null
-    ? collateralGapBaseForRisk - currentHoldingValueForRisk
+    ? currentHoldingValueForRisk - collateralGapBaseForRisk
     : null;
   const exposure = holdingGapForRisk !== null
-    ? holdingGapForRisk + accruedForRisk - paidInterestForRisk - collateralValue
-    : collateralGapBaseForRisk + accruedForRisk - paidInterestForRisk - collateralValue;
+    ? holdingGapForRisk - accruedForRisk + paidInterestForRisk + collateralValue
+    : -collateralGapBaseForRisk - accruedForRisk + paidInterestForRisk + collateralValue;
   // 37号盈亏标签、担保标签均可独立使用；担保物也可完全手工录入。
   // 利息和借出本金属于52订单本身，始终按普通订单的风险公式处理。
   const linkedCollateralValueU = hasExternalCollateral
@@ -1795,7 +1795,7 @@ export function FunderOrderCard({
     && linkedHoldingValueU !== null
     && linkedPendingInterestForRisk !== null
     && linkedPaidInterestForRisk !== null
-    ? collateralGapBaseForRisk - linkedHoldingValueU + accruedForRisk - paidInterestForRisk - linkedCollateralValueU
+    ? linkedHoldingValueU - collateralGapBaseForRisk - accruedForRisk + paidInterestForRisk + linkedCollateralValueU
     : null;
   // 共享担保模式分为两层口径：
   // 1) 卡片行内的「本订单担保缺口/余量」必须计入本订单实际选定的担保物；
@@ -1852,8 +1852,8 @@ export function FunderOrderCard({
   // 共享只改变担保物可以在池内共同覆盖的总计判断，不能抹掉该订单本身的担保物。
   const sharedOrderExposure = sharedOrderCollateralValueU !== null
     ? (sharedOrderHoldingValueU !== null
-      ? sharedOrderGapBaseU - sharedOrderHoldingValueU + sharedOrderPendingInterestU - sharedOrderPaidInterestU - sharedOrderCollateralValueU
-      : sharedOrderGapBaseU + sharedOrderPendingInterestU - sharedOrderPaidInterestU - sharedOrderCollateralValueU)
+      ? sharedOrderHoldingValueU - sharedOrderGapBaseU - sharedOrderPendingInterestU + sharedOrderPaidInterestU + sharedOrderCollateralValueU
+      : -sharedOrderGapBaseU - sharedOrderPendingInterestU + sharedOrderPaidInterestU + sharedOrderCollateralValueU)
     : null;
   // 共享池中的37标签订单使用服务端回传的标签净值盈亏，不能再按股票行情价推算。
   // 同一标签的担保物与净值盈亏都只计一次；各订单的待结利息/借出本金仍分别计入。
@@ -1865,7 +1865,7 @@ export function FunderOrderCard({
     const counted37Tags = new Set<string>();
     const counted37PendingInterestTags = new Set<string>();
     const counted37PaidInterestTags = new Set<string>();
-    // 先汇总所有订单“未扣担保物”的应补缺口，调用端再一次性扣除共享担保物，避免重复计入。
+    // 先汇总所有订单“未计担保物”的余量，调用端再一次性加上共享担保物，避免重复计入。
     let remaining = 0;
     for (const poolOrder of poolOrders) {
       const interestCurrency = String(poolOrder.interestBaseCurrency || 'USDT').trim().toUpperCase();
@@ -1931,7 +1931,7 @@ export function FunderOrderCard({
         const buyValueU = ['CNY', 'RMB', '人民币'].includes(buyCurrency) ? buyValue / cnyRate : buyValue;
         holdingValueU = currentValue;
       }
-      remaining += gapBaseU - (holdingValueU ?? 0) + accruedInterestU - paidInterestU;
+      remaining += (holdingValueU ?? 0) - gapBaseU - accruedInterestU + paidInterestU;
     }
     return remaining;
   })();
@@ -1945,8 +1945,8 @@ export function FunderOrderCard({
   // 不再退回成漏算担保物的数值。
   // 非共享的37号标签订单用含利息的外部担保公式，其他订单沿用原有 exposure 逻辑。
   const effectiveExposure = isSharedMode ? (sharedOrderExposure ?? 0) : (externalNonSharedGapU ?? exposure);
-  // 担保缺口：正数表示仍需补足，负数表示担保有余量。
-  const isSufficient = effectiveExposure <= 0;
+  // 担保余量：正数表示担保充足，负数表示仍需补足。
+  const isSufficient = effectiveExposure >= 0;
   // 共享模式下缺口计算不再依赖 sharedPoolInfo，不需要显示「计算中...」
   // sharedPoolLoading 仅用于弹窗内共享池汇总区域的加载状态
   const showExposureLoading = (hasExternalPendingInterest && linkedPendingInterestForRisk === null)
@@ -2843,7 +2843,7 @@ export function FunderOrderCard({
                     ) : (
                     <div className="p-5">
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保缺口计算说明</span>
+                      <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保余量 / 缺口计算说明</span>
                       <button onClick={closeCollateralInfoDialog} className="text-gray-400 text-lg leading-none">×</button>
                     </div>
                     <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
@@ -2861,7 +2861,7 @@ export function FunderOrderCard({
                           const gapBaseU = collateralGapBaseForRisk;
                           const holdingValueU = floatingPnlU === null ? null : buyValueForRisk + floatingPnlU;
                           const gapU = externalNonSharedGapU;
-                          const valueColor = (value: number) => value >= 0 ? '#DC2626' : '#16A34A';
+                          const valueColor = (value: number) => value >= 0 ? '#16A34A' : '#DC2626';
                           return (
                             <>
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
@@ -2888,19 +2888,19 @@ export function FunderOrderCard({
                               </div>
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                                 <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 订单利息</div>
-                                <div className="mt-1 flex justify-between font-mono"><span>待结利息（增加缺口）</span><span style={{ color: '#DC2626' }}>+{(pendingInterestU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
-                                <div className="mt-1 flex justify-between font-mono"><span>已结利息（减少缺口）</span><span style={{ color: '#16A34A' }}>−{(paidInterestU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
-                                <div className="mt-1 flex justify-between font-mono"><span>{collateralGapBaseLabel}（缺口基准）</span><span style={{ color: '#DC2626' }}>+{(gapBaseU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
+                                <div className="mt-1 flex justify-between font-mono"><span>待结利息（扣除）</span><span style={{ color: '#16A34A' }}>−{(pendingInterestU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
+                                <div className="mt-1 flex justify-between font-mono"><span>已结利息（加回）</span><span style={{ color: '#DC2626' }}>+{(paidInterestU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
+                                <div className="mt-1 flex justify-between font-mono"><span>{collateralGapBaseLabel}（扣除）</span><span style={{ color: '#16A34A' }}>−{(gapBaseU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
                               </div>
-                              <div className="p-2.5 rounded-lg" style={{ background: gapU !== null && gapU >= 0 ? '#FFF1F1' : '#F0FDF4' }}>
-                                <div className="font-semibold mb-1" style={{ color: gapU !== null && gapU >= 0 ? '#DC2626' : '#16A34A' }}>④ 担保缺口</div>
-                                <div>{collateralGapBaseLabel} − 当前持有资产价值 + 待结利息 − 已结利息 − {hasExternalCollateral ? '37号担保货币' : '手工担保货币'}</div>
+                              <div className="p-2.5 rounded-lg" style={{ background: gapU !== null && gapU >= 0 ? '#F0FDF4' : '#FFF1F1' }}>
+                                <div className="font-semibold mb-1" style={{ color: gapU !== null && gapU >= 0 ? '#16A34A' : '#DC2626' }}>④ 担保余量 / 缺口</div>
+                                <div>当前持有资产价值 − {collateralGapBaseLabel} − 待结利息 + 已结利息 + {hasExternalCollateral ? '37号担保货币' : '手工担保货币'}</div>
                                 <div className="mt-1 font-mono">
                                   {gapU !== null && collateralU !== null && holdingValueU !== null
-                                    ? <span style={{ color: '#3B82F6' }}>= {(gapBaseU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit} − {(holdingValueU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit} + {(pendingInterestU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit} − {(paidInterestU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit} − {(collateralU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit} = <strong style={{ color: valueColor(gapU) }}>{formatValue(gapU)}</strong></span>
+                                    ? <span style={{ color: '#3B82F6' }}>= {(holdingValueU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit} − {(gapBaseU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit} − {(pendingInterestU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit} + {(paidInterestU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit} + {(collateralU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit} = <strong style={{ color: valueColor(gapU) }}>{formatValue(gapU)}</strong></span>
                                     : <span className="text-gray-400">{isManualStockPnlSource ? '盘尾价格数据加载中...' : '37号标签数据加载中...'}</span>}
                                 </div>
-                                {gapU !== null && <div className="mt-1.5" style={{ color: valueColor(gapU) }}>{gapU > 0 ? `担保不足，还需补充 ${formatValue(gapU)}` : `担保充足，尚有 ${formatValue(Math.abs(gapU))} 的余量`}</div>}
+                                {gapU !== null && <div className="mt-1.5" style={{ color: valueColor(gapU) }}>{gapU >= 0 ? `担保充足，尚有 ${formatValue(gapU)} 的余量` : `担保不足，还需补充 ${formatValue(Math.abs(gapU))}`}</div>}
                               </div>
                             </>
                           );
@@ -2912,8 +2912,8 @@ export function FunderOrderCard({
                             const orders = (sharedPoolInfo as any).orders ?? [];
                             const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
                             const allHaveGap = sharedPoolRemainingU !== null;
-                            const totalRequired = sharedPoolRemainingU ?? 0;
-                            const diff = totalRequired - totalColl;
+                            const holdingBalance = sharedPoolRemainingU ?? 0;
+                            const diff = holdingBalance + totalColl;
                             // 每张订单按其保存的缺口基准汇总：买入价值或计息基数，均已折为 U。
                             const totalGapBase = orders.reduce((sum: number, o: any) => {
                               const base = Number(o.collateralGapBaseU);
@@ -2923,26 +2923,26 @@ export function FunderOrderCard({
                               return sum + (['CNY', 'RMB', '人民币'].includes(buyValueCurrency) ? buyValue / cnyRate : buyValue);
                             }, 0);
                             const marginRatio = totalGapBase > 0 ? (diff / totalGapBase) * 100 : null;
-                            const diffColor = diff < 0 ? '#16A34A' : '#DC2626';
-                            const ratioColor = marginRatio === null ? '#9CA3AF' : (marginRatio < 0 ? '#16A34A' : '#DC2626');
+                            const diffColor = diff >= 0 ? '#16A34A' : '#DC2626';
+                            const ratioColor = marginRatio === null ? '#9CA3AF' : (marginRatio >= 0 ? '#16A34A' : '#DC2626');
                             return (
                               <>
                                 <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                                  <div className="font-semibold mb-1" style={{ color: '#374151' }}>① 总计担保缺口</div>
-                                  <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>各订单基准差额合计 − 共享担保物</div>
+                                  <div className="font-semibold mb-1" style={{ color: '#374151' }}>① 总计担保余量 / 缺口</div>
+                                  <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>各订单持有资产差额合计 + 共享担保物</div>
                                   <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                     {allHaveGap
-                                      ? <>{totalRequired.toFixed(2)} − {totalColl.toFixed(2)} = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} u</span></>
-                                      : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
+                                      ? <>{holdingBalance.toFixed(2)} + {totalColl.toFixed(2)} = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} u</span></>
+                                      : <span style={{ color: '#9CA3AF' }}>订单余额加载中...</span>}
                                   </div>
                                 </div>
                                 <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
                                   <div className="font-semibold mb-1" style={{ color: '#374151' }}>② 保证金比例</div>
-                                  <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>总担保缺口 ÷ 总担保缺口基准</div>
+                                  <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>总担保余量 / 缺口 ÷ 总担保缺口基准</div>
                                   <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                     {allHaveGap
                                       ? <>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalGapBase.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
-                                      : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
+                                      : <span style={{ color: '#9CA3AF' }}>订单余额加载中...</span>}
                                   </div>
                                   <div className="text-xs" style={{ color: '#9CA3AF' }}>总缺口基准 {totalGapBase.toFixed(2)} u（逐单按“买入价值”或“计息基数”保存口径汇总）</div>
                                 </div>
@@ -2950,16 +2950,16 @@ export function FunderOrderCard({
                             );
                           })()}
 
-                          {/* ③ 所有共享订单的基准差额（不含担保物；担保物在第④项一次性汇总） */}
+                          {/* ③ 所有共享订单的持仓差额（不含担保物；担保物在第④项一次性汇总） */}
                           <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                            <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>③ 各订单基准差额</div>
-                            <div className="mb-1" style={{ color: '#9CA3AF' }}>此处不含担保物；卡片行内的担保缺口已计入本订单担保物</div>
+                            <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>③ 各订单持仓差额</div>
+                            <div className="mb-1" style={{ color: '#9CA3AF' }}>当前持有资产 − 缺口基准 − 待结 + 已结；此处不含担保物</div>
                             {sharedPoolInfo ? (
                               <>
                                 <div className="space-y-1.5">
                                   {((sharedPoolInfo as any).orders ?? []).map((o: any) => {
-                                    // gap = 所选基准 − 当前持有资产市值 + 待结利息 − 已结利息。
-                                    // 此处不含担保物，担保物统一在第④项只扣一次。
+                                    // balance = 当前持有资产市值 − 所选基准 − 待结利息 + 已结利息。
+                                    // 此处不含担保物，担保物统一在第④项只加一次。
                                     const oQty = Number(o.quantity ?? 0);
                                     const oPrincipal = Number(o.principal ?? 0);
                                     const oCoin = (o.coin || '').toUpperCase();
@@ -2987,7 +2987,7 @@ export function FunderOrderCard({
                                       const oPrincipalUOpt = isCNY ? oPrincipal / cnyRate : oPrincipal;
                                       const oServerGapBase = Number(o.collateralGapBaseU);
                                       const oGapBase = Number.isFinite(oServerGapBase) && oServerGapBase > 0 ? oServerGapBase : oPrincipalUOpt;
-                                      const gap = oGapBase + oAccruedInterest - oPaidInterest;
+                                      const gap = -oGapBase - oAccruedInterest + oPaidInterest;
                                       return (
                                         <div key={o.orderId} className="flex justify-between items-center">
                                           <div>
@@ -2995,7 +2995,7 @@ export function FunderOrderCard({
                                             <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
                                           </div>
                                           <div className="text-right">
-                                            <span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span>
+                                            <span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#16A34A' : '#DC2626' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span>
                                           </div>
                                         </div>
                                       );
@@ -3016,7 +3016,7 @@ export function FunderOrderCard({
                                     const oGapBase = Number(o.collateralGapBaseU);
                                     const oRiskBaseU = Number.isFinite(oGapBase) && oGapBase > 0 ? oGapBase : oPrincipalU;
                                     const oHoldingValueU = oFloatPnl === null ? null : oFloatBaseU + oFloatPnl;
-                                    const gap = oHoldingValueU !== null ? oRiskBaseU - oHoldingValueU + oAccruedInterest - oPaidInterest : null;
+                                    const gap = oHoldingValueU !== null ? oHoldingValueU - oRiskBaseU - oAccruedInterest + oPaidInterest : null;
                                     return (
                                       <div key={o.orderId} className="flex justify-between items-center">
                                         <div>
@@ -3026,7 +3026,7 @@ export function FunderOrderCard({
                                         </div>
                                         <div className="text-right">
                                           {gap !== null
-                                            ? <span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span>
+                                            ? <span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#16A34A' : '#DC2626' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span>
                                             : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                         </div>
                                       </div>
@@ -3034,15 +3034,15 @@ export function FunderOrderCard({
                                   })}
                                 </div>
                                 {(() => {
-                                  // 共享总计 = 各订单基准差额合计 − 共享担保物总值。
+                                  // 共享总计 = 各订单持仓差额合计 + 共享担保物总值。
                                   const totalCollateral = Number((sharedPoolInfo as any).totalCollateralValue ?? 0);
                                   const allKnown = sharedPoolRemainingU !== null;
-                                  const totalGapLive = allKnown ? sharedPoolRemainingU! - totalCollateral : 0;
+                                  const totalGapLive = allKnown ? sharedPoolRemainingU! + totalCollateral : 0;
                                   return (
                                     <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
-                                  <span style={{ color: '#374151' }}>合计担保缺口</span>
+                                  <span style={{ color: '#374151' }}>合计担保余量 / 缺口</span>
                                       {allKnown
-                                        ? <span className="font-mono" style={{ color: totalGapLive >= 0 ? '#DC2626' : '#16A34A' }}>{totalGapLive >= 0 ? '+' : ''}{totalGapLive.toFixed(2)} u</span>
+                                        ? <span className="font-mono" style={{ color: totalGapLive >= 0 ? '#16A34A' : '#DC2626' }}>{totalGapLive >= 0 ? '+' : ''}{totalGapLive.toFixed(2)} u</span>
                                         : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                     </div>
                                   );
@@ -3090,9 +3090,9 @@ export function FunderOrderCard({
                           {/* 共享担保计算说明 */}
                           <div className="mt-2 p-2.5 rounded-lg text-[10px] space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
                             <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
-                            <div>• <strong>卡片行内担保缺口/余量</strong> = 本订单担保物 + 浮动盈亏 − 待结利息 + 已结利息 − 缺口基准</div>
+                            <div>• <strong>卡片行内担保余量 / 缺口</strong> = 当前持有资产价值 − 缺口基准 − 待结利息 + 已结利息 + 本订单担保物</div>
                             <div>• <strong>缺口基准</strong> = 每张订单保存的“买入价值”或“计息基数”；本项净风险变动不含担保物，避免第④项重复相加</div>
-                            <div>• <strong>总计风险敎口</strong> = 共享担保物合计 + 各订单净风险变动合计（正数表示担保充足，负数表示担保不足）</div>
+                            <div>• <strong>总计担保余量 / 缺口</strong> = 共享担保物合计 + 各订单持仓差额合计（正数表示担保充足，负数表示担保不足）</div>
                             <div>• <strong>保证金比例</strong> = 风险敎口 ÷ 全部订单缺口基准，负数表示担保不足需补仓</div>
                             <div>• <strong>每张订单的基准选择</strong>在订单编辑页保存后，同步用于共享池和订单卡片。</div>
                           </div>
@@ -3137,18 +3137,18 @@ export function FunderOrderCard({
                             }
                           </div>
                           <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#F0FDF4' : '#FFF1F1' }}>
-                            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>③ 担保缺口</div>
-                            <div>{collateralGapBaseLabel} − 当前持有资产价值 + 待结利息 − 已结利息 − 担保物（正数需补足，负数有余量）</div>
+                            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>③ 担保余量 / 缺口</div>
+                            <div>当前持有资产价值 − {collateralGapBaseLabel} − 待结利息 + 已结利息 + 担保物（正数有余量，负数需补足）</div>
                             <div className="mt-1 font-mono">
                               {floatPnl !== null
-                                ? <span style={{ color: '#3B82F6' }}>= {collateralGapBaseForRisk.toFixed(2)}（{collateralGapBaseLabel}） − {(currentHoldingValueForRisk ?? 0).toFixed(2)}（当前持有资产） + {accruedForRisk.toFixed(2)} − {paidInterestForRisk.toFixed(2)} − {collateralValue.toFixed(2)} = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
-                                : <span style={{ color: '#3B82F6' }}>= {collateralGapBaseForRisk.toFixed(2)}（{collateralGapBaseLabel}） + {accruedForRisk.toFixed(2)} − {paidInterestForRisk.toFixed(2)} − {collateralValue.toFixed(2)} = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
+                                ? <span style={{ color: '#3B82F6' }}>= {(currentHoldingValueForRisk ?? 0).toFixed(2)}（当前持有资产） − {collateralGapBaseForRisk.toFixed(2)}（{collateralGapBaseLabel}） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} + {collateralValue.toFixed(2)} = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
+                                : <span style={{ color: '#3B82F6' }}>= −{collateralGapBaseForRisk.toFixed(2)}（{collateralGapBaseLabel}） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} + {collateralValue.toFixed(2)} = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
                               }
                             </div>
                             <div className="mt-1.5" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>
                               {isSufficient
-                                ? `担保物充足，尚有 ${Math.abs(exposure).toFixed(2)} u 的余量空间`
-                                : `担保物不足，还需补充 ${exposure.toFixed(2)} u 才能覆盖风险`
+                                ? `担保充足，尚有 ${exposure.toFixed(2)} u 的余量空间`
+                                : `担保不足，还需补充 ${Math.abs(exposure).toFixed(2)} u 才能覆盖风险`
                               }
                             </div>
                           </div>
@@ -3159,16 +3159,16 @@ export function FunderOrderCard({
                         <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
                         {isConfiguredStockPnlSource && !isSharedMode ? (
                           <>
-                          <div>• <strong>担保缺口</strong> = {hasExternalCollateral ? '37号担保货币' : '手工担保货币'} + 37号浮动盈亏 − 待结利息 + 已结利息（开启借出本金时再减去计息基数）</div>
+                          <div>• <strong>担保余量 / 缺口</strong> = 当前持有资产价值 − 缺口基准 − 待结利息 + 已结利息 + {hasExternalCollateral ? '37号担保货币' : '手工担保货币'}</div>
                           <div>• <strong>37号浮动盈亏</strong> = {floatingPnlCalculationMode === 'leveraged_net_pnl'
                             ? '（37号标签最新余额 − 初始金额）× 账号倍率，即37号“净值盈亏”数值。'
                             : '37号标签今日最新余额 − 初始金额，不使用账号倍率；结果为负数表示亏损。'}</div>
                           </>
                         ) : (
                           <>
-                            <div>• <strong>担保缺口</strong> = 担保物市值 + 浮动盈亏 − 待结利息 + 已结利息 − 缺口基准</div>
+                            <div>• <strong>担保余量 / 缺口</strong> = 当前持有资产价值 − 缺口基准 − 待结利息 + 已结利息 + 担保物市值</div>
                             <div>• <strong>缺口基准</strong> = 订单设置的“买入价值”或“计息基数”</div>
-                            <div>• <strong>浮动盈亏</strong> = 当前市值 − 计息基数（资产上涨为盈，下跌为亏）</div>
+                          <div>• <strong>浮动盈亏</strong> = 当前市值 − 买入价值（资产上涨为盈，下跌为亏）</div>
                             {isOptionOrder && (
                               <div>• <strong>期权订单</strong>：开启「借出本金」开关→ 担保缺口基数 = 计息基数 + 待结利息；未开启→ 担保缺口 = 只有待结利息。买入期权用行权价×张数作为基数</div>
                             )}
@@ -3207,7 +3207,7 @@ export function FunderOrderCard({
               )}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-0.5">
-                  <span className="text-gray-400">担保缺口</span>
+                  <span className="text-gray-400">担保余量 / 缺口</span>
                   <button
                     onClick={e => { e.stopPropagation(); setShowCollateralGapFormulaInfo(true); }}
                     className="relative w-3.5 h-3.5 rounded-full inline-flex items-center justify-center flex-shrink-0 font-bold leading-none"
@@ -3221,7 +3221,7 @@ export function FunderOrderCard({
                         const remainingU = isSharedMode ? effectiveExposure : externalNonSharedGapU!;
                         const remaining = externalCollateralGapDisplay === 'CNY' ? remainingU * cnyRate : remainingU;
                         const unit = externalCollateralGapDisplay === 'CNY' ? '元' : 'u';
-                        return <span className="font-medium tabular-nums" style={{ color: remaining >= 0 ? '#DC2626' : '#16A34A' }}>
+                        return <span className="font-medium tabular-nums" style={{ color: remaining >= 0 ? '#16A34A' : '#DC2626' }}>
                           {remaining >= 0 ? '+' : ''}{remaining.toLocaleString(undefined, { maximumFractionDigits: externalCollateralGapDisplay === 'CNY' ? 0 : 2 })} {unit}
                         </span>;
                       })()

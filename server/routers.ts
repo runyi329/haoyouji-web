@@ -19042,14 +19042,14 @@ ${klinesSummary}
               ? principalU
               : (buyValueU > 0 ? buyValueU : principalU);
             const paidInterestU = baseCurrency === 'CNY' ? paidInterest / usdtCnyRate : paidInterest;
-            // 缺口为正表示仍需补足：所选基准 − 当前持有资产市值 + 待结 − 已结 − 担保物。
-            // 37 标签浮盈是“当前市值 − 买入价值”，需还原为当前市值后再与所选基准比较。
+            // 担保余量/缺口：当前持有资产市值 − 所选基准 − 待结 + 已结 + 担保物。
+            // 正数表示担保充足，负数表示仍需补足；37 标签浮盈需先还原为当前市值。
             const fallbackHoldingValueU = buyValueU > 0 ? buyValueU : principalU;
             const linkedFloatingPnlU = linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null;
             const holdingValueU = linkedFloatingPnlU !== null && Number.isFinite(linkedFloatingPnlU)
               ? fallbackHoldingValueU + linkedFloatingPnlU
               : currentValue;
-            const collateralRequired = collateralGapBaseU - (holdingValueU ?? 0) + pendingInterestU - paidInterestU;
+            const collateralRequired = (holdingValueU ?? 0) - collateralGapBaseU - pendingInterestU + paidInterestU;
             const principalLentOut = o.principal_lent_out === 1 || o.principal_lent_out === true;
             return {
               orderId: Number(o.id),
@@ -19075,10 +19075,10 @@ ${klinesSummary}
               // 浮动盈亏 − 累计待结利息 + 已结利息，而不只返回已扣除付款的净待结额。
               accruedInterest: totalInterest,
               pendingInterest,
-              paidInterest,  // 已结利息，供前端弹窗第①部分缺口计算加回
+              paidInterest,  // 已结利息，供前端弹窗的担保余量计算加回
               collateralRequired,
               collateralValue,
-              collateralGap: collateralRequired - collateralValue,
+              collateralGap: collateralRequired + collateralValue,
               collateralAssets: effectiveCollateralAssets,
               // linked37TagName专指实际引用的37号担保物，供担保池去重。
               linked37TagName: linked37Collateral?.useCollateral ? linked37Collateral.collateralTagName : null,
@@ -19112,7 +19112,7 @@ ${klinesSummary}
             return s + o.collateralValue;
           }, 0);
           const totalCollateralRequired = orderDetails.reduce((s: number, o: any) => s + o.collateralRequired, 0);
-          const totalGap = totalCollateralRequired - totalCollateralValue;
+          const totalGap = totalCollateralRequired + totalCollateralValue;
           const totalBuyValue = orderDetails.reduce((s: number, o: any) => s + (o.buyValue || 0), 0);
 
           await conn.end();

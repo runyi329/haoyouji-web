@@ -903,12 +903,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     return quantity * price;
   }, [formData.buyQuantity, formData.coin, formLivePrices]);
 
-  // 编辑区先按“基准 − 当前持有资产 − 担保物”预览；订单卡片还会纳入待结/已结利息。
-  const computedCollateralGap = useMemo(() => {
-    if (collateralGapBaseValue <= 0) return null;
-    return collateralGapBaseValue - (previewCurrentHoldingValue ?? 0) - computedCollateralValue;
-  }, [computedCollateralValue, collateralGapBaseValue, previewCurrentHoldingValue]);
-
   // 预览卡片实时待结利息（每秒更新）
   const [previewAccrued, setPreviewAccrued] = useState<number>(0);
   useEffect(() => {
@@ -926,6 +920,24 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     const timer = setInterval(compute, 1000);
     return () => clearInterval(timer);
   }, [formData.interestBase, formData.interestRateAnnual, formData.interestStartDate]);
+
+  // 编辑区与订单卡片采用同一固定方向：当前持有资产 − 基准 − 待结 + 已结 + 担保物。
+  const previewPendingInterestU = useMemo(() => {
+    const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
+    return ['CNY', 'RMB', '人民币'].includes(currency) ? previewAccrued / cnyRate : previewAccrued;
+  }, [previewAccrued, formData.interestBaseCurrency, cnyRate]);
+  const previewPaidInterestU = useMemo(() => {
+    const currency = String(previewPaidInterestCurrency || 'USDT').trim().toUpperCase();
+    return ['CNY', 'RMB', '人民币'].includes(currency) ? previewPaidInterest / cnyRate : previewPaidInterest;
+  }, [previewPaidInterest, previewPaidInterestCurrency, cnyRate]);
+  const computedCollateralGap = useMemo(() => {
+    if (collateralGapBaseValue <= 0) return null;
+    return (previewCurrentHoldingValue ?? 0)
+      - collateralGapBaseValue
+      - previewPendingInterestU
+      + previewPaidInterestU
+      + computedCollateralValue;
+  }, [computedCollateralValue, collateralGapBaseValue, previewCurrentHoldingValue, previewPendingInterestU, previewPaidInterestU]);
 
   // 预览卡片实时待结佣金（受邀订单专用，每秒更新）
   const [previewCommission, setPreviewCommission] = useState<number>(0);
@@ -3879,9 +3891,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     </div>
                     {computedCollateralGap !== null && (
                       <div className="flex items-center justify-between text-sm">
-                        <span style={{ color: '#6B7280' }}>担保缺口</span>
+                        <span style={{ color: '#6B7280' }}>担保余量 / 缺口</span>
                         <span className={`font-semibold ${
-                          computedCollateralGap > 0 ? 'text-red-500' : 'text-green-600'
+                          computedCollateralGap >= 0 ? 'text-green-600' : 'text-red-500'
                         }`}>
                           {computedCollateralGap > 0 ? '+' : ''}{computedCollateralGap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U
                         </span>
@@ -4937,7 +4949,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       </div>
                       <div className="text-right">
                         <div className="text-xs text-gray-500">担保物 {o.collateralValue.toFixed(0)} U</div>
-                        <div className="text-xs text-gray-500">需求 {o.collateralRequired.toFixed(0)} U</div>
+                        <div className="text-xs text-gray-500">持仓差额 {o.collateralRequired >= 0 ? '+' : ''}{o.collateralRequired.toFixed(0)} U</div>
                       </div>
                     </div>
                   ))}
