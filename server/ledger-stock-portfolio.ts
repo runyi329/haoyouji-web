@@ -58,7 +58,22 @@ function normalizeStoredDate(value: unknown): string | null {
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
   const parsed = value instanceof Date ? value : new Date(raw);
   if (Number.isNaN(parsed.getTime())) throw new Error("日期格式无效");
-  return parsed.toISOString().slice(0, 10);
+  // mysql2 returns MySQL DATE columns as Date objects.  In production these
+  // objects represent midnight in the database/server time zone; slicing the
+  // UTC ISO string turns Beijing's 2026-09-28 into 2026-09-27.  All 37 stock
+  // settlement dates are business dates in Beijing, so preserve that calendar
+  // day explicitly instead of deriving it in UTC.
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(parsed);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) throw new Error("日期格式无效");
+  return `${year}-${month}-${day}`;
 }
 
 /**
