@@ -10027,6 +10027,21 @@ ${klinesSummary}
         const { getStockTagPortfolio } = await import('./ledger-stock-portfolio');
         return getStockTagPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
+    // 普通成员及观察视角只读取本人按批次分配的份额；盈亏基准是该份额的入场参考价，
+    // 不回退到股票标签的总市值或旧版初始金额。
+    getMyStockTagParticipantPortfolio: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), categoryId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { getMyStockTagParticipantPortfolio } = await import('./ledger-stock-portfolio');
+        return getMyStockTagParticipantPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
+    // 37 号账本概览用：仅返回已对当前有效成员开启、已到开始日期且至少分配一笔股票的标签。
+    getMyStockTagOverview: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37) }))
+      .query(async ({ ctx, input }) => {
+        const { getMyStockTagOverview } = await import('./ledger-stock-portfolio');
+        return getMyStockTagOverview({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
     getStockTagDailySnapshots: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),

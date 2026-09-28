@@ -15,6 +15,8 @@ type Props = {
   categoryId: number;
   categoryName: string;
   onBack: () => void;
+  /** Member/observed view: only show this member's allocated lots and P&L baseline. */
+  participantView?: boolean;
 };
 
 const eventLabels: Record<EventType, string> = {
@@ -65,16 +67,26 @@ function localInputTime(now = new Date()) {
   return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 16);
 }
 
-export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, onBack }: Props) {
+export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, onBack, participantView = false }: Props) {
   const utils = trpc.useUtils();
-  const { data, isLoading, error } = trpc.ledger.getStockTagPortfolio.useQuery(
+  const globalPortfolioQuery = trpc.ledger.getStockTagPortfolio.useQuery(
     { ledgerId, categoryId },
-    { refetchOnWindowFocus: true, staleTime: 10_000 },
+    { enabled: !participantView, refetchOnWindowFocus: true, staleTime: 10_000 },
   );
-  const { data: dailySnapshots = [] } = trpc.ledger.getStockTagDailySnapshots.useQuery(
+  const memberPortfolioQuery = trpc.ledger.getMyStockTagParticipantPortfolio.useQuery(
+    { ledgerId: 37, categoryId },
+    { enabled: participantView && ledgerId === 37, refetchOnWindowFocus: true, staleTime: 10_000 },
+  );
+  const globalDailySnapshotsQuery = trpc.ledger.getStockTagDailySnapshots.useQuery(
     { ledgerId, categoryId },
-    { refetchOnWindowFocus: true, staleTime: 10_000 },
+    { enabled: !participantView, refetchOnWindowFocus: true, staleTime: 10_000 },
   );
+  const data = participantView ? memberPortfolioQuery.data : globalPortfolioQuery.data;
+  const isLoading = participantView ? memberPortfolioQuery.isLoading : globalPortfolioQuery.isLoading;
+  const error = participantView ? memberPortfolioQuery.error : globalPortfolioQuery.error;
+  const dailySnapshots = participantView
+    ? ((memberPortfolioQuery.data as any)?.dailySnapshots || [])
+    : (globalDailySnapshotsQuery.data || []);
   const [query, setQuery] = useState("");
   const [showCurrent, setShowCurrent] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
@@ -104,6 +116,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       toast.success(`${eventLabels[eventType]}已登记，并保留服务器登记时间`);
       closeActionDialog();
       void utils.ledger.getStockTagPortfolio.invalidate({ ledgerId, categoryId });
+      void utils.ledger.getMyStockTagParticipantPortfolio.invalidate({ ledgerId: 37, categoryId });
       void utils.ledger.getStockTagDailySnapshots.invalidate({ ledgerId, categoryId });
     },
     onError: (error) => toast.error(`登记失败：${error.message}`),
@@ -113,6 +126,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     onSuccess: () => {
       toast.success("操作已作废，原始审计记录仍会保留");
       void utils.ledger.getStockTagPortfolio.invalidate({ ledgerId, categoryId });
+      void utils.ledger.getMyStockTagParticipantPortfolio.invalidate({ ledgerId: 37, categoryId });
     },
     onError: (error) => toast.error(`作废失败：${error.message}`),
   });
@@ -122,6 +136,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       toast.success("更正已追加；原始操作已保留为作废审计记录");
       closeActionDialog();
       void utils.ledger.getStockTagPortfolio.invalidate({ ledgerId, categoryId });
+      void utils.ledger.getMyStockTagParticipantPortfolio.invalidate({ ledgerId: 37, categoryId });
     },
     onError: (error) => toast.error(`更正失败：${error.message}`),
   });
@@ -210,7 +225,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   };
 
   const summary = (data as any)?.summary;
-  const canEdit = Boolean((data as any)?.canEdit);
+  // 观察成员与普通成员始终只读；后端亦不会接受其写请求。
+  const canEdit = !participantView && Boolean((data as any)?.canEdit);
   const selectedHistory = selectedPosition
     ? ((data as any)?.history || []).filter((event: any) => event.symbol === selectedPosition.symbol)
     : [];
@@ -230,7 +246,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       <header className="sticky top-0 z-20 bg-[#D32F2F] text-white px-4 pt-3 pb-3 shadow-sm">
         <div className="flex items-center gap-3">
           <button onClick={onBack} aria-label="返回"><ArrowLeft className="w-5 h-5" /></button>
-          <div className="min-w-0 flex-1"><div className="text-base font-semibold truncate">{categoryName}</div><div className="text-[11px] text-white/75">股票持仓 · {canEdit ? "管理员维护" : "只读查看"}</div></div>
+          <div className="min-w-0 flex-1"><div className="text-base font-semibold truncate">{categoryName}</div><div className="text-[11px] text-white/75">股票持仓 · {participantView ? "我的份额 · 只读查看" : canEdit ? "管理员维护" : "只读查看"}</div></div>
           {canEdit && <button onClick={() => openAction("buy")} className="rounded-full bg-white text-[#D32F2F] p-2 shadow-sm" aria-label="新增成交"><Plus className="w-5 h-5" /></button>}
         </div>
       </header>
@@ -238,7 +254,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       <main className="mx-auto max-w-2xl px-3 pt-3 space-y-3">
         <section className="rounded-2xl bg-white p-4 shadow-sm border border-[#F1E6DE]">
           <div className="flex items-start justify-between gap-3">
-            <div><div className="text-xs text-gray-500">当前持仓市值 · {summary.positionCount || 0} 只</div><div className="mt-1 text-2xl font-bold text-[#222222]">{money(summary.marketValue)}</div></div>
+            <div><div className="text-xs text-gray-500">{participantView ? "我的当前持仓市值" : "当前持仓市值"} · {summary.positionCount || 0} 只</div><div className="mt-1 text-2xl font-bold text-[#222222]">{money(summary.marketValue)}</div></div>
             <div className="text-right"><div className="text-xs text-gray-500">累计盈亏</div><div className={`mt-1 text-lg font-bold ${pnlTone}`}>{signedMoney(summary.totalPnl)}</div></div>
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2 border-t pt-3 text-xs">
@@ -246,7 +262,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
             <div><div className="text-gray-500">浮动盈亏</div><div className={`mt-1 font-semibold ${Number(summary.floatingPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{signedMoney(summary.floatingPnl)}</div></div>
             <div><div className="text-gray-500">已实现盈亏</div><div className={`mt-1 font-semibold ${Number(summary.realizedPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{signedMoney(summary.realizedPnl)}</div></div>
           </div>
-          {summary.unpricedPositionCount > 0 && <div className="mt-3 text-[11px] text-[#E65100]">有 {summary.unpricedPositionCount} 只持仓尚无有效行情，暂保留最近可用数据，不会以 0 计价。</div>}
+          {summary.unpricedPositionCount > 0 && <div className="mt-3 text-[11px] text-[#E65100]">有 {summary.unpricedPositionCount} 只持仓尚无有效盘尾行情；不会以 0 计价。</div>}
           <div className="mt-3 text-[11px] text-gray-400">最新盘尾快照：{summary.latestSnapshot ? `${summary.latestSnapshot.snapshotDate} 15:05` : "首次登记后等待盘尾更新"}</div>
         </section>
 
@@ -256,8 +272,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
         </section>
 
         <section className="rounded-xl bg-white shadow-sm border border-[#F1E6DE] overflow-hidden">
-          <button onClick={() => setShowDailySnapshots((value) => !value)} className="w-full px-3 py-3 flex items-center justify-between text-sm font-semibold text-[#222222]"><span>每日盘尾估值 ({dailySnapshots.length})</span>{showDailySnapshots ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
-          {showDailySnapshots && <div className="border-t divide-y divide-gray-100">{dailySnapshots.length === 0 ? <div className="px-3 py-6 text-center text-sm text-gray-400">首笔成交后，每个有效交易日 15:05 自动记录盘尾估值</div> : dailySnapshots.map((snapshot: any) => <div key={snapshot.snapshotDate} className="px-3 py-2.5 flex items-center justify-between gap-3 text-xs"><div><div className="font-medium text-[#222222]">{snapshot.snapshotDate} 15:05</div><div className="mt-1 text-gray-500">持仓 {snapshot.positionCount} 只 · 成本 {money(snapshot.costValue)}</div></div><div className="text-right"><div className="font-semibold text-[#222222]">{money(snapshot.marketValue)}</div><div className={`mt-1 ${Number(snapshot.totalPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{signedMoney(snapshot.totalPnl)}</div></div></div>)}</div>}
+          <button onClick={() => setShowDailySnapshots((value) => !value)} className="w-full px-3 py-3 flex items-center justify-between text-sm font-semibold text-[#222222]"><span>{participantView ? "我的每日盈亏" : "每日盘尾估值"} ({dailySnapshots.length})</span>{showDailySnapshots ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+          {showDailySnapshots && <div className="border-t divide-y divide-gray-100">{dailySnapshots.length === 0 ? <div className="px-3 py-6 text-center text-sm text-gray-400">首笔成交后，每个有效交易日 15:05 自动记录盘尾估值</div> : dailySnapshots.map((snapshot: any) => <div key={snapshot.snapshotDate} className="px-3 py-2.5 flex items-center justify-between gap-3 text-xs"><div><div className="font-medium text-[#222222]">{snapshot.snapshotDate} 15:05</div><div className="mt-1 text-gray-500">持仓 {snapshot.positionCount} 只 · 基准 {money(snapshot.costValue)}</div></div><div className="text-right"><div className="font-semibold text-[#222222]">{money(snapshot.marketValue)}</div><div className={`mt-1 ${Number(snapshot.totalPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{signedMoney(snapshot.totalPnl)}</div></div></div>)}</div>}
         </section>
 
         <div className="relative"><Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索名称、代码或历史备注" className="pl-9 bg-white h-9 border-[#E0E0E0]" /></div>
@@ -265,7 +281,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
         {canEdit && <div className="grid grid-cols-5 gap-1.5"><Button size="sm" variant="outline" onClick={() => openAction("buy")} className="text-xs">买入</Button><Button size="sm" variant="outline" onClick={() => openAction("add")} className="text-xs">加仓</Button><Button size="sm" variant="outline" onClick={() => openAction("reduce")} className="text-xs">减仓</Button><Button size="sm" variant="outline" onClick={() => openAction("sell")} className="text-xs">卖出</Button><Button size="sm" variant="outline" onClick={() => openAction("note")} className="text-xs">备注</Button></div>}
 
         <section className="rounded-xl bg-white shadow-sm border border-[#F1E6DE] overflow-hidden">
-          <button onClick={() => setShowCurrent((value) => !value)} className="w-full px-3 py-3 flex items-center justify-between text-sm font-semibold text-[#222222]"><span>当前持仓 ({filteredPositions.length})</span>{showCurrent ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+          <button onClick={() => setShowCurrent((value) => !value)} className="w-full px-3 py-3 flex items-center justify-between text-sm font-semibold text-[#222222]"><span>{participantView ? "我的当前份额" : "当前持仓"} ({filteredPositions.length})</span>{showCurrent ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
           {showCurrent && <div className="border-t divide-y divide-gray-100">{filteredPositions.length === 0 ? <div className="px-3 py-8 text-center text-sm text-gray-400">暂无当前持仓</div> : filteredPositions.map((position: any) => <button key={position.symbol} onClick={() => setSelectedPosition(position)} className="w-full text-left px-3 py-3 hover:bg-gray-50"><div className="flex items-center justify-between gap-3"><div className="min-w-0"><div className="text-sm font-semibold text-[#222222] truncate">{position.stockName} <span className="ml-1 text-xs font-normal text-gray-500">{position.symbol}</span></div><div className="mt-1 text-[11px] text-gray-500">{formatQuantity(position.quantity)} 股 · 成本 {money(position.averageCost)} · 现价 {money(position.marketPrice)}</div></div><div className="shrink-0 text-right"><div className="text-sm font-semibold text-[#222222]">{money(position.marketValue)}</div><div className={`mt-1 text-[11px] ${Number(position.floatingPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{signedMoney(position.floatingPnl)}</div></div></div></button>)}</div>}
         </section>
 

@@ -969,6 +969,7 @@ const AddTransaction = () => {
         ledgerId={ledgerId}
         categoryId={currentCategoryId}
         categoryName={selectedCategory?.name || '股票持仓'}
+        participantView={userRole !== 'owner' && userRole !== 'admin'}
         onBack={() => setLocation(`/ledger/${id}`)}
       />
     );

@@ -356,7 +356,7 @@ async function getLatestQuotes(categoryId: number, symbols: string[]): Promise<R
       result[String(row.symbol)] = {
         symbol: String(row.symbol),
         price,
-        priceDate: String(row.price_date || "").slice(0, 10),
+        priceDate: normalizeStoredDate(row.price_date) || "",
         updatedAt: toIso(row.captured_at),
       };
     }
@@ -465,7 +465,7 @@ async function getLatestDailySnapshots(categoryId: number) {
     [categoryId],
   );
   return (rows as any[]).map((row) => ({
-    snapshotDate: String(row.snapshot_date).slice(0, 10),
+    snapshotDate: normalizeStoredDate(row.snapshot_date) || "",
     marketValue: numberValue(row.market_value),
     costValue: numberValue(row.cost_value),
     floatingPnl: numberValue(row.floating_pnl),
@@ -579,6 +579,255 @@ export async function getStockTagPortfolio(input: {
   return { ...access, accountingMode: "stock_portfolio" as const, ...portfolio, history };
 }
 
+/**
+ * A member's view is deliberately separate from the administrator's tag-wide
+ * portfolio.  A member's baseline is each allocated lot's entry price and
+ * start date, never the tag's (non-existent) manual initial balance.
+ */
+async function buildMemberStockPortfolio(categoryId: number, userId: number) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  const [rows] = await (conn as any).execute(
+    `SELECT p.id, p.lot_id, p.allocated_quantity, p.remaining_quantity, p.entry_price,
+            p.start_date, p.pause_date, p.assigned_at,
+            l.symbol, l.stock_name, l.opened_at, l.initial_quantity, l.unit_cost,
+            COALESCE(SUM(c.quantity), 0) AS closed_quantity,
+            COALESCE(SUM(c.quantity * (c.sale_price - p.entry_price)), 0) AS realized_pnl
+     FROM ledger_stock_lot_participations p
+     INNER JOIN ledger_stock_lots l ON l.id = p.lot_id
+     LEFT JOIN ledger_stock_participation_closures c ON c.participation_id = p.id
+     WHERE p.category_id = ? AND p.user_id = ? AND p.allocated_quantity > 0
+     GROUP BY p.id
+     ORDER BY COALESCE(p.start_date, DATE(l.opened_at)) ASC, p.assigned_at ASC, p.id ASC`,
+    [categoryId, userId],
+  );
+
+  const today = beijingDate();
+  const participations = (rows as any[]).map((row) => {
+    const startDate = normalizeStoredDate(row.start_date) || normalizeStoredDate(row.opened_at) || today;
+    const pauseDate = normalizeStoredDate(row.pause_date);
+    const allocatedQuantity = numberValue(row.allocated_quantity);
+    const remainingQuantity = numberValue(row.remaining_quantity);
+    const lotInitialQuantity = numberValue(row.initial_quantity);
+    return {
+      id: Number(row.id),
+      lotId: Number(row.lot_id),
+      symbol: String(row.symbol),
+      stockName: String(row.stock_name),
+      openedAt: toIso(row.opened_at),
+      startDate,
+      pauseDate,
+      allocatedQuantity,
+      remainingQuantity,
+      closedQuantity: numberValue(row.closed_quantity),
+      entryPrice: numberValue(row.entry_price),
+      lotInitialQuantity,
+      allocationRatio: lotInitialQuantity > EPSILON ? allocatedQuantity / lotInitialQuantity : 0,
+      realizedPnl: numberValue(row.realized_pnl),
+    };
+  });
+  const visibleParticipations = participations.filter((item) => item.startDate <= today);
+  const activeParticipations = visibleParticipations.filter((item) => item.remainingQuantity > EPSILON);
+  const symbols = Array.from(new Set(activeParticipations.map((item) => item.symbol)));
+  // Member P&L begins from the explicit entry reference, so only actual end-of-day
+  // snapshots may update it.  A registration-time quote is not a fabricated close.
+  const quotes = await getLatestQuotes(categoryId, symbols);
+  const grouped = new Map<string, any>();
+  for (const item of activeParticipations) {
+    const current = grouped.get(item.symbol) || {
+      symbol: item.symbol,
+      stockName: item.stockName,
+      quantity: 0,
+      costValue: 0,
+      lots: [],
+      realizedPnl: 0,
+    };
+    current.quantity += item.remainingQuantity;
+    current.costValue += item.remainingQuantity * item.entryPrice;
+    current.realizedPnl += item.realizedPnl;
+    current.lots.push({
+      id: item.lotId,
+      participationId: item.id,
+      openedAt: item.openedAt,
+      startDate: item.startDate,
+      pauseDate: item.pauseDate,
+      quantity: item.remainingQuantity,
+      allocatedQuantity: item.allocatedQuantity,
+      allocationRatio: item.allocationRatio,
+      entryPrice: item.entryPrice,
+      unitCost: item.entryPrice,
+    });
+    grouped.set(item.symbol, current);
+  }
+  const positions = Array.from(grouped.values()).map((position) => {
+    const quote = quotes[position.symbol];
+    const marketPrice = quote?.price ?? null;
+    const marketValue = marketPrice === null ? null : position.quantity * marketPrice;
+    return {
+      ...position,
+      quantity: Number(position.quantity.toFixed(8)),
+      costValue: Number(position.costValue.toFixed(8)),
+      averageCost: position.quantity > EPSILON ? position.costValue / position.quantity : 0,
+      marketPrice,
+      marketValue,
+      floatingPnl: marketValue === null ? null : marketValue - position.costValue,
+      quoteDate: quote?.priceDate || null,
+      quoteUpdatedAt: quote?.updatedAt || null,
+      hasPrice: marketPrice !== null,
+    };
+  });
+  const closedLots = visibleParticipations
+    .filter((item) => item.remainingQuantity <= EPSILON)
+    .map((item) => ({
+      symbol: item.symbol,
+      stockName: item.stockName,
+      openedAt: item.openedAt,
+      startDate: item.startDate,
+      initialQuantity: item.allocatedQuantity,
+      unitCost: item.entryPrice,
+      realizedPnl: item.realizedPnl,
+    }));
+  const costValue = positions.reduce((total, position) => total + position.costValue, 0);
+  const realizedPnl = visibleParticipations.reduce((total, item) => total + item.realizedPnl, 0);
+  const allPositionsPriced = positions.every((position) => position.marketValue !== null);
+  const marketValue = allPositionsPriced ? positions.reduce((total, position) => total + (position.marketValue ?? 0), 0) : null;
+  const floatingPnl = allPositionsPriced ? positions.reduce((total, position) => total + (position.floatingPnl ?? 0), 0) : null;
+
+  const [priceRows] = symbols.length > 0
+    ? await (conn as any).execute(
+      `SELECT symbol, price_date, price
+       FROM ledger_stock_price_snapshots
+       WHERE category_id = ? AND symbol IN (${symbols.map(() => '?').join(',')})
+       ORDER BY price_date ASC`,
+      [categoryId, ...symbols],
+    )
+    : [[]];
+  const priceByDate = new Map<string, Map<string, number>>();
+  for (const row of priceRows as any[]) {
+    const date = normalizeStoredDate(row.price_date);
+    if (!date) continue;
+    const bySymbol = priceByDate.get(date) || new Map<string, number>();
+    bySymbol.set(String(row.symbol), numberValue(row.price));
+    priceByDate.set(date, bySymbol);
+  }
+  const dailySnapshots = Array.from(priceByDate.entries()).map(([snapshotDate, priceBySymbol]) => {
+    const effective = activeParticipations.filter((item) => (
+      item.startDate <= snapshotDate && (!item.pauseDate || snapshotDate <= item.pauseDate)
+    ));
+    const allPriced = effective.every((item) => priceBySymbol.has(item.symbol));
+    const snapshotCost = effective.reduce((total, item) => total + item.remainingQuantity * item.entryPrice, 0);
+    const snapshotMarket = allPriced
+      ? effective.reduce((total, item) => total + item.remainingQuantity * (priceBySymbol.get(item.symbol) || 0), 0)
+      : null;
+    const snapshotFloating = snapshotMarket === null ? null : snapshotMarket - snapshotCost;
+    return {
+      snapshotDate,
+      marketValue: snapshotMarket,
+      costValue: snapshotCost,
+      floatingPnl: snapshotFloating,
+      realizedPnl,
+      totalPnl: snapshotFloating === null ? null : snapshotFloating + realizedPnl,
+      positionCount: new Set(effective.map((item) => item.symbol)).size,
+    };
+  });
+  const latestSnapshot = dailySnapshots[dailySnapshots.length - 1] || null;
+  const priorSnapshot = dailySnapshots.length > 1 ? dailySnapshots[dailySnapshots.length - 2] : null;
+  const dailyChange = latestSnapshot && priorSnapshot && latestSnapshot.marketValue !== null && priorSnapshot.marketValue !== null
+    ? latestSnapshot.marketValue - priorSnapshot.marketValue
+    : null;
+  const dailyChangePercent = dailyChange !== null && priorSnapshot && priorSnapshot.marketValue !== null && Math.abs(priorSnapshot.marketValue) > EPSILON
+    ? dailyChange / priorSnapshot.marketValue
+    : null;
+  return {
+    positions,
+    closedLots,
+    participations,
+    isEligible: visibleParticipations.length > 0,
+    startDate: visibleParticipations.map((item) => item.startDate).sort()[0] || null,
+    dailySnapshots: dailySnapshots.slice().reverse(),
+    summary: {
+      marketValue,
+      costValue,
+      floatingPnl,
+      realizedPnl,
+      totalPnl: floatingPnl === null ? (realizedPnl || null) : floatingPnl + realizedPnl,
+      positionCount: positions.length,
+      unpricedPositionCount: positions.filter((position) => position.marketValue === null).length,
+      dailyChange,
+      dailyChangePercent,
+      latestSnapshot,
+      priorSnapshot,
+      awaitingFirstClose: positions.length > 0 && latestSnapshot === null,
+    },
+  };
+}
+
+export async function getMyStockTagParticipantPortfolio(input: {
+  ledgerId: number;
+  categoryId: number;
+  userId: number;
+  systemRole?: string;
+}) {
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
+  const [portfolio, history] = await Promise.all([
+    buildMemberStockPortfolio(access.categoryId, input.userId),
+    getEventHistory(access.categoryId),
+  ]);
+  if (!portfolio.isEligible && !access.canEdit) throw new Error("该股票标签尚未对您开放");
+  return {
+    ...access,
+    accountingMode: "stock_portfolio" as const,
+    participantView: true,
+    ...portfolio,
+    history,
+  };
+}
+
+/** All immediately-visible stock tags for the effective member, used by 37's overview table. */
+export async function getMyStockTagOverview(input: { ledgerId: number; userId: number; systemRole?: string }) {
+  if (input.ledgerId !== STOCK_LEDGER_ID) return [];
+  await ensureLedgerStockPortfolioTables();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  const [categoryRows] = await (conn as any).execute(
+    `SELECT DISTINCT c.id, c.name, c.sortOrder
+     FROM ledger_categories c
+     INNER JOIN ledger_stock_lot_participations p ON p.category_id = c.id AND p.user_id = ? AND p.allocated_quantity > 0
+     INNER JOIN ledger_stock_lots l ON l.id = p.lot_id
+     WHERE c.ledgerId = ? AND c.parentId IS NULL AND c.accounting_mode = 'stock_portfolio'
+       AND COALESCE(p.start_date, DATE(l.opened_at)) <= ?
+     ORDER BY c.sortOrder ASC, c.id ASC`,
+    [input.userId, STOCK_LEDGER_ID, beijingDate()],
+  );
+  const result: any[] = [];
+  for (const category of categoryRows as any[]) {
+    const access = await assertStockTagAccess(input.ledgerId, Number(category.id), input.userId, input.systemRole);
+    const portfolio = await buildMemberStockPortfolio(Number(category.id), input.userId);
+    if (!portfolio.isEligible) continue;
+    const chronological = portfolio.dailySnapshots.slice().reverse();
+    const points = chronological.map((snapshot, index) => ({
+      date: snapshot.snapshotDate,
+      pnl: snapshot.totalPnl ?? 0,
+      dailyPnl: index > 0 && snapshot.totalPnl !== null && chronological[index - 1].totalPnl !== null
+        ? snapshot.totalPnl - (chronological[index - 1].totalPnl as number)
+        : 0,
+      marketValue: snapshot.marketValue,
+    }));
+    // The tag must become visible immediately after a valid allocation, even before its first 15:05 close.
+    if (points.length === 0) {
+      points.push({ date: beijingDate(), pnl: 0, dailyPnl: 0, marketValue: null });
+    }
+    result.push({
+      categoryId: access.categoryId,
+      name: access.categoryName,
+      startDate: portfolio.startDate,
+      summary: portfolio.summary,
+      points,
+    });
+  }
+  return result;
+}
+
 export async function getStockTagDailySnapshots(input: {
   ledgerId: number;
   categoryId: number;
@@ -602,7 +851,7 @@ export async function getStockTagDailySnapshots(input: {
     params,
   );
   return (rows as any[]).map((row) => ({
-    snapshotDate: String(row.snapshot_date).slice(0, 10),
+    snapshotDate: normalizeStoredDate(row.snapshot_date) || "",
     marketValue: numberValue(row.market_value),
     costValue: numberValue(row.cost_value),
     floatingPnl: numberValue(row.floating_pnl),

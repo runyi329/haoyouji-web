@@ -373,6 +373,18 @@ export default function LedgerDetailAA({
     { ledgerId, viewAsUserId: viewAsUserId ?? undefined },
     { enabled: !!ledgerId }
   );
+  // 股票标签没有“初始金额”。普通成员（以及创建者切换到成员观察视角）
+  // 仅在至少获得一笔股票份额且到达该份额开始日期后，才会在首页和标签下拉中看到它。
+  const stockParticipantView = ledgerId === 37 && (!!viewAsUserId || !canEdit);
+  const stockTagOverviewQuery = trpc.ledger.getMyStockTagOverview.useQuery(
+    { ledgerId: 37 },
+    { enabled: stockParticipantView },
+  );
+  const stockTagOverview = (stockTagOverviewQuery.data || []) as any[];
+  const stockTagOverviewById = useMemo(
+    () => new Map(stockTagOverview.map((item: any) => [Number(item.categoryId), item])),
+    [stockTagOverview],
+  );
   // 过滤掉全局默认分类（如「购物」），只保留手动创建的标签
   const allCategories = useMemo(() => {
     if (!rawCategories) return [];
@@ -392,10 +404,15 @@ export default function LedgerDetailAA({
     return allCategories.filter((c: any) => {
       const visibleVal = balances[`${c.name}__visible`];
       // 未设置时默认显示；设置为 0 则隐藏
-      if (visibleVal === undefined || visibleVal === null) return true;
-      return Number(visibleVal) !== 0;
+      const explicitlyVisible = visibleVal === undefined || visibleVal === null || Number(visibleVal) !== 0;
+      if (!explicitlyVisible) return false;
+      if (stockParticipantView && c.accountingMode === 'stock_portfolio') {
+        // 查询尚未返回时先不展示，避免未授权股票标签闪现。
+        return stockTagOverviewQuery.data !== undefined && stockTagOverviewById.has(Number(c.id));
+      }
+      return true;
     });
-  }, [allCategories, initialBalancesData]);
+  }, [allCategories, initialBalancesData, stockParticipantView, stockTagOverviewQuery.data, stockTagOverviewById]);
 
   // 如果当前选中的标签已被隐藏，切换到全部模式
   useEffect(() => {
@@ -809,6 +826,31 @@ export default function LedgerDetailAA({
     return categories.map((cat: any, idx: number) => {
       const tagName = cat.name;
       const color = COLORS[idx % COLORS.length];
+      // 股票标签的成员视图严格按“成员 × 股票批次”的开始日、入场价与盘尾价计算，
+      // 不使用历史手工余额、初始金额、提现或本金变动公式。
+      const stockOverview = stockTagOverviewById.get(Number(cat.id));
+      if (cat.accountingMode === 'stock_portfolio' && stockParticipantView && stockOverview) {
+        return {
+          name: tagName,
+          color,
+          isStockPortfolio: true,
+          stockStartDate: stockOverview.startDate || null,
+          initialBalance: 0,
+          marginCny: 0,
+          marginEntries: [] as ResolvedMarginEntry[],
+          points: (stockOverview.points || []).map((point: any) => ({
+            date: point.date,
+            pnl: Number(point.pnl || 0),
+            stockDailyPnl: Number(point.dailyPnl || 0),
+            // 仅用于概览的只读显示；为空代表首个盘尾前不虚构市值。
+            balance: point.marketValue === null || point.marketValue === undefined ? null : Number(point.marketValue),
+            capitalChange: 0,
+            withdrawToDate: 0,
+            capitalChangeToday: 0,
+            withdrawToday: 0,
+          })),
+        };
+      }
       // 初始金额
       const initialBalance = Number(initialBalancesData.balances[tagName] ?? 0);
       // 押金：新格式可包含多笔不同币种，逐项按实时人民币价格折算后汇总。
@@ -872,7 +914,7 @@ export default function LedgerDetailAA({
       });
       return { name: tagName, color, points, initialBalance, marginCny, marginEntries };
     });
-  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, tagCashFlows]);
+  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, tagCashFlows, stockParticipantView, stockTagOverviewById]);
 
   // ─── 全部模式：计算所有标签的押金总和和盈亏总和 ────────────────────────
   const allTagsStats = useMemo(() => {
@@ -1453,6 +1495,7 @@ export default function LedgerDetailAA({
         ledgerId={ledgerId}
         categoryId={selectedTagId}
         categoryName={selectedTag.name}
+        participantView={stockParticipantView}
         onBack={() => {
           setSelectedTagId(null);
           sessionStorage.removeItem(sessionKey);
@@ -2504,10 +2547,13 @@ export default function LedgerDetailAA({
               const todayCapitalChange = Number((_latestPoint as any)?.capitalChangeToday ?? 0);
               const todayWithdraw = Number((_latestPoint as any)?.withdrawToday ?? 0);
               const prevPnl = tag.points.length >= 2 ? (tag.points[tag.points.length - 2]?.pnl ?? 0) : 0;
-              // 今日变动：有balance数据时乘以占比（ratio=0时结果为0）；无balance数据时fallback到pnl差值再乘ratio
-              const todayPnl = (latestBalance !== null && prevBalance !== null)
-                ? (prevBalance + todayCapitalChange - todayWithdraw - latestBalance) * (_tagRatio / 100)
-                : (_tagRatio > 0 && tag.points.length > 0 ? (latestPnl - prevPnl) * (_tagRatio / 100) : (_tagRatio === 0 ? 0 : (tag.points.length > 0 ? latestPnl - prevPnl : null)));
+              // 股票标签已经在服务端按成员的每笔入场价与股票批次计算，绝不能再乘旧版标签比例。
+              // 手工余额标签保留原有的资金流剔除公式。
+              const todayPnl = tag.isStockPortfolio
+                ? (tag.points.length > 0 ? Number((_latestPoint as any)?.stockDailyPnl ?? 0) : null)
+                : (latestBalance !== null && prevBalance !== null)
+                  ? (prevBalance + todayCapitalChange - todayWithdraw - latestBalance) * (_tagRatio / 100)
+                  : (_tagRatio > 0 && tag.points.length > 0 ? (latestPnl - prevPnl) * (_tagRatio / 100) : (_tagRatio === 0 ? 0 : (tag.points.length > 0 ? latestPnl - prevPnl : null)));
               const annualized = tag.marginCny > 0 && days > 0 ? (latestPnl / tag.marginCny / days) * 365 * 100 : null;
               const divAmt = dividendByTag[tag.name] ?? 0;
               return { tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, todayCapitalChange, todayWithdraw, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
@@ -3377,7 +3423,7 @@ export default function LedgerDetailAA({
                     let maxVal = -Infinity, maxIdx2 = -1;
                     let minVal = Infinity, minIdx2 = -1;
                     for (let i = startIdx; i <= endIdx; i++) {
-                      const p = datePointMap.get(dates[i]);
+                      const p = datePointMap.get(dates[i]) as any;
                       if (!p) continue;
                       const v = mode === 'amount' ? p.pnl : mode === 'initial' ? p.pctInitial : p.pctMargin;
                       if (v > maxVal) { maxVal = v; maxIdx2 = i; }
@@ -3428,7 +3474,7 @@ export default function LedgerDetailAA({
                     const dimmed = hasActive && !isActive && !isHidden;
                     const datePointMap = new Map(tag.points.map((p: any) => [p.date, p]));
                     const data: (number | null)[] = allDates.map(date => {
-                      const p = datePointMap.get(date);
+                      const p = datePointMap.get(date) as any;
                       if (!p) return null;
                       if (allChartMode === 'amount') return parseFloat(p.pnl.toFixed(2));
                       if (allChartMode === 'initial') return parseFloat(p.pctInitial.toFixed(2));
