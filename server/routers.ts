@@ -10052,6 +10052,8 @@ ${klinesSummary}
         targetUserId: z.number().int().positive(),
         quantity: z.number().min(0).max(1_000_000_000),
         entryPrice: z.number().positive().max(1_000_000_000).optional(),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
+        pauseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { setStockLotParticipation } = await import('./ledger-stock-portfolio');

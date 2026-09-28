@@ -52,6 +52,15 @@ function numberValue(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function normalizeStoredDate(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const raw = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  const parsed = value instanceof Date ? value : new Date(raw);
+  if (Number.isNaN(parsed.getTime())) throw new Error("日期格式无效");
+  return parsed.toISOString().slice(0, 10);
+}
+
 /**
  * This migration is deliberately independent from financing-order stock data.
  * It adds an immutable category mode and dedicated append-only portfolio tables.
@@ -186,6 +195,27 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           INDEX idx_ledger_stock_participation_lot (lot_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+
+      // 参与日期属于“成员 × 股票批次”，不能复用标签级初始金额日期。
+      // 保留为空的历史记录在读取时回退到该批次实际成交日，避免迁移覆盖旧配置。
+      const [participationColumnRows] = await (conn as any).execute(
+        `SELECT COLUMN_NAME FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'ledger_stock_lot_participations'
+           AND column_name IN ('start_date', 'pause_date')`,
+      );
+      const participationColumns = new Set((participationColumnRows as any[]).map((row: any) => String(row.COLUMN_NAME || row.column_name)));
+      if (!participationColumns.has('start_date')) {
+        await (conn as any).execute(
+          `ALTER TABLE ledger_stock_lot_participations
+           ADD COLUMN start_date DATE NULL COMMENT '成员本股票批次开始参与日期' AFTER entry_price`,
+        );
+      }
+      if (!participationColumns.has('pause_date')) {
+        await (conn as any).execute(
+          `ALTER TABLE ledger_stock_lot_participations
+           ADD COLUMN pause_date DATE NULL COMMENT '成员本股票批次暂停日期' AFTER start_date`,
+        );
+      }
 
       // 卖出只追加关闭明细；已卖出的参与股数永远不回到可编辑的分配行。
       await (conn as any).execute(`
@@ -963,10 +993,13 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
   );
   const [participationRows] = await (conn as any).execute(
     `SELECT p.id, p.lot_id, p.user_id, p.allocated_quantity, p.remaining_quantity, p.entry_price,
+            DATE_FORMAT(COALESCE(MAX(p.start_date), DATE(MAX(l.opened_at))), '%Y-%m-%d') AS start_date,
+            DATE_FORMAT(MAX(p.pause_date), '%Y-%m-%d') AS pause_date,
             p.assigned_at, p.assigned_by,
             COALESCE(SUM(c.quantity), 0) AS closed_quantity,
             COALESCE(SUM(c.quantity * (c.sale_price - p.entry_price)), 0) AS realized_pnl
      FROM ledger_stock_lot_participations p
+     INNER JOIN ledger_stock_lots l ON l.id = p.lot_id
      LEFT JOIN ledger_stock_participation_closures c ON c.participation_id = p.id
      WHERE p.category_id = ?
      GROUP BY p.id
@@ -986,6 +1019,7 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
       id: Number(row.id), userId: Number(row.user_id),
       allocatedQuantity: numberValue(row.allocated_quantity), remainingQuantity: numberValue(row.remaining_quantity),
       closedQuantity: numberValue(row.closed_quantity), entryPrice: numberValue(row.entry_price),
+      startDate: row.start_date || '', pauseDate: row.pause_date || '',
       assignedAt: toIso(row.assigned_at), assignedBy: Number(row.assigned_by), realizedPnl: numberValue(row.realized_pnl),
     });
     byLot.set(lotId, list);
@@ -1036,6 +1070,8 @@ export async function setStockLotParticipation(input: {
   userId: number;
   systemRole?: string;
   entryPrice?: number;
+  startDate?: string;
+  pauseDate?: string;
 }) {
   const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
   const quantity = Number(input.quantity);
@@ -1044,6 +1080,8 @@ export async function setStockLotParticipation(input: {
   if (specifiedEntryPrice !== undefined && (!Number.isFinite(specifiedEntryPrice) || specifiedEntryPrice <= 0)) {
     throw new Error("成员入场参考价必须大于 0");
   }
+  const specifiedStartDate = input.startDate === undefined ? undefined : normalizeStoredDate(input.startDate);
+  const specifiedPauseDate = input.pauseDate === undefined ? undefined : normalizeStoredDate(input.pauseDate);
   const tx = await getDbTransactionConnection();
   if (!tx) throw new Error("数据库连接不可用");
   try {
@@ -1055,7 +1093,7 @@ export async function setStockLotParticipation(input: {
     if ((memberRows as any[]).length === 0) throw new Error("该用户不是37号账本成员");
     // 先锁定股票批次主记录。每次同一批次的参与分配都会串行计算，避免并发编辑合计超出当前余量。
     const [lotRows] = await (tx as any).execute(
-      `SELECT l.id, l.symbol, l.initial_quantity, l.unit_cost, opening_event.market_reference_price
+      `SELECT l.id, l.symbol, l.initial_quantity, l.unit_cost, l.opened_at, opening_event.market_reference_price
        FROM ledger_stock_lots l
        INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
        WHERE l.id = ? AND l.category_id = ? AND opening_event.status = 'active'
@@ -1072,7 +1110,7 @@ export async function setStockLotParticipation(input: {
       [input.lotId],
     );
     const [existingRows] = await (tx as any).execute(
-      `SELECT p.id, p.entry_price, COUNT(c.id) AS closure_count
+      `SELECT p.id, p.entry_price, p.start_date, p.pause_date, COUNT(c.id) AS closure_count
        FROM ledger_stock_lot_participations p
        LEFT JOIN ledger_stock_participation_closures c ON c.participation_id = p.id
        WHERE p.lot_id = ? AND p.user_id = ?
@@ -1082,6 +1120,12 @@ export async function setStockLotParticipation(input: {
     const existing = (existingRows as any[])[0];
     if (existing && Number(existing.closure_count) > 0) {
       throw new Error("该用户的此股票已发生卖出结算，分配记录仅可查看，不能再修改");
+    }
+    const defaultStartDate = normalizeStoredDate(lot.opened_at) || beijingDate();
+    const effectiveStartDate = specifiedStartDate ?? normalizeStoredDate(existing?.start_date) ?? defaultStartDate;
+    const effectivePauseDate = specifiedPauseDate === undefined ? normalizeStoredDate(existing?.pause_date) : specifiedPauseDate;
+    if (effectivePauseDate && effectiveStartDate && effectivePauseDate < effectiveStartDate) {
+      throw new Error("暂停日期不能早于开始日期");
     }
     const [otherRows] = await (tx as any).execute(
       `SELECT COALESCE(SUM(remaining_quantity), 0) AS allocated_quantity
@@ -1099,17 +1143,24 @@ export async function setStockLotParticipation(input: {
     } else if (existing) {
       await (tx as any).execute(
         `UPDATE ledger_stock_lot_participations
-         SET allocated_quantity = ?, remaining_quantity = ?, entry_price = COALESCE(?, entry_price), assigned_by = ?
+         SET allocated_quantity = ?, remaining_quantity = ?, entry_price = COALESCE(?, entry_price), assigned_by = ?,
+             start_date = CASE WHEN ? THEN ? ELSE start_date END,
+             pause_date = CASE WHEN ? THEN ? ELSE pause_date END
          WHERE id = ?`,
-        [quantity, quantity, specifiedEntryPrice ?? null, input.userId, existing.id],
+        [
+          quantity, quantity, specifiedEntryPrice ?? null, input.userId,
+          input.startDate === undefined ? 0 : 1, specifiedStartDate,
+          input.pauseDate === undefined ? 0 : 1, specifiedPauseDate,
+          existing.id,
+        ],
       );
     } else {
       const entryPrice = specifiedEntryPrice ?? (numberValue(lot.market_reference_price) || numberValue(lot.unit_cost));
       await (tx as any).execute(
         `INSERT INTO ledger_stock_lot_participations
-         (ledger_id, category_id, lot_id, user_id, allocated_quantity, remaining_quantity, entry_price, assigned_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [access.ledgerId, access.categoryId, input.lotId, input.targetUserId, quantity, quantity, entryPrice, input.userId],
+         (ledger_id, category_id, lot_id, user_id, allocated_quantity, remaining_quantity, entry_price, start_date, pause_date, assigned_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [access.ledgerId, access.categoryId, input.lotId, input.targetUserId, quantity, quantity, entryPrice, effectiveStartDate, effectivePauseDate, input.userId],
       );
     }
     await (tx as any).commit();

@@ -704,6 +704,16 @@ export default function LedgerAAInitialBalance() {
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
       }).format(date).replaceAll('/', '-');
     };
+    const dateInputValue = (value?: string | null) => {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+      }).formatToParts(date);
+      const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
+      return `${part('year')}-${part('month')}-${part('day')}`;
+    };
     return (
       <section className="rounded-xl p-3 space-y-3" style={{ backgroundColor: '#F7FAFC', border: '1px solid #DCE7EE' }}>
         <div className="flex items-start gap-2">
@@ -757,15 +767,19 @@ export default function LedgerAAInitialBalance() {
                   const maxPercentage = Math.max(0, Math.min(100, Math.floor(lot.currentQuantity > 0 ? maxQuantity / lot.currentQuantity * 100 : 0)));
                   const draftKey = `${lot.id}:${member.userId}`;
                   const savedEntryPrice = Number(participation?.entryPrice || lot.openingReferencePrice || lot.unitCost || 0);
-                  const fallbackDraft = { percentage: share ? String(Math.round(share)) : '', entryPrice: savedEntryPrice ? String(savedEntryPrice) : '' };
+                  const defaultStartDate = dateInputValue(lot.actualTradedAt || lot.openedAt);
+                  const savedStartDate = participation?.startDate || defaultStartDate;
+                  const savedPauseDate = participation?.pauseDate || '';
+                  const fallbackDraft = { percentage: share ? String(Math.round(share)) : '', entryPrice: savedEntryPrice ? String(savedEntryPrice) : '', startDate: savedStartDate, pauseDate: savedPauseDate };
                   const draft = stockParticipationDrafts[draftKey] ?? fallbackDraft;
                   const draftEntryPrice = Number(draft.entryPrice) > 0 ? Number(draft.entryPrice) : savedEntryPrice;
+                  const draftStartDate = draft.startDate || defaultStartDate;
                   const setPercentage = (value: number, save = false) => {
                     const normalized = Math.round(Math.max(0, Math.min(maxPercentage, value)));
                     const quantity = lot.currentQuantity * normalized / 100;
                     const next = { percentage: String(normalized) };
                     setStockParticipationDraft(draftKey, next, fallbackDraft);
-                    if (save) saveStockParticipation(Number(lot.id), Number(member.userId), quantity, currentQuantity, draftEntryPrice, savedEntryPrice);
+                    if (save) saveStockParticipation(Number(lot.id), Number(member.userId), quantity, currentQuantity, draftEntryPrice, savedEntryPrice, draftStartDate, savedStartDate, draft.pauseDate, savedPauseDate);
                   };
                   const saveTypedPercentage = () => {
                     const value = Number(draft.percentage);
@@ -781,7 +795,20 @@ export default function LedgerAAInitialBalance() {
                     const percentage = Math.round(Math.max(0, Math.min(maxPercentage, Number(draft.percentage) || 0)));
                     const quantity = lot.currentQuantity * percentage / 100;
                     setStockParticipationDraft(draftKey, { entryPrice: String(nextPrice) }, fallbackDraft);
-                    saveStockParticipation(Number(lot.id), Number(member.userId), quantity, currentQuantity, nextPrice, savedEntryPrice);
+                    saveStockParticipation(Number(lot.id), Number(member.userId), quantity, currentQuantity, nextPrice, savedEntryPrice, draftStartDate, savedStartDate, draft.pauseDate, savedPauseDate);
+                  };
+                  const saveTypedDates = () => {
+                    const startDate = draft.startDate || defaultStartDate;
+                    const pauseDate = draft.pauseDate;
+                    if (pauseDate && startDate && pauseDate < startDate) {
+                      toast.error('暂停日期不能早于开始日期');
+                      setStockParticipationDraft(draftKey, { pauseDate: savedPauseDate }, fallbackDraft);
+                      return;
+                    }
+                    const percentage = Math.round(Math.max(0, Math.min(maxPercentage, Number(draft.percentage) || 0)));
+                    const quantity = lot.currentQuantity * percentage / 100;
+                    setStockParticipationDraft(draftKey, { startDate, pauseDate }, fallbackDraft);
+                    saveStockParticipation(Number(lot.id), Number(member.userId), quantity, currentQuantity, draftEntryPrice, savedEntryPrice, startDate, savedStartDate, pauseDate, savedPauseDate);
                   };
                   return (
                     <div key={member.userId} className="rounded-lg px-2 py-2" style={{ backgroundColor: !isMemberVisible ? '#F7F7F7' : Number(member.userId) === Number(selectedUserId) ? '#F4FAFC' : '#FAFAFA', opacity: isMemberVisible ? 1 : 0.7 }}>
@@ -825,6 +852,32 @@ export default function LedgerAAInitialBalance() {
                             style={{ color: isReadonly ? '#9CA3AF' : '#4B5563' }}
                           />
                         </div>
+                      </div>
+                      <div className="mt-1.5 grid grid-cols-2 gap-2">
+                        <label className="min-w-0">
+                          <span className="mb-0.5 block text-[10px] text-gray-400">开始日期</span>
+                          <input
+                            type="date"
+                            value={draftStartDate}
+                            disabled={isReadonly}
+                            onChange={(event) => setStockParticipationDraft(draftKey, { startDate: event.target.value }, fallbackDraft)}
+                            onBlur={saveTypedDates}
+                            className="h-7 w-full rounded-md border bg-white px-1.5 text-[10px] outline-none disabled:text-gray-400"
+                            style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE', color: isReadonly ? '#9CA3AF' : '#4B5563' }}
+                          />
+                        </label>
+                        <label className="min-w-0">
+                          <span className="mb-0.5 block text-[10px] text-[#B45309]">暂停日期</span>
+                          <input
+                            type="date"
+                            value={draft.pauseDate}
+                            disabled={isReadonly}
+                            onChange={(event) => setStockParticipationDraft(draftKey, { pauseDate: event.target.value }, fallbackDraft)}
+                            onBlur={saveTypedDates}
+                            className="h-7 w-full rounded-md border bg-[#FFFBEB] px-1.5 text-[10px] outline-none disabled:text-gray-400"
+                            style={{ borderColor: isReadonly ? '#ECECEC' : '#FDE68A', color: isReadonly ? '#9CA3AF' : '#92400E' }}
+                          />
+                        </label>
                       </div>
                       <div className="mt-1.5 flex items-center justify-between border-t pt-1.5" style={{ borderColor: '#E8EEF1' }}>
                         <div>
@@ -887,16 +940,17 @@ export default function LedgerAAInitialBalance() {
     onError: (error) => toast.error(error.message || '保存股票参与分配失败'),
   });
   // 移动端输入保持在本地草稿中，避免每次输入都触发查询重渲染而丢失键盘焦点。
-  const [stockParticipationDrafts, setStockParticipationDrafts] = useState<Record<string, { percentage: string; entryPrice: string }>>({});
-  const setStockParticipationDraft = (key: string, patch: Partial<{ percentage: string; entryPrice: string }>, fallback: { percentage: string; entryPrice: string }) => {
+  const [stockParticipationDrafts, setStockParticipationDrafts] = useState<Record<string, { percentage: string; entryPrice: string; startDate: string; pauseDate: string }>>({});
+  const setStockParticipationDraft = (key: string, patch: Partial<{ percentage: string; entryPrice: string; startDate: string; pauseDate: string }>, fallback: { percentage: string; entryPrice: string; startDate: string; pauseDate: string }) => {
     setStockParticipationDrafts((previous) => ({
       ...previous,
       [key]: { ...(previous[key] ?? fallback), ...patch },
     }));
   };
-  const saveStockParticipation = (lotId: number, targetUserId: number, quantity: number, previousQuantity: number, entryPrice: number, previousEntryPrice: number) => {
+  const saveStockParticipation = (lotId: number, targetUserId: number, quantity: number, previousQuantity: number, entryPrice: number, previousEntryPrice: number, startDate: string, previousStartDate: string, pauseDate: string, previousPauseDate: string) => {
     const priceChanged = Number.isFinite(entryPrice) && entryPrice > 0 && Math.abs(entryPrice - previousEntryPrice) >= 0.00000001;
-    if (!Number.isFinite(quantity) || quantity < 0 || (!priceChanged && Math.abs(quantity - previousQuantity) < 0.00000001)) return;
+    const datesChanged = startDate !== previousStartDate || pauseDate !== previousPauseDate;
+    if (!Number.isFinite(quantity) || quantity < 0 || (!priceChanged && !datesChanged && Math.abs(quantity - previousQuantity) < 0.00000001)) return;
     if (isLocalHotPreview) {
       toast.info('热预览仅演示交互，不会写入正式股票数据');
       return;
@@ -908,6 +962,8 @@ export default function LedgerAAInitialBalance() {
       targetUserId,
       quantity,
       entryPrice: Number.isFinite(entryPrice) && entryPrice > 0 ? entryPrice : undefined,
+      startDate,
+      pauseDate,
     });
   };
   const saveStockTagVisibility = (targetUserId: number, tagName: string, nextVisible: boolean) => {
@@ -2328,8 +2384,8 @@ export default function LedgerAAInitialBalance() {
                           </div>
                           {/* 展开内容 */}
                           {isCatExpanded && <div className="px-3 pb-3 space-y-2" style={{ borderTop: '1px solid #F0E8E0' }}>
-                          {/* 与标签视角头像弹窗一致的顶部日期区。 */}
-                          <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
+                          {/* 手工标签沿用标签级日期；股票标签改为每个“成员 × 批次”的日期，在下方批次行内管理。 */}
+                          {!isStockTag && <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
                             <div className="text-xs font-medium text-gray-700">日期设置</div>
                             <div className="grid grid-cols-2 gap-2">
                             <div className="min-w-0">
@@ -2363,7 +2419,7 @@ export default function LedgerAAInitialBalance() {
                               </div>
                               </div>
                             </div>
-                          </section>
+                          </section>}
 
                           {isStockTag ? renderStockParticipationEditor({ selectedUserId: userId, accentColor: cat.color || '#2F6F85' }) : <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
                             <div className="flex items-center justify-between gap-2">
@@ -2492,8 +2548,8 @@ export default function LedgerAAInitialBalance() {
               </div>
               {/* 内容区 */}
               <div className="overflow-y-auto flex-1 px-4 py-3 space-y-3">
-                {/* 顶部日期区：先设置开始日期与暂停日期。 */}
-                <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
+                {/* 手工标签使用标签级日期；股票标签在每笔成员参与记录内设置日期。 */}
+                {!isStockTag && <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
                   <div className="text-xs font-medium text-gray-700">日期设置</div>
                   <div className="grid grid-cols-2 gap-2">
                     <label className="min-w-0">
@@ -2644,7 +2700,7 @@ export default function LedgerAAInitialBalance() {
                     </div>
                   )}
                   </div>
-                </section>
+                </section>}
                 {isStockTag ? renderStockParticipationEditor({ selectedUserId: userId, accentColor: catColor }) : <>
                 {/* 比例、初始金额、实际权益三联动 */}
                 <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
