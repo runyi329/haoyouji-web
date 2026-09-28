@@ -25,6 +25,7 @@ const CRYPTO_ASSET_ICON_SOURCES: Readonly<Record<string, string>> = {
   LDO: `${COS_CRYPTO_ICON_BASE_URL}/ldo.png`,
   ENA: `${COS_CRYPTO_ICON_BASE_URL}/ena.png`,
   ARKM: `${COS_CRYPTO_ICON_BASE_URL}/arkm.png`,
+  UNI: `${COS_CRYPTO_ICON_BASE_URL}/uni.png`,
   SEI: `${COS_CRYPTO_ICON_BASE_URL}/sei.png`,
   PLUME: `${COS_CRYPTO_ICON_BASE_URL}/plume.png`,
   ADA: `${COS_CRYPTO_ICON_BASE_URL}/ada.png`,

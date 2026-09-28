@@ -12,7 +12,7 @@ export const AI_WALLET_MARKET_ASSETS = [
   "BTC", "ETH", "SOL", "BNB",
   "HYPE", "TRUMP", "PENGU", "XPL", "WLFI",
   "AVAX", "DOGE", "XLM", "TIA", "EIGEN", "FET",
-  "AAVE", "SUI", "ONDO", "ASTER", "LDO", "ENA", "ARKM", "SEI",
+  "AAVE", "SUI", "ONDO", "ASTER", "LDO", "ENA", "ARKM", "UNI", "SEI",
   "PLUME", "ADA", "ZRO", "WLD", "LINK", "POL", "CRV", "PEPE", "B2",
 ] as const;
 
@@ -62,6 +62,7 @@ const ASSET_NAMES: Record<AiWalletAsset, string> = {
   LDO: "Lido DAO",
   ENA: "Ethena",
   ARKM: "Arkham",
+  UNI: "Uniswap",
   SEI: "Sei",
   PLUME: "Plume",
   ADA: "艾达币",
@@ -97,6 +98,6 @@ export const AI_WALLET_ASSET_COLORS: Record<AiWalletAsset, string> = {
   HYPE: "#5C6BC0", TRUMP: "#D71920", PENGU: "#66C5E0", XPL: "#6B5CFF", WLFI: "#1F2937",
   AVAX: "#E84142", DOGE: "#C2A633", XLM: "#14B8A6", TIA: "#7C3AED", EIGEN: "#8B5CF6", FET: "#1A73E8",
   AAVE: "#B6509E", SUI: "#4DA2FF", ONDO: "#1A1A2E", ASTER: "#00D4AA", LDO: "#F68B1E", ENA: "#00C4B4",
-  ARKM: "#FF6B00", SEI: "#9C1FFF", PLUME: "#7B5EA7", ADA: "#0033AD", ZRO: "#111111", WLD: "#111111",
+  ARKM: "#FF6B00", UNI: "#FF007A", SEI: "#9C1FFF", PLUME: "#7B5EA7", ADA: "#0033AD", ZRO: "#111111", WLD: "#111111",
   LINK: "#2A5ADA", POL: "#8247E5", CRV: "#406C9A", PEPE: "#479F53", B2: "#F59E0B",
 };

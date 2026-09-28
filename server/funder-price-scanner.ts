@@ -25,6 +25,7 @@ const COIN_SYMBOLS: Record<string, string> = {
   ETH: 'ETHUSDT',
   SOL: 'SOLUSDT',
   HYPE: 'HYPEUSDT',
+  UNI: 'UNIUSDT',
 };
 
 // 全局扫描锁：防止并发执行

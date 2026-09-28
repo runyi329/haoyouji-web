@@ -48,6 +48,7 @@ jobs:
             const icons = [
               { localPath: '/root/haoyouji-web/client/public/okx-circle-icon.png', cosKey: 'assets/logos/okx-circle-icon.png', name: 'OKX' },
               { localPath: '/root/haoyouji-web/client/public/binance-circle-icon.png', cosKey: 'assets/logos/binance-circle-icon.png', name: '币安' },
+              { localPath: '/root/haoyouji-web/client/public/assets/crypto-icons/uni.png', cosKey: 'assets/crypto-icons/uni.png', name: 'Uniswap UNI' },
             ];
             
             for (const icon of icons) {

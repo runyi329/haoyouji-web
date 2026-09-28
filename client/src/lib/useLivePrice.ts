@@ -31,18 +31,18 @@ const BINANCE_SYMBOL_MAP: Record<string, string> = {
   BTC: 'BTCUSDT', ETH: 'ETHUSDT', SOL: 'SOLUSDT', BNB: 'BNBUSDT',
   AAVE: 'AAVEUSDT', SUI: 'SUIUSDT', ONDO: 'ONDOUSDT', ASTER: 'ASTERUSDT',
   LDO: 'LDOUSDT', ENA: 'ENAUSDT', ARKM: 'ARKMUSDT', PLUME: 'PLUMEUSDT',
-  SEI: 'SEIUSDT', DRAM: 'DRAMUSDT', MU: 'MUUSDT', USDT: 'USDCUSDT',
+  SEI: 'SEIUSDT', UNI: 'UNIUSDT', DRAM: 'DRAMUSDT', MU: 'MUUSDT', USDT: 'USDCUSDT',
 };
 const OKX_SYMBOL_MAP: Record<string, string> = {
   BTC: 'BTC-USDT', ETH: 'ETH-USDT', SOL: 'SOL-USDT', BNB: 'BNB-USDT',
   AAVE: 'AAVE-USDT', SUI: 'SUI-USDT', ONDO: 'ONDO-USDT', ASTER: 'ASTER-USDT',
   LDO: 'LDO-USDT', ENA: 'ENA-USDT', ARKM: 'ARKM-USDT', PLUME: 'PLUME-USDT',
-  SEI: 'SEI-USDT', DRAM: 'DRAM-USDT', MU: 'MU-USDT',
+  SEI: 'SEI-USDT', UNI: 'UNI-USDT', DRAM: 'DRAM-USDT', MU: 'MU-USDT',
 };
 const COINGECKO_ID_MAP: Record<string, string> = {
   BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', BNB: 'binancecoin',
   AAVE: 'aave', SUI: 'sui', ONDO: 'ondo-finance', LDO: 'lido-dao',
-  ENA: 'ethena', ARKM: 'arkham', SEI: 'sei-network',
+  ENA: 'ethena', ARKM: 'arkham', UNI: 'uniswap', SEI: 'sei-network',
 };
 
 // ===== 通道一：数字币价格（三重兜底）=====
@@ -345,7 +345,7 @@ export function useCryptoPrices(intervalMs = 3000) {
     usdtCnyRate: number;
   }>({ prices: {}, changes: {}, opens: {}, usdtCnyRate: 6.8 });
 
-  const BUILTIN_COINS_LIST = ['BTC', 'ETH', 'SOL', 'BNB', 'AAVE', 'SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'SEI', 'PLUME', 'ASTER', 'DRAM', 'MU'];
+  const BUILTIN_COINS_LIST = ['BTC', 'ETH', 'SOL', 'BNB', 'AAVE', 'SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'UNI', 'SEI', 'PLUME', 'ASTER', 'DRAM', 'MU'];
 
   const fetch_ = useCallback(async () => {
     // 每次拉取前合并数据库中的自定义币种（带内存缓存，不会每次都发请求）
