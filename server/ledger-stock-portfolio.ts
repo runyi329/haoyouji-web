@@ -952,7 +952,7 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
     [categoryId],
   );
   const [members] = await (conn as any).execute(
-    `SELECT lm.userId, lm.role, u.username, u.nickname, u.name
+    `SELECT lm.userId, lm.role, u.username, u.name
      FROM ledger_members lm
      LEFT JOIN users u ON u.id = lm.userId
      WHERE lm.ledgerId = ?
@@ -1010,7 +1010,7 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
   return {
     members: (members as any[]).map((member) => ({
       userId: Number(member.userId), role: member.role,
-      name: member.nickname || member.name || member.username || `用户${member.userId}`,
+      name: member.name || member.username || `用户${member.userId}`,
     })),
     lots,
   };

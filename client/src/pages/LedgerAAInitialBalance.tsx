@@ -680,6 +680,14 @@ export default function LedgerAAInitialBalance() {
   // 股票标签没有标签级“初始金额”。此处是所有成员共享的“股票批次 × 参与股数”矩阵：
   // 从任意成员弹窗都可配置任意成员；一旦发生卖出，对应参与行自动转为只读历史。
   const StockParticipationEditor = ({ selectedUserId, accentColor }: { selectedUserId: number; accentColor: string }) => {
+    if (stockParticipationError) {
+      return (
+        <section className="rounded-xl p-3 text-xs" style={{ backgroundColor: '#FFF7F7', border: '1px solid #F5C2C7', color: '#A33A3A' }}>
+          <div>股票批次分配载入失败：{stockParticipationError.message || '请稍后重试'}</div>
+          <button type="button" onClick={() => refetchStockParticipationMatrix()} className="mt-2 rounded-md px-2 py-1 text-xs" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E5A6AD' }}>重新载入</button>
+        </section>
+      );
+    }
     if (!stockParticipationMatrix) {
       return <section className="rounded-xl p-3 text-xs text-gray-400" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>正在载入股票批次与参与分配…</section>;
     }
@@ -772,7 +780,7 @@ export default function LedgerAAInitialBalance() {
   // 标签维度双击编辑弹窗
   const [tagEditModal, setTagEditModal] = useState<{ userId: number; tagName: string; catColor: string } | null>(null);
   const [activeStockParticipationCategoryId, setActiveStockParticipationCategoryId] = useState<number | null>(null);
-  const { data: stockParticipationMatrix, refetch: refetchStockParticipationMatrix } = trpc.ledger.getStockLotParticipationMatrix.useQuery(
+  const { data: stockParticipationMatrix, error: stockParticipationError, refetch: refetchStockParticipationMatrix } = trpc.ledger.getStockLotParticipationMatrix.useQuery(
     { ledgerId: 37, categoryId: Number(activeStockParticipationCategoryId || 0) },
     { enabled: ledgerId === 37 && !!activeStockParticipationCategoryId },
   );
