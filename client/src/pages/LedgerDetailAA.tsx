@@ -378,7 +378,9 @@ export default function LedgerDetailAA({
   const stockParticipantView = ledgerId === 37 && (!!viewAsUserId || !canEdit);
   const stockTagOverviewQuery = trpc.ledger.getMyStockTagOverview.useQuery(
     { ledgerId: 37 },
-    { enabled: stockParticipantView },
+    // owner/admin 也可能是某一批次的参与人。概览必须同时读取其个人分层，
+    // 但不改变其进入标签后仍可维护整账户的管理员权限。
+    { enabled: ledgerId === 37 },
   );
   const stockTagOverview = (stockTagOverviewQuery.data || []) as any[];
   const stockTagOverviewById = useMemo(
@@ -829,7 +831,9 @@ export default function LedgerDetailAA({
       // 股票标签的成员视图严格按“成员 × 股票批次”的开始日、入场价与盘尾价计算，
       // 不使用历史手工余额、初始金额、提现或本金变动公式。
       const stockOverview = stockTagOverviewById.get(Number(cat.id));
-      if (cat.accountingMode === 'stock_portfolio' && stockParticipantView && stockOverview) {
+      // 股票行只要当前有效用户对该标签有一笔已生效分层，就按“用户 × 批次”
+      // 的对赌盈亏渲染。不能因为该用户恰好也是 owner/admin 而退回旧初始金额模型。
+      if (cat.accountingMode === 'stock_portfolio' && stockOverview) {
         return {
           name: tagName,
           color,
