@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-09-28
+// 生成时间：2026-09-29
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9340,5 +9340,27 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-09-27T07:06:49Z", type: "feat", cleanMessage: "show stock P&L derivation clearly" },
     { date: "2026-09-27T07:31:29Z", type: "style", cleanMessage: "soften order reference indicators" },
     { date: "2026-09-27T07:56:09Z", type: "fix", cleanMessage: "distinguish 37 tag pause states" },
+  ],
+  "2026-09-28": [
+    { date: "2026-09-27T20:29:07Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-09-28T05:23:34Z", type: "feat", cleanMessage: "add stock portfolio tags" },
+    { date: "2026-09-28T05:31:06Z", type: "fix", cleanMessage: "read member balance column correctly" },
+    { date: "2026-09-28T05:37:48Z", type: "fix", cleanMessage: "avoid bound history limit query" },
+    { date: "2026-09-28T06:10:10Z", type: "feat", cleanMessage: "allocate stock participation by lot" },
+    { date: "2026-09-28T06:17:23Z", type: "fix", cleanMessage: "load stock participation members" },
+    { date: "2026-09-28T07:06:02Z", type: "feat", cleanMessage: "refine stock allocation management" },
+    { date: "2026-09-28T07:28:01Z", type: "feat", cleanMessage: "track stock participant dates" },
+    { date: "2026-09-28T08:28:46Z", type: "feat", cleanMessage: "show member stock tag performance" },
+    { date: "2026-09-28T09:57:22Z", type: "feat", cleanMessage: "refine member stock settlement view" },
+    { date: "2026-09-28T10:09:08Z", type: "fix", cleanMessage: "anchor overview to latest stock close" },
+    { date: "2026-09-28T11:00:45Z", type: "fix", cleanMessage: "keep overview header on Beijing date" },
+    { date: "2026-09-28T11:14:29Z", type: "fix", cleanMessage: "show owner stock allocations in overview" },
+    { date: "2026-09-28T11:27:04Z", type: "feat", cleanMessage: "explain first stock settlement profit" },
+    { date: "2026-09-28T12:20:20Z", type: "fix", cleanMessage: "preserve Beijing stock settlement dates" },
+    { date: "2026-09-28T14:40:39Z", type: "feat", cleanMessage: "refine stock account allocation view" },
+    { date: "2026-09-28T14:58:13Z", type: "feat", cleanMessage: "add UNI currency support" },
+  ],
+  "2026-09-29": [
+    { date: "2026-09-28T22:14:41Z", type: "feat", cleanMessage: "refine owner editing and collateral gaps" },
   ],
 };
