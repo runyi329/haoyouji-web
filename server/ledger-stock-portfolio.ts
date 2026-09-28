@@ -351,6 +351,9 @@ async function getRealizedPnl(categoryId: number): Promise<number> {
 async function getEventHistory(categoryId: number, limit = 500) {
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
+  // This production MySQL/MariaDB endpoint rejects a bound LIMIT parameter in prepared statements.
+  // The value is clamped locally before interpolation, so it remains non-user-injectable.
+  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 1000);
   const [rows] = await (conn as any).execute(
     `SELECT e.*, u.name AS admin_name, u.username AS admin_username,
             corrected.id AS corrected_event_id
@@ -359,8 +362,8 @@ async function getEventHistory(categoryId: number, limit = 500) {
      LEFT JOIN ledger_stock_events corrected ON corrected.corrects_event_id = e.id
      WHERE e.category_id = ?
      ORDER BY COALESCE(e.actual_traded_at, e.server_registered_at) DESC, e.id DESC
-     LIMIT ?`,
-    [categoryId, Math.min(Math.max(limit, 1), 1000)],
+     LIMIT ${safeLimit}`,
+    [categoryId],
   );
   return (rows as any[]).map((row) => ({
     id: Number(row.id),
