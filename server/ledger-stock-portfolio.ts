@@ -591,7 +591,9 @@ export async function getStockTagPortfolio(input: {
     buildPortfolio(access.categoryId),
     getEventHistory(access.categoryId),
   ]);
-  return { ...access, accountingMode: "stock_portfolio" as const, ...portfolio, history };
+  // The administrator UI needs this only to label its own allocation inside the
+  // full member allocation matrix.  Access remains enforced server-side.
+  return { ...access, viewerUserId: input.userId, accountingMode: "stock_portfolio" as const, ...portfolio, history };
 }
 
 /**
@@ -1340,6 +1342,10 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
 
 export async function getStockLotParticipationMatrix(input: { ledgerId: number; categoryId: number; userId: number; systemRole?: string }) {
   const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
+  // The matrix names every participant and their allocated quantities.  It is an
+  // administrator maintenance view only; ordinary members keep the separate
+  // read-only endpoint that returns only their own allocations.
+  if (!access.canEdit) throw new Error("仅37号账本管理员可查看全员股票份额");
   return { ...await getStockLotParticipationMatrixInternal(access.categoryId), canEdit: access.canEdit };
 }
 

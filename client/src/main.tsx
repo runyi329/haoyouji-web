@@ -70,7 +70,13 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
-// 共享 fetch：注入 token / viewAs 头，供 batch 与非 batch 两条 link 复用
+// 共享 fetch：注入 token / viewAs 头，供 batch 与非 batch 两条 link 复用。
+// 热预览会使用临时 HTTPS 域名；部分移动 WebView 对相对 tRPC 地址的单独请求
+// 会抛出 “The string did not match the expected pattern”。统一先解析成当前站点绝对地址。
+const trpcEndpoint = typeof window === "undefined"
+  ? "/api/trpc"
+  : new URL("/api/trpc", window.location.origin).toString();
+
 const trpcFetch: typeof globalThis.fetch = (input, init) => {
   const rawToken = localStorage.getItem('auth-token');
   // 只接受标准 JWT 格式（三段 base64url，不含控制字符/换行）
@@ -104,7 +110,10 @@ const trpcFetch: typeof globalThis.fetch = (input, init) => {
       headers.set('x-yaban-tenant', curTenant);
     }
   } catch (e) {}
-  return globalThis.fetch(input, {
+  const resolvedInput = typeof input === "string" && input.startsWith("/") && typeof window !== "undefined"
+    ? new URL(input, window.location.origin).toString()
+    : input;
+  return globalThis.fetch(resolvedInput, {
     ...(init ?? {}),
     headers,
     credentials: "include",
@@ -115,12 +124,18 @@ const trpcFetch: typeof globalThis.fetch = (input, init) => {
 const trpcClient = trpc.createClient({
   links: [
     splitLink({
-      // 影像上传等大体积请求不走 batch，避免多条合并后超体积导致整批失败
+      // 影像上传等大体积请求不走 batch，避免多条合并后超体积导致整批失败。
+      // 股票账户页在移动热预览中也单独请求，避免 WebView 解析合并请求 URL 时失败。
       condition(op) {
-        return op.path === "yabanCustomer.uploadMedia";
+        return op.path === "yabanCustomer.uploadMedia"
+          || op.path === "ledger.getStockTagPortfolio"
+          || op.path === "ledger.getStockTagPublicPortfolio"
+          || op.path === "ledger.getMyStockTagParticipantPortfolio"
+          || op.path === "ledger.getStockTagDailySnapshots"
+          || op.path === "ledger.getStockLotParticipationMatrix";
       },
-      true: httpLink({ url: "/api/trpc", transformer: superjson, fetch: trpcFetch }),
-      false: httpBatchLink({ url: "/api/trpc", transformer: superjson, fetch: trpcFetch }),
+      true: httpLink({ url: trpcEndpoint, transformer: superjson, fetch: trpcFetch }),
+      false: httpBatchLink({ url: trpcEndpoint, transformer: superjson, fetch: trpcFetch }),
     }),
   ],
 });
