@@ -13,6 +13,7 @@ import { startScanner } from "../blockchain-scanner";
 import { startTierScanner } from "../af-tier-scanner";
 import { startPriceScanner } from "../price-scanner";
 import { startManualStockCloseScheduler } from "../manual-stock-close-scheduler";
+import { ensureLedgerStockPortfolioTables } from "../ledger-stock-portfolio";
 import { startFunderScanner } from "../funder-price-scanner";
 import { startEnergyPriceScanner } from "../energy-price-scanner";
 import { smsService } from "../sms-service";
@@ -714,6 +715,9 @@ async function startServer() {
       return res.status(500).json({ error: e.message });
     }
   });
+
+  // 37号股票标签的模式列必须先完成迁移，避免分类读取先于默认值列创建。
+  await ensureLedgerStockPortfolioTables();
 
   // tRPC API
   // TEMP DEBUG: log Authorization header

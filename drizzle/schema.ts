@@ -494,6 +494,8 @@ export const ledgerCategories = mysqlTable("ledger_categories", {
 	name: varchar({ length: 50 }).notNull(),
 	type: mysqlEnum(['income','expense','branch']).notNull(),
 	parentId: int(),
+	// 37号账本顶级标签在创建时确定；旧标签默认手工余额模式。
+	accountingMode: mysqlEnum('accounting_mode', ['manual_balance', 'stock_portfolio']).default('manual_balance').notNull(),
 	icon: text(),
 	color: varchar({ length: 20 }),
 	sortOrder: int().default(0).notNull(),

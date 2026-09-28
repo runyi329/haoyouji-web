@@ -27,6 +27,7 @@ import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X, RefreshCw, PauseCircle, AlertTriangle, HelpCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import StockTagPortfolio from "@/pages/StockTagPortfolio";
 import {
   AreaChart,
   Area,
@@ -1444,6 +1445,22 @@ export default function LedgerDetailAA({
   };
 
   // ─── 渲染 ──────────────────────────────────────────────────────────────────
+  // 股票持仓标签独立进入统一账户视图，确保普通成员与管理员都只看到同一份完整历史；
+  // 不会落入下面的余额、图片、提现或本金增减日历逻辑。
+  if (selectedTagId && selectedTag?.accountingMode === 'stock_portfolio') {
+    return (
+      <StockTagPortfolio
+        ledgerId={ledgerId}
+        categoryId={selectedTagId}
+        categoryName={selectedTag.name}
+        onBack={() => {
+          setSelectedTagId(null);
+          sessionStorage.removeItem(sessionKey);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: "#FAF3ED" }}>
       {/* ── 顶部红色区域 ── */}

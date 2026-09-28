@@ -1223,6 +1223,7 @@ export async function addLedgerCategory(data: {
   name: string;
   type: "income" | "expense" | "branch";
   parentId?: number;
+  accountingMode?: "manual_balance" | "stock_portfolio";
   icon?: string;
   color?: string;
   sortOrder?: number;
@@ -1245,6 +1246,24 @@ export async function addLedgerCategory(data: {
     throw new Error("权限不足：您不是此账本的成员，无法添加分类");
   }
   await requireLedger52CreatorInDb(db, data.ledgerId, data.createdBy);
+
+  // 股票持仓模式只可作为37号账本的顶级标签在创建时设定，后续没有更新入口。
+  if (data.accountingMode === "stock_portfolio" && (data.ledgerId !== 37 || data.parentId)) {
+    throw new Error("股票持仓模式仅支持37号账本的一级标签");
+  }
+  if (data.parentId) {
+    const [parent] = await db
+      .select({ ledgerId: ledgerCategories.ledgerId, accountingMode: ledgerCategories.accountingMode })
+      .from(ledgerCategories)
+      .where(eq(ledgerCategories.id, data.parentId))
+      .limit(1);
+    if (!parent || parent.ledgerId !== data.ledgerId) {
+      throw new Error("上级分类不存在或不属于当前账本");
+    }
+    if (parent.accountingMode === "stock_portfolio") {
+      throw new Error("股票持仓标签不可添加子分类，以避免混用核算方式");
+    }
+  }
   
   // 如果没有指定排序，获取当前最大排序值+1
   let sortOrder = data.sortOrder;
@@ -1269,10 +1288,11 @@ export async function addLedgerCategory(data: {
     name: data.name,
     type: data.type,
     parentId: data.parentId || null,
+    accountingMode: data.accountingMode || "manual_balance",
     icon: data.icon || "📝",
     color: data.color || (data.type === "income" ? "#10b981" : "#ef4444"),
     sortOrder,
-    isDefault: false,
+    isDefault: 0,
     createdBy: data.createdBy,
   }).$returningId();
   

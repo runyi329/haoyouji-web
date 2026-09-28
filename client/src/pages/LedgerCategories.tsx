@@ -25,6 +25,7 @@ interface Category {
   color: string;
   sortOrder: number;
   isDefault: boolean;
+  accountingMode?: 'manual_balance' | 'stock_portfolio';
   children?: Category[];
 }
 
@@ -37,6 +38,8 @@ const LedgerCategories = () => {
   const [newCategorySortOrder, setNewCategorySortOrder] = useState("1");
   const [selectedParentId, setSelectedParentId] = useState<number | null>(null);
   const [selectedType, setSelectedType] = useState<CategoryType>("expense");
+  // 仅37号账本的一级标签在创建时可选择，保存后没有切换入口。
+  const [newAccountingMode, setNewAccountingMode] = useState<'manual_balance' | 'stock_portfolio'>('manual_balance');
   
   // 记录当前操作的一级分类ID和选择的操作类型
   const [currentCategoryId, setCurrentCategoryId] = useState<number | null>(null);
@@ -300,6 +303,9 @@ const LedgerCategories = () => {
                       </span>
                     )}
                     {category.name}
+                    {Number(id) === 37 && category.accountingMode === 'stock_portfolio' && (
+                      <span className="ml-2 text-[10px] font-medium text-[#1565C0]">股票持仓</span>
+                    )}
                   </button>
                   <div className="flex items-center gap-2">
                     <button
@@ -321,7 +327,7 @@ const LedgerCategories = () => {
                     >
                       替换
                     </button>
-                    <button
+                    {category.accountingMode !== 'stock_portfolio' && <button
                       onClick={() => {
                         setCurrentCategoryId(category.id);
                         setSelectedAction(null);
@@ -330,7 +336,7 @@ const LedgerCategories = () => {
                       className="w-8 h-8 flex items-center justify-center border border-[#1976D2] text-[#1976D2] rounded hover:bg-[#F5F5F5]"
                     >
                       <Plus className="w-4 h-4" />
-                    </button>
+                    </button>}
                     <button
                       onClick={() => setIsDeleteMode(!isDeleteMode)}
                       className={`w-8 h-8 flex items-center justify-center border rounded hover:bg-[#F5F5F5] ${
@@ -474,6 +480,7 @@ const LedgerCategories = () => {
           setIsAddDialogOpen(false);
           setSelectedAction(null);
           setNewCategoryName("");
+          setNewAccountingMode('manual_balance');
           setShowSubCategorySelect(false);
           setSelectedParentId(null);
         }
@@ -521,6 +528,19 @@ const LedgerCategories = () => {
                   placeholder={label.inputPlaceholder}
                 />
               </div>
+              {selectedAction === 'level1' && Number(id) === 37 && (
+                <div className="rounded-lg border border-[#E0E0E0] overflow-hidden">
+                  <div className="px-3 py-2 bg-[#FAF3ED] text-sm font-medium text-[#222222]">核算方式（创建后不可切换）</div>
+                  <label className={`flex items-start gap-3 px-3 py-3 cursor-pointer border-t ${newAccountingMode === 'manual_balance' ? 'bg-white' : 'bg-gray-50'}`}>
+                    <input type="radio" name="accountingMode" value="manual_balance" checked={newAccountingMode === 'manual_balance'} onChange={() => setNewAccountingMode('manual_balance')} className="mt-1 accent-[#D32F2F]" />
+                    <span><span className="block text-sm font-medium">手工余额</span><span className="block text-xs text-gray-500 mt-0.5">沿用日历余额、图片、提现和本金增减记录。</span></span>
+                  </label>
+                  <label className={`flex items-start gap-3 px-3 py-3 cursor-pointer border-t ${newAccountingMode === 'stock_portfolio' ? 'bg-[#F4F8FF]' : 'bg-gray-50'}`}>
+                    <input type="radio" name="accountingMode" value="stock_portfolio" checked={newAccountingMode === 'stock_portfolio'} onChange={() => setNewAccountingMode('stock_portfolio')} className="mt-1 accent-[#1565C0]" />
+                    <span><span className="block text-sm font-medium text-[#1565C0]">股票持仓</span><span className="block text-xs text-gray-500 mt-0.5">逐笔成交、盘尾估值与完整审计历史；不使用余额和图片。</span></span>
+                  </label>
+                </div>
+              )}
               <div className="flex gap-2">
                 <Button
                   onClick={() => {
@@ -547,6 +567,7 @@ const LedgerCategories = () => {
                         ledgerId: Number(id),
                         name: newCategoryName.trim(),
                         type: "expense",
+                        ...(Number(id) === 37 ? { accountingMode: newAccountingMode } : {}),
                         icon: "📝",
                         color: "#ef4444",
                       });
@@ -575,6 +596,7 @@ const LedgerCategories = () => {
                     setIsAddDialogOpen(false);
                     setSelectedAction(null);
                     setNewCategoryName("");
+                    setNewAccountingMode('manual_balance');
                     setShowSubCategorySelect(false);
                     setSelectedParentId(null);
                   }}

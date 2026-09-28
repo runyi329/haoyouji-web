@@ -1,5 +1,6 @@
 import { getDbConnection } from "./db";
 import { fetchEndOfDayStockCloseSnapshots } from "./price-scanner";
+import { ensureLedgerStockPortfolioTables, refreshLedgerStockTagCloseSnapshots } from "./ledger-stock-portfolio";
 
 type StoredManualStockClose = {
   symbol: string;
@@ -164,7 +165,11 @@ function millisecondsUntilNextBeijingClose(): number {
 function scheduleNextManualStockClose(): void {
   dailyTimer = setTimeout(async () => {
     try {
-      await refreshManualStockCloseSnapshots();
+      // 52号融资订单与37号股票标签分别持久化，绝不混写到同一快照表。
+      await Promise.all([
+        refreshManualStockCloseSnapshots(),
+        refreshLedgerStockTagCloseSnapshots(),
+      ]);
     } catch (error) {
       console.error("[股票盘尾] 同步失败:", error instanceof Error ? error.message : error);
     } finally {
@@ -179,6 +184,9 @@ export function startManualStockCloseScheduler(): void {
   void ensureTable().catch((error) => {
     console.error("[股票盘尾] 快照表初始化失败:", error instanceof Error ? error.message : error);
   });
+  void ensureLedgerStockPortfolioTables().catch((error) => {
+    console.error("[37股票盘尾] 标签数据表初始化失败:", error instanceof Error ? error.message : error);
+  });
   scheduleNextManualStockClose();
-  console.log("[股票盘尾] 每日北京时间 15:05 收盘价快照任务已启动");
+  console.log("[股票盘尾] 每日北京时间 15:05 收盘价快照任务已启动（52订单与37股票标签独立存储）");
 }

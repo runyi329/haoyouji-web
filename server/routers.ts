@@ -9990,15 +9990,100 @@ ${klinesSummary}
         name: z.string().min(1).max(50),
         type: z.enum(['income', 'expense']),
         parentId: z.number().optional(),
+        accountingMode: z.enum(['manual_balance', 'stock_portfolio']).optional(),
         icon: z.string().optional(),
         color: z.string().optional(),
         sortOrder: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        if (input.accountingMode === 'stock_portfolio') {
+          if (input.ledgerId !== 37 || input.parentId) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '股票持仓模式仅可创建为37号账本的一级标签' });
+          }
+          const conn = await getDbConnection();
+          if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+          const [members] = await (conn as any).execute(
+            `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+            [input.ledgerId, ctx.user.id],
+          );
+          const role = (members as any[])[0]?.role;
+          const systemRole = (ctx.user as any).role as string | undefined;
+          const isSystemAdmin = systemRole === 'admin' || systemRole === 'super_admin';
+          if (!isSystemAdmin && role !== 'owner' && role !== 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅37号账本管理员可以创建股票持仓标签' });
+          }
+          const { ensureLedgerStockPortfolioTables } = await import('./ledger-stock-portfolio');
+          await ensureLedgerStockPortfolioTables();
+        }
         return await dbLedger.addLedgerCategory({
           ...input,
           createdBy: ctx.user.id,
         });
+      }),
+    // 37号账本股票标签：独立的批次、事件和盘尾快照，不读取或修改52号订单数据。
+    getStockTagPortfolio: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), categoryId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { getStockTagPortfolio } = await import('./ledger-stock-portfolio');
+        return getStockTagPortfolio({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
+    getStockTagDailySnapshots: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        categoryId: z.number(),
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { getStockTagDailySnapshots } = await import('./ledger-stock-portfolio');
+        return getStockTagDailySnapshots({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
+    addStockTagEvent: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        categoryId: z.number(),
+        eventType: z.enum(['buy', 'add', 'reduce', 'sell', 'note']),
+        symbol: z.string().max(16).optional(),
+        quantity: z.number().positive().max(1_000_000_000).optional(),
+        executionPrice: z.number().positive().max(10_000_000).optional(),
+        actualTradedAt: z.string().datetime().optional(),
+        note: z.string().max(3000).optional(),
+      }).superRefine((value, issue) => {
+        if (value.eventType !== 'note' && (!value.symbol || !value.quantity || !value.executionPrice)) {
+          issue.addIssue({ code: z.ZodIssueCode.custom, message: '股票成交需要代码、数量和成交价格' });
+        }
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { createStockTagEvent } = await import('./ledger-stock-portfolio');
+        return createStockTagEvent({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
+    voidStockTagEvent: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        categoryId: z.number(),
+        eventId: z.number(),
+        reason: z.string().trim().min(1).max(300),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { voidStockTagEvent } = await import('./ledger-stock-portfolio');
+        return voidStockTagEvent({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
+    correctStockTagEvent: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        categoryId: z.number(),
+        eventId: z.number(),
+        eventType: z.enum(['buy', 'add', 'reduce', 'sell', 'note']),
+        symbol: z.string().max(16).optional(),
+        quantity: z.number().positive().max(1_000_000_000).optional(),
+        executionPrice: z.number().positive().max(10_000_000).optional(),
+        actualTradedAt: z.string().datetime().optional(),
+        note: z.string().max(3000).optional(),
+        reason: z.string().trim().min(1).max(300),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { correctStockTagEvent } = await import('./ledger-stock-portfolio');
+        return correctStockTagEvent({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
 
     // 删除账本分类

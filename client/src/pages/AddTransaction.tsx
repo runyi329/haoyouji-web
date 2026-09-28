@@ -40,6 +40,7 @@ import { EXPENSE_CATEGORIES, getDefaultExpenseConfig } from "@/pages/AJCompanyMa
 import { useAuth } from "@/_core/hooks/useAuth";
 import { autoCompressImage } from "@/utils/imageUtils";
 import { setSmartAccountingLastPage } from "@/lib/smartAccountingNavigation";
+import StockTagPortfolio from "@/pages/StockTagPortfolio";
 
 type TransactionType = "expense" | "income" | "transfer";
 
@@ -503,6 +504,10 @@ const AddTransaction = () => {
 
   // 如果没有分类，使用预设分类
   const displayCategories = topCategories.length > 0 ? topCategories : defaultCategories;
+  // 股票模式只能是37号账本的一级标签。进入原有 /add 路由时切换到统一的股票账户页，
+  // 因而不会渲染余额、图片、提现或本金增减等手工余额功能。
+  const selectedCategory = topCategories.find((category: any) => Number(category.id) === Number(currentCategoryId));
+  const isStockPortfolioTag = isCustomAA && selectedCategory?.accountingMode === 'stock_portfolio';
   
   // 当真实分类加载完成后，更新选中状态
   useEffect(() => {
@@ -957,6 +962,17 @@ const AddTransaction = () => {
 
   // 主题颜色数组
   const themeColors = ["bg-[#D32F2F]", "bg-[#CBA471]", "bg-[#4CAF50]", "bg-[#1976D2]"];
+
+  if (isStockPortfolioTag && currentCategoryId) {
+    return (
+      <StockTagPortfolio
+        ledgerId={ledgerId}
+        categoryId={currentCategoryId}
+        categoryName={selectedCategory?.name || '股票持仓'}
+        onBack={() => setLocation(`/ledger/${id}`)}
+      />
+    );
+  }
 
   return (
     <div className={`h-screen flex flex-col overflow-x-hidden ${isCustomAJ ? 'bg-[#F4F6F9]' : 'bg-[#FAF3ED]'}`}>
