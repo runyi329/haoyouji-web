@@ -198,7 +198,7 @@ async function assertStockTagAccess(
   }
 
   const [memberRows] = await (conn as any).execute(
-    `SELECT role, initialBalances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+    `SELECT role, initial_balances AS initialBalances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
     [ledgerId, userId],
   );
   const member = (memberRows as any[])[0];
