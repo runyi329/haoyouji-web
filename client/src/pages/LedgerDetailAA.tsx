@@ -2746,6 +2746,10 @@ export default function LedgerDetailAA({
                         const _prevDate = tag.points.length >= 2 ? (tag.points[tag.points.length - 2]?.date ?? '') : '';
                         const _latestDateLabel = latestDate ? latestDate.slice(5).replace('-', '/') : '';
                         const _prevDateLabel = _prevDate ? _prevDate.slice(5).replace('-', '/') : '';
+                        // 股票标签的首个有效盘尾没有“上一有效交易日”可相减：
+                        // 当天展示的数就是该成员以个人入场价计算出的累计盈亏。
+                        const _isFirstStockSettlement = !!tag.isStockPortfolio && tag.points.length === 1;
+                        const _formatStockPnl = (value: number) => `${value >= 0 ? '+' : '-'}${Math.abs(value).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`;
                         const _canShowTooltip = _showTodayPnl && todayPnl !== null;
                         return (
                           <div className={dataCellCls} style={{ borderBottom: rowBorder, position: 'relative', height: rowHeight }}>
@@ -2758,10 +2762,26 @@ export default function LedgerDetailAA({
                             {tooltipTodayPnlTag === tag.name && _canShowTooltip && (
                               <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: '#1A1A1A', color: '#FFF', borderRadius: 6, padding: '5px 8px', whiteSpace: 'nowrap', fontSize: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.25)', marginTop: 4, lineHeight: 1.6 }}>
                                 <div style={{ color: '#BDBDBD', marginBottom: 2 }}>
-                                  {_prevDateLabel ? `${_prevDateLabel} → ${_latestDateLabel}` : _latestDateLabel}
+                                  {_isFirstStockSettlement ? `${_latestDateLabel} · 首次15:05盘尾` : (_prevDateLabel ? `${_prevDateLabel} → ${_latestDateLabel}` : _latestDateLabel)}
                                 </div>
                                 <div>
-                                  {latestBalance !== null && prevBalance !== null ? (
+                                  {tag.isStockPortfolio ? (
+                                    _isFirstStockSettlement ? (
+                                      <>
+                                        今天是第一天，个人盈亏为{' '}
+                                        <span style={{ color: todayPnl === 0 ? '#BDBDBD' : todayPnl > 0 ? '#FF8A80' : '#A5D6A7', fontWeight: 600 }}>
+                                          {_formatStockPnl(todayPnl)}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        个人累计盈亏 {_formatStockPnl(prevPnl)} → {_formatStockPnl(latestPnl)}，今日 {' '}
+                                        <span style={{ color: todayPnl === 0 ? '#BDBDBD' : todayPnl > 0 ? '#FF8A80' : '#A5D6A7', fontWeight: 600 }}>
+                                          {_formatStockPnl(todayPnl)}
+                                        </span>
+                                      </>
+                                    )
+                                  ) : latestBalance !== null && prevBalance !== null ? (
                                     <>
                                       ({prevBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
                                       {todayCapitalChange > 0 ? ` + 追加本金 ${todayCapitalChange.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : ''}
