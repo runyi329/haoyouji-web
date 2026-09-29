@@ -1586,9 +1586,19 @@ export function FunderOrderCard({
   const allowImageDownload = isAdmin || dc?.allowUserImageDownload !== false;
   const [headerTagsExpanded, setHeaderTagsExpanded] = useState(false);
   const headerMember = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
-  const normalHeaderOwner = headerMember?.nickname || (order as any).nickname || headerMember?.username || (order as any).owner_label || null;
+  // 订单页眉优先显示可读的中文显示名；不能因为登录用户名恰好是手机号就优先展示手机号。
+  // owner_display_name 来自订单接口的 users.name，成员昵称与用户名仅作为后备。
+  const normalHeaderOwner = (order as any).owner_display_name
+    || headerMember?.nickname
+    || headerMember?.name
+    || headerMember?.user_nickname
+    || (order as any).nickname
+    || (order as any).owner_label
+    || headerMember?.username
+    || (order as any).username
+    || null;
   const headerOwnerLabel = isParticipantVisual
-    ? ((order as any).order_owner_name || (order as any).nickname || (order as any).username || normalHeaderOwner)
+    ? ((order as any).order_owner_name || (order as any).owner_display_name || (order as any).nickname || (order as any).username || normalHeaderOwner)
     : normalHeaderOwner;
   const headerCollaboratorLabel = (isParticipantVisual || isOwnerView)
     ? ((order as any).participant_name || (order as any).owner_label || null)

@@ -18227,7 +18227,7 @@ ${klinesSummary}
           if (participantOrderIds.length > 0) {
             const placeholders = participantOrderIds.map(() => '?').join(',');
             rows = await conn!.execute(
-              `SELECT fo.*, u.username, u.username as userName, u.avatar
+              `SELECT fo.*, u.username, u.name AS owner_display_name, u.username as userName, u.avatar
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
@@ -18238,7 +18238,7 @@ ${klinesSummary}
             );
           } else {
             rows = await conn!.execute(
-              `SELECT fo.*, u.username, u.username as userName, u.avatar
+              `SELECT fo.*, u.username, u.name AS owner_display_name, u.username as userName, u.avatar
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
@@ -18254,7 +18254,7 @@ ${klinesSummary}
           } else {
             const placeholders = participantOrderIds.map(() => '?').join(',');
             rows = await conn!.execute(
-              `SELECT fo.*, u.username, u.username as userName, u.avatar
+              `SELECT fo.*, u.username, u.name AS owner_display_name, u.username as userName, u.avatar
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
@@ -18280,7 +18280,7 @@ ${klinesSummary}
             if (targetParticipantOrderIds.length > 0) {
               const ph = targetParticipantOrderIds.map(() => '?').join(',');
               rows = await conn!.execute(
-                `SELECT fo.*, u.username, u.username as userName, u.avatar
+                `SELECT fo.*, u.username, u.name AS owner_display_name, u.username as userName, u.avatar
                  FROM ledger_orders fo
                  LEFT JOIN users u ON u.id = fo.user_id
                  LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
@@ -18291,7 +18291,7 @@ ${klinesSummary}
               );
             } else {
               rows = await conn!.execute(
-                `SELECT fo.*, u.username, u.username as userName, u.avatar
+                `SELECT fo.*, u.username, u.name AS owner_display_name, u.username as userName, u.avatar
                  FROM ledger_orders fo
                  LEFT JOIN users u ON u.id = fo.user_id
                  LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
@@ -18302,7 +18302,7 @@ ${klinesSummary}
             }
           } else {
             rows = await db.execute(
-              sql`SELECT fo.*, u.username, u.username as userName, u.avatar
+              sql`SELECT fo.*, u.username, u.name AS owner_display_name, u.username as userName, u.avatar
                   FROM ledger_orders fo
                   LEFT JOIN users u ON u.id = fo.user_id
                   LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
@@ -18465,7 +18465,8 @@ ${klinesSummary}
           // 快照是历史业务字段，不得覆盖当前请求对应协作者的真实角色。
           // 这样即使旧快照意外带有 participantInfo，也不会改变本人/参与归类。
           if (o.participantInfo) result.participantInfo = o.participantInfo;
-          result.order_owner_name = o.owner_label || o.username || null;
+          // 共同拥有/参与视角也优先显示中文姓名，手机号式登录用户名只作为最终兜底。
+          result.order_owner_name = o.owner_display_name || o.owner_label || o.username || null;
           if (participantUserName) {
             result.participant_name = participantUserName;
             result.owner_label = participantUserName; // 兼容旧版卡片字段

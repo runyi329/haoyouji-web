@@ -4414,9 +4414,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   if (formData.userId > 0) {
                     const allMembers = ((ledgerData as any)?.members || []) as any[];
                     const m = allMembers.find((mm: any) => mm.userId === formData.userId);
-                    return m?.username || m?.nickname || m?.name || editingOrder?.userName || null;
+                    return m?.nickname || m?.name || m?.user_nickname || m?.username || editingOrder?.owner_display_name || editingOrder?.userName || null;
                   }
-                  return editingOrder?.userName || null;
+                  return editingOrder?.owner_display_name || editingOrder?.userName || null;
                 })();
                 const previewOrder: any = {
                   id: editingOrder?.id ?? -1,
