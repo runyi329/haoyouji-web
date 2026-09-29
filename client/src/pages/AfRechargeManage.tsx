@@ -382,6 +382,13 @@ export default function AfRechargeManage() {
   // ===== 内嵌调账 Tab 数据查询 =====
   const adjUtils = mtrpc.useUtils();
   const { data: adjAllUsers = [] } = mtrpc.adminUser.list.useQuery();
+  // 调账页复用服务端统一行情缓存，将选中用户或全部用户的 USDT、人民币和数字资产统一折算为总价值。
+  const adjWalletPricesQuery = trpc.getCryptoPrices.useQuery(undefined, {
+    enabled: mainTab === "adjust" && (!!adjSelectedUser?.id || adjFlowTab === "balances"),
+    refetchInterval: 3000,
+    staleTime: 2000,
+    refetchOnWindowFocus: true,
+  });
   // 与用户自己进入全局钱包看到的明细使用完全相同的合并、去重和逐笔余额口径。
   const adjHistoryQuery = trpc.ledger.afGetMyRechargeHistory.useQuery(
     { ...(adjSelectedUser?.id ? { viewAsUserId: Number(adjSelectedUser.id) } : {}) },
@@ -539,6 +546,52 @@ export default function AfRechargeManage() {
       total: Number.isFinite(reportedTotal) ? reportedTotal : available + frozen,
     };
   };
+  // 总资产按“总持有”估值，冻结仅限制操作，不从资产总价值中扣除。
+  // 对暂时没有行情的币种不按 0 静默计入，明确提示管理员该总额尚未覆盖的资产。
+  const adjSelectedWalletValuation = (() => {
+    const usdtBalance = Number(adjSelectedUser?.usdtBalance ?? 0);
+    const cnyBalance = Number(adjSelectedUser?.cnyBalance ?? 0);
+    const usdtCnyRate = Number((adjWalletPricesQuery.data as any)?.usdtCnyRate ?? 0);
+    const livePrices = ((adjWalletPricesQuery.data as any)?.prices ?? {}) as Record<string, number>;
+    const hasRate = Number.isFinite(usdtCnyRate) && usdtCnyRate > 0;
+    let totalU = usdtBalance + (hasRate ? cnyBalance / usdtCnyRate : 0);
+    let availableU = totalU;
+    let frozenU = 0;
+    const unpricedAssets: string[] = [];
+
+    for (const asset of (adjSelectedUser?.multiAssetBalances ?? [])) {
+      const code = String(asset?.assetCode ?? "").trim().toUpperCase();
+      const breakdown = getMultiAssetBreakdown(asset);
+      const quantity = breakdown.total;
+      if (!code || Math.abs(quantity) < 1e-12) continue;
+      // 基础 USDT / 人民币已经由两张余额卡纳入，避免存在兼容行时重复估值。
+      if (["USDT", "U", "CNY", "RMB", "人民币"].includes(code)) continue;
+      const priceU = Number(livePrices[code] ?? 0);
+      if (!Number.isFinite(priceU) || priceU <= 0) {
+        unpricedAssets.push(code);
+        continue;
+      }
+      totalU += quantity * priceU;
+      availableU += breakdown.available * priceU;
+      frozenU += breakdown.frozen * priceU;
+    }
+
+    const valuationBaseU = Math.max(totalU, 0);
+    const frozenPercent = valuationBaseU > 0
+      ? Math.min(100, Math.max(0, (frozenU / valuationBaseU) * 100))
+      : 0;
+
+    return {
+      totalU,
+      totalCny: hasRate ? totalU * usdtCnyRate : null,
+      availableU,
+      frozenU,
+      availablePercent: valuationBaseU > 0 ? 100 - frozenPercent : 0,
+      frozenPercent,
+      hasRate,
+      unpricedAssets: Array.from(new Set(unpricedAssets)),
+    };
+  })();
   const adjBalanceQuery = adjBalanceSearch.trim().toLocaleLowerCase();
   const adjBalanceTotals = adjUserList.reduce((totals, user: any) => ({
     userCount: totals.userCount + 1,
@@ -563,6 +616,42 @@ export default function AfRechargeManage() {
     }
     return totals;
   }, {});
+  // 用户余额页的数字资产按“总持有”乘统一实时行情估值，再依据市值由高到低展示。
+  // 未获得行情的非零资产仍会显示在列表末尾，并明确标为未计入总额。
+  const adjBalancePrices = ((adjWalletPricesQuery.data as any)?.prices ?? {}) as Record<string, number>;
+  const adjBalanceUsdtCnyRate = Number((adjWalletPricesQuery.data as any)?.usdtCnyRate ?? 0);
+  const adjBalanceHasRate = Number.isFinite(adjBalanceUsdtCnyRate) && adjBalanceUsdtCnyRate > 0;
+  const adjMultiAssetValuations = (AI_WALLET_SETTLEMENT_ASSETS as readonly string[])
+    .map((assetCode) => {
+      const total = Number(adjMultiAssetTotals[assetCode] ?? 0);
+      const frozen = Number(adjMultiAssetFrozenTotals[assetCode] ?? 0);
+      const priceU = Number(adjBalancePrices[assetCode] ?? 0);
+      const isPriced = Number.isFinite(priceU) && priceU > 0;
+      return {
+        assetCode,
+        total,
+        frozen,
+        priceU: isPriced ? priceU : null,
+        valueU: isPriced ? total * priceU : null,
+      };
+    })
+    .sort((left, right) => {
+      const valueDifference = Number(right.valueU ?? -1) - Number(left.valueU ?? -1);
+      if (Math.abs(valueDifference) > 1e-8) return valueDifference;
+      return left.assetCode.localeCompare(right.assetCode);
+    });
+  const adjBalanceUnpricedAssets = adjMultiAssetValuations
+    .filter((asset) => Math.abs(asset.total) > 1e-12 && asset.valueU == null)
+    .map((asset) => asset.assetCode);
+  const adjBalanceDigitalValueU = adjMultiAssetValuations.reduce((sum, asset) => sum + Number(asset.valueU ?? 0), 0);
+  const adjAllWalletValuation = {
+    totalU: adjBalanceTotals.usdt + (adjBalanceHasRate ? adjBalanceTotals.cny / adjBalanceUsdtCnyRate : 0) + adjBalanceDigitalValueU,
+    totalCny: adjBalanceHasRate
+      ? (adjBalanceTotals.usdt + adjBalanceTotals.cny / adjBalanceUsdtCnyRate + adjBalanceDigitalValueU) * adjBalanceUsdtCnyRate
+      : null,
+    hasRate: adjBalanceHasRate,
+    unpricedAssets: adjBalanceUnpricedAssets,
+  };
   const adjFilteredBalanceUsers = adjUserList.filter((user: any) => {
     if (!adjBalanceQuery) return true;
     return [user.name, user.username, user.id].some((value) => String(value ?? "").toLocaleLowerCase().includes(adjBalanceQuery));
@@ -1594,6 +1683,57 @@ export default function AfRechargeManage() {
                     </div>
                   </div>
                 )}
+                <div className="mt-2.5 rounded-lg border border-orange-200 bg-white px-3 py-2.5 shadow-[0_1px_0_rgba(249,115,22,0.08)]">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold text-gray-600">资产总价值</p>
+                      <p className="mt-0.5 text-[9px] leading-3 text-gray-400">USDT、人民币及全部数字资产统一折算（含担保冻结）</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-orange-50 px-1.5 py-0.5 text-[9px] font-medium text-orange-600">实时估值</span>
+                  </div>
+                  {adjWalletPricesQuery.isLoading ? (
+                    <div className="mt-2 h-8 w-full animate-pulse rounded-md bg-orange-50" />
+                  ) : adjSelectedWalletValuation.hasRate && adjSelectedWalletValuation.totalCny != null ? (
+                    <>
+                    <div className="mt-2 overflow-hidden rounded-md border border-orange-100 bg-orange-50/50">
+                      <div className="flex items-baseline justify-between gap-3 px-2.5 py-2">
+                        <p className="shrink-0 text-[9px] text-gray-400">约合 USDT</p>
+                        <p className="min-w-0 text-right text-[15px] font-bold tabular-nums text-orange-600">
+                          ≈ {formatWalletAmount(adjSelectedWalletValuation.totalU, 2)} <span className="text-[10px] font-semibold">U</span>
+                        </p>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-3 border-t border-orange-100 px-2.5 py-2">
+                        <p className="shrink-0 text-[9px] text-gray-400">约合人民币</p>
+                        <p className="min-w-0 text-right text-[15px] font-bold tabular-nums text-green-600">
+                          ≈ ¥{formatWalletAmount(adjSelectedWalletValuation.totalCny, 2)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-medium">
+                        <span className="text-blue-600">可用 {adjSelectedWalletValuation.availablePercent.toFixed(1)}%</span>
+                        <span className="text-amber-600">担保冻结 {adjSelectedWalletValuation.frozenPercent.toFixed(1)}%</span>
+                      </div>
+                      <div className="flex h-1.5 overflow-hidden rounded-full bg-amber-100" aria-label={`资产可用 ${adjSelectedWalletValuation.availablePercent.toFixed(1)}%，担保冻结 ${adjSelectedWalletValuation.frozenPercent.toFixed(1)}%`}>
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-sky-400 to-blue-500 transition-[width] duration-300"
+                          style={{ width: `${adjSelectedWalletValuation.availablePercent}%` }}
+                        />
+                        <div
+                          className="h-full bg-amber-400 transition-[width] duration-300"
+                          style={{ width: `${adjSelectedWalletValuation.frozenPercent}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-[9px] text-gray-400">可用 ≈ {formatWalletAmount(adjSelectedWalletValuation.availableU, 2)} U · 担保冻结 ≈ {formatWalletAmount(adjSelectedWalletValuation.frozenU, 2)} U</p>
+                    </div>
+                    </>
+                  ) : (
+                    <p className="mt-2 rounded-md bg-orange-50 px-2.5 py-2 text-[10px] text-orange-500">行情或 USDT 汇率暂未就绪，正在等待统一估值。</p>
+                  )}
+                  {adjSelectedWalletValuation.unpricedAssets.length > 0 && (
+                    <p className="mt-1.5 text-[9px] leading-3 text-amber-600">未取得行情，暂未计入：{adjSelectedWalletValuation.unpricedAssets.join("、")}</p>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="relative">
@@ -1985,6 +2125,33 @@ export default function AfRechargeManage() {
                 <span className="shrink-0 text-[11px] text-gray-400">共 {adjBalanceTotals.userCount} 位</span>
               </div>
 
+              <div className="mb-3 rounded-xl border border-orange-200 bg-orange-50/60 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[10px] font-semibold text-orange-700">全部用户资产总价值</p>
+                    <p className="mt-0.5 text-[9px] text-orange-500/80">USDT、人民币及数字资产统一实时折算</p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-medium text-orange-600 shadow-sm">实时估值</span>
+                </div>
+                {adjWalletPricesQuery.isLoading ? (
+                  <div className="mt-2 h-8 animate-pulse rounded-lg bg-orange-100" />
+                ) : adjAllWalletValuation.hasRate && adjAllWalletValuation.totalCny != null ? (
+                  <div className="mt-2 overflow-hidden rounded-lg border border-orange-100 bg-white">
+                    <div className="flex items-baseline justify-between gap-3 px-2.5 py-2">
+                      <p className="shrink-0 text-[9px] text-gray-400">约合 USDT</p>
+                      <p className="min-w-0 text-right text-[16px] font-bold tabular-nums text-orange-600">≈ {formatWalletAmount(adjAllWalletValuation.totalU, 2)} <span className="text-[10px] font-semibold">U</span></p>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3 border-t border-orange-100 px-2.5 py-2">
+                      <p className="shrink-0 text-[9px] text-gray-400">约合人民币</p>
+                      <p className="min-w-0 text-right text-[16px] font-bold tabular-nums text-green-600">≈ ¥{formatWalletAmount(adjAllWalletValuation.totalCny, 2)}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-2 rounded-lg bg-white px-2.5 py-2 text-[10px] text-orange-500">行情或 USDT 汇率暂未就绪，正在等待统一估值。</p>
+                )}
+                {adjAllWalletValuation.unpricedAssets.length > 0 && <p className="mt-1.5 text-[9px] leading-3 text-amber-700">未取得行情，暂未计入：{adjAllWalletValuation.unpricedAssets.join("、")}</p>}
+              </div>
+
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
                   <p className="text-[10px] text-blue-500">全部用户 USDT 总余额</p>
@@ -1996,15 +2163,21 @@ export default function AfRechargeManage() {
                 </div>
               </div>
               <div className="mb-3 rounded-xl border border-violet-100 bg-violet-50 p-2.5">
-                <p className="text-[10px] font-medium text-violet-600">独立数字资产总持有（含担保冻结）</p>
+                <p className="text-[10px] font-medium text-violet-600">独立数字资产总持有（含担保冻结，按实时市值由高到低）</p>
                 <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-                  {AI_WALLET_SETTLEMENT_ASSETS.map((assetCode) => (
-                    <div key={assetCode} className="rounded-lg bg-white px-2 py-1.5 ring-1 ring-violet-100">
-                      <p className="text-[10px] text-violet-400">{assetCode}</p>
-                      <p className="mt-0.5 truncate text-[12px] font-bold text-violet-700">
-                        {Number(adjMultiAssetTotals[assetCode] ?? 0).toLocaleString("zh-CN", { maximumFractionDigits: 8 })}
+                  {adjMultiAssetValuations.map((asset) => (
+                    <div key={asset.assetCode} className="rounded-lg bg-white px-2 py-2 ring-1 ring-violet-100">
+                      <div className="flex items-baseline justify-between gap-1">
+                        <p className="text-[10px] font-semibold text-violet-600">{asset.assetCode}</p>
+                        <p className="min-w-0 truncate text-right text-[11px] font-bold tabular-nums text-violet-800">{asset.total.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}</p>
+                      </div>
+                      <p className="mt-1 truncate text-[9px] tabular-nums text-gray-400">
+                        {asset.valueU == null || !adjBalanceHasRate ? "人民币估值待获取" : `≈ ¥${formatWalletAmount(asset.valueU * adjBalanceUsdtCnyRate, 2)}`}
                       </p>
-                      {Number(adjMultiAssetFrozenTotals[assetCode] ?? 0) > 0 && <p className="mt-0.5 truncate text-[9px] text-amber-600">担保冻结 {Number(adjMultiAssetFrozenTotals[assetCode] ?? 0).toLocaleString("zh-CN", { maximumFractionDigits: 8 })}</p>}
+                      <p className="mt-0.5 truncate text-[9px] tabular-nums text-gray-400">
+                        {asset.valueU == null ? "USDT 估值待获取" : `≈ ${formatWalletAmount(asset.valueU, 2)} U`}
+                      </p>
+                      {asset.frozen > 0 && <p className="mt-1 truncate text-[9px] font-medium text-orange-500">担保冻结 {asset.frozen.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}</p>}
                     </div>
                   ))}
                 </div>
