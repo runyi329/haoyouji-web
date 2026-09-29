@@ -18401,17 +18401,24 @@ ${klinesSummary}
               if (puArr.length > 0) participantUserName = puArr[0].nickname || puArr[0].name || puArr[0].username || '';
             }
         }
-        // 给每个订单附带 participantInfo（如果当前用户是参与方）。
+        // 给每个订单附带协作角色（如果当前用户是协作者）。
         // 主订单 user_id 相同的 owner 协作记录只是该拥有者的配置快照，不能把主拥有者误标成参与者。
         const ordersWithParticipant = orders.map((o: any) => {
           const pi = participantInfoMap[Number(o.id)];
           const isPrimaryOwner = Number(o.user_id) === participantQueryUserId;
           if (pi && !isPrimaryOwner) {
+            const collaboratorRole = String(pi.role || '').toLowerCase();
+            const isCoOwner = collaboratorRole === 'owner';
             return {
               ...o,
+              // 平级共同拥有者有独立快照，但绝不能被下游/旧前端当作参与者。
+              _collaborator_role: collaboratorRole || null,
+              _isParticipant: !isCoOwner,
+              order_perspective: isCoOwner ? 'self' : (o.order_perspective || 'self'),
               participantInfo: {
                 userId: participantQueryUserId,
-                role: pi.role,
+                role: collaboratorRole || pi.role,
+                isPersonalOwnerView: isCoOwner,
                 interestRate: pi.interest_rate != null ? pi.interest_rate : null,
                 commissionRate: pi.commission_rate != null ? pi.commission_rate : null,
                 commissionBase: pi.commission_base || o.interest_base || null,
@@ -18427,11 +18434,13 @@ ${klinesSummary}
         });
         const ordersWithParticipantView = ordersWithParticipant.map((o: any) => {
           const pi = piDetailMap[Number(o.id)];
-          // 共同拥有者的 user_id 与主订单拥有者不同，仍使用独立订单快照；
-          // 主拥有者自身的 owner 快照仅用于编辑配置，列表必须保留为“本人”主订单。
-          const isParticipantOrder = participantQueryUserIdSet.has(Number(o.id))
+          const collaboratorRole = String(pi?.role || o?.participantInfo?.role || '').toLowerCase();
+          const isCoOwner = collaboratorRole === 'owner';
+          // 共同拥有者与真实参与者都使用各自的独立订单快照；主拥有者自身的
+          // owner 快照仅用于编辑配置。两者的唯一差别是列表归属：owner 始终归本人。
+          const isCollaboratorOrder = participantQueryUserIdSet.has(Number(o.id))
             && Number(o.user_id) !== participantQueryUserId;
-          if (!isParticipantOrder) return o;
+          if (!isCollaboratorOrder) return o;
           const snapshot = syncFunderParticipantCollateralSnapshot(
             parseFunderParticipantSnapshot(pi?.order_snapshot),
             o,
@@ -18448,9 +18457,14 @@ ${klinesSummary}
           result.user_id = o.user_id;
           result.order_no = pi?.order_no_override || o.order_no;
           result._participantParentDeleted = Boolean(o.deleted_at);
-          // 参与者身份只用于附带参与者专属数据与视觉状态；
-          // 本人 / 他人位置沿用订单自身的 order_perspective，不能在此强制改写。
-          result.order_perspective = result.order_perspective || o.order_perspective || 'self';
+          // 共同拥有者与原拥有者平级。角色字段和本人视角必须在快照覆盖后重置，
+          // 防止历史快照的 other / 字符串 0 被前端错误归到“参与”。
+          result._collaborator_role = collaboratorRole || null;
+          result._isParticipant = !isCoOwner;
+          result.order_perspective = isCoOwner ? 'self' : (result.order_perspective || o.order_perspective || 'self');
+          // 快照是历史业务字段，不得覆盖当前请求对应协作者的真实角色。
+          // 这样即使旧快照意外带有 participantInfo，也不会改变本人/参与归类。
+          if (o.participantInfo) result.participantInfo = o.participantInfo;
           result.order_owner_name = o.owner_label || o.username || null;
           if (participantUserName) {
             result.participant_name = participantUserName;

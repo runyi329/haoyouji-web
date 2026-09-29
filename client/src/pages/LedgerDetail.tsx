@@ -2755,12 +2755,24 @@ export default function LedgerDetail() {
     // 无论后端补充了何种 owner 快照，订单主拥有者的视角必须稳定归入“本人”。
     // 这也兼容旧接口曾把 owner 快照打成 _isParticipant 的历史响应。
     if (effectiveViewerId > 0 && Number(order?.user_id) === effectiveViewerId) return false;
-    const participantRole = String(order?.participantInfo?.role || '').toLowerCase();
+    // 新接口会带 participantInfo，旧缓存/历史响应可能只有协作者的扁平字段。
+    // 无论字段来源，role=owner 都必须优先于任何 _isParticipant 或 other 回退判断。
+    const participantRole = String(
+      order?.participantInfo?.role
+      ?? order?._collaborator_role
+      ?? order?._participant_role
+      ?? ''
+    ).trim().toLowerCase();
     // 共同拥有者与原拥有者平级：即使订单锚点属于另一位拥有者，
     // 也必须落在“本人”而不是“参与”页签。
     if (participantRole === 'owner') return false;
-    return (participantRole !== '' && participantRole !== 'owner')
-      || !!order?._isParticipant
+    if (participantRole !== '') return true;
+    // MySQL / JSON 反序列化后可能把 0 返回成字符串 "0"；不能把它当成真值。
+    const hasExplicitParticipantFlag = order?._isParticipant === true
+      || order?._isParticipant === 1
+      || order?._isParticipant === '1'
+      || order?._isParticipant === 'true';
+    return hasExplicitParticipantFlag
       || !!order?._fromFunder
       || order?.order_perspective === 'other';
   };
