@@ -20127,14 +20127,18 @@ ${klinesSummary}
           // 不改变订单筛选、参与者快照覆盖或已结利息的业务口径。
           const normalRows = await db.execute(
             sql`WITH visible_order_ids AS (
-                  SELECT fo.id, 0 AS is_participant
+                SELECT fo.id, 0 AS is_participant, NULL AS collaborator_role
                     FROM ledger_orders fo
                    WHERE fo.ledger_id = ${input.ledgerId}
                      AND fo.order_role = 'finance'
                      AND fo.deleted_at IS NULL
                      AND fo.user_id = ${targetUserId}
                   UNION ALL
-                  SELECT DISTINCT fo.id, 1 AS is_participant
+                  -- 共同拥有者使用与主订单相同的“本人”入口；只有真实参与者才进入“参与”。
+                  -- role 同时带到下面的快照装配逻辑，避免共同拥有者丢失自己的独立配置。
+                  SELECT DISTINCT fo.id,
+                         CASE WHEN p.role = 'owner' THEN 0 ELSE 1 END AS is_participant,
+                         p.role AS collaborator_role
                     FROM ledger_orders fo
                     INNER JOIN ledger_order_participants p ON p.order_id = fo.id
                    WHERE fo.ledger_id = ${input.ledgerId}
@@ -20153,6 +20157,7 @@ ${klinesSummary}
                 )
                 SELECT fo.*, u.username, u.name AS nickname, u.username AS userName, u.avatar AS userAvatar,
                        visible.is_participant AS _isParticipant,
+                       visible.collaborator_role AS _collaborator_role,
                        pi.role AS _participant_role,
                        pi.commission_rate AS _participant_commission_rate,
                        pi.commission_base AS _participant_commission_base,
@@ -20195,7 +20200,9 @@ ${klinesSummary}
             }
 
             const participantRole = (o as any)._participant_role;
-            if ((o as any)._isParticipant && participantRole && Number(o.user_id) !== Number(targetUserId)) {
+            // 共同拥有者和参与者都需要加载各自的独立订单快照；两者的区别仅是列表归属：
+            // role=owner 始终归到“本人”，其余角色才归到“参与”。
+            if (participantRole && Number(o.user_id) !== Number(targetUserId)) {
               const pi = {
                 role: participantRole,
                 commission_rate: (o as any)._participant_commission_rate,
@@ -20215,6 +20222,7 @@ ${klinesSummary}
               (o as any).participantInfo = {
                 userId: targetUserId,
                 role: pi.role,
+                isPersonalOwnerView: pi.role === 'owner',
                 commissionRate: pi.commission_rate != null ? pi.commission_rate : null,
                 commissionBase: pi.commission_base || o.interest_base || null,
                 commissionStartDate: pi.commission_start_date || o.interest_start_date || null,
@@ -20255,7 +20263,7 @@ ${klinesSummary}
               '_participant_commission_start_date', '_participant_paid_commission', '_participant_note',
               '_participant_interest_rate', '_participant_interest_base', '_participant_interest_base_currency',
               '_participant_interest_payment_type', '_participant_interest_start_date', '_participant_interest_rate_currency',
-              '_participant_display_config', '_participant_order_snapshot', '_participant_name',
+              '_participant_display_config', '_participant_order_snapshot', '_participant_name', '_collaborator_role',
               '_paid_total', '_paid_currency',
             ]) {
               delete (o as any)[key];

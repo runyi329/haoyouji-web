@@ -414,6 +414,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [participants, setParticipants] = useState<ParticipantForm[]>([]);
   const [participantUserSearch, setParticipantUserSearch] = useState('');
   const [selectedParticipantUserIds, setSelectedParticipantUserIds] = useState<number[]>([]);
+  // 新增成员时先明确关系，避免所有人都被默认写成共同拥有者。
+  const [newCollaboratorRole, setNewCollaboratorRole] = useState<'owner' | 'funder'>('owner');
   const [participantsSectionExpanded, setParticipantsSectionExpanded] = useState(false);
   const [ownerAddPanelExpanded, setOwnerAddPanelExpanded] = useState(false);
   const [primaryOwnerEditorExpanded, setPrimaryOwnerEditorExpanded] = useState(true);
@@ -1403,6 +1405,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setParticipants([]);
     setSelectedParticipantUserIds([]);
     setParticipantUserSearch('');
+    setNewCollaboratorRole('owner');
     // 多拥有者只在管理员主动选择时配置；新订单仍按原有单拥有者表单打开。
     setParticipantsSectionExpanded(false);
     resetLinkedAmountFields();
@@ -1481,6 +1484,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setParticipants([]);
     setSelectedParticipantUserIds([]);
     setParticipantUserSearch('');
+    setNewCollaboratorRole('owner');
     // 只有从订单底部的“拥有者/参与者”入口进入时才主动展开；普通编辑保持收起。
     setParticipantsSectionExpanded(scrollTo === 'participants');
     resetLinkedAmountFields();
@@ -4666,11 +4670,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     .slice(0, 40);
                   const selectedMembers = allMembers.filter((m: any) => selectedParticipantUserIds.includes(Number(m.userId || m.id)));
                   const addSelectedParticipants = () => {
-                    const buildOwnerForm = (m: any, index: number, useParentDefaults = false): ParticipantForm => ({
+                    const buildCollaboratorForm = (m: any, index: number, useParentDefaults = false): ParticipantForm => ({
                       userId: Number(m.userId || m.id),
                       userName: getUserDisplayName(m, String(m.userId || m.id)),
                       avatar: m.avatar,
-                      role: 'owner' as const,
+                      role: newCollaboratorRole,
                       coin: formData.coin,
                       amount: useParentDefaults ? (formData.assetType === 'stock' ? amountInputValue : (financingAmountUsdt || '')) : '',
                       amountCurrency: formData.amountCurrency || 'USDT',
@@ -4705,20 +4709,21 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         const id = Number(m.userId || m.id);
                         return id !== Number(formData.userId) && !participants.some(p => p.userId === id);
                       })
-                      .map((m: any, index: number) => buildOwnerForm(m, index));
+                      .map((m: any, index: number) => buildCollaboratorForm(m, index));
                     if (newParticipants.length === 0) return;
                     // 第一次建立拥有者组时，同步纳入原订单拥有者，便于立即配置其独立视图和可见范围。
+                    // 仅新增“参与者”时不需要把主拥有者重复写入协作关系。
                     const primaryOwnerId = Number(formData.userId);
                     const primaryMember = allMembers.find((m: any) => Number(m.userId || m.id) === primaryOwnerId);
-                    if (primaryMember && !participants.some(p => p.userId === primaryOwnerId)) {
-                      newParticipants.unshift({ ...buildOwnerForm(primaryMember, -1, true), expanded: false });
+                    if (newCollaboratorRole === 'owner' && primaryMember && !participants.some(p => p.userId === primaryOwnerId)) {
+                      newParticipants.unshift({ ...buildCollaboratorForm(primaryMember, -1, true), role: 'owner', expanded: false });
                     }
                     setParticipants(prev => [...prev.map(item => ({ ...item, expanded: false })), ...newParticipants]);
                     setParticipantsSectionExpanded(true);
                     setSelectedParticipantUserIds([]);
                     setParticipantUserSearch('');
                     setOwnerAddPanelExpanded(false);
-                    toast.success(`已加入 ${newParticipants.length} 位拥有者，请在底部统一保存`);
+                    toast.success(`已加入 ${newParticipants.length} 位${newCollaboratorRole === 'owner' ? '拥有者' : '参与者'}，请在底部统一保存`);
                   };
                   return (
                     <div className="overflow-hidden rounded-xl border border-dashed border-indigo-200 bg-white">
@@ -4734,8 +4739,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
                       >
                         <span>
-                          <span className="block text-sm font-medium text-gray-700">添加拥有者</span>
-                          <span className="mt-0.5 block text-xs text-gray-400">需要添加时再展开搜索与选择成员</span>
+                          <span className="block text-sm font-medium text-gray-700">添加拥有者 / 参与者</span>
+                          <span className="mt-0.5 block text-xs text-gray-400">需要添加时再展开搜索、选择身份与成员</span>
                         </span>
                         <span className="flex items-center gap-1.5 text-xs font-medium text-indigo-600">
                           {ownerAddPanelExpanded ? '收起' : '添加'}
@@ -4745,10 +4750,29 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       {ownerAddPanelExpanded && (
                         <div className="border-t border-indigo-100 p-3">
                           <div className="mb-2 flex items-start justify-between gap-3">
-                            <div className="text-xs leading-5 text-gray-500">每位拥有者可独立设置本金、利率、备注和信息可见范围。</div>
+                            <div className="text-xs leading-5 text-gray-500">先选择要添加的关系，再搜索并勾选成员；共同拥有者与参与者会进入不同的前端页签。</div>
                             {selectedParticipantUserIds.length > 0 && (
                               <button type="button" onClick={() => setSelectedParticipantUserIds([])} className="shrink-0 text-xs text-gray-400">清空</button>
                             )}
+                          </div>
+                          <div className="mb-3">
+                            <div className="mb-1.5 text-xs font-medium text-gray-600">添加身份</div>
+                            <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-1.5">
+                              {([
+                                { value: 'owner', label: '共同拥有者', hint: '显示在本人订单' },
+                                { value: 'funder', label: '参与者', hint: '显示在参与订单' },
+                              ] as const).map(option => (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() => setNewCollaboratorRole(option.value)}
+                                  className={`rounded-lg px-2 py-2 text-left transition-colors ${newCollaboratorRole === option.value ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+                                >
+                                  <span className="block text-xs font-semibold">{option.label}</span>
+                                  <span className={`mt-0.5 block text-[10px] ${newCollaboratorRole === option.value ? 'text-slate-200' : 'text-slate-400'}`}>{option.hint}</span>
+                                </button>
+                              ))}
+                            </div>
                           </div>
                       <input
                         type="text"
@@ -4801,7 +4825,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         style={{ background: 'linear-gradient(135deg, #4F46E5, #6366F1)' }}
                       >
                         <Plus className="h-4 w-4" />
-                        {selectedParticipantUserIds.length > 0 ? `加入 ${selectedParticipantUserIds.length} 位拥有者` : '请先勾选拥有者'}
+                        {selectedParticipantUserIds.length > 0 ? `加入 ${selectedParticipantUserIds.length} 位${newCollaboratorRole === 'owner' ? '拥有者' : '参与者'}` : `请先勾选${newCollaboratorRole === 'owner' ? '拥有者' : '参与者'}`}
                       </button>
                         </div>
                       )}

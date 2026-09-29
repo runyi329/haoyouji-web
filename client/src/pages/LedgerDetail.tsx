@@ -2756,6 +2756,9 @@ export default function LedgerDetail() {
     // 这也兼容旧接口曾把 owner 快照打成 _isParticipant 的历史响应。
     if (effectiveViewerId > 0 && Number(order?.user_id) === effectiveViewerId) return false;
     const participantRole = String(order?.participantInfo?.role || '').toLowerCase();
+    // 共同拥有者与原拥有者平级：即使订单锚点属于另一位拥有者，
+    // 也必须落在“本人”而不是“参与”页签。
+    if (participantRole === 'owner') return false;
     return (participantRole !== '' && participantRole !== 'owner')
       || !!order?._isParticipant
       || !!order?._fromFunder
