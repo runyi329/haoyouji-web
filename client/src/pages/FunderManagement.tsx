@@ -471,7 +471,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     participantsLoadedRef.current = loadKey;
     const loaded = (existingParticipantsData.participants as any[]).map((p: any) => ({
       userId: p.user_id,
-      userName: p.nickname || p.username || p.userName || String(p.user_id),
+      userName: getUserDisplayName(p, `成员 #${p.user_id}`),
       avatar: p.avatar,
       role: (['owner', 'funder', 'borrower', 'broker'].includes(p.role) ? p.role : 'funder') as ParticipantForm['role'],
       coin: p.coin || formData.coin,
@@ -548,7 +548,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const isSnapshotScopedEdit = !!editingOrder?.participantInfo && !isPrimaryOwnerEdit;
   const isRestrictedParticipantEdit = !!editingOrder?.participantInfo && editingCollaboratorRole !== 'owner';
   const isOwnerPersonalView = isSnapshotScopedEdit && editingCollaboratorRole === 'owner';
-  const personalViewName = String((editingOrder as any)?.participant_name || (editingOrder as any)?.owner_label || '当前成员');
+  // 所有协作人界面共用中文显示名优先级，避免手机号式 username 被当作姓名展示。
+  const getMemberDisplayName = (member: any, fallback = '当前成员') => getUserDisplayName(member, fallback);
+  const personalViewName = String((editingOrder as any)?.participant_display_name
+    || (editingOrder as any)?.participant_name
+    || (editingOrder as any)?.owner_label
+    || '当前成员');
+  const primaryOwnerDisplayName = getMemberDisplayName(
+    ((ledgerData as any)?.members || []).find((member: any) => Number(member.userId ?? member.id) === Number(formData.userId)),
+    (editingOrder as any)?.owner_display_name || (editingOrder as any)?.nickname || (editingOrder as any)?.username || '当前拥有者',
+  );
   const canManageCollaboratorsInEditor = !editingOrder || isAdminUser;
 
   // 拥有者在业务上是平级关系：主订单仅是数据存储锚点，不能作为界面上的主次排序依据。
@@ -1304,7 +1313,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       const result = await trpcUtils.ledger.funderGetOrderParticipants.fetch({ orderId, ledgerId });
       const mapped = (result.participants || []).map((p: any) => ({
         userId: p.user_id,
-        displayName: p.username || p.nickname || p.userName || `用户${p.user_id}`,
+        displayName: getUserDisplayName(p, `成员 #${p.user_id}`),
         role: p.role as ParticipantRole,
         sortOrder: p.sort_order || 0,
         rate: (p.commission_rate != null && p.commission_rate !== '') ? String(p.commission_rate) : (p.rate != null ? String(p.rate) : ''),
@@ -1314,7 +1323,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       setParticipantsEditMode(mapped.length === 0);
       const mappedMembers = (result.members || []).map((m: any) => ({
         userId: m.userId,
-        displayName: m.username || m.nickname || m.userName || `用户${m.userId}`,
+        displayName: getUserDisplayName(m, `成员 #${m.userId}`),
         memberRole: m.memberRole,
       }));
       setLedgerMembers(mappedMembers);
@@ -2366,7 +2375,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 >
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-blue-950">第一位拥有者的订单内容</span>
-                    <span className="mt-0.5 block truncate text-xs text-blue-700">{formData.ownerLabel || `用户 ${formData.userId}`} · 单独保存后自动收起</span>
+                    <span className="mt-0.5 block truncate text-xs text-blue-700">{formData.ownerLabel || primaryOwnerDisplayName} · 单独保存后自动收起</span>
                   </span>
                   <ChevronDown className={`h-5 w-5 shrink-0 text-blue-600 transition-transform ${primaryOwnerEditorExpanded ? 'rotate-180' : ''}`} />
                 </button>

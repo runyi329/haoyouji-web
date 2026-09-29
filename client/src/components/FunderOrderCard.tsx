@@ -708,10 +708,10 @@ export function FunderOrderCard({
     _intSetParticipantsLoading(true);
     try {
       const result = await trpcUtils.ledger.funderGetOrderParticipants.fetch({ orderId, ledgerId });
-      const mapped = (result.participants || []).map((p: any) => ({ userId: p.user_id, displayName: p.nickname || p.user_nickname || p.username || p.userName || `用户${p.user_id}`, role: p.role, sortOrder: p.sort_order || 0, rate: (p.commission_rate != null && p.commission_rate !== '') ? String(p.commission_rate) : (p.rate != null ? String(p.rate) : '') }));
+      const mapped = (result.participants || []).map((p: any) => ({ userId: p.user_id, displayName: p.nickname || p.user_nickname || p.name || p.username || p.userName || `成员 #${p.user_id}`, role: p.role, sortOrder: p.sort_order || 0, rate: (p.commission_rate != null && p.commission_rate !== '') ? String(p.commission_rate) : (p.rate != null ? String(p.rate) : '') }));
       _intSetParticipantsList(mapped);
       _intSetParticipantsEditMode(mapped.length === 0);
-      const mappedMembers = (result.members || []).map((m: any) => ({ userId: m.userId, displayName: m.nickname || m.user_nickname || m.username || m.userName || `用户${m.userId}`, memberRole: m.memberRole }));
+      const mappedMembers = (result.members || []).map((m: any) => ({ userId: m.userId, displayName: m.nickname || m.user_nickname || m.name || m.username || m.userName || `成员 #${m.userId}`, memberRole: m.memberRole }));
       _intSetLedgerMembers(mappedMembers);
     } catch { toast.error('加载参与方失败'); _intSetParticipantsList([]); _intSetParticipantsEditMode(true); }
     finally { _intSetParticipantsLoading(false); }
@@ -723,7 +723,12 @@ export function FunderOrderCard({
   // 内部 handleSaveParticipants
   const _intHandleSaveParticipants = (orderId: number) => {
     const valid = _intParticipantsList.filter(p => p.userId > 0);
-    _intSaveParticipantsMutation.mutate({ orderId, ledgerId, participants: valid.map((p, i) => ({ userId: p.userId, role: p.role, sortOrder: i, rate: (p.rate ?? '').toString().trim() || undefined })) });
+    _intSaveParticipantsMutation.mutate({ orderId, ledgerId, participants: valid.map((p, i) => ({
+      userId: p.userId,
+      role: (['owner', 'funder', 'borrower', 'broker'].includes(p.role) ? p.role : 'funder') as 'owner' | 'funder' | 'borrower' | 'broker',
+      sortOrder: i,
+      rate: (p.rate ?? '').toString().trim() || undefined,
+    })) });
   };
   // 合并后的活跃值（父组件传入优先，否则用内部 fallback）
   const $showPaymentPanel = showPaymentPanel !== undefined ? showPaymentPanel : _intShowPayment;

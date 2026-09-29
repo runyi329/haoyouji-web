@@ -6,6 +6,8 @@
  */
 export type SearchableUserIdentity = {
   nickname?: string | null;
+  user_nickname?: string | null;
+  display_name?: string | null;
   name?: string | null;
   realName?: string | null;
   accountName?: string | null;
@@ -25,13 +27,15 @@ const normalize = (value: unknown) => String(value ?? "").trim();
 
 export function getUserDisplayName(user?: SearchableUserIdentity | null, fallback = "") {
   if (!user) return fallback;
-  return normalize(user.nickname) || normalize(user.name) || normalize(user.realName) || normalize(user.accountName) || normalize(user.displayName) || normalize(user.username) || normalize(user.userName) || fallback;
+  return normalize(user.nickname) || normalize(user.name) || normalize(user.user_nickname) || normalize(user.display_name) || normalize(user.realName) || normalize(user.accountName) || normalize(user.displayName) || normalize(user.username) || normalize(user.userName) || fallback;
 }
 
 export function getUserSearchText(user?: SearchableUserIdentity | null) {
   if (!user) return "";
   return [
     user.nickname,
+    user.user_nickname,
+    user.display_name,
     user.name,
     user.realName,
     user.accountName,

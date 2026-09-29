@@ -21314,7 +21314,9 @@ ${klinesSummary}
         if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看参与方配置' });
         // 已配置的参与方
         const rows = await db.execute(
-          sql`SELECT p.*, u.username, u.name as user_nickname, u.username as userName, u.avatar, lm.nickname
+          sql`SELECT p.*, u.username, u.name as user_nickname,
+                  COALESCE(NULLIF(lm.nickname, ''), NULLIF(u.name, ''), u.username) AS display_name,
+                  u.username as userName, u.avatar, lm.nickname
               FROM ledger_order_participants p
               LEFT JOIN users u ON u.id = p.user_id
               LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
@@ -21323,7 +21325,9 @@ ${klinesSummary}
         ) as any;
         // 账本所有成员（供前端下拉选择）
         const memberRows = await db.execute(
-          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.name as user_nickname, u.username as userName, u.avatar
+          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.name as user_nickname,
+                  COALESCE(NULLIF(lm.nickname, ''), NULLIF(u.name, ''), u.username) AS display_name,
+                  u.username as userName, u.avatar
               FROM ledger_members lm
               LEFT JOIN users u ON u.id = lm.userId
               WHERE lm.ledgerId = ${input.ledgerId}
@@ -21891,7 +21895,9 @@ ${klinesSummary}
         const isManager = role === 'owner' || role === 'admin';
         if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看参与方配置' });
         const rows = await db.execute(
-          sql`SELECT p.*, u.username, u.name as user_nickname, u.username as userName, u.avatar, lm.nickname
+          sql`SELECT p.*, u.username, u.name as user_nickname,
+                  COALESCE(NULLIF(lm.nickname, ''), NULLIF(u.name, ''), u.username) AS display_name,
+                  u.username as userName, u.avatar, lm.nickname
               FROM ledger_order_participants p
               LEFT JOIN users u ON u.id = p.user_id
               LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
@@ -21899,7 +21905,9 @@ ${klinesSummary}
               ORDER BY p.sort_order ASC, p.id ASC`
         ) as any;
         const memberRows = await db.execute(
-          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.name as user_nickname, u.username as userName, u.avatar
+          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.name as user_nickname,
+                  COALESCE(NULLIF(lm.nickname, ''), NULLIF(u.name, ''), u.username) AS display_name,
+                  u.username as userName, u.avatar
               FROM ledger_members lm
               LEFT JOIN users u ON u.id = lm.userId
               WHERE lm.ledgerId = ${input.ledgerId}
