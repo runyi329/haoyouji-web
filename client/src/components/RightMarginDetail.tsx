@@ -6,6 +6,14 @@
  */
 import React, { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import {
+  getTagMarginCurrencyRecords,
+  getTagMarginStockMarketValue,
+  getTagMarginStockRecords,
+  getTagMarginStockSymbols,
+  parseTagMarginRecords,
+  resolveTagMarginStockQuote,
+} from "@shared/tag-margin-assets";
 
 const CNY_RATE_FALLBACK = 6.8;
 
@@ -105,39 +113,31 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
         const parsed = typeof rawConfiguredMargins === 'string'
           ? JSON.parse(rawConfiguredMargins)
           : rawConfiguredMargins;
-        if (Array.isArray(parsed)) {
-          const entries = parsed
-            .map((entry: any) => ({
-              coin: String(entry?.coin ?? 'CNY').trim().toUpperCase() || 'CNY',
-              amount: Number(entry?.amount),
-              label: String(entry?.label ?? entry?.note ?? ''),
-              date: String(entry?.date ?? entry?.createdAt ?? ''),
-            }))
-            .filter((item) => Number.isFinite(item.amount));
-          if (entries.length > 0) return entries;
-        }
-        if (parsed && typeof parsed === 'object') {
-          const entries = Object.entries(parsed)
-            .map(([coin, amount]) => ({ coin: String(coin).trim().toUpperCase() || 'CNY', amount: Number(amount), label: '', date: '' }))
-            .filter((item) => Number.isFinite(item.amount));
-          if (entries.length > 0) return entries;
-        }
+        const entries = parseTagMarginRecords(parsed);
+        if (entries.length > 0) return entries;
       } catch {
         // 配置损坏时继续走兼容汇总，避免只读详情完全空白。
       }
     }
     const summaryMargins = (rightTagSummary as any)?.marginByCoin;
     if (summaryMargins && typeof summaryMargins === 'object') {
-      return Object.entries(summaryMargins)
-        .map(([coin, amount]) => ({ coin: String(coin).trim().toUpperCase() || 'CNY', amount: Number(amount), label: '', date: '' }))
-        .filter((item) => Number.isFinite(item.amount) && item.amount !== 0);
+      return parseTagMarginRecords(summaryMargins).filter((item) => item.assetType === 'stock' || item.amount !== 0);
     }
     return [];
   }, [rightTagConfig, rightTagSummary]);
 
+  const rightMarginStockSymbols = useMemo(() => getTagMarginStockSymbols(rightMarginData), [rightMarginData]);
+  const rightMarginStockCloseQuery = (trpc as any).getManualStockCloseSnapshots.useQuery(
+    { symbols: rightMarginStockSymbols },
+    { enabled: rightMarginStockSymbols.length > 0, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false },
+  );
+  const rightMarginStockQuotes = ((rightMarginStockCloseQuery.data as any)?.quotes ?? {}) as Record<string, { price?: number; currency?: string; priceDate?: string; updatedAt?: string }>;
+
   const rightTotalCNY = useMemo(() => {
-    return rightMarginData.reduce((sum, { coin, amount }) => sum + toCNY(String(amount), coin, cryptoPrices), 0);
-  }, [rightMarginData, cryptoPrices]);
+    return rightMarginData.reduce((sum, entry) => entry.assetType === 'stock'
+      ? sum + (getTagMarginStockMarketValue(entry, rightMarginStockQuotes) ?? 0)
+      : sum + toCNY(String(entry.amount), entry.coin, cryptoPrices), 0);
+  }, [rightMarginData, cryptoPrices, rightMarginStockQuotes]);
 
   // ── 账户信息计算 ──
   const latestBalance = (rightTagSummary as any)?.latestBalance;
@@ -171,7 +171,31 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
           <div className="text-xs text-gray-400 py-2 text-center">暂未设置右侧保证金</div>
         ) : (
           <div className="space-y-2">
-            {(rightMarginData as Array<{ coin: string; amount: number; label: string; date: string }>).map(({ coin, amount, label, date }, _i) => {
+            {rightMarginData.map((entry, _i) => {
+              if (entry.assetType === 'stock') {
+                const quote = resolveTagMarginStockQuote(entry, rightMarginStockQuotes);
+                const marketValue = getTagMarginStockMarketValue(entry, rightMarginStockQuotes);
+                const quoteDate = quote.priceDate ? quote.priceDate.slice(0, 10) : '';
+                return (
+                  <div key={_i} className="flex items-start justify-between py-2" style={{ borderBottom: "1px solid #E5E7EB" }}>
+                    <div className="flex flex-col min-w-0 flex-1 mr-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-xs font-medium text-gray-700">股票</span>
+                        <span className="truncate text-xs" style={{ color: '#2563EB' }}>{entry.name || entry.code}</span>
+                        <span className="text-[10px] font-mono" style={{ color: '#64748B' }}>{entry.code}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-400 mt-0.5">{quote.isCloseSnapshot ? '参考价' : '暂用参考价'}{quoteDate ? ` · ${quoteDate}` : ''} · ¥{quote.price?.toLocaleString('zh-CN', { maximumFractionDigits: 3 }) ?? '--'}</span>
+                      {entry.label ? <span className="text-[10px] text-gray-400 mt-0.5 break-all" style={{ maxWidth: "160px" }}>{entry.label}</span> : null}
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{entry.quantity.toLocaleString('zh-CN', { maximumFractionDigits: 4 })}<span className="text-xs text-gray-500 ml-1">股</span></span>
+                      <span className="text-xs" style={{ color: marketValue === null ? '#9CA3AF' : '#2563EB' }}>{marketValue === null ? '市值待获取' : `约 ¥${marketValue.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`}</span>
+                      {marketValue !== null && _cnyRate > 0 && <span className="text-[10px] text-gray-400">≈ {(marketValue / _cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} U</span>}
+                    </div>
+                  </div>
+                );
+              }
+              const { coin, amount, label, date } = entry;
               const cnyVal = coin !== "元" ? toCNY(String(Math.abs(amount)), coin, cryptoPrices) : Math.abs(amount);
               return (
                 <div key={_i} className="flex items-start justify-between py-2" style={{ borderBottom: "1px solid #E5E7EB" }}>
@@ -212,7 +236,7 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
               <span className="text-xs text-gray-500">合计</span>
               <div className="flex flex-col items-end">
                 {Object.entries(
-                  (rightMarginData as Array<{ coin: string; amount: number }>).reduce((acc, { coin, amount }) => {
+                  getTagMarginCurrencyRecords(rightMarginData).reduce((acc, { coin, amount }) => {
                     acc[coin] = (acc[coin] || 0) + amount;
                     return acc;
                   }, {} as Record<string, number>)
@@ -221,9 +245,14 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
                     {(total as number) >= 0 ? "+" : ""}{(total as number).toLocaleString("zh-CN", { maximumFractionDigits: 4 })} {coin}
                   </span>
                 ))}
-                <span className="text-sm font-bold text-blue-700">
-                  ¥{rightTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
-                </span>
+                {getTagMarginStockRecords(rightMarginData).length > 0 && (
+                  <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>
+                    {getTagMarginStockRecords(rightMarginData).reduce((sum, stock) => sum + stock.quantity, 0).toLocaleString('zh-CN', { maximumFractionDigits: 4 })} 股（股票）
+                  </span>
+                )}
+                <span className="text-[10px] text-gray-500">总担保市值</span>
+                <span className="text-sm font-bold text-blue-700">约 ¥{rightTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}</span>
+                {_cnyRate > 0 && <span className="text-xs text-gray-500">≈ {(rightTotalCNY / _cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} U</span>}
               </div>
             </div>
           </div>

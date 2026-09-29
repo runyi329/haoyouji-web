@@ -1,6 +1,7 @@
 import { getDbConnection } from "./db";
 import { fetchEndOfDayStockCloseSnapshots } from "./price-scanner";
 import { ensureLedgerStockPortfolioTables, refreshLedgerStockTagCloseSnapshots } from "./ledger-stock-portfolio";
+import { getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
 
 type StoredManualStockClose = {
   symbol: string;
@@ -74,6 +75,17 @@ async function getTrackedSymbols(): Promise<string[]> {
       // 单张历史订单的数据异常不能阻断其他订单的盘尾快照。
     }
   }
+  // 37号标签的股票保证金使用同一套盘尾快照，不在管理员打开页面时发起第三方报价请求。
+  const [marginRows] = await (conn as any).execute(`
+    SELECT margin_by_coin
+    FROM ledger_tag_config
+    WHERE ledger_id = 37
+      AND margin_by_coin IS NOT NULL
+      AND margin_by_coin <> ''
+  `);
+  for (const row of marginRows as Array<{ margin_by_coin?: unknown }>) {
+    for (const symbol of getTagMarginStockSymbols(parseTagMarginRecords(row.margin_by_coin))) symbols.add(symbol);
+  }
   return Array.from(symbols).slice(0, 200);
 }
 
@@ -123,7 +135,7 @@ export async function getManualStockCloseSnapshots(symbols: string[]): Promise<R
   const normalized = Array.from(new Set(symbols
     .map(normalizeSymbol)
     .filter((symbol): symbol is string => !!symbol)))
-    .slice(0, 20);
+    .slice(0, 100);
   if (!normalized.length) return {};
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用，无法读取股票盘尾快照");

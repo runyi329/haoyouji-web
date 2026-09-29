@@ -12,6 +12,13 @@ import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, Chevr
 import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
+import {
+  getTagMarginCurrencyRecords,
+  getTagMarginStockMarketValue,
+  getTagMarginStockRecords,
+  getTagMarginStockSymbols,
+  parseTagMarginRecords,
+} from "@shared/tag-margin-assets";
 
 // 以 SVG viewBox 的中心放置文本；无论父圆标缩放到何种尺寸，37 都保持几何居中。
 function Linked37BadgeText() {
@@ -917,6 +924,20 @@ export function FunderOrderCard({
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPendingInterestTagName || '' },
     { enabled: hasExternalPendingInterest, staleTime: 3000 }
   );
+  const linkedCollateralMarginRecords = useMemo(() => {
+    const configured = parseTagMarginRecords((_collateralTagConfig as any)?.margin_by_coin);
+    if (configured.length > 0) return configured;
+    return parseTagMarginRecords((_collateralTagSummary as any)?.marginByCoin);
+  }, [_collateralTagConfig, _collateralTagSummary]);
+  const linkedCollateralMarginStockSymbols = useMemo(
+    () => getTagMarginStockSymbols(linkedCollateralMarginRecords),
+    [linkedCollateralMarginRecords],
+  );
+  const linkedCollateralStockCloseQuery = (trpc as any).getManualStockCloseSnapshots.useQuery(
+    { symbols: linkedCollateralMarginStockSymbols },
+    { enabled: hasExternalCollateral && linkedCollateralMarginStockSymbols.length > 0, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false },
+  );
+  const linkedCollateralStockQuotes = ((linkedCollateralStockCloseQuery.data as any)?.quotes ?? {}) as Record<string, { price?: number; currency?: string; priceDate?: string; updatedAt?: string }>;
   const { data: _extCryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
     enabled: hasExternalDataSource, refetchInterval: 3000, staleTime: 0,
   });
@@ -938,20 +959,16 @@ export function FunderOrderCard({
     };
     const marginTotalCny = (() => {
       if (!linkedCollateralTagName || !_collateralTagConfig || _cnyR <= 0) return null;
-      try {
-        const summaryMargins = (_collateralTagSummary as any)?.marginByCoin;
-        const configuredMargins = typeof (_collateralTagConfig as any).margin_by_coin === 'string'
-          ? JSON.parse((_collateralTagConfig as any).margin_by_coin)
-          : (_collateralTagConfig as any).margin_by_coin;
-        const hasConfiguredMargins = Array.isArray(configuredMargins)
-          ? configuredMargins.length > 0
-          : !!configuredMargins && typeof configuredMargins === 'object' && Object.keys(configuredMargins).length > 0;
-        const rawMargins = hasConfiguredMargins ? configuredMargins : summaryMargins;
-        const items = Array.isArray(rawMargins)
-          ? rawMargins.map((e: any) => ({ coin: e.coin || '元', amount: Number(e.amount) }))
-          : Object.entries(rawMargins ?? {}).map(([coin, amount]) => ({ coin, amount: Number(amount) }));
-        return items.reduce((sum: number, item: any) => sum + _toCNY(item.amount, item.coin), 0);
-      } catch { return null; }
+      let allKnown = true;
+      const total = linkedCollateralMarginRecords.reduce((sum, item) => {
+        if (item.assetType === 'stock') {
+          const value = getTagMarginStockMarketValue(item, linkedCollateralStockQuotes);
+          if (value === null) { allKnown = false; return sum; }
+          return sum + value;
+        }
+        return sum + _toCNY(item.amount, item.coin);
+      }, 0);
+      return allKnown ? total : null;
     })();
     const floatingPnlCny = (() => {
       if (!linkedPnlTagName || !_pnlTagConfig || _cnyR <= 0) return null;
@@ -968,34 +985,21 @@ export function FunderOrderCard({
       extCollateralValueU: marginTotalCny === null ? null : marginTotalCny / _cnyR,
       extFloatingPnlU: floatingPnlCny === null ? null : floatingPnlCny / _cnyR,
     };
-  }, [linkedPnlTagName, linkedCollateralTagName, floatingPnlCalculationMode, _pnlTagConfig, _pnlTagSummary, _collateralTagConfig, _collateralTagSummary, _extCryptoPricesRaw]);
+  }, [linkedPnlTagName, linkedCollateralTagName, floatingPnlCalculationMode, _pnlTagConfig, _pnlTagSummary, _collateralTagConfig, _collateralTagSummary, _extCryptoPricesRaw, linkedCollateralMarginRecords, linkedCollateralStockQuotes]);
 
   // 绑定 37 号账本标签时，担保物必须以该标签内逐笔保证金为唯一来源。
   // 这里与 RightMarginDetail 的展示口径一致：保留各币种净额，再按当前汇率汇总为 U / 人民币；
   // 不把订单上的历史手填 collateral_assets 与第三方标签重复相加。
   const externalCollateralSummary = useMemo(() => {
-    const empty = { entries: [] as Array<{ coin: string; amount: number }>, totalCny: null as number | null, totalU: null as number | null, currencyLabel: '' };
+    const empty = { entries: [] as Array<{ coin: string; amount: number; assetType?: 'stock'; name?: string; code?: string }>, totalCny: null as number | null, totalU: null as number | null, currencyLabel: '' };
     if (!hasExternalCollateral || !_collateralTagConfig) return empty;
-    let entries: Array<{ coin: string; amount: number }> = [];
-    try {
-      // 与37标签详情/剩余保证金同口径：逐笔标签配置优先，成员汇总仅兼容老标签。
-      const summaryMargins = (_collateralTagSummary as any)?.marginByCoin;
-      const configuredMargins = (typeof (_collateralTagConfig as any).margin_by_coin === 'string')
-        ? JSON.parse((_collateralTagConfig as any).margin_by_coin)
-        : (_collateralTagConfig as any).margin_by_coin;
-      const hasConfiguredMargins = Array.isArray(configuredMargins)
-        ? configuredMargins.length > 0
-        : !!configuredMargins && typeof configuredMargins === 'object' && Object.keys(configuredMargins).length > 0;
-      const raw = hasConfiguredMargins
-        ? configuredMargins
-        : summaryMargins;
-      entries = Array.isArray(raw)
-        ? raw.map((item: any) => ({ coin: String(item?.coin ?? '元').trim() || '元', amount: Number(item?.amount) }))
-        : Object.entries(raw ?? {}).map(([coin, amount]) => ({ coin: String(coin).trim() || '元', amount: Number(amount) }));
-      entries = entries.filter(item => Number.isFinite(item.amount) && item.amount !== 0);
-    } catch {
-      return empty;
-    }
+    const currencyEntries = getTagMarginCurrencyRecords(linkedCollateralMarginRecords)
+      .filter((item) => Number.isFinite(item.amount) && item.amount !== 0)
+      .map((item) => ({ coin: item.coin, amount: item.amount }));
+    const stockEntries = getTagMarginStockRecords(linkedCollateralMarginRecords)
+      .filter((item) => Number.isFinite(item.quantity) && item.quantity !== 0)
+      .map((item) => ({ coin: item.symbol, amount: item.quantity, assetType: 'stock' as const, name: item.name, code: item.code }));
+    const entries = [...currencyEntries, ...stockEntries];
     const rate = Number((_extCryptoPricesRaw as any)?.usdtCnyRate ?? cnyRate) || cnyRate;
     const prices = (_extCryptoPricesRaw as any)?.prices ?? {};
     const toCny = (coin: string, amount: number) => {
@@ -1007,22 +1011,29 @@ export function FunderOrderCard({
     };
     let totalCny = 0;
     let allKnown = true;
-    for (const entry of entries) {
+    for (const entry of currencyEntries) {
       const value = toCny(entry.coin, entry.amount);
       if (value === null) allKnown = false;
       else totalCny += value;
     }
-    const netByCoin = entries.reduce((acc, item) => {
+    for (const stock of getTagMarginStockRecords(linkedCollateralMarginRecords)) {
+      const value = getTagMarginStockMarketValue(stock, linkedCollateralStockQuotes);
+      if (value === null) allKnown = false;
+      else totalCny += value;
+    }
+    const netByCoin = currencyEntries.reduce((acc, item) => {
       const label = ['CNY', 'RMB', '人民币'].includes(item.coin.toUpperCase()) ? '元' : item.coin.toUpperCase();
       acc[label] = (acc[label] ?? 0) + item.amount;
       return acc;
     }, {} as Record<string, number>);
-    const currencyLabel = Object.entries(netByCoin)
+    const currencyParts = Object.entries(netByCoin)
       .filter(([, amount]) => Math.abs(amount) > 0.0000001)
-      .map(([coin, amount]) => `${amount >= 0 ? '+' : ''}${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${coin}`)
-      .join(' · ');
+      .map(([coin, amount]) => `${amount >= 0 ? '+' : ''}${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${coin}`);
+    const stockParts = getTagMarginStockRecords(linkedCollateralMarginRecords)
+      .map((stock) => `${stock.name || stock.code} ${stock.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}股`);
+    const currencyLabel = [...currencyParts, ...stockParts].join(' · ');
     return { entries, totalCny: allKnown ? totalCny : null, totalU: allKnown && rate > 0 ? totalCny / rate : null, currencyLabel };
-  }, [hasExternalCollateral, _collateralTagConfig, _collateralTagSummary, _extCryptoPricesRaw, cnyRate]);
+  }, [hasExternalCollateral, _collateralTagConfig, _extCryptoPricesRaw, cnyRate, linkedCollateralMarginRecords, linkedCollateralStockQuotes]);
 
   // 37号标签同时记录“应收”和“已付”：普通自动分段与手工加息都属于待结，
   // 只有负数手工分段（37页的“计入已付”）才是52号订单可引用的已结利息。
@@ -2740,7 +2751,7 @@ export function FunderOrderCard({
             {show('collateralCoin') && hasExternalCollateral && (
               <div className="flex items-start justify-between gap-1 text-xs mt-0.5">
                 <span className="flex items-center gap-1 shrink-0 whitespace-nowrap">
-                  <span className="text-gray-400 whitespace-nowrap">担保货币</span>
+                  <span className="text-gray-400 whitespace-nowrap">{getTagMarginStockRecords(linkedCollateralMarginRecords).length > 0 ? '担保资产' : '担保货币'}</span>
                   <button
                     type="button"
                     className="relative w-3.5 h-3.5 rounded-full inline-flex items-center justify-center font-bold leading-none flex-shrink-0"

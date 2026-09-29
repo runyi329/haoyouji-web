@@ -29,6 +29,15 @@ import {
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
+import {
+  getTagMarginCurrencyRecords,
+  getTagMarginStockMarketValue,
+  getTagMarginStockRecords,
+  getTagMarginStockSymbols,
+  parseTagMarginRecords,
+  resolveTagMarginStockQuote,
+  type TagMarginRecord,
+} from "@shared/tag-margin-assets";
 
 const CRYPTO_COINS = ["BTC", "ETH", "SOL", "LDO", "USDT", "元"];
 const normalizeCoin = (coin: string) => (!coin || coin === "人民币") ? "元" : coin;
@@ -37,6 +46,46 @@ const CNY_RATE_FALLBACK = 6.8; // 居底备用，实际汇率从接口实时获�
 interface DepositEntry {
   margin: string;
   marginCoin: string;
+}
+
+type RightMarginEdit = {
+  assetType: 'currency' | 'stock';
+  coin: string;
+  amount: string;
+  label: string;
+  date: string;
+  symbol: string;
+  code: string;
+  name: string;
+  quantity: string;
+  referencePrice: string;
+  priceDate: string;
+  priceUpdatedAt: string;
+};
+
+const emptyCurrencyMargin = (date = new Date().toISOString().slice(0, 10)): RightMarginEdit => ({
+  assetType: 'currency', coin: 'ETH', amount: '', label: '', date,
+  symbol: '', code: '', name: '', quantity: '', referencePrice: '', priceDate: '', priceUpdatedAt: '',
+});
+
+const emptyStockMargin = (date = new Date().toISOString().slice(0, 10)): RightMarginEdit => ({
+  assetType: 'stock', coin: '', amount: '', label: '', date,
+  symbol: '', code: '', name: '', quantity: '', referencePrice: '', priceDate: '', priceUpdatedAt: '',
+});
+
+function toRightMarginEdit(record: TagMarginRecord, date: string): RightMarginEdit {
+  if (record.assetType === 'stock') {
+    return {
+      assetType: 'stock', coin: '', amount: '', label: record.label, date: record.date || date,
+      symbol: record.symbol, code: record.code, name: record.name, quantity: String(record.quantity),
+      referencePrice: record.referencePrice > 0 ? String(record.referencePrice) : '',
+      priceDate: record.priceDate, priceUpdatedAt: record.priceUpdatedAt,
+    };
+  }
+  return {
+    assetType: 'currency', coin: record.coin || '元', amount: String(record.amount), label: record.label, date: record.date || date,
+    symbol: '', code: '', name: '', quantity: '', referencePrice: '', priceDate: '', priceUpdatedAt: '',
+  };
 }
 
 function toCNY(margin: string | number, coin: string, prices: Record<string, number>): number {
@@ -445,7 +494,11 @@ export default function DepositManage() {
 
   // ── 右侧保证金状态 ──
   const [selectedTagForRight, setSelectedTagForRight] = useState<string | null>(null);
-  const [rightMarginEdits, setRightMarginEdits] = useState<Array<{ coin: string; amount: string; label: string; date: string }>>([]);
+  const [rightMarginEdits, setRightMarginEdits] = useState<RightMarginEdit[]>([]);
+  const [savedRightMarginEdits, setSavedRightMarginEdits] = useState<RightMarginEdit[] | null>(null);
+  const [rightMarginStockLookupRow, setRightMarginStockLookupRow] = useState<number | null>(null);
+  const [rightMarginStockLookupInput, setRightMarginStockLookupInput] = useState('');
+  const [rightMarginStockLookupQuery, setRightMarginStockLookupQuery] = useState('');
   const [rightEditMode, setRightEditMode] = useState(false);
   const [rightSaving, setRightSaving] = useState(false);
   // 提现/入金相关状态
@@ -518,6 +571,51 @@ export default function DepositManage() {
     { enabled: !!ledgerId, refetchInterval: 30000 }
   );
 
+  const currentRightMarginRecords = useMemo(() => {
+    if (savedRightMarginEdits) {
+      return parseTagMarginRecords(savedRightMarginEdits.map((entry) => entry.assetType === 'stock'
+        ? {
+          assetType: 'stock', symbol: entry.symbol, code: entry.code, name: entry.name,
+          quantity: Number(entry.quantity), referencePrice: Number(entry.referencePrice),
+          priceDate: entry.priceDate, priceUpdatedAt: entry.priceUpdatedAt,
+          label: entry.label, date: entry.date,
+        }
+        : { assetType: 'currency', coin: entry.coin, amount: Number(entry.amount), label: entry.label, date: entry.date }
+      ));
+    }
+    return parseTagMarginRecords((rightTagConfig as any)?.margin_by_coin);
+  }, [rightTagConfig, savedRightMarginEdits]);
+  const currentRightMarginJson = useMemo(() => (
+    currentRightMarginRecords.length > 0 ? JSON.stringify(currentRightMarginRecords) : undefined
+  ), [currentRightMarginRecords]);
+  const allRightMarginStockSymbols = useMemo(() => {
+    const records = Object.values((allTagsMarginSummary ?? {}) as Record<string, any>)
+      .flatMap((summary) => parseTagMarginRecords(summary?.marginByCoin));
+    return getTagMarginStockSymbols(records);
+  }, [allTagsMarginSummary]);
+  const allMarginStockCloseQuery = (trpc as any).getManualStockCloseSnapshots.useQuery(
+    { symbols: allRightMarginStockSymbols },
+    { enabled: allRightMarginStockSymbols.length > 0, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false },
+  );
+  const allMarginStockQuotes = ((allMarginStockCloseQuery.data as any)?.quotes ?? {}) as Record<string, { price?: number; currency?: string; priceDate?: string; updatedAt?: string }>;
+
+  useEffect(() => {
+    if (rightMarginStockLookupRow === null || rightMarginStockLookupInput.trim().length < 2) {
+      setRightMarginStockLookupQuery('');
+      return;
+    }
+    const timer = window.setTimeout(() => setRightMarginStockLookupQuery(rightMarginStockLookupInput.trim()), 280);
+    return () => window.clearTimeout(timer);
+  }, [rightMarginStockLookupRow, rightMarginStockLookupInput]);
+
+  const rightMarginStockLookupResult = (trpc as any).searchManualAshareStocks.useQuery(
+    { query: rightMarginStockLookupQuery || 'xx' },
+    { enabled: rightEditMode && rightMarginStockLookupRow !== null && rightMarginStockLookupQuery.length >= 2, staleTime: 60_000 },
+  );
+  const rightMarginStockSuggestions = ((rightMarginStockLookupResult.data as any)?.results ?? []) as Array<{
+    symbol: string; code: string; name: string; latestPrice?: number; latestPriceDate?: string; latestPriceUpdatedAt?: string;
+  }>;
+
   const saveTagConfigMutation = trpc.ledger.saveTagConfig.useMutation({
     onSuccess: () => {
       toast.success("已保存");
@@ -540,38 +638,100 @@ export default function DepositManage() {
   useEffect(() => {
     setRightEditMode(false);
     setRightMarginEdits([]);
+    setSavedRightMarginEdits(null);
+    setRightMarginStockLookupRow(null);
+    setRightMarginStockLookupInput('');
+    setRightMarginStockLookupQuery('');
     setRightBalanceEditMode(false);
     setFundFlowEditMode(false);
     setFundFlowEdits([]);
   }, [selectedTagForRight]);
 
   const handleStartRightEditing = () => {
-    const savedMargin = rightTagConfig?.margin_by_coin
-      ? (() => { try { return JSON.parse(rightTagConfig.margin_by_coin as string); } catch { return null; } })()
-      : null;
     const todayStr = new Date().toISOString().slice(0, 10);
-    let entries: Array<{ coin: string; amount: string; label: string; date: string }>;
-    if (!savedMargin) {
-      entries = [{ coin: "ETH", amount: "", label: "", date: todayStr }];
-    } else if (Array.isArray(savedMargin)) {
-      // 新格式：数组
-      entries = savedMargin.map((e: any) => ({ coin: e.coin || '元', amount: String(e.amount), label: e.label || '', date: e.date || todayStr }));
-    } else {
-      // 旧格式对象
-      entries = Object.entries(savedMargin).map(([coin, amount]) => ({ coin, amount: String(amount), label: '', date: todayStr }));
-    }
+    const savedRecords = parseTagMarginRecords((rightTagConfig as any)?.margin_by_coin);
+    // 查询缓存保存后会异步刷新；刷新完成前仍应从刚保存的全量清单继续编辑，
+    // 否则紧接着新增币种会拿旧快照覆盖已保存的股票。
+    const entries: RightMarginEdit[] = savedRightMarginEdits
+      ? savedRightMarginEdits.map((entry) => ({ ...entry }))
+      : savedRecords.length > 0
+        ? savedRecords.map((record) => toRightMarginEdit(record, todayStr))
+        : [emptyCurrencyMargin(todayStr)];
     setRightMarginEdits(entries);
     setRightEditMode(true);
   };
 
+  const updateRightMarginEntry = (index: number, patch: Partial<RightMarginEdit>) => {
+    setRightMarginEdits((entries) => entries.map((entry, entryIndex) => entryIndex === index ? { ...entry, ...patch } : entry));
+  };
+
+  const selectRightMarginAshareStock = (index: number, suggestion: { symbol: string; code: string; name: string; latestPrice?: number; latestPriceDate?: string; latestPriceUpdatedAt?: string }) => {
+    updateRightMarginEntry(index, {
+      symbol: suggestion.symbol,
+      code: suggestion.code,
+      name: suggestion.name,
+      referencePrice: Number(suggestion.latestPrice) > 0 ? String(suggestion.latestPrice) : '',
+      priceDate: suggestion.latestPriceDate || '',
+      priceUpdatedAt: suggestion.latestPriceUpdatedAt || '',
+    });
+    setRightMarginStockLookupRow(null);
+    setRightMarginStockLookupInput('');
+    setRightMarginStockLookupQuery('');
+  };
+
+  // 六码和唯一候选直接回填；有多个候选时保留列表供管理员确认。
+  useEffect(() => {
+    if (rightMarginStockLookupRow === null || rightMarginStockLookupResult.isFetching) return;
+    const typedCode = rightMarginStockLookupInput.trim().toUpperCase()
+      .replace(/^(?:SH|SZ|BJ)[._-]?/, '')
+      .replace(/[._-]?(?:SH|SZ|BJ)$/, '');
+    const exactSuggestion = /^\d{6}$/.test(typedCode)
+      ? rightMarginStockSuggestions.find((suggestion) => suggestion.code === typedCode)
+      : undefined;
+    const onlySuggestion = rightMarginStockSuggestions.length === 1 ? rightMarginStockSuggestions[0] : undefined;
+    const suggestion = exactSuggestion || onlySuggestion;
+    if (suggestion) selectRightMarginAshareStock(rightMarginStockLookupRow, suggestion);
+  }, [rightMarginStockLookupRow, rightMarginStockLookupInput, rightMarginStockSuggestions, rightMarginStockLookupResult.isFetching]);
+
   const handleSaveRightMargin = async () => {
     if (!selectedTagForRight) return;
     setRightSaving(true);
-    // 支持负数（给出保证金），过滤掉金额为空的行
+    // 数字币/人民币支持正负流水；股票以有效代码和持仓股数作为一笔标签级担保物。
     const todayStr = new Date().toISOString().slice(0, 10);
-    const validEntries = rightMarginEdits.filter(e => e.amount !== '' && !isNaN(parseFloat(e.amount)));
+    const incompleteStock = rightMarginEdits.find((entry) => entry.assetType === 'stock'
+      && (entry.symbol.trim() || entry.name.trim() || entry.quantity.trim())
+      && (!/^\d{6}\.(?:SH|SZ|BJ)$/.test(entry.symbol.trim().toUpperCase()) || !Number.isFinite(Number(entry.quantity)) || Number(entry.quantity) <= 0));
+    if (incompleteStock) {
+      toast.error('股票保证金请完成选择股票和填写持股数量后再保存');
+      setRightSaving(false);
+      return;
+    }
+    const validEntries: TagMarginRecord[] = [];
+    for (const entry of rightMarginEdits) {
+      if (entry.assetType === 'stock') {
+        const symbol = entry.symbol.trim().toUpperCase();
+        const quantity = Number(entry.quantity);
+        if (!/^\d{6}\.(?:SH|SZ|BJ)$/.test(symbol) || !Number.isFinite(quantity) || quantity === 0) continue;
+        validEntries.push({
+          assetType: 'stock' as const,
+          symbol,
+          code: entry.code.trim() || symbol.slice(0, 6),
+          name: entry.name.trim(),
+          quantity,
+          referencePrice: Number(entry.referencePrice) > 0 ? Number(entry.referencePrice) : 0,
+          priceDate: entry.priceDate || '',
+          priceUpdatedAt: entry.priceUpdatedAt || '',
+          label: entry.label || '',
+          date: entry.date || todayStr,
+        });
+        continue;
+      }
+      const amount = Number(entry.amount);
+      if (entry.amount === '' || !Number.isFinite(amount)) continue;
+      validEntries.push({ assetType: 'currency' as const, coin: entry.coin || '元', amount, label: entry.label || '', date: entry.date || todayStr });
+    }
     const marginByCoinJson = validEntries.length > 0
-      ? JSON.stringify(validEntries.map(e => ({ coin: e.coin || '元', amount: parseFloat(e.amount), label: e.label || '', date: e.date || todayStr })))
+      ? JSON.stringify(validEntries)
       : undefined;
     // 保留其他配置字段，只更新 marginByCoin（余额改为自动读取，不保存 accountBalance/balanceDate）
     try {
@@ -583,9 +743,12 @@ export default function DepositManage() {
         accountMultiplier: rightTagConfig?.account_multiplier as string | undefined,
         marginBase: (rightTagConfig as any)?.margin_base as string | undefined,
       });
+      setSavedRightMarginEdits(validEntries.map((entry) => toRightMarginEdit(entry, todayStr)));
       // 写入操作日志
       const detail = validEntries.length > 0
-        ? validEntries.map(e => `${e.coin} ${e.amount}${e.label ? ' (' + e.label + ')' : ''}`).join('、')
+        ? validEntries.map((entry) => entry.assetType === 'stock'
+          ? `${entry.name || entry.code} ${entry.quantity}股${entry.label ? ' (' + entry.label + ')' : ''}`
+          : `${entry.coin} ${entry.amount}${entry.label ? ' (' + entry.label + ')' : ''}`).join('、')
         : '清空保证金';
       await addMarginLogMutation.mutateAsync({
         ledgerId,
@@ -602,7 +765,7 @@ export default function DepositManage() {
     if (!selectedTagForRight) return;
     setRightSaving(true);
     // 保存时保持当前保证金数据不变
-    const marginByCoinJson = rightTagConfig?.margin_by_coin as string | undefined;
+    const marginByCoinJson = currentRightMarginJson;
     try {
       await saveTagConfigMutation.mutateAsync({
         ledgerId,
@@ -660,25 +823,15 @@ export default function DepositManage() {
     return null;
   }, []);
 
-  // 解析右侧保证金数据（当前选中标签）
-  const rightMarginData = useMemo(() => {
-    if (!rightTagConfig?.margin_by_coin) return [];
-    try {
-      const parsed = JSON.parse(rightTagConfig.margin_by_coin as string);
-      // 新格式：数组 [{ coin, amount, label? }]
-      if (Array.isArray(parsed)) {
-        return parsed.map((e: any) => ({ coin: e.coin || '元', amount: Number(e.amount), label: e.label || '', date: e.date || '' }));
-      }
-      // 旧格式向下兼容：对象 { coin: amount }
-      return Object.entries(parsed).map(([coin, amount]) => ({ coin, amount: Number(amount), label: '', date: '' }));
-    } catch { return []; }
-  }, [rightTagConfig]);
+  // 解析右侧保证金数据（当前选中标签）。旧币种结构与新版股票结构同时兼容。
+  const rightMarginData = currentRightMarginRecords;
 
   const rightTotalCNY = useMemo(() => {
-    return rightMarginData.reduce((sum, { coin, amount }) => {
-      return sum + toCNY(String(amount), coin, cryptoPrices);
+    return rightMarginData.reduce((sum, entry) => {
+      if (entry.assetType === 'stock') return sum + (getTagMarginStockMarketValue(entry, allMarginStockQuotes) ?? 0);
+      return sum + toCNY(String(entry.amount), entry.coin, cryptoPrices);
     }, 0);
-  }, [rightMarginData, cryptoPrices]);
+  }, [rightMarginData, cryptoPrices, allMarginStockQuotes]);
 
   // 解析提现/入金数据（当前选中标签）
   const fundFlowData = useMemo(() => {
@@ -725,7 +878,7 @@ export default function DepositManage() {
       await saveTagConfigMutation.mutateAsync({
         ledgerId,
         tagName: selectedTagForRight,
-        marginByCoin: rightTagConfig?.margin_by_coin as string | undefined,
+        marginByCoin: currentRightMarginJson,
         initialAmount: rightTagConfig?.initial_amount as string | undefined,
         accountMultiplier: rightTagConfig?.account_multiplier as string | undefined,
         marginBase: (rightTagConfig as any)?.margin_base as string | undefined,
@@ -755,7 +908,7 @@ export default function DepositManage() {
           await saveTagConfigMutation.mutateAsync({
             ledgerId,
             tagName: selectedTagForRight,
-            marginByCoin: rightTagConfig?.margin_by_coin as string | undefined,
+            marginByCoin: currentRightMarginJson,
             initialAmount: rightTagConfig?.initial_amount as string | undefined,
             accountMultiplier: rightTagConfig?.account_multiplier as string | undefined,
             marginBase: (rightTagConfig as any)?.margin_base as string | undefined,
@@ -969,9 +1122,9 @@ export default function DepositManage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
                           <UserAvatar
-                            userId={member.userId}
+                            username={member.username}
                             nickname={member.nickname || member.username}
-                            size={32}
+                            size="md"
                           />
                           <div>
                             <div className="text-sm font-bold text-gray-800">
@@ -1119,17 +1272,11 @@ export default function DepositManage() {
                 if (tagSummaryData && hasPrices) {
                   const marginBase = parseFloat(tagSummaryData.marginBase || '0') || 0;
                   if (marginBase > 0) {
-                    // 解析 marginByCoin 计算已付保证金（与展开里 rightTotalCNY 逻辑完全一致）
-                    let totalMarginCNY = 0;
-                    if (tagSummaryData.marginByCoin) {
-                      try {
-                        const parsed = JSON.parse(tagSummaryData.marginByCoin);
-                        if (Array.isArray(parsed)) {
-                          // 与展开里 rightTotalCNY 一致：toCNY(String(amount), coin, cryptoPrices)
-                          totalMarginCNY = parsed.reduce((s: number, e: any) => s + toCNY(String(e.amount), e.coin, cryptoPrices), 0);
-                        }
-                      } catch {}
-                    }
+                    // 与展开详情共用的口径：数字币/人民币按实时币价，A 股按最后一笔可用盘尾价估值。
+                    const totalMarginCNY = parseTagMarginRecords(tagSummaryData.marginByCoin).reduce((sum, entry) => {
+                      if (entry.assetType === 'stock') return sum + (getTagMarginStockMarketValue(entry, allMarginStockQuotes) ?? 0);
+                      return sum + toCNY(String(entry.amount), entry.coin, cryptoPrices);
+                    }, 0);
                     // 盈亏净值（与展开里 pnl 逻辑完全一致）
                     const latestBal = tagSummaryData.latestBalance;
                     const balNum = latestBal ? parseFloat(String(latestBal.balance)) : 0;
@@ -1224,7 +1371,32 @@ export default function DepositManage() {
                                 <div className="text-xs text-gray-400 py-2 text-center">暂未设置右侧保证金</div>
                               ) : (
                                 <div className="space-y-2">
-                                  {(rightMarginData as Array<{ coin: string; amount: number; label: string; date: string }>).map(({ coin, amount, label, date }, _i) => {
+                                  {rightMarginData.map((entry, _i) => {
+                                    if (entry.assetType === 'stock') {
+                                      const quote = resolveTagMarginStockQuote(entry, allMarginStockQuotes);
+                                      const marketValue = getTagMarginStockMarketValue(entry, allMarginStockQuotes);
+                                      const quoteDate = quote.priceDate ? quote.priceDate.slice(0, 10) : '';
+                                      const cnyRate = cryptoPrices.USDT ?? CNY_RATE_FALLBACK;
+                                      return (
+                                        <div key={_i} className="flex items-start justify-between py-2" style={{ borderBottom: '1px solid #E5E7EB' }}>
+                                          <div className="flex flex-col min-w-0 flex-1 mr-2">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                            <span className="text-xs font-medium text-gray-700">股票</span>
+                                            <span className="text-xs truncate" style={{ color: '#2563EB' }}>{entry.name || entry.code}</span>
+                                            <span className="text-[10px] font-mono" style={{ color: '#64748B' }}>{entry.code}</span>
+                                          </div>
+                                            <span className="text-[10px] text-gray-400 mt-0.5">{quote.isCloseSnapshot ? '参考价' : '暂用参考价'}{quoteDate ? ` · ${quoteDate}` : ''} · ¥{quote.price?.toLocaleString('zh-CN', { maximumFractionDigits: 3 }) ?? '--'}</span>
+                                            {entry.label ? <span className="text-[10px] text-gray-400 mt-0.5 break-all" style={{ maxWidth: '160px' }}>{entry.label}</span> : null}
+                                          </div>
+                                          <div className="flex flex-col items-end">
+                                            <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{entry.quantity.toLocaleString('zh-CN', { maximumFractionDigits: 4 })}<span className="text-xs text-gray-500 ml-1">股</span></span>
+                                            <span className="text-xs" style={{ color: marketValue === null ? '#9CA3AF' : '#2563EB' }}>{marketValue === null ? '市值待获取' : `约 ¥${marketValue.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`}</span>
+                                            {marketValue !== null && cnyRate > 0 && <span className="text-[10px] text-gray-400">≈ {(marketValue / cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} U</span>}
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                    const { coin, amount, label, date } = entry;
                                     const cnyVal = coin !== '元' ? toCNY(String(Math.abs(amount)), coin, cryptoPrices) : Math.abs(amount);
                                     return (
                                       <div
@@ -1278,7 +1450,7 @@ export default function DepositManage() {
                                     <span className="text-xs text-gray-500">合计</span>
                                     <div className="flex flex-col items-end">
                                       {Object.entries(
-                                        (rightMarginData as Array<{ coin: string; amount: number }>).reduce((acc, { coin, amount }) => {
+                                        getTagMarginCurrencyRecords(rightMarginData).reduce((acc, { coin, amount }) => {
                                           acc[coin] = (acc[coin] || 0) + amount;
                                           return acc;
                                         }, {} as Record<string, number>)
@@ -1287,87 +1459,15 @@ export default function DepositManage() {
                                           {total >= 0 ? '+' : ''}{total.toLocaleString('zh-CN', { maximumFractionDigits: 4 })} {coin}
                                         </span>
                                       ))}
-                                      <span className="text-sm font-bold text-blue-700">
-                                        ¥{rightTotalCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                                      </span>
+                                      {getTagMarginStockRecords(rightMarginData).length > 0 && (
+                                        <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>
+                                          {getTagMarginStockRecords(rightMarginData).reduce((sum, stock) => sum + stock.quantity, 0).toLocaleString('zh-CN', { maximumFractionDigits: 4 })} 股（股票）
+                                        </span>
+                                      )}
+                                      <span className="text-[10px] text-gray-500">总担保市值</span>
+                                      <span className="text-sm font-bold text-blue-700">约 ¥{rightTotalCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                                      {(cryptoPrices.USDT ?? CNY_RATE_FALLBACK) > 0 && <span className="text-xs text-gray-500">≈ {(rightTotalCNY / (cryptoPrices.USDT ?? CNY_RATE_FALLBACK)).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} U</span>}
                                     </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* ── 历史提现区块（只读，联动P004录入的withdraw记录） ── */}
-                            <div className="rounded-xl p-3 mb-3 space-y-2" style={{ backgroundColor: '#FFFBF0', border: '1px solid #FDE68A' }}>
-                              <div className="text-xs text-amber-700 font-medium">历史提现</div>
-                              {transferRecords.withdraws.length === 0 ? (
-                                <div className="text-xs text-gray-400 py-2 text-center">暂无历史提现记录</div>
-                              ) : (
-                                <div className="space-y-2">
-                                  {transferRecords.withdraws.map((record, _i) => (
-                                    <div
-                                      key={_i}
-                                      className="flex items-start justify-between py-2"
-                                      style={{ borderBottom: '1px solid #FDE68A' }}
-                                    >
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-xs font-medium text-gray-700">提现</span>
-                                        <span className="text-xs" style={{ color: '#D97706' }}>
-                                          {record.date ? record.date.slice(5) : '--'}
-                                        </span>
-                                        <span className="text-[10px] font-medium px-1 py-0.5 rounded" style={{ backgroundColor: '#FEF3C7', color: '#D97706' }}>
-                                          {record.amount < 0 ? '提出' : '转入'}
-                                        </span>
-                                      </div>
-                                      <span className="text-sm font-semibold" style={{ color: '#D97706' }}>
-                                        {record.amount >= 0 ? '+' : ''}¥{record.amount.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                                      </span>
-                                    </div>
-                                  ))}
-                                  <div className="flex items-end justify-between pt-1" style={{ borderTop: '1px solid #FDE68A' }}>
-                                    <span className="text-xs text-gray-500">累计提现</span>
-                                    <span className="text-sm font-bold" style={{ color: '#D97706' }}>
-                                      ¥{transferRecords.withdraws.reduce((s, r) => s + r.amount, 0).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* ── 增减本金区块（只读，联动P004录入的capital_add/capital_reduce记录） ── */}
-                            <div className="rounded-xl p-3 mb-3 space-y-2" style={{ backgroundColor: '#F5F3FF', border: '1px solid #DDD6FE' }}>
-                              <div className="text-xs font-medium" style={{ color: '#7C3AED' }}>增减本金</div>
-                              {transferRecords.capitals.length === 0 ? (
-                                <div className="text-xs text-gray-400 py-2 text-center">暂无增减本金记录</div>
-                              ) : (
-                                <div className="space-y-2">
-                                  {transferRecords.capitals.map((record, _i) => {
-                                    const isAdd = record.description === 'capital_add';
-                                    return (
-                                      <div
-                                        key={_i}
-                                        className="flex items-start justify-between py-2"
-                                        style={{ borderBottom: '1px solid #DDD6FE' }}
-                                      >
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="text-xs font-medium text-gray-700">{isAdd ? '增加本金' : '减少本金'}</span>
-                                          <span className="text-xs" style={{ color: '#7C3AED' }}>
-                                            {record.date ? record.date.slice(5) : '--'}
-                                          </span>
-                                          <span className="text-[10px] font-medium px-1 py-0.5 rounded" style={{ backgroundColor: '#EDE9FE', color: '#7C3AED' }}>
-                                            本金
-                                          </span>
-                                        </div>
-                                        <span className="text-sm font-semibold" style={{ color: '#7C3AED' }}>
-                                          {record.amount >= 0 ? '+' : ''}¥{record.amount.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                                        </span>
-                                      </div>
-                                    );
-                                  })}
-                                  <div className="flex items-end justify-between pt-1" style={{ borderTop: '1px solid #DDD6FE' }}>
-                                    <span className="text-xs text-gray-500">累计本金变动</span>
-                                    <span className="text-sm font-bold" style={{ color: '#7C3AED' }}>
-                                      {transferRecords.capitals.reduce((s, r) => s + r.amount, 0) >= 0 ? '+' : ''}¥{transferRecords.capitals.reduce((s, r) => s + r.amount, 0).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                                    </span>
                                   </div>
                                 </div>
                               )}
@@ -1543,6 +1643,84 @@ export default function DepositManage() {
                           </>
                         )}
 
+                            {/* ── 历史提现区块（只读，联动P004录入的withdraw记录） ── */}
+                            <div className="mt-3 rounded-xl p-3 mb-3 space-y-2" style={{ backgroundColor: '#FFFBF0', border: '1px solid #FDE68A' }}>
+                              <div className="text-xs text-amber-700 font-medium">历史提现</div>
+                              {transferRecords.withdraws.length === 0 ? (
+                                <div className="text-xs text-gray-400 py-2 text-center">暂无历史提现记录</div>
+                              ) : (
+                                <div className="space-y-2">
+                                  {transferRecords.withdraws.map((record, _i) => (
+                                    <div
+                                      key={_i}
+                                      className="flex items-start justify-between py-2"
+                                      style={{ borderBottom: '1px solid #FDE68A' }}
+                                    >
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-medium text-gray-700">提现</span>
+                                        <span className="text-xs" style={{ color: '#D97706' }}>
+                                          {record.date ? record.date.slice(5) : '--'}
+                                        </span>
+                                        <span className="text-[10px] font-medium px-1 py-0.5 rounded" style={{ backgroundColor: '#FEF3C7', color: '#D97706' }}>
+                                          {record.amount < 0 ? '提出' : '转入'}
+                                        </span>
+                                      </div>
+                                      <span className="text-sm font-semibold" style={{ color: '#D97706' }}>
+                                        {record.amount >= 0 ? '+' : ''}¥{record.amount.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                                      </span>
+                                    </div>
+                                  ))}
+                                  <div className="flex items-end justify-between pt-1" style={{ borderTop: '1px solid #FDE68A' }}>
+                                    <span className="text-xs text-gray-500">累计提现</span>
+                                    <span className="text-sm font-bold" style={{ color: '#D97706' }}>
+                                      ¥{transferRecords.withdraws.reduce((s, r) => s + r.amount, 0).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* ── 增减本金区块（只读，联动P004录入的capital_add/capital_reduce记录） ── */}
+                            <div className="rounded-xl p-3 mb-3 space-y-2" style={{ backgroundColor: '#F5F3FF', border: '1px solid #DDD6FE' }}>
+                              <div className="text-xs font-medium" style={{ color: '#7C3AED' }}>增减本金</div>
+                              {transferRecords.capitals.length === 0 ? (
+                                <div className="text-xs text-gray-400 py-2 text-center">暂无增减本金记录</div>
+                              ) : (
+                                <div className="space-y-2">
+                                  {transferRecords.capitals.map((record, _i) => {
+                                    const isAdd = record.description === 'capital_add';
+                                    return (
+                                      <div
+                                        key={_i}
+                                        className="flex items-start justify-between py-2"
+                                        style={{ borderBottom: '1px solid #DDD6FE' }}
+                                      >
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-xs font-medium text-gray-700">{isAdd ? '增加本金' : '减少本金'}</span>
+                                          <span className="text-xs" style={{ color: '#7C3AED' }}>
+                                            {record.date ? record.date.slice(5) : '--'}
+                                          </span>
+                                          <span className="text-[10px] font-medium px-1 py-0.5 rounded" style={{ backgroundColor: '#EDE9FE', color: '#7C3AED' }}>
+                                            本金
+                                          </span>
+                                        </div>
+                                        <span className="text-sm font-semibold" style={{ color: '#7C3AED' }}>
+                                          {record.amount >= 0 ? '+' : ''}¥{record.amount.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                  <div className="flex items-end justify-between pt-1" style={{ borderTop: '1px solid #DDD6FE' }}>
+                                    <span className="text-xs text-gray-500">累计本金变动</span>
+                                    <span className="text-sm font-bold" style={{ color: '#7C3AED' }}>
+                                      {transferRecords.capitals.reduce((s, r) => s + r.amount, 0) >= 0 ? '+' : ''}¥{transferRecords.capitals.reduce((s, r) => s + r.amount, 0).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+
                         {/* 备注面板（始终显示，不随编辑模式隐藏） */}
                         {!rightEditMode && selectedTagForRight && (
                           <DepositNoteRow
@@ -1667,83 +1845,74 @@ export default function DepositManage() {
                             <div className="space-y-3 mb-3">
                               {rightMarginEdits.map((entry, idx) => (
                                 <div key={idx} className="rounded-xl p-2.5" style={{ backgroundColor: '#F0F4FF', border: '1px solid #DBEAFE' }}>
-                                  {/* 币种选择行 */}
-                                  <div className="flex gap-1 flex-wrap mb-2">
-                                    {CRYPTO_COINS.map((c) => (
-                                      <button
-                                        key={c}
-                                        onClick={() => {
-                                          const next = [...rightMarginEdits];
-                                          next[idx] = { ...next[idx], coin: c };
-                                          setRightMarginEdits(next);
+                                  <div className="flex items-center justify-between gap-2 mb-2">
+                                    <div className="flex gap-1 rounded-lg p-0.5" style={{ backgroundColor: '#E0E7FF' }}>
+                                      {([['currency', '数字币 / 人民币'], ['stock', '股票']] as const).map(([assetType, label]) => (
+                                        <button key={assetType} type="button" onClick={() => {
+                                          if (entry.assetType === assetType) return;
+                                          // 资产类别不是互斥的“转换”：从股票点“数字币 / 人民币”或反向点击时，
+                                          // 在当前行后插入新资产，保留已有担保物，避免用户误操作覆盖整笔股票。
+                                          setRightMarginEdits((items) => [
+                                            ...items.slice(0, idx + 1),
+                                            assetType === 'stock' ? emptyStockMargin(entry.date || undefined) : emptyCurrencyMargin(entry.date || undefined),
+                                            ...items.slice(idx + 1),
+                                          ]);
                                         }}
-                                        className="px-2 py-1 rounded-lg text-xs font-medium"
-                                        style={{
-                                          backgroundColor: (entry.coin || "ETH") === c ? "#2563eb" : "#FFFFFF",
-                                          color: (entry.coin || "ETH") === c ? "#FFFFFF" : "#374151",
-                                        }}
-                                      >
-                                        {c}
-                                      </button>
-                                    ))}
-                                  </div>
-                                  {/* 第一行：金额 + 日期（各占一半） */}
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="number"
-                                      value={entry.amount}
-                                      onChange={(e) => {
-                                        const next = [...rightMarginEdits];
-                                        next[idx] = { ...next[idx], amount: e.target.value };
-                                        setRightMarginEdits(next);
-                                      }}
-                                      placeholder="金额"
-                                      className="flex-1 text-sm border rounded-lg px-2 py-1.5 outline-none"
-                                      style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF" }}
-                                    />
-                                    <input
-                                      type="date"
-                                      value={entry.date || new Date().toISOString().slice(0, 10)}
-                                      onChange={(e) => {
-                                        const next = [...rightMarginEdits];
-                                        next[idx] = { ...next[idx], date: e.target.value };
-                                        setRightMarginEdits(next);
-                                      }}
-                                      className="flex-1 text-xs border rounded-lg px-2 py-1.5 outline-none"
-                                      style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF", WebkitAppearance: 'none' }}
-                                    />
-                                  </div>
-                                  {/* 第二行：备注（多行）+ 删除按鈕 */}
-                                  <div className="flex items-start gap-2 mt-1.5">
-                                    <textarea
-                                      value={entry.label || ''}
-                                      onChange={(e) => {
-                                        const next = [...rightMarginEdits];
-                                        next[idx] = { ...next[idx], label: e.target.value };
-                                        setRightMarginEdits(next);
-                                      }}
-                                      placeholder="备注（可输入多行）"
-                                      rows={2}
-                                      className="flex-1 text-sm border rounded-lg px-2 py-1.5 outline-none resize-none"
-                                      style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF", lineHeight: '1.5' }}
-                                    />
-                                    <button
-                                      onClick={() => setRightMarginEdits(rightMarginEdits.filter((_, i) => i !== idx))}
-                                      className="w-7 h-7 flex items-center justify-center rounded-full flex-shrink-0 mt-0.5"
-                                      style={{ backgroundColor: "#FFF5F5" }}
-                                    >
+                                          disabled={entry.assetType === assetType}
+                                          title={entry.assetType === assetType ? `当前为${label}` : `新增一项${label}`}
+                                          className="px-2 py-1 rounded-md text-[11px] font-semibold"
+                                          style={{ backgroundColor: entry.assetType === assetType ? '#2563EB' : 'transparent', color: entry.assetType === assetType ? '#FFFFFF' : '#475569', cursor: entry.assetType === assetType ? 'default' : 'pointer' }}>
+                                          {entry.assetType === assetType ? label : `+ 添加${label}`}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <button onClick={() => setRightMarginEdits((items) => items.filter((_, itemIndex) => itemIndex !== idx))} className="w-7 h-7 flex items-center justify-center rounded-full flex-shrink-0" style={{ backgroundColor: '#FFF5F5' }} title="删除">
                                       <X className="w-3 h-3 text-red-400" />
                                     </button>
                                   </div>
+                                  {entry.assetType === 'currency' ? (
+                                    <>
+                                      <div className="flex gap-1 flex-wrap mb-2">
+                                        {CRYPTO_COINS.map((coin) => (
+                                          <button key={coin} type="button" onClick={() => updateRightMarginEntry(idx, { coin })} className="px-2 py-1 rounded-lg text-xs font-medium"
+                                            style={{ backgroundColor: (entry.coin || 'ETH') === coin ? '#2563eb' : '#FFFFFF', color: (entry.coin || 'ETH') === coin ? '#FFFFFF' : '#374151' }}>{coin}</button>
+                                        ))}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <input type="number" value={entry.amount} onChange={(event) => updateRightMarginEntry(idx, { amount: event.target.value })} placeholder="金额（可为负数）" className="flex-1 text-sm border rounded-lg px-2 py-1.5 outline-none" style={{ borderColor: '#BFDBFE', backgroundColor: '#FFFFFF' }} />
+                                        <input type="date" value={entry.date || new Date().toISOString().slice(0, 10)} onChange={(event) => updateRightMarginEntry(idx, { date: event.target.value })} className="flex-1 text-xs border rounded-lg px-2 py-1.5 outline-none" style={{ borderColor: '#BFDBFE', backgroundColor: '#FFFFFF', WebkitAppearance: 'none' }} />
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <input value={entry.name} onFocus={() => { setRightMarginStockLookupRow(idx); setRightMarginStockLookupInput(entry.name); }} onChange={(event) => { updateRightMarginEntry(idx, { name: event.target.value }); setRightMarginStockLookupRow(idx); setRightMarginStockLookupInput(event.target.value); }} placeholder="股票名称 / 拼音简称" className="min-w-0 text-xs border rounded-lg px-2 py-1.5 outline-none" style={{ borderColor: '#BFDBFE', backgroundColor: '#FFFFFF' }} />
+                                        <input value={entry.symbol} onFocus={() => { setRightMarginStockLookupRow(idx); setRightMarginStockLookupInput(entry.symbol); }} onChange={(event) => { const symbol = event.target.value.toUpperCase(); updateRightMarginEntry(idx, { symbol }); setRightMarginStockLookupRow(idx); setRightMarginStockLookupInput(symbol); }} placeholder="A 股六码，如 600519" className="min-w-0 text-xs border rounded-lg px-2 py-1.5 outline-none uppercase" style={{ borderColor: '#BFDBFE', backgroundColor: '#FFFFFF' }} />
+                                      </div>
+                                      {rightMarginStockLookupRow === idx && (
+                                        <div className="mt-1.5 rounded-lg border p-1.5" style={{ borderColor: '#C7D2FE', backgroundColor: '#FFFFFF' }}>
+                                          <div className="px-1 pb-1 text-[10px] text-blue-500">输入 A 股六码、名称或拼音简称后校验；选中后将带入最新参考价。</div>
+                                          {rightMarginStockLookupResult.isFetching && <div className="px-1 py-1 text-xs text-blue-500">正在检索 A 股…</div>}
+                                          {!rightMarginStockLookupResult.isFetching && rightMarginStockLookupQuery.length >= 2 && rightMarginStockSuggestions.length === 0 && <div className="px-1 py-1 text-xs text-slate-500">未找到可验证的沪深北 A 股，请检查名称、拼音或六码代码。</div>}
+                                          {rightMarginStockSuggestions.map((suggestion) => <button key={suggestion.symbol} type="button" onClick={() => selectRightMarginAshareStock(idx, suggestion)} className="flex w-full items-center justify-between gap-2 rounded px-1.5 py-1.5 text-left text-xs hover:bg-blue-50"><span className="min-w-0 truncate font-semibold text-blue-900">{suggestion.name}</span><span className="shrink-0 font-mono text-blue-700">{suggestion.code}</span><span className="shrink-0 tabular-nums text-blue-600">{Number(suggestion.latestPrice) > 0 ? `¥${Number(suggestion.latestPrice).toLocaleString()}` : '最新价暂缺'}</span></button>)}
+                                        </div>
+                                      )}
+                                      <div className="grid grid-cols-2 gap-2 mt-1.5">
+                                        <input type="number" min="0" step="any" value={entry.quantity} onChange={(event) => updateRightMarginEntry(idx, { quantity: event.target.value })} placeholder="持股数量" className="min-w-0 text-xs border rounded-lg px-2 py-1.5 outline-none" style={{ borderColor: '#BFDBFE', backgroundColor: '#FFFFFF' }} />
+                                        <input type="date" value={entry.date || new Date().toISOString().slice(0, 10)} onChange={(event) => updateRightMarginEntry(idx, { date: event.target.value })} className="min-w-0 text-xs border rounded-lg px-2 py-1.5 outline-none" style={{ borderColor: '#BFDBFE', backgroundColor: '#FFFFFF', WebkitAppearance: 'none' }} />
+                                      </div>
+                                      <div className="mt-1.5 rounded-lg px-2 py-1.5 text-[11px]" style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8' }}>
+                                        当前参考价：{entry.referencePrice ? `¥${Number(entry.referencePrice).toLocaleString('zh-CN', { maximumFractionDigits: 3 })}` : '选择股票后自动带入'}{entry.priceDate ? ` · ${entry.priceDate}` : ''}；担保市值按每日 15:05 保存的参考价计算。
+                                      </div>
+                                    </>
+                                  )}
+                                  <textarea value={entry.label || ''} onChange={(event) => updateRightMarginEntry(idx, { label: event.target.value })} placeholder="备注（可输入多行）" rows={2} className="w-full mt-1.5 text-sm border rounded-lg px-2 py-1.5 outline-none resize-none" style={{ borderColor: '#BFDBFE', backgroundColor: '#FFFFFF', lineHeight: '1.5' }} />
                                 </div>
                               ))}
-                              {/* 添加一条保证金 */}
-                              <button
-                                onClick={() => setRightMarginEdits([...rightMarginEdits, { coin: "ETH", amount: "", label: "", date: new Date().toISOString().slice(0, 10) }])}
-                                className="flex items-center gap-1 text-xs text-blue-500 mt-1"
-                              >
-                                <Plus className="w-3 h-3" />添加一条保证金
-                              </button>
+                              <div className="flex items-center gap-3 mt-1">
+                                <button type="button" onClick={() => setRightMarginEdits((items) => [...items, emptyCurrencyMargin()])} className="flex items-center gap-1 text-xs text-blue-500"><Plus className="w-3 h-3" />添加数字币 / 人民币</button>
+                                <button type="button" onClick={() => setRightMarginEdits((items) => [...items, emptyStockMargin()])} className="flex items-center gap-1 text-xs text-blue-600"><Plus className="w-3 h-3" />添加股票</button>
+                              </div>
                             </div>
                             <div className="flex gap-2">
                               <button

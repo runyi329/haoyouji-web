@@ -138,11 +138,26 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           opened_at DATETIME NOT NULL,
           initial_quantity DECIMAL(24,8) NOT NULL,
           unit_cost DECIMAL(20,8) NOT NULL,
+          note TEXT NULL COMMENT '持仓编号的管理员批次备注',
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           UNIQUE KEY uk_ledger_stock_lots_opened_event (opened_event_id),
           INDEX idx_ledger_stock_lots_tag_symbol (category_id, symbol, opened_at, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+
+      // 批次备注独立于不可变的成交审计备注。已有批次读取时会回退到开仓事件的 note，
+      // 管理员后续编辑只更新此字段，不会作废或重建任何股票成交记录。
+      const [lotNoteColumnRows] = await (conn as any).execute(
+        `SELECT COLUMN_NAME FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'ledger_stock_lots'
+           AND column_name = 'note'`,
+      );
+      if ((lotNoteColumnRows as any[]).length === 0) {
+        await (conn as any).execute(
+          `ALTER TABLE ledger_stock_lots
+           ADD COLUMN note TEXT NULL COMMENT '持仓编号的管理员批次备注' AFTER unit_cost`,
+        );
+      }
 
       await (conn as any).execute(`
         CREATE TABLE IF NOT EXISTS ledger_stock_event_lot_allocations (
@@ -323,6 +338,7 @@ async function getActiveLots(categoryId: number, symbol?: string) {
   const [rows] = await (conn as any).execute(
     `SELECT l.id, l.symbol, l.stock_name, l.opened_event_id, l.opened_at,
             l.initial_quantity, l.unit_cost,
+            COALESCE(l.note, opening_event.note, '') AS note,
             COALESCE(SUM(CASE WHEN e.status = 'active' THEN a.quantity ELSE 0 END), 0) AS allocated_quantity
      FROM ledger_stock_lots l
      INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
@@ -341,6 +357,7 @@ async function getActiveLots(categoryId: number, symbol?: string) {
     openedAt: toIso(row.opened_at),
     initialQuantity: numberValue(row.initial_quantity),
     unitCost: numberValue(row.unit_cost),
+    note: String(row.note || ""),
     allocatedQuantity: numberValue(row.allocated_quantity),
     remainingQuantity: Math.max(0, numberValue(row.initial_quantity) - numberValue(row.allocated_quantity)),
   }));
@@ -510,9 +527,11 @@ async function buildPortfolio(categoryId: number) {
     current.costValue += lot.remainingQuantity * lot.unitCost;
     current.lots.push({
       id: lot.id,
+      openedEventId: lot.openedEventId,
       openedAt: lot.openedAt,
       quantity: lot.remainingQuantity,
       unitCost: lot.unitCost,
+      note: lot.note,
     });
     positionMap.set(lot.symbol, current);
   }
@@ -555,9 +574,12 @@ async function buildPortfolio(categoryId: number) {
   const dailySnapshots = await getLatestDailySnapshots(categoryId);
   const latestSnapshot = dailySnapshots[0] || null;
   const priorSnapshot = dailySnapshots[1] || null;
-  const dailyChange = latestSnapshot && priorSnapshot ? latestSnapshot.marketValue - priorSnapshot.marketValue : null;
-  const dailyChangePercent = dailyChange !== null && priorSnapshot && Math.abs(priorSnapshot.marketValue) > EPSILON
-    ? dailyChange / priorSnapshot.marketValue
+  // 当日盈亏必须比较两个盘尾的累计盈亏，不能直接比较总市值：新开仓、加仓或
+  // 减仓会改变市值，但新增/收回的本金不是当天的盈亏。例如 R1 在 9 月 29 日
+  // 新增约 55.6 万持仓，市值差额不应被误报为 +55 万当日盈利。
+  const dailyChange = latestSnapshot && priorSnapshot ? latestSnapshot.totalPnl - priorSnapshot.totalPnl : null;
+  const dailyChangePercent = dailyChange !== null && priorSnapshot && Math.abs(priorSnapshot.costValue) > EPSILON
+    ? dailyChange / priorSnapshot.costValue
     : null;
 
   return {
@@ -611,7 +633,12 @@ export async function getStockTagPublicPortfolio(input: {
   const memberPortfolio = await buildMemberStockPortfolio(access.categoryId, input.userId);
   if (!memberPortfolio.isEligible && !access.canEdit) throw new Error("该股票标签尚未对您开放");
   const portfolio = await buildPortfolio(access.categoryId);
-  return { ...access, accountingMode: "stock_portfolio" as const, ...portfolio, history: [] as any[] };
+  // 批次备注是管理员维护信息；成员只需看到已分配批次的价格与数量，不能读取备注。
+  const publicPositions = portfolio.positions.map((position) => ({
+    ...position,
+    lots: position.lots.map(({ note: _note, ...lot }: any) => lot),
+  }));
+  return { ...access, accountingMode: "stock_portfolio" as const, ...portfolio, positions: publicPositions, history: [] as any[] };
 }
 
 /**
@@ -767,11 +794,12 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   });
   const latestSnapshot = dailySnapshots[dailySnapshots.length - 1] || null;
   const priorSnapshot = dailySnapshots.length > 1 ? dailySnapshots[dailySnapshots.length - 2] : null;
-  const dailyChange = latestSnapshot && priorSnapshot && latestSnapshot.marketValue !== null && priorSnapshot.marketValue !== null
-    ? priorSnapshot.marketValue - latestSnapshot.marketValue
+  // 成员视图同样按个人累计盈亏的相邻盘尾差额计算，避免新增参与份额被误算成盈亏。
+  const dailyChange = latestSnapshot && priorSnapshot && latestSnapshot.totalPnl !== null && priorSnapshot.totalPnl !== null
+    ? latestSnapshot.totalPnl - priorSnapshot.totalPnl
     : null;
-  const dailyChangePercent = dailyChange !== null && priorSnapshot && priorSnapshot.marketValue !== null && Math.abs(priorSnapshot.marketValue) > EPSILON
-    ? dailyChange / priorSnapshot.marketValue
+  const dailyChangePercent = dailyChange !== null && priorSnapshot && priorSnapshot.costValue !== null && Math.abs(priorSnapshot.costValue) > EPSILON
+    ? dailyChange / priorSnapshot.costValue
     : null;
   return {
     positions,
@@ -1025,9 +1053,9 @@ export async function createStockTagEvent(input: {
     if (type === "buy" || type === "add") {
       await (tx as any).execute(
         `INSERT INTO ledger_stock_lots
-         (ledger_id, category_id, symbol, stock_name, opened_event_id, opened_at, initial_quantity, unit_cost)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [access.ledgerId, access.categoryId, stock!.symbol, stock!.name, eventId, actualTradedAt, quantity, executionPrice],
+         (ledger_id, category_id, symbol, stock_name, opened_event_id, opened_at, initial_quantity, unit_cost, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [access.ledgerId, access.categoryId, stock!.symbol, stock!.name, eventId, actualTradedAt, quantity, executionPrice, note || null],
       );
     }
     if (type === "reduce" || type === "sell") {
@@ -1256,6 +1284,7 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
   if (!conn) throw new Error("数据库连接不可用");
   const [lotRows] = await (conn as any).execute(
     `SELECT l.id, l.symbol, l.stock_name, l.opened_at, l.initial_quantity, l.unit_cost,
+            COALESCE(l.note, opening_event.note, '') AS note,
             opening_event.market_reference_price AS opening_reference_price,
             COALESCE(opening_event.actual_traded_at, l.opened_at) AS actual_traded_at,
             COALESCE(SUM(CASE WHEN e.status = 'active' THEN a.quantity ELSE 0 END), 0) AS globally_sold_quantity
@@ -1321,6 +1350,7 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
       // 使用管理员登记的实际成交/接单时间（精确到秒），不受后续日度估值影响。
       openedAt: toIso(row.opened_at), actualTradedAt: toIso(row.actual_traded_at),
       unitCost: numberValue(row.unit_cost), openingReferencePrice: numberValue(row.opening_reference_price) || null,
+      note: String(row.note || ""),
       initialQuantity, globallySoldQuantity, currentQuantity, marketPrice,
       availableForParticipation: Math.max(0, currentQuantity - activeAllocatedQuantity),
       status: currentQuantity > EPSILON ? "active" as const : "closed" as const,
@@ -1347,6 +1377,42 @@ export async function getStockLotParticipationMatrix(input: { ledgerId: number; 
   // read-only endpoint that returns only their own allocations.
   if (!access.canEdit) throw new Error("仅37号账本管理员可查看全员股票份额");
   return { ...await getStockLotParticipationMatrixInternal(access.categoryId), canEdit: access.canEdit };
+}
+
+/**
+ * Updates the display note for one holding number without changing the immutable
+ * opening event or any balance, quantity, cost, allocation, or audit evidence.
+ */
+export async function updateStockTagLotNote(input: {
+  ledgerId: number;
+  categoryId: number;
+  lotId: number;
+  note: string;
+  userId: number;
+  systemRole?: string;
+}) {
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
+  const lotId = Number(input.lotId);
+  if (!Number.isInteger(lotId) || lotId <= 0) throw new Error("持仓编号无效");
+  const note = String(input.note ?? "").trim().slice(0, 3000);
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  const [rows] = await (conn as any).execute(
+    `SELECT l.id
+     FROM ledger_stock_lots l
+     INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
+     WHERE l.id = ? AND l.category_id = ? AND opening_event.status = 'active'
+     LIMIT 1`,
+    [lotId, access.categoryId],
+  );
+  if ((rows as any[]).length === 0) throw new Error("持仓编号不存在或已作废");
+  // Empty string is intentionally stored as an explicit cleared note. NULL is reserved
+  // for legacy rows so those rows continue to display their original opening-event note.
+  await (conn as any).execute(
+    `UPDATE ledger_stock_lots SET note = ? WHERE id = ? AND category_id = ?`,
+    [note, lotId, access.categoryId],
+  );
+  return { success: true, note };
 }
 
 

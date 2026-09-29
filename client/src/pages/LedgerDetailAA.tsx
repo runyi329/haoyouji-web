@@ -211,8 +211,11 @@ export default function LedgerDetailAA({
     return Number.isInteger(value) && value > 0 ? value : null;
   });
   const [showTagDropdown, setShowTagDropdown] = useState(false);
-  // 股票标签也先进入与其他标签一致的日历首页；仅在点击日期后打开统一维护/详情页。
-  const [showStockPortfolio, setShowStockPortfolio] = useState(false);
+  // 股票标签默认保留日历首页；预览/分享链接可显式携带 openStockPortfolio=1，
+  // 直接进入管理员或成员对应的持仓页面，不改变普通日历点击路径。
+  const [showStockPortfolio, setShowStockPortfolio] = useState(() => (
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('openStockPortfolio') === '1'
+  ));
 
   // 图片预览（普通成员点击日历格子时弹出）
   const [previewImages, setPreviewImages] = useState<string[]>([]);

@@ -1,4 +1,5 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { getTagMarginCurrencyRecords, getTagMarginStockRecords, getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
 import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter, mibanPearRouter, mibanAftersaleRouter } from "./miban";
 import { mibanTeamRouter } from "./miban-teams";
 import { createHmac } from "crypto";
@@ -10108,6 +10109,17 @@ ${klinesSummary}
         const { getStockLotParticipationMatrix } = await import('./ledger-stock-portfolio');
         return getStockLotParticipationMatrix({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
+    updateStockTagLotNote: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        categoryId: z.number(),
+        lotId: z.number().int().positive(),
+        note: z.string().max(3000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { updateStockTagLotNote } = await import('./ledger-stock-portfolio');
+        return updateStockTagLotNote({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
     setStockLotParticipation: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(37),
@@ -18794,6 +18806,7 @@ ${klinesSummary}
           const linkedTagConfigByName = new Map<string, any>();
           const linkedTagBalanceByName = new Map<string, number>();
           const linkedTagMarginByName = new Map<string, Record<string, number>>();
+          const linkedTagStockMarginsByName = new Map<string, ReturnType<typeof getTagMarginStockRecords>>();
           if (linked37Tags.length > 0) {
             const placeholders = linked37Tags.map(() => '?').join(',');
             const [configs] = await conn.execute(
@@ -18806,29 +18819,29 @@ ${klinesSummary}
               linkedTagConfigByName.set(tagName, config);
               try {
                 // 37号保证金管理维护的 margin_by_coin 是标签逐笔保证金的展示与结算来源。
-                // 共享池按其币种净额估值，避免成员初始金额中的旧兼容字段覆盖当前标签记录。
-                const rawMargins = typeof config.margin_by_coin === 'string'
-                  ? JSON.parse(config.margin_by_coin)
-                  : config.margin_by_coin;
-                const entries = Array.isArray(rawMargins)
-                  ? rawMargins.map((entry: any) => ({ coin: String(entry?.coin ?? 'CNY').trim().toUpperCase() || 'CNY', amount: Number(entry?.amount) }))
-                  : Object.entries(rawMargins ?? {}).map(([coin, amount]) => ({ coin: String(coin).trim().toUpperCase() || 'CNY', amount: Number(amount) }));
+                // 共享池按币种净额与股票盘尾市值估值；成员初始金额的旧字段不会覆盖当前标签记录。
+                const records = parseTagMarginRecords(config.margin_by_coin);
+                const entries = getTagMarginCurrencyRecords(records)
+                  .map((entry) => ({ coin: entry.coin, amount: entry.amount }));
                 const summary: Record<string, number> = {};
                 for (const entry of entries) {
                   if (!Number.isFinite(entry.amount)) continue;
                   summary[entry.coin] = (summary[entry.coin] ?? 0) + entry.amount;
                 }
                 linkedTagMarginByName.set(tagName, summary);
+                linkedTagStockMarginsByName.set(tagName, getTagMarginStockRecords(records));
               } catch {
                 linkedTagMarginByName.set(tagName, {});
+                linkedTagStockMarginsByName.set(tagName, []);
               }
             }
             for (const tagName of linked37Tags) {
               if (!linkedTagMarginByName.has(tagName)) linkedTagMarginByName.set(tagName, {});
+              if (!linkedTagStockMarginsByName.has(tagName)) linkedTagStockMarginsByName.set(tagName, []);
             }
             // 仅当标签没有维护 margin_by_coin 时，兼容读取成员初始金额中的旧押金字段。
             // 有当前逐笔标签记录时绝不与旧字段叠加，避免同一担保重复计入共享池。
-            const fallbackTags = linked37Tags.filter((tagName) => Object.keys(linkedTagMarginByName.get(tagName) ?? {}).length === 0);
+            const fallbackTags = linked37Tags.filter((tagName) => Object.keys(linkedTagMarginByName.get(tagName) ?? {}).length === 0 && (linkedTagStockMarginsByName.get(tagName)?.length ?? 0) === 0);
             if (fallbackTags.length > 0) {
               const [memberMargins] = await conn.execute(
                 `SELECT initial_balances FROM ledger_members WHERE ledgerId = 37`
@@ -18882,6 +18895,20 @@ ${klinesSummary}
               [...linked37Tags, ...linked37Tags]
             ) as any[];
             for (const row of (Array.isArray(latestBalances) ? latestBalances : [])) linkedTagBalanceByName.set(String(row.tag_name), Number(row.amount));
+          }
+
+          // 股票保证金只读取已经保存的盘尾价快照；首次登记、尚未到 15:05 时才使用管理员确认时保存的参考价兜底。
+          const linkedMarginStockSymbols = Array.from(new Set(
+            Array.from(linkedTagStockMarginsByName.values()).flatMap((records) => getTagMarginStockSymbols(records))
+          ));
+          let linkedMarginStockQuotes: Record<string, { price?: number; currency?: string; priceDate?: string; updatedAt?: string }> = {};
+          if (linkedMarginStockSymbols.length > 0) {
+            try {
+              const { getManualStockCloseSnapshots } = await import('./manual-stock-close-scheduler');
+              linkedMarginStockQuotes = await getManualStockCloseSnapshots(linkedMarginStockSymbols);
+            } catch (error) {
+              console.warn('[SharedPool] 读取股票保证金盘尾价失败:', error);
+            }
           }
 
           // 37号利息页的分段均以人民币存储。待结只取自动分段和手工正数，
@@ -18942,17 +18969,42 @@ ${klinesSummary}
             const collateralConfig = source.collateralTagName ? linkedTagConfigByName.get(source.collateralTagName) : null;
             const pnlConfig = source.floatingPnlTagName ? linkedTagConfigByName.get(source.floatingPnlTagName) : null;
             if ((source.useCollateral && !collateralConfig) || (source.useFloatingPnl && !pnlConfig)) return null;
-            let entries: Array<{ coin: string; qty: number; note: string }> = [];
+            let entries: Array<{ coin: string; qty: number; note: string; assetType?: 'stock'; name?: string; code?: string; price?: number | null; priceDate?: string }> = [];
             try {
               const rawMargins = source.collateralTagName ? (linkedTagMarginByName.get(source.collateralTagName) ?? {}) : {};
-              entries = Array.isArray(rawMargins)
+              const currencyEntries = Array.isArray(rawMargins)
                 ? rawMargins.map((entry: any) => ({ coin: String(entry?.coin ?? 'CNY'), qty: Number(entry?.amount), note: String(entry?.label ?? '') }))
                 : Object.entries(rawMargins ?? {}).map(([coin, qty]) => ({ coin: String(coin), qty: Number(qty), note: '' }));
-              entries = entries.filter(entry => Number.isFinite(entry.qty) && entry.qty !== 0);
+              const stockEntries = source.collateralTagName
+                ? (linkedTagStockMarginsByName.get(source.collateralTagName) ?? []).map((stock) => {
+                  const snapshot = linkedMarginStockQuotes[stock.symbol];
+                  const snapshotPrice = Number(snapshot?.price);
+                  const price = Number.isFinite(snapshotPrice) && snapshotPrice > 0
+                    ? snapshotPrice
+                    : (stock.referencePrice > 0 ? stock.referencePrice : null);
+                  return {
+                    coin: stock.symbol,
+                    qty: stock.quantity,
+                    note: stock.label,
+                    assetType: 'stock' as const,
+                    name: stock.name,
+                    code: stock.code,
+                    price,
+                    priceDate: String(snapshot?.priceDate || stock.priceDate || ''),
+                  };
+                })
+                : [];
+              entries = [...currencyEntries, ...stockEntries].filter(entry => Number.isFinite(entry.qty) && entry.qty !== 0);
             } catch { entries = []; }
             let allPricesKnown = true;
             let collateralValue = 0;
             for (const entry of entries) {
+              if (entry.assetType === 'stock') {
+                if (!entry.price || entry.price <= 0) { allPricesKnown = false; continue; }
+                // A 股参考价是人民币；共享池使用 U 作为风险口径。
+                collateralValue += entry.qty * entry.price / usdtCnyRate;
+                continue;
+              }
               const coin = entry.coin.trim().toUpperCase();
               const isCny = ['CNY', 'RMB', '人民币', '元'].includes(coin);
               const isStablecoin = ['USDT', 'U', 'USDC', 'USDT.E', 'USDC.E', 'BUSD', 'DAI'].includes(coin);
@@ -19007,7 +19059,7 @@ ${klinesSummary}
               useCollateral: source.useCollateral,
               usePendingInterest: source.usePendingInterest,
               usePaidInterest: source.usePaidInterest,
-              collateralAssets: entries.map(entry => ({ coin: entry.coin, qty: entry.qty, note: entry.note })),
+              collateralAssets: entries.map(entry => ({ coin: entry.coin, qty: entry.qty, note: entry.note, assetType: entry.assetType, name: entry.name, code: entry.code, price: entry.price, priceDate: entry.priceDate })),
               collateralValue: allPricesKnown ? collateralValue : null,
               floatingPnl,
               pendingInterestCny: linkedPendingInterestCny,
@@ -28764,7 +28816,7 @@ insights 数组每项包含：
   // 前端不会在盘中触发第三方行情请求，也无法传入外部 URL 或行情密钥。
   getManualStockCloseSnapshots: protectedProcedure
     .input(z.object({
-      symbols: z.array(z.string().trim().min(1).max(20)).max(20),
+      symbols: z.array(z.string().trim().min(1).max(20)).max(100),
     }))
     .query(async ({ input }) => {
       const { getManualStockCloseSnapshots } = await import('./manual-stock-close-scheduler');

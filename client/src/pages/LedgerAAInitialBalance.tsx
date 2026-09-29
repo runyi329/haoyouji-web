@@ -834,6 +834,10 @@ export default function LedgerAAInitialBalance() {
                   </button>
                 </div>
               </div>
+              <div className="flex items-start gap-2 border-t px-2.5 py-1.5 text-[11px]" style={{ borderColor: '#E8EEF1', backgroundColor: '#FFFDFC' }}>
+                <span className="shrink-0 text-gray-400">批次备注</span>
+                <span className={lot.note ? 'min-w-0 break-words text-gray-700' : 'text-gray-400'}>{lot.note || '未填写（可在管理员日历页编辑）'}</span>
+              </div>
               <div className="grid grid-cols-3 gap-px border-y text-[10px]" style={{ borderColor: '#E8EEF1', backgroundColor: '#E8EEF1' }}>
                 <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500"><span>持仓</span><b className="ml-1 font-semibold text-gray-700">{formatNumber(lot.initialQuantity, 4)} 股</b></div>
                 <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500"><span>持仓均价</span><b className="ml-1 font-semibold text-gray-700">{formatNumber(lot.unitCost, 4)}</b></div>

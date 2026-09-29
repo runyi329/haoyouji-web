@@ -413,7 +413,7 @@ export async function fetchEndOfDayStockCloseSnapshots(symbols: string[]): Promi
   const uniqueSymbols = Array.from(new Set(symbols
     .map(normalizeOnDemandStockSymbol)
     .filter((symbol): symbol is string => !!symbol)))
-    .slice(0, 20);
+    .slice(0, 200);
   const results: Record<string, OnDemandStockQuote> = {};
 
   await Promise.all(uniqueSymbols.map(async (symbol) => {
