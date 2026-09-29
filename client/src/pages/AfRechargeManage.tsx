@@ -32,8 +32,6 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type LedgerDatePreset = "all" | "today" | "this_month" | "last_month" | "custom";
-type WalletBalanceSortKey = "usdt" | "cny" | "user";
-type WalletBalanceSortDirection = "asc" | "desc";
 type WalletTrendDays = 7 | 30 | 60 | 70;
 type WalletTrendCurrency = "USDT" | "CNY";
 type AdjustmentAsset = "USDT" | "CNY" | (typeof AI_WALLET_SETTLEMENT_ASSETS)[number];
@@ -258,6 +256,157 @@ function WalletBalanceTrendChart({
   );
 }
 
+// 全部用户视图不单独展示人民币曲线：以总资产 U 为柱高，分别显示实际 USDT、ETH、SOL
+// 与其他资产的实时折算价值，让主要数字资产在总资产内的占比一目了然。
+function WalletTotalAssetTrendChart({
+  trend,
+  isLoading,
+  days,
+  onDaysChange,
+  usdtCnyRate,
+  assetPrices,
+  fallbackMultiAssets,
+}: {
+  trend: any;
+  isLoading: boolean;
+  days: WalletTrendDays;
+  onDaysChange: (days: WalletTrendDays) => void;
+  usdtCnyRate: number;
+  assetPrices: Record<string, number>;
+  fallbackMultiAssets: Record<string, number>;
+}) {
+  const safeRate = Number.isFinite(usdtCnyRate) && usdtCnyRate > 0 ? usdtCnyRate : 0;
+  const resolveBalances = (balances: unknown) => balances && typeof balances === "object"
+    ? balances as Record<string, unknown>
+    : fallbackMultiAssets;
+  const getDigitalAssetValueU = (balances: unknown) => {
+    return Object.entries(resolveBalances(balances)).reduce((sum, [assetCode, quantity]) => {
+      const priceU = Number(assetPrices[String(assetCode).toUpperCase()] ?? 0);
+      const total = Number(quantity ?? 0);
+      return Number.isFinite(priceU) && priceU > 0 && Number.isFinite(total) ? sum + total * priceU : sum;
+    }, 0);
+  };
+  const getAssetValueU = (balances: unknown, assetCode: string) => {
+    const priceU = Number(assetPrices[assetCode] ?? 0);
+    const quantity = Number(resolveBalances(balances)[assetCode] ?? 0);
+    return Number.isFinite(priceU) && priceU > 0 && Number.isFinite(quantity) ? quantity * priceU : 0;
+  };
+  const series = (trend?.series ?? []).map((point: any) => {
+    const actualUsdt = Number(point?.usdt ?? 0);
+    const cnyAssetU = safeRate > 0 ? Number(point?.cny ?? 0) / safeRate : 0;
+    const digitalAssetU = getDigitalAssetValueU(point?.multiAssets);
+    const ethU = getAssetValueU(point?.multiAssets, "ETH");
+    const solU = getAssetValueU(point?.multiAssets, "SOL");
+    const otherAssetsU = cnyAssetU + Math.max(0, digitalAssetU - ethU - solU);
+    const totalAssetU = actualUsdt + ethU + solU + otherAssetsU;
+    return {
+      ...point,
+      label: String(point.date ?? "").slice(5).replace("-", "/"),
+      actualUsdt,
+      ethU,
+      solU,
+      otherAssetsU,
+      totalAssetU,
+    };
+  });
+  const currentUsdt = Number(trend?.current?.usdt ?? 0);
+  const currentCnyU = safeRate > 0 ? Number(trend?.current?.cny ?? 0) / safeRate : 0;
+  const currentDigitalAssetU = getDigitalAssetValueU(trend?.current?.multiAssets);
+  const currentEthU = getAssetValueU(trend?.current?.multiAssets, "ETH");
+  const currentSolU = getAssetValueU(trend?.current?.multiAssets, "SOL");
+  const currentOtherAssetsU = currentCnyU + Math.max(0, currentDigitalAssetU - currentEthU - currentSolU);
+  const currentTotalAssetU = currentUsdt + currentEthU + currentSolU + currentOtherAssetsU;
+  const startingTotalAssetU = Number(series[0]?.totalAssetU ?? currentTotalAssetU);
+  const periodChange = currentTotalAssetU - startingTotalAssetU;
+  const formatAmount = (value: number) => Number(value).toLocaleString("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const formatAxisValue = (value: number) => {
+    const absolute = Math.abs(Number(value) || 0);
+    if (absolute >= 10000) return `${(Number(value) / 10000).toFixed(1)}万`;
+    if (absolute >= 1000) return `${(Number(value) / 1000).toFixed(1)}k`;
+    return Number(value).toFixed(0);
+  };
+  const interval = days <= 7 ? 0 : days <= 30 ? 4 : days <= 60 ? 9 : 11;
+
+  return (
+    <div className="mb-3 rounded-2xl border border-gray-100 bg-white p-3.5 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[13px] font-bold text-gray-900">全部用户资金走势</p>
+          <p className="mt-0.5 text-[10px] leading-4 text-gray-400">总资产以 U 计；分段显示 USDT、ETH、SOL 与其他资产</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-600">总资产 U</span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 rounded-xl bg-gray-50 px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="text-[10px] text-gray-400">当前总资产</p>
+          <p className="mt-0.5 truncate text-[18px] font-bold tabular-nums text-blue-700">≈ {formatAmount(currentTotalAssetU)} <span className="text-[10px] font-medium">U</span></p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-[10px] text-gray-400">实际 USDT</p>
+          <p className="mt-0.5 text-[12px] font-bold tabular-nums text-red-500">{formatAmount(currentUsdt)} U</p>
+          <p className={`mt-0.5 text-[9px] font-medium tabular-nums ${periodChange > 0 ? "text-green-600" : periodChange < 0 ? "text-red-500" : "text-gray-400"}`}>较 {days} 天前 {periodChange > 0 ? "+" : ""}{formatAmount(periodChange)} U</p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]">
+        <span className="inline-flex items-center gap-1 text-red-500"><span className="h-2 w-2 rounded-sm bg-red-400" />实际 USDT</span>
+        <span className="inline-flex items-center gap-1 text-indigo-600"><span className="h-2 w-2 rounded-sm bg-indigo-400" />ETH ≈ {formatAmount(currentEthU)} U</span>
+        <span className="inline-flex items-center gap-1 text-violet-600"><span className="h-2 w-2 rounded-sm bg-violet-500" />SOL ≈ {formatAmount(currentSolU)} U</span>
+        <span className="inline-flex items-center gap-1 text-blue-600"><span className="h-2 w-2 rounded-sm bg-blue-400" />其他资产</span>
+      </div>
+      <div className="mt-2 flex items-center gap-1 overflow-x-auto pb-0.5">
+        {([7, 30, 60, 70] as WalletTrendDays[]).map((item) => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => onDaysChange(item)}
+            className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${days === item ? "border-orange-500 bg-orange-50 text-orange-600" : "border-gray-200 bg-white text-gray-500"}`}
+          >{item} 天</button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="flex h-[184px] items-center justify-center text-[12px] text-gray-300">资金走势加载中...</div>
+      ) : series.length === 0 ? (
+        <div className="flex h-[184px] items-center justify-center text-[12px] text-gray-300">暂无可用于计算走势的资金记录</div>
+      ) : (
+        <div className="mt-2 h-[184px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={series} margin={{ top: 8, right: 2, left: -20, bottom: 0 }} barCategoryGap={days <= 7 ? "22%" : "12%"}>
+              <CartesianGrid vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="label" interval={interval} tickLine={false} axisLine={false} tick={{ fill: "#9ca3af", fontSize: 9 }} />
+              <YAxis tickLine={false} axisLine={false} tick={{ fill: "#9ca3af", fontSize: 9 }} tickFormatter={formatAxisValue} />
+              <Tooltip
+                cursor={{ fill: "rgba(96,165,250,0.08)" }}
+                contentStyle={{ borderRadius: 10, border: "1px solid #bfdbfe", fontSize: 11, padding: "7px 9px" }}
+                formatter={(value: number, name: string) => {
+                  const labels: Record<string, string> = {
+                    actualUsdt: "实际 USDT",
+                    ethU: "以太坊 ETH",
+                    solU: "Solana SOL",
+                    otherAssetsU: "其他资产折算",
+                  };
+                  return [`≈ ${formatAmount(Number(value))} U`, labels[name] ?? "资产折算"];
+                }}
+                labelFormatter={(label) => `日期 ${label}`}
+              />
+              <Bar dataKey="actualUsdt" name="actualUsdt" stackId="totalAssets" fill="#f87171" maxBarSize={28} />
+              <Bar dataKey="ethU" name="ethU" stackId="totalAssets" fill="#818cf8" maxBarSize={28} />
+              <Bar dataKey="solU" name="solU" stackId="totalAssets" fill="#8b5cf6" maxBarSize={28} />
+              <Bar dataKey="otherAssetsU" name="otherAssetsU" stackId="totalAssets" fill="#60a5fa" radius={[4, 4, 0, 0]} maxBarSize={28} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <p className="mt-1 text-[10px] leading-4 text-gray-400">每日 USDT、人民币与各数字币均按当日结束时持有量计算；ETH、SOL 单独分段，其余数字资产按当前实时行情折算并计入总资产。</p>
+    </div>
+  );
+}
+
 export default function AfRechargeManage() {
   const params = useParams();
   const [, setLocation] = useLocation();
@@ -351,10 +500,9 @@ export default function AfRechargeManage() {
   });
   const [adjFlowTab, setAdjFlowTab] = useState<"user" | "global" | "balances">("user");
   const [adjLogPage, setAdjLogPage] = useState(1);
-  const [adjBalancePage, setAdjBalancePage] = useState(1);
   const [adjBalanceSearch, setAdjBalanceSearch] = useState("");
-  const [adjBalanceSortKey, setAdjBalanceSortKey] = useState<WalletBalanceSortKey>("usdt");
-  const [adjBalanceSortDirection, setAdjBalanceSortDirection] = useState<WalletBalanceSortDirection>("desc");
+  const [adjHideZeroAssetUsers, setAdjHideZeroAssetUsers] = useState(true);
+  const [adjHideZeroAssetTypes, setAdjHideZeroAssetTypes] = useState(true);
   const [adjGlobalTrendDays, setAdjGlobalTrendDays] = useState<WalletTrendDays>(30);
   const [adjUserTrendDays, setAdjUserTrendDays] = useState<WalletTrendDays>(30);
   const [adjUserFlowKeyword, setAdjUserFlowKeyword] = useState("");
@@ -652,40 +800,91 @@ export default function AfRechargeManage() {
     hasRate: adjBalanceHasRate,
     unpricedAssets: adjBalanceUnpricedAssets,
   };
-  const adjFilteredBalanceUsers = adjUserList.filter((user: any) => {
-    if (!adjBalanceQuery) return true;
-    return [user.name, user.username, user.id].some((value) => String(value ?? "").toLocaleLowerCase().includes(adjBalanceQuery));
-  });
-  const adjSortedBalanceUsers = [...adjFilteredBalanceUsers].sort((left: any, right: any) => {
-    let comparison = 0;
-    if (adjBalanceSortKey === "usdt") {
-      comparison = Number(left.usdtBalance ?? 0) - Number(right.usdtBalance ?? 0);
-    } else if (adjBalanceSortKey === "cny") {
-      comparison = Number(left.cnyBalance ?? 0) - Number(right.cnyBalance ?? 0);
-    } else {
-      const leftLabel = String(left.name || left.username || left.id || "");
-      const rightLabel = String(right.name || right.username || right.id || "");
-      comparison = leftLabel.localeCompare(rightLabel, "zh-CN");
+  // “按用户”视图使用完整的资产行：先固定展示 USDT / 人民币，再展示钱包中全部数字币。
+  // 兼容任何未来新增的资产代码，避免新币种在管理员用户视图中遗漏。
+  const getUserWalletAssetRows = (user: any) => {
+    const multiAssetByCode = new Map<string, { total: number; frozen: number }>();
+    for (const balance of (user?.multiAssetBalances ?? [])) {
+      const assetCode = String(balance?.assetCode ?? "").trim().toUpperCase();
+      if (!assetCode || ["USDT", "CNY", "RMB", "人民币"].includes(assetCode)) continue;
+      const breakdown = getMultiAssetBreakdown(balance);
+      const current = multiAssetByCode.get(assetCode) ?? { total: 0, frozen: 0 };
+      multiAssetByCode.set(assetCode, {
+        total: current.total + breakdown.total,
+        frozen: current.frozen + breakdown.frozen,
+      });
     }
-    if (comparison === 0) comparison = Number(left.id ?? 0) - Number(right.id ?? 0);
-    return adjBalanceSortDirection === "asc" ? comparison : -comparison;
-  });
-  const ADJ_BALANCE_PAGE_SIZE = 15;
-  const adjBalanceTotalPages = Math.max(1, Math.ceil(adjSortedBalanceUsers.length / ADJ_BALANCE_PAGE_SIZE));
-  const adjBalancePageSafe = Math.min(adjBalancePage, adjBalanceTotalPages);
-  const adjPagedBalanceUsers = adjSortedBalanceUsers.slice(
-    (adjBalancePageSafe - 1) * ADJ_BALANCE_PAGE_SIZE,
-    adjBalancePageSafe * ADJ_BALANCE_PAGE_SIZE,
-  );
-  const chooseBalanceSort = (key: WalletBalanceSortKey) => {
-    setAdjBalancePage(1);
-    if (key === adjBalanceSortKey) {
-      setAdjBalanceSortDirection((direction) => direction === "desc" ? "asc" : "desc");
-    } else {
-      setAdjBalanceSortKey(key);
-      setAdjBalanceSortDirection(key === "user" ? "asc" : "desc");
-    }
+    const knownDigitalCodes = AI_WALLET_SETTLEMENT_ASSETS as readonly string[];
+    const extraDigitalCodes = Array.from(multiAssetByCode.keys())
+      .filter((assetCode) => !knownDigitalCodes.includes(assetCode))
+      .sort((left, right) => left.localeCompare(right));
+    return [
+      { assetCode: "USDT", total: Number(user?.usdtBalance ?? 0), frozen: 0, isFunding: true },
+      { assetCode: "CNY", total: Number(user?.cnyBalance ?? 0), frozen: 0, isFunding: true },
+      ...[...knownDigitalCodes, ...extraDigitalCodes].map((assetCode) => ({
+        assetCode,
+        total: multiAssetByCode.get(assetCode)?.total ?? 0,
+        frozen: multiAssetByCode.get(assetCode)?.frozen ?? 0,
+        isFunding: false,
+      })),
+    ];
   };
+  const getUserWalletTotalValuation = (user: any) => {
+    const unpricedAssets: string[] = [];
+    let totalU = 0;
+    for (const asset of getUserWalletAssetRows(user)) {
+      if (asset.assetCode === "USDT") {
+        totalU += asset.total;
+        continue;
+      }
+      if (asset.assetCode === "CNY") {
+        if (adjBalanceHasRate) totalU += asset.total / adjBalanceUsdtCnyRate;
+        continue;
+      }
+      if (Math.abs(asset.total) < 1e-12) continue;
+      const priceU = Number(adjBalancePrices[asset.assetCode] ?? 0);
+      if (!Number.isFinite(priceU) || priceU <= 0) {
+        unpricedAssets.push(asset.assetCode);
+        continue;
+      }
+      totalU += asset.total * priceU;
+    }
+    return {
+      totalU,
+      totalCny: adjBalanceHasRate ? totalU * adjBalanceUsdtCnyRate : null,
+      unpricedAssets,
+    };
+  };
+  const copyUserTransferCode = (transferCode: string) => {
+    if (!transferCode) return;
+    if (!navigator.clipboard?.writeText) {
+      toast.error("当前浏览器不支持复制转账码");
+      return;
+    }
+    navigator.clipboard.writeText(transferCode)
+      .then(() => toast.success("转账码已复制"))
+      .catch(() => toast.error("转账码复制失败"));
+  };
+  const userHasAnyWalletAsset = (user: any) => getUserWalletAssetRows(user)
+    .some((asset) => Math.abs(asset.total) > 1e-12 || Math.abs(asset.frozen) > 1e-12);
+  const adjFilteredBalanceUsers = adjUserList.filter((user: any) => {
+    const matchesSearch = !adjBalanceQuery || [user.name, user.username, user.id]
+      .some((value) => String(value ?? "").toLocaleLowerCase().includes(adjBalanceQuery));
+    if (!matchesSearch) return false;
+    return !adjHideZeroAssetUsers || userHasAnyWalletAsset(user);
+  });
+  const adjUserWalletValuations = new Map(
+    adjFilteredBalanceUsers.map((user: any) => [Number(user.id), getUserWalletTotalValuation(user)]),
+  );
+  const adjSortedBalanceUsers = [...adjFilteredBalanceUsers].sort((left: any, right: any) => {
+    const valuationDifference = Number(adjUserWalletValuations.get(Number(right.id))?.totalU ?? 0)
+      - Number(adjUserWalletValuations.get(Number(left.id))?.totalU ?? 0);
+    if (Math.abs(valuationDifference) > 1e-8) return valuationDifference;
+    const leftLabel = String(left.name || left.username || left.id || "");
+    const rightLabel = String(right.name || right.username || right.id || "");
+    const comparison = leftLabel.localeCompare(rightLabel, "zh-CN");
+    return comparison === 0 ? Number(left.id ?? 0) - Number(right.id ?? 0) : comparison;
+  });
   // 以全局流水的最新用户为准；当前设备的成功调账记录仅在接口暂不可用时作补充。
   const adjRecentUserIds = Array.from(new Set([
     ...adjRecentHistoryItems.map((record: any) => Number(record.userId)).filter((id: number) => Number.isInteger(id) && id > 0),
@@ -1928,10 +2127,7 @@ export default function AfRechargeManage() {
               className={`min-w-0 flex-1 py-2.5 rounded-xl text-[12px] font-semibold transition-colors ${adjFlowTab === "global" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"}`}
             >全局流水</button>
             <button
-              onClick={() => {
-                setAdjFlowTab("balances");
-                setAdjBalancePage(1);
-              }}
+              onClick={() => setAdjFlowTab("balances")}
               className={`min-w-0 flex-1 py-2.5 rounded-xl text-[12px] font-semibold transition-colors ${adjFlowTab === "balances" ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"}`}
             >用户余额</button>
           </div>
@@ -2108,13 +2304,14 @@ export default function AfRechargeManage() {
           {/* 全部用户当前钱包余额 */}
           {adjFlowTab === "balances" && (
             <>
-              <WalletBalanceTrendChart
-                title="全部用户资金走势"
-                subtitle="全部用户每日结束时的统一钱包余额汇总"
+              <WalletTotalAssetTrendChart
                 trend={adjGlobalTrendQuery.data}
                 isLoading={adjGlobalTrendQuery.isLoading || adjGlobalTrendQuery.isFetching}
                 days={adjGlobalTrendDays}
                 onDaysChange={setAdjGlobalTrendDays}
+                usdtCnyRate={adjBalanceUsdtCnyRate}
+                assetPrices={adjBalancePrices}
+                fallbackMultiAssets={adjMultiAssetTotals}
               />
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
               <div className="flex items-start justify-between gap-3 mb-3">
@@ -2165,7 +2362,9 @@ export default function AfRechargeManage() {
               <div className="mb-3 rounded-xl border border-violet-100 bg-violet-50 p-2.5">
                 <p className="text-[10px] font-medium text-violet-600">独立数字资产总持有（含担保冻结，按实时市值由高到低）</p>
                 <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-                  {adjMultiAssetValuations.map((asset) => (
+                  {adjMultiAssetValuations
+                    .filter((asset) => !adjHideZeroAssetTypes || Math.abs(asset.total) > 1e-12 || Math.abs(asset.frozen) > 1e-12)
+                    .map((asset) => (
                     <div key={asset.assetCode} className="rounded-lg bg-white px-2 py-2 ring-1 ring-violet-100">
                       <div className="flex items-baseline justify-between gap-1">
                         <p className="text-[10px] font-semibold text-violet-600">{asset.assetCode}</p>
@@ -2187,112 +2386,115 @@ export default function AfRechargeManage() {
                 <Search className="h-4 w-4 shrink-0 text-gray-400" />
                 <input
                   value={adjBalanceSearch}
-                  onChange={(event) => { setAdjBalanceSearch(event.target.value); setAdjBalancePage(1); }}
+                  onChange={(event) => setAdjBalanceSearch(event.target.value)}
                   placeholder="搜索昵称、用户名或 ID"
                   className="min-w-0 flex-1 bg-transparent text-[12px] text-gray-700 outline-none placeholder:text-gray-400"
                 />
                 {adjBalanceSearch && (
-                  <button type="button" onClick={() => { setAdjBalanceSearch(""); setAdjBalancePage(1); }} className="p-0.5 text-gray-400" aria-label="清除用户余额搜索">
+                  <button type="button" onClick={() => setAdjBalanceSearch("")} className="p-0.5 text-gray-400" aria-label="清除用户余额搜索">
                     <X className="h-4 w-4" />
                   </button>
                 )}
               </div>
 
-              <div className="mb-3 flex items-center gap-1 overflow-x-auto pb-0.5">
-                {([
-                  ["usdt", "按 USDT"],
-                  ["cny", "按 CNY"],
-                  ["user", "按用户"],
-                ] as Array<[WalletBalanceSortKey, string]>).map(([key, label]) => {
-                  const selected = adjBalanceSortKey === key;
-                  const directionMark = selected ? (adjBalanceSortDirection === "desc" ? "↓" : "↑") : "";
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => chooseBalanceSort(key)}
-                      className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-                        selected ? "border-orange-500 bg-orange-50 text-orange-600" : "border-gray-200 bg-white text-gray-500"
-                      }`}
-                    >{label} {directionMark}</button>
-                  );
-                })}
-                <span className="ml-auto shrink-0 text-[10px] text-gray-400">{adjSortedBalanceUsers.length} 位</span>
+              <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-orange-200 bg-orange-50/50 px-3 py-2">
+                <span className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-semibold text-orange-600 shadow-sm">按用户</span>
+                <span className="min-w-0 text-right text-[10px] text-gray-500">每位用户展示完整钱包资产</span>
+                <span className="shrink-0 text-[10px] text-gray-400">{adjSortedBalanceUsers.length} 位</span>
+              </div>
+
+              <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50 px-2.5 py-2">
+                <span className="mr-0.5 text-[10px] text-gray-400">显示</span>
+                <button
+                  type="button"
+                  onClick={() => setAdjHideZeroAssetUsers((hidden) => !hidden)}
+                  className={`rounded-full border px-2 py-1 text-[10px] font-medium transition-colors ${adjHideZeroAssetUsers ? "border-orange-300 bg-orange-50 text-orange-600" : "border-gray-200 bg-white text-gray-500"}`}
+                >{adjHideZeroAssetUsers ? "已隐藏零资产用户" : "显示零资产用户"}</button>
+                <button
+                  type="button"
+                  onClick={() => setAdjHideZeroAssetTypes((hidden) => !hidden)}
+                  className={`rounded-full border px-2 py-1 text-[10px] font-medium transition-colors ${adjHideZeroAssetTypes ? "border-violet-300 bg-violet-50 text-violet-600" : "border-gray-200 bg-white text-gray-500"}`}
+                >{adjHideZeroAssetTypes ? "已隐藏 0 余额币种" : "显示全部币种"}</button>
+                <span className="basis-full pt-0.5 text-[9px] text-gray-400">USDT、人民币固定置前；数字资产按该用户持有量依次展示。</span>
               </div>
 
               {adjUserList.length === 0 ? (
                 <p className="py-8 text-center text-[12px] text-gray-300">用户余额加载中...</p>
-              ) : adjPagedBalanceUsers.length === 0 ? (
+              ) : adjSortedBalanceUsers.length === 0 ? (
                 <p className="py-8 text-center text-[12px] text-gray-300">未找到匹配用户</p>
               ) : (
-                <div className="overflow-hidden rounded-xl border border-gray-100">
-                  <div className="grid grid-cols-[minmax(0,1fr)_76px_68px] gap-1 border-b border-gray-100 bg-gray-50 px-2.5 py-2 text-[10px] font-medium text-gray-400">
-                    <span>用户</span><span className="text-right">USDT</span><span className="text-right">CNY</span>
-                  </div>
-                  {adjPagedBalanceUsers.map((user: any) => {
+                <div className="space-y-2">
+                  {adjSortedBalanceUsers.map((user: any) => {
                     const name = String(user.name || "未设置昵称");
                     const username = String(user.username || `用户${user.id}`);
+                    const assetRows = getUserWalletAssetRows(user).filter((asset) => !adjHideZeroAssetTypes || Math.abs(asset.total) > 1e-12 || Math.abs(asset.frozen) > 1e-12);
+                    const walletValuation = adjUserWalletValuations.get(Number(user.id)) ?? getUserWalletTotalValuation(user);
                     return (
-                      <button
+                      <div
                         key={user.id}
-                        type="button"
-                        onClick={() => {
-                          setAdjSelectedUser(user);
-                          setAdjFlowTab("user");
-                          setAdjSearch("");
-                          setAdjShowDropdown(false);
-                        }}
-                        className="grid w-full grid-cols-[minmax(0,1fr)_76px_68px] gap-1 border-b border-gray-50 px-2.5 py-2.5 text-left last:border-0 hover:bg-orange-50 active:bg-orange-100"
-                        title="查看该用户的全部钱包流水"
+                        className="w-full rounded-xl border border-orange-200 bg-orange-50/60 p-3 text-left shadow-sm"
                       >
-                        <span className="min-w-0">
-                          <span className="block truncate text-[12px] font-semibold text-gray-800">{name}</span>
-                          <span className="block truncate text-[10px] text-gray-400">@{username} · ID {user.id}</span>
-                          {(user.multiAssetBalances ?? []).length > 0 && (
-                            <span className="mt-1 flex flex-wrap gap-1">
-                              {(user.multiAssetBalances ?? []).map((asset: any) => {
-                                const breakdown = getMultiAssetBreakdown(asset);
-                                return <span key={asset.assetCode} className="rounded bg-violet-50 px-1 py-0.5 text-[9px] font-medium text-violet-600">
-                                  {asset.assetCode} {breakdown.total.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}{breakdown.frozen > 0 ? <span className="text-amber-600">（冻 {breakdown.frozen.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}）</span> : null}
-                                </span>;
-                              })}
-                            </span>
-                          )}
-                        </span>
-                        <span className={`self-center text-right text-[11px] font-semibold ${Number(user.usdtBalance ?? 0) < 0 ? "text-red-500" : "text-blue-600"}`}>
-                          {formatWalletAmount(user.usdtBalance, 2)}
-                        </span>
-                        <span className={`self-center text-right text-[11px] font-semibold ${Number(user.cnyBalance ?? 0) < 0 ? "text-red-500" : "text-green-600"}`}>
-                          ¥{formatWalletAmount(user.cnyBalance, 2)}
-                        </span>
-                      </button>
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                            <span className="shrink-0 truncate text-[13px] font-semibold text-orange-800">{name}</span>
+                            <span className="min-w-0 truncate text-[10px] text-orange-500/70">@{username}</span>
+                            {user.inviteCode && (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-white/80 px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-orange-600">
+                                转账码 {String(user.inviteCode)}
+                                <button
+                                  type="button"
+                                  onClick={() => copyUserTransferCode(String(user.inviteCode))}
+                                  className="rounded p-0.5 text-orange-400 transition-colors hover:bg-orange-100 hover:text-orange-700 active:bg-orange-200"
+                                  aria-label={`复制 ${name} 的转账码`}
+                                  title="复制转账码"
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </button>
+                              </span>
+                            )}
+                          </span>
+                          <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[9px] font-medium text-orange-600 shadow-sm">{assetRows.length} 种资产</span>
+                        </div>
+                        <div className="mt-2.5 rounded-lg border border-orange-100 bg-white px-2.5 py-2 text-gray-500">
+                          <p className="text-[10px] font-semibold text-orange-700">全部资产</p>
+                          <p className="mt-0.5 text-[16px] font-bold tabular-nums text-orange-600">≈ {formatWalletAmount(walletValuation.totalU, 2)} <span className="text-[10px] font-semibold">U</span></p>
+                          <p className="mt-0.5 text-[11px] font-medium tabular-nums text-gray-400">{walletValuation.totalCny == null ? "人民币估值待获取" : `≈ ¥${formatWalletAmount(walletValuation.totalCny, 2)}`}</p>
+                        </div>
+                        {assetRows.length > 0 ? (
+                          <div className="mt-2.5">
+                            <p className="mb-1 text-[9px] font-medium text-orange-500/70">资产分布</p>
+                            <div className="grid grid-cols-2 gap-x-4">
+                            {assetRows.map((asset) => {
+                              const isUsdt = asset.assetCode === "USDT";
+                              const isCny = asset.assetCode === "CNY";
+                              return (
+                                <div key={asset.assetCode} className="min-w-0 border-b border-orange-100/80 py-1.5">
+                                  <span className="flex items-baseline justify-between gap-1">
+                                    <span className="truncate text-[10px] font-semibold text-gray-500">{isCny ? "人民币" : asset.assetCode}</span>
+                                    <span className="min-w-0 truncate text-right text-[11px] font-bold tabular-nums text-gray-700">
+                                      {isCny
+                                        ? `¥${formatWalletAmount(asset.total, 2)}`
+                                        : isUsdt
+                                          ? `${formatWalletAmount(asset.total, 2)} U`
+                                          : asset.total.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}
+                                    </span>
+                                  </span>
+                                  {asset.frozen > 0 && <span className="mt-1 block truncate text-[9px] text-orange-500">担保冻结 {asset.frozen.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}</span>}
+                                </div>
+                              );
+                            })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-2 rounded-lg border border-dashed border-gray-200 px-2 py-2 text-center text-[10px] text-gray-400">暂无非零资产</div>
+                        )}
+                        {walletValuation.unpricedAssets.length > 0 && <p className="mt-1 text-[9px] text-amber-600">未计入总估值：{walletValuation.unpricedAssets.join("、")}</p>}
+                      </div>
                     );
                   })}
                 </div>
               )}
 
-              {adjBalanceTotalPages > 1 && (
-                <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => setAdjBalancePage((page) => Math.max(1, page - 1))}
-                    disabled={adjBalancePageSafe <= 1}
-                    className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] text-gray-500 disabled:opacity-30"
-                  >
-                    <PrevIcon className="h-3.5 w-3.5" />上一页
-                  </button>
-                  <span className="text-[12px] text-gray-400">{adjBalancePageSafe} / {adjBalanceTotalPages}</span>
-                  <button
-                    type="button"
-                    onClick={() => setAdjBalancePage((page) => Math.min(adjBalanceTotalPages, page + 1))}
-                    disabled={adjBalancePageSafe >= adjBalanceTotalPages}
-                    className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] text-gray-500 disabled:opacity-30"
-                  >
-                    下一页<NextIcon className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-              <p className="mt-3 text-center text-[10px] text-gray-400">点击任意用户可直接查看该用户的全部钱包流水</p>
               </div>
             </>
           )}

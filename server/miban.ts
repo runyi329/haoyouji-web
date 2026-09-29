@@ -962,6 +962,26 @@ async function getWalletDailyBalanceTrend(conn: any, daysInput: number, userId?:
   const current = Array.isArray(currentRows) ? currentRows[0] : currentRows;
   const currentUsdt = Number(current?.usdt_balance ?? 0);
   const currentCny = Number(current?.cny_balance ?? 0);
+  // 数字资产总持有 = 可用 + 担保冻结。担保锁定只在两者间搬移，不改变该币种总资产。
+  const currentMultiAssets: Record<string, number> = {};
+  try {
+    const [multiAssetRows] = await conn.execute(
+      `SELECT UPPER(asset_code) AS asset_code,
+              COALESCE(SUM(COALESCE(available_balance, 0) + COALESCE(frozen_balance, 0)), 0) AS total_balance
+         FROM ai_wallet_asset_balances
+         ${normalizedUserId ? 'WHERE user_id = ?' : ''}
+        GROUP BY UPPER(asset_code)`,
+      normalizedUserId ? [normalizedUserId] : [],
+    ) as any[];
+    for (const row of (Array.isArray(multiAssetRows) ? multiAssetRows : [])) {
+      const assetCode = String(row?.asset_code ?? '').trim().toUpperCase();
+      const total = Number(row?.total_balance ?? 0);
+      if (assetCode && Number.isFinite(total)) currentMultiAssets[assetCode] = total;
+    }
+  } catch (error: any) {
+    // 兼容数字资产表尚未初始化的旧环境；USDT / 人民币趋势仍可正常返回。
+    console.warn('[miban] load multi-asset wallet trend balances failed:', error?.message);
+  }
 
   // 与全局流水和用户流水相同的三源合并去重规则：实际充值、业务/手动账本、未重复的旧余额流水。
   const usdtEventsSql = `
@@ -1020,6 +1040,32 @@ async function getWalletDailyBalanceTrend(conn: any, daysInput: number, userId?:
     String(row.day instanceof Date ? row.day.toISOString().slice(0, 10) : row.day),
     { usdt: Number(row.usdt_delta ?? 0), cny: Number(row.cny_delta ?? 0) },
   ]));
+  const multiAssetDayToDelta = new Map<string, Record<string, number>>();
+  try {
+    const [multiAssetEventRows] = await conn.execute(
+      `SELECT DATE(created_at) AS day,
+              UPPER(asset_code) AS asset_code,
+              COALESCE(SUM(amount), 0) AS asset_delta
+         FROM ai_wallet_asset_entries
+        WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+          AND COALESCE(event_type, '') NOT IN ('collateral_lock', 'collateral_release')
+          ${normalizedUserId ? 'AND user_id = ?' : ''}
+        GROUP BY DATE(created_at), UPPER(asset_code)
+        ORDER BY day ASC, asset_code ASC`,
+      normalizedUserId ? [days - 1, normalizedUserId] : [days - 1],
+    ) as any[];
+    for (const row of (Array.isArray(multiAssetEventRows) ? multiAssetEventRows : [])) {
+      const day = String(row?.day instanceof Date ? row.day.toISOString().slice(0, 10) : row?.day ?? '');
+      const assetCode = String(row?.asset_code ?? '').trim().toUpperCase();
+      const delta = Number(row?.asset_delta ?? 0);
+      if (!day || !assetCode || !Number.isFinite(delta)) continue;
+      const existing = multiAssetDayToDelta.get(day) ?? {};
+      existing[assetCode] = Number(existing[assetCode] ?? 0) + delta;
+      multiAssetDayToDelta.set(day, existing);
+    }
+  } catch (error: any) {
+    console.warn('[miban] load multi-asset wallet trend events failed:', error?.message);
+  }
   const dates: string[] = [];
   const anchor = new Date(`${today}T00:00:00`);
   for (let offset = days - 1; offset >= 0; offset -= 1) {
@@ -1030,18 +1076,24 @@ async function getWalletDailyBalanceTrend(conn: any, daysInput: number, userId?:
 
   let usdtBalance = currentUsdt;
   let cnyBalance = currentCny;
+  const multiAssetBalances: Record<string, number> = { ...currentMultiAssets };
   const reversed = [...dates].reverse().map((date) => {
     const delta = dayToDelta.get(date) || { usdt: 0, cny: 0 };
+    const multiAssetDelta = multiAssetDayToDelta.get(date) ?? {};
     const point = {
       date,
       usdt: Number(usdtBalance.toFixed(8)),
       cny: Number(cnyBalance.toFixed(2)),
+      multiAssets: Object.fromEntries(Object.entries(multiAssetBalances).map(([assetCode, total]) => [assetCode, Number(total.toFixed(8))])),
       usdtDelta: Number(delta.usdt.toFixed(8)),
       cnyDelta: Number(delta.cny.toFixed(2)),
       isToday: date === today,
     };
     usdtBalance -= delta.usdt;
     cnyBalance -= delta.cny;
+    for (const [assetCode, amount] of Object.entries(multiAssetDelta)) {
+      multiAssetBalances[assetCode] = Number(multiAssetBalances[assetCode] ?? 0) - Number(amount ?? 0);
+    }
     return point;
   });
   const series = reversed.reverse();
@@ -1049,7 +1101,11 @@ async function getWalletDailyBalanceTrend(conn: any, daysInput: number, userId?:
   return {
     days,
     userId: normalizedUserId,
-    current: { usdt: Number(currentUsdt.toFixed(8)), cny: Number(currentCny.toFixed(2)) },
+    current: {
+      usdt: Number(currentUsdt.toFixed(8)),
+      cny: Number(currentCny.toFixed(2)),
+      multiAssets: Object.fromEntries(Object.entries(currentMultiAssets).map(([assetCode, total]) => [assetCode, Number(total.toFixed(8))])),
+    },
     change: {
       usdt: Number((currentUsdt - Number(start.usdt ?? currentUsdt)).toFixed(8)),
       cny: Number((currentCny - Number(start.cny ?? currentCny)).toFixed(2)),
@@ -2525,7 +2581,7 @@ export const mibanAdminUserRouter = router({
     }))
     .query(async ({ input }) => {
       const conn = await getDbConnection();
-      if (!conn) return { days: input.days, userId: input.userId ?? null, current: { usdt: 0, cny: 0 }, change: { usdt: 0, cny: 0 }, series: [] };
+      if (!conn) return { days: input.days, userId: input.userId ?? null, current: { usdt: 0, cny: 0, multiAssets: {} }, change: { usdt: 0, cny: 0 }, series: [] };
       return await getWalletDailyBalanceTrend(conn, input.days, input.userId);
     }),
   // 全局流水日志（不限用户，支持关键词与日期账本筛选后分页）
