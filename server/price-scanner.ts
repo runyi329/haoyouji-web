@@ -278,6 +278,55 @@ function expectedAshareSuffix(code: string): 'SH' | 'SZ' | 'BJ' | null {
   return null;
 }
 
+type ManualAshareStockBase = Omit<ManualAshareStockSuggestion, 'latestPrice' | 'latestPriceDate' | 'latestPriceUpdatedAt'>;
+
+async function searchLocalManualAshareStocks(query: string): Promise<ManualAshareStockBase[]> {
+  const rawQuery = String(query || '').trim();
+  if (!rawQuery) return [];
+  try {
+    // 本地 5210 只 A 股目录是建议接口异常时的兜底。动态导入避免行情扫描器启动时形成数据库循环依赖。
+    const { getDbConnection } = await import('./db');
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    const compactCode = rawQuery
+      .toUpperCase()
+      .replace(/^(?:SH|SZ|BJ)[._-]?/, '')
+      .replace(/[._-]?(?:SH|SZ|BJ)$/, '')
+      .replace(/\s+/g, '');
+    const isExactCode = /^\d{6}$/.test(compactCode);
+    const [rows] = await (conn as any).execute(
+      isExactCode
+        ? 'SELECT code, name FROM stock_list WHERE code = ? LIMIT 8'
+        : 'SELECT code, name FROM stock_list WHERE name LIKE ? ORDER BY name LIMIT 8',
+      [isExactCode ? compactCode : `%${rawQuery}%`],
+    );
+    return (rows as any[])
+      .map((row) => {
+        const code = String(row?.code || '').trim().padStart(6, '0');
+        const suffix = expectedAshareSuffix(code);
+        const name = String(row?.name || '').trim();
+        return suffix && name ? { symbol: `${code}.${suffix}`, code, name } : null;
+      })
+      .filter((item): item is ManualAshareStockBase => !!item);
+  } catch {
+    return [];
+  }
+}
+
+async function hydrateManualAshareStockSuggestions(results: ManualAshareStockBase[]): Promise<ManualAshareStockSuggestion[]> {
+  return await Promise.all(results.slice(0, 8).map(async (result) => {
+    const quote = await fetchSinaOnDemandStockQuote(result.symbol);
+    return {
+      ...result,
+      ...(quote ? {
+        latestPrice: quote.price,
+        latestPriceDate: quote.priceDate,
+        latestPriceUpdatedAt: quote.updatedAt,
+      } : {}),
+    };
+  }));
+}
+
 /**
  * A 股检索可按六码、中文名称或拼音简称匹配；只接受可校验的沪深北代码。
  * 选中时获取一笔最新价，订单保存后由每日 15:05 盘尾快照接管，不会产生盘中轮询。
@@ -285,15 +334,15 @@ function expectedAshareSuffix(code: string): 'SH' | 'SZ' | 'BJ' | null {
 export async function searchManualAshareStocks(query: string): Promise<ManualAshareStockSuggestion[]> {
   const normalizedQuery = String(query || '').trim();
   if (normalizedQuery.length < 2 || normalizedQuery.length > 40) return [];
+  const deduped = new Map<string, ManualAshareStockBase>();
   try {
     const response = await fetch(`https://suggest3.sinajs.cn/suggest/type=11,12,13,14,15&key=${encodeURIComponent(normalizedQuery)}`, {
       headers: { Referer: 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (!response.ok) return [];
+    if (!response.ok) throw new Error(`Sina suggestion response ${response.status}`);
     const text = new TextDecoder('gbk').decode(await response.arrayBuffer());
     const payload = text.match(/suggestvalue="([^"]*)"/)?.[1] || '';
-    const deduped = new Map<string, Omit<ManualAshareStockSuggestion, 'latestPrice' | 'latestPriceDate' | 'latestPriceUpdatedAt'>>();
     for (const row of payload.split(';')) {
       const fields = row.split(',').map((item) => item.trim());
       const marketCode = fields[3] || fields[0] || '';
@@ -307,21 +356,14 @@ export async function searchManualAshareStocks(query: string): Promise<ManualAsh
       const symbol = `${code}.${suffix}`;
       deduped.set(symbol, { symbol, code, name });
     }
-    const baseResults = Array.from(deduped.values()).slice(0, 8);
-    return await Promise.all(baseResults.map(async (result) => {
-      const quote = await fetchSinaOnDemandStockQuote(result.symbol);
-      return {
-        ...result,
-        ...(quote ? {
-          latestPrice: quote.price,
-          latestPriceDate: quote.priceDate,
-          latestPriceUpdatedAt: quote.updatedAt,
-        } : {}),
-      };
-    }));
   } catch {
-    return [];
+    // 建议源偶发网络/限流不应让管理员无法验证股票，继续读取本地目录。
   }
+  const remoteResults = Array.from(deduped.values());
+  const baseResults = remoteResults.length > 0
+    ? remoteResults
+    : await searchLocalManualAshareStocks(normalizedQuery);
+  return await hydrateManualAshareStockSuggestions(baseResults);
 }
 
 /** Tushare 仅作为日线收盘价兜底，令牌必须在服务端环境变量中配置。 */

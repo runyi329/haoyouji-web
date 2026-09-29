@@ -143,6 +143,13 @@ export function fmtDate(dateStr: string | null | undefined): string {
   return `${parts[0].slice(2)}.${parts[1]}.${parts[2]}`;
 }
 
+// 股票盘尾价的业务日期是交易日，不应以浏览器时区重新解析；直接转成中文年月日显示。
+function formatChineseStockPriceDate(dateStr: string | null | undefined): string {
+  const text = String(dateStr || '').trim();
+  const matched = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  return matched ? `${matched[1]}年${Number(matched[2])}月${Number(matched[3])}日` : (text || '选股时');
+}
+
 // 已结订单统一按北京时间显示结清时分秒，供卡片模式和订单模式共用。
 export function formatSettledTimestamp(settledAt?: string | Date | null): string {
   if (!settledAt) return '';
@@ -2337,7 +2344,7 @@ export function FunderOrderCard({
                         </div>
                         {manualStockPnlCalculationMode === 'total_capital' ? (
                           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
-                            <span>更新于：{position.updatedAt ? new Date(position.updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : position.priceDate || '选股时'}</span>
+                            <span>更新于：{position.updatedAt ? new Date(position.updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : formatChineseStockPriceDate(position.priceDate)}</span>
                             <span>{position.isCloseSnapshot ? '盘尾价' : '最新价'}：{position.currentPrice === null ? '暂未取得' : `${position.currentPrice.toLocaleString()} ${position.currency === 'CNY' ? '元' : 'USD'}`}</span>
                             <span>股数：{position.quantity.toLocaleString()}</span>
                           </div>
@@ -2362,7 +2369,7 @@ export function FunderOrderCard({
                               {manualStockMarketValueCny === null ? '暂未取得最新价' : `${manualStockMarketValueCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`}
                             </span>
                           </div>
-                          <div className="mt-1 text-[10px] text-gray-400">{manualStockPnlDetail.find((position) => position.priceDate)?.priceDate ? `价格日期：${manualStockPnlDetail.find((position) => position.priceDate)?.priceDate}` : '价格日期：选股后自动带入'}</div>
+                          <div className="mt-1 text-[10px] text-gray-400">{manualStockPnlDetail.find((position) => position.priceDate)?.priceDate ? `价格日期：${formatChineseStockPriceDate(manualStockPnlDetail.find((position) => position.priceDate)?.priceDate)}` : '价格日期：选股后自动带入'}</div>
                         </div>
                         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3">
                           <span className="text-gray-500">账户初始总额度</span>

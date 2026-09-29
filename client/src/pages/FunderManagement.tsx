@@ -30,6 +30,14 @@ type ManualStockPosition = {
   latestPriceUpdatedAt?: string;
 };
 
+const formatChineseStockPriceDate = (value?: string | null) => {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const parts = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (parts) return `${parts[1]}年${Number(parts[2])}月${Number(parts[3])}日`;
+  return text;
+};
+
 export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, financeOnly, onRecycleBinRef }: FunderManagementProps = {}) {
   const [, params] = useRoute("/ledger/:id/funder-management");
   const [, routeParams2] = useRoute("/ledger/:id/finance-unified");
@@ -272,6 +280,19 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setManualStockLookupInput('');
     setManualStockLookupQuery('');
   }, []);
+  // 六码与仅命中一只股票的名称/拼音可直接回填；多个简称候选则保留清单供管理员确认。
+  useEffect(() => {
+    if (manualStockLookupRow === null || manualStockLookupQueryResult.isFetching) return;
+    const typedCode = manualStockLookupInput.trim().toUpperCase()
+      .replace(/^(?:SH|SZ|BJ)[._-]?/, '')
+      .replace(/[._-]?(?:SH|SZ|BJ)$/, '');
+    const exactSuggestion = /^\d{6}$/.test(typedCode)
+      ? manualStockLookupResults.find((suggestion) => suggestion.code === typedCode)
+      : undefined;
+    const onlySuggestion = manualStockLookupResults.length === 1 ? manualStockLookupResults[0] : undefined;
+    const suggestion = exactSuggestion || onlySuggestion;
+    if (suggestion) selectManualAshareStock(manualStockLookupRow, suggestion);
+  }, [manualStockLookupRow, manualStockLookupInput, manualStockLookupResults, manualStockLookupQueryResult.isFetching, selectManualAshareStock]);
   // 编辑页只读展示已保存的盘尾价；不会在盘中额外拉取实时股票行情。
   const manualStockClosePreviewQuery = (trpc as any).getManualStockCloseSnapshots.useQuery(
     { symbols: manualStockPreviewSymbols },
@@ -3695,6 +3716,25 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             placeholder="A 股六码，如 600519"
                             aria-label={`第${index + 1}只股票代码`}
                           />
+                          {manualStockLookupRow === index && (
+                            <div className={`col-span-2 rounded-md border border-violet-200 bg-white p-1.5 shadow-sm ${manualStockPnlCalculationMode === 'total_capital' ? 'sm:col-span-4' : 'sm:col-span-6'}`}>
+                              <div className="px-1 pb-1 text-[10px] text-violet-500">输入 A 股六码、名称或英文简写后自动校验；多个同名/简称候选请点选，名称、代码和最新价会一起补全。</div>
+                              {manualStockLookupQueryResult.isFetching && <div className="px-1 py-1.5 text-xs text-violet-500">正在检索 A 股…</div>}
+                              {!manualStockLookupQueryResult.isFetching && manualStockLookupQuery.length >= 2 && manualStockLookupResults.length === 0 && <div className="px-1 py-1.5 text-xs text-slate-500">未找到可验证的沪深北 A 股，请检查名称、拼音或六码代码。</div>}
+                              {manualStockLookupResults.map((suggestion) => (
+                                <button
+                                  key={suggestion.symbol}
+                                  type="button"
+                                  onClick={() => selectManualAshareStock(index, suggestion)}
+                                  className="flex w-full items-center justify-between gap-2 rounded px-1.5 py-1.5 text-left text-xs hover:bg-violet-50"
+                                >
+                                  <span className="min-w-0 truncate font-semibold text-violet-900">{suggestion.name}</span>
+                                  <span className="shrink-0 font-mono text-violet-700">{suggestion.code}</span>
+                                  <span className="shrink-0 tabular-nums text-violet-600">{Number(suggestion.latestPrice) > 0 ? `最新 ¥${Number(suggestion.latestPrice).toLocaleString()}` : '最新价暂缺'}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                           {manualStockPnlCalculationMode === 'position_cost' && <>
                             <input
                               type="number"
@@ -3746,29 +3786,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               <div className={`col-span-2 flex min-w-0 items-center justify-between rounded-md bg-violet-50 px-2 py-1.5 text-[11px] text-violet-700 ${manualStockPnlCalculationMode === 'total_capital' ? 'sm:col-span-4' : 'sm:col-span-6'}`}>
                                 <span>{isCloseSnapshot ? '最新盘尾价' : '最新价'}</span>
                                 <span className="font-semibold tabular-nums">{price === null ? '正在获取最新价' : `${price.toLocaleString()} ${unit}`}</span>
-                                <span className="text-violet-400">{priceDate ? `价格日期 ${priceDate}` : updatedAt ? `更新于 ${new Date(updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}` : '选择股票后自动带入'}</span>
+                                <span className="text-violet-400">{priceDate ? `价格日期 ${formatChineseStockPriceDate(priceDate)}` : updatedAt ? `更新于 ${new Date(updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}` : '选择股票后自动带入'}</span>
                               </div>
                             );
                           })()}
-                          {manualStockLookupRow === index && (
-                            <div className={`col-span-2 rounded-md border border-violet-200 bg-white p-1.5 shadow-sm ${manualStockPnlCalculationMode === 'total_capital' ? 'sm:col-span-4' : 'sm:col-span-6'}`}>
-                              <div className="px-1 pb-1 text-[10px] text-violet-500">输入 A 股六码、名称或英文简写后，选择校验结果自动补全名称、代码和最新价；每日 15:05 再以盘尾价更新。</div>
-                              {manualStockLookupQueryResult.isFetching && <div className="px-1 py-1.5 text-xs text-violet-500">正在检索 A 股…</div>}
-                              {!manualStockLookupQueryResult.isFetching && manualStockLookupQuery.length >= 2 && manualStockLookupResults.length === 0 && <div className="px-1 py-1.5 text-xs text-slate-500">未找到可验证的沪深北 A 股，请检查名称、拼音或六码代码。</div>}
-                              {manualStockLookupResults.map((suggestion) => (
-                                <button
-                                  key={suggestion.symbol}
-                                  type="button"
-                                  onClick={() => selectManualAshareStock(index, suggestion)}
-                                  className="flex w-full items-center justify-between gap-2 rounded px-1.5 py-1.5 text-left text-xs hover:bg-violet-50"
-                                >
-                                  <span className="min-w-0 truncate font-semibold text-violet-900">{suggestion.name}</span>
-                                  <span className="shrink-0 font-mono text-violet-700">{suggestion.code}</span>
-                                  <span className="shrink-0 tabular-nums text-violet-600">{Number(suggestion.latestPrice) > 0 ? `最新 ¥${Number(suggestion.latestPrice).toLocaleString()}` : '最新价暂缺'}</span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
                         </div>
                       ))}
                       <div className="flex items-center justify-between gap-2 pt-1">
