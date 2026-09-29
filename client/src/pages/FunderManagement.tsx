@@ -921,7 +921,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     return () => clearInterval(timer);
   }, [formData.interestBase, formData.interestRateAnnual, formData.interestStartDate]);
 
-  // 编辑区与订单卡片采用同一固定方向：当前持有资产 − 基准 − 待结 + 已结 + 担保物。
+  // 普通订单：当前持有资产 − 基准 − 待结 + 已结 + 担保物。
+  // 借出本金：担保物 − 当前借出本金价值 − 待结 + 已结；借出的币不可再当成持有资产。
   const previewPendingInterestU = useMemo(() => {
     const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
     return ['CNY', 'RMB', '人民币'].includes(currency) ? previewAccrued / cnyRate : previewAccrued;
@@ -932,12 +933,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   }, [previewPaidInterest, previewPaidInterestCurrency, cnyRate]);
   const computedCollateralGap = useMemo(() => {
     if (collateralGapBaseValue <= 0) return null;
+    if (formData.principalLentOut) {
+      const borrowedValue = previewCurrentHoldingValue ?? collateralGapBaseValue;
+      return computedCollateralValue - borrowedValue - previewPendingInterestU + previewPaidInterestU;
+    }
     return (previewCurrentHoldingValue ?? 0)
       - collateralGapBaseValue
       - previewPendingInterestU
       + previewPaidInterestU
       + computedCollateralValue;
-  }, [computedCollateralValue, collateralGapBaseValue, previewCurrentHoldingValue, previewPendingInterestU, previewPaidInterestU]);
+  }, [computedCollateralValue, collateralGapBaseValue, formData.principalLentOut, previewCurrentHoldingValue, previewPendingInterestU, previewPaidInterestU]);
 
   // 预览卡片实时待结佣金（受邀订单专用，每秒更新）
   const [previewCommission, setPreviewCommission] = useState<number>(0);
@@ -964,11 +969,15 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     const buyPriceNum = parseFloat(formData.buyPrice || '0');
     const buyValue = buyPriceNum * buyQty;
     const currentValue = liveP ? liveP * buyQty : null;
+    if (formData.principalLentOut) {
+      const borrowedValue = currentValue ?? collateralGapBaseValue;
+      return computedCollateralValue - borrowedValue - previewPendingInterestU + previewPaidInterestU;
+    }
     const floatPnl = currentValue !== null ? currentValue - buyValue : null;
     return floatPnl !== null
       ? computedCollateralValue + floatPnl - previewAccrued
       : computedCollateralValue - previewAccrued;
-  }, [computedCollateralValue, formLivePrices, formData.coin, formData.buyQuantity, formData.buyPrice, previewAccrued]);
+  }, [collateralGapBaseValue, computedCollateralValue, formLivePrices, formData.coin, formData.buyQuantity, formData.buyPrice, formData.principalLentOut, previewAccrued, previewPaidInterestU, previewPendingInterestU]);
 
   const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
     onSuccess: async (result) => {
@@ -3899,7 +3908,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         </span>
                       </div>
                     )}
-                    {ledgerId === 52 && (
+                    {ledgerId === 52 && formData.principalLentOut && (
+                      <div className="mt-2 border-t border-blue-100 pt-2 text-[11px] text-slate-500">
+                        借出本金订单固定按：担保物市值 − 当前借出本金实时价值 − 待结利息 + 已结利息计算；不使用买入价值或计息基数作为重复扣减项。
+                      </div>
+                    )}
+                    {ledgerId === 52 && !formData.principalLentOut && (
                       <div className="mt-2 border-t border-blue-100 pt-2">
                         <div className="mb-1.5 text-xs font-medium text-slate-600">担保缺口计算基准</div>
                         <div className="grid grid-cols-2 gap-2">
@@ -3926,7 +3940,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           {collateralGapBaseValue > 0 && <> · {collateralGapBaseValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</>}
                         </div>
                         <div className="mt-0.5 text-[11px] text-slate-500">
-                          预览缺口 = 基准 − 当前持有资产{previewCurrentHoldingValue !== null ? `（${previewCurrentHoldingValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U）` : '（行情待获取）'} − 担保价值；待结、已结利息在订单卡片中继续计算。
+                          预览缺口 = 当前持有资产{previewCurrentHoldingValue !== null ? `（${previewCurrentHoldingValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U）` : '（行情待获取）'} − 基准 + 担保价值；待结、已结利息在订单卡片中继续计算。
                         </div>
                       </div>
                     )}

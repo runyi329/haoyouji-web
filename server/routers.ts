@@ -19042,15 +19042,19 @@ ${klinesSummary}
               ? principalU
               : (buyValueU > 0 ? buyValueU : principalU);
             const paidInterestU = baseCurrency === 'CNY' ? paidInterest / usdtCnyRate : paidInterest;
-            // 担保余量/缺口：当前持有资产市值 − 所选基准 − 待结 + 已结 + 担保物。
-            // 正数表示担保充足，负数表示仍需补足；37 标签浮盈需先还原为当前市值。
+            const principalLentOut = o.principal_lent_out === 1 || o.principal_lent_out === true;
+            // 普通订单：当前持有资产 − 所选基准 − 待结 + 已结。
+            // 借出本金：借出的币不是可用持仓，单订单待覆盖额必须是“−当前借出本金价值 − 待结 + 已结”，
+            // 共享池在此基础上再统一加担保物，避免把本金市值与担保物都当作正资产。
             const fallbackHoldingValueU = buyValueU > 0 ? buyValueU : principalU;
             const linkedFloatingPnlU = linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null;
             const holdingValueU = linkedFloatingPnlU !== null && Number.isFinite(linkedFloatingPnlU)
               ? fallbackHoldingValueU + linkedFloatingPnlU
               : currentValue;
-            const collateralRequired = (holdingValueU ?? 0) - collateralGapBaseU - pendingInterestU + paidInterestU;
-            const principalLentOut = o.principal_lent_out === 1 || o.principal_lent_out === true;
+            const principalLentOutValueU = holdingValueU ?? collateralGapBaseU;
+            const collateralRequired = principalLentOut
+              ? -principalLentOutValueU - pendingInterestU + paidInterestU
+              : (holdingValueU ?? 0) - collateralGapBaseU - pendingInterestU + paidInterestU;
             return {
               orderId: Number(o.id),
               orderNo: o.order_no,
