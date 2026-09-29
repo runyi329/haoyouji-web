@@ -430,9 +430,10 @@ function syncFunderParticipantCollateralSnapshot(snapshot: Record<string, any> |
   return next;
 }
 
-// 所有协作视图都是同一张订单的不同记账视角，标的币种及期权标的必须继承主订单，
-// 不允许旧的参与者快照在主订单改币种后把旧币种重新覆盖回来。
-const FUNDER_PARTICIPANT_SHARED_ASSET_FIELDS = ['coin', 'asset_type', 'option_info'] as const;
+// 协作人保存的是完整的个人订单视图。购买币种（coin）可以与主订单不同，
+// 例如共同拥有者可独立选择 UNI 本位；绝不能在保存时回写成主订单的 USDT。
+// 订单类型和期权合约结构仍属于同一张关联订单，保持与主订单同步。
+const FUNDER_PARTICIPANT_SHARED_ASSET_FIELDS = ['asset_type', 'option_info'] as const;
 function syncFunderParticipantSharedAssetSnapshot(snapshot: Record<string, any> | null | undefined, parentOrder: any): Record<string, any> {
   const next = { ...(snapshot || {}) };
   for (const field of FUNDER_PARTICIPANT_SHARED_ASSET_FIELDS) {
@@ -441,6 +442,47 @@ function syncFunderParticipantSharedAssetSnapshot(snapshot: Record<string, any> 
     } else {
       delete next[field];
     }
+  }
+  return next;
+}
+
+/**
+ * 兼容曾被旧同步逻辑错误回写为主订单币种的个人视图。
+ *
+ * 仅在下面全部成立时恢复为融资输入币种：
+ * - 快照币种仍与主订单币种完全相同；
+ * - 融资输入币种是非 USDT/CNY 的数字币；
+ * - 买入数量与保存的融资输入数量一致，且单价为 1。
+ *
+ * 这正是“购买币种与融资币种均选 UNI”的保存形态；该修复只改读取响应，
+ * 不会改写任何历史订单、钱包或担保数据，也不会影响普通 USDT 订单。
+ */
+function restoreLegacyPersonalAssetCoin(snapshot: Record<string, any> | null | undefined, parentOrder: any): Record<string, any> {
+  const next = { ...(snapshot || {}) };
+  const snapshotCoin = String(next.coin || '').trim().toUpperCase();
+  const parentCoin = String(parentOrder?.coin || '').trim().toUpperCase();
+  const amountCurrencyRaw = String(next.amount_currency || '').trim().toUpperCase();
+  const amountCurrency = amountCurrencyRaw === 'U' ? 'USDT' : amountCurrencyRaw === 'RMB' ? 'CNY' : amountCurrencyRaw;
+  if (!snapshotCoin || !parentCoin || snapshotCoin !== parentCoin || !amountCurrency || ['USDT', 'CNY'].includes(amountCurrency)) {
+    return next;
+  }
+
+  let displayConfig: Record<string, any> = {};
+  try {
+    const raw = next.display_config;
+    displayConfig = raw && typeof raw === 'string'
+      ? JSON.parse(raw)
+      : (raw && typeof raw === 'object' ? raw : {});
+  } catch {}
+  const savedInputAmount = Number(displayConfig.financingInputAmount);
+  const buyQuantity = Number(next.buy_quantity);
+  const buyPrice = Number(next.buy_price);
+  const valuesMatch = Number.isFinite(savedInputAmount)
+    && savedInputAmount > 0
+    && Number.isFinite(buyQuantity)
+    && Math.abs(savedInputAmount - buyQuantity) < 0.000001;
+  if (valuesMatch && Number.isFinite(buyPrice) && Math.abs(buyPrice - 1) < 0.000001) {
+    next.coin = amountCurrency;
   }
   return next;
 }
@@ -18441,8 +18483,11 @@ ${klinesSummary}
           const isCollaboratorOrder = participantQueryUserIdSet.has(Number(o.id))
             && Number(o.user_id) !== participantQueryUserId;
           if (!isCollaboratorOrder) return o;
-          const snapshot = syncFunderParticipantCollateralSnapshot(
-            parseFunderParticipantSnapshot(pi?.order_snapshot),
+          const snapshot = restoreLegacyPersonalAssetCoin(
+            syncFunderParticipantCollateralSnapshot(
+              parseFunderParticipantSnapshot(pi?.order_snapshot),
+              o,
+            ),
             o,
           );
           const result = { ...o, ...(snapshot || {}) };
@@ -20248,8 +20293,11 @@ ${klinesSummary}
               const mainOrderStatus = o.status;
               const mainOrderSettledAt = o.settled_at;
               const mainOrderInterestEndDate = o.interest_end_date;
-              const snapshot = syncFunderParticipantCollateralSnapshot(
-                parseFunderParticipantSnapshot(pi.order_snapshot),
+              const snapshot = restoreLegacyPersonalAssetCoin(
+                syncFunderParticipantCollateralSnapshot(
+                  parseFunderParticipantSnapshot(pi.order_snapshot),
+                  o,
+                ),
                 o,
               );
               if (snapshot) Object.assign(o, snapshot);
@@ -20371,8 +20419,11 @@ ${klinesSummary}
                   const mainOrderStatus = o.status;
                   const mainOrderSettledAt = o.settled_at;
                   const mainOrderInterestEndDate = o.interest_end_date;
-                  const snapshot = syncFunderParticipantCollateralSnapshot(
-                    parseFunderParticipantSnapshot(pi.order_snapshot),
+                  const snapshot = restoreLegacyPersonalAssetCoin(
+                    syncFunderParticipantCollateralSnapshot(
+                      parseFunderParticipantSnapshot(pi.order_snapshot),
+                      o,
+                    ),
                     o,
                   );
                   if (snapshot) Object.assign(o, snapshot);
