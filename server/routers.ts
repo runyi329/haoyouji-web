@@ -19195,6 +19195,192 @@ ${klinesSummary}
         }
       }),
 
+    // 管理中侧统一订单台：管理员一次读取所有左侧（资方）、右侧（借方）及协作人个人订单视图。
+    // 同一物理订单会保留为同一个关联组；主拥有者展示一次，其他每位活跃拥有者／参与者各展示一次，
+    // 这样按任一订单号、姓名或备注检索时，前端可以完整列出同组的每一张独立订单视图。
+    funderAdminGetOrderViews: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const sessionRole = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (sessionRole !== 'owner' && sessionRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看统一订单台' });
+        }
+
+        const [orderResult, participantResult] = await Promise.all([
+          db.execute(sql`
+            SELECT o.*, u.username, u.name AS owner_user_name, u.avatar, owner_member.role AS owner_member_role,
+                   COALESCE(NULLIF(owner_member.nickname, ''), NULLIF(u.name, ''), u.username) AS owner_display_name
+              FROM ledger_orders o
+              LEFT JOIN users u ON u.id = o.user_id
+              LEFT JOIN ledger_members owner_member
+                ON owner_member.ledgerId = o.ledger_id AND owner_member.userId = o.user_id
+             WHERE o.ledger_id = ${input.ledgerId}
+               AND o.deleted_at IS NULL
+             ORDER BY o.created_at DESC
+          `) as Promise<any>,
+          db.execute(sql`
+            SELECT p.*, o.order_no AS parent_order_no, o.user_id AS parent_user_id,
+                   pu.username AS participant_username, pu.name AS participant_user_name,
+                   COALESCE(NULLIF(participant_member.nickname, ''), NULLIF(pu.name, ''), pu.username) AS participant_display_name
+              FROM ledger_order_participants p
+              INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
+              LEFT JOIN users pu ON pu.id = p.user_id
+              LEFT JOIN ledger_members participant_member
+                ON participant_member.ledgerId = p.ledger_id AND participant_member.userId = p.user_id
+             WHERE p.ledger_id = ${input.ledgerId}
+               AND p.role <> 'inactive'
+               AND o.deleted_at IS NULL
+             ORDER BY p.order_id DESC, p.sort_order ASC, p.id ASC
+          `) as Promise<any>,
+        ]);
+        const asRows = (result: any): any[] => Array.isArray(result?.[0]) ? result[0] : (Array.isArray(result) ? result : []);
+        const sourceOrders = asRows(orderResult);
+        const sourceParticipants = asRows(participantResult);
+        const participantsByOrder = new Map<number, any[]>();
+        for (const participant of sourceParticipants) {
+          const orderId = Number(participant.order_id);
+          if (!orderId) continue;
+          const list = participantsByOrder.get(orderId) || [];
+          list.push(participant);
+          participantsByOrder.set(orderId, list);
+        }
+        const serializeDates = (source: any) => {
+          const next = { ...source };
+          for (const field of ['interest_start_date', 'buy_date', 'settled_at', 'created_at', 'updated_at', 'end_date', 'start_date', 'interest_end_date']) {
+            if (next[field] instanceof Date) {
+              const date = next[field] as Date;
+              next[field] = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            }
+          }
+          return next;
+        };
+        const orderViews: any[] = [];
+
+        for (const sourceOrder of sourceOrders) {
+          const baseOrder = serializeDates(sourceOrder);
+          const orderId = Number(baseOrder.id);
+          const linkedParticipants = participantsByOrder.get(orderId) || [];
+          const participantUserIds = linkedParticipants.map((participant: any) => Number(participant.user_id)).filter(Boolean);
+          const ownerDisplayNames = linkedParticipants
+            .filter((participant: any) => String(participant.role || '').toLowerCase() === 'owner')
+            .map((participant: any) => ({ userId: Number(participant.user_id), name: participant.participant_display_name || participant.participant_user_name || participant.participant_username || `用户${participant.user_id}` }));
+          if (!ownerDisplayNames.some((owner: any) => owner.userId === Number(baseOrder.user_id))) {
+            ownerDisplayNames.unshift({ userId: Number(baseOrder.user_id), name: baseOrder.owner_display_name || baseOrder.owner_user_name || baseOrder.username || `用户${baseOrder.user_id}` });
+          }
+          const groupFields = {
+            _linkGroupKey: `order:${orderId}`,
+            _parentOrderId: orderId,
+            _parentOrderNo: baseOrder.order_no,
+            _managementSide: ['owner', 'admin'].includes(String(baseOrder.owner_member_role || '').toLowerCase())
+              ? '中侧'
+              : (String(baseOrder.owner_member_role || '').toLowerCase() === 'funder' ? '左侧' : '右侧'),
+            _participantCount: linkedParticipants.length,
+            _participantUserIds: participantUserIds,
+            owner_display_names: ownerDisplayNames,
+          };
+          orderViews.push({
+            ...baseOrder,
+            ...groupFields,
+            _viewKey: `${orderId}:primary:${baseOrder.user_id}`,
+            _orderViewKind: '主订单',
+            _isParticipant: false,
+            order_perspective: 'self',
+          });
+
+          // 主拥有者在上方已经有主订单卡片，不再重复；其他协作人各保留一张可编辑的个人视图卡片。
+          for (const participant of linkedParticipants) {
+            const collaboratorUserId = Number(participant.user_id);
+            if (!collaboratorUserId || collaboratorUserId === Number(baseOrder.user_id)) continue;
+            const collaboratorRole = String(participant.role || '').toLowerCase();
+            const isCoOwner = collaboratorRole === 'owner';
+            const snapshot = restoreLegacyPersonalAssetCoin(
+              syncFunderParticipantCollateralSnapshot(parseFunderParticipantSnapshot(participant.order_snapshot), baseOrder),
+              baseOrder,
+            );
+            const view = {
+              ...baseOrder,
+              ...(snapshot || {}),
+              ...groupFields,
+              id: baseOrder.id,
+              ledger_id: baseOrder.ledger_id,
+              user_id: baseOrder.user_id,
+              order_no: participant.order_no_override || baseOrder.order_no,
+              _viewKey: `${orderId}:collaborator:${collaboratorUserId}`,
+              _orderViewKind: isCoOwner ? '共同拥有者视图' : '参与者视图',
+              _collaborator_role: collaboratorRole || null,
+              _isParticipant: !isCoOwner,
+              order_perspective: isCoOwner ? 'self' : (snapshot?.order_perspective || baseOrder.order_perspective || 'self'),
+              order_owner_name: baseOrder.owner_display_name || baseOrder.owner_user_name || baseOrder.username || null,
+              participant_name: participant.participant_display_name || participant.participant_user_name || participant.participant_username || `用户${collaboratorUserId}`,
+              participant_display_name: participant.participant_display_name || participant.participant_user_name || participant.participant_username || `用户${collaboratorUserId}`,
+              owner_label: participant.participant_display_name || participant.participant_user_name || participant.participant_username || `用户${collaboratorUserId}`,
+              participantInfo: {
+                userId: collaboratorUserId,
+                role: collaboratorRole || participant.role,
+                isPersonalOwnerView: isCoOwner,
+                interestRate: participant.interest_rate ?? null,
+                commissionRate: participant.commission_rate ?? null,
+                commissionBase: participant.commission_base || baseOrder.interest_base || null,
+                commissionStartDate: participant.commission_start_date || baseOrder.interest_start_date || null,
+                paidCommission: participant.paid_commission || '0',
+                paidInterest: participant.paid_interest || '0',
+                note: participant.note || null,
+                interestBaseCurrency: ['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes(participant.interest_base_currency || baseOrder.interest_base_currency || '') ? 'CNY' : 'USDT',
+              },
+              _participantSearchNote: participant.note || null,
+            } as any;
+            // 这些列是早期参与者编辑页可能单独保存的字段；优先级高于历史快照。
+            if (participant.amount != null && participant.amount !== '') view.amount = participant.amount;
+            if (participant.amount_currency) view.amount_currency = participant.amount_currency;
+            if (participant.interest_rate != null && participant.interest_rate !== '') view.interest_rate_annual = participant.interest_rate;
+            if (participant.interest_base) view.interest_base = participant.interest_base;
+            if (participant.interest_base_currency) view.interest_base_currency = participant.interest_base_currency;
+            if (participant.interest_payment_type) view.interest_payment_type = participant.interest_payment_type;
+            if (participant.interest_start_date) view.interest_start_date = participant.interest_start_date;
+            if (participant.interest_rate_currency) view.interest_rate_currency = participant.interest_rate_currency;
+            if (participant.display_config) view.display_config = participant.display_config;
+            if (participant.buy_date_override) view.buy_date = participant.buy_date_override;
+            if (participant.broker_name_override) view.broker_name = participant.broker_name_override;
+            if (participant.broker_account_override) view.broker_account = participant.broker_account_override;
+            if (baseOrder.status === 'settled' || baseOrder.status === 'completed') {
+              view.status = baseOrder.status;
+              view.settled_at = baseOrder.settled_at;
+              view.interest_end_date = baseOrder.interest_end_date;
+            }
+            orderViews.push(serializeDates(view));
+          }
+        }
+
+        // 统一订单台也使用订单卡片的实时估值；仅采集当前实际出现的标的与担保币种，避免无关行情扫描。
+        const priceCoins = new Set<string>();
+        const addCoin = (value: unknown) => {
+          const coin = String(value || '').trim().toUpperCase();
+          if (coin) priceCoins.add(coin);
+        };
+        for (const order of orderViews) {
+          addCoin(order.coin);
+          try {
+            const option = typeof order.option_info === 'string' ? JSON.parse(order.option_info) : order.option_info;
+            addCoin(option?.coin);
+          } catch {}
+          try {
+            const assets = typeof order.collateral_assets === 'string' ? JSON.parse(order.collateral_assets) : order.collateral_assets;
+            if (Array.isArray(assets)) assets.forEach((asset: any) => addCoin(asset?.coin));
+          } catch {}
+        }
+        const { getLatestPrice } = await import('./price-scanner');
+        const livePrices: Record<string, number> = {};
+        for (const coin of Array.from(priceCoins)) {
+          const price = getLatestPrice(coin);
+          if (price) livePrices[coin] = price;
+        }
+        return { orders: orderViews, livePrices };
+      }),
+
     // 获取资方资产汇总（资金方首页用）
     funderGetAssetSummary: protectedProcedure
       .input(z.object({ ledgerId: z.number(), userId: z.number().optional() }))

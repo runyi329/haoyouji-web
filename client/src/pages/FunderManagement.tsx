@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { getUserDisplayName, getUserSearchLabel, matchesUserSearch } from "@/lib/userIdentity";
-import { ChevronLeft, ChevronDown, ChevronRight, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check } from "lucide-react";
+import { ChevronLeft, ChevronDown, ChevronRight, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check, Search } from "lucide-react";
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER } from "@/components/FunderOrderCard";
 import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
@@ -40,6 +40,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [userSearchText, setUserSearchText] = useState('');
+  // 中侧是管理员统一订单台：本地索引所有订单字段，并在命中后展开同一关联组的全部独立视图。
+  const [orderSearchText, setOrderSearchText] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -599,11 +601,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     },
   );
 
-  const { data: assetOrdersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.funderGetAssetOrders.useQuery(
+  const standardOrderQuery = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId, ...(selectedUserId ? { userId: selectedUserId } : {}), ...(adminOnly ? { roleFilter: "admin" as const } : {}), ...(financeOnly ? { financeOnly: true } : {}) },
-    { enabled: ledgerId > 0, staleTime: 3000, refetchInterval: 3000, placeholderData: (prev: any) => prev }
+    { enabled: ledgerId > 0 && !adminOnly, staleTime: 3000, refetchInterval: 3000, placeholderData: (prev: any) => prev }
   );
-  // funderGetAssetOrders 返回 { orders, livePrices }，取 orders 数组
+  const adminOrderQuery = trpc.ledger.funderAdminGetOrderViews.useQuery(
+    { ledgerId },
+    { enabled: ledgerId > 0 && !!adminOnly && isAdminUser, staleTime: 3000, refetchInterval: 3000, placeholderData: (prev: any) => prev }
+  );
+  const assetOrdersData = adminOnly ? adminOrderQuery.data : standardOrderQuery.data;
+  const ordersLoading = adminOnly ? adminOrderQuery.isLoading : standardOrderQuery.isLoading;
+  const refetchOrders = adminOnly ? adminOrderQuery.refetch : standardOrderQuery.refetch;
+  // 两个接口均返回 { orders, livePrices }，取 orders 数组。
   const assetOrders = (assetOrdersData as any)?.orders ?? assetOrdersData ?? [];
   const getParticipantUserIdForOrder = (order: any): number | undefined => {
     const collaboratorUserId = Number(order?.participantInfo?.userId ?? order?.participantInfo?.user_id ?? 0);
@@ -807,10 +816,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(formLivePrices)]);
   // 全量订单（不带 userId 过滤），专用于下拉框统计每个用户的订单数量
-  const { data: allOrdersData } = trpc.ledger.funderGetAssetOrders.useQuery(
+  const standardAllOrdersQuery = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId, ...(adminOnly ? { roleFilter: "admin" as const } : {}), ...(financeOnly ? { financeOnly: true } : {}) },
-    { enabled: ledgerId > 0, staleTime: 30000 }
+    { enabled: ledgerId > 0 && !adminOnly, staleTime: 30000 }
   );
+  const allOrdersData = adminOnly ? adminOrderQuery.data : standardAllOrdersQuery.data;
   const allOrders: any[] = (allOrdersData as any)?.orders ?? allOrdersData ?? [];
   // 右侧借方列表会先于全量统计请求拿到卡片数据；在此期间以已显示订单兜底，避免下拉框只剩“全部成员”。
   const memberSelectorOrders: any[] = allOrders.length > 0 ? allOrders : assetOrders;
@@ -831,6 +841,65 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ...(((funderUsers as any[]) || [])),
     ].map((member: any) => [getMemberSelectorId(member), member] as const).filter(([userId]) => userId > 0)
   ).values());
+  const normalizeOrderSearchText = (value: unknown) => String(value ?? '')
+    .toLocaleLowerCase('zh-CN')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const smartMatchedOrders = useMemo(() => {
+    const allViews = assetOrders as any[];
+    if (!adminOnly) return allViews;
+    const selectedMemberViews = selectedUserId === null
+      ? allViews
+      : allViews.filter((order: any) => {
+        const selectedId = Number(selectedUserId);
+        const participantId = Number(order?.participantInfo?.userId ?? order?.participantInfo?.user_id ?? 0);
+        const relatedIds = Array.isArray(order?._participantUserIds) ? order._participantUserIds : [];
+        return Number(order?.user_id) === selectedId
+          || participantId === selectedId
+          || relatedIds.some((id: unknown) => Number(id) === selectedId);
+      });
+    const queryTerms = normalizeOrderSearchText(orderSearchText).split(' ').filter(Boolean);
+    if (queryTerms.length === 0) return selectedMemberViews;
+    const hasTermMatch = (order: any) => {
+      const searchable = [
+        order?.id, order?.order_no, order?._parentOrderNo, order?.order_role, order?._orderViewKind,
+        order?.owner_display_name, order?.owner_user_name, order?.username, order?.order_owner_name,
+        order?.participant_name, order?.participant_display_name, order?.owner_label,
+        order?.coin, order?.amount_currency, order?.asset_type, order?.finance_type,
+        order?.broker_name, order?.broker_account, order?.storage_account,
+        order?.admin_note, order?.public_note, order?._participantSearchNote,
+        order?.tags, order?.collateral_assets, order?.option_info, order?.display_config,
+      ].map(normalizeOrderSearchText).join(' ');
+      return queryTerms.every(term => searchable.includes(term));
+    };
+    const matchedGroups = new Set(
+      selectedMemberViews
+        .filter(hasTermMatch)
+        .map((order: any) => String(order?._linkGroupKey || `order:${order?.id}`)),
+    );
+    // 命中任一视图后，显示同一关联组中的主订单、共同拥有者和参与者视图，彼此保持独立卡片。
+    return selectedMemberViews.filter((order: any) => matchedGroups.has(String(order?._linkGroupKey || `order:${order?.id}`)));
+  }, [adminOnly, assetOrders, orderSearchText, selectedUserId]);
+  const managementCardLookupOrders = useMemo(() => {
+    if (!adminOnly) return assetOrders as any[];
+    const uniqueParents = new Map<number, any>();
+    for (const order of assetOrders as any[]) {
+      const parentId = Number(order?._parentOrderId ?? order?.id);
+      if (parentId > 0 && !uniqueParents.has(parentId)) uniqueParents.set(parentId, order);
+    }
+    return Array.from(uniqueParents.values());
+  }, [adminOnly, assetOrders]);
+  const managementSideCounts = useMemo(() => {
+    const counts = { 左侧: 0, 中侧: 0, 右侧: 0 } as Record<'左侧' | '中侧' | '右侧', number>;
+    if (!adminOnly) return counts;
+    for (const order of assetOrders as any[]) {
+      // 每个物理订单仅计一次，个人视图只在检索结果中展开，不重复膨胀三侧统计。
+      if (String(order?._viewKey || '').includes(':collaborator:')) continue;
+      const side = order?._managementSide as keyof typeof counts;
+      if (side in counts) counts[side] += 1;
+    }
+    return counts;
+  }, [adminOnly, assetOrders]);
 
   // 强制转成数字，避免 MySQL 返回字符串导致 tRPC z.number() 校验失败
   // 编辑面板专用：查询当前编辑订单的结息记录列表
@@ -2135,6 +2204,36 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       )}
 
       <div className="px-4 py-4">
+        {isAdminUser && adminOnly && (
+          <div className="mb-3">
+            <div className="flex items-center gap-2 rounded-2xl border border-blue-100 bg-white px-3 py-2.5 shadow-sm">
+              <Search className="h-4 w-4 shrink-0 text-blue-500" />
+              <input
+                value={orderSearchText}
+                onChange={event => setOrderSearchText(event.target.value)}
+                className="min-w-0 flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400"
+                placeholder="智能查询：订单号、姓名、币种、标签、备注…"
+                aria-label="智能查询全部融资付息订单"
+              />
+              {orderSearchText && (
+                <button type="button" onClick={() => setOrderSearchText('')} className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="清空查询">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <div className="mt-1.5 px-1 text-[11px] text-gray-400">
+              命中任意一张关联订单后，会一并列出该组的主订单、共同拥有者和参与者个人视图。
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5 px-0.5 text-[11px]">
+              {(['左侧', '中侧', '右侧'] as const).map(side => (
+                <span key={side} className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-blue-700">
+                  {side} {managementSideCounts[side]}
+                </span>
+              ))}
+              <span className="rounded-full border border-slate-100 bg-slate-50 px-2 py-0.5 text-slate-500">含协作人个人视图</span>
+            </div>
+          </div>
+        )}
         {/* 用户选择下拉框 + 资产类型筛选 + 添加订单按钮（仅管理员可见） */}
         {isAdminUser && (
         <div className="flex items-center gap-2 mb-4">
@@ -2235,7 +2334,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         {/* 订单列表 */}
         <div>
           <h2 className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">
-            订单列表 {assetOrders ? `· ${(assetOrders as any[]).length} 笔` : ''}
+            {adminOnly ? '统一订单台' : '订单列表'} {smartMatchedOrders ? `· ${smartMatchedOrders.length} 笔` : ''}
           </h2>
           {ordersLoading ? (
             <div className="text-center py-4 text-gray-400 text-sm">加载中...</div>
@@ -2245,7 +2344,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               <div className="text-gray-400 text-sm">暂无订单</div>
             </div>
           ) : (() => {
-            const filteredOrders = [...(assetOrders as any[])].filter((o: any) => {
+            const filteredOrders = [...smartMatchedOrders].filter((o: any) => {
               if (!assetTypeFilter) return true;
               if (assetTypeFilter === 'settled') return o.status === 'settled';
               if (assetTypeFilter === 'stock') return o.asset_type === 'stock';
@@ -2262,7 +2361,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             });
             return filteredOrders.length === 0 ? (
               <div className="text-center py-8 bg-white rounded-2xl shadow-sm">
-                <div className="text-gray-400 text-sm">暂无订单</div>
+                <div className="text-gray-400 text-sm">{adminOnly && orderSearchText ? '未找到匹配的订单或关联订单组' : '暂无订单'}</div>
               </div>
             ) : (
             <div className="space-y-3">
@@ -2271,7 +2370,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 const isInvited = !!order.participantInfo && String(order.participantInfo?.role || '') !== 'owner';
                 return (
                   <FunderOrderCard
-                    key={order.id}
+                    key={order._viewKey || order.id}
                     order={order}
                     livePrices={(assetOrdersData as any)?.livePrices ?? {}}
                     priceDirection={priceDirection}
@@ -2318,7 +2417,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     setShowInterestTip={(v) => setInterestTipOrderId(v ? order.id : null)}
                     showMarginInfo={marginInfoOrderId === order.id}
                     setShowMarginInfo={(v) => setMarginInfoOrderId(v ? order.id : null)}
-                    allOrders={assetOrders as any[]}
+                    allOrders={managementCardLookupOrders}
                   />
                 );
               })}
