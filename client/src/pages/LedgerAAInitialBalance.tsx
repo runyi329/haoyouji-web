@@ -21,7 +21,7 @@
  */
 import { Fragment, useState, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, ChartNoAxesCombined, Pencil } from "lucide-react";
+import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, ChartNoAxesCombined } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -321,7 +321,7 @@ export default function LedgerAAInitialBalance() {
     const hasRatio = Number.isFinite(ratio) && ratio >= 0;
     const hasActualAmount = Number.isFinite(actualAmount) && actualAmount >= 0;
     const key = allocationKey(userId, tagName);
-    let derivedField = derivedAllocationFields[key] ?? null;
+    let derivedField: 'amount' | 'ratio' | 'targetAmount' | null = derivedAllocationFields[key] ?? null;
     const display = { amount: entry.amount, ratio: entry.ratio, targetAmount: entry.targetAmount };
 
     const canDeriveActual = hasAmount && hasRatio;
@@ -715,14 +715,7 @@ export default function LedgerAAInitialBalance() {
       return `${part('year')}-${part('month')}-${part('day')}`;
     };
     return (
-      <section className="rounded-xl p-3 space-y-3" style={{ backgroundColor: '#F7FAFC', border: '1px solid #DCE7EE' }}>
-        <div className="flex items-start gap-2">
-          <ChartNoAxesCombined size={16} className="mt-0.5 flex-shrink-0" style={{ color: accentColor }} />
-          <div className="min-w-0">
-            <div className="text-xs font-semibold text-gray-800">股票参与分配</div>
-            <div className="mt-0.5 text-[11px] leading-4 text-gray-500">每笔开仓按「持仓编号」管理。平时只显示摘要；点击编辑后才展开成员份额，保存仅影响当前这笔股票。</div>
-          </div>
-        </div>
+      <section className="space-y-2">
         {matrix.lots.length === 0 ? (
           <div className="rounded-lg bg-white px-3 py-4 text-center text-xs text-gray-400">该标签还没有登记股票；请先在股票账户页新增买入或加仓。</div>
         ) : matrix.lots.map((lot: any, lotIndex: number) => {
@@ -734,6 +727,15 @@ export default function LedgerAAInitialBalance() {
           const isSaving = savingStockLots.has(lotId);
           const activeParticipations = lot.participations.filter((item: any) => Number(item.remainingQuantity || 0) > 0);
           const totalAllocatedQuantity = activeParticipations.reduce((total: number, item: any) => total + Number(item.remainingQuantity || 0), 0);
+          const holdingTotal = Number(lot.initialQuantity || 0) * Number(lot.unitCost || 0);
+          const marketValue = lot.marketPrice === null || lot.marketPrice === undefined
+            ? null
+            : Number(lot.currentQuantity || 0) * Number(lot.marketPrice || 0);
+          // 当前市值按尚未卖出的持仓计算；盈亏也以相同的剩余数量对比该批次均价，避免部分卖出后混入历史已实现收益。
+          const marketPnl = marketValue === null
+            ? null
+            : marketValue - Number(lot.currentQuantity || 0) * Number(lot.unitCost || 0);
+          const tradeTimestamp = formatTradeTime(lot.actualTradedAt || lot.openedAt);
           const startLotSave = async () => {
             if (!matrix.canEdit || globalClosed || isSaving) return;
             const proposedRows: Array<{ targetUserId: number; quantity: number; previousQuantity: number; entryPrice?: number; startDate: string; pauseDate: string }> = [];
@@ -820,56 +822,47 @@ export default function LedgerAAInitialBalance() {
             <div key={lot.id} className="overflow-hidden rounded-xl bg-white" style={{ border: `1px solid ${isEditing ? accentColor : '#E3E9ED'}` }}>
               <div className="flex items-start gap-2 px-2.5 py-2.5" style={{ backgroundColor: isEditing ? '#F4FAFC' : '#FFFFFF' }}>
                 <button type="button" onClick={() => toggleStockLotExpanded(lotId)} className="min-w-0 flex-1 text-left">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                    <span className="text-sm font-semibold leading-5 text-gray-800 break-words">{lot.stockName}</span>
+                    <span className="shrink-0 text-sm font-semibold leading-5 text-gray-800">{lot.symbol}</span>
                     <span className="shrink-0 text-xs font-semibold" style={{ color: accentColor }}>持仓编号 {lotNumber}</span>
-                    <span className="min-w-0 truncate text-sm font-semibold text-gray-800">{lot.stockName}</span>
-                    <span className="shrink-0 text-[11px] text-gray-400">{lot.symbol}</span>
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-x-1.5 gap-y-0.5 text-[11px] text-gray-500">
-                    <span>买入 {formatNumber(lot.initialQuantity, 4)} 股</span>
-                    <span>成本 ¥{formatNumber(lot.unitCost, 4)}</span>
-                    <span>{formatTradeTime(lot.actualTradedAt || lot.openedAt)}</span>
                   </div>
                 </button>
                 <div className="flex shrink-0 items-center gap-1">
-                  {matrix.canEdit && !globalClosed && !isEditing && (
-                    <button type="button" onClick={(event) => { event.stopPropagation(); startStockLotEditing(lotId); }} className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-medium" style={{ color: accentColor, backgroundColor: '#EAF4F7' }}>
-                      <Pencil size={12} /> 编辑
-                    </button>
-                  )}
-                  {isEditing && (
-                    <>
-                      <button type="button" disabled={isSaving} onClick={(event) => { event.stopPropagation(); finishStockLotEditing(lotId, true); }} className="h-7 rounded-lg px-2 text-[11px] text-gray-500 disabled:opacity-50">取消</button>
-                      <button type="button" disabled={isSaving} onClick={(event) => { event.stopPropagation(); void startLotSave(); }} className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-medium text-white disabled:opacity-60" style={{ backgroundColor: accentColor }}>
-                        <Save size={12} /> {isSaving ? '保存中' : '保存'}
-                      </button>
-                    </>
-                  )}
                   <button type="button" aria-label={isExpanded ? `收起持仓编号 ${lotNumber}` : `展开持仓编号 ${lotNumber}`} onClick={() => toggleStockLotExpanded(lotId)} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100">
                     <ChevronDown size={15} className="transition-transform" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
                   </button>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-px border-y text-[10px]" style={{ borderColor: '#E8EEF1', backgroundColor: '#E8EEF1' }}>
-                <div className="bg-[#F8FAFB] px-2 py-1.5 text-gray-500">当前余量 <b className="ml-0.5 text-gray-700">{formatNumber(lot.currentQuantity, 4)}</b></div>
-                <div className="bg-[#F8FAFB] px-2 py-1.5 text-gray-500">已分配 <b className="ml-0.5 text-gray-700">{formatNumber(totalAllocatedQuantity, 4)}</b></div>
-                <div className="bg-[#F8FAFB] px-2 py-1.5 text-gray-500">成员 <b className="ml-0.5 text-gray-700">{activeParticipations.length}</b> 人</div>
+                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500"><span>持仓</span><b className="ml-1 font-semibold text-gray-700">{formatNumber(lot.initialQuantity, 4)} 股</b></div>
+                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500"><span>持仓均价</span><b className="ml-1 font-semibold text-gray-700">{formatNumber(lot.unitCost, 4)}</b></div>
+                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500"><span>总额</span><b className="ml-1 font-semibold text-gray-700">{formatNumber(holdingTotal, 2)}</b></div>
+                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500"><span>市值</span><b className="ml-1 font-semibold text-gray-700">{marketValue === null ? '待更新' : formatNumber(marketValue, 2)}</b></div>
+                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500"><span>盈亏</span><b className="ml-1 font-semibold" style={{ color: marketPnl === null ? '#6B7280' : marketPnl >= 0 ? '#D32F2F' : '#2E7D32' }}>{marketPnl === null ? '待更新' : `${marketPnl >= 0 ? '+' : ''}${formatNumber(marketPnl, 2)}`}</b></div>
+                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500">可分配 <b className="ml-0.5 font-semibold text-gray-700">{formatNumber(lot.availableForParticipation, 4)} 股</b></div>
+                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500">当前余量 <b className="ml-0.5 text-gray-700">{formatNumber(lot.currentQuantity, 4)}</b></div>
+                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500">已分配 <b className="ml-0.5 text-gray-700">{formatNumber(totalAllocatedQuantity, 4)}</b></div>
+                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500">成员 <b className="ml-0.5 text-gray-700">{activeParticipations.length}</b> 人</div>
               </div>
-              {!isExpanded ? (
-                <button type="button" onClick={() => toggleStockLotExpanded(lotId)} className="flex w-full items-center justify-between px-2.5 py-2 text-left text-[11px] text-gray-500 hover:bg-[#FAFCFD]">
-                  <span>{globalClosed ? '本批次已结束，成员分配仅供查看' : `尚有 ${formatNumber(lot.availableForParticipation, 4)} 股可分配`}</span>
-                  <span style={{ color: accentColor }}>查看成员持仓</span>
-                </button>
-              ) : <div className="space-y-1.5 p-2.5">
+              {isExpanded && <div className="space-y-1.5 p-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-[10px]" style={{ backgroundColor: isEditing ? '#EAF4F7' : '#F8FAFB', color: '#61727B' }}>
-                  <span>{isEditing ? '编辑完成后点击本持仓右上角「保存」统一提交。' : '成员持仓摘要；点击「编辑」后才可调整。'}</span>
+                  <span>{isEditing ? '编辑完成后点击本持仓页尾「保存」统一提交。' : '成员持仓摘要；收起后点击右侧「编辑」可调整。'}</span>
                   <span>参考价 {lot.marketPrice === null ? '待更新' : `¥${formatNumber(lot.marketPrice, 4)}`}</span>
                 </div>
                 <div className="space-y-1.5">
                 {[...matrix.members].sort((left: any, right: any) => {
-                  // 只按已保存的份额排序：保存后自动刷新，避免输入中改变顺序导致移动端焦点跳失。
-                  const leftQuantity = Number(lot.participations.find((item: any) => Number(item.userId) === Number(left.userId))?.remainingQuantity || 0);
-                  const rightQuantity = Number(lot.participations.find((item: any) => Number(item.userId) === Number(right.userId))?.remainingQuantity || 0);
+                  // 编辑时，比例框失焦后按全部草稿比例重排。输入过程中不移动当前行，避免移动端键盘与焦点跳失。
+                  const sortByDraft = isEditing && stockLotsSortedByDraft.has(lotId);
+                  const quantityForSort = (member: any) => {
+                    const savedQuantity = Number(lot.participations.find((item: any) => Number(item.userId) === Number(member.userId))?.remainingQuantity || 0);
+                    if (!sortByDraft) return savedQuantity;
+                    const draftPercentage = stockParticipationDrafts[`${lot.id}:${member.userId}`]?.percentage;
+                    if (draftPercentage === undefined) return savedQuantity;
+                    return Number(lot.currentQuantity || 0) * Math.max(0, Math.min(100, Number(draftPercentage) || 0)) / 100;
+                  };
+                  const leftQuantity = quantityForSort(left);
+                  const rightQuantity = quantityForSort(right);
                   return rightQuantity - leftQuantity;
                 }).map((member: any) => {
                   const participation = lot.participations.find((item: any) => Number(item.userId) === Number(member.userId));
@@ -894,6 +887,7 @@ export default function LedgerAAInitialBalance() {
                   const draft = stockParticipationDrafts[draftKey] ?? fallbackDraft;
                   const draftEntryPrice = Number(draft.entryPrice) > 0 ? Number(draft.entryPrice) : savedEntryPrice;
                   const draftStartDate = draft.startDate || defaultStartDate;
+                  const showPauseDate = Boolean(draft.pauseDate) || (isEditing && expandedStockPauseDateFields.has(draftKey));
                   return (
                     <div key={member.userId} className="rounded-lg px-2 py-2" style={{ backgroundColor: !isMemberVisible ? '#F7F7F7' : Number(member.userId) === Number(selectedUserId) ? '#F4FAFC' : '#FAFAFA', opacity: isMemberVisible ? 1 : 0.7 }}>
                       <div className="flex items-center gap-1.5">
@@ -911,54 +905,83 @@ export default function LedgerAAInitialBalance() {
                             {isMemberVisible ? <Eye size={12} /> : <EyeOff size={12} />}
                           </button>
                         </div>
-                        <span className="text-[10px] text-gray-400 whitespace-nowrap">{formatNumber(share, 0)}% · {formatNumber(currentQuantity, 4)} 股 · ¥{formatNumber(currentQuantity * savedEntryPrice, 2)}</span>
+                        <span className="text-[10px] whitespace-nowrap text-gray-500"><b className="font-semibold" style={{ color: !isEditing && currentQuantity > 0 ? '#D32F2F' : '#6B7280' }}>{formatNumber(share, 0)}%</b> · {formatNumber(currentQuantity, 4)} 股 · ¥{formatNumber(currentQuantity * savedEntryPrice, 2)}</span>
                         {hasSoldHistory && <span className="text-[10px] whitespace-nowrap" style={{ color: '#8A5A00' }}>已卖 {formatNumber(participation.closedQuantity, 4)} · 只读</span>}
                       </div>
-                      <div className="mt-1.5 text-[10px] text-gray-400">
-                        当前比例折算 <b className="font-medium text-gray-600">{formatNumber(lot.currentQuantity * (Number(draft.percentage) || 0) / 100, 4)} 股</b> · 占比金额 <b className="font-medium text-gray-600">¥{formatNumber(lot.currentQuantity * (Number(draft.percentage) || 0) / 100 * draftEntryPrice, 2)}</b>
-                      </div>
-                      <div className="mt-1.5 flex items-center justify-between gap-2">
-                        <span className="text-[10px] text-gray-400">我的买入价</span>
-                        <div className="flex h-7 items-center overflow-hidden rounded-md border bg-white" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}>
-                          <span className="pl-2 text-[10px] text-gray-400">¥</span>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={draft.entryPrice}
-                            disabled={isReadonly}
-                            placeholder={savedEntryPrice ? String(savedEntryPrice) : '买入价'}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              if (/^(?:\d*\.?\d*)?$/.test(value)) setStockParticipationDraft(draftKey, { entryPrice: value }, fallbackDraft);
-                            }}
-                            className="h-full w-24 bg-transparent px-1.5 text-right text-xs font-medium outline-none disabled:text-gray-400"
-                            style={{ color: isReadonly ? '#9CA3AF' : '#4B5563' }}
-                          />
-                        </div>
-                      </div>
-                      <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-                        <label className="min-w-0 overflow-hidden">
-                          <span className="mb-0.5 block text-[10px] text-gray-400">开始日期</span>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                        <label className="flex items-center gap-1">
+                          <span className="shrink-0 text-[10px] text-gray-400">我的买入价</span>
+                          <div className="flex h-7 min-w-0 items-center overflow-hidden rounded-md border bg-white" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}>
+                            <span className="pl-1.5 text-[10px] text-gray-400">¥</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={draft.entryPrice}
+                              disabled={isReadonly}
+                              placeholder={savedEntryPrice ? String(savedEntryPrice) : '买入价'}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                if (/^(?:\d*\.?\d*)?$/.test(value)) setStockParticipationDraft(draftKey, { entryPrice: value }, fallbackDraft);
+                              }}
+                              className="h-full w-[clamp(5rem,22vw,6rem)] min-w-0 bg-transparent px-1 text-right text-xs font-medium outline-none disabled:text-gray-400"
+                              style={{ color: !isEditing ? '#1F2937' : isReadonly ? '#9CA3AF' : '#4B5563' }}
+                            />
+                          </div>
+                        </label>
+                        <label className="flex items-center gap-1">
+                          <span className="shrink-0 text-[10px] text-gray-400">开始日期</span>
                           <input
                             type="date"
                             value={draftStartDate}
                             disabled={isReadonly}
                             onChange={(event) => setStockParticipationDraft(draftKey, { startDate: event.target.value }, fallbackDraft)}
-                            className="h-7 w-full min-w-0 max-w-full rounded-md border bg-white px-1 text-[10px] outline-none disabled:text-gray-400"
-                            style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE', color: isReadonly ? '#9CA3AF' : '#4B5563', minWidth: 0 }}
+                            className="h-7 w-[clamp(5rem,22vw,6rem)] min-w-0 shrink-0 rounded-md border bg-white px-0.5 text-[9px] outline-none disabled:text-gray-400"
+                            style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE', color: !isEditing ? '#1F2937' : isReadonly ? '#9CA3AF' : '#4B5563', minWidth: 0 }}
                           />
                         </label>
-                        <label className="min-w-0 overflow-hidden">
-                          <span className="mb-0.5 block text-[10px] text-[#B45309]">暂停日期</span>
-                          <input
-                            type="date"
-                            value={draft.pauseDate}
-                            disabled={isReadonly}
-                            onChange={(event) => setStockParticipationDraft(draftKey, { pauseDate: event.target.value }, fallbackDraft)}
-                            className="h-7 w-full min-w-0 max-w-full rounded-md border bg-[#FFFBEB] px-1 text-[10px] outline-none disabled:text-gray-400"
-                            style={{ borderColor: isReadonly ? '#ECECEC' : '#FDE68A', color: isReadonly ? '#9CA3AF' : '#92400E', minWidth: 0 }}
-                          />
-                        </label>
+                      </div>
+                      <div className="mt-1.5 space-y-1.5">
+                        {showPauseDate ? (
+                          <label className="flex items-center justify-between gap-2">
+                            <span className="shrink-0 text-[10px] text-[#B45309]">暂停日期</span>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <input
+                                type="date"
+                                value={draft.pauseDate}
+                                disabled={isReadonly}
+                                onChange={(event) => setStockParticipationDraft(draftKey, { pauseDate: event.target.value }, fallbackDraft)}
+                                className="h-7 w-24 rounded-md border bg-[#FFFBEB] px-1 text-[10px] outline-none disabled:text-gray-400"
+                                style={{ borderColor: isReadonly ? '#ECECEC' : '#FDE68A', color: !isEditing ? '#1F2937' : isReadonly ? '#9CA3AF' : '#92400E', minWidth: 0 }}
+                              />
+                              {!isReadonly && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (draft.pauseDate) setStockParticipationDraft(draftKey, { pauseDate: '' }, fallbackDraft);
+                                    setExpandedStockPauseDateFields((previous) => {
+                                      const next = new Set(previous);
+                                      next.delete(draftKey);
+                                      return next;
+                                    });
+                                  }}
+                                  className="h-7 rounded-md px-1.5 text-[10px]"
+                                  style={{ color: '#B45309', backgroundColor: '#FFFBEB' }}
+                                >
+                                  {draft.pauseDate ? '解除' : '取消'}
+                                </button>
+                              )}
+                            </div>
+                          </label>
+                        ) : !isReadonly ? (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedStockPauseDateFields((previous) => new Set(previous).add(draftKey))}
+                            className="flex items-center gap-1 text-[10px]"
+                            style={{ color: '#B45309' }}
+                          >
+                            <span className="text-sm leading-none">+</span> 设置暂停日期
+                          </button>
+                        ) : null}
                       </div>
                       <div className="mt-1.5 flex items-center justify-between border-t pt-1.5" style={{ borderColor: '#E8EEF1' }}>
                         <div>
@@ -980,8 +1003,9 @@ export default function LedgerAAInitialBalance() {
                                 setStockParticipationDraft(draftKey, { percentage: clamped }, fallbackDraft);
                               }
                             }}
+                            onBlur={() => setStockLotsSortedByDraft((previous) => new Set(previous).add(lotId))}
                             className="h-full w-12 bg-transparent px-2 text-right text-sm font-semibold outline-none disabled:text-gray-400"
-                            style={{ color: isReadonly ? '#9CA3AF' : accentColor }}
+                            style={{ color: !isEditing ? '#D32F2F' : isReadonly ? '#9CA3AF' : accentColor }}
                           />
                           <span className="flex h-full w-7 items-center justify-center border-l text-xs font-semibold text-gray-400" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}>%</span>
                         </div>
@@ -991,10 +1015,29 @@ export default function LedgerAAInitialBalance() {
                 })}
                 </div>
               </div>}
+              {!isEditing ? (
+                <div className="flex w-full items-center justify-between px-2.5 py-2 text-[11px] text-gray-500">
+                  <span>成交时间 {tradeTimestamp}</span>
+                  {!isExpanded && matrix.canEdit && !globalClosed && (
+                    <button type="button" onClick={() => startStockLotEditing(lotId)} className="font-medium" style={{ color: accentColor }}>编辑</button>
+                  )}
+                </div>
+              ) : matrix.canEdit && !globalClosed && (
+                <div className="border-t px-2.5 py-2" style={{ borderColor: '#E8EEF1', backgroundColor: isEditing ? '#F4FAFC' : '#FCFEFF' }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-gray-500">成交时间 {tradeTimestamp}</span>
+                    <div className="flex items-center gap-2">
+                    <button type="button" disabled={isSaving} onClick={() => finishStockLotEditing(lotId, true)} className="h-8 rounded-lg px-3 text-xs text-gray-500 disabled:opacity-50">取消</button>
+                    <button type="button" disabled={isSaving} onClick={() => void startLotSave()} className="inline-flex h-8 items-center gap-1 rounded-lg px-3 text-xs font-medium text-white disabled:opacity-60" style={{ backgroundColor: accentColor }}>
+                      <Save size={13} /> {isSaving ? '保存中' : `保存持仓编号 ${lotNumber}`}
+                    </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
-        <div className="text-[11px] leading-4 text-gray-500">成员占比金额按“参与股数 × 我的买入价”记录；默认采用该股票批次的实际买入价。已卖出的历史部分仅可查看，无法再次修改。</div>
       </section>
     );
   };
@@ -1026,6 +1069,10 @@ export default function LedgerAAInitialBalance() {
   const [savingStockLots, setSavingStockLots] = useState<Set<number>>(new Set());
   // 移动端输入保持在本地草稿中，避免每次输入都触发查询重渲染而丢失键盘焦点。
   const [stockParticipationDrafts, setStockParticipationDrafts] = useState<Record<string, { percentage: string; entryPrice: string; startDate: string; pauseDate: string }>>({});
+  // 暂停日期仅在成员确实暂停，或管理员主动设置暂停时展示；避免为每位正常持仓成员占用一行表单。
+  const [expandedStockPauseDateFields, setExpandedStockPauseDateFields] = useState<Set<string>>(new Set());
+  // 比例编辑过程先稳定当前行；失焦后才按全部草稿比例重新排序。
+  const [stockLotsSortedByDraft, setStockLotsSortedByDraft] = useState<Set<number>>(new Set());
   const setStockParticipationDraft = (key: string, patch: Partial<{ percentage: string; entryPrice: string; startDate: string; pauseDate: string }>, fallback: { percentage: string; entryPrice: string; startDate: string; pauseDate: string }) => {
     setStockParticipationDrafts((previous) => ({
       ...previous,
@@ -1037,6 +1084,14 @@ export default function LedgerAAInitialBalance() {
     setStockParticipationDrafts((previous) => Object.fromEntries(
       Object.entries(previous).filter(([key]) => !key.startsWith(prefix)),
     ));
+    setExpandedStockPauseDateFields((previous) => new Set(
+      Array.from(previous).filter((key) => !key.startsWith(prefix)),
+    ));
+    setStockLotsSortedByDraft((previous) => {
+      const next = new Set(previous);
+      next.delete(lotId);
+      return next;
+    });
   };
   const toggleStockLotExpanded = (lotId: number) => {
     setExpandedStockLots((previous) => {
@@ -1496,13 +1551,13 @@ export default function LedgerAAInitialBalance() {
             const cat = categories.find((c: any) => c.name === selectedTagName);
             if (isStockPortfolioTag(cat)) {
               return (
-                <div className="mx-4 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: '#FFFFFF' }}>
-                  <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: '1px solid #F0E8E0' }}>
+                <div className="mx-4">
+                  <div className="flex items-center gap-2 px-1 pb-2">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat?.color || '#2F6F85' }} />
                     <span className="text-sm font-semibold text-gray-800">{selectedTagName}</span>
                     <span className="ml-auto text-xs" style={{ color: '#2F6F85' }}>股票批次参与管理</span>
                   </div>
-                  <div className="p-3">{renderStockParticipationEditor({ selectedUserId: 0, accentColor: cat?.color || '#2F6F85' })}</div>
+                  {renderStockParticipationEditor({ selectedUserId: 0, accentColor: cat?.color || '#2F6F85' })}
                 </div>
               );
             }
