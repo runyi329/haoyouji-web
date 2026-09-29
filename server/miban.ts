@@ -2555,14 +2555,14 @@ export const mibanAdminUserRouter = router({
         await ensureMultiAssetWalletInfrastructure();
         const eventSourceSql = `
           SELECT
-            CONCAT('r_', r.id) AS event_key,
+            CONVERT(CONCAT('r_', r.id) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_key,
             r.id AS source_id,
-            'recharge' AS source_type,
+            CONVERT('recharge' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS source_type,
             r.user_id,
             h.amount,
-            'recharge' AS event_type,
-            'USDT' AS currency,
-            '充值到账' AS note,
+            CONVERT('recharge' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,
+            CONVERT('USDT' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS currency,
+            CONVERT('充值到账' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
             NULL AS raw_balance,
             COALESCE(r.completed_at, r.created_at) AS created_at
           FROM recharge_orders r
@@ -2573,21 +2573,21 @@ export const mibanAdminUserRouter = router({
           UNION ALL
 
           SELECT
-            CONCAT('m_', m.id) AS event_key,
+            CONVERT(CONCAT('m_', m.id) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_key,
             m.id AS source_id,
-            'manual' AS source_type,
+            CONVERT('manual' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS source_type,
             m.user_id,
             m.amount,
-            CASE
+            CONVERT(CASE
               WHEN m.note LIKE '委托买入%' THEN 'order_buy'
               WHEN m.note LIKE '卖出成交%' THEN 'order_settlement'
               WHEN m.note LIKE '%管理费%' THEN 'management_fee'
               WHEN m.note LIKE '%撤单%' OR m.note LIKE '%退款%' THEN 'refund'
               WHEN m.note LIKE '%提现%' THEN 'withdraw'
               ELSE 'manual'
-            END AS event_type,
-            'USDT' AS currency,
-            m.note,
+            END USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,
+            CONVERT('USDT' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS currency,
+            CONVERT(m.note USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
             NULL AS raw_balance,
             m.created_at
           FROM af_manual_balances m
@@ -2597,14 +2597,14 @@ export const mibanAdminUserRouter = router({
           UNION ALL
 
           SELECT
-            CONCAT('bh_', bh.id) AS event_key,
+            CONVERT(CONCAT('bh_', bh.id) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_key,
             bh.id AS source_id,
-            'balance_history' AS source_type,
+            CONVERT('balance_history' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS source_type,
             bh.user_id,
             bh.amount,
-            bh.type AS event_type,
-            COALESCE(NULLIF(UPPER(bh.currency), ''), 'USDT') AS currency,
-            bh.description AS note,
+            CONVERT(bh.type USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,
+            CONVERT(COALESCE(NULLIF(UPPER(bh.currency), ''), 'USDT') USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS currency,
+            CONVERT(bh.description USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
             bh.balance AS raw_balance,
             bh.created_at
           FROM balance_history bh
@@ -2625,14 +2625,14 @@ export const mibanAdminUserRouter = router({
           UNION ALL
 
           SELECT
-            CONCAT('ma_', mae.id) AS event_key,
+            CONVERT(CONCAT('ma_', mae.id) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_key,
             mae.id AS source_id,
-            'multi_asset' AS source_type,
+            CONVERT('multi_asset' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS source_type,
             mae.user_id,
             mae.amount,
-            mae.event_type,
-            mae.asset_code AS currency,
-            mae.note,
+            CONVERT(mae.event_type USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,
+            CONVERT(mae.asset_code USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS currency,
+            CONVERT(mae.note USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
             mae.balance_after AS raw_balance,
             mae.created_at
           FROM ai_wallet_asset_entries mae
