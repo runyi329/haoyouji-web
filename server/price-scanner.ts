@@ -271,6 +271,27 @@ async function fetchSinaOnDemandStockQuote(symbol: string): Promise<OnDemandStoc
   }
 }
 
+/**
+ * 52号账本手工股票组合的盘中参考价。
+ *
+ * 仅由服务端的交易时段任务调用，前端订单页始终只读取已保存的数据；
+ * 盘尾 15:05 仍通过 fetchEndOfDayStockCloseSnapshots 固化日结价。
+ */
+export async function fetchIntradayStockQuotes(symbols: string[]): Promise<Record<string, OnDemandStockQuote>> {
+  const uniqueSymbols = Array.from(new Set(symbols
+    .map(normalizeOnDemandStockSymbol)
+    .filter((symbol): symbol is string => !!symbol)))
+    .slice(0, 200);
+  const results: Record<string, OnDemandStockQuote> = {};
+
+  await Promise.all(uniqueSymbols.map(async (symbol) => {
+    const sina = await fetchSinaOnDemandStockQuote(symbol);
+    if (sina) results[symbol] = sina;
+  }));
+
+  return results;
+}
+
 function expectedAshareSuffix(code: string): 'SH' | 'SZ' | 'BJ' | null {
   if (/^(?:600|601|603|605|688)\d{3}$/.test(code)) return 'SH';
   if (/^(?:000|001|002|003|300|301)\d{3}$/.test(code)) return 'SZ';

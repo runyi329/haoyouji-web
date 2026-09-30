@@ -1,5 +1,5 @@
 import { getDbConnection } from "./db";
-import { fetchEndOfDayStockCloseSnapshots } from "./price-scanner";
+import { fetchEndOfDayStockCloseSnapshots, fetchIntradayStockQuotes } from "./price-scanner";
 import { ensureLedgerStockPortfolioTables, refreshLedgerStockTagCloseSnapshots } from "./ledger-stock-portfolio";
 import { getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
 
@@ -8,11 +8,13 @@ type StoredManualStockClose = {
   price: number;
   currency: "USD" | "CNY";
   priceDate: string;
+  source: string;
   updatedAt: string;
 };
 
 let tableReady: Promise<void> | null = null;
 let dailyTimer: NodeJS.Timeout | null = null;
+let intradayTimer: NodeJS.Timeout | null = null;
 let refreshInProgress = false;
 
 function beijingDate(): string {
@@ -50,13 +52,14 @@ async function ensureTable(): Promise<void> {
   await tableReady;
 }
 
-async function getTrackedSymbols(): Promise<string[]> {
+async function getTrackedSymbols(options: { includeLedger37MarginStocks?: boolean } = {}): Promise<string[]> {
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用，无法读取股票组合");
   const [rows] = await (conn as any).execute(`
     SELECT collateral_source
     FROM ledger_orders
-    WHERE asset_type = 'stock'
+    WHERE ledger_id = 52
+      AND asset_type = 'stock'
       AND status = 'active'
       AND collateral_source IS NOT NULL
   `);
@@ -75,6 +78,7 @@ async function getTrackedSymbols(): Promise<string[]> {
       // 单张历史订单的数据异常不能阻断其他订单的盘尾快照。
     }
   }
+  if (!options.includeLedger37MarginStocks) return Array.from(symbols).slice(0, 200);
   // 37号标签的股票保证金使用同一套盘尾快照，不在管理员打开页面时发起第三方报价请求。
   const [marginRows] = await (conn as any).execute(`
     SELECT margin_by_coin
@@ -98,11 +102,53 @@ export async function refreshManualStockCloseSnapshots(): Promise<{ symbols: num
   refreshInProgress = true;
   try {
     await ensureTable();
-    const symbols = await getTrackedSymbols();
+    const symbols = await getTrackedSymbols({ includeLedger37MarginStocks: true });
     if (!symbols.length) return { symbols: 0, updated: 0 };
     const quotes = await fetchEndOfDayStockCloseSnapshots(symbols);
     const conn = await getDbConnection();
     if (!conn) throw new Error("数据库连接不可用，无法保存股票盘尾快照");
+    let updated = 0;
+    for (const symbol of symbols) {
+      const quote = quotes[symbol];
+      if (!quote) continue;
+      const priceDate = quote.priceDate || beijingDate();
+      // A 股休市日会返回上一交易日的静态行情，不能把它误写成新的盘中更新。
+      if (/^\d{6}\.(?:SH|SZ|BJ)$/.test(symbol) && priceDate !== beijingDate()) continue;
+      await (conn as any).execute(
+        `INSERT INTO funder_manual_stock_close_snapshots
+          (symbol, price, currency, price_date, source, updated_at)
+         VALUES (?, ?, ?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE
+           price = VALUES(price),
+           currency = VALUES(currency),
+           price_date = VALUES(price_date),
+           source = VALUES(source),
+           updated_at = NOW()`,
+        [symbol, quote.price, quote.currency, priceDate, `盘尾·${quote.source}`]
+      );
+      updated += 1;
+    }
+    console.log(`[股票盘尾] ${beijingDate()}：跟踪 ${symbols.length} 只，更新 ${updated} 只`);
+    return { symbols: symbols.length, updated };
+  } finally {
+    refreshInProgress = false;
+  }
+}
+
+/**
+ * 盘中每五分钟刷新 52 号账本手工股票组合的参考价。
+ * 只更新当前可见价格与浮动盈亏，不创建日结记录；15:05 的独立盘尾任务仍负责固化收盘价。
+ */
+export async function refreshManualStockIntradaySnapshots(): Promise<{ symbols: number; updated: number }> {
+  if (refreshInProgress) return { symbols: 0, updated: 0 };
+  refreshInProgress = true;
+  try {
+    await ensureTable();
+    const symbols = await getTrackedSymbols({ includeLedger37MarginStocks: false });
+    if (!symbols.length) return { symbols: 0, updated: 0 };
+    const quotes = await fetchIntradayStockQuotes(symbols);
+    const conn = await getDbConnection();
+    if (!conn) throw new Error("数据库连接不可用，无法保存股票盘中参考价");
     let updated = 0;
     for (const symbol of symbols) {
       const quote = quotes[symbol];
@@ -118,11 +164,11 @@ export async function refreshManualStockCloseSnapshots(): Promise<{ symbols: num
            price_date = VALUES(price_date),
            source = VALUES(source),
            updated_at = NOW()`,
-        [symbol, quote.price, quote.currency, priceDate, quote.source]
+        [symbol, quote.price, quote.currency, priceDate, `盘中·${quote.source}`]
       );
       updated += 1;
     }
-    console.log(`[股票盘尾] ${beijingDate()}：跟踪 ${symbols.length} 只，更新 ${updated} 只`);
+    console.log(`[股票盘中] ${beijingDate()}：跟踪 ${symbols.length} 只，更新 ${updated} 只`);
     return { symbols: symbols.length, updated };
   } finally {
     refreshInProgress = false;
@@ -141,7 +187,7 @@ export async function getManualStockCloseSnapshots(symbols: string[]): Promise<R
   if (!conn) throw new Error("数据库连接不可用，无法读取股票盘尾快照");
   const placeholders = normalized.map(() => "?").join(",");
   const [rows] = await (conn as any).execute(
-    `SELECT symbol, price, currency, price_date, updated_at
+    `SELECT symbol, price, currency, price_date, source, updated_at
      FROM funder_manual_stock_close_snapshots
      WHERE symbol IN (${placeholders})`,
     normalized
@@ -157,6 +203,7 @@ export async function getManualStockCloseSnapshots(symbols: string[]): Promise<R
       price,
       currency,
       priceDate: String(row.price_date || "").slice(0, 10),
+      source: String(row.source || ""),
       updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : "",
     };
   }
@@ -190,9 +237,45 @@ function scheduleNextManualStockClose(): void {
   }, millisecondsUntilNextBeijingClose());
 }
 
-/** 启动一次每日北京时间 15:05 的盘尾快照任务；不做盘中轮询。 */
+function isBeijingTradingWindow(now = new Date()): boolean {
+  const beijing = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const day = beijing.getUTCDay();
+  if (day === 0 || day === 6) return false;
+  const minutes = beijing.getUTCHours() * 60 + beijing.getUTCMinutes();
+  // A股连续竞价时段：09:30–11:30、13:00–15:00（含收盘前最后一个五分钟点）。
+  return (minutes >= 9 * 60 + 30 && minutes <= 11 * 60 + 30)
+    || (minutes >= 13 * 60 && minutes <= 15 * 60);
+}
+
+function millisecondsUntilNextFiveMinuteBoundary(now = new Date()): number {
+  const next = new Date(now);
+  next.setUTCSeconds(0, 0);
+  next.setUTCMinutes(next.getUTCMinutes() + (5 - (next.getUTCMinutes() % 5)));
+  return Math.max(1_000, next.getTime() - now.getTime());
+}
+
+function scheduleNextManualStockIntradayRefresh(): void {
+  intradayTimer = setTimeout(async () => {
+    try {
+      if (isBeijingTradingWindow()) await refreshManualStockIntradaySnapshots();
+    } catch (error) {
+      console.error("[股票盘中] 同步失败:", error instanceof Error ? error.message : error);
+    } finally {
+      scheduleNextManualStockIntradayRefresh();
+    }
+  }, millisecondsUntilNextFiveMinuteBoundary());
+}
+
+function refreshIntradayQuotesOnStartup(): void {
+  if (!isBeijingTradingWindow()) return;
+  void refreshManualStockIntradaySnapshots().catch((error) => {
+    console.error("[股票盘中] 启动即时同步失败:", error instanceof Error ? error.message : error);
+  });
+}
+
+/** 启动 52 号订单盘中报价与每日 15:05 盘尾快照任务。 */
 export function startManualStockCloseScheduler(): void {
-  if (dailyTimer) return;
+  if (dailyTimer || intradayTimer) return;
   void ensureTable().catch((error) => {
     console.error("[股票盘尾] 快照表初始化失败:", error instanceof Error ? error.message : error);
   });
@@ -200,5 +283,8 @@ export function startManualStockCloseScheduler(): void {
     console.error("[37股票盘尾] 标签数据表初始化失败:", error instanceof Error ? error.message : error);
   });
   scheduleNextManualStockClose();
-  console.log("[股票盘尾] 每日北京时间 15:05 收盘价快照任务已启动（52订单与37股票标签独立存储）");
+  // 部署或 PM2 重启发生在交易时段时，先立即取一次报价，之后再对齐每五分钟整点。
+  refreshIntradayQuotesOnStartup();
+  scheduleNextManualStockIntradayRefresh();
+  console.log("[股票行情] 52订单交易时段每5分钟更新，37标签仅每日北京时间15:05盘尾快照");
 }

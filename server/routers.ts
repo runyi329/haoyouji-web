@@ -28812,7 +28812,7 @@ insights 数组每项包含：
     return { prices, changes, opens, updatedAt, health: getMarketPriceHealth(), usdtCnyRate };
   }),
 
-  // 融资订单的手工股票组合：只读取每日盘尾已保存的收盘价快照。
+  // 融资订单的手工股票组合：只读取服务端已保存的盘中参考价或盘尾收盘价。
   // 前端不会在盘中触发第三方行情请求，也无法传入外部 URL 或行情密钥。
   getManualStockCloseSnapshots: protectedProcedure
     .input(z.object({

@@ -3588,7 +3588,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/70 px-4 py-3">
                   <div>
                     <div className="text-sm font-semibold text-violet-800">股票浮动盈亏来源</div>
-                    <p className="mt-1 text-[11px] leading-4 text-violet-600">三选一：不引用、37号账本标签，或管理员录入股票组合。手工组合只使用每日盘尾收盘价，不做盘中报价。</p>
+                    <p className="mt-1 text-[11px] leading-4 text-violet-600">三选一：不引用、37号账本标签，或管理员录入股票组合。52号手工组合在开盘交易时段每 5 分钟刷新，15:05 固化盘尾价。</p>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     {([
@@ -3628,8 +3628,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   {stockPnlSourceMode === 'manual_positions' && (
                     <div className="space-y-2 rounded-lg border border-violet-200 bg-white p-2.5">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="text-xs font-semibold text-violet-800">股票组合（盘尾价每日 15:05 更新）</div>
-                        <span className="text-[10px] text-violet-500">每日盘尾 15:05 更新</span>
+                        <div className="text-xs font-semibold text-violet-800">股票组合（盘中参考价 + 盘尾价）</div>
+                        <span className="text-[10px] text-violet-500">开盘每 5 分钟 · 15:05 固化</span>
                       </div>
                       <div className="rounded-lg border border-violet-100 bg-violet-50 p-2">
                         <div className="mb-1.5 text-[11px] font-semibold text-violet-800">盈亏计算方式</div>
@@ -3647,8 +3647,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         </div>
                         <p className="mt-1.5 text-[10px] leading-4 text-violet-600">
                           {manualStockPnlCalculationMode === 'position_cost'
-                            ? '逐只输入买入价：各股票（盘尾价／卖出价 − 买入价）× 股数后汇总。'
-                            : '不需填写逐只买入价：盘尾持仓市值合计 − 账户初始总额度，最后再乘计算系数。'}
+                            ? '逐只输入买入价：各股票（盘中参考价／盘尾价／卖出价 − 买入价）× 股数后汇总。'
+                            : '不需填写逐只买入价：最新持仓市值合计 − 账户初始总额度，最后再乘计算系数。'}
                         </p>
                       </div>
                       {manualStockPnlCalculationMode === 'total_capital' && (
@@ -3781,10 +3781,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             const unit = String(quote?.currency || 'CNY').toUpperCase() === 'CNY' ? '元' : 'USD';
                             const priceDate = String(quote?.priceDate || position.latestPriceDate || '');
                             const updatedAt = String(quote?.updatedAt || position.latestPriceUpdatedAt || '');
-                            const isCloseSnapshot = snapshotPrice > 0;
+                            const isIntradayQuote = String((quote as any)?.source || '').startsWith('盘中·');
+                            const quoteLabel = isIntradayQuote ? '最新盘中参考价' : '最新盘尾价';
                             return (
                               <div className={`col-span-2 flex min-w-0 items-center justify-between rounded-md bg-violet-50 px-2 py-1.5 text-[11px] text-violet-700 ${manualStockPnlCalculationMode === 'total_capital' ? 'sm:col-span-4' : 'sm:col-span-6'}`}>
-                                <span>{isCloseSnapshot ? '最新盘尾价' : '最新价'}</span>
+                                <span>{snapshotPrice > 0 ? quoteLabel : '最新价'}</span>
                                 <span className="font-semibold tabular-nums">{price === null ? '正在获取最新价' : `${price.toLocaleString()} ${unit}`}</span>
                                 <span className="text-violet-400">{priceDate ? `价格日期 ${formatChineseStockPriceDate(priceDate)}` : updatedAt ? `更新于 ${new Date(updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}` : '选择股票后自动带入'}</span>
                               </div>
@@ -3810,8 +3811,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       </div>
                       <div className="text-[11px] leading-4 text-violet-600">
                         {manualStockPnlCalculationMode === 'total_capital'
-                          ? '字段依次为名称、代码和当前持股数量。选中股票时自动带入一笔最新价；每日 15:05 再由盘尾价覆盖。差值 = Σ（最新价 × 股数）− 账户初始总额度；最终浮动盈亏 = 差值 × 计算系数。点击订单里浮动盈亏后的说明按钮可逐只查看最新价、持仓市值、更新时间与计算过程。'
-                          : '字段依次为名称、代码、买入价、卖出价（可选）和持股数量。未填卖出价时，原始盈亏 = Σ（每日盘尾价 − 买入价）× 股数；填入卖出价后按卖出价锁定计算。最终浮动盈亏 = 原始盈亏合计 × 计算系数；点击订单里浮动盈亏后的说明按钮可逐只查看价格、更新时间与计算过程。'}
+                          ? '字段依次为名称、代码和当前持股数量。选中股票时自动带入一笔最新价；开盘交易时段每 5 分钟更新，15:05 以盘尾价固化。差值 = Σ（最新价 × 股数）− 账户初始总额度；最终浮动盈亏 = 差值 × 计算系数。点击订单浮动盈亏说明可查看价格、更新时间与计算过程。'
+                          : '字段依次为名称、代码、买入价、卖出价（可选）和持股数量。未填卖出价时，原始盈亏 = Σ（盘中参考价／盘尾价 − 买入价）× 股数；填入卖出价后按卖出价锁定计算。最终浮动盈亏 = 原始盈亏合计 × 计算系数；点击订单浮动盈亏说明可查看价格、更新时间与计算过程。'}
                       </div>
                     </div>
                   )}
