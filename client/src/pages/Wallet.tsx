@@ -701,8 +701,18 @@ export default function Wallet() {
   // 详情页展示最近 10 笔，因此每个资金来源保留足够的候选记录后再统一排序。
   const recentRechargeQuery = trpc.recharge.getMyOrders.useQuery({ limit: 20 });
   const recentWithdrawQuery = trpc.recharge.getMyWithdrawHistory.useQuery({ limit: 20 });
-  const recentManualQuery = trpc.recharge.getMyManualBalances.useQuery({ limit: 20 });
+  const recentManualQuery = trpc.recharge.getMyManualBalances.useQuery(
+    isLedger52WalletEntry
+      ? { limit: 500, ledgerId: 52, ...(viewAsUserId ? { viewAsUserId } : {}) }
+      : { limit: 20 },
+  );
   const recentBalanceHistoryQuery = trpc.recharge.getBalanceHistory.useQuery({ limit: 20 });
+  // 52号数字币账户的首页与“资金明细”共用同一条统一USDT流水；首页仅在最后截取最近10笔。
+  // 旧的短列表仍保留给非52入口，避免改变其他账本的既有展示。
+  const ledger52UsdtHistoryQuery = trpc.ledger.afGetMyRechargeHistory.useQuery(
+    { ledgerId: 52, ...(viewAsUserId ? { viewAsUserId } : {}) },
+    { enabled: isLedger52WalletEntry, staleTime: 30_000 },
+  );
   const cnyBalanceQuery = trpc.recharge.getCnyBalance.useQuery();
   const cnyHistoryQuery = trpc.recharge.getCnyHistory.useQuery({ limit: 20 });
   const multiAssetBalancesQuery = trpc.recharge.getMultiAssetBalances.useQuery(
@@ -791,6 +801,37 @@ export default function Wallet() {
         : "";
 
   const recentUsdtTx = (() => {
+    if (isLedger52WalletEntry) {
+      const byFingerprint = new Map<string, any>();
+      const put = (item: any) => {
+        const amount = Number(item.amount ?? 0);
+        const createdAt = item.createdAt ?? item.created_at;
+        const note = String(item.note || item.description || "");
+        const fingerprint = [amount.toFixed(8), String(createdAt || ""), note].join("|");
+        if (!byFingerprint.has(fingerprint)) {
+          byFingerprint.set(fingerprint, {
+            ...item,
+            amount,
+            createdAt,
+            note,
+            wcCode: extractWcTeamCode(note),
+          });
+        }
+      };
+      // 与 CryptoWalletTransactions 完整明细页保持相同的主源与安全回退顺序。
+      (ledger52UsdtHistoryQuery.data ?? []).forEach(put);
+      (recentManualQuery.data ?? [])
+        .filter((item: any) => !String(item.note || "").startsWith("[CNY]") && !String(item.note || "").startsWith("[BALANCE_BASE]"))
+        .forEach((item: any) => put({
+          ...item,
+          id: `manual-fallback-${item.id}`,
+          sourceType: "manual",
+          createdAt: item.createdAt ?? item.created_at,
+        }));
+      return Array.from(byFingerprint.values())
+        .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+        .slice(0, 10);
+    }
     const recharges = (recentRechargeQuery.data ?? []).map((r: any) => ({
       id: `r-${r.id}`, sourceType: "recharge",
       amount: Number(r.amount), status: r.status, createdAt: r.createdAt,
@@ -1237,7 +1278,7 @@ export default function Wallet() {
             </div>
           </div>}
           txPath=""
-          onRefresh={() => { void balanceQuery.refetch(); void recentRechargeQuery.refetch(); void recentWithdrawQuery.refetch(); void recentManualQuery.refetch(); void recentBalanceHistoryQuery.refetch(); void multiAssetBalancesQuery.refetch(); void multiAssetHistoryQuery.refetch(); }}
+          onRefresh={() => { void balanceQuery.refetch(); void recentRechargeQuery.refetch(); void recentWithdrawQuery.refetch(); void recentManualQuery.refetch(); void recentBalanceHistoryQuery.refetch(); void ledger52UsdtHistoryQuery.refetch(); void multiAssetBalancesQuery.refetch(); void multiAssetHistoryQuery.refetch(); }}
           // USDT 已并入数字币账户，充值和提现仍按 USDT 的既有真实通道执行。
           onRecharge={canRecharge ? () => setModal("recharge") : undefined}
           onWithdraw={canWithdraw ? () => setModal("withdraw") : undefined}
