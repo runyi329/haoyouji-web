@@ -13,7 +13,6 @@ import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import {
-  getTagMarginCurrencyRecords,
   getTagMarginStockMarketValue,
   getTagMarginStockRecords,
   getTagMarginStockSymbols,
@@ -972,7 +971,7 @@ export function FunderOrderCard({
   // 读取三份独立数据：担保标签的逐笔保证金总值、按管理员口径显示的浮盈、
   // 以及37标签自己的真实当前持仓值。最后一项不能由倍率后浮盈反推。
   // 52订单的利息和借出本金不属于37号标签，仍在风险公式中另行处理。
-  const { extCollateralValueU: extTagCollateralValueU, extFloatingPnlU: extTagFloatingPnlU, extHoldingValueU: extTagHoldingValueU, extHoldingValueCny: extTagHoldingValueCny, extHoldingValueDate: extTagHoldingValueDate } = useMemo(() => {
+  const { extValuationCnyRate: extTagValuationCnyRate, extCollateralValueU: extTagCollateralValueU, extCollateralValueCny: extTagCollateralValueCny, extFloatingPnlU: extTagFloatingPnlU, extHoldingValueU: extTagHoldingValueU, extHoldingValueCny: extTagHoldingValueCny, extHoldingValueDate: extTagHoldingValueDate } = useMemo(() => {
     const _cnyR = (_extCryptoPricesRaw as any)?.usdtCnyRate ?? 7.0;
     const _pricesMap = (_extCryptoPricesRaw as any)?.prices ?? {};
     const _prices: Record<string, number> = {};
@@ -1024,7 +1023,11 @@ export function FunderOrderCard({
         : (legacyNumber !== null && Number.isFinite(legacyNumber) ? legacyNumber : null);
     })();
     return {
+      extValuationCnyRate: _cnyR,
       extCollateralValueU: marginTotalCny === null ? null : marginTotalCny / _cnyR,
+      // 37号保证金的人民币总值必须作为原值传递。52只展示同一次行情估值的
+      // CNY/U双值，不能先折成U后再用另一条USD/CNY接口反推人民币。
+      extCollateralValueCny: marginTotalCny,
       extFloatingPnlU: floatingPnlCny === null ? null : floatingPnlCny / _cnyR,
       extHoldingValueU: holdingValueCny === null ? null : holdingValueCny / _cnyR,
       // 人民币视图必须直接展示37返回的原始市值，不能经不同汇率源往返折算。
@@ -1032,54 +1035,6 @@ export function FunderOrderCard({
       extHoldingValueDate: String((_pnlTagSummary as any)?.currentHoldingValue?.updatedDate ?? (_pnlTagSummary as any)?.latestBalance?.recordDate ?? '').slice(0, 10) || null,
     };
   }, [linkedPnlTagName, linkedCollateralTagName, floatingPnlCalculationMode, _pnlTagConfig, _pnlTagSummary, _collateralTagConfig, _collateralTagSummary, _extCryptoPricesRaw, linkedCollateralMarginRecords, linkedCollateralStockQuotes]);
-
-  // 绑定 37 号账本标签时，担保物必须以该标签内逐笔保证金为唯一来源。
-  // 这里与 RightMarginDetail 的展示口径一致：保留各币种净额，再按当前汇率汇总为 U / 人民币；
-  // 不把订单上的历史手填 collateral_assets 与第三方标签重复相加。
-  const externalCollateralSummary = useMemo(() => {
-    const empty = { entries: [] as Array<{ coin: string; amount: number; assetType?: 'stock'; name?: string; code?: string }>, totalCny: null as number | null, totalU: null as number | null, currencyLabel: '' };
-    if (!hasExternalCollateral || !_collateralTagConfig) return empty;
-    const currencyEntries = getTagMarginCurrencyRecords(linkedCollateralMarginRecords)
-      .filter((item) => Number.isFinite(item.amount) && item.amount !== 0)
-      .map((item) => ({ coin: item.coin, amount: item.amount }));
-    const stockEntries = getTagMarginStockRecords(linkedCollateralMarginRecords)
-      .filter((item) => Number.isFinite(item.quantity) && item.quantity !== 0)
-      .map((item) => ({ coin: item.symbol, amount: item.quantity, assetType: 'stock' as const, name: item.name, code: item.code }));
-    const entries = [...currencyEntries, ...stockEntries];
-    const rate = Number((_extCryptoPricesRaw as any)?.usdtCnyRate ?? cnyRate) || cnyRate;
-    const prices = (_extCryptoPricesRaw as any)?.prices ?? {};
-    const toCny = (coin: string, amount: number) => {
-      const normalized = coin.toUpperCase();
-      if (['元', '人民币', 'CNY', 'RMB'].includes(normalized)) return amount;
-      if (['USDT', 'USDC', 'BUSD', 'DAI', 'U'].includes(normalized)) return amount * rate;
-      const priceU = Number(prices[normalized] ?? prices[coin] ?? 0);
-      return priceU > 0 ? amount * priceU * rate : null;
-    };
-    let totalCny = 0;
-    let allKnown = true;
-    for (const entry of currencyEntries) {
-      const value = toCny(entry.coin, entry.amount);
-      if (value === null) allKnown = false;
-      else totalCny += value;
-    }
-    for (const stock of getTagMarginStockRecords(linkedCollateralMarginRecords)) {
-      const value = getTagMarginStockMarketValue(stock, linkedCollateralStockQuotes);
-      if (value === null) allKnown = false;
-      else totalCny += value;
-    }
-    const netByCoin = currencyEntries.reduce((acc, item) => {
-      const label = ['CNY', 'RMB', '人民币'].includes(item.coin.toUpperCase()) ? '元' : item.coin.toUpperCase();
-      acc[label] = (acc[label] ?? 0) + item.amount;
-      return acc;
-    }, {} as Record<string, number>);
-    const currencyParts = Object.entries(netByCoin)
-      .filter(([, amount]) => Math.abs(amount) > 0.0000001)
-      .map(([coin, amount]) => `${amount >= 0 ? '+' : ''}${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${coin}`);
-    const stockParts = getTagMarginStockRecords(linkedCollateralMarginRecords)
-      .map((stock) => `${stock.name || stock.code} ${stock.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}股`);
-    const currencyLabel = [...currencyParts, ...stockParts].join(' · ');
-    return { entries, totalCny: allKnown ? totalCny : null, totalU: allKnown && rate > 0 ? totalCny / rate : null, currencyLabel };
-  }, [hasExternalCollateral, _collateralTagConfig, _extCryptoPricesRaw, cnyRate, linkedCollateralMarginRecords, linkedCollateralStockQuotes]);
 
   // 37号标签同时记录“应收”和“已付”：普通自动分段与手工加息都属于待结，
   // 只有负数手工分段（37页的“计入已付”）才是52号订单可引用的已结利息。
@@ -1878,11 +1833,17 @@ export function FunderOrderCard({
       ? (manualStockFloatPnlCny === null ? null : manualStockFloatPnlCny / cnyRate)
       : 0;
   const usesConfiguredStockRiskData = hasExternalCollateral || isConfiguredStockPnlSource;
-  // 对37引用，实际持仓价值是37页已确认的余额/marketValue；倍率只用于独立浮盈。
+  // 对37引用，实际持仓价值独立保留给“账户余额”展示；担保缺口股票项则严格
+  // 采用管理员选择的净值盈亏口径，不能再用实际余额减52买入基准反推。
   // 其他既有手工股票路径继续保持原有「买入价值 + 浮盈」兼容计算。
   const linkedHoldingValueU = isExternalStockPnlSource
     ? extTagHoldingValueU
     : (linkedFloatingPnlU === null ? null : buyValueForRisk + linkedFloatingPnlU);
+  const linkedStockContributionU = principalLentOut
+    ? -principalLentOutValueForRisk
+    : isExternalStockPnlSource
+      ? linkedFloatingPnlU
+      : (linkedHoldingValueU === null ? null : linkedHoldingValueU - collateralGapBaseForRisk);
   const externalNonSharedGapU = principalLentOut
     && linkedCollateralValueU !== null
     && linkedPendingInterestForRisk !== null
@@ -1890,10 +1851,10 @@ export function FunderOrderCard({
     ? linkedCollateralValueU - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk
     : usesConfiguredStockRiskData
     && linkedCollateralValueU !== null
-    && linkedHoldingValueU !== null
+    && linkedStockContributionU !== null
     && linkedPendingInterestForRisk !== null
     && linkedPaidInterestForRisk !== null
-    ? linkedHoldingValueU - collateralGapBaseForRisk - accruedForRisk + paidInterestForRisk + linkedCollateralValueU
+    ? linkedStockContributionU - accruedForRisk + paidInterestForRisk + linkedCollateralValueU
     : null;
   // 共享担保模式分为两层口径：
   // 1) 卡片行内的「本订单担保缺口/余量」必须计入本订单实际选定的担保物；
@@ -1949,6 +1910,11 @@ export function FunderOrderCard({
     if (hasLinkedTag) return Number.isFinite(serverValue) ? serverValue : null;
     return sharedOrderFloatingPnlU === null ? null : sharedOrderBuyValueU + sharedOrderFloatingPnlU;
   })();
+  const sharedOrderStockContributionU = (() => {
+    const hasLinkedTag = Boolean(sharedOrderPoolDetail?.linked37PnlTagName || sharedOrderPoolDetail?.linked37TagName);
+    if (hasLinkedTag) return sharedOrderFloatingPnlU;
+    return sharedOrderHoldingValueU === null ? null : sharedOrderHoldingValueU - sharedOrderGapBaseU;
+  })();
   // 行内「担保缺口/余量」与非共享订单使用完全相同的单订单公式。
   // 共享只改变担保物可以在池内共同覆盖的总计判断，不能抹掉该订单本身的担保物。
   const sharedOrderPrincipalLentOut = sharedOrderPoolDetail?.principalLentOut === true || sharedOrderPoolDetail?.principalLentOut === 1;
@@ -1960,8 +1926,8 @@ export function FunderOrderCard({
   const sharedOrderExposure = sharedOrderCollateralValueU !== null
     ? (sharedOrderPrincipalLentOut
       ? sharedOrderCollateralValueU - sharedOrderBorrowedValueU - sharedOrderPendingInterestU + sharedOrderPaidInterestU
-      : sharedOrderHoldingValueU !== null
-      ? sharedOrderHoldingValueU - sharedOrderGapBaseU - sharedOrderPendingInterestU + sharedOrderPaidInterestU + sharedOrderCollateralValueU
+      : sharedOrderStockContributionU !== null
+      ? sharedOrderStockContributionU - sharedOrderPendingInterestU + sharedOrderPaidInterestU + sharedOrderCollateralValueU
       : -sharedOrderGapBaseU - sharedOrderPendingInterestU + sharedOrderPaidInterestU + sharedOrderCollateralValueU)
     : null;
   // 共享池中的37标签订单使用服务端回传的标签净值盈亏，不能再按股票行情价推算。
@@ -2015,17 +1981,24 @@ export function FunderOrderCard({
         ? poolOrder.linked37PnlTagName
         : (typeof poolOrder.linked37TagName === 'string' ? poolOrder.linked37TagName : '');
       let holdingValueU: number | null = null;
+      let stockContributionU: number | null = null;
       if (linkedTag) {
         if (!counted37Tags.has(linkedTag)) {
           counted37Tags.add(linkedTag);
-          const value = Number(poolOrder.linked37HoldingValue);
-          if (!Number.isFinite(value)) return null;
-          holdingValueU = value;
+          const holdingValue = Number(poolOrder.linked37HoldingValue);
+          const floatingPnl = Number(poolOrder.linked37FloatingPnl);
+          if (!Number.isFinite(holdingValue) || !Number.isFinite(floatingPnl)) return null;
+          holdingValueU = holdingValue;
+          // 37引用的担保风险项只取标签自身的净值盈亏，已由服务端按raw/leveraged
+          // 配置计算；不得改用账户余额减52订单基准重建。
+          stockContributionU = floatingPnl;
         } else {
           holdingValueU = 0;
+          stockContributionU = 0;
         }
       } else if (poolOrder.assetType === 'crypto_option') {
         holdingValueU = 0;
+        stockContributionU = -gapBaseU;
       } else {
         const coin = String(poolOrder.coin || '').toUpperCase();
         const quantity = Number(poolOrder.quantity ?? 0);
@@ -2036,21 +2009,24 @@ export function FunderOrderCard({
         const buyCurrency = String(poolOrder.buyValueCurrency || 'USDT').trim().toUpperCase();
         const buyValueU = ['CNY', 'RMB', '人民币'].includes(buyCurrency) ? buyValue / cnyRate : buyValue;
         holdingValueU = currentValue;
+        stockContributionU = currentValue - (gapBaseU > 0 ? gapBaseU : buyValueU);
       }
       const isPrincipalLoan = poolOrder.principalLentOut === true || poolOrder.principalLentOut === 1;
       const borrowedValueU = holdingValueU ?? gapBaseU;
       remaining += isPrincipalLoan
         ? -borrowedValueU - accruedInterestU + paidInterestU
-        : (holdingValueU ?? 0) - gapBaseU - accruedInterestU + paidInterestU;
+        : (stockContributionU ?? 0) - accruedInterestU + paidInterestU;
     }
     return remaining;
   })();
   const externalCollateralValueU = isSharedMode
     ? (sharedPoolInfo ? Number((sharedPoolInfo as any).totalCollateralValue) : null)
-    : (hasExternalCollateral ? externalCollateralSummary.totalU : (collateralValueKnown ? collateralValue : null));
-  const externalCollateralValueCny = externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU)
-    ? externalCollateralValueU * cnyRate
-    : null;
+    : (hasExternalCollateral ? extTagCollateralValueU : (collateralValueKnown ? collateralValue : null));
+  const externalCollateralValueCny = hasExternalCollateral && !isSharedMode
+    ? extTagCollateralValueCny
+    : (externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU)
+      ? externalCollateralValueU * cnyRate
+      : null);
   // 37号担保标签的主卡行只显示统一总额，不展示标签内各资产的组成。
   const externalCollateralAssetLabel = isSharedMode
     ? '共享担保（按池合计）'
@@ -2980,19 +2956,47 @@ export function FunderOrderCard({
                           const paidInterestU = paidInterestForRisk;
                           const gapBaseU = collateralGapBaseForRisk;
                           const interestDifferenceU = paidInterestU - pendingInterestU;
+                          const pnlInitialAmountCny = Number((_pnlTagConfig as any)?.initial_amount ?? 0) || 0;
+                          const pnlMultiplier = Number((_pnlTagConfig as any)?.account_multiplier ?? 1) || 1;
+                          const pnlInitialAmountDisplay = showCny
+                            ? pnlInitialAmountCny
+                            : pnlInitialAmountCny / (extTagValuationCnyRate || cnyRate);
+                          const floatingPnlCny = isExternalStockPnlSource && externalStockFloatPnlCny !== null
+                            ? externalStockFloatPnlCny
+                            : null;
+                          const collateralCny = hasExternalCollateral ? extTagCollateralValueCny : null;
+                          const pendingInterestCny = hasExternalPendingInterest && linked37PendingInterestCny !== null
+                            ? linked37PendingInterestCny
+                            : pendingInterestU * cnyRate;
+                          const paidInterestCny = hasExternalPaidInterest && linked37PaidInterestCny !== null
+                            ? linked37PaidInterestCny
+                            : paidInterestU * cnyRate;
+                          const interestDifferenceCny = paidInterestCny - pendingInterestCny;
                           const holdingValueU = isExternalStockPnlSource
                             ? extTagHoldingValueU
                             : (floatingPnlU === null ? null : buyValueForRisk + floatingPnlU);
                           const holdingValueDisplay = showCny && isExternalStockPnlSource && extTagHoldingValueCny !== null
                             ? extTagHoldingValueCny
                             : (holdingValueU === null ? null : holdingValueU * factor);
-                          const holdingValueDateLabel = extTagHoldingValueDate
-                            ? formatChineseStockPriceDate(extTagHoldingValueDate)
-                            : '暂未提供更新日期';
+                          const holdingValueDateBadge = (() => {
+                            const matched = String(extTagHoldingValueDate || '').match(/^\d{4}-(\d{1,2})-(\d{1,2})/);
+                            return matched ? `${matched[1].padStart(2, '0')}/${matched[2].padStart(2, '0')}` : '待更新';
+                          })();
                           // 担保缺口按“股票差额 + 担保货币 + 利息差值”三项汇总。
                           const stockContributionU = principalLentOut
                             ? -principalLentOutValueForRisk
-                            : (holdingValueU === null ? null : holdingValueU - gapBaseU);
+                            : isExternalStockPnlSource
+                              ? floatingPnlU
+                              : (holdingValueU === null ? null : holdingValueU - gapBaseU);
+                          const stockContributionCny = isExternalStockPnlSource && floatingPnlCny !== null
+                            ? floatingPnlCny
+                            : (stockContributionU === null ? null : stockContributionU * cnyRate);
+                          const gapCny = stockContributionCny === null || collateralCny === null
+                            ? null
+                            : stockContributionCny + collateralCny + interestDifferenceCny;
+                          const formatDirectValue = (valueU: number, directCny: number | null) => showCny && directCny !== null
+                            ? `${directCny >= 0 ? '+' : ''}${directCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`
+                            : formatValue(valueU);
                           // 手工逐只股票模式需要把每支股票的“最新价 − 买入价”× 股数完整列出，
                           // 不得只给出组合结果。末尾再按管理员设置的系数及缺口基准做必要调整。
                           const manualStockFloatingPnlU = isManualStockPnlSource && manualStockFloatPnlCny !== null
@@ -3039,7 +3043,7 @@ export function FunderOrderCard({
                           return (
                             <>
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① {isManualStockPnlSource ? '股票组合浮动盈亏' : isExternalStockPnlSource ? '37号实际持仓与浮盈' : '股票浮动盈亏'}</div>
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① {isManualStockPnlSource ? '股票组合浮动盈亏' : isExternalStockPnlSource ? '37号账户余额与盈亏净值' : '股票浮动盈亏'}</div>
                                 {isManualStockPnlSource && manualStockPnlCalculationMode === 'position_cost' ? (
                                   <>
                                     <div className="mt-1 space-y-1 font-mono">
@@ -3077,10 +3081,18 @@ export function FunderOrderCard({
                                   </>
                                 ) : isExternalStockPnlSource && !principalLentOut ? (
                                   <>
-                                    <div className="mt-1 flex justify-between font-mono"><span>37号当前持仓价值</span><span style={{ color: '#DC2626' }}>{holdingValueDisplay === null ? '加载中...' : `${holdingValueDisplay.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`}</span></div>
-                                    <div className="mt-0.5 text-right text-[10px] text-slate-400">37号市值更新于：{holdingValueDateLabel}</div>
-                                    <div className="mt-1 flex justify-between font-mono"><span>37号浮动盈亏（{floatingPnlCalculationMode === 'leveraged_net_pnl' ? '按1.5倍净值口径' : '原始净值口径'}）</span><span style={{ color: valueColor(floatingPnlU ?? 0) }}>{floatingPnlU === null ? '加载中...' : formatValue(floatingPnlU)}</span></div>
-                                    <div className="mt-1 flex justify-between font-mono"><span>{collateralGapBaseLabel}（扣除）</span><span style={{ color: '#16A34A' }}>−{(gapBaseU * factor).toLocaleString(undefined, { maximumFractionDigits: 2 })} {unit}</span></div>
+                                    <div className="mt-1 flex items-baseline justify-between gap-2 font-mono">
+                                      <span>账户余额 <span className="ml-1 text-[10px] font-sans font-medium" style={{ color: '#2563EB' }}>{holdingValueDateBadge}</span></span>
+                                      <span style={{ color: '#DC2626' }}>{holdingValueDisplay === null ? '加载中...' : `${holdingValueDisplay.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`}</span>
+                                    </div>
+                                    <div className="mt-1 flex justify-between font-mono"><span>倍数（净值口径）</span><span className="font-semibold" style={{ color: '#1A2340' }}>{pnlMultiplier.toLocaleString(undefined, { maximumFractionDigits: 4 })}倍</span></div>
+                                    <div className="mt-1 border-t border-blue-100 pt-1.5 font-mono">
+                                      <div className="flex justify-between gap-2">
+                                        <span className="text-slate-500">盈亏净值</span>
+                                        <strong style={{ color: valueColor(floatingPnlU ?? 0) }}>{floatingPnlU === null ? '加载中...' : formatDirectValue(floatingPnlU, floatingPnlCny)}</strong>
+                                      </div>
+                                      <div className="mt-0.5 text-[10px] text-slate-400">（余额 {holdingValueDisplay === null ? '—' : holdingValueDisplay.toLocaleString(undefined, { maximumFractionDigits: 2 })} − 初始 {pnlInitialAmountDisplay.toLocaleString(undefined, { maximumFractionDigits: 2 })}）× {pnlMultiplier.toLocaleString(undefined, { maximumFractionDigits: 4 })}倍</div>
+                                    </div>
                                   </>
                                 ) : principalLentOut ? (
                                   <div className="mt-1 flex justify-between font-mono"><span>当前借出本金（扣除）</span><span style={{ color: '#16A34A' }}>−{(principalLentOutValueForRisk * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
@@ -3090,11 +3102,11 @@ export function FunderOrderCard({
                                     <div className="mt-1 flex justify-between font-mono"><span>{collateralGapBaseLabel}（扣除）</span><span style={{ color: '#16A34A' }}>−{(gapBaseU * factor).toLocaleString(undefined, { maximumFractionDigits: showCny ? 0 : 2 })} {unit}</span></div>
                                   </>
                                 )}
-                                {!(isManualStockPnlSource && manualStockPnlCalculationMode === 'position_cost') && (
+                                {!(isManualStockPnlSource && manualStockPnlCalculationMode === 'position_cost') && !isExternalStockPnlSource && (
                                   <div className="mt-1.5 border-t border-blue-100 pt-1.5 font-mono">
                                     <span className="text-slate-500">{principalLentOut ? '本金差值' : isExternalStockPnlSource ? '用于担保缺口的股票项' : '浮动盈亏合计'}</span>{' '}
                                     {stockContributionU !== null
-                                      ? <strong style={{ color: valueColor(stockContributionU) }}>{formatValue(stockContributionU)}</strong>
+                                      ? <strong style={{ color: valueColor(stockContributionU) }}>{formatDirectValue(stockContributionU, stockContributionCny)}</strong>
                                       : <span className="text-gray-400">股票报价数据加载中...</span>}
                                   </div>
                                 )}
@@ -3105,7 +3117,7 @@ export function FunderOrderCard({
                                   <div className="mt-1.5 font-mono">
                                     <span className="text-slate-500">担保货币合计</span>{' '}
                                     {collateralU !== null
-                                      ? <><span className="text-slate-400">（≈{collateralU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>{' '}<strong style={{ color: valueColor(collateralU) }}>= {(collateralU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</strong></>
+                                      ? <><span className="text-slate-400">（≈{collateralU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>{' '}<strong style={{ color: valueColor(collateralU) }}>= {(collateralCny ?? (collateralU * cnyRate)).toLocaleString(undefined, { maximumFractionDigits: 2 })} 元</strong></>
                                       : <span className="text-gray-400">担保物实时价加载中...</span>}
                                   </div>
                                 ) : <>
@@ -3138,10 +3150,10 @@ export function FunderOrderCard({
                               </div>
                               <div className="p-2.5 rounded-lg" style={{ background: gapU !== null && gapU < 0 ? '#F0FDF4' : '#FFF1F1' }}>
                                 <div className="font-semibold mb-1" style={{ color: gapU !== null && gapU < 0 ? '#16A34A' : '#DC2626' }}>④ 担保缺口</div>
-                                <div>① {principalLentOut ? '本金差值' : isExternalStockPnlSource ? '实际持仓 − 缺口基准' : '股票浮动盈亏合计'} + ② 担保货币合计 + ③ 利息差值</div>
+                                <div>① {principalLentOut ? '本金差值' : isExternalStockPnlSource ? '37号盈亏净值' : '股票浮动盈亏合计'} + ② 担保货币合计 + ③ 利息差值</div>
                                 <div className="mt-1 font-mono">
                                   {gapU !== null && collateralU !== null && stockContributionU !== null
-                                    ? <span style={{ color: '#3B82F6' }}>= ① {formatValue(stockContributionU)} + ② {formatValue(collateralU)} + ③ {formatValue(interestDifferenceU)} = <strong style={{ color: valueColor(gapU) }}>{formatValue(gapU)}</strong></span>
+                                    ? <span style={{ color: '#3B82F6' }}>= ① {formatDirectValue(stockContributionU, stockContributionCny)} + ② {formatDirectValue(collateralU, collateralCny)} + ③ {formatDirectValue(interestDifferenceU, interestDifferenceCny)} = <strong style={{ color: valueColor(gapU) }}>{formatDirectValue(gapU, gapCny)}</strong></span>
                                     : <span className="text-gray-400">{isManualStockPnlSource ? '股票报价数据加载中...' : '37号标签数据加载中...'}</span>}
                                 </div>
                                 {gapU !== null && <div className="mt-1.5" style={{ color: valueColor(gapU) }}>{gapU >= 0 ? `担保充足，尚有 ${formatValue(gapU)} 的余量` : `担保不足，还需补充 ${formatValue(Math.abs(gapU))}`}</div>}

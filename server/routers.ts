@@ -19166,7 +19166,9 @@ ${klinesSummary}
               floatingPnl,
               pendingInterestCny: linkedPendingInterestCny,
               paidInterestCny: linkedPaidInterestCny,
-              riskExposure: allPricesKnown && holdingValue !== null ? collateralValue + holdingValue : null,
+              // 37标签的风险项是按管理员所选倍数计算后的“盈亏净值”；实际账户余额
+              // 只用于展示，不能再与52买入基数相减重建成另一套风险数。
+              riskExposure: allPricesKnown && floatingPnl !== null ? collateralValue + floatingPnl : null,
             };
           };
 
@@ -19260,13 +19262,18 @@ ${klinesSummary}
             // 普通订单：当前持有资产 − 所选基准 − 待结 + 已结。
             // 借出本金：借出的币不是可用持仓，单订单待覆盖额必须是“−当前借出本金价值 − 待结 + 已结”，
             const linkedHoldingValueU = linked37Collateral?.useFloatingPnl ? linked37Collateral.holdingValue : null;
+            const linkedFloatingPnlU = linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null;
             const holdingValueU = linkedHoldingValueU !== null && Number.isFinite(linkedHoldingValueU)
               ? linkedHoldingValueU
               : currentValue;
             const principalLentOutValueU = holdingValueU ?? collateralGapBaseU;
             const collateralRequired = principalLentOut
               ? -principalLentOutValueU - pendingInterestU + paidInterestU
-              : (holdingValueU ?? 0) - collateralGapBaseU - pendingInterestU + paidInterestU;
+              // 37引用单独使用“盈亏净值”。这等于（账户余额 − 初始金额）×倍数，
+              // 绝不能再由实际持仓价值减去52订单的买入/计息基数倒推。
+              : (linkedFloatingPnlU !== null && Number.isFinite(linkedFloatingPnlU)
+                ? linkedFloatingPnlU
+                : (holdingValueU ?? 0) - collateralGapBaseU) - pendingInterestU + paidInterestU;
             return {
               orderId: Number(o.id),
               orderNo: o.order_no,
