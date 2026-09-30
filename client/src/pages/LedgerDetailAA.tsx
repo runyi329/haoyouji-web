@@ -749,6 +749,8 @@ export default function LedgerDetailAA({
   const [pnlDetailModal, setPnlDetailModal] = useState<{
     tagName: string;
     tagAlias: string;
+    isStockPortfolio?: boolean;
+    referenceDeposit?: number;
     ratio: number;
     initialBalance: number;
     capitalChange: number;
@@ -853,24 +855,49 @@ export default function LedgerDetailAA({
     ])
   ) as Record<string, number>, [tagCashFlows]);
 
-  // 押金明细弹窗顶部汇总：参考押金 = 当前本金 × 当前占比 × 20%；实际押金仅加总有可靠人民币报价的逐笔明细。
+  // 押金明细弹窗顶部汇总：手工余额标签沿用“当前本金 × 占比 × 20%”；
+  // 股票标签则严格取当前成员每笔实际持仓市值之和 × 20%，绝不从标签级初始金额或比例反推。
   // 必须定义在 capitalByTag 之后，避免页面首次渲染时访问未初始化的本金变动映射。
   const currentMarginDetailSummary = useMemo(() => {
     if (!marginNoteTag || !initialBalancesData?.balances) return null;
     const balances = initialBalancesData.balances as Record<string, any>;
+    const category = categories.find((item: any) => item.name === marginNoteTag);
+    const stockOverview = category?.accountingMode === 'stock_portfolio'
+      ? stockTagOverviewById.get(Number(category.id))
+      : null;
+    if (stockOverview) {
+      const summary = (stockOverview as any).summary || {};
+      const currentPrincipal = Number(summary.costValue || 0);
+      const latestMarketValue = summary.marketValue === null || summary.marketValue === undefined
+        ? null
+        : Number(summary.marketValue);
+      const referenceDeposit = latestMarketValue === null ? 0 : latestMarketValue * 0.2;
+      return {
+        isStockPortfolio: true,
+        currentPrincipal,
+        latestMarketValue,
+        ratioPercent: 100,
+        referenceDeposit,
+        actualDeposit: 0,
+        shortfall: 0,
+        hasUnpricedEntry: latestMarketValue === null,
+      };
+    }
     const currentPrincipal = Number(balances[marginNoteTag] ?? 0) + (capitalByTag[marginNoteTag] || 0);
     const ratioPercent = Number(balances[`${marginNoteTag}__ratio`] ?? 100);
     const referenceDeposit = currentPrincipal * (ratioPercent / 100) * 0.2;
     const actualDeposit = currentMarginDetailEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0);
     return {
+      isStockPortfolio: false,
       currentPrincipal,
+      latestMarketValue: null,
       ratioPercent,
       referenceDeposit,
       actualDeposit,
       shortfall: referenceDeposit - actualDeposit,
       hasUnpricedEntry: currentMarginDetailEntries.some((entry) => entry.cnyValue === null),
     };
-  }, [marginNoteTag, initialBalancesData, capitalByTag, currentMarginDetailEntries]);
+  }, [marginNoteTag, initialBalancesData, categories, stockTagOverviewById, capitalByTag, currentMarginDetailEntries]);
 
   // ─── 全部模式：计算每个标签的每日盈亏数据（用于多线图表） ─────────────────
   const allTagsChartData = useMemo(() => {
@@ -886,13 +913,19 @@ export default function LedgerDetailAA({
       // 股票行只要当前有效用户对该标签有一笔已生效分层，就按“用户 × 批次”
       // 的对赌盈亏渲染。不能因为该用户恰好也是 owner/admin 而退回旧初始金额模型。
       if (cat.accountingMode === 'stock_portfolio' && stockOverview) {
+        const stockSummary = (stockOverview as any).summary || {};
+        const latestMarketValue = stockSummary.marketValue === null || stockSummary.marketValue === undefined
+          ? null
+          : Number(stockSummary.marketValue);
         return {
           name: tagName,
           color,
           isStockPortfolio: true,
           stockStartDate: stockOverview.startDate || null,
-          initialBalance: 0,
-          marginCny: 0,
+          // 成员只看自己的批次：初始本金为每笔入场价 × 当前所持股数之和，
+          // 参考押金为这些个人持仓最新市值之和 × 20%。
+          initialBalance: Number(stockSummary.costValue || 0),
+          marginCny: latestMarketValue === null ? 0 : latestMarketValue * 0.2,
           marginEntries: [] as ResolvedMarginEntry[],
           points: (stockOverview.points || []).map((point: any) => ({
             date: point.date,
@@ -983,6 +1016,7 @@ export default function LedgerDetailAA({
     const cryptoMap: Record<string, { amount: number, cnyValue: number }> = {};
     const perTagDetail: Array<{
       tagName: string;
+      isStockPortfolio: boolean;
       marginEntries: ResolvedMarginEntry[]; marginCny: number;
       initialBalance: number; capitalChange: number; effectiveInitial: number;
       latestBalance: number; latestDate: string;
@@ -993,6 +1027,42 @@ export default function LedgerDetailAA({
     }> = [];
     categories.forEach((cat: any) => {
       const tagName = cat.name;
+      const stockOverview = cat.accountingMode === 'stock_portfolio'
+        ? stockTagOverviewById.get(Number(cat.id))
+        : null;
+      // 股票标签不使用手工押金、比例或余额流水。必须直接采用当前成员每笔
+      // 获配股票的成本、市值与对赌盈亏，和股票详情页保持同一计算口径。
+      if (stockOverview) {
+        const summary = (stockOverview as any).summary || {};
+        const marketValue = summary.marketValue === null || summary.marketValue === undefined
+          ? null
+          : Number(summary.marketValue);
+        const initialBalance = Number(summary.costValue || 0);
+        const tagPnl = summary.totalPnl === null || summary.totalPnl === undefined
+          ? 0
+          : Number(summary.totalPnl);
+        const marginCny = marketValue === null ? 0 : marketValue * 0.2;
+        const stockPoints = (stockOverview as any).points || [];
+        const latestPoint = stockPoints[stockPoints.length - 1];
+        totalMargin += marginCny;
+        if (marketValue !== null) totalPnl += tagPnl;
+        perTagDetail.push({
+          tagName,
+          isStockPortfolio: true,
+          marginEntries: [] as ResolvedMarginEntry[],
+          marginCny,
+          initialBalance,
+          capitalChange: 0,
+          effectiveInitial: initialBalance,
+          latestBalance: marketValue ?? 0,
+          latestDate: String(latestPoint?.date || ''),
+          tagWithdraw: 0,
+          ratio: 1,
+          tagPnl,
+          hasData: marketValue !== null,
+        });
+        return;
+      }
       // 押金：每笔按自身币种折算人民币后汇总；无可靠报价的数字币不虚构人民币值。
       const marginEntries = resolveMarginEntries(initialBalancesData.balances, tagName, aaCryptoPrices);
       const marginCny = marginEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0);
@@ -1063,6 +1133,7 @@ export default function LedgerDetailAA({
         }
         perTagDetail.push({
           tagName,
+          isStockPortfolio: false,
           marginEntries,
           marginCny,
           initialBalance,
@@ -1078,6 +1149,7 @@ export default function LedgerDetailAA({
       } else {
         perTagDetail.push({
           tagName,
+          isStockPortfolio: false,
           marginEntries,
           marginCny,
           initialBalance,
@@ -1094,7 +1166,7 @@ export default function LedgerDetailAA({
     });
     const cryptoDetails = Object.entries(cryptoMap).map(([coin, v]) => ({ coin, amount: v.amount, cnyValue: v.cnyValue }));
     return { totalMargin, totalPnl, diff: totalMargin + totalPnl, hasCrypto, cryptoDetails, perTagDetail };
-  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, withdrawByTag, capitalByTag]);
+  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, withdrawByTag, capitalByTag, stockTagOverviewById]);
 
 
   // ─── 统计数据 ─────────────────────────────────────────────────────────────
@@ -1800,16 +1872,10 @@ export default function LedgerDetailAA({
               </div>
               {/* 押金（第三个） */}
               <div className="rounded-sm p-2 flex flex-col" style={{ backgroundColor: "rgba(15,23,42,0.45)" }}>
-                <div className="text-[10px] opacity-75 flex items-center justify-end gap-1 mb-1">历史押金 <button onClick={() => setShowAllModeHelp('margin')} className="inline-flex items-center justify-center active:opacity-60"><HelpCircle className="w-3 h-3 text-white/60" /></button></div>
-                {allTagsStats.hasCrypto ? (
-                  <div className="text-sm font-bold leading-tight text-right">
-                    {allTagsStats.cryptoDetails.map(d => `${formatSignedMarginNumber(d.amount, 2)} ${d.coin}`).join(' · ')}
-                  </div>
-                ) : (
-                  <div className="text-sm font-bold leading-tight text-right">
-                    {formatSignedMarginCny(allTagsStats.totalMargin, 0)}
-                  </div>
-                )}
+                <div className="text-[10px] opacity-75 flex items-center justify-end gap-1 mb-1">押金合计 <button onClick={() => setShowAllModeHelp('margin')} className="inline-flex items-center justify-center active:opacity-60"><HelpCircle className="w-3 h-3 text-white/60" /></button></div>
+                <div className="text-sm font-bold leading-tight text-right">
+                  {formatSignedMarginCny(allTagsStats.totalMargin, 0)}
+                </div>
               </div>
 
             </>
@@ -2955,6 +3021,35 @@ export default function LedgerDetailAA({
                           const canClick = !!firstDate;
                           const handlePnlClick = () => {
                             if (!firstDate) return;
+                            if (tag.isStockPortfolio) {
+                              const stockSummary = (stockTagOverviewById.get(Number(categories.find((item: any) => item.name === tag.name)?.id)) as any)?.summary || {};
+                              const latestMarketValue = stockSummary.marketValue === null || stockSummary.marketValue === undefined
+                                ? Number(latestBalance || 0)
+                                : Number(stockSummary.marketValue);
+                              setPnlDetailModal({
+                                tagName: tag.name,
+                                tagAlias: (initialBalancesData?.balances as any)?.[`${tag.name}__alias`] ?? tag.name,
+                                isStockPortfolio: true,
+                                referenceDeposit: latestMarketValue * 0.2,
+                                ratio: 100,
+                                initialBalance: Number(stockSummary.costValue ?? tag.initialBalance ?? 0),
+                                capitalChange: 0,
+                                capitalRecords: [],
+                                tagWithdraw: 0,
+                                segments: [{
+                                  segNo: 1,
+                                  startDate: firstDate,
+                                  endDate: latestDate || firstDate,
+                                  startBalance: 0,
+                                  endBalance: latestMarketValue,
+                                  effectiveInitial: Number(stockSummary.costValue ?? tag.initialBalance ?? 0),
+                                  pnl: latestPnl,
+                                  isPaused: false,
+                                }],
+                                totalPnl: latestPnl,
+                              });
+                              return;
+                            }
                             const _ratio = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${tag.name}__ratio`] ?? 100) : 100;
                             const _tagAlias = (initialBalancesData?.balances as any)?.[`${tag.name}__alias`] ?? tag.name;
                             const _effectiveInitial = tag.initialBalance + (capitalByTag[tag.name] || 0);
@@ -3139,7 +3234,8 @@ export default function LedgerDetailAA({
                       {/* 占比（移到最右，默认屏幕外） */}
                       {(() => {
                         const ratioVal = initialBalancesData?.balances ? initialBalancesData.balances[`${tag.name}__ratio`] : undefined;
-                        const ratioNum = ratioVal !== undefined && ratioVal !== null ? Number(ratioVal) : null;
+                        // 股票标签只展示当前用户已获配的个人仓位；该个人仓位即为其 100% 口径。
+                        const ratioNum = tag.isStockPortfolio ? 100 : (ratioVal !== undefined && ratioVal !== null ? Number(ratioVal) : null);
                         const tagInitialBalance = tag.initialBalance ?? 0;
                         const actualAmt = ratioNum !== null && tagInitialBalance > 0 ? tagInitialBalance * (ratioNum / 100) : null;
                         return (
@@ -3945,14 +4041,16 @@ export default function LedgerDetailAA({
       {/* ── 自定义名称编辑弹框 ── */}
       {/* 单击标签名：信息提示弹框 */}
       {pnlDetailModal !== null && (() => {
-        const { tagName, tagAlias, ratio, initialBalance, capitalChange, capitalRecords, tagWithdraw, segments, totalPnl } = pnlDetailModal;
+        const { tagName, tagAlias, isStockPortfolio = false, referenceDeposit: stockReferenceDeposit, ratio, initialBalance, capitalChange, capitalRecords, tagWithdraw, segments, totalPnl } = pnlDetailModal;
         const fmtAbs = (n: number) => '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const fmt = (n: number) => (n >= 0 ? '+' : '') + '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const fmtDate = (d: string) => { const [, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
         const pnlColor = totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD';
         const currentCapital = initialBalance + capitalChange;
-        // 参考押金 = 当前本金 × 当前占比 × 20%，仅用于本段回报弹窗提示，不写入押金记录。
-        const referenceDeposit = currentCapital * (ratio / 100) * 0.2;
+        // 股票标签直接按成员全部当前持仓价值的20%汇总；手工标签维持原本金比例口径。
+        const referenceDeposit = isStockPortfolio
+          ? Number(stockReferenceDeposit || 0)
+          : currentCapital * (ratio / 100) * 0.2;
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setPnlDetailModal(null)}>
             <div className="bg-white rounded-2xl shadow-xl mx-4 w-full max-w-sm" style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
@@ -4036,7 +4134,9 @@ export default function LedgerDetailAA({
                       {/* 盈亏统计（标签视角）= 余额 + 提现 − 本金（正数=标签赚了红色，负数=标签亏了绿色） */}
                       {idx === 0 && (() => {
                         const segCapital = segments.length === 1 ? currentCapital : initialBalance;
-                        const tagPnl = seg.endBalance + tagWithdraw - segCapital; // 标签盈亏：正=赚，负=亏
+                        // 股票标签的盈亏已由成员每笔“入场价 × 股数 − 最新价 × 股数”直接汇总，
+                        // 不可用旧手工余额的反向公式重算。
+                        const tagPnl = isStockPortfolio ? seg.pnl : seg.endBalance + tagWithdraw - segCapital;
                         return (
                           <div className="flex items-center justify-between">
                             <span className="text-xs" style={{ color: '#888' }}>盈亏统计</span>
@@ -4061,7 +4161,7 @@ export default function LedgerDetailAA({
                             </span>
                           </div>
                           <div className="mt-1.5 flex items-center justify-between" style={{ borderTop: '1px solid #E0E0E0', paddingTop: 5 }}>
-                            <span className="text-xs font-semibold" style={{ color: '#1565C0' }}>参考押金 <span className="font-normal" style={{ color: '#90A4AE' }}>当前本金 × 占比 × 20%</span></span>
+                            <span className="text-xs font-semibold" style={{ color: '#1565C0' }}>参考押金 <span className="font-normal" style={{ color: '#90A4AE' }}>{isStockPortfolio ? '当前个人持仓价值 × 20%' : '当前本金 × 占比 × 20%'}</span></span>
                             <span className="text-sm font-bold font-mono" style={{ color: '#1565C0' }}>￥{Math.abs(referenceDeposit).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
                         </>
@@ -4717,7 +4817,7 @@ export default function LedgerDetailAA({
           <div className="relative bg-white rounded-2xl w-[88%] max-w-sm max-h-[80vh] overflow-hidden shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F0F0F0' }}>
               <div className="text-base font-bold text-gray-800">
-                {showAllModeHelp === 'value' ? '「实时价値」计算说明' : showAllModeHelp === 'pnl' ? '「实时波动」计算说明' : '「历史押金」说明'}
+                {showAllModeHelp === 'value' ? '「实时价値」计算说明' : showAllModeHelp === 'pnl' ? '「实时波动」计算说明' : '「押金合计」说明'}
               </div>
               <button onClick={() => setShowAllModeHelp(null)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
                 <X className="w-4 h-4 text-gray-500" />
@@ -4761,12 +4861,30 @@ export default function LedgerDetailAA({
                 if (showAllModeHelp === 'pnl') {
                   return (
                     <>
-                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">公式：回报 = (初始本金 + 增减本金 − 最新余额 − 累计提现) × 占比</div>
+                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">手工余额标签：回报 = (初始本金 + 增减本金 − 最新余额 − 累计提现) × 占比；股票标签：回报 = 所有个人批次的买入成本 − 当前持仓价值。</div>
                       {perTag.map((t, i) => (
                         <div key={t.tagName} className="bg-gray-50 rounded-lg px-3 py-2 space-y-1">
                           <div className="font-semibold text-gray-900 text-xs">标签「{t.tagName}」</div>
                           {!t.hasData ? (
                             <div className="text-xs text-gray-400">暂无余额记录，跳过</div>
+                          ) : t.isStockPortfolio ? (
+                            <>
+                              <div className="text-xs text-gray-600 flex justify-between">
+                                <span>个人买入成本</span>
+                                <span className="font-medium font-mono">{fmtAbs(t.initialBalance)}</span>
+                              </div>
+                              <div className="text-xs text-gray-600 flex justify-between">
+                                <span>当前个人持仓价值 <span className="text-gray-400">({t.latestDate})</span></span>
+                                <span className="font-medium font-mono text-red-500">−{fmtAbs(t.latestBalance)}</span>
+                              </div>
+                              <div className="text-xs font-mono text-gray-400 bg-white rounded px-2 py-1">
+                                {fmtAbs(t.initialBalance)} − {fmtAbs(t.latestBalance)}
+                              </div>
+                              <div className={`text-sm font-bold flex justify-between pt-1 border-t border-gray-200 ${t.tagPnl >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                <span>本标签回报</span>
+                                <span>{fmt(t.tagPnl)}</span>
+                              </div>
+                            </>
                           ) : (
                             <>
                               <div className="text-xs text-gray-600 flex justify-between">
@@ -4822,13 +4940,15 @@ export default function LedgerDetailAA({
                 if (showAllModeHelp === 'margin') {
                   return (
                     <>
-                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">押金是客户投入的本金，是计算盈亏和收益率的基准。下列为每个标签的押金明细：</div>
+                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">手工余额标签按已记录押金汇总；股票标签按当前个人获配持仓市值 × 20% 计算参考所需押金。</div>
                       {perTag.map((t) => (
                         <div key={t.tagName} className="bg-gray-50 rounded-lg px-3 py-2">
                           <div className="flex items-start justify-between gap-3">
                             <span className="font-semibold text-gray-900 text-xs pt-0.5">标签「{t.tagName}」</span>
                             <div className="text-right font-mono text-sm font-bold text-gray-800">
-                              {t.marginEntries.length === 0 ? (
+                              {t.isStockPortfolio ? (
+                                <div>参考 {formatSignedMarginCny(t.marginCny)}</div>
+                              ) : t.marginEntries.length === 0 ? (
                                 <div>{formatSignedMarginCny(0)}</div>
                               ) : t.marginEntries.map((entry, index) => (
                                 <div key={`${entry.coin}-${index}`}>
@@ -4843,7 +4963,7 @@ export default function LedgerDetailAA({
                           {t.marginEntries.some((entry) => entry.cnyValue === null) && (
                             <div className="text-xs mt-0.5" style={{ color: '#B26A00' }}>部分币种暂无可靠报价，未计入合计</div>
                           )}
-                          <div className="text-xs text-gray-400 mt-0.5">有效本金：{fmtAbs(t.effectiveInitial)}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">{t.isStockPortfolio ? `当前个人持仓价值 ${fmtAbs(t.latestBalance)} × 20%` : `有效本金：${fmtAbs(t.effectiveInitial)}`}</div>
                         </div>
                       ))}
                       <div className="pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
@@ -4851,7 +4971,7 @@ export default function LedgerDetailAA({
                           <span className="font-bold text-gray-900">押金净额</span>
                           <span className="text-lg font-bold text-gray-900">{formatSignedMarginCny(allTagsStats.totalMargin)}</span>
                         </div>
-                        {allTagsStats.hasCrypto && <div className="text-xs text-gray-400 mt-1">数字币已按实时价格折算为人民币加总</div>}
+                        {allTagsStats.hasCrypto && <div className="text-xs text-gray-400 mt-1">数字币按实时价格折算；股票按当前个人持仓市值的 20% 计入合计</div>}
                       </div>
                     </>
                   );
@@ -4968,6 +5088,24 @@ export default function LedgerDetailAA({
                 const summary = currentMarginDetailSummary;
                 const formatCny = (value: number) => formatSignedMarginCny(value);
                 const formatAbsoluteCny = (value: number) => `¥${Math.abs(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                if (summary.isStockPortfolio) {
+                  return (
+                    <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ backgroundColor: '#F4F8FF', border: '1px solid #D7E6FF' }}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold" style={{ color: '#1565C0' }}>参考所需押金</span>
+                        <span className="text-sm font-bold font-mono" style={{ color: '#1565C0' }}>{formatCny(summary.referenceDeposit)}</span>
+                      </div>
+                      {summary.latestMarketValue === null ? (
+                        <div className="text-[11px]" style={{ color: '#B26A00' }}>当前个人持仓尚无完整价格，暂无法计算参考押金</div>
+                      ) : (
+                        <>
+                          <div className="text-[11px]" style={{ color: '#78909C' }}>当前个人持仓价值 {formatCny(summary.latestMarketValue)} × 20%</div>
+                          <div className="text-[11px]" style={{ color: '#78909C' }}>个人持仓成本 {formatCny(summary.currentPrincipal)}；已按所有当前获配股票逐笔市值相加</div>
+                        </>
+                      )}
+                    </div>
+                  );
+                }
                 const shortfallText = summary.shortfall > 0
                   ? formatAbsoluteCny(summary.shortfall)
                   : summary.shortfall < 0
@@ -4992,7 +5130,11 @@ export default function LedgerDetailAA({
                   </div>
                 );
               })()}
-              {currentMarginDetailEntries.length === 0 ? (
+              {currentMarginDetailSummary?.isStockPortfolio ? (
+                <div className="rounded-xl px-3 py-3 text-xs leading-5" style={{ backgroundColor: '#FAFAFA', color: '#757575' }}>
+                  股票标签不保存独立的手工押金记录。此处仅显示您当前全部个人持仓价值的 20% 作为参考所需押金；每笔股票的所需保证金可在持仓详情中核对。
+                </div>
+              ) : currentMarginDetailEntries.length === 0 ? (
                 <div className="text-center py-6" style={{ color: '#BDBDBD' }}>暂无押金记录</div>
               ) : (
                 <>
