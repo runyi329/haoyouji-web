@@ -14720,10 +14720,15 @@ ${klinesSummary}
         try {
           const manualRows = await db.execute(
             sql`SELECT m.id, m.ledger_id, m.amount, m.note, m.created_at,
-                       o.id AS order_id, o.created_at AS order_created_at
+                       o.id AS order_id, o.created_at AS order_created_at,
+                       w.id AS withdrawal_id, w.status AS withdrawal_status
                 FROM af_manual_balances m
                 LEFT JOIN af_orders o ON (
                   m.note REGEXP CONCAT('#', o.id, '$') AND o.ledger_id = m.ledger_id
+                )
+                LEFT JOIN snt_withdrawals w ON (
+                  w.user_id = m.user_id
+                  AND m.note LIKE CONCAT('提现申请冻结 #', w.id, ' %')
                 )
                 WHERE m.user_id = ${targetUserId}
                   AND m.note NOT LIKE '[CNY]%'
@@ -14732,6 +14737,8 @@ ${klinesSummary}
           ) as any;
           manualList = ((manualRows[0] || manualRows) as any[]).map((r: any) => {
             let note = r.note || '管理员调账';
+            const withdrawalId = Number(r.withdrawal_id || 0);
+            const isWithdrawalFreeze = Number.isFinite(withdrawalId) && withdrawalId > 0;
             // 如果关联到了订单，把 #id 替换为完整编号 AFyymmdd000000
             if (r.order_id && r.order_created_at) {
               const d = new Date(r.order_created_at);
@@ -14745,7 +14752,10 @@ ${klinesSummary}
               id: `m_${r.id}`,
               ledgerId: Number(r.ledger_id),
               amount: parseFloat(r.amount),
-              sourceType: 'manual' as const,
+              sourceType: isWithdrawalFreeze ? 'balance_history' as const : 'manual' as const,
+              type: isWithdrawalFreeze ? 'withdraw' : undefined,
+              relatedId: isWithdrawalFreeze ? withdrawalId : undefined,
+              status: isWithdrawalFreeze ? (r.withdrawal_status || 'pending') : undefined,
               note,
               createdAt: r.created_at,
             };

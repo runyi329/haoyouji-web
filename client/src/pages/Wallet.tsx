@@ -798,19 +798,31 @@ export default function Wallet() {
     }));
     const withdraws = (recentWithdrawQuery.data ?? []).map((w: any) => ({
       id: `w-${w.id}`, sourceType: "withdraw",
+      withdrawalId: Number(w.relatedId ?? 0),
       amount: -Math.abs(Number(w.amount)), status: w.status, createdAt: w.createdAt,
       note: "", wcCode: null,
     }));
+    const withdrawalHistoryIds = new Set(
+      withdraws
+        .map((item) => Number(item.withdrawalId))
+        .filter((withdrawalId) => Number.isFinite(withdrawalId) && withdrawalId > 0),
+    );
     const manuals = (recentManualQuery.data ?? [])
       .filter((m: any) => !(m.note || "").startsWith("[CNY]"))
+      // 提现冻结与提现审计行代表同一个动作，首页只保留“提现”这一条。
+      .filter((m: any) => {
+        const withdrawalMatch = String(m.note || "").match(/^提现申请冻结\s+#(\d+)\b/);
+        return !withdrawalMatch || !withdrawalHistoryIds.has(Number(withdrawalMatch[1]));
+      })
       .map((m: any) => {
         const note = String(m.note || "");
+        const withdrawalMatch = note.match(/^提现申请冻结\s+#(\d+)\b/);
         const amount = Number(m.amount);
         return {
           id: `m-${m.id}`,
-          sourceType: "manual",
+          sourceType: withdrawalMatch ? "withdraw" : "manual",
           amount, status: "completed" as const,
-          note,
+          note: withdrawalMatch ? note.replace(/^提现申请冻结\s+/, "提现申请 ") : note,
           wcCode: extractWcTeamCode(note),
           createdAt: m.created_at,
         };
