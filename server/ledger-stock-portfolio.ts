@@ -619,6 +619,44 @@ export async function getStockTagPortfolio(input: {
 }
 
 /**
+ * Reads a whole tag's current market value after confirming stock_portfolio mode.
+ * Financing-order references intentionally bypass member-view filtering, while
+ * preserving the strict split between stock_portfolio and manual_balance tags.
+ */
+export async function getStockTagCurrentMarketValue(input: {
+  ledgerId: number;
+  categoryId: number;
+}): Promise<{ value: number; priceDate: string | null; updatedAt: string | null } | null> {
+  if (input.ledgerId !== STOCK_LEDGER_ID) return null;
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  const [rows] = await (conn as any).execute(
+    `SELECT id, accounting_mode
+     FROM ledger_categories
+     WHERE id = ? AND ledgerId = ? AND parentId IS NULL
+     LIMIT 1`,
+    [input.categoryId, input.ledgerId],
+  );
+  const category = (rows as any[])[0];
+  if (!category || category.accounting_mode !== "stock_portfolio") return null;
+  const portfolio = await buildPortfolio(Number(category.id));
+  if (portfolio.summary.marketValue === null) return null;
+  const priceDates = portfolio.positions
+    .map((position) => position.quoteDate)
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .sort();
+  const updatedTimes = portfolio.positions
+    .map((position) => position.quoteUpdatedAt)
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .sort();
+  return {
+    value: portfolio.summary.marketValue,
+    priceDate: priceDates.at(-1) || portfolio.summary.latestSnapshot?.snapshotDate || null,
+    updatedAt: updatedTimes.at(-1) || portfolio.summary.latestSnapshot?.capturedAt || null,
+  };
+}
+
+/**
  * Read-only tag-wide market view for a member who already has an eligible
  * allocation.  This deliberately exposes aggregate holdings only; all write
  * controls remain governed by the existing administrator procedure.

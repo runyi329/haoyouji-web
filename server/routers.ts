@@ -13492,19 +13492,52 @@ ${klinesSummary}
             }
           } catch {}
         }
-        const latestBalanceRows = await db.execute(
-          sql`SELECT lr.amount, lr.recordDate
-              FROM ledger_records lr
-              INNER JOIN ledger_categories lc ON lc.id = lr.categoryId
-              WHERE lr.ledgerId = ${input.ledgerId}
-                AND lc.name = ${input.tagName}
-                AND lr.type != 'transfer'
-                AND lr.deleted_at IS NULL
-              ORDER BY lr.recordDate DESC
+        const categoryRows = await db.execute(
+          sql`SELECT id, accounting_mode
+              FROM ledger_categories
+              WHERE ledgerId = ${input.ledgerId}
+                AND name = ${input.tagName}
+              ORDER BY id DESC
               LIMIT 1`
         );
+        const categoryList = (categoryRows as any)[0] as any[];
+        const category = categoryList.length > 0 ? categoryList[0] : null;
+        // 手工余额标签只认同一标签内「业务日期、登记时间、ID」均最新的一条余额。
+        // 不能仅按日期排序，否则同日补录会让52订单读到旧市值。
+        const latestBalanceRows = category ? await db.execute(
+          sql`SELECT lr.amount, lr.recordDate
+              FROM ledger_records lr
+              WHERE lr.ledgerId = ${input.ledgerId}
+                AND lr.categoryId = ${Number(category.id)}
+                AND lr.type != 'transfer'
+                AND lr.deleted_at IS NULL
+              ORDER BY lr.recordDate DESC, lr.createdAt DESC, lr.id DESC
+              LIMIT 1`
+        ) : [[]];
         const latestBalanceList = (latestBalanceRows as any)[0] as any[];
         const latestBalance = latestBalanceList.length > 0 ? latestBalanceList[0] : null;
+        // 37 的 manual_balance 与 stock_portfolio 是互斥模型：前者以最新手工
+        // 余额作为实际持仓值，后者必须按批次仓位和行情读取真实 marketValue。
+        let currentHoldingValue: number | null = latestBalance ? Number(latestBalance.amount) : null;
+        let currentHoldingValueDate: string | null = latestBalance
+          ? (typeof latestBalance.recordDate === 'string' ? latestBalance.recordDate.slice(0, 10) : new Date(latestBalance.recordDate).toISOString().slice(0, 10))
+          : null;
+        const accountingMode = String(category?.accounting_mode || 'manual_balance');
+        if (category && accountingMode === 'stock_portfolio') {
+          try {
+            const { getStockTagCurrentMarketValue } = await import('./ledger-stock-portfolio');
+            const stockMarketValue = await getStockTagCurrentMarketValue({
+              ledgerId: input.ledgerId,
+              categoryId: Number(category.id),
+            });
+            currentHoldingValue = stockMarketValue?.value ?? null;
+            currentHoldingValueDate = stockMarketValue?.priceDate ?? stockMarketValue?.updatedAt ?? null;
+          } catch (error) {
+            console.warn('[getTagSummary] 读取股票标签市值失败:', error);
+            currentHoldingValue = null;
+            currentHoldingValueDate = null;
+          }
+        }
         return {
           marginByCoin,
           latestBalance: latestBalance ? {
@@ -13512,6 +13545,15 @@ ${klinesSummary}
             recordDate: typeof latestBalance.recordDate === 'string'
               ? latestBalance.recordDate.slice(0, 10)
               : new Date(latestBalance.recordDate).toISOString().slice(0, 10),
+          } : null,
+          // 单独返回真实当前持仓值。52可保留 raw/leveraged 浮盈展示，
+          // 但绝不能以「初始金额 + 倍率后浮盈」反推实际市值。
+          currentHoldingValue: Number.isFinite(currentHoldingValue) ? {
+            value: currentHoldingValue,
+            currency: 'CNY' as const,
+            accountingMode,
+            categoryId: Number(category?.id),
+            updatedDate: currentHoldingValueDate,
           } : null,
         };
       }),
@@ -18814,7 +18856,9 @@ ${klinesSummary}
             } catch { return []; }
           }))) as string[];
           const linkedTagConfigByName = new Map<string, any>();
+          const linkedTagCategoryByName = new Map<string, any>();
           const linkedTagBalanceByName = new Map<string, number>();
+          const linkedTagHoldingDateByName = new Map<string, string>();
           const linkedTagMarginByName = new Map<string, Record<string, number>>();
           const linkedTagStockMarginsByName = new Map<string, ReturnType<typeof getTagMarginStockRecords>>();
           if (linked37Tags.length > 0) {
@@ -18848,6 +18892,15 @@ ${klinesSummary}
             for (const tagName of linked37Tags) {
               if (!linkedTagMarginByName.has(tagName)) linkedTagMarginByName.set(tagName, {});
               if (!linkedTagStockMarginsByName.has(tagName)) linkedTagStockMarginsByName.set(tagName, []);
+            }
+            const [linkedCategories] = await conn.execute(
+              `SELECT id, name, accounting_mode
+               FROM ledger_categories
+               WHERE ledgerId = 37 AND name IN (${placeholders})`,
+              linked37Tags,
+            ) as any[];
+            for (const category of (Array.isArray(linkedCategories) ? linkedCategories : [])) {
+              linkedTagCategoryByName.set(String(category.name), category);
             }
             // 仅当标签没有维护 margin_by_coin 时，兼容读取成员初始金额中的旧押金字段。
             // 有当前逐笔标签记录时绝不与旧字段叠加，避免同一担保重复计入共享池。
@@ -18884,27 +18937,55 @@ ${klinesSummary}
                 } catch {}
               }
             }
+            // manual_balance：最新余额就是实际当前持仓值。业务日期、登记时间、ID
+            // 三层排序，避免MAX(id)或未排序结果挑中同日旧记录。
             const [latestBalances] = await conn.execute(
-              `SELECT lc.name AS tag_name, lr.amount
-               FROM ledger_records lr
-               INNER JOIN ledger_categories lc ON lc.id = lr.categoryId
-               WHERE lr.ledgerId = 37
-                 AND lc.name IN (${placeholders})
-                 AND lr.type <> 'transfer'
-                 AND lr.deleted_at IS NULL
-                 AND lr.id IN (
-                   SELECT MAX(lr2.id)
-                   FROM ledger_records lr2
-                   INNER JOIN ledger_categories lc2 ON lc2.id = lr2.categoryId
-                   WHERE lr2.ledgerId = 37
-                     AND lc2.name IN (${placeholders})
-                     AND lr2.type <> 'transfer'
-                     AND lr2.deleted_at IS NULL
-                   GROUP BY lc2.name
-                 )`,
-              [...linked37Tags, ...linked37Tags]
+              `SELECT tag_name, amount, recordDate FROM (
+                 SELECT lc.name AS tag_name, lr.amount, lr.recordDate,
+                        ROW_NUMBER() OVER (
+                          PARTITION BY lc.id
+                          ORDER BY lr.recordDate DESC, lr.createdAt DESC, lr.id DESC
+                        ) AS row_num
+                 FROM ledger_records lr
+                 INNER JOIN ledger_categories lc ON lc.id = lr.categoryId
+                 WHERE lr.ledgerId = 37
+                   AND lc.name IN (${placeholders})
+                   AND lc.accounting_mode = 'manual_balance'
+                   AND lr.type <> 'transfer'
+                   AND lr.deleted_at IS NULL
+               ) ranked
+               WHERE row_num = 1`,
+              linked37Tags,
             ) as any[];
-            for (const row of (Array.isArray(latestBalances) ? latestBalances : [])) linkedTagBalanceByName.set(String(row.tag_name), Number(row.amount));
+            for (const row of (Array.isArray(latestBalances) ? latestBalances : [])) {
+              linkedTagBalanceByName.set(String(row.tag_name), Number(row.amount));
+              const recordDate = row.recordDate instanceof Date
+                ? `${row.recordDate.getFullYear()}-${String(row.recordDate.getMonth() + 1).padStart(2, '0')}-${String(row.recordDate.getDate()).padStart(2, '0')}`
+                : String(row.recordDate || '').slice(0, 10);
+              if (recordDate) linkedTagHoldingDateByName.set(String(row.tag_name), recordDate);
+            }
+            // stock_portfolio：市值来自批次、持仓数量与最新行情，不能误读
+            // ledger_records，也不能把倍率后浮盈重建为市值。
+            const stockPortfolioCategories = Array.from(linkedTagCategoryByName.entries())
+              .filter(([, category]) => String(category?.accounting_mode) === 'stock_portfolio');
+            if (stockPortfolioCategories.length > 0) {
+              try {
+                const { getStockTagCurrentMarketValue } = await import('./ledger-stock-portfolio');
+                const values = await Promise.all(stockPortfolioCategories.map(async ([tagName, category]) => ({
+                  tagName,
+                  marketValue: await getStockTagCurrentMarketValue({ ledgerId: 37, categoryId: Number(category.id) }),
+                })));
+                for (const item of values) {
+                  if (item.marketValue !== null && Number.isFinite(item.marketValue.value)) {
+                    linkedTagBalanceByName.set(item.tagName, item.marketValue.value);
+                    const priceDate = String(item.marketValue.priceDate || item.marketValue.updatedAt || '').slice(0, 10);
+                    if (priceDate) linkedTagHoldingDateByName.set(item.tagName, priceDate);
+                  }
+                }
+              } catch (error) {
+                console.warn('[SharedPool] 读取37股票标签市值失败:', error);
+              }
+            }
           }
 
           // 股票保证金只读取已经保存的盘尾价快照；首次登记、尚未到 15:05 时才使用管理员确认时保存的参考价兜底。
@@ -19025,6 +19106,15 @@ ${klinesSummary}
             const latestBalance = source.floatingPnlTagName ? linkedTagBalanceByName.get(source.floatingPnlTagName) : null;
             const initialAmount = Number(pnlConfig?.initial_amount) || 0;
             const multiplier = Number(pnlConfig?.account_multiplier) || 1;
+            // latestBalance 是37标签的实际当前持仓值：manual_balance为最新手工余额，
+            // stock_portfolio为真实marketValue。倍率只能作用于浮盈展示，不能反推市值。
+            const holdingValueCny = source.useFloatingPnl && Number.isFinite(latestBalance)
+              ? latestBalance!
+              : null;
+            const holdingValue = holdingValueCny === null ? null : holdingValueCny / usdtCnyRate;
+            const holdingValueDate = source.floatingPnlTagName
+              ? (linkedTagHoldingDateByName.get(source.floatingPnlTagName) ?? null)
+              : null;
             const floatingPnlCny = source.useFloatingPnl && Number.isFinite(latestBalance)
               ? (source.floatingPnlCalculationMode === 'leveraged_net_pnl'
                 ? (latestBalance! - initialAmount) * multiplier
@@ -19071,10 +19161,12 @@ ${klinesSummary}
               usePaidInterest: source.usePaidInterest,
               collateralAssets: entries.map(entry => ({ coin: entry.coin, qty: entry.qty, note: entry.note, assetType: entry.assetType, name: entry.name, code: entry.code, price: entry.price, priceDate: entry.priceDate })),
               collateralValue: allPricesKnown ? collateralValue : null,
+              holdingValue,
+              holdingValueDate,
               floatingPnl,
               pendingInterestCny: linkedPendingInterestCny,
               paidInterestCny: linkedPaidInterestCny,
-              riskExposure: allPricesKnown && floatingPnl !== null ? collateralValue + floatingPnl : null,
+              riskExposure: allPricesKnown && holdingValue !== null ? collateralValue + holdingValue : null,
             };
           };
 
@@ -19167,11 +19259,9 @@ ${klinesSummary}
             const principalLentOut = o.principal_lent_out === 1 || o.principal_lent_out === true;
             // 普通订单：当前持有资产 − 所选基准 − 待结 + 已结。
             // 借出本金：借出的币不是可用持仓，单订单待覆盖额必须是“−当前借出本金价值 − 待结 + 已结”，
-            // 共享池在此基础上再统一加担保物，避免把本金市值与担保物都当作正资产。
-            const fallbackHoldingValueU = buyValueU > 0 ? buyValueU : principalU;
-            const linkedFloatingPnlU = linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null;
-            const holdingValueU = linkedFloatingPnlU !== null && Number.isFinite(linkedFloatingPnlU)
-              ? fallbackHoldingValueU + linkedFloatingPnlU
+            const linkedHoldingValueU = linked37Collateral?.useFloatingPnl ? linked37Collateral.holdingValue : null;
+            const holdingValueU = linkedHoldingValueU !== null && Number.isFinite(linkedHoldingValueU)
+              ? linkedHoldingValueU
               : currentValue;
             const principalLentOutValueU = holdingValueU ?? collateralGapBaseU;
             const collateralRequired = principalLentOut
@@ -19212,6 +19302,9 @@ ${klinesSummary}
               linked37PnlTagName: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnlTagName : null,
               linked37FloatingPnlCalculationMode: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnlCalculationMode : null,
               linked37FloatingPnl: linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null,
+              // 真实当前持仓值独立返回；客户端不能以倍率后浮盈和52买入基数重建它。
+              linked37HoldingValue: linked37Collateral?.useFloatingPnl ? linked37Collateral.holdingValue : null,
+              linked37HoldingValueDate: linked37Collateral?.useFloatingPnl ? linked37Collateral.holdingValueDate : null,
               // 待结、已结利息均可独立引用37号利息页，金额固定为人民币，由前端统一折算为U。
               linked37PendingInterestTagName: linked37Collateral?.usePendingInterest ? linked37Collateral.pendingInterestTagName : null,
               linked37PendingInterestCny: linked37Collateral?.usePendingInterest ? linked37Collateral.pendingInterestCny : null,
