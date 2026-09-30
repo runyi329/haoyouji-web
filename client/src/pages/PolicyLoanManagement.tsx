@@ -299,6 +299,14 @@ export default function PolicyLoanManagement({
         const usedPercent = totalLimit > 0 ? Math.min(100, Math.round((balance / totalLimit) * 100)) : 0;
         const annual = balance * Number(loan.annual_rate || 0) / 100;
         const huabeiCycle = isHuabei ? buildHuabeiCycle(loan.huabei_billing_day, loan.huabei_repayment_day) : null;
+        // 花呗尚未有独立账单/还款流水：使用已保存的“本期应还”作为本期账单是否登记的真实来源。
+        // 有应还金额即本期账单已录入（绿点）；应还为 0 视为已还清（绿点），大于 0 为待还（红点）。
+        const hasHuabeiBillingRecord = loan.outstanding_balance != null;
+        const huabeiRepaymentStatus = !hasHuabeiBillingRecord ? null : (
+          balance <= 0
+            ? { className: 'bg-emerald-500', label: '本期已还清' }
+            : { className: 'bg-rose-500', label: '本期待还' }
+        );
         if (isHuabei) {
           return (
             <div key={loan.id} className="overflow-hidden rounded-2xl border border-[#D7E9FF] bg-white shadow-sm">
@@ -327,8 +335,8 @@ export default function PolicyLoanManagement({
               {/* 白色账期区：与信用卡一致，固定为四列三行信息层级。 */}
               <div className="grid grid-cols-4 divide-x divide-[#D7E9FF] bg-[#F8FBFF] py-2 text-center" style={{ borderTop: '1px solid #D7E9FF' }}>
                 {huabeiCycle ? <>
-                  <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1"><p className="text-[11px] leading-4 text-slate-400">账单日</p><p className="truncate text-sm font-bold leading-5 text-slate-800">{formatMonthDay(huabeiCycle.upcomingBill)}</p><p className={`text-[10px] leading-4 ${huabeiCycle.billingDays <= 3 ? 'text-red-500' : huabeiCycle.billingDays <= 7 ? 'text-orange-500' : 'text-slate-400'}`}>{huabeiCycle.billingDays === 0 ? '今天' : `${huabeiCycle.billingDays}天后`}</p></div>
-                  <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1"><p className="text-[11px] leading-4 text-slate-400">最后还款日</p><p className="truncate text-sm font-bold leading-5 text-slate-800">{formatMonthDay(huabeiCycle.todayDue)}</p><p className={`text-[10px] leading-4 ${huabeiCycle.todayDays <= 3 ? 'text-red-500' : huabeiCycle.todayDays <= 7 ? 'text-orange-500' : 'text-slate-400'}`}>{huabeiCycle.todayDays === 0 ? '今天' : `${huabeiCycle.todayDays}天后`}</p></div>
+                  <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1"><p className="flex items-center justify-center gap-1 text-[11px] leading-4 text-slate-400"><span>账单日</span><span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${hasHuabeiBillingRecord ? 'bg-emerald-500' : 'border border-amber-500 bg-transparent'}`} title={hasHuabeiBillingRecord ? '本期账单已登记' : '本期待登记'} aria-label={hasHuabeiBillingRecord ? '本期账单已登记' : '本期待登记'} /></p><p className="truncate text-sm font-bold leading-5 text-slate-800">{formatMonthDay(huabeiCycle.upcomingBill)}</p><p className={`text-[10px] leading-4 ${huabeiCycle.billingDays <= 3 ? 'text-red-500' : huabeiCycle.billingDays <= 7 ? 'text-orange-500' : 'text-slate-400'}`}>{huabeiCycle.billingDays === 0 ? '今天' : `${huabeiCycle.billingDays}天后`}</p></div>
+                  <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1"><p className="flex items-center justify-center gap-1 text-[11px] leading-4 text-slate-400"><span>最后还款日</span>{huabeiRepaymentStatus && <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${huabeiRepaymentStatus.className}`} title={huabeiRepaymentStatus.label} aria-label={huabeiRepaymentStatus.label} />}</p><p className="truncate text-sm font-bold leading-5 text-slate-800">{formatMonthDay(huabeiCycle.todayDue)}</p><p className={`text-[10px] leading-4 ${huabeiCycle.todayDays <= 3 ? 'text-red-500' : huabeiCycle.todayDays <= 7 ? 'text-orange-500' : 'text-slate-400'}`}>{huabeiCycle.todayDays === 0 ? '今天' : `${huabeiCycle.todayDays}天后`}</p></div>
                   <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1"><p className="text-[11px] leading-4 text-slate-400">今日使用</p><p className="truncate text-sm font-bold leading-5 text-slate-800">{formatMonthDay(new Date())}</p><p className="text-[10px] leading-4 text-slate-400">{huabeiCycle.todayDays}天账期</p></div>
                   <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1"><p className="text-[11px] leading-4 text-slate-400">最优使用日</p><p className="truncate text-sm font-bold leading-5 text-[#1677FF]">{formatMonthDay(huabeiCycle.optimalUse)}</p><p className="text-[10px] leading-4 text-rose-500">{huabeiCycle.optimalDays}天账期</p></div>
                 </> : <>
