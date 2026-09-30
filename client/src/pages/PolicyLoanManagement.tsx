@@ -91,7 +91,10 @@ function nextMonthlyDay(day: number, after: Date) {
   const reference = new Date(after);
   reference.setHours(0, 0, 0, 0);
   let candidate = atMonthDay(reference.getFullYear(), reference.getMonth(), day);
-  if (candidate <= reference) candidate = atMonthDay(reference.getFullYear(), reference.getMonth() + 1, day);
+  // 当月没有 31 日时，atMonthDay 会取当月最后一天；当天就是该账单日时，
+  // 必须仍保留在本期，不能因“等于今天”提前跳到下个月。
+  // 账单日当天零点起即允许录入，只有已经过去的日期才进入下一期。
+  if (candidate < reference) candidate = atMonthDay(reference.getFullYear(), reference.getMonth() + 1, day);
   return candidate;
 }
 
