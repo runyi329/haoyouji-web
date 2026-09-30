@@ -745,6 +745,10 @@ export default function LedgerDetailAA({
   const [aliasEditValue, setAliasEditValue] = useState(''); // 输入框内容
   const [aliasSaving, setAliasSaving] = useState(false);
   const [aliasInfoTag, setAliasInfoTag] = useState<string | null>(null); // 单击查看信息的 tag.name
+  // 个人标签备注：存储在当前成员自己的 initialBalances 中，不与其他成员共享。
+  const [tagNoteEditTag, setTagNoteEditTag] = useState<string | null>(null);
+  const [tagNoteEditValue, setTagNoteEditValue] = useState('');
+  const [tagNoteSaving, setTagNoteSaving] = useState(false);
   // 回报分段详情弹框
   const [pnlDetailModal, setPnlDetailModal] = useState<{
     tagName: string;
@@ -1738,8 +1742,10 @@ export default function LedgerDetailAA({
 
             </div>
 
-            {/* 右侧：操作按鈕 + 返回按鈕 + 标签下拉 */}
+            {/* 右侧：胡大叔保留完整快捷入口；其他用户仅显示刷新与返回 */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
+              {isJiamGSuperAdmin ? (
+                <>
               {/* 数字B快捷按钮（跳转52号账本）——最左边 */}
               {myShortcuts?.digitalB && (
                 <div
@@ -1781,11 +1787,32 @@ export default function LedgerDetailAA({
                   <Settings className="w-3.5 h-3.5 text-white" />
                 </button>
               )}
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="h-8 px-2.5 rounded-lg text-xs font-medium whitespace-nowrap"
+                    style={{ backgroundColor: "rgba(255,255,255,0.9)", color: "#D32F2F", border: "1px solid rgba(255,255,255,0.4)" }}
+                  >
+                    刷新
+                  </button>
+                  <button
+                    onClick={onBack}
+                    className="h-8 px-2.5 rounded-lg text-xs font-medium whitespace-nowrap"
+                    style={{ backgroundColor: "rgba(255,255,255,0.9)", color: "#D32F2F", border: "1px solid rgba(255,255,255,0.4)" }}
+                  >
+                    返回
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
-        {/* 第二行：刷新、返回、AI数据、细则及JiamG专属利息/保证金快捷入口 */}
-        <div className={`px-4 pb-2 flex items-center ${isJiamGSuperAdmin ? 'gap-1' : 'gap-1.5'}`}>
+        {isJiamGSuperAdmin && (
+          <>
+          {/* 第二行：刷新、返回、AI数据、细则及JiamG专属利息/保证金快捷入口 */}
+          <div className={`px-4 pb-2 flex items-center ${isJiamGSuperAdmin ? 'gap-1' : 'gap-1.5'}`}>
               {/* 刷新按钮 */}
               <button
                 onClick={() => window.location.reload()}
@@ -1860,221 +1887,11 @@ export default function LedgerDetailAA({
                   </button>
                 </>
               )}
-        </div>
-
-
-        {/* 4个统计卡片 */}
-        <div className={`px-4 pb-3 grid gap-1.5 ${selectedTagId === null ? 'grid-cols-3' : 'grid-cols-2'}`}>
-          {selectedTagId === null ? (
-            /* ─── 全部模式：价値 + 盈亏总计 + 押金 ─── */
-            <>
-              {/* 价値（第一个） */}
-              <div className="rounded-sm p-2 flex flex-col" style={{ backgroundColor: "rgba(15,23,42,0.45)" }}>
-                {(() => {
-                  const totalDividend = Object.values(dividendByTag).reduce((s: number, v: any) => s + Number(v), 0);
-                  const value = allTagsStats.diff - totalDividend;
-                  return (
-                    <>
-                      <div className="text-[10px] opacity-75 flex items-center justify-end gap-0.5 mb-1">实时价値 <button onClick={() => setShowAllModeHelp('value')} className="inline-flex items-center justify-center active:opacity-60"><HelpCircle className="w-3 h-3 text-white/60" /></button></div>
-                      <div className="text-sm font-bold leading-tight text-right">
-                        {value > 0 ? '+' : ''}￥{value.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-              {/* 盈亏总计（第二个） */}
-              <div className="rounded-sm p-2 flex flex-col" style={{ backgroundColor: "rgba(15,23,42,0.45)" }}>
-                <div className="text-[10px] opacity-75 flex items-center justify-end gap-1 mb-1">实时波动 <button onClick={() => setShowAllModeHelp('pnl')} className="inline-flex items-center justify-center active:opacity-60"><HelpCircle className="w-3 h-3 text-white/60" /></button></div>
-                <div className="text-sm font-bold leading-tight text-right">
-                  {overviewTotalPnlRef.current > 0 ? '+' : ''}￥{overviewTotalPnlRef.current.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                </div>
-              </div>
-              {/* 押金（第三个） */}
-              <div className="rounded-sm p-2 flex flex-col" style={{ backgroundColor: "rgba(15,23,42,0.45)" }}>
-                <div className="text-[10px] opacity-75 flex items-center justify-end gap-1 mb-1">押金合计 <button onClick={() => setShowAllModeHelp('margin')} className="inline-flex items-center justify-center active:opacity-60"><HelpCircle className="w-3 h-3 text-white/60" /></button></div>
-                <div className="text-sm font-bold leading-tight text-right">
-                  {formatSignedMarginCny(allTagsStats.totalMargin, 0)}
-                </div>
-              </div>
-
-            </>
-          ) : isSelectedStockPortfolio ? (
-            /* ─── 股票标签：盘尾快照口径，不展示手工余额/初始本金/提现 ─── */
-            <>
-              <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-                <div className="text-xs opacity-75 mb-0.5">盘尾累计盈亏</div>
-                <div className="text-base font-bold">
-                  {stats.totalPnl > 0 ? "+" : stats.totalPnl < 0 ? "−" : ""}¥{Math.abs(stats.totalPnl).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <div className="text-xs opacity-60 mt-0.5">按逐笔入场价核算</div>
-              </div>
-              <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-                <div className="text-xs opacity-75 mb-0.5">当日盈亏</div>
-                <div className="text-base font-bold">
-                  {latestStockCalendarPoint && latestStockCalendarPoint.dailyPnl > 0 ? "+" : latestStockCalendarPoint && latestStockCalendarPoint.dailyPnl < 0 ? "−" : ""}¥{Math.abs(latestStockCalendarPoint?.dailyPnl || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <div className="text-xs opacity-60 mt-0.5">首日以 0 为比较基准</div>
-              </div>
-              <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-                <div className="text-xs opacity-75 mb-0.5">最近盘尾</div>
-                <div className="text-base font-bold">{latestStockCalendarPoint?.date || '待结算'}</div>
-                <div className="text-xs opacity-60 mt-0.5">有效行情于 15:05 固定</div>
-              </div>
-              <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-                <div className="text-xs opacity-75 mb-0.5">查看与维护</div>
-                <div className="text-base font-bold">日历入口</div>
-                <div className="text-xs opacity-60 mt-0.5">点击交易日进入{stockParticipantView ? '只读详情' : '账户维护'}</div>
-              </div>
-            </>
-          ) : (
-            /* ─── 单标签模式：最新余额 + 押金 + 初始金额 + 累计盈亏 ─── */
-            <>
-          {/* 最新余额（联动：原始余额 + 提现） */}
-          <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-0.5">最新余额</div>
-            <div className="text-base font-bold">
-              {(() => {
-                // 从 cumulativeMap 取最后一天的联动值（已按日期累进）
-                const lastDate = stats.latestDate;
-                const linkedBalance = lastDate && cumulativeMap.has(lastDate) ? cumulativeMap.get(lastDate)! : stats.latestBalance;
-                return '¥' + linkedBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-              })()}
-            </div>
-            {stats.latestDate && (
-              <div className="text-xs opacity-60 mt-0.5">
-                {(() => {
-                  const [y, m, d] = stats.latestDate.split("-");
-                  return `${y}年${m}月${d}日`;
-                })()}
-              </div>
-            )}
           </div>
+          </>
+        )}
 
-          {/* 押金 + 比例 */}
-          <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            {(() => {
-              const tagName = selectedTag?.name;
-              if (!tagName || !initialBalancesData?.balances) {
-                return (
-                  <>
-                    <div className="text-xs opacity-75 mb-0.5">押金</div>
-                    <div className="text-base font-bold">¥0.00</div>
-                  </>
-                );
-              }
-              const marginEntries = resolveMarginEntries(initialBalancesData.balances, tagName, aaCryptoPrices);
-              const marginCny = marginEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0);
-              const ratioVal = initialBalancesData.balances[`${tagName}__ratio`];
-              const detailText = marginEntries.length === 0
-                ? ''
-                : marginEntries.slice(0, 2).map((entry) => entry.coin === 'CNY' ? `¥${entry.amount}` : `${entry.amount} ${entry.coin}`).join(' · ')
-                  + (marginEntries.length > 2 ? ` 等${marginEntries.length}笔` : '');
-              const hasUnpricedMargin = marginEntries.some((entry) => entry.cnyValue === null);
-              return (
-                <>
-                  <div className="text-xs opacity-75 mb-0.5 flex items-center gap-2">
-                    <span>押金</span>
-                    {ratioVal !== undefined && ratioVal !== null && (
-                      <span className="opacity-80">比例 {Number(ratioVal).toFixed(1)}%</span>
-                    )}
-                  </div>
-                  <div className="text-base font-bold">{formatSignedMarginCny(marginCny)}</div>
-                  <div className="text-xs opacity-60 mt-0.5">{hasUnpricedMargin ? '部分报价获取中' : (detailText || '未设置')}</div>
-                </>
-              );
-            })()}
-          </div>
 
-          {/* 初始金额 */}
-          <div className="rounded-xl p-2 relative" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-0.5 flex items-center gap-1">
-              {capitalHistory.length > 0 ? '当前本金' : '初始本金'}
-              {capitalHistory.length > 0 && (
-                <button
-                  onClick={() => setShowCapitalHistory(true)}
-                  className="inline-flex items-center justify-center active:opacity-60"
-                  title="本金有变动，点击查看详情"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5 text-black" fill="#FBBF24" />
-                </button>
-              )}
-            </div>
-            <div className="text-base font-bold">
-              {(() => {
-                const tagName = selectedTag?.name;
-                if (!tagName || !initialBalancesData?.balances) return '未设置';
-                const val = initialBalancesData.balances[tagName];
-                if (val === undefined || val === null) return '未设置';
-                const initialVal = Number(val);
-                // 如果有本金变动，显示当前本金（初始 + 净变动）
-                if (capitalHistory.length > 0) {
-                  const netChange = capitalHistory.reduce((sum: number, r: any) => {
-                    const amt = Number(r.amount) || 0;
-                    return r.description?.startsWith('capital_add') ? sum + amt : sum - amt;
-                  }, 0);
-                  const currentCapital = initialVal + netChange;
-                  return '¥' + currentCapital.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                }
-                return '¥' + initialVal.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-              })()}
-            </div>
-            {capitalHistory.length > 0 && (() => {
-              const tagName = selectedTag?.name;
-              const val = tagName && initialBalancesData?.balances ? initialBalancesData.balances[tagName] : null;
-              if (val === undefined || val === null) return null;
-              return (
-                <div className="text-[10px] opacity-50 mt-0.5">
-                  初始: ¥{Number(val).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-                </div>
-              );
-            })()}
-            {stats.startDate && (
-              <div className="text-xs opacity-60 mt-0.5">
-                {(() => {
-                  const [y, m, d] = stats.startDate.split("-");
-                  return `${y}年${m}月${d}日`;
-                })()}
-              </div>
-            )}
-          </div>
-
-          {/* 累计盈亏 */}
-          <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-0.5 flex items-center gap-1">
-              累计盈亏
-              {withdrawRecords.length > 0 && (
-                <button
-                  onClick={() => setShowWithdrawHistory(true)}
-                  className="inline-flex items-center justify-center active:opacity-60"
-                  title="有提现记录，点击查看详情"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5 text-black" fill="#FBBF24" />
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              <div
-                className="text-base font-bold"
-                style={{ color: "#FFFFFF" }}
-              >
-                {stats.totalPnl > 0 ? "+" : stats.totalPnl < 0 ? "-" : ""}¥{Math.abs(stats.totalPnl).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <button
-                onClick={() => setShowPnlExplain(true)}
-                className="inline-flex items-center justify-center active:opacity-60"
-                title="查看计算详情"
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-white/70" />
-              </button>
-            </div>
-            <div className="text-xs opacity-60 mt-0.5">
-              收益率 {stats.returnRate >= 0 ? "+" : ""}{stats.returnRate.toFixed(2)}%
-            </div>
-          </div>
-            </>
-          )}
-        </div>
       </div>
 
       {/* 标签下拉（白色区域顶部，整行，始终可见） */}
@@ -2082,18 +1899,35 @@ export default function LedgerDetailAA({
         <div className="px-3 pt-3">
           <div className="relative w-full">
             <button
-              onClick={() => setShowTagDropdown(!showTagDropdown)}
+              onClick={() => {
+                setShowTagDropdown((showing) => !showing);
+                setTagNoteEditTag(null);
+              }}
               className="w-full flex items-center justify-center gap-1 h-10 rounded-xl text-sm font-semibold transition-all bg-white shadow-sm"
               style={{ color: selectedTag ? '#D32F2F' : '#888888', border: '1px solid #E0E0E0' }}
             >
-              <span>{selectedTagId === null ? '全部' : (() => { const alias = (initialBalancesData?.balances as any)?.[`${selectedTag?.name}__alias`]; return alias || selectedTag?.name || '全部'; })()}</span>
+              <span>{selectedTagId === null ? '全部' : (() => {
+                const balances = initialBalancesData?.balances as any;
+                const label = balances?.[`${selectedTag?.name}__alias`] || selectedTag?.name || '全部';
+                const note = String(balances?.[`${selectedTag?.name}__note`] ?? '').trim();
+                return note ? `${label} · ${note}` : label;
+              })()}</span>
               <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
             </button>
             {showTagDropdown && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowTagDropdown(false)} />
-                <div className="absolute left-0 right-0 top-full mt-1 rounded-xl shadow-lg z-50 bg-white" style={{ border: '1px solid #E0E0E0', maxHeight: 'calc(5 * 41px)', overflowY: 'scroll' }}>
-                  <button onClick={() => { setSelectedTagId(null); setShowTagDropdown(false); }} className="w-full px-4 py-2.5 text-left text-sm hover:bg-[#FFEBEE]" style={{ color: selectedTagId === null ? '#D32F2F' : '#222222', fontWeight: selectedTagId === null ? 600 : 400, borderBottom: '1px solid #F5F5F5' }}>全部</button>
+                <div className="fixed inset-0 z-40" onClick={() => { setShowTagDropdown(false); setTagNoteEditTag(null); }} />
+                <div
+                  className={`${tagNoteEditTag ? 'fixed left-3 right-3 z-50' : 'absolute left-0 right-0 top-full mt-1 z-50'} rounded-xl shadow-lg bg-white`}
+                  style={{
+                    border: '1px solid #E0E0E0',
+                    top: tagNoteEditTag ? '12px' : undefined,
+                    maxHeight: tagNoteEditTag ? 'calc(100dvh - 24px)' : 'calc(5 * 41px)',
+                    overflowY: 'auto',
+                    WebkitOverflowScrolling: 'touch',
+                  }}
+                >
+                  <button onClick={() => { setSelectedTagId(null); setShowTagDropdown(false); setTagNoteEditTag(null); }} className="w-full px-4 py-2.5 text-left text-sm hover:bg-[#FFEBEE]" style={{ color: selectedTagId === null ? '#D32F2F' : '#222222', fontWeight: selectedTagId === null ? 600 : 400, borderBottom: '1px solid #F5F5F5' }}>全部</button>
                   {[...categories].sort((a: any, b: any) => {
                     const balances = initialBalancesData?.balances ?? {};
                     const getIsPaused = (name: string) => {
@@ -2123,11 +1957,71 @@ export default function LedgerDetailAA({
                       const diffDays = Math.floor((today.getTime() - pauseD.getTime()) / 86400000);
                       pauseInfo = `(${Number(m)}月${Number(d)}日暂停，已${diffDays}天)`;
                     }
+                    const tagAlias = (initialBalancesData?.balances as any)?.[`${cat.name}__alias`] || cat.name;
+                    const tagNote = String((initialBalancesData?.balances as any)?.[`${cat.name}__note`] ?? '').trim();
                     return (
-                      <button key={cat.id} onClick={() => { setSelectedTagId(cat.id); setShowTagDropdown(false); }} className="w-full px-4 py-2.5 text-left text-sm hover:bg-[#FFEBEE]" style={{ fontWeight: selectedTagId === cat.id ? 600 : 400, borderBottom: '1px solid #F5F5F5' }}>
-                        <span style={{ color: selectedTagId === cat.id ? '#D32F2F' : '#222222' }}>{(initialBalancesData?.balances as any)?.[`${cat.name}__alias`] || cat.name}</span>
-                        {isCatPaused && <span style={{ marginLeft: 4, fontSize: 11, color: '#1565C0' }}>{pauseInfo}</span>}
-                      </button>
+                      <div key={cat.id} style={{ borderBottom: '1px solid #F5F5F5' }}>
+                        <div className="flex items-stretch">
+                          <button type="button" onClick={() => { setSelectedTagId(cat.id); setShowTagDropdown(false); setTagNoteEditTag(null); }} className="flex-1 min-w-0 px-4 py-2.5 text-left text-sm hover:bg-[#FFEBEE]" style={{ fontWeight: selectedTagId === cat.id ? 600 : 400 }}>
+                            <span style={{ color: selectedTagId === cat.id ? '#D32F2F' : '#222222' }}>
+                              {tagAlias}{tagNote && <span style={{ marginLeft: 4, fontSize: 12, fontWeight: 400, color: '#9E9E9E' }}>· {tagNote}</span>}
+                            </span>
+                            {isCatPaused && <span style={{ marginLeft: 4, fontSize: 11, color: '#1565C0' }}>{pauseInfo}</span>}
+                          </button>
+                          {!viewAsUserId && (
+                            <button
+                              type="button"
+                              aria-label={`${tagNote ? '修改' : '添加'} ${tagAlias} 的个人备注`}
+                              onClick={() => {
+                                setTagNoteEditTag(cat.name);
+                                setTagNoteEditValue(tagNote);
+                              }}
+                              className="px-3 text-xs font-medium whitespace-nowrap hover:bg-[#FFEBEE]"
+                              style={{ color: '#1565C0' }}
+                            >
+                              {tagNote ? '修改备注' : '添加备注'}
+                            </button>
+                          )}
+                        </div>
+                        {!viewAsUserId && tagNoteEditTag === cat.name && (
+                          <div className="flex items-center gap-2 px-3 pb-2">
+                            <input
+                              type="text"
+                              value={tagNoteEditValue}
+                              onChange={(event) => setTagNoteEditValue(event.target.value)}
+                              placeholder="输入仅自己可见的备注"
+                              maxLength={24}
+                              className="flex-1 min-w-0 border rounded-lg px-2 py-1.5 text-xs"
+                              style={{ borderColor: '#E0E0E0', color: '#222', outline: 'none' }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => { setTagNoteEditTag(null); setTagNoteEditValue(''); }}
+                              className="text-xs whitespace-nowrap"
+                              style={{ color: '#757575' }}
+                            >取消</button>
+                            <button
+                              type="button"
+                              disabled={tagNoteSaving}
+                              onClick={async () => {
+                                setTagNoteSaving(true);
+                                try {
+                                  await updateMyInitialBalancesMutation.mutateAsync({
+                                    ledgerId,
+                                    balances: { [`${cat.name}__note`]: tagNoteEditValue.trim() },
+                                  });
+                                  setTagNoteEditTag(null);
+                                  setTagNoteEditValue('');
+                                } finally {
+                                  setTagNoteSaving(false);
+                                }
+                              }}
+                              className="text-xs font-semibold whitespace-nowrap"
+                              style={{ color: '#D32F2F', opacity: tagNoteSaving ? 0.65 : 1 }}
+                            >{tagNoteSaving ? '保存中' : '保存'}</button>
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -2815,11 +2709,11 @@ export default function LedgerDetailAA({
             const weightedAnnualized = weightedDenominator > 0 ? (totalPnl / weightedDenominator) * 100 : null;
             const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
             // Grid 列定义：名称固定52px，其他列 minmax 自适应
-            // 横向可滑动概览表：名称(sticky)/今日/回报/周期 第一屏平分；金额/年化/分红/占比全部溢出右侧可滑动
+            // 横向可滑动概览表：名称(sticky)/今日/回报/押金 第一屏平分；分红/年化/周期/占比全部溢出右侧可滑动
             // 名称列 sticky 固定左边，前4列平分屏幕宽度，其余列溢出到右侧
-            // 列定义：名称(90px) | 今日(1fr) | 回报(1fr) | 周期(1fr) | 金额(70px溢出) | 年化(64px溢出) | 分红(64px溢出) | 占比(52px最右溢出)
+            // 列定义：名称(90px) | 今日(1fr) | 回报(1fr) | 押金(70px溢出) | 分红(64px溢出) | 年化(64px溢出) | 周期(1fr) | 占比(52px最右溢出)
             // 右侧滚动区 grid 列定义（去掉第一列 104px 名称列）
-            const rightGridCols = 'minmax(52px,max-content) 1px minmax(52px,max-content) 1px minmax(52px,max-content) 1px minmax(64px,max-content) 1px minmax(64px,max-content) 1px 64px 1px 52px';
+            const rightGridCols = 'minmax(52px,max-content) 1px minmax(52px,max-content) 1px minmax(64px,max-content) 1px minmax(64px,max-content) 1px 64px 1px minmax(52px,max-content) 1px 52px';
             // 右侧滚动区最小宽度：内容自动撑开，不换行
             const rightMinWidth = 'max-content';
             // 概览表头始终表示北京时间的“当天”，不能被某个标签最后一笔手工记录或
@@ -2866,13 +2760,15 @@ export default function LedgerDetailAA({
                     <span style={{ color: '#9E9E9E', fontSize: 12 }}>名称</span>
                   </div>
                   {/* 数据行名称格 */}
-                  {displayedTagData.map(({ tag }, displayedIndex) => {
+                  {displayedTagData.map(({ tag, isPaused }, displayedIndex) => {
                     const rowBorder2 = displayedIndex === displayedTagData.length - 1 && !showPausedSummary ? 'none' : '1px solid #F9F9F9';
                     const tagAlias2 = (initialBalancesData?.balances as any)?.[`${tag.name}__alias`] ?? '';
                     const displayName2 = tagAlias2 || tag.name;
                     return (
                       <div key={`${tag.name}-name-left`} className="flex items-center justify-start gap-1" style={{ borderBottom: rowBorder2, flex: '0 0 auto', height: 36, paddingLeft: 6, paddingRight: 2, overflow: 'hidden' }}>
-                        <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
+                        <span style={{ minWidth: 14, height: 14, padding: '0 2px', borderRadius: 3, backgroundColor: isPaused ? '#1565C0' : '#D32F2F', color: '#FFFFFF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, lineHeight: 1, flexShrink: 0 }}>
+                          {displayedIndex + 1}
+                        </span>
                         <span
                           style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
                           onPointerDown={(e) => {
@@ -2921,15 +2817,15 @@ export default function LedgerDetailAA({
                   <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                   <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报￥</span><SortArrow col="pnl" /></div>
                   <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
-                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                   <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E' }}>押金￥</span><SortArrow col="amount" /></div>
-                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
                   <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                   <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('dividend')}>
                     <span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红￥</span><SortArrow col="dividend" />
                   </div>
+                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
+                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
                   <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                   <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
                   {/* 数据行右侧各列 */}
@@ -3173,7 +3069,103 @@ export default function LedgerDetailAA({
                         })()}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
-                      {/* 周期（移到回报后面） */}
+                      {/* 押金（回报后、分红前）：多笔明细按实时人民币价格汇总 */}
+                      <div className="px-1 flex flex-col items-center justify-center" style={{ borderBottom: rowBorder, height: rowHeight }}>
+                        {(() => {
+                          const actualDeposit = Number(tag.marginCny || 0);
+                          const rawReferenceDeposit = tag.isStockPortfolio
+                            ? (latestBalance === null ? 0 : Number(latestBalance) * 0.2)
+                            : (Number(tag.initialBalance || 0) + Number(capitalByTag[tag.name] || 0))
+                              * (Number(initialBalancesData?.balances?.[`${tag.name}__ratio`] ?? 100) / 100)
+                              * 0.2;
+                          const referenceDeposit = Number.isFinite(rawReferenceDeposit) ? Math.max(0, rawReferenceDeposit) : 0;
+                          const progressPercent = referenceDeposit > 0
+                            ? Math.min(100, Math.max(0, (actualDeposit / referenceDeposit) * 100))
+                            : 0;
+                          const progressLabel = referenceDeposit > 0
+                            ? `实际手动押金 ${formatSignedMarginCny(actualDeposit, 0)}，参考押金 ${formatSignedMarginCny(referenceDeposit, 0)}，完成 ${Math.max(0, (actualDeposit / referenceDeposit) * 100).toFixed(0)}%`
+                            : '暂无参考押金，暂不计算完成比例';
+                          return (
+                            <div
+                              onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
+                              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
+                            >
+                              <div style={{ fontSize: 13, lineHeight: 1, color: '#424242', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}>
+                                {formatSignedMarginNumber(actualDeposit, 0)}{(() => {
+                                  const embeddedNoteCount = tag.marginEntries.reduce((sum, entry) => sum + (entry.notes?.length ?? 0), 0);
+                                  const totalNoteCount = embeddedNoteCount + (marginNoteCounts[tag.name] ?? 0);
+                                  return totalNoteCount > 0 ? <sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{totalNoteCount}</sup> : null;
+                                })()}
+                              </div>
+                              {referenceDeposit > 0 && (
+                                <div
+                                  role="progressbar"
+                                  aria-label={progressLabel}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-valuenow={Math.round(progressPercent)}
+                                  title={progressLabel}
+                                  style={{ width: 56, height: 2, marginTop: 3, overflow: 'hidden', borderRadius: 999, backgroundColor: '#EF5350' }}
+                                >
+                                  <div style={{ width: `${progressPercent}%`, height: '100%', borderRadius: 999, backgroundColor: '#86EFAC', transition: 'width 300ms ease' }} />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 分红 */}
+                      <div className="px-1 flex flex-col items-center justify-center" style={{ borderBottom: rowBorder, height: rowHeight }}>
+                        {(() => {
+                          const distributedDividend = Number(divAmt || 0);
+                          const referenceReturn = Number(latestPnl || 0);
+                          // 表格金额按整数展示；超额判断也按同一显示口径，避免 277 与 276.999... 被误标为超额。
+                          const displayedDividend = Math.round(distributedDividend);
+                          const displayedReturn = Math.round(referenceReturn);
+                          const isOverDistributed = displayedDividend > 0 && displayedDividend > displayedReturn;
+                          const dividendProgressPercent = referenceReturn > 0
+                            ? Math.min(100, Math.max(0, (distributedDividend / referenceReturn) * 100))
+                            : isOverDistributed ? 100 : 0;
+                          const dividendProgressLabel = referenceReturn > 0
+                            ? `累计已分红 ${distributedDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}，当前回报 ${referenceReturn.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}，${isOverDistributed ? '已超额分配' : `已分配 ${Math.max(0, (distributedDividend / referenceReturn) * 100).toFixed(0)}%`}`
+                            : isOverDistributed
+                              ? `累计已分红 ${distributedDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}，当前回报 ${referenceReturn.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}，已超额分配`
+                              : '当前回报未转正，暂不计算分红比例';
+                          return (
+                            <>
+                              <div style={{ fontSize: 13, lineHeight: 1, color: distributedDividend > 0 ? '#D32F2F' : '#BDBDBD', whiteSpace: 'normal', wordBreak: 'break-all' }}>
+                                {distributedDividend > 0 ? (
+                                  <span
+                                    onClick={(e) => { e.stopPropagation(); setDividendNoteTag(tag.name); }}
+                                    style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#D32F2F', textUnderlineOffset: '2px' }}
+                                  >{distributedDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(dividendNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{dividendNoteCounts[tag.name]}</sup>)}</span>
+                                ) : '--'}
+                              </div>
+                              {(referenceReturn > 0 || isOverDistributed) && (
+                                <div
+                                  role="progressbar"
+                                  aria-label={dividendProgressLabel}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-valuenow={Math.round(dividendProgressPercent)}
+                                  title={dividendProgressLabel}
+                                  style={{ width: 56, height: 2, marginTop: 3, overflow: 'hidden', borderRadius: 999, backgroundColor: isOverDistributed ? '#3B82F6' : '#EF5350' }}
+                                >
+                                  <div style={{ width: `${dividendProgressPercent}%`, height: '100%', borderRadius: 999, backgroundColor: isOverDistributed ? '#3B82F6' : '#86EFAC', transition: 'width 300ms ease' }} />
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 年化 */}
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13, color: _isStale || annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C', height: rowHeight }}>
+                        {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 周期（移到年化后面） */}
                       <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13, height: rowHeight }}>
                         {(() => {
                           const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
@@ -3222,33 +3214,6 @@ export default function LedgerDetailAA({
                             >{days > 0 ? `${days}天` : '--'}</span>
                           );
                         })()}
-                      </div>
-                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
-                      {/* 押金（周期后面）：多笔明细按实时人民币价格汇总 */}
-                      <div className="px-1 flex flex-col items-center justify-center" style={{ borderBottom: rowBorder, height: rowHeight }}>
-                        <div
-                          onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
-                          style={{ fontSize: 13, lineHeight: 1, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                        >{formatSignedMarginNumber(tag.marginCny, 0)}{(() => {
-                          const embeddedNoteCount = tag.marginEntries.reduce((sum, entry) => sum + (entry.notes?.length ?? 0), 0);
-                          const totalNoteCount = embeddedNoteCount + (marginNoteCounts[tag.name] ?? 0);
-                          return totalNoteCount > 0 ? <sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{totalNoteCount}</sup> : null;
-                        })()}</div>
-                      </div>
-                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
-                      {/* 年化 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13, color: _isStale || annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C', height: rowHeight }}>
-                        {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
-                      </div>
-                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
-                      {/* 分红 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'normal', wordBreak: 'break-all', fontSize: 13, color: divAmt > 0 ? '#D32F2F' : '#BDBDBD', height: rowHeight }}>
-                        {divAmt > 0 ? (
-                          <span
-                            onClick={(e) => { e.stopPropagation(); setDividendNoteTag(tag.name); }}
-                            style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#D32F2F', textUnderlineOffset: '2px' }}
-                          >{divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(dividendNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{dividendNoteCounts[tag.name]}</sup>)}</span>
-                        ) : '--'}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 占比（移到最右，默认屏幕外） */}
@@ -3311,18 +3276,18 @@ export default function LedgerDetailAA({
                           type="button"
                           onClick={() => setShowPausedTagDetails(true)}
                           className="px-1 text-center flex items-center justify-center"
-                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: '#1565C0', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}
+                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: '#424242', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
                         >
-                          暂停中
+                          {formatNumber(pausedSummaryMargin)}
                         </button>
                         <div style={{ backgroundColor: '#DCE8FA', width: 1, borderBottom: pausedSummaryBorder }} />
                         <button
                           type="button"
                           onClick={() => setShowPausedTagDetails(true)}
                           className="px-1 text-center flex items-center justify-center"
-                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: '#424242', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: pausedSummaryDividend > 0 ? '#D32F2F' : '#BDBDBD', cursor: 'pointer', fontSize: 13, fontWeight: pausedSummaryDividend > 0 ? 600 : 400 }}
                         >
-                          {formatNumber(pausedSummaryMargin)}
+                          {pausedSummaryDividend > 0 ? formatNumber(pausedSummaryDividend) : '--'}
                         </button>
                         <div style={{ backgroundColor: '#DCE8FA', width: 1, borderBottom: pausedSummaryBorder }} />
                         <button
@@ -3336,9 +3301,9 @@ export default function LedgerDetailAA({
                           type="button"
                           onClick={() => setShowPausedTagDetails(true)}
                           className="px-1 text-center flex items-center justify-center"
-                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: pausedSummaryDividend > 0 ? '#D32F2F' : '#BDBDBD', cursor: 'pointer', fontSize: 13, fontWeight: pausedSummaryDividend > 0 ? 600 : 400 }}
+                          style={{ border: 'none', borderBottom: pausedSummaryBorder, background: pausedSummaryBackground, height: rowHeight, color: '#1565C0', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}
                         >
-                          {pausedSummaryDividend > 0 ? formatNumber(pausedSummaryDividend) : '--'}
+                          暂停中
                         </button>
                         <div style={{ backgroundColor: '#DCE8FA', width: 1, borderBottom: pausedSummaryBorder }} />
                         <button
@@ -3406,14 +3371,16 @@ export default function LedgerDetailAA({
                       </span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
-                    {/* 周期 -- */}
-                    <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', height: rowHeight }}>
-                      <span style={{ fontSize: 13, color: '#BDBDBD' }}>--</span>
-                    </div>
-                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
-                    {/* 金额：人民币汇总 */}
+                    {/* 押金：人民币汇总 */}
                     <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', height: rowHeight }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+                    {/* 分红 */}
+                    <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', height: rowHeight }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: totalDividend > 0 ? '#D32F2F' : '#BDBDBD' }}>
+                        {totalDividend > 0 ? `${totalDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                      </span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 年化 */}
@@ -3423,11 +3390,9 @@ export default function LedgerDetailAA({
                       </span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
-                    {/* 分红 */}
+                    {/* 周期 -- */}
                     <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', height: rowHeight }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: totalDividend > 0 ? '#D32F2F' : '#BDBDBD' }}>
-                        {totalDividend > 0 ? `${totalDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
-                      </span>
+                      <span style={{ fontSize: 13, color: '#BDBDBD' }}>--</span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 占比 -- */}
@@ -4462,7 +4427,7 @@ export default function LedgerDetailAA({
         </div>
       )}
 
-      {/* ── 图片预览弹窗（普通成员点击日历格子时弹出） ── */}
+      {/* ── 图片预览弹窗（普通成员点击日历格子时弹出） */}
       {showImagePreview && previewImages.length > 0 && (
         <div
           className="fixed inset-0 z-50 flex flex-col"
