@@ -1204,6 +1204,7 @@ export function FunderOrderCardV2Silver({
   isAdmin = false,
   allOrders,
   sharedGapMap,
+  onExposureGapChange,
 }: FunderOrderCardV2Props) {
   const cardExportRef = useRef<HTMLDivElement>(null);
   const allowImageDownload = isAdmin || getBooleanDisplayFlag(order, 'allowUserImageDownload', true);
@@ -1481,6 +1482,12 @@ export function FunderOrderCardV2Silver({
     const pct = marginBaseNum > 0 ? (remainingCNY / marginBaseNum * 100) : null;
     return { fc2977RemainingMarginU: remainingU, fc2977MarginBasePct: pct };
   })();
+  // 外部37号担保订单的卡片行已直接展示该标签的最终「余/缺」值。
+  // 共享担保弹窗仅复用这个已展示结果，绝不把浮动盈亏重新当成担保缺口计算。
+  useEffect(() => {
+    if (!onExposureGapChange || !hasExternalCollateral || !Number.isFinite(fc2977RemainingMarginU)) return;
+    onExposureGapChange(Number(order.id), Number(fc2977RemainingMarginU));
+  }, [onExposureGapChange, hasExternalCollateral, fc2977RemainingMarginU, order.id]);
   const sharedCollateralViewUserId = Number(order.user_id);
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId: (order as any).ledger_id ?? 0, userId: sharedCollateralViewUserId },

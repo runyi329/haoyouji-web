@@ -3958,6 +3958,7 @@ export default function CryptoPrediction() {
                             currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
                             allOrders={financeOrders}
                             sharedGapMap={financeExposureGapMap}
+                            onExposureGapChange={handleFinanceExposureGapChange}
                           />
                         );
                       })}
