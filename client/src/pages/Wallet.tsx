@@ -782,14 +782,6 @@ export default function Wallet() {
     0,
   );
   const digitalTotalUsdt = usdtTotalBalance + cryptoTotalUsdt;
-  const digitalAvailableUsdt = usdtAvailableBalance + visibleMultiAssetBalances.reduce(
-    (total, asset) => total + Number(asset.availableBalance ?? 0) * Number(asset.priceUsdt ?? 0),
-    0,
-  );
-  const digitalFrozenUsdt = Number(usdtSummary.frozen ?? 0) + visibleMultiAssetBalances.reduce(
-    (total, asset) => total + Number(asset.frozenBalance ?? 0) * Number(asset.priceUsdt ?? 0),
-    0,
-  );
   const cryptoAccountLabel = hasDigitalAssets ? `52号市场资产账户 · ${visibleDigitalAssetBalances.length} 项` : "52号市场资产账户 · 暂无资产";
   const foreignAccountLabel = foreignAccountsEnabled ? "外币账户" : "外币账户 · 暂无资产";
   const accountMenuItems: Array<{ value: WalletAccountAsset; label: string; enabled: boolean }> = isLedger52WalletEntry
@@ -1277,19 +1269,8 @@ export default function Wallet() {
           balance={mask(digitalTotalUsdt.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
           unit="USDT"
           balanceCaption="总资产估值"
-          subLine={!hideBalance && <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.035)", border: `1px solid ${G.divider}` }}>
-              <div className="text-[10px]" style={{ color: G.whiteDim }}>可用资产</div>
-              <div className="mt-0.5 text-xs font-semibold tabular-nums" style={{ color: G.white }}>≈ {digitalAvailableUsdt.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} u</div>
-            </div>
-            <div className="rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.035)", border: `1px solid ${G.divider}` }}>
-              <div className="text-[10px]" style={{ color: G.whiteDim }}>资产构成</div>
-              <div className="mt-0.5 text-xs font-semibold" style={{ color: G.white }}>{visibleDigitalAssetBalances.length} 种资产{digitalFrozenUsdt > 0 ? ` · 冻结 ≈ ${digitalFrozenUsdt.toLocaleString("zh-CN", { maximumFractionDigits: 2 })} u` : ""}</div>
-            </div>
-            <div className="col-span-2 flex items-center justify-between px-0.5 text-[10px]" style={{ color: G.goldDim }}>
-              <span>≈ ¥{(digitalTotalUsdt * 7.25).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币</span>
-              <span>按实时行情估值</span>
-            </div>
+          subLine={!hideBalance && <div className="mt-2 text-xs" style={{ color: G.goldDim }}>
+            ≈ ¥{(digitalTotalUsdt * 7.25).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币
           </div>}
           txPath=""
           onRefresh={() => { void balanceQuery.refetch(); void recentRechargeQuery.refetch(); void recentWithdrawQuery.refetch(); void recentManualQuery.refetch(); void recentBalanceHistoryQuery.refetch(); void ledger52UsdtHistoryQuery.refetch(); void multiAssetBalancesQuery.refetch(); void multiAssetHistoryQuery.refetch(); }}
