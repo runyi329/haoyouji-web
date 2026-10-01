@@ -834,28 +834,6 @@ export function FunderOrderCard({
       refetchIntervalInBackground: false,
     }
   );
-  // 当前资金方列表可能只含参与订单，而⑤列出的却是共享担保拥有者的非共享订单。
-  // 此处按拥有者读取完整融资订单，并只把这些原订单卡自身最终展示的缺口回传给父级；
-  // 不读取 sharedPoolInfo 的服务端简化 collateralGap。
-  const { data: sharedOwnerOrdersData } = trpc.ledger.financeGetOrders.useQuery(
-    { ledgerId, viewAsUserId: sharedCollateralViewUserId },
-    {
-      enabled: !!onExposureGapChange && ledgerId > 0 && orderShareMode === 'self' && Number.isFinite(sharedCollateralViewUserId),
-      retry: 1,
-      staleTime: 5000,
-      refetchInterval: 15000,
-      refetchIntervalInBackground: false,
-    }
-  );
-  const sharedOwnerOrders: any[] = (sharedOwnerOrdersData as any)?.orders ?? [];
-  const sharedOwnerNonSharedOrderIds = new Set<number>(
-    ((sharedPoolInfo as any)?.nonSharedOrders ?? [])
-      .map((candidate: any) => Number(candidate.orderId ?? candidate.id))
-      .filter((orderId: number) => Number.isFinite(orderId))
-  );
-  const sharedOwnerCanonicalNonSharedOrders = sharedOwnerOrders.filter((candidate: any) =>
-    sharedOwnerNonSharedOrderIds.has(Number(candidate.id))
-  );
   // 第⑤项只允许显示订单卡已经确认的最终缺口。服务端摘要会遗漏37号、手工股票
   // 与人民币结息，尚未收到订单卡结果时保留加载状态，不得回退到摘要值。
   const nonSharedOwnerOrders = (() => {
@@ -1160,6 +1138,30 @@ export function FunderOrderCard({
   };
   const showMarginInfo = _propShowMarginInfo !== undefined ? _propShowMarginInfo : _intShowMarginInfo;
   const setShowMarginInfo = _propSetShowMarginInfo ?? _intSetShowMarginInfo;
+  // financeGetOrders 会按当前列表权限过滤“参与者快照”，恰好会遗漏⑤列出的部分
+  // 非共享订单。共享池接口已用相同权限完成拥有者校验，并返回这些订单的原卡输入；
+  // 弹窗只挂载它们的原订单卡，直接拿其最终展示的缺口，绝不使用服务端摘要值。
+  const sharedOwnerOrders: any[] = Array.isArray((sharedPoolInfo as any)?.nonSharedOrderCardSources)
+    ? (sharedPoolInfo as any).nonSharedOrderCardSources
+    : [];
+  const sharedOwnerNonSharedOrderIds = new Set<number>(
+    ((sharedPoolInfo as any)?.nonSharedOrders ?? [])
+      .map((candidate: any) => Number(candidate.orderId ?? candidate.id))
+      .filter((orderId: number) => Number.isFinite(orderId))
+  );
+  const sharedOwnerCanonicalNonSharedOrders = sharedOwnerOrders.filter((candidate: any) =>
+    sharedOwnerNonSharedOrderIds.has(Number(candidate.id))
+  );
+  // 同一拥有者的每张共享订单都会拿到同一共享池。只由订单编号最小的一张共享订单
+  // 常驻挂载这 11 张原订单卡，既保证⑤随时可读取原卡最终值，也避免每张共享卡重复
+  // 发起同一批37号/利息查询，导致页面长期“加载中”。
+  const canonicalSharedReporterOrderId = ((sharedPoolInfo as any)?.orders ?? [])
+    .map((poolOrder: any) => Number(poolOrder.orderId))
+    .filter((orderId: number) => Number.isFinite(orderId))
+    .sort((a: number, b: number) => a - b)[0] ?? null;
+  const shouldMountNonSharedGapReporter = !!onExposureGapChange
+    && orderShareMode === 'self'
+    && Number(order.id) === canonicalSharedReporterOrderId;
   // ===== 担保物快捷编辑面板 =====
   type QuickCollateralItem = { coin: string; qty: string; note?: string; source?: 'wallet' };
   const isQuickWalletCollateral = (asset: Partial<QuickCollateralItem> | null | undefined) =>
@@ -2134,7 +2136,7 @@ export function FunderOrderCard({
     >
       {/* 共享担保拥有者的非共享订单可能不在当前卡片列表中。隐藏挂载其原订单卡，
           只回传订单页面已经计算并展示的最终担保缺口，供⑤直接引用。 */}
-      {onExposureGapChange && sharedOwnerCanonicalNonSharedOrders.length > 0 && (
+      {shouldMountNonSharedGapReporter && sharedOwnerCanonicalNonSharedOrders.length > 0 && (
         <div aria-hidden="true" style={{ display: 'none' }}>
           {sharedOwnerCanonicalNonSharedOrders.map((canonicalOrder: any) => (
             <FunderOrderCard

@@ -19581,6 +19581,30 @@ ${klinesSummary}
           const nonSharedOrderDetails = orderDetails
             .filter((detail: any) => detail.shareMode !== 'self')
             .sort(sortByCollateralValue);
+          // ⑤必须复用原订单卡已展示的最终担保缺口，而非采用上方 nonSharedOrders
+          // 的服务端摘要 collateralGap。当前查看者已通过共享池的同一权限校验，故只向
+          // 该响应附带对应原订单的输入字段，供前端无界面挂载原订单卡并回传最终值。
+          // 将 Buffer / Date 规范成可安全序列化的值，避免不同 MySQL 字段类型导致前端
+          // 丢失 collateral_source、display_config 等决定最终缺口的配置。
+          const rawNonSharedById = new Map<number, any>(
+            allOwnerOrders
+              .filter((raw: any) => raw.collateral_share_mode !== 'self')
+              .map((raw: any) => [Number(raw.id), raw])
+          );
+          const toOrderCardSource = (raw: any) => Object.fromEntries(
+            Object.entries(raw).map(([key, value]) => [
+              key,
+              Buffer.isBuffer(value)
+                ? value.toString('utf8')
+                : value instanceof Date
+                  ? value.toISOString()
+                  : value,
+            ])
+          );
+          const nonSharedOrderCardSources = nonSharedOrderDetails
+            .map((detail: any) => rawNonSharedById.get(Number(detail.orderId)))
+            .filter(Boolean)
+            .map(toOrderCardSource);
 
           // 汇总共享池总数据。同一 37 号标签可被同一人的多张订单引用，
           // 它代表同一组真实保证金，因此池内只能计入一次，不能随引用订单数重复放大。
@@ -19600,6 +19624,7 @@ ${klinesSummary}
           return {
             orders: sharedOrderDetails,
             nonSharedOrders: nonSharedOrderDetails,
+            nonSharedOrderCardSources,
             livePrices,
             totalCollateralValue,
             totalCollateralRequired,

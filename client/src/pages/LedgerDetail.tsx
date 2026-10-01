@@ -5719,27 +5719,6 @@ export default function LedgerDetail() {
                 ))}
               </div>
             )}
-            {/* ⑤只读取订单模式原卡的最终担保缺口。无论用户当前处在卡片或订单模式，
-                均常驻挂载全部原卡作为唯一来源，避免筛选后非共享订单未渲染而永久加载。 */}
-            {allFunderOrdersForGap.length > 0 && (
-              <div aria-hidden="true" style={{ display: 'none' }}>
-                {allFunderOrdersForGap.map((order: any) => (
-                  <FunderOrderCard
-                    key={`gap-reporter-${order.id}`}
-                    order={order}
-                    ledgerId={ledgerId}
-                    livePrices={funderLivePrices}
-                    priceDirection={funderPriceDirection}
-                    currentUser={user}
-                    membersData={membersData as any[]}
-                    isAdmin={false}
-                    allOrders={allFunderOrdersForGap}
-                    onExposureGapChange={handleFunderExposureGapChange}
-                    sharedGapMap={funderExposureGapMap}
-                  />
-                ))}
-              </div>
-            )}
           </div>
         </div>
       )}

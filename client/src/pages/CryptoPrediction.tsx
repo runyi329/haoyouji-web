@@ -3983,27 +3983,6 @@ export default function CryptoPrediction() {
                       ))}
                     </div>
                   )}
-                  {/* ⑤只读取订单模式原卡的最终担保缺口。无论用户当前处在卡片或订单
-                      模式，均常驻挂载全部原卡作为唯一来源，避免筛选后非共享订单未渲染而永久加载。 */}
-                  {financeOrders.length > 0 && (
-                    <div aria-hidden="true" style={{ display: 'none' }}>
-                      {financeOrders.map((order: any) => (
-                        <FunderOrderCard
-                          key={`finance-gap-reporter-${order.id}`}
-                          order={order}
-                          ledgerId={ledgerId}
-                          livePrices={financeLivePrices}
-                          priceDirection={{}}
-                          currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
-                          isAdmin={false}
-                          membersData={(ledgerInfo as any)?.members || []}
-                          allOrders={financeOrders}
-                          onExposureGapChange={handleFinanceExposureGapChange}
-                          sharedGapMap={financeExposureGapMap}
-                        />
-                      ))}
-                    </div>
-                  )}
                 </>
               );
             })()}
