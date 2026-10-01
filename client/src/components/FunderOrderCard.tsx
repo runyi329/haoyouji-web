@@ -3332,15 +3332,14 @@ export function FunderOrderCard({
                                   })}
                                 </div>
                                 {(() => {
-                                  // 共享总计 = 各订单持仓差额合计 + 共享担保物总值。
-                                  const totalCollateral = Number((sharedPoolInfo as any).totalCollateralValue ?? 0);
+                                  // 第③项只汇总各订单持仓差额；共享担保物已在第④项单列，不能在此重复加入。
                                   const allKnown = sharedPoolRemainingU !== null;
-                                  const totalGapLive = allKnown ? sharedPoolRemainingU! + totalCollateral : 0;
+                                  const totalHoldingGap = sharedPoolRemainingU ?? 0;
                                   return (
                                     <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
-                                  <span style={{ color: '#374151' }}>合计担保缺口</span>
+                                  <span style={{ color: '#374151' }}>合计持仓差额</span>
                                       {allKnown
-                                        ? <span className="font-mono" style={{ color: totalGapLive < 0 ? '#16A34A' : '#DC2626' }}>{totalGapLive >= 0 ? '+' : ''}{totalGapLive.toFixed(2)} u</span>
+                                        ? <span className="font-mono" style={{ color: totalHoldingGap < 0 ? '#16A34A' : '#DC2626' }}>{totalHoldingGap >= 0 ? '+' : ''}{totalHoldingGap.toFixed(2)} u</span>
                                         : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                     </div>
                                   );

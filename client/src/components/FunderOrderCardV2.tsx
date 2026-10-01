@@ -2508,7 +2508,7 @@ export function FunderOrderCardV2Silver({
                                 }
                                 return (
                                   <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
-                                    <span style={{ color: '#374151' }}>合计缺口需求</span>
+                                    <span style={{ color: '#374151' }}>合计持仓差额</span>
                                     {allKnown
                                       ? <span className="font-mono" style={{ color: totalGapLive >= 0 ? '#DC2626' : '#16A34A' }}>{totalGapLive >= 0 ? '+' : ''}{totalGapLive.toFixed(2)} u</span>
                                       : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
