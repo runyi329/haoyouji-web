@@ -88,6 +88,58 @@ function asRows(result: any): any[] {
   if (Array.isArray(result?.[0])) return result[0];
   return Array.isArray(result) ? result : [];
 }
+
+// 个人账本备忘录：按账本和当前登录用户严格隔离，供 37 号账本等首页使用。
+let ledgerPersonalMemoTableReady: Promise<void> | null = null;
+async function getLedgerPersonalMemoDb(ledgerId: number, userId: number) {
+  const membership = await dbLedger.getUserMembership(ledgerId, userId);
+  if (!membership) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员，无法使用备忘录' });
+  }
+  const ledgerDb = await getLedgerDb();
+  if (!ledgerDb) {
+    throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+  }
+  if (!ledgerPersonalMemoTableReady) {
+    ledgerPersonalMemoTableReady = (async () => {
+      await ledgerDb.execute(sql`
+        CREATE TABLE IF NOT EXISTS ledger_personal_memos (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL,
+          user_id INT NOT NULL,
+          memo_visibility VARCHAR(16) NOT NULL DEFAULT 'private',
+          content TEXT NOT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_ledger_personal_memos_user_updated (ledger_id, user_id, updated_at),
+          INDEX idx_ledger_personal_memos_visibility_updated (ledger_id, memo_visibility, updated_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      const columns = asRows(await ledgerDb.execute(sql`
+        SELECT COLUMN_NAME
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name = 'ledger_personal_memos'
+      `));
+      const hasVisibility = columns.some((column: any) => String(column.COLUMN_NAME || column.column_name) === 'memo_visibility');
+      if (!hasVisibility) {
+        await ledgerDb.execute(sql.raw(`
+          ALTER TABLE ledger_personal_memos
+          ADD COLUMN memo_visibility VARCHAR(16) NOT NULL DEFAULT 'private' AFTER user_id
+        `));
+        await ledgerDb.execute(sql.raw(`
+          ALTER TABLE ledger_personal_memos
+          ADD INDEX idx_ledger_personal_memos_visibility_updated (ledger_id, memo_visibility, updated_at)
+        `));
+      }
+    })().catch((error) => {
+      ledgerPersonalMemoTableReady = null;
+      throw error;
+    });
+  }
+  await ledgerPersonalMemoTableReady;
+  return ledgerDb;
+}
 // // 在应用启动时初始化数据库
 // initDatabase().catch(err => {
 //   console.error("[DB Init] Failed to initialize database:", err);
@@ -13029,6 +13081,98 @@ ${klinesSummary}
           // 新版押金明细若由旧单笔转换且缺失 createdAt，前端以此次成员配置的真实保存时间回填展示。
           updatedAt: targetMembership?.updatedAt ? new Date(targetMembership.updatedAt).toISOString() : null,
         };
+      }),
+    // 个人备忘录：私人记录仅本人可见；共享记录同时对账本创建者与管理员可见。
+    getPersonalMemos: protectedProcedure
+      .input(z.object({ ledgerId: z.number().int().positive(), visibility: z.enum(['private', 'shared']) }))
+      .query(async ({ ctx, input }) => {
+        const memoDb = await getLedgerPersonalMemoDb(input.ledgerId, ctx.user.id);
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        const canReadSharedMemos = membership?.role === 'owner' || membership?.role === 'admin';
+        const rows = asRows(await memoDb.execute(canReadSharedMemos ? sql`
+          SELECT memo.id, memo.user_id, memo.memo_visibility, memo.content, memo.created_at, memo.updated_at,
+                 COALESCE(author.name, author.username, CONCAT('用户', memo.user_id)) AS author_name
+          FROM ledger_personal_memos AS memo
+          LEFT JOIN crm_db.users AS author ON author.id = memo.user_id
+          WHERE memo.ledger_id = ${input.ledgerId}
+            AND memo.memo_visibility = ${input.visibility}
+            AND (memo.user_id = ${ctx.user.id} OR memo.memo_visibility = 'shared')
+          ORDER BY memo.updated_at DESC, memo.id DESC
+        ` : sql`
+          SELECT memo.id, memo.user_id, memo.memo_visibility, memo.content, memo.created_at, memo.updated_at,
+                 COALESCE(author.name, author.username, CONCAT('用户', memo.user_id)) AS author_name
+          FROM ledger_personal_memos AS memo
+          LEFT JOIN crm_db.users AS author ON author.id = memo.user_id
+          WHERE memo.ledger_id = ${input.ledgerId}
+            AND memo.user_id = ${ctx.user.id}
+            AND memo.memo_visibility = ${input.visibility}
+          ORDER BY memo.updated_at DESC, memo.id DESC
+        `));
+        return rows.map((row: any) => ({
+          id: Number(row.id),
+          authorId: Number(row.user_id),
+          authorName: String(row.author_name ?? ''),
+          visibility: String(row.memo_visibility) === 'shared' ? 'shared' as const : 'private' as const,
+          content: String(row.content ?? ''),
+          createdAt: String(row.created_at ?? ''),
+          updatedAt: String(row.updated_at ?? ''),
+        }));
+      }),
+    getPersonalMemoCounts: protectedProcedure
+      .input(z.object({ ledgerId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const memoDb = await getLedgerPersonalMemoDb(input.ledgerId, ctx.user.id);
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        const canReadSharedMemos = membership?.role === 'owner' || membership?.role === 'admin';
+        const rows = asRows(await memoDb.execute(canReadSharedMemos ? sql`
+          SELECT memo_visibility, COUNT(*) AS total
+          FROM ledger_personal_memos
+          WHERE ledger_id = ${input.ledgerId}
+            AND (user_id = ${ctx.user.id} OR memo_visibility = 'shared')
+          GROUP BY memo_visibility
+        ` : sql`
+          SELECT memo_visibility, COUNT(*) AS total
+          FROM ledger_personal_memos
+          WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}
+          GROUP BY memo_visibility
+        `));
+        const counts = { private: 0, shared: 0 };
+        for (const row of rows) {
+          if (row.memo_visibility === 'shared') counts.shared = Number(row.total) || 0;
+          else if (row.memo_visibility === 'private') counts.private = Number(row.total) || 0;
+        }
+        return counts;
+      }),
+    createPersonalMemo: protectedProcedure
+      .input(z.object({ ledgerId: z.number().int().positive(), visibility: z.enum(['private', 'shared']), content: z.string().trim().min(1).max(2000) }))
+      .mutation(async ({ ctx, input }) => {
+        const memoDb = await getLedgerPersonalMemoDb(input.ledgerId, ctx.user.id);
+        const result = await memoDb.execute(sql`
+          INSERT INTO ledger_personal_memos (ledger_id, user_id, memo_visibility, content)
+          VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.visibility}, ${input.content})
+        `) as any;
+        return { id: Number(result?.[0]?.insertId ?? result?.insertId ?? 0), success: true };
+      }),
+    updatePersonalMemo: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), ledgerId: z.number().int().positive(), content: z.string().trim().min(1).max(2000) }))
+      .mutation(async ({ ctx, input }) => {
+        const memoDb = await getLedgerPersonalMemoDb(input.ledgerId, ctx.user.id);
+        await memoDb.execute(sql`
+         UPDATE ledger_personal_memos
+         SET content = ${input.content}
+         WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}
+       `);
+        return { success: true };
+      }),
+    deletePersonalMemo: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), ledgerId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const memoDb = await getLedgerPersonalMemoDb(input.ledgerId, ctx.user.id);
+        await memoDb.execute(sql`
+          DELETE FROM ledger_personal_memos
+          WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}
+        `);
+        return { success: true };
       }),
     // 更新当前用户的初始金额配置（定制账本AA）
     updateMyInitialBalances: protectedProcedure
@@ -29001,8 +29145,11 @@ insights 数组每项包含：
     }))
     .mutation(async ({ ctx, input }) => {
       const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-      if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
+      const canManageDividend = input.ledgerId === 37
+        ? ctx.user.id === 870413
+        : !!myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
+      if (!canManageDividend) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: input.ledgerId === 37 ? '37号账本分红仅胡大叔可操作' : '仅账本创建人或管理员可操作' });
       }
       const db = await getLedgerDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
@@ -29018,8 +29165,11 @@ insights 数组每项包含：
     }))
     .mutation(async ({ ctx, input }) => {
       const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-      if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
+      const canManageDividend = input.ledgerId === 37
+        ? ctx.user.id === 870413
+        : !!myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
+      if (!canManageDividend) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: input.ledgerId === 37 ? '37号账本分红仅胡大叔可操作' : '仅账本创建人或管理员可操作' });
       }
       const db = await getLedgerDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
@@ -29036,8 +29186,11 @@ insights 数组每项包含：
     }))
     .mutation(async ({ ctx, input }) => {
       const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-      if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
+      const canManageDividend = input.ledgerId === 37
+        ? ctx.user.id === 870413
+        : !!myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
+      if (!canManageDividend) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: input.ledgerId === 37 ? '37号账本分红仅胡大叔可操作' : '仅账本创建人或管理员可操作' });
       }
       const db = await getLedgerDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
@@ -29063,8 +29216,11 @@ insights 数组每项包含：
     .input(z.object({ ledgerId: z.number() }))
     .query(async ({ ctx, input }) => {
       const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-      if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可查看' });
+      const canManageDividend = input.ledgerId === 37
+        ? ctx.user.id === 870413
+        : !!myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
+      if (!canManageDividend) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: input.ledgerId === 37 ? '37号账本分红仅胡大叔可查看' : '仅账本创建人或管理员可查看' });
       }
       const db = await getLedgerDb();
       if (!db) return { records: [] };

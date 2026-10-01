@@ -23,11 +23,16 @@ export async function createContext(
     user = null;
   }
 
-  // 开启DEV_BYPASS_AUTH时自动使用测试用户
+  // 开启 DEV_BYPASS_AUTH 时自动使用测试用户；可通过 DEV_BYPASS_USER_ID
+  // 指定真实账户，便于本地按目标权限预览。生产环境不会进入此分支。
   // 但如果请求携带了 Authorization header，说明前端已有真实 token，不走 bypass
   const hasAuthHeader = !!(opts.req.headers.authorization);
   if (process.env.DEV_BYPASS_AUTH === 'true' && !user && !hasAuthHeader) {
-    user = {
+    const configuredUserId = Number(process.env.DEV_BYPASS_USER_ID || 28);
+    const configuredUser = Number.isInteger(configuredUserId) && configuredUserId > 0
+      ? await sdk.getCachedUserById(configuredUserId)
+      : undefined;
+    user = configuredUser ?? {
       id: 28,
       openId: 'dev_mock_user',
       username: 'hyy329',

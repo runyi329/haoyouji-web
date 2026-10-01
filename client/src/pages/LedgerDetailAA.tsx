@@ -25,7 +25,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import ReactECharts from "echarts-for-react";
 import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
-import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X, RefreshCw, PauseCircle, AlertTriangle, HelpCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X, RefreshCw, PauseCircle, AlertTriangle, HelpCircle, Pencil, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import StockTagPortfolio from "@/pages/StockTagPortfolio";
 import {
@@ -43,6 +43,16 @@ import {
 type MarginNote = { id: string; content: string; createdAt: string };
 type MarginEntry = { id?: string; coin: string; amount: number; createdAt?: string; notes?: MarginNote[] };
 type ResolvedMarginEntry = MarginEntry & { cnyValue: number | null };
+type MemoVisibility = 'private' | 'shared';
+type PersonalMemo = { id: number; authorId: number; authorName: string; visibility: MemoVisibility; content: string; createdAt: string; updatedAt: string };
+
+const formatPersonalMemoTime = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value || '--';
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+};
 
 const normalizeMarginCoin = (coin: unknown): string => {
   const value = String(coin ?? '').trim().toUpperCase();
@@ -191,6 +201,8 @@ export default function LedgerDetailAA({
   // 日历视图模  // 权限判断：owner 或 admin 才能操作
   const userRole = (ledgerData as any)?.userRole;
   const canEdit = userRole === 'owner' || userRole === 'admin';
+  // 37号账本的分红记录属于胡大叔专属管理功能；其他管理员和成员仅可查看概览金额。
+  const canManageDividends = ledgerId === 37 ? Number(user?.id) === 870413 : canEdit;
   // 视角切换仅账本创建者（owner）可用，管理员不可切换他人视角
   const canSwitchView = userRole === 'owner';
   // 隐藏悬浮+按钮：账本 ID=37（"2026 AA"私人定制账本）对所有人隐藏，仅保留点击日历格子添加记录
@@ -202,6 +214,7 @@ export default function LedgerDetailAA({
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
   });
+  const [summaryCalendarMode, setSummaryCalendarMode] = useState<'daily' | 'monthly' | 'yearly'>('daily');
   // 标签（被记录者）选择。预览链接可带 categoryId，便于管理员直接打开指定标签的日历首页。
   // 用 sessionStorage 持久化选中的标签，返回时恢复；页面首次加载时清除
   const sessionKey = `ledger_${ledgerId}_selectedTagId`;
@@ -518,9 +531,60 @@ export default function LedgerDetailAA({
   const [showWithdrawHistory, setShowWithdrawHistory] = useState(false);
   const [showPnlExplain, setShowPnlExplain] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [showPersonalMemos, setShowPersonalMemos] = useState(false);
+  const [memoTab, setMemoTab] = useState<MemoVisibility>('private');
+  const [memoComposerOpen, setMemoComposerOpen] = useState(false);
+  const [memoEditingId, setMemoEditingId] = useState<number | null>(null);
+  const [memoComposerVisibility, setMemoComposerVisibility] = useState<MemoVisibility>('private');
+  const [memoDraft, setMemoDraft] = useState('');
   const [showAllModeHelp, setShowAllModeHelp] = useState<'value' | 'pnl' | 'margin' | null>(null);
   // 概览表格盘价总和：用 ref 存储，在概览渲染时赋值，弹窗直接读取
   const overviewTotalPnlRef = useRef<number>(0);
+
+  const personalMemosQuery = (trpc as any).ledger.getPersonalMemos.useQuery(
+    { ledgerId, visibility: memoTab },
+    { enabled: Boolean(ledgerId && showPersonalMemos) },
+  );
+  const personalMemoCountsQuery = (trpc as any).ledger.getPersonalMemoCounts.useQuery(
+    { ledgerId },
+    { enabled: Boolean(ledgerId && showPersonalMemos) },
+  );
+  const personalMemos = (personalMemosQuery.data ?? []) as PersonalMemo[];
+  const memoCounts = {
+    private: Number(personalMemoCountsQuery.data?.private) || 0,
+    shared: Number(personalMemoCountsQuery.data?.shared) || 0,
+  } as Record<MemoVisibility, number>;
+  const refreshPersonalMemos = () => Promise.all([
+    (trpcUtils as any).ledger.getPersonalMemos.invalidate({ ledgerId, visibility: memoTab }),
+    (trpcUtils as any).ledger.getPersonalMemoCounts.invalidate({ ledgerId }),
+  ]);
+  const createPersonalMemoMutation = (trpc as any).ledger.createPersonalMemo.useMutation({
+    onSuccess: () => {
+      setMemoDraft('');
+      setMemoEditingId(null);
+      setMemoComposerOpen(false);
+      void refreshPersonalMemos();
+    },
+    onError: (error: any) => alert(error?.message || '保存备忘失败，请稍后重试'),
+  });
+  const updatePersonalMemoMutation = (trpc as any).ledger.updatePersonalMemo.useMutation({
+    onSuccess: () => {
+      setMemoDraft('');
+      setMemoEditingId(null);
+      setMemoComposerOpen(false);
+      void refreshPersonalMemos();
+    },
+    onError: (error: any) => alert(error?.message || '更新备忘失败，请稍后重试'),
+  });
+  const deletePersonalMemoMutation = (trpc as any).ledger.deletePersonalMemo.useMutation({
+    onSuccess: () => {
+      setMemoDraft('');
+      setMemoEditingId(null);
+      setMemoComposerOpen(false);
+      void refreshPersonalMemos();
+    },
+    onError: (error: any) => alert(error?.message || '删除备忘失败，请稍后重试'),
+  });
 
   // 客户端查看备注
   // 分红备注按标签维度：记录当前查看的标签名
@@ -734,9 +798,26 @@ export default function LedgerDetailAA({
   const echartsRef = useRef<any>(null);
   const [tooltipTagName, setTooltipTagName] = useState<string | null>(null);
   const [tooltipRatioTag, setTooltipRatioTag] = useState<string | null>(null);
-  const [tooltipTodayPnlTag, setTooltipTodayPnlTag] = useState<string | null>(null);
-  const [showTotalTodayTooltip, setShowTotalTodayTooltip] = useState(false);
-  const [totalTodayTooltipPos, setTotalTodayTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const [dailyPnlDetail, setDailyPnlDetail] = useState<{
+    tagName: string;
+    isStockPortfolio: boolean;
+    isFirstSettlement: boolean;
+    latestDate: string;
+    previousDate: string;
+    todayPnl: number;
+    previousBalance: number | null;
+    latestBalance: number | null;
+    capitalChange: number;
+    withdraw: number;
+    ratio: number;
+    previousPnl: number;
+    latestPnl: number;
+  } | null>(null);
+  const [totalTodayPnlDetail, setTotalTodayPnlDetail] = useState<{
+    total: number;
+    updated: Array<{ tagName: string; amount: number; latestDate: string }>;
+    pending: Array<{ tagName: string; latestDate: string }>;
+  } | null>(null);
   // 名称列 tooltip 用 fixed 定位，记录点击坐标
   const [tooltipTagPos, setTooltipTagPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -785,9 +866,6 @@ export default function LedgerDetailAA({
       setTooltipTagName(null);
       setTooltipTagPos(null);
       setTooltipRatioTag(null);
-      setTooltipTodayPnlTag(null);
-      setShowTotalTodayTooltip(false);
-      setTotalTodayTooltipPos(null);
     };
     document.addEventListener('click', closeAll);
     return () => document.removeEventListener('click', closeAll);
@@ -799,8 +877,6 @@ export default function LedgerDetailAA({
   useEffect(() => {
     if (overviewTab !== 'overview') setShowPausedTagDetails(false);
   }, [overviewTab]);
-  const overviewHeaderInnerRef = useRef<HTMLDivElement>(null); // 表头行内层div，用translateX同步横向位置
-  const overviewBodyScrollRef = useRef<HTMLDivElement>(null); // 数据行横向滚动容器
   const [overviewSort, setOverviewSort] = useState<{ col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend'; dir: 'asc' | 'desc' } | null>(null);
   const handleOverviewSort = (col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend') => {
     setOverviewSort(prev => prev && prev.col === col ? { col, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' });
@@ -925,26 +1001,34 @@ export default function LedgerDetailAA({
         // 所需押金只在点击后的明细弹窗中作为参考提示。
         const marginEntries = resolveMarginEntries(initialBalancesData.balances, tagName, aaCryptoPrices);
         const marginCny = marginEntries.reduce((sum, entry) => sum + (entry.cnyValue ?? 0), 0);
+        const initialBalance = Number(stockSummary.costValue || 0);
         return {
           name: tagName,
           color,
           isStockPortfolio: true,
           stockStartDate: stockOverview.startDate || null,
           // 成员只看自己的批次：初始本金为每笔入场价 × 当前所持股数之和。
-          initialBalance: Number(stockSummary.costValue || 0),
+          initialBalance,
           marginCny,
           marginEntries,
-          points: (stockOverview.points || []).map((point: any) => ({
-            date: point.date,
-            pnl: Number(point.pnl || 0),
-            stockDailyPnl: Number(point.dailyPnl || 0),
-            // 仅用于概览的只读显示；为空代表首个盘尾前不虚构市值。
-            balance: point.marketValue === null || point.marketValue === undefined ? null : Number(point.marketValue),
-            capitalChange: 0,
-            withdrawToDate: 0,
-            capitalChangeToday: 0,
-            withdrawToday: 0,
-          })),
+          points: (stockOverview.points || []).map((point: any) => {
+            const pnl = Number(point.pnl || 0);
+            return {
+              date: point.date,
+              pnl,
+              // 波动 = 累计回报 ÷ 入场成本；回报 = 累计回报 ÷ 实际押金。
+              // 股票标签此前缺失这两个字段，导致“波动 / 回报”图表调用 toFixed 时崩溃。
+              pctInitial: initialBalance > 0 ? (pnl / initialBalance) * 100 : 0,
+              pctMargin: marginCny > 0 ? (pnl / marginCny) * 100 : 0,
+              stockDailyPnl: Number(point.dailyPnl || 0),
+              // 仅用于概览的只读显示；为空代表首个盘尾前不虚构市值。
+              balance: point.marketValue === null || point.marketValue === undefined ? null : Number(point.marketValue),
+              capitalChange: 0,
+              withdrawToDate: 0,
+              capitalChangeToday: 0,
+              withdrawToday: 0,
+            };
+          }),
         };
       }
       // 初始金额
@@ -1011,6 +1095,48 @@ export default function LedgerDetailAA({
       return { name: tagName, color, points, initialBalance, marginCny, marginEntries };
     });
   }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, tagCashFlows, stockParticipantView, stockTagOverviewById]);
+
+  // 下拉菜单的顺序以概览表默认顺序为基准：运行中的标签在前，暂停标签在后。
+  // 没有任何概览数据的标签保留可选，但放在所有概览标签之后，避免打乱概览序号。
+  const dropdownOrderedCategories = useMemo(() => {
+    if (!categories || categories.length === 0) return [];
+    const balances = initialBalancesData?.balances ?? {};
+    const getIsPaused = (name: string) => {
+      const raw = (balances as any)[`${name}__pauseHistory`];
+      if (raw) {
+        try {
+          const history = JSON.parse(String(raw));
+          const last = history[history.length - 1];
+          return !!last && !last.resumeDate;
+        } catch { /* ignore invalid pause history */ }
+      }
+      return !!(balances as any)[`${name}__pauseDate`];
+    };
+    const overviewNames = [...allTagsChartData]
+      .filter((tag: any) => tag.points.length > 0)
+      .sort((left: any, right: any) => {
+        const leftPaused = getIsPaused(left.name);
+        const rightPaused = getIsPaused(right.name);
+        if (leftPaused && !rightPaused) return 1;
+        if (!leftPaused && rightPaused) return -1;
+        return 0;
+      })
+      .map((tag: any) => tag.name);
+    const overviewOrder = new Map(overviewNames.map((name, index) => [name, index]));
+
+    return [...categories].sort((left: any, right: any) => {
+      const leftOrder = overviewOrder.get(left.name);
+      const rightOrder = overviewOrder.get(right.name);
+      if (leftOrder !== undefined && rightOrder !== undefined) return leftOrder - rightOrder;
+      if (leftOrder !== undefined) return -1;
+      if (rightOrder !== undefined) return 1;
+      const leftPaused = getIsPaused(left.name);
+      const rightPaused = getIsPaused(right.name);
+      if (leftPaused && !rightPaused) return 1;
+      if (!leftPaused && rightPaused) return -1;
+      return 0;
+    });
+  }, [categories, initialBalancesData, allTagsChartData]);
 
   // ─── 全部模式：计算所有标签的押金总和和盈亏总和 ────────────────────────
   const allTagsStats = useMemo(() => {
@@ -1704,7 +1830,7 @@ export default function LedgerDetailAA({
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: "#FAF3ED" }}>
       {/* ── 顶部红色区域 ── */}
-      <div style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
+      <div style={{ backgroundColor: "#D32F2F", color: "#FFFFFF", borderRadius: 0 }}>
         {/* 用户信息行 + 标签下拉（直接顶部，无返回栏） */}
         <div className="px-4 pt-3 pb-1 flex items-center gap-3">
           {/* 头像（管理员可点击切换视角） */}
@@ -1742,7 +1868,7 @@ export default function LedgerDetailAA({
 
             </div>
 
-            {/* 右侧：胡大叔保留完整快捷入口；其他用户仅显示刷新与返回 */}
+            {/* 右侧：胡大叔保留完整快捷入口；所有用户均可维护自己的备忘录 */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {isJiamGSuperAdmin ? (
                 <>
@@ -1793,14 +1919,21 @@ export default function LedgerDetailAA({
                   <button
                     onClick={() => window.location.reload()}
                     className="h-8 px-2.5 rounded-lg text-xs font-medium whitespace-nowrap"
-                    style={{ backgroundColor: "rgba(255,255,255,0.9)", color: "#D32F2F", border: "1px solid rgba(255,255,255,0.4)" }}
+                    style={{ backgroundColor: "rgba(255,255,255,0.9)", color: "#D32F2F", border: "1px solid rgba(255,255,255,0.4)", borderRadius: 8 }}
                   >
                     刷新
                   </button>
                   <button
+                    onClick={() => { setShowPersonalMemos(true); setMemoComposerOpen(false); setMemoEditingId(null); setMemoDraft(''); }}
+                    className="h-8 px-2.5 rounded-lg text-xs font-medium whitespace-nowrap"
+                    style={{ backgroundColor: "rgba(255,255,255,0.9)", color: "#D32F2F", border: "1px solid rgba(255,255,255,0.4)", borderRadius: 8 }}
+                  >
+                    备忘
+                  </button>
+                  <button
                     onClick={onBack}
                     className="h-8 px-2.5 rounded-lg text-xs font-medium whitespace-nowrap"
-                    style={{ backgroundColor: "rgba(255,255,255,0.9)", color: "#D32F2F", border: "1px solid rgba(255,255,255,0.4)" }}
+                    style={{ backgroundColor: "rgba(255,255,255,0.9)", color: "#D32F2F", border: "1px solid rgba(255,255,255,0.4)", borderRadius: 8 }}
                   >
                     返回
                   </button>
@@ -1824,6 +1957,17 @@ export default function LedgerDetailAA({
                 }}
               >
                 刷新
+              </button>
+              <button
+                onClick={() => { setShowPersonalMemos(true); setMemoComposerOpen(false); setMemoEditingId(null); setMemoDraft(''); }}
+                className={`flex-1 flex items-center justify-center font-medium whitespace-nowrap ${isJiamGSuperAdmin ? 'h-8 rounded-lg text-xs' : 'h-9 rounded-full text-sm'}`}
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.9)",
+                  color: "#D32F2F",
+                  border: "1px solid rgba(255,255,255,0.4)",
+                }}
+              >
+                备忘
               </button>
               {/* 返回按钮 */}
               <button
@@ -1903,8 +2047,8 @@ export default function LedgerDetailAA({
                 setShowTagDropdown((showing) => !showing);
                 setTagNoteEditTag(null);
               }}
-              className="w-full flex items-center justify-center gap-1 h-10 rounded-xl text-sm font-semibold transition-all bg-white shadow-sm"
-              style={{ color: selectedTag ? '#D32F2F' : '#888888', border: '1px solid #E0E0E0' }}
+              className="w-full flex items-center justify-center gap-1 h-10 rounded-lg text-sm font-semibold transition-all bg-white shadow-sm"
+              style={{ color: selectedTag ? '#D32F2F' : '#888888', border: '1px solid #E0E0E0', borderRadius: 8 }}
             >
               <span>{selectedTagId === null ? '全部' : (() => {
                 const balances = initialBalancesData?.balances as any;
@@ -1918,9 +2062,10 @@ export default function LedgerDetailAA({
               <>
                 <div className="fixed inset-0 z-40" onClick={() => { setShowTagDropdown(false); setTagNoteEditTag(null); }} />
                 <div
-                  className={`${tagNoteEditTag ? 'fixed left-3 right-3 z-50' : 'absolute left-0 right-0 top-full mt-1 z-50'} rounded-xl shadow-lg bg-white`}
+                  className={`${tagNoteEditTag ? 'fixed left-3 right-3 z-50' : 'absolute left-0 right-0 top-full mt-1 z-50'} rounded-lg shadow-lg bg-white`}
                   style={{
                     border: '1px solid #E0E0E0',
+                    borderRadius: 8,
                     top: tagNoteEditTag ? '12px' : undefined,
                     maxHeight: tagNoteEditTag ? 'calc(100dvh - 24px)' : 'calc(5 * 41px)',
                     overflowY: 'auto',
@@ -1928,19 +2073,7 @@ export default function LedgerDetailAA({
                   }}
                 >
                   <button onClick={() => { setSelectedTagId(null); setShowTagDropdown(false); setTagNoteEditTag(null); }} className="w-full px-4 py-2.5 text-left text-sm hover:bg-[#FFEBEE]" style={{ color: selectedTagId === null ? '#D32F2F' : '#222222', fontWeight: selectedTagId === null ? 600 : 400, borderBottom: '1px solid #F5F5F5' }}>全部</button>
-                  {[...categories].sort((a: any, b: any) => {
-                    const balances = initialBalancesData?.balances ?? {};
-                    const getIsPaused = (name: string) => {
-                      const raw = (balances as any)[`${name}__pauseHistory`];
-                      if (raw) { try { const h = JSON.parse(String(raw)); const last = h[h.length-1]; return !!last && !last.resumeDate; } catch { /* ignore */ } }
-                      return !!(balances as any)[`${name}__pauseDate`];
-                    };
-                    const aPaused = getIsPaused(a.name);
-                    const bPaused = getIsPaused(b.name);
-                    if (aPaused && !bPaused) return 1;
-                    if (!aPaused && bPaused) return -1;
-                    return 0;
-                  }).map((cat: any) => {
+                  {dropdownOrderedCategories.map((cat: any, dropdownIndex: number) => {
                     // 优先读 pauseHistory，兑容旧 pauseDate
                     const catPauseHistoryRaw = initialBalancesData?.balances ? (initialBalancesData.balances as any)[`${cat.name}__pauseHistory`] : null;
                     let catPauseHistory: Array<{pauseDate: string; resumeDate?: string}> = [];
@@ -1962,8 +2095,11 @@ export default function LedgerDetailAA({
                     return (
                       <div key={cat.id} style={{ borderBottom: '1px solid #F5F5F5' }}>
                         <div className="flex items-stretch">
-                          <button type="button" onClick={() => { setSelectedTagId(cat.id); setShowTagDropdown(false); setTagNoteEditTag(null); }} className="flex-1 min-w-0 px-4 py-2.5 text-left text-sm hover:bg-[#FFEBEE]" style={{ fontWeight: selectedTagId === cat.id ? 600 : 400 }}>
-                            <span style={{ color: selectedTagId === cat.id ? '#D32F2F' : '#222222' }}>
+                          <button type="button" onClick={() => { setSelectedTagId(cat.id); setShowTagDropdown(false); setTagNoteEditTag(null); }} className="flex-1 min-w-0 px-4 py-2.5 text-left text-sm hover:bg-[#FFEBEE] flex items-center gap-2" style={{ fontWeight: selectedTagId === cat.id ? 600 : 400 }}>
+                            <span aria-label={`序号 ${dropdownIndex + 1}`} style={{ minWidth: 14, height: 14, padding: '0 2px', borderRadius: 3, backgroundColor: isCatPaused ? '#1565C0' : '#D32F2F', color: '#FFFFFF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, lineHeight: 1, flexShrink: 0 }}>
+                              <span style={{ display: 'inline-block', transform: 'translateY(1px)' }}>{dropdownIndex + 1}</span>
+                            </span>
+                            <span style={{ color: selectedTagId === cat.id ? '#D32F2F' : '#222222', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {tagAlias}{tagNote && <span style={{ marginLeft: 4, fontSize: 12, fontWeight: 400, color: '#9E9E9E' }}>· {tagNote}</span>}
                             </span>
                             {isCatPaused && <span style={{ marginLeft: 4, fontSize: 11, color: '#1565C0' }}>{pauseInfo}</span>}
@@ -2031,11 +2167,33 @@ export default function LedgerDetailAA({
         </div>
       )}
 
+      {/* 全部与单标签共用的视图切换；更换标签时保留当前模式。 */}
+      {categories && categories.length > 0 && (
+        <div className="mx-3 mt-2 flex rounded-lg bg-white shadow-sm" style={{ border: '1px solid #F0F0F0', borderRadius: 8 }}>
+          {(['overview', 'calendar', 'chart'] as const).map((tab) => {
+            const labels = { overview: '概览', calendar: '日历图', chart: '走势图' };
+            const active = overviewTab === tab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => {
+                  setOverviewTab(tab);
+                  if (tab === 'overview') setShowPausedTagDetails(false);
+                }}
+                className="flex-1 mx-1 my-1 py-1.5 rounded-none text-sm font-medium transition-all"
+                style={{ color: active ? '#FFFFFF' : '#9E9E9E', backgroundColor: active ? '#D32F2F' : 'transparent', borderRadius: 8 }}
+              >{labels[tab]}</button>
+            );
+          })}
+        </div>
+      )}
+
       {/* ── 可滚动内容区域（全部模式下隐藏） ── */}
       <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', display: selectedTagId === null ? 'none' : undefined }}>
 
       {/* ── 日历视图 ── */}
-      <div className="mx-3 mt-2 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
+      {overviewTab !== 'chart' && (<div className="mx-3 mt-2 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
         <div className="px-3 pt-3 pb-2">
           {/* 月份导航 + 视图切换 */}
           <div className="flex items-center justify-between mb-2">
@@ -2082,10 +2240,11 @@ export default function LedgerDetailAA({
                   <button
                     key={mode}
                     onClick={() => setCalendarMode(mode)}
-                    className="px-2 py-1 rounded-lg text-xs font-medium transition-all flex items-center justify-center"
+                    className="px-2 py-1 rounded-none text-xs font-medium transition-all flex items-center justify-center"
                     style={{
                       backgroundColor: active ? "#D32F2F" : "#F5F5F5",
                       color: active ? "#FFFFFF" : "#757575",
+                      borderRadius: 8,
                     }}
                   >
                     {mode === "balance" ? (
@@ -2199,11 +2358,12 @@ export default function LedgerDetailAA({
                           key={day}
                           onClick={() => isNonTrading ? undefined : handleDayClick(day)}
                           disabled={isNonTrading}
-                          className="rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
+                          className="rounded-none flex flex-col items-center justify-center transition-all active:scale-95"
                           style={{
                             height: '50px',
                             backgroundColor: cellBg,
                             border: cellBorder,
+                            borderRadius: 8,
                             padding: '3px 2px',
                             cursor: isNonTrading ? 'default' : 'pointer',
                             position: 'relative',
@@ -2306,11 +2466,12 @@ export default function LedgerDetailAA({
                   return (
                     <div
                       key={m}
-                      className="rounded-lg flex flex-col items-center justify-center py-2"
+                      className="rounded-none flex flex-col items-center justify-center py-2"
                       style={{
                         height: '58px',
                         backgroundColor: hasData ? "#FFEBEE" : "#F9F9F9",
                         border: isCurrent ? "1.5px solid #D32F2F" : "1px solid #F0F0F0",
+                        borderRadius: 8,
                       }}
                     >
                       <span style={{ fontSize: '13px', fontWeight: 500, color: isCurrent ? "#D32F2F" : "#222222" }}>{m}月</span>
@@ -2326,38 +2487,48 @@ export default function LedgerDetailAA({
             );
           })()}
 
-          {/* 年视图：显示所有有数据的年份，显示该年所有记录的净盈亏总和 */}
+          {/* 年视图：按年度首尾联动余额的净变化展示，不能累加每日余额快照。 */}
           {calendarMode === "yearly" && (() => {
-            const sorted = [...filteredTransactions].sort((a, b) => a.date.localeCompare(b.date));
-            // 按年汇总每年的净盈亏（income - expense）
-            const yearNetMap = new Map<string, number>();
+            const sorted = [...filteredTransactions]
+              .filter((d) => !chartEffectiveStartDate || d.date >= chartEffectiveStartDate)
+              .sort((a, b) => a.date.localeCompare(b.date));
+            const yearLastBalance = new Map<string, number>();
             sorted.forEach((d) => {
-              const y = d.date.slice(0, 4);
-              yearNetMap.set(y, (yearNetMap.get(y) ?? 0) + (d.income - d.expense));
+              const balance = cumulativeMap.get(d.date);
+              if (balance !== undefined) yearLastBalance.set(d.date.slice(0, 4), balance);
             });
-            const allYears = Array.from(yearNetMap.keys()).sort();
+            const allYears = Array.from(yearLastBalance.keys()).sort();
             if (allYears.length === 0) return <div className="text-xs text-gray-400 py-4 text-center">暂无数据</div>;
             const nowY = String(new Date().getFullYear());
             return (
               <div className="grid grid-cols-3 gap-1.5">
-                {allYears.map((y) => {
-                  const net = yearNetMap.get(y) ?? 0;
-                  const sign = net > 0 ? "+" : net < 0 ? "-" : "";
-                  const color = net > 0 ? "#D32F2F" : net < 0 ? "#4CAF50" : "#9E9E9E";
+                {allYears.map((y, index) => {
+                  const yearRecords = sorted.filter((d) => d.date.startsWith(y));
+                  const lastBalance = yearLastBalance.get(y) ?? 0;
+                  let change: number | null = null;
+                  if (index > 0) {
+                    change = lastBalance - (yearLastBalance.get(allYears[index - 1]) ?? lastBalance);
+                  } else if (yearRecords.length > 1) {
+                    const firstBalance = cumulativeMap.get(yearRecords[0].date);
+                    if (firstBalance !== undefined) change = lastBalance - firstBalance;
+                  }
+                  const color = change === null ? "#9E9E9E" : change > 0 ? "#D32F2F" : change < 0 ? "#4CAF50" : "#9E9E9E";
+                  const sign = change !== null && change > 0 ? "+" : change !== null && change < 0 ? "-" : "";
                   return (
                     <div
                       key={y}
-                      className="rounded-lg flex flex-col items-center justify-center py-2"
+                      className="rounded-none flex flex-col items-center justify-center py-2"
                       style={{
                         height: '58px',
                         backgroundColor: "#F9F9F9",
                         border: y === nowY ? "1.5px solid #D32F2F" : "1px solid #F0F0F0",
+                        borderRadius: 8,
                       }}
                     >
                       <span style={{ fontSize: '13px', fontWeight: 500, color: y === nowY ? "#D32F2F" : "#222222" }}>{y}年</span>
-                      <span className="font-semibold mt-0.5" style={{ fontSize: "12px", color }}>
-                        {formatMoney(Math.abs(net), sign)}
-                      </span>
+                      {change !== null && <span className="font-semibold mt-0.5" style={{ fontSize: "12px", color }}>
+                        {formatMoney(Math.abs(change), sign)}
+                      </span>}
                     </div>
                   );
                 })}
@@ -2365,10 +2536,10 @@ export default function LedgerDetailAA({
             );
           })()}
         </div>
-      </div>
+      </div>)}
 
       {/* ── 余额变化曲线 ── */}
-      <div
+      {overviewTab !== 'calendar' && (<div
         className="mx-3 mt-2 rounded-2xl shadow-sm mb-4"
         style={{ backgroundColor: "#FFFFFF" }}
       >
@@ -2548,7 +2719,7 @@ export default function LedgerDetailAA({
           </div>
           );
         })()}
-      </div>
+      </div>)}
 
       </div>{/* end 可滚动内容区域 */}
 
@@ -2557,32 +2728,7 @@ export default function LedgerDetailAA({
         <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
           {/* ── 标签周期年化表格（在滚动容器内） ── */}
           {allTagsChartData.length > 0 && (
-          <div className="mx-3 mt-3 rounded-2xl shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
-          {/* 冻结头部：Tab行 + 表头行共用一个 sticky 容器，彻底消除缝隙 */}
-          <div style={{ position: 'sticky', top: 0, backgroundColor: '#fff', zIndex: 20 }}>
-          <div className="flex border-b" style={{ borderColor: '#F5F5F5' }}>
-            {(['overview', 'calendar', 'chart'] as const).map((tab) => {
-              const labels = { overview: '概览', calendar: '日历图', chart: '走势图' };
-              const active = overviewTab === tab;
-              return (
-                <button
-                  key={tab}
-                  onClick={() => {
-                    setOverviewTab(tab);
-                    // 概览标签再次被点选时恢复暂停人员的默认折叠状态。
-                    if (tab === 'overview') setShowPausedTagDetails(false);
-                  }}
-                  className="flex-1 py-2.5 text-sm font-medium transition-all"
-                  style={{
-                    color: active ? '#D32F2F' : '#9E9E9E',
-                    borderBottom: active ? '2px solid #D32F2F' : '2px solid transparent',
-                    backgroundColor: 'transparent',
-                  }}
-                >{labels[tab]}</button>
-              );
-            })}
-          </div>
-          </div>{/* 关闭大sticky容器 */}
+          <div className="mx-3 mt-3 rounded-lg shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF', borderRadius: 8, overflow: overviewTab === 'overview' ? 'visible' : 'hidden' }}>
           {/* 概览表格数据行 */}
           {overviewTab === 'overview' && (() => {
             const visibleTags = allTagsChartData.filter(tag => tag.points.length > 0);
@@ -2708,14 +2854,10 @@ export default function LedgerDetailAA({
             }, 0);
             const weightedAnnualized = weightedDenominator > 0 ? (totalPnl / weightedDenominator) * 100 : null;
             const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
-            // Grid 列定义：名称固定52px，其他列 minmax 自适应
-            // 横向可滑动概览表：名称(sticky)/今日/回报/押金 第一屏平分；分红/年化/周期/占比全部溢出右侧可滑动
-            // 名称列 sticky 固定左边，前4列平分屏幕宽度，其余列溢出到右侧
-            // 列定义：名称(90px) | 今日(1fr) | 回报(1fr) | 押金(70px溢出) | 分红(64px溢出) | 年化(64px溢出) | 周期(1fr) | 占比(52px最右溢出)
-            // 右侧滚动区 grid 列定义（去掉第一列 104px 名称列）
-            const rightGridCols = 'minmax(52px,max-content) 1px minmax(52px,max-content) 1px minmax(64px,max-content) 1px minmax(64px,max-content) 1px 64px 1px minmax(52px,max-content) 1px 52px';
-            // 右侧滚动区最小宽度：内容自动撑开，不换行
-            const rightMinWidth = 'max-content';
+            // 右侧表头和数据网格必须共用同一组绝对轨道宽度；不能按各自内容自适应，
+            // 否则在横向滑动时会出现标题与数字列宽不同、错位的情况。
+            const rightGridCols = '64px 1px 72px 1px 72px 1px 68px 1px 64px 1px 64px 1px 52px';
+            const rightGridWidth = '562px';
             // 概览表头始终表示北京时间的“当天”，不能被某个标签最后一笔手工记录或
             // 某支股票的上一交易日快照改写。每一行是否真正完成当天计算，仍按该行自己的
             // latestDate 与这个北京日期比对（R1 的9/28盘尾只影响R1本行）。
@@ -2731,6 +2873,8 @@ export default function LedgerDetailAA({
             const rowHeight = 36; // 左右两侧统一行高，保证对齐
             const dataCellStyle = { whiteSpace: 'nowrap' as const };
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
+            // 纵向滚动时，概览标题行固定在滚动容器顶部；横向滚动仍由右侧容器处理。
+            const stickyOverviewHeaderStyle = { position: 'sticky' as const, top: 0, zIndex: 10, backgroundColor: '#FFFFFF', boxShadow: '0 1px 0 #F5F5F5' };
             // 排序箭头辅助
             const SortArrow = ({ col }: { col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend' }) => {
               if (!overviewSort || overviewSort.col !== col) return <span style={{ color: '#D0D0D0', fontSize: 7, marginLeft: 1 }}>▼</span>;
@@ -2751,12 +2895,12 @@ export default function LedgerDetailAA({
             const pausedSummaryDividend = pausedTagData.reduce((sum, td) => sum + td.divAmt, 0);
             return (
               <>
-              {/* 左右分栏布局：左侧固定104px名称列 + 右侧横向滚动区 */}
-              <div style={{ display: 'flex', alignItems: 'stretch' }}>
+              {/* 单一原生滚动层：表头和数据共同横向移动，不存在两层同步延迟。 */}
+              <div style={{ display: 'flex', alignItems: 'stretch', position: 'relative', overflow: 'auto', maxHeight: 'calc(100dvh - 186px)', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'contain' }}>
                 {/* ── 左侧固定名称列 ── */}
-                <div style={{ width: 104, flexShrink: 0, borderRight: '1px solid #F0F0F0', position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ width: 104, flexShrink: 0, borderRight: '1px solid #F0F0F0', position: 'sticky', left: 0, zIndex: 30, backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column' }}>
                   {/* 表头名称格 */}
-                  <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5', background: '#fff', flex: '0 0 auto', height: 36 }}>
+                  <div className={cellCls} style={{ ...stickyOverviewHeaderStyle, borderBottom: '1px solid #F5F5F5', background: '#fff', zIndex: 20, flex: '0 0 auto', height: 36 }}>
                     <span style={{ color: '#9E9E9E', fontSize: 12 }}>名称</span>
                   </div>
                   {/* 数据行名称格 */}
@@ -2767,7 +2911,7 @@ export default function LedgerDetailAA({
                     return (
                       <div key={`${tag.name}-name-left`} className="flex items-center justify-start gap-1" style={{ borderBottom: rowBorder2, flex: '0 0 auto', height: 36, paddingLeft: 6, paddingRight: 2, overflow: 'hidden' }}>
                         <span style={{ minWidth: 14, height: 14, padding: '0 2px', borderRadius: 3, backgroundColor: isPaused ? '#1565C0' : '#D32F2F', color: '#FFFFFF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, lineHeight: 1, flexShrink: 0 }}>
-                          {displayedIndex + 1}
+                          <span style={{ display: 'inline-block', transform: 'translateY(1px)' }}>{displayedIndex + 1}</span>
                         </span>
                         <span
                           style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
@@ -2804,31 +2948,41 @@ export default function LedgerDetailAA({
                   )}
                   {/* 合计名称格 */}
                   {visibleTags.length > 0 && (
-                    <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px', flex: '0 0 auto', height: 36 }}>
+                    <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 8px', flex: '0 0 auto', height: 36 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: '#9E9E9E' }}>合计</span>
                     </div>
                   )}
                 </div>
-                {/* ── 右侧横向滚动区 ── */}
-                <div style={{ flex: 1, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', touchAction: 'pan-x pan-y' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: rightGridCols, backgroundColor: '#fff', minWidth: rightMinWidth }}>
-                  {/* 表头右侧各列 */}
-                  <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }}><span style={{ color: '#9E9E9E' }}>{todayColTitle}</span></div>
-                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报￥</span><SortArrow col="pnl" /></div>
-                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E' }}>押金￥</span><SortArrow col="amount" /></div>
-                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('dividend')}>
-                    <span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红￥</span><SortArrow col="dividend" />
+                {/* ── 右侧：与数据共用同一原生横向滚动层 ── */}
+                <div style={{ flex: '0 0 auto', width: rightGridWidth, display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ position: 'sticky', top: 0, zIndex: 15, backgroundColor: '#FFFFFF', boxShadow: '0 1px 0 #F5F5F5' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: rightGridCols, backgroundColor: '#FFFFFF', width: rightGridWidth }}>
+                      <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }}><span style={{ color: '#9E9E9E' }}>{todayColTitle}</span></div>
+                      <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                      <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报￥</span><SortArrow col="pnl" /></div>
+                      <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                      <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E' }}>押金￥</span><SortArrow col="amount" /></div>
+                      <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                      <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('dividend')}>
+                        <span
+                          style={{ color: canManageDividends ? '#1565C0' : '#9E9E9E', textDecoration: canManageDividends ? 'underline' : 'none', textDecorationStyle: 'dashed', textUnderlineOffset: '2px', cursor: canManageDividends ? 'pointer' : 'default' }}
+                          onClick={(e) => {
+                            if (!canManageDividends) return;
+                            e.stopPropagation();
+                            setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`);
+                          }}
+                        >分红￥</span><SortArrow col="dividend" />
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                      <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
+                      <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                      <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
+                      <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                      <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
+                    </div>
                   </div>
-                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
-                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
-                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
-                  {/* 数据行右侧各列 */}
+                    <div style={{ display: 'grid', gridTemplateColumns: rightGridCols, backgroundColor: '#fff', width: rightGridWidth }}>
+                    {/* 数据行右侧各列 */}
                 {displayedTagData.map(({ tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, todayCapitalChange, todayWithdraw, annualized, divAmt, isPaused, firstDate, endDate }, displayedIndex) => {
                       // 判断是否需要灰色：北京时间交易日 15:00后且最新数据不是今天
                       const _nowBJ = new Date(Date.now() + 8 * 3600 * 1000);
@@ -2853,69 +3007,36 @@ export default function LedgerDetailAA({
                         const _todayPnlText = _showTodayPnl && todayPnl !== null
                           ? `${todayPnl < 0 ? '-' : ''}${Math.abs(todayPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`
                           : '--';
-                        // 占比
                         const _ratioNum = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${tag.name}__ratio`] ?? 0) : 0;
-                        // 计算过程：资金流先从余额变动中剔除，再计算实际盈亏。
                         const _prevDate = tag.points.length >= 2 ? (tag.points[tag.points.length - 2]?.date ?? '') : '';
-                        const _latestDateLabel = latestDate ? latestDate.slice(5).replace('-', '/') : '';
-                        const _prevDateLabel = _prevDate ? _prevDate.slice(5).replace('-', '/') : '';
-                        // 股票标签的首个有效盘尾没有“上一有效交易日”可相减：
-                        // 当天展示的数就是该成员以个人入场价计算出的累计盈亏。
                         const _isFirstStockSettlement = !!tag.isStockPortfolio && tag.points.length === 1;
-                        const _formatStockPnl = (value: number) => `${value >= 0 ? '+' : '-'}${Math.abs(value).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`;
-                        const _canShowTooltip = _showTodayPnl && todayPnl !== null;
+                        const _canShowDetail = _showTodayPnl && todayPnl !== null;
                         return (
-                          <div className={dataCellCls} style={{ borderBottom: rowBorder, position: 'relative', height: rowHeight }}>
+                          <div className={dataCellCls} style={{ borderBottom: rowBorder, height: rowHeight }}>
                             <span
-                              style={{ fontSize: 13, color: _todayPnlColor, cursor: _canShowTooltip ? 'pointer' : 'default',
-                                textDecoration: _canShowTooltip ? 'underline' : 'none', textDecorationStyle: 'dashed',
+                              style={{ fontSize: 13, color: _todayPnlColor, cursor: _canShowDetail ? 'pointer' : 'default',
+                                textDecoration: _canShowDetail ? 'underline' : 'none', textDecorationStyle: 'dashed',
                                 textDecorationColor: _todayPnlColor, textUnderlineOffset: '2px', whiteSpace: 'normal', wordBreak: 'break-all', textAlign: 'center' }}
-                              onClick={(e) => { if (_canShowTooltip) { e.stopPropagation(); setTooltipTodayPnlTag(tooltipTodayPnlTag === tag.name ? null : tag.name); } }}
+                              onClick={(e) => {
+                                if (!_canShowDetail) return;
+                                e.stopPropagation();
+                                setDailyPnlDetail({
+                                  tagName: tag.name,
+                                  isStockPortfolio: !!tag.isStockPortfolio,
+                                  isFirstSettlement: _isFirstStockSettlement,
+                                  latestDate,
+                                  previousDate: _prevDate,
+                                  todayPnl: Number(todayPnl ?? 0),
+                                  previousBalance: prevBalance ?? null,
+                                  latestBalance: latestBalance ?? null,
+                                  capitalChange: Number(todayCapitalChange ?? 0),
+                                  withdraw: Number(todayWithdraw ?? 0),
+                                  ratio: _ratioNum,
+                                  previousPnl: Number(prevPnl ?? 0),
+                                  latestPnl: Number(latestPnl ?? 0),
+                                });
+                              }}
                             >{_todayPnlText}</span>
-                            {tooltipTodayPnlTag === tag.name && _canShowTooltip && (
-                              <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: '#1A1A1A', color: '#FFF', borderRadius: 6, padding: '5px 8px', whiteSpace: 'nowrap', fontSize: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.25)', marginTop: 4, lineHeight: 1.6 }}>
-                                <div style={{ color: '#BDBDBD', marginBottom: 2 }}>
-                                  {_isFirstStockSettlement ? `${_latestDateLabel} · 首次15:05盘尾` : (_prevDateLabel ? `${_prevDateLabel} → ${_latestDateLabel}` : _latestDateLabel)}
-                                </div>
-                                <div>
-                                  {tag.isStockPortfolio ? (
-                                    _isFirstStockSettlement ? (
-                                      <>
-                                        今天是第一天，个人盈亏为{' '}
-                                        <span style={{ color: todayPnl === 0 ? '#BDBDBD' : todayPnl > 0 ? '#FF8A80' : '#A5D6A7', fontWeight: 600 }}>
-                                          {_formatStockPnl(todayPnl)}
-                                        </span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        个人累计盈亏 {_formatStockPnl(prevPnl)} → {_formatStockPnl(latestPnl)}，今日 {' '}
-                                        <span style={{ color: todayPnl === 0 ? '#BDBDBD' : todayPnl > 0 ? '#FF8A80' : '#A5D6A7', fontWeight: 600 }}>
-                                          {_formatStockPnl(todayPnl)}
-                                        </span>
-                                      </>
-                                    )
-                                  ) : latestBalance !== null && prevBalance !== null ? (
-                                    <>
-                                      ({prevBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                                      {todayCapitalChange > 0 ? ` + 追加本金 ${todayCapitalChange.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : ''}
-                                      {todayCapitalChange < 0 ? ` − 减少本金 ${Math.abs(todayCapitalChange).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : ''}
-                                      {todayWithdraw > 0 ? ` − 提现 ${todayWithdraw.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : ''}
-                                      {` − ${latestBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`})
-                                      {` × ${_ratioNum.toFixed(0)}%`}
-                                    </>
-                                  ) : (
-                                    <>
-                                      ({latestPnl.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} − {prevPnl.toLocaleString('zh-CN', { maximumFractionDigits: 0 })})
-                                      {` × ${_ratioNum.toFixed(0)}%`}
-                                    </>
-                                  )}
-                                  {' = '}
-                                  <span style={{ color: todayPnl === 0 ? '#BDBDBD' : todayPnl > 0 ? '#FF8A80' : '#A5D6A7', fontWeight: 600 }}>
-                                    {todayPnl < 0 ? '-' : ''}{Math.abs(todayPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
                           </div>
                         );
                       })()}
@@ -3329,37 +3450,18 @@ export default function LedgerDetailAA({
                         <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', position: 'relative', height: rowHeight }}>
                           <span
                             style={{ fontSize: 13, fontWeight: 600, color: !hasAny ? '#BDBDBD' : totalTodayPnl > 0 ? '#D32F2F' : totalTodayPnl < 0 ? '#388E3C' : '#BDBDBD', cursor: hasAny ? 'pointer' : 'default', textDecoration: hasAny ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: totalTodayPnl > 0 ? '#D32F2F' : '#388E3C', textUnderlineOffset: '2px' }}
-                            onClick={(e) => { if (hasAny) { e.stopPropagation(); if (showTotalTodayTooltip) { setShowTotalTodayTooltip(false); setTotalTodayTooltipPos(null); } else { setShowTotalTodayTooltip(true); setTotalTodayTooltipPos({ x: e.clientX, y: e.clientY }); } } }}
+                            onClick={(e) => {
+                              if (!hasAny) return;
+                              e.stopPropagation();
+                              setTotalTodayPnlDetail({
+                                total: totalTodayPnl,
+                                updated: updatedTagsData.map((td) => ({ tagName: td.tag.name, amount: Number(td.todayPnl ?? 0), latestDate: td.latestDate })),
+                                pending: staleTagsData.map((td) => ({ tagName: td.tag.name, latestDate: td.latestDate })),
+                              });
+                            }}
                           >
                             {!hasAny ? '--' : (totalTodayPnl !== 0 ? `${totalTodayPnl < 0 ? '-' : ''}${Math.abs(totalTodayPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--')}
                           </span>
-                          {showTotalTodayTooltip && hasAny && totalTodayTooltipPos && (
-                            <div style={{ position: 'fixed', left: Math.min(totalTodayTooltipPos.x + 8, window.innerWidth - 160), bottom: window.innerHeight - totalTodayTooltipPos.y + 12, zIndex: 9999, background: '#1A1A1A', color: '#FFF', borderRadius: 8, padding: '8px 10px', whiteSpace: 'nowrap', fontSize: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.3)', lineHeight: 1.8, minWidth: 140 }}
-                              onClick={(e) => { e.stopPropagation(); setShowTotalTodayTooltip(false); setTotalTodayTooltipPos(null); }}
-                            >
-                              <div style={{ color: '#BDBDBD', marginBottom: 4, fontSize: 9 }}>点击关闭</div>
-                              {updatedTagsData.length > 0 && (
-                                <div>
-                                  <div style={{ color: '#A5D6A7', marginBottom: 2 }}>✓ 已计入（{updatedTagsData.length}个）</div>
-                                  {updatedTagsData.map(td => (
-                                    <div key={td.tag.name} style={{ paddingLeft: 8, color: '#FFF' }}>
-                                      {td.tag.name}：{(td.todayPnl ?? 0) >= 0 ? '+' : ''}{(td.todayPnl ?? 0).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {staleTagsData.length > 0 && (
-                                <div style={{ marginTop: 6 }}>
-                                  <div style={{ color: '#BDBDBD', marginBottom: 2 }}>✗ 未更新（{staleTagsData.length}个，不计入）</div>
-                                  {staleTagsData.map(td => (
-                                    <div key={td.tag.name} style={{ paddingLeft: 8, color: '#757575' }}>
-                                      {td.tag.name}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
                         </div>
                       );
                     })()}
@@ -3396,12 +3498,12 @@ export default function LedgerDetailAA({
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 占比 -- */}
-                    <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 0', height: rowHeight }}>
+                    <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 8px 0', height: rowHeight }}>
                       <span style={{ fontSize: 13, color: '#BDBDBD' }}>--</span>
                     </div>
                   </>
                 )}
-                </div>
+                    </div>
                 </div>
               </div>
               </>
@@ -3430,7 +3532,15 @@ export default function LedgerDetailAA({
                 entry.tags.push({ name: tag.name, val });
               });
             });
-            // 汇总日历的weeks计算
+            // 汇总日历的日 / 月 / 年汇总数据。
+            const summaryMonthMap = new Map<string, number>();
+            const summaryYearMap = new Map<string, number>();
+            summaryDayMap.forEach(({ total }, date) => {
+              const monthKey = date.slice(0, 7);
+              const yearKey = date.slice(0, 4);
+              summaryMonthMap.set(monthKey, (summaryMonthMap.get(monthKey) ?? 0) + total);
+              summaryYearMap.set(yearKey, (summaryYearMap.get(yearKey) ?? 0) + total);
+            });
             const { year: sy, month: sm } = summaryCalendarDate;
             const sDaysInMonth = new Date(sy, sm + 1, 0).getDate();
             const sFirstDayRaw = new Date(sy, sm, 1).getDay();
@@ -3443,78 +3553,123 @@ export default function LedgerDetailAA({
             for (let i = 0; i < sCells.length; i += 7) sWeeks.push(sCells.slice(i, i + 7));
             const sGetDateStr = (day: number) => `${sy}-${String(sm + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const sToday = new Date();
+            const summaryValueColor = (value: number) => value > 0 ? '#D32F2F' : value < 0 ? '#4CAF50' : '#9E9E9E';
+            const formatSummaryValue = (value: number) => formatMoney(Math.abs(value), value > 0 ? '+' : value < 0 ? '-' : '');
+            const changeSummaryPeriod = (step: number) => {
+              setSummaryCalendarDate(prev => {
+                if (summaryCalendarMode === 'daily') {
+                  let month = prev.month + step;
+                  let year = prev.year;
+                  if (month < 0) { month = 11; year--; }
+                  if (month > 11) { month = 0; year++; }
+                  return { year, month };
+                }
+                return { ...prev, year: prev.year + step };
+              });
+            };
             return (
               <div style={{ backgroundColor: '#FFFFFF' }}>
                 <div className="px-3 pt-3 pb-2">
-                  {/* 月份导航 */}
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setSummaryCalendarDate(prev => { let m = prev.month - 1, y = prev.year; if (m < 0) { m = 11; y--; } return { year: y, month: m }; })} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: '#FFEBEE' }}>
-                        <ChevronLeft className="w-3.5 h-3.5" style={{ color: '#D32F2F' }} />
-                      </button>
-                      <span className="text-sm font-semibold whitespace-nowrap" style={{ color: '#222222', minWidth: '72px', textAlign: 'center' }}>{sy}年{sm + 1}月</span>
-                      <button onClick={() => setSummaryCalendarDate(prev => { let m = prev.month + 1, y = prev.year; if (m > 11) { m = 0; y++; } return { year: y, month: m }; })} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: '#FFEBEE' }}>
-                        <ChevronRight className="w-3.5 h-3.5" style={{ color: '#D32F2F' }} />
-                      </button>
-                    </div>
-                    <span className="text-sm font-bold" style={{ color: '#1A1A1A' }}>每日汇总</span>
-                  </div>
-                  {/* 横向可滑动日历 */}
-                  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', touchAction: 'pan-x pan-y' }}>
-                    <div style={{ width: 'calc(7 / 5 * 100%)' }}>
-                      {/* 星期标题 */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: '2px' }}>
-                        {['一','二','三','四','五','六','日'].map((d, i) => (
-                          <div key={d} className="text-center py-1" style={{ fontSize: '11px', fontWeight: 500, color: i >= 5 ? '#BDBDBD' : '#757575' }}>{d}</div>
-                        ))}
+                    {summaryCalendarMode === 'yearly' ? (
+                      <span className="text-sm font-semibold whitespace-nowrap" style={{ color: '#222222', minWidth: '72px' }}>年度汇总</span>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => changeSummaryPeriod(-1)} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: '#FFEBEE' }}>
+                          <ChevronLeft className="w-3.5 h-3.5" style={{ color: '#D32F2F' }} />
+                        </button>
+                        <span className="text-sm font-semibold whitespace-nowrap" style={{ color: '#222222', minWidth: '72px', textAlign: 'center' }}>{sy}年{summaryCalendarMode === 'daily' ? `${sm + 1}月` : ''}</span>
+                        <button onClick={() => changeSummaryPeriod(1)} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: '#FFEBEE' }}>
+                          <ChevronRight className="w-3.5 h-3.5" style={{ color: '#D32F2F' }} />
+                        </button>
                       </div>
-                      {/* 日历格子 */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        {sWeeks.map((week, wIdx) => (
-                          <div key={wIdx} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
-                            {week.map((day, cIdx) => {
-                              if (day === null) return <div key={`se-${wIdx}-${cIdx}`} style={{ height: '50px' }} />;
-                              const dateStr = sGetDateStr(day);
-                              const entry = summaryDayMap.get(dateStr);
-                              const val = entry?.total ?? null;
-                              const isTodayCell = sToday.getFullYear() === sy && sToday.getMonth() === sm && sToday.getDate() === day;
-                              // 使用与单标签日历相同的非交易日判断逻辑
-                              const sNonTradingLabel = (() => {
-                                if (MAKEUP_WORKDAYS_2026.has(dateStr)) return null;
-                                if (HOLIDAY_MAP_2026[dateStr]) return HOLIDAY_MAP_2026[dateStr];
-                                const dow2 = new Date(sy, sm, day).getDay();
-                                if (dow2 === 0) return '周日';
-                                if (dow2 === 6) return '周六';
-                                return null;
-                              })();
-                              const isNonTrading = sNonTradingLabel !== null;
-                              const cellBg = isNonTrading ? '#F0F0F0' : isTodayCell ? '#FFF3E0' : '#F9F9F9';
-                              const cellBorder = isNonTrading ? '1px solid #E0E0E0' : isTodayCell ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
-                              const dayNumColor = isNonTrading ? '#BDBDBD' : isTodayCell ? '#D32F2F' : '#222222';
-                              const valueColor = val === null ? '#9E9E9E' : val > 0 ? '#D32F2F' : val < 0 ? '#4CAF50' : '#9E9E9E';
-                              const displayVal = val === null ? null : formatMoney(Math.abs(val), val >= 0 ? '+' : '-');
-                              return (
-                                <div key={day} className="rounded-lg flex flex-col items-center justify-center" style={{ height: '50px', backgroundColor: cellBg, border: cellBorder, padding: '3px 2px' }}>
-                                  <span style={{ fontSize: '12px', fontWeight: 500, lineHeight: 1, color: dayNumColor, marginBottom: '1px' }}>{day}</span>
-                                  {isNonTrading ? (
-                                    <span style={{ fontSize: '9px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>{sNonTradingLabel}</span>
-                                  ) : displayVal !== null ? (
-                                    <span style={{ fontSize: '12px', fontWeight: 700, lineHeight: 1.1, color: valueColor, whiteSpace: 'nowrap' }}>{displayVal}</span>
-                                  ) : null}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </div>
+                    )}
+                    <div className="flex items-center gap-1">
+                      {(['daily', 'monthly', 'yearly'] as const).map((mode) => {
+                        const active = summaryCalendarMode === mode;
+                        return <button key={mode} type="button" onClick={() => setSummaryCalendarMode(mode)} className="px-2 py-1 rounded-none text-xs font-medium transition-all" style={{ backgroundColor: active ? '#D32F2F' : '#F5F5F5', color: active ? '#FFFFFF' : '#757575', borderRadius: 8 }}>{mode === 'daily' ? '日' : mode === 'monthly' ? '月' : '年'}</button>;
+                      })}
                     </div>
                   </div>
+
+                  {summaryCalendarMode === 'daily' && <>
+                    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', touchAction: 'pan-x pan-y' }}>
+                      <div style={{ width: 'calc(7 / 5 * 100%)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: '2px' }}>
+                          {['一','二','三','四','五','六','日'].map((d, i) => (
+                            <div key={d} className="text-center py-1" style={{ fontSize: '11px', fontWeight: 500, color: i >= 5 ? '#BDBDBD' : '#757575' }}>{d}</div>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          {sWeeks.map((week, wIdx) => (
+                            <div key={wIdx} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
+                              {week.map((day, cIdx) => {
+                                if (day === null) return <div key={`se-${wIdx}-${cIdx}`} style={{ height: '50px' }} />;
+                                const dateStr = sGetDateStr(day);
+                                const entry = summaryDayMap.get(dateStr);
+                                const val = entry?.total ?? null;
+                                const isTodayCell = sToday.getFullYear() === sy && sToday.getMonth() === sm && sToday.getDate() === day;
+                                const sNonTradingLabel = (() => {
+                                  if (MAKEUP_WORKDAYS_2026.has(dateStr)) return null;
+                                  if (HOLIDAY_MAP_2026[dateStr]) return HOLIDAY_MAP_2026[dateStr];
+                                  const dow2 = new Date(sy, sm, day).getDay();
+                                  if (dow2 === 0) return '周日';
+                                  if (dow2 === 6) return '周六';
+                                  return null;
+                                })();
+                                const isNonTrading = sNonTradingLabel !== null;
+                                const cellBg = isNonTrading ? '#F0F0F0' : isTodayCell ? '#FFF3E0' : '#F9F9F9';
+                                const cellBorder = isNonTrading ? '1px solid #E0E0E0' : isTodayCell ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
+                                const dayNumColor = isNonTrading ? '#BDBDBD' : isTodayCell ? '#D32F2F' : '#222222';
+                                return (
+                                  <div key={day} className="rounded-none flex flex-col items-center justify-center" style={{ height: '50px', backgroundColor: cellBg, border: cellBorder, borderRadius: 8, padding: '3px 2px' }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 500, lineHeight: 1, color: dayNumColor, marginBottom: '1px' }}>{day}</span>
+                                    {isNonTrading ? (
+                                      <span style={{ fontSize: '9px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>{sNonTradingLabel}</span>
+                                    ) : val !== null ? (
+                                      <span style={{ fontSize: '12px', fontWeight: 700, lineHeight: 1.1, color: summaryValueColor(val), whiteSpace: 'nowrap' }}>{formatSummaryValue(val)}</span>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </>}
+
+                  {summaryCalendarMode === 'monthly' && <div className="grid grid-cols-4 gap-1.5">
+                    {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => {
+                      const monthKey = `${sy}-${String(month).padStart(2, '0')}`;
+                      const value = summaryMonthMap.get(monthKey);
+                      const hasData = value !== undefined;
+                      const isCurrent = sy === sToday.getFullYear() && month === sToday.getMonth() + 1;
+                      return <div key={month} className="rounded-none flex flex-col items-center justify-center py-2" style={{ height: '58px', backgroundColor: hasData ? '#FFF3F3' : '#F9F9F9', border: isCurrent ? '1.5px solid #D32F2F' : '1px solid #F0F0F0', borderRadius: 8 }}>
+                        <span style={{ fontSize: '13px', fontWeight: 500, color: isCurrent ? '#D32F2F' : '#222222' }}>{month}月</span>
+                        {hasData && <span className="font-semibold mt-0.5" style={{ fontSize: '12px', color: summaryValueColor(value ?? 0) }}>{formatSummaryValue(value ?? 0)}</span>}
+                      </div>;
+                    })}
+                  </div>}
+
+                  {summaryCalendarMode === 'yearly' && (() => {
+                    const years = Array.from(summaryYearMap.keys()).sort();
+                    if (years.length === 0) return <div className="text-xs text-gray-400 py-4 text-center">暂无数据</div>;
+                    return <div className="grid grid-cols-3 gap-1.5">{years.map((year) => {
+                      const value = summaryYearMap.get(year) ?? 0;
+                      const isCurrent = Number(year) === sToday.getFullYear();
+                      return <div key={year} className="rounded-none flex flex-col items-center justify-center py-2" style={{ height: '58px', backgroundColor: '#F9F9F9', border: isCurrent ? '1.5px solid #D32F2F' : '1px solid #F0F0F0', borderRadius: 8 }}>
+                        <span style={{ fontSize: '13px', fontWeight: 500, color: isCurrent ? '#D32F2F' : '#222222' }}>{year}年</span>
+                        <span className="font-semibold mt-0.5" style={{ fontSize: '12px', color: summaryValueColor(value) }}>{formatSummaryValue(value)}</span>
+                      </div>;
+                    })}</div>;
+                  })()}
                 </div>
               </div>
             );
           })()}
 
-          {overviewTab === 'chart' && <div style={{ backgroundColor: '#FFFFFF' }}>
+          {(overviewTab === 'chart' || overviewTab === 'calendar') && <div style={{ backgroundColor: '#FFFFFF', borderTop: overviewTab === 'calendar' ? '8px solid #FAF3ED' : undefined }}>
             {/* 图表标题行 */}
             <div className="px-4 pt-4 pb-1 flex items-center justify-between">
               <div>
@@ -3645,6 +3800,14 @@ export default function LedgerDetailAA({
                 ? Math.max(0, Math.floor((defaultStartIdx / allDates.length) * 100) - 2)
                 : 0;
 
+              // 旧数据或新增标签可能暂未具备某个百分比指标；缺失点留空而非让整张图报错。
+              const getMetricValue = (point: any, mode: typeof allChartMode): number | null => {
+                const raw = mode === 'amount' ? point?.pnl : mode === 'initial' ? point?.pctInitial : point?.pctMargin;
+                if (raw === null || raw === undefined || raw === '') return null;
+                const value = Number(raw);
+                return Number.isFinite(value) ? value : null;
+              };
+
               // 辅助函数：根据可视区间计算每个标签的最高/最低点，返回 markPoint 配置
               const buildMarkPoints = (tagDataList: typeof allTagsChartData, dates: string[], startPct: number, endPct: number, mode: typeof allChartMode, hidden: Set<string>) => {
                 const total = dates.length;
@@ -3659,7 +3822,8 @@ export default function LedgerDetailAA({
                     for (let i = startIdx; i <= endIdx; i++) {
                       const p = datePointMap.get(dates[i]) as any;
                       if (!p) continue;
-                      const v = mode === 'amount' ? p.pnl : mode === 'initial' ? p.pctInitial : p.pctMargin;
+                      const v = getMetricValue(p, mode);
+                      if (v === null) continue;
                       if (v > maxVal) { maxVal = v; maxIdx2 = i; }
                       if (v < minVal) { minVal = v; minIdx2 = i; }
                     }
@@ -3710,9 +3874,8 @@ export default function LedgerDetailAA({
                     const data: (number | null)[] = allDates.map(date => {
                       const p = datePointMap.get(date) as any;
                       if (!p) return null;
-                      if (allChartMode === 'amount') return parseFloat(p.pnl.toFixed(2));
-                      if (allChartMode === 'initial') return parseFloat(p.pctInitial.toFixed(2));
-                      return parseFloat(p.pctMargin.toFixed(2));
+                      const metricValue = getMetricValue(p, allChartMode);
+                      return metricValue === null ? null : parseFloat(metricValue.toFixed(2));
                     });
                     return {
                       name: tag.name,
@@ -3930,6 +4093,140 @@ export default function LedgerDetailAA({
           </div>}
           </div>
           )}
+        </div>
+      )}
+
+      {/* ── 个人备忘录（按当前用户与账本隔离） ── */}
+      {showPersonalMemos && (
+        <div className="fixed inset-0 z-[250] flex flex-col" style={{ backgroundColor: '#F7F7F7' }}>
+          <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
+            <button
+              type="button"
+              onClick={() => { setShowPersonalMemos(false); setMemoComposerOpen(false); setMemoEditingId(null); setMemoDraft(''); }}
+              className="w-8 h-8 flex items-center justify-center"
+              aria-label="关闭备忘录"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <span className="text-base font-semibold">备忘</span>
+            <button
+              type="button"
+              onClick={() => { setMemoEditingId(null); setMemoComposerVisibility(memoTab); setMemoDraft(''); setMemoComposerOpen(true); }}
+              className="h-8 px-2.5 rounded-lg flex items-center gap-1 text-xs font-semibold"
+              style={{ backgroundColor: 'rgba(255,255,255,0.92)', color: '#D32F2F' }}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              新建
+            </button>
+          </div>
+          <div className="px-3 pt-2" style={{ backgroundColor: '#F7F7F7' }}>
+            <div className="grid grid-cols-2 rounded-xl p-1" style={{ backgroundColor: '#EDEDED' }}>
+              {([
+                ['private', '私人备忘', '仅自己可见'],
+                ['shared', '共享备忘', '与管理员共同可见'],
+              ] as Array<[MemoVisibility, string, string]>).map(([visibility, label, hint]) => (
+                <button
+                  key={visibility}
+                  type="button"
+                  disabled={memoEditingId !== null}
+                  onClick={() => {
+                    setMemoTab(visibility);
+                    if (memoEditingId === null) setMemoComposerVisibility(visibility);
+                  }}
+                  className="rounded-lg py-1.5 text-center disabled:opacity-55"
+                  style={{ backgroundColor: memoTab === visibility ? '#FFFFFF' : 'transparent', boxShadow: memoTab === visibility ? '0 1px 3px rgba(0,0,0,0.10)' : 'none' }}
+                >
+                  <span className="flex items-center justify-center gap-1 text-xs font-semibold" style={{ color: memoTab === visibility ? '#D32F2F' : '#757575' }}>
+                    {label}
+                    <span className="min-w-4 h-4 px-1 rounded-full inline-flex items-center justify-center text-[10px]" style={{ backgroundColor: memoTab === visibility ? '#FDE7E7' : '#DDDDDD', color: memoTab === visibility ? '#D32F2F' : '#757575' }}>{memoCounts[visibility]}</span>
+                  </span>
+                  <span className="block text-[10px] mt-0.5" style={{ color: '#9E9E9E' }}>{hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto" style={{ padding: '14px 14px 32px', WebkitOverflowScrolling: 'touch' }}>
+            {memoComposerOpen && (
+              <div className="rounded-2xl mb-3" style={{ backgroundColor: '#FFFFFF', padding: '14px', border: '1px solid #F0F0F0' }}>
+                <div className="text-sm font-semibold" style={{ color: '#222222' }}>{memoEditingId === null ? `新建${memoComposerVisibility === 'private' ? '私人' : '共享'}备忘` : '编辑备忘'}</div>
+                <div className="text-[11px] mb-2" style={{ color: memoComposerVisibility === 'private' ? '#9E9E9E' : '#C0853E' }}>{memoComposerVisibility === 'private' ? '仅自己可见' : '与账本管理员共同可见'}</div>
+                <textarea
+                  value={memoDraft}
+                  onChange={(event) => setMemoDraft(event.target.value)}
+                  placeholder="写下需要记住的事情…"
+                  maxLength={2000}
+                  rows={6}
+                  className="w-full rounded-xl text-sm outline-none resize-none"
+                  style={{ backgroundColor: '#FAF3ED', border: '1px solid #E8DED6', color: '#222222', padding: '11px 12px', lineHeight: 1.6 }}
+                />
+                <div className="flex items-center justify-between gap-2 mt-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px]" style={{ color: '#9E9E9E' }}>{memoDraft.length}/2000</span>
+                    {memoEditingId !== null && (
+                      <button
+                        type="button"
+                        disabled={deletePersonalMemoMutation.isPending}
+                        onClick={() => {
+                          if (!window.confirm('确定删除这条备忘吗？删除后不可恢复。')) return;
+                          deletePersonalMemoMutation.mutate({ id: memoEditingId, ledgerId });
+                        }}
+                        className="h-8 px-2.5 rounded-lg flex items-center gap-1 text-xs font-medium disabled:opacity-40"
+                        style={{ backgroundColor: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        {deletePersonalMemoMutation.isPending ? '删除中…' : '删除'}
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setMemoComposerOpen(false); setMemoEditingId(null); setMemoDraft(''); }}
+                      className="h-8 px-3 rounded-lg text-xs font-medium"
+                      style={{ backgroundColor: '#F5F5F5', color: '#757575' }}
+                    >取消</button>
+                    <button
+                      type="button"
+                      disabled={!memoDraft.trim() || createPersonalMemoMutation.isPending || updatePersonalMemoMutation.isPending || deletePersonalMemoMutation.isPending}
+                      onClick={() => {
+                        const content = memoDraft.trim();
+                        if (!content) return;
+                        if (memoEditingId === null) createPersonalMemoMutation.mutate({ ledgerId, visibility: memoComposerVisibility, content });
+                        else updatePersonalMemoMutation.mutate({ id: memoEditingId, ledgerId, content });
+                      }}
+                      className="h-8 px-3 rounded-lg text-xs font-semibold disabled:opacity-40"
+                      style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
+                    >{createPersonalMemoMutation.isPending || updatePersonalMemoMutation.isPending ? '保存中…' : '保存'}</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {personalMemosQuery.isLoading ? (
+              <div className="text-center text-sm py-10" style={{ color: '#9E9E9E' }}>正在加载备忘…</div>
+            ) : personalMemos.length === 0 ? (
+              <div className="text-center text-sm py-12" style={{ color: '#9E9E9E' }}>还没有{memoTab === 'private' ? '私人' : '共享'}备忘，点击右上角“新建”记录第一条。</div>
+            ) : (
+              <div className="space-y-2">
+                {personalMemos.map((memo) => (
+                  <button
+                    key={memo.id}
+                    type="button"
+                    onClick={() => { setMemoEditingId(memo.id); setMemoComposerVisibility(memo.visibility); setMemoDraft(memo.content); setMemoComposerOpen(true); }}
+                    className="w-full text-left rounded-2xl"
+                    style={{ backgroundColor: '#FFFFFF', padding: '14px', border: '1px solid #F0F0F0' }}
+                  >
+                    <div style={{ color: '#1F2937', fontSize: 17, fontWeight: 700, lineHeight: 1.7, whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{memo.content}</div>
+                    <div className="flex items-center justify-between gap-3 mt-2">
+                      <div className="text-[11px]" style={{ color: '#BDBDBD' }}>
+                        创建 {formatPersonalMemoTime(memo.createdAt)}{memo.updatedAt && memo.updatedAt !== memo.createdAt ? ` · 修改 ${formatPersonalMemoTime(memo.updatedAt)}` : ''}
+                      </div>
+                      <span className="flex shrink-0 items-center gap-1 text-xs" style={{ color: '#D32F2F' }}><Pencil className="w-3 h-3" />编辑</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -4712,6 +5009,141 @@ export default function LedgerDetailAA({
         );
       })()}
 
+      {/* ── 当日盈亏明细弹窗 ── */}
+      {dailyPnlDetail && (() => {
+        const detail = dailyPnlDetail;
+        const resultColor = detail.todayPnl > 0 ? '#D32F2F' : detail.todayPnl < 0 ? '#388E3C' : '#BDBDBD';
+        const signedMoney = (amount: number) => `${amount > 0 ? '+' : amount < 0 ? '−' : ''}￥${Math.abs(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const money = (amount: number) => `￥${Math.abs(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const hasBalanceSteps = detail.previousBalance !== null && detail.latestBalance !== null;
+        const accountPnl = hasBalanceSteps
+          ? Number(detail.previousBalance) + detail.capitalChange - detail.withdraw - Number(detail.latestBalance)
+          : detail.latestPnl - detail.previousPnl;
+        const previousLabel = detail.previousDate ? detail.previousDate.slice(5).replace('-', '/') : '上一有效数据';
+        const latestLabel = detail.latestDate ? detail.latestDate.slice(5).replace('-', '/') : '当前数据';
+        return (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setDailyPnlDetail(null)}>
+            <div className="bg-white rounded-2xl shadow-xl mx-4 w-full max-w-sm" style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid #F0F0F0' }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-base font-bold" style={{ color: '#1A1A1A' }}>{detail.tagName}</span>
+                    <span className="text-xs ml-2 px-2 py-0.5 rounded-full" style={{ background: '#FFF3F3', color: '#D32F2F' }}>当日盈亏</span>
+                  </div>
+                  <button type="button" aria-label="关闭当日盈亏明细" onClick={() => setDailyPnlDetail(null)} className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: '#F5F5F5', color: '#757575' }}><X className="w-4 h-4" /></button>
+                </div>
+              </div>
+
+              <div style={{ overflowY: 'auto', flex: 1, padding: '12px 20px' }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#EEF2FF', color: '#3949AB' }}>{detail.isFirstSettlement ? '首次盘尾' : '日度结算'}</div>
+                  <div className="text-xs" style={{ color: '#888888' }}>{detail.isFirstSettlement ? `${latestLabel} · 15:05盘尾` : `${previousLabel} → ${latestLabel}`}</div>
+                </div>
+
+                <div className="rounded-xl space-y-1" style={{ background: '#FAFAFA', padding: '10px 14px' }}>
+                  {detail.isStockPortfolio ? (
+                    detail.isFirstSettlement ? (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs" style={{ color: '#888888' }}>当前个人累计盈亏</span>
+                          <span className="text-sm font-medium font-mono" style={{ color: resultColor }}>{signedMoney(detail.latestPnl)}</span>
+                        </div>
+                        <div className="text-xs" style={{ color: '#BDBDBD' }}>首次有效盘尾以 0 为比较基准</div>
+                        <div style={{ borderTop: '1px dashed #E0E0E0', margin: '6px 0' }} />
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold" style={{ color: '#555555' }}>当日个人盈亏</span>
+                          <span className="text-sm font-bold" style={{ color: resultColor }}>{signedMoney(detail.todayPnl)}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs" style={{ color: '#888888' }}>{previousLabel} 累计盈亏</span>
+                          <span className="text-sm font-medium font-mono" style={{ color: detail.previousPnl > 0 ? '#D32F2F' : detail.previousPnl < 0 ? '#388E3C' : '#1A1A1A' }}>{signedMoney(detail.previousPnl)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs" style={{ color: '#888888' }}>{latestLabel} 累计盈亏</span>
+                          <span className="text-sm font-medium font-mono" style={{ color: detail.latestPnl > 0 ? '#D32F2F' : detail.latestPnl < 0 ? '#388E3C' : '#1A1A1A' }}>{signedMoney(detail.latestPnl)}</span>
+                        </div>
+                        <div style={{ borderTop: '1px dashed #E0E0E0', margin: '6px 0' }} />
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold" style={{ color: '#555555' }}>当日个人盈亏 <span className="font-normal" style={{ color: '#BDBDBD' }}>当前 − 上一盘尾</span></span>
+                          <span className="text-sm font-bold" style={{ color: resultColor }}>{signedMoney(detail.todayPnl)}</span>
+                        </div>
+                      </>
+                    )
+                  ) : hasBalanceSteps ? (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs" style={{ color: '#888888' }}>{previousLabel} 上一笔余额</span>
+                        <span className="text-sm font-medium font-mono" style={{ color: '#1A1A1A' }}>{money(Number(detail.previousBalance))}</span>
+                      </div>
+                      {detail.capitalChange !== 0 && <div className="flex items-center justify-between"><span className="text-xs" style={{ color: '#888888' }}>{detail.capitalChange > 0 ? '追加本金' : '减少本金'}</span><span className="text-sm font-medium font-mono" style={{ color: detail.capitalChange > 0 ? '#1565C0' : '#E65100' }}>{detail.capitalChange > 0 ? '+' : '−'}{money(detail.capitalChange)}</span></div>}
+                      {detail.withdraw > 0 && <div className="flex items-center justify-between"><span className="text-xs" style={{ color: '#888888' }}>当日提现</span><span className="text-sm font-medium font-mono" style={{ color: '#E65100' }}>−{money(detail.withdraw)}</span></div>}
+                      <div style={{ borderTop: '1px solid #E0E0E0', margin: '4px 0' }} />
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs" style={{ color: '#888888' }}>{latestLabel} 最新余额</span>
+                        <span className="text-sm font-medium font-mono" style={{ color: '#1A1A1A' }}>{money(Number(detail.latestBalance))}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs" style={{ color: '#888888' }}>剔除资金流后的账户盈亏</span>
+                        <span className="text-sm font-medium font-mono" style={{ color: accountPnl > 0 ? '#D32F2F' : accountPnl < 0 ? '#388E3C' : '#BDBDBD' }}>{signedMoney(accountPnl)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs" style={{ color: '#888888' }}>占比</span>
+                        <span className="text-sm font-medium" style={{ color: '#555555' }}>× {detail.ratio.toFixed(2)}%</span>
+                      </div>
+                      <div style={{ borderTop: '1px dashed #E0E0E0', margin: '6px 0' }} />
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold" style={{ color: '#555555' }}>当日回报</span>
+                        <span className="text-sm font-bold" style={{ color: resultColor }}>{signedMoney(detail.todayPnl)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between"><span className="text-xs" style={{ color: '#888888' }}>上一笔累计回报</span><span className="text-sm font-medium font-mono" style={{ color: '#1A1A1A' }}>{signedMoney(detail.previousPnl)}</span></div>
+                      <div className="flex items-center justify-between"><span className="text-xs" style={{ color: '#888888' }}>当前累计回报</span><span className="text-sm font-medium font-mono" style={{ color: '#1A1A1A' }}>{signedMoney(detail.latestPnl)}</span></div>
+                      <div className="flex items-center justify-between"><span className="text-xs" style={{ color: '#888888' }}>占比</span><span className="text-sm font-medium" style={{ color: '#555555' }}>× {detail.ratio.toFixed(2)}%</span></div>
+                      <div style={{ borderTop: '1px dashed #E0E0E0', margin: '6px 0' }} />
+                      <div className="flex items-center justify-between"><span className="text-xs font-semibold" style={{ color: '#555555' }}>当日回报 <span className="font-normal" style={{ color: '#BDBDBD' }}>累计回报差额 × 占比</span></span><span className="text-sm font-bold" style={{ color: resultColor }}>{signedMoney(detail.todayPnl)}</span></div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ padding: '10px 20px 16px', background: '#FFFFFF', borderRadius: '0 0 16px 16px' }}>
+                <button type="button" onClick={() => setDailyPnlDetail(null)} className="w-full py-2 rounded-xl text-sm font-semibold" style={{ background: '#F5F5F5', color: '#666666' }}>关闭</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {totalTodayPnlDetail && (() => {
+        const detail = totalTodayPnlDetail;
+        const resultColor = detail.total > 0 ? '#D32F2F' : detail.total < 0 ? '#388E3C' : '#757575';
+        const signedMoney = (amount: number) => `${amount > 0 ? '+' : amount < 0 ? '−' : ''}￥${Math.abs(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        return (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center px-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setTotalTodayPnlDetail(null)}>
+            <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-xl" style={{ maxHeight: '84vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between" style={{ padding: '18px 20px 14px', borderBottom: '1px solid #F0F0F0' }}>
+                <div><div className="text-base font-bold" style={{ color: '#1A1A1A' }}>当日盈亏合计</div><div className="mt-1 text-xs" style={{ color: '#888888' }}>仅汇总已更新标签的当日盈亏</div></div>
+                <button type="button" aria-label="关闭当日盈亏合计" onClick={() => setTotalTodayPnlDetail(null)} className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: '#F5F5F5', color: '#757575' }}><X className="w-4 h-4" /></button>
+              </div>
+              <div className="overflow-y-auto" style={{ padding: '14px 20px 16px' }}>
+                <div className="rounded-xl" style={{ padding: '13px 14px', background: '#F7F7F7', border: '1px solid #EEEEEE' }}><div className="text-xs font-medium" style={{ color: '#757575' }}>已计入 {detail.updated.length} 个标签</div><div className="mt-1 text-2xl font-bold" style={{ color: resultColor }}>{signedMoney(detail.total)}</div><div className="mt-2 text-xs" style={{ color: '#888888' }}>合计 = 下列所有已更新标签的当日盈亏之和</div></div>
+                <div className="mt-4 text-xs font-bold" style={{ color: '#555555' }}>已计入明细</div>
+                <div className="mt-2 overflow-hidden rounded-xl" style={{ border: '1px solid #EEEEEE' }}>
+                  {detail.updated.map((item, index) => <div key={item.tagName} className="flex items-center justify-between gap-3" style={{ padding: '11px 14px', borderBottom: index < detail.updated.length - 1 ? '1px solid #F2F2F2' : 'none' }}><div className="min-w-0"><div className="truncate text-sm font-medium" style={{ color: '#333333' }}>{item.tagName}</div><div className="mt-0.5 text-[11px]" style={{ color: '#9E9E9E' }}>更新至 {item.latestDate}</div></div><div className="shrink-0 text-sm font-bold font-mono" style={{ color: item.amount > 0 ? '#D32F2F' : item.amount < 0 ? '#388E3C' : '#757575' }}>{signedMoney(item.amount)}</div></div>)}
+                </div>
+                {detail.pending.length > 0 && <><div className="mt-4 text-xs font-bold" style={{ color: '#888888' }}>未更新（不计入合计）</div><div className="mt-2 overflow-hidden rounded-xl" style={{ border: '1px solid #EEEEEE', background: '#FAFAFA' }}>{detail.pending.map((item, index) => <div key={item.tagName} className="flex items-center justify-between gap-3" style={{ padding: '10px 14px', borderBottom: index < detail.pending.length - 1 ? '1px solid #F0F0F0' : 'none' }}><span className="truncate text-sm" style={{ color: '#888888' }}>{item.tagName}</span><span className="shrink-0 text-[11px]" style={{ color: '#BDBDBD' }}>最新 {item.latestDate || '暂无数据'}</span></div>)}</div></>}
+              </div>
+              <div style={{ padding: '10px 20px 16px', borderTop: '1px solid #F0F0F0' }}><button type="button" onClick={() => setTotalTodayPnlDetail(null)} className="w-full rounded-xl py-2 text-sm font-semibold" style={{ background: '#F5F5F5', color: '#666666' }}>关闭</button></div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── 盈亏计算详情弹窗 ── */}
       {showPnlExplain && (() => {
         // 计算弹窗内需要的数据
@@ -5032,7 +5464,7 @@ export default function LedgerDetailAA({
                   {(dividendNotesData?.notes ?? []).length > 0 && (
                     <div className="mt-3 px-3 py-2 rounded-xl" style={{ backgroundColor: '#FFF8E1' }}>
                       <div className="text-xs font-medium mb-1" style={{ color: '#F57F17' }}>备注</div>
-                      {(dividendNotesData.notes as any[]).map((note: any) => (
+                      {(dividendNotesData?.notes ?? []).map((note: any) => (
                         <div key={note.id} className="text-xs" style={{ color: '#5D4037', whiteSpace: 'pre-wrap' }}>{note.content}</div>
                       ))}
                     </div>

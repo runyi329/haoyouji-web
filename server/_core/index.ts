@@ -234,26 +234,31 @@ async function initAgSyncSources() {
 }
 
 async function startServer() {
-  // 初始化字段分类
-  await initFieldCategories();
-  // 确保奢贝美容院数据库表存在
-  await ensureBeautyTables();
-  // 初始化红立方商品
-  await initRedCubeProduct();
-  
-  // 初始化数据库（确保意见本等功能所需字段存在）
-  const { initDatabase } = await import('../db-init');
-  await initDatabase();
-  
-  // 添加管理员为企业成员
-  const { addAdminAsMember } = await import('../add-admin-member');
-  await addAdminAsMember();
+  const isFastPreview = process.env.FAST_PREVIEW === 'true';
+  if (isFastPreview) {
+    console.log('[FastPreview] 跳过无关模块初始化与后台扫描，仅启动页面与 API 热预览');
+  } else {
+    // 初始化字段分类
+    await initFieldCategories();
+    // 确保奢贝美容院数据库表存在
+    await ensureBeautyTables();
+    // 初始化红立方商品
+    await initRedCubeProduct();
 
-  // 初始化 AI 用量监控表
-  const { initAIMonitorTables } = await import('../ai-monitor');
-  await initAIMonitorTables();
-  // 初始化 AG 同步数据源（确保 OpenNana 和 aiart.pics 记录存在）
-  await initAgSyncSources();
+    // 初始化数据库（确保意见本等功能所需字段存在）
+    const { initDatabase } = await import('../db-init');
+    await initDatabase();
+
+    // 添加管理员为企业成员
+    const { addAdminAsMember } = await import('../add-admin-member');
+    await addAdminAsMember();
+
+    // 初始化 AI 用量监控表
+    const { initAIMonitorTables } = await import('../ai-monitor');
+    await initAIMonitorTables();
+    // 初始化 AG 同步数据源（确保 OpenNana 和 aiart.pics 记录存在）
+    await initAgSyncSources();
+  }
   
   const app = express();
   const server = createServer(app);
@@ -749,6 +754,10 @@ async function startServer() {
 
   server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
+    if (isFastPreview) {
+      console.log('[FastPreview] 后台扫描与定时任务已禁用');
+      return;
+    }
     // 部署成功后发送短信通知（已关闭）
     // const adminPhone = process.env.ADMIN_PHONE || "13127919173";
     // if (adminPhone) {

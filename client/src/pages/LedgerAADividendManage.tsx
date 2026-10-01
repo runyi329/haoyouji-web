@@ -91,11 +91,13 @@ export default function LedgerAADividendManage() {
   });
 
   const isAdmin = ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin';
+  // 37号账本的分红仅由胡大叔维护；其他账本保持原有 owner/admin 权限。
+  const canManageDividends = ledgerId === 37 ? Number(user?.id) === 870413 : isAdmin;
 
   // ── 管理员：获取成员列表和所有分红记录 ──
   const { data: initialBalancesAll } = trpc.ledger.adminGetAllInitialBalances.useQuery(
     { ledgerId },
-    { enabled: !!ledgerId && isAdmin }
+    { enabled: !!ledgerId && canManageDividends }
   );
   const members: any[] = useMemo(() => initialBalancesAll?.members ?? [], [initialBalancesAll]);
 
@@ -110,7 +112,7 @@ export default function LedgerAADividendManage() {
 
   const { data: allDividendsData, refetch: refetchDividends } = trpc.adminGetAllDividends.useQuery(
     { ledgerId },
-    { enabled: !!ledgerId && isAdmin }
+    { enabled: !!ledgerId && canManageDividends }
   );
 
   const dividendsByUser = useMemo(() => {
@@ -154,7 +156,7 @@ export default function LedgerAADividendManage() {
   // ── 普通成员：获取自己的分红明细 ──
   const { data: myDividendData, refetch: refetchMyDividends } = trpc.getDividendRecords.useQuery(
     { ledgerId },
-    { enabled: !!ledgerId && !isAdmin && !!ledgerData }
+    { enabled: !!ledgerId && !isAdmin && !!ledgerData && ledgerId !== 37 }
   );
   const myRecords: any[] = myDividendData?.records ?? [];
   const myTotal = myRecords.reduce((s, r) => s + parseFloat(r.amount), 0);
@@ -264,6 +266,17 @@ export default function LedgerAADividendManage() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F5F5' }}>
         <span style={{ color: '#9E9E9E' }}>加载中...</span>
+      </div>
+    );
+  }
+
+  if (ledgerId === 37 && !canManageDividends) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6 text-center" style={{ backgroundColor: '#F5F5F5' }}>
+        <div>
+          <div className="text-base font-semibold" style={{ color: '#424242' }}>无权访问分红管理</div>
+          <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="mt-4 px-4 py-2 text-sm" style={{ color: '#D32F2F' }}>返回账本</button>
+        </div>
       </div>
     );
   }

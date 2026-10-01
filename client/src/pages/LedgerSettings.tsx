@@ -487,11 +487,13 @@ export default function LedgerSettings() {
          showIcon
          onClick={() => setLocation(`/ledger/${ledgerId}/categories`)}
        />
-       <SettingItem
-         label="分红管理"
-         showIcon
-         onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage`)}
-       />
+       {Number(user?.id) === 870413 && (
+         <SettingItem
+           label="分红管理"
+           showIcon
+           onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage`)}
+         />
+       )}
      </>
    );
  })()}
