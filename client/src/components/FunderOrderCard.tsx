@@ -831,11 +831,12 @@ export function FunderOrderCard({
     const serverCalculatedOrders = (sharedPoolInfo as any)?.nonSharedOrders;
     // 优先直接复用各订单卡已经算出的最终担保缺口。手工股票、37号标签、人民币利息等
     // 复杂口径都已在卡片内完成，弹窗仅做 U 展示，绝不再另起一套计算公式。
-    // 服务器值只在该订单卡尚未渲染时作为后备，避免筛选/懒加载期间留白。
+    // 共享弹窗不得回退到服务端的简化缺口：它会漏掉手工股票、37号标签担保
+    // 和已结利息。订单卡最终口径尚未就绪时宁可显示“读取中”，也不能显示错误数值。
     if (Array.isArray(serverCalculatedOrders)) return serverCalculatedOrders.map((candidate: any) => {
       const orderId = Number(candidate.orderId ?? candidate.id);
       const cardGap = Number(sharedGapMap?.[orderId]);
-      return Number.isFinite(cardGap) ? { ...candidate, collateralGap: cardGap } : candidate;
+      return Number.isFinite(cardGap) ? { ...candidate, collateralGap: cardGap } : { ...candidate, collateralGap: Number.NaN };
     });
     const sharedOrderIds = new Set<number>(((sharedPoolInfo as any)?.orders ?? []).map((poolOrder: any) => Number(poolOrder.orderId)));
     return (allOrders ?? []).filter((candidate: any) => {

@@ -3930,7 +3930,32 @@ export default function CryptoPrediction() {
                       <div className="text-gray-400 text-sm">{financeL3Tab === 'settled' ? '暂无已结清订单' : '该分类下暂无进行中订单'}</div>
                     </div>
                   ) : financeViewMode === 'card' ? (
-                    <div className="space-y-3">
+                    <>
+                      {/*
+                        共享担保弹窗只展示订单模式已经确认的最终“担保缺口”。
+                        银色/金色卡片各自的视觉简化公式不能作为弹窗口径，否则会漏掉
+                        37 号逐笔担保、待结/已结利息或手工股票组合。隐藏的订单模式卡
+                        仅负责将同一份最终结果写入 financeExposureGapMap，不产生界面。
+                      */}
+                      <div aria-hidden="true" style={{ display: 'none' }}>
+                        {financeOrders.filter((order: any) => order.status === 'active').map((order: any) => (
+                          <FunderOrderCard
+                            key={`canonical-gap-${order.id}`}
+                            order={order}
+                            ledgerId={ledgerId}
+                            livePrices={financeLivePrices}
+                            priceDirection={{}}
+                            currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
+                            isAdmin={false}
+                            membersData={(ledgerInfo as any)?.members || []}
+                            isInvited={!!(order._isParticipant || order._fromFunder)}
+                            allOrders={financeOrders}
+                            onExposureGapChange={handleFinanceExposureGapChange}
+                            sharedGapMap={financeExposureGapMap}
+                          />
+                        ))}
+                      </div>
+                      <div className="space-y-3">
                       {sortedOrders.map((order: any) => {
                         // 按利率符号判断布局：正号（rate>=0）→付息型（突出利息，股票金色），负号（rate<0）→权益型（突出持仓，銀色）
                         // 利率为负或为0 → 权益型（突出资产）；利率为正 → 付息型（突出利息）
@@ -3961,25 +3986,8 @@ export default function CryptoPrediction() {
                           />
                         );
                       })}
-                      {/* 卡片模式没有可见的订单模式卡片；隐藏计算器仅上报同一张订单已定义的最终缺口。 */}
-                      <div aria-hidden="true" style={{ display: 'none' }}>
-                        {financeOrders.map((order: any) => (
-                          <FunderOrderCard
-                            key={`finance-gap-reporter-${order.id}`}
-                            order={order}
-                            ledgerId={ledgerId}
-                            livePrices={financeLivePrices}
-                            priceDirection={{}}
-                            currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
-                            isAdmin={false}
-                            membersData={(ledgerInfo as any)?.members || []}
-                            allOrders={financeOrders}
-                            onExposureGapChange={handleFinanceExposureGapChange}
-                            sharedGapMap={financeExposureGapMap}
-                          />
-                        ))}
                       </div>
-                    </div>
+                    </>
                   ) : (
                     <div className="space-y-3">
                       {sortedOrders.map((order: any) => (

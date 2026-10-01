@@ -1495,11 +1495,12 @@ export function FunderOrderCardV2Silver({
   const nonSharedOwnerOrders = (() => {
     const serverCalculatedOrders = (sharedPoolInfo as any)?.nonSharedOrders;
     // 订单模式已完成完整风险口径；卡片模式只复用该最终结果。服务端值仅在对应订单
-    // 尚未渲染时后备，避免手工股票、37号标签和人民币利息被第二套公式简化。
+    // 尚未就绪时不使用服务端简化公式；手工股票、37号标签和人民币利息必须等待
+    // 订单模式卡片上报最终口径，避免把错误的缺口展示给用户。
     if (Array.isArray(serverCalculatedOrders)) return serverCalculatedOrders.map((candidate: any) => {
       const orderId = Number(candidate.orderId ?? candidate.id);
       const cardGap = Number(sharedGapMap?.[orderId]);
-      return Number.isFinite(cardGap) ? { ...candidate, collateralGap: cardGap } : candidate;
+      return Number.isFinite(cardGap) ? { ...candidate, collateralGap: cardGap } : { ...candidate, collateralGap: Number.NaN };
     });
     const sharedOrderIds = new Set<number>(((sharedPoolInfo as any)?.orders ?? []).map((poolOrder: any) => Number(poolOrder.orderId)));
     const currentLedgerId = Number((order as any).ledger_id ?? ledgerId ?? 0);
