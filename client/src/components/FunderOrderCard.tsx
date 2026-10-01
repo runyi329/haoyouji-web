@@ -641,6 +641,10 @@ export function FunderOrderCard({
   const cardExportRef = useRef<HTMLDivElement>(null);
   // 共享担保弹窗：点击订单号弹出第二层订单详情
   const [clickedOrderNo, setClickedOrderNo] = useState<string | null>(null);
+  const [collateralDetail, setCollateralDetail] = useState<{
+    orderNo: string;
+    assets: Array<{ coin: string; qty: string; valueU: number | null }>;
+  } | null>(null);
   // clickedOrder: 延迟计算，在 sharedPoolInfo 声明之后（见下方 clickedOrderResolved）
   // ===== 内部 fallback：当父组件未传入对应 props 时，组件自己管理 state 和 mutation =====
   const trpcUtils = trpc.useUtils();
@@ -822,6 +826,21 @@ export function FunderOrderCard({
       refetchIntervalInBackground: false,
     }
   );
+  // 共享池只计入拥有者本人且开启共享担保的订单；其余本人订单仅作提示，绝不计入共享担保总额。
+  const nonSharedOwnerOrders = (() => {
+    const sharedOrderIds = new Set<number>(((sharedPoolInfo as any)?.orders ?? []).map((poolOrder: any) => Number(poolOrder.orderId)));
+    return (allOrders ?? []).filter((candidate: any) => {
+      const ownerId = Number(candidate.user_id ?? candidate.owner_user_id ?? candidate.userId);
+      const candidateId = Number(candidate.id ?? candidate.orderId);
+      const isParticipantSnapshot = candidate._isParticipant === true || candidate.order_perspective === 'other' || candidate.participantInfo?.role === 'participant';
+      return ownerId === sharedCollateralViewUserId
+        && Number(candidate.ledger_id ?? candidate.ledgerId) === ledgerId
+        && candidate.status === 'active'
+        && !isParticipantSnapshot
+        && !sharedOrderIds.has(candidateId)
+        && String(candidate.collateral_share_mode ?? candidate.collateralShareMode ?? 'none') !== 'self';
+    });
+  })();
   // 订单模式共享担保弹窗：点击订单号后打开订单详情（先从 allOrders 找，找不到则从 sharedPoolInfo 构造）
   const clickedOrder = clickedOrderNo ? (
     (allOrders ?? []).find((o: any) => o.order_no === clickedOrderNo)
@@ -3224,12 +3243,13 @@ export function FunderOrderCard({
                             {sharedPoolInfo ? (
                               <>
                                 <div className="space-y-1.5">
-                                  {((sharedPoolInfo as any).orders ?? []).map((o: any) => {
+                                  {((sharedPoolInfo as any).orders ?? []).map((o: any, index: number) => {
                                     // balance = 当前持有资产市值 − 所选基准 − 待结利息 + 已结利息。
                                     // 此处不含担保物，担保物统一在第④项只加一次。
                                     const oQty = Number(o.quantity ?? 0);
                                     const oPrincipal = Number(o.principal ?? 0);
                                     const oCoin = (o.coin || '').toUpperCase();
+                                    const assetTypeLabel = o.assetType === 'stock' ? '股' : o.assetType === 'crypto_option' ? '期' : '币';
                                     const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
                                     // 标的为CNY仅影响市值；计息基数和待结利息必须按各自币种换算为U。
                                     const isCNY = oCoin === 'CNY';
@@ -3258,6 +3278,8 @@ export function FunderOrderCard({
                                       return (
                                         <div key={o.orderId} className="flex justify-between items-center">
                                           <div>
+                                            <span className="mr-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
+                                            <span className="mr-1.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
                                             <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                             <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
                                           </div>
@@ -3294,6 +3316,8 @@ export function FunderOrderCard({
                                     return (
                                       <div key={o.orderId} className="flex justify-between items-center">
                                         <div>
+                                          <span className="mr-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
+                                          <span className="mr-1.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
                                           <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                           <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
                                           {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {oCoin === 'BTC' ? oQty.toFixed(2) : oQty}</span> : null}
@@ -3333,28 +3357,71 @@ export function FunderOrderCard({
                             {sharedPoolInfo ? (
                               <>
                                 <div className="space-y-1.5">
-                                  {((sharedPoolInfo as any).orders ?? []).map((o: any) => (
-                                    <div key={o.orderId}>
-                                      {(o.collateralAssets ?? []).length === 0 ? (
-                                        <div className="flex justify-between items-center">
-                                          <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
-                                          <span style={{ color: '#9CA3AF' }}>无担保物</span>
+                                  {((sharedPoolInfo as any).orders ?? []).map((o: any, index: number) => {
+                                    const collateralAssets = Array.isArray(o.collateralAssets) ? o.collateralAssets : [];
+                                    const assetTypeLabel = o.assetType === 'stock' ? '股' : o.assetType === 'crypto_option' ? '期' : '币';
+                                    const collateralItems = collateralAssets.map((asset: any) => {
+                                      const coin = String(asset?.coin || '').trim().toUpperCase();
+                                      const qty = String(asset?.qty ?? asset?.amount ?? '').trim();
+                                      const quantity = Number(qty);
+                                      const priceU = ['CNY', 'RMB', '人民币'].includes(coin)
+                                        ? 1 / cnyRate
+                                        : ['USDT', 'USDC', 'USDE', 'USD', 'DAI'].includes(coin)
+                                          ? 1
+                                          : Number(livePrices[coin] ?? NaN);
+                                      const valueU = Number.isFinite(quantity) && Number.isFinite(priceU) && priceU > 0
+                                        ? quantity * priceU
+                                        : null;
+                                      return { coin, qty, valueU };
+                                    });
+                                    const primaryCollateral = collateralItems.slice().sort((a: { valueU: number | null }, b: { valueU: number | null }) => (b.valueU ?? -Infinity) - (a.valueU ?? -Infinity))[0];
+                                    return (
+                                      <div key={o.orderId} className="flex justify-between items-center gap-2">
+                                        <div className="min-w-0 flex flex-wrap items-baseline">
+                                          <span className="mr-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
+                                          <span className="mr-1.5 text-[10px] font-medium shrink-0" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
+                                          <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono underline underline-offset-2 cursor-pointer shrink-0" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
+                                          {collateralItems.length > 1 ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => setCollateralDetail({ orderNo: String(o.orderNo), assets: collateralItems })}
+                                              className="ml-1.5 text-xs cursor-pointer"
+                                              style={{ color: '#9CA3AF', background: 'none', border: 'none', borderBottom: '1px dashed #9CA3AF', padding: 0 }}
+                                              title="查看全部担保物"
+                                            >
+                                              {primaryCollateral?.coin || '担保物'}{primaryCollateral?.qty ? ` × ${primaryCollateral.qty}` : ''} ···
+                                            </button>
+                                          ) : collateralItems.length === 1
+                                            ? <span className="ml-1.5 text-xs" style={{ color: '#9CA3AF' }}>{primaryCollateral?.coin || '担保物'}{primaryCollateral?.qty ? ` × ${primaryCollateral.qty}` : ''}</span>
+                                            : <span className="ml-1.5 text-xs" style={{ color: '#9CA3AF' }}>无担保物</span>}
                                         </div>
-                                      ) : (
-                                        <div className="flex justify-between items-center">
-                                          <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
-                                          <span className="font-mono font-semibold" style={{ color: '#DC2626' }}>
-                                            {o.collateralValue > 0 ? `+${o.collateralValue.toFixed(2)} u` : '+--- u'}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
+                                        <span className="font-mono font-semibold shrink-0" style={{ color: '#DC2626' }}>
+                                          {collateralAssets.length > 0 && o.collateralValue > 0 ? `+${o.collateralValue.toFixed(2)} u` : '+--- u'}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                                 <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                                   <span style={{ color: '#374151' }}>合计担保物价值</span>
                                   <span className="font-mono" style={{ color: '#DC2626' }}>+{((sharedPoolInfo as any).totalCollateralValue ?? 0).toFixed(2)} u</span>
                                 </div>
+                                {nonSharedOwnerOrders.length > 0 && (
+                                  <div className="mt-2 pt-2" style={{ borderTop: '1px dashed #D1D5DB' }}>
+                                    <div className="mb-1 text-xs" style={{ color: '#9CA3AF' }}>以下订单不计入共享担保合计</div>
+                                    <div className="space-y-1.5">
+                                      {nonSharedOwnerOrders.map((nonSharedOrder: any, index: number) => {
+                                        const assetTypeLabel = nonSharedOrder.asset_type === 'stock' ? '股' : nonSharedOrder.asset_type === 'crypto_option' ? '期' : '币';
+                                        return <div key={nonSharedOrder.id} className="flex items-center gap-1.5">
+                                          <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{((sharedPoolInfo as any).orders ?? []).length + index + 1}</span>
+                                          <span className="text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
+                                          <button type="button" onClick={() => setClickedOrderNo(nonSharedOrder.order_no)} className="font-mono underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{nonSharedOrder.order_no}</button>
+                                          <span className="text-xs" style={{ color: '#9CA3AF' }}>非共享担保订单</span>
+                                        </div>;
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
                               </>
                             ) : (
                               <div className="text-gray-400">加载中...</div>
@@ -3482,6 +3549,35 @@ export function FunderOrderCard({
                         previewMode={true}
                       />
                     </div>
+                  </div>
+                </div>
+              )}
+              {collateralDetail && (
+                <div className="fixed inset-0 z-[230] flex items-center justify-center px-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setCollateralDetail(null)}>
+                  <div className="w-full max-w-md max-h-[80vh] overflow-y-auto bg-white rounded-2xl px-4 pt-4 pb-6" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid #E5E7EB' }}>
+                      <div>
+                        <div className="text-sm font-bold" style={{ color: '#1A2340' }}>{collateralDetail.orderNo} 担保物详情</div>
+                        <div className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>按实时市值从高到低展示</div>
+                      </div>
+                      <button type="button" onClick={() => setCollateralDetail(null)} className="text-gray-400 text-xl leading-none">×</button>
+                    </div>
+                    <div className="py-2 space-y-1.5">
+                      {collateralDetail.assets.slice().sort((a, b) => (b.valueU ?? -Infinity) - (a.valueU ?? -Infinity)).map((asset, index) => (
+                        <div key={`${asset.coin}-${index}`} className="flex items-center justify-between py-1.5">
+                          <span className="font-mono text-sm" style={{ color: '#374151' }}>{asset.coin || '未知资产'}{asset.qty ? ` × ${asset.qty}` : ''}</span>
+                          <span className="font-mono text-sm font-semibold" style={{ color: '#DC2626' }}>{asset.valueU === null ? '实时价加载中' : `≈ ${asset.valueU.toFixed(2)} u`}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {(() => {
+                      const allKnown = collateralDetail.assets.every(asset => asset.valueU !== null);
+                      const totalValue = collateralDetail.assets.reduce((sum, asset) => sum + (asset.valueU ?? 0), 0);
+                      return <div className="pt-3 flex items-center justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
+                        <span style={{ color: '#374151' }}>担保物合计</span>
+                        <span className="font-mono" style={{ color: '#DC2626' }}>{allKnown ? `≈ ${totalValue.toFixed(2)} u` : '实时价加载中'}</span>
+                      </div>;
+                    })()}
                   </div>
                 </div>
               )}
