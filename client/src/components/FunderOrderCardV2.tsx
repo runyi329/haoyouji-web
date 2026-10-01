@@ -2802,10 +2802,10 @@ export function FunderOrderCardV2Silver({
                       className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
                       style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}>!</button>
                   </span>
-                  <span className="flex flex-col items-end leading-tight" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                    <span>{isSufficient ? '+' : '-'}{Math.abs(exposure).toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
+                  <span className="inline-block text-right leading-tight" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                    <span className="block">{isSufficient ? '+' : '-'}{Math.abs(exposure).toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
                     {cardCollateralGapApprox !== 'hidden' && (
-                      <span className="mt-0.5 text-[10px] font-medium opacity-80">≈ {cardCollateralGapApprox === 'CNY'
+                      <span className="block mt-0.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>≈ {cardCollateralGapApprox === 'CNY'
                         ? `${(exposure * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
                         : `${exposure.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`}</span>
                     )}

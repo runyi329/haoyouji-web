@@ -2051,13 +2051,17 @@ export function FunderOrderCard({
     if (sharedOrderPrincipalLentOut && Number.isFinite(serverValue) && serverValue > 0) return serverValue;
     return sharedOrderHoldingValueU ?? sharedOrderGapBaseU;
   })();
-  const sharedOrderExposure = sharedOrderCollateralValueU !== null
-    ? (sharedOrderPrincipalLentOut
-      ? sharedOrderCollateralValueU - sharedOrderBorrowedValueU - sharedOrderPendingInterestU + sharedOrderPaidInterestU
-      : sharedOrderStockContributionU !== null
-      ? sharedOrderStockContributionU - sharedOrderPendingInterestU + sharedOrderPaidInterestU + sharedOrderCollateralValueU
-      : -sharedOrderGapBaseU - sharedOrderPendingInterestU + sharedOrderPaidInterestU + sharedOrderCollateralValueU)
-    : null;
+  const sharedOrderExposure = isOptionOrder
+    // 「借出本金」对期权仅标识融资来源，不能把期权实时市值当作已借出本金再次扣除。
+    // 共享担保卡片行必须直接复用期权单订单口径：浮盈亏 − 待结 + 已结 + 本订单担保物。
+    ? optionExposure
+    : sharedOrderCollateralValueU !== null
+      ? (sharedOrderPrincipalLentOut
+        ? sharedOrderCollateralValueU - sharedOrderBorrowedValueU - sharedOrderPendingInterestU + sharedOrderPaidInterestU
+        : sharedOrderStockContributionU !== null
+          ? sharedOrderStockContributionU - sharedOrderPendingInterestU + sharedOrderPaidInterestU + sharedOrderCollateralValueU
+          : -sharedOrderGapBaseU - sharedOrderPendingInterestU + sharedOrderPaidInterestU + sharedOrderCollateralValueU)
+      : null;
   // 共享池中的37标签订单使用服务端回传的标签净值盈亏，不能再按股票行情价推算。
   // 同一标签的担保物与净值盈亏都只计一次；各订单的待结利息/借出本金仍分别计入。
   const sharedPoolRemainingU = (() => {
@@ -2197,10 +2201,10 @@ export function FunderOrderCard({
     const approxUnit = approxCollateralGap === 'CNY' ? '元' : 'u';
     const format = (value: number, isCny: boolean) => `${value >= 0 ? '+' : ''}${value.toLocaleString(undefined, { maximumFractionDigits: isCny ? 0 : 2 })}`;
     return (
-      <span className="flex flex-col items-end leading-tight tabular-nums" style={{ color }}>
-        <span className="font-medium">{format(primaryValue, primaryIsCny)} {primaryUnit}</span>
+      <span className="inline-block text-right leading-tight tabular-nums" style={{ color }}>
+        <span className="block font-medium">{format(primaryValue, primaryIsCny)} {primaryUnit}</span>
         {approxValue !== null && (
-          <span className="mt-0.5 text-[10px] font-medium opacity-80">≈ {format(approxValue, approxCollateralGap === 'CNY')} {approxUnit}</span>
+          <span className="block mt-0.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>≈ {format(approxValue, approxCollateralGap === 'CNY')} {approxUnit}</span>
         )}
       </span>
     );
@@ -3780,8 +3784,8 @@ export function FunderOrderCard({
                   </div>
                 </div>
               )}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-0.5">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-0.5 pt-px">
                   <span className="text-gray-400">担保缺口</span>
                   <button
                     onClick={e => { e.stopPropagation(); setShowCollateralGapFormulaInfo(true); }}
