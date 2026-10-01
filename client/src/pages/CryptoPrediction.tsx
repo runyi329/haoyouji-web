@@ -3977,6 +3977,7 @@ export default function CryptoPrediction() {
                           membersData={(ledgerInfo as any)?.members || []}
                           isInvited={!!(order._isParticipant || order._fromFunder)}
                           allOrders={financeOrders}
+                          onExposureGapChange={handleFinanceExposureGapChange}
                           sharedGapMap={financeExposureGapMap}
                         />
                       ))}

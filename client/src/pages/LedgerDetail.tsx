@@ -2700,6 +2700,21 @@ export default function LedgerDetail() {
     }
   );
   const funderAssetOrders = (funderAssetData as any)?.orders ?? funderAssetData ?? [];
+  // 共享池⑤会列出拥有者的全部非共享订单；这些订单不一定出现在
+  // funderGetAssetOrders 的当前可见集合中。必须从完整融资订单接口挂载原订单卡，
+  // 才能直接引用每笔订单最终展示的担保缺口，而非使用服务端简化缺口。
+  const { data: canonicalFunderOrdersData } = trpc.ledger.financeGetOrders.useQuery(
+    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
+    {
+      enabled: isCustomAF && effectiveIsFunder && !!ledgerId,
+      retry: 1,
+      staleTime: 5000,
+      refetchInterval: 15000,
+      refetchIntervalInBackground: false,
+    }
+  );
+  const canonicalFunderOrders: any[] = (canonicalFunderOrdersData as any)?.orders ?? [];
+  const allFunderOrdersForGap = canonicalFunderOrders.length > 0 ? canonicalFunderOrders : funderAssetOrders;
   // livePrices：优先用接口返回的最新价格，若还未加载则从 localStorage 读取上次缓存
   const freshPrices: Record<string, number> = (funderAssetData as any)?.livePrices ?? {};
   const hasFreshPrices = Object.keys(freshPrices).length > 0;
@@ -5677,7 +5692,7 @@ export default function LedgerDetail() {
                       membersData={membersData as any[]}
                       cnyRate={cnyRate}
                       currentUser={user ? { id: (user as any).id, name: (user as any).name, username: (user as any).username, avatar: (user as any).avatar } : undefined}
-                      allOrders={funderDisplayOrders as any[]}
+                      allOrders={allFunderOrdersForGap}
                       sharedGapMap={funderExposureGapMap}
                     />
                   );
@@ -5697,7 +5712,8 @@ export default function LedgerDetail() {
                     currentUser={user}
                     membersData={membersData as any[]}
                     isAdmin={false}
-                    allOrders={funderDisplayOrders as any[]}
+                    allOrders={allFunderOrdersForGap}
+                    onExposureGapChange={handleFunderExposureGapChange}
                     sharedGapMap={funderExposureGapMap}
                   />
                 ))}
@@ -5705,9 +5721,9 @@ export default function LedgerDetail() {
             )}
             {/* ⑤只读取订单模式原卡的最终担保缺口。无论用户当前处在卡片或订单模式，
                 均常驻挂载全部原卡作为唯一来源，避免筛选后非共享订单未渲染而永久加载。 */}
-            {(funderDisplayOrders as any[]).length > 0 && (
+            {allFunderOrdersForGap.length > 0 && (
               <div aria-hidden="true" style={{ display: 'none' }}>
-                {(funderDisplayOrders as any[]).map((order: any) => (
+                {allFunderOrdersForGap.map((order: any) => (
                   <FunderOrderCard
                     key={`gap-reporter-${order.id}`}
                     order={order}
@@ -5717,7 +5733,7 @@ export default function LedgerDetail() {
                     currentUser={user}
                     membersData={membersData as any[]}
                     isAdmin={false}
-                    allOrders={funderDisplayOrders as any[]}
+                    allOrders={allFunderOrdersForGap}
                     onExposureGapChange={handleFunderExposureGapChange}
                     sharedGapMap={funderExposureGapMap}
                   />
