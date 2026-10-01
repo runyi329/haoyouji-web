@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-10-01
+// 生成时间：2026-10-02
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9395,5 +9395,35 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-10-01": [
     { date: "2026-09-30T16:45:29Z", type: "fix", cleanMessage: "show actual stock tag margin separately" },
     { date: "2026-09-30T18:50:12Z", type: "feat", cleanMessage: "refine overview indicators and columns" },
+    { date: "2026-09-30T21:33:00Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-10-01T03:11:49Z", type: "feat", cleanMessage: "refine AA ledger workspace" },
+    { date: "2026-10-01T03:36:07Z", type: "fix", cleanMessage: "refine overview scroll bounds" },
+    { date: "2026-10-01T07:32:54Z", type: "feat", cleanMessage: "connect ledger 37 funding to global wallet" },
+    { date: "2026-10-01T07:54:37Z", type: "fix", cleanMessage: "isolate shared collateral by order owner" },
+    { date: "2026-10-01T08:29:07Z", type: "feat", cleanMessage: "refine shared collateral summary" },
+    { date: "2026-10-01T08:36:34Z", type: "fix", cleanMessage: "keep holding gap separate from collateral" },
+    { date: "2026-10-01T08:55:17Z", type: "feat", cleanMessage: "sort and clarify collateral orders" },
+    { date: "2026-10-01T09:10:59Z", type: "fix", cleanMessage: "reuse card collateral gaps in shared summary" },
+    { date: "2026-10-01T09:20:04Z", type: "fix", cleanMessage: "separate nonshared collateral and reuse card gaps" },
+    { date: "2026-10-01T09:27:18Z", type: "fix", cleanMessage: "reuse final card gaps in finance view" },
+    { date: "2026-10-01T09:50:13Z", type: "fix", cleanMessage: "reuse canonical collateral gap in shared summary" },
+    { date: "2026-10-01T09:54:29Z", type: "other", cleanMessage: "Revert \"fix: reuse canonical collateral gap in shared summary\"" },
+    { date: "2026-10-01T10:04:21Z", type: "fix", cleanMessage: "reuse displayed external collateral gap in shared pool" },
+    { date: "2026-10-01T10:21:41Z", type: "fix", cleanMessage: "use final order gap in non-shared collateral" },
+    { date: "2026-10-01T10:35:15Z", type: "fix", cleanMessage: "wire final gaps in ledger collateral view" },
+    { date: "2026-10-01T10:45:12Z", type: "fix", cleanMessage: "use order card gap as sole shared source" },
+    { date: "2026-10-01T11:05:39Z", type: "fix", cleanMessage: "keep canonical collateral gaps available in all views" },
+    { date: "2026-10-01T11:21:17Z", type: "fix", cleanMessage: "load owner order gaps for shared collateral" },
+    { date: "2026-10-01T12:49:16Z", type: "fix", cleanMessage: "load canonical gaps in shared collateral popup" },
+    { date: "2026-10-01T13:37:15Z", type: "refactor", cleanMessage: "rebuild nonshared collateral popup gaps" },
+    { date: "2026-10-01T15:11:10Z", type: "feat", cleanMessage: "sync ledger 52 market assets" },
+    { date: "2026-10-01T15:34:25Z", type: "fix", cleanMessage: "normalize snapshot history collation" },
+    { date: "2026-10-01T15:49:43Z", type: "fix", cleanMessage: "add icons for market assets" },
+    { date: "2026-10-01T15:55:59Z", type: "fix", cleanMessage: "host market asset icons on COS" },
+  ],
+  "2026-10-02": [
+    { date: "2026-10-01T16:05:54Z", type: "refactor", cleanMessage: "simplify total valuation display" },
+    { date: "2026-10-01T17:55:50Z", type: "fix", cleanMessage: "unify collateral and option gap valuation" },
+    { date: "2026-10-01T18:10:17Z", type: "fix", cleanMessage: "use option pnl for shared collateral gap" },
   ],
 };
