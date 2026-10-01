@@ -829,9 +829,14 @@ export function FunderOrderCard({
   // 共享池只计入拥有者本人且开启共享担保的订单；其余本人订单仅作提示，绝不计入共享担保总额。
   const nonSharedOwnerOrders = (() => {
     const serverCalculatedOrders = (sharedPoolInfo as any)?.nonSharedOrders;
-    // 服务端沿用共享池同一套实时价格、持仓和利息口径计算非共享订单的担保缺口，
-    // 不能在前端用不完整的订单快照重算。
-    if (Array.isArray(serverCalculatedOrders)) return serverCalculatedOrders;
+    // 优先直接复用各订单卡已经算出的最终担保缺口。手工股票、37号标签、人民币利息等
+    // 复杂口径都已在卡片内完成，弹窗仅做 U 展示，绝不再另起一套计算公式。
+    // 服务器值只在该订单卡尚未渲染时作为后备，避免筛选/懒加载期间留白。
+    if (Array.isArray(serverCalculatedOrders)) return serverCalculatedOrders.map((candidate: any) => {
+      const orderId = Number(candidate.orderId ?? candidate.id);
+      const cardGap = Number(sharedGapMap?.[orderId]);
+      return Number.isFinite(cardGap) ? { ...candidate, collateralGap: cardGap } : candidate;
+    });
     const sharedOrderIds = new Set<number>(((sharedPoolInfo as any)?.orders ?? []).map((poolOrder: any) => Number(poolOrder.orderId)));
     return (allOrders ?? []).filter((candidate: any) => {
       const ownerId = Number(candidate.user_id ?? candidate.owner_user_id ?? candidate.userId);
@@ -2069,12 +2074,13 @@ export function FunderOrderCard({
   const showExposureLoading = (hasExternalPendingInterest && linkedPendingInterestForRisk === null)
     || (hasExternalPaidInterest && linkedPaidInterestForRisk === null)
     || (isSharedMode && sharedOrderExposure === null);
-  // 每次共享订单行内余量变化时上报给父组件，供扩展风险视图读取。
+  // 每张订单卡都上报最终担保缺口。共享弹窗直接读取此结果，避免手工组合、37号标签
+  // 或人民币利息在服务端摘要中被再次简化或重复计算。
   useEffect(() => {
-    if (isSharedMode && onExposureGapChange) {
-      onExposureGapChange(order.id, sharedOrderExposure ?? 0);
-    }
-  }, [sharedOrderExposure, isSharedMode, order.id]);
+    if (!onExposureGapChange) return;
+    const finalGap = isSharedMode ? sharedOrderExposure : (externalNonSharedGapU ?? exposure);
+    if (finalGap !== null && Number.isFinite(finalGap)) onExposureGapChange(order.id, finalGap);
+  }, [sharedOrderExposure, externalNonSharedGapU, exposure, isSharedMode, onExposureGapChange, order.id]);
 
   return (
     <>
@@ -3414,7 +3420,7 @@ export function FunderOrderCard({
                                   <span className="font-mono" style={{ color: '#DC2626' }}>+{((sharedPoolInfo as any).totalCollateralValue ?? 0).toFixed(2)} u</span>
                                 </div>
                                 {nonSharedOwnerOrders.length > 0 && (
-                                  <div className="mt-2 pt-2" style={{ borderTop: '1px dashed #D1D5DB' }}>
+                                  <div className="mt-2 rounded-lg px-2 py-2" style={{ background: '#F7F7F8', border: '1px solid #E5E7EB' }}>
                                     <div className="mb-1 text-xs" style={{ color: '#9CA3AF' }}>以下订单不计入共享担保合计</div>
                                     <div className="space-y-1.5">
                                       {nonSharedOwnerOrders.map((nonSharedOrder: any, index: number) => {
@@ -3430,13 +3436,13 @@ export function FunderOrderCard({
                                             <button type="button" onClick={() => setClickedOrderNo(orderNo)} className="font-mono underline underline-offset-2 cursor-pointer truncate" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{orderNo}</button>
                                             <span className="text-xs shrink-0" style={{ color: '#9CA3AF' }}>非共享担保订单</span>
                                           </div>
-                                          <span className="font-mono font-semibold shrink-0" style={{ color: Number.isFinite(gap) && gap < 0 ? '#DC2626' : '#16A34A' }}>{gapLabel}</span>
+                                          <span className="font-mono font-semibold shrink-0" style={{ color: Number.isFinite(gap) && gap < 0 ? '#16A34A' : '#DC2626' }}>{gapLabel}</span>
                                         </div>;
                                       })}
                                     </div>
                                     <div className="mt-2 pt-1.5 flex justify-between gap-3 font-semibold text-xs" style={{ borderTop: '1px dashed #D1D5DB' }}>
                                       <span style={{ color: '#6B7280' }}>非共享订单担保缺口合计（不计入共享担保）</span>
-                                      <span className="font-mono shrink-0" style={{ color: nonSharedGapTotal < 0 ? '#DC2626' : '#16A34A' }}>{nonSharedGapTotal >= 0 ? '+' : ''}{nonSharedGapTotal.toFixed(2)} u</span>
+                                      <span className="font-mono shrink-0" style={{ color: nonSharedGapTotal < 0 ? '#16A34A' : '#DC2626' }}>{nonSharedGapTotal >= 0 ? '+' : ''}{nonSharedGapTotal.toFixed(2)} u</span>
                                     </div>
                                   </div>
                                 )}

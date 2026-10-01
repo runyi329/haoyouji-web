@@ -2738,6 +2738,13 @@ export default function LedgerDetail() {
   // 资产订单视图模式：按账本和当前查看用户隔离保存，避免不同用户或账本之间互相覆盖。
   const funderViewModeStorageKey = `funder_view_mode_${ledgerId}_${viewAsUserId ?? (user as any)?.id ?? 'anonymous'}`;
   const [funderViewMode, setFunderViewMode] = useState<'card' | 'order'>('card');
+  // 订单卡是担保缺口的唯一完整计算源。共享担保弹窗按订单 ID 复用这些最终结果，
+  // 不另行重算手工组合、37号标签或人民币利息。
+  const [funderExposureGapMap, setFunderExposureGapMap] = useState<Record<number, number>>({});
+  const handleFunderExposureGapChange = useCallback((orderId: number, gap: number) => {
+    if (!Number.isFinite(orderId) || !Number.isFinite(gap)) return;
+    setFunderExposureGapMap(previous => previous[orderId] === gap ? previous : { ...previous, [orderId]: gap });
+  }, []);
   useEffect(() => {
     try {
       const savedMode = localStorage.getItem(funderViewModeStorageKey);
@@ -5689,6 +5696,8 @@ export default function LedgerDetail() {
                     membersData={membersData as any[]}
                     isAdmin={false}
                     allOrders={funderDisplayOrders as any[]}
+                    onExposureGapChange={handleFunderExposureGapChange}
+                    sharedGapMap={funderExposureGapMap}
                   />
                 ))}
               </div>
