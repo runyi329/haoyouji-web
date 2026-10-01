@@ -3946,7 +3946,6 @@ export default function CryptoPrediction() {
                             priceDirection={{}}
                             membersData={(ledgerInfo as any)?.members || []}
                             currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
-                            onExposureGapChange={handleFinanceExposureGapChange}
                           />
                         ) : (
                           <FunderOrderCardV2Silver
@@ -3959,15 +3958,13 @@ export default function CryptoPrediction() {
                             currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
                             allOrders={financeOrders}
                             sharedGapMap={financeExposureGapMap}
-                            onExposureGapChange={handleFinanceExposureGapChange}
                           />
                         );
                       })}
-                      {/* 普通订单沿用原订单卡的权威计算器。外部37号/手工股票订单由可见银色卡
-                          在担保物、待结与已结利息齐备后直接上报，隐藏卡不参与，防止未就绪时
-                          的浮盈回退值覆盖最终担保缺口。 */}
+                      {/* 第⑤项只订阅原订单卡实际展示的最终担保缺口。该卡是订单详情的唯一
+                          计算源，数据未齐时不回传；银色卡和共享弹窗都不另行计算或覆盖它。 */}
                       <div aria-hidden="true" style={{ display: 'none' }}>
-                        {financeOrders.filter((order: any) => !order.collateral_source).map((order: any) => (
+                        {financeOrders.map((order: any) => (
                           <FunderOrderCard
                             key={`finance-gap-reporter-${order.id}`}
                             order={order}
