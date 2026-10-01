@@ -588,6 +588,14 @@ export interface FunderOrderCardProps {
   allOrders?: any[];
 }
 
+// `Number(null) === 0` 会把尚未到齐的订单缺口错误伪装成 +0.00 U。
+// 第⑤项需要严格区分真实零值和未加载值，未确认前只显示“加载中”。
+function readConfirmedExposureGap(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const gap = Number(value);
+  return Number.isFinite(gap) ? gap : null;
+}
+
 export function FunderOrderCard({
   order,
   livePrices,
@@ -832,8 +840,8 @@ export function FunderOrderCard({
     const serverCalculatedOrders = (sharedPoolInfo as any)?.nonSharedOrders;
     if (Array.isArray(serverCalculatedOrders)) return serverCalculatedOrders.map((candidate: any) => {
       const orderId = Number(candidate.orderId ?? candidate.id);
-      const cardGap = Number(sharedGapMap?.[orderId]);
-      return { ...candidate, collateralGap: Number.isFinite(cardGap) ? cardGap : null };
+      const cardGap = readConfirmedExposureGap(sharedGapMap?.[orderId]);
+      return { ...candidate, collateralGap: cardGap };
     });
     const sharedOrderIds = new Set<number>(((sharedPoolInfo as any)?.orders ?? []).map((poolOrder: any) => Number(poolOrder.orderId)));
     return (allOrders ?? []).filter((candidate: any) => {
@@ -848,14 +856,14 @@ export function FunderOrderCard({
         && String(candidate.collateral_share_mode ?? candidate.collateralShareMode ?? 'none') !== 'self';
     }).map((candidate: any) => {
       const orderId = Number(candidate.id ?? candidate.orderId);
-      const cardGap = Number(sharedGapMap?.[orderId]);
-      return { ...candidate, collateralGap: Number.isFinite(cardGap) ? cardGap : null };
+      const cardGap = readConfirmedExposureGap(sharedGapMap?.[orderId]);
+      return { ...candidate, collateralGap: cardGap };
     });
   })();
-  const nonSharedGapReady = nonSharedOwnerOrders.every((candidate: any) => Number.isFinite(Number(candidate.collateralGap)));
+  const nonSharedGapReady = nonSharedOwnerOrders.every((candidate: any) => readConfirmedExposureGap(candidate.collateralGap) !== null);
   const nonSharedGapTotal = nonSharedOwnerOrders.reduce((sum: number, candidate: any) => {
-    const gap = Number(candidate.collateralGap);
-    return Number.isFinite(gap) ? sum + gap : sum;
+    const gap = readConfirmedExposureGap(candidate.collateralGap);
+    return gap !== null ? sum + gap : sum;
   }, 0);
   // 订单模式共享担保弹窗：点击订单号后打开订单详情（先从 allOrders 找，找不到则从 sharedPoolInfo 构造）
   const clickedOrder = clickedOrderNo ? (
@@ -3441,9 +3449,8 @@ export function FunderOrderCard({
                                   const assetType = nonSharedOrder.assetType ?? nonSharedOrder.asset_type;
                                   const assetTypeLabel = assetType === 'stock' ? '股' : assetType === 'crypto_option' ? '期' : '币';
                                   const orderNo = nonSharedOrder.orderNo ?? nonSharedOrder.order_no;
-                                  const gap = Number(nonSharedOrder.collateralGap);
-                                  const gapKnown = Number.isFinite(gap);
-                                  const gapLabel = gapKnown ? `${gap >= 0 ? '+' : ''}${gap.toFixed(2)} u` : '加载中...';
+                                  const gap = readConfirmedExposureGap(nonSharedOrder.collateralGap);
+                                  const gapLabel = gap !== null ? `${gap >= 0 ? '+' : ''}${gap.toFixed(2)} u` : '加载中...';
                                   return <div key={nonSharedOrder.orderId ?? nonSharedOrder.id} className="flex items-center justify-between gap-2">
                                     <div className="min-w-0 flex items-center gap-1.5">
                                       <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
@@ -3451,7 +3458,7 @@ export function FunderOrderCard({
                                       <button type="button" onClick={() => setClickedOrderNo(orderNo)} className="font-mono underline underline-offset-2 cursor-pointer truncate" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{orderNo}</button>
                                       <span className="text-xs shrink-0" style={{ color: '#9CA3AF' }}>非共享担保订单</span>
                                     </div>
-                                    <span className="font-mono font-semibold shrink-0" style={{ color: !gapKnown ? '#9CA3AF' : gap < 0 ? '#16A34A' : '#DC2626' }}>{gapLabel}</span>
+                                    <span className="font-mono font-semibold shrink-0" style={{ color: gap === null ? '#9CA3AF' : gap < 0 ? '#16A34A' : '#DC2626' }}>{gapLabel}</span>
                                   </div>;
                                 })}
                               </div>
