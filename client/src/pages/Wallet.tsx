@@ -751,7 +751,7 @@ export default function Wallet() {
   const configuredSettlementAssets = new Set(
     ((walletPolicyQuery.data?.visibleAssets ?? []) as string[]).map((asset) => String(asset).toUpperCase()),
   );
-  // 数字币账户只收纳项目允许且用户实际持有的币种；冻结担保也属于持有资产，不能因可用额为0而消失。
+  // 52号市场资产账户只收纳项目允许且用户实际持有的资产；冻结担保也属于持有资产，不能因可用额为0而消失。
   const visibleMultiAssetBalances = multiAssetBalances.filter((asset) =>
     configuredSettlementAssets.has(String(asset.assetCode || "").toUpperCase())
     && Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0))) > 0,
@@ -790,11 +790,11 @@ export default function Wallet() {
     (total, asset) => total + Number(asset.frozenBalance ?? 0) * Number(asset.priceUsdt ?? 0),
     0,
   );
-  const cryptoAccountLabel = hasDigitalAssets ? `数字币账户 · ${visibleDigitalAssetBalances.length} 项` : "数字币账户 · 暂无资产";
+  const cryptoAccountLabel = hasDigitalAssets ? `52号市场资产账户 · ${visibleDigitalAssetBalances.length} 项` : "52号市场资产账户 · 暂无资产";
   const foreignAccountLabel = foreignAccountsEnabled ? "外币账户" : "外币账户 · 暂无资产";
   const accountMenuItems: Array<{ value: WalletAccountAsset; label: string; enabled: boolean }> = isLedger52WalletEntry
     ? [
-      // 数字币账户始终可进入：即使当前没有资产，也可以使用其中的 USDT 充值通道。
+      // 52号市场资产账户始终可进入：即使当前没有资产，也可以使用其中的 USDT 充值通道。
       { value: "CRYPTO", label: cryptoAccountLabel, enabled: true },
       { value: "CNY", label: "人民币账户 · CNY", enabled: true },
       { value: "FOREIGN", label: foreignAccountLabel, enabled: foreignAccountsEnabled },
@@ -803,7 +803,7 @@ export default function Wallet() {
       { value: "USDT", label: "稳定币账户 · USDT", enabled: true },
       { value: "CNY", label: "人民币账户 · CNY", enabled: true },
     ];
-  const currentAccountLabel = accountMenuItems.find((item) => item.value === activeAsset)?.label || (isLedger52WalletEntry ? "数字币账户" : "稳定币账户 · USDT");
+  const currentAccountLabel = accountMenuItems.find((item) => item.value === activeAsset)?.label || (isLedger52WalletEntry ? "52号市场资产账户" : "稳定币账户 · USDT");
   const activeAssetDetailsPath = activeAsset === "USDT"
     ? appendWalletAccount("/wallet/transactions", "USDT")
     : activeAsset === "CNY"

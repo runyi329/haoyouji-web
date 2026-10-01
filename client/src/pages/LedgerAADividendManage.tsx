@@ -12,7 +12,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
+import { AI_WALLET_CRYPTO_MARKET_ASSETS } from "@shared/ai-wallet-assets";
 
 export default function LedgerAADividendManage() {
   const params = useParams();
@@ -647,7 +647,7 @@ export default function LedgerAADividendManage() {
                     <select value={addForm.assetCode} onChange={e => setAddForm(f => ({ ...f, assetCode: e.target.value }))} className="rounded-xl border bg-white px-2 text-sm outline-none" style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}>
                       <option value="CNY">人民币 CNY</option>
                       <option value="USDT">USDT</option>
-                      {AI_WALLET_SETTLEMENT_ASSETS.map((asset) => <option key={asset} value={asset}>{asset}</option>)}
+                      {AI_WALLET_CRYPTO_MARKET_ASSETS.map((asset) => <option key={asset} value={asset}>{asset}</option>)}
                     </select>
                   )}
                   <input

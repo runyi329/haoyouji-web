@@ -2,13 +2,14 @@
  * AI 智能钱包的全局资产目录。
  *
  * 说明：`funding` 资产为历史兼容的 CNY / USDT 资金账户；52 号账本订单币种目录
- * 中的 `market` 数字资产全部具备独立钱包余额、不可变流水、后台手动加减、站内
- * 转账和钱包担保能力。链上充值、提现地址仍须按币种网络单独配置后才会开放。
+ * 中的 `market` 市场资产（数字币、证券及商品）全部具备独立钱包余额、不可变流水、
+ * 后台手动加减、站内转账和钱包担保能力。链上充值、提现地址仅适用于数字币，仍须按
+ * 币种网络单独配置后才会开放。
  */
 export const AI_WALLET_FUNDING_ASSETS = ["CNY", "USDT"] as const;
 
-/** 与 52 号账本融资付息订单、price-scanner 的数字资产报价集合保持一致。 */
-export const AI_WALLET_MARKET_ASSETS = [
+/** 52 号账本融资付息订单、price-scanner 支持的全部数字资产。 */
+export const AI_WALLET_CRYPTO_MARKET_ASSETS = [
   "BTC", "ETH", "SOL", "BNB",
   "HYPE", "TRUMP", "PENGU", "XPL", "WLFI",
   "AVAX", "DOGE", "XLM", "TIA", "EIGEN", "FET",
@@ -17,9 +18,24 @@ export const AI_WALLET_MARKET_ASSETS = [
 ] as const;
 
 /**
- * 52号账本融资付息订单下拉中的全部数字货币，均启用“独立余额 + 手动加减 +
- * 站内转账 + 钱包担保”。股票、ETF、商品期货等非数字资产绝不混入数字币资金账本。
+ * 52 号账本融资付息订单下拉中可独立记账的证券与商品标的。
+ *
+ * 这些资产与数字币一样按“代码 + 数量”独立记账，不同的是它们不开放链上充提；价格
+ * 统一由 price-scanner 的证券/商品行情链路提供。CRCL（Circle）在此清单中，避免
+ * 管理员手动调账、站内转账和担保冻结与订单目录脱节。
  */
+export const AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS = [
+  "MSTR", "COIN", "AAOI", "HOOD", "SLV",
+  "TSLA", "NVDA", "AAPL", "MSFT", "GOOGL", "META", "AMZN", "SPY", "QQQ",
+  "NFLX", "ORCL", "TSM", "AMD", "CL", "NG", "CRCL", "DRAM", "MU", "SKHYNIX", "BZ",
+] as const;
+
+/** 与 52 号融资付息订单完整下拉一致的可独立记账市场资产。 */
+export const AI_WALLET_MARKET_ASSETS = [
+  ...AI_WALLET_CRYPTO_MARKET_ASSETS,
+  ...AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS,
+] as const;
+
 export const AI_WALLET_SETTLEMENT_ASSETS = [...AI_WALLET_MARKET_ASSETS] as const;
 export type AiWalletSettlementAsset = (typeof AI_WALLET_SETTLEMENT_ASSETS)[number];
 
@@ -73,6 +89,31 @@ const ASSET_NAMES: Record<AiWalletAsset, string> = {
   CRV: "Curve DAO",
   PEPE: "Pepe",
   B2: "B² Network",
+  MSTR: "Strategy",
+  COIN: "Coinbase",
+  AAOI: "Applied Optoelectronics",
+  HOOD: "Robinhood",
+  SLV: "iShares 白银 ETF",
+  TSLA: "Tesla",
+  NVDA: "NVIDIA",
+  AAPL: "Apple",
+  MSFT: "Microsoft",
+  GOOGL: "Alphabet",
+  META: "Meta",
+  AMZN: "Amazon",
+  SPY: "标普500 ETF",
+  QQQ: "纳斯达克100 ETF",
+  NFLX: "Netflix",
+  ORCL: "Oracle",
+  TSM: "台积电",
+  AMD: "AMD",
+  CL: "WTI 原油",
+  NG: "天然气",
+  CRCL: "Circle Internet Group",
+  DRAM: "DRAM ETF",
+  MU: "Micron",
+  SKHYNIX: "SK hynix",
+  BZ: "布伦特原油",
 };
 
 export const AI_WALLET_ASSET_CATALOG: readonly AiWalletAssetDefinition[] = AI_WALLET_ASSETS.map((code) => {
@@ -88,7 +129,7 @@ export const AI_WALLET_ASSET_CATALOG: readonly AiWalletAssetDefinition[] = AI_WA
         ? "现有余额、后台调账与站内转账已支持；用户端法币充值/提现申请闭环尚未接入。"
         : "现有余额、充值订单、提现审核、站内转账与链网络能力已接入。")
       : ((AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(code)
-        ? "多资产钱包：已启用独立余额、不可变流水、后台手动加减和站内转账；链上充值地址须在配置完成后另行开放。"
+        ? "52号市场资产钱包：已启用独立余额、不可变流水、后台手动加减、站内转账和担保冻结；数字币链上充提须完成网络配置后另行开放。"
         : "已接入 52 号账本的实时行情与仓位展示；尚未纳入独立钱包资金账本。"),
   };
 });
@@ -100,4 +141,9 @@ export const AI_WALLET_ASSET_COLORS: Record<AiWalletAsset, string> = {
   AAVE: "#B6509E", SUI: "#4DA2FF", ONDO: "#1A1A2E", ASTER: "#00D4AA", LDO: "#F68B1E", ENA: "#00C4B4",
   ARKM: "#FF6B00", UNI: "#FF007A", SEI: "#9C1FFF", PLUME: "#7B5EA7", ADA: "#0033AD", ZRO: "#111111", WLD: "#111111",
   LINK: "#2A5ADA", POL: "#8247E5", CRV: "#406C9A", PEPE: "#479F53", B2: "#F59E0B",
+  MSTR: "#F7931A", COIN: "#1652F0", AAOI: "#6D28D9", HOOD: "#00C805", SLV: "#8B95A5",
+  TSLA: "#CC0000", NVDA: "#76B900", AAPL: "#555555", MSFT: "#00A4EF", GOOGL: "#4285F4",
+  META: "#0866FF", AMZN: "#FF9900", SPY: "#1A56DB", QQQ: "#7C3AED", NFLX: "#E50914",
+  ORCL: "#F80000", TSM: "#0070C0", AMD: "#ED1C24", CL: "#8B4513", NG: "#4A90D9",
+  CRCL: "#1E88D6", DRAM: "#E040FB", MU: "#0097A7", SKHYNIX: "#EB1C24", BZ: "#8B4513",
 };

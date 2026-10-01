@@ -1,15 +1,16 @@
 import { randomBytes } from "crypto";
 import { getDbConnection, getDbTransactionConnection } from "./db";
 import {
-  AI_WALLET_SETTLEMENT_ASSETS,
-  type AiWalletSettlementAsset,
+  AI_WALLET_CRYPTO_MARKET_ASSETS,
+  type AiWalletMarketAsset,
 } from "../shared/ai-wallet-assets";
 import * as dbMultiAssetWallet from "./db-multi-asset-wallet";
 
 export const LEDGER_37_ID = 37;
 export const LEDGER_37_WALLET_OPERATOR_ID = 870413;
 
-export type Ledger37WalletAsset = "CNY" | "USDT" | AiWalletSettlementAsset;
+// 37号账本当前业务范围是人民币、USDT与数字币；52号新增的证券/商品市场资产不进入37号分红或保证金流程。
+export type Ledger37WalletAsset = "CNY" | "USDT" | (typeof AI_WALLET_CRYPTO_MARKET_ASSETS)[number];
 
 type SqlRows = any[];
 
@@ -49,10 +50,10 @@ function decimalText(value: string | number): string {
 export function normalizeLedger37WalletAsset(value: unknown): Ledger37WalletAsset {
   const asset = String(value || "").trim().toUpperCase();
   if (asset === "CNY" || asset === "USDT") return asset;
-  if ((AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(asset)) {
-    return asset as AiWalletSettlementAsset;
+  if ((AI_WALLET_CRYPTO_MARKET_ASSETS as readonly string[]).includes(asset)) {
+    return asset as AiWalletMarketAsset as Ledger37WalletAsset;
   }
-  throw new Error("该资产尚未纳入全局钱包");
+  throw new Error("37号账本仅支持人民币、USDT与已启用的数字币资产");
 }
 
 function isFundingAsset(assetCode: Ledger37WalletAsset): assetCode is "CNY" | "USDT" {

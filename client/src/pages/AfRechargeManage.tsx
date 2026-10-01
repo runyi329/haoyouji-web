@@ -10,7 +10,12 @@ import {
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "@/pages/miban/mibanTrpc";
 import { toast } from "sonner";
-import { AI_WALLET_ASSET_CATALOG, AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
+import {
+  AI_WALLET_ASSET_CATALOG,
+  AI_WALLET_CRYPTO_MARKET_ASSETS,
+  AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS,
+  AI_WALLET_SETTLEMENT_ASSETS,
+} from "@shared/ai-wallet-assets";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -637,7 +642,7 @@ export default function AfRechargeManage() {
   });
   const multiAssetAdjMutation = mtrpc.adminUser.multiAssetWalletAdjust.useMutation({
     onSuccess: () => {
-      toast.success("数字资产调账成功");
+      toast.success("52号市场资产调账成功");
       if (adjSelectedUser?.id) rememberRecentAdjUser(Number(adjSelectedUser.id));
       setAdjAmount("");
       setAdjNote("");
@@ -648,7 +653,7 @@ export default function AfRechargeManage() {
       setAdjLogPage(1);
       refetchAdjGlobal();
     },
-    onError: (e: any) => toast.error(e.message || "数字资产调账失败"),
+    onError: (e: any) => toast.error(e.message || "52号市场资产调账失败"),
   });
   const multiAssetRevokeMutation = mtrpc.adminUser.multiAssetWalletRevokeAdjustment.useMutation({
     onSuccess: (_result: unknown, variables: { mode: "reverse" | "delete" }) => {
@@ -2005,7 +2010,13 @@ export default function AfRechargeManage() {
                   <option value="USDT">USDT · 泰达币（现有账户）</option>
                   <option value="CNY">CNY · 人民币（现有账户）</option>
                   <optgroup label="52号账本数字资产账户">
-                    {AI_WALLET_SETTLEMENT_ASSETS.map((assetCode) => {
+                    {AI_WALLET_CRYPTO_MARKET_ASSETS.map((assetCode) => {
+                      const asset = AI_WALLET_ASSET_CATALOG.find((item) => item.code === assetCode);
+                      return <option key={assetCode} value={assetCode}>{assetCode} · {asset?.name || assetCode}</option>;
+                    })}
+                  </optgroup>
+                  <optgroup label="52号账本证券与商品账户">
+                    {AI_WALLET_SECURITIES_AND_COMMODITIES_ASSETS.map((assetCode) => {
                       const asset = AI_WALLET_ASSET_CATALOG.find((item) => item.code === assetCode);
                       return <option key={assetCode} value={assetCode}>{assetCode} · {asset?.name || assetCode}</option>;
                     })}

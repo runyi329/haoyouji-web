@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDbConnection } from "./db";
-import { AI_WALLET_ASSET_CATALOG, AI_WALLET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS, type AiWalletAsset } from "../shared/ai-wallet-assets";
+import { AI_WALLET_ASSET_CATALOG, AI_WALLET_ASSETS, AI_WALLET_CRYPTO_MARKET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS, type AiWalletAsset } from "../shared/ai-wallet-assets";
 
 const WALLET_ASSETS = AI_WALLET_ASSETS;
 const PROFILE_TEMPLATES = ["cny_simple", "stablecoin", "blockchain", "hybrid", "custom"] as const;
@@ -126,12 +126,13 @@ function normalizeProfile(row: WalletProfileRow): WalletProfile {
 }
 
 /**
- * 将既有的五币 52 号账本档案扩展为全部订单数字币。
+ * 将既有的52号账本档案扩展为全部订单市场资产。
  * 迁移只补全项目可见范围，不创建余额、不写资金流水，也不改变任何已有冻结或担保。
  * 以独立迁移标记确保管理员日后从配置中主动隐藏某个币种时，不会被每次服务重启强行加回。
  */
 async function migrateLedger52SettlementVisibility(conn: any): Promise<void> {
-  const migrationKey = "ledger52_settlement_assets_v2";
+  // v3：在原33种数字币基础上补入与52号订单下拉一致的证券及商品标的（含 CRCL）。
+  const migrationKey = "ledger52_settlement_assets_v3";
   await (conn as any).execute(`
     CREATE TABLE IF NOT EXISTS ai_wallet_profile_migrations (
       migration_key VARCHAR(96) NOT NULL,
@@ -250,7 +251,7 @@ async function ensureWalletProjectProfileTable(): Promise<void> {
           (target_type, target_key, target_name, ledger_id, template_key, enabled, visible_assets, default_asset,
            allow_recharge, allow_withdrawal, allow_transfer, allow_admin_adjustment, allow_order_debit, show_market, show_networks, rate_policy)
          VALUES ('ledger', 'ledger:37', '37号账本', 37, 'hybrid', 1, ?, 'CNY', 0, 0, 0, 0, 1, 1, 0, 'order_snapshot')`,
-        [JSON.stringify(AI_WALLET_ASSETS)]
+        [JSON.stringify(["CNY", "USDT", ...AI_WALLET_CRYPTO_MARKET_ASSETS])]
       );
       await (conn as any).execute(
         `INSERT IGNORE INTO ai_wallet_project_profiles
@@ -551,7 +552,7 @@ export const aiWalletRouter = router({
             title: "统一钱包底座",
             lines: [
               "用户资产目前以全局钱包余额和流水为唯一口径，项目不复制独立余额。",
-              "当前已投入使用、可记账的资金资产为 CNY、USDT 与52号账本的全部32种订单数字币；每种数字币使用独立余额和不可变流水。",
+              "当前已投入使用、可记账的资金资产为 CNY、USDT 与52号账本全部58种订单市场资产（33种数字币、25种证券及商品）；每种资产使用独立余额和不可变流水。",
               "全局流水、用户余额、手动调账、充值监控和站内转账在现有后台模块中统一核对。",
             ],
           },
@@ -560,7 +561,7 @@ export const aiWalletRouter = router({
             lines: [
               "USDT：现有充值订单、收款地址、链上扫描、人工确认、提现申请和审核链路已接入。",
               "CNY：现有后台调账与内部业务记账已接入；用户端法币充值/提现仍需建设正式申请、匹配和审核流程。",
-              "站内转账：CNY、USDT 与52号账本全部订单数字币均采用双边原子记账、幂等键和不可撤回审计；需要纠正时应新建反向流水。",
+              "站内转账：CNY、USDT 与52号账本全部订单市场资产均采用双边原子记账、幂等键和不可撤回审计；需要纠正时应新建反向流水。",
               "人工加减余额与新建业务订单扣款可由项目档案按项目暂停；退款、成交结算、奖励与佣金等既有资金义务不会被暂停，以避免用户资金冻结。",
             ],
           },
@@ -568,7 +569,7 @@ export const aiWalletRouter = router({
             title: "行情与汇率服务",
             lines: [
               "USDT/CNY 展示汇率优先使用 CoinGecko Tether/CNY，其次 OKX C2C，再回退到其他汇率服务和进程缓存。",
-              "数字资产行情缓存当前覆盖 52号账本可选的 32 种数字资产，优先 Gate.io，备用 HTX 与 OKX；行情资产只有在用户存在实际仓位或进行中订单时才会在 52号首页显示。",
+              "52号数字资产行情优先 Gate.io，备用 HTX 与 OKX；证券及商品通过新浪财经、Yahoo 与相关备用源获取。行情资产只有在用户存在实际仓位或进行中订单时才会在 52号首页显示。",
               "展示估值与业务结算应分开保存：展示可使用实时价，订单结算应保存订单快照。",
             ],
           },
