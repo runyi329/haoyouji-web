@@ -1213,8 +1213,13 @@ export function FunderOrderCardV2Silver({
   const [clickedOrderNo, setClickedOrderNo] = useState<string | null>(null);
   const [showInterestDetail, setShowInterestDetail] = useState(false);
   const [showInterestHistory, setShowInterestHistory] = useState(false);
-  const _v2IsParticipant = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder || (order as any).order_perspective === 'other';
-  const _v2ParticipantUserId = _v2IsParticipant ? ((order as any).participantInfo?.userId || undefined) : undefined;
+  const _v2HasParticipantView = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder || (order as any).order_perspective === 'other';
+  const _v2ParticipantRole = String((order as any).participantInfo?.role || '');
+  const _v2ParticipantId = Number((order as any).participantInfo?.userId || (order as any).participantInfo?.user_id || 0);
+  const _v2OwnerId = Number((order as any).user_id || 0);
+  const _v2IsParticipantOrder = _v2HasParticipantView && _v2ParticipantId > 0
+    && (_v2ParticipantId !== _v2OwnerId || _v2ParticipantRole !== 'owner');
+  const _v2ParticipantUserId = _v2IsParticipantOrder ? _v2ParticipantId : undefined;
   const { data: interestPaymentsData } = trpc.ledger.funderGetInterestPayments.useQuery(
     { orderId: order.id as number, ledgerId: ledgerId as number, participantUserId: _v2ParticipantUserId },
     { enabled: showInterestHistory && !!ledgerId, staleTime: 10000 }
@@ -1402,7 +1407,8 @@ export function FunderOrderCardV2Silver({
     }
   } catch {}
 
-  const isSharedMode = (order as any).collateral_share_mode === 'self';
+  // 担保物与共享池按订单拥有者隔离；参与者快照中的共享标记不能跨用户建立担保桥梁。
+  const isSharedMode = !_v2IsParticipantOrder && (order as any).collateral_share_mode === 'self';
   // 动态解析 collateral_source（调用其他账本担保物）
   const _parsedCollateralSource = useMemo(() => {
     try {
@@ -1468,7 +1474,7 @@ export function FunderOrderCardV2Silver({
     const pct = marginBaseNum > 0 ? (remainingCNY / marginBaseNum * 100) : null;
     return { fc2977RemainingMarginU: remainingU, fc2977MarginBasePct: pct };
   })();
-  const sharedCollateralViewUserId = _v2ParticipantUserId ?? Number(order.user_id);
+  const sharedCollateralViewUserId = Number(order.user_id);
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId: (order as any).ledger_id ?? 0, userId: sharedCollateralViewUserId },
     {
@@ -2921,16 +2927,21 @@ export function FunderLenderCardSilver({
   };
   const [showInterestHistory, setShowInterestHistory] = useState(false);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
-  const _lnIsParticipant = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder || (order as any).order_perspective === 'other';
-  const _lnParticipantUserId = _lnIsParticipant ? ((order as any).participantInfo?.userId || undefined) : undefined;
+  const _lnHasParticipantView = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder || (order as any).order_perspective === 'other';
+  const _lnParticipantRole = String((order as any).participantInfo?.role || '');
+  const _lnParticipantId = Number((order as any).participantInfo?.userId || (order as any).participantInfo?.user_id || 0);
+  const _lnOwnerId = Number((order as any).user_id || 0);
+  const _lnIsParticipantOrder = _lnHasParticipantView && _lnParticipantId > 0
+    && (_lnParticipantId !== _lnOwnerId || _lnParticipantRole !== 'owner');
+  const _lnParticipantUserId = _lnIsParticipantOrder ? _lnParticipantId : undefined;
   const interestHistoryQuery = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId: ledgerId ?? 0, orderId: order.id as number, participantUserId: _lnParticipantUserId },
     { enabled: showInterestHistory && !!ledgerId, staleTime: 0 }
   );
   // 共享担保池查询（仅当订单开启了本人订单共享时才查询）
-  const orderShareMode = (order as any).collateral_share_mode;
+  const orderShareMode = _lnIsParticipantOrder ? 'none' : (order as any).collateral_share_mode;
   const isSharedMode = orderShareMode === 'self';
-  const sharedCollateralViewUserId = _lnParticipantUserId ?? Number(order.user_id);
+  const sharedCollateralViewUserId = Number(order.user_id);
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId: ledgerId ?? 0, userId: sharedCollateralViewUserId },
     {

@@ -545,9 +545,15 @@ function FunderOrderCardLegacy({
 
 
 
-  // 共享担保池按当前视角用户隔离；参与者不能沿用主订单拥有者的担保体系。
-  const orderShareMode = (order as any).collateral_share_mode;
-  const sharedCollateralViewUserId = Number((order as any).participantInfo?.userId || order.user_id);
+  // 共享担保只可由订单拥有者汇总。参与者可查看订单，却不能将拥有者担保物并入自己的池。
+  const participantRole = String((order as any).participantInfo?.role || '');
+  const participantUserId = Number((order as any).participantInfo?.userId || (order as any).participantInfo?.user_id || 0);
+  const ownerUserId = Number((order as any).user_id || 0);
+  const hasParticipantView = !!(order as any).participantInfo || !!(order as any)._isParticipant || !!(order as any)._fromFunder || (order as any).order_perspective === 'other';
+  const isParticipantOrder = hasParticipantView && participantUserId > 0
+    && (participantUserId !== ownerUserId || participantRole !== 'owner');
+  const orderShareMode = isParticipantOrder ? 'none' : (order as any).collateral_share_mode;
+  const sharedCollateralViewUserId = ownerUserId;
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId, userId: sharedCollateralViewUserId },
     { enabled: ledgerId > 0 && orderShareMode === 'self', staleTime: 10000 }

@@ -810,9 +810,9 @@ export function FunderOrderCard({
     { staleTime: 30000, refetchInterval: 30000, refetchIntervalInBackground: false }
   );
   const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "6.8") || 6.8;
-  // 共享担保池按当前视角用户隔离：参与者使用参与者自己的池，拥有者使用主订单拥有者的池。
-  const orderShareMode = (order as any).collateral_share_mode;
-  const sharedCollateralViewUserId = _participantUserId ?? Number(order.user_id);
+  // 共享担保只属于订单拥有者。参与者订单即使快照带有 self，也不能形成或加入参与者自己的共享池。
+  const orderShareMode = _isParticipantOrder ? 'none' : (order as any).collateral_share_mode;
+  const sharedCollateralViewUserId = Number(order.user_id);
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId, userId: sharedCollateralViewUserId },
     {
