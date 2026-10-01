@@ -5,7 +5,7 @@
  *   K 线图区域（固定，不随 Tab 切换）
  *   两个业务入口：谷底增筹 / 融资付息
  */
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { FunderOrderCard } from "@/components/FunderOrderCard";
 import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
 import { useRoute, useLocation } from "wouter";
@@ -2421,6 +2421,12 @@ export default function CryptoPrediction() {
   );
   // 融资付息视图模式：卡片模式（银色铭牌）/ 订单模式（原始）
   const [financeViewMode, setFinanceViewMode] = useState<'card' | 'order'>('card');
+  // 共享担保弹窗不得另起一套简化公式；直接复用每张订单卡已经展示的最终担保缺口。
+  const [financeExposureGapMap, setFinanceExposureGapMap] = useState<Record<number, number>>({});
+  const handleFinanceExposureGapChange = useCallback((orderId: number, gap: number) => {
+    if (!Number.isFinite(orderId) || !Number.isFinite(gap)) return;
+    setFinanceExposureGapMap(previous => previous[orderId] === gap ? previous : { ...previous, [orderId]: gap });
+  }, []);
   // 融资付息：资产汇总
   const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
     { ledgerId },
@@ -3950,9 +3956,29 @@ export default function CryptoPrediction() {
                             priceDirection={{}}
                             membersData={(ledgerInfo as any)?.members || []}
                             currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
+                            allOrders={financeOrders}
+                            sharedGapMap={financeExposureGapMap}
                           />
                         );
                       })}
+                      {/* 卡片模式没有可见的订单模式卡片；隐藏计算器仅上报同一张订单已定义的最终缺口。 */}
+                      <div aria-hidden="true" style={{ display: 'none' }}>
+                        {financeOrders.map((order: any) => (
+                          <FunderOrderCard
+                            key={`finance-gap-reporter-${order.id}`}
+                            order={order}
+                            ledgerId={ledgerId}
+                            livePrices={financeLivePrices}
+                            priceDirection={{}}
+                            currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
+                            isAdmin={false}
+                            membersData={(ledgerInfo as any)?.members || []}
+                            allOrders={financeOrders}
+                            onExposureGapChange={handleFinanceExposureGapChange}
+                            sharedGapMap={financeExposureGapMap}
+                          />
+                        ))}
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -3967,6 +3993,9 @@ export default function CryptoPrediction() {
                           isAdmin={false}
                           membersData={(ledgerInfo as any)?.members || []}
                           isInvited={!!(order._isParticipant || order._fromFunder)}
+                          allOrders={financeOrders}
+                          onExposureGapChange={handleFinanceExposureGapChange}
+                          sharedGapMap={financeExposureGapMap}
                         />
                       ))}
                     </div>
