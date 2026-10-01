@@ -2424,8 +2424,9 @@ export default function CryptoPrediction() {
   // 共享担保弹窗不得另起一套简化公式；直接复用每张订单卡已经展示的最终担保缺口。
   const [financeExposureGapMap, setFinanceExposureGapMap] = useState<Record<number, number>>({});
   const handleFinanceExposureGapChange = useCallback((orderId: number, gap: number) => {
-    if (!Number.isFinite(orderId) || !Number.isFinite(gap)) return;
-    setFinanceExposureGapMap(previous => previous[orderId] === gap ? previous : { ...previous, [orderId]: gap });
+    const canonicalOrderId = Number(orderId);
+    if (!Number.isFinite(canonicalOrderId) || !Number.isFinite(gap)) return;
+    setFinanceExposureGapMap(previous => previous[canonicalOrderId] === gap ? previous : { ...previous, [canonicalOrderId]: gap });
   }, []);
   // 融资付息：资产汇总
   const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
@@ -3961,25 +3962,6 @@ export default function CryptoPrediction() {
                           />
                         );
                       })}
-                      {/* 第⑤项只订阅原订单卡实际展示的最终担保缺口。该卡是订单详情的唯一
-                          计算源，数据未齐时不回传；银色卡和共享弹窗都不另行计算或覆盖它。 */}
-                      <div aria-hidden="true" style={{ display: 'none' }}>
-                        {financeOrders.map((order: any) => (
-                          <FunderOrderCard
-                            key={`finance-gap-reporter-${order.id}`}
-                            order={order}
-                            ledgerId={ledgerId}
-                            livePrices={financeLivePrices}
-                            priceDirection={{}}
-                            currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
-                            isAdmin={false}
-                            membersData={(ledgerInfo as any)?.members || []}
-                            allOrders={financeOrders}
-                            onExposureGapChange={handleFinanceExposureGapChange}
-                            sharedGapMap={financeExposureGapMap}
-                          />
-                        ))}
-                      </div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -3994,6 +3976,26 @@ export default function CryptoPrediction() {
                           isAdmin={false}
                           membersData={(ledgerInfo as any)?.members || []}
                           isInvited={!!(order._isParticipant || order._fromFunder)}
+                          allOrders={financeOrders}
+                          sharedGapMap={financeExposureGapMap}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {/* ⑤只读取订单模式原卡的最终担保缺口。无论用户当前处在卡片或订单
+                      模式，均常驻挂载全部原卡作为唯一来源，避免筛选后非共享订单未渲染而永久加载。 */}
+                  {financeOrders.length > 0 && (
+                    <div aria-hidden="true" style={{ display: 'none' }}>
+                      {financeOrders.map((order: any) => (
+                        <FunderOrderCard
+                          key={`finance-gap-reporter-${order.id}`}
+                          order={order}
+                          ledgerId={ledgerId}
+                          livePrices={financeLivePrices}
+                          priceDirection={{}}
+                          currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
+                          isAdmin={false}
+                          membersData={(ledgerInfo as any)?.members || []}
                           allOrders={financeOrders}
                           onExposureGapChange={handleFinanceExposureGapChange}
                           sharedGapMap={financeExposureGapMap}

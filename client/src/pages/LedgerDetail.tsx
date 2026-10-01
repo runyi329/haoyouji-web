@@ -2742,8 +2742,9 @@ export default function LedgerDetail() {
   // 不另行重算手工组合、37号标签或人民币利息。
   const [funderExposureGapMap, setFunderExposureGapMap] = useState<Record<number, number>>({});
   const handleFunderExposureGapChange = useCallback((orderId: number, gap: number) => {
-    if (!Number.isFinite(orderId) || !Number.isFinite(gap)) return;
-    setFunderExposureGapMap(previous => previous[orderId] === gap ? previous : { ...previous, [orderId]: gap });
+    const canonicalOrderId = Number(orderId);
+    if (!Number.isFinite(canonicalOrderId) || !Number.isFinite(gap)) return;
+    setFunderExposureGapMap(previous => previous[canonicalOrderId] === gap ? previous : { ...previous, [canonicalOrderId]: gap });
   }, []);
   useEffect(() => {
     try {
@@ -5681,25 +5682,6 @@ export default function LedgerDetail() {
                     />
                   );
                 })}
-                {/* 第⑤项只订阅原订单卡实际展示的最终担保缺口。该卡是订单详情的唯一
-                    计算源，数据未齐时不回传；银色卡和共享弹窗都不另行计算或覆盖它。 */}
-                <div aria-hidden="true" style={{ display: 'none' }}>
-                  {funderDisplayOrders.map((order: any) => (
-                    <FunderOrderCard
-                      key={`gap-reporter-${order.id}`}
-                      order={order}
-                      ledgerId={ledgerId}
-                      livePrices={funderLivePrices}
-                      priceDirection={funderPriceDirection}
-                      currentUser={user}
-                      membersData={membersData as any[]}
-                      isAdmin={false}
-                      allOrders={funderDisplayOrders as any[]}
-                      onExposureGapChange={handleFunderExposureGapChange}
-                      sharedGapMap={funderExposureGapMap}
-                    />
-                  ))}
-                </div>
               </div>
               </Suspense>
             ) : (
@@ -5708,6 +5690,26 @@ export default function LedgerDetail() {
                 {funderVisibleOrders.map((order: any) => (
                   <FunderOrderCard
                     key={order.id}
+                    order={order}
+                    ledgerId={ledgerId}
+                    livePrices={funderLivePrices}
+                    priceDirection={funderPriceDirection}
+                    currentUser={user}
+                    membersData={membersData as any[]}
+                    isAdmin={false}
+                    allOrders={funderDisplayOrders as any[]}
+                    sharedGapMap={funderExposureGapMap}
+                  />
+                ))}
+              </div>
+            )}
+            {/* ⑤只读取订单模式原卡的最终担保缺口。无论用户当前处在卡片或订单模式，
+                均常驻挂载全部原卡作为唯一来源，避免筛选后非共享订单未渲染而永久加载。 */}
+            {(funderDisplayOrders as any[]).length > 0 && (
+              <div aria-hidden="true" style={{ display: 'none' }}>
+                {(funderDisplayOrders as any[]).map((order: any) => (
+                  <FunderOrderCard
+                    key={`gap-reporter-${order.id}`}
                     order={order}
                     ledgerId={ledgerId}
                     livePrices={funderLivePrices}

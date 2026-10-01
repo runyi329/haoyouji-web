@@ -2091,9 +2091,12 @@ export function FunderOrderCard({
     if (!onExposureGapChange) return;
     // 外部担保数据未到齐时，exposure 只剩浮盈/利息的简化值。绝不能用它覆盖
     // 已有的最终缺口；待完整 externalNonSharedGapU 产生后再发布。
+    const canonicalOrderId = Number(order.id);
     if (hasExternalCollateral && !isSharedMode && externalNonSharedGapU === null) return;
     const finalGap = isSharedMode ? sharedOrderExposure : (externalNonSharedGapU ?? exposure);
-    if (finalGap !== null && Number.isFinite(finalGap)) onExposureGapChange(order.id, finalGap);
+    if (finalGap !== null && Number.isFinite(finalGap) && Number.isFinite(canonicalOrderId)) {
+      onExposureGapChange(canonicalOrderId, finalGap);
+    }
   }, [sharedOrderExposure, externalNonSharedGapU, exposure, hasExternalCollateral, isSharedMode, onExposureGapChange, order.id]);
 
   return (
