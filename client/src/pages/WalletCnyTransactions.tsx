@@ -43,21 +43,24 @@ export default function WalletCnyTransactions() {
   const params = new URLSearchParams(search);
   const isYaban = params.get("from") === "yaban";
   const viewAsUserId = restoreLedgerViewAsState(params.get("viewAs"));
-  const walletQuery = viewAsUserId ? `?fromLedger=52&account=CNY&viewAs=${viewAsUserId}` : "?fromLedger=52&account=CNY";
+  const sourceLedgerId = params.get("fromLedger") === "37" ? "37" : "52";
+  const walletQuery = viewAsUserId ? `?fromLedger=${sourceLedgerId}&account=CNY&viewAs=${viewAsUserId}` : `?fromLedger=${sourceLedgerId}&account=CNY`;
   const walletQueryForAccount = (account: "USDT" | "CNY" | "CRYPTO") => viewAsUserId
-    ? `?fromLedger=52&account=${account}&viewAs=${viewAsUserId}`
-    : `?fromLedger=52&account=${account}`;
+    ? `?fromLedger=${sourceLedgerId}&account=${account}&viewAs=${viewAsUserId}`
+    : `?fromLedger=${sourceLedgerId}&account=${account}`;
   const switchAsset = (asset: string) => {
     if (asset === "CNY") return;
     if (asset === "USDT") return setLocation(`/wallet/transactions${walletQueryForAccount("USDT")}`);
-    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=52&account=CRYPTO${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
+    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=${sourceLedgerId}&account=CRYPTO${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
   };
   const [filter, setFilter] = useState<"all" | "in" | "out">("all");
 
   const cnyBalanceQuery = trpc.recharge.getCnyBalance.useQuery();
+  const cnyBalanceSummaryQuery = trpc.recharge.getCnyBalanceSummary.useQuery();
   const cnyHistoryQuery = trpc.recharge.getCnyHistory.useQuery({ limit: 200 });
 
   const cnyBalance = typeof cnyBalanceQuery.data === "number" ? cnyBalanceQuery.data : 0;
+  const cnySummary = cnyBalanceSummaryQuery.data ?? { total: cnyBalance, frozen: 0, available: cnyBalance };
 
   const allTx = (cnyHistoryQuery.data ?? []).map((m: any) => {
     const rawNote = (m.note || "").replace(/^\[CNY\]/, "");
@@ -106,7 +109,7 @@ export default function WalletCnyTransactions() {
             <option value="USDT">USDT</option><option value="CNY">CNY</option>{AI_WALLET_SETTLEMENT_ASSETS.map((asset) => <option key={asset} value={asset}>{asset}</option>)}
           </select>
           <button
-            onClick={() => { cnyBalanceQuery.refetch(); cnyHistoryQuery.refetch(); }}
+            onClick={() => { cnyBalanceQuery.refetch(); cnyBalanceSummaryQuery.refetch(); cnyHistoryQuery.refetch(); }}
             className="flex items-center justify-center w-9 h-9 rounded-full"
             style={{ background: "rgba(255,255,255,0.18)" }}
           >
@@ -127,6 +130,10 @@ export default function WalletCnyTransactions() {
                   {cnyBalance.toFixed(2)}
                 </span>
                 <span className="text-base font-medium text-[#1E88D6]">CNY</span>
+              </div>
+              <div className="mt-2 flex gap-3 text-xs">
+                <span className="text-gray-400">可用 <b className="font-semibold text-[#0E5A9E]">{Number(cnySummary.available).toFixed(2)}</b></span>
+                {Number(cnySummary.frozen) > 0 && <span className="text-gray-400">冻结 <b className="font-semibold text-[#5A7A92]">{Number(cnySummary.frozen).toFixed(2)}</b></span>}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100">
@@ -282,6 +289,10 @@ export default function WalletCnyTransactions() {
                 {cnyBalance.toFixed(2)}
               </span>
               <span className="text-base font-medium" style={{ color: "rgba(255,138,128,0.6)" }}>CNY</span>
+            </div>
+            <div className="mt-2 flex gap-3 text-xs" style={{ color: "rgba(255,205,210,0.55)" }}>
+              <span>可用 <b style={{ color: "#ffb3ad" }}>{Number(cnySummary.available).toFixed(2)}</b></span>
+              {Number(cnySummary.frozen) > 0 && <span>冻结 <b style={{ color: "#B0BEC5" }}>{Number(cnySummary.frozen).toFixed(2)}</b></span>}
             </div>
           </div>
           <div

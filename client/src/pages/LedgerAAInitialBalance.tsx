@@ -21,7 +21,7 @@
  */
 import { Fragment, useState, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, ChartNoAxesCombined } from "lucide-react";
+import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, ChartNoAxesCombined, WalletCards, LockKeyhole, Unlock } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -42,6 +42,9 @@ type MarginEntry = {
   amount: string;
   createdAt: string;
   notes: MarginNote[];
+  source?: 'wallet_hold' | 'manual';
+  holdId?: number;
+  status?: 'active' | 'released';
 };
 
 const createMarginEntry = (seed?: Partial<MarginEntry>): MarginEntry => ({
@@ -52,6 +55,9 @@ const createMarginEntry = (seed?: Partial<MarginEntry>): MarginEntry => ({
   // 只有新建明细记录当前时间；历史单笔若无来源时间，明确保留为空而不伪造时间。
   createdAt: seed && Object.prototype.hasOwnProperty.call(seed, 'createdAt') ? String(seed.createdAt ?? '') : new Date().toISOString(),
   notes: Array.isArray(seed?.notes) ? seed.notes : [],
+  source: seed?.source,
+  holdId: seed?.holdId,
+  status: seed?.status,
 });
 
 const normalizeMarginCoin = (coin: unknown): string => {
@@ -91,6 +97,9 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string, migra
                   createdAt: typeof note.createdAt === 'string' ? note.createdAt : '',
                 }))
               : [],
+            source: item.source === 'wallet_hold' ? 'wallet_hold' : undefined,
+            holdId: Number.isFinite(Number(item.holdId)) ? Number(item.holdId) : undefined,
+            status: item.status === 'released' ? 'released' : item.status === 'active' ? 'active' : undefined,
           }));
       }
     } catch {
@@ -176,6 +185,26 @@ export default function LedgerAAInitialBalance() {
       { ledgerId },
       { enabled: !!ledgerId }
     );
+  const [walletMarginDraft, setWalletMarginDraft] = useState<{ userId: number; tagName: string; assetCode: string; amount: string } | null>(null);
+  const walletMarginContext = trpc.ledger.getLedger37WalletMarginContext.useQuery(
+    walletMarginDraft ? { targetUserId: walletMarginDraft.userId } : undefined,
+    { enabled: ledgerId === 37 && !!walletMarginDraft && !isLocalHotPreview, staleTime: 10_000 },
+  );
+  const freezeWalletMarginMutation = trpc.ledger.freezeLedger37MarginFromWallet.useMutation({
+    onSuccess: async () => {
+      toast.success('保证金已从全局钱包冻结');
+      setWalletMarginDraft(null);
+      await Promise.all([refetch(), walletMarginContext.refetch()]);
+    },
+    onError: (error) => toast.error(error.message || '冻结失败'),
+  });
+  const releaseWalletMarginMutation = trpc.ledger.releaseLedger37MarginToWallet.useMutation({
+    onSuccess: async () => {
+      toast.success('保证金已解冻并恢复可用');
+      await Promise.all([refetch(), walletMarginContext.refetch()]);
+    },
+    onError: (error) => toast.error(error.message || '解冻失败'),
+  });
 
   const [editState, setEditState] = useState<
     Record<number, Record<string, TagEntry>>
@@ -545,6 +574,38 @@ export default function LedgerAAInitialBalance() {
     updateEntry(userId, tagName, { margins: current.margins.filter((_, itemIndex) => itemIndex !== index) });
   };
 
+  const openWalletMargin = (userId: number, tagName: string) => {
+    setWalletMarginDraft({ userId, tagName, assetCode: 'CNY', amount: '' });
+  };
+
+  const submitWalletMargin = () => {
+    if (!walletMarginDraft) return;
+    if (!walletMarginDraft.amount || Number(walletMarginDraft.amount) <= 0) {
+      toast.error('请输入有效的冻结金额');
+      return;
+    }
+    if (isLocalHotPreview) {
+      toast.info('热预览仅展示钱包冻结流程，不会操作真实资金');
+      return;
+    }
+    freezeWalletMarginMutation.mutate({
+      ledgerId: 37,
+      targetUserId: walletMarginDraft.userId,
+      tagName: walletMarginDraft.tagName,
+      assetCode: walletMarginDraft.assetCode,
+      amount: walletMarginDraft.amount,
+    });
+  };
+
+  const releaseWalletMargin = (holdId?: number) => {
+    if (!holdId) return;
+    if (isLocalHotPreview) {
+      toast.info('热预览仅展示钱包解冻流程，不会操作真实资金');
+      return;
+    }
+    releaseWalletMarginMutation.mutate({ ledgerId: 37, holdId });
+  };
+
   const MarginEntriesEditor = ({ userId, tagName, entry, accentColor, compact = false }: {
     userId: number;
     tagName: string;
@@ -554,7 +615,7 @@ export default function LedgerAAInitialBalance() {
   }) => {
     const rows = entry.margins.length > 0
       ? entry.margins
-      : [createMarginEntry({ id: `draft_margin_${userId}_${tagName}`, createdAt: '' })];
+      : ledgerId === 37 ? [] : [createMarginEntry({ id: `draft_margin_${userId}_${tagName}`, createdAt: '' })];
     const summary = summarizeMargins(entry.margins);
     const formatRecordedAt = (value: string) => {
       if (!value) return '历史记录';
@@ -576,6 +637,32 @@ export default function LedgerAAInitialBalance() {
           const cnyValue = getMarginEntryCNY(marginEntry);
           const rawAmount = String(marginEntry.amount ?? '').trim();
           const isOutflow = rawAmount.startsWith('-');
+          const isWalletHold = ledgerId === 37 && marginEntry.source === 'wallet_hold';
+          const isLegacyReadOnly = ledgerId === 37;
+          if (isWalletHold) {
+            const isReleased = marginEntry.status === 'released' || isOutflow;
+            return (
+              <div key={marginEntry.id || `${tagName}-margin-${index}`} className="rounded-xl px-2 py-2" style={{ backgroundColor: isReleased ? '#FAFAFA' : '#F2F8FF', border: `1px solid ${isReleased ? '#F0F0F0' : '#CDE1F7'}` }}>
+                <div className="flex items-center gap-1.5">
+                  <div className="h-7 w-7 flex items-center justify-center rounded-lg" style={{ backgroundColor: isReleased ? '#ECEFF1' : '#E2F0FF', color: isReleased ? '#78909C' : '#1565C0' }}>
+                    {isReleased ? <Unlock size={14} /> : <LockKeyhole size={14} />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium" style={{ color: '#37474F' }}>钱包{isReleased ? '解冻' : '冻结'} · {normalizeMarginCoin(marginEntry.coin)}</span>
+                      <span className="text-sm font-semibold tabular-nums" style={{ color: isReleased ? '#78909C' : '#1565C0' }}>{isReleased ? '−' : ''}{rawAmount.replace(/^-/, '')}</span>
+                    </div>
+                    <div className="mt-0.5 text-[10px]" style={{ color: '#78909C' }}>记录时间：{formatRecordedAt(marginEntry.createdAt)}{cnyValue !== null ? ` · ≈ ¥${formatSignedMarginAmount(cnyValue, 0)}` : ''}</div>
+                  </div>
+                  {!isReleased && (
+                    <button type="button" onClick={() => releaseWalletMargin(marginEntry.holdId)} disabled={releaseWalletMarginMutation.isPending} className="h-7 rounded-lg px-2 text-[10px] font-medium disabled:opacity-50" style={{ backgroundColor: '#FFFFFF', color: '#1565C0', border: '1px solid #B8D7F3' }}>
+                      解冻
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          }
           return (
             <div key={marginEntry.id || `${tagName}-margin-${index}`} className="rounded-xl px-2 py-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #F0F0F0' }}>
               <div className="flex items-center gap-1.5 w-full min-w-0">
@@ -583,6 +670,7 @@ export default function LedgerAAInitialBalance() {
                 <div className="flex rounded-lg overflow-hidden border flex-shrink-0" style={{ borderColor: '#E0E0E0' }} aria-label="选择押金方向">
                   <button
                     type="button"
+                    disabled={isLegacyReadOnly}
                     onClick={() => setMarginEntryDirection(userId, tagName, index, rawAmount, 'inflow')}
                     className="h-7 px-1.5 text-[10px] font-medium"
                     style={!isOutflow ? { backgroundColor: '#EAF3FF', color: '#1565C0' } : { backgroundColor: '#FFFFFF', color: '#9E9E9E' }}
@@ -592,6 +680,7 @@ export default function LedgerAAInitialBalance() {
                   </button>
                   <button
                     type="button"
+                    disabled={isLegacyReadOnly}
                     onClick={() => setMarginEntryDirection(userId, tagName, index, rawAmount, 'outflow')}
                     className="h-7 px-1.5 text-[10px] font-medium border-l"
                     style={isOutflow ? { borderColor: '#F3CDD1', backgroundColor: '#FFF1F2', color: '#D32F2F' } : { borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#9E9E9E' }}
@@ -602,6 +691,7 @@ export default function LedgerAAInitialBalance() {
                 </div>
                 <select
                   value={normalizeMarginCoin(marginEntry.coin)}
+                  disabled={isLegacyReadOnly}
                   onChange={(event) => updateMarginEntry(userId, tagName, index, { coin: event.target.value })}
                   className="text-xs border rounded-lg px-1 py-1.5 outline-none flex-shrink-0"
                   style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: normalizeMarginCoin(marginEntry.coin) === 'CNY' ? '#9E9E9E' : accentColor, width: compact ? '56px' : '66px' }}
@@ -616,6 +706,7 @@ export default function LedgerAAInitialBalance() {
                   pattern="[0-9]*[.]?[0-9]*"
                   placeholder={isOutflow ? '输入转出金额' : '输入存入金额'}
                   value={rawAmount.replace(/^-/, '')}
+                  disabled={isLegacyReadOnly}
                   onChange={(event) => {
                     const nextMagnitude = event.target.value;
                     if (/^(?:\d*\.?\d*)?$/.test(nextMagnitude)) {
@@ -625,7 +716,7 @@ export default function LedgerAAInitialBalance() {
                   className="min-w-0 flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
                   style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: isOutflow ? '#D32F2F' : '#222222' }}
                 />
-                {rows.length > 1 && (
+                {rows.length > 1 && !isLegacyReadOnly && (
                   <button type="button" aria-label="删除该笔押金" onClick={() => removeMarginEntry(userId, tagName, index)} className="w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0" style={{ color: '#EF5350', backgroundColor: '#FFF5F5' }}>
                     <Trash2 size={14} />
                   </button>
@@ -662,14 +753,40 @@ export default function LedgerAAInitialBalance() {
           );
         })}
         <div className="flex items-center justify-between pl-10 gap-2">
-          <button type="button" onClick={() => addMarginEntry(userId, tagName)} className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: accentColor }}>
-            <Plus size={13} /> 新增一笔押金流水
-          </button>
+          {ledgerId === 37 ? (
+            <button type="button" onClick={() => openWalletMargin(userId, tagName)} className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: '#1565C0' }}>
+              <WalletCards size={13} /> 从钱包冻结保证金
+            </button>
+          ) : (
+            <button type="button" onClick={() => addMarginEntry(userId, tagName)} className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: accentColor }}>
+              <Plus size={13} /> 新增一笔押金流水
+            </button>
+          )}
           <span className="text-xs px-2 py-0.5 rounded-full text-right" style={{ backgroundColor: '#FFF0F0', color: accentColor }}>
             {summary.validCount}笔 · 净额 ≈ ¥{formatSignedMarginAmount(summary.totalCNY, 0)}
           </span>
         </div>
-        <div className="pl-10 text-xs" style={{ color: '#9E9E9E' }}>正数为存入，负数为转出或平移；每笔流水与备注均会保留。</div>
+        {ledgerId === 37 ? (
+          <div className="pl-10 text-xs" style={{ color: '#78909C' }}>新保证金从全局钱包冻结：总额不变、可用额减少；解冻后恢复可用。历史手工记录仅保留查看。</div>
+        ) : (
+          <div className="pl-10 text-xs" style={{ color: '#9E9E9E' }}>正数为存入，负数为转出或平移；每笔流水与备注均会保留。</div>
+        )}
+        {ledgerId === 37 && walletMarginDraft?.userId === userId && walletMarginDraft.tagName === tagName && (
+          <div className="ml-10 rounded-lg p-2.5 space-y-2" style={{ backgroundColor: '#F2F8FF', border: '1px solid #CDE1F7' }}>
+            <div className="text-xs font-medium" style={{ color: '#1565C0' }}>从全局钱包冻结保证金</div>
+            <div className="grid grid-cols-[92px_1fr] gap-2">
+              <select value={walletMarginDraft.assetCode} onChange={(event) => setWalletMarginDraft({ ...walletMarginDraft, assetCode: event.target.value })} className="h-8 rounded-lg border bg-white px-2 text-xs outline-none" style={{ borderColor: '#B8D7F3' }}>
+                <option value="CNY">人民币 CNY</option>
+                <option value="USDT">USDT</option>
+                {((walletMarginContext.data?.multiAssetBalances ?? []) as any[]).filter((asset) => Number(asset.totalBalance || 0) > 0).map((asset) => <option key={asset.assetCode} value={asset.assetCode}>{asset.assetCode}</option>)}
+              </select>
+              <input type="text" inputMode="decimal" value={walletMarginDraft.amount} onChange={(event) => /^\d*\.?\d*$/.test(event.target.value) && setWalletMarginDraft({ ...walletMarginDraft, amount: event.target.value })} placeholder="冻结数量" className="h-8 min-w-0 rounded-lg border bg-white px-2 text-right text-sm outline-none" style={{ borderColor: '#B8D7F3' }} />
+            </div>
+            {walletMarginDraft.assetCode === 'CNY' && walletMarginContext.data?.cny && <div className="text-[10px]" style={{ color: '#78909C' }}>钱包：总额 ¥{Number(walletMarginContext.data.cny.total).toFixed(2)} · 冻结 ¥{Number(walletMarginContext.data.cny.frozen).toFixed(2)} · 可用 ¥{Number(walletMarginContext.data.cny.available).toFixed(2)}</div>}
+            {walletMarginDraft.assetCode === 'USDT' && walletMarginContext.data?.usdt && <div className="text-[10px]" style={{ color: '#78909C' }}>钱包：总额 {Number(walletMarginContext.data.usdt.total).toFixed(4)} · 冻结 {Number(walletMarginContext.data.usdt.frozen).toFixed(4)} · 可用 {Number(walletMarginContext.data.usdt.available).toFixed(4)} USDT</div>}
+            <div className="flex justify-end gap-2"><button type="button" onClick={() => setWalletMarginDraft(null)} className="h-7 px-2 text-xs" style={{ color: '#78909C' }}>取消</button><button type="button" onClick={submitWalletMargin} disabled={freezeWalletMarginMutation.isPending} className="h-7 rounded-lg px-3 text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: '#1565C0' }}>确认冻结</button></div>
+          </div>
+        )}
         {summary.unpricedCoins.length > 0 && (
           <div className="pl-10 text-xs" style={{ color: '#B26A00' }}>
             {Array.from(new Set(summary.unpricedCoins)).join('、')} 暂无可靠报价，未计入人民币汇总
@@ -1869,9 +1986,15 @@ export default function LedgerAAInitialBalance() {
                   {/* 押金汇总 */}
                   <div>
                     <div className="text-xs font-medium text-gray-500 mb-1.5">押金汇总</div>
-                    {!tagConfigEditing ? (
-                      /* 查看模式：仅显示手动录入的押金 */
+                    {!tagConfigEditing || ledgerId === 37 ? (
+                      /* 37号统一读取成员钱包冻结；其他账本保留历史手工汇总。 */
                       <div className="rounded-xl px-3 py-2" style={{ backgroundColor: "#FAF3ED" }}>
+                        {ledgerId === 37 && (
+                          <div className="mb-2 flex items-start gap-1.5 text-xs" style={{ color: '#1565C0' }}>
+                            <WalletCards size={13} className="mt-0.5 flex-shrink-0" />
+                            <span>新保证金请在「用户」视图对应标签中从全局钱包冻结；此处不再支持手工输入。</span>
+                          </div>
+                        )}
                         {(() => {
                           const savedMargin = tagConfigData?.margin_by_coin
                             ? (() => { try { return JSON.parse(tagConfigData.margin_by_coin); } catch { return null; } })()
@@ -1892,7 +2015,7 @@ export default function LedgerAAInitialBalance() {
                               ))}
                             </div>
                           ) : (
-                            <span className="text-xs text-gray-400">暂无押金数据，点「编辑」手动录入</span>
+                            <span className="text-xs text-gray-400">{ledgerId === 37 ? '暂无历史手工押金记录' : '暂无押金数据，点「编辑」手动录入'}</span>
                           );
                         })()}
                       </div>

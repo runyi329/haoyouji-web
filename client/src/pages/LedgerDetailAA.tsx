@@ -1982,6 +1982,13 @@ export default function LedgerDetailAA({
                     备忘
                   </button>
                   <button
+                    onClick={() => setLocation('/wallet?fromLedger=37&account=CNY')}
+                    className="h-8 px-2.5 rounded-lg text-xs font-medium whitespace-nowrap"
+                    style={{ backgroundColor: "rgba(255,255,255,0.9)", color: "#D32F2F", border: "1px solid rgba(255,255,255,0.4)", borderRadius: 8 }}
+                  >
+                    钱包
+                  </button>
+                  <button
                     onClick={onBack}
                     className="h-8 px-2.5 rounded-lg text-xs font-medium whitespace-nowrap"
                     style={{ backgroundColor: "rgba(255,255,255,0.9)", color: "#D32F2F", border: "1px solid rgba(255,255,255,0.4)", borderRadius: 8 }}

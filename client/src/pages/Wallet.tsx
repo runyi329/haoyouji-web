@@ -651,6 +651,9 @@ export default function Wallet() {
   const isReadOnlyMemberView = !!viewAsUserId;
   // 52号账本的钱包把稳定币和其他数字资产合并到同一“数字币账户”。
   const isLedger52WalletEntry = searchParams.get("fromLedger") === "52";
+  // 37号账本只引用全局钱包：成员从账本进入时默认查看人民币账户及其冻结金额。
+  const isLedger37WalletEntry = searchParams.get("fromLedger") === "37";
+  const walletEntryLedgerId = isLedger52WalletEntry ? "52" : isLedger37WalletEntry ? "37" : null;
   const appendViewAs = (path: string) => viewAsUserId
     ? `${path}${path.includes("?") ? "&" : "?"}viewAs=${viewAsUserId}`
     : path;
@@ -669,7 +672,7 @@ export default function Wallet() {
           ? "CRYPTO"
           : "USDT";
   const appendWalletAccount = (path: string, account: WalletAccountAsset) => appendViewAs(
-    `${path}${path.includes("?") ? "&" : "?"}account=${account}`,
+    `${path}${path.includes("?") ? "&" : "?"}account=${account}${walletEntryLedgerId ? `&fromLedger=${walletEntryLedgerId}` : ""}`,
   );
   const [modal, setModal] = useState<ModalType>(null);
   const [hideBalance, setHideBalance] = useState(false);
@@ -686,14 +689,16 @@ export default function Wallet() {
     if (activeAsset !== "CRYPTO") autoDigitalHistoryFilterRef.current = true;
   }, [activeAsset]);
   // 转账能力是全局统一钱包能力；当前仅由52号账本首页以该上下文开放按钮。
-  const walletReturnPath = appendViewAs(isLedger52WalletEntry ? "/ledger/52" : "/");
-  const walletPolicyQuery = trpc.aiWallet.runtimeProfile.useQuery(
-    { targetKey: "ledger:52" },
-    { enabled: isLedger52WalletEntry, staleTime: 30_000 },
+  const walletReturnPath = appendViewAs(
+    isLedger52WalletEntry ? "/ledger/52" : isLedger37WalletEntry ? "/ledger/37" : "/",
   );
-  // 非52入口沿用既有通用钱包显示；52入口严格按项目档案决定是否显示新资金入口。
-  const canRecharge = !isLedger52WalletEntry || walletPolicyQuery.data?.allowRecharge === true;
-  const canWithdraw = !isLedger52WalletEntry || walletPolicyQuery.data?.allowWithdrawal === true;
+  const walletPolicyQuery = trpc.aiWallet.runtimeProfile.useQuery(
+    { targetKey: isLedger37WalletEntry ? "ledger:37" : "ledger:52" },
+    { enabled: isLedger52WalletEntry || isLedger37WalletEntry, staleTime: 30_000 },
+  );
+  // 非项目入口沿用既有通用钱包显示；从项目进入时严格按项目档案决定是否开放新资金入口。
+  const canRecharge = !walletEntryLedgerId || walletPolicyQuery.data?.allowRecharge === true;
+  const canWithdraw = !walletEntryLedgerId || walletPolicyQuery.data?.allowWithdrawal === true;
   // 52号账本已有转账授权时，配置仍在加载阶段先展示入口；档案明确关闭时才隐藏，服务端也会二次校验。
   const canTransfer = isLedger52WalletEntry && walletPolicyQuery.data?.allowTransfer !== false;
 
@@ -714,6 +719,8 @@ export default function Wallet() {
     { enabled: isLedger52WalletEntry, staleTime: 30_000 },
   );
   const cnyBalanceQuery = trpc.recharge.getCnyBalance.useQuery();
+  const cnyBalanceSummaryQuery = trpc.recharge.getCnyBalanceSummary.useQuery();
+  const usdtBalanceSummaryQuery = trpc.recharge.getUsdtBalanceSummary.useQuery();
   const cnyHistoryQuery = trpc.recharge.getCnyHistory.useQuery({ limit: 20 });
   const multiAssetBalancesQuery = trpc.recharge.getMultiAssetBalances.useQuery(
     viewAsUserId ? { viewAsUserId } : undefined,
@@ -732,8 +739,13 @@ export default function Wallet() {
   });
 
   const balance = typeof balanceQuery.data === "number" ? balanceQuery.data : 0;
+  const usdtSummary = usdtBalanceSummaryQuery.data ?? { total: balance, frozen: 0, available: balance };
+  const usdtTotalBalance = Number(usdtSummary.total ?? balance);
+  const usdtAvailableBalance = Number(usdtSummary.available ?? balance);
   const cnyBalance = typeof cnyBalanceQuery.data === "number" ? cnyBalanceQuery.data : 0;
-  const usdtToCny = balance * 7.25;
+  const cnySummary = cnyBalanceSummaryQuery.data ?? { total: cnyBalance, frozen: 0, available: cnyBalance };
+  const cnyAvailableBalance = Number(cnySummary.available ?? cnyBalance);
+  const usdtToCny = usdtTotalBalance * 7.25;
   const multiAssetBalances = (multiAssetBalancesQuery.data ?? []) as any[];
   const multiAssetHistory = (multiAssetHistoryQuery.data ?? []) as any[];
   const configuredSettlementAssets = new Set(
@@ -746,11 +758,11 @@ export default function Wallet() {
   );
   // 稳定币也是数字资产：有 USDT 时固定置顶；0 余额不占用资产列表位置。
   const visibleDigitalAssetBalances = [
-    ...(balance > 0 ? [{
+    ...(usdtTotalBalance > 0 ? [{
       assetCode: "USDT",
-      totalBalance: balance,
-      availableBalance: balance,
-      frozenBalance: 0,
+      totalBalance: usdtTotalBalance,
+      availableBalance: usdtAvailableBalance,
+      frozenBalance: Number(usdtSummary.frozen ?? 0),
       priceUsdt: 1,
       isStablecoin: true,
     }] : []),
@@ -769,12 +781,12 @@ export default function Wallet() {
     (total, asset) => total + Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0))) * Number(asset.priceUsdt ?? 0),
     0,
   );
-  const digitalTotalUsdt = balance + cryptoTotalUsdt;
-  const digitalAvailableUsdt = balance + visibleMultiAssetBalances.reduce(
+  const digitalTotalUsdt = usdtTotalBalance + cryptoTotalUsdt;
+  const digitalAvailableUsdt = usdtAvailableBalance + visibleMultiAssetBalances.reduce(
     (total, asset) => total + Number(asset.availableBalance ?? 0) * Number(asset.priceUsdt ?? 0),
     0,
   );
-  const digitalFrozenUsdt = visibleMultiAssetBalances.reduce(
+  const digitalFrozenUsdt = Number(usdtSummary.frozen ?? 0) + visibleMultiAssetBalances.reduce(
     (total, asset) => total + Number(asset.frozenBalance ?? 0) * Number(asset.priceUsdt ?? 0),
     0,
   );
@@ -793,11 +805,11 @@ export default function Wallet() {
     ];
   const currentAccountLabel = accountMenuItems.find((item) => item.value === activeAsset)?.label || (isLedger52WalletEntry ? "数字币账户" : "稳定币账户 · USDT");
   const activeAssetDetailsPath = activeAsset === "USDT"
-    ? appendWalletAccount("/wallet/transactions?fromLedger=52", "USDT")
+    ? appendWalletAccount("/wallet/transactions", "USDT")
     : activeAsset === "CNY"
-      ? appendWalletAccount("/wallet/cny-transactions?fromLedger=52", "CNY")
+      ? appendWalletAccount("/wallet/cny-transactions", "CNY")
       : activeAsset === "CRYPTO"
-        ? appendWalletAccount("/wallet/crypto-transactions?fromLedger=52", "CRYPTO")
+        ? appendWalletAccount("/wallet/crypto-transactions", "CRYPTO")
         : "";
 
   const recentUsdtTx = (() => {
@@ -955,7 +967,7 @@ export default function Wallet() {
               onClick={() => setLocation(walletReturnPath)}
               className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center"
               style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}` }}
-              aria-label="返回52号账本"
+              aria-label={isLedger37WalletEntry ? "返回37号账本" : isLedger52WalletEntry ? "返回52号账本" : "返回首页"}
             >
               <ArrowLeft className="w-4 h-4" style={{ color: G.goldLight }} />
             </button>
@@ -1135,15 +1147,17 @@ export default function Wallet() {
         {activeAsset === "USDT" && <AccountCard
           icon="$"
           label="USDT 账户"
-          balance={mask(balance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+          balance={mask(usdtTotalBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
           unit="USDT"
           subLine={!hideBalance && (
             <div className="flex items-center space-x-1 mt-0.5" style={{ color: G.goldDim }}>
               <span className="text-xs">≈ ¥{usdtToCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币</span>
+              <span className="text-xs">· 可用 {usdtAvailableBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              {Number(usdtSummary.frozen) > 0 && <span className="text-xs" style={{ color: '#B0BEC5' }}>· 冻结 {Number(usdtSummary.frozen).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
             </div>
           )}
           txPath="/wallet/transactions"
-          onRefresh={() => balanceQuery.refetch()}
+          onRefresh={() => { balanceQuery.refetch(); usdtBalanceSummaryQuery.refetch(); }}
           onRecharge={canRecharge ? () => setModal("recharge") : undefined}
           onWithdraw={canWithdraw ? () => setModal("withdraw") : undefined}
           onTransfer={canTransfer ? () => { setTransferAsset("USDT"); setModal("transfer"); } : undefined}
@@ -1203,10 +1217,10 @@ export default function Wallet() {
           balance={mask(cnyBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
           unit="CNY"
           subLine={!hideBalance && (
-            <span className="text-xs" style={{ color: G.goldDim }}>≈ {(cnyBalance / 7.25).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
+            <span className="text-xs" style={{ color: G.goldDim }}>可用 ¥{cnyAvailableBalance.toFixed(2)}{Number(cnySummary.frozen || 0) > 0 ? ` · 冻结 ¥${Number(cnySummary.frozen).toFixed(2)}` : ''}</span>
           )}
           txPath="/wallet/cny-transactions"
-          onRefresh={() => cnyBalanceQuery.refetch()}
+          onRefresh={() => { cnyBalanceQuery.refetch(); cnyBalanceSummaryQuery.refetch(); }}
           onRecharge={canRecharge ? () => setModal("cny-recharge") : undefined}
           onWithdraw={canWithdraw ? () => setModal("cny-withdraw") : undefined}
           onTransfer={canTransfer ? () => { setTransferAsset("CNY"); setModal("transfer"); } : undefined}
@@ -1420,7 +1434,7 @@ export default function Wallet() {
       )}
       {modal === "cny-withdraw" && (
         <BottomSheet title="人民币提现" onClose={() => setModal(null)}>
-          <CnyWithdrawContent cnyBalance={cnyBalance} onClose={() => setModal(null)} />
+          <CnyWithdrawContent cnyBalance={cnyAvailableBalance} onClose={() => setModal(null)} />
         </BottomSheet>
       )}
       {modal === "crypto-transfer-select" && (
@@ -1467,15 +1481,16 @@ export default function Wallet() {
           <WalletTransferContent
             currency={transferAsset}
             availableBalance={transferAsset === "CNY"
-              ? cnyBalance
+              ? cnyAvailableBalance
               : transferAsset === "USDT"
-                ? balance
+                ? usdtAvailableBalance
                 : Number(multiAssetBalances.find((asset: any) => String(asset.assetCode || "").toUpperCase() === transferAsset)?.availableBalance ?? 0)}
             sourceLedgerId={52}
             onClose={() => setModal(null)}
             onCompleted={() => {
               void balanceQuery.refetch();
               void cnyBalanceQuery.refetch();
+              void cnyBalanceSummaryQuery.refetch();
               void recentManualQuery.refetch();
               void recentBalanceHistoryQuery.refetch();
               void multiAssetBalancesQuery.refetch();

@@ -33,6 +33,7 @@ import {
 import { AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
 import { getUsdtCnyRate } from "./price-scanner";
 import { assertAiWalletOperationEnabled } from "./ai-wallet-router";
+import { ensureLedger37WalletInfrastructure } from "./ledger37-wallet";
 
 // 管理员中间件：米伴管理操作必须在服务端验证系统管理员身份。
 // 前端页面隐藏只改善体验，不能作为资金、订单和用户数据的授权边界。
@@ -2609,6 +2610,7 @@ export const mibanAdminUserRouter = router({
       if (input.includeAllWalletEvents) {
         // 首次查询时创建第二阶段的独立多资产账本表；该步骤不会写入任何用户余额或流水。
         await ensureMultiAssetWalletInfrastructure();
+        await ensureLedger37WalletInfrastructure();
         const eventSourceSql = `
           SELECT
             CONVERT(CONCAT('r_', r.id) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_key,
@@ -2649,6 +2651,59 @@ export const mibanAdminUserRouter = router({
           FROM af_manual_balances m
           WHERE COALESCE(m.note, '') NOT LIKE '[CNY]%'
             AND COALESCE(m.note, '') NOT LIKE '[BALANCE_BASE]%'
+
+          UNION ALL
+
+          SELECT
+            CONVERT(CONCAT('cny_', m.id) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_key,
+            m.id AS source_id,
+            CONVERT('manual_cny' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS source_type,
+            m.user_id,
+            m.amount,
+            CONVERT(CASE
+              WHEN m.note LIKE '%分红入账%' THEN 'ledger_dividend'
+              WHEN m.note LIKE '%分红冲正%' THEN 'ledger_dividend_reversal'
+              WHEN m.note LIKE '%提现%' THEN 'withdraw'
+              ELSE 'manual'
+            END USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,
+            CONVERT('CNY' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS currency,
+            CONVERT(REPLACE(m.note, '[CNY]', '') USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
+            NULL AS raw_balance,
+            m.created_at
+          FROM af_manual_balances m
+          WHERE COALESCE(m.note, '') LIKE '[CNY]%'
+
+          UNION ALL
+
+          SELECT
+            CONVERT(CONCAT('hold_', h.id) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_key,
+            h.id AS source_id,
+            CONVERT('wallet_hold' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS source_type,
+            h.user_id,
+            -h.amount AS amount,
+            CONVERT('collateral_lock' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,
+            CONVERT(h.asset_code USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS currency,
+            CONVERT(CONCAT('37号账本保证金冻结 · ', h.tag_name) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
+            NULL AS raw_balance,
+            h.created_at
+          FROM ai_wallet_project_holds h
+          WHERE h.ledger_id = 37 AND h.asset_code IN ('CNY', 'USDT')
+
+          UNION ALL
+
+          SELECT
+            CONVERT(CONCAT('hold_release_', h.id) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_key,
+            h.id AS source_id,
+            CONVERT('wallet_hold' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS source_type,
+            h.user_id,
+            h.amount,
+            CONVERT('collateral_release' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,
+            CONVERT(h.asset_code USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS currency,
+            CONVERT(CONCAT('37号账本保证金解冻 · ', h.tag_name) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
+            NULL AS raw_balance,
+            h.released_at
+          FROM ai_wallet_project_holds h
+          WHERE h.ledger_id = 37 AND h.asset_code IN ('CNY', 'USDT') AND h.status = 'released'
 
           UNION ALL
 

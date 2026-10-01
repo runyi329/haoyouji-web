@@ -28,7 +28,7 @@ export type MultiAssetHistoryItem = {
   assetName: string;
   amount: string;
   balanceAfter: string;
-  eventType: "admin_adjustment" | "transfer_in" | "transfer_out" | "collateral_lock" | "collateral_release";
+  eventType: "admin_adjustment" | "transfer_in" | "transfer_out" | "collateral_lock" | "collateral_release" | "ledger_dividend" | "ledger_dividend_reversal";
   note: string;
   sourceLedgerId: number | null;
   /** 对手方仅在站内转账流水中返回，用于把“转给谁/谁转入”放在预览首行。 */
@@ -119,7 +119,7 @@ function entryResult(row: any): MultiAssetHistoryItem {
     assetName: getAssetName(assetCode),
     amount: String(row.amount),
     balanceAfter: String(row.balance_after),
-    eventType: eventType === "transfer_in" || eventType === "transfer_out" || eventType === "collateral_lock" || eventType === "collateral_release"
+    eventType: eventType === "transfer_in" || eventType === "transfer_out" || eventType === "collateral_lock" || eventType === "collateral_release" || eventType === "ledger_dividend" || eventType === "ledger_dividend_reversal"
       ? eventType
       : "admin_adjustment",
     note: String(row.note || ""),
@@ -369,19 +369,23 @@ export async function adjustMultiAssetBalance(params: {
   requestId: string;
   actorUserId: number;
   sourceLedgerId?: number;
+  eventType?: "admin_adjustment" | "ledger_dividend" | "ledger_dividend_reversal";
+  transaction?: any;
 }): Promise<{ success: true; entry: MultiAssetHistoryItem; alreadyCompleted: boolean }> {
   if (!Number.isInteger(params.userId) || params.userId <= 0) throw new Error("调账用户无效");
   if (!REQUEST_ID_PATTERN.test(params.requestId)) throw new Error("调账请求无效");
   const assetCode = normalizeMultiAssetWalletAsset(params.assetCode);
   const amount = normalizeSignedDecimal(params.amount);
-  const note = String(params.note || "").trim().slice(0, 500) || "管理员手动调账（未填写备注）";
+  const note = String(params.note || "").trim().slice(0, 500);
+  const eventType = params.eventType ?? "admin_adjustment";
   await ensureMultiAssetWalletInfrastructure();
 
-  const conn = await getDbTransactionConnection();
+  const ownConnection = !params.transaction;
+  const conn = params.transaction || await getDbTransactionConnection();
   if (!conn) throw new Error("数据库连接失败");
   const transaction = conn as any;
   try {
-    await transaction.beginTransaction();
+    if (ownConnection) await transaction.beginTransaction();
     const [existingRows] = await transaction.execute(
       `SELECT id, entry_no, request_id, asset_code, amount, balance_after, event_type, note, source_ledger_id, created_at
          FROM ai_wallet_asset_entries
@@ -394,7 +398,7 @@ export async function adjustMultiAssetBalance(params: {
       if (String(existing.asset_code).toUpperCase() !== assetCode || String(existing.amount) !== amount) {
         throw new Error("调账请求已被使用，请刷新后重新填写金额");
       }
-      await transaction.commit();
+      if (ownConnection) await transaction.commit();
       return { success: true, entry: entryResult(existing), alreadyCompleted: true };
     }
 
@@ -416,8 +420,8 @@ export async function adjustMultiAssetBalance(params: {
     const [entryInsert] = await transaction.execute(
       `INSERT INTO ai_wallet_asset_entries
         (entry_no, request_id, user_id, asset_code, amount, balance_after, event_type, note, source_ledger_id, actor_user_id)
-       VALUES (?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), ?, 'admin_adjustment', ?, ?, ?)`,
-      [entryNo, params.requestId, params.userId, assetCode, amount, String(balanceRow.available_balance), note, params.sourceLedgerId ?? null, params.actorUserId],
+       VALUES (?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), ?, ?, ?, ?, ?)`,
+      [entryNo, params.requestId, params.userId, assetCode, amount, String(balanceRow.available_balance), eventType, note, params.sourceLedgerId ?? null, params.actorUserId],
     );
     const entry = {
       id: Number((entryInsert as any).insertId),
@@ -426,18 +430,96 @@ export async function adjustMultiAssetBalance(params: {
       asset_code: assetCode,
       amount,
       balance_after: String(balanceRow.available_balance),
-      event_type: "admin_adjustment",
+      event_type: eventType,
       note,
       source_ledger_id: params.sourceLedgerId ?? null,
       created_at: new Date().toISOString(),
     };
-    await transaction.commit();
+    if (ownConnection) await transaction.commit();
     return { success: true, entry: entryResult(entry), alreadyCompleted: false };
   } catch (error) {
-    try { await transaction.rollback(); } catch {}
+    if (ownConnection) try { await transaction.rollback(); } catch {}
     throw error;
   } finally {
-    transaction.release?.();
+    if (ownConnection) transaction.release?.();
+  }
+}
+
+/**
+ * 业务担保的可用/冻结分层移动。
+ *
+ * 该操作不改变数字资产总持有，仅在可用与冻结间搬移，并写入不可变流水。
+ * 允许调用方传入事务，从而与业务主记录保持完全原子。
+ */
+export async function moveMultiAssetBalanceToFrozen(params: {
+  userId: number;
+  assetCode: MultiAssetWalletAsset | string;
+  amount: string;
+  direction: "freeze" | "release";
+  note: string;
+  requestId: string;
+  actorUserId: number;
+  sourceLedgerId: number;
+  transaction?: any;
+}): Promise<{ success: true; assetCode: MultiAssetWalletAsset; amount: string; availableBalance: string; alreadyCompleted: boolean }> {
+  if (!Number.isInteger(params.userId) || params.userId <= 0) throw new Error("钱包用户无效");
+  if (!REQUEST_ID_PATTERN.test(params.requestId)) throw new Error("资金请求无效");
+  const assetCode = normalizeMultiAssetWalletAsset(params.assetCode);
+  const amount = normalizeUnsignedDecimal(params.amount);
+  const note = String(params.note || "").trim().slice(0, 500);
+  await ensureMultiAssetWalletInfrastructure();
+
+  const ownConnection = !params.transaction;
+  const conn = params.transaction || await getDbTransactionConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const transaction = conn as any;
+  try {
+    if (ownConnection) await transaction.beginTransaction();
+    const [existingRows] = await transaction.execute(
+      `SELECT asset_code, amount, balance_after FROM ai_wallet_asset_entries WHERE user_id = ? AND request_id = ? LIMIT 1 FOR UPDATE`,
+      [params.userId, params.requestId],
+    );
+    const existing = asRows(existingRows)[0];
+    if (existing) {
+      if (String(existing.asset_code).toUpperCase() !== assetCode) throw new Error("资金请求已被使用，请刷新后重试");
+      if (ownConnection) await transaction.commit();
+      return { success: true, assetCode, amount, availableBalance: String(existing.balance_after), alreadyCompleted: true };
+    }
+
+    await assertUserExists(transaction, params.userId);
+    await ensureBalanceRow(transaction, params.userId, assetCode);
+    await getLockedBalance(transaction, params.userId, assetCode);
+    const eventType = params.direction === "freeze" ? "collateral_lock" : "collateral_release";
+    const signedAmount = params.direction === "freeze" ? `-${amount}` : amount;
+    const [result] = await transaction.execute(
+      params.direction === "freeze"
+        ? `UPDATE ai_wallet_asset_balances
+             SET available_balance = available_balance - CAST(? AS DECIMAL(36,18)),
+                 frozen_balance = frozen_balance + CAST(? AS DECIMAL(36,18)), updated_at = NOW()
+           WHERE user_id = ? AND asset_code = ? AND available_balance >= CAST(? AS DECIMAL(36,18))`
+        : `UPDATE ai_wallet_asset_balances
+             SET available_balance = available_balance + CAST(? AS DECIMAL(36,18)),
+                 frozen_balance = frozen_balance - CAST(? AS DECIMAL(36,18)), updated_at = NOW()
+           WHERE user_id = ? AND asset_code = ? AND frozen_balance >= CAST(? AS DECIMAL(36,18))`,
+      [amount, amount, params.userId, assetCode, amount],
+    );
+    if (Number((result as any).affectedRows || 0) !== 1) {
+      throw new Error(params.direction === "freeze" ? `${assetCode} 可用余额不足，无法冻结` : `${assetCode} 冻结余额不足，无法解冻`);
+    }
+    const balance = await getLockedBalance(transaction, params.userId, assetCode);
+    await transaction.execute(
+      `INSERT INTO ai_wallet_asset_entries
+        (entry_no, request_id, user_id, asset_code, amount, balance_after, event_type, note, source_ledger_id, actor_user_id)
+       VALUES (?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), ?, ?, ?, ?, ?)`,
+      [buildEntryNo(), params.requestId, params.userId, assetCode, signedAmount, String(balance.available_balance), eventType, note, params.sourceLedgerId, params.actorUserId],
+    );
+    if (ownConnection) await transaction.commit();
+    return { success: true, assetCode, amount, availableBalance: String(balance.available_balance), alreadyCompleted: false };
+  } catch (error) {
+    if (ownConnection) try { await transaction.rollback(); } catch {}
+    throw error;
+  } finally {
+    if (ownConnection) transaction.release?.();
   }
 }
 

@@ -64,15 +64,16 @@ export default function WalletTransactions() {
   const params = new URLSearchParams(search);
   const isYaban = params.get("from") === "yaban";
   const viewAsUserId = restoreLedgerViewAsState(params.get("viewAs"));
-  const walletQuery = viewAsUserId ? `?fromLedger=52&account=USDT&viewAs=${viewAsUserId}` : "?fromLedger=52&account=USDT";
+  const sourceLedgerId = params.get("fromLedger") === "37" ? "37" : "52";
+  const walletQuery = viewAsUserId ? `?fromLedger=${sourceLedgerId}&account=USDT&viewAs=${viewAsUserId}` : `?fromLedger=${sourceLedgerId}&account=USDT`;
   const walletQueryForAccount = (account: "USDT" | "CNY" | "CRYPTO") => viewAsUserId
-    ? `?fromLedger=52&account=${account}&viewAs=${viewAsUserId}`
-    : `?fromLedger=52&account=${account}`;
+    ? `?fromLedger=${sourceLedgerId}&account=${account}&viewAs=${viewAsUserId}`
+    : `?fromLedger=${sourceLedgerId}&account=${account}`;
   const backTo = isYaban ? "/yaban/wallet" : `/wallet${walletQuery}`;
   const switchAsset = (asset: string) => {
     if (asset === "USDT") return;
     if (asset === "CNY") return setLocation(`/wallet/cny-transactions${walletQueryForAccount("CNY")}`);
-    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=52&account=CRYPTO${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
+    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(asset)}&fromLedger=${sourceLedgerId}&account=CRYPTO${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
   };
 
   type FilterType = "all" | "recharge" | "withdraw" | "manual";

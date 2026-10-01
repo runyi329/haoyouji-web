@@ -12,6 +12,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
 
 export default function LedgerAADividendManage() {
   const params = useParams();
@@ -25,6 +26,7 @@ export default function LedgerAADividendManage() {
     targetUserId: 0,
     tagName: "",
     amount: "",
+    assetCode: "CNY",
     note: "",
   });
 
@@ -166,7 +168,7 @@ export default function LedgerAADividendManage() {
     onSuccess: () => {
       toast.success("分红添加成功");
       setShowAddModal(false);
-      setAddForm({ targetUserId: 0, tagName: "", amount: "", note: "" });
+      setAddForm({ targetUserId: 0, tagName: "", amount: "", assetCode: "CNY", note: "" });
       // 快捷添加模式：保留标签录入状态、清空输入
       setQuickAmount("");
       setQuickNote("");
@@ -223,6 +225,7 @@ export default function LedgerAADividendManage() {
       targetUserId: addForm.targetUserId,
       tagName: addForm.tagName,
       amount,
+      ...(ledgerId === 37 ? { assetCode: addForm.assetCode, assetAmount: addForm.amount } : {}),
       note: addForm.note || undefined,
     });
   };
@@ -477,7 +480,9 @@ export default function LedgerAADividendManage() {
                                   </div>
                                 </div>
                                 <div className="text-sm font-semibold mr-2" style={{ color: '#D32F2F' }}>
-                                  ¥{parseFloat(rec.amount).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                                  {String(rec.asset_code || 'CNY').toUpperCase() === 'CNY'
+                                    ? `¥${parseFloat(rec.asset_amount ?? rec.amount).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
+                                    : `${Number(rec.asset_amount ?? rec.amount).toLocaleString('zh-CN', { maximumFractionDigits: 8 })} ${String(rec.asset_code).toUpperCase()}`}
                                 </div>
                                 <button
                                   onClick={() => {
@@ -634,17 +639,28 @@ export default function LedgerAADividendManage() {
                 </div>
               )}
 
-              {/* 金额 */}
+              {/* 币种与金额 */}
               <div>
-                <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>分红金额（¥）</div>
-                <input
-                  type="number"
-                  placeholder="请输入金额"
-                  value={addForm.amount}
-                  onChange={e => setAddForm(f => ({ ...f, amount: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none border"
-                  style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
-                />
+                <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>{ledgerId === 37 ? '入账币种与数量' : '分红金额（¥）'}</div>
+                <div className={ledgerId === 37 ? 'grid grid-cols-[108px_1fr] gap-2' : ''}>
+                  {ledgerId === 37 && (
+                    <select value={addForm.assetCode} onChange={e => setAddForm(f => ({ ...f, assetCode: e.target.value }))} className="rounded-xl border bg-white px-2 text-sm outline-none" style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}>
+                      <option value="CNY">人民币 CNY</option>
+                      <option value="USDT">USDT</option>
+                      {AI_WALLET_SETTLEMENT_ASSETS.map((asset) => <option key={asset} value={asset}>{asset}</option>)}
+                    </select>
+                  )}
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder={ledgerId === 37 ? `请输入${addForm.assetCode}数量` : '请输入金额'}
+                    value={addForm.amount}
+                    onChange={e => setAddForm(f => ({ ...f, amount: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl text-sm outline-none border"
+                    style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
+                  />
+                </div>
+                {ledgerId === 37 && <div className="mt-1.5 text-[11px]" style={{ color: '#78909C' }}>确认后按原币种直接入账至成员全局钱包；页面中的回报统计保留人民币估值快照。</div>}
               </div>
 
               {/* 备注 */}

@@ -2,6 +2,7 @@ import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { randomInt } from "crypto";
 import { getDb, getDbConnection, getDbTransactionConnection } from "./db";
 import { rechargeOrders, balanceHistory, users, walletAddresses } from "../drizzle/schema";
+import { ensureLedger37WalletInfrastructure } from "./ledger37-wallet";
 
 // ========== 短信通知（腾讯云SMS） ==========
 const SMS_SECRET_ID = process.env.SMS_SECRET_ID ?? '';
@@ -1023,6 +1024,7 @@ export async function transferWalletBalance(params: {
   }
   if (params.fromUserId === params.toUserId) throw new Error('不能转账给自己');
   await ensureInternalWalletTransferTable();
+  await ensureLedger37WalletInfrastructure();
 
   const conn = await getDbTransactionConnection();
   if (!conn) throw new Error('数据库连接失败');
@@ -1089,6 +1091,14 @@ export async function transferWalletBalance(params: {
       const manualTotal = asRows(manualRows).reduce((total, row: any) => total + Number(row.amount || 0), 0);
       senderAvailable = Number(sender.balance_cny || 0) + manualTotal;
     }
+    const [holdRows] = await transaction.execute(
+      `SELECT COALESCE(SUM(amount), 0) AS frozen
+       FROM ai_wallet_project_holds
+       WHERE user_id = ? AND asset_code = ? AND status = 'active' FOR UPDATE`,
+      [params.fromUserId, params.currency],
+    );
+    const frozen = Number(asRows(holdRows)[0]?.frozen || 0);
+    senderAvailable -= frozen;
     if (amount > senderAvailable + 1e-8) {
       throw new Error(`可用余额不足，当前可转 ${senderAvailable.toFixed(params.currency === 'CNY' ? 2 : 4)} ${params.currency}`);
     }
@@ -1279,6 +1289,12 @@ export async function getUserBalance(userId: number, ledgerId?: number): Promise
   const manual = parseFloat(row?.manual?.toString() || '0');
   
   return userBalance + manual;
+}
+
+/** 稳定币钱包分层余额：37号保证金冻结仅占用可用额，不改变总余额。 */
+export async function getUserUsdtBalanceSummary(userId: number): Promise<{ total: number; frozen: number; available: number }> {
+  const { getLedger37FundingBalanceSummary } = await import('./ledger37-wallet');
+  return await getLedger37FundingBalanceSummary(userId, 'USDT');
 }
 
 // 获取用户余额变动记录（合并 balance_history + af_manual_balances，从最早真实流水正序累计余额快照）
@@ -2203,6 +2219,12 @@ export async function getUserCnyBalance(userId: number): Promise<number> {
   return baseCny + manual;
 }
 
+/** 人民币钱包分层余额：冻结只占用可用额，不改变总余额。 */
+export async function getUserCnyBalanceSummary(userId: number): Promise<{ total: number; frozen: number; available: number }> {
+  const { getLedger37FundingBalanceSummary } = await import('./ledger37-wallet');
+  return await getLedger37FundingBalanceSummary(userId, 'CNY');
+}
+
 /** 获取用户 CNY 流水记录（af_manual_balances WHERE note LIKE '[CNY]%'） */
 export async function getUserCnyHistory(userId: number, limit = 50): Promise<any[]> {
   const conn = await getDbConnection();
@@ -2211,11 +2233,21 @@ export async function getUserCnyHistory(userId: number, limit = 50): Promise<any
   // 会返回 ER_WRONG_ARGUMENTS / mysqld_stmt_execute。先钳制为安全整数后内联，
   // 保持 userId 继续使用参数绑定，避免快照等只读查询整体失败。
   const safeLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 50)));
+  await ensureLedger37WalletInfrastructure();
   const [rows] = await conn.execute(
-    `SELECT id, user_id, amount, note, created_at FROM af_manual_balances
-     WHERE user_id = ? AND note LIKE '[CNY]%'
+    `(SELECT id, user_id, amount, note, created_at, 'balance' AS source_type
+       FROM af_manual_balances
+      WHERE user_id = ? AND note LIKE '[CNY]%')
+     UNION ALL
+     (SELECT h.id, h.user_id, -h.amount AS amount, CONCAT('[CNY]37号账本保证金冻结 · ', h.tag_name) AS note, h.created_at, 'hold' AS source_type
+       FROM ai_wallet_project_holds h
+      WHERE h.user_id = ? AND h.ledger_id = 37 AND h.asset_code = 'CNY')
+     UNION ALL
+     (SELECT h.id, h.user_id, h.amount AS amount, CONCAT('[CNY]37号账本保证金解冻 · ', h.tag_name) AS note, h.released_at AS created_at, 'hold_release' AS source_type
+       FROM ai_wallet_project_holds h
+      WHERE h.user_id = ? AND h.ledger_id = 37 AND h.asset_code = 'CNY' AND h.status = 'released')
      ORDER BY created_at DESC LIMIT ${safeLimit}`,
-    [userId]
+    [userId, userId, userId]
   ) as any;
   return Array.isArray(rows) ? rows : [];
 }
@@ -2235,7 +2267,7 @@ export async function adminAdjustCnyBalance(params: {
     [params.userId]
   ) as any;
   const ledgerId = (Array.isArray(ledgerRows) ? ledgerRows[0]?.ledger_id : null) ?? 37;
-  const noteText = `[CNY]${params.note || (params.amount > 0 ? '充值' : '提现')}`;
+  const noteText = `[CNY]${params.note || ''}`;
   await conn.execute(
     `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
     [ledgerId, params.userId, params.amount, noteText]

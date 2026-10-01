@@ -83,10 +83,62 @@ import { versionRouter } from "./version-router";
 import { aiWalletRouter, assertAiWalletOperationEnabled } from "./ai-wallet-router";
 import { AI_WALLET_MARKET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
 import * as dbMultiAssetWallet from "./db-multi-asset-wallet";
+import {
+  LEDGER_37_ID,
+  LEDGER_37_WALLET_OPERATOR_ID,
+  freezeLedger37WalletHold,
+  getLedger37FundingBalanceSummary,
+  listLedger37WalletHolds,
+  releaseLedger37WalletHold,
+  createLedger37Dividend,
+  ensureLedger37WalletInfrastructure,
+} from "./ledger37-wallet";
 
 function asRows(result: any): any[] {
   if (Array.isArray(result?.[0])) return result[0];
   return Array.isArray(result) ? result : [];
+}
+
+async function appendLedger37WalletMarginRecord(transaction: any, params: {
+  userId: number;
+  tagName: string;
+  holdId: number;
+  assetCode: string;
+  amount: string;
+  createdAt: string;
+  direction: 'freeze' | 'release';
+}) {
+  const [memberRows] = await transaction.execute(
+    `SELECT initial_balances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
+    [LEDGER_37_ID, params.userId],
+  );
+  const member = asRows(memberRows)[0];
+  if (!member) throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本成员' });
+  let balances: Record<string, unknown> = {};
+  try { balances = member.initial_balances ? JSON.parse(String(member.initial_balances)) : {}; } catch { balances = {}; }
+  const key = `${params.tagName}__margins`;
+  let entries: any[] = [];
+  try { entries = Array.isArray(balances[key]) ? balances[key] : JSON.parse(String(balances[key] || '[]')); } catch { entries = []; }
+  if (params.direction === 'release') {
+    entries = entries.map((entry) => entry?.id === `wallet_hold_${params.holdId}_freeze`
+      ? { ...entry, status: 'released' }
+      : entry);
+  }
+  entries.push({
+    id: `wallet_hold_${params.holdId}_${params.direction}`,
+    coin: params.assetCode,
+    amount: params.direction === 'release' ? `-${params.amount}` : params.amount,
+    createdAt: params.createdAt,
+    notes: [],
+    source: 'wallet_hold',
+    holdId: params.holdId,
+    status: params.direction === 'release' ? 'released' : 'active',
+  });
+  balances[key] = JSON.stringify(entries);
+  await transaction.execute(
+    `UPDATE ledger_members SET initial_balances = ?, updatedAt = NOW() WHERE ledgerId = ? AND userId = ?`,
+    [JSON.stringify(balances), LEDGER_37_ID, params.userId],
+  );
 }
 
 // 个人账本备忘录：按账本和当前登录用户严格隔离，供 37 号账本等首页使用。
@@ -2032,6 +2084,12 @@ ${klinesSummary}
         return await dbRecharge.getUserBalance(targetUserId, input?.ledgerId);
       }),
 
+    // 稳定币分层余额：与人民币钱包同口径展示总额、37号保证金冻结额和可用额。
+    getUsdtBalanceSummary: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await dbRecharge.getUserUsdtBalanceSummary(ctx.user.id);
+      }),
+
     // 获取本人收款 ID。该 ID 与专属邀请码完全复用，保证邀请和收款使用同一个稳定标识。
     getMyWalletPaymentIdentity: protectedProcedure
       .query(async ({ ctx }) => {
@@ -2887,6 +2945,13 @@ ${klinesSummary}
       .input(z.object({}).optional())
       .query(async ({ ctx }) => {
         return await dbRecharge.getUserCnyBalance(ctx.user.id);
+      }),
+
+    // 全局钱包的人民币分层余额；总额不因37号保证金冻结而改变。
+    getCnyBalanceSummary: protectedProcedure
+      .input(z.object({}).optional())
+      .query(async ({ ctx }) => {
+        return await dbRecharge.getUserCnyBalanceSummary(ctx.user.id);
       }),
 
     // 获取 CNY 流水记录
@@ -13260,6 +13325,91 @@ ${klinesSummary}
           }
         }
         return { success: true };
+      }),
+
+    // 37号账本保证金统一从全局钱包冻结，不允许新建手工余额记录。
+    getLedger37WalletMarginContext: protectedProcedure
+      .input(z.object({ targetUserId: z.number().int().positive().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本钱包保证金仅胡大叔可查看' });
+        }
+        const userId = input?.targetUserId;
+        const [cny, usdt, holds] = await Promise.all([
+          userId ? getLedger37FundingBalanceSummary(userId, 'CNY') : Promise.resolve(null),
+          userId ? getLedger37FundingBalanceSummary(userId, 'USDT') : Promise.resolve(null),
+          listLedger37WalletHolds(userId),
+        ]);
+        const multiAssetBalances = userId ? await dbMultiAssetWallet.getUserMultiAssetBalances(userId) : [];
+        return { cny, usdt, multiAssetBalances, holds };
+      }),
+
+    freezeLedger37MarginFromWallet: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        targetUserId: z.number().int().positive(),
+        tagName: z.string().trim().min(1).max(160),
+        assetCode: z.string().trim().min(3).max(16),
+        amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示界面，不会冻结真实钱包资金' });
+        }
+        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本保证金仅胡大叔可操作' });
+        }
+        await assertAiWalletOperationEnabled('ledger:37', 'order_debit');
+        const membership = await dbLedger.getUserMembership(LEDGER_37_ID, input.targetUserId);
+        if (!membership) throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本成员' });
+        const category = (await dbLedger.getLedgerCategories(LEDGER_37_ID, ctx.user.id, undefined, null)).find((item: any) => String(item.name) === input.tagName && !item.isDefault);
+        if (!category) throw new TRPCError({ code: 'NOT_FOUND', message: '标签不存在或不可用于保证金' });
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+        const transaction = conn as any;
+        try {
+          await transaction.beginTransaction();
+          const result = await freezeLedger37WalletHold({
+            userId: input.targetUserId, tagName: input.tagName, assetCode: input.assetCode,
+            amount: input.amount, actorUserId: ctx.user.id, transaction,
+          });
+          await appendLedger37WalletMarginRecord(transaction, {
+            userId: input.targetUserId, tagName: input.tagName, holdId: result.hold.id,
+            assetCode: result.hold.assetCode, amount: result.hold.amount, createdAt: result.hold.createdAt, direction: 'freeze',
+          });
+          await transaction.commit();
+          return { success: true, hold: result.hold };
+        } catch (error: any) {
+          try { await transaction.rollback(); } catch {}
+          throw error;
+        } finally { transaction.release?.(); }
+      }),
+
+    releaseLedger37MarginToWallet: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), holdId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        if (process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示界面，不会解冻真实钱包资金' });
+        }
+        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本保证金仅胡大叔可操作' });
+        }
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+        const transaction = conn as any;
+        try {
+          await transaction.beginTransaction();
+          const hold = await releaseLedger37WalletHold({ holdId: input.holdId, actorUserId: ctx.user.id, transaction });
+          await appendLedger37WalletMarginRecord(transaction, {
+            userId: hold.userId, tagName: hold.tagName, holdId: hold.id,
+            assetCode: hold.assetCode, amount: hold.amount, createdAt: hold.releasedAt || new Date().toISOString(), direction: 'release',
+          });
+          await transaction.commit();
+          return { success: true, hold };
+        } catch (error: any) {
+          try { await transaction.rollback(); } catch {}
+          throw error;
+        } finally { transaction.release?.(); }
       }),
 
     // 获取标签配置
@@ -29120,6 +29270,7 @@ insights 数组每项包含：
       viewAsUserId: z.number().optional(),
     }))
     .query(async ({ ctx, input }) => {
+      if (input.ledgerId === LEDGER_37_ID) await ensureLedger37WalletInfrastructure();
       const db = await getLedgerDb();
       if (!db) return { records: [] };
       let targetUserId = ctx.user.id;
@@ -29130,7 +29281,7 @@ insights 数组每项包含：
           targetUserId = input.viewAsUserId;
         }
       }
-      const result = await db.execute(sql`SELECT id, tag_name, amount, note, created_at FROM dividend_records WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} ORDER BY created_at DESC`);
+      const result = await db.execute(sql`SELECT id, tag_name, amount, asset_code, asset_amount, note, created_at FROM dividend_records WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} ORDER BY created_at DESC`);
       return { records: (result as any)[0] as any[] };
     }),
 
@@ -29141,6 +29292,8 @@ insights 数组每项包含：
       targetUserId: z.number(),
       tagName: z.string(),
       amount: z.number().positive(),
+      assetCode: z.string().trim().min(3).max(16).optional(),
+      assetAmount: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).optional(),
       note: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -29150,6 +29303,23 @@ insights 数组每项包含：
         : !!myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
       if (!canManageDividend) {
         throw new TRPCError({ code: 'FORBIDDEN', message: input.ledgerId === 37 ? '37号账本分红仅胡大叔可操作' : '仅账本创建人或管理员可操作' });
+      }
+      if (input.ledgerId === LEDGER_37_ID) {
+        if (process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示界面，不会将真实分红记入钱包' });
+        }
+        await assertAiWalletOperationEnabled('ledger:37', 'order_debit');
+        const targetMembership = await dbLedger.getUserMembership(LEDGER_37_ID, input.targetUserId);
+        if (!targetMembership) throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本成员' });
+        const result = await createLedger37Dividend({
+          userId: input.targetUserId,
+          tagName: input.tagName,
+          assetCode: input.assetCode || 'CNY',
+          assetAmount: input.assetAmount || String(input.amount),
+          note: input.note,
+          actorUserId: ctx.user.id,
+        });
+        return { success: true, ...result };
       }
       const db = await getLedgerDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
@@ -29171,8 +29341,17 @@ insights 数组每项包含：
       if (!canManageDividend) {
         throw new TRPCError({ code: 'FORBIDDEN', message: input.ledgerId === 37 ? '37号账本分红仅胡大叔可操作' : '仅账本创建人或管理员可操作' });
       }
+      if (input.ledgerId === LEDGER_37_ID && process.env.DEV_BYPASS_AUTH === 'true') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示界面，不会修改真实分红记录' });
+      }
       const db = await getLedgerDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      if (input.ledgerId === LEDGER_37_ID) {
+        const existingRows = await db.execute(sql`SELECT wallet_request_id FROM dividend_records WHERE id = ${input.recordId} AND ledger_id = ${input.ledgerId} LIMIT 1`);
+        if ((existingRows as any)?.[0]?.[0]?.wallet_request_id) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '已入账分红需要先作钱包冲正后重新登记，不能直接删除' });
+        }
+      }
       await db.execute(sql`DELETE FROM dividend_records WHERE id = ${input.recordId} AND ledger_id = ${input.ledgerId}`);
        return { success: true };
     }),
@@ -29192,8 +29371,17 @@ insights 数组每项包含：
       if (!canManageDividend) {
         throw new TRPCError({ code: 'FORBIDDEN', message: input.ledgerId === 37 ? '37号账本分红仅胡大叔可操作' : '仅账本创建人或管理员可操作' });
       }
+      if (input.ledgerId === LEDGER_37_ID && process.env.DEV_BYPASS_AUTH === 'true') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示界面，不会修改真实分红记录' });
+      }
       const db = await getLedgerDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      if (input.ledgerId === LEDGER_37_ID) {
+        const existingRows = await db.execute(sql`SELECT wallet_request_id FROM dividend_records WHERE id = ${input.recordId} AND ledger_id = ${input.ledgerId} LIMIT 1`);
+        if ((existingRows as any)?.[0]?.[0]?.wallet_request_id) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '已入账分红需要先作钱包冲正后重新登记，不能直接修改' });
+        }
+      }
       await db.execute(sql`UPDATE dividend_records SET amount = ${input.amount}, note = ${input.note ?? ''} WHERE id = ${input.recordId} AND ledger_id = ${input.ledgerId}`);
       return { success: true };
     }),
@@ -29215,6 +29403,7 @@ insights 数组每项包含：
   adminGetAllDividends: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
     .query(async ({ ctx, input }) => {
+      if (input.ledgerId === LEDGER_37_ID) await ensureLedger37WalletInfrastructure();
       const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
       const canManageDividend = input.ledgerId === 37
         ? ctx.user.id === 870413
@@ -29224,7 +29413,7 @@ insights 数组每项包含：
       }
       const db = await getLedgerDb();
       if (!db) return { records: [] };
-      const result = await db.execute(sql`SELECT dr.id, dr.user_id, dr.tag_name, dr.amount, dr.note, dr.created_at, u.name as user_name, u.username as user_username, lm.nickname as user_nickname FROM dividend_records dr LEFT JOIN users u ON u.id = dr.user_id LEFT JOIN ledger_members lm ON lm.ledgerId = dr.ledger_id AND lm.userId = dr.user_id WHERE dr.ledger_id = ${input.ledgerId} ORDER BY dr.created_at DESC`);
+      const result = await db.execute(sql`SELECT dr.id, dr.user_id, dr.tag_name, dr.amount, dr.asset_code, dr.asset_amount, dr.note, dr.created_at, u.name as user_name, u.username as user_username, lm.nickname as user_nickname FROM dividend_records dr LEFT JOIN users u ON u.id = dr.user_id LEFT JOIN ledger_members lm ON lm.ledgerId = dr.ledger_id AND lm.userId = dr.user_id WHERE dr.ledger_id = ${input.ledgerId} ORDER BY dr.created_at DESC`);
       return { records: (result as any)[0] as any[] };
     }),
 

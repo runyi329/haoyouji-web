@@ -247,6 +247,13 @@ async function ensureWalletProjectProfileTable(): Promise<void> {
       );
       await (conn as any).execute(
         `INSERT IGNORE INTO ai_wallet_project_profiles
+          (target_type, target_key, target_name, ledger_id, template_key, enabled, visible_assets, default_asset,
+           allow_recharge, allow_withdrawal, allow_transfer, allow_admin_adjustment, allow_order_debit, show_market, show_networks, rate_policy)
+         VALUES ('ledger', 'ledger:37', '37号账本', 37, 'hybrid', 1, ?, 'CNY', 0, 0, 0, 0, 1, 1, 0, 'order_snapshot')`,
+        [JSON.stringify(AI_WALLET_ASSETS)]
+      );
+      await (conn as any).execute(
+        `INSERT IGNORE INTO ai_wallet_project_profiles
           (target_type, target_key, target_name, version_key, template_key, enabled, visible_assets, default_asset,
            allow_recharge, allow_withdrawal, allow_transfer, allow_admin_adjustment, allow_order_debit, show_market, show_networks, rate_policy)
          VALUES ('site_version', 'version:proj_hzxm2t', '米伴', 'proj_hzxm2t', 'hybrid', 1, ?, 'CNY', 0, 0, 0, 0, 1, 0, 0, 'order_snapshot')`,
@@ -283,8 +290,8 @@ export async function assertAiWalletOperationEnabled(targetKey: string, operatio
     recharge: "充值入口",
     withdrawal: "提现入口",
     transfer: "站内转账",
-    admin_adjustment: "管理员手动调账",
-    order_debit: "业务订单扣款",
+    admin_adjustment: "手动调账",
+    order_debit: "业务资金占用",
   };
   const column = columnByOperation[operation];
   const [rows] = await (conn as any).execute(
@@ -354,6 +361,14 @@ function getRuntimeFacts(profile: WalletProfile): string[] {
     return [
       "米伴当前使用全局钱包进行订单扣款、退款和佣金入账；下单优先扣 CNY，不足部分按订单时的 CNY/USDT 换算值扣 USDT。",
       "米伴项目暂未在用户端开放独立充值、提现或站内转账页面；本档案用于保留当前业务口径并为后续入口接入提供授权依据。",
+      ...baseline,
+    ];
+  }
+  if (profile.targetKey === "ledger:37") {
+    return [
+      "37号账本只引用全局钱包，不会创建或复制项目独立余额。保证金冻结不改变钱包总额，仅减少可用额；解除冻结后可用额恢复。",
+      "分红会按登记币种即时记入成员全局钱包，并与37号账本分红记录同时落库。人民币、USDT与系统已启用数字资产均按原币种独立记账。",
+      "37号账本的新保证金和分红不再提供手工余额录入；历史手工记录仅保留查看，以确保每笔项目资金都可以与全局钱包流水核对。",
       ...baseline,
     ];
   }
