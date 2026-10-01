@@ -3793,12 +3793,44 @@ export default function CryptoPrediction() {
               const matchedFinanceOrderCount = financeOrderSearchTokens.length === 0
                 ? 0
                 : l3Pool.filter(doesFinanceOrderMatchSearch).length;
+
+              // 订单、对应的计息时长及卡片内容必须使用同一排序。担保物优先按实时 U 值从高到低，
+              // 没有担保物或行情暂不可用的订单再按时间排序，避免为了等待报价而打乱已知顺序。
+              const getFinanceCollateralValue = (order: any) => {
+                let assets: any[] = [];
+                try {
+                  const raw = order.collateral_assets ?? order.collateralAssets ?? [];
+                  if (Array.isArray(raw)) assets = raw;
+                  else if (typeof raw === 'string') assets = JSON.parse(raw || '[]');
+                } catch {
+                  assets = [];
+                }
+                return assets.reduce((total: number, asset: any) => {
+                  const quantity = Number(asset?.qty ?? asset?.amount ?? asset?.quantity ?? 0);
+                  if (!Number.isFinite(quantity) || quantity <= 0) return total;
+                  const coin = String(asset?.coin ?? asset?.symbol ?? '').trim().toUpperCase();
+                  const isCny = ['CNY', 'RMB', '人民币', '元'].includes(coin);
+                  const isStablecoin = ['USDT', 'U', 'USDC', 'USDE', 'USD', 'USDT.E', 'USDC.E', 'BUSD', 'DAI'].includes(coin);
+                  const isStock = asset?.assetType === 'stock' || asset?.asset_type === 'stock' || order.asset_type === 'stock';
+                  const storedPrice = Number(asset?.price ?? asset?.referencePrice ?? 0);
+                  const priceU = isCny
+                    ? 1 / 6.8
+                    : isStablecoin
+                      ? 1
+                      : isStock && Number.isFinite(storedPrice) && storedPrice > 0
+                        ? storedPrice / 6.8
+                        : Number(financeLivePrices[coin] ?? 0);
+                  return Number.isFinite(priceU) && priceU > 0 ? total + quantity * priceU : total;
+                }, 0);
+              };
               const sortedOrders = [...l3Pool].sort((a: any, b: any) => {
                 if (financeOrderSearchTokens.length > 0) {
                   const aMatches = doesFinanceOrderMatchSearch(a);
                   const bMatches = doesFinanceOrderMatchSearch(b);
                   if (aMatches !== bMatches) return Number(bMatches) - Number(aMatches);
                 }
+                const collateralDifference = getFinanceCollateralValue(b) - getFinanceCollateralValue(a);
+                if (collateralDifference !== 0) return collateralDifference;
                 const aTime = new Date(financeL3Tab === 'settled' ? (a.settled_at || a.updated_at || a.created_at) : (a.created_at || a.buy_date || 0)).getTime();
                 const bTime = new Date(financeL3Tab === 'settled' ? (b.settled_at || b.updated_at || b.created_at) : (b.created_at || b.buy_date || 0)).getTime();
                 return bTime - aTime;

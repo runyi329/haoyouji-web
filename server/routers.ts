@@ -19042,13 +19042,13 @@ ${klinesSummary}
             [input.ledgerId, input.userId]
           ) as any[];
           const rawOrders = Array.isArray(sharedRows) ? sharedRows : [];
-          const orders = rawOrders
-            .filter((o: any) => o.collateral_share_mode === 'self')
+          const allOwnerOrders = rawOrders
             .map((o: any) => ({ ...o, _sharedPoolParticipantUserId: null }));
+          const orders = allOwnerOrders.filter((o: any) => o.collateral_share_mode === 'self');
 
           // 查询每个订单的已结利息明细；后续按当前视角身份筛选。
           // 主订单使用 participant_user_id IS NULL，参与者子订单只使用该参与者自己的记录。
-          const orderIds = orders.map((o: any) => Number(o.id));
+          const orderIds = allOwnerOrders.map((o: any) => Number(o.id));
           const paymentRowsMap: Record<number, any[]> = {};
           if (orderIds.length > 0) {
             const placeholders = orderIds.map(() => '?').join(',');
@@ -19084,7 +19084,7 @@ ${klinesSummary}
           // 37号标签可以独立提供股票净值盈亏、担保物、待结利息、已结利息。
           // 旧订单的 interestTagName 只兼容为已结利息，绝不误切换为待结引用。
           // 共享池按实际被启用的用途汇总，避免手工担保物被37号保证金覆盖或重复计入。
-          const linked37Tags = Array.from(new Set(orders.flatMap((o: any) => {
+          const linked37Tags = Array.from(new Set(allOwnerOrders.flatMap((o: any) => {
             try {
               const raw = o.collateral_source;
               const source = Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : (typeof raw === 'string' ? JSON.parse(raw) : raw);
@@ -19416,7 +19416,7 @@ ${klinesSummary}
           };
 
           // 汇总每张订单的担保物价值和担保需求
-          const orderDetails = orders.map((o: any) => {
+          const orderDetails = allOwnerOrders.map((o: any) => {
             const collateralAssets = (() => { try { const raw = o.collateral_assets; if (Array.isArray(raw)) return raw; if (Buffer.isBuffer(raw)) return JSON.parse(raw.toString('utf8')); if (typeof raw === 'string') return JSON.parse(raw || '[]'); return []; } catch { return []; } })();
             const linked37Collateral = calculateLinked37Collateral(o.collateral_source);
             // 计算担保物总价值（U）
@@ -19570,29 +19570,42 @@ ${klinesSummary}
             };
           });
 
+          // 按担保物价值从高到低排序；所有共享区块和主列表使用同一顺序。
+          const sortByCollateralValue = (a: any, b: any) => {
+            const difference = Number(b.collateralValue ?? 0) - Number(a.collateralValue ?? 0);
+            return difference !== 0 ? difference : String(a.orderNo ?? '').localeCompare(String(b.orderNo ?? ''));
+          };
+          const sharedOrderDetails = orderDetails
+            .filter((detail: any) => detail.shareMode === 'self')
+            .sort(sortByCollateralValue);
+          const nonSharedOrderDetails = orderDetails
+            .filter((detail: any) => detail.shareMode !== 'self')
+            .sort(sortByCollateralValue);
+
           // 汇总共享池总数据。同一 37 号标签可被同一人的多张订单引用，
           // 它代表同一组真实保证金，因此池内只能计入一次，不能随引用订单数重复放大。
           const includedLinked37Tags = new Set<string>();
-          const totalCollateralValue = orderDetails.reduce((s: number, o: any) => {
+          const totalCollateralValue = sharedOrderDetails.reduce((s: number, o: any) => {
             if (o.linked37TagName) {
               if (includedLinked37Tags.has(o.linked37TagName)) return s;
               includedLinked37Tags.add(o.linked37TagName);
             }
             return s + o.collateralValue;
           }, 0);
-          const totalCollateralRequired = orderDetails.reduce((s: number, o: any) => s + o.collateralRequired, 0);
+          const totalCollateralRequired = sharedOrderDetails.reduce((s: number, o: any) => s + o.collateralRequired, 0);
           const totalGap = totalCollateralRequired + totalCollateralValue;
-          const totalBuyValue = orderDetails.reduce((s: number, o: any) => s + (o.buyValue || 0), 0);
+          const totalBuyValue = sharedOrderDetails.reduce((s: number, o: any) => s + (o.buyValue || 0), 0);
 
           await conn.end();
           return {
-            orders: orderDetails,
+            orders: sharedOrderDetails,
+            nonSharedOrders: nonSharedOrderDetails,
             livePrices,
             totalCollateralValue,
             totalCollateralRequired,
             totalGap,
             totalBuyValue,
-            orderCount: orderDetails.length,
+            orderCount: sharedOrderDetails.length,
           };
         } catch (e: any) {
           await conn.end();
