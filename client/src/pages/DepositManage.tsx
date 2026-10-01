@@ -531,6 +531,11 @@ export default function DepositManage() {
     { ledgerId, tagName: selectedTagForRight ?? "" },
     { enabled: !!ledgerId && !!selectedTagForRight }
   );
+  // 37号页面和52号引用订单共用同一服务端估值快照，杜绝不同组件各自取行情造成的担保金额偏差。
+  const { data: canonicalMarginValuation } = (trpc.ledger as any).getTagMarginValuation.useQuery(
+    { ledgerId, tagName: selectedTagForRight ?? "" },
+    { enabled: !!ledgerId && !!selectedTagForRight, staleTime: 25_000, refetchInterval: 30_000, refetchIntervalInBackground: true },
+  );
 
   // 查询当前选中标签的 transfer 记录（历史提现 + 增减本金），用于只读展示
   const selectedTagCategoryId = useMemo(() => {
@@ -826,12 +831,14 @@ export default function DepositManage() {
   // 解析右侧保证金数据（当前选中标签）。旧币种结构与新版股票结构同时兼容。
   const rightMarginData = currentRightMarginRecords;
 
-  const rightTotalCNY = useMemo(() => {
+  const locallyComputedRightTotalCNY = useMemo(() => {
     return rightMarginData.reduce((sum, entry) => {
       if (entry.assetType === 'stock') return sum + (getTagMarginStockMarketValue(entry, allMarginStockQuotes) ?? 0);
       return sum + toCNY(String(entry.amount), entry.coin, cryptoPrices);
     }, 0);
   }, [rightMarginData, cryptoPrices, allMarginStockQuotes]);
+  const canonicalRightTotalCNY = Number((canonicalMarginValuation as any)?.totalCny);
+  const rightTotalCNY = Number.isFinite(canonicalRightTotalCNY) ? canonicalRightTotalCNY : locallyComputedRightTotalCNY;
 
   // 解析提现/入金数据（当前选中标签）
   const fundFlowData = useMemo(() => {

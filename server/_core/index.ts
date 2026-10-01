@@ -755,7 +755,10 @@ async function startServer() {
   server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
     if (isFastPreview) {
-      console.log('[FastPreview] 后台扫描与定时任务已禁用');
+      // 轻量预览不启动交易、资金、预警等后台任务；但37号保证金、52号担保物和
+      // 钱包估值都必须走同一份实时行情缓存，不能把 ETH 等币种按 ¥0 处理。
+      startPriceScanner();
+      console.log('[FastPreview] 无关后台任务已禁用；统一行情扫描已保留用于实时估值');
       return;
     }
     // 部署成功后发送短信通知（已关闭）

@@ -85,6 +85,11 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
 
   // 走服务器tRPC获取价格（price-scanner缓存，3秒刷新）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
+  // 与52号引用同用服务端快照，确保外部担保详情与37号原页面显示完全一致。
+  const { data: canonicalMarginValuation } = (trpc.ledger as any).getTagMarginValuation.useQuery(
+    { ledgerId, tagName },
+    { enabled: !!ledgerId && !!tagName, staleTime: 25_000, refetchInterval: 30_000, refetchIntervalInBackground: true },
+  );
   const cryptoPrices: Record<string, number> = useMemo(() => {
     const result: Record<string, number> = {};
     if (cryptoPricesRaw) {
@@ -133,11 +138,13 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
   );
   const rightMarginStockQuotes = ((rightMarginStockCloseQuery.data as any)?.quotes ?? {}) as Record<string, { price?: number; currency?: string; priceDate?: string; updatedAt?: string }>;
 
-  const rightTotalCNY = useMemo(() => {
+  const locallyComputedTotalCNY = useMemo(() => {
     return rightMarginData.reduce((sum, entry) => entry.assetType === 'stock'
       ? sum + (getTagMarginStockMarketValue(entry, rightMarginStockQuotes) ?? 0)
       : sum + toCNY(String(entry.amount), entry.coin, cryptoPrices), 0);
   }, [rightMarginData, cryptoPrices, rightMarginStockQuotes]);
+  const canonicalTotalCNY = Number((canonicalMarginValuation as any)?.totalCny);
+  const rightTotalCNY = Number.isFinite(canonicalTotalCNY) ? canonicalTotalCNY : locallyComputedTotalCNY;
 
   // ── 账户信息计算 ──
   const latestBalance = (rightTagSummary as any)?.latestBalance;

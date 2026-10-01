@@ -1237,6 +1237,7 @@ export function FunderOrderCardV2Silver({
   const _v2OwnerId = Number((order as any).user_id || 0);
   const _v2IsParticipantOrder = _v2HasParticipantView && _v2ParticipantId > 0
     && (_v2ParticipantId !== _v2OwnerId || _v2ParticipantRole !== 'owner');
+  const _v2IsOtherPerspective = String((order as any).order_perspective || 'self') === 'other';
   const _v2ParticipantUserId = _v2IsParticipantOrder ? _v2ParticipantId : undefined;
   const { data: interestPaymentsData } = trpc.ledger.funderGetInterestPayments.useQuery(
     { orderId: order.id as number, ledgerId: ledgerId as number, participantUserId: _v2ParticipantUserId },
@@ -1292,6 +1293,10 @@ export function FunderOrderCardV2Silver({
   const cardCollateralTotalApprox = ['hidden', 'U', 'CNY'].includes(cardDisplayConfig.approxCollateralTotal)
     ? cardDisplayConfig.approxCollateralTotal
     : cardDisplayConfig.approxCollateralValue === 'CNY' ? 'CNY' : 'U';
+  // 主缺口值固定随资产类型显示；该字段只控制下方“≈”折算行。
+  const cardCollateralGapApprox = ['hidden', 'U', 'CNY'].includes(cardDisplayConfig.approxCollateralGap)
+    ? cardDisplayConfig.approxCollateralGap
+    : 'hidden';
   const cardPrincipalLentOut = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true;
   // 借出本金的左上角主展示可选择本金或标的数量；选择仅影响展示。
   const cardPrincipalLentOutPrimary = cardDisplayConfig.principalLentOutPrimary === 'quantity'
@@ -1355,6 +1360,8 @@ export function FunderOrderCardV2Silver({
   });
   // Gate.io主源和Deribit备用均由接口统一为USDT/张。
   const optMarkPrice = greeksResult.data?.markPrice ?? null;
+  // 期权价格只和同一合约的上一笔标记价比较，不能引用 ETH/BTC 现货涨跌。
+  const optMarkPriceDirection = greeksResult.markPriceDirection;
   const optCurrentValue = optMarkPrice !== null && qty > 0 ? optMarkPrice * qty : null;
   const optIsShort = _optInfo?.direction === 'short_call' || _optInfo?.direction === 'short_put';
   // 期权浮盈与普通现货完全分离：只计算（合约标记价 − 权利金）× 张数。
@@ -1405,6 +1412,12 @@ export function FunderOrderCardV2Silver({
     : (interestUnit === 'U' ? displayPaid * cnyRate : displayPaid);
   const approxPaidUnit = approxPaidMode === 'U' ? 'U' : '元';
 
+  // 风险敞口内部统一使用 U。资产类型可能为“币”，但利息仍可按人民币约定，
+  // 因此必须按实际利息币种折算，不能将人民币待结利息直接当作 U 扣除。
+  const silverRiskCnyRate = cnyRate && cnyRate > 0 ? cnyRate : 6.8;
+  const silverAccruedInterestU = interestUnit === '元' ? displayAccrued / silverRiskCnyRate : displayAccrued;
+  const silverPaidInterestU = interestUnit === '元' ? displayPaid / silverRiskCnyRate : displayPaid;
+
   const holdDurationLabel = (() => {
     if (!order.buy_date) return '--';
     const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
@@ -1425,8 +1438,8 @@ export function FunderOrderCardV2Silver({
     }
   } catch {}
 
-  // 担保物与共享池按订单拥有者隔离；参与者快照中的共享标记不能跨用户建立担保桥梁。
-  const isSharedMode = !_v2IsParticipantOrder && (order as any).collateral_share_mode === 'self';
+  // 担保物与共享池按订单拥有者隔离；参与者或归属「他人」的订单不能建立担保桥梁。
+  const isSharedMode = !_v2IsParticipantOrder && !_v2IsOtherPerspective && (order as any).collateral_share_mode === 'self';
   // 动态解析 collateral_source（调用其他账本担保物）
   const _parsedCollateralSource = useMemo(() => {
     try {
@@ -1591,10 +1604,20 @@ export function FunderOrderCardV2Silver({
       else { collateralItemValues.push(null); collateralValueKnown = false; }
     }
   }
-  // 担保缺口 = 担保总値 + 浮动盈亏 - 待结利息 + 已结利息
-  const exposure = floatPnl !== null
-    ? collateralValue + floatPnl - displayAccrued + displayPaid
-    : collateralValue - displayAccrued + displayPaid;
+  // 期权行权价不参与当前担保缺口。自有资金直接以实时合约价值计，融资付息则以
+  // 「实时价值 − 权利金总成本 − 待结 + 已结 + 担保物」计，和订单模式保持一致。
+  const isSelfFundedOption = _isOptCard && (
+    cardDisplayConfig.assetFundingType === 'self'
+    || cardDisplayConfig.selfFundedAsset === true
+    || cardDisplayConfig.selfFundedAsset === 'true'
+  );
+  const exposure = _isOptCard
+    ? (isSelfFundedOption
+      ? (optCurrentValue ?? 0)
+      : (optionFloatPnl ?? 0) + collateralValue - silverAccruedInterestU + silverPaidInterestU)
+    : (floatPnl !== null
+      ? collateralValue + floatPnl - silverAccruedInterestU + silverPaidInterestU
+      : collateralValue - silverAccruedInterestU + silverPaidInterestU);
   const isSufficient = exposure >= 0;
 
   const fmt = (v: number | null, digits = 2) =>
@@ -1676,6 +1699,11 @@ export function FunderOrderCardV2Silver({
   const TXT_DIM = (isParticipant || isOptionCard) ? (isParticipant ? GRN_TEXT_DIM : OPT_TEXT_DIM) : SL_TEXT_DIM;
   const TXT_SHADOW = (isParticipant || isOptionCard) ? (isParticipant ? GRN_TEXT_SHADOW : OPT_TEXT_SHADOW) : SL_TEXT_SHADOW;
   const TXT_SHADOW_LG = (isParticipant || isOptionCard) ? (isParticipant ? GRN_TEXT_SHADOW_LG : OPT_TEXT_SHADOW_LG) : SL_TEXT_SHADOW_LG;
+  const optMarkPriceTone = optMarkPriceDirection === 'up'
+    ? '#DC2626'
+    : optMarkPriceDirection === 'down'
+      ? '#16A34A'
+      : TXT_PRI;
   const DIVIDER = (isParticipant || isOptionCard) ? (isParticipant ? GRN_DIVIDER : OPT_DIVIDER) : SL_DIVIDER;
   const rivetBg = isParticipant ? GRN_RIVET_BG
     : isStockCard
@@ -1928,7 +1956,9 @@ export function FunderOrderCardV2Silver({
             <div className="text-right" style={{ flex: 1 }}>
               <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>{isOptionCard ? '期权现价 (U)' : '当前价 (U)'}</div>
               <div style={{ lineHeight: 1 }}>
-                <span className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
+                <span className="text-sm font-semibold inline-flex items-center justify-end gap-0.5" style={{ color: isOptionCard ? optMarkPriceTone : TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
+                  {isOptionCard && optMarkPriceDirection === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
+                  {isOptionCard && optMarkPriceDirection === 'down' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#16A34A', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
                   {isOptionCard
                     ? (optMarkPrice != null ? fmt(optMarkPrice, 2) : (greeksResult.loading ? '...' : '--'))
                     : (liveP != null ? fmt(liveP, 2) : '--')}
@@ -2772,8 +2802,13 @@ export function FunderOrderCardV2Silver({
                       className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
                       style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}>!</button>
                   </span>
-                  <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                    {isSufficient ? '+' : '-'}{Math.abs(exposure).toLocaleString(undefined, { maximumFractionDigits: 2 })} u
+                  <span className="flex flex-col items-end leading-tight" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                    <span>{isSufficient ? '+' : '-'}{Math.abs(exposure).toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
+                    {cardCollateralGapApprox !== 'hidden' && (
+                      <span className="mt-0.5 text-[10px] font-medium opacity-80">≈ {cardCollateralGapApprox === 'CNY'
+                        ? `${(exposure * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
+                        : `${exposure.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`}</span>
+                    )}
                   </span>
                 </div>
                 {showCollateralInfo && (
@@ -3098,13 +3133,14 @@ export function FunderLenderCardSilver({
   const _lnOwnerId = Number((order as any).user_id || 0);
   const _lnIsParticipantOrder = _lnHasParticipantView && _lnParticipantId > 0
     && (_lnParticipantId !== _lnOwnerId || _lnParticipantRole !== 'owner');
+  const _lnIsOtherPerspective = String((order as any).order_perspective || 'self') === 'other';
   const _lnParticipantUserId = _lnIsParticipantOrder ? _lnParticipantId : undefined;
   const interestHistoryQuery = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId: ledgerId ?? 0, orderId: order.id as number, participantUserId: _lnParticipantUserId },
     { enabled: showInterestHistory && !!ledgerId, staleTime: 0 }
   );
-  // 共享担保池查询（仅当订单开启了本人订单共享时才查询）
-  const orderShareMode = _lnIsParticipantOrder ? 'none' : (order as any).collateral_share_mode;
+  // 共享担保池查询仅适用于归属为本人的订单；参与者与「他人」订单均不得进入。
+  const orderShareMode = (_lnIsParticipantOrder || _lnIsOtherPerspective) ? 'none' : (order as any).collateral_share_mode;
   const isSharedMode = orderShareMode === 'self';
   const sharedCollateralViewUserId = Number(order.user_id);
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
@@ -3333,17 +3369,30 @@ export function FunderLenderCardSilver({
   const collateralValue = collateralValueKnown
     ? collateralItemValues.reduce((s, v) => s + (v ?? 0), 0)
     : null;
-  // 担保缺口 = 担保价值 + 浮动盈亏 - 待收利息(U) + 已结利息(U)（与老订单模式一致）
   // 利息如果是元，需先除以cnyRate换算成U
   const effectiveCnyRate = cnyRate && cnyRate > 0 ? cnyRate : 6.8;
   const accruedInU = interestUnit === '元' ? displayAccrued / effectiveCnyRate : displayAccrued;
   const paidInU = interestUnit === '元' ? displayPaid / effectiveCnyRate : displayPaid;
-  // 正数=充足，负数=缺口
-  const collateralGap = collateralValue !== null
-    ? floatPnl !== null
-      ? collateralValue + floatPnl - accruedInU + paidInU
-      : collateralValue - accruedInU + paidInU
-    : null;
+  const lenderIsSelfFundedOption = (() => {
+    try {
+      const raw = (order as any).display_config;
+      const config = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});
+      return _lnIsOpt && (config.assetFundingType === 'self' || config.selfFundedAsset === true || config.selfFundedAsset === 'true');
+    } catch { return false; }
+  })();
+  // 期权行权价不作为担保风险基准：自有资金仅保留实时合约市值；融资付息使用
+  // 实时价值 − 初始权利金总成本 − 待结 + 已结 + 担保物。
+  const collateralGap = _lnIsOpt
+    ? (lenderIsSelfFundedOption
+      ? optionCurrentValue
+      : (optionFloatPnl === null || collateralValue === null
+        ? null
+        : optionFloatPnl + collateralValue - accruedInU + paidInU))
+    : (collateralValue !== null
+      ? (floatPnl !== null
+        ? collateralValue + floatPnl - accruedInU + paidInU
+        : collateralValue - accruedInU + paidInU)
+      : null);
   // 外部37号担保的标签余量只包含「浮盈 + 担保物」。订单最终缺口还必须计入
   // 本订单待结和已结利息，且该值是第五容器唯一允许消费的口径。
   const lnExternalFinalGapU = lnExtRemainingMarginU !== null

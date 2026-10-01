@@ -1,5 +1,5 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
-import { getTagMarginCurrencyRecords, getTagMarginStockRecords, getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
+import { getTagMarginCurrencyRecords, getTagMarginStockMarketValue, getTagMarginStockRecords, getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
 import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter, mibanPearRouter, mibanAftersaleRouter } from "./miban";
 import { mibanTeamRouter } from "./miban-teams";
 import { createHmac } from "crypto";
@@ -13852,6 +13852,76 @@ ${klinesSummary}
         };
       }),
 
+    // 37号保证金的唯一实时估值口径。37号原页面、52号引用详情和52订单风险公式
+    // 都必须读取此快照，避免不同前端请求在行情刷新前后分别计算而出现数值偏差。
+    getTagMarginValuation: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string(),
+      }))
+      .query(async ({ input }) => {
+        const db = await getLedgerDb();
+        const configRows = await db.execute(
+          sql`SELECT margin_by_coin FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
+        );
+        const config = ((configRows as any)[0] as any[])[0] ?? null;
+        const records = parseTagMarginRecords(config?.margin_by_coin);
+        const stockSymbols = getTagMarginStockSymbols(records);
+        let stockQuotes: Record<string, { price?: number; currency?: string; priceDate?: string; updatedAt?: string }> = {};
+        if (stockSymbols.length > 0) {
+          try {
+            const { getManualStockCloseSnapshots } = await import('./manual-stock-close-scheduler');
+            stockQuotes = await getManualStockCloseSnapshots(stockSymbols);
+          } catch (error) {
+            console.warn('[getTagMarginValuation] 读取股票保证金快照失败:', error);
+          }
+        }
+
+        const { getAllLatestPrices, getLatestPrice, getUsdtCnyRate } = await import('./price-scanner');
+        const usdtCnyRate = Number(getUsdtCnyRate() || 0);
+        const allPrices = getAllLatestPrices();
+        let fullyValued = usdtCnyRate > 0;
+        let totalCny = 0;
+        const itemValuesCny = records.map((record) => {
+          if (record.assetType === 'stock') {
+            const value = getTagMarginStockMarketValue(record, stockQuotes);
+            if (value === null) fullyValued = false;
+            else totalCny += value;
+            return value;
+          }
+          const coin = String(record.coin || 'CNY').trim().toUpperCase();
+          const amount = Number(record.amount);
+          if (!Number.isFinite(amount)) {
+            fullyValued = false;
+            return null;
+          }
+          if (['CNY', 'RMB', '人民币', '元'].includes(coin)) {
+            totalCny += amount;
+            return amount;
+          }
+          const priceU = Number(getLatestPrice(coin) || 0);
+          if (!Number.isFinite(priceU) || priceU <= 0 || usdtCnyRate <= 0) {
+            fullyValued = false;
+            return null;
+          }
+          const value = amount * priceU * usdtCnyRate;
+          totalCny += value;
+          return value;
+        });
+        const valuationUpdatedAt = records
+          .filter((record) => record.assetType === 'currency' && !['CNY', 'RMB', '人民币', '元'].includes(String(record.coin || '').trim().toUpperCase()))
+          .map((record) => allPrices[String((record as any).coin || '').trim().toUpperCase()]?.updatedAt)
+          .filter(Boolean)
+          .sort()
+          .at(-1) ?? null;
+        return {
+          totalCny: fullyValued ? totalCny : null,
+          itemValuesCny,
+          usdtCnyRate: usdtCnyRate > 0 ? usdtCnyRate : null,
+          valuationUpdatedAt,
+        };
+      }),
+
     // 批量获取账本所有标签的保证金配置和最新余额（用于列表行显示百分比）
     getAllTagsMarginSummary: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
@@ -19028,9 +19098,11 @@ ${klinesSummary}
         try {
           // 确保字段存在
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_share_mode VARCHAR(10) DEFAULT 'none'`).catch(() => {});
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS order_perspective VARCHAR(10) DEFAULT 'self'`).catch(() => {});
 
-          // 共享担保池严格按订单拥有者隔离：只能汇总该用户自己创建的订单。
-          // 协作参与者可以查看对应订单，但永远不能把订单拥有者的担保物带入自己的共享池；
+          // 共享担保池严格按订单拥有者隔离：只能汇总该用户自己创建、且归属为「本人」的订单。
+          // 「他人」订单仅供列表展示，绝不能进入该用户的共享或非共享担保缺口弹窗；
+          // 协作参与者也不能把订单拥有者的担保物带入自己的共享池。
           // 这条服务端边界同时约束所有旧版/新版订单卡，不能只依赖前端隐藏。
           const [sharedRows] = await conn.execute(
             `SELECT fo.*
@@ -19038,7 +19110,8 @@ ${klinesSummary}
              WHERE fo.ledger_id = ?
                AND fo.user_id = ?
                AND fo.status = 'active'
-               AND fo.deleted_at IS NULL`,
+               AND fo.deleted_at IS NULL
+               AND (fo.order_perspective IS NULL OR fo.order_perspective <> 'other')`,
             [input.ledgerId, input.userId]
           ) as any[];
           const rawOrders = Array.isArray(sharedRows) ? sharedRows : [];
@@ -19605,6 +19678,17 @@ ${klinesSummary}
             .map((detail: any) => rawNonSharedById.get(Number(detail.orderId)))
             .filter(Boolean)
             .map(toOrderCardSource);
+          // 共享区第③项同样必须使用订单卡的最终担保缺口，尤其期权的实时合约价值
+          // 不能由服务端的现货价格简化公式代替。因此一并返回已授权的原始订单输入。
+          const rawSharedById = new Map<number, any>(
+            allOwnerOrders
+              .filter((raw: any) => raw.collateral_share_mode === 'self')
+              .map((raw: any) => [Number(raw.id), raw])
+          );
+          const sharedOrderCardSources = sharedOrderDetails
+            .map((detail: any) => rawSharedById.get(Number(detail.orderId)))
+            .filter(Boolean)
+            .map(toOrderCardSource);
 
           // 汇总共享池总数据。同一 37 号标签可被同一人的多张订单引用，
           // 它代表同一组真实保证金，因此池内只能计入一次，不能随引用订单数重复放大。
@@ -19625,6 +19709,7 @@ ${klinesSummary}
             orders: sharedOrderDetails,
             nonSharedOrders: nonSharedOrderDetails,
             nonSharedOrderCardSources,
+            sharedOrderCardSources,
             livePrices,
             totalCollateralValue,
             totalCollateralRequired,
