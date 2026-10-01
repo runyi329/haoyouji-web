@@ -877,6 +877,8 @@ export default function LedgerDetailAA({
   useEffect(() => {
     if (overviewTab !== 'overview') setShowPausedTagDetails(false);
   }, [overviewTab]);
+  const overviewNativeScrollRef = useRef<HTMLDivElement>(null);
+  const overviewPageScrollRef = useRef<HTMLDivElement>(null);
   const [overviewSort, setOverviewSort] = useState<{ col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend'; dir: 'asc' | 'desc' } | null>(null);
   const handleOverviewSort = (col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend') => {
     setOverviewSort(prev => prev && prev.col === col ? { col, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' });
@@ -1137,6 +1139,55 @@ export default function LedgerDetailAA({
       return 0;
     });
   }, [categories, initialBalancesData, allTagsChartData]);
+
+  // iOS 在滚动抵达边缘时仍会出现橡皮筋回弹，短暂露出容器外的白边。
+  // 表格层锁定横纵两端；页面层只锁定纵向两端，避免影响表格的正常横向滑动。
+  useEffect(() => {
+    const starts = new WeakMap<HTMLElement, { x: number; y: number }>();
+    const bindBoundaryLock = (scrollEl: HTMLDivElement | null, lockHorizontal: boolean) => {
+      if (!scrollEl) return () => undefined;
+      const rememberTouchStart = (event: TouchEvent) => {
+        const touch = event.touches[0];
+        if (touch) starts.set(scrollEl, { x: touch.clientX, y: touch.clientY });
+      };
+      const preventBoundaryBounce = (event: TouchEvent) => {
+        // 表格手势由表格自己的边界锁定处理，页面容器不重复接管，避免阻塞表格正常上下移动。
+        if (!lockHorizontal && overviewNativeScrollRef.current?.contains(event.target as Node)) return;
+        const start = starts.get(scrollEl);
+        const touch = event.touches[0];
+        if (!start || !touch) return;
+        const deltaX = start.x - touch.clientX;
+        const deltaY = start.y - touch.clientY;
+        const isHorizontalGesture = Math.abs(deltaX) > Math.abs(deltaY);
+        if (isHorizontalGesture) {
+          if (!lockHorizontal) return;
+          const maxScrollLeft = scrollEl.scrollWidth - scrollEl.clientWidth;
+          const atLeftEdge = scrollEl.scrollLeft <= 2;
+          const atRightEdge = scrollEl.scrollLeft >= maxScrollLeft - 2;
+          if ((atLeftEdge && deltaX < 0) || (atRightEdge && deltaX > 0)) event.preventDefault();
+          return;
+        }
+        const maxScrollTop = scrollEl.scrollHeight - scrollEl.clientHeight;
+        const atTopEdge = scrollEl.scrollTop <= 2;
+        const atBottomEdge = scrollEl.scrollTop >= maxScrollTop - 2;
+        if ((atTopEdge && deltaY < 0) || (atBottomEdge && deltaY > 0)) event.preventDefault();
+      };
+      const clearTouch = () => { starts.delete(scrollEl); };
+      scrollEl.addEventListener('touchstart', rememberTouchStart, { passive: true });
+      scrollEl.addEventListener('touchmove', preventBoundaryBounce, { passive: false });
+      scrollEl.addEventListener('touchend', clearTouch, { passive: true });
+      scrollEl.addEventListener('touchcancel', clearTouch, { passive: true });
+      return () => {
+        scrollEl.removeEventListener('touchstart', rememberTouchStart);
+        scrollEl.removeEventListener('touchmove', preventBoundaryBounce);
+        scrollEl.removeEventListener('touchend', clearTouch);
+        scrollEl.removeEventListener('touchcancel', clearTouch);
+      };
+    };
+    const unbindTable = bindBoundaryLock(overviewNativeScrollRef.current, true);
+    const unbindPage = bindBoundaryLock(overviewPageScrollRef.current, false);
+    return () => { unbindTable(); unbindPage(); };
+  }, [allTagsChartData, selectedTagId, overviewTab]);
 
   // ─── 全部模式：计算所有标签的押金总和和盈亏总和 ────────────────────────
   const allTagsStats = useMemo(() => {
@@ -2725,7 +2776,7 @@ export default function LedgerDetailAA({
 
       {/* ── 全部模式：多线盈亏增长图表 ── */}
       {selectedTagId === null && (
-        <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div ref={overviewPageScrollRef} className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'none', overscrollBehaviorY: 'none' }}>
           {/* ── 标签周期年化表格（在滚动容器内） ── */}
           {allTagsChartData.length > 0 && (
           <div className="mx-3 mt-3 rounded-lg shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF', borderRadius: 8, overflow: overviewTab === 'overview' ? 'visible' : 'hidden' }}>
@@ -2857,7 +2908,8 @@ export default function LedgerDetailAA({
             // 右侧表头和数据网格必须共用同一组绝对轨道宽度；不能按各自内容自适应，
             // 否则在横向滑动时会出现标题与数字列宽不同、错位的情况。
             const rightGridCols = '64px 1px 72px 1px 72px 1px 68px 1px 64px 1px 64px 1px 52px';
-            const rightGridWidth = '562px';
+            // 所有轨道之和为 462px；此前误设为 562px，导致占比列右侧多出 100px 可滑动白边。
+            const rightGridWidth = '462px';
             // 概览表头始终表示北京时间的“当天”，不能被某个标签最后一笔手工记录或
             // 某支股票的上一交易日快照改写。每一行是否真正完成当天计算，仍按该行自己的
             // latestDate 与这个北京日期比对（R1 的9/28盘尾只影响R1本行）。
@@ -2896,7 +2948,7 @@ export default function LedgerDetailAA({
             return (
               <>
               {/* 单一原生滚动层：表头和数据共同横向移动，不存在两层同步延迟。 */}
-              <div style={{ display: 'flex', alignItems: 'stretch', position: 'relative', overflow: 'auto', maxHeight: 'calc(100dvh - 186px)', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'contain' }}>
+              <div ref={overviewNativeScrollRef} style={{ display: 'flex', alignItems: 'stretch', position: 'relative', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100dvh - 186px)', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'none', overscrollBehaviorX: 'none', overscrollBehaviorY: 'none', touchAction: 'pan-x pan-y', backgroundColor: '#FFFFFF' }}>
                 {/* ── 左侧固定名称列 ── */}
                 <div style={{ width: 104, flexShrink: 0, borderRight: '1px solid #F0F0F0', position: 'sticky', left: 0, zIndex: 30, backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column' }}>
                   {/* 表头名称格 */}
