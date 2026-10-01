@@ -527,6 +527,8 @@ interface FunderOrderCardV2Props {
   isAdmin?: boolean;
   /** 共享担保弹窗点击订单号时，用于打开订单模式详情 */
   allOrders?: any[];
+  /** 订单模式已算出的最终缺口；卡片模式共享弹窗直接复用，不重算。 */
+  sharedGapMap?: Record<number, number>;
 }
 
 export function FunderOrderCardV2({
@@ -1201,6 +1203,7 @@ export function FunderOrderCardV2Silver({
   currentUser,
   isAdmin = false,
   allOrders,
+  sharedGapMap,
 }: FunderOrderCardV2Props) {
   const cardExportRef = useRef<HTMLDivElement>(null);
   const allowImageDownload = isAdmin || getBooleanDisplayFlag(order, 'allowUserImageDownload', true);
@@ -1491,8 +1494,13 @@ export function FunderOrderCardV2Silver({
   // 共享池只计入拥有者本人且开启共享担保的订单；其余本人订单仅作提示，绝不计入共享担保总额。
   const nonSharedOwnerOrders = (() => {
     const serverCalculatedOrders = (sharedPoolInfo as any)?.nonSharedOrders;
-    // 非共享订单也由共享池接口按实时价格、利息与持仓口径计算，前端不以快照重复推导。
-    if (Array.isArray(serverCalculatedOrders)) return serverCalculatedOrders;
+    // 订单模式已完成完整风险口径；卡片模式只复用该最终结果。服务端值仅在对应订单
+    // 尚未渲染时后备，避免手工股票、37号标签和人民币利息被第二套公式简化。
+    if (Array.isArray(serverCalculatedOrders)) return serverCalculatedOrders.map((candidate: any) => {
+      const orderId = Number(candidate.orderId ?? candidate.id);
+      const cardGap = Number(sharedGapMap?.[orderId]);
+      return Number.isFinite(cardGap) ? { ...candidate, collateralGap: cardGap } : candidate;
+    });
     const sharedOrderIds = new Set<number>(((sharedPoolInfo as any)?.orders ?? []).map((poolOrder: any) => Number(poolOrder.orderId)));
     const currentLedgerId = Number((order as any).ledger_id ?? ledgerId ?? 0);
     return (allOrders ?? []).filter((candidate: any) => {
@@ -2583,36 +2591,38 @@ export function FunderOrderCardV2Silver({
                                 <span style={{ color: '#374151' }}>合计担保物价値</span>
                                 <span className="font-mono" style={{ color: '#DC2626' }}>+{((sharedPoolInfo as any).totalCollateralValue ?? 0).toFixed(2)} u</span>
                               </div>
-                              {nonSharedOwnerOrders.length > 0 && (
-                                <div className="mt-2 rounded-lg px-2 py-2" style={{ background: '#F7F7F8', border: '1px solid #E5E7EB' }}>
-                                  <div className="mb-1 text-xs" style={{ color: '#9CA3AF' }}>以下订单不计入共享担保合计</div>
-                                  <div className="space-y-1.5">
-                                    {nonSharedOwnerOrders.map((nonSharedOrder: any, index: number) => {
-                                      const assetType = nonSharedOrder.assetType ?? nonSharedOrder.asset_type;
-                                      const assetTypeLabel = assetType === 'stock' ? '股' : assetType === 'crypto_option' ? '期' : '币';
-                                      const orderNo = nonSharedOrder.orderNo ?? nonSharedOrder.order_no;
-                                      const gap = Number(nonSharedOrder.collateralGap);
-                                      const gapLabel = Number.isFinite(gap) ? `${gap >= 0 ? '+' : ''}${gap.toFixed(2)} u` : '--- u';
-                                      return <div key={nonSharedOrder.orderId ?? nonSharedOrder.id} className="flex items-center justify-between gap-2">
-                                        <div className="min-w-0 flex items-center gap-1.5">
-                                          <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{((sharedPoolInfo as any).orders ?? []).length + index + 1}</span>
-                                          <span className="text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
-                                          <button type="button" onClick={() => setClickedOrderNo(orderNo)} className="font-mono underline underline-offset-2 cursor-pointer truncate" style={{ color: '#1A56DB', border: 'none', background: 'transparent', padding: 0 }}>{orderNo}</button>
-                                          <span className="text-xs shrink-0" style={{ color: '#9CA3AF' }}>非共享担保订单</span>
-                                        </div>
-                                        <span className="font-mono font-semibold shrink-0" style={{ color: Number.isFinite(gap) && gap < 0 ? '#16A34A' : '#DC2626' }}>{gapLabel}</span>
-                                      </div>;
-                                    })}
-                                  </div>
-                                  <div className="mt-2 pt-1.5 flex justify-between gap-3 font-semibold text-xs" style={{ borderTop: '1px dashed #D1D5DB' }}>
-                                    <span style={{ color: '#6B7280' }}>非共享订单担保缺口合计（不计入共享担保）</span>
-                                    <span className="font-mono shrink-0" style={{ color: nonSharedGapTotal < 0 ? '#16A34A' : '#DC2626' }}>{nonSharedGapTotal >= 0 ? '+' : ''}{nonSharedGapTotal.toFixed(2)} u</span>
-                                  </div>
-                                </div>
-                              )}
                             </>
                           ) : <div className="text-gray-400">加载中...</div>}
                         </div>
+                        {/* ⑤ 非共享担保订单：单独容器，绝不计入第④项共享担保 */}
+                        {nonSharedOwnerOrders.length > 0 && (
+                          <div className="mt-2 p-2.5 rounded-lg" style={{ background: '#F7F7F8', border: '1px solid #E5E7EB' }}>
+                            <div className="font-semibold mb-1" style={{ color: '#374151' }}>⑤ 非共享担保订单</div>
+                            <div className="mb-2 text-xs" style={{ color: '#9CA3AF' }}>以下订单独立计算，不计入共享担保合计</div>
+                            <div className="space-y-1.5">
+                              {nonSharedOwnerOrders.map((nonSharedOrder: any, index: number) => {
+                                const assetType = nonSharedOrder.assetType ?? nonSharedOrder.asset_type;
+                                const assetTypeLabel = assetType === 'stock' ? '股' : assetType === 'crypto_option' ? '期' : '币';
+                                const orderNo = nonSharedOrder.orderNo ?? nonSharedOrder.order_no;
+                                const gap = Number(nonSharedOrder.collateralGap);
+                                const gapLabel = Number.isFinite(gap) ? `${gap >= 0 ? '+' : ''}${gap.toFixed(2)} u` : '--- u';
+                                return <div key={nonSharedOrder.orderId ?? nonSharedOrder.id} className="flex items-center justify-between gap-2">
+                                  <div className="min-w-0 flex items-center gap-1.5">
+                                    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
+                                    <span className="text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
+                                    <button type="button" onClick={() => setClickedOrderNo(orderNo)} className="font-mono underline underline-offset-2 cursor-pointer truncate" style={{ color: '#1A56DB', border: 'none', background: 'transparent', padding: 0 }}>{orderNo}</button>
+                                    <span className="text-xs shrink-0" style={{ color: '#9CA3AF' }}>非共享担保订单</span>
+                                  </div>
+                                  <span className="font-mono font-semibold shrink-0" style={{ color: Number.isFinite(gap) && gap < 0 ? '#16A34A' : '#DC2626' }}>{gapLabel}</span>
+                                </div>;
+                              })}
+                            </div>
+                            <div className="mt-2 pt-1.5 flex justify-between gap-3 font-semibold text-xs" style={{ borderTop: '1px dashed #D1D5DB' }}>
+                              <span style={{ color: '#6B7280' }}>非共享订单担保缺口合计（不计入共享担保）</span>
+                              <span className="font-mono shrink-0" style={{ color: nonSharedGapTotal < 0 ? '#16A34A' : '#DC2626' }}>{nonSharedGapTotal >= 0 ? '+' : ''}{nonSharedGapTotal.toFixed(2)} u</span>
+                            </div>
+                          </div>
+                        )}
                         {/* 共享担保计算说明：与订单模式保持一致 */}
                         <div className="mt-2 p-2.5 rounded-lg text-[10px] space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
                           <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>

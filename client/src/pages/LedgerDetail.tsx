@@ -5677,9 +5677,28 @@ export default function LedgerDetail() {
                       cnyRate={cnyRate}
                       currentUser={user ? { id: (user as any).id, name: (user as any).name, username: (user as any).username, avatar: (user as any).avatar } : undefined}
                       allOrders={funderDisplayOrders as any[]}
+                      sharedGapMap={funderExposureGapMap}
                     />
                   );
                 })}
+                {/* 卡片模式同样取订单模式已完成的最终缺口；仅作计算上报，不渲染可见界面。 */}
+                <div aria-hidden="true" style={{ display: 'none' }}>
+                  {funderDisplayOrders.map((order: any) => (
+                    <FunderOrderCard
+                      key={`gap-reporter-${order.id}`}
+                      order={order}
+                      ledgerId={ledgerId}
+                      livePrices={funderLivePrices}
+                      priceDirection={funderPriceDirection}
+                      currentUser={user}
+                      membersData={membersData as any[]}
+                      isAdmin={false}
+                      allOrders={funderDisplayOrders as any[]}
+                      onExposureGapChange={handleFunderExposureGapChange}
+                      sharedGapMap={funderExposureGapMap}
+                    />
+                  ))}
+                </div>
               </div>
               </Suspense>
             ) : (
