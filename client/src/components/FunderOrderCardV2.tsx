@@ -529,6 +529,8 @@ interface FunderOrderCardV2Props {
   allOrders?: any[];
   /** 订单模式已算出的最终缺口；卡片模式共享弹窗直接复用，不重算。 */
   sharedGapMap?: Record<number, number>;
+  /** 卡片已确认的最终担保缺口（统一为 U），供同一拥有者的共享担保弹窗直接复用。 */
+  onExposureGapChange?: (orderId: number, gap: number) => void;
 }
 
 export function FunderOrderCardV2({
@@ -1447,8 +1449,8 @@ export function FunderOrderCardV2Silver({
   );
   // 规则G：数字币价格前端直连（老方案已封存：trpc.getCryptoPrices）
   const { data: _fc2977CryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { enabled: hasExternalCollateral, refetchInterval: 3000, staleTime: 2000 });
-  const { fc2977RemainingMarginU, fc2977MarginBasePct } = (() => {
-    if (!isFC2977 || !_fc2977TagConfig) return { fc2977RemainingMarginU: null as number | null, fc2977MarginBasePct: null as number | null };
+  const { fc2977RemainingMarginU, fc2977MarginBasePct, fc2977CnyRate } = (() => {
+    if (!isFC2977 || !_fc2977TagConfig) return { fc2977RemainingMarginU: null as number | null, fc2977MarginBasePct: null as number | null, fc2977CnyRate: null as number | null };
     const _cnyR = (_fc2977CryptoPricesRaw as any)?.usdtCnyRate ?? 7.0;
     const _pricesMap = (_fc2977CryptoPricesRaw as any)?.prices ?? {};
     const _prices: Record<string, number> = {};
@@ -1472,7 +1474,7 @@ export function FunderOrderCardV2Silver({
     const balanceNum = latestBalance?.balance ? parseFloat(String(latestBalance.balance)) : null;
     const initialNum = parseFloat((_fc2977TagConfig as any).initial_amount || '0') || 0;
     const multiplierNum = parseFloat((_fc2977TagConfig as any).account_multiplier || '1') || 1;
-    if (balanceNum === null) return { fc2977RemainingMarginU: null, fc2977MarginBasePct: null };
+    if (balanceNum === null) return { fc2977RemainingMarginU: null, fc2977MarginBasePct: null, fc2977CnyRate: _cnyR };
     const pnl = externalFloatingPnlCalculationMode === 'leveraged_net_pnl'
       ? (balanceNum - initialNum) * multiplierNum
       : balanceNum - initialNum;
@@ -1480,14 +1482,23 @@ export function FunderOrderCardV2Silver({
     const remainingU = _cnyR > 0 ? remainingCNY / _cnyR : null;
     const marginBaseNum = parseFloat((_fc2977TagConfig as any).margin_base || '0') || 0;
     const pct = marginBaseNum > 0 ? (remainingCNY / marginBaseNum * 100) : null;
-    return { fc2977RemainingMarginU: remainingU, fc2977MarginBasePct: pct };
+    return { fc2977RemainingMarginU: remainingU, fc2977MarginBasePct: pct, fc2977CnyRate: _cnyR };
   })();
-  // 外部37号担保订单的卡片行已直接展示该标签的最终「余/缺」值。
-  // 共享担保弹窗仅复用这个已展示结果，绝不把浮动盈亏重新当成担保缺口计算。
+  // 外部37号订单的最终担保缺口必须与订单详情卡完全一致：
+  // 37号「浮盈 + 担保物」余量 − 本订单待结利息 + 已结利息。不能只上报前两项。
+  const fc2977InterestCnyRate = fc2977CnyRate && fc2977CnyRate > 0 ? fc2977CnyRate : cnyRate;
+  const fc2977AccruedInterestU = interestUnit === '元' ? displayAccrued / fc2977InterestCnyRate : displayAccrued;
+  const fc2977PaidInterestU = interestUnit === '元' ? displayPaid / fc2977InterestCnyRate : displayPaid;
+  const fc2977FinalGapU = fc2977RemainingMarginU !== null
+    && Number.isFinite(fc2977RemainingMarginU)
+    && Number.isFinite(fc2977AccruedInterestU)
+    && Number.isFinite(fc2977PaidInterestU)
+    ? fc2977RemainingMarginU - fc2977AccruedInterestU + fc2977PaidInterestU
+    : null;
   useEffect(() => {
-    if (!onExposureGapChange || !hasExternalCollateral || !Number.isFinite(fc2977RemainingMarginU)) return;
-    onExposureGapChange(Number(order.id), Number(fc2977RemainingMarginU));
-  }, [onExposureGapChange, hasExternalCollateral, fc2977RemainingMarginU, order.id]);
+    if (!onExposureGapChange || !hasExternalCollateral || !Number.isFinite(fc2977FinalGapU)) return;
+    onExposureGapChange(Number(order.id), Number(fc2977FinalGapU));
+  }, [onExposureGapChange, hasExternalCollateral, fc2977FinalGapU, order.id]);
   const sharedCollateralViewUserId = Number(order.user_id);
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId: (order as any).ledger_id ?? 0, userId: sharedCollateralViewUserId },
@@ -1498,15 +1509,14 @@ export function FunderOrderCardV2Silver({
       refetchIntervalInBackground: false,
     }
   );
-  // 共享池只计入拥有者本人且开启共享担保的订单；其余本人订单仅作提示，绝不计入共享担保总额。
+  // 第⑤项只能消费订单卡已确认的最终担保缺口。服务端摘要是简化口径，
+  // 对37号/手工股票/结息订单会漏项，因此数值尚未就绪时必须明确加载，绝不能回退显示它。
   const nonSharedOwnerOrders = (() => {
     const serverCalculatedOrders = (sharedPoolInfo as any)?.nonSharedOrders;
-    // 订单模式已完成完整风险口径；卡片模式只复用该最终结果。服务端值仅在对应订单
-    // 尚未渲染时后备，避免手工股票、37号标签和人民币利息被第二套公式简化。
     if (Array.isArray(serverCalculatedOrders)) return serverCalculatedOrders.map((candidate: any) => {
       const orderId = Number(candidate.orderId ?? candidate.id);
       const cardGap = Number(sharedGapMap?.[orderId]);
-      return Number.isFinite(cardGap) ? { ...candidate, collateralGap: cardGap } : candidate;
+      return { ...candidate, collateralGap: Number.isFinite(cardGap) ? cardGap : null };
     });
     const sharedOrderIds = new Set<number>(((sharedPoolInfo as any)?.orders ?? []).map((poolOrder: any) => Number(poolOrder.orderId)));
     const currentLedgerId = Number((order as any).ledger_id ?? ledgerId ?? 0);
@@ -1520,8 +1530,13 @@ export function FunderOrderCardV2Silver({
         && !isParticipantSnapshot
         && !sharedOrderIds.has(candidateId)
         && String(candidate.collateral_share_mode ?? candidate.collateralShareMode ?? 'none') !== 'self';
+    }).map((candidate: any) => {
+      const orderId = Number(candidate.id ?? candidate.orderId);
+      const cardGap = Number(sharedGapMap?.[orderId]);
+      return { ...candidate, collateralGap: Number.isFinite(cardGap) ? cardGap : null };
     });
   })();
+  const nonSharedGapReady = nonSharedOwnerOrders.every((candidate: any) => Number.isFinite(Number(candidate.collateralGap)));
   const nonSharedGapTotal = nonSharedOwnerOrders.reduce((sum: number, candidate: any) => {
     const gap = Number(candidate.collateralGap);
     return Number.isFinite(gap) ? sum + gap : sum;
@@ -2353,10 +2368,10 @@ export function FunderOrderCardV2Silver({
                   >!</button>
                 </span>
                 {isFC2977 ? (
-                  fc2977RemainingMarginU !== null ? (
+                  fc2977FinalGapU !== null ? (
                     <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                      <span style={{ backgroundColor: 'rgba(60,35,0,0.75)', color: '#F5C842', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2 }}>{fc2977RemainingMarginU >= 0 ? '余' : '缺'}</span>
-                      <span style={{ color: TXT_PRI }}>{Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</span>
+                      <span style={{ backgroundColor: 'rgba(60,35,0,0.75)', color: '#F5C842', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2 }}>{fc2977FinalGapU >= 0 ? '余' : '缺'}</span>
+                      <span style={{ color: TXT_PRI }}>{Math.abs(fc2977FinalGapU).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</span>
                     </span>
                   ) : (
                     <span style={{ color: TXT_DIM, fontSize: '0.75rem' }}>加载中...</span>
@@ -2612,7 +2627,8 @@ export function FunderOrderCardV2Silver({
                                 const assetTypeLabel = assetType === 'stock' ? '股' : assetType === 'crypto_option' ? '期' : '币';
                                 const orderNo = nonSharedOrder.orderNo ?? nonSharedOrder.order_no;
                                 const gap = Number(nonSharedOrder.collateralGap);
-                                const gapLabel = Number.isFinite(gap) ? `${gap >= 0 ? '+' : ''}${gap.toFixed(2)} u` : '--- u';
+                                const gapKnown = Number.isFinite(gap);
+                                const gapLabel = gapKnown ? `${gap >= 0 ? '+' : ''}${gap.toFixed(2)} u` : '加载中...';
                                 return <div key={nonSharedOrder.orderId ?? nonSharedOrder.id} className="flex items-center justify-between gap-2">
                                   <div className="min-w-0 flex items-center gap-1.5">
                                     <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{index + 1}</span>
@@ -2620,13 +2636,15 @@ export function FunderOrderCardV2Silver({
                                     <button type="button" onClick={() => setClickedOrderNo(orderNo)} className="font-mono underline underline-offset-2 cursor-pointer truncate" style={{ color: '#1A56DB', border: 'none', background: 'transparent', padding: 0 }}>{orderNo}</button>
                                     <span className="text-xs shrink-0" style={{ color: '#9CA3AF' }}>非共享担保订单</span>
                                   </div>
-                                  <span className="font-mono font-semibold shrink-0" style={{ color: Number.isFinite(gap) && gap < 0 ? '#16A34A' : '#DC2626' }}>{gapLabel}</span>
+                                  <span className="font-mono font-semibold shrink-0" style={{ color: !gapKnown ? '#9CA3AF' : gap < 0 ? '#16A34A' : '#DC2626' }}>{gapLabel}</span>
                                 </div>;
                               })}
                             </div>
                             <div className="mt-2 pt-1.5 flex justify-between gap-3 font-semibold text-xs" style={{ borderTop: '1px dashed #D1D5DB' }}>
                               <span style={{ color: '#6B7280' }}>非共享订单担保缺口合计（不计入共享担保）</span>
-                              <span className="font-mono shrink-0" style={{ color: nonSharedGapTotal < 0 ? '#16A34A' : '#DC2626' }}>{nonSharedGapTotal >= 0 ? '+' : ''}{nonSharedGapTotal.toFixed(2)} u</span>
+                              {nonSharedGapReady
+                                ? <span className="font-mono shrink-0" style={{ color: nonSharedGapTotal < 0 ? '#16A34A' : '#DC2626' }}>{nonSharedGapTotal >= 0 ? '+' : ''}{nonSharedGapTotal.toFixed(2)} u</span>
+                                : <span className="font-mono shrink-0" style={{ color: '#9CA3AF' }}>加载中...</span>}
                             </div>
                           </div>
                         )}
@@ -3034,6 +3052,7 @@ export function FunderLenderCardSilver({
   ledgerId,
   currentUser,
   isAdmin = false,
+  onExposureGapChange,
 }: FunderOrderCardV2Props) {
   const cardExportRef = useRef<HTMLDivElement>(null);
   const allowImageDownload = isAdmin || getBooleanDisplayFlag(order, 'allowUserImageDownload', true);
@@ -3318,6 +3337,18 @@ export function FunderLenderCardSilver({
       ? collateralValue + floatPnl - accruedInU + paidInU
       : collateralValue - accruedInU + paidInU
     : null;
+  // 外部37号担保的标签余量只包含「浮盈 + 担保物」。订单最终缺口还必须计入
+  // 本订单待结和已结利息，且该值是第五容器唯一允许消费的口径。
+  const lnExternalFinalGapU = lnExtRemainingMarginU !== null
+    && Number.isFinite(lnExtRemainingMarginU)
+    && Number.isFinite(accruedInU)
+    && Number.isFinite(paidInU)
+    ? lnExtRemainingMarginU - accruedInU + paidInU
+    : null;
+  useEffect(() => {
+    if (!onExposureGapChange || !hasExternalCollateral || !Number.isFinite(lnExternalFinalGapU)) return;
+    onExposureGapChange(Number(order.id), Number(lnExternalFinalGapU));
+  }, [onExposureGapChange, hasExternalCollateral, lnExternalFinalGapU, order.id]);
   const isSufficient = collateralGap !== null && collateralGap >= 0;
 
   // 读取 display_config 开关（与订单模式一致）
@@ -4085,10 +4116,10 @@ export function FunderLenderCardSilver({
                         >?</button>
                       </span>
                       {hasExternalCollateral ? (
-                        lnExtRemainingMarginU !== null ? (
+                        lnExternalFinalGapU !== null ? (
                           <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                            <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{lnExtRemainingMarginU >= 0 ? '充足' : '不足'}</span>
-                            <span style={{ color: TXT_PRI }}>{lnExtRemainingMarginU >= 0 ? '+' : '-'}{Math.abs(lnExtRemainingMarginU).toFixed(2)} U</span>
+                            <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{lnExternalFinalGapU >= 0 ? '充足' : '不足'}</span>
+                            <span style={{ color: TXT_PRI }}>{lnExternalFinalGapU >= 0 ? '+' : '-'}{Math.abs(lnExternalFinalGapU).toFixed(2)} U</span>
                           </span>
                         ) : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>加载中...</span>
                       ) : isSharedMode ? (() => {
