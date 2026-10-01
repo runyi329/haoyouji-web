@@ -2235,15 +2235,24 @@ export async function getUserCnyHistory(userId: number, limit = 50): Promise<any
   const safeLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 50)));
   await ensureLedger37WalletInfrastructure();
   const [rows] = await conn.execute(
-    `(SELECT id, user_id, amount, note, created_at, 'balance' AS source_type
+    // 历史手动调账表的 note 使用 utf8mb4_unicode_ci，而37号冻结台账使用
+    // utf8mb4_0900_ai_ci。邀请树钱包快照会在同一请求里读取本流水，故在
+    // UNION 边界显式归一为 unicode_ci，避免排序规则冲突中断整个快照。
+    `(SELECT id, user_id, amount,
+             CONVERT(COALESCE(note, '') USING utf8mb4) COLLATE utf8mb4_unicode_ci AS note,
+             created_at, 'balance' AS source_type
        FROM af_manual_balances
       WHERE user_id = ? AND note LIKE '[CNY]%')
      UNION ALL
-     (SELECT h.id, h.user_id, -h.amount AS amount, CONCAT('[CNY]37号账本保证金冻结 · ', h.tag_name) AS note, h.created_at, 'hold' AS source_type
+     (SELECT h.id, h.user_id, -h.amount AS amount,
+             CONVERT(CONCAT('[CNY]37号账本保证金冻结 · ', h.tag_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci AS note,
+             h.created_at, 'hold' AS source_type
        FROM ai_wallet_project_holds h
       WHERE h.user_id = ? AND h.ledger_id = 37 AND h.asset_code = 'CNY')
      UNION ALL
-     (SELECT h.id, h.user_id, h.amount AS amount, CONCAT('[CNY]37号账本保证金解冻 · ', h.tag_name) AS note, h.released_at AS created_at, 'hold_release' AS source_type
+     (SELECT h.id, h.user_id, h.amount AS amount,
+             CONVERT(CONCAT('[CNY]37号账本保证金解冻 · ', h.tag_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci AS note,
+             h.released_at AS created_at, 'hold_release' AS source_type
        FROM ai_wallet_project_holds h
       WHERE h.user_id = ? AND h.ledger_id = 37 AND h.asset_code = 'CNY' AND h.status = 'released')
      ORDER BY created_at DESC LIMIT ${safeLimit}`,
