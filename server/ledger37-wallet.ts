@@ -332,7 +332,8 @@ async function writeFundingDividend(transaction: any, params: {
   note?: string;
 }) {
   await getFundingBalanceForUpdate(transaction, params.userId, params.assetCode);
-  const visibleNote = `37号账本分红入账 · ${params.tagName}${params.note ? ` · ${params.note}` : ""}`;
+  // 用户钱包只展示资金用途，不再暴露账本编号；标签和备注保留，便于对账。
+  const visibleNote = `股票分红 · ${params.tagName}${params.note ? ` · ${params.note}` : ""}`;
   const note = params.assetCode === "CNY" ? `[CNY]${visibleNote}` : visibleNote;
   const [insert] = await transaction.execute(
     "INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, CAST(? AS DECIMAL(36,18)), ?, NOW(), NOW())",
@@ -377,7 +378,7 @@ export async function createLedger37Dividend(params: {
         userId: params.userId,
         assetCode,
         amount: assetAmount,
-        note: `37号账本分红入账 · ${tagName}${params.note ? ` · ${params.note}` : ""}`,
+        note: `股票分红 · ${tagName}${params.note ? ` · ${params.note}` : ""}`,
         requestId: `${requestId}_ASSET`,
         actorUserId: params.actorUserId,
         sourceLedgerId: LEDGER_37_ID,

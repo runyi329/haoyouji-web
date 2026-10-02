@@ -29513,6 +29513,288 @@ insights 数组每项包含：
       return { records: (result as any)[0] as any[] };
     }),
 
+  // 37号分红管理：按成员 × 标签返回首页同口径的累计回报、已分红与可分红额。
+  // 仅只读汇总；不会在读取时写钱包或创建分红记录。
+  adminGetLedger37DividendAvailability: protectedProcedure
+    .input(z.object({ ledgerId: z.literal(37) }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本分红仅胡大叔可查看' });
+      }
+      const db = await getLedgerDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+
+      const [memberRows, balancesMapRaw, categoryResult, recordResult, dividendResult] = await Promise.all([
+        dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id),
+        dbLedger.getAllMembersInitialBalances(input.ledgerId),
+        db.execute(sql`
+          SELECT id, name, accounting_mode, sortOrder
+          FROM ledger_categories
+          WHERE ledgerId = ${input.ledgerId} AND parentId IS NULL
+            AND (isDefault = 0 OR isDefault IS NULL)
+          ORDER BY sortOrder ASC, id ASC
+        `),
+        db.execute(sql`
+          SELECT lr.categoryId, lr.type, lr.amount, lr.description, lr.recordDate, lr.createdAt, lr.id
+          FROM ledger_records lr
+          WHERE lr.ledgerId = ${input.ledgerId} AND lr.deleted_at IS NULL
+          ORDER BY lr.recordDate ASC, lr.createdAt ASC, lr.id ASC
+        `),
+        db.execute(sql`
+          SELECT user_id, tag_name, SUM(amount) AS paid_total
+          FROM dividend_records WHERE ledger_id = ${input.ledgerId}
+          GROUP BY user_id, tag_name
+        `),
+      ]);
+
+      const members = (memberRows as any[]).filter((member) => member.memberType !== 'ai');
+      const balancesMap = (balancesMapRaw || {}) as Record<number, Record<string, unknown>>;
+      const categories = asRows(categoryResult).map((row: any, index: number) => ({
+        id: Number(row.id),
+        name: String(row.name),
+        accountingMode: String(row.accounting_mode || 'manual_balance'),
+        order: Number.isFinite(Number(row.sortOrder)) ? Number(row.sortOrder) : index,
+      }));
+      const categoryById = new Map(categories.map((category) => [category.id, category]));
+      const categoryByName = new Map(categories.map((category) => [category.name, category]));
+      const num = (value: unknown): number => Number.isFinite(Number(value)) ? Number(value) : 0;
+      const money = (value: number): number => Math.round((Number.isFinite(value) ? value : 0) * 100) / 100;
+      const dateOf = (value: unknown): string => {
+        if (typeof value === 'string') return value.slice(0, 10);
+        const date = value instanceof Date ? value : new Date(String(value || ''));
+        if (Number.isNaN(date.getTime())) return '';
+        const parts = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+        }).formatToParts(date);
+        const year = parts.find((part) => part.type === 'year')?.value;
+        const month = parts.find((part) => part.type === 'month')?.value;
+        const day = parts.find((part) => part.type === 'day')?.value;
+        return year && month && day ? `${year}-${month}-${day}` : '';
+      };
+      const holidays2026 = new Set([
+        '2026-01-01','2026-01-02','2026-01-03',
+        '2026-02-15','2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20','2026-02-21','2026-02-22','2026-02-23',
+        '2026-04-04','2026-04-05','2026-04-06', '2026-05-01','2026-05-02','2026-05-03','2026-05-04','2026-05-05',
+        '2026-06-19','2026-06-20','2026-06-21', '2026-09-25','2026-09-26','2026-09-27',
+        '2026-10-01','2026-10-02','2026-10-03','2026-10-04','2026-10-05','2026-10-06','2026-10-07',
+      ]);
+      const previousTradingDay = (value: unknown): string | null => {
+        const start = dateOf(value);
+        if (!start) return null;
+        const date = new Date(`${start}T00:00:00+08:00`);
+        for (let i = 0; i < 30; i += 1) {
+          date.setUTCDate(date.getUTCDate() - 1);
+          const candidate = date.toISOString().slice(0, 10);
+          const weekday = date.getUTCDay();
+          if (weekday !== 0 && weekday !== 6 && !holidays2026.has(candidate)) return candidate;
+        }
+        return start;
+      };
+      const pauseDate = (balances: Record<string, unknown>, tagName: string): string | null => {
+        try {
+          const raw = balances[`${tagName}__pauseHistory`];
+          const history = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          const last = Array.isArray(history) ? history[history.length - 1] : null;
+          if (last?.pauseDate && !last?.resumeDate) return dateOf(last.pauseDate);
+        } catch { /* Compatibility fallback below. */ }
+        return balances[`${tagName}__pauseDate`] ? dateOf(balances[`${tagName}__pauseDate`]) : null;
+      };
+
+      const daysByTag = new Map<string, Map<string, { income: number; expense: number }>>();
+      const cashFlowsByTag = new Map<string, { capitalChange: number; withdraw: number }>();
+      for (const record of asRows(recordResult)) {
+        const category = categoryById.get(Number(record.categoryId));
+        if (!category) continue;
+        const amount = Math.abs(num(record.amount));
+        if (String(record.type) === 'transfer') {
+          const flow = cashFlowsByTag.get(category.name) || { capitalChange: 0, withdraw: 0 };
+          const description = String(record.description || '');
+          if (description.startsWith('capital_')) {
+            flow.capitalChange += description.startsWith('capital_add') ? amount : -amount;
+          } else {
+            flow.withdraw += amount;
+          }
+          cashFlowsByTag.set(category.name, flow);
+          continue;
+        }
+        const date = dateOf(record.recordDate);
+        if (!date) continue;
+        const tagDays = daysByTag.get(category.name) || new Map<string, { income: number; expense: number }>();
+        const total = tagDays.get(date) || { income: 0, expense: 0 };
+        if (String(record.type) === 'income') total.income += amount;
+        else total.expense += amount;
+        tagDays.set(date, total);
+        daysByTag.set(category.name, tagDays);
+      }
+
+      const paidByUserTag = new Map<string, number>();
+      for (const row of asRows(dividendResult)) {
+        paidByUserTag.set(`${Number(row.user_id)}|${String(row.tag_name || '')}`, num(row.paid_total));
+      }
+      const stockPnlByUser = new Map<number, Map<string, number>>();
+      await Promise.all(members.map(async (member: any) => {
+        try {
+          const { getMyStockTagOverview } = await import('./ledger-stock-portfolio');
+          const overview = await getMyStockTagOverview({
+            ledgerId: input.ledgerId,
+            userId: Number(member.userId),
+            systemRole: (ctx.user as any).role,
+          });
+          stockPnlByUser.set(Number(member.userId), new Map(
+            overview.map((item: any) => [String(item.name), num(item.summary?.totalPnl)]),
+          ));
+        } catch (error) {
+          console.warn('[adminGetLedger37DividendAvailability] 股票成员回报读取失败:', member.userId, error);
+          stockPnlByUser.set(Number(member.userId), new Map());
+        }
+      }));
+
+      const users = members.map((member: any) => {
+        const userId = Number(member.userId);
+        const balances = (balancesMap[userId] || {}) as Record<string, unknown>;
+        const stockPnl = stockPnlByUser.get(userId) || new Map<string, number>();
+        const tagNames = new Set<string>();
+        for (const key of Object.keys(balances)) {
+          if (!key.includes('__') && categoryByName.has(key)) tagNames.add(key);
+        }
+        for (const tagName of stockPnl.keys()) tagNames.add(tagName);
+        for (const paidKey of paidByUserTag.keys()) {
+          const splitAt = paidKey.indexOf('|');
+          if (Number(paidKey.slice(0, splitAt)) === userId) tagNames.add(paidKey.slice(splitAt + 1));
+        }
+        const tags = [...tagNames].map((tagName) => {
+          const category = categoryByName.get(tagName);
+          const paidDividend = paidByUserTag.get(`${userId}|${tagName}`) || 0;
+          let cumulativeReturn = 0;
+          let hasReturnData = false;
+          if (category?.accountingMode === 'stock_portfolio') {
+            if (stockPnl.has(tagName)) {
+              cumulativeReturn = stockPnl.get(tagName) || 0;
+              hasReturnData = true;
+            }
+          } else {
+            const start = previousTradingDay(balances[`${tagName}__startDate`]);
+            const pausedAt = pauseDate(balances, tagName);
+            const daily = [...(daysByTag.get(tagName)?.entries() || [])]
+              .map(([date, total]) => ({ date, balance: total.income > 0 ? total.income : total.expense }))
+              .filter((day) => day.balance > 0 && (!start || day.date >= start) && (!pausedAt || day.date <= pausedAt))
+              .sort((left, right) => left.date.localeCompare(right.date));
+            const latest = daily[daily.length - 1];
+            if (latest) {
+              const flow = cashFlowsByTag.get(tagName) || { capitalChange: 0, withdraw: 0 };
+              const effectiveInitial = num(balances[tagName]) + flow.capitalChange;
+              const ratio = num(balances[`${tagName}__ratio`] ?? 100) / 100;
+              cumulativeReturn = effectiveInitial > 0
+                ? (effectiveInitial - latest.balance - flow.withdraw) * ratio
+                : 0;
+              hasReturnData = true;
+            }
+          }
+          return {
+            tagName,
+            accountingMode: category?.accountingMode || 'manual_balance',
+            cumulativeReturn: money(cumulativeReturn),
+            paidDividend: money(paidDividend),
+            availableDividend: money(cumulativeReturn - paidDividend),
+            hasReturnData,
+            order: category?.order ?? Number.MAX_SAFE_INTEGER,
+          };
+        }).sort((left, right) => left.order - right.order || left.tagName.localeCompare(right.tagName, 'zh-CN'));
+        return { userId, tags };
+      });
+      return { users };
+    }),
+
+  // 37号分红管理：胡大叔仅可从成员头像读取该成员的全局钱包快照。
+  // 服务端同时锁定账本、操作者与目标成员，且只返回展示数据，不提供资金操作能力。
+  adminGetLedger37MemberWalletSnapshot: protectedProcedure
+    .input(z.object({
+      ledgerId: z.literal(37),
+      targetUserId: z.number().int().positive(),
+    }))
+    .query(async ({ ctx, input }) => {
+      if (Number(ctx.user.id) !== LEDGER_37_WALLET_OPERATOR_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅胡大叔可查看37号成员钱包快照' });
+      }
+
+      const targetUserId = Number(input.targetUserId);
+      const membership = await dbLedger.getUserMembership(LEDGER_37_ID, targetUserId);
+      if (!membership || membership.memberType === 'ai') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '目标用户不是37号账本的真实成员' });
+      }
+
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+
+      const [[userRows], [manualRows], [profileRows]] = await Promise.all([
+        (conn as any).execute(
+          `SELECT id, name, username FROM users WHERE id = ? LIMIT 1`,
+          [targetUserId],
+        ),
+        (conn as any).execute(
+          `SELECT id, ledger_id, user_id, amount, note, created_at, updated_at
+             FROM af_manual_balances
+            WHERE user_id = ? AND amount != 0 AND (note IS NULL OR note NOT LIKE '%[ERROR]%')
+            ORDER BY created_at DESC
+            LIMIT 30`,
+          [targetUserId],
+        ),
+        (conn as any).execute(
+          `SELECT enabled, visible_assets
+             FROM ai_wallet_project_profiles
+            WHERE target_key = 'ledger:37' LIMIT 1`,
+          [],
+        ),
+      ]);
+      const member = (userRows as any[])?.[0];
+      if (!member) throw new TRPCError({ code: 'NOT_FOUND', message: '成员不存在' });
+
+      const profile = (profileRows as any[])?.[0];
+      let visibleAssets: string[] = [];
+      try {
+        visibleAssets = Array.isArray(profile?.visible_assets)
+          ? profile.visible_assets
+          : JSON.parse(String(profile?.visible_assets || '[]'));
+      } catch { visibleAssets = []; }
+      if (!profile || Number(profile.enabled) !== 1) visibleAssets = [];
+
+      const [usdtBalance, recharges, withdrawals, balanceHistory, cnyBalance, cnyHistory, multiAssetBalances, multiAssetHistory] = await Promise.all([
+        dbRecharge.getUserBalance(targetUserId, input.ledgerId),
+        dbRecharge.getUserRechargeOrders(targetUserId, 20),
+        dbRecharge.getUserWithdrawHistory(targetUserId, 20),
+        dbRecharge.getUserBalanceHistory(targetUserId, 30),
+        dbRecharge.getUserCnyBalance(targetUserId),
+        dbRecharge.getUserCnyHistory(targetUserId, 20),
+        dbMultiAssetWallet.getUserMultiAssetBalances(targetUserId),
+        dbMultiAssetWallet.getUserMultiAssetHistory(targetUserId, 100),
+      ]);
+      const { getLatestPrice, getUsdtCnyRate } = await import('./price-scanner');
+      const usdtCnyRate = Number(getUsdtCnyRate?.() || 0);
+      const pricedMultiAssets = multiAssetBalances.map((balance) => {
+        const priceUsdt = Number(getLatestPrice(balance.assetCode) || 0);
+        return {
+          ...balance,
+          priceUsdt,
+          priceCny: priceUsdt > 0 && usdtCnyRate > 0 ? priceUsdt * usdtCnyRate : 0,
+        };
+      });
+
+      return {
+        member: { id: Number(member.id), name: member.name || member.username || '成员', username: member.username || '' },
+        visibleAssets: visibleAssets.map((asset) => String(asset).toUpperCase()),
+        usdtCnyRate: usdtCnyRate || 7.25,
+        usdtBalance,
+        cnyBalance,
+        recharges,
+        withdrawals,
+        manualBalances: Array.isArray(manualRows) ? manualRows : [],
+        balanceHistory,
+        cnyHistory,
+        multiAssetBalances: pricedMultiAssets,
+        multiAssetHistory,
+      };
+    }),
+
   // ============================================================
   // 管理员备注功能（分红备注 / 保证金备注）
   // ============================================================

@@ -7,10 +7,11 @@
  */
 import { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, Plus, Trash2, ChevronDown, ChevronUp, Pencil, Check, X } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, ChevronDown, ChevronUp, Pencil, Check, X, PauseCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
+import { ReadonlyWalletSnapshot } from "@/components/ReadonlyWalletSnapshot";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AI_WALLET_CRYPTO_MARKET_ASSETS } from "@shared/ai-wallet-assets";
 
@@ -51,6 +52,8 @@ export default function LedgerAADividendManage() {
   const [quickAdd, setQuickAdd] = useState<{ userId: number; tagName: string } | null>(null);
   const [quickAmount, setQuickAmount] = useState("");
   const [quickNote, setQuickNote] = useState("");
+  // 37号分红管理：仅胡大叔可通过成员头像读取全局钱包快照。
+  const [walletSnapshotUser, setWalletSnapshotUser] = useState<{ id: number; name: string; username?: string } | null>(null);
 
   // 获取账本信息（权限校验）
   const { data: ledgerData } = trpc.ledger.getById.useQuery(
@@ -95,6 +98,14 @@ export default function LedgerAADividendManage() {
   const isAdmin = ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin';
   // 37号账本的分红仅由胡大叔维护；其他账本保持原有 owner/admin 权限。
   const canManageDividends = ledgerId === 37 ? Number(user?.id) === 870413 : isAdmin;
+  const walletSnapshotQuery = trpc.adminGetLedger37MemberWalletSnapshot.useQuery(
+    { ledgerId: 37, targetUserId: walletSnapshotUser?.id || 0 },
+    {
+      enabled: ledgerId === 37 && canManageDividends && !!walletSnapshotUser?.id,
+      staleTime: 0,
+      refetchOnWindowFocus: false,
+    },
+  );
 
   // ── 管理员：获取成员列表和所有分红记录 ──
   const { data: initialBalancesAll } = trpc.ledger.adminGetAllInitialBalances.useQuery(
@@ -103,7 +114,7 @@ export default function LedgerAADividendManage() {
   );
   const members: any[] = useMemo(() => initialBalancesAll?.members ?? [], [initialBalancesAll]);
 
-  const balancesMap: Record<number, Record<string, number>> = useMemo(
+  const balancesMap: Record<number, Record<string, number | string>> = useMemo(
     () => initialBalancesAll?.balancesMap ?? {},
     [initialBalancesAll]
   );
@@ -116,6 +127,24 @@ export default function LedgerAADividendManage() {
     { ledgerId },
     { enabled: !!ledgerId && canManageDividends }
   );
+
+  // 37号标签累计回报、已分红与可分红额由服务端按首页口径统一快照计算。
+  const { data: dividendAvailabilityData, refetch: refetchDividendAvailability } = trpc.adminGetLedger37DividendAvailability.useQuery(
+    { ledgerId: 37 },
+    { enabled: ledgerId === 37 && canManageDividends }
+  );
+  const availabilityByUserTag = useMemo(() => {
+    const byUser = new Map<number, Map<string, any>>();
+    for (const user of dividendAvailabilityData?.users ?? []) {
+      byUser.set(Number(user.userId), new Map((user.tags ?? []).map((tag: any) => [String(tag.tagName), tag])));
+    }
+    return byUser;
+  }, [dividendAvailabilityData]);
+  const selectableMemberTags = useMemo(() => {
+    const tagNames = new Set(selectedMemberTags);
+    for (const tagName of Array.from(availabilityByUserTag.get(addForm.targetUserId)?.keys() ?? [])) tagNames.add(tagName);
+    return Array.from(tagNames);
+  }, [addForm.targetUserId, selectedMemberTags, availabilityByUserTag]);
 
   const dividendsByUser = useMemo(() => {
     const records: any[] = allDividendsData?.records ?? [];
@@ -131,18 +160,38 @@ export default function LedgerAADividendManage() {
     return map;
   }, [allDividendsData]);
 
-  // 按用户 -> 标签 分组聚合
-  // tagGroups[userId] = { tags: [{ tagName, total, records:[] }], total }
+  // 按用户 -> 标签分组。成员尚无分红记录时，也必须显示其可分红标签。
   const tagGroupsByUser = useMemo(() => {
-    const result: Record<number, { tagName: string; total: number; records: any[] }[]> = {};
-    for (const userIdStr of Object.keys(dividendsByUser)) {
-      const userId = Number(userIdStr);
-      const recs = dividendsByUser[userId].records;
+    const result: Record<number, { tagName: string; total: number; records: any[]; isPaused: boolean }[]> = {};
+    // 与37号账本首页保持同一口径：最后一次暂停尚未恢复，才视为当前暂停。
+    const isTagPaused = (userId: number, tagName: string) => {
+      const balances = balancesMap[userId] as Record<string, unknown> | undefined;
+      const rawHistory = balances?.[`${tagName}__pauseHistory`];
+      if (rawHistory) {
+        try {
+          const history = JSON.parse(String(rawHistory));
+          const last = Array.isArray(history) ? history[history.length - 1] : null;
+          return !!last && !last.resumeDate;
+        } catch { /* 兼容遗留的暂停日期字段 */ }
+      }
+      return !!balances?.[`${tagName}__pauseDate`];
+    };
+    const userIds = new Set<number>([
+      ...members.map((member: any) => Number(member.userId)),
+      ...Object.keys(dividendsByUser).map(Number),
+      ...Array.from(availabilityByUserTag.keys()),
+    ]);
+    for (const userId of Array.from(userIds)) {
+      const recs = dividendsByUser[userId]?.records ?? [];
       const tagMap: Record<string, { tagName: string; total: number; records: any[] }> = {};
       // 先纳入该用户在保证金里涉及的所有标签（即使尚无分红）
       const memberTags = balancesMap[userId] ? Object.keys(balancesMap[userId]).filter(k => !k.includes('__')) : [];
       for (const t of memberTags) {
         tagMap[t] = { tagName: t, total: 0, records: [] };
+      }
+      // 股票标签或没有传统初始金额的标签由可分红汇总补入。
+      for (const t of Array.from(availabilityByUserTag.get(userId)?.keys() ?? [])) {
+        if (!tagMap[t]) tagMap[t] = { tagName: t, total: 0, records: [] };
       }
       for (const r of recs) {
         const t = r.tag_name || '未分类';
@@ -150,10 +199,13 @@ export default function LedgerAADividendManage() {
         tagMap[t].records.push(r);
         tagMap[t].total += parseFloat(r.amount);
       }
-      result[userId] = Object.values(tagMap);
+      // 运行中的标签保持原有顺序；当前暂停、已结束的标签统一沉到该成员列表底部。
+      result[userId] = Object.values(tagMap)
+        .map(group => ({ ...group, isPaused: isTagPaused(userId, group.tagName) }))
+        .sort((left, right) => Number(left.isPaused) - Number(right.isPaused));
     }
     return result;
-  }, [dividendsByUser, balancesMap]);
+  }, [dividendsByUser, balancesMap, members, availabilityByUserTag]);
 
   // ── 普通成员：获取自己的分红明细 ──
   const { data: myDividendData, refetch: refetchMyDividends } = trpc.getDividendRecords.useQuery(
@@ -174,6 +226,7 @@ export default function LedgerAADividendManage() {
       setQuickNote("");
       setQuickAdd(null);
       refetchDividends();
+      refetchDividendAvailability();
     },
     onError: (err) => {
       toast.error(err.message || "添加失败");
@@ -185,6 +238,7 @@ export default function LedgerAADividendManage() {
     onSuccess: () => {
       toast.success("已删除");
       refetchDividends();
+      refetchDividendAvailability();
     },
     onError: (err) => {
       toast.error(err.message || "删除失败");
@@ -197,6 +251,7 @@ export default function LedgerAADividendManage() {
       toast.success("修改成功");
       setEditRecord(null);
       refetchDividends();
+      refetchDividendAvailability();
     },
     onError: (err) => {
       toast.error(err.message || "修改失败");
@@ -415,7 +470,36 @@ export default function LedgerAADividendManage() {
                 className="flex items-center px-4 py-3 cursor-pointer"
                 onClick={() => setExpandedUserId(isExpanded ? null : userId)}
               >
-                <UserAvatar username={member.nickname ?? member.username ?? `用户${userId}`} size="sm" />
+                {ledgerId === 37 && canManageDividends ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setWalletSnapshotUser({
+                        id: Number(userId),
+                        name: userDiv?.userName ?? member.nickname ?? member.realName ?? member.username ?? `用户${userId}`,
+                        username: member.username ?? undefined,
+                      });
+                    }}
+                    className="block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A84C] focus-visible:ring-offset-2"
+                    title={`查看 ${userDiv?.userName ?? member.nickname ?? member.username ?? `用户${userId}`} 的只读钱包快照`}
+                    aria-label={`查看 ${userDiv?.userName ?? member.nickname ?? member.username ?? `用户${userId}`} 的只读钱包快照`}
+                  >
+                    <UserAvatar
+                      username={member.username ?? `用户${userId}`}
+                      nickname={member.nickname ?? null}
+                      avatar={member.avatar ?? null}
+                      size="sm"
+                    />
+                  </button>
+                ) : (
+                  <UserAvatar
+                    username={member.username ?? `用户${userId}`}
+                    nickname={member.nickname ?? null}
+                    avatar={member.avatar ?? null}
+                    size="sm"
+                  />
+                )}
                 <div className="ml-3 flex-1 min-w-0">
                   <div className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{userDiv?.userName ?? member.nickname ?? member.username ?? `用户${userId}`}</div>
                   <div className="text-xs mt-0.5" style={{ color: '#9E9E9E' }}>
@@ -441,34 +525,98 @@ export default function LedgerAADividendManage() {
                   {(tagGroupsByUser[userId] ?? []).map((grp) => {
                     const tagKey = `${userId}__${grp.tagName}`;
                     const tagExpanded = expandedTagKey === tagKey;
+                    const availability = availabilityByUserTag.get(Number(userId))?.get(grp.tagName);
+                    const formatCny = (value: number) => `¥${Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`;
+                    const cumulativeReturn = Number(availability?.cumulativeReturn ?? 0);
+                    const paidDividend = Number(availability?.paidDividend ?? 0);
+                    const availableAmount = Number(availability?.availableDividend ?? 0);
+                    const tagPillBackground = grp.isPaused ? '#E3F2FD' : '#FFF3E0';
+                    const tagPillColor = grp.isPaused ? '#1565C0' : '#E65100';
+                    // 一条完整进度条由三项金额按绝对值比例依次分段，负值仍以其规模参与比例并保留蓝色提示。
+                    const dividendProgressTotal = Math.abs(cumulativeReturn) + Math.abs(paidDividend) + Math.abs(availableAmount);
+                    const segmentWidth = (value: number) => dividendProgressTotal > 0
+                      ? `${(Math.abs(value) / dividendProgressTotal) * 100}%`
+                      : '0%';
+                    const cumulativeColor = '#5C6BC0';
+                    const paidColor = '#EF6C00';
+                    const availabilityColor = availableAmount > 0 ? '#2E7D32' : availableAmount < 0 ? '#1565C0' : '#9E9E9E';
                     return (
-                      <div key={tagKey} style={{ borderBottom: '1px solid #F5F5F5' }}>
+                      <div key={tagKey} style={{ borderBottom: '1px solid #E3EDF9', backgroundColor: grp.isPaused ? '#F7FAFF' : '#FFFFFF' }}>
                         {/* 标签汇总行 */}
                         <div
                           className="flex items-center px-4 py-2.5 cursor-pointer"
-                          style={{ backgroundColor: '#FAFAFA' }}
+                          style={{ backgroundColor: grp.isPaused ? '#EFF6FF' : '#FAFAFA', borderLeft: grp.isPaused ? '3px solid #1565C0' : '3px solid transparent' }}
                           onClick={() => setExpandedTagKey(tagExpanded ? null : tagKey)}
                         >
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3E0', color: '#E65100' }}>
-                            {grp.tagName}
-                          </span>
-                          <span className="text-[10px] ml-2" style={{ color: '#9E9E9E' }}>
-                            {grp.records.length > 0 ? `共 ${grp.records.length} 笔` : '暂无分红'}
-                          </span>
-                          <div className="flex-1" />
-                          <span className="text-sm font-semibold mr-2" style={{ color: grp.total > 0 ? '#D32F2F' : '#BDBDBD' }}>
-                            {grp.total > 0 ? `¥${grp.total.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
-                          </span>
-                          {grp.records.length > 0 && (
-                            tagExpanded
-                              ? <ChevronUp className="w-4 h-4 flex-shrink-0" style={{ color: '#BDBDBD' }} />
-                              : <ChevronDown className="w-4 h-4 flex-shrink-0" style={{ color: '#BDBDBD' }} />
+                          {ledgerId === 37 && availability ? (
+                            <div className="flex-1 min-w-0 mr-2">
+                              {/* 第一行仅呈现标签与分红笔数，避免和计算公式混排。 */}
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs font-medium px-2 py-0.5 rounded-full truncate" style={{ backgroundColor: tagPillBackground, color: tagPillColor }}>
+                                  {grp.tagName}
+                                </span>
+                                <span className="text-[10px] flex-shrink-0" style={{ color: '#9E9E9E' }}>
+                                  共 {grp.records.length} 笔
+                                </span>
+                                {grp.isPaused && (
+                                  <span className="flex items-center gap-0.5 text-[10px] font-semibold flex-shrink-0" style={{ color: '#1565C0' }}>
+                                    <PauseCircle className="w-3 h-3" /> 暂停
+                                  </span>
+                                )}
+                              </div>
+                              {/* 第二行用三色、三等宽统计块呈现。 */}
+                              <div className="grid grid-cols-3 gap-1 mt-1.5">
+                                <div className="min-w-0">
+                                  <div className="text-[11px] font-medium" style={{ color: cumulativeColor }}>累计回报</div>
+                                  <div className="text-[13px] leading-5 font-semibold tabular-nums whitespace-nowrap" style={{ color: cumulativeColor }}>{formatCny(cumulativeReturn)}</div>
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-[11px] font-medium" style={{ color: paidColor }}>已分红</div>
+                                  <div className="text-[13px] leading-5 font-semibold tabular-nums whitespace-nowrap" style={{ color: paidColor }}>{formatCny(paidDividend)}</div>
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-[11px] font-medium" style={{ color: availabilityColor }}>可分红</div>
+                                  <div className="text-[13px] leading-5 font-semibold tabular-nums whitespace-nowrap" style={{ color: availabilityColor }}>{formatCny(availableAmount)}</div>
+                                </div>
+                              </div>
+                              {/* 与整个标签等宽的三色比例条：累计回报 / 已分红 / 可分红。 */}
+                              <div className="mt-2 h-2 w-full rounded-full overflow-hidden flex" style={{ backgroundColor: '#ECEFF1' }}>
+                                <div className="h-full" style={{ width: segmentWidth(cumulativeReturn), backgroundColor: cumulativeColor }} />
+                                <div className="h-full" style={{ width: segmentWidth(paidDividend), backgroundColor: paidColor }} />
+                                <div className="h-full" style={{ width: segmentWidth(availableAmount), backgroundColor: availabilityColor }} />
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: tagPillBackground, color: tagPillColor }}>
+                                {grp.tagName}
+                              </span>
+                              <div className="ml-2 min-w-0">
+                                <div className="text-[10px]" style={{ color: '#9E9E9E' }}>
+                                  共 {grp.records.length} 笔
+                                </div>
+                              </div>
+                              {grp.isPaused && (
+                                <span className="flex items-center gap-0.5 text-[10px] font-semibold ml-2 flex-shrink-0" style={{ color: '#1565C0' }}>
+                                  <PauseCircle className="w-3 h-3" /> 暂停
+                                </span>
+                              )}
+                              <div className="flex-1" />
+                              <div className="text-right mr-2 whitespace-nowrap">
+                                <div className="text-sm font-semibold" style={{ color: grp.total > 0 ? '#D32F2F' : '#BDBDBD' }}>
+                                  {grp.total > 0 ? `¥${grp.total.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                                </div>
+                              </div>
+                            </>
                           )}
+                          {tagExpanded
+                            ? <ChevronUp className="w-4 h-4 flex-shrink-0" style={{ color: '#BDBDBD' }} />
+                            : <ChevronDown className="w-4 h-4 flex-shrink-0" style={{ color: '#BDBDBD' }} />}
                         </div>
 
                         {/* 第二级：该标签下每笔明细 + 标签操作区 */}
                         {tagExpanded && (
-                          <div style={{ backgroundColor: '#FFFFFF' }}>
+                          <div style={{ backgroundColor: grp.isPaused ? '#F7FAFF' : '#FFFFFF' }}>
                             {grp.records.map((rec: any) => (
                               <div key={rec.id} className="flex items-center px-6 py-2" style={{ borderTop: '1px solid #FAFAFA' }}>
                                 <div className="flex-1 min-w-0">
@@ -621,7 +769,10 @@ export default function LedgerAADividendManage() {
                 <div>
                   <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>选择标签</div>
                   <div className="flex flex-wrap gap-2">
-                    {selectedMemberTags.map((tagName: string) => (
+                    {selectableMemberTags.map((tagName: string) => {
+                      const availability = availabilityByUserTag.get(addForm.targetUserId)?.get(tagName);
+                      const availableAmount = Number(availability?.availableDividend ?? 0);
+                      return (
                       <button
                         key={tagName}
                         onClick={() => setAddForm(f => ({ ...f, tagName }))}
@@ -632,9 +783,10 @@ export default function LedgerAADividendManage() {
                           borderColor: addForm.tagName === tagName ? '#D32F2F' : '#E0E0E0',
                         }}
                       >
-                        {tagName}
+                        {tagName}{ledgerId === 37 && availability ? ` · 可分红 ¥${availableAmount.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}` : ''}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -827,6 +979,27 @@ export default function LedgerAADividendManage() {
             </div>
           </div>
         </div>
+      )}
+
+      {walletSnapshotUser && (
+        walletSnapshotQuery.isLoading ? (
+          <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/65" onClick={() => setWalletSnapshotUser(null)}>
+            <div className="rounded-2xl px-6 py-5 text-center" style={{ background: '#151515', border: '1px solid rgba(201,168,76,.5)' }} onClick={(event) => event.stopPropagation()}>
+              <div className="text-sm font-semibold text-[#f5d78e]">正在读取钱包实时快照…</div>
+              <div className="mt-1 text-xs text-white/45">仅加载该37号账本成员的只读资产与资金明细</div>
+            </div>
+          </div>
+        ) : walletSnapshotQuery.error ? (
+          <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/65 px-6" onClick={() => setWalletSnapshotUser(null)}>
+            <div className="w-full max-w-sm rounded-2xl px-5 py-5 text-center" style={{ background: '#151515', border: '1px solid rgba(248,113,113,.55)' }} onClick={(event) => event.stopPropagation()}>
+              <div className="text-sm font-semibold text-red-300">钱包快照暂时无法读取</div>
+              <div className="mt-1 text-xs leading-5 text-white/55">{walletSnapshotQuery.error.message || '请稍后重新打开，不会影响成员钱包或分红。'}</div>
+              <div className="mt-4 flex justify-center gap-2"><button type="button" onClick={() => walletSnapshotQuery.refetch()} className="rounded-lg bg-[#C9A84C] px-4 py-2 text-xs font-semibold text-[#151515]">重新读取</button><button type="button" onClick={() => setWalletSnapshotUser(null)} className="rounded-lg border border-white/20 px-4 py-2 text-xs font-semibold text-white/70">关闭</button></div>
+            </div>
+          </div>
+        ) : walletSnapshotQuery.data ? (
+          <ReadonlyWalletSnapshot snapshot={walletSnapshotQuery.data} onClose={() => setWalletSnapshotUser(null)} />
+        ) : null
       )}
     </div>
   );
