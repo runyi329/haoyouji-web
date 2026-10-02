@@ -30356,7 +30356,7 @@ insights 数组每项包含：
           targetUserId = input.viewAsUserId;
         }
       }
-      const result = await db.execute(sql`SELECT id, tag_name, amount, asset_code, asset_amount, note, created_at, wallet_request_id, wallet_entry_id, reversal_of_id, reversal_mode FROM dividend_records WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} ORDER BY created_at DESC`);
+      const result = await db.execute(sql`SELECT id, tag_name, amount, asset_code, asset_amount, note, created_at, wallet_request_id, wallet_entry_id, wallet_snapshot_json, reversal_of_id, reversal_mode FROM dividend_records WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} ORDER BY created_at DESC`);
       return { records: (result as any)[0] as any[] };
     }),
 

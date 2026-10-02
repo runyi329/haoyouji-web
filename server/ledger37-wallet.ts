@@ -36,6 +36,8 @@ export type Ledger37WalletBalanceSnapshot = {
   total: string;
   frozen: string;
   available: string;
+  /** 快照固化时点；后续钱包动账不会覆盖本次审计余额。 */
+  capturedAt?: string;
 };
 
 export type Ledger37ManualMarginMigration = {
@@ -293,6 +295,7 @@ export async function ensureLedger37WalletInfrastructure(): Promise<void> {
       await addColumn("wallet_entry_id", "BIGINT NULL DEFAULT NULL AFTER wallet_request_id");
       await addColumn("reversal_of_id", "BIGINT NULL DEFAULT NULL AFTER wallet_entry_id");
       await addColumn("reversal_mode", "VARCHAR(16) NULL DEFAULT NULL AFTER reversal_of_id");
+      await addColumn("wallet_snapshot_json", "LONGTEXT NULL AFTER wallet_entry_id");
       try {
         await (conn as any).execute("ALTER TABLE dividend_records ADD UNIQUE KEY uk_dividend_wallet_request (wallet_request_id)");
       } catch (error: any) {
@@ -360,6 +363,46 @@ export async function getLedger37FundingBalanceSummary(userId: number, assetCode
   const total = Number(assetCode === "CNY" ? user.balance_cny : user.balance) + Number(rowsOf(manualRows)[0]?.total || 0);
   const frozen = Number(rowsOf(holdRows)[0]?.frozen || 0);
   return { total, frozen, available: total - frozen };
+}
+
+/**
+ * 在同一事务内读取分红入账完成后的钱包余额。
+ * 该值仅作为分红审计快照保存，不会随之后的充值、冻结或解冻变化。
+ */
+async function getLedger37DividendWalletSnapshot(
+  transaction: any,
+  userId: number,
+  assetCode: Ledger37WalletAsset,
+): Promise<Ledger37WalletBalanceSnapshot> {
+  const capturedAt = new Date().toISOString();
+  if (isFundingAsset(assetCode)) {
+    const wallet = await getFundingBalanceForUpdate(transaction, userId, assetCode);
+    return {
+      assetCode,
+      total: balanceSnapshotText(wallet.total),
+      frozen: balanceSnapshotText(wallet.frozen),
+      available: balanceSnapshotText(wallet.available),
+      capturedAt,
+    };
+  }
+
+  const [assetRows] = await transaction.execute(
+    `SELECT available_balance AS available, frozen_balance AS frozen,
+            available_balance + frozen_balance AS total
+       FROM ai_wallet_asset_balances
+      WHERE user_id = ? AND asset_code = ?
+      LIMIT 1 FOR UPDATE`,
+    [userId, assetCode],
+  );
+  const assetBalance = rowsOf(assetRows)[0];
+  if (!assetBalance) throw new Error("分红入账后无法读取数字资产钱包余额快照");
+  return {
+    assetCode,
+    total: balanceSnapshotText(assetBalance.total),
+    frozen: balanceSnapshotText(assetBalance.frozen),
+    available: balanceSnapshotText(assetBalance.available),
+    capturedAt,
+  };
 }
 
 async function getCnyValue(assetCode: Ledger37WalletAsset, amount: string): Promise<string> {
@@ -858,7 +901,7 @@ export async function createLedger37Dividend(params: {
   note?: string;
   actorUserId: number;
   transaction?: any;
-}): Promise<{ recordId: number; cnyValue: string; assetCode: Ledger37WalletAsset; assetAmount: string }> {
+}): Promise<{ recordId: number; cnyValue: string; assetCode: Ledger37WalletAsset; assetAmount: string; walletBalanceSnapshot: Ledger37WalletBalanceSnapshot | null }> {
   await ensureLedger37WalletInfrastructure();
   const assetCode = normalizeLedger37WalletAsset(params.assetCode);
   const assetAmount = decimalText(params.assetAmount);
@@ -879,6 +922,7 @@ export async function createLedger37Dividend(params: {
     );
     const recordId = Number((recordInsert as any).insertId);
     let walletEntryId: number | null = null;
+    let walletBalanceSnapshot: Ledger37WalletBalanceSnapshot | null = null;
     if (isFundingAsset(assetCode)) {
       walletEntryId = await writeFundingDividend(transaction, { userId: params.userId, assetCode, amount: assetAmount, tagName, note: params.note });
     } else {
@@ -895,9 +939,13 @@ export async function createLedger37Dividend(params: {
       });
       walletEntryId = Number(credit.entry.id);
     }
-    await transaction.execute("UPDATE dividend_records SET wallet_entry_id = ? WHERE id = ?", [walletEntryId, recordId]);
+    walletBalanceSnapshot = await getLedger37DividendWalletSnapshot(transaction, params.userId, assetCode);
+    await transaction.execute(
+      "UPDATE dividend_records SET wallet_entry_id = ?, wallet_snapshot_json = ? WHERE id = ?",
+      [walletEntryId, JSON.stringify(walletBalanceSnapshot), recordId],
+    );
     if (ownConnection) await transaction.commit();
-    return { recordId, cnyValue, assetCode, assetAmount };
+    return { recordId, cnyValue, assetCode, assetAmount, walletBalanceSnapshot };
   } catch (error) {
     if (ownConnection) try { await transaction.rollback(); } catch {}
     throw error;
@@ -954,6 +1002,7 @@ export async function revokeLedger37Dividend(params: {
     const reversalNo = `V37${Date.now().toString(36).toUpperCase()}${randomBytes(4).toString('hex').toUpperCase()}`;
     let reversalWalletEntryId: number | null = null;
     let reversalRecordId: number | undefined;
+    let reversalWalletBalanceSnapshot: Ledger37WalletBalanceSnapshot | null = null;
 
     if (params.mode === 'reverse') {
       if (isFundingAsset(assetCode)) {
@@ -993,7 +1042,11 @@ export async function revokeLedger37Dividend(params: {
         });
         reversalWalletEntryId = Number(debit.entry.id);
       }
-      await transaction.execute('UPDATE dividend_records SET wallet_entry_id = ? WHERE id = ?', [reversalWalletEntryId, reversalRecordId]);
+      reversalWalletBalanceSnapshot = await getLedger37DividendWalletSnapshot(transaction, sourceUserId, assetCode);
+      await transaction.execute(
+        'UPDATE dividend_records SET wallet_entry_id = ?, wallet_snapshot_json = ? WHERE id = ?',
+        [reversalWalletEntryId, JSON.stringify(reversalWalletBalanceSnapshot), reversalRecordId],
+      );
     } else {
       if (isFundingAsset(assetCode)) {
         const [walletRows] = await transaction.execute(
