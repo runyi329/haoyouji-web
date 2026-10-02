@@ -1838,6 +1838,7 @@ import {
   LayoutList,
   Calculator,
   TrendingUp,
+  WalletCards,
 } from "lucide-react";
 import { AJOwnerPanel, FunderViewPanel } from "@/components/AJOwnerPanel";
 
@@ -3832,6 +3833,19 @@ export default function LedgerDetail() {
                       style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
                     >
                       邀请
+                    </button>
+                  )}
+                  {/* 资方不展示成员钱包卡片，改在右上操作栏提供本人智能钱包入口。 */}
+                  {effectiveIsFunder && (
+                    <button
+                      type="button"
+                      onClick={() => setLocation(`/wallet?fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+                      aria-label="打开智能钱包"
+                      title="智能钱包"
+                      className="h-9 w-9 shrink-0 rounded-full border border-white/60 text-white transition active:scale-95"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+                    >
+                      <WalletCards className="mx-auto h-[18px] w-[18px]" strokeWidth={1.9} />
                     </button>
                   )}
                   <button
