@@ -1297,7 +1297,11 @@ export function FunderOrderCardV2Silver({
   const cardCollateralGapApprox = ['hidden', 'U', 'CNY'].includes(cardDisplayConfig.approxCollateralGap)
     ? cardDisplayConfig.approxCollateralGap
     : 'hidden';
-  const cardPrincipalLentOut = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true;
+  // 明确选择“融资付息”的非期权订单，其融资本金是待覆盖负债；
+  // 历史数据里该属性与 principal_lent_out 曾不同步，不能再把本金当持仓计入。
+  const cardPrincipalLentOut = (order as any).principal_lent_out === 1
+    || (order as any).principal_lent_out === true
+    || (!_isOptCard && cardDisplayConfig.assetFundingType === 'financing');
   // 借出本金的左上角主展示可选择本金或标的数量；选择仅影响展示。
   const cardPrincipalLentOutPrimary = cardDisplayConfig.principalLentOutPrimary === 'quantity'
     ? 'quantity'
@@ -1417,6 +1421,11 @@ export function FunderOrderCardV2Silver({
   const silverRiskCnyRate = cnyRate && cnyRate > 0 ? cnyRate : 6.8;
   const silverAccruedInterestU = interestUnit === '元' ? displayAccrued / silverRiskCnyRate : displayAccrued;
   const silverPaidInterestU = interestUnit === '元' ? displayPaid / silverRiskCnyRate : displayPaid;
+  // 融资本金固定取订单约定的计息基数；不以 BTC/ETH/SOL 的实时市值替代本金。
+  const silverFinancingPrincipalRaw = Number(order.interest_base || storedAmountUsdt || 0);
+  const silverFinancingPrincipalU = baseCur === 'CNY'
+    ? silverFinancingPrincipalRaw / silverRiskCnyRate
+    : silverFinancingPrincipalRaw;
 
   const holdDurationLabel = (() => {
     if (!order.buy_date) return '--';
@@ -1615,9 +1624,11 @@ export function FunderOrderCardV2Silver({
     ? (isSelfFundedOption
       ? (optCurrentValue ?? 0)
       : (optionFloatPnl ?? 0) + collateralValue - silverAccruedInterestU + silverPaidInterestU)
-    : (floatPnl !== null
-      ? collateralValue + floatPnl - silverAccruedInterestU + silverPaidInterestU
-      : collateralValue - silverAccruedInterestU + silverPaidInterestU);
+    : (cardPrincipalLentOut
+      ? collateralValue - silverFinancingPrincipalU - silverAccruedInterestU + silverPaidInterestU
+      : (floatPnl !== null
+        ? collateralValue + floatPnl - silverAccruedInterestU + silverPaidInterestU
+        : collateralValue - silverAccruedInterestU + silverPaidInterestU));
   const isSufficient = exposure >= 0;
 
   const fmt = (v: number | null, digits = 2) =>
@@ -3373,10 +3384,24 @@ export function FunderLenderCardSilver({
   const effectiveCnyRate = cnyRate && cnyRate > 0 ? cnyRate : 6.8;
   const accruedInU = interestUnit === '元' ? displayAccrued / effectiveCnyRate : displayAccrued;
   const paidInU = interestUnit === '元' ? displayPaid / effectiveCnyRate : displayPaid;
+  const lenderDisplayConfig: Record<string, boolean | string> | null = (() => {
+    try {
+      const raw = order.display_config;
+      if (!raw) return null;
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch { return null; }
+  })();
+  const lenderPrincipalLentOut = (order as any).principal_lent_out === 1
+    || (order as any).principal_lent_out === true
+    || (!_lnIsOpt && lenderDisplayConfig?.assetFundingType === 'financing');
+  // 约定融资本金是固定负债，不能跟随标的实时市值重估。
+  const lenderFinancingPrincipalRaw = Number(_effectiveInterestBase || storedAmountUsdt || 0);
+  const lenderFinancingPrincipalU = baseCur === 'CNY'
+    ? lenderFinancingPrincipalRaw / effectiveCnyRate
+    : lenderFinancingPrincipalRaw;
   const lenderIsSelfFundedOption = (() => {
     try {
-      const raw = (order as any).display_config;
-      const config = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});
+      const config = lenderDisplayConfig || {};
       return _lnIsOpt && (config.assetFundingType === 'self' || config.selfFundedAsset === true || config.selfFundedAsset === 'true');
     } catch { return false; }
   })();
@@ -3389,9 +3414,11 @@ export function FunderLenderCardSilver({
         ? null
         : optionFloatPnl + collateralValue - accruedInU + paidInU))
     : (collateralValue !== null
-      ? (floatPnl !== null
-        ? collateralValue + floatPnl - accruedInU + paidInU
-        : collateralValue - accruedInU + paidInU)
+      ? (lenderPrincipalLentOut
+        ? collateralValue - lenderFinancingPrincipalU - accruedInU + paidInU
+        : (floatPnl !== null
+          ? collateralValue + floatPnl - accruedInU + paidInU
+          : collateralValue - accruedInU + paidInU))
       : null);
   // 外部37号担保的标签余量只包含「浮盈 + 担保物」。订单最终缺口还必须计入
   // 本订单待结和已结利息，且该值是第五容器唯一允许消费的口径。
@@ -3408,15 +3435,8 @@ export function FunderLenderCardSilver({
   const isSufficient = collateralGap !== null && collateralGap >= 0;
 
   // 读取 display_config 开关（与订单模式一致）
-  const dc: Record<string, boolean | string> | null = (() => {
-    try {
-      const raw = order.display_config;
-      if (!raw) return null;
-      return typeof raw === 'string' ? JSON.parse(raw) : raw;
-    } catch { return null; }
-  })();
+  const dc = lenderDisplayConfig;
   const showField = (key: string) => dc ? (dc[key] !== false) : true;
-  const lenderPrincipalLentOut = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true;
   const lenderShowsPrincipal = lenderPrincipalLentOut && dc?.principalLentOutPrimary !== 'quantity';
   const lenderFinancingUnit = amountCurrency === 'USDT' ? 'U' : amountCurrency === 'CNY' ? '元' : amountCurrency;
   // 仅用于前端资产标题旁的展示标签，不影响订单、利息或担保计算。

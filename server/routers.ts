@@ -19574,15 +19574,21 @@ ${klinesSummary}
               ? principalU
               : (buyValueU > 0 ? buyValueU : principalU);
             const paidInterestU = baseCurrency === 'CNY' ? paidInterest / usdtCnyRate : paidInterest;
-            const principalLentOut = o.principal_lent_out === 1 || o.principal_lent_out === true;
+            // “融资付息”是订单已保存的资金属性。历史记录中它曾与
+            // principal_lent_out 分开保存，导致融资订单把本金误作为持仓重复计入。
+            // 期权单有专用的权利金/实时价值公式，不适用本段本金扣减。
+            const principalLentOut = o.principal_lent_out === 1
+              || o.principal_lent_out === true
+              || (o.asset_type !== 'crypto_option' && displayConfig.assetFundingType === 'financing');
             // 普通订单：当前持有资产 − 所选基准 − 待结 + 已结。
-            // 借出本金：借出的币不是可用持仓，单订单待覆盖额必须是“−当前借出本金价值 − 待结 + 已结”，
+            // 融资付息/借出本金：借出的资金不是可用持仓，待覆盖额必须是
+            // “−约定融资本金 − 待结 + 已结”。本金固定取计息基数，不能随标的市值变动。
             const linkedHoldingValueU = linked37Collateral?.useFloatingPnl ? linked37Collateral.holdingValue : null;
             const linkedFloatingPnlU = linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null;
             const holdingValueU = linkedHoldingValueU !== null && Number.isFinite(linkedHoldingValueU)
               ? linkedHoldingValueU
               : currentValue;
-            const principalLentOutValueU = holdingValueU ?? collateralGapBaseU;
+            const principalLentOutValueU = principalU > 0 ? principalU : collateralGapBaseU;
             const collateralRequired = principalLentOut
               ? -principalLentOutValueU - pendingInterestU + paidInterestU
               // 37引用单独使用“盈亏净值”。这等于（账户余额 − 初始金额）×倍数，

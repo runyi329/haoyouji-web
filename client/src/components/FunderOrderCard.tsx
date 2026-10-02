@@ -1597,7 +1597,8 @@ export function FunderOrderCard({
       return typeof raw === 'string' ? JSON.parse(raw) : raw;
     } catch { return null; }
   })();
-  // 仅用于前端资产标题旁的展示标签，不影响订单、利息或担保计算。
+  // 52号账本的资金属性是担保缺口的业务口径：明确标为“融资付息”的
+  // 非期权订单，融资金额本身是待覆盖本金，不能再作为本订单持有资产。
   // 旧订单的 selfFundedAsset 继续视为“自有资产”。
   const assetFundingType = financingDisplayConfig?.assetFundingType === 'financing'
     ? 'financing'
@@ -1624,7 +1625,13 @@ export function FunderOrderCard({
         ? legacyInterestBase
         : calculatedFinancingDisplayAmount;
   const financingDisplayUnit = amountCurrency === 'USDT' ? 'u' : amountCurrency === 'CNY' ? '元' : amountCurrency;
-  const principalLentOut = order.principal_lent_out === 1 || order.principal_lent_out === true;
+  // 历史订单曾把“融资付息”展示属性与 principal_lent_out 存成两套开关，
+  // 导致 FK9201 一类订单把融资本金误当成持仓价值而重复计入。
+  // 对明确的融资付息非期权单，资金属性即为本金待覆盖口径；期权单沿用独立的
+  // 「实时价值－权利金成本」公式，不能走这里的本金扣减分支。
+  const principalLentOut = order.principal_lent_out === 1
+    || order.principal_lent_out === true
+    || (!isOptionOrder && assetFundingType === 'financing');
   // 借出本金时允许管理员决定左上角主展示：默认展示借出本金，也可保留标的币种数量。
   // 该配置纯属展示，不参与计息、担保缺口或任何资金计算。
   const principalLentOutPrimary = financingDisplayConfig?.principalLentOutPrimary === 'quantity'
@@ -1925,8 +1932,9 @@ export function FunderOrderCard({
     : (collateralGapBaseMode === 'interest_base' ? interestBaseForRisk : buyValueForRisk);
   const floatPnlForRisk = isStockOrder && floatPnl !== null ? floatPnl / cnyRate : floatPnl;
   // 普通订单：当前持有资产 − 所选基准 − 待结 + 已结 + 担保物。
-  // 借出本金：借出的币已经不属于本订单可用持仓，必须用担保物 − 借出本金实时价值 − 待结 + 已结。
-  // 因此“买入价值 / 计息基数”只影响普通订单；不能把借出本金误计成资产再加一次担保物。
+  // 融资付息/借出本金：借出的本金不是本订单可用持仓，必须用
+  // “担保物 − 原始融资本金 − 待结 + 已结”。本金是约定融资金额，
+  // 不是标的币的实时市值；否则币价上涨会被误当作本金增加而重复扣减。
   const currentHoldingValueForRisk = isExternalStockPnlSource
     ? extTagHoldingValueU
     : currentValue !== null
@@ -1935,7 +1943,9 @@ export function FunderOrderCard({
   const holdingGapForRisk = currentHoldingValueForRisk !== null
     ? currentHoldingValueForRisk - collateralGapBaseForRisk
     : null;
-  const principalLentOutValueForRisk = currentHoldingValueForRisk ?? collateralGapBaseForRisk;
+  const principalLentOutValueForRisk = interestBaseForRisk > 0
+    ? interestBaseForRisk
+    : collateralGapBaseForRisk;
   const optionExposure = isOptionOrder
     ? (assetFundingType === 'self'
       // 自有资金期权不需要扣除历史买入成本，也不叠加订单利息或外部担保物。
@@ -2045,10 +2055,12 @@ export function FunderOrderCard({
   })();
   // 行内「担保缺口/余量」与非共享订单使用完全相同的单订单公式。
   // 共享只改变担保物可以在池内共同覆盖的总计判断，不能抹掉该订单本身的担保物。
-  const sharedOrderPrincipalLentOut = sharedOrderPoolDetail?.principalLentOut === true || sharedOrderPoolDetail?.principalLentOut === 1;
+  const sharedOrderPrincipalLentOut = principalLentOut
+    || sharedOrderPoolDetail?.principalLentOut === true
+    || sharedOrderPoolDetail?.principalLentOut === 1;
   const sharedOrderBorrowedValueU = (() => {
-    const serverValue = Number(sharedOrderPoolDetail?.currentValue);
-    if (sharedOrderPrincipalLentOut && Number.isFinite(serverValue) && serverValue > 0) return serverValue;
+    // 共享担保行必须与订单卡主公式复用同一笔原始融资本金，绝不能改用标的实时市值。
+    if (sharedOrderPrincipalLentOut) return principalLentOutValueForRisk;
     return sharedOrderHoldingValueU ?? sharedOrderGapBaseU;
   })();
   const sharedOrderExposure = isOptionOrder
@@ -2144,7 +2156,8 @@ export function FunderOrderCard({
         stockContributionU = currentValue - (gapBaseU > 0 ? gapBaseU : buyValueU);
       }
       const isPrincipalLoan = poolOrder.principalLentOut === true || poolOrder.principalLentOut === 1;
-      const borrowedValueU = holdingValueU ?? gapBaseU;
+      // 共享池汇总也扣约定融资本金，不随标的币价重估本金。
+      const borrowedValueU = isPrincipalLoan && principalU > 0 ? principalU : (holdingValueU ?? gapBaseU);
       remaining += isPrincipalLoan
         ? -borrowedValueU - accruedInterestU + paidInterestU
         : (stockContributionU ?? 0) - accruedInterestU + paidInterestU;
