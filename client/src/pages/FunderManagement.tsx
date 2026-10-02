@@ -999,6 +999,22 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     return ['CNY', 'RMB', '人民币'].includes(currency) ? base / cnyRate : base;
   }, [collateralGapBaseMode, financingAmountUsdt, formData.interestBase, formData.interestBaseCurrency, cnyRate]);
 
+  // 融资付息的本金是创建时约定的固定债务，不能随标的行情变化。
+  // “借出本金”开关是旧订单的兼容标记；新版融资付息属性也必须进入同一口径。
+  const previewIsFinancingOrder = useMemo(() => {
+    const fundingType = String(displayConfig.assetFundingType || '').trim().toLowerCase();
+    return Boolean(formData.principalLentOut)
+      || (!Boolean(displayConfig.selfFundedAsset) && ['financing', 'finance', '融资付息'].includes(fundingType));
+  }, [displayConfig.assetFundingType, displayConfig.selfFundedAsset, formData.principalLentOut]);
+  const previewFinancingPrincipalU = useMemo(() => {
+    const principal = parseFloat(formData.interestBase || '0');
+    if (Number.isFinite(principal) && principal > 0) {
+      const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
+      return ['CNY', 'RMB', '人民币'].includes(currency) ? principal / cnyRate : principal;
+    }
+    return collateralGapBaseValue;
+  }, [collateralGapBaseValue, cnyRate, formData.interestBase, formData.interestBaseCurrency]);
+
   const previewCurrentHoldingValue = useMemo(() => {
     const quantity = parseFloat(formData.buyQuantity || '0');
     const coin = String(formData.coin || '').trim().toUpperCase();
@@ -1026,7 +1042,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   }, [formData.interestBase, formData.interestRateAnnual, formData.interestStartDate]);
 
   // 普通订单：当前持有资产 − 基准 − 待结 + 已结 + 担保物。
-  // 借出本金：担保物 − 当前借出本金价值 − 待结 + 已结；借出的币不可再当成持有资产。
+  // 融资付息：担保物 − 固定融资本金 − 待结 + 已结；借出的币不可再当成持有资产。
   const previewPendingInterestU = useMemo(() => {
     const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
     return ['CNY', 'RMB', '人民币'].includes(currency) ? previewAccrued / cnyRate : previewAccrued;
@@ -1037,16 +1053,15 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   }, [previewPaidInterest, previewPaidInterestCurrency, cnyRate]);
   const computedCollateralGap = useMemo(() => {
     if (collateralGapBaseValue <= 0) return null;
-    if (formData.principalLentOut) {
-      const borrowedValue = previewCurrentHoldingValue ?? collateralGapBaseValue;
-      return computedCollateralValue - borrowedValue - previewPendingInterestU + previewPaidInterestU;
+    if (previewIsFinancingOrder) {
+      return computedCollateralValue - previewFinancingPrincipalU - previewPendingInterestU + previewPaidInterestU;
     }
     return (previewCurrentHoldingValue ?? 0)
       - collateralGapBaseValue
       - previewPendingInterestU
       + previewPaidInterestU
       + computedCollateralValue;
-  }, [computedCollateralValue, collateralGapBaseValue, formData.principalLentOut, previewCurrentHoldingValue, previewPendingInterestU, previewPaidInterestU]);
+  }, [computedCollateralValue, collateralGapBaseValue, previewIsFinancingOrder, previewFinancingPrincipalU, previewCurrentHoldingValue, previewPendingInterestU, previewPaidInterestU]);
 
   // 预览卡片实时待结佣金（受邀订单专用，每秒更新）
   const [previewCommission, setPreviewCommission] = useState<number>(0);
@@ -1073,15 +1088,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     const buyPriceNum = parseFloat(formData.buyPrice || '0');
     const buyValue = buyPriceNum * buyQty;
     const currentValue = liveP ? liveP * buyQty : null;
-    if (formData.principalLentOut) {
-      const borrowedValue = currentValue ?? collateralGapBaseValue;
-      return computedCollateralValue - borrowedValue - previewPendingInterestU + previewPaidInterestU;
+    if (previewIsFinancingOrder) {
+      return computedCollateralValue - previewFinancingPrincipalU - previewPendingInterestU + previewPaidInterestU;
     }
     const floatPnl = currentValue !== null ? currentValue - buyValue : null;
     return floatPnl !== null
       ? computedCollateralValue + floatPnl - previewAccrued
       : computedCollateralValue - previewAccrued;
-  }, [collateralGapBaseValue, computedCollateralValue, formLivePrices, formData.coin, formData.buyQuantity, formData.buyPrice, formData.principalLentOut, previewAccrued, previewPaidInterestU, previewPendingInterestU]);
+  }, [computedCollateralValue, formLivePrices, formData.coin, formData.buyQuantity, formData.buyPrice, previewAccrued, previewFinancingPrincipalU, previewIsFinancingOrder, previewPaidInterestU, previewPendingInterestU]);
 
   const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
     onSuccess: async (result) => {
@@ -4045,12 +4059,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         </span>
                       </div>
                     )}
-                    {ledgerId === 52 && formData.principalLentOut && (
+                    {ledgerId === 52 && previewIsFinancingOrder && (
                       <div className="mt-2 border-t border-blue-100 pt-2 text-[11px] text-slate-500">
-                        借出本金订单固定按：担保物市值 − 当前借出本金实时价值 − 待结利息 + 已结利息计算；不使用买入价值或计息基数作为重复扣减项。
+                        融资付息订单固定按：担保物市值 − 原始融资本金 − 待结利息 + 已结利息计算；不随标的实时价格重复改变本金。
                       </div>
                     )}
-                    {ledgerId === 52 && !formData.principalLentOut && (
+                    {ledgerId === 52 && !previewIsFinancingOrder && (
                       <div className="mt-2 border-t border-blue-100 pt-2">
                         <div className="mb-1.5 text-xs font-medium text-slate-600">担保缺口计算基准</div>
                         <div className="grid grid-cols-2 gap-2">
