@@ -11,6 +11,7 @@ import { RightMarginDetail } from "./RightMarginDetail";
 import { RightInterestDetail } from "./RightInterestDetail";
 import { OrderCardImageDownload } from "./OrderCardImageDownload";
 import { SelfFundedOptionPnlDisclosure } from "./SelfFundedOptionPnlDisclosure";
+import { FinancedOptionPnlDisclosure } from "./FinancedOptionPnlDisclosure";
 import {
   COIN_COLORS,
   CoinType,
@@ -2064,10 +2065,10 @@ export function FunderOrderCardV2Silver({
           </div>
         )}
         {!isStockCard && (
-          // 期权卡片固定展示行权价；浮动盈亏仅在订单模式展示，避免卡片内容过长遮挡。
+          // 期权卡片展示可点开的浮盈；融资付息订单同步披露权利金和利息口径。
           <div className="text-right" style={{ flex: 1, minWidth: 0 }}>
             <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-              {isOptionCard ? (isSelfFundedOption ? '浮动盈亏 (U)' : '行权价 (U)') : '浮动盈亏 (U)'}
+              浮动盈亏 (U)
             </div>
             {isOptionCard ? (
               isSelfFundedOption && optCurrentValue !== null ? (
@@ -2076,6 +2077,23 @@ export function FunderOrderCardV2Silver({
                   quantity={qty}
                   currentValue={optCurrentValue}
                   color="#F5E9FF"
+                  textShadow={TXT_SHADOW}
+                  className="text-sm font-semibold"
+                  maximumFractionDigits={0}
+                  unit="U"
+                />
+              ) : optCurrentValue !== null && optPremiumTotal !== null && optionFloatPnl !== null ? (
+                <FinancedOptionPnlDisclosure
+                  optionMarkPrice={optMarkPrice}
+                  quantity={qty}
+                  currentValue={optCurrentValue}
+                  premiumTotal={optPremiumTotal}
+                  floatPnl={optionFloatPnl}
+                  isShort={optIsShort}
+                  collateralValue={collateralValue}
+                  accruedInterest={silverAccruedInterestU}
+                  settledInterest={silverPaidInterestU}
+                  color={pnlColor}
                   textShadow={TXT_SHADOW}
                   className="text-sm font-semibold"
                   maximumFractionDigits={0}
@@ -3697,13 +3715,30 @@ export function FunderLenderCardSilver({
           </div>
           {_lnIsOpt && (
             <div className="mt-2 flex items-center justify-between gap-2 rounded-md px-2 py-1" style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.11)', border: `1px solid ${DIVIDER}` }}>
-              <span style={{ color: TXT_SEC }}>{lenderIsSelfFundedOption ? '浮动盈亏 (U)' : '行权价 (U)'}</span>
+              <span style={{ color: TXT_SEC }}>浮动盈亏 (U)</span>
               {lenderIsSelfFundedOption && optionCurrentValue !== null ? (
                 <SelfFundedOptionPnlDisclosure
                   optionMarkPrice={optionMarkPrice}
                   quantity={qty}
                   currentValue={optionCurrentValue}
                   color={TXT_PRI}
+                  textShadow={TXT_SHADOW}
+                  className="font-semibold"
+                  maximumFractionDigits={2}
+                  unit="U"
+                />
+              ) : optionCurrentValue !== null && optionPremiumTotal !== null && optionFloatPnl !== null ? (
+                <FinancedOptionPnlDisclosure
+                  optionMarkPrice={optionMarkPrice}
+                  quantity={qty}
+                  currentValue={optionCurrentValue}
+                  premiumTotal={optionPremiumTotal}
+                  floatPnl={optionFloatPnl}
+                  isShort={optionIsShort}
+                  collateralValue={collateralValue}
+                  accruedInterest={accruedInU}
+                  settledInterest={paidInU}
+                  color={pnlColor}
                   textShadow={TXT_SHADOW}
                   className="font-semibold"
                   maximumFractionDigits={2}

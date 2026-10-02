@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { SelfFundedOptionPnlDisclosure } from "@/components/SelfFundedOptionPnlDisclosure";
+import { FinancedOptionPnlDisclosure } from "@/components/FinancedOptionPnlDisclosure";
 import {
   getTagMarginStockMarketValue,
   getTagMarginStockRecords,
@@ -2547,6 +2548,19 @@ export function FunderOrderCard({
                       quantity={optionContractQty}
                       currentValue={optionCurrentValue}
                       color="#DC2626"
+                    />
+                  ) : isOptionOrder && optionCurrentValue !== null && optionPremiumTotal !== null && optionFloatPnl !== null ? (
+                    <FinancedOptionPnlDisclosure
+                      optionMarkPrice={optionMarkPrice}
+                      quantity={optionContractQty}
+                      currentValue={optionCurrentValue}
+                      premiumTotal={optionPremiumTotal}
+                      floatPnl={optionFloatPnl}
+                      isShort={isShortOption}
+                      collateralValue={collateralValueKnown ? collateralValue : null}
+                      accruedInterest={accruedForRisk}
+                      settledInterest={paidInterestForRisk}
+                      color={floatPnl >= 0 ? "#DC2626" : "#16A34A"}
                     />
                   ) : (
                   <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
