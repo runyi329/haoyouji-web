@@ -2,7 +2,7 @@ import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getTagMarginCurrencyRecords, getTagMarginStockMarketValue, getTagMarginStockRecords, getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
 import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter, mibanPearRouter, mibanAftersaleRouter } from "./miban";
 import { mibanTeamRouter } from "./miban-teams";
-import { createHmac } from "crypto";
+import { createHash, createHmac } from "crypto";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
@@ -90,6 +90,9 @@ import {
   getLedger37FundingBalanceSummary,
   listLedger37WalletHolds,
   releaseLedger37WalletHold,
+  migrateLedger37ManualMarginToWalletHold,
+  transferLedger37ManualMarginWalletHold,
+  normalizeLedger37WalletAsset,
   createLedger37Dividend,
   ensureLedger37WalletInfrastructure,
 } from "./ledger37-wallet";
@@ -111,6 +114,9 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
   remainingAmount?: string;
   releasedAmount?: string;
   fullyReleased?: boolean;
+  /** 历史手工保证金迁入时，保留原条目ID并替换为同金额的钱包冻结条目。 */
+  replaceManualEntryId?: string;
+  migrationNo?: string;
 }) {
   const [memberRows] = await transaction.execute(
     `SELECT initial_balances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
@@ -123,8 +129,42 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
   const key = `${params.tagName}__margins`;
   let entries: any[] = [];
   try { entries = Array.isArray(balances[key]) ? balances[key] : JSON.parse(String(balances[key] || '[]')); } catch { entries = []; }
+  if (entries.length === 0 && params.replaceManualEntryId) {
+    const legacyAmount = balances[`${params.tagName}__margin`];
+    if (legacyAmount !== undefined && legacyAmount !== null && String(legacyAmount).trim() !== '') {
+      entries = [{
+        id: `legacy_${params.tagName}_0`,
+        coin: String(balances[`${params.tagName}__marginCoin`] || 'CNY').trim().toUpperCase() || 'CNY',
+        amount: Number(legacyAmount),
+        createdAt: '',
+        notes: [],
+      }];
+    }
+  }
+  let replacedManualEntry = false;
+  if (params.direction === 'freeze' && params.replaceManualEntryId) {
+    entries = entries.map((entry) => {
+      if (String(entry?.id || '') !== params.replaceManualEntryId) return entry;
+      replacedManualEntry = true;
+      return {
+        ...entry,
+        coin: params.assetCode,
+        amount: params.amount,
+        source: 'wallet_hold',
+        holdId: params.holdId,
+        status: 'active',
+        releasedAmount: '0',
+        remainingAmount: params.amount,
+        migratedFrom: 'manual',
+        migrationNo: params.migrationNo,
+      };
+    });
+    if (!replacedManualEntry) {
+      throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '历史手工保证金记录已变化，请刷新后重试迁移' });
+    }
+  }
   if (params.direction === 'release') {
-    entries = entries.map((entry) => entry?.id === `wallet_hold_${params.holdId}_freeze`
+    entries = entries.map((entry) => (entry?.id === `wallet_hold_${params.holdId}_freeze` || (entry?.source === 'wallet_hold' && Number(entry?.holdId) === params.holdId))
       ? {
         ...entry,
         status: params.fullyReleased ? 'released' : 'active',
@@ -132,22 +172,312 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
         releasedAmount: params.releasedAmount,
       }
       : entry);
+    if (params.replaceManualEntryId) {
+      entries = entries.map((entry) => {
+        if (String(entry?.id || '') !== params.replaceManualEntryId) return entry;
+        replacedManualEntry = true;
+        return {
+          ...entry,
+          coin: params.assetCode,
+          amount: `-${params.amount}`,
+          source: 'wallet_hold',
+          holdId: params.holdId,
+          status: params.fullyReleased ? 'released' : 'active',
+          releasedAmount: params.releasedAmount,
+          remainingAmount: params.remainingAmount,
+          migratedFrom: 'manual',
+          migrationNo: params.migrationNo,
+        };
+      });
+      if (!replacedManualEntry) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '历史保证金转出记录已变化，请刷新后重试迁移' });
+      }
+    }
   }
-  entries.push({
-    id: `wallet_hold_${params.holdId}_${params.direction}${params.releaseNo ? `_${params.releaseNo}` : ''}`,
-    coin: params.assetCode,
-    amount: params.direction === 'release' ? `-${params.amount}` : params.amount,
-    createdAt: params.createdAt,
-    notes: [],
-    source: 'wallet_hold',
-    holdId: params.holdId,
-    status: params.direction === 'release' ? 'released' : 'active',
-  });
+  if (!params.replaceManualEntryId) {
+    entries.push({
+      id: `wallet_hold_${params.holdId}_${params.direction}${params.releaseNo ? `_${params.releaseNo}` : ''}`,
+      coin: params.assetCode,
+      amount: params.direction === 'release' ? `-${params.amount}` : params.amount,
+      createdAt: params.createdAt,
+      notes: [],
+      source: 'wallet_hold',
+      holdId: params.holdId,
+      status: params.direction === 'release' ? 'released' : 'active',
+    });
+  }
   balances[key] = JSON.stringify(entries);
   await transaction.execute(
     `UPDATE ledger_members SET initial_balances = ?, updatedAt = NOW() WHERE ledgerId = ? AND userId = ?`,
     [JSON.stringify(balances), LEDGER_37_ID, params.userId],
   );
+}
+
+type Ledger37ManualMarginMigrationCandidate = {
+  userId: number;
+  tagName: string;
+  marginEntryId: string;
+  assetCode: string;
+  amount: string;
+  sourceRecordedAt: string | null;
+  sourceNotes: string[];
+};
+
+type Ledger37ManualMarginTransferCandidate = {
+  userId: number;
+  assetCode: string;
+  amount: string;
+  source: Ledger37ManualMarginMigrationCandidate;
+  sourceOutflow: Ledger37ManualMarginMigrationCandidate;
+  target: Ledger37ManualMarginMigrationCandidate;
+};
+
+// 经原始备注与金额双重核对的两笔历史标签平移。目标正数仅承接来源冻结，不能重复给钱包入账。
+const LEDGER37_MANUAL_MARGIN_TRANSFER_RULES = [
+  { sourceTagName: '70金富3105金融街(原9571)', targetTagName: 'YCX10同花顺0911', assetCode: 'CNY', amount: '10000' },
+  { sourceTagName: 'Da同花4215', targetTagName: 'DN50-2.5国金5767', assetCode: 'CNY', amount: '20000' },
+] as const;
+
+/**
+ * 从37号账本成员的原始保证金明细生成可迁移清单。普通正数保证金迁入并冻结；
+ * 原有“来源正数 + 负数转出 + 目标正数”的两笔平移按单次入账、双标签冻结平移处理。
+ */
+async function getLedger37ManualMarginMigrationPlan(transaction: any, lockMembers = false) {
+  const suffix = lockMembers ? ' FOR UPDATE' : '';
+  const [memberRows] = await transaction.execute(
+    `SELECT userId, initial_balances FROM ledger_members WHERE ledgerId = ? ORDER BY userId${suffix}`,
+    [LEDGER_37_ID],
+  );
+  const positiveEntries: Ledger37ManualMarginMigrationCandidate[] = [];
+  const negativeEntries: Ledger37ManualMarginMigrationCandidate[] = [];
+  const skipped: Array<{ userId: number; tagName: string; marginEntryId: string; reason: string }> = [];
+  for (const member of asRows(memberRows)) {
+    const userId = Number(member.userId);
+    let balances: Record<string, unknown> = {};
+    try { balances = member.initial_balances ? JSON.parse(String(member.initial_balances)) : {}; } catch { balances = {}; }
+    const tagNames = new Set(
+      Object.keys(balances)
+        .filter((key) => key.endsWith('__margins'))
+        .map((key) => key.slice(0, -'__margins'.length)),
+    );
+    for (const key of Object.keys(balances)) {
+      if (key.endsWith('__margin') && !key.endsWith('__margins')) tagNames.add(key.slice(0, -'__margin'.length));
+    }
+    for (const tagName of Array.from(tagNames).sort((a, b) => a.localeCompare(b, 'zh-CN'))) {
+      const marginKey = `${tagName}__margins`;
+      let entries: any[] = [];
+      try { entries = Array.isArray(balances[marginKey]) ? balances[marginKey] : JSON.parse(String(balances[marginKey] || '[]')); } catch { entries = []; }
+      if (entries.length === 0) {
+        const legacyAmount = balances[`${tagName}__margin`];
+        if (legacyAmount !== undefined && legacyAmount !== null && String(legacyAmount).trim() !== '') {
+          entries = [{
+            id: `legacy_${tagName}_0`,
+            coin: balances[`${tagName}__marginCoin`] || 'CNY',
+            amount: legacyAmount,
+            createdAt: balances[`${tagName}__marginCreatedAt`] || null,
+            notes: balances[`${tagName}__marginNotes`] || [],
+          }];
+        }
+      }
+      for (const entry of entries) {
+        if (String(entry?.source || '') === 'wallet_hold') continue;
+        const marginEntryId = String(entry?.id || '').trim();
+        const rawAmount = String(entry?.amount ?? '').trim();
+        if (!marginEntryId || !/^-?(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/.test(rawAmount) || Number(rawAmount) === 0) {
+          skipped.push({ userId, tagName, marginEntryId: marginEntryId || '(无编号)', reason: '零金额或无效历史保证金' });
+          continue;
+        }
+        let assetCode: string;
+        try { assetCode = normalizeLedger37WalletAsset(entry?.coin || 'CNY'); }
+        catch {
+          skipped.push({ userId, tagName, marginEntryId, reason: `不支持的币种：${String(entry?.coin || '') || '(空)'}` });
+          continue;
+        }
+        const normalizedEntry = {
+          userId,
+          tagName,
+          marginEntryId,
+          assetCode,
+          amount: rawAmount.startsWith('-') ? rawAmount.slice(1) : rawAmount,
+          sourceRecordedAt: typeof entry?.createdAt === 'string' ? entry.createdAt : null,
+          sourceNotes: Array.isArray(entry?.notes)
+            ? entry.notes.map((note: any) => String(note?.content || '').trim()).filter(Boolean)
+            : [],
+        };
+        if (Number(rawAmount) > 0) positiveEntries.push(normalizedEntry);
+        else negativeEntries.push(normalizedEntry);
+      }
+    }
+  }
+  const sortEntries = (items: Ledger37ManualMarginMigrationCandidate[]) => items.sort((a, b) => a.userId - b.userId || a.tagName.localeCompare(b.tagName, 'zh-CN') || a.marginEntryId.localeCompare(b.marginEntryId));
+  sortEntries(positiveEntries);
+  sortEntries(negativeEntries);
+  const usedPositiveEntryIds = new Set<string>();
+  const usedNegativeEntryIds = new Set<string>();
+  const transfers: Ledger37ManualMarginTransferCandidate[] = [];
+  const unresolvedTransfers: Array<{ userId: number; tagName: string; marginEntryId: string; reason: string }> = [];
+  const entryKey = (entry: Ledger37ManualMarginMigrationCandidate) => `${entry.userId}|${entry.tagName}|${entry.marginEntryId}`;
+  for (const rule of LEDGER37_MANUAL_MARGIN_TRANSFER_RULES) {
+    const ruleOutflows = negativeEntries.filter((entry) => entry.tagName === rule.sourceTagName && entry.assetCode === rule.assetCode && Number(entry.amount) === Number(rule.amount));
+    for (const outflow of ruleOutflows) {
+      const sources = positiveEntries.filter((entry) => entry.userId === outflow.userId && entry.tagName === rule.sourceTagName && entry.assetCode === rule.assetCode && Number(entry.amount) === Number(rule.amount) && !usedPositiveEntryIds.has(entryKey(entry)));
+      const targets = positiveEntries.filter((entry) => entry.userId === outflow.userId && entry.tagName === rule.targetTagName && entry.assetCode === rule.assetCode && Number(entry.amount) === Number(rule.amount) && !usedPositiveEntryIds.has(entryKey(entry)));
+      const source = sources.filter((entry) => !outflow.sourceRecordedAt || !entry.sourceRecordedAt || entry.sourceRecordedAt <= outflow.sourceRecordedAt).sort((a, b) => String(b.sourceRecordedAt || '').localeCompare(String(a.sourceRecordedAt || '')))[0];
+      const target = targets.sort((a, b) => String(a.sourceRecordedAt || '').localeCompare(String(b.sourceRecordedAt || '')))[0];
+      if (!source || !target) {
+        unresolvedTransfers.push({ userId: outflow.userId, tagName: outflow.tagName, marginEntryId: outflow.marginEntryId, reason: '未找到金额、币种和成员均一致的来源/目标保证金记录' });
+        continue;
+      }
+      usedPositiveEntryIds.add(entryKey(source));
+      usedPositiveEntryIds.add(entryKey(target));
+      usedNegativeEntryIds.add(entryKey(outflow));
+      transfers.push({ userId: outflow.userId, assetCode: rule.assetCode, amount: rule.amount, source, sourceOutflow: outflow, target });
+    }
+  }
+  for (const outflow of negativeEntries) {
+    if (!usedNegativeEntryIds.has(entryKey(outflow))) {
+      unresolvedTransfers.push({ userId: outflow.userId, tagName: outflow.tagName, marginEntryId: outflow.marginEntryId, reason: '未配置为可核对的历史标签平移' });
+    }
+  }
+  const candidates = positiveEntries.filter((entry) => !usedPositiveEntryIds.has(entryKey(entry)));
+  sortEntries(candidates);
+  transfers.sort((a, b) => a.userId - b.userId || a.source.tagName.localeCompare(b.source.tagName, 'zh-CN'));
+  const grossMarginTotals: Record<string, number> = {};
+  for (const candidate of positiveEntries) grossMarginTotals[candidate.assetCode] = (grossMarginTotals[candidate.assetCode] || 0) + Number(candidate.amount);
+  const walletCreditTotals: Record<string, number> = {};
+  for (const candidate of candidates) walletCreditTotals[candidate.assetCode] = (walletCreditTotals[candidate.assetCode] || 0) + Number(candidate.amount);
+  for (const transfer of transfers) walletCreditTotals[transfer.assetCode] = (walletCreditTotals[transfer.assetCode] || 0) + Number(transfer.amount);
+  const transferTotals: Record<string, number> = {};
+  for (const transfer of transfers) transferTotals[transfer.assetCode] = (transferTotals[transfer.assetCode] || 0) + Number(transfer.amount);
+  const manifestPayload = {
+    candidates: candidates.map((candidate) => [candidate.userId, candidate.tagName, candidate.marginEntryId, candidate.assetCode, candidate.amount, candidate.sourceRecordedAt || '', candidate.sourceNotes]),
+    transfers: transfers.map((transfer) => [
+      transfer.userId, transfer.assetCode, transfer.amount,
+      transfer.source.tagName, transfer.source.marginEntryId, transfer.source.sourceRecordedAt || '', transfer.source.sourceNotes,
+      transfer.sourceOutflow.tagName, transfer.sourceOutflow.marginEntryId, transfer.sourceOutflow.sourceRecordedAt || '', transfer.sourceOutflow.sourceNotes,
+      transfer.target.tagName, transfer.target.marginEntryId, transfer.target.sourceRecordedAt || '', transfer.target.sourceNotes,
+    ]),
+  };
+  const manifestHash = createHash('sha256').update(JSON.stringify(manifestPayload)).digest('hex');
+  return { manifestHash, candidates, transfers, grossMarginTotals, walletCreditTotals, transferTotals, skipped, unresolvedTransfers, positiveEntryCount: positiveEntries.length, negativeEntryCount: negativeEntries.length };
+}
+
+const ledger37CanonicalJson = (value: unknown) => JSON.stringify(value);
+const ledger37SectionHash = (value: unknown) => createHash('sha256').update(ledger37CanonicalJson(value)).digest('hex');
+
+/** 只保留迁移绝不能改变的账面要素；钱包冻结来源、状态与审计号属于预期变化，故不纳入相等性比较。 */
+async function getLedger37MarginMigrationReconciliationSnapshot(transaction: any) {
+  const [memberRows] = await transaction.execute(
+    'SELECT userId, initial_balances FROM ledger_members WHERE ledgerId = ? ORDER BY userId FOR UPDATE',
+    [LEDGER_37_ID],
+  );
+  const tagConfigs: any[] = [];
+  const marginEntries: any[] = [];
+  for (const member of asRows(memberRows)) {
+    const userId = Number(member.userId);
+    let balances: Record<string, any> = {};
+    try { balances = member.initial_balances ? JSON.parse(String(member.initial_balances)) : {}; } catch { balances = {}; }
+    const tagNames = new Set<string>();
+    for (const key of Object.keys(balances)) {
+      if (key.endsWith('__margins')) tagNames.add(key.slice(0, -'__margins'.length));
+      if (key.endsWith('__margin') && !key.endsWith('__margins')) tagNames.add(key.slice(0, -'__margin'.length));
+    }
+    for (const tagName of Array.from(tagNames).sort((a, b) => a.localeCompare(b, 'zh-CN'))) {
+      tagConfigs.push({
+        userId,
+        tagName,
+        initialAmount: String(balances[tagName] ?? ''),
+        ratio: String(balances[`${tagName}__ratio`] ?? ''),
+        targetAmount: String(balances[`${tagName}__targetAmount`] ?? ''),
+        startDate: String(balances[`${tagName}__startDate`] ?? ''),
+        pauseDate: String(balances[`${tagName}__pauseDate`] ?? ''),
+        endDate: String(balances[`${tagName}__endDate`] ?? ''),
+        visible: String(balances[`${tagName}__visible`] ?? ''),
+      });
+      let entries: any[] = [];
+      try { entries = Array.isArray(balances[`${tagName}__margins`]) ? balances[`${tagName}__margins`] : JSON.parse(String(balances[`${tagName}__margins`] || '[]')); } catch { entries = []; }
+      if (entries.length === 0 && balances[`${tagName}__margin`] !== undefined && balances[`${tagName}__margin`] !== null && String(balances[`${tagName}__margin`]).trim() !== '') {
+        entries = [{ id: `legacy_${tagName}_0`, coin: balances[`${tagName}__marginCoin`] || 'CNY', amount: balances[`${tagName}__margin`], createdAt: balances[`${tagName}__marginCreatedAt`] || '', notes: balances[`${tagName}__marginNotes`] || [] }];
+      }
+      for (const entry of entries) {
+        let coin = String(entry?.coin || 'CNY').trim().toUpperCase() || 'CNY';
+        if (coin === '人民币' || coin === 'RMB' || coin === '元') coin = 'CNY';
+        marginEntries.push({
+          userId,
+          tagName,
+          id: String(entry?.id || ''),
+          coin,
+          amount: String(entry?.amount ?? ''),
+          createdAt: String(entry?.createdAt || ''),
+          notes: Array.isArray(entry?.notes)
+            ? entry.notes.map((note: any) => ({ content: String(note?.content || ''), createdAt: String(note?.createdAt || '') }))
+            : [],
+        });
+      }
+    }
+  }
+  const [ledgerRecordRows] = await transaction.execute(
+    'SELECT id, type, amount, categoryId, recordDate, description, deleted_at AS deletedAt FROM ledger_records WHERE ledgerId = ? ORDER BY id',
+    [LEDGER_37_ID],
+  );
+  const [dividendRows] = await transaction.execute(
+    'SELECT id, user_id, tag_name, amount, asset_code, asset_amount, note, created_at FROM dividend_records WHERE ledger_id = ? ORDER BY id',
+    [LEDGER_37_ID],
+  );
+  let stockPnlInputs: any[] = [];
+  try {
+    const [stockRows] = await transaction.execute(
+      `SELECT s.category_id, s.snapshot_date, s.market_value, s.cost_value, s.floating_pnl, s.realized_pnl, s.total_pnl, s.position_count
+       FROM ledger_stock_daily_snapshots s
+       WHERE s.ledger_id = ? ORDER BY s.category_id, s.snapshot_date`,
+      [LEDGER_37_ID],
+    );
+    stockPnlInputs = asRows(stockRows);
+  } catch {
+    // 股票组合表尚未初始化的环境不影响手工余额账本的迁移核对。
+  }
+  const snapshot = {
+    tagConfigs,
+    marginEntries,
+    pnlInputs: asRows(ledgerRecordRows),
+    stockPnlInputs,
+    dividends: asRows(dividendRows),
+  };
+  return {
+    snapshot,
+    hashes: {
+      tagConfigs: ledger37SectionHash(snapshot.tagConfigs),
+      marginEntries: ledger37SectionHash(snapshot.marginEntries),
+      pnlInputs: ledger37SectionHash(snapshot.pnlInputs),
+      stockPnlInputs: ledger37SectionHash(snapshot.stockPnlInputs),
+      dividends: ledger37SectionHash(snapshot.dividends),
+    },
+    counts: {
+      tagConfigs: snapshot.tagConfigs.length,
+      marginEntries: snapshot.marginEntries.length,
+      pnlInputs: snapshot.pnlInputs.length,
+      stockPnlInputs: snapshot.stockPnlInputs.length,
+      dividends: snapshot.dividends.length,
+    },
+  };
+}
+
+function reconcileLedger37MarginMigrationSnapshots(before: Awaited<ReturnType<typeof getLedger37MarginMigrationReconciliationSnapshot>>, after: Awaited<ReturnType<typeof getLedger37MarginMigrationReconciliationSnapshot>>) {
+  const labels: Record<string, string> = {
+    tagConfigs: '初始金额、占比与标签配置',
+    marginEntries: '保证金币种、数量、日期与备注',
+    pnlInputs: '盈亏账本输入',
+    stockPnlInputs: '股票标签盈亏输入',
+    dividends: '分红记录与金额',
+  };
+  const checks = Object.keys(labels).map((key) => ({
+    key,
+    label: labels[key],
+    unchanged: before.hashes[key as keyof typeof before.hashes] === after.hashes[key as keyof typeof after.hashes],
+    beforeCount: before.counts[key as keyof typeof before.counts],
+    afterCount: after.counts[key as keyof typeof after.counts],
+  }));
+  return { passed: checks.every((check) => check.unchanged), checks };
 }
 
 // 个人账本备忘录：按账本和当前登录用户严格隔离，供 37 号账本等首页使用。
@@ -13351,6 +13681,293 @@ ${klinesSummary}
         ]);
         const multiAssetBalances = userId ? await dbMultiAssetWallet.getUserMultiAssetBalances(userId) : [];
         return { cny, usdt, multiAssetBalances, holds };
+      }),
+
+    // 只读预检：供一次性迁移前固定精确清单哈希，避免确认后记录变化造成误迁。
+    getLedger37ManualMarginMigrationPlan: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37) }))
+      .query(async ({ ctx }) => {
+        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本历史保证金仅胡大叔可查看' });
+        }
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+        const plan = await getLedger37ManualMarginMigrationPlan(conn, false);
+        return {
+          manifestHash: plan.manifestHash,
+          directMigrationCount: plan.candidates.length,
+          transferCount: plan.transfers.length,
+          positiveEntryCount: plan.positiveEntryCount,
+          negativeEntryCount: plan.negativeEntryCount,
+          grossMarginTotals: plan.grossMarginTotals,
+          walletCreditTotals: plan.walletCreditTotals,
+          transferTotals: plan.transferTotals,
+          candidates: plan.candidates,
+          transfers: plan.transfers,
+          skippedCount: plan.skipped.length,
+          blockingSkipped: [
+            ...plan.skipped.filter((item) => !item.reason.startsWith('零金额')),
+            ...plan.unresolvedTransfers,
+          ],
+        };
+      }),
+
+    // 只读账面核对：展示批量迁移前的保证金、盈亏输入与分红输入基线；不产生资金写入。
+    getLedger37MarginMigrationReconciliationPreview: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37) }))
+      .query(async ({ ctx }) => {
+        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本历史保证金仅胡大叔可查看' });
+        }
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+        const snapshot = await getLedger37MarginMigrationReconciliationSnapshot(conn as any);
+        return { hashes: snapshot.hashes, counts: snapshot.counts };
+      }),
+
+    // 批量把当前全部正数历史手工保证金迁入成员全局钱包，并在同一事务中冻结回原标签。
+    migrateAllLedger37ManualMarginsToWalletHolds: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37), manifestHash: z.string().length(64) }))
+      .mutation(async ({ ctx, input }) => {
+        if (process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示批量迁移方案，不会写入真实钱包资金' });
+        }
+        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本保证金仅胡大叔可操作' });
+        }
+        await assertAiWalletOperationEnabled('ledger:37', 'order_debit');
+        await ensureLedger37WalletInfrastructure();
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+        const transaction = conn as any;
+        try {
+          await transaction.beginTransaction();
+          const plan = await getLedger37ManualMarginMigrationPlan(transaction, true);
+          const blockingSkipped = [
+            ...plan.skipped.filter((item) => !item.reason.startsWith('零金额')),
+            ...plan.unresolvedTransfers,
+          ];
+          if (blockingSkipped.length > 0) {
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: `存在${blockingSkipped.length}笔无法核对的历史保证金记录，请先核对后再迁移` });
+          }
+          if (plan.candidates.length === 0 && plan.transfers.length === 0) {
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '当前没有可迁入的钱包保证金记录' });
+          }
+          if (plan.manifestHash !== input.manifestHash) {
+            throw new TRPCError({ code: 'CONFLICT', message: '保证金原始记录已变化，请重新核对迁移清单后再执行' });
+          }
+          const beforeSnapshot = await getLedger37MarginMigrationReconciliationSnapshot(transaction);
+          const migrationNos: string[] = [];
+          for (const candidate of plan.candidates) {
+            const migration = await migrateLedger37ManualMarginToWalletHold({
+              ...candidate,
+              actorUserId: ctx.user.id,
+              transaction,
+            });
+            if (migration.alreadyCompleted) {
+              throw new TRPCError({ code: 'CONFLICT', message: '发现已迁移但未更新的历史保证金记录，请刷新后核对' });
+            }
+            await appendLedger37WalletMarginRecord(transaction, {
+              userId: candidate.userId,
+              tagName: candidate.tagName,
+              holdId: migration.hold.id,
+              assetCode: migration.assetCode,
+              amount: migration.amount,
+              createdAt: migration.hold.createdAt,
+              direction: 'freeze',
+              replaceManualEntryId: candidate.marginEntryId,
+              migrationNo: migration.migrationNo,
+            });
+            migrationNos.push(migration.migrationNo);
+          }
+          const transferNos: string[] = [];
+          for (const transfer of plan.transfers) {
+            const result = await transferLedger37ManualMarginWalletHold({
+              userId: transfer.userId,
+              assetCode: transfer.assetCode,
+              amount: transfer.amount,
+              sourceTagName: transfer.source.tagName,
+              sourceMarginEntryId: transfer.source.marginEntryId,
+              sourceRecordedAt: transfer.source.sourceRecordedAt,
+              sourceNotes: transfer.source.sourceNotes,
+              sourceOutflowEntryId: transfer.sourceOutflow.marginEntryId,
+              sourceOutflowRecordedAt: transfer.sourceOutflow.sourceRecordedAt,
+              sourceOutflowNotes: transfer.sourceOutflow.sourceNotes,
+              targetTagName: transfer.target.tagName,
+              targetMarginEntryId: transfer.target.marginEntryId,
+              targetRecordedAt: transfer.target.sourceRecordedAt,
+              targetNotes: transfer.target.sourceNotes,
+              actorUserId: ctx.user.id,
+              transaction,
+            });
+            if (result.alreadyCompleted) {
+              throw new TRPCError({ code: 'CONFLICT', message: '发现已迁移但未更新的历史保证金平移记录，请刷新后核对' });
+            }
+            await appendLedger37WalletMarginRecord(transaction, {
+              userId: transfer.userId,
+              tagName: transfer.source.tagName,
+              holdId: result.sourceMigration.hold.id,
+              assetCode: result.sourceMigration.assetCode,
+              amount: result.sourceMigration.amount,
+              createdAt: result.sourceMigration.hold.createdAt,
+              direction: 'freeze',
+              replaceManualEntryId: transfer.source.marginEntryId,
+              migrationNo: result.sourceMigration.migrationNo,
+            });
+            await appendLedger37WalletMarginRecord(transaction, {
+              userId: transfer.userId,
+              tagName: transfer.sourceOutflow.tagName,
+              holdId: result.sourceMigration.hold.id,
+              assetCode: result.sourceMigration.assetCode,
+              amount: result.sourceRelease.releasedAmount,
+              createdAt: result.sourceRelease.releasedAt,
+              direction: 'release',
+              releaseNo: result.sourceRelease.releaseNo,
+              remainingAmount: result.sourceRelease.remainingAmount,
+              releasedAmount: result.sourceRelease.releasedAmount,
+              fullyReleased: result.sourceRelease.fullyReleased,
+              replaceManualEntryId: transfer.sourceOutflow.marginEntryId,
+              migrationNo: result.transferNo,
+            });
+            await appendLedger37WalletMarginRecord(transaction, {
+              userId: transfer.userId,
+              tagName: transfer.target.tagName,
+              holdId: result.targetHold.id,
+              assetCode: result.targetHold.assetCode,
+              amount: result.targetHold.amount,
+              createdAt: result.targetHold.createdAt,
+              direction: 'freeze',
+              replaceManualEntryId: transfer.target.marginEntryId,
+              migrationNo: result.transferNo,
+            });
+            migrationNos.push(result.sourceMigration.migrationNo);
+            transferNos.push(result.transferNo);
+          }
+          const afterSnapshot = await getLedger37MarginMigrationReconciliationSnapshot(transaction);
+          const reconciliation = reconcileLedger37MarginMigrationSnapshots(beforeSnapshot, afterSnapshot);
+          if (!reconciliation.passed) {
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '迁移前后账面核对未通过，已停止并回滚本次迁移' });
+          }
+          const batchNo = `B37${nanoid(18)}`;
+          await transaction.execute(
+            `INSERT INTO ledger37_margin_migration_batches
+              (batch_no, manifest_hash, direct_migration_count, transfer_count, pre_snapshot, post_snapshot, reconciliation_json, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              batchNo,
+              plan.manifestHash,
+              plan.candidates.length,
+              plan.transfers.length,
+              JSON.stringify(beforeSnapshot),
+              JSON.stringify(afterSnapshot),
+              JSON.stringify(reconciliation),
+              ctx.user.id,
+            ],
+          );
+          await transaction.commit();
+          return {
+            success: true,
+            batchNo,
+            directMigrationCount: plan.candidates.length,
+            transferCount: plan.transfers.length,
+            positiveEntryCount: plan.positiveEntryCount,
+            walletCreditTotals: plan.walletCreditTotals,
+            grossMarginTotals: plan.grossMarginTotals,
+            manifestHash: plan.manifestHash,
+            migrationNos,
+            transferNos,
+            reconciliation,
+          };
+        } catch (error: any) {
+          try { await transaction.rollback(); } catch {}
+          throw error;
+        } finally { transaction.release?.(); }
+      }),
+
+    // 将一笔历史手工保证金一次性纳入全局钱包，并立即冻结给原标签；不可重复迁移。
+    migrateLedger37ManualMarginToWalletHold: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        targetUserId: z.number().int().positive(),
+        tagName: z.string().trim().min(1).max(160),
+        marginEntryId: z.string().trim().min(1).max(160),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示历史保证金迁移，不会写入真实钱包资金' });
+        }
+        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本保证金仅胡大叔可操作' });
+        }
+        await assertAiWalletOperationEnabled('ledger:37', 'order_debit');
+        const membership = await dbLedger.getUserMembership(LEDGER_37_ID, input.targetUserId);
+        if (!membership) throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本成员' });
+        const category = (await dbLedger.getLedgerCategories(LEDGER_37_ID, ctx.user.id, undefined, null)).find((item: any) => String(item.name) === input.tagName && !item.isDefault);
+        if (!category) throw new TRPCError({ code: 'NOT_FOUND', message: '标签不存在或不可用于保证金' });
+        await ensureLedger37WalletInfrastructure();
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+        const transaction = conn as any;
+        try {
+          await transaction.beginTransaction();
+          const [memberRows] = await transaction.execute(
+            'SELECT initial_balances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE',
+            [LEDGER_37_ID, input.targetUserId],
+          );
+          const member = asRows(memberRows)[0];
+          if (!member) throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本成员' });
+          let balances: Record<string, any> = {};
+          try { balances = member.initial_balances ? JSON.parse(String(member.initial_balances)) : {}; } catch { balances = {}; }
+          const marginKey = `${input.tagName}__margins`;
+          let entries: any[] = [];
+          try { entries = Array.isArray(balances[marginKey]) ? balances[marginKey] : JSON.parse(String(balances[marginKey] || '[]')); } catch { entries = []; }
+          if (entries.length === 0 && input.marginEntryId === `legacy_${input.tagName}_0`) {
+            const amount = balances[`${input.tagName}__margin`];
+            if (amount !== undefined && amount !== null && String(amount).trim() !== '') {
+              entries = [{ id: input.marginEntryId, coin: balances[`${input.tagName}__marginCoin`] || 'CNY', amount }];
+            }
+          }
+          const entry = entries.find((item) => String(item?.id || '') === input.marginEntryId);
+          if (!entry) throw new TRPCError({ code: 'NOT_FOUND', message: '历史手工保证金记录不存在，请刷新后重试' });
+          const amount = String(entry.amount ?? '').trim();
+          if (!/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/.test(amount) || Number(amount) <= 0) {
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '仅正数历史手工保证金可迁入钱包；转出或平移记录需保留线下核对' });
+          }
+          const source = String(entry.source || 'manual');
+          if (source === 'wallet_hold' && entry.migratedFrom !== 'manual') {
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '该保证金已经是钱包冻结记录，无需再次迁移' });
+          }
+          const migration = await migrateLedger37ManualMarginToWalletHold({
+            userId: input.targetUserId,
+            tagName: input.tagName,
+            marginEntryId: input.marginEntryId,
+            assetCode: String(entry.coin || 'CNY'),
+            amount,
+            sourceRecordedAt: typeof entry.createdAt === 'string' ? entry.createdAt : null,
+            sourceNotes: Array.isArray(entry.notes) ? entry.notes.map((note: any) => String(note?.content || '')) : [],
+            actorUserId: ctx.user.id,
+            transaction,
+          });
+          // 已完成的请求仅返回原结果，避免重试覆盖已解冻/部分解冻的当前状态。
+          if (!migration.alreadyCompleted) {
+            await appendLedger37WalletMarginRecord(transaction, {
+              userId: input.targetUserId,
+              tagName: input.tagName,
+              holdId: migration.hold.id,
+              assetCode: migration.assetCode,
+              amount: migration.amount,
+              createdAt: migration.hold.createdAt,
+              direction: 'freeze',
+              replaceManualEntryId: input.marginEntryId,
+              migrationNo: migration.migrationNo,
+            });
+          }
+          await transaction.commit();
+          return { success: true, migrationNo: migration.migrationNo, hold: migration.hold, alreadyCompleted: migration.alreadyCompleted };
+        } catch (error: any) {
+          try { await transaction.rollback(); } catch {}
+          throw error;
+        } finally { transaction.release?.(); }
       }),
 
     freezeLedger37MarginFromWallet: protectedProcedure

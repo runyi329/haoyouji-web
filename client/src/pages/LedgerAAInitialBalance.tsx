@@ -52,6 +52,8 @@ type MarginEntry = {
   status?: 'active' | 'released';
   releasedAmount?: string;
   remainingAmount?: string;
+  migratedFrom?: 'manual';
+  migrationNo?: string;
 };
 
 const createMarginEntry = (seed?: Partial<MarginEntry>): MarginEntry => ({
@@ -67,11 +69,13 @@ const createMarginEntry = (seed?: Partial<MarginEntry>): MarginEntry => ({
   status: seed?.status,
   releasedAmount: seed?.releasedAmount === undefined || seed?.releasedAmount === null ? undefined : String(seed.releasedAmount),
   remainingAmount: seed?.remainingAmount === undefined || seed?.remainingAmount === null ? undefined : String(seed.remainingAmount),
+  migratedFrom: seed?.migratedFrom,
+  migrationNo: seed?.migrationNo,
 });
 
 const normalizeMarginCoin = (coin: unknown): string => {
   const value = String(coin ?? '').trim().toUpperCase();
-  return value === '人民币' || value === 'RMB' || value === '' ? 'CNY' : value;
+  return value === '人民币' || value === 'RMB' || value === '元' || value === '' ? 'CNY' : value;
 };
 
 const formatSignedMarginAmount = (value: number, maximumFractionDigits = 2) => {
@@ -111,6 +115,8 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string, migra
             status: item.status === 'released' ? 'released' : item.status === 'active' ? 'active' : undefined,
             releasedAmount: item.releasedAmount === undefined || item.releasedAmount === null ? undefined : String(item.releasedAmount),
             remainingAmount: item.remainingAmount === undefined || item.remainingAmount === null ? undefined : String(item.remainingAmount),
+            migratedFrom: item.migratedFrom === 'manual' ? 'manual' : undefined,
+            migrationNo: typeof item.migrationNo === 'string' ? item.migrationNo : undefined,
           }));
       }
     } catch {
@@ -216,6 +222,7 @@ export default function LedgerAAInitialBalance() {
   );
   const [walletMarginDraft, setWalletMarginDraft] = useState<{ userId: number; tagName: string; assetCode: string; amount: string } | null>(null);
   const [walletMarginReleaseDraft, setWalletMarginReleaseDraft] = useState<{ holdId: number; assetCode: string; maxAmount: string; amount: string } | null>(null);
+  const [manualMarginMigrationDraft, setManualMarginMigrationDraft] = useState<{ userId: number; tagName: string; marginEntryId: string; assetCode: string; amount: string } | null>(null);
   // 暂停标签前先选择保证金去向；真正的暂停和解冻均在“保存”时才执行。
   const [pauseWalletHandlingDraft, setPauseWalletHandlingDraft] = useState<PauseWalletHandling | null>(null);
   const [pauseWalletPlans, setPauseWalletPlans] = useState<Record<string, PauseWalletHandling>>({});
@@ -301,6 +308,14 @@ export default function LedgerAAInitialBalance() {
       await Promise.all([refetch(), walletMarginContext.refetch()]);
     },
     onError: (error) => toast.error(error.message || '暂停后的保证金解冻失败；该标签已暂停，保证金仍保持冻结'),
+  });
+  const migrateManualMarginMutation = trpc.ledger.migrateLedger37ManualMarginToWalletHold.useMutation({
+    onSuccess: async (result) => {
+      toast.success(result.alreadyCompleted ? '该笔历史保证金已迁入钱包冻结' : '历史保证金已迁入钱包并冻结；成员可用余额未增加');
+      setManualMarginMigrationDraft(null);
+      await Promise.all([refetch(), walletMarginContext.refetch()]);
+    },
+    onError: (error) => toast.error(error.message || '历史保证金迁入失败'),
   });
 
   const [editState, setEditState] = useState<
@@ -571,6 +586,8 @@ export default function LedgerAAInitialBalance() {
           status: item.status,
           releasedAmount: item.releasedAmount,
           remainingAmount: item.remainingAmount,
+          migratedFrom: item.migratedFrom,
+          migrationNo: item.migrationNo,
         }))
         .filter((item) => item.amount !== '' && Number.isFinite(Number(item.amount)));
       balances[`${n}__margins`] = JSON.stringify(marginEntries.map((item) => ({
@@ -584,6 +601,8 @@ export default function LedgerAAInitialBalance() {
         status: item.status,
         releasedAmount: item.releasedAmount,
         remainingAmount: item.remainingAmount,
+        migratedFrom: item.migratedFrom,
+        migrationNo: item.migrationNo,
       })));
       // 旧字段保留为首笔明细，供尚未升级的历史读取入口安全兼容；新展示以 __margins 为准。
       const legacyMargin = marginEntries[0];
@@ -769,6 +788,39 @@ export default function LedgerAAInitialBalance() {
     releaseWalletMarginMutation.mutate({ ledgerId: 37, holdId: walletMarginReleaseDraft.holdId, amount: walletMarginReleaseDraft.amount });
   };
 
+  const openManualMarginMigration = (userId: number, tagName: string, marginEntry: MarginEntry) => {
+    const amount = String(marginEntry.amount ?? '').trim();
+    if (!(Number(amount) > 0)) {
+      toast.error('仅正数历史手工保证金可迁入钱包；转出或平移记录需保留线下核对');
+      return;
+    }
+    if (dirtyUsers.has(userId)) {
+      toast.error('请先保存该成员当前的标签修改，再迁入历史手工保证金');
+      return;
+    }
+    setManualMarginMigrationDraft({
+      userId,
+      tagName,
+      marginEntryId: marginEntry.id,
+      assetCode: normalizeMarginCoin(marginEntry.coin),
+      amount,
+    });
+  };
+
+  const submitManualMarginMigration = () => {
+    if (!manualMarginMigrationDraft) return;
+    if (isLocalHotPreview) {
+      toast.info('热预览仅展示历史保证金迁入冻结流程，不会写入真实钱包资金');
+      return;
+    }
+    migrateManualMarginMutation.mutate({
+      ledgerId: 37,
+      targetUserId: manualMarginMigrationDraft.userId,
+      tagName: manualMarginMigrationDraft.tagName,
+      marginEntryId: manualMarginMigrationDraft.marginEntryId,
+    });
+  };
+
   const MarginEntriesEditor = ({ userId, tagName, entry, accentColor, compact = false }: {
     userId: number;
     tagName: string;
@@ -820,10 +872,10 @@ export default function LedgerAAInitialBalance() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium" style={{ color: '#37474F' }}>钱包{isReleased ? '解冻' : '冻结'} · {normalizeMarginCoin(marginEntry.coin)}</span>
+                      <span className="text-xs font-medium" style={{ color: '#37474F' }}>{marginEntry.migratedFrom === 'manual' ? '历史手工迁入 · ' : '钱包'}{isReleased ? '解冻' : '冻结'} · {normalizeMarginCoin(marginEntry.coin)}</span>
                       <span className="text-sm font-semibold tabular-nums" style={{ color: isReleased ? '#78909C' : '#1565C0' }}>{isReleased ? '−' : ''}{isReleased ? originalFrozenAmount : remainingFrozenAmount}</span>
                     </div>
-                    <div className="mt-0.5 text-[10px]" style={{ color: '#78909C' }}>记录时间：{formatRecordedAt(marginEntry.createdAt)}{displayedCnyValue !== null ? ` · ≈ ¥${formatSignedMarginAmount(displayedCnyValue, 0)}` : ''}{isPartialRelease ? ` · 已解冻 ${marginEntry.releasedAmount}` : ''}</div>
+                    <div className="mt-0.5 text-[10px]" style={{ color: '#78909C' }}>记录时间：{formatRecordedAt(marginEntry.createdAt)}{displayedCnyValue !== null ? ` · ≈ ¥${formatSignedMarginAmount(displayedCnyValue, 0)}` : ''}{isPartialRelease ? ` · 已解冻 ${marginEntry.releasedAmount}` : ''}{marginEntry.migrationNo ? ` · 迁移单 ${marginEntry.migrationNo}` : ''}</div>
                   </div>
                   {!isReleased && (
                     <button type="button" onClick={() => openWalletMarginRelease(marginEntry.holdId, normalizeMarginCoin(marginEntry.coin), remainingFrozenAmount)} disabled={releaseWalletMarginMutation.isPending} className="h-7 rounded-lg px-2 text-[10px] font-medium disabled:opacity-50" style={{ backgroundColor: '#FFFFFF', color: '#1565C0', border: '1px solid #B8D7F3' }}>
@@ -897,12 +949,24 @@ export default function LedgerAAInitialBalance() {
                   className="min-w-0 flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
                   style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: isOutflow ? '#D32F2F' : '#222222' }}
                 />
+                {ledgerId === 37 && !isOutflow && Number(rawAmount) > 0 && (
+                  <button type="button" onClick={() => openManualMarginMigration(userId, tagName, marginEntry)} className="h-7 rounded-lg px-2 text-[10px] font-medium flex-shrink-0" style={{ backgroundColor: '#EAF3FF', color: '#1565C0', border: '1px solid #B8D7F3' }}>
+                    迁入冻结
+                  </button>
+                )}
                 {rows.length > 1 && !isLegacyReadOnly && (
                   <button type="button" aria-label="删除该笔押金" onClick={() => removeMarginEntry(userId, tagName, index)} className="w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0" style={{ color: '#EF5350', backgroundColor: '#FFF5F5' }}>
                     <Trash2 size={14} />
                   </button>
                 )}
               </div>
+              {ledgerId === 37 && manualMarginMigrationDraft?.userId === userId && manualMarginMigrationDraft.tagName === tagName && manualMarginMigrationDraft.marginEntryId === marginEntry.id && (
+                <div className="ml-10 mt-2 rounded-lg p-2.5 space-y-1.5" style={{ backgroundColor: '#F2F8FF', border: '1px solid #B8D7F3' }}>
+                  <div className="text-xs font-semibold" style={{ color: '#1565C0' }}>迁入全局钱包并冻结</div>
+                  <div className="text-[10px] leading-4" style={{ color: '#607D8B' }}>确认将本笔 {formatWalletMarginAssetBalance(Number(manualMarginMigrationDraft.amount), manualMarginMigrationDraft.assetCode)} 迁入成员全局钱包，并立刻冻结给「{tagName}」。钱包总额会纳入该笔历史资金，但可用余额不会增加；标签暂停选择解冻时才恢复可用。</div>
+                  <div className="flex justify-end gap-2"><button type="button" onClick={() => setManualMarginMigrationDraft(null)} className="h-7 px-2 text-[10px]" style={{ color: '#78909C' }}>取消</button><button type="button" onClick={submitManualMarginMigration} disabled={migrateManualMarginMutation.isPending} className="h-7 rounded-lg px-2.5 text-[10px] font-medium text-white disabled:opacity-50" style={{ backgroundColor: '#1565C0' }}>确认迁入并冻结</button></div>
+                </div>
+              )}
               <div className="ml-10 mt-1 flex items-center justify-between gap-2 text-xs">
                 <span style={{ color: '#9E9E9E' }}>记录时间：{formatRecordedAt(marginEntry.createdAt)}</span>
                 <span style={{ color: cnyValue === null ? '#B26A00' : isOutflow ? '#D32F2F' : '#757575' }}>{cnyValue === null ? '暂无可靠报价' : `≈ ¥${formatSignedMarginAmount(cnyValue, 0)}`}</span>
@@ -948,7 +1012,7 @@ export default function LedgerAAInitialBalance() {
           </span>
         </div>
         {ledgerId === 37 ? (
-          <div className="pl-10 text-xs" style={{ color: '#78909C' }}>新保证金从全局钱包冻结：总额不变、可用额减少；解冻后恢复可用。历史手工记录仅保留查看。</div>
+          <div className="pl-10 text-xs" style={{ color: '#78909C' }}>新保证金从全局钱包冻结：总额不变、可用额减少；解冻后恢复可用。历史手工保证金可逐笔迁入钱包并冻结，暂停后可按原币种解冻。</div>
         ) : (
           <div className="pl-10 text-xs" style={{ color: '#9E9E9E' }}>正数为存入，负数为转出或平移；每笔流水与备注均会保留。</div>
         )}
