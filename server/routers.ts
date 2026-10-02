@@ -365,6 +365,17 @@ async function getLedger37ManualMarginMigrationPlan(transaction: any, lockMember
 
 const ledger37CanonicalJson = (value: unknown) => JSON.stringify(value);
 const ledger37SectionHash = (value: unknown) => createHash('sha256').update(ledger37CanonicalJson(value)).digest('hex');
+/** DECIMAL 驱动层会补零到固定精度；账面核对按数值而非显示位数比较。 */
+function ledger37CanonicalAmount(value: unknown) {
+  const raw = String(value ?? '').trim();
+  const match = raw.match(/^([+-]?)(\d+)(?:\.(\d+))?$/);
+  if (!match) return raw;
+  const sign = match[1] === '-' ? '-' : '';
+  const integer = match[2].replace(/^0+(?=\d)/, '') || '0';
+  const fraction = (match[3] || '').replace(/0+$/, '');
+  const normalized = `${sign}${integer}${fraction ? `.${fraction}` : ''}`;
+  return normalized === '-0' ? '0' : normalized;
+}
 
 /** 只保留迁移绝不能改变的账面要素；钱包冻结来源、状态与审计号属于预期变化，故不纳入相等性比较。 */
 async function getLedger37MarginMigrationReconciliationSnapshot(transaction: any) {
@@ -408,7 +419,7 @@ async function getLedger37MarginMigrationReconciliationSnapshot(transaction: any
           tagName,
           id: String(entry?.id || ''),
           coin,
-          amount: String(entry?.amount ?? ''),
+          amount: ledger37CanonicalAmount(entry?.amount),
           createdAt: String(entry?.createdAt || ''),
           notes: Array.isArray(entry?.notes)
             ? entry.notes.map((note: any) => ({ content: String(note?.content || ''), createdAt: String(note?.createdAt || '') }))
