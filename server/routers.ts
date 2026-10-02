@@ -478,7 +478,13 @@ function reconcileLedger37MarginMigrationSnapshots(before: Awaited<ReturnType<ty
     beforeCount: before.counts[key as keyof typeof before.counts],
     afterCount: after.counts[key as keyof typeof after.counts],
   }));
-  return { passed: checks.every((check) => check.unchanged), checks };
+  const beforeMargins = new Map(before.snapshot.marginEntries.map((entry: any) => [`${entry.userId}|${entry.tagName}|${entry.id}`, entry]));
+  const afterMargins = new Map(after.snapshot.marginEntries.map((entry: any) => [`${entry.userId}|${entry.tagName}|${entry.id}`, entry]));
+  const firstMarginDifference = Array.from(new Set([...beforeMargins.keys(), ...afterMargins.keys()]))
+    .sort()
+    .map((key) => ({ key, before: beforeMargins.get(key), after: afterMargins.get(key) }))
+    .find((item) => ledger37CanonicalJson(item.before) !== ledger37CanonicalJson(item.after)) || null;
+  return { passed: checks.every((check) => check.unchanged), checks, firstMarginDifference };
 }
 
 // 个人账本备忘录：按账本和当前登录用户严格隔离，供 37 号账本等首页使用。
@@ -13851,7 +13857,10 @@ ${klinesSummary}
               .filter((check) => !check.unchanged)
               .map((check) => `${check.label}（${check.beforeCount}→${check.afterCount}）`)
               .join('、');
-            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: `迁移前后账面核对未通过：${failedSections || '未知项目'}；已停止并回滚本次迁移` });
+            const firstDifference = reconciliation.firstMarginDifference
+              ? `；首条差异 ${JSON.stringify(reconciliation.firstMarginDifference)}`
+              : '';
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: `迁移前后账面核对未通过：${failedSections || '未知项目'}${firstDifference}；已停止并回滚本次迁移` });
           }
           const batchNo = `B37${nanoid(18)}`;
           await transaction.execute(
