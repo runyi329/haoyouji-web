@@ -9,10 +9,11 @@ interface RechargeProps {
   hideBalance?: boolean;
   theme?: "yaban";
   onClose?: () => void;
+  onOperationSubmitted?: (operation: { amount: number; currency: "USDT"; referenceNo: string }) => void;
   ledgerId?: number;
 }
 
-export default function Recharge({ hideHeader = false, hideBalance = false, theme, onClose, ledgerId }: RechargeProps = {}) {
+export default function Recharge({ hideHeader = false, hideBalance = false, theme, onClose, onOperationSubmitted, ledgerId }: RechargeProps = {}) {
   const isYaban = theme === "yaban";
   const [, setLocation] = useLocation();
   const search = useSearch();
@@ -23,7 +24,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
   const viewAsUserId = searchParams.get('viewAs');
   const returnTo = searchParams.get('returnTo');
   const handleBack = () => {
-    if (isYaban && onClose) { onClose(); return; }
+    if (onClose) { onClose(); return; }
     if (returnTo) {
       setLocation(decodeURIComponent(returnTo));
     } else if (fromLedger && fromLedgerId) {
@@ -93,6 +94,11 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
     setSubmitting(true);
     try {
       await submitTransferMutation.mutateAsync({ orderNo: order.orderNo });
+      onOperationSubmitted?.({
+        amount: Number(order.amount),
+        currency: "USDT",
+        referenceNo: String(order.orderNo),
+      });
       setSubmitted(true);
     } catch (error: any) {
       alert(error.message || "提交失败，请重试");
@@ -379,11 +385,14 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
           </div>
           <div className="space-y-3">
             <button
-              onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}` : '/recharge/history')}
+              onClick={() => {
+                if (onClose) { onClose(); return; }
+                setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}` : '/recharge/history');
+              }}
               className="w-full py-4 rounded-xl font-semibold text-black tracking-widest"
               style={{background:'linear-gradient(135deg,#CBA471,#e8c98a,#CBA471)',boxShadow:'0 4px 20px rgba(203,164,113,0.4)'}}
             >
-              查看充值记录
+              {onClose ? '返回钱包' : '查看充值记录'}
             </button>
             <button
               onClick={() => { setOrder(null); setSubmitted(false); }}

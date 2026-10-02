@@ -366,6 +366,37 @@ export async function getLedger37FundingBalanceSummary(userId: number, assetCode
 }
 
 /**
+ * 资金型钱包冻结的可审计来源分组。
+ * 只读取仍有效的项目冻结台账，remainingAmount 与分层余额的 frozen 口径保持一致，绝不从流水备注推测。
+ */
+export async function getLedger37FundingBalanceBreakdown(userId: number, assetCode: "CNY" | "USDT") {
+  const summary = await getLedger37FundingBalanceSummary(userId, assetCode);
+  const conn = await getDbConnection();
+  if (!conn) return { ...summary, frozenByLedger: [] as Array<{ ledgerId: number; amount: number; holdCount: number }> };
+  const [rows] = await (conn as any).execute(
+    `SELECT ledger_id,
+            COALESCE(SUM(amount - COALESCE(released_amount, 0)), 0) AS amount,
+            COUNT(*) AS hold_count
+       FROM ai_wallet_project_holds
+      WHERE user_id = ?
+        AND asset_code = ?
+        AND status = 'active'
+        AND amount > COALESCE(released_amount, 0)
+      GROUP BY ledger_id
+      ORDER BY ledger_id ASC`,
+    [userId, assetCode],
+  );
+  const frozenByLedger = rowsOf(rows)
+    .map((row) => ({
+      ledgerId: Number(row.ledger_id),
+      amount: Number(row.amount || 0),
+      holdCount: Number(row.hold_count || 0),
+    }))
+    .filter((row) => Number.isInteger(row.ledgerId) && row.ledgerId > 0 && row.amount > 0);
+  return { ...summary, frozenByLedger };
+}
+
+/**
  * 在同一事务内读取分红入账完成后的钱包余额。
  * 该值仅作为分红审计快照保存，不会随之后的充值、冻结或解冻变化。
  */

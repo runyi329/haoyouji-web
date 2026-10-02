@@ -58,11 +58,12 @@ export default function MultiAssetWalletTransactions() {
   const search = useSearch();
   const query = new URLSearchParams(search);
   const viewAsUserId = restoreLedgerViewAsState(query.get("viewAs"));
-  // 从单币种明细返回时保持数字币账户选中，不回退到默认稳定币账户。
-  const walletQuery = viewAsUserId ? `?fromLedger=52&account=CRYPTO&viewAs=${viewAsUserId}` : "?fromLedger=52&account=CRYPTO";
+  const sourceLedgerId = query.get("fromLedger") === "37" ? "37" : "52";
+  // 从单币种明细返回时保持数字币账户选中，并保留来自37号或52号账本的返回上下文。
+  const walletQuery = viewAsUserId ? `?fromLedger=${sourceLedgerId}&account=CRYPTO&viewAs=${viewAsUserId}` : `?fromLedger=${sourceLedgerId}&account=CRYPTO`;
   const walletQueryForAccount = (account: "USDT" | "CNY" | "CRYPTO") => viewAsUserId
-    ? `?fromLedger=52&account=${account}&viewAs=${viewAsUserId}`
-    : `?fromLedger=52&account=${account}`;
+    ? `?fromLedger=${sourceLedgerId}&account=${account}&viewAs=${viewAsUserId}`
+    : `?fromLedger=${sourceLedgerId}&account=${account}`;
   const requestedAsset = String(query.get("asset") || "BTC").toUpperCase();
   const assetCode = (AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(requestedAsset)
     ? requestedAsset as AiWalletSettlementAsset
@@ -89,7 +90,7 @@ export default function MultiAssetWalletTransactions() {
   const handleAssetChange = (nextAsset: string) => {
     if (nextAsset === "USDT") return setLocation(`/wallet/transactions${walletQueryForAccount("USDT")}`);
     if (nextAsset === "CNY") return setLocation(`/wallet/cny-transactions${walletQueryForAccount("CNY")}`);
-    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(nextAsset)}&fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
+    setLocation(`/wallet/asset-transactions?asset=${encodeURIComponent(nextAsset)}&fromLedger=${sourceLedgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ""}`);
   };
 
   return (

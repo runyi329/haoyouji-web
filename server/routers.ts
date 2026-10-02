@@ -3595,6 +3595,13 @@ ${klinesSummary}
         return await dbRecharge.getUserCnyBalanceSummary(ctx.user.id);
       }),
 
+    // 人民币冻结来源：按真实项目冻结台账分组，不从流水备注或金额推测。
+    getCnyBalanceBreakdown: protectedProcedure
+      .input(z.object({}).optional())
+      .query(async ({ ctx }) => {
+        return await dbRecharge.getUserCnyBalanceBreakdown(ctx.user.id);
+      }),
+
     // 获取 CNY 流水记录
     getCnyHistory: protectedProcedure
       .input(z.object({ limit: z.number().optional() }).optional())

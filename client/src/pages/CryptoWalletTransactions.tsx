@@ -164,9 +164,10 @@ export default function CryptoWalletTransactions() {
   const search = useSearch();
   const query = new URLSearchParams(search);
   const viewAsUserId = restoreLedgerViewAsState(query.get("viewAs"));
+  const sourceLedgerId = query.get("fromLedger") === "37" ? "37" : "52";
   const walletQuery = viewAsUserId
-    ? "?fromLedger=52&account=CRYPTO&viewAs=" + viewAsUserId
-    : "?fromLedger=52&account=CRYPTO";
+    ? `?fromLedger=${sourceLedgerId}&account=CRYPTO&viewAs=${viewAsUserId}`
+    : `?fromLedger=${sourceLedgerId}&account=CRYPTO`;
   const queryInput = viewAsUserId ? { viewAsUserId } : undefined;
   const [period, setPeriod] = useState<PeriodFilter>("all");
   const [assetFilter, setAssetFilter] = useState("ALL");

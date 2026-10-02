@@ -8,10 +8,11 @@ interface WithdrawProps {
   hideHeader?: boolean;
   theme?: "yaban";
   onClose?: () => void;
+  onOperationSubmitted?: (operation: { amount: number; currency: "USDT"; referenceNo?: string }) => void;
   ledgerId?: number;
 }
 
-export default function Withdraw({ hideHeader, theme, onClose, ledgerId }: WithdrawProps) {
+export default function Withdraw({ hideHeader, theme, onClose, onOperationSubmitted, ledgerId }: WithdrawProps) {
   const isYaban = theme === "yaban";
   const [, setLocation] = useLocation();
   const search = useSearch();
@@ -49,8 +50,13 @@ export default function Withdraw({ hideHeader, theme, onClose, ledgerId }: Withd
   }, [selectedWalletId, blockchainWallets]);
 
   const withdrawMutation = trpc.recharge.requestSntWithdraw.useMutation({
-    onSuccess: () => {
-      toast.success("提现申请已提交，等待管理员审核");
+    onSuccess: (result: any) => {
+      onOperationSubmitted?.({
+        amount: Number(amount),
+        currency: "USDT",
+        referenceNo: String(result?.withdrawNo ?? result?.requestNo ?? result?.id ?? "") || undefined,
+      });
+      toast.success("提现申请已提交，等待审核");
       setAmount("");
       balanceQuery.refetch();
       withdrawalsQuery.refetch();
@@ -93,7 +99,7 @@ export default function Withdraw({ hideHeader, theme, onClose, ledgerId }: Withd
   const withdrawals = (withdrawalsQuery.data || []) as any[];
 
   const handleBack = () => {
-    if (isYaban && onClose) { onClose(); return; }
+    if (onClose) { onClose(); return; }
     if (fromLedgerId) {
       setLocation(`/recharge?from=ledger&ledgerId=${fromLedgerId}`);
     } else {
@@ -202,7 +208,7 @@ export default function Withdraw({ hideHeader, theme, onClose, ledgerId }: Withd
               <ul className="text-xs text-gray-500 space-y-1.5">
                 <li>· 最低提现金额为 10 USDT</li>
                 <li>· 提现将发送到您选择的区块链钱包地址</li>
-                <li>· 提现申请提交后需要管理员审核</li>
+                <li>· 提现申请提交后等待审核</li>
                 <li>· 审核通过后将在 1-3 个工作日内到账</li>
                 <li>· 请确保收款钱包地址准确无误，转错地址无法找回</li>
               </ul>
@@ -428,7 +434,7 @@ export default function Withdraw({ hideHeader, theme, onClose, ledgerId }: Withd
             <ul className="text-xs text-gray-500 space-y-1.5">
               <li>• 最低提现金额为 10 USDT</li>
               <li>• 提现将发送到您选择的区块链钱包地址</li>
-              <li>• 提现申请提交后需要管理员审核</li>
+              <li>• 提现申请提交后等待审核</li>
               <li>• 审核通过后将在 1-3 个工作日内到账</li>
               <li>• 请确保收款钱包地址准确无误，转错地址无法找回</li>
             </ul>

@@ -2225,6 +2225,12 @@ export async function getUserCnyBalanceSummary(userId: number): Promise<{ total:
   return await getLedger37FundingBalanceSummary(userId, 'CNY');
 }
 
+/** 人民币可用与冻结来源：仅返回真实仍有效的项目冻结台账分组。 */
+export async function getUserCnyBalanceBreakdown(userId: number) {
+  const { getLedger37FundingBalanceBreakdown } = await import('./ledger37-wallet');
+  return await getLedger37FundingBalanceBreakdown(userId, 'CNY');
+}
+
 /** 获取用户 CNY 流水记录（af_manual_balances WHERE note LIKE '[CNY]%'） */
 export async function getUserCnyHistory(userId: number, limit = 50): Promise<any[]> {
   const conn = await getDbConnection();
