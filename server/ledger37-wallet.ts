@@ -652,6 +652,162 @@ export async function migrateLedger37ManualMarginToWalletHold(params: {
 }
 
 /**
+ * 直接删除一笔“历史手工保证金迁入并冻结”。
+ * 仅允许仍全额冻结、从未解冻或平移的迁入记录：同步移除迁入钱包流水与冻结台账，
+ * 但在 ledger37_wallet_action_reversals 保留后台审计，避免形成无痕资金删除。
+ */
+export async function deleteLedger37ManualMarginMigration(params: {
+  holdId: number;
+  expectedUserId: number;
+  expectedTagName: string;
+  expectedMarginEntryId: string;
+  expectedAmount: string;
+  reason: string;
+  actorUserId: number;
+  transaction?: any;
+}): Promise<{
+  holdId: number;
+  migrationNo: string;
+  marginEntryId: string;
+  userId: number;
+  tagName: string;
+  assetCode: Ledger37WalletAsset;
+  amount: string;
+  walletEntryId: number;
+  auditNo: string;
+}> {
+  await ensureLedger37WalletInfrastructure();
+  const holdId = Number(params.holdId);
+  const expectedUserId = Number(params.expectedUserId);
+  const expectedTagName = String(params.expectedTagName || '').trim().slice(0, 160);
+  const expectedMarginEntryId = String(params.expectedMarginEntryId || '').trim().slice(0, 160);
+  const expectedAmount = decimalText(params.expectedAmount);
+  const reason = String(params.reason || '').trim().slice(0, 240);
+  if (!Number.isInteger(holdId) || holdId <= 0 || !Number.isInteger(expectedUserId) || expectedUserId <= 0 || !expectedTagName || !expectedMarginEntryId || !reason) {
+    throw new Error('删除历史保证金迁入的核对参数不完整');
+  }
+
+  const ownConnection = !params.transaction;
+  const conn = params.transaction || await getDbTransactionConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const transaction = conn as any;
+  try {
+    if (ownConnection) await transaction.beginTransaction();
+    const [migrationRows] = await transaction.execute(
+      `SELECT m.*, h.user_id AS hold_user_id, h.tag_name AS hold_tag_name,
+              h.asset_code AS hold_asset_code, h.amount AS hold_amount,
+              h.released_amount AS hold_released_amount, h.status AS hold_status
+       FROM ai_wallet_project_hold_migrations m
+       JOIN ai_wallet_project_holds h ON h.id = m.hold_id
+       WHERE m.ledger_id = ? AND m.hold_id = ?
+       LIMIT 1 FOR UPDATE`,
+      [LEDGER_37_ID, holdId],
+    );
+    const migration = rowsOf(migrationRows)[0];
+    if (!migration) throw new Error('未找到该历史保证金迁入记录，可能已被删除或变更');
+
+    const assetCode = normalizeLedger37WalletAsset(migration.asset_code);
+    const amount = decimalText(String(migration.amount));
+    const userId = Number(migration.user_id);
+    const tagName = String(migration.tag_name || '').trim();
+    const marginEntryId = String(migration.margin_entry_id || '').trim();
+    const walletEntryId = Number(migration.wallet_entry_id);
+    if (
+      userId !== expectedUserId
+      || tagName !== expectedTagName
+      || marginEntryId !== expectedMarginEntryId
+      || Math.abs(Number(amount) - Number(expectedAmount)) > 0.00000001
+      || Number(migration.hold_user_id) !== expectedUserId
+      || String(migration.hold_tag_name || '').trim() !== expectedTagName
+      || String(migration.hold_asset_code || '').trim().toUpperCase() !== assetCode
+      || Math.abs(Number(migration.hold_amount) - Number(expectedAmount)) > 0.00000001
+    ) {
+      throw new Error('迁入记录已变化，已阻止删除；请刷新后重新核对');
+    }
+    if (String(migration.hold_status) !== 'active' || Math.abs(Number(migration.hold_released_amount || 0)) > 0.00000001) {
+      throw new Error('该笔保证金已发生解冻，不能直接删除；请使用撤回或冲正流程');
+    }
+
+    const [releaseRows] = await transaction.execute(
+      'SELECT id FROM ai_wallet_project_hold_releases WHERE hold_id = ? LIMIT 1 FOR UPDATE',
+      [holdId],
+    );
+    if (rowsOf(releaseRows)[0]) throw new Error('该笔保证金已有解冻流水，不能直接删除；请使用撤回或冲正流程');
+    const [transferRows] = await transaction.execute(
+      'SELECT id FROM ai_wallet_project_hold_transfers WHERE source_hold_id = ? OR target_hold_id = ? LIMIT 1 FOR UPDATE',
+      [holdId, holdId],
+    );
+    if (rowsOf(transferRows)[0]) throw new Error('该笔保证金已参与标签平移，不能直接删除；请使用撤回或冲正流程');
+
+    const [existingAuditRows] = await transaction.execute(
+      `SELECT id FROM ledger37_wallet_action_reversals
+       WHERE action_kind = 'manual_margin_migration_delete' AND source_record_id = ?
+       LIMIT 1 FOR UPDATE`,
+      [holdId],
+    );
+    if (rowsOf(existingAuditRows)[0]) throw new Error('该笔历史保证金迁入已删除，请勿重复操作');
+    if (!Number.isInteger(walletEntryId) || walletEntryId <= 0) throw new Error('迁入钱包流水缺失，不能直接删除');
+
+    if (isFundingAsset(assetCode)) {
+      const [walletRows] = await transaction.execute(
+        `SELECT id FROM af_manual_balances
+         WHERE id = ? AND ledger_id = ? AND user_id = ?
+           AND amount = CAST(? AS DECIMAL(36,18))
+           AND COALESCE(note, '') LIKE '%历史手工保证金迁入并冻结%'
+         LIMIT 1 FOR UPDATE`,
+        [walletEntryId, LEDGER_37_ID, userId, amount],
+      );
+      if (!rowsOf(walletRows)[0]) throw new Error('原钱包迁入流水已变化，不能直接删除');
+    } else {
+      const [walletRows] = await transaction.execute(
+        `SELECT id FROM ai_wallet_asset_entries
+         WHERE id = ? AND user_id = ? AND asset_code = ?
+           AND amount = CAST(? AS DECIMAL(36,18)) AND source_ledger_id = ?
+           AND event_type = 'admin_adjustment'
+         LIMIT 1 FOR UPDATE`,
+        [walletEntryId, userId, assetCode, amount, LEDGER_37_ID],
+      );
+      if (!rowsOf(walletRows)[0]) throw new Error('原数字资产迁入流水已变化，不能直接删除');
+    }
+
+    const auditNo = `D37${Date.now().toString(36).toUpperCase()}${randomBytes(4).toString('hex').toUpperCase()}`;
+    const requestId = `MDD37_${holdId}_${randomBytes(6).toString('hex')}`;
+    await transaction.execute(
+      `INSERT INTO ledger37_wallet_action_reversals
+        (reversal_no, request_id, action_kind, source_record_id, mode, user_id, asset_code, amount, source_wallet_entry_id, actor_user_id, detail_json)
+       VALUES (?, ?, 'manual_margin_migration_delete', ?, 'delete', ?, ?, CAST(? AS DECIMAL(36,18)), ?, ?, ?)`,
+      [auditNo, requestId, holdId, userId, assetCode, amount, walletEntryId, params.actorUserId, JSON.stringify({
+        migrationNo: String(migration.migration_no),
+        marginEntryId,
+        tagName,
+        reason,
+        sourceRecordedAt: migration.source_recorded_at ?? null,
+        sourceNotes: migration.source_notes ?? null,
+      })],
+    );
+    await transaction.execute('DELETE FROM ai_wallet_project_hold_migrations WHERE id = ? LIMIT 1', [Number(migration.id)]);
+    await transaction.execute(
+      `DELETE FROM ai_wallet_project_holds
+       WHERE id = ? AND status = 'active' AND released_amount = 0
+       LIMIT 1`,
+      [holdId],
+    );
+    if (isFundingAsset(assetCode)) {
+      await transaction.execute('DELETE FROM af_manual_balances WHERE id = ? LIMIT 1', [walletEntryId]);
+    } else {
+      await transaction.execute('DELETE FROM ai_wallet_asset_entries WHERE id = ? LIMIT 1', [walletEntryId]);
+    }
+    if (ownConnection) await transaction.commit();
+    return { holdId, migrationNo: String(migration.migration_no), marginEntryId, userId, tagName, assetCode, amount, walletEntryId, auditNo };
+  } catch (error) {
+    if (ownConnection) try { await transaction.rollback(); } catch {}
+    throw error;
+  } finally {
+    if (ownConnection) transaction.release?.();
+  }
+}
+
+/**
  * 历史手工保证金的标签平移：来源正数保证金只入钱包一次，再从来源冻结转至目标冻结。
  * 目标标签的“转入”正数仅承接已有冻结，绝不重复给全局钱包加余额。
  */

@@ -599,8 +599,50 @@ export default function LedgerAAInitialBalance() {
     updateEntry(userId, tagName, next);
   };
 
+  const allocationValueChanged = (before: unknown, after: unknown) => {
+    const beforeText = before === undefined || before === null ? '' : String(before).trim();
+    const afterText = after === undefined || after === null ? '' : String(after).trim();
+    if (!beforeText && !afterText) return false;
+    const beforeNumber = Number(beforeText);
+    const afterNumber = Number(afterText);
+    if (Number.isFinite(beforeNumber) && Number.isFinite(afterNumber)) return Math.abs(beforeNumber - afterNumber) >= 0.00000001;
+    return beforeText !== afterText;
+  };
+
+  // 37号：只有本次改动过初始金额/比例/实际权益的非股票标签才进行三项完整校验，
+  // 让未改动的历史遗留数据不妨碍其他标签的维护；服务端同步执行同一规则兜底。
+  const getChangedAllocationError = (userId: number, userEdit: Record<string, TagEntry>) => {
+    if (ledgerId !== 37) return null;
+    const originalBalances = ((allBalancesData as any)?.balancesMap?.[userId] ?? {}) as Record<string, unknown>;
+    for (const category of categories) {
+      if (isStockPortfolioTag(category)) continue;
+      const tagName = category.name;
+      const entry = userEdit[tagName] ?? defaultEntry();
+      const changed = allocationValueChanged(originalBalances[tagName], entry.amount)
+        || allocationValueChanged(originalBalances[`${tagName}__ratio`], entry.ratio)
+        || allocationValueChanged(originalBalances[`${tagName}__targetAmount`], entry.targetAmount);
+      if (!changed) continue;
+      const amount = Number(entry.amount);
+      const ratio = Number(entry.ratio);
+      const actualAmount = Number(entry.targetAmount);
+      if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(ratio) || ratio <= 0 || ratio > 100 || !Number.isFinite(actualAmount) || actualAmount <= 0) {
+        return `「${tagName}」需同时填写有效的初始金额、比例（0–100%）和实际权益`;
+      }
+      const expectedActual = amount * ratio / 100;
+      if (Math.abs(actualAmount - expectedActual) > 0.01) {
+        return `「${tagName}」实际权益应为 ¥${expectedActual.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}（初始金额 × 比例）`;
+      }
+    }
+    return null;
+  };
+
   const handleSaveMember = async (userId: number) => {
     const userEdit = editState[userId] ?? {};
+    const allocationError = getChangedAllocationError(userId, userEdit);
+    if (allocationError) {
+      toast.error(allocationError);
+      return;
+    }
     const balances: Record<string, number | string> = {};
     for (const cat of categories) {
       const n = cat.name;

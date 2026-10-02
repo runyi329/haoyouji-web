@@ -91,6 +91,7 @@ import {
   listLedger37WalletHolds,
   releaseLedger37WalletHold,
   migrateLedger37ManualMarginToWalletHold,
+  deleteLedger37ManualMarginMigration,
   transferLedger37ManualMarginWalletHold,
   normalizeLedger37WalletAsset,
   createLedger37Dividend,
@@ -103,6 +104,62 @@ import {
 function asRows(result: any): any[] {
   if (Array.isArray(result?.[0])) return result[0];
   return Array.isArray(result) ? result : [];
+}
+
+function readLedger37PositiveNumber(value: unknown): number | null {
+  if (value === undefined || value === null || String(value).trim() === '') return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
+}
+
+function sameLedger37Number(left: unknown, right: unknown): boolean {
+  const leftText = left === undefined || left === null ? '' : String(left).trim();
+  const rightText = right === undefined || right === null ? '' : String(right).trim();
+  if (!leftText && !rightText) return true;
+  const leftNumber = Number(leftText);
+  const rightNumber = Number(rightText);
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return Math.abs(leftNumber - rightNumber) < 0.00000001;
+  return leftText === rightText;
+}
+
+/**
+ * 37号非股票标签的初始金额、比例、实际权益必须完整且严格满足公式。
+ * 仅阻止本次实际修改过这三项的标签，避免遗留不完整配置阻塞其他字段维护。
+ */
+async function assertLedger37AllocationTripletOnChange(params: {
+  targetUserId: number;
+  actorUserId: number;
+  balances: Record<string, number | string>;
+}) {
+  const previous = (await dbLedger.getMyInitialBalances(LEDGER_37_ID, params.targetUserId)) as Record<string, unknown>;
+  const categories = await dbLedger.getLedgerCategories(LEDGER_37_ID, params.actorUserId, undefined, null) as any[];
+  for (const category of categories) {
+    if (category?.isDefault || category?.accountingMode === 'stock_portfolio' || category?.accounting_mode === 'stock_portfolio') continue;
+    const tagName = String(category?.name || '').trim();
+    if (!tagName) continue;
+    const keys = [tagName, `${tagName}__ratio`, `${tagName}__targetAmount`];
+    const hasTripletChange = keys.some((key) => Object.prototype.hasOwnProperty.call(params.balances, key)
+      && !sameLedger37Number(previous[key], params.balances[key]));
+    if (!hasTripletChange) continue;
+
+    const effective = (key: string) => Object.prototype.hasOwnProperty.call(params.balances, key) ? params.balances[key] : previous[key];
+    const amount = readLedger37PositiveNumber(effective(tagName));
+    const ratio = readLedger37PositiveNumber(effective(`${tagName}__ratio`));
+    const actualAmount = readLedger37PositiveNumber(effective(`${tagName}__targetAmount`));
+    if (amount === null || ratio === null || ratio > 100 || actualAmount === null) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `「${tagName}」保存需要同时填写有效的初始金额、比例（0–100%）和实际权益`,
+      });
+    }
+    const expectedActual = amount * ratio / 100;
+    if (Math.abs(actualAmount - expectedActual) > 0.01) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `「${tagName}」实际权益必须等于初始金额 × 比例（应为 ${expectedActual.toFixed(2)}）`,
+      });
+    }
+  }
 }
 
 async function appendLedger37WalletMarginRecord(transaction: any, params: {
@@ -13847,6 +13904,13 @@ ${klinesSummary}
         if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可设置初始金额' });
         }
+        if (input.ledgerId === LEDGER_37_ID) {
+          await assertLedger37AllocationTripletOnChange({
+            targetUserId: input.targetUserId,
+            actorUserId: ctx.user.id,
+            balances: input.balances,
+          });
+        }
         await dbLedger.updateMyInitialBalances(input.ledgerId, input.targetUserId, input.balances);
 
         // 旧版保证金备注按“用户 + 标签”共享。新版已归入首笔押金的 notes，
@@ -13867,6 +13931,85 @@ ${klinesSummary}
           }
         }
         return { success: true };
+      }),
+
+    // 37号：纠正一笔“历史手工保证金迁入并冻结”的录入错误。
+    // 仅胡大叔可执行；仅限未发生解冻/平移的迁入记录。用户可见流水和配置删除，但后台保留审计。
+    deleteLedger37ManualMarginMigration: protectedProcedure
+      .input(z.object({
+        targetUserId: z.number().int().positive(),
+        tagName: z.string().trim().min(1).max(160),
+        holdId: z.number().int().positive(),
+        marginEntryId: z.string().trim().min(1).max(160),
+        amount: z.string().trim().regex(/^\d+(?:\.\d+)?$/),
+        reason: z.string().trim().min(3).max(240),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '热预览禁止删除真实钱包或保证金记录' });
+        }
+        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅胡大叔可删除错误的历史保证金迁入' });
+        }
+        await ensureLedger37WalletInfrastructure();
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const transaction = conn as any;
+        try {
+          await transaction.beginTransaction();
+          const [memberRows] = await transaction.execute(
+            `SELECT initial_balances FROM ledger_members
+             WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
+            [LEDGER_37_ID, input.targetUserId],
+          );
+          const member = asRows(memberRows)[0];
+          if (!member) throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本成员' });
+          let balances: Record<string, any> = {};
+          try { balances = member.initial_balances ? JSON.parse(String(member.initial_balances)) : {}; } catch { balances = {}; }
+          const marginKey = `${input.tagName}__margins`;
+          let entries: any[] = [];
+          try { entries = Array.isArray(balances[marginKey]) ? balances[marginKey] : JSON.parse(String(balances[marginKey] || '[]')); } catch { entries = []; }
+          const sourceEntry = entries.find((entry) => String(entry?.id || '') === input.marginEntryId);
+          if (!sourceEntry || sourceEntry?.source !== 'wallet_hold' || Number(sourceEntry?.holdId) !== input.holdId || sourceEntry?.migratedFrom !== 'manual') {
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '标签历史保证金记录已变化，已阻止删除；请刷新后重新核对' });
+          }
+          const deleted = await deleteLedger37ManualMarginMigration({
+            holdId: input.holdId,
+            expectedUserId: input.targetUserId,
+            expectedTagName: input.tagName,
+            expectedMarginEntryId: input.marginEntryId,
+            expectedAmount: input.amount,
+            reason: input.reason,
+            actorUserId: ctx.user.id,
+            transaction,
+          });
+          const remainingEntries = entries.filter((entry) => String(entry?.id || '') !== input.marginEntryId && Number(entry?.holdId) !== input.holdId);
+          if (remainingEntries.length > 0) balances[marginKey] = JSON.stringify(remainingEntries);
+          else delete balances[marginKey];
+          // 此操作针对“原始初始金额录入错误”：关联的初始金额、比例、实际权益及旧单笔兼容字段一起清除。
+          for (const key of [
+            input.tagName,
+            `${input.tagName}__ratio`,
+            `${input.tagName}__targetAmount`,
+            `${input.tagName}__margin`,
+            `${input.tagName}__marginCoin`,
+            `${input.tagName}__marginCreatedAt`,
+            `${input.tagName}__marginNotes`,
+          ]) delete balances[key];
+          await transaction.execute(
+            `UPDATE ledger_members
+             SET initial_balances = ?, updatedAt = NOW()
+             WHERE ledgerId = ? AND userId = ?`,
+            [JSON.stringify(balances), LEDGER_37_ID, input.targetUserId],
+          );
+          await transaction.commit();
+          return { success: true, ...deleted };
+        } catch (error) {
+          try { await transaction.rollback(); } catch {}
+          throw error;
+        } finally {
+          transaction.release?.();
+        }
       }),
 
     // 37号账本保证金统一从全局钱包冻结，不允许新建手工余额记录。
