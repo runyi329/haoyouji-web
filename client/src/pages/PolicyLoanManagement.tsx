@@ -125,6 +125,18 @@ function formatMonthDay(date: Date) {
   return `${date.getUTCMonth() + 1}月${date.getUTCDate()}日`;
 }
 
+function huabeiBillingDateKey(date: Date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function formatHuabeiBillingDate(date: Date) {
+  return `${date.getUTCFullYear()}年${date.getUTCMonth() + 1}月${date.getUTCDate()}日`;
+}
+
+function huabeiStatementKey(policyLoanId: number, billingDate: string) {
+  return `${policyLoanId}:${billingDate}`;
+}
+
 // 统一日期字段为 HTML date 输入框和 MySQL DATE 均可识别的 YYYY-MM-DD。
 // mysql2 在部分环境会把 DATE 返回为 Date 对象，直接 String 后会变成如 "Mon Aug 17" 的浏览器文本。
 function toDateInputValue(value: unknown): string {
@@ -193,6 +205,11 @@ export default function PolicyLoanManagement({
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [serviceContact, setServiceContact] = useState<LoanServiceContact | null>(null);
   const [showLoanMenuId, setShowLoanMenuId] = useState<number | null>(null);
+  const [activeHuabeiBillingLoan, setActiveHuabeiBillingLoan] = useState<any | null>(null);
+  const [showHuabeiStatementSheet, setShowHuabeiStatementSheet] = useState(false);
+  const [showHuabeiPaymentSheet, setShowHuabeiPaymentSheet] = useState(false);
+  const [huabeiStatementDraft, setHuabeiStatementDraft] = useState('');
+  const [huabeiPaymentDraft, setHuabeiPaymentDraft] = useState('');
   const isHuabei = loanType === "huabei";
   const isHousingFund = loanType === "housing_fund";
   const loanLabel = isHuabei ? "花呗" : isHousingFund ? "公积金贷款" : "保单贷款";
@@ -201,6 +218,13 @@ export default function PolicyLoanManagement({
 
   const { data: myLoans = [], refetch: refetchMy } = trpc.policyLoan.list.useQuery({ loanType }, { enabled: !adminMode });
   const { data: allLoans = [], refetch: refetchAll } = trpc.policyLoan.adminListAll.useQuery({ loanType }, { enabled: adminMode });
+  const huabeiBillingEntriesQuery = trpc.policyLoan.huabeiBillingStatementEntries.useQuery(undefined, { enabled: isHuabei });
+  const huabeiStatementsByCycle = useMemo(() => new Map(
+    ((huabeiBillingEntriesQuery.data || []) as any[]).map((statement) => [
+      huabeiStatementKey(Number(statement.policy_loan_id), String(statement.billing_date).slice(0, 10)),
+      statement,
+    ])
+  ), [huabeiBillingEntriesQuery.data]);
   const refetch = () => { refetchMy(); refetchAll(); };
   const sourceLoans = ((adminMode ? allLoans : myLoans) as any[]).filter((loan) => {
     if (adminMode && filterUserId && Number(loan.user_id) !== filterUserId) return false;
@@ -239,6 +263,101 @@ export default function PolicyLoanManagement({
     onSuccess: () => { toast.success("已删除"); refetch(); setDeleteId(null); setDeleteStep(1); },
     onError: (e) => toast.error(`删除失败: ${e.message || ""}`),
   });
+
+  const activeHuabeiCycle = useMemo(
+    () => activeHuabeiBillingLoan ? buildHuabeiCycle(activeHuabeiBillingLoan.huabei_billing_day, activeHuabeiBillingLoan.huabei_repayment_day) : null,
+    [activeHuabeiBillingLoan]
+  );
+  const activeHuabeiBillingDate = activeHuabeiCycle ? huabeiBillingDateKey(activeHuabeiCycle.currentBill) : '';
+  const activeHuabeiStatement = activeHuabeiBillingLoan && activeHuabeiBillingDate
+    ? huabeiStatementsByCycle.get(huabeiStatementKey(Number(activeHuabeiBillingLoan.id), activeHuabeiBillingDate)) as any
+    : undefined;
+  const activeHuabeiStatementAmount = Number(activeHuabeiStatement?.statement_amount || 0);
+  const activeHuabeiPaidAmount = Number(activeHuabeiStatement?.paid_amount || 0);
+  const activeHuabeiRemainingAmount = Math.max(0, activeHuabeiStatementAmount - activeHuabeiPaidAmount);
+
+  const saveHuabeiStatementMutation = trpc.policyLoan.upsertHuabeiBillingStatement.useMutation({
+    onSuccess: () => {
+      void huabeiBillingEntriesQuery.refetch();
+      toast.success('本期花呗账单已保存');
+    },
+    onError: (error) => toast.error(error.message || '花呗账单保存失败'),
+  });
+  const saveHuabeiPaymentMutation = trpc.policyLoan.upsertHuabeiBillingPayment.useMutation({
+    onSuccess: () => {
+      void huabeiBillingEntriesQuery.refetch();
+      toast.success('本期花呗已还金额已保存');
+    },
+    onError: (error) => toast.error(error.message || '花呗还款保存失败'),
+  });
+
+  const closeHuabeiBillingSheets = () => {
+    setShowHuabeiStatementSheet(false);
+    setShowHuabeiPaymentSheet(false);
+    setActiveHuabeiBillingLoan(null);
+    setHuabeiStatementDraft('');
+    setHuabeiPaymentDraft('');
+  };
+  const openHuabeiStatementSheet = (loan: any) => {
+    const cycle = buildHuabeiCycle(loan.huabei_billing_day, loan.huabei_repayment_day);
+    if (!cycle) {
+      toast.error('请先在花呗额度设置中填写账单日和最后还款日');
+      return;
+    }
+    const billingDate = huabeiBillingDateKey(cycle.currentBill);
+    const savedStatement = huabeiStatementsByCycle.get(huabeiStatementKey(Number(loan.id), billingDate)) as any;
+    setActiveHuabeiBillingLoan(loan);
+    setHuabeiStatementDraft(savedStatement ? String(Number(savedStatement.statement_amount || 0)) : loan.outstanding_balance != null ? String(Number(loan.outstanding_balance)) : '');
+    setHuabeiPaymentDraft(savedStatement ? String(Number(savedStatement.paid_amount || 0)) : '');
+    setShowHuabeiPaymentSheet(false);
+    setShowHuabeiStatementSheet(true);
+  };
+  const openHuabeiPaymentSheet = (loan: any) => {
+    const cycle = buildHuabeiCycle(loan.huabei_billing_day, loan.huabei_repayment_day);
+    if (!cycle) {
+      toast.error('请先在花呗额度设置中填写账单日和最后还款日');
+      return;
+    }
+    const billingDate = huabeiBillingDateKey(cycle.currentBill);
+    const savedStatement = huabeiStatementsByCycle.get(huabeiStatementKey(Number(loan.id), billingDate)) as any;
+    if (!savedStatement) {
+      toast.error('请先在账单日录入本期账单金额');
+      return;
+    }
+    setActiveHuabeiBillingLoan(loan);
+    setHuabeiStatementDraft(String(Number(savedStatement.statement_amount || 0)));
+    setHuabeiPaymentDraft(String(Number(savedStatement.paid_amount || 0)));
+    setShowHuabeiStatementSheet(false);
+    setShowHuabeiPaymentSheet(true);
+  };
+  const saveHuabeiStatement = () => {
+    const statementAmount = Number(huabeiStatementDraft);
+    if (!activeHuabeiBillingLoan || !activeHuabeiBillingDate || !huabeiStatementDraft.trim() || Number.isNaN(statementAmount) || statementAmount < 0) {
+      toast.error('请输入不小于 0 的本期账单金额');
+      return;
+    }
+    saveHuabeiStatementMutation.mutate({
+      policyLoanId: Number(activeHuabeiBillingLoan.id),
+      billingDate: activeHuabeiBillingDate,
+      statementAmount,
+    });
+  };
+  const saveHuabeiPayment = () => {
+    const paidAmount = Number(huabeiPaymentDraft);
+    if (!activeHuabeiBillingLoan || !activeHuabeiBillingDate || !huabeiPaymentDraft.trim() || Number.isNaN(paidAmount) || paidAmount < 0) {
+      toast.error('请输入不小于 0 的本期累计已还金额');
+      return;
+    }
+    if (paidAmount > activeHuabeiStatementAmount) {
+      toast.error('已还金额不能超过本期账单应还金额');
+      return;
+    }
+    saveHuabeiPaymentMutation.mutate({
+      policyLoanId: Number(activeHuabeiBillingLoan.id),
+      billingDate: activeHuabeiBillingDate,
+      paidAmount,
+    });
+  };
 
   const sortedLoans = useMemo(() => [...sourceLoans].sort((a, b) => {
     // 默认与“按到期日”均采用最近到期优先；没有到期日的贷款统一排在末尾。
@@ -327,18 +446,28 @@ export default function PolicyLoanManagement({
         <p className="text-xs mt-1">点击右上角 + 添加</p>
       </div>) : sortedLoans.map((loan: any) => {
         const totalLimit = Number(loan.loan_amount || 0);
-        const balance = loan.outstanding_balance != null ? Number(loan.outstanding_balance) : totalLimit;
+        const huabeiCycle = isHuabei ? buildHuabeiCycle(loan.huabei_billing_day, loan.huabei_repayment_day) : null;
+        const huabeiBillingDate = huabeiCycle ? huabeiBillingDateKey(huabeiCycle.currentBill) : '';
+        const huabeiCurrentStatement = huabeiBillingDate
+          ? huabeiStatementsByCycle.get(huabeiStatementKey(Number(loan.id), huabeiBillingDate)) as any
+          : undefined;
+        const huabeiStatementAmount = Number(huabeiCurrentStatement?.statement_amount || 0);
+        const huabeiPaidAmount = Number(huabeiCurrentStatement?.paid_amount || 0);
+        const huabeiRemainingAmount = Math.max(0, huabeiStatementAmount - huabeiPaidAmount);
+        // 未登记的新账期继续展示原档案内的历史“本期应还”；一旦登记，以独立账期记录为准。
+        const balance = isHuabei && huabeiCurrentStatement
+          ? huabeiRemainingAmount
+          : loan.outstanding_balance != null ? Number(loan.outstanding_balance) : totalLimit;
         const available = Math.max(0, totalLimit - balance);
         const usedPercent = totalLimit > 0 ? Math.min(100, Math.round((balance / totalLimit) * 100)) : 0;
         const annual = balance * Number(loan.annual_rate || 0) / 100;
-        const huabeiCycle = isHuabei ? buildHuabeiCycle(loan.huabei_billing_day, loan.huabei_repayment_day) : null;
-        // 花呗尚未有独立账单/还款流水：使用已保存的“本期应还”作为本期账单是否登记的真实来源。
-        // 有应还金额即本期账单已录入（绿点）；应还为 0 视为已还清（绿点），大于 0 为待还（红点）。
-        const hasHuabeiBillingRecord = loan.outstanding_balance != null;
-        const huabeiRepaymentStatus = !hasHuabeiBillingRecord ? null : (
-          balance <= 0
+        const hasHuabeiBillingRecord = !!huabeiCurrentStatement;
+        const huabeiRepaymentStatus = !huabeiCurrentStatement ? null : (
+          huabeiRemainingAmount <= 0
             ? { className: 'bg-emerald-500', label: '本期已还清' }
-            : { className: 'bg-rose-500', label: '本期待还' }
+            : huabeiPaidAmount > 0
+              ? { className: 'bg-amber-500', label: '本期部分已还' }
+              : { className: 'bg-rose-500', label: '本期待还' }
         );
         if (isHuabei) {
           return (
@@ -368,16 +497,16 @@ export default function PolicyLoanManagement({
               {/* 白色账期区：与信用卡一致，固定为四列三行信息层级。 */}
               <div className="grid grid-cols-4 divide-x divide-[#D7E9FF] bg-[#F8FBFF] py-2 text-center" style={{ borderTop: '1px solid #D7E9FF' }}>
                 {huabeiCycle ? <>
-                  <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1">
-                    <p className="flex items-center justify-center gap-1 text-[11px] leading-4 text-slate-400"><span>账单日</span><span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${hasHuabeiBillingRecord ? 'bg-emerald-500' : 'border border-amber-500 bg-transparent'}`} title={hasHuabeiBillingRecord ? '本期账单已登记' : '本期待登记'} aria-label={hasHuabeiBillingRecord ? '本期账单已登记' : '本期待登记'} /></p>
+                  <button type="button" onClick={() => openHuabeiStatementSheet(loan)} className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1 text-center transition-colors active:bg-[#1677FF]/[0.06]" aria-label="打开本期花呗账单录入">
+                    <p className="flex items-center justify-center gap-1 text-[11px] leading-4 text-slate-400"><span className="inline-block border-b border-dashed border-[#1677FF]/60 pb-px">账单日</span><span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${hasHuabeiBillingRecord ? 'bg-emerald-500' : 'border border-amber-500 bg-transparent'}`} title={hasHuabeiBillingRecord ? '本期账单已登记' : '本期待登记'} aria-label={hasHuabeiBillingRecord ? '本期账单已登记' : '本期待登记'} /></p>
                     <p className="truncate text-sm font-bold leading-5 text-slate-800">{formatMonthDay(huabeiCycle.currentBill)}</p>
                     <p className={`text-[10px] leading-4 ${huabeiCycle.hasActiveRepaymentCycle ? 'text-slate-400' : huabeiCycle.billingDays <= 3 ? 'text-red-500' : huabeiCycle.billingDays <= 7 ? 'text-orange-500' : 'text-slate-400'}`}>{huabeiCycle.hasActiveRepaymentCycle ? (huabeiCycle.billingIsToday ? '今天出账' : '本期已出账') : (huabeiCycle.billingDays === 0 ? '今天' : `${huabeiCycle.billingDays}天后`)}</p>
-                  </div>
-                  <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1">
-                    <p className="flex items-center justify-center gap-1 text-[11px] leading-4 text-slate-400"><span>最后还款日</span>{huabeiRepaymentStatus && <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${huabeiRepaymentStatus.className}`} title={huabeiRepaymentStatus.label} aria-label={huabeiRepaymentStatus.label} />}</p>
+                  </button>
+                  <button type="button" onClick={() => openHuabeiPaymentSheet(loan)} className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1 text-center transition-colors active:bg-[#1677FF]/[0.06]" aria-label="打开本期花呗还款录入">
+                    <p className="flex items-center justify-center gap-1 text-[11px] leading-4 text-slate-400"><span className="inline-block border-b border-dashed border-[#1677FF]/60 pb-px">最后还款日</span>{huabeiRepaymentStatus && <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${huabeiRepaymentStatus.className}`} title={huabeiRepaymentStatus.label} aria-label={huabeiRepaymentStatus.label} />}</p>
                     <p className="truncate text-sm font-bold leading-5 text-slate-800">{formatMonthDay(huabeiCycle.currentDue)}</p>
                     <p className={`text-[10px] leading-4 ${huabeiCycle.repaymentDays <= 3 ? 'text-red-500' : huabeiCycle.repaymentDays <= 7 ? 'text-orange-500' : 'text-slate-400'}`}>{huabeiCycle.repaymentDays === 0 ? '今天' : `${huabeiCycle.repaymentDays}天后`}</p>
-                  </div>
+                  </button>
                   <div className="grid min-w-0 grid-rows-[16px_20px_16px] px-1.5 py-1">
                     <p className="text-[11px] leading-4 text-slate-400">今日使用</p>
                     <p className="truncate text-sm font-bold leading-5 text-slate-800">{formatMonthDay(getBeijingToday())}</p>
@@ -487,6 +616,59 @@ export default function PolicyLoanManagement({
           </div>
         </div>
       </div>}
+
+      {showHuabeiStatementSheet && activeHuabeiBillingLoan && activeHuabeiCycle && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <div>
+                <p className="text-base font-semibold text-slate-900">账单日</p>
+                <p className="mt-0.5 text-xs text-slate-400">录入或修改本期花呗账单金额</p>
+              </div>
+              <button type="button" onClick={closeHuabeiBillingSheets} className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-slate-400 active:bg-slate-100 active:text-slate-600" aria-label="关闭花呗账单录入"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="px-5 py-4">
+              <section className="rounded-2xl border border-sky-100 bg-sky-50/60 p-3.5">
+                <div className="flex items-start justify-between gap-3 border-b border-sky-100 pb-3">
+                  <div>
+                    <p className="text-[11px] font-medium text-sky-600/70">本期账单日</p>
+                    <p className="mt-1 text-base font-semibold text-slate-800">{formatHuabeiBillingDate(activeHuabeiCycle.currentBill)}</p>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${activeHuabeiStatement ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{activeHuabeiStatement ? '已记录' : '待录入'}</span>
+                </div>
+                <label className="mt-4 block">
+                  <span className="mb-1.5 block text-[11px] font-medium text-slate-500">本期账单应还金额</span>
+                  <input type="number" min="0" step="0.01" inputMode="decimal" autoFocus value={huabeiStatementDraft} onChange={(event) => setHuabeiStatementDraft(event.target.value)} placeholder="输入金额（无消费可填 0）" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-right text-lg font-semibold text-slate-900 outline-none focus:border-[#1677FF]" />
+                </label>
+                <p className="mt-2 text-[11px] leading-4 text-slate-400">保存后可在最后还款日录入本期累计已还金额；账期按北京时间计算。</p>
+                <button type="button" disabled={saveHuabeiStatementMutation.isPending || huabeiStatementDraft.trim() === ''} onClick={saveHuabeiStatement} className="mt-4 w-full rounded-xl bg-[#1677FF] px-4 py-3 text-sm font-semibold text-white active:opacity-80 disabled:opacity-40">{saveHuabeiStatementMutation.isPending ? '保存中…' : activeHuabeiStatement ? '保存修改' : '保存本期账单'}</button>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showHuabeiPaymentSheet && activeHuabeiBillingLoan && activeHuabeiCycle && activeHuabeiStatement && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="w-full max-w-[480px] rounded-t-2xl bg-white px-5 pb-7 pt-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-base font-semibold text-slate-900">本期还款</p>
+                <p className="mt-0.5 text-xs text-slate-400">账单日 {formatHuabeiBillingDate(activeHuabeiCycle.currentBill)} · 最后还款日 {formatHuabeiBillingDate(activeHuabeiCycle.currentDue)}</p>
+              </div>
+              <button type="button" onClick={closeHuabeiBillingSheets} className="text-slate-400 active:text-slate-600" aria-label="关闭花呗还款录入"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-xl border border-slate-100 bg-slate-50 py-3 text-center">
+              <div className="px-1"><p className="text-[11px] text-slate-400">账单应还</p><p className="mt-1 text-sm font-bold text-slate-800">{activeHuabeiStatementAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
+              <div className="px-1"><p className="text-[11px] text-slate-400">已还</p><p className="mt-1 text-sm font-bold text-emerald-600">{activeHuabeiPaidAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
+              <div className="px-1"><p className="text-[11px] text-slate-400">剩余应还</p><p className="mt-1 text-sm font-bold text-rose-500">{activeHuabeiRemainingAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
+            </div>
+            <label className="mt-5 block text-xs font-medium text-slate-600">目前累计已还金额</label>
+            <input type="number" min="0" max={activeHuabeiStatementAmount} step="0.01" inputMode="decimal" autoFocus value={huabeiPaymentDraft} onChange={(event) => setHuabeiPaymentDraft(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-center text-lg font-semibold text-slate-900 outline-none focus:border-[#1677FF]" placeholder="输入本期累计已还金额" />
+            <button type="button" disabled={saveHuabeiPaymentMutation.isPending || huabeiPaymentDraft.trim() === ''} onClick={saveHuabeiPayment} className="mt-4 w-full rounded-xl bg-[#1677FF] px-4 py-3 text-sm font-semibold text-white active:opacity-80 disabled:opacity-40">{saveHuabeiPaymentMutation.isPending ? '保存中…' : '保存已还金额'}</button>
+          </div>
+        </div>
+      )}
 
       {serviceContact && <LoanServiceContactSheet contact={serviceContact} open={true} onClose={() => setServiceContact(null)} />}
       {deleteId !== null && <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: "rgba(0,0,0,.5)" }}><div className="bg-white rounded-2xl p-6 mx-6 w-full max-w-xs">{deleteStep === 1 ? <><p className="text-gray-800 font-semibold text-center mb-2">删除{loanLabel}</p><p className="text-gray-500 text-sm text-center mb-5">确定要删除这笔{loanLabel}吗？</p><div className="flex gap-3"><button onClick={() => setDeleteId(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm">取消</button><button onClick={() => setDeleteStep(2)} className="flex-1 py-2.5 rounded-xl bg-gray-800 text-white text-sm">继续</button></div></> : <><p className="text-red-500 font-semibold text-center mb-2">再次确认删除</p><p className="text-gray-500 text-sm text-center mb-5">删除后数据不可恢复，请确认操作。</p><div className="flex gap-3"><button onClick={() => { setDeleteId(null); setDeleteStep(1); }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm">取消</button><button onClick={() => { if (adminMode) adminDeleteMutation.mutate({ id: deleteId }); else deleteMutation.mutate({ id: deleteId }); }} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm">确认删除</button></div></>}</div></div>}

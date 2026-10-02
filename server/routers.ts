@@ -106,6 +106,48 @@ function asRows(result: any): any[] {
   return Array.isArray(result) ? result : [];
 }
 
+/**
+ * 花呗账单按“花呗档案 + 北京时间账单日”独立保存，不能复用信用卡账单表，
+ * 也不能把每期已还金额覆盖到花呗档案的额度字段中。
+ * 生产库采用接口侧幂等建表，确保部署后首个受控请求即可安全启用该能力。
+ */
+async function ensureHuabeiBillingStatementsTable(conn: any) {
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS huabei_billing_statements (
+      id BIGINT NOT NULL AUTO_INCREMENT,
+      policy_loan_id INT NOT NULL COMMENT '花呗贷款档案 ID',
+      billing_date DATE NOT NULL COMMENT '对应花呗账单日（北京时间账期唯一标识）',
+      statement_amount DECIMAL(14,2) NOT NULL DEFAULT 0 COMMENT '本期应还金额',
+      paid_amount DECIMAL(14,2) NOT NULL DEFAULT 0 COMMENT '本期累计已还金额',
+      created_by_user_id INT NOT NULL COMMENT '首次录入人用户 ID',
+      updated_by_user_id INT NOT NULL COMMENT '最后更新人用户 ID',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_huabei_loan_billing_date (policy_loan_id, billing_date),
+      KEY idx_huabei_billing_statement_loan_date (policy_loan_id, billing_date DESC)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+      COMMENT='花呗按账期保存的本期应还及累计已还金额'
+  `);
+}
+
+/** 花呗账期操作统一校验档案存在性、归属及管理员代操作权限。 */
+async function getAccessibleHuabeiLoan(conn: any, actor: { id: number; role?: string }, policyLoanId: number) {
+  const [loanRows] = await conn.execute(
+    `SELECT id, user_id, loan_type, is_active
+     FROM policy_loans
+     WHERE id=? AND loan_type='huabei' AND is_active=1
+     LIMIT 1`,
+    [policyLoanId]
+  ) as any[];
+  const loan = Array.isArray(loanRows) ? loanRows[0] : null;
+  if (!loan) throw new TRPCError({ code: 'NOT_FOUND', message: '花呗档案不存在或已停用' });
+  if (Number(loan.user_id) !== Number(actor.id) && actor.role !== 'super_admin') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作该花呗账期记录' });
+  }
+  return loan;
+}
+
 function readLedger37PositiveNumber(value: unknown): number | null {
   if (value === undefined || value === null || String(value).trim() === '') return null;
   const numberValue = Number(value);
@@ -34800,6 +34842,104 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
           [ctx.user.id, loanType]
         ) as any[];
         return Array.isArray(rows) ? rows : [];
+      }),
+    // 花呗卡片的当前账期状态需要一次读取全部可见花呗档案的账单记录；普通用户只会得到本人数据，管理员可代为查看全员数据。
+    huabeiBillingStatementEntries: protectedProcedure.query(async ({ ctx }) => {
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+      await ensureHuabeiBillingStatementsTable(conn);
+      const isAdmin = String(ctx.user.role) === 'super_admin';
+      const [rows] = await conn.execute(
+        `SELECT bs.id, bs.policy_loan_id, DATE_FORMAT(bs.billing_date, '%Y-%m-%d') AS billing_date,
+                bs.statement_amount, bs.paid_amount, bs.created_by_user_id, bs.updated_by_user_id, bs.created_at, bs.updated_at
+         FROM huabei_billing_statements bs
+         INNER JOIN policy_loans pl ON pl.id=bs.policy_loan_id
+         WHERE pl.is_active=1 AND pl.loan_type='huabei'${isAdmin ? '' : ' AND pl.user_id=?'}
+         ORDER BY bs.billing_date DESC, bs.updated_at DESC`,
+        isAdmin ? [] : [ctx.user.id]
+      ) as any[];
+      return Array.isArray(rows) ? rows : [];
+    }),
+    // 查询一份花呗档案的全部账期明细；档案归属校验与写入接口完全一致。
+    huabeiBillingStatements: protectedProcedure
+      .input(z.object({ policyLoanId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+        await ensureHuabeiBillingStatementsTable(conn);
+        await getAccessibleHuabeiLoan(conn, ctx.user, input.policyLoanId);
+        const [rows] = await conn.execute(
+          `SELECT id, policy_loan_id, DATE_FORMAT(billing_date, '%Y-%m-%d') AS billing_date,
+                  statement_amount, paid_amount, created_by_user_id, updated_by_user_id, created_at, updated_at
+           FROM huabei_billing_statements
+           WHERE policy_loan_id=?
+           ORDER BY billing_date DESC, updated_at DESC`,
+          [input.policyLoanId]
+        ) as any[];
+        return Array.isArray(rows) ? rows : [];
+      }),
+    // 新增或更新本期花呗应还金额；账期唯一键确保同一花呗同一账单日不会产生重复记录。
+    upsertHuabeiBillingStatement: protectedProcedure
+      .input(z.object({
+        policyLoanId: z.number().int().positive(),
+        billingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '账单日格式应为 YYYY-MM-DD'),
+        statementAmount: z.number().min(0).max(9999999999),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+        await ensureHuabeiBillingStatementsTable(conn);
+        await getAccessibleHuabeiLoan(conn, ctx.user, input.policyLoanId);
+        await conn.execute(
+          `INSERT INTO huabei_billing_statements
+             (policy_loan_id, billing_date, statement_amount, created_by_user_id, updated_by_user_id)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             statement_amount=VALUES(statement_amount),
+             paid_amount=LEAST(paid_amount, VALUES(statement_amount)),
+             updated_by_user_id=VALUES(updated_by_user_id),
+             updated_at=CURRENT_TIMESTAMP`,
+          [input.policyLoanId, input.billingDate, input.statementAmount, ctx.user.id, ctx.user.id]
+        );
+        return { success: true };
+      }),
+    // 最后还款日只更新当前账期累计已还金额；没有账单金额时拒绝写入，避免出现脱离账期的还款数据。
+    upsertHuabeiBillingPayment: protectedProcedure
+      .input(z.object({
+        policyLoanId: z.number().int().positive(),
+        billingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '账单日格式应为 YYYY-MM-DD'),
+        paidAmount: z.number().min(0).max(9999999999),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库暂不可用' });
+        await ensureHuabeiBillingStatementsTable(conn);
+        await getAccessibleHuabeiLoan(conn, ctx.user, input.policyLoanId);
+        const [statementRows] = await conn.execute(
+          `SELECT id, statement_amount
+           FROM huabei_billing_statements
+           WHERE policy_loan_id=? AND billing_date=?
+           LIMIT 1`,
+          [input.policyLoanId, input.billingDate]
+        ) as any[];
+        const statement = Array.isArray(statementRows) ? statementRows[0] : null;
+        if (!statement) throw new TRPCError({ code: 'BAD_REQUEST', message: '请先在账单日录入本期账单金额' });
+        const statementAmount = Number(statement.statement_amount || 0);
+        if (input.paidAmount > statementAmount) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '已还金额不能超过本期账单应还金额' });
+        }
+        await conn.execute(
+          `UPDATE huabei_billing_statements
+           SET paid_amount=?, updated_by_user_id=?, updated_at=CURRENT_TIMESTAMP
+           WHERE id=?`,
+          [input.paidAmount, ctx.user.id, statement.id]
+        );
+        return {
+          success: true,
+          statementAmount,
+          paidAmount: input.paidAmount,
+          remainingAmount: Math.max(0, statementAmount - input.paidAmount),
+        };
       }),
     create: protectedProcedure
       .input(z.object({

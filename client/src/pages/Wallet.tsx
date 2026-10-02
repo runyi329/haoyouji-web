@@ -779,7 +779,6 @@ export default function Wallet() {
     }] : []),
     ...visibleMultiAssetBalances.filter((asset) => String(asset.assetCode || "").toUpperCase() !== "USDT"),
   ];
-  const hasDigitalAssets = visibleDigitalAssetBalances.length > 0;
   const digitalHistoryAssetCodes = Array.from(new Set([
     "USDT",
     ...visibleMultiAssetBalances.map((asset) => String(asset.assetCode || "").toUpperCase()),
@@ -793,20 +792,21 @@ export default function Wallet() {
     0,
   );
   const digitalTotalUsdt = usdtTotalBalance + cryptoTotalUsdt;
-  const cryptoAccountLabel = hasDigitalAssets ? `52号市场资产账户 · ${visibleDigitalAssetBalances.length} 项` : "52号市场资产账户 · 暂无资产";
-  const foreignAccountLabel = foreignAccountsEnabled ? "外币账户" : "外币账户 · 暂无资产";
+  // 钱包为全局共享账户；从任一项目进入都使用统一的三类账户名称。
+  const cryptoAccountLabel = "数字币账户";
+  const foreignAccountLabel = "外币账户";
   const accountMenuItems: Array<{ value: WalletAccountAsset; label: string; enabled: boolean }> = isLedger52WalletEntry
     ? [
       // 52号市场资产账户始终可进入：即使当前没有资产，也可以使用其中的 USDT 充值通道。
       { value: "CRYPTO", label: cryptoAccountLabel, enabled: true },
-      { value: "CNY", label: "人民币账户 · CNY", enabled: true },
+      { value: "CNY", label: "人民币账户", enabled: true },
       { value: "FOREIGN", label: foreignAccountLabel, enabled: foreignAccountsEnabled },
     ]
     : [
       { value: "USDT", label: "稳定币账户 · USDT", enabled: true },
       { value: "CNY", label: "人民币账户 · CNY", enabled: true },
     ];
-  const currentAccountLabel = accountMenuItems.find((item) => item.value === activeAsset)?.label || (isLedger52WalletEntry ? "52号市场资产账户" : "稳定币账户 · USDT");
+  const currentAccountLabel = accountMenuItems.find((item) => item.value === activeAsset)?.label || (isLedger52WalletEntry ? "数字币账户" : "稳定币账户 · USDT");
   const activeAssetDetailsPath = activeAsset === "USDT"
     ? appendWalletAccount("/wallet/transactions", "USDT")
     : activeAsset === "CNY"
