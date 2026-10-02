@@ -7,7 +7,7 @@
  */
 import { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, Plus, Trash2, ChevronDown, ChevronUp, Pencil, Check, X, PauseCircle } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, ChevronDown, ChevronUp, Pencil, Check, X, PauseCircle, RotateCcw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -35,6 +35,8 @@ export default function LedgerAADividendManage() {
   const [editRecord, setEditRecord] = useState<any | null>(null);
   const [editAmount, setEditAmount] = useState("");
   const [editNote, setEditNote] = useState("");
+  // 已入账分红不可直接编辑；管理员可选择撤回原记录或写入一笔等额冲正。
+  const [revokeDividendRecord, setRevokeDividendRecord] = useState<any | null>(null);
 
   // 管理员备注功能（标签维度）
   const [showNoteModal, setShowNoteModal] = useState<{ userId: number; userName: string; tagName: string } | null>(null);
@@ -256,6 +258,14 @@ export default function LedgerAADividendManage() {
     onError: (err) => {
       toast.error(err.message || "修改失败");
     },
+  });
+  const revokeDividendMutation = trpc.adminRevokeLedger37Dividend.useMutation({
+    onSuccess: async (result) => {
+      toast.success(result.mode === 'reverse' ? '已写入分红冲正流水' : '已直接撤回原分红记录');
+      setRevokeDividendRecord(null);
+      await Promise.all([refetchDividends(), refetchDividendAvailability()]);
+    },
+    onError: (err) => toast.error(err.message || '分红撤回失败'),
   });
 
   // 修改备注（用户）
@@ -627,33 +637,51 @@ export default function LedgerAADividendManage() {
                                     {new Date(rec.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
                                   </div>
                                 </div>
-                                <div className="text-sm font-semibold mr-2" style={{ color: '#D32F2F' }}>
+                                <div className="text-sm font-semibold mr-2" style={{ color: Number(rec.amount) < 0 ? '#2E7D32' : '#D32F2F' }}>
                                   {String(rec.asset_code || 'CNY').toUpperCase() === 'CNY'
                                     ? `¥${parseFloat(rec.asset_amount ?? rec.amount).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
                                     : `${Number(rec.asset_amount ?? rec.amount).toLocaleString('zh-CN', { maximumFractionDigits: 8 })} ${String(rec.asset_code).toUpperCase()}`}
                                 </div>
-                                <button
-                                  onClick={() => {
-                                    setEditRecord(rec);
-                                    setEditAmount(String(parseFloat(rec.amount)));
-                                    setEditNote(rec.note ?? '');
-                                  }}
-                                  className="p-1.5 rounded-lg mr-1"
-                                  style={{ backgroundColor: '#FFF8E1' }}
-                                >
-                                  <Pencil className="w-3.5 h-3.5" style={{ color: '#F57F17' }} />
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    if (confirm('确认删除这笔分红记录？')) {
-                                      deleteMutation.mutate({ ledgerId, recordId: rec.id });
-                                    }
-                                  }}
-                                  className="p-1.5 rounded-lg"
-                                  style={{ backgroundColor: '#FFF5F5' }}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" style={{ color: '#EF5350' }} />
-                                </button>
+                                {ledgerId === 37 && rec.wallet_request_id ? (
+                                  Number(rec.reversal_of_id || 0) > 0 ? (
+                                    <span className="rounded-lg px-2 py-1 text-[10px] font-medium" style={{ color: '#2E7D32', backgroundColor: '#E8F5E9' }}>冲正流水</span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setRevokeDividendRecord(rec)}
+                                      className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] font-medium"
+                                      style={{ backgroundColor: '#EAF3FF', color: '#1565C0' }}
+                                      title="撤回或冲正这笔已入账分红"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5" /> 撤回
+                                    </button>
+                                  )
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        setEditRecord(rec);
+                                        setEditAmount(String(parseFloat(rec.amount)));
+                                        setEditNote(rec.note ?? '');
+                                      }}
+                                      className="p-1.5 rounded-lg mr-1"
+                                      style={{ backgroundColor: '#FFF8E1' }}
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" style={{ color: '#F57F17' }} />
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        if (confirm('确认删除这笔分红记录？')) {
+                                          deleteMutation.mutate({ ledgerId, recordId: rec.id });
+                                        }
+                                      }}
+                                      className="p-1.5 rounded-lg"
+                                      style={{ backgroundColor: '#FFF5F5' }}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" style={{ color: '#EF5350' }} />
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             ))}
 
@@ -977,6 +1005,43 @@ export default function LedgerAADividendManage() {
                 {editMutation.isPending ? '保存中...' : '保存修改'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {revokeDividendRecord && (
+        <div className="fixed inset-0 z-[210] flex items-end justify-center bg-black/50" onClick={() => setRevokeDividendRecord(null)}>
+          <div className="w-full max-w-md rounded-t-2xl bg-white p-5" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-base font-semibold" style={{ color: '#1A1A1A' }}>撤回已入账分红</h3>
+            <div className="mt-1 text-sm" style={{ color: '#757575' }}>
+              {String(revokeDividendRecord.asset_code || 'CNY').toUpperCase() === 'CNY'
+                ? `分红金额：¥${Number(revokeDividendRecord.asset_amount ?? revokeDividendRecord.amount).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
+                : `分红数量：${Number(revokeDividendRecord.asset_amount ?? revokeDividendRecord.amount).toLocaleString('zh-CN', { maximumFractionDigits: 8 })} ${String(revokeDividendRecord.asset_code).toUpperCase()}`}
+            </div>
+            <p className="mt-1 text-xs leading-5" style={{ color: '#9E9E9E' }}>仅当该资产当前仍可用时才能执行；已被消费或再次冻结的资金会被安全拦截。</p>
+            <div className="mt-4 space-y-3">
+              <button
+                type="button"
+                disabled={revokeDividendMutation.isPending}
+                onClick={() => revokeDividendMutation.mutate({ ledgerId: 37, recordId: Number(revokeDividendRecord.id), mode: 'reverse' })}
+                className="w-full rounded-xl border px-4 py-3 text-left disabled:opacity-50"
+                style={{ borderColor: '#BBE0C2', backgroundColor: '#F0F9F1', color: '#237A39' }}
+              >
+                <div className="text-sm font-semibold">写入反向冲正记录（推荐）</div>
+                <div className="mt-0.5 text-xs leading-5">保留原分红，并新增一笔同金额的负向冲正；钱包余额与可分红额同步还原，便于审计。</div>
+              </button>
+              <button
+                type="button"
+                disabled={revokeDividendMutation.isPending}
+                onClick={() => revokeDividendMutation.mutate({ ledgerId: 37, recordId: Number(revokeDividendRecord.id), mode: 'delete' })}
+                className="w-full rounded-xl border px-4 py-3 text-left disabled:opacity-50"
+                style={{ borderColor: '#F3CDD1', backgroundColor: '#FFF5F5', color: '#C62828' }}
+              >
+                <div className="text-sm font-semibold">直接撤回原分红记录</div>
+                <div className="mt-0.5 text-xs leading-5">移除原分红及其钱包入账流水，不新增面向成员的冲正流水。</div>
+              </button>
+            </div>
+            <button type="button" onClick={() => setRevokeDividendRecord(null)} className="mt-4 w-full rounded-xl border py-2.5 text-sm" style={{ borderColor: '#E0E0E0', color: '#757575' }}>取消</button>
           </div>
         </div>
       )}

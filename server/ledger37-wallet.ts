@@ -149,6 +149,49 @@ export async function ensureLedger37WalletInfrastructure(): Promise<void> {
           KEY idx_ai_wallet_project_hold_release_hold (hold_id, created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='37号项目钱包保证金部分或全额解冻审计流水'
       `);
+      const [releaseColumns] = await (conn as any).execute(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'ai_wallet_project_hold_releases'
+      `) as any[];
+      const releaseColumnSet = new Set(rowsOf(releaseColumns).map((row) => String(row.column_name)));
+      const addReleaseColumn = async (column: string, definition: string) => {
+        if (releaseColumnSet.has(column)) return;
+        try { await (conn as any).execute(`ALTER TABLE ai_wallet_project_hold_releases ADD COLUMN ${column} ${definition}`); }
+        catch (error: any) { if (error?.code !== 'ER_DUP_FIELDNAME') throw error; }
+        releaseColumnSet.add(column);
+      };
+      await addReleaseColumn('entry_kind', "VARCHAR(16) NOT NULL DEFAULT 'release' AFTER amount");
+      await addReleaseColumn('status', "VARCHAR(16) NOT NULL DEFAULT 'active' AFTER entry_kind");
+      await addReleaseColumn('reversal_of_id', 'BIGINT UNSIGNED NULL AFTER status');
+      await addReleaseColumn('reversed_by', 'INT NULL AFTER released_by');
+      await addReleaseColumn('reversed_at', 'DATETIME NULL AFTER reversed_by');
+      try {
+        await (conn as any).execute('ALTER TABLE ai_wallet_project_hold_releases ADD UNIQUE KEY uk_ai_wallet_project_hold_release_reversal (reversal_of_id)');
+      } catch (error: any) {
+        if (!['ER_DUP_KEYNAME', 'ER_DUP_ENTRY'].includes(String(error?.code))) throw error;
+      }
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ledger37_wallet_action_reversals (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          reversal_no VARCHAR(64) NOT NULL,
+          request_id VARCHAR(112) NOT NULL,
+          action_kind VARCHAR(32) NOT NULL,
+          source_record_id BIGINT UNSIGNED NOT NULL,
+          mode VARCHAR(16) NOT NULL,
+          user_id INT NOT NULL,
+          asset_code VARCHAR(16) NOT NULL,
+          amount DECIMAL(36,18) NOT NULL,
+          source_wallet_entry_id BIGINT NULL,
+          reversal_wallet_entry_id BIGINT NULL,
+          actor_user_id INT NOT NULL,
+          detail_json LONGTEXT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_ledger37_wallet_action_reversal_no (reversal_no),
+          UNIQUE KEY uk_ledger37_wallet_action_reversal_request (request_id),
+          UNIQUE KEY uk_ledger37_wallet_action_reversal_source (action_kind, source_record_id),
+          KEY idx_ledger37_wallet_action_reversal_user (user_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='37号钱包资金动作撤回或冲正审计'
+      `);
       await (conn as any).execute(`
         CREATE TABLE IF NOT EXISTS ai_wallet_project_hold_migrations (
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -248,8 +291,15 @@ export async function ensureLedger37WalletInfrastructure(): Promise<void> {
       await addColumn("asset_amount", "DECIMAL(36,18) NULL DEFAULT NULL AFTER asset_code");
       await addColumn("wallet_request_id", "VARCHAR(112) NULL DEFAULT NULL AFTER note");
       await addColumn("wallet_entry_id", "BIGINT NULL DEFAULT NULL AFTER wallet_request_id");
+      await addColumn("reversal_of_id", "BIGINT NULL DEFAULT NULL AFTER wallet_entry_id");
+      await addColumn("reversal_mode", "VARCHAR(16) NULL DEFAULT NULL AFTER reversal_of_id");
       try {
         await (conn as any).execute("ALTER TABLE dividend_records ADD UNIQUE KEY uk_dividend_wallet_request (wallet_request_id)");
+      } catch (error: any) {
+        if (!['ER_DUP_KEYNAME', 'ER_DUP_ENTRY'].includes(String(error?.code))) throw error;
+      }
+      try {
+        await (conn as any).execute('ALTER TABLE dividend_records ADD UNIQUE KEY uk_dividend_reversal_of (reversal_of_id)');
       } catch (error: any) {
         if (!['ER_DUP_KEYNAME', 'ER_DUP_ENTRY'].includes(String(error?.code))) throw error;
       }
@@ -754,8 +804,8 @@ export async function releaseLedger37WalletHold(params: {
     }
     await transaction.execute(
       `INSERT INTO ai_wallet_project_hold_releases
-        (release_no, request_id, hold_id, amount, released_by)
-       VALUES (?, ?, ?, CAST(? AS DECIMAL(36,18)), ?)`,
+        (release_no, request_id, hold_id, amount, entry_kind, status, released_by)
+       VALUES (?, ?, ?, CAST(? AS DECIMAL(36,18)), 'release', 'active', ?)`,
       [releaseNo, releaseRequestId, params.holdId, amount, params.actorUserId],
     );
     if (fullyReleased) {
@@ -787,10 +837,11 @@ async function writeFundingDividend(transaction: any, params: {
   amount: string;
   tagName: string;
   note?: string;
+  kind?: 'dividend' | 'reversal';
 }) {
   await getFundingBalanceForUpdate(transaction, params.userId, params.assetCode);
   // 用户钱包只展示资金用途，不再暴露账本编号；标签和备注保留，便于对账。
-  const visibleNote = `股票分红 · ${params.tagName}${params.note ? ` · ${params.note}` : ""}`;
+  const visibleNote = `${params.kind === 'reversal' ? '股票分红冲正' : '股票分红'} · ${params.tagName}${params.note ? ` · ${params.note}` : ""}`;
   const note = params.assetCode === "CNY" ? `[CNY]${visibleNote}` : visibleNote;
   const [insert] = await transaction.execute(
     "INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, CAST(? AS DECIMAL(36,18)), ?, NOW(), NOW())",
@@ -847,6 +898,245 @@ export async function createLedger37Dividend(params: {
     await transaction.execute("UPDATE dividend_records SET wallet_entry_id = ? WHERE id = ?", [walletEntryId, recordId]);
     if (ownConnection) await transaction.commit();
     return { recordId, cnyValue, assetCode, assetAmount };
+  } catch (error) {
+    if (ownConnection) try { await transaction.rollback(); } catch {}
+    throw error;
+  } finally {
+    if (ownConnection) transaction.release?.();
+  }
+}
+
+export type Ledger37RevokeMode = 'reverse' | 'delete';
+
+/**
+ * 撤回一笔已入账的37号分红。
+ * - reverse：保留原分红，在分红与钱包中各写一笔相反方向的冲正流水；
+ * - delete：删除原分红及其原钱包流水，仅适用于资金仍完全可用的情形。
+ */
+export async function revokeLedger37Dividend(params: {
+  recordId: number;
+  mode: Ledger37RevokeMode;
+  actorUserId: number;
+  transaction?: any;
+}): Promise<{ mode: Ledger37RevokeMode; sourceRecordId: number; reversalRecordId?: number; assetCode: Ledger37WalletAsset; assetAmount: string }> {
+  await ensureLedger37WalletInfrastructure();
+  const ownConnection = !params.transaction;
+  const conn = params.transaction || await getDbTransactionConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const transaction = conn as any;
+  try {
+    if (ownConnection) await transaction.beginTransaction();
+    const [sourceRows] = await transaction.execute(
+      `SELECT * FROM dividend_records
+       WHERE id = ? AND ledger_id = ?
+       LIMIT 1 FOR UPDATE`,
+      [params.recordId, LEDGER_37_ID],
+    );
+    const source = rowsOf(sourceRows)[0];
+    if (!source) throw new Error('分红记录不存在或已被直接撤回');
+    if (Number(source.reversal_of_id || 0) > 0) throw new Error('冲正分红不能再次撤回');
+    if (!source.wallet_request_id || !source.wallet_entry_id) throw new Error('该笔分红没有关联钱包入账，仍可使用原编辑或删除功能');
+
+    const [existingAuditRows] = await transaction.execute(
+      `SELECT id FROM ledger37_wallet_action_reversals
+       WHERE action_kind = 'dividend' AND source_record_id = ? LIMIT 1 FOR UPDATE`,
+      [params.recordId],
+    );
+    if (rowsOf(existingAuditRows)[0]) throw new Error('该笔分红已经撤回或冲正，请刷新后核对');
+
+    const assetCode = normalizeLedger37WalletAsset(source.asset_code || 'CNY');
+    const assetAmount = decimalText(String(source.asset_amount ?? source.amount ?? ''));
+    const cnyAmount = Math.abs(Number(source.amount || 0));
+    if (!(cnyAmount > 0)) throw new Error('原分红人民币估值无效，不能撤回');
+    const sourceUserId = Number(source.user_id);
+    const sourceWalletEntryId = Number(source.wallet_entry_id);
+    const requestId = buildRequestId(params.mode === 'reverse' ? 'DR' : 'DD');
+    const reversalNo = `V37${Date.now().toString(36).toUpperCase()}${randomBytes(4).toString('hex').toUpperCase()}`;
+    let reversalWalletEntryId: number | null = null;
+    let reversalRecordId: number | undefined;
+
+    if (params.mode === 'reverse') {
+      if (isFundingAsset(assetCode)) {
+        const funding = await getFundingBalanceForUpdate(transaction, sourceUserId, assetCode);
+        if (Number(assetAmount) > funding.available + 1e-8) {
+          throw new Error(`${assetCode} 当前可用余额不足，不能为该笔分红写入冲正`);
+        }
+      }
+      const reversalNote = source.note ? `冲正原分红#${params.recordId} · ${String(source.note).trim()}` : `冲正原分红#${params.recordId}`;
+      const [reversalInsert] = await transaction.execute(
+        `INSERT INTO dividend_records
+          (ledger_id, user_id, tag_name, amount, asset_code, asset_amount, note, wallet_request_id, reversal_of_id, reversal_mode)
+         VALUES (?, ?, ?, CAST(? AS DECIMAL(18,2)), ?, CAST(? AS DECIMAL(36,18)), ?, ?, ?, 'reverse')`,
+        [LEDGER_37_ID, sourceUserId, String(source.tag_name), -cnyAmount, assetCode, `-${assetAmount}`, reversalNote.slice(0, 255), requestId, params.recordId],
+      );
+      reversalRecordId = Number((reversalInsert as any).insertId);
+      if (isFundingAsset(assetCode)) {
+        reversalWalletEntryId = await writeFundingDividend(transaction, {
+          userId: sourceUserId,
+          assetCode,
+          amount: `-${assetAmount}`,
+          tagName: String(source.tag_name),
+          note: reversalNote,
+          kind: 'reversal',
+        });
+      } else {
+        const debit = await dbMultiAssetWallet.adjustMultiAssetBalance({
+          userId: sourceUserId,
+          assetCode,
+          amount: `-${assetAmount}`,
+          note: `股票分红冲正 · ${String(source.tag_name)} · 原分红#${params.recordId}`,
+          requestId: `${requestId}_ASSET`,
+          actorUserId: params.actorUserId,
+          sourceLedgerId: LEDGER_37_ID,
+          eventType: 'ledger_dividend_reversal',
+          transaction,
+        });
+        reversalWalletEntryId = Number(debit.entry.id);
+      }
+      await transaction.execute('UPDATE dividend_records SET wallet_entry_id = ? WHERE id = ?', [reversalWalletEntryId, reversalRecordId]);
+    } else {
+      if (isFundingAsset(assetCode)) {
+        const [walletRows] = await transaction.execute(
+          `SELECT id FROM af_manual_balances
+           WHERE id = ? AND ledger_id = ? AND user_id = ? AND amount > 0
+             AND COALESCE(note, '') LIKE '%股票分红%'
+           LIMIT 1 FOR UPDATE`,
+          [sourceWalletEntryId, LEDGER_37_ID, sourceUserId],
+        );
+        if (!rowsOf(walletRows)[0]) throw new Error('未找到原分红钱包流水，已阻止直接撤回');
+        const funding = await getFundingBalanceForUpdate(transaction, sourceUserId, assetCode);
+        if (Number(assetAmount) > funding.available + 1e-8) {
+          throw new Error(`${assetCode} 当前可用余额不足，不能直接撤回原分红；请待资金回到可用余额后重试`);
+        }
+        await transaction.execute('DELETE FROM af_manual_balances WHERE id = ? LIMIT 1', [sourceWalletEntryId]);
+      } else {
+        const [walletRows] = await transaction.execute(
+          `SELECT id FROM ai_wallet_asset_entries
+           WHERE id = ? AND user_id = ? AND asset_code = ? AND amount > 0
+             AND source_ledger_id = ? AND event_type = 'ledger_dividend'
+           LIMIT 1 FOR UPDATE`,
+          [sourceWalletEntryId, sourceUserId, assetCode, LEDGER_37_ID],
+        );
+        if (!rowsOf(walletRows)[0]) throw new Error('未找到原分红数字资产流水，已阻止直接撤回');
+        const debit = await dbMultiAssetWallet.adjustMultiAssetBalance({
+          userId: sourceUserId,
+          assetCode,
+          amount: `-${assetAmount}`,
+          note: `临时撤回分红#${params.recordId}`,
+          requestId: `${requestId}_ASSET`,
+          actorUserId: params.actorUserId,
+          sourceLedgerId: LEDGER_37_ID,
+          eventType: 'ledger_dividend_reversal',
+          transaction,
+        });
+        // 直接撤回语义是移除原流水；余额已由上面的受控负向调整恢复，临时审计流水也一并删除。
+        await transaction.execute('DELETE FROM ai_wallet_asset_entries WHERE id IN (?, ?)', [sourceWalletEntryId, Number(debit.entry.id)]);
+      }
+      await transaction.execute('DELETE FROM dividend_records WHERE id = ? AND ledger_id = ? LIMIT 1', [params.recordId, LEDGER_37_ID]);
+    }
+
+    await transaction.execute(
+      `INSERT INTO ledger37_wallet_action_reversals
+        (reversal_no, request_id, action_kind, source_record_id, mode, user_id, asset_code, amount, source_wallet_entry_id, reversal_wallet_entry_id, actor_user_id, detail_json)
+       VALUES (?, ?, 'dividend', ?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), ?, ?, ?, ?)`,
+      [reversalNo, requestId, params.recordId, params.mode, sourceUserId, assetCode, assetAmount, sourceWalletEntryId, reversalWalletEntryId, params.actorUserId, JSON.stringify({ tagName: String(source.tag_name), reversalRecordId: reversalRecordId ?? null })],
+    );
+    if (ownConnection) await transaction.commit();
+    return { mode: params.mode, sourceRecordId: params.recordId, reversalRecordId, assetCode, assetAmount };
+  } catch (error) {
+    if (ownConnection) try { await transaction.rollback(); } catch {}
+    throw error;
+  } finally {
+    if (ownConnection) transaction.release?.();
+  }
+}
+
+/** 撤回一笔“保证金解冻回退”，重新将等额资金冻结至原标签。 */
+export async function revokeLedger37WalletHoldRelease(params: {
+  releaseNo: string;
+  mode: Ledger37RevokeMode;
+  actorUserId: number;
+  transaction?: any;
+}): Promise<{ mode: Ledger37RevokeMode; sourceReleaseNo: string; reversalNo?: string; hold: Ledger37WalletHold; amount: string }> {
+  await ensureLedger37WalletInfrastructure();
+  const ownConnection = !params.transaction;
+  const conn = params.transaction || await getDbTransactionConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const transaction = conn as any;
+  try {
+    if (ownConnection) await transaction.beginTransaction();
+    const [releaseRows] = await transaction.execute(
+      `SELECT r.*, h.ledger_id, h.user_id, h.tag_name, h.asset_code, h.amount AS hold_amount,
+              h.released_amount, h.status AS hold_status
+         FROM ai_wallet_project_hold_releases r
+         INNER JOIN ai_wallet_project_holds h ON h.id = r.hold_id
+        WHERE r.release_no = ? AND h.ledger_id = ?
+        LIMIT 1 FOR UPDATE`,
+      [params.releaseNo, LEDGER_37_ID],
+    );
+    const release = rowsOf(releaseRows)[0];
+    if (!release) throw new Error('保证金回退记录不存在或已被直接撤回');
+    if (String(release.entry_kind || 'release') !== 'release' || String(release.status || 'active') !== 'active') {
+      throw new Error('该保证金回退已经撤回或冲正，请刷新后核对');
+    }
+    const assetCode = normalizeLedger37WalletAsset(release.asset_code);
+    const amount = decimalText(String(release.amount));
+    const sourceUserId = Number(release.user_id);
+    const heldAmount = Number(release.hold_amount || 0);
+    const releasedAmount = Number(release.released_amount || 0);
+    if (releasedAmount + 1e-8 < Number(amount)) throw new Error('当前冻结台账与回退记录不一致，已阻止撤回');
+
+    const requestId = buildRequestId(params.mode === 'reverse' ? 'HR' : 'HD');
+    if (isFundingAsset(assetCode)) {
+      const funding = await getFundingBalanceForUpdate(transaction, sourceUserId, assetCode);
+      if (Number(amount) > funding.available + 1e-8) {
+        throw new Error(`${assetCode} 当前可用余额不足，不能撤回该笔保证金回退`);
+      }
+    } else {
+      await dbMultiAssetWallet.moveMultiAssetBalanceToFrozen({
+        userId: sourceUserId,
+        assetCode,
+        amount,
+        direction: 'freeze',
+        note: `保证金解冻冲正 · ${String(release.tag_name)}`,
+        requestId: `${requestId}_ASSET`,
+        actorUserId: params.actorUserId,
+        sourceLedgerId: LEDGER_37_ID,
+        transaction,
+      });
+    }
+
+    const nextReleased = Math.max(0, releasedAmount - Number(amount));
+    await transaction.execute(
+      `UPDATE ai_wallet_project_holds
+          SET released_amount = CAST(? AS DECIMAL(36,18)), status = 'active', updated_at = NOW()
+        WHERE id = ?`,
+      [nextReleased.toFixed(18), Number(release.hold_id)],
+    );
+
+    let reversalNo: string | undefined;
+    if (params.mode === 'delete') {
+      await transaction.execute('DELETE FROM ai_wallet_project_hold_releases WHERE id = ? LIMIT 1', [Number(release.id)]);
+    } else {
+      reversalNo = `V37${Date.now().toString(36).toUpperCase()}${randomBytes(4).toString('hex').toUpperCase()}`;
+      const reversalRequestId = buildRequestId('HV');
+      await transaction.execute(
+        `UPDATE ai_wallet_project_hold_releases
+            SET status = 'reversed', reversed_by = ?, reversed_at = NOW()
+          WHERE id = ?`,
+        [params.actorUserId, Number(release.id)],
+      );
+      await transaction.execute(
+        `INSERT INTO ai_wallet_project_hold_releases
+          (release_no, request_id, hold_id, amount, entry_kind, status, reversal_of_id, released_by)
+         VALUES (?, ?, ?, CAST(? AS DECIMAL(36,18)), 'reversal', 'active', ?, ?)`,
+        [reversalNo, reversalRequestId, Number(release.hold_id), amount, Number(release.id), params.actorUserId],
+      );
+    }
+    const [holdRows] = await transaction.execute('SELECT * FROM ai_wallet_project_holds WHERE id = ? LIMIT 1', [Number(release.hold_id)]);
+    const hold = holdResult(rowsOf(holdRows)[0]);
+    if (ownConnection) await transaction.commit();
+    return { mode: params.mode, sourceReleaseNo: params.releaseNo, reversalNo, hold, amount };
   } catch (error) {
     if (ownConnection) try { await transaction.rollback(); } catch {}
     throw error;

@@ -21,7 +21,7 @@
  */
 import { Fragment, useState, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, ChartNoAxesCombined, WalletCards, LockKeyhole, Unlock } from "lucide-react";
+import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, ChartNoAxesCombined, WalletCards, LockKeyhole, Unlock, RotateCcw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -63,6 +63,10 @@ type MarginEntry = {
   migratedFrom?: 'manual';
   migrationNo?: string;
   walletBalanceSnapshot?: WalletBalanceSnapshot;
+  entryKind?: 'freeze' | 'release' | 'reversal';
+  releaseNo?: string;
+  reversalOfReleaseNo?: string;
+  reversalStatus?: 'reversed';
 };
 
 const createMarginEntry = (seed?: Partial<MarginEntry>): MarginEntry => ({
@@ -81,6 +85,10 @@ const createMarginEntry = (seed?: Partial<MarginEntry>): MarginEntry => ({
   migratedFrom: seed?.migratedFrom,
   migrationNo: seed?.migrationNo,
   walletBalanceSnapshot: seed?.walletBalanceSnapshot,
+  entryKind: seed?.entryKind,
+  releaseNo: seed?.releaseNo,
+  reversalOfReleaseNo: seed?.reversalOfReleaseNo,
+  reversalStatus: seed?.reversalStatus,
 });
 
 const normalizeMarginCoin = (coin: unknown): string => {
@@ -127,6 +135,10 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string, migra
             remainingAmount: item.remainingAmount === undefined || item.remainingAmount === null ? undefined : String(item.remainingAmount),
             migratedFrom: item.migratedFrom === 'manual' ? 'manual' : undefined,
             migrationNo: typeof item.migrationNo === 'string' ? item.migrationNo : undefined,
+            entryKind: item.entryKind === 'freeze' || item.entryKind === 'release' || item.entryKind === 'reversal' ? item.entryKind : undefined,
+            releaseNo: typeof item.releaseNo === 'string' ? item.releaseNo : undefined,
+            reversalOfReleaseNo: typeof item.reversalOfReleaseNo === 'string' ? item.reversalOfReleaseNo : undefined,
+            reversalStatus: item.reversalStatus === 'reversed' ? 'reversed' : undefined,
             walletBalanceSnapshot: item.walletBalanceSnapshot && typeof item.walletBalanceSnapshot === 'object'
               && typeof item.walletBalanceSnapshot.assetCode === 'string'
               && typeof item.walletBalanceSnapshot.total === 'string'
@@ -245,6 +257,7 @@ export default function LedgerAAInitialBalance() {
   );
   const [walletMarginDraft, setWalletMarginDraft] = useState<{ userId: number; tagName: string; assetCode: string; amount: string } | null>(null);
   const [walletMarginReleaseDraft, setWalletMarginReleaseDraft] = useState<{ holdId: number; assetCode: string; maxAmount: string; amount: string } | null>(null);
+  const [revokeWalletReleaseDraft, setRevokeWalletReleaseDraft] = useState<{ releaseNo: string; assetCode: string; amount: string } | null>(null);
   const [manualMarginMigrationDraft, setManualMarginMigrationDraft] = useState<{ userId: number; tagName: string; marginEntryId: string; assetCode: string; amount: string } | null>(null);
   // 暂停标签前先选择保证金去向；真正的暂停和解冻均在“保存”时才执行。
   const [pauseWalletHandlingDraft, setPauseWalletHandlingDraft] = useState<PauseWalletHandling | null>(null);
@@ -323,6 +336,14 @@ export default function LedgerAAInitialBalance() {
       await Promise.all([refetch(), walletMarginContext.refetch()]);
     },
     onError: (error) => toast.error(error.message || '解冻失败'),
+  });
+  const revokeWalletReleaseMutation = trpc.ledger.revokeLedger37MarginReleaseToWallet.useMutation({
+    onSuccess: async (result) => {
+      toast.success(result.mode === 'reverse' ? '已写入保证金冻结冲正' : '已直接撤回原保证金回退');
+      setRevokeWalletReleaseDraft(null);
+      await Promise.all([refetch(), walletMarginContext.refetch()]);
+    },
+    onError: (error) => toast.error(error.message || '保证金回退撤回失败'),
   });
   const releasePausedTagMarginsMutation = trpc.ledger.releaseLedger37PausedTagMarginsToWallet.useMutation({
     onSuccess: async (result) => {
@@ -878,31 +899,48 @@ export default function LedgerAAInitialBalance() {
           const isWalletHold = ledgerId === 37 && marginEntry.source === 'wallet_hold';
           const isLegacyReadOnly = ledgerId === 37;
           if (isWalletHold) {
-            const isReleased = marginEntry.status === 'released' || isOutflow;
+            const inferredReleaseNo = marginEntry.releaseNo
+              || String(marginEntry.id || '').match(/^wallet_hold_\d+_release_(.+)$/)?.[1];
+            const entryKind = marginEntry.entryKind ?? (isOutflow ? 'release' : 'freeze');
+            const isReleaseRecord = entryKind === 'release';
+            const isReversalRecord = entryKind === 'reversal';
+            const isReleased = marginEntry.status === 'released' || isReleaseRecord;
             const originalFrozenAmount = rawAmount.replace(/^-/, '');
             const remainingFrozenAmount = String(marginEntry.remainingAmount ?? originalFrozenAmount);
             const releasedFromThisHold = Number(marginEntry.releasedAmount || 0);
-            const isPartialRelease = !isReleased && releasedFromThisHold > 0.00000001;
-            const isReleaseEditing = !isReleased && walletMarginReleaseDraft?.holdId === marginEntry.holdId;
+            const isOriginalFreeze = !isReleaseRecord && !isReversalRecord;
+            const isPartialRelease = isOriginalFreeze && !isReleased && releasedFromThisHold > 0.00000001;
+            const isReleaseEditing = isOriginalFreeze && !isReleased && walletMarginReleaseDraft?.holdId === marginEntry.holdId;
             const displayedCnyValue = isPartialRelease && cnyValue !== null && Number(originalFrozenAmount) > 0
               ? cnyValue * Number(remainingFrozenAmount) / Number(originalFrozenAmount)
               : cnyValue;
+            const entryLabel = isReversalRecord
+              ? '解冻冲正 · 钱包冻结'
+              : isReleaseRecord
+                ? (marginEntry.reversalStatus === 'reversed' ? '钱包解冻 · 已冲正' : '钱包解冻')
+                : `${marginEntry.migratedFrom === 'manual' ? '历史手工迁入 · ' : '钱包'}${isReleased ? '解冻' : '冻结'}`;
+            const shownAmount = isReversalRecord ? originalFrozenAmount : (isReleased ? originalFrozenAmount : remainingFrozenAmount);
             return (
-              <div key={marginEntry.id || `${tagName}-margin-${index}`} className="rounded-xl px-2 py-2" style={{ backgroundColor: isReleased ? '#FAFAFA' : '#F2F8FF', border: `1px solid ${isReleased ? '#F0F0F0' : '#CDE1F7'}` }}>
+              <div key={marginEntry.id || `${tagName}-margin-${index}`} className="rounded-xl px-2 py-2" style={{ backgroundColor: isReleased && !isReversalRecord ? '#FAFAFA' : '#F2F8FF', border: `1px solid ${isReleased && !isReversalRecord ? '#F0F0F0' : '#CDE1F7'}` }}>
                 <div className="flex items-center gap-1.5">
-                  <div className="h-7 w-7 flex items-center justify-center rounded-lg" style={{ backgroundColor: isReleased ? '#ECEFF1' : '#E2F0FF', color: isReleased ? '#78909C' : '#1565C0' }}>
-                    {isReleased ? <Unlock size={14} /> : <LockKeyhole size={14} />}
+                  <div className="h-7 w-7 flex items-center justify-center rounded-lg" style={{ backgroundColor: isReleased && !isReversalRecord ? '#ECEFF1' : '#E2F0FF', color: isReleased && !isReversalRecord ? '#78909C' : '#1565C0' }}>
+                    {isReleased && !isReversalRecord ? <Unlock size={14} /> : <LockKeyhole size={14} />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium" style={{ color: '#37474F' }}>{marginEntry.migratedFrom === 'manual' ? '历史手工迁入 · ' : '钱包'}{isReleased ? '解冻' : '冻结'} · {normalizeMarginCoin(marginEntry.coin)}</span>
-                      <span className="text-sm font-semibold tabular-nums" style={{ color: isReleased ? '#78909C' : '#1565C0' }}>{isReleased ? '−' : ''}{isReleased ? originalFrozenAmount : remainingFrozenAmount}</span>
+                      <span className="text-xs font-medium" style={{ color: '#37474F' }}>{entryLabel} · {normalizeMarginCoin(marginEntry.coin)}</span>
+                      <span className="text-sm font-semibold tabular-nums" style={{ color: isReleased && !isReversalRecord ? '#78909C' : '#1565C0' }}>{isReleaseRecord ? '−' : '+'}{shownAmount}</span>
                     </div>
-                    <div className="mt-0.5 text-[10px]" style={{ color: '#78909C' }}>记录时间：{formatRecordedAt(marginEntry.createdAt)}{displayedCnyValue !== null ? ` · ≈ ¥${formatSignedMarginAmount(displayedCnyValue, 0)}` : ''}{isPartialRelease ? ` · 已解冻 ${marginEntry.releasedAmount}` : ''}{marginEntry.migrationNo ? ` · 迁移单 ${marginEntry.migrationNo}` : ''}</div>
+                    <div className="mt-0.5 text-[10px]" style={{ color: '#78909C' }}>记录时间：{formatRecordedAt(marginEntry.createdAt)}{displayedCnyValue !== null ? ` · ≈ ¥${formatSignedMarginAmount(displayedCnyValue, 0)}` : ''}{isPartialRelease ? ` · 已解冻 ${marginEntry.releasedAmount}` : ''}{marginEntry.reversalStatus === 'reversed' ? ' · 已有冲正' : ''}{marginEntry.migrationNo ? ` · 迁移单 ${marginEntry.migrationNo}` : ''}</div>
                   </div>
-                  {!isReleased && (
+                  {isOriginalFreeze && !isReleased && (
                     <button type="button" onClick={() => openWalletMarginRelease(marginEntry.holdId, normalizeMarginCoin(marginEntry.coin), remainingFrozenAmount)} disabled={releaseWalletMarginMutation.isPending} className="h-7 rounded-lg px-2 text-[10px] font-medium disabled:opacity-50" style={{ backgroundColor: '#FFFFFF', color: '#1565C0', border: '1px solid #B8D7F3' }}>
                       减少/解冻
+                    </button>
+                  )}
+                  {isReleaseRecord && inferredReleaseNo && marginEntry.reversalStatus !== 'reversed' && (
+                    <button type="button" onClick={() => setRevokeWalletReleaseDraft({ releaseNo: inferredReleaseNo, assetCode: normalizeMarginCoin(marginEntry.coin), amount: originalFrozenAmount })} disabled={revokeWalletReleaseMutation.isPending} className="flex h-7 items-center gap-1 rounded-lg px-2 text-[10px] font-medium disabled:opacity-50" style={{ backgroundColor: '#EAF3FF', color: '#1565C0', border: '1px solid #B8D7F3' }}>
+                      <RotateCcw size={12} /> 撤回
                     </button>
                   )}
                 </div>
@@ -3487,6 +3525,39 @@ export default function LedgerAAInitialBalance() {
           </div>
         );
       })()}
+
+      {revokeWalletReleaseDraft && (
+        <div className="fixed inset-0 z-[210] flex items-end justify-center bg-black/50" onClick={() => setRevokeWalletReleaseDraft(null)}>
+          <div className="w-full max-w-md rounded-t-2xl bg-white p-5" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-base font-semibold" style={{ color: '#1A1A1A' }}>撤回保证金回退</h3>
+            <div className="mt-1 text-sm" style={{ color: '#757575' }}>已回退金额：{formatWalletMarginAssetBalance(Number(revokeWalletReleaseDraft.amount), revokeWalletReleaseDraft.assetCode)}</div>
+            <p className="mt-1 text-xs leading-5" style={{ color: '#9E9E9E' }}>会把等额资金重新冻结至原标签。仅当该资产当前仍可用时才可执行，已消费或再次冻结的资金会被安全拦截。</p>
+            <div className="mt-4 space-y-3">
+              <button
+                type="button"
+                disabled={revokeWalletReleaseMutation.isPending}
+                onClick={() => revokeWalletReleaseMutation.mutate({ ledgerId: 37, releaseNo: revokeWalletReleaseDraft.releaseNo, mode: 'reverse' })}
+                className="w-full rounded-xl border px-4 py-3 text-left disabled:opacity-50"
+                style={{ borderColor: '#BBE0C2', backgroundColor: '#F0F9F1', color: '#237A39' }}
+              >
+                <div className="text-sm font-semibold">写入冻结冲正记录（推荐）</div>
+                <div className="mt-0.5 text-xs leading-5">保留原解冻回退，并新增一笔等额冻结冲正；保证金净额恢复，审计链路完整。</div>
+              </button>
+              <button
+                type="button"
+                disabled={revokeWalletReleaseMutation.isPending}
+                onClick={() => revokeWalletReleaseMutation.mutate({ ledgerId: 37, releaseNo: revokeWalletReleaseDraft.releaseNo, mode: 'delete' })}
+                className="w-full rounded-xl border px-4 py-3 text-left disabled:opacity-50"
+                style={{ borderColor: '#F3CDD1', backgroundColor: '#FFF5F5', color: '#C62828' }}
+              >
+                <div className="text-sm font-semibold">直接撤回原回退记录</div>
+                <div className="mt-0.5 text-xs leading-5">移除原解冻回退明细，不新增面向成员的冲正记录，并恢复该笔保证金冻结。</div>
+              </button>
+            </div>
+            <button type="button" onClick={() => setRevokeWalletReleaseDraft(null)} className="mt-4 w-full rounded-xl border py-2.5 text-sm" style={{ borderColor: '#E0E0E0', color: '#757575' }}>取消</button>
+          </div>
+        </div>
+      )}
 
       {walletSnapshotUser && (
         walletSnapshotQuery.isLoading ? (

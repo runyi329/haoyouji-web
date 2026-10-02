@@ -50,6 +50,8 @@ type MarginEntry = {
   notes?: MarginNote[];
   source?: 'wallet_hold';
   walletBalanceSnapshot?: WalletBalanceSnapshot;
+  entryKind?: 'freeze' | 'release' | 'reversal';
+  reversalStatus?: 'reversed';
 };
 type ResolvedMarginEntry = MarginEntry & { cnyValue: number | null };
 type MemoVisibility = 'private' | 'shared';
@@ -135,6 +137,8 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string, migra
               : [],
             source: item.source === 'wallet_hold' ? 'wallet_hold' : undefined,
             walletBalanceSnapshot: readWalletBalanceSnapshot(item.walletBalanceSnapshot),
+            entryKind: item.entryKind === 'freeze' || item.entryKind === 'release' || item.entryKind === 'reversal' ? item.entryKind : undefined,
+            reversalStatus: item.reversalStatus === 'reversed' ? 'reversed' : undefined,
           }));
       }
     } catch {
@@ -5672,6 +5676,8 @@ export default function LedgerDetailAA({
                     };
                     const isOutflow = entry.amount < 0;
                     const isWalletFreeze = !isOutflow && entry.source === 'wallet_hold';
+                    const isReversal = entry.entryKind === 'reversal';
+                    const isReversedRelease = entry.entryKind === 'release' && entry.reversalStatus === 'reversed';
                     const amountLabel = entry.coin === 'CNY'
                       ? formatSignedMarginCny(entry.amount)
                       : `${formatSignedMarginNumber(entry.amount, 8)} ${entry.coin}`;
@@ -5681,7 +5687,7 @@ export default function LedgerDetailAA({
                           <div>
                             <div className="text-xs font-medium flex items-center gap-1.5" style={{ color: '#9E9E9E' }}>
                               第 {index + 1} 笔押金
-                              <span className="px-1.5 py-0.5 rounded" style={isOutflow ? { color: '#D32F2F', backgroundColor: '#FFF1F2' } : { color: '#1565C0', backgroundColor: '#EFF6FF' }}>{isOutflow ? '转出' : isWalletFreeze ? '钱包冻结' : '存入'}</span>
+                              <span className="px-1.5 py-0.5 rounded" style={isReversal ? { color: '#1565C0', backgroundColor: '#EFF6FF' } : isOutflow ? { color: '#D32F2F', backgroundColor: '#FFF1F2' } : { color: '#1565C0', backgroundColor: '#EFF6FF' }}>{isReversal ? '解冻冲正' : isReversedRelease ? '已冲正解冻' : isOutflow ? '转出' : isWalletFreeze ? '钱包冻结' : '存入'}</span>
                             </div>
                             <div className="text-base font-bold mt-0.5" style={{ color: isOutflow ? '#D32F2F' : '#1A1A1A' }}>{amountLabel}</div>
                           </div>

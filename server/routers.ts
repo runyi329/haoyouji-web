@@ -94,6 +94,8 @@ import {
   transferLedger37ManualMarginWalletHold,
   normalizeLedger37WalletAsset,
   createLedger37Dividend,
+  revokeLedger37Dividend,
+  revokeLedger37WalletHoldRelease,
   ensureLedger37WalletInfrastructure,
   type Ledger37WalletBalanceSnapshot,
 } from "./ledger37-wallet";
@@ -172,7 +174,7 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
     }
   }
   if (params.direction === 'release') {
-    entries = entries.map((entry) => (entry?.id === `wallet_hold_${params.holdId}_freeze` || (entry?.source === 'wallet_hold' && Number(entry?.holdId) === params.holdId))
+    entries = entries.map((entry) => (entry?.id === `wallet_hold_${params.holdId}_freeze` || (entry?.source === 'wallet_hold' && Number(entry?.holdId) === params.holdId && Number(entry?.amount) > 0 && entry?.entryKind !== 'reversal'))
       ? {
         ...entry,
         status: params.fullyReleased ? 'released' : 'active',
@@ -193,6 +195,8 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
           status: params.fullyReleased ? 'released' : 'active',
           releasedAmount: params.releasedAmount,
           remainingAmount: params.remainingAmount,
+          entryKind: 'release',
+          releaseNo: params.releaseNo,
           migratedFrom: 'manual',
           migrationNo: params.migrationNo,
         };
@@ -212,6 +216,8 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
       source: 'wallet_hold',
       holdId: params.holdId,
       status: params.direction === 'release' ? 'released' : 'active',
+      entryKind: params.direction === 'release' ? 'release' : 'freeze',
+      ...(params.releaseNo ? { releaseNo: params.releaseNo } : {}),
       ...(snapshotForRecord ? { walletBalanceSnapshot: snapshotForRecord } : {}),
     });
   }
@@ -220,6 +226,177 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
     `UPDATE ledger_members SET initial_balances = ?, updatedAt = NOW() WHERE ledgerId = ? AND userId = ?`,
     [JSON.stringify(balances), LEDGER_37_ID, params.userId],
   );
+}
+
+/**
+ * 将某一笔钱包解冻回退的撤回/冲正同步回37号标签明细。
+ * 直接撤回会删除原负数回退行；冲正保留原行并追加一笔正数冻结冲正行。
+ */
+async function retractLedger37WalletMarginReleaseRecord(transaction: any, params: {
+  userId: number;
+  tagName: string;
+  holdId: number;
+  sourceReleaseNo: string;
+  mode: 'reverse' | 'delete';
+  amount: string;
+  createdAt: string;
+  remainingAmount: string;
+  releasedAmount: string;
+  reversalNo?: string;
+}) {
+  const [memberRows] = await transaction.execute(
+    `SELECT initial_balances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
+    [LEDGER_37_ID, params.userId],
+  );
+  const member = asRows(memberRows)[0];
+  if (!member) throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本成员' });
+  let balances: Record<string, unknown> = {};
+  try { balances = member.initial_balances ? JSON.parse(String(member.initial_balances)) : {}; } catch { balances = {}; }
+  const key = `${params.tagName}__margins`;
+  let entries: any[] = [];
+  try { entries = Array.isArray(balances[key]) ? balances[key] : JSON.parse(String(balances[key] || '[]')); } catch { entries = []; }
+  // 早期历史平移已经生成了钱包解冻审计，但当时标签明细还没有写入 releaseNo。
+  // 仅在同一冻结单、同一负数金额且没有其他候选项时兼容识别；绝不按金额猜测多笔部分解冻。
+  const legacySourceCandidates = entries.filter((entry) => entry?.source === 'wallet_hold'
+    && Number(entry?.holdId) === params.holdId
+    && Number(entry?.amount) < 0
+    && Math.abs(Math.abs(Number(entry?.amount)) - Math.abs(Number(params.amount))) < 0.00000001
+    && !String(entry?.releaseNo || '').trim());
+  const legacySourceEntry = legacySourceCandidates.length === 1 ? legacySourceCandidates[0] : null;
+  const isSourceRelease = (entry: any) => String(entry?.releaseNo || '') === params.sourceReleaseNo
+    || String(entry?.id || '') === `wallet_hold_${params.holdId}_release_${params.sourceReleaseNo}`
+    || entry === legacySourceEntry;
+  if (!entries.some(isSourceRelease)) {
+    throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '未找到标签内对应的保证金回退明细，请刷新后核对' });
+  }
+  entries = entries.map((entry) => {
+    const isOriginalFreeze = entry?.source === 'wallet_hold'
+      && Number(entry?.holdId) === params.holdId
+      && Number(entry?.amount) > 0
+      && entry?.entryKind !== 'reversal';
+    if (isOriginalFreeze) {
+      return {
+        ...entry,
+        status: 'active',
+        remainingAmount: params.remainingAmount,
+        releasedAmount: params.releasedAmount,
+      };
+    }
+    if (isSourceRelease(entry) && params.mode === 'reverse') {
+      return {
+        ...entry,
+        entryKind: 'release',
+        releaseNo: params.sourceReleaseNo,
+        reversalStatus: 'reversed',
+      };
+    }
+    return entry;
+  });
+  if (params.mode === 'delete') {
+    entries = entries.filter((entry) => !isSourceRelease(entry));
+  } else {
+    entries.push({
+      id: `wallet_hold_${params.holdId}_reversal_${params.reversalNo || Date.now()}`,
+      coin: entries.find((entry) => Number(entry?.holdId) === params.holdId)?.coin || 'CNY',
+      amount: params.amount,
+      createdAt: params.createdAt,
+      notes: [],
+      source: 'wallet_hold',
+      holdId: params.holdId,
+      status: 'active',
+      entryKind: 'reversal',
+      reversalOfReleaseNo: params.sourceReleaseNo,
+      releaseNo: params.reversalNo,
+      remainingAmount: params.remainingAmount,
+      releasedAmount: params.releasedAmount,
+    });
+  }
+  balances[key] = JSON.stringify(entries);
+  await transaction.execute(
+    `UPDATE ledger_members SET initial_balances = ?, updatedAt = NOW() WHERE ledgerId = ? AND userId = ?`,
+    [JSON.stringify(balances), LEDGER_37_ID, params.userId],
+  );
+}
+
+/**
+ * 只修复早期“历史手工保证金标签平移”的展示关联字段：当时已经真实冻结/解冻，
+ * 但标签内的负数回退行没有保存 releaseNo，无法从 UI 打开撤回或冲正。
+ *
+ * 本函数不新增、不删除、不改写任何金额、余额、冻结状态、日期或备注；只在唯一匹配
+ * 的既有负数回退行写入 entryKind/releaseNo，使其指向既有的钱包解冻审计流水。
+ */
+async function repairLedger37WalletReleasePresentationRecords(transaction: any) {
+  const [releaseRows] = await transaction.execute(
+    `SELECT r.release_no, r.hold_id, r.amount, r.created_at,
+            h.user_id, h.tag_name, h.asset_code, h.released_amount, h.status AS hold_status
+       FROM ai_wallet_project_hold_releases r
+       INNER JOIN ai_wallet_project_holds h ON h.id = r.hold_id
+      WHERE h.ledger_id = ? AND r.entry_kind = 'release' AND r.status = 'active'
+      ORDER BY r.id ASC
+      FOR UPDATE`,
+    [LEDGER_37_ID],
+  );
+  const summary = { examined: 0, repaired: 0, alreadyLinked: 0, skipped: 0 };
+  const memberBalances = new Map<number, { balances: Record<string, unknown>; changed: boolean }>();
+  for (const release of asRows(releaseRows)) {
+    summary.examined += 1;
+    const userId = Number(release.user_id);
+    let cached = memberBalances.get(userId);
+    if (!cached) {
+      const [memberRows] = await transaction.execute(
+        `SELECT initial_balances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
+        [LEDGER_37_ID, userId],
+      );
+      const member = asRows(memberRows)[0];
+      if (!member) {
+        summary.skipped += 1;
+        continue;
+      }
+      let balances: Record<string, unknown> = {};
+      try { balances = member.initial_balances ? JSON.parse(String(member.initial_balances)) : {}; } catch { balances = {}; }
+      cached = { balances, changed: false };
+      memberBalances.set(userId, cached);
+    }
+    const key = `${String(release.tag_name)}__margins`;
+    let entries: any[] = [];
+    try { entries = Array.isArray(cached.balances[key]) ? cached.balances[key] : JSON.parse(String(cached.balances[key] || '[]')); } catch { entries = []; }
+    const currentReleaseNo = String(release.release_no || '');
+    if (entries.some((entry) => String(entry?.releaseNo || '') === currentReleaseNo)) {
+      summary.alreadyLinked += 1;
+      continue;
+    }
+    const expectedAmount = Math.abs(Number(release.amount));
+    const candidates = entries.filter((entry) => entry?.source === 'wallet_hold'
+      && Number(entry?.holdId) === Number(release.hold_id)
+      && Number(entry?.amount) < 0
+      && Math.abs(Math.abs(Number(entry?.amount)) - expectedAmount) < 0.00000001
+      && !String(entry?.releaseNo || '').trim());
+    if (candidates.length !== 1) {
+      summary.skipped += 1;
+      continue;
+    }
+    const matched = candidates[0];
+    cached.balances[key] = JSON.stringify(entries.map((entry) => entry === matched
+      ? {
+        ...entry,
+        entryKind: 'release',
+        releaseNo: currentReleaseNo,
+        status: 'released',
+        releasedAmount: String(release.released_amount ?? release.amount),
+        remainingAmount: String(release.hold_status) === 'released' ? '0' : String(entry?.remainingAmount ?? '0'),
+      }
+      : entry));
+    cached.changed = true;
+    summary.repaired += 1;
+  }
+  for (const [userId, cached] of Array.from(memberBalances.entries())) {
+    if (!cached.changed) continue;
+    await transaction.execute(
+      `UPDATE ledger_members SET initial_balances = ?, updatedAt = NOW() WHERE ledgerId = ? AND userId = ?`,
+      [JSON.stringify(cached.balances), LEDGER_37_ID, userId],
+    );
+  }
+  return summary;
 }
 
 type Ledger37ManualMarginMigrationCandidate = {
@@ -14073,6 +14250,77 @@ ${klinesSummary}
           });
           await transaction.commit();
           return { success: true, hold: release.hold, releasedAmount: release.releasedAmount, remainingAmount: release.remainingAmount, fullyReleased: release.fullyReleased };
+        } catch (error: any) {
+          try { await transaction.rollback(); } catch {}
+          throw error;
+        } finally { transaction.release?.(); }
+      }),
+
+    // 已回到成员可用余额的保证金，可选择直接撤回原回退或保留原记录并写入冻结冲正。
+    revokeLedger37MarginReleaseToWallet: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        releaseNo: z.string().trim().min(8).max(64),
+        mode: z.enum(['reverse', 'delete']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示撤回与冲正界面，不会修改真实保证金或钱包资金' });
+        }
+        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本保证金仅胡大叔可撤回或冲正' });
+        }
+        await assertAiWalletOperationEnabled('ledger:37', 'order_debit');
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+        const transaction = conn as any;
+        try {
+          await transaction.beginTransaction();
+          const result = await revokeLedger37WalletHoldRelease({
+            releaseNo: input.releaseNo,
+            mode: input.mode,
+            actorUserId: ctx.user.id,
+            transaction,
+          });
+          await retractLedger37WalletMarginReleaseRecord(transaction, {
+            userId: result.hold.userId,
+            tagName: result.hold.tagName,
+            holdId: result.hold.id,
+            sourceReleaseNo: result.sourceReleaseNo,
+            mode: result.mode,
+            amount: result.amount,
+            createdAt: new Date().toISOString(),
+            remainingAmount: result.hold.remainingAmount,
+            releasedAmount: result.hold.releasedAmount,
+            reversalNo: result.reversalNo,
+          });
+          await transaction.commit();
+          return { success: true, ...result };
+        } catch (error: any) {
+          try { await transaction.rollback(); } catch {}
+          throw error;
+        } finally { transaction.release?.(); }
+      }),
+
+    // 仅补齐早期历史保证金平移的撤回审计关联；不改变钱包余额、冻结金额或标签净额。
+    repairLedger37MarginReleasePresentation: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(37) }))
+      .mutation(async ({ ctx, input }) => {
+        if (process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示历史回退修复方案，不会修改真实标签明细' });
+        }
+        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本保证金仅胡大叔可修复历史回退关联' });
+        }
+        await ensureLedger37WalletInfrastructure();
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+        const transaction = conn as any;
+        try {
+          await transaction.beginTransaction();
+          const summary = await repairLedger37WalletReleasePresentationRecords(transaction);
+          await transaction.commit();
+          return { success: true, ...summary };
         } catch (error: any) {
           try { await transaction.rollback(); } catch {}
           throw error;
@@ -30108,7 +30356,7 @@ insights 数组每项包含：
           targetUserId = input.viewAsUserId;
         }
       }
-      const result = await db.execute(sql`SELECT id, tag_name, amount, asset_code, asset_amount, note, created_at FROM dividend_records WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} ORDER BY created_at DESC`);
+      const result = await db.execute(sql`SELECT id, tag_name, amount, asset_code, asset_amount, note, created_at, wallet_request_id, wallet_entry_id, reversal_of_id, reversal_mode FROM dividend_records WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} ORDER BY created_at DESC`);
       return { records: (result as any)[0] as any[] };
     }),
 
@@ -30152,6 +30400,40 @@ insights 数组每项包含：
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       await db.execute(sql`INSERT INTO dividend_records (ledger_id, user_id, tag_name, amount, note) VALUES (${input.ledgerId}, ${input.targetUserId}, ${input.tagName}, ${input.amount}, ${input.note || ''})`);
       return { success: true };
+    }),
+
+  // 37号已入账分红只能撤回原记录或写入等额冲正，不允许直接改金额或备注。
+  adminRevokeLedger37Dividend: protectedProcedure
+    .input(z.object({
+      ledgerId: z.literal(37),
+      recordId: z.number().int().positive(),
+      mode: z.enum(['reverse', 'delete']),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (process.env.DEV_BYPASS_AUTH === 'true') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示撤回与冲正界面，不会修改真实分红或钱包资金' });
+      }
+      if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本分红仅胡大叔可撤回或冲正' });
+      }
+      await assertAiWalletOperationEnabled('ledger:37', 'order_debit');
+      const conn = await getDbTransactionConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+      const transaction = conn as any;
+      try {
+        await transaction.beginTransaction();
+        const result = await revokeLedger37Dividend({
+          recordId: input.recordId,
+          mode: input.mode,
+          actorUserId: ctx.user.id,
+          transaction,
+        });
+        await transaction.commit();
+        return { success: true, ...result };
+      } catch (error: any) {
+        try { await transaction.rollback(); } catch {}
+        throw error;
+      } finally { transaction.release?.(); }
     }),
 
   // 分红功能：管理员删除分红记录
@@ -30240,7 +30522,7 @@ insights 数组每项包含：
       }
       const db = await getLedgerDb();
       if (!db) return { records: [] };
-      const result = await db.execute(sql`SELECT dr.id, dr.user_id, dr.tag_name, dr.amount, dr.asset_code, dr.asset_amount, dr.note, dr.created_at, u.name as user_name, u.username as user_username, lm.nickname as user_nickname FROM dividend_records dr LEFT JOIN users u ON u.id = dr.user_id LEFT JOIN ledger_members lm ON lm.ledgerId = dr.ledger_id AND lm.userId = dr.user_id WHERE dr.ledger_id = ${input.ledgerId} ORDER BY dr.created_at DESC`);
+      const result = await db.execute(sql`SELECT dr.id, dr.user_id, dr.tag_name, dr.amount, dr.asset_code, dr.asset_amount, dr.note, dr.created_at, dr.wallet_request_id, dr.wallet_entry_id, dr.reversal_of_id, dr.reversal_mode, u.name as user_name, u.username as user_username, lm.nickname as user_nickname FROM dividend_records dr LEFT JOIN users u ON u.id = dr.user_id LEFT JOIN ledger_members lm ON lm.ledgerId = dr.ledger_id AND lm.userId = dr.user_id WHERE dr.ledger_id = ${input.ledgerId} ORDER BY dr.created_at DESC`);
       return { records: (result as any)[0] as any[] };
     }),
 
