@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { WalletCards, X } from "lucide-react";
 import { getCryptoAssetIconSrc } from "@/lib/cryptoAssetIcons";
 import { getInternalTransferPresentation } from "@/lib/walletTransferPresentation";
+import { selectWalletAccountByLatestFlow } from "@/lib/walletAccountSelection";
 
 // MySQL timestamp strings are stored as Beijing wall-clock values; format with UTC accessors.
 const fmtBJTime = (d: any, withTime = true): string => {
@@ -44,7 +45,13 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
   snapshot: any;
   onClose: () => void;
 }) {
-  const [account, setAccount] = useState<'CRYPTO' | 'CNY'>('CRYPTO');
+  const [account, setAccount] = useState<'CRYPTO' | 'CNY'>(() => selectWalletAccountByLatestFlow(
+    [
+      ...(snapshot?.balanceHistory || []).filter((entry: any) => !String(entry.description || '').startsWith('[CNY]')),
+      ...(snapshot?.multiAssetHistory || []).filter((entry: any) => entry.eventType !== 'collateral_lock' && entry.eventType !== 'collateral_release'),
+    ],
+    snapshot?.cnyHistory || [],
+  ));
   const [flowFilter, setFlowFilter] = useState('USDT');
   const autoFlowFilterRef = useRef(true);
   const usdtBalance = Number(snapshot?.usdtBalance || 0);

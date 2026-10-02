@@ -107,6 +107,10 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
   amount: string;
   createdAt: string;
   direction: 'freeze' | 'release';
+  releaseNo?: string;
+  remainingAmount?: string;
+  releasedAmount?: string;
+  fullyReleased?: boolean;
 }) {
   const [memberRows] = await transaction.execute(
     `SELECT initial_balances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
@@ -121,11 +125,16 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
   try { entries = Array.isArray(balances[key]) ? balances[key] : JSON.parse(String(balances[key] || '[]')); } catch { entries = []; }
   if (params.direction === 'release') {
     entries = entries.map((entry) => entry?.id === `wallet_hold_${params.holdId}_freeze`
-      ? { ...entry, status: 'released' }
+      ? {
+        ...entry,
+        status: params.fullyReleased ? 'released' : 'active',
+        remainingAmount: params.remainingAmount,
+        releasedAmount: params.releasedAmount,
+      }
       : entry);
   }
   entries.push({
-    id: `wallet_hold_${params.holdId}_${params.direction}`,
+    id: `wallet_hold_${params.holdId}_${params.direction}${params.releaseNo ? `_${params.releaseNo}` : ''}`,
     coin: params.assetCode,
     amount: params.direction === 'release' ? `-${params.amount}` : params.amount,
     createdAt: params.createdAt,
@@ -13386,7 +13395,12 @@ ${klinesSummary}
       }),
 
     releaseLedger37MarginToWallet: protectedProcedure
-      .input(z.object({ ledgerId: z.literal(37), holdId: z.number().int().positive() }))
+      .input(z.object({
+        ledgerId: z.literal(37),
+        holdId: z.number().int().positive(),
+        // 未传代表该笔全部解冻；传入则只减少对应数量。
+        amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         if (process.env.DEV_BYPASS_AUTH === 'true') {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示界面，不会解冻真实钱包资金' });
@@ -13399,13 +13413,79 @@ ${klinesSummary}
         const transaction = conn as any;
         try {
           await transaction.beginTransaction();
-          const hold = await releaseLedger37WalletHold({ holdId: input.holdId, actorUserId: ctx.user.id, transaction });
+          const release = await releaseLedger37WalletHold({ holdId: input.holdId, amount: input.amount, actorUserId: ctx.user.id, transaction });
           await appendLedger37WalletMarginRecord(transaction, {
-            userId: hold.userId, tagName: hold.tagName, holdId: hold.id,
-            assetCode: hold.assetCode, amount: hold.amount, createdAt: hold.releasedAt || new Date().toISOString(), direction: 'release',
+            userId: release.hold.userId, tagName: release.hold.tagName, holdId: release.hold.id,
+            assetCode: release.hold.assetCode, amount: release.releasedAmount, createdAt: release.releasedAt, direction: 'release',
+            releaseNo: release.releaseNo, remainingAmount: release.remainingAmount,
+            releasedAmount: release.hold.releasedAmount, fullyReleased: release.fullyReleased,
           });
           await transaction.commit();
-          return { success: true, hold };
+          return { success: true, hold: release.hold, releasedAmount: release.releasedAmount, remainingAmount: release.remainingAmount, fullyReleased: release.fullyReleased };
+        } catch (error: any) {
+          try { await transaction.rollback(); } catch {}
+          throw error;
+        } finally { transaction.release?.(); }
+      }),
+
+    // 标签已暂停时，管理员可把该标签全部仍在冻结中的钱包保证金返还至成员原币种可用余额。
+    releaseLedger37PausedTagMarginsToWallet: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        targetUserId: z.number().int().positive(),
+        tagName: z.string().trim().min(1).max(160),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (process.env.DEV_BYPASS_AUTH === 'true') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示暂停后解冻流程，不会操作真实钱包资金' });
+        }
+        if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本保证金仅胡大叔可操作' });
+        }
+        const membership = await dbLedger.getUserMembership(LEDGER_37_ID, input.targetUserId);
+        if (!membership) throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本成员' });
+        const category = (await dbLedger.getLedgerCategories(LEDGER_37_ID, ctx.user.id, undefined, null)).find((item: any) => String(item.name) === input.tagName && !item.isDefault);
+        if (!category) throw new TRPCError({ code: 'NOT_FOUND', message: '标签不存在或不可用于保证金' });
+        await ensureLedger37WalletInfrastructure();
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '钱包服务暂不可用' });
+        const transaction = conn as any;
+        try {
+          await transaction.beginTransaction();
+          const [memberRows] = await transaction.execute(
+            'SELECT initial_balances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE',
+            [LEDGER_37_ID, input.targetUserId],
+          );
+          const member = asRows(memberRows)[0];
+          if (!member) throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本成员' });
+          let balances: Record<string, any> = {};
+          try { balances = member.initial_balances ? JSON.parse(String(member.initial_balances)) : {}; } catch { balances = {}; }
+          const rawHistory = balances[`${input.tagName}__pauseHistory`];
+          let pauseHistory: Array<{ pauseDate?: string; resumeDate?: string }> = [];
+          try { pauseHistory = rawHistory ? JSON.parse(String(rawHistory)) : []; } catch { pauseHistory = []; }
+          const latestPause = pauseHistory[pauseHistory.length - 1];
+          const isPaused = Boolean((latestPause?.pauseDate && !latestPause.resumeDate) || balances[`${input.tagName}__pauseDate`]);
+          if (!isPaused) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '请先保存该标签的暂停状态，再执行保证金解冻' });
+          const [holdRows] = await transaction.execute(
+            `SELECT id FROM ai_wallet_project_holds
+             WHERE ledger_id = ? AND user_id = ? AND tag_name = ? AND status = 'active'
+               AND amount > COALESCE(released_amount, 0)
+             ORDER BY id ASC FOR UPDATE`,
+            [LEDGER_37_ID, input.targetUserId, input.tagName],
+          );
+          const releases: Array<{ assetCode: string; amount: string }> = [];
+          for (const row of asRows(holdRows)) {
+            const release = await releaseLedger37WalletHold({ holdId: Number(row.id), actorUserId: ctx.user.id, transaction });
+            await appendLedger37WalletMarginRecord(transaction, {
+              userId: release.hold.userId, tagName: release.hold.tagName, holdId: release.hold.id,
+              assetCode: release.hold.assetCode, amount: release.releasedAmount, createdAt: release.releasedAt, direction: 'release',
+              releaseNo: release.releaseNo, remainingAmount: release.remainingAmount,
+              releasedAmount: release.hold.releasedAmount, fullyReleased: release.fullyReleased,
+            });
+            releases.push({ assetCode: release.hold.assetCode, amount: release.releasedAmount });
+          }
+          await transaction.commit();
+          return { success: true, releases };
         } catch (error: any) {
           try { await transaction.rollback(); } catch {}
           throw error;

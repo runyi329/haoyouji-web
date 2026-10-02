@@ -24,6 +24,7 @@ import { trpc } from "../lib/trpc";
 import { restoreLedgerViewAsState } from "../lib/authIdentity";
 import { getInternalTransferPresentation } from "../lib/walletTransferPresentation";
 import { getCryptoAssetIconSrc } from "../lib/cryptoAssetIcons";
+import { selectWalletAccountByLatestFlow } from "../lib/walletAccountSelection";
 import Recharge from "./Recharge";
 import Withdraw from "./Withdraw";
 import { AI_WALLET_SETTLEMENT_ASSETS, type AiWalletSettlementAsset } from "@shared/ai-wallet-assets";
@@ -659,6 +660,10 @@ export default function Wallet() {
     : path;
   // 钱包详情页会离开本组件；把账户类别保存在 URL 中，返回时才能保持原来的账户上下文。
   const accountFromRoute = searchParams.get("account");
+  const hasExplicitAccountRoute = accountFromRoute === "USDT"
+    || accountFromRoute === "CNY"
+    || accountFromRoute === "CRYPTO"
+    || accountFromRoute === "FOREIGN";
   // 外币独立账本尚未开通真实余额与流水；入口先保留为禁用态，后续接入 USD/HKD/JPY 等资产后再自动激活。
   // 该常量必须在账户路由初始化之前声明，避免旧热更新模块引用未初始化的账户能力。
   const foreignAccountsEnabled = false;
@@ -677,9 +682,15 @@ export default function Wallet() {
   const [modal, setModal] = useState<ModalType>(null);
   const [hideBalance, setHideBalance] = useState(false);
   const [activeAsset, setActiveAsset] = useState<WalletAccountAsset>(initialAccount);
+  // 未指定账户时，钱包仅在首次加载完成后由最新一笔真实动账决定默认账户。
+  // 用户手动选择账户或通过 URL 指定账户后，均不再被自动选择逻辑覆盖。
+  const autoAccountSelectionRef = useRef(!hasExplicitAccountRoute);
   useEffect(() => {
     setActiveAsset(initialAccount);
   }, [initialAccount]);
+  useEffect(() => {
+    autoAccountSelectionRef.current = !hasExplicitAccountRoute;
+  }, [hasExplicitAccountRoute]);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [transferAsset, setTransferAsset] = useState<WalletTransferAsset>("USDT");
   const [digitalHistoryFilter, setDigitalHistoryFilter] = useState<DigitalHistoryFilter>("USDT");
@@ -907,6 +918,30 @@ export default function Wallet() {
   ]
     .sort((left: any, right: any) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
   const latestDigitalHistoryAsset = String(allRecentDigitalTx[0]?.assetCode || "").toUpperCase() as DigitalAssetHistoryCode | "";
+  const latestWalletAccount = selectWalletAccountByLatestFlow(allRecentDigitalTx, recentCnyTx);
+  const latestWalletActiveAsset: WalletAccountAsset = latestWalletAccount === "CNY"
+    ? "CNY"
+    : isLedger52WalletEntry ? "CRYPTO" : "USDT";
+  const latestWalletAccountDataLoading = isLedger52WalletEntry
+    ? (
+      walletPolicyQuery.isLoading
+      || recentManualQuery.isLoading
+      || ledger52UsdtHistoryQuery.isLoading
+      || multiAssetHistoryQuery.isLoading
+      || cnyHistoryQuery.isLoading
+    )
+    : (
+      recentRechargeQuery.isLoading
+      || recentWithdrawQuery.isLoading
+      || recentManualQuery.isLoading
+      || recentBalanceHistoryQuery.isLoading
+      || cnyHistoryQuery.isLoading
+    );
+  useEffect(() => {
+    if (!autoAccountSelectionRef.current || latestWalletAccountDataLoading) return;
+    setActiveAsset(latestWalletActiveAsset);
+    autoAccountSelectionRef.current = false;
+  }, [latestWalletActiveAsset, latestWalletAccountDataLoading]);
   // 交易所式顺序：全部、USDT 固定在前；最近变动币种固定第三位，其余币种顺延。
   const digitalHistoryFilterOptions: DigitalHistoryFilter[] = [
     "ALL",
@@ -989,6 +1024,7 @@ export default function Wallet() {
                         type="button"
                         disabled={!item.enabled}
                         onClick={() => {
+                          autoAccountSelectionRef.current = false;
                           setActiveAsset(item.value);
                           setIsAccountMenuOpen(false);
                           // 同步地址，确保进入币种详情后返回仍保留当前账户，不回落到稳定币账户。

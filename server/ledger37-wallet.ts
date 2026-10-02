@@ -22,6 +22,8 @@ export type Ledger37WalletHold = {
   tagName: string;
   assetCode: Ledger37WalletAsset;
   amount: string;
+  releasedAmount: string;
+  remainingAmount: string;
   cnyValueSnapshot: string | null;
   status: "active" | "released";
   createdAt: string;
@@ -76,6 +78,7 @@ export async function ensureLedger37WalletInfrastructure(): Promise<void> {
           tag_name VARCHAR(160) NOT NULL,
           asset_code VARCHAR(16) NOT NULL,
           amount DECIMAL(36,18) NOT NULL,
+          released_amount DECIMAL(36,18) NOT NULL DEFAULT 0,
           cny_value_snapshot DECIMAL(36,8) NULL,
           status VARCHAR(20) NOT NULL DEFAULT 'active',
           created_by INT NOT NULL,
@@ -89,6 +92,29 @@ export async function ensureLedger37WalletInfrastructure(): Promise<void> {
           KEY idx_ai_wallet_project_hold_user_asset (user_id, asset_code, status),
           KEY idx_ai_wallet_project_hold_ledger_tag (ledger_id, tag_name, status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='项目钱包冻结台账：不改变总资产，仅占用可用余额'
+      `);
+      const [holdColumns] = await (conn as any).execute(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'ai_wallet_project_holds'
+      `) as any[];
+      const holdColumnSet = new Set(rowsOf(holdColumns).map((row) => String(row.column_name)));
+      if (!holdColumnSet.has('released_amount')) {
+        try { await (conn as any).execute("ALTER TABLE ai_wallet_project_holds ADD COLUMN released_amount DECIMAL(36,18) NOT NULL DEFAULT 0 AFTER amount"); }
+        catch (error: any) { if (error?.code !== "ER_DUP_FIELDNAME") throw error; }
+      }
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ai_wallet_project_hold_releases (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          release_no VARCHAR(64) NOT NULL,
+          request_id VARCHAR(112) NOT NULL,
+          hold_id BIGINT UNSIGNED NOT NULL,
+          amount DECIMAL(36,18) NOT NULL,
+          released_by INT NOT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_ai_wallet_project_hold_release_no (release_no),
+          UNIQUE KEY uk_ai_wallet_project_hold_release_request (request_id),
+          KEY idx_ai_wallet_project_hold_release_hold (hold_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='37号项目钱包保证金部分或全额解冻审计流水'
       `);
       const [columns] = await (conn as any).execute(`
         SELECT column_name FROM information_schema.columns
@@ -134,7 +160,7 @@ async function getFundingBalanceForUpdate(transaction: any, userId: number, asse
   );
   const manual = rowsOf(manualRows).reduce((total, row) => total + Number(row.amount || 0), 0);
   const [holdRows] = await transaction.execute(
-    `SELECT COALESCE(SUM(amount), 0) AS frozen FROM ai_wallet_project_holds
+    `SELECT COALESCE(SUM(amount - COALESCE(released_amount, 0)), 0) AS frozen FROM ai_wallet_project_holds
       WHERE user_id = ? AND asset_code = ? AND status = 'active' FOR UPDATE`,
     [userId, assetCode],
   );
@@ -161,7 +187,7 @@ export async function getLedger37FundingBalanceSummary(userId: number, assetCode
     [userId],
   );
   const [holdRows] = await (conn as any).execute(
-    "SELECT COALESCE(SUM(amount), 0) AS frozen FROM ai_wallet_project_holds WHERE user_id = ? AND asset_code = ? AND status = 'active'",
+    "SELECT COALESCE(SUM(amount - COALESCE(released_amount, 0)), 0) AS frozen FROM ai_wallet_project_holds WHERE user_id = ? AND asset_code = ? AND status = 'active'",
     [userId, assetCode],
   );
   const total = Number(assetCode === "CNY" ? user.balance_cny : user.balance) + Number(rowsOf(manualRows)[0]?.total || 0);
@@ -181,6 +207,9 @@ async function getCnyValue(assetCode: Ledger37WalletAsset, amount: string): Prom
 }
 
 function holdResult(row: any): Ledger37WalletHold {
+  const amount = String(row.amount);
+  const releasedAmount = String(row.released_amount ?? 0);
+  const remainingAmount = Math.max(0, Number(amount) - Number(releasedAmount)).toFixed(18).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
   return {
     id: Number(row.id),
     holdNo: String(row.hold_no),
@@ -188,7 +217,9 @@ function holdResult(row: any): Ledger37WalletHold {
     userId: Number(row.user_id),
     tagName: String(row.tag_name),
     assetCode: normalizeLedger37WalletAsset(row.asset_code),
-    amount: String(row.amount),
+    amount,
+    releasedAmount,
+    remainingAmount,
     cnyValueSnapshot: row.cny_value_snapshot == null ? null : String(row.cny_value_snapshot),
     status: String(row.status) === "released" ? "released" : "active",
     createdAt: row.created_at ? String(row.created_at) : "",
@@ -279,9 +310,11 @@ export async function freezeLedger37WalletHold(params: {
 
 export async function releaseLedger37WalletHold(params: {
   holdId: number;
+  /** 未传时释放该笔剩余冻结金额；传入时仅减少指定数量。 */
+  amount?: string;
   actorUserId: number;
   transaction?: any;
-}): Promise<Ledger37WalletHold> {
+}): Promise<{ hold: Ledger37WalletHold; releasedAmount: string; remainingAmount: string; fullyReleased: boolean; releaseNo: string; releasedAt: string }> {
   await ensureLedger37WalletInfrastructure();
   const ownConnection = !params.transaction;
   const conn = params.transaction || await getDbTransactionConnection();
@@ -297,12 +330,26 @@ export async function releaseLedger37WalletHold(params: {
     if (!hold) throw new Error("保证金冻结记录不存在");
     if (String(hold.status) !== "active") throw new Error("该保证金已经解冻");
     const assetCode = normalizeLedger37WalletAsset(hold.asset_code);
-    const amount = decimalText(String(hold.amount));
+    const originalAmount = Number(hold.amount || 0);
+    const previouslyReleased = Math.max(0, Number(hold.released_amount || 0));
+    const remaining = Math.max(0, originalAmount - previouslyReleased);
+    if (!(remaining > 0.00000001)) throw new Error("该保证金没有可解冻余额");
+    const amount = params.amount
+      ? decimalText(params.amount)
+      : remaining.toFixed(18).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+    if (Number(amount) - remaining > 0.00000001) {
+      throw new Error(`${assetCode} 本笔最多可解冻 ${remaining.toFixed(assetCode === "CNY" ? 2 : 8)} ${assetCode}`);
+    }
+    const nextReleased = previouslyReleased + Number(amount);
+    const fullyReleased = nextReleased >= originalAmount - 0.00000001;
+    const releaseNo = `R37${Date.now().toString(36).toUpperCase()}${randomBytes(4).toString("hex").toUpperCase()}`;
+    const releaseRequestId = buildRequestId("R");
+    const releasedAt = new Date().toISOString();
     if (!isFundingAsset(assetCode)) {
       await dbMultiAssetWallet.moveMultiAssetBalanceToFrozen({
         userId: Number(hold.user_id), assetCode, amount, direction: "release",
         note: `37号账本保证金解冻 · ${String(hold.tag_name)}`,
-        requestId: `${String(hold.request_id)}_RELEASE`, actorUserId: params.actorUserId,
+        requestId: `${releaseRequestId}_ASSET`, actorUserId: params.actorUserId,
         sourceLedgerId: LEDGER_37_ID, transaction,
       });
     } else {
@@ -310,12 +357,26 @@ export async function releaseLedger37WalletHold(params: {
       await getFundingBalanceForUpdate(transaction, Number(hold.user_id), assetCode);
     }
     await transaction.execute(
-      "UPDATE ai_wallet_project_holds SET status = 'released', released_by = ?, released_reason = 'ledger37_margin_release', released_at = NOW(), updated_at = NOW() WHERE id = ?",
-      [params.actorUserId, params.holdId],
+      `INSERT INTO ai_wallet_project_hold_releases
+        (release_no, request_id, hold_id, amount, released_by)
+       VALUES (?, ?, ?, CAST(? AS DECIMAL(36,18)), ?)`,
+      [releaseNo, releaseRequestId, params.holdId, amount, params.actorUserId],
     );
+    if (fullyReleased) {
+      await transaction.execute(
+        "UPDATE ai_wallet_project_holds SET released_amount = amount, status = 'released', released_by = ?, released_reason = 'ledger37_margin_release', released_at = NOW(), updated_at = NOW() WHERE id = ?",
+        [params.actorUserId, params.holdId],
+      );
+    } else {
+      await transaction.execute(
+        "UPDATE ai_wallet_project_holds SET released_amount = released_amount + CAST(? AS DECIMAL(36,18)), released_by = ?, released_reason = 'ledger37_margin_partial_release', updated_at = NOW() WHERE id = ?",
+        [amount, params.actorUserId, params.holdId],
+      );
+    }
     const [releasedRows] = await transaction.execute("SELECT * FROM ai_wallet_project_holds WHERE id = ? LIMIT 1", [params.holdId]);
     if (ownConnection) await transaction.commit();
-    return holdResult(rowsOf(releasedRows)[0]);
+    const updatedHold = holdResult(rowsOf(releasedRows)[0]);
+    return { hold: updatedHold, releasedAmount: amount, remainingAmount: updatedHold.remainingAmount, fullyReleased, releaseNo, releasedAt };
   } catch (error) {
     if (ownConnection) try { await transaction.rollback(); } catch {}
     throw error;

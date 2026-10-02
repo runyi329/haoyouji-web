@@ -25,10 +25,15 @@ import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, Eye, 
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
+import { ReadonlyWalletSnapshot } from "@/components/ReadonlyWalletSnapshot";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { COIN_OPTIONS } from "@/components/FunderOrderCard";
+import { AI_WALLET_CRYPTO_MARKET_ASSETS } from "@shared/ai-wallet-assets";
 
 // 与52号融资付息订单保持同一币种覆盖范围；CNY 统一表示人民币。
 const MARGIN_COIN_OPTIONS = ['CNY', ...COIN_OPTIONS.filter((coin) => coin !== 'CNY')];
+// 37号保证金只接收人民币、USDT及全局钱包已启用的数字币；证券和商品资产不进入本账本。
+const LEDGER_37_WALLET_CRYPTO_CODES = new Set<string>(AI_WALLET_CRYPTO_MARKET_ASSETS);
 
 type MarginNote = {
   id: string;
@@ -45,6 +50,8 @@ type MarginEntry = {
   source?: 'wallet_hold' | 'manual';
   holdId?: number;
   status?: 'active' | 'released';
+  releasedAmount?: string;
+  remainingAmount?: string;
 };
 
 const createMarginEntry = (seed?: Partial<MarginEntry>): MarginEntry => ({
@@ -58,6 +65,8 @@ const createMarginEntry = (seed?: Partial<MarginEntry>): MarginEntry => ({
   source: seed?.source,
   holdId: seed?.holdId,
   status: seed?.status,
+  releasedAmount: seed?.releasedAmount === undefined || seed?.releasedAmount === null ? undefined : String(seed.releasedAmount),
+  remainingAmount: seed?.remainingAmount === undefined || seed?.remainingAmount === null ? undefined : String(seed.remainingAmount),
 });
 
 const normalizeMarginCoin = (coin: unknown): string => {
@@ -100,6 +109,8 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string, migra
             source: item.source === 'wallet_hold' ? 'wallet_hold' : undefined,
             holdId: Number.isFinite(Number(item.holdId)) ? Number(item.holdId) : undefined,
             status: item.status === 'released' ? 'released' : item.status === 'active' ? 'active' : undefined,
+            releasedAmount: item.releasedAmount === undefined || item.releasedAmount === null ? undefined : String(item.releasedAmount),
+            remainingAmount: item.remainingAmount === undefined || item.remainingAmount === null ? undefined : String(item.remainingAmount),
           }));
       }
     } catch {
@@ -123,6 +134,12 @@ interface PauseHistoryItem {
   pauseDate: string;   // 暂停日期 YYYY-MM-DD
   resumeDate?: string; // 重启日期 YYYY-MM-DD（空表示尚未重启）
 }
+type PauseWalletHandling = {
+  userId: number;
+  tagName: string;
+  pauseDate: string;
+  action: 'retain' | 'release_wallet_holds';
+};
 interface TagEntry {
   amount: string;
   ratio: string;
@@ -162,6 +179,7 @@ export default function LedgerAAInitialBalance() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 0;
+  const { user } = useAuth();
 
   const { data: ledgerData } = trpc.ledger.getById.useQuery(
     { ledgerId },
@@ -185,11 +203,81 @@ export default function LedgerAAInitialBalance() {
       { ledgerId },
       { enabled: !!ledgerId }
     );
-  const [walletMarginDraft, setWalletMarginDraft] = useState<{ userId: number; tagName: string; assetCode: string; amount: string } | null>(null);
-  const walletMarginContext = trpc.ledger.getLedger37WalletMarginContext.useQuery(
-    walletMarginDraft ? { targetUserId: walletMarginDraft.userId } : undefined,
-    { enabled: ledgerId === 37 && !!walletMarginDraft && !isLocalHotPreview, staleTime: 10_000 },
+  // 37号初始金额管理的「用户」视图：胡大叔可从成员头像读取同款只读钱包快照。
+  const [walletSnapshotUser, setWalletSnapshotUser] = useState<{ id: number; name: string; username?: string } | null>(null);
+  const canViewLedger37WalletSnapshot = ledgerId === 37 && Number(user?.id) === 870413;
+  const walletSnapshotQuery = trpc.adminGetLedger37MemberWalletSnapshot.useQuery(
+    { ledgerId: 37, targetUserId: walletSnapshotUser?.id || 0 },
+    {
+      enabled: canViewLedger37WalletSnapshot && !!walletSnapshotUser?.id,
+      staleTime: 0,
+      refetchOnWindowFocus: false,
+    },
   );
+  const [walletMarginDraft, setWalletMarginDraft] = useState<{ userId: number; tagName: string; assetCode: string; amount: string } | null>(null);
+  const [walletMarginReleaseDraft, setWalletMarginReleaseDraft] = useState<{ holdId: number; assetCode: string; maxAmount: string; amount: string } | null>(null);
+  // 暂停标签前先选择保证金去向；真正的暂停和解冻均在“保存”时才执行。
+  const [pauseWalletHandlingDraft, setPauseWalletHandlingDraft] = useState<PauseWalletHandling | null>(null);
+  const [pauseWalletPlans, setPauseWalletPlans] = useState<Record<string, PauseWalletHandling>>({});
+  const walletMarginContextTargetUserId = walletMarginDraft?.userId ?? pauseWalletHandlingDraft?.userId;
+  const walletMarginContext = trpc.ledger.getLedger37WalletMarginContext.useQuery(
+    walletMarginContextTargetUserId ? { targetUserId: walletMarginContextTargetUserId } : undefined,
+    // 热预览可只读查看真实可用余额；冻结/解冻 mutation 仍由服务端明确拒绝，绝不写入资金。
+    { enabled: ledgerId === 37 && !!walletMarginContextTargetUserId, staleTime: 10_000 },
+  );
+  const walletMarginAvailableAssets = useMemo(() => {
+    const context = walletMarginContext.data as any;
+    if (!context) return [] as Array<{ assetCode: string; label: string; available: number; frozen: number; total: number }>;
+    const assets: Array<{ assetCode: string; label: string; available: number; frozen: number; total: number }> = [];
+    const addAsset = (assetCode: string, label: string, source: any) => {
+      const available = Number(source?.available ?? source?.availableBalance ?? 0);
+      // 只允许从可用余额冻结：余额为零或已全部冻结的资产不展示在下拉内。
+      if (!Number.isFinite(available) || available <= 0) return;
+      assets.push({
+        assetCode,
+        label,
+        available,
+        frozen: Number(source?.frozen ?? source?.frozenBalance ?? 0),
+        total: Number(source?.total ?? source?.totalBalance ?? available),
+      });
+    };
+    addAsset('CNY', '人民币 CNY', context.cny);
+    addAsset('USDT', 'USDT', context.usdt);
+    for (const balance of (context.multiAssetBalances ?? []) as any[]) {
+      const assetCode = String(balance?.assetCode || '').trim().toUpperCase();
+      if (!assetCode || assetCode === 'CNY' || assetCode === 'USDT' || !LEDGER_37_WALLET_CRYPTO_CODES.has(assetCode)) continue;
+      addAsset(assetCode, assetCode, balance);
+    }
+    return assets;
+  }, [walletMarginContext.data]);
+  const selectedWalletMarginAsset = walletMarginAvailableAssets.find((asset) => asset.assetCode === walletMarginDraft?.assetCode) ?? null;
+  const pauseWalletReleaseAssets = useMemo(() => {
+    if (!pauseWalletHandlingDraft || pauseWalletHandlingDraft.action !== 'release_wallet_holds') return [] as Array<{ assetCode: string; amount: number }>;
+    const byAsset = new Map<string, number>();
+    for (const hold of ((walletMarginContext.data as any)?.holds ?? []) as any[]) {
+      if (String(hold?.tagName || '') !== pauseWalletHandlingDraft.tagName || String(hold?.status || '') !== 'active') continue;
+      const amount = Number(hold?.remainingAmount ?? hold?.amount ?? 0);
+      if (!(amount > 0.00000001)) continue;
+      const assetCode = String(hold?.assetCode || '').toUpperCase();
+      byAsset.set(assetCode, (byAsset.get(assetCode) ?? 0) + amount);
+    }
+    return Array.from(byAsset.entries()).map(([assetCode, amount]) => ({ assetCode, amount }));
+  }, [pauseWalletHandlingDraft, walletMarginContext.data]);
+  const formatWalletMarginAssetBalance = (amount: number, assetCode: string) => {
+    const formatted = Number(amount || 0).toLocaleString('zh-CN', {
+      minimumFractionDigits: assetCode === 'CNY' ? 2 : 0,
+      maximumFractionDigits: assetCode === 'CNY' ? 2 : 8,
+    });
+    return assetCode === 'CNY' ? `¥${formatted}` : `${formatted} ${assetCode}`;
+  };
+  useEffect(() => {
+    if (!walletMarginDraft || walletMarginContext.isLoading || walletMarginAvailableAssets.length === 0) return;
+    if (walletMarginAvailableAssets.some((asset) => asset.assetCode === walletMarginDraft.assetCode)) return;
+    const nextAsset = walletMarginAvailableAssets[0];
+    setWalletMarginDraft((previous) => previous && previous.userId === walletMarginDraft.userId && previous.tagName === walletMarginDraft.tagName
+      ? { ...previous, assetCode: nextAsset.assetCode, amount: '' }
+      : previous);
+  }, [walletMarginDraft?.assetCode, walletMarginDraft?.tagName, walletMarginDraft?.userId, walletMarginContext.isLoading, walletMarginAvailableAssets]);
   const freezeWalletMarginMutation = trpc.ledger.freezeLedger37MarginFromWallet.useMutation({
     onSuccess: async () => {
       toast.success('保证金已从全局钱包冻结');
@@ -199,11 +287,20 @@ export default function LedgerAAInitialBalance() {
     onError: (error) => toast.error(error.message || '冻结失败'),
   });
   const releaseWalletMarginMutation = trpc.ledger.releaseLedger37MarginToWallet.useMutation({
-    onSuccess: async () => {
-      toast.success('保证金已解冻并恢复可用');
+    onSuccess: async (result) => {
+      toast.success(result.fullyReleased ? '该笔保证金已全部解冻并恢复可用' : '保证金已部分解冻并恢复可用');
+      setWalletMarginReleaseDraft(null);
       await Promise.all([refetch(), walletMarginContext.refetch()]);
     },
     onError: (error) => toast.error(error.message || '解冻失败'),
+  });
+  const releasePausedTagMarginsMutation = trpc.ledger.releaseLedger37PausedTagMarginsToWallet.useMutation({
+    onSuccess: async (result) => {
+      const count = result.releases.length;
+      toast.success(count > 0 ? `暂停标签的 ${count} 笔钱包保证金已解冻并回到成员账户` : '该暂停标签没有仍在冻结中的钱包保证金');
+      await Promise.all([refetch(), walletMarginContext.refetch()]);
+    },
+    onError: (error) => toast.error(error.message || '暂停后的保证金解冻失败；该标签已暂停，保证金仍保持冻结'),
   });
 
   const [editState, setEditState] = useState<
@@ -443,7 +540,7 @@ export default function LedgerAAInitialBalance() {
     updateEntry(userId, tagName, next);
   };
 
-  const handleSaveMember = (userId: number) => {
+  const handleSaveMember = async (userId: number) => {
     const userEdit = editState[userId] ?? {};
     const balances: Record<string, number | string> = {};
     for (const cat of categories) {
@@ -469,6 +566,11 @@ export default function LedgerAAInitialBalance() {
           notes: (item.notes ?? [])
             .filter((note) => note && note.content.trim() !== '')
             .map((note) => ({ id: note.id, content: note.content.trim(), createdAt: note.createdAt || '' })),
+          source: item.source,
+          holdId: item.holdId,
+          status: item.status,
+          releasedAmount: item.releasedAmount,
+          remainingAmount: item.remainingAmount,
         }))
         .filter((item) => item.amount !== '' && Number.isFinite(Number(item.amount)));
       balances[`${n}__margins`] = JSON.stringify(marginEntries.map((item) => ({
@@ -477,6 +579,11 @@ export default function LedgerAAInitialBalance() {
         amount: Number(item.amount),
         createdAt: item.createdAt,
         notes: item.notes,
+        source: item.source,
+        holdId: item.holdId,
+        status: item.status,
+        releasedAmount: item.releasedAmount,
+        remainingAmount: item.remainingAmount,
       })));
       // 旧字段保留为首笔明细，供尚未升级的历史读取入口安全兼容；新展示以 __margins 为准。
       const legacyMargin = marginEntries[0];
@@ -509,14 +616,47 @@ export default function LedgerAAInitialBalance() {
         if (!isNaN(num)) balances[`${n}__targetAmount`] = num;
       }
     }
+    const memberPausePlans = Object.values(pauseWalletPlans).filter((plan) => plan.userId === userId);
+    // 热预览可以读取真实金额，但暂停与解冻均不允许落库或改动真实资金。
+    if (isLocalHotPreview && memberPausePlans.length > 0) {
+      toast.info('热预览仅展示暂停后的保证金处理，不会暂停标签或解冻真实钱包资金');
+      return;
+    }
     setSavingUsers((prev) => new Set(prev).add(userId));
     const migratedMarginNoteIds = categories.flatMap((cat: any) => userEdit[cat.name]?.legacyMarginNoteIds ?? []);
-    setMutation.mutate({
-      ledgerId,
-      targetUserId: userId,
-      balances: balances as Record<string, number>,
-      migratedMarginNoteIds,
-    });
+    try {
+      // 先持久化暂停状态；只有保存成功后才允许退回钱包，避免“钱已退、标签仍运行”的状态。
+      await setMutation.mutateAsync({
+        ledgerId,
+        targetUserId: userId,
+        balances: balances as Record<string, number>,
+        migratedMarginNoteIds,
+      });
+      const releasePlans = memberPausePlans.filter((plan) => plan.action === 'release_wallet_holds');
+      if (releasePlans.length > 0) {
+        setSavingUsers((previous) => new Set(previous).add(userId));
+        try {
+          for (const plan of releasePlans) {
+            await releasePausedTagMarginsMutation.mutateAsync({ ledgerId: 37, targetUserId: userId, tagName: plan.tagName });
+          }
+        } finally {
+          setSavingUsers((previous) => {
+            const next = new Set(previous);
+            next.delete(userId);
+            return next;
+          });
+        }
+      }
+      if (memberPausePlans.length > 0) {
+        setPauseWalletPlans((previous) => {
+          const next = { ...previous };
+          for (const [key, plan] of Object.entries(next)) if (plan.userId === userId) delete next[key];
+          return next;
+        });
+      }
+    } catch {
+      // 各 mutation 已给出错误提示；草稿与暂停选择均保留，方便管理员修正后重试。
+    }
   };
 
   const getMarginEntryCNY = (entry: MarginEntry): number | null => {
@@ -584,6 +724,14 @@ export default function LedgerAAInitialBalance() {
       toast.error('请输入有效的冻结金额');
       return;
     }
+    if (!selectedWalletMarginAsset) {
+      toast.error('该成员没有可用于冻结的人民币或数字币余额');
+      return;
+    }
+    if (Number(walletMarginDraft.amount) - selectedWalletMarginAsset.available > 0.00000001) {
+      toast.error(`冻结数量不能超过可用余额 ${formatWalletMarginAssetBalance(selectedWalletMarginAsset.available, selectedWalletMarginAsset.assetCode)}`);
+      return;
+    }
     if (isLocalHotPreview) {
       toast.info('热预览仅展示钱包冻结流程，不会操作真实资金');
       return;
@@ -597,13 +745,28 @@ export default function LedgerAAInitialBalance() {
     });
   };
 
-  const releaseWalletMargin = (holdId?: number) => {
-    if (!holdId) return;
-    if (isLocalHotPreview) {
-      toast.info('热预览仅展示钱包解冻流程，不会操作真实资金');
+  const openWalletMarginRelease = (holdId: number | undefined, assetCode: string, remainingAmount: string) => {
+    if (!holdId || Number(remainingAmount) <= 0) return;
+    setWalletMarginReleaseDraft({ holdId, assetCode, maxAmount: remainingAmount, amount: '' });
+  };
+
+  const submitWalletMarginRelease = () => {
+    if (!walletMarginReleaseDraft) return;
+    const amount = Number(walletMarginReleaseDraft.amount);
+    const maximum = Number(walletMarginReleaseDraft.maxAmount);
+    if (!(amount > 0)) {
+      toast.error('请输入需要减少的保证金数量');
       return;
     }
-    releaseWalletMarginMutation.mutate({ ledgerId: 37, holdId });
+    if (amount - maximum > 0.00000001) {
+      toast.error(`本笔最多可解冻 ${formatWalletMarginAssetBalance(maximum, walletMarginReleaseDraft.assetCode)}`);
+      return;
+    }
+    if (isLocalHotPreview) {
+      toast.info('热预览仅展示保证金减少与解冻流程，不会操作真实资金');
+      return;
+    }
+    releaseWalletMarginMutation.mutate({ ledgerId: 37, holdId: walletMarginReleaseDraft.holdId, amount: walletMarginReleaseDraft.amount });
   };
 
   const MarginEntriesEditor = ({ userId, tagName, entry, accentColor, compact = false }: {
@@ -641,6 +804,14 @@ export default function LedgerAAInitialBalance() {
           const isLegacyReadOnly = ledgerId === 37;
           if (isWalletHold) {
             const isReleased = marginEntry.status === 'released' || isOutflow;
+            const originalFrozenAmount = rawAmount.replace(/^-/, '');
+            const remainingFrozenAmount = String(marginEntry.remainingAmount ?? originalFrozenAmount);
+            const releasedFromThisHold = Number(marginEntry.releasedAmount || 0);
+            const isPartialRelease = !isReleased && releasedFromThisHold > 0.00000001;
+            const isReleaseEditing = !isReleased && walletMarginReleaseDraft?.holdId === marginEntry.holdId;
+            const displayedCnyValue = isPartialRelease && cnyValue !== null && Number(originalFrozenAmount) > 0
+              ? cnyValue * Number(remainingFrozenAmount) / Number(originalFrozenAmount)
+              : cnyValue;
             return (
               <div key={marginEntry.id || `${tagName}-margin-${index}`} className="rounded-xl px-2 py-2" style={{ backgroundColor: isReleased ? '#FAFAFA' : '#F2F8FF', border: `1px solid ${isReleased ? '#F0F0F0' : '#CDE1F7'}` }}>
                 <div className="flex items-center gap-1.5">
@@ -650,16 +821,26 @@ export default function LedgerAAInitialBalance() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-medium" style={{ color: '#37474F' }}>钱包{isReleased ? '解冻' : '冻结'} · {normalizeMarginCoin(marginEntry.coin)}</span>
-                      <span className="text-sm font-semibold tabular-nums" style={{ color: isReleased ? '#78909C' : '#1565C0' }}>{isReleased ? '−' : ''}{rawAmount.replace(/^-/, '')}</span>
+                      <span className="text-sm font-semibold tabular-nums" style={{ color: isReleased ? '#78909C' : '#1565C0' }}>{isReleased ? '−' : ''}{isReleased ? originalFrozenAmount : remainingFrozenAmount}</span>
                     </div>
-                    <div className="mt-0.5 text-[10px]" style={{ color: '#78909C' }}>记录时间：{formatRecordedAt(marginEntry.createdAt)}{cnyValue !== null ? ` · ≈ ¥${formatSignedMarginAmount(cnyValue, 0)}` : ''}</div>
+                    <div className="mt-0.5 text-[10px]" style={{ color: '#78909C' }}>记录时间：{formatRecordedAt(marginEntry.createdAt)}{displayedCnyValue !== null ? ` · ≈ ¥${formatSignedMarginAmount(displayedCnyValue, 0)}` : ''}{isPartialRelease ? ` · 已解冻 ${marginEntry.releasedAmount}` : ''}</div>
                   </div>
                   {!isReleased && (
-                    <button type="button" onClick={() => releaseWalletMargin(marginEntry.holdId)} disabled={releaseWalletMarginMutation.isPending} className="h-7 rounded-lg px-2 text-[10px] font-medium disabled:opacity-50" style={{ backgroundColor: '#FFFFFF', color: '#1565C0', border: '1px solid #B8D7F3' }}>
-                      解冻
+                    <button type="button" onClick={() => openWalletMarginRelease(marginEntry.holdId, normalizeMarginCoin(marginEntry.coin), remainingFrozenAmount)} disabled={releaseWalletMarginMutation.isPending} className="h-7 rounded-lg px-2 text-[10px] font-medium disabled:opacity-50" style={{ backgroundColor: '#FFFFFF', color: '#1565C0', border: '1px solid #B8D7F3' }}>
+                      减少/解冻
                     </button>
                   )}
                 </div>
+                {isReleaseEditing && walletMarginReleaseDraft && (
+                  <div className="mt-2 rounded-lg p-2" style={{ backgroundColor: '#FFFFFF', border: '1px solid #B8D7F3' }}>
+                    <div className="text-[10px]" style={{ color: '#78909C' }}>本笔当前冻结 {formatWalletMarginAssetBalance(Number(remainingFrozenAmount), walletMarginReleaseDraft.assetCode)}；减少后立即回到该成员同币种可用余额。</div>
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <input type="text" inputMode="decimal" value={walletMarginReleaseDraft.amount} onChange={(event) => /^\d*\.?\d*$/.test(event.target.value) && setWalletMarginReleaseDraft({ ...walletMarginReleaseDraft, amount: event.target.value })} placeholder="减少数量" className="h-7 min-w-0 flex-1 rounded-lg border px-2 text-right text-xs outline-none" style={{ borderColor: '#B8D7F3' }} />
+                      <button type="button" onClick={() => setWalletMarginReleaseDraft({ ...walletMarginReleaseDraft, amount: walletMarginReleaseDraft.maxAmount })} className="h-7 rounded-lg px-2 text-[10px] font-medium" style={{ backgroundColor: '#EAF3FF', color: '#1565C0' }}>全部</button>
+                    </div>
+                    <div className="mt-1.5 flex justify-end gap-2"><button type="button" onClick={() => setWalletMarginReleaseDraft(null)} className="h-7 px-2 text-[10px]" style={{ color: '#78909C' }}>取消</button><button type="button" onClick={submitWalletMarginRelease} disabled={releaseWalletMarginMutation.isPending} className="h-7 rounded-lg px-2.5 text-[10px] font-medium text-white disabled:opacity-50" style={{ backgroundColor: '#1565C0' }}>确认减少</button></div>
+                  </div>
+                )}
               </div>
             );
           }
@@ -775,16 +956,27 @@ export default function LedgerAAInitialBalance() {
           <div className="ml-10 rounded-lg p-2.5 space-y-2" style={{ backgroundColor: '#F2F8FF', border: '1px solid #CDE1F7' }}>
             <div className="text-xs font-medium" style={{ color: '#1565C0' }}>从全局钱包冻结保证金</div>
             <div className="grid grid-cols-[92px_1fr] gap-2">
-              <select value={walletMarginDraft.assetCode} onChange={(event) => setWalletMarginDraft({ ...walletMarginDraft, assetCode: event.target.value })} className="h-8 rounded-lg border bg-white px-2 text-xs outline-none" style={{ borderColor: '#B8D7F3' }}>
-                <option value="CNY">人民币 CNY</option>
-                <option value="USDT">USDT</option>
-                {((walletMarginContext.data?.multiAssetBalances ?? []) as any[]).filter((asset) => Number(asset.totalBalance || 0) > 0).map((asset) => <option key={asset.assetCode} value={asset.assetCode}>{asset.assetCode}</option>)}
+              <select value={selectedWalletMarginAsset?.assetCode ?? ''} disabled={walletMarginContext.isLoading || walletMarginAvailableAssets.length === 0} onChange={(event) => setWalletMarginDraft({ ...walletMarginDraft, assetCode: event.target.value, amount: '' })} className="h-8 rounded-lg border bg-white px-2 text-xs outline-none disabled:cursor-not-allowed disabled:opacity-60" style={{ borderColor: '#B8D7F3' }}>
+                {walletMarginContext.isLoading ? (
+                  <option value="">读取余额…</option>
+                ) : walletMarginAvailableAssets.length > 0 ? (
+                  walletMarginAvailableAssets.map((asset) => <option key={asset.assetCode} value={asset.assetCode}>{asset.label}</option>)
+                ) : (
+                  <option value="">无可用资产</option>
+                )}
               </select>
-              <input type="text" inputMode="decimal" value={walletMarginDraft.amount} onChange={(event) => /^\d*\.?\d*$/.test(event.target.value) && setWalletMarginDraft({ ...walletMarginDraft, amount: event.target.value })} placeholder="冻结数量" className="h-8 min-w-0 rounded-lg border bg-white px-2 text-right text-sm outline-none" style={{ borderColor: '#B8D7F3' }} />
+              <input type="text" inputMode="decimal" disabled={!selectedWalletMarginAsset} value={walletMarginDraft.amount} onChange={(event) => /^\d*\.?\d*$/.test(event.target.value) && setWalletMarginDraft({ ...walletMarginDraft, amount: event.target.value })} placeholder={selectedWalletMarginAsset ? `冻结数量（可用 ${formatWalletMarginAssetBalance(selectedWalletMarginAsset.available, selectedWalletMarginAsset.assetCode)}）` : '暂无可冻结余额'} className="h-8 min-w-0 rounded-lg border bg-white px-2 text-right text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60" style={{ borderColor: '#B8D7F3' }} />
             </div>
-            {walletMarginDraft.assetCode === 'CNY' && walletMarginContext.data?.cny && <div className="text-[10px]" style={{ color: '#78909C' }}>钱包：总额 ¥{Number(walletMarginContext.data.cny.total).toFixed(2)} · 冻结 ¥{Number(walletMarginContext.data.cny.frozen).toFixed(2)} · 可用 ¥{Number(walletMarginContext.data.cny.available).toFixed(2)}</div>}
-            {walletMarginDraft.assetCode === 'USDT' && walletMarginContext.data?.usdt && <div className="text-[10px]" style={{ color: '#78909C' }}>钱包：总额 {Number(walletMarginContext.data.usdt.total).toFixed(4)} · 冻结 {Number(walletMarginContext.data.usdt.frozen).toFixed(4)} · 可用 {Number(walletMarginContext.data.usdt.available).toFixed(4)} USDT</div>}
-            <div className="flex justify-end gap-2"><button type="button" onClick={() => setWalletMarginDraft(null)} className="h-7 px-2 text-xs" style={{ color: '#78909C' }}>取消</button><button type="button" onClick={submitWalletMargin} disabled={freezeWalletMarginMutation.isPending} className="h-7 rounded-lg px-3 text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: '#1565C0' }}>确认冻结</button></div>
+            {walletMarginContext.isError ? (
+              <div className="flex items-center justify-between gap-2 text-[10px]" style={{ color: '#C62828' }}><span>钱包余额读取失败</span><button type="button" onClick={() => walletMarginContext.refetch()} className="font-medium underline">重试</button></div>
+            ) : walletMarginContext.isLoading ? (
+              <div className="text-[10px]" style={{ color: '#78909C' }}>正在读取该成员的全局钱包可用余额…</div>
+            ) : selectedWalletMarginAsset ? (
+              <div className="text-[10px] tabular-nums" style={{ color: '#78909C' }}>可用 <span className="font-semibold" style={{ color: '#1565C0' }}>{formatWalletMarginAssetBalance(selectedWalletMarginAsset.available, selectedWalletMarginAsset.assetCode)}</span> · 已冻结 {formatWalletMarginAssetBalance(selectedWalletMarginAsset.frozen, selectedWalletMarginAsset.assetCode)} · 总额 {formatWalletMarginAssetBalance(selectedWalletMarginAsset.total, selectedWalletMarginAsset.assetCode)}</div>
+            ) : (
+              <div className="text-[10px]" style={{ color: '#78909C' }}>该成员没有可用于冻结的人民币或数字币余额；已全部冻结的资产不会显示。</div>
+            )}
+            <div className="flex justify-end gap-2"><button type="button" onClick={() => setWalletMarginDraft(null)} className="h-7 px-2 text-xs" style={{ color: '#78909C' }}>取消</button><button type="button" onClick={submitWalletMargin} disabled={freezeWalletMarginMutation.isPending || !selectedWalletMarginAsset} className="h-7 rounded-lg px-3 text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: '#1565C0' }}>确认冻结</button></div>
           </div>
         )}
         {summary.unpricedCoins.length > 0 && (
@@ -2507,12 +2699,36 @@ export default function LedgerAAInitialBalance() {
                     onClick={toggleUserExpand}
                   >
                     <div className="flex items-center gap-2">
-                      <UserAvatar
-                        username={member.username}
-                        avatar={member.avatar}
-                        nickname={member.nickname}
-                        size="sm"
-                      />
+                      {canViewLedger37WalletSnapshot ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setWalletSnapshotUser({
+                              id: Number(userId),
+                              name: member.nickname || member.realName || member.username || `用户${userId}`,
+                              username: member.username || undefined,
+                            });
+                          }}
+                          className="block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A84C] focus-visible:ring-offset-2"
+                          title={`查看 ${member.nickname || member.username || `用户${userId}`} 的只读钱包快照`}
+                          aria-label={`查看 ${member.nickname || member.username || `用户${userId}`} 的只读钱包快照`}
+                        >
+                          <UserAvatar
+                            username={member.username}
+                            avatar={member.avatar}
+                            nickname={member.nickname}
+                            size="sm"
+                          />
+                        </button>
+                      ) : (
+                        <UserAvatar
+                          username={member.username}
+                          avatar={member.avatar}
+                          nickname={member.nickname}
+                          size="sm"
+                        />
+                      )}
                       <div>
                         <div className="text-sm font-semibold text-gray-800">
                           {member.nickname || member.username || "未知用户"}
@@ -2584,6 +2800,24 @@ export default function LedgerAAInitialBalance() {
                       // 折叠行始终按“初始金额 × 比例”展示实际权益，保证与三联动口径一致。
                       const allocatedAmount = hasAmount && hasRatio ? amountNum * ratioNum / 100 : NaN;
                       const allocatedAmountText = Number.isFinite(allocatedAmount) ? formatSummaryAmount(allocatedAmount) : '—';
+                      // 保证金摘要沿用用户详情页口径：应交 = 实际权益 × 20%，实交为逐笔保证金按实时人民币价格折算后的净额。
+                      const marginSummary = summarizeMargins(entry.margins);
+                      const requiredMargin = Number.isFinite(allocatedAmount) ? Math.max(0, allocatedAmount * 0.2) : NaN;
+                      const marginGap = Number.isFinite(requiredMargin) ? requiredMargin - marginSummary.totalCNY : NaN;
+                      const formatMarginSummary = (value: number) => `${value < 0 ? '−' : ''}¥${formatSummaryAmount(Math.abs(value))}`;
+                      const requiredMarginText = Number.isFinite(requiredMargin) ? formatMarginSummary(requiredMargin) : '—';
+                      const actualMarginText = formatMarginSummary(marginSummary.totalCNY);
+                      const marginGapLabel = !Number.isFinite(marginGap)
+                        ? '差额'
+                        : marginGap > 0.005 ? '缺'
+                          : marginGap < -0.005 ? '超'
+                            : '已足';
+                      const marginGapText = Number.isFinite(marginGap) ? formatMarginSummary(Math.abs(marginGap)) : '—';
+                      const marginGapColor = !Number.isFinite(marginGap)
+                        ? '#757575'
+                        : marginGap > 0.005 ? '#D32F2F'
+                          : marginGap < -0.005 ? '#2E7D32'
+                            : '#2E7D32';
                       // 计算暂停状态
                       let catPauseStatus: 'paused' | 'running' | 'none' = 'none';
                       if (entry.pauseHistory && entry.pauseHistory.length > 0) {
@@ -2649,11 +2883,18 @@ export default function LedgerAAInitialBalance() {
                             {isStockTag ? (
                               <div className="mt-1.5 flex items-center gap-1.5 text-xs"><ChartNoAxesCombined size={12} style={{ color: cat.color || '#2F6F85' }} /><span className="text-gray-500">股票持仓 · 按股票批次分配参与股数</span></div>
                             ) : (
-                              <div className="mt-1.5 flex items-center gap-x-3 gap-y-1 text-xs tabular-nums whitespace-nowrap overflow-hidden">
-                                <span className="text-gray-400 flex-shrink-0">初始 <span className="text-gray-700">{amountText}</span></span>
-                                <span className="text-gray-400 flex-shrink-0">占比 <span className="text-gray-700">{ratioText}</span></span>
-                                <span className="min-w-0 truncate text-gray-400">实际权益 <span className="font-medium text-gray-800">{allocatedAmountText}</span></span>
-                              </div>
+                              <>
+                                <div className="mt-1.5 flex items-center gap-x-3 gap-y-1 text-xs tabular-nums whitespace-nowrap overflow-hidden">
+                                  <span className="text-gray-400 flex-shrink-0">初始 <span className="text-gray-700">{amountText}</span></span>
+                                  <span className="text-gray-400 flex-shrink-0">占比 <span className="text-gray-700">{ratioText}</span></span>
+                                  <span className="min-w-0 truncate text-gray-400">实际权益 <span className="font-medium text-gray-800">{allocatedAmountText}</span></span>
+                                </div>
+                                <div className="mt-1 flex items-center gap-x-2.5 text-[11px] tabular-nums whitespace-nowrap overflow-hidden">
+                                  <span className="text-gray-400 flex-shrink-0">应交 <span className="font-medium" style={{ color: '#1565C0' }}>{requiredMarginText}</span></span>
+                                  <span className="text-gray-400 flex-shrink-0">实交 <span className="font-medium text-gray-700" title={marginSummary.unpricedCoins.length > 0 ? `${Array.from(new Set(marginSummary.unpricedCoins)).join('、')} 暂无可靠报价，未计入实交汇总` : undefined}>{actualMarginText}{marginSummary.unpricedCoins.length > 0 ? '*' : ''}</span></span>
+                                  <span className="min-w-0 truncate text-gray-400">{marginGapLabel} <span className="font-semibold" style={{ color: marginGapColor }}>{marginGapText}</span></span>
+                                </div>
+                              </>
                             )}
                           </div>
                           {/* 展开内容 */}
@@ -2683,16 +2924,60 @@ export default function LedgerAAInitialBalance() {
                                 <input
                                   type="date"
                                   value={entry.pauseDate}
-                                  onChange={(event) => updateEntry(userId, cat.name, { pauseDate: event.target.value })}
+                                  onChange={(event) => {
+                                    if (ledgerId === 37 && event.target.value) {
+                                      setPauseWalletHandlingDraft({ userId, tagName: cat.name, pauseDate: event.target.value, action: 'retain' });
+                                    } else {
+                                      updateEntry(userId, cat.name, { pauseDate: event.target.value });
+                                      if (!event.target.value) {
+                                        setPauseWalletPlans((previous) => {
+                                          const key = `${userId}|${cat.name}`;
+                                          if (!previous[key]) return previous;
+                                          const next = { ...previous };
+                                          delete next[key];
+                                          return next;
+                                        });
+                                      }
+                                    }
+                                  }}
                                   className="min-w-0 flex-1 text-xs border rounded-lg px-1.5 py-1 outline-none"
                                   style={{ borderColor: '#FDE68A', backgroundColor: '#FFFBEB', color: '#92400E' }}
                                 />
                                 {entry.pauseDate && (
-                                  <button type="button" onClick={() => updateEntry(userId, cat.name, { pauseDate: '' })} className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full hover:bg-amber-100" style={{ fontSize: 11, color: '#B45309' }}>×</button>
+                                  <button type="button" onClick={() => {
+                                    updateEntry(userId, cat.name, { pauseDate: '' });
+                                    setPauseWalletPlans((previous) => {
+                                      const key = `${userId}|${cat.name}`;
+                                      if (!previous[key]) return previous;
+                                      const next = { ...previous };
+                                      delete next[key];
+                                      return next;
+                                    });
+                                  }} className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full hover:bg-amber-100" style={{ fontSize: 11, color: '#B45309' }}>×</button>
                                 )}
                               </div>
                               </div>
                             </div>
+                            {ledgerId === 37 && pauseWalletHandlingDraft?.userId === userId && pauseWalletHandlingDraft!.tagName === cat.name && (
+                              <div className="rounded-xl p-2.5 space-y-2" style={{ backgroundColor: '#F2F8FF', border: '1px solid #B8D7F3' }}>
+                                <div className="text-xs font-semibold" style={{ color: '#1565C0' }}>暂停后的保证金处理</div>
+                                <div className="text-[10px]" style={{ color: '#607D8B' }}>暂停保存后，可保留保证金等待手动处理，或把本标签仍冻结的钱包保证金原币种退回成员可用余额。</div>
+                                <input type="date" value={pauseWalletHandlingDraft!.pauseDate} onChange={(event) => setPauseWalletHandlingDraft({ ...pauseWalletHandlingDraft!, pauseDate: event.target.value })} className="h-8 w-full rounded-lg border bg-white px-2 text-xs outline-none" style={{ borderColor: '#B8D7F3', color: '#1565C0' }} />
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button type="button" onClick={() => setPauseWalletHandlingDraft({ ...pauseWalletHandlingDraft!, action: 'retain' })} className="rounded-lg p-2 text-left" style={{ backgroundColor: pauseWalletHandlingDraft!.action === 'retain' ? '#EAF3FF' : '#FFFFFF', border: `1px solid ${pauseWalletHandlingDraft!.action === 'retain' ? '#6FA8DC' : '#DCE9F5'}` }}><div className="text-xs font-semibold" style={{ color: '#1565C0' }}>保留保证金</div><div className="mt-0.5 text-[10px] leading-4" style={{ color: '#607D8B' }}>继续冻结，之后可逐笔手动减少或解冻。</div></button>
+                                  <button type="button" onClick={() => setPauseWalletHandlingDraft({ ...pauseWalletHandlingDraft!, action: 'release_wallet_holds' })} className="rounded-lg p-2 text-left" style={{ backgroundColor: pauseWalletHandlingDraft!.action === 'release_wallet_holds' ? '#EAF3FF' : '#FFFFFF', border: `1px solid ${pauseWalletHandlingDraft!.action === 'release_wallet_holds' ? '#6FA8DC' : '#DCE9F5'}` }}><div className="text-xs font-semibold" style={{ color: '#1565C0' }}>暂停并解冻</div><div className="mt-0.5 text-[10px] leading-4" style={{ color: '#607D8B' }}>保存暂停后，将本标签的冻结保证金退回钱包。</div></button>
+                                </div>
+                                {pauseWalletHandlingDraft!.action === 'release_wallet_holds' && <div className="rounded-lg px-2 py-1.5 text-[10px]" style={{ backgroundColor: '#FFFFFF', color: '#45616F' }}>{walletMarginContext.isLoading ? '正在核算本标签可解冻的保证金…' : walletMarginContext.isError ? '保证金读取失败；请改为保留保证金后稍后手动处理。' : pauseWalletReleaseAssets.length > 0 ? <>保存暂停后将解冻：{pauseWalletReleaseAssets.map((asset) => formatWalletMarginAssetBalance(asset.amount, asset.assetCode)).join(' · ')}</> : '本标签没有仍冻结的钱包保证金；历史手工押金不会自动退回钱包。'}</div>}
+                                <div className="flex justify-end gap-2"><button type="button" onClick={() => setPauseWalletHandlingDraft(null)} className="h-7 px-2 text-[10px]" style={{ color: '#78909C' }}>取消</button><button type="button" onClick={() => {
+                                  const plan = pauseWalletHandlingDraft!;
+                                  if (!plan.pauseDate) { toast.error('请选择暂停日期'); return; }
+                                  updateEntry(userId, cat.name, { pauseDate: plan.pauseDate });
+                                  setPauseWalletPlans((previous) => ({ ...previous, [`${userId}|${cat.name}`]: plan }));
+                                  setPauseWalletHandlingDraft(null);
+                                }} className="h-7 rounded-lg px-2.5 text-[10px] font-medium text-white" style={{ backgroundColor: '#1565C0' }}>确认暂停方案</button></div>
+                              </div>
+                            )}
+                            {ledgerId === 37 && pauseWalletPlans[`${userId}|${cat.name}`] && <div className="rounded-lg px-2 py-1.5 text-[10px]" style={{ backgroundColor: '#F2F8FF', color: '#45616F' }}>已选择：{pauseWalletPlans[`${userId}|${cat.name}`].action === 'release_wallet_holds' ? '暂停保存后，解冻本标签仍冻结的钱包保证金并退回成员账户' : '暂停保存后，继续保留保证金冻结'}。</div>}
                           </section>}
 
                           {isStockTag ? renderStockParticipationEditor({ selectedUserId: userId, accentColor: cat.color || '#2F6F85' }) : <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
@@ -2856,6 +3141,12 @@ export default function LedgerAAInitialBalance() {
                                 if (latest) {
                                   const nextHistory = history.map((item, index) => index === latestIndex ? { ...item, pauseDate: e.target.value } : item);
                                   updateEntry(userId, tagName, { pauseHistory: nextHistory });
+                                  setPauseWalletPlans((previous) => {
+                                    const key = `${userId}|${tagName}`;
+                                    return previous[key] ? { ...previous, [key]: { ...previous[key], pauseDate: e.target.value } } : previous;
+                                  });
+                                } else if (ledgerId === 37 && e.target.value) {
+                                  setPauseWalletHandlingDraft({ userId, tagName, pauseDate: e.target.value, action: 'retain' });
                                 } else {
                                   updateEntry(userId, tagName, { pauseDate: e.target.value });
                                 }
@@ -2868,6 +3159,13 @@ export default function LedgerAAInitialBalance() {
                                 if (latest) {
                                   const nextHistory = history.map((item, index) => index === latestIndex ? { ...item, pauseDate: '' } : item);
                                   updateEntry(userId, tagName, { pauseHistory: nextHistory });
+                                  setPauseWalletPlans((previous) => {
+                                    const key = `${userId}|${tagName}`;
+                                    if (!previous[key]) return previous;
+                                    const next = { ...previous };
+                                    delete next[key];
+                                    return next;
+                                  });
                                 } else {
                                   updateEntry(userId, tagName, { pauseDate: '' });
                                 }
@@ -2912,8 +3210,12 @@ export default function LedgerAAInitialBalance() {
                             className="text-xs px-2 py-1 rounded-lg"
                             style={{ backgroundColor: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}
                             onClick={() => {
-                              const newHistory = [...history, { pauseDate: today }];
-                              updateEntry(userId, tagName, { pauseHistory: newHistory });
+                              if (ledgerId === 37) {
+                                setPauseWalletHandlingDraft({ userId, tagName, pauseDate: today, action: 'retain' });
+                              } else {
+                                const newHistory = [...history, { pauseDate: today }];
+                                updateEntry(userId, tagName, { pauseHistory: newHistory });
+                              }
                             }}
                           >
                             + 添加暂停
@@ -2922,6 +3224,41 @@ export default function LedgerAAInitialBalance() {
                       }
                     })()}
                   </div>
+                  {ledgerId === 37 && pauseWalletHandlingDraft?.userId === userId && pauseWalletHandlingDraft.tagName === tagName && (
+                    <div className="rounded-xl p-2.5 space-y-2" style={{ backgroundColor: '#F2F8FF', border: '1px solid #B8D7F3' }}>
+                      <div className="text-xs font-semibold" style={{ color: '#1565C0' }}>暂停后的保证金处理</div>
+                      <div className="text-[10px]" style={{ color: '#607D8B' }}>暂停保存后，可保留保证金等待手动处理，或把本标签仍冻结的钱包保证金原币种退回成员可用余额。</div>
+                      <input type="date" value={pauseWalletHandlingDraft.pauseDate} onChange={(event) => setPauseWalletHandlingDraft({ ...pauseWalletHandlingDraft, pauseDate: event.target.value })} className="h-8 w-full rounded-lg border bg-white px-2 text-xs outline-none" style={{ borderColor: '#B8D7F3', color: '#1565C0' }} />
+                      <div className="grid grid-cols-2 gap-2">
+                        <button type="button" onClick={() => setPauseWalletHandlingDraft({ ...pauseWalletHandlingDraft, action: 'retain' })} className="rounded-lg p-2 text-left" style={{ backgroundColor: pauseWalletHandlingDraft.action === 'retain' ? '#EAF3FF' : '#FFFFFF', border: `1px solid ${pauseWalletHandlingDraft.action === 'retain' ? '#6FA8DC' : '#DCE9F5'}` }}>
+                          <div className="text-xs font-semibold" style={{ color: '#1565C0' }}>保留保证金</div>
+                          <div className="mt-0.5 text-[10px] leading-4" style={{ color: '#607D8B' }}>继续冻结，之后可逐笔手动减少或解冻。</div>
+                        </button>
+                        <button type="button" onClick={() => setPauseWalletHandlingDraft({ ...pauseWalletHandlingDraft, action: 'release_wallet_holds' })} className="rounded-lg p-2 text-left" style={{ backgroundColor: pauseWalletHandlingDraft.action === 'release_wallet_holds' ? '#EAF3FF' : '#FFFFFF', border: `1px solid ${pauseWalletHandlingDraft.action === 'release_wallet_holds' ? '#6FA8DC' : '#DCE9F5'}` }}>
+                          <div className="text-xs font-semibold" style={{ color: '#1565C0' }}>暂停并解冻</div>
+                          <div className="mt-0.5 text-[10px] leading-4" style={{ color: '#607D8B' }}>保存暂停后，将本标签的冻结保证金退回钱包。</div>
+                        </button>
+                      </div>
+                      {pauseWalletHandlingDraft.action === 'release_wallet_holds' && (
+                        <div className="rounded-lg px-2 py-1.5 text-[10px]" style={{ backgroundColor: '#FFFFFF', color: '#45616F' }}>
+                          {walletMarginContext.isLoading ? '正在核算本标签可解冻的保证金…' : walletMarginContext.isError ? '保证金读取失败；请改为保留保证金后稍后手动处理。' : pauseWalletReleaseAssets.length > 0 ? <>保存暂停后将解冻：{pauseWalletReleaseAssets.map((asset) => formatWalletMarginAssetBalance(asset.amount, asset.assetCode)).join(' · ')}</> : '本标签没有仍冻结的钱包保证金；历史手工押金不会自动退回钱包。'}
+                        </div>
+                      )}
+                      <div className="flex justify-end gap-2"><button type="button" onClick={() => setPauseWalletHandlingDraft(null)} className="h-7 px-2 text-[10px]" style={{ color: '#78909C' }}>取消</button><button type="button" onClick={() => {
+                        const plan = pauseWalletHandlingDraft;
+                        if (!plan.pauseDate) { toast.error('请选择暂停日期'); return; }
+                        const newHistory = [...(entry.pauseHistory ?? []), { pauseDate: plan.pauseDate }];
+                        updateEntry(userId, tagName, { pauseHistory: newHistory, pauseDate: '' });
+                        setPauseWalletPlans((previous) => ({ ...previous, [`${userId}|${tagName}`]: plan }));
+                        setPauseWalletHandlingDraft(null);
+                      }} className="h-7 rounded-lg px-2.5 text-[10px] font-medium text-white" style={{ backgroundColor: '#1565C0' }}>确认暂停方案</button></div>
+                    </div>
+                  )}
+                  {ledgerId === 37 && pauseWalletPlans[`${userId}|${tagName}`] && (
+                    <div className="rounded-lg px-2 py-1.5 text-[10px]" style={{ backgroundColor: '#F2F8FF', color: '#45616F' }}>
+                      已选择：{pauseWalletPlans[`${userId}|${tagName}`].action === 'release_wallet_holds' ? '暂停保存后，解冻本标签仍冻结的钱包保证金并退回成员账户' : '暂停保存后，继续保留保证金冻结'}。
+                    </div>
+                  )}
                   {/* 历史列表 */}
                   {(entry.pauseHistory ?? []).length === 0 ? (
                     <div className="text-xs text-gray-400 py-1">无暂停记录</div>
@@ -2967,6 +3304,15 @@ export default function LedgerAAInitialBalance() {
                             onClick={() => {
                               const newHistory = (entry.pauseHistory ?? []).filter((_, i) => i !== idx);
                               updateEntry(userId, tagName, { pauseHistory: newHistory });
+                              if (idx === (entry.pauseHistory ?? []).length - 1 && !item.resumeDate) {
+                                setPauseWalletPlans((previous) => {
+                                  const key = `${userId}|${tagName}`;
+                                  if (!previous[key]) return previous;
+                                  const next = { ...previous };
+                                  delete next[key];
+                                  return next;
+                                });
+                              }
                             }}
                           >×</button>
                         </div>
@@ -3054,6 +3400,27 @@ export default function LedgerAAInitialBalance() {
           </div>
         );
       })()}
+
+      {walletSnapshotUser && (
+        walletSnapshotQuery.isLoading ? (
+          <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/65" onClick={() => setWalletSnapshotUser(null)}>
+            <div className="rounded-2xl px-6 py-5 text-center" style={{ background: '#151515', border: '1px solid rgba(201,168,76,.5)' }} onClick={(event) => event.stopPropagation()}>
+              <div className="text-sm font-semibold text-[#f5d78e]">正在读取钱包实时快照…</div>
+              <div className="mt-1 text-xs text-white/45">仅加载该37号账本成员的只读资产与资金明细</div>
+            </div>
+          </div>
+        ) : walletSnapshotQuery.error ? (
+          <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/65 px-6" onClick={() => setWalletSnapshotUser(null)}>
+            <div className="w-full max-w-sm rounded-2xl px-5 py-5 text-center" style={{ background: '#151515', border: '1px solid rgba(248,113,113,.55)' }} onClick={(event) => event.stopPropagation()}>
+              <div className="text-sm font-semibold text-red-300">钱包快照暂时无法读取</div>
+              <div className="mt-1 text-xs leading-5 text-white/55">{walletSnapshotQuery.error.message || '请稍后重新打开，不会影响成员钱包或初始金额配置。'}</div>
+              <div className="mt-4 flex justify-center gap-2"><button type="button" onClick={() => walletSnapshotQuery.refetch()} className="rounded-lg bg-[#C9A84C] px-4 py-2 text-xs font-semibold text-[#151515]">重新读取</button><button type="button" onClick={() => setWalletSnapshotUser(null)} className="rounded-lg border border-white/20 px-4 py-2 text-xs font-semibold text-white/70">关闭</button></div>
+            </div>
+          </div>
+        ) : walletSnapshotQuery.data ? (
+          <ReadonlyWalletSnapshot snapshot={walletSnapshotQuery.data} onClose={() => setWalletSnapshotUser(null)} />
+        ) : null
+      )}
 
     </div>
   );
