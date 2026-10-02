@@ -23,7 +23,7 @@
  */
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import ReactECharts from "echarts-for-react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X, RefreshCw, PauseCircle, AlertTriangle, HelpCircle, Pencil, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -223,6 +223,14 @@ export default function LedgerDetailAA({
   onBack,
 }: Props) {
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  // 37号账本的成员视角需要随钱包、明细和返回路径显式传递，避免账本页卸载后临时
+  // sessionStorage 被清理，钱包回退成管理员本人账户。
+  const viewAsUserIdFromUrl = useMemo(() => {
+    const rawUserId = new URLSearchParams(search).get('viewAs');
+    const parsedUserId = Number(rawUserId);
+    return Number.isInteger(parsedUserId) && parsedUserId > 0 ? parsedUserId : null;
+  }, [search]);
 
   // 快捷按钮配置：从数据库读取当前用户的快捷按钮开关状态
   const { data: myShortcuts } = (trpc as any).ledger.getMyShortcutButtons.useQuery(
@@ -298,7 +306,7 @@ export default function LedgerDetailAA({
   const [showStockPreview, setShowStockPreview] = useState(false);
 
   // ── 视角切换（管理员/创建者可切换到其他成员视角）──
-  const [viewAsUserId, setViewAsUserId] = useState<number | null>(null);
+  const [viewAsUserId, setViewAsUserId] = useState<number | null>(() => viewAsUserIdFromUrl);
   // 胡大叔（JiamG）超级管理员专属：仅本人在37号账本首页可见利息与保证金快捷入口。
   const isJiamGSuperAdmin = ledgerId === 37 && Number(user?.id) === 870413 && !viewAsUserId;
   const [showViewAsPicker, setShowViewAsPicker] = useState(false);
@@ -315,6 +323,16 @@ export default function LedgerDetailAA({
     } else {
       sessionStorage.removeItem('view-as-user-id');
     }
+    // 与52号账本一致，把当前成员视角写入URL。这样钱包及其明细页的刷新、返回均能
+    // 恢复到同一个成员，而不会在组件卸载时丢失身份上下文。
+    const nextParams = new URLSearchParams(window.location.search);
+    if (userId) {
+      nextParams.set('viewAs', String(userId));
+    } else {
+      nextParams.delete('viewAs');
+    }
+    const nextQuery = nextParams.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`);
     // 刷新所有查询，使视角切换立即生效（包括 transactionsData、initialBalancesData 等）
     trpcUtils.invalidate();
     // 同时触发父组件的 refetch，确保 transactionsData 切换到被观察用户的数据
@@ -2024,7 +2042,11 @@ export default function LedgerDetailAA({
                     备忘
                   </button>
                   <button
-                    onClick={() => setLocation('/wallet?fromLedger=37&account=CNY')}
+                    onClick={() => {
+                      const walletParams = new URLSearchParams({ fromLedger: '37', account: 'CNY' });
+                      if (viewAsUserId) walletParams.set('viewAs', String(viewAsUserId));
+                      setLocation(`/wallet?${walletParams.toString()}`);
+                    }}
                     className="h-8 px-2.5 rounded-lg text-xs font-medium whitespace-nowrap"
                     style={{ backgroundColor: "rgba(255,255,255,0.9)", color: "#D32F2F", border: "1px solid rgba(255,255,255,0.4)", borderRadius: 8 }}
                   >
