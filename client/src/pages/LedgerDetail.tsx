@@ -680,6 +680,11 @@ function FunderOrderCardLegacy({
       return typeof raw === 'string' ? JSON.parse(raw) : raw;
     } catch { return null; }
   })();
+  const isSelfFundedOption = isOptionOrder && (
+    dc?.assetFundingType === 'self'
+    || dc?.selfFundedAsset === true
+    || dc?.selfFundedAsset === 'true'
+  );
   const show = (key: string) => dc ? (dc[key] !== false) : true;
   const legacyMember = (membersData as any[])?.find((m: any) => Number(m.userId) === Number(order.user_id));
   const legacyNormalOwner = (order as any).owner_label || legacyMember?.nickname || legacyMember?.username || null;
@@ -765,11 +770,15 @@ function FunderOrderCardLegacy({
     : (order.interest_base ? Number(order.interest_base) : totalU);
   const liveP = livePrices[order.coin] ?? null;
   const currentValue = isOptionOrder ? optionCurrentValue : (liveP !== null ? liveP * qty : null);
-  // 期权使用合约标记价与权利金总成本的差额；其他订单保留原有持仓市值口径。
-  const floatPnl = isOptionOrder ? optionFloatPnl : (currentValue !== null ? currentValue - totalU : null);
-  const exposure = floatPnl !== null
-    ? collateralValue + floatPnl - accrued + totalPaid
-    : collateralValue - accrued + totalPaid;
+  // 融资付息期权使用“合约标记价 − 权利金总成本”；自有资产期权仅显示当前合约价值。
+  const floatPnl = isOptionOrder
+    ? (isSelfFundedOption ? optionCurrentValue : optionFloatPnl)
+    : (currentValue !== null ? currentValue - totalU : null);
+  const exposure = isSelfFundedOption
+    ? (optionCurrentValue ?? 0)
+    : (floatPnl !== null
+      ? collateralValue + floatPnl - accrued + totalPaid
+      : collateralValue - accrued + totalPaid);
   const isSufficient = exposure >= 0;
 
   return (
@@ -1199,13 +1208,15 @@ function FunderOrderCardLegacy({
                       <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保缺口计算说明</span>
                       <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
                     </div>
-                    <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
+                      <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
                       <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                        <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动盈亏</div>
-                        <div>= 当前市值 - 买入价值（正数为浮盈，负数为亏损）</div>
+                        <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>{isSelfFundedOption ? '① 自有资产期权实时价值' : '① 浮动盈亏'}</div>
+                        <div>{isSelfFundedOption ? '= 期权标记价 × 持有张数（不扣自有权利金）' : '= 当前市值 - 买入价值（正数为浮盈，负数为亏损）'}</div>
                         <div className="mt-1 font-mono">
                           {floatPnl !== null
-                            ? <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {totalU.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} U{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
+                            ? (isSelfFundedOption
+                              ? <><span style={{ color: '#3B82F6' }}>= {(optionMarkPrice ?? 0).toFixed(2)} × {optionQty.toFixed(2)} = </span><strong style={{ color: '#DC2626' }}>+{floatPnl.toFixed(2)} U（自有资产实时价值）</strong></>
+                              : <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {totalU.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} U{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>)
                             : <span className="text-gray-400">当前市值暂无实时价格，暂无法计算浮动盈亏</span>
                           }
                         </div>
@@ -1237,9 +1248,11 @@ function FunderOrderCardLegacy({
                       </div>
                       <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
                         <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敞口</div>
-                        <div>担保物 + 浮动盈亏 − 待结利息 + 已结利息（正数充足，负数缺口）</div>
+                        <div>{isSelfFundedOption ? '自有资产期权只采用实时合约价值，不叠加利息或担保物' : '担保物 + 浮动盈亏 − 待结利息 + 已结利息（正数充足，负数缺口）'}</div>
                         <div className="mt-1 font-mono">
-                          {floatPnl !== null
+                          {isSelfFundedOption
+                            ? <span style={{ color: '#3B82F6' }}>= {(optionCurrentValue ?? 0).toFixed(2)}（期权实时价值） = <strong style={{ color: '#DC2626' }}>+{exposure.toFixed(2)} U</strong></span>
+                            : floatPnl !== null
                             ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} + {totalPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
                             : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} + {totalPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
                           }
@@ -1309,9 +1322,11 @@ function FunderOrderCardLegacy({
               </div>
               {/* 保证金率：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100% */}
               {show('marginRate') && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && (() => {
-                const effectiveCollateral = floatPnl !== null
-                  ? collateralValue + floatPnl - accrued + totalPaid
-                  : collateralValue - accrued + totalPaid;
+                const effectiveCollateral = isSelfFundedOption
+                  ? (optionCurrentValue ?? 0)
+                  : (floatPnl !== null
+                    ? collateralValue + floatPnl - accrued + totalPaid
+                    : collateralValue - accrued + totalPaid);
                 const marginRatio = effectiveCollateral / interestBaseNum;
                 const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
                 const alertThreshold = (dc && typeof (dc as any).marginAlertThreshold === 'number') ? (dc as any).marginAlertThreshold as number : null;

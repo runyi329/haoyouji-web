@@ -12,6 +12,7 @@ import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, Chevr
 import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
+import { SelfFundedOptionPnlDisclosure } from "@/components/SelfFundedOptionPnlDisclosure";
 import {
   getTagMarginStockMarketValue,
   getTagMarginStockRecords,
@@ -1605,6 +1606,8 @@ export function FunderOrderCard({
     : financingDisplayConfig?.assetFundingType === 'self' || financingDisplayConfig?.selfFundedAsset === true || financingDisplayConfig?.selfFundedAsset === 'true'
       ? 'self'
       : null;
+  // 自有资产期权的浮盈定义为当前合约价值，不将自有权利金重复作为融资成本扣除。
+  const isSelfFundedOption = isOptionOrder && assetFundingType === 'self';
   const calculatedFinancingDisplayAmount = amountCurrency === 'USDT'
     ? financingAmountUsdt
     : amountCurrency === 'CNY'
@@ -1890,7 +1893,8 @@ export function FunderOrderCard({
     ? optionMarkPrice * optionContractQty
     : null;
   const isShortOption = optionInfo?.direction === 'short_call' || optionInfo?.direction === 'short_put';
-  // 期权浮盈只允许使用“合约标记价 × 张数”与“权利金/张 × 张数”的差额；
+  // 融资付息期权的浮盈使用“合约标记价 × 张数”与“权利金总成本”的差额；
+  // 自有资产期权则只显示当前合约价值，不能重复扣除自有权利金。
   // 行权价仅用于到期收益和风险敞口，标的现货价只用于非期权订单。
   const optionFloatPnl = isOptionOrder && optionCurrentValue !== null && optionPremiumTotal !== null && optionPremiumTotal > 0
     ? (isShortOption ? optionPremiumTotal - optionCurrentValue : optionCurrentValue - optionPremiumTotal)
@@ -1901,7 +1905,7 @@ export function FunderOrderCard({
   const spotBuyValueUsdt = qty > 0 && quotedPriceUsdt > 0 ? qty * quotedPriceUsdt : totalU;
   const floatPnlBase = isOptionOrder ? optionPremiumTotal : (!isStockOrder ? spotBuyValueUsdt : interestBaseNum);
   const floatPnl = isOptionOrder
-    ? optionFloatPnl
+    ? (isSelfFundedOption ? optionCurrentValue : optionFloatPnl)
     : (currentValue !== null && floatPnlBase !== null && floatPnlBase > 0
       ? (isShort ? floatPnlBase - currentValue : currentValue - floatPnlBase)
       : null);
@@ -2537,9 +2541,18 @@ export function FunderOrderCard({
                     <span className="font-medium text-gray-400">{isManualStockPnlSource ? (manualStockCloseQuery.isLoading ? '读取股票报价...' : '等待股票报价') : (_pnlTagSummary ? '暂无37号数据' : '加载37号数据...')}</span>
                   )
                 ) : floatPnl !== null ? (
+                  isSelfFundedOption && optionCurrentValue !== null ? (
+                    <SelfFundedOptionPnlDisclosure
+                      optionMarkPrice={optionMarkPrice}
+                      quantity={optionContractQty}
+                      currentValue={optionCurrentValue}
+                      color="#DC2626"
+                    />
+                  ) : (
                   <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
                     {floatPnl >= 0 ? '+' : ''}{floatPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })} u
                   </span>
+                  )
                 ) : (
                   <span className="font-medium text-gray-400">{greeksResult.loading ? '加载中...' : '暂无合约报价'}</span>
                 )}
@@ -3640,11 +3653,21 @@ export function FunderOrderCard({
                         /* 非共享订单：保留原有三段式计算说明 */
                         <>
                           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>{isOptionOrder ? '① 期权实时价值与权利金' : '① 浮动盈亏'}</div>
-                            <div>{isOptionOrder ? '= 期权标记价 × 持有张数 − 初始权利金 × 持有张数' : '= 当前市值 - 买入价值（正数为浮盈，负数为亏损）'}</div>
+                            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>
+                              {isOptionOrder
+                                ? (isSelfFundedOption ? '① 自有资产期权实时价值' : '① 期权实时价值与权利金')
+                                : '① 浮动盈亏'}
+                            </div>
+                            <div>{isOptionOrder
+                              ? (isSelfFundedOption
+                                ? '= 期权标记价 × 持有张数（不扣自有权利金）'
+                                : '= 期权标记价 × 持有张数 − 初始权利金 × 持有张数')
+                              : '= 当前市值 - 买入价值（正数为浮盈，负数为亏损）'}</div>
                             <div className="mt-1 font-mono">
                               {floatPnl !== null
-                                ? <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {(floatPnlBase ?? 0).toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
+                                ? (isSelfFundedOption
+                                  ? <><span style={{ color: '#3B82F6' }}>= {(optionMarkPrice ?? 0).toFixed(2)} × {optionContractQty.toFixed(2)} = </span><strong style={{ color: '#DC2626' }}>+{floatPnl.toFixed(2)} u（自有资产实时价值）</strong></>
+                                  : <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {(floatPnlBase ?? 0).toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>)
                                 : <span className="text-gray-400">当前市值暂无实时价格，暂无法计算浮动盈亏</span>
                               }
                             </div>

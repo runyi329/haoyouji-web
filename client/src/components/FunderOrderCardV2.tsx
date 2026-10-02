@@ -10,6 +10,7 @@ import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { RightMarginDetail } from "./RightMarginDetail";
 import { RightInterestDetail } from "./RightInterestDetail";
 import { OrderCardImageDownload } from "./OrderCardImageDownload";
+import { SelfFundedOptionPnlDisclosure } from "./SelfFundedOptionPnlDisclosure";
 import {
   COIN_COLORS,
   CoinType,
@@ -1288,6 +1289,11 @@ export function FunderOrderCardV2Silver({
       return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
     } catch { return {}; }
   })();
+  const isSelfFundedOption = _isOptCard && (
+    cardDisplayConfig.assetFundingType === 'self'
+    || cardDisplayConfig.selfFundedAsset === true
+    || cardDisplayConfig.selfFundedAsset === 'true'
+  );
   // 多笔担保总值单独配置。未保存新字段的历史订单默认显示 USD；
   // 仅保留旧“显示元”作为兼容映射，避免默认 hidden 导致总值空白。
   const cardCollateralTotalApprox = ['hidden', 'U', 'CNY'].includes(cardDisplayConfig.approxCollateralTotal)
@@ -1368,7 +1374,8 @@ export function FunderOrderCardV2Silver({
   const optMarkPriceDirection = greeksResult.markPriceDirection;
   const optCurrentValue = optMarkPrice !== null && qty > 0 ? optMarkPrice * qty : null;
   const optIsShort = _optInfo?.direction === 'short_call' || _optInfo?.direction === 'short_put';
-  // 期权浮盈与普通现货完全分离：只计算（合约标记价 − 权利金）× 张数。
+  // 融资付息期权使用（合约标记价 − 权利金）× 张数；
+  // 自有资产期权仅展示当前合约价值，不能重复扣减自有权利金。
   // 行权价仅用于到期收益/风险敞口，不能进入实时浮盈。
   const optionFloatPnl = _isOptCard && optCurrentValue !== null && optPremiumTotal !== null && optPremiumTotal > 0
     ? (optIsShort ? optPremiumTotal - optCurrentValue : optCurrentValue - optPremiumTotal)
@@ -1377,11 +1384,11 @@ export function FunderOrderCardV2Silver({
   const buyValue = _isOptCard ? optPremiumTotal : (qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : storedAmountUsdt);
   const _isShortSl = _isOptCard ? optIsShort : (order as any).trade_direction === 'short';
   const floatPnl = _isOptCard
-    ? optionFloatPnl
+    ? (isSelfFundedOption ? optCurrentValue : optionFloatPnl)
     : (currentValue !== null && buyValue !== null && buyValue > 0
       ? (_isShortSl ? buyValue - currentValue : currentValue - buyValue)
       : null);
-  const floatPct = floatPnl !== null && buyValue !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
+  const floatPct = !isSelfFundedOption && floatPnl !== null && buyValue !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const dir = priceDirection?.[coin] ?? 'same';
   const pnlColor = floatPnl === null ? (_isOptCard ? OPT_TEXT_SEC : SL_TEXT_SEC) : floatPnl >= 0 ? SL_GREEN : SL_RED;
   const priceDiff = liveP !== null && buyPriceUsdt > 0 ? liveP - buyPriceUsdt : null;
@@ -1615,11 +1622,6 @@ export function FunderOrderCardV2Silver({
   }
   // 期权行权价不参与当前担保缺口。自有资金直接以实时合约价值计，融资付息则以
   // 「实时价值 − 权利金总成本 − 待结 + 已结 + 担保物」计，和订单模式保持一致。
-  const isSelfFundedOption = _isOptCard && (
-    cardDisplayConfig.assetFundingType === 'self'
-    || cardDisplayConfig.selfFundedAsset === true
-    || cardDisplayConfig.selfFundedAsset === 'true'
-  );
   const exposure = _isOptCard
     ? (isSelfFundedOption
       ? (optCurrentValue ?? 0)
@@ -2065,12 +2067,25 @@ export function FunderOrderCardV2Silver({
           // 期权卡片固定展示行权价；浮动盈亏仅在订单模式展示，避免卡片内容过长遮挡。
           <div className="text-right" style={{ flex: 1, minWidth: 0 }}>
             <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-              {isOptionCard ? '行权价 (U)' : '浮动盈亏 (U)'}
+              {isOptionCard ? (isSelfFundedOption ? '浮动盈亏 (U)' : '行权价 (U)') : '浮动盈亏 (U)'}
             </div>
             {isOptionCard ? (
-              <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
-                {_optInfo?.strikePrice ? fmt(Number(_optInfo.strikePrice), 0) : '--'}
-              </div>
+              isSelfFundedOption && optCurrentValue !== null ? (
+                <SelfFundedOptionPnlDisclosure
+                  optionMarkPrice={optMarkPrice}
+                  quantity={qty}
+                  currentValue={optCurrentValue}
+                  color="#F5E9FF"
+                  textShadow={TXT_SHADOW}
+                  className="text-sm font-semibold"
+                  maximumFractionDigits={0}
+                  unit="U"
+                />
+              ) : (
+                <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
+                  {_optInfo?.strikePrice ? fmt(Number(_optInfo.strikePrice), 0) : '--'}
+                </div>
+              )
             ) : (order as any).order_fill_status === 'pending' ? (
               <div className="text-sm font-semibold" style={{ color: '#F97316', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>挂单中</div>
             ) : (
@@ -2830,15 +2845,26 @@ export function FunderOrderCardV2Silver({
                         <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
                       </div>
                       <div className="text-xs space-y-2" style={{ color: '#4B5563' }}>
-                        <div>担保缺口 = 担保总值 + 浮动盈亏 − 待结利息 + 已结利息</div>
-                        <div className="font-mono p-2 rounded" style={{ background: '#F9FAFB' }}>
-                          = {collateralValue.toFixed(2)}
-                          {floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ' + ---'}
-                          {` − ${displayAccrued.toFixed(2)}`}
-                          {` + ${displayPaid.toFixed(2)}`}
-                          {` = `}
-                          <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong>
-                        </div>
+                        {isSelfFundedOption ? (
+                          <>
+                            <div>自有资产期权：担保缺口只采用期权实时价值，不扣权利金、不叠加利息或担保物</div>
+                            <div className="font-mono p-2 rounded" style={{ background: '#F9FAFB' }}>
+                              = {(optCurrentValue ?? 0).toFixed(2)}（期权标记价 × 持有张数） = <strong style={{ color: '#16A34A' }}>+{exposure.toFixed(2)} u</strong>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div>担保缺口 = 担保总值 + 浮动盈亏 − 待结利息 + 已结利息</div>
+                            <div className="font-mono p-2 rounded" style={{ background: '#F9FAFB' }}>
+                              = {collateralValue.toFixed(2)}
+                              {floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ' + ---'}
+                              {` − ${displayAccrued.toFixed(2)}`}
+                              {` + ${displayPaid.toFixed(2)}`}
+                              {` = `}
+                              <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong>
+                            </div>
+                          </>
+                        )}
                         <div style={{ color: '#9CA3AF' }}>正数表示担保充足，负数表示担保缺口</div>
                       </div>
                     </div>
@@ -3269,6 +3295,19 @@ export function FunderLenderCardSilver({
   const financingDisplayAmount = getExactFinancingDisplayAmount(order, amountCurrency, calculatedFinancingDisplayAmount);
   const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'U' : amountCurrency;
 
+  const lenderDisplayConfig: Record<string, boolean | string> | null = (() => {
+    try {
+      const raw = order.display_config;
+      if (!raw) return null;
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch { return null; }
+  })();
+  const lenderIsSelfFundedOption = _lnIsOpt && (
+    lenderDisplayConfig?.assetFundingType === 'self'
+    || lenderDisplayConfig?.selfFundedAsset === true
+    || lenderDisplayConfig?.selfFundedAsset === 'true'
+  );
+
   // BTC/ETH期权仅在已有可靠合约报价时计算；无报价时不使用标的现货价格替代。
   const optionGreeksSupported = coin === 'BTC' || coin === 'ETH';
   const optionGreeksCurrency = (coin === 'ETH' ? 'ETH' : 'BTC') as 'BTC' | 'ETH';
@@ -3303,18 +3342,19 @@ export function FunderLenderCardSilver({
   const optionMarkPrice = optionGreeksResult.data?.markPrice ?? null;
   const optionCurrentValue = optionMarkPrice !== null && qty > 0 ? optionMarkPrice * qty : null;
   const optionIsShort = _lnOptInfo?.direction === 'short_call' || _lnOptInfo?.direction === 'short_put';
-  // 收息型期权同样只使用合约标记价与权利金成本；行权价不参与实时浮盈。
+  // 融资付息期权使用合约标记价与权利金成本差额；自有资产期权只显示当前合约价值。
+  // 行权价不参与实时浮盈。
   const optionFloatPnl = _lnIsOpt && optionCurrentValue !== null && optionPremiumTotal !== null && optionPremiumTotal > 0
     ? (optionIsShort ? optionPremiumTotal - optionCurrentValue : optionCurrentValue - optionPremiumTotal)
     : null;
   const currentValue = _lnIsOpt ? optionCurrentValue : (liveP !== null && qty > 0 ? liveP * qty : null);
   const buyValue = _lnIsOpt ? optionPremiumTotal : (qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : storedAmountUsdt);
   const floatPnl = _lnIsOpt
-    ? optionFloatPnl
+    ? (lenderIsSelfFundedOption ? optionCurrentValue : optionFloatPnl)
     : (currentValue !== null && buyValue !== null && buyValue > 0
       ? ((optionIsShort ? buyValue - currentValue : currentValue - buyValue))
       : null);
-  const floatPct = floatPnl !== null && buyValue !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
+  const floatPct = !lenderIsSelfFundedOption && floatPnl !== null && buyValue !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const dir = priceDirection?.[coin] ?? 'same';
   const isStock = order.asset_type === 'stock';
   const isOption = order.asset_type === 'crypto_option';
@@ -3384,13 +3424,6 @@ export function FunderLenderCardSilver({
   const effectiveCnyRate = cnyRate && cnyRate > 0 ? cnyRate : 6.8;
   const accruedInU = interestUnit === '元' ? displayAccrued / effectiveCnyRate : displayAccrued;
   const paidInU = interestUnit === '元' ? displayPaid / effectiveCnyRate : displayPaid;
-  const lenderDisplayConfig: Record<string, boolean | string> | null = (() => {
-    try {
-      const raw = order.display_config;
-      if (!raw) return null;
-      return typeof raw === 'string' ? JSON.parse(raw) : raw;
-    } catch { return null; }
-  })();
   const lenderPrincipalLentOut = (order as any).principal_lent_out === 1
     || (order as any).principal_lent_out === true
     || (!_lnIsOpt && lenderDisplayConfig?.assetFundingType === 'financing');
@@ -3399,12 +3432,6 @@ export function FunderLenderCardSilver({
   const lenderFinancingPrincipalU = baseCur === 'CNY'
     ? lenderFinancingPrincipalRaw / effectiveCnyRate
     : lenderFinancingPrincipalRaw;
-  const lenderIsSelfFundedOption = (() => {
-    try {
-      const config = lenderDisplayConfig || {};
-      return _lnIsOpt && (config.assetFundingType === 'self' || config.selfFundedAsset === true || config.selfFundedAsset === 'true');
-    } catch { return false; }
-  })();
   // 期权行权价不作为担保风险基准：自有资金仅保留实时合约市值；融资付息使用
   // 实时价值 − 初始权利金总成本 − 待结 + 已结 + 担保物。
   const collateralGap = _lnIsOpt
@@ -3670,10 +3697,23 @@ export function FunderLenderCardSilver({
           </div>
           {_lnIsOpt && (
             <div className="mt-2 flex items-center justify-between gap-2 rounded-md px-2 py-1" style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.11)', border: `1px solid ${DIVIDER}` }}>
-              <span style={{ color: TXT_SEC }}>行权价 (U)</span>
-              <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
-                {_lnOptInfo?.strikePrice ? fmt(Number(_lnOptInfo.strikePrice), 2) : '--'}
-              </span>
+              <span style={{ color: TXT_SEC }}>{lenderIsSelfFundedOption ? '浮动盈亏 (U)' : '行权价 (U)'}</span>
+              {lenderIsSelfFundedOption && optionCurrentValue !== null ? (
+                <SelfFundedOptionPnlDisclosure
+                  optionMarkPrice={optionMarkPrice}
+                  quantity={qty}
+                  currentValue={optionCurrentValue}
+                  color={TXT_PRI}
+                  textShadow={TXT_SHADOW}
+                  className="font-semibold"
+                  maximumFractionDigits={2}
+                  unit="U"
+                />
+              ) : (
+                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                  {_lnOptInfo?.strikePrice ? fmt(Number(_lnOptInfo.strikePrice), 2) : '--'}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -4114,11 +4154,17 @@ export function FunderLenderCardSilver({
                             <>
                               {/* 普通担保：原有三段式 */}
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动盈亏</div>
-                                <div>{isOption ? '期权当前市值 − 权利金总成本（正数为浮盈，负数为亏损）' : '= 当前市值 − 计息基数（正数为浮盈，负数为亏损）'}</div>
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>{isOption && lenderIsSelfFundedOption ? '① 自有资产期权实时价值' : '① 浮动盈亏'}</div>
+                                <div>{isOption
+                                  ? (lenderIsSelfFundedOption
+                                    ? '期权标记价 × 持有张数（不扣自有权利金）'
+                                    : '期权当前市值 − 权利金总成本（正数为浮盈，负数为亏损）')
+                                  : '= 当前市值 − 计息基数（正数为浮盈，负数为亏损）'}</div>
                                 <div className="mt-1 font-mono">
                                   {floatPnl !== null
-                                    ? <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} − {buyValue!.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
+                                    ? (lenderIsSelfFundedOption
+                                      ? <><span style={{ color: '#3B82F6' }}>= {(optionMarkPrice ?? 0).toFixed(2)} × {qty.toFixed(2)} = </span><strong style={{ color: '#DC2626' }}>+{floatPnl.toFixed(2)} u（自有资产实时价值）</strong></>
+                                      : <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} − {buyValue!.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>)
                                     : <span className="text-gray-400">{isOption ? '暂无期权合约报价，暂无法计算浮动盈亏' : '当前市值暂无实时价格，暂无法计算浮动盈亏'}</span>
                                   }
                                 </div>
@@ -4151,13 +4197,18 @@ export function FunderLenderCardSilver({
                               {collateralGap !== null && (
                                 <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
                                   <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敎口</div>
-                                  <div>担保物 + 浮动盈亏 − 待结利息(U) + 已结利息(U)（正数充足，负数缺口）</div>
+                                  <div>{lenderIsSelfFundedOption
+                                    ? '自有资产期权仅采用实时合约价值，不扣权利金、不叠加利息或担保物'
+                                    : '担保物 + 浮动盈亏 − 待结利息(U) + 已结利息(U)（正数充足，负数缺口）'}</div>
                                   {interestUnit === '元' && (
                                     <div className="text-[10px] mt-0.5" style={{ color: '#9CA3AF' }}>利息已按汇率 {effectiveCnyRate.toFixed(2)} 换算为 U</div>
                                   )}
                                   <div className="mt-1 font-mono">
                                     {(() => {
                                       const gap = collateralGap!;
+                                      if (lenderIsSelfFundedOption) {
+                                        return <span style={{ color: '#3B82F6' }}>= {(optionCurrentValue ?? 0).toFixed(2)}（期权实时价值） = <strong style={{ color: '#DC2626' }}>+{gap.toFixed(2)} U</strong></span>;
+                                      }
                                       return floatPnl !== null
                                         ? <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accruedInU.toFixed(2)} + {paidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</strong></span>
                                         : <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} + ---（暂无实时价） − {accruedInU.toFixed(2)} + {paidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</strong></span>;
