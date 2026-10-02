@@ -1,5 +1,8 @@
 name: pm2-restart
-on:
+"on":
+  push:
+    branches:
+      - main
   workflow_dispatch:
 jobs:
   restart:
@@ -12,12 +15,12 @@ jobs:
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           cat > ~/.ssh/config << 'SSHEOF'
-Host *
-  StrictHostKeyChecking no
-  UserKnownHostsFile /dev/null
-  ServerAliveInterval 15
-  ServerAliveCountMax 10
-SSHEOF
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ServerAliveInterval 15
+            ServerAliveCountMax 10
+          SSHEOF
           chmod 600 ~/.ssh/config
 
       - name: restart pm2
