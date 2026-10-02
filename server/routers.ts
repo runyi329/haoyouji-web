@@ -136,8 +136,9 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
         id: `legacy_${params.tagName}_0`,
         coin: String(balances[`${params.tagName}__marginCoin`] || 'CNY').trim().toUpperCase() || 'CNY',
         amount: Number(legacyAmount),
-        createdAt: '',
-        notes: [],
+        // 与旧字段读取口径一致，迁入钱包只改变资金来源，不得丢失原始时间或备注。
+        createdAt: balances[`${params.tagName}__marginCreatedAt`] || '',
+        notes: balances[`${params.tagName}__marginNotes`] || [],
       }];
     }
   }
