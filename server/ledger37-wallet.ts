@@ -30,6 +30,14 @@ export type Ledger37WalletHold = {
   releasedAt: string | null;
 };
 
+/** 冻结完成时的全局钱包余额；后续动账不会覆盖该历史快照。 */
+export type Ledger37WalletBalanceSnapshot = {
+  assetCode: Ledger37WalletAsset;
+  total: string;
+  frozen: string;
+  available: string;
+};
+
 export type Ledger37ManualMarginMigration = {
   migrationNo: string;
   hold: Ledger37WalletHold;
@@ -65,6 +73,12 @@ function decimalText(value: string | number): string {
     throw new Error("金额必须大于0，且最多支持18位小数");
   }
   return text;
+}
+
+function balanceSnapshotText(value: unknown): string {
+  const text = String(value ?? "").trim();
+  if (!/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/.test(text)) return "0";
+  return text.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
 }
 
 export function normalizeLedger37WalletAsset(value: unknown): Ledger37WalletAsset {
@@ -352,7 +366,7 @@ export async function freezeLedger37WalletHold(params: {
   actorUserId: number;
   requestId?: string;
   transaction?: any;
-}): Promise<{ hold: Ledger37WalletHold; alreadyCompleted: boolean }> {
+}): Promise<{ hold: Ledger37WalletHold; walletBalanceSnapshot: Ledger37WalletBalanceSnapshot | null; alreadyCompleted: boolean }> {
   await ensureLedger37WalletInfrastructure();
   const assetCode = normalizeLedger37WalletAsset(params.assetCode);
   const amount = decimalText(params.amount);
@@ -372,14 +386,21 @@ export async function freezeLedger37WalletHold(params: {
     const existing = rowsOf(existingRows)[0];
     if (existing) {
       if (ownConnection) await transaction.commit();
-      return { hold: holdResult(existing), alreadyCompleted: true };
+      return { hold: holdResult(existing), walletBalanceSnapshot: null, alreadyCompleted: true };
     }
     const cnyValueSnapshot = await getCnyValue(assetCode, amount);
+    let walletBalanceSnapshot: Ledger37WalletBalanceSnapshot;
     if (isFundingAsset(assetCode)) {
       const wallet = await getFundingBalanceForUpdate(transaction, params.userId, assetCode);
       if (Number(amount) > wallet.available + 1e-8) {
         throw new Error(`${assetCode} 可用余额不足；可冻结 ${Math.max(0, wallet.available).toFixed(assetCode === "CNY" ? 2 : 8)} ${assetCode}`);
       }
+      walletBalanceSnapshot = {
+        assetCode,
+        total: balanceSnapshotText(wallet.total),
+        frozen: balanceSnapshotText(wallet.frozen + Number(amount)),
+        available: balanceSnapshotText(wallet.available - Number(amount)),
+      };
     } else {
       await dbMultiAssetWallet.moveMultiAssetBalanceToFrozen({
         userId: params.userId,
@@ -392,6 +413,22 @@ export async function freezeLedger37WalletHold(params: {
         sourceLedgerId: LEDGER_37_ID,
         transaction,
       });
+      const [assetRows] = await transaction.execute(
+        `SELECT available_balance AS available, frozen_balance AS frozen,
+                available_balance + frozen_balance AS total
+           FROM ai_wallet_asset_balances
+          WHERE user_id = ? AND asset_code = ?
+          LIMIT 1 FOR UPDATE`,
+        [params.userId, assetCode],
+      );
+      const assetBalance = rowsOf(assetRows)[0];
+      if (!assetBalance) throw new Error("冻结后无法读取钱包余额快照");
+      walletBalanceSnapshot = {
+        assetCode,
+        total: balanceSnapshotText(assetBalance.total),
+        frozen: balanceSnapshotText(assetBalance.frozen),
+        available: balanceSnapshotText(assetBalance.available),
+      };
     }
     const holdNo = `H37${Date.now().toString(36).toUpperCase()}${randomBytes(4).toString("hex").toUpperCase()}`;
     const [insert] = await transaction.execute(
@@ -402,7 +439,7 @@ export async function freezeLedger37WalletHold(params: {
     );
     const [holdRows] = await transaction.execute("SELECT * FROM ai_wallet_project_holds WHERE id = ? LIMIT 1", [Number((insert as any).insertId)]);
     if (ownConnection) await transaction.commit();
-    return { hold: holdResult(rowsOf(holdRows)[0]), alreadyCompleted: false };
+    return { hold: holdResult(rowsOf(holdRows)[0]), walletBalanceSnapshot, alreadyCompleted: false };
   } catch (error) {
     if (ownConnection) try { await transaction.rollback(); } catch {}
     throw error;

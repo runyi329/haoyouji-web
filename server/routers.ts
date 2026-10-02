@@ -95,6 +95,7 @@ import {
   normalizeLedger37WalletAsset,
   createLedger37Dividend,
   ensureLedger37WalletInfrastructure,
+  type Ledger37WalletBalanceSnapshot,
 } from "./ledger37-wallet";
 
 function asRows(result: any): any[] {
@@ -117,6 +118,8 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
   /** 历史手工保证金迁入时，保留原条目ID并替换为同金额的钱包冻结条目。 */
   replaceManualEntryId?: string;
   migrationNo?: string;
+  /** 冻结提交时同一事务固化的全局钱包余额，供客户侧说明资金来源。 */
+  walletBalanceSnapshot?: Ledger37WalletBalanceSnapshot | null;
 }) {
   const [memberRows] = await transaction.execute(
     `SELECT initial_balances FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
@@ -129,6 +132,9 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
   const key = `${params.tagName}__margins`;
   let entries: any[] = [];
   try { entries = Array.isArray(balances[key]) ? balances[key] : JSON.parse(String(balances[key] || '[]')); } catch { entries = []; }
+  const snapshotForRecord = params.direction === 'freeze' && params.walletBalanceSnapshot
+    ? { ...params.walletBalanceSnapshot, capturedAt: params.createdAt }
+    : undefined;
   if (entries.length === 0 && params.replaceManualEntryId) {
     const legacyAmount = balances[`${params.tagName}__margin`];
     if (legacyAmount !== undefined && legacyAmount !== null && String(legacyAmount).trim() !== '') {
@@ -158,6 +164,7 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
         remainingAmount: params.amount,
         migratedFrom: 'manual',
         migrationNo: params.migrationNo,
+        ...(snapshotForRecord ? { walletBalanceSnapshot: snapshotForRecord } : {}),
       };
     });
     if (!replacedManualEntry) {
@@ -205,6 +212,7 @@ async function appendLedger37WalletMarginRecord(transaction: any, params: {
       source: 'wallet_hold',
       holdId: params.holdId,
       status: params.direction === 'release' ? 'released' : 'active',
+      ...(snapshotForRecord ? { walletBalanceSnapshot: snapshotForRecord } : {}),
     });
   }
   balances[key] = JSON.stringify(entries);
@@ -14027,6 +14035,7 @@ ${klinesSummary}
           await appendLedger37WalletMarginRecord(transaction, {
             userId: input.targetUserId, tagName: input.tagName, holdId: result.hold.id,
             assetCode: result.hold.assetCode, amount: result.hold.amount, createdAt: result.hold.createdAt, direction: 'freeze',
+            walletBalanceSnapshot: result.walletBalanceSnapshot,
           });
           await transaction.commit();
           return { success: true, hold: result.hold };

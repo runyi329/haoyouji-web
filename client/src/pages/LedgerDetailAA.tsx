@@ -41,7 +41,16 @@ import {
 
 // 数字币价格现已改为服务端缓存，通过 tRPC getCryptoPrices 接口获取。
 type MarginNote = { id: string; content: string; createdAt: string };
-type MarginEntry = { id?: string; coin: string; amount: number; createdAt?: string; notes?: MarginNote[] };
+type WalletBalanceSnapshot = { assetCode: string; total: string; frozen: string; available: string; capturedAt?: string };
+type MarginEntry = {
+  id?: string;
+  coin: string;
+  amount: number;
+  createdAt?: string;
+  notes?: MarginNote[];
+  source?: 'wallet_hold';
+  walletBalanceSnapshot?: WalletBalanceSnapshot;
+};
 type ResolvedMarginEntry = MarginEntry & { cnyValue: number | null };
 type MemoVisibility = 'private' | 'shared';
 type PersonalMemo = { id: number; authorId: number; authorName: string; visibility: MemoVisibility; content: string; createdAt: string; updatedAt: string };
@@ -57,6 +66,33 @@ const formatPersonalMemoTime = (value: string) => {
 const normalizeMarginCoin = (coin: unknown): string => {
   const value = String(coin ?? '').trim().toUpperCase();
   return value === '人民币' || value === 'RMB' || value === '' ? 'CNY' : value;
+};
+
+const readWalletBalanceSnapshot = (value: unknown): WalletBalanceSnapshot | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const snapshot = value as Record<string, unknown>;
+  if (
+    typeof snapshot.assetCode !== 'string'
+    || typeof snapshot.total !== 'string'
+    || typeof snapshot.frozen !== 'string'
+    || typeof snapshot.available !== 'string'
+  ) return undefined;
+  return {
+    assetCode: normalizeMarginCoin(snapshot.assetCode),
+    total: snapshot.total,
+    frozen: snapshot.frozen,
+    available: snapshot.available,
+    capturedAt: typeof snapshot.capturedAt === 'string' ? snapshot.capturedAt : undefined,
+  };
+};
+
+const formatWalletSnapshotBalance = (value: string, assetCode: string) => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return assetCode === 'CNY' ? '¥0.00' : `0 ${assetCode}`;
+  if (assetCode === 'CNY') {
+    return `¥${amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `${amount.toLocaleString('zh-CN', { maximumFractionDigits: 8 })} ${assetCode}`;
 };
 
 // 押金是可正可负的流水：正数为存入，负数为转出/平移。展示必须保留方向，不能用绝对值掩盖。
@@ -97,6 +133,8 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string, migra
                   createdAt: typeof note.createdAt === 'string' ? note.createdAt : '',
                 }))
               : [],
+            source: item.source === 'wallet_hold' ? 'wallet_hold' : undefined,
+            walletBalanceSnapshot: readWalletBalanceSnapshot(item.walletBalanceSnapshot),
           }));
       }
     } catch {
@@ -5633,6 +5671,7 @@ export default function LedgerDetailAA({
                       return Number.isNaN(date.getTime()) ? '历史押金（未记录时间）' : date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
                     };
                     const isOutflow = entry.amount < 0;
+                    const isWalletFreeze = !isOutflow && entry.source === 'wallet_hold';
                     const amountLabel = entry.coin === 'CNY'
                       ? formatSignedMarginCny(entry.amount)
                       : `${formatSignedMarginNumber(entry.amount, 8)} ${entry.coin}`;
@@ -5642,7 +5681,7 @@ export default function LedgerDetailAA({
                           <div>
                             <div className="text-xs font-medium flex items-center gap-1.5" style={{ color: '#9E9E9E' }}>
                               第 {index + 1} 笔押金
-                              <span className="px-1.5 py-0.5 rounded" style={isOutflow ? { color: '#D32F2F', backgroundColor: '#FFF1F2' } : { color: '#1565C0', backgroundColor: '#EFF6FF' }}>{isOutflow ? '转出' : '存入'}</span>
+                              <span className="px-1.5 py-0.5 rounded" style={isOutflow ? { color: '#D32F2F', backgroundColor: '#FFF1F2' } : { color: '#1565C0', backgroundColor: '#EFF6FF' }}>{isOutflow ? '转出' : isWalletFreeze ? '钱包冻结' : '存入'}</span>
                             </div>
                             <div className="text-base font-bold mt-0.5" style={{ color: isOutflow ? '#D32F2F' : '#1A1A1A' }}>{amountLabel}</div>
                           </div>
@@ -5653,6 +5692,19 @@ export default function LedgerDetailAA({
                             <div className="text-xs mt-0.5" style={{ color: '#9E9E9E' }}>{formatRecordedAt(entry.createdAt)}</div>
                           </div>
                         </div>
+                        {isWalletFreeze && (
+                          <div className="mt-2.5 rounded-lg px-2.5 py-2" style={{ backgroundColor: '#F2F8FF', border: '1px solid #D7E6FF' }}>
+                            <div className="text-xs font-semibold" style={{ color: '#1565C0' }}>来源：从全局钱包冻结</div>
+                            {entry.walletBalanceSnapshot ? (
+                              <div className="mt-1 text-[11px] leading-5 tabular-nums" style={{ color: '#607D8B' }}>
+                                冻结后可用余额 <span className="font-semibold" style={{ color: '#1565C0' }}>{formatWalletSnapshotBalance(entry.walletBalanceSnapshot.available, entry.walletBalanceSnapshot.assetCode)}</span>
+                                <span> · 已冻结 {formatWalletSnapshotBalance(entry.walletBalanceSnapshot.frozen, entry.walletBalanceSnapshot.assetCode)} · 总额 {formatWalletSnapshotBalance(entry.walletBalanceSnapshot.total, entry.walletBalanceSnapshot.assetCode)}</span>
+                              </div>
+                            ) : (
+                              <div className="mt-1 text-[11px] leading-5" style={{ color: '#78909C' }}>该笔为钱包冻结；冻结后余额快照将在新流水中自动保存。</div>
+                            )}
+                          </div>
+                        )}
                         {(entry.notes ?? []).length > 0 && (
                           <div className="mt-2.5 pt-2.5 space-y-2" style={{ borderTop: '1px solid #EAEAEA' }}>
                             {(entry.notes ?? []).map((note) => (

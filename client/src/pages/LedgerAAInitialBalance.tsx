@@ -41,6 +41,14 @@ type MarginNote = {
   createdAt: string;
 };
 
+type WalletBalanceSnapshot = {
+  assetCode: string;
+  total: string;
+  frozen: string;
+  available: string;
+  capturedAt?: string;
+};
+
 type MarginEntry = {
   id: string;
   coin: string;
@@ -54,6 +62,7 @@ type MarginEntry = {
   remainingAmount?: string;
   migratedFrom?: 'manual';
   migrationNo?: string;
+  walletBalanceSnapshot?: WalletBalanceSnapshot;
 };
 
 const createMarginEntry = (seed?: Partial<MarginEntry>): MarginEntry => ({
@@ -71,6 +80,7 @@ const createMarginEntry = (seed?: Partial<MarginEntry>): MarginEntry => ({
   remainingAmount: seed?.remainingAmount === undefined || seed?.remainingAmount === null ? undefined : String(seed.remainingAmount),
   migratedFrom: seed?.migratedFrom,
   migrationNo: seed?.migrationNo,
+  walletBalanceSnapshot: seed?.walletBalanceSnapshot,
 });
 
 const normalizeMarginCoin = (coin: unknown): string => {
@@ -117,6 +127,19 @@ const readMarginEntries = (balances: Record<string, any>, tagName: string, migra
             remainingAmount: item.remainingAmount === undefined || item.remainingAmount === null ? undefined : String(item.remainingAmount),
             migratedFrom: item.migratedFrom === 'manual' ? 'manual' : undefined,
             migrationNo: typeof item.migrationNo === 'string' ? item.migrationNo : undefined,
+            walletBalanceSnapshot: item.walletBalanceSnapshot && typeof item.walletBalanceSnapshot === 'object'
+              && typeof item.walletBalanceSnapshot.assetCode === 'string'
+              && typeof item.walletBalanceSnapshot.total === 'string'
+              && typeof item.walletBalanceSnapshot.frozen === 'string'
+              && typeof item.walletBalanceSnapshot.available === 'string'
+              ? {
+                assetCode: item.walletBalanceSnapshot.assetCode,
+                total: item.walletBalanceSnapshot.total,
+                frozen: item.walletBalanceSnapshot.frozen,
+                available: item.walletBalanceSnapshot.available,
+                capturedAt: typeof item.walletBalanceSnapshot.capturedAt === 'string' ? item.walletBalanceSnapshot.capturedAt : undefined,
+              }
+              : undefined,
           }));
       }
     } catch {
