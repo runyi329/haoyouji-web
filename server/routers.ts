@@ -13847,7 +13847,11 @@ ${klinesSummary}
           const afterSnapshot = await getLedger37MarginMigrationReconciliationSnapshot(transaction);
           const reconciliation = reconcileLedger37MarginMigrationSnapshots(beforeSnapshot, afterSnapshot);
           if (!reconciliation.passed) {
-            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '迁移前后账面核对未通过，已停止并回滚本次迁移' });
+            const failedSections = reconciliation.checks
+              .filter((check) => !check.unchanged)
+              .map((check) => `${check.label}（${check.beforeCount}→${check.afterCount}）`)
+              .join('、');
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: `迁移前后账面核对未通过：${failedSections || '未知项目'}；已停止并回滚本次迁移` });
           }
           const batchNo = `B37${nanoid(18)}`;
           await transaction.execute(
