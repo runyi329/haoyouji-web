@@ -19670,16 +19670,34 @@ ${klinesSummary}
               .filter((raw: any) => raw.collateral_share_mode !== 'self')
               .map((raw: any) => [Number(raw.id), raw])
           );
-          const toOrderCardSource = (raw: any) => Object.fromEntries(
-            Object.entries(raw).map(([key, value]) => [
-              key,
-              Buffer.isBuffer(value)
-                ? value.toString('utf8')
-                : value instanceof Date
-                  ? value.toISOString()
-                  : value,
+          // 第二层订单详情、⑤的隐藏原订单卡都消费这里的原始订单快照。
+          // 它们与订单管理列表不同，不能天然携带 paidTotal；若遗漏，卡片会把
+          // 已结利息错误地回退为 0，继而少加这一笔已结利息到担保缺口。
+          // 复用上方同一共享池已经按订单实际计息币种和付款汇率换算的 paidInterest。
+          const paidTotalByOrderId = new Map<number, { amount: number; currency: string }>(
+            orderDetails.map((detail: any) => [
+              Number(detail.orderId),
+              {
+                amount: Number(detail.paidInterest ?? 0),
+                currency: String(detail.interestBaseCurrency || 'USDT').toUpperCase() === 'CNY' ? 'CNY' : 'USDT',
+              },
             ])
           );
+          const toOrderCardSource = (raw: any) => ({
+            ...Object.fromEntries(
+              Object.entries(raw).map(([key, value]) => [
+                key,
+                Buffer.isBuffer(value)
+                  ? value.toString('utf8')
+                  : value instanceof Date
+                    ? value.toISOString()
+                    : value,
+              ])
+            ),
+            // 和 funderGetAssetOrders 一致的字段结构，供 FunderOrderCard 直接显示、
+            // 折算并将已结利息计入最终担保缺口。
+            paidTotal: paidTotalByOrderId.get(Number(raw.id)) ?? null,
+          });
           const nonSharedOrderCardSources = nonSharedOrderDetails
             .map((detail: any) => rawNonSharedById.get(Number(detail.orderId)))
             .filter(Boolean)
