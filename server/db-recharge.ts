@@ -197,10 +197,11 @@ async function notifyIfYJHDownline(userId: number, type: 'recharge' | 'withdraw'
   }
 }
 
-// 生成唯一的充值金额（原金额 + 0.0001-0.9999的随机数）
+// 生成唯一的充值金额（原金额 + 0.000001-0.009999 的随机数）。
+// 小额测试也保持接近用户输入值，且 USDT 常用网络均支持 6 位小数。
 function generateUniqueAmount(baseAmount: number): number {
-  const randomDecimal = (Math.floor(Math.random() * 9999) + 1) / 10000;
-  return parseFloat((baseAmount + randomDecimal).toFixed(4));
+  const randomDecimal = (Math.floor(Math.random() * 9999) + 1) / 1_000_000;
+  return parseFloat((baseAmount + randomDecimal).toFixed(6));
 }
 
 // 生成订单号
@@ -345,8 +346,8 @@ export async function createRechargeOrder(
   network: string = 'TRC20',
   ledgerId?: number  // 关联账本 ID，为空表示通用充値
 ) {
-  if (!Number.isFinite(baseAmount) || baseAmount < 500) {
-    throw new Error('最低充值金额为 500 USDT');
+  if (!Number.isFinite(baseAmount) || baseAmount < 0.01) {
+    throw new Error('最低充值金额为 0.01 USDT');
   }
   const guardConnection = await getDbConnection();
   if (!guardConnection) throw new Error('数据库连接失败');
@@ -593,6 +594,10 @@ export async function findOrderByAmount(
 } | null> {
   const db = await getDb();
   const orderScope = getRechargeOrderScope(context);
+  // 小额订单使用 6 位小数的唯一金额，必须精确匹配，避免原先 ±0.01 / ±1 的容差
+  // 在多个并行小额订单中发生跨用户误配。大额历史订单沿用既有容差策略。
+  const exactTolerance = amount < 10 ? 0.000001 : 0.01;
+  const fuzzyTolerance = amount < 10 ? 0.000001 : 1.0;
 
   // ===== 双重防护 =====
   // 防护1：txn_hash 数据库唯一性检查
@@ -627,11 +632,11 @@ export async function findOrderByAmount(
     if (proofMatchedOrders.length > 0) {
       const proofMatchedOrder = proofMatchedOrders[0];
       const amountDiff = Math.abs(Number(proofMatchedOrder.amount) - amount);
-      if (amountDiff <= 1) {
+      if (amountDiff <= fuzzyTolerance) {
         console.log(`[Recharge] User-submitted transaction identifier matched order ${proofMatchedOrder.orderNo}`);
         return {
           order: proofMatchedOrder,
-          matchType: amountDiff <= 0.01 ? 'exact' : 'fuzzy',
+          matchType: amountDiff <= exactTolerance ? 'exact' : 'fuzzy',
           amountDiff: Number((Number(proofMatchedOrder.amount) - amount).toFixed(4)),
         };
       }
@@ -697,7 +702,7 @@ export async function findOrderByAmount(
     const exactConditions = [
       ...orderScope,
       eq(rechargeOrders.status, status),
-      sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 0.01`,
+        sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= ${exactTolerance}`,
       sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
     ];
     
@@ -727,7 +732,7 @@ export async function findOrderByAmount(
     const fuzzyConditions = [
       ...orderScope,
       eq(rechargeOrders.status, status),
-      sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 1.0`,
+      sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= ${fuzzyTolerance}`,
       sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
     ];
     

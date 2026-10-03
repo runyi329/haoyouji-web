@@ -59,6 +59,24 @@ export async function scanSolanaTransactions(targets?: RechargeScanTarget[]) {
  */
 async function getTokenAccount(walletAddress: string): Promise<string | null> {
   try {
+    // 部分交易所会直接展示 USDT Token Account，而不是其所有者主地址。
+    // 若配置地址本身就是官方 USDT 的代币账户，直接扫描它即可。
+    const directAccountResponse = await fetch(SOLANA_RPC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getAccountInfo',
+        params: [walletAddress, { encoding: 'jsonParsed' }],
+      }),
+    });
+    const directAccountData = await directAccountResponse.json();
+    const directMint = String(directAccountData.result?.value?.data?.parsed?.info?.mint || '');
+    if (directMint === USDT_MINT_ADDRESS) {
+      return walletAddress;
+    }
+
     const response = await fetch(SOLANA_RPC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -128,7 +146,8 @@ async function scanWalletAddress(walletAddress: string, label: string) {
         method: 'getSignaturesForAddress',
         params: [
           tokenAccount,
-          { limit: 20 }
+          // 只查询已完成最终确认的签名，避免确认中交易回滚后提前入账。
+          { limit: 20, commitment: 'finalized' }
         ]
       })
     });
@@ -145,7 +164,7 @@ async function scanWalletAddress(walletAddress: string, label: string) {
 
     // 获取每个交易的详情
     for (const sig of signatures) {
-      if (sig.err === null) { // 只处理成功的交易
+      if (sig.err === null && sig.confirmationStatus === 'finalized') { // 只处理最终确认的成功交易
         await processTransaction(sig.signature, tokenAccount, walletAddress);
       }
     }
@@ -175,7 +194,7 @@ async function processTransaction(signature: string, tokenAccount: string, walle
         method: 'getTransaction',
         params: [
           signature,
-          { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }
+          { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'finalized' }
         ]
       })
     });

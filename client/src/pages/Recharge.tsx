@@ -8,13 +8,13 @@ import QRCode from "qrcode";
 const RECHARGE_NETWORKS = [
   { code: "TRC20", label: "TRC20", enabled: true },
   { code: "APTOS", label: "Aptos", enabled: true },
-  { code: "SOLANA", label: "Solana", enabled: false },
-  { code: "BEP20", label: "BEP20", enabled: false },
-  { code: "ERC20", label: "ERC20", enabled: false },
+  { code: "SOLANA", label: "Solana", enabled: true },
+  { code: "BEP20", label: "BEP20", enabled: true },
+  { code: "ERC20", label: "ERC20", enabled: true },
 ] as const;
 
 type RechargeNetwork = (typeof RECHARGE_NETWORKS)[number]["code"];
-const MIN_RECHARGE_AMOUNT = 500;
+const MIN_RECHARGE_AMOUNT = 0.01;
 
 function formatRechargeAmount(value: unknown): string {
   const raw = String(value ?? "").trim();
