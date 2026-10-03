@@ -665,6 +665,16 @@ export default function PolicyLoanManagement({
             </div>
             <label className="mt-5 block text-xs font-medium text-slate-600">目前累计已还金额</label>
             <input type="number" min="0" max={activeHuabeiStatementAmount} step="0.01" inputMode="decimal" autoFocus value={huabeiPaymentDraft} onChange={(event) => setHuabeiPaymentDraft(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-center text-lg font-semibold text-slate-900 outline-none focus:border-[#1677FF]" placeholder="输入本期累计已还金额" />
+            <button
+              type="button"
+              disabled={saveHuabeiPaymentMutation.isPending || activeHuabeiRemainingAmount <= 0}
+              onClick={() => setHuabeiPaymentDraft(String(activeHuabeiStatementAmount))}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 active:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+            >
+              <Check className="h-4 w-4" />
+              {activeHuabeiRemainingAmount <= 0 ? '本期已还清' : '一键全额还清'}
+            </button>
+            <p className="mt-2 text-[11px] leading-4 text-slate-400">点击“一键全额还清”会自动填入账单应还金额，仍需点击下方保存确认。</p>
             <button type="button" disabled={saveHuabeiPaymentMutation.isPending || huabeiPaymentDraft.trim() === ''} onClick={saveHuabeiPayment} className="mt-4 w-full rounded-xl bg-[#1677FF] px-4 py-3 text-sm font-semibold text-white active:opacity-80 disabled:opacity-40">{saveHuabeiPaymentMutation.isPending ? '保存中…' : '保存已还金额'}</button>
           </div>
         </div>
