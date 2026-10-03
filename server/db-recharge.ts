@@ -400,10 +400,15 @@ export async function createRechargeOrder(
       [userId, orderNo, uniqueAmount.toString(), network, wallet.address, ledgerId ?? null]
     );
     const [createdRows] = await (guardConnection as any).execute(
-      `SELECT expires_at FROM recharge_orders WHERE order_no = ? AND user_id = ? LIMIT 1`,
+      `SELECT expires_at,
+              GREATEST(0, TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), expires_at)) AS remaining_seconds
+         FROM recharge_orders
+        WHERE order_no = ? AND user_id = ? LIMIT 1`,
       [orderNo, userId]
     );
-    const expiresAt = asUtcIsoString((createdRows as any[])[0]?.expires_at);
+    const createdOrder = (createdRows as any[])[0];
+    const expiresAt = asUtcIsoString(createdOrder?.expires_at);
+    const remainingSeconds = Math.max(0, Number(createdOrder?.remaining_seconds ?? 0));
 
     return {
       orderNo,
@@ -411,7 +416,9 @@ export async function createRechargeOrder(
       currency: 'USDT',
       network,
       walletAddress: wallet.address,
-      expiresAt: expiresAt ?? new Date(Date.now() + RECHARGE_ORDER_EXPIRY_MINUTES * 60 * 1000).toISOString()
+      expiresAt: expiresAt ?? new Date(Date.now() + RECHARGE_ORDER_EXPIRY_MINUTES * 60 * 1000).toISOString(),
+      // 倒计时优先使用同一数据库时钟的剩余秒数，不依赖客户端对时间字符串的时区解析。
+      remainingSeconds,
     };
   } finally {
     await (guardConnection as any).execute('SELECT RELEASE_LOCK(?)', [lockName]).catch(() => undefined);

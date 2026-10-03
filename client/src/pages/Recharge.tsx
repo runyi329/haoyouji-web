@@ -136,18 +136,29 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
         ...(effectiveLedgerId ? { ledgerId: effectiveLedgerId } : {}),
         ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}),
       });
+      // 先写入倒计时再显示订单。否则二维码生成期间会以初始值 0 渲染“订单已过期”。
+      // 新建订单优先使用服务端基于数据库 UTC 时钟计算的剩余秒数，避免客户端时区解析差异。
+      const serverRemainingSeconds = Number((result as any).remainingSeconds);
+      const parsedExpiresAt = new Date(result.expiresAt).getTime();
+      const initialTimeLeft = Number.isFinite(serverRemainingSeconds) && serverRemainingSeconds > 0
+        ? Math.floor(serverRemainingSeconds)
+        : Math.max(0, Math.floor((parsedExpiresAt - Date.now()) / 1000));
+      setTimeLeft(initialTimeLeft);
       setOrder(result);
       setShowPaymentProof(false);
       setUserTxnHash("");
       setPaymentProofImage("");
       setPaymentProofPreview("");
       if (result.walletAddress) {
-        const qr = await QRCode.toDataURL(result.walletAddress);
-        setQrCode(qr);
+        // 二维码仅为辅助展示；生成失败不能影响有效订单及其倒计时。
+        try {
+          const qr = await QRCode.toDataURL(result.walletAddress);
+          setQrCode(qr);
+        } catch (qrError) {
+          console.warn("充值二维码生成失败", qrError);
+          setQrCode("");
+        }
       }
-      const expiresAt = new Date(result.expiresAt).getTime();
-      const now = Date.now();
-      setTimeLeft(Math.floor((expiresAt - now) / 1000));
     } catch (error: any) {
       alert(error.message || "创建订单失败");
     }
