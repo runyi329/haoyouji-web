@@ -360,9 +360,12 @@ export async function createRechargeOrder(
 
   try {
     // 待支付与确认中订单共用同一条30分钟扫描窗口，过期后均不再阻塞下一笔充值。
+    // 历史上 created_at 使用数据库本地时钟、expires_at 使用 UTC 时钟，造成两列相差 8 小时；
+    // 兼容清理这类 expires_at 早于 created_at 的错误旧订单，避免其继续占用用户的建单入口。
     await (guardConnection as any).execute(
       `UPDATE recharge_orders SET status = 'expired'
-       WHERE user_id = ? AND status IN ('pending', 'submitted') AND expires_at <= UTC_TIMESTAMP()`,
+       WHERE user_id = ? AND status IN ('pending', 'submitted')
+         AND (expires_at <= UTC_TIMESTAMP() OR expires_at <= created_at)`,
       [userId]
     );
 
@@ -388,11 +391,12 @@ export async function createRechargeOrder(
 
     const uniqueAmount = generateUniqueAmount(baseAmount);
     const orderNo = generateOrderNo();
-    // 订单支付窗口统一为30分钟；直接使用数据库 UTC 时钟，避免应用服务器/数据库时区错位。
+    // 创建与到期时间均使用数据库 UTC 时钟。recharge_orders 为 TIMESTAMP 字段，
+    // 必须避免 created_at 的数据库本地默认值与 expires_at 的 UTC 值混用。
     await (guardConnection as any).execute(
       `INSERT INTO recharge_orders
-       (user_id, order_no, amount, currency, network, wallet_address, status, ledger_id, expires_at)
-       VALUES (?, ?, ?, 'USDT', ?, ?, 'pending', ?, UTC_TIMESTAMP() + INTERVAL ${RECHARGE_ORDER_EXPIRY_MINUTES} MINUTE)`,
+       (user_id, order_no, amount, currency, network, wallet_address, status, ledger_id, created_at, expires_at)
+       VALUES (?, ?, ?, 'USDT', ?, ?, 'pending', ?, UTC_TIMESTAMP(), UTC_TIMESTAMP() + INTERVAL ${RECHARGE_ORDER_EXPIRY_MINUTES} MINUTE)`,
       [userId, orderNo, uniqueAmount.toString(), network, wallet.address, ledgerId ?? null]
     );
     const [createdRows] = await (guardConnection as any).execute(
