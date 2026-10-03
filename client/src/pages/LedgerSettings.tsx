@@ -1441,8 +1441,8 @@ function SettingItem({
  className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0 cursor-pointer active:bg-gray-50"
  onClick={onClick}
  >
- <div className="flex items-center gap-2">
- <span className="text-[15px] text-gray-900">{label}</span>
+ <div className="flex min-w-0 flex-1 items-center gap-2">
+ <span className="shrink-0 text-[15px] text-gray-900">{label}</span>
  {isVip && (
  <span className="text-xs font-bold bg-gray-50 px-1.5 py-0.5 rounded" style={{ color: 'var(--status-gold)' }}>
  VIP
@@ -1455,9 +1455,9 @@ function SettingItem({
  )}
  </div>
  
- <div className="flex items-center gap-2">
+ <div className="flex min-w-0 items-center gap-2">
  {value && (
- <span className={`text-[15px] ${valueColor}`}>{value}</span>
+ <span className={`min-w-0 max-w-[56vw] break-all text-right text-[15px] leading-5 ${valueColor}`}>{value}</span>
  )}
  {rightContent}
  {showIcon && (

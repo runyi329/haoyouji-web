@@ -1001,7 +1001,8 @@ export default function LedgerAAInitialBalance() {
           }
           return (
             <div key={marginEntry.id || `${tagName}-margin-${index}`} className="rounded-xl px-2 py-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #F0F0F0' }}>
-              <div className="flex items-center gap-1.5 w-full min-w-0">
+              <div className="flex w-full min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
                 <span className="text-xs text-gray-400 w-10 flex-shrink-0">{index === 0 ? '押金' : `第${index + 1}笔`}</span>
                 <div className="flex rounded-lg overflow-hidden border flex-shrink-0" style={{ borderColor: '#E0E0E0' }} aria-label="选择押金方向">
                   <button
@@ -1052,6 +1053,8 @@ export default function LedgerAAInitialBalance() {
                   className="min-w-0 flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
                   style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: isOutflow ? '#D32F2F' : '#222222' }}
                 />
+                </div>
+                <div className="flex items-center justify-end gap-1.5 self-end sm:self-auto">
                 {ledgerId === 37 && !isOutflow && Number(rawAmount) > 0 && (
                   <button type="button" onClick={() => openManualMarginMigration(userId, tagName, marginEntry)} className="h-7 rounded-lg px-2 text-[10px] font-medium flex-shrink-0" style={{ backgroundColor: '#EAF3FF', color: '#1565C0', border: '1px solid #B8D7F3' }}>
                     迁入冻结
@@ -1062,6 +1065,7 @@ export default function LedgerAAInitialBalance() {
                     <Trash2 size={14} />
                   </button>
                 )}
+                </div>
               </div>
               {ledgerId === 37 && manualMarginMigrationDraft?.userId === userId && manualMarginMigrationDraft.tagName === tagName && manualMarginMigrationDraft.marginEntryId === marginEntry.id && (
                 <div className="ml-10 mt-2 rounded-lg p-2.5 space-y-1.5" style={{ backgroundColor: '#F2F8FF', border: '1px solid #B8D7F3' }}>

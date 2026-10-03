@@ -56,6 +56,32 @@ type MarginEntry = {
 type ResolvedMarginEntry = MarginEntry & { cnyValue: number | null };
 type MemoVisibility = 'private' | 'shared';
 type PersonalMemo = { id: number; authorId: number; authorName: string; visibility: MemoVisibility; content: string; createdAt: string; updatedAt: string };
+type OverviewFocusMetric = 'today' | 'pnl' | 'amount' | 'dividend' | 'annualized';
+type OverviewSortColumn = OverviewFocusMetric | 'days' | 'ratio';
+type CalendarDateDetail = {
+  scope: 'tag' | 'summary';
+  date: string;
+  tagName?: string;
+  isStockPortfolio?: boolean;
+  summaryTags?: Array<{ name: string; val: number }>;
+};
+type CalendarMonthPoint = { date: string; value: number };
+type CalendarMonthSummary = {
+  total: number;
+  positiveDays: number;
+  negativeDays: number;
+  best: CalendarMonthPoint | null;
+  worst: CalendarMonthPoint | null;
+  recordDays: number;
+};
+const OVERVIEW_FOCUS_OPTIONS: Array<{ key: OverviewFocusMetric; label: string; scrollLeft: number }> = [
+  { key: 'today', label: '今日', scrollLeft: 0 },
+  { key: 'pnl', label: '回报', scrollLeft: 65 },
+  { key: 'amount', label: '押金', scrollLeft: 138 },
+  // 分红前的 1px 分隔线也需被固定名称列遮住，避免视觉上残留上一列。
+  { key: 'dividend', label: '分红', scrollLeft: 212 },
+  { key: 'annualized', label: '年化', scrollLeft: 280 },
+];
 
 const formatPersonalMemoTime = (value: string) => {
   const date = new Date(value);
@@ -64,6 +90,71 @@ const formatPersonalMemoTime = (value: string) => {
     year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
   });
 };
+
+const buildCalendarMonthSummary = (points: CalendarMonthPoint[]): CalendarMonthSummary => {
+  const valid = points.filter((point) => Number.isFinite(point.value));
+  const positiveDays = valid.filter((point) => point.value > 0).length;
+  const negativeDays = valid.filter((point) => point.value < 0).length;
+  return {
+    total: valid.reduce((sum, point) => sum + point.value, 0),
+    positiveDays,
+    negativeDays,
+    best: valid.length > 0 ? valid.reduce((best, point) => point.value > best.value ? point : best) : null,
+    worst: valid.length > 0 ? valid.reduce((worst, point) => point.value < worst.value ? point : worst) : null,
+    recordDays: valid.length,
+  };
+};
+
+function CalendarMonthSummaryStrip({ summary, previousSummary }: { summary: CalendarMonthSummary; previousSummary?: CalendarMonthSummary }) {
+  const signedMoney = (value: number) => {
+    const prefix = value > 0 ? '+' : value < 0 ? '−' : '';
+    const abs = Math.abs(value);
+    const amount = abs >= 10000
+      ? `${(abs / 10000).toFixed(2)}万`
+      : abs.toLocaleString('zh-CN', { maximumFractionDigits: 0 });
+    return `${prefix}￥${amount}`;
+  };
+  const moneyColor = (value: number) => value > 0 ? '#D32F2F' : value < 0 ? '#388E3C' : '#757575';
+  const dateLabel = (date: string) => date ? date.slice(5).replace('-', '/') : '--';
+  const signedCount = (value: number) => `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value)}`;
+
+  if (summary.recordDays === 0) {
+    return <div className="mb-3 rounded-lg px-3 py-2 text-xs" style={{ background: '#FAFAFA', border: '1px solid #EEEEEE', color: '#9E9E9E' }}>本月暂无已更新交易日</div>;
+  }
+
+  return (
+    <div className="mb-3 overflow-hidden rounded-lg" style={{ border: '1px solid #EEEEEE', background: '#FCFCFC' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.04fr 0.9fr 1.46fr' }}>
+        <div className="px-3 py-2.5" style={{ borderRight: '1px solid #EEEEEE' }}>
+          <div className="text-[10px] font-medium" style={{ color: '#888888' }}>当月回报</div>
+          <div className="mt-0.5 whitespace-nowrap font-mono text-sm font-bold" style={{ color: moneyColor(summary.total) }}>{signedMoney(summary.total)}</div>
+        </div>
+        <div className="px-3 py-2.5" style={{ borderRight: '1px solid #EEEEEE' }}>
+          <div className="text-[10px] font-medium" style={{ color: '#888888' }}>正 / 负</div>
+          <div className="mt-0.5 whitespace-nowrap font-mono text-sm font-bold"><span style={{ color: '#D32F2F' }}>{summary.positiveDays}</span><span style={{ color: '#BDBDBD' }}> / </span><span style={{ color: '#388E3C' }}>{summary.negativeDays}</span></div>
+        </div>
+        <div className="px-3 py-2" style={{ minWidth: 0 }}>
+          <div className="text-[10px] font-medium" style={{ color: '#888888' }}>最佳 / 最弱交易日</div>
+          <div className="mt-0.5 flex items-center justify-between gap-1 text-[11px] leading-4"><span className="shrink-0" style={{ color: '#888888' }}>{dateLabel(summary.best?.date || '')}</span><span className="truncate font-mono font-semibold" style={{ color: moneyColor(summary.best?.value ?? 0) }}>{summary.best ? signedMoney(summary.best.value) : '--'}</span></div>
+          <div className="flex items-center justify-between gap-1 text-[11px] leading-4"><span className="shrink-0" style={{ color: '#888888' }}>{dateLabel(summary.worst?.date || '')}</span><span className="truncate font-mono font-semibold" style={{ color: moneyColor(summary.worst?.value ?? 0) }}>{summary.worst ? signedMoney(summary.worst.value) : '--'}</span></div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 px-3 py-1.5 text-[10px]" style={{ borderTop: '1px solid #EEEEEE', background: '#F8F8F8' }}>
+        <span className="shrink-0 font-medium" style={{ color: '#888888' }}>较上月</span>
+        {previousSummary && previousSummary.recordDays > 0 ? (() => {
+          const returnDelta = summary.total - previousSummary.total;
+          const positiveDaysDelta = summary.positiveDays - previousSummary.positiveDays;
+          const negativeDaysDelta = summary.negativeDays - previousSummary.negativeDays;
+          return <>
+            <span className="truncate" style={{ color: '#888888' }}>回报</span>
+            <span className="shrink-0 font-mono font-semibold" style={{ color: moneyColor(returnDelta) }}>{signedMoney(returnDelta)}</span>
+            <span className="ml-auto shrink-0 whitespace-nowrap" style={{ color: '#888888' }}>正日 <span style={{ color: positiveDaysDelta > 0 ? '#D32F2F' : positiveDaysDelta < 0 ? '#388E3C' : '#757575' }}>{signedCount(positiveDaysDelta)}</span> · 负日 <span style={{ color: negativeDaysDelta < 0 ? '#D32F2F' : negativeDaysDelta > 0 ? '#388E3C' : '#757575' }}>{signedCount(negativeDaysDelta)}</span></span>
+          </>;
+        })() : <span style={{ color: '#9E9E9E' }}>无可比已更新交易日</span>}
+      </div>
+    </div>
+  );
+}
 
 const normalizeMarginCoin = (coin: unknown): string => {
   const value = String(coin ?? '').trim().toUpperCase();
@@ -264,6 +355,8 @@ export default function LedgerDetailAA({
   const hideFloatingAddButton = ledgerId === 37;
 
   const [calendarMode, setCalendarMode] = useState<"balance" | "daily" | "monthly" | "yearly">("balance");
+  // 点击日历日期后先展示只读快览；管理员可从快览底部继续编辑或新增当日记录。
+  const [calendarDateDetail, setCalendarDateDetail] = useState<CalendarDateDetail | null>(null);
   // 汇总日历（全部模式，概览下方）独立月份状态
   const [summaryCalendarDate, setSummaryCalendarDate] = useState(() => {
     const d = new Date();
@@ -659,7 +752,7 @@ export default function LedgerDetailAA({
   // 分红明细弹窗：使用 getDividendRecords 获取分红日志记录
   const { data: dividendRecordsData } = trpc.getDividendRecords.useQuery(
     { ledgerId, viewAsUserId: viewAsUserId ?? undefined },
-    { enabled: !!ledgerId && !!dividendNoteTag }
+    { enabled: !!ledgerId && (!!dividendNoteTag || calendarDateDetail?.scope === 'tag') }
   );
   // 按标签过滤当前弹窗的分红记录
   const currentDividendRecords = (dividendRecordsData?.records ?? []).filter((r: any) => r.tag_name === dividendNoteTag);
@@ -944,8 +1037,14 @@ export default function LedgerDetailAA({
   }, [overviewTab]);
   const overviewNativeScrollRef = useRef<HTMLDivElement>(null);
   const overviewPageScrollRef = useRef<HTMLDivElement>(null);
-  const [overviewSort, setOverviewSort] = useState<{ col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend'; dir: 'asc' | 'desc' } | null>(null);
-  const handleOverviewSort = (col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend') => {
+  const [overviewSort, setOverviewSort] = useState<{ col: OverviewSortColumn; dir: 'asc' | 'desc' } | null>(null);
+  const [overviewFocusMetric, setOverviewFocusMetric] = useState<OverviewFocusMetric>('pnl');
+  const focusOverviewMetric = useCallback((metric: OverviewFocusMetric, behavior: ScrollBehavior = 'smooth') => {
+    setOverviewFocusMetric(metric);
+    const scrollLeft = OVERVIEW_FOCUS_OPTIONS.find((option) => option.key === metric)?.scrollLeft ?? 0;
+    requestAnimationFrame(() => overviewNativeScrollRef.current?.scrollTo({ left: scrollLeft, behavior }));
+  }, []);
+  const handleOverviewSort = (col: OverviewSortColumn) => {
     setOverviewSort(prev => prev && prev.col === col ? { col, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' });
   };
 
@@ -1162,6 +1261,19 @@ export default function LedgerDetailAA({
       return { name: tagName, color, points, initialBalance, marginCny, marginEntries };
     });
   }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, tagCashFlows, stockParticipantView, stockTagOverviewById]);
+
+  // 概览默认把“回报”紧贴名称列；切换焦点仅移动当前表格视口，不改变表格的完整列结构或排序。
+  useEffect(() => {
+    if (selectedTagId !== null || overviewTab !== 'overview' || allTagsChartData.length === 0) return;
+    const applyFocus = () => focusOverviewMetric(overviewFocusMetric, 'auto');
+    const frame = requestAnimationFrame(applyFocus);
+    // 数据、卡片及原生滚动层可能分批挂载；补一次定位确保手机首次进入即可看到默认回报列。
+    const timer = window.setTimeout(applyFocus, 80);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [selectedTagId, overviewTab, allTagsChartData.length, overviewFocusMetric, focusOverviewMetric]);
 
   // 下拉菜单的顺序以概览表默认顺序为基准：运行中的标签在前，暂停标签在后。
   // 没有任何概览数据的标签保留可选，但放在所有概览标签之后，避免打乱概览序号。
@@ -1617,6 +1729,32 @@ export default function LedgerDetailAA({
   // 兼容旧代码：calendarCells 保持为一维数组
   const calendarCells = useMemo(() => calendarWeeks.flat(), [calendarWeeks]);
 
+  // 单标签月度经营摘要：与日度日历的“实际回报”同口径，剔除本金与提现资金流。
+  // 手工余额标签需乘以该用户在标签中的实际比例；股票持仓已是用户/标签口径，无需再次折算。
+  const selectedCalendarMonthSummaries = useMemo(() => {
+    const currentPrefix = `${calendarDate.year}-${String(calendarDate.month + 1).padStart(2, '0')}`;
+    const previousMonthDate = new Date(calendarDate.year, calendarDate.month - 1, 1);
+    const previousPrefix = `${previousMonthDate.getFullYear()}-${String(previousMonthDate.getMonth() + 1).padStart(2, '0')}`;
+    if (isSelectedStockPortfolio) {
+      const points = stockCalendarPoints.map((point) => ({ date: point.date, value: Number(point.dailyPnl || 0) }));
+      return {
+        current: buildCalendarMonthSummary(points.filter((point) => point.date.startsWith(currentPrefix))),
+        previous: buildCalendarMonthSummary(points.filter((point) => point.date.startsWith(previousPrefix))),
+      };
+    }
+    const configuredRatio = selectedTag?.name && initialBalancesData?.balances
+      ? Number(initialBalancesData.balances[`${selectedTag.name}__ratio`] ?? 100) / 100
+      : 1;
+    const ratio = Number.isFinite(configuredRatio) ? configuredRatio : 1;
+    const points = Array.from(selectedDailyReturnMap.entries())
+      .filter(([, value]) => value !== null)
+      .map(([date, value]) => ({ date, value: Number(value) * ratio }));
+    return {
+      current: buildCalendarMonthSummary(points.filter((point) => point.date.startsWith(currentPrefix))),
+      previous: buildCalendarMonthSummary(points.filter((point) => point.date.startsWith(previousPrefix))),
+    };
+  }, [calendarDate, isSelectedStockPortfolio, stockCalendarPoints, selectedDailyReturnMap, selectedTag?.name, initialBalancesData]);
+
   // 月份切换后自动滚动到周一（让周六周日在屏幕外）
   useEffect(() => {
     const el = calendarScrollRef.current;
@@ -1857,73 +1995,64 @@ export default function LedgerDetailAA({
     return s;
   }, [selectedTagPauseHistory]);
 
-  // 点击日历格子：已有记录则跳转编辑，否则跳转新增
+  // 日期快览不直接写入数据；保留原有的编辑/新增能力，改由快览底部显式进入。
   const handleDayClick = (day: number) => {
-    const dateStr = getDateStr(day);
-    const existing = dayMap.get(dateStr);
+    setCalendarDateDetail({
+      scope: 'tag',
+      date: getDateStr(day),
+      tagName: selectedTag?.name,
+      isStockPortfolio: isSelectedStockPortfolio,
+    });
+  };
 
-    // 观察视角权限判断：如果切换到非管理员用户视角，按只读处理
-    const viewTargetMember = viewAsUserId ? (membersData || []).find((m: any) => m.userId === viewAsUserId) : null;
-    const viewTargetCanEdit = viewTargetMember ? (viewTargetMember.role === 'owner' || viewTargetMember.role === 'admin') : true;
-    const effectiveCanEdit = canEdit && (!viewAsUserId || viewTargetCanEdit);
-
-    // 股票标签先保留与所有标签一致的月日历入口。点击交易日后才进入
-    // 管理员维护页；普通成员进入同一页的只读个人份额视图。
+  const openCalendarRecordEditor = (dateStr: string) => {
+    setCalendarDateDetail(null);
+    // 股票标签维持原有的统一持仓维护入口。
     if (isSelectedStockPortfolio && selectedTagId) {
       setShowStockPortfolio(true);
       return;
     }
-
-    if (!effectiveCanEdit) {
-      // 普通成员或观察非管理员视角：暂停后仍可查看图片/股票，不拦截也不弹提示
-      // 不可编辑，但可查看图片和股票
-      if (existing && existing.records.length > 0) {
-        // 收集当天所有记录的图片
-        const allImages: string[] = [];
-        for (const record of existing.records) {
-          if (record.images && Array.isArray(record.images) && record.images.length > 0) {
-            allImages.push(...record.images);
-          } else if (record.imageUrl) {
-            allImages.push(record.imageUrl);
-          }
-        }
-        // 收集当天所有记录的股票代码（去重）
-        const allStocks: Array<{code: string; name: string}> = [];
-        const seenCodes = new Set<string>();
-        for (const record of existing.records) {
-          if (record.stockCodes && Array.isArray(record.stockCodes)) {
-            for (const s of record.stockCodes) {
-              if (s.code && !seenCodes.has(s.code)) {
-                seenCodes.add(s.code);
-                allStocks.push(s);
-              }
-            }
-          }
-        }
-        // 优先显示图片，若只有股票则显示股票弹窗
-        if (allImages.length > 0) {
-          setPreviewImages(allImages);
-          setPreviewImageIndex(0);
-          setShowImagePreview(true);
-        } else if (allStocks.length > 0) {
-          setPreviewStocks(allStocks);
-          setShowStockPreview(true);
-        }
-      }
-      return;
-    }
-
-    // 注意：管理员在暂停日期之后仍可继续登记（暂停只冻结周期/年化，不拦截日历登记）
+    const existing = dayMap.get(dateStr);
     if (existing && existing.records.length > 0) {
-      // 已有记录：跳转编辑第一条记录
       const recordId = existing.records[0].id;
       let editUrl = `/ledger/${ledgerId}/add?edit=${recordId}`;
       if (selectedTagId) editUrl += `&categoryId=${selectedTagId}`;
       setLocation(editUrl);
-    } else {
-      let url = `/ledger/${ledgerId}/add?date=${dateStr}`;
-      if (selectedTagId) url += `&categoryId=${selectedTagId}`;
-      setLocation(url);
+      return;
+    }
+    let url = `/ledger/${ledgerId}/add?date=${dateStr}`;
+    if (selectedTagId) url += `&categoryId=${selectedTagId}`;
+    setLocation(url);
+  };
+
+  const openCalendarDayAttachments = (dateStr: string) => {
+    const existing = dayMap.get(dateStr);
+    if (!existing?.records?.length) return;
+    const allImages: string[] = [];
+    const allStocks: Array<{ code: string; name: string }> = [];
+    const seenCodes = new Set<string>();
+    for (const record of existing.records) {
+      if (record.images && Array.isArray(record.images) && record.images.length > 0) {
+        allImages.push(...record.images);
+      } else if (record.imageUrl) {
+        allImages.push(record.imageUrl);
+      }
+      if (record.stockCodes && Array.isArray(record.stockCodes)) {
+        for (const stock of record.stockCodes) {
+          if (stock.code && !seenCodes.has(stock.code)) {
+            seenCodes.add(stock.code);
+            allStocks.push(stock);
+          }
+        }
+      }
+    }
+    if (allImages.length > 0) {
+      setPreviewImages(allImages);
+      setPreviewImageIndex(0);
+      setShowImagePreview(true);
+    } else if (allStocks.length > 0) {
+      setPreviewStocks(allStocks);
+      setShowStockPreview(true);
     }
   };
 
@@ -2384,6 +2513,10 @@ export default function LedgerDetailAA({
               })}
             </div>
           </div>
+
+          {(calendarMode === 'balance' || calendarMode === 'daily') && (
+            <CalendarMonthSummaryStrip summary={selectedCalendarMonthSummaries.current} previousSummary={selectedCalendarMonthSummaries.previous} />
+          )}
 
           {/* 日视图 / 月视图 / 年视图 */}
           {(calendarMode === "balance" || calendarMode === "daily") && (
@@ -2949,7 +3082,15 @@ export default function LedgerDetailAA({
             // 排序逻辑：默认（无手动排序）时暂停的排最下面；用户手动排序时参与全局排序
             const sortedTagData = overviewSort ? [...tagData].sort((a, b) => {
               let va = 0, vb = 0;
-              if (overviewSort.col === 'days') { va = a.days; vb = b.days; }
+              // “今日”未更新的标签固定置后，避免升序时因空值排到最上面。
+              if (overviewSort.col === 'today') {
+                const aMissing = a.todayPnl === null;
+                const bMissing = b.todayPnl === null;
+                if (aMissing !== bMissing) return aMissing ? 1 : -1;
+                va = a.todayPnl ?? 0;
+                vb = b.todayPnl ?? 0;
+              }
+              else if (overviewSort.col === 'days') { va = a.days; vb = b.days; }
               else if (overviewSort.col === 'ratio') {
                 const ra = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${a.tag.name}__ratio`] ?? 0) : 0;
                 const rb = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${b.tag.name}__ratio`] ?? 0) : 0;
@@ -2983,9 +3124,12 @@ export default function LedgerDetailAA({
             const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
             // 右侧表头和数据网格必须共用同一组绝对轨道宽度；不能按各自内容自适应，
             // 否则在横向滑动时会出现标题与数字列宽不同、错位的情况。
-            const rightGridCols = '64px 1px 72px 1px 72px 1px 68px 1px 64px 1px 64px 1px 52px';
-            // 所有轨道之和为 462px；此前误设为 562px，导致占比列右侧多出 100px 可滑动白边。
-            const rightGridWidth = '462px';
+            // 年化焦点需要向右移动至 280px；窄屏下通过扩展末列而非留白，确保年化列可完全贴近名称列。
+            const annualizedFocusTail = overviewFocusMetric === 'annualized' ? 12 : 0;
+            const rightGridCols = `64px 1px 72px 1px 72px 1px 68px 1px 64px 1px 64px 1px ${52 + annualizedFocusTail}px`;
+            // 所有轨道基础和为 462px；年化焦点时把额外空间并入末列“占比”，避免产生右侧白边。
+            const rightGridWidth = `${462 + annualizedFocusTail}px`;
+            const overviewTableWidth = `${566 + annualizedFocusTail}px`;
             // 概览表头始终表示北京时间的“当天”，不能被某个标签最后一笔手工记录或
             // 某支股票的上一交易日快照改写。每一行是否真正完成当天计算，仍按该行自己的
             // latestDate 与这个北京日期比对（R1 的9/28盘尾只影响R1本行）。
@@ -3004,7 +3148,7 @@ export default function LedgerDetailAA({
             // 纵向滚动时，概览标题行固定在滚动容器顶部；横向滚动仍由右侧容器处理。
             const stickyOverviewHeaderStyle = { position: 'sticky' as const, top: 0, zIndex: 10, backgroundColor: '#FFFFFF', boxShadow: '0 1px 0 #F5F5F5' };
             // 排序箭头辅助
-            const SortArrow = ({ col }: { col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend' }) => {
+            const SortArrow = ({ col }: { col: OverviewSortColumn }) => {
               if (!overviewSort || overviewSort.col !== col) return <span style={{ color: '#D0D0D0', fontSize: 7, marginLeft: 1 }}>▼</span>;
               return <span style={{ color: '#1565C0', fontSize: 7, marginLeft: 1 }}>{overviewSort.dir === 'desc' ? '▼' : '▲'}</span>;
             };
@@ -3021,23 +3165,84 @@ export default function LedgerDetailAA({
             const pausedSummaryPnl = pausedTagData.reduce((sum, td) => sum + td.latestPnl, 0);
             const pausedSummaryMargin = pausedTagData.reduce((sum, td) => sum + td.tag.marginCny, 0);
             const pausedSummaryDividend = pausedTagData.reduce((sum, td) => sum + td.divAmt, 0);
+            const activeFocusOption = OVERVIEW_FOCUS_OPTIONS.find((option) => option.key === overviewFocusMetric)!;
+            const focusSortActive = overviewSort?.col === overviewFocusMetric;
             return (
               <>
+              <div className="flex items-center gap-1 overflow-x-auto px-2 py-2" style={{ borderBottom: '1px solid #F5F5F5', scrollbarWidth: 'none' }}>
+                <span className="mr-1 shrink-0 text-[11px] font-medium" style={{ color: '#9E9E9E' }}>焦点</span>
+                {OVERVIEW_FOCUS_OPTIONS.map((option) => {
+                  const active = overviewFocusMetric === option.key;
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => {
+                        focusOverviewMetric(option.key);
+                        // 切换观察指标时不沿用其他指标的旧排序，避免列表顺序造成误判。
+                        if (overviewSort?.col !== option.key) setOverviewSort(null);
+                      }}
+                      className="shrink-0 px-2 py-1 text-xs font-medium"
+                      style={{ borderRadius: 5, backgroundColor: active ? '#D32F2F' : '#FAFAFA', color: active ? '#FFFFFF' : '#757575', border: active ? '1px solid #D32F2F' : '1px solid #E8E8E8' }}
+                      aria-pressed={active}
+                      aria-label={`将${option.label}列置于名称列旁`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => handleOverviewSort(overviewFocusMetric)}
+                  className="ml-1 shrink-0 px-2 py-1 text-xs font-medium"
+                  style={{ borderRadius: 5, backgroundColor: focusSortActive ? '#E3F2FD' : '#FFFFFF', color: focusSortActive ? '#1565C0' : '#757575', border: focusSortActive ? '1px solid #90CAF9' : '1px solid #E8E8E8' }}
+                  aria-label={`按${activeFocusOption.label}排序`}
+                >
+                  {focusSortActive ? (overviewSort?.dir === 'desc' ? '降序↓' : '升序↑') : '排序'}
+                </button>
+              </div>
               {/* 单一原生滚动层：表头和数据共同横向移动，不存在两层同步延迟。 */}
-              <div ref={overviewNativeScrollRef} style={{ display: 'flex', alignItems: 'stretch', position: 'relative', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100dvh - 186px)', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'none', overscrollBehaviorX: 'none', overscrollBehaviorY: 'none', touchAction: 'pan-x pan-y', backgroundColor: '#FFFFFF' }}>
-                {/* ── 左侧固定名称列 ── */}
-                <div style={{ width: 104, flexShrink: 0, borderRight: '1px solid #F0F0F0', position: 'sticky', left: 0, zIndex: 30, backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column' }}>
-                  {/* 表头名称格 */}
-                  <div className={cellCls} style={{ ...stickyOverviewHeaderStyle, borderBottom: '1px solid #F5F5F5', background: '#fff', zIndex: 20, flex: '0 0 auto', height: 36 }}>
+              <div ref={overviewNativeScrollRef} style={{ position: 'relative', isolation: 'isolate', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100dvh - 186px)', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'none', overscrollBehaviorX: 'none', overscrollBehaviorY: 'none', touchAction: 'pan-x pan-y', backgroundColor: '#FFFFFF' }}>
+                {/* 表头直接挂在原生滚动层：iOS 从第13项继续上滑时仍保持固定，不受名称列移动端合成层影响。 */}
+                <div style={{ display: 'flex', width: overviewTableWidth, minWidth: overviewTableWidth, position: 'sticky', top: 0, zIndex: 50, backgroundColor: '#FFFFFF', boxShadow: '0 1px 0 #F5F5F5' }}>
+                  <div className={cellCls} style={{ width: 104, minWidth: 104, maxWidth: 104, flexShrink: 0, position: 'sticky', left: 0, zIndex: 60, borderRight: '1px solid #F0F0F0', backgroundColor: '#FFFFFF', boxShadow: '2px 0 0 #FFFFFF, 3px 0 0 #F0F0F0', height: rowHeight }}>
                     <span style={{ color: '#9E9E9E', fontSize: 12 }}>名称</span>
                   </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: rightGridCols, backgroundColor: '#FFFFFF', width: rightGridWidth }}>
+                    <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('today')}><span style={{ color: overviewSort?.col === 'today' ? '#1565C0' : '#9E9E9E' }}>{todayColTitle}</span><SortArrow col="today" /></div>
+                    <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                    <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报￥</span><SortArrow col="pnl" /></div>
+                    <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                    <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E' }}>押金￥</span><SortArrow col="amount" /></div>
+                    <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                    <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('dividend')}>
+                      <span
+                        style={{ color: canManageDividends ? '#1565C0' : '#9E9E9E', textDecoration: canManageDividends ? 'underline' : 'none', textDecorationStyle: 'dashed', textUnderlineOffset: '2px', cursor: canManageDividends ? 'pointer' : 'default' }}
+                        onClick={(e) => {
+                          if (!canManageDividends) return;
+                          e.stopPropagation();
+                          setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`);
+                        }}
+                      >分红￥</span><SortArrow col="dividend" />
+                    </div>
+                    <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                    <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
+                    <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                    <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
+                    <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                    <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'stretch', width: overviewTableWidth, minWidth: overviewTableWidth }}>
+                {/* ── 左侧固定名称列 ── */}
+                <div style={{ width: 104, minWidth: 104, maxWidth: 104, flexShrink: 0, borderRight: '1px solid #F0F0F0', position: 'sticky', left: 0, zIndex: 40, isolation: 'isolate', backgroundColor: '#FFFFFF', boxShadow: '2px 0 0 #FFFFFF, 3px 0 0 #F0F0F0', display: 'flex', flexDirection: 'column' }}>
                   {/* 数据行名称格 */}
                   {displayedTagData.map(({ tag, isPaused }, displayedIndex) => {
                     const rowBorder2 = displayedIndex === displayedTagData.length - 1 && !showPausedSummary ? 'none' : '1px solid #F9F9F9';
                     const tagAlias2 = (initialBalancesData?.balances as any)?.[`${tag.name}__alias`] ?? '';
                     const displayName2 = tagAlias2 || tag.name;
                     return (
-                      <div key={`${tag.name}-name-left`} className="flex items-center justify-start gap-1" style={{ borderBottom: rowBorder2, flex: '0 0 auto', height: 36, paddingLeft: 6, paddingRight: 2, overflow: 'hidden' }}>
+                      <div key={`${tag.name}-name-left`} className="flex items-center justify-start gap-1" style={{ position: 'relative', zIndex: 1, borderBottom: rowBorder2, backgroundColor: '#FFFFFF', flex: '0 0 auto', height: 36, paddingLeft: 6, paddingRight: 2, overflow: 'hidden' }}>
                         <span style={{ minWidth: 14, height: 14, padding: '0 2px', borderRadius: 3, backgroundColor: isPaused ? '#1565C0' : '#D32F2F', color: '#FFFFFF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, lineHeight: 1, flexShrink: 0 }}>
                           <span style={{ display: 'inline-block', transform: 'translateY(1px)' }}>{displayedIndex + 1}</span>
                         </span>
@@ -3076,40 +3281,14 @@ export default function LedgerDetailAA({
                   )}
                   {/* 合计名称格 */}
                   {visibleTags.length > 0 && (
-                    <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 8px', flex: '0 0 auto', height: 36 }}>
+                    <div className="px-1 flex items-center justify-center" style={{ position: 'relative', zIndex: 1, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 8px', flex: '0 0 auto', height: 36 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: '#9E9E9E' }}>合计</span>
                     </div>
                   )}
                 </div>
                 {/* ── 右侧：与数据共用同一原生横向滚动层 ── */}
-                <div style={{ flex: '0 0 auto', width: rightGridWidth, display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ position: 'sticky', top: 0, zIndex: 15, backgroundColor: '#FFFFFF', boxShadow: '0 1px 0 #F5F5F5' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: rightGridCols, backgroundColor: '#FFFFFF', width: rightGridWidth }}>
-                      <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }}><span style={{ color: '#9E9E9E' }}>{todayColTitle}</span></div>
-                      <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                      <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报￥</span><SortArrow col="pnl" /></div>
-                      <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                      <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E' }}>押金￥</span><SortArrow col="amount" /></div>
-                      <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                      <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('dividend')}>
-                        <span
-                          style={{ color: canManageDividends ? '#1565C0' : '#9E9E9E', textDecoration: canManageDividends ? 'underline' : 'none', textDecorationStyle: 'dashed', textUnderlineOffset: '2px', cursor: canManageDividends ? 'pointer' : 'default' }}
-                          onClick={(e) => {
-                            if (!canManageDividends) return;
-                            e.stopPropagation();
-                            setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`);
-                          }}
-                        >分红￥</span><SortArrow col="dividend" />
-                      </div>
-                      <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                      <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
-                      <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                      <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
-                      <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                      <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
-                    </div>
-                  </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: rightGridCols, backgroundColor: '#fff', width: rightGridWidth }}>
+                <div style={{ position: 'relative', zIndex: 0, flex: '0 0 auto', width: rightGridWidth, display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: rightGridCols, backgroundColor: '#fff', width: rightGridWidth }}>
                     {/* 数据行右侧各列 */}
                 {displayedTagData.map(({ tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, todayCapitalChange, todayWithdraw, annualized, divAmt, isPaused, firstDate, endDate }, displayedIndex) => {
                       // 判断是否需要灰色：北京时间交易日 15:00后且最新数据不是今天
@@ -3634,6 +3813,7 @@ export default function LedgerDetailAA({
                     </div>
                 </div>
               </div>
+              </div>
               </>
             );
           })()}
@@ -3680,6 +3860,18 @@ export default function LedgerDetailAA({
             const sWeeks: (number | null)[][] = [];
             for (let i = 0; i < sCells.length; i += 7) sWeeks.push(sCells.slice(i, i + 7));
             const sGetDateStr = (day: number) => `${sy}-${String(sm + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const summaryCalendarMonthSummary = buildCalendarMonthSummary(
+              Array.from(summaryDayMap.entries())
+                .filter(([date]) => date.startsWith(`${sy}-${String(sm + 1).padStart(2, '0')}`))
+                .map(([date, entry]) => ({ date, value: entry.total })),
+            );
+            const summaryPreviousMonthDate = new Date(sy, sm - 1, 1);
+            const summaryPreviousMonthPrefix = `${summaryPreviousMonthDate.getFullYear()}-${String(summaryPreviousMonthDate.getMonth() + 1).padStart(2, '0')}`;
+            const summaryPreviousMonthSummary = buildCalendarMonthSummary(
+              Array.from(summaryDayMap.entries())
+                .filter(([date]) => date.startsWith(summaryPreviousMonthPrefix))
+                .map(([date, entry]) => ({ date, value: entry.total })),
+            );
             const sToday = new Date();
             const summaryValueColor = (value: number) => value > 0 ? '#D32F2F' : value < 0 ? '#4CAF50' : '#9E9E9E';
             const formatSummaryValue = (value: number) => formatMoney(Math.abs(value), value > 0 ? '+' : value < 0 ? '-' : '');
@@ -3720,6 +3912,10 @@ export default function LedgerDetailAA({
                     </div>
                   </div>
 
+                  {summaryCalendarMode === 'daily' && (
+                    <CalendarMonthSummaryStrip summary={summaryCalendarMonthSummary} previousSummary={summaryPreviousMonthSummary} />
+                  )}
+
                   {summaryCalendarMode === 'daily' && <>
                     <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', touchAction: 'pan-x pan-y' }}>
                       <div style={{ width: 'calc(7 / 5 * 100%)' }}>
@@ -3750,14 +3946,20 @@ export default function LedgerDetailAA({
                                 const cellBorder = isNonTrading ? '1px solid #E0E0E0' : isTodayCell ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
                                 const dayNumColor = isNonTrading ? '#BDBDBD' : isTodayCell ? '#D32F2F' : '#222222';
                                 return (
-                                  <div key={day} className="rounded-none flex flex-col items-center justify-center" style={{ height: '50px', backgroundColor: cellBg, border: cellBorder, borderRadius: 8, padding: '3px 2px' }}>
+                                  <button
+                                    key={day}
+                                    type="button"
+                                    onClick={() => setCalendarDateDetail({ scope: 'summary', date: dateStr, summaryTags: entry?.tags ?? [] })}
+                                    className="rounded-none flex flex-col items-center justify-center transition-all active:scale-95"
+                                    style={{ height: '50px', backgroundColor: cellBg, border: cellBorder, borderRadius: 8, padding: '3px 2px', cursor: 'pointer' }}
+                                  >
                                     <span style={{ fontSize: '12px', fontWeight: 500, lineHeight: 1, color: dayNumColor, marginBottom: '1px' }}>{day}</span>
                                     {isNonTrading ? (
                                       <span style={{ fontSize: '9px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>{sNonTradingLabel}</span>
                                     ) : val !== null ? (
                                       <span style={{ fontSize: '12px', fontWeight: 700, lineHeight: 1.1, color: summaryValueColor(val), whiteSpace: 'nowrap' }}>{formatSummaryValue(val)}</span>
                                     ) : null}
-                                  </div>
+                                  </button>
                                 );
                               })}
                             </div>
@@ -5267,6 +5469,166 @@ export default function LedgerDetailAA({
                 {detail.pending.length > 0 && <><div className="mt-4 text-xs font-bold" style={{ color: '#888888' }}>未更新（不计入合计）</div><div className="mt-2 overflow-hidden rounded-xl" style={{ border: '1px solid #EEEEEE', background: '#FAFAFA' }}>{detail.pending.map((item, index) => <div key={item.tagName} className="flex items-center justify-between gap-3" style={{ padding: '10px 14px', borderBottom: index < detail.pending.length - 1 ? '1px solid #F0F0F0' : 'none' }}><span className="truncate text-sm" style={{ color: '#888888' }}>{item.tagName}</span><span className="shrink-0 text-[11px]" style={{ color: '#BDBDBD' }}>最新 {item.latestDate || '暂无数据'}</span></div>)}</div></>}
               </div>
               <div style={{ padding: '10px 20px 16px', borderTop: '1px solid #F0F0F0' }}><button type="button" onClick={() => setTotalTodayPnlDetail(null)} className="w-full rounded-xl py-2 text-sm font-semibold" style={{ background: '#F5F5F5', color: '#666666' }}>关闭</button></div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── 日历单日明细快览 ── */}
+      {calendarDateDetail && (() => {
+        const detail = calendarDateDetail;
+        const dateLabel = new Date(`${detail.date}T12:00:00+08:00`).toLocaleDateString('zh-CN', {
+          year: 'numeric', month: 'long', day: 'numeric', weekday: 'short',
+        });
+        const signedMoney = (amount: number | null | undefined) => {
+          if (amount === null || amount === undefined || !Number.isFinite(amount)) return '--';
+          return `${amount > 0 ? '+' : amount < 0 ? '−' : ''}￥${Math.abs(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        };
+        const plainMoney = (amount: number | null | undefined) => {
+          if (amount === null || amount === undefined || !Number.isFinite(amount)) return '--';
+          return `￥${Math.abs(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        };
+        const moneyColor = (amount: number | null | undefined) => amount === null || amount === undefined || amount === 0
+          ? '#757575'
+          : amount > 0 ? '#D32F2F' : '#388E3C';
+        const summaryTags = [...(detail.summaryTags ?? [])].sort((left, right) => Math.abs(right.val) - Math.abs(left.val));
+        const summaryTotal = summaryTags.reduce((sum, item) => sum + Number(item.val || 0), 0);
+        const dayData = detail.scope === 'tag' ? dayMap.get(detail.date) : undefined;
+        const dayRecords = dayData?.records ?? [];
+        const stockPoint = detail.isStockPortfolio ? stockCalendarPointByDate.get(detail.date) : undefined;
+        const dailyReturn = detail.isStockPortfolio
+          ? (stockPoint?.dailyPnl ?? null)
+          : (selectedDailyReturnMap.get(detail.date) ?? null);
+        const endBalance = detail.isStockPortfolio
+          ? (stockPoint?.marketValue ?? null)
+          : (cumulativeMap.get(detail.date) ?? null);
+        const totalReturn = detail.isStockPortfolio ? (stockPoint?.totalPnl ?? null) : null;
+        const capitalChange = capitalHistory
+          .filter((record: any) => record.recordDate === detail.date)
+          .reduce((sum: number, record: any) => sum + (record.description?.startsWith('capital_add') ? Number(record.amount) || 0 : -(Number(record.amount) || 0)), 0);
+        const withdrawal = withdrawRecords
+          .filter((record) => record.date === detail.date)
+          .reduce((sum, record) => sum + Number(record.amount || 0), 0);
+        const dayDividends = ((dividendRecordsData?.records ?? []) as any[]).filter((record: any) => {
+          const recordDate = String(record.created_at ?? '').slice(0, 10);
+          return recordDate === detail.date && (!detail.tagName || record.tag_name === detail.tagName);
+        });
+        const dividendTotal = dayDividends.reduce((sum: number, record: any) => sum + Number(record.amount || 0), 0);
+        const hasAttachments = dayRecords.some((record: any) => (
+          (Array.isArray(record.images) && record.images.length > 0)
+          || Boolean(record.imageUrl)
+          || (Array.isArray(record.stockCodes) && record.stockCodes.length > 0)
+        ));
+        const viewTargetMember = viewAsUserId ? (membersData || []).find((member: any) => member.userId === viewAsUserId) : null;
+        const viewTargetCanEdit = viewTargetMember ? (viewTargetMember.role === 'owner' || viewTargetMember.role === 'admin') : true;
+        const effectiveCanEdit = canEdit && (!viewAsUserId || viewTargetCanEdit);
+        const primaryValue = detail.scope === 'summary' ? summaryTotal : dailyReturn;
+        const primaryLabel = detail.scope === 'summary' ? '当日回报合计' : (detail.isStockPortfolio ? '当日浮动回报' : '当日回报');
+
+        return (
+          <div className="fixed inset-0 z-[520] flex items-end justify-center bg-black/50" onClick={() => setCalendarDateDetail(null)}>
+            <div className="w-full max-w-md overflow-hidden rounded-t-2xl bg-white shadow-2xl" style={{ maxHeight: '84vh', display: 'flex', flexDirection: 'column' }} onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-start justify-between px-5 pb-3 pt-5" style={{ borderBottom: '1px solid #F0F0F0' }}>
+                <div className="min-w-0">
+                  <div className="text-base font-bold" style={{ color: '#1A1A1A' }}>单日明细快览</div>
+                  <div className="mt-1 truncate text-xs" style={{ color: '#757575' }}>
+                    {dateLabel}{detail.scope === 'tag' && detail.tagName ? ` · ${detail.tagName}` : ' · 全部标签'}
+                  </div>
+                </div>
+                <button type="button" aria-label="关闭单日明细快览" onClick={() => setCalendarDateDetail(null)} className="ml-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: '#F5F5F5', color: '#757575' }}>
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto px-5 py-4">
+                <div className="rounded-xl px-4 py-3" style={{ background: '#FFF7F7', border: '1px solid #F4D7D7' }}>
+                  <div className="text-xs font-medium" style={{ color: '#8A5A5A' }}>{primaryLabel}</div>
+                  <div className="mt-1 text-2xl font-bold" style={{ color: moneyColor(primaryValue) }}>{signedMoney(primaryValue)}</div>
+                  <div className="mt-1 text-[11px] leading-4" style={{ color: '#9E9E9E' }}>
+                    {detail.scope === 'summary' ? '仅汇总当日已更新标签，已剔除本金与提现资金流。' : '当日回报已剔除本金变动与提现等资金流。'}
+                  </div>
+                </div>
+
+                {detail.scope === 'summary' ? (
+                  <>
+                    <div className="mt-4 flex items-center justify-between">
+                      <span className="text-xs font-bold" style={{ color: '#555555' }}>已更新标签</span>
+                      <span className="text-xs" style={{ color: '#9E9E9E' }}>{summaryTags.length} 个</span>
+                    </div>
+                    {summaryTags.length > 0 ? (
+                      <div className="mt-2 overflow-hidden rounded-xl" style={{ border: '1px solid #EEEEEE' }}>
+                        {summaryTags.map((item, index) => (
+                          <div key={item.name} className="flex items-center justify-between gap-3" style={{ padding: '11px 14px', borderBottom: index < summaryTags.length - 1 ? '1px solid #F2F2F2' : 'none' }}>
+                            <span className="min-w-0 truncate text-sm font-medium" style={{ color: '#333333' }}>{item.name}</span>
+                            <span className="shrink-0 font-mono text-sm font-bold" style={{ color: moneyColor(item.val) }}>{signedMoney(item.val)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-2 rounded-xl py-7 text-center text-sm" style={{ background: '#FAFAFA', color: '#9E9E9E' }}>当天暂无已更新标签</div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="mt-4 grid grid-cols-2 overflow-hidden rounded-xl" style={{ border: '1px solid #EEEEEE' }}>
+                      <div className="px-3 py-3" style={{ borderRight: '1px solid #EEEEEE', borderBottom: '1px solid #EEEEEE' }}>
+                        <div className="text-[11px]" style={{ color: '#888888' }}>{detail.isStockPortfolio ? '盘尾市值' : '日末余额'}</div>
+                        <div className="mt-1 font-mono text-sm font-bold" style={{ color: '#1A1A1A' }}>{plainMoney(endBalance)}</div>
+                      </div>
+                      <div className="px-3 py-3" style={{ borderBottom: '1px solid #EEEEEE' }}>
+                        <div className="text-[11px]" style={{ color: '#888888' }}>{detail.isStockPortfolio ? '累计浮动回报' : '当日账目'}</div>
+                        <div className="mt-1 font-mono text-sm font-bold" style={{ color: detail.isStockPortfolio ? moneyColor(totalReturn) : '#1A1A1A' }}>
+                          {detail.isStockPortfolio ? signedMoney(totalReturn) : `${dayRecords.length} 笔`}
+                        </div>
+                      </div>
+                      {!detail.isStockPortfolio && <>
+                        <div className="px-3 py-3" style={{ borderRight: '1px solid #EEEEEE' }}>
+                          <div className="text-[11px]" style={{ color: '#888888' }}>本金变动</div>
+                          <div className="mt-1 font-mono text-sm font-bold" style={{ color: capitalChange === 0 ? '#757575' : capitalChange > 0 ? '#1565C0' : '#E65100' }}>{signedMoney(capitalChange)}</div>
+                        </div>
+                        <div className="px-3 py-3">
+                          <div className="text-[11px]" style={{ color: '#888888' }}>提现 / 分红</div>
+                          <div className="mt-1 font-mono text-sm font-bold" style={{ color: withdrawal + dividendTotal > 0 ? '#E65100' : '#757575' }}>
+                            {withdrawal > 0 || dividendTotal > 0 ? `−${plainMoney(withdrawal + dividendTotal)}` : '--'}
+                          </div>
+                        </div>
+                      </>}
+                    </div>
+
+                    {dayRecords.length > 0 && (
+                      <>
+                        <div className="mt-4 text-xs font-bold" style={{ color: '#555555' }}>当日账目</div>
+                        <div className="mt-2 overflow-hidden rounded-xl" style={{ border: '1px solid #EEEEEE' }}>
+                          {dayRecords.map((record: any, index: number) => (
+                            <div key={record.id ?? `${detail.date}-${index}`} className="flex items-center gap-3" style={{ padding: '10px 13px', borderBottom: index < dayRecords.length - 1 ? '1px solid #F2F2F2' : 'none' }}>
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: '#D32F2F' }} />
+                              <span className="min-w-0 flex-1 truncate text-sm" style={{ color: '#444444' }}>{String(record.description || record.category || record.type || '账目记录')}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {dayDividends.length > 0 && (
+                      <div className="mt-3 rounded-xl px-3 py-2.5" style={{ background: '#FFF8E8', border: '1px solid #F7E2A5' }}>
+                        <div className="flex items-center justify-between gap-3"><span className="text-xs font-medium" style={{ color: '#8A6500' }}>当日分红已入钱包</span><span className="font-mono text-sm font-bold" style={{ color: '#B26A00' }}>−{plainMoney(dividendTotal)}</span></div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="space-y-2 px-5 py-3" style={{ borderTop: '1px solid #F0F0F0' }}>
+                {detail.scope === 'tag' && hasAttachments && (
+                  <button type="button" onClick={() => { setCalendarDateDetail(null); openCalendarDayAttachments(detail.date); }} className="w-full rounded-xl border py-2.5 text-sm font-semibold" style={{ borderColor: '#E0E0E0', color: '#555555' }}>查看当日附件</button>
+                )}
+                {detail.scope === 'tag' && effectiveCanEdit && (
+                  <button type="button" onClick={() => openCalendarRecordEditor(detail.date)} className="w-full rounded-xl py-2.5 text-sm font-semibold" style={{ background: '#D32F2F', color: '#FFFFFF' }}>
+                    {detail.isStockPortfolio ? '查看持仓维护' : dayRecords.length > 0 ? '编辑当日记录' : '新增当日记录'}
+                  </button>
+                )}
+                <button type="button" onClick={() => setCalendarDateDetail(null)} className="w-full rounded-xl py-2.5 text-sm font-semibold" style={{ background: '#F5F5F5', color: '#666666' }}>关闭</button>
+              </div>
             </div>
           </div>
         );

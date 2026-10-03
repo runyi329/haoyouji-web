@@ -762,7 +762,7 @@ export default function LedgerAADividendManage() {
         >
           <div
             className="w-full rounded-t-2xl overflow-hidden"
-            style={{ backgroundColor: '#FFFFFF', maxWidth: 480 }}
+            style={{ backgroundColor: '#FFFFFF', maxWidth: 480, maxHeight: '90dvh', display: 'flex', flexDirection: 'column' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
@@ -770,7 +770,7 @@ export default function LedgerAADividendManage() {
               <button onClick={() => setShowAddModal(false)} className="text-sm" style={{ color: '#9E9E9E' }}>取消</button>
             </div>
 
-            <div className="px-4 py-4 space-y-4">
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
               {/* 选择成员 */}
               <div>
                 <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>选择成员</div>

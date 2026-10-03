@@ -1068,7 +1068,7 @@ export default function Wallet() {
       />
       <div className="p-5">
         {/* 所有导航和操作都收在钱包容器内；账户名称本身就是币种下拉入口。 */}
-        <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 mb-4">
           <div className="flex min-w-0 items-center space-x-2">
             <button
               onClick={() => setLocation(walletReturnPath)}
@@ -1154,7 +1154,7 @@ export default function Wallet() {
               }
             </button>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             {showDetails && <button
               onClick={onDetails || (() => setLocation(activeAssetDetailsPath))}
               className="h-7 rounded-lg px-2 text-xs font-medium"
