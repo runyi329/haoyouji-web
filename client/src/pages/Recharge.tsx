@@ -14,7 +14,7 @@ const RECHARGE_NETWORKS = [
 ] as const;
 
 type RechargeNetwork = (typeof RECHARGE_NETWORKS)[number]["code"];
-const MIN_RECHARGE_AMOUNT = 0.01;
+const MIN_RECHARGE_AMOUNT = 500;
 
 function formatRechargeAmount(value: unknown): string {
   const raw = String(value ?? "").trim();
@@ -541,7 +541,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
           <div className="rounded-2xl p-4 bg-white" style={{ boxShadow: "0 4px 16px rgba(33,150,200,0.1)" }}>
             <div className="text-sm text-gray-400 mb-3">充值金额</div>
             <div className="flex items-center rounded-xl px-4 py-3 mb-3" style={{ background: "#F4F8FB", border: "1px solid #E1ECF5" }}>
-              <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="请输入金额（≥ 0.01 USDT）"
+              <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`请输入金额（≥ ${MIN_RECHARGE_AMOUNT} USDT）`}
                 className="flex-1 min-w-0 text-xl font-bold outline-none bg-transparent text-gray-800 placeholder:text-sm placeholder:font-normal placeholder-gray-300" step="0.01" min={MIN_RECHARGE_AMOUNT} />
               <span className="text-[#1E88D6] text-sm font-medium ml-2">USDT</span>
             </div>
@@ -838,7 +838,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="请输入金额（≥ 0.01 USDT）"
+              placeholder={`请输入金额（≥ ${MIN_RECHARGE_AMOUNT} USDT）`}
               className="flex-1 min-w-0 text-xl font-bold outline-none bg-transparent text-white placeholder:text-sm placeholder:font-normal placeholder-gray-600"
               step="0.01"
               min={MIN_RECHARGE_AMOUNT}

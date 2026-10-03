@@ -2660,7 +2660,7 @@ ${klinesSummary}
     // 创建充値订单
     createOrder: protectedProcedure
       .input(z.object({
-        amount: z.number().min(0.01, '最低充值金额为 0.01 USDT').max(100000),
+        amount: z.number().min(dbRecharge.MIN_RECHARGE_AMOUNT, `最低充值金额为 ${dbRecharge.MIN_RECHARGE_AMOUNT} USDT`).max(100000),
         network: z.enum(['TRC20', 'ERC20', 'BEP20', 'APTOS', 'SOLANA']).default('TRC20'),
         ledgerId: z.number().optional(),  // 关联账本 ID，传入则充値记录关联到该账本
       }))

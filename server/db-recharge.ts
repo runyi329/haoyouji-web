@@ -14,6 +14,7 @@ const SMS_TEMPLATE_ORDER_UPDATE = '2630924'; // 账本订单信息有新更新
 const YJH_USER_ID_SMS = 4957151;
 const LEDGER_52_ID = 52;
 const RECHARGE_ORDER_EXPIRY_MINUTES = 30;
+export const MIN_RECHARGE_AMOUNT = 500;
 
 // 仅作为订单与扫描器之间的内部枚举；前端实际开放网络仍由充值路由单独控制。
 export const RECHARGE_NETWORKS = ['TRC20', 'APTOS', 'SOLANA', 'ERC20', 'BEP20'] as const;
@@ -346,8 +347,8 @@ export async function createRechargeOrder(
   network: string = 'TRC20',
   ledgerId?: number  // 关联账本 ID，为空表示通用充値
 ) {
-  if (!Number.isFinite(baseAmount) || baseAmount < 0.01) {
-    throw new Error('最低充值金额为 0.01 USDT');
+  if (!Number.isFinite(baseAmount) || baseAmount < MIN_RECHARGE_AMOUNT) {
+    throw new Error(`最低充值金额为 ${MIN_RECHARGE_AMOUNT} USDT`);
   }
   const guardConnection = await getDbConnection();
   if (!guardConnection) throw new Error('数据库连接失败');
