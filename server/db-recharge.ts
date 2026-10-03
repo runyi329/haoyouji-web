@@ -702,26 +702,6 @@ export async function findOrderByAmount(
   }
   // ===== 双重防护结束 =====
 
-  // 防护3.5：已完成订单金额去重检查
-  // 如果过去24小时内已有金额相近（±1 USDT）的 completed 订单，说明这笔链上交易已被处理（手动或自动），拒绝再次匹配
-  {
-    const recentCompletedLimit = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
-    const recentCompleted = await db
-      .select({ id: rechargeOrders.id, orderNo: rechargeOrders.orderNo, amount: rechargeOrders.amount, userId: rechargeOrders.userId })
-      .from(rechargeOrders)
-      .where(and(
-        ...orderScope,
-        eq(rechargeOrders.status, 'completed'),
-        sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 1.0`,
-        sql`${rechargeOrders.completedAt} >= ${recentCompletedLimit}`
-      ))
-      .limit(1);
-    if (recentCompleted.length > 0) {
-      console.warn(`[Recharge] ⛔ ALREADY_COMPLETED: 过去24小时内已有金额相近的completed订单 (orderNo=${recentCompleted[0].orderNo}, amount=${recentCompleted[0].amount}, userId=${recentCompleted[0].userId})，拒绝再次匹配，防止重复入账。`);
-      return null;
-    }
-  }
-  
   // 按优先级搜索：先submitted，再pending；两种状态均只在订单创建后的30分钟窗口内参与扫描。
   const statusPriority = ['submitted', 'pending'] as const;
   

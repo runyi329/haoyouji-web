@@ -242,7 +242,7 @@ export function startScanner() {
   console.log('[Scanner] Supported chains: TRC20, APTOS, SOLANA, ERC20, BEP20');
   console.log('[Scanner] Scan targets: active recharge orders only');
   console.log('[Scanner] Scan interval: 60 seconds');
-  console.log('[Scanner] Match strategy: exact (±0.01) → fuzzy (≤3 USDT fee tolerance) → record unmatched');
+  console.log('[Scanner] Match strategy: exact (±0.000001) → one active order fuzzy (≤1.01 USDT) → record unmatched');
 
   // 立即执行一次（异步导入多链扫描器）
   (async () => {
