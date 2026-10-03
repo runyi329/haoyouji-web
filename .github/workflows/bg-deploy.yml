@@ -110,14 +110,16 @@ jobs:
           rsync -a --delete node_modules/ /home/ubuntu/haoyouji-web/node_modules/ >> $LOG 2>&1
           chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules >> $LOG 2>&1
           cp .env /home/ubuntu/haoyouji-web/.env 2>/dev/null && chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/.env >> $LOG 2>&1 || true
-          sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' ecosystem.config.cjs > /home/ubuntu/haoyouji-web/ecosystem.config.cjs
-          chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs
-          echo "[$(date '+%Y-%m-%d %H:%M:%S')] pm2 restart..." >> $LOG
-          pm2 restart haoyouji-web --update-env >> $LOG 2>&1 || \
-            pm2 start /root/haoyouji-web/ecosystem.config.cjs >> $LOG 2>&1 || true
-          pm2 save >> $LOG 2>&1 || true
+          # 线上对外服务由 ubuntu 用户的 PM2 管理；root 用户的 PM2 不持有监听端口。
+          # 直接启动已同步的生产构建，避免依赖仓库中不存在的 ecosystem 配置文件。
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] pm2 restart as ubuntu..." >> $LOG
+          pm2 delete haoyouji-web >> $LOG 2>&1 || true
+          sudo -u ubuntu env HOME=/home/ubuntu pm2 delete haoyouji-web >> $LOG 2>&1 || true
+          sudo -u ubuntu env HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/dist/index.js \
+            --name haoyouji-web --cwd /home/ubuntu/haoyouji-web >> $LOG 2>&1
+          sudo -u ubuntu env HOME=/home/ubuntu pm2 save >> $LOG 2>&1 || true
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] pm2 status:" >> $LOG
-          pm2 list >> $LOG 2>&1 || true
+          sudo -u ubuntu env HOME=/home/ubuntu pm2 list >> $LOG 2>&1 || true
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] === DEPLOY DONE ===" >> $LOG
           SCRIPTEOF
           chmod +x /tmp/deploy.sh
