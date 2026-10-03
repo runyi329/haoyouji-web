@@ -1,5 +1,5 @@
 import { useLocation, useSearch } from "wouter";
-import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, Clock, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, Clock, ArrowDownCircle, ArrowUpCircle, ChevronRight } from "lucide-react";
 import { trpc } from "../lib/trpc";
 
 // 从备注中提取世界杯球队 code，与 P202 保持一致
@@ -237,10 +237,21 @@ export default function RechargeHistory() {
             ) : (
               <div className="divide-y divide-[#2a2a2a]">
                 {(normalData as any[]).map((order: any) => {
-                  const config = statusConfig[order.status] || statusConfig.pending;
+                  const isPending = order.status === 'pending';
+                  const isExpired = isPending && order.expiresAt && new Date(order.expiresAt).getTime() <= Date.now();
+                  const canResumePayment = isPending && !isExpired;
+                  const config = isExpired ? statusConfig.expired : (statusConfig[order.status] || statusConfig.pending);
                   const StatusIcon = config.icon;
                   return (
-                    <div key={order.id} className="px-4 py-3">
+                    <button
+                      key={order.id}
+                      type="button"
+                      disabled={!canResumePayment}
+                      onClick={() => {
+                        if (canResumePayment) setLocation(`/recharge?orderNo=${encodeURIComponent(order.orderNo)}`);
+                      }}
+                      className={`w-full px-4 py-3 text-left transition-colors ${canResumePayment ? 'cursor-pointer hover:bg-white/[0.035] active:bg-white/[0.06]' : 'cursor-default'}`}
+                    >
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center">
                           <span className="font-semibold text-white">{order.amount} USDT</span>
@@ -253,14 +264,20 @@ export default function RechargeHistory() {
                       </div>
                       <div className="flex items-center justify-between text-xs text-gray-600">
                         <span>订单号: {order.orderNo}</span>
-<span>{formatDate(order.createdAt)} <span className="text-gray-600">UTC+8</span></span>
+                        <span>{formatDate(order.createdAt)} <span className="text-gray-600">UTC+8</span></span>
                       </div>
                       {order.txnHash && (
                         <div className="text-xs text-gray-600 mt-1 truncate">
                           交易哈希: {order.txnHash}
                         </div>
                       )}
-                    </div>
+                      {canResumePayment && (
+                        <div className="mt-2 flex items-center justify-end gap-1 text-xs font-medium text-[#CBA471]">
+                          <span>继续支付</span>
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </div>
+                      )}
+                    </button>
                   );
                 })}
               </div>

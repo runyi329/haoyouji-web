@@ -2660,11 +2660,14 @@ ${klinesSummary}
     // 创建充値订单
     createOrder: protectedProcedure
       .input(z.object({
-        amount: z.number().min(1).max(100000),
+        amount: z.number().min(500, '最低充值金额为 500 USDT').max(100000),
         network: z.enum(['TRC20', 'ERC20', 'BEP20', 'APTOS', 'SOLANA']).default('TRC20'),
         ledgerId: z.number().optional(),  // 关联账本 ID，传入则充値记录关联到该账本
       }))
       .mutation(async ({ ctx, input }) => {
+        if (!['TRC20', 'APTOS'].includes(input.network)) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '当前仅开放 TRC20 和 Aptos 充值网络' });
+        }
         // 普通充值入口只可为本人建单；管理员代建必须使用单独、受审计的后台接口。
         if (input.ledgerId) await assertAiWalletOperationEnabled(`ledger:${input.ledgerId}`, "recharge");
         return await dbRecharge.createRechargeOrder(ctx.user.id, input.amount, input.network, input.ledgerId);
@@ -2672,9 +2675,23 @@ ${klinesSummary}
 
     // 用户提交转账确认
     submitTransfer: protectedProcedure
+      .input(z.object({
+        orderNo: z.string(),
+        userTxnHash: z.string().trim().max(100).optional(),
+        paymentProofImage: z.string().max(2_000_000).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbRecharge.submitTransferConfirmation(
+          input.orderNo,
+          ctx.user.id,
+          input.userTxnHash,
+          input.paymentProofImage,
+        );
+      }),
+    cancelPendingOrder: protectedProcedure
       .input(z.object({ orderNo: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        return await dbRecharge.submitTransferConfirmation(input.orderNo, ctx.user.id);
+        return await dbRecharge.cancelPendingRechargeOrder(input.orderNo, ctx.user.id);
       }),
     // 查询充值订单
     getOrder: protectedProcedure

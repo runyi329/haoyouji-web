@@ -2,6 +2,7 @@
 const COS_CRYPTO_ICON_BASE_URL = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/crypto-icons";
 
 const CRYPTO_ASSET_ICON_SOURCES: Readonly<Record<string, string>> = {
+  CNY: `${COS_CRYPTO_ICON_BASE_URL}/cny-flag.png`,
   USDT: `${COS_CRYPTO_ICON_BASE_URL}/usdt.png`,
   BTC: `${COS_CRYPTO_ICON_BASE_URL}/btc.png`,
   ETH: `${COS_CRYPTO_ICON_BASE_URL}/eth.png`,

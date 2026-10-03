@@ -1380,6 +1380,8 @@ export default function AfRechargeManage() {
                   const config = statusConfig[order.status] || statusConfig.pending;
                   const StatusIcon = config.icon;
                   const hash = order.txnHash || order.txn_hash;
+                  const userTxnHash = order.userTxnHash || order.user_txn_hash;
+                  const paymentProofUrl = order.paymentProofUrl || order.payment_proof_url;
                   const explorerUrl = getExplorerUrl(order.network, hash);
                   return (
                     <div key={order.id} className={`relative px-4 py-3.5 border-l-4 transition-colors ${
@@ -1472,6 +1474,27 @@ export default function AfRechargeManage() {
                             <span className="text-gray-600">{formatDate(order.completedAt || order.completed_at)}</span>
                           </div>
                         )}
+                        {userTxnHash && !hash && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400 w-16 flex-shrink-0">用户 TxID</span>
+                            <button
+                              className="font-mono text-blue-600 hover:underline flex items-center gap-1"
+                              onClick={() => navigator.clipboard.writeText(userTxnHash).then(() => toast.success('用户提交的 TxID 已复制'))}
+                            >
+                              {userTxnHash.slice(0, 6)}…{userTxnHash.slice(-6)}
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                        {paymentProofUrl && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400 w-16 flex-shrink-0">付款截图</span>
+                            <a href={paymentProofUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 hover:underline">
+                              查看凭证
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        )}
                         {/* 交易哈希 */}
                         {hash && (
                           <div className="flex items-center justify-between">
@@ -1500,7 +1523,7 @@ export default function AfRechargeManage() {
                             onClick={() => {
                               setSelectedOrder(order);
                               setActualAmount(order.amount);
-                              setTxnHash("");
+                              setTxnHash(order.userTxnHash || order.user_txn_hash || "");
                               setShowManualConfirmDialog(true);
                             }}
                             className="flex-1 py-2 text-xs font-medium text-[#D32F2F] border border-[#D32F2F] rounded-xl hover:bg-red-50 active:scale-[0.98] transition-all"

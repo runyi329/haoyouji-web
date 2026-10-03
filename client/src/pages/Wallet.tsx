@@ -127,6 +127,27 @@ function cleanWalletFlowNote(value: unknown) {
   return /^(?:手动)?调账[（(]未填写备注[）)]$/.test(note) ? "" : note;
 }
 
+function summarizeWalletFlowNote(value: unknown) {
+  const note = cleanWalletFlowNote(value)
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!note) return "";
+
+  // 快览只传达资金动作与对象；完整原始说明保留在“明细”页审阅。
+  if (/历史.*手工/.test(note) && /担保/.test(note) && /应收账款/.test(note)) {
+    return /解冻|释放/.test(note) ? "历史手工担保 · 应收账款解冻" : "历史手工担保 · 应收账款冻结";
+  }
+  if (/应收账款/.test(note) && /冻结|占用/.test(note)) return "应收账款冻结";
+  if (/应收账款/.test(note) && /解冻|释放/.test(note)) return "应收账款解冻";
+
+  const compact = note
+    .replace(/[（(][^）)]{1,80}[）)]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return compact.length > 40 ? `${compact.slice(0, 40).replace(/[，、；\s]+$/, "")}…` : compact;
+}
+
 function hasOrderContext(note: string) {
   return /(订单|谷底|征筹|增筹|净收益|卖出|成交|结算|委托|融资)/.test(note);
 }
@@ -141,7 +162,7 @@ type WalletFlowPresentation = {
 function getUsdtFlowPresentation(item: { sourceType?: string; type?: string; amount?: number; note?: string }): WalletFlowPresentation {
   const amount = Number(item.amount ?? 0);
   const isIn = amount >= 0;
-  const note = cleanWalletFlowNote(item.note);
+  const note = summarizeWalletFlowNote(item.note);
   const isInternalTransfer = String(item.note || "").includes("[站内转账]");
   if (isInternalTransfer) {
     const transfer = getInternalTransferPresentation(item.note, isIn ? "in" : "out");
@@ -158,6 +179,24 @@ function getUsdtFlowPresentation(item: { sourceType?: string; type?: string; amo
     const labels: Record<string, string> = { consume: "消费", refund: "退款", reward: "入账", withdraw: "提现", reward_clawback: "入账回退" };
     return { label: labels[String(item.type || "")] || "资金流水", detail: note, isIn };
   }
+  return { label: isIn ? "入账" : "扣除", detail: note, isIn };
+}
+
+function getCnyQuickFlowPresentation(noteValue: string | undefined, isIn: boolean): WalletFlowPresentation {
+  const rawNote = cleanWalletFlowNote(noteValue);
+  const note = summarizeWalletFlowNote(noteValue);
+  const isInternalTransfer = String(noteValue || "").includes("[站内转账]");
+  if (isInternalTransfer) {
+    const transfer = getInternalTransferPresentation(noteValue, isIn ? "in" : "out");
+    return { label: transfer?.primary || (isIn ? "站内转账收款" : "站内转账汇款"), detail: transfer?.secondary || note, isIn };
+  }
+  if (/担保.*(冻结|占用)|冻结/.test(rawNote)) return { label: "担保冻结", detail: note, isIn: false };
+  if (/解冻|释放/.test(rawNote)) return { label: "担保解冻", detail: note, isIn: true };
+  if (/提现/.test(rawNote)) return { label: "提现", detail: note, isIn: false };
+  if (/充值/.test(rawNote)) return { label: "充值到账", detail: note, isIn: true };
+  if (/退款/.test(rawNote)) return { label: "退款", detail: note, isIn: true };
+  if (hasOrderContext(rawNote)) return { label: isIn ? "订单入账" : "订单扣除", detail: note, isIn };
+  if (/手工|手动|调账/.test(rawNote)) return { label: isIn ? "手工入账" : "手工扣除", detail: note, isIn };
   return { label: isIn ? "入账" : "扣除", detail: note, isIn };
 }
 
@@ -808,7 +847,6 @@ export default function Wallet() {
   );
   const cnyBalanceQuery = trpc.recharge.getCnyBalance.useQuery();
   const cnyBalanceSummaryQuery = trpc.recharge.getCnyBalanceSummary.useQuery();
-  const cnyBalanceBreakdownQuery = trpc.recharge.getCnyBalanceBreakdown.useQuery(undefined, { staleTime: 15_000 });
   const usdtBalanceSummaryQuery = trpc.recharge.getUsdtBalanceSummary.useQuery();
   const cnyHistoryQuery = trpc.recharge.getCnyHistory.useQuery({ limit: 20 });
   const multiAssetBalancesQuery = trpc.recharge.getMultiAssetBalances.useQuery(
@@ -834,14 +872,8 @@ export default function Wallet() {
   const cnyBalance = typeof cnyBalanceQuery.data === "number" ? cnyBalanceQuery.data : 0;
   const cnySummary = cnyBalanceSummaryQuery.data ?? { total: cnyBalance, frozen: 0, available: cnyBalance };
   const cnyAvailableBalance = Number(cnySummary.available ?? cnyBalance);
-  const cnyFrozenByLedger = Array.isArray(cnyBalanceBreakdownQuery.data?.frozenByLedger)
-    ? cnyBalanceBreakdownQuery.data.frozenByLedger
-      .map((item: any) => ({ ledgerId: Number(item.ledgerId), amount: Number(item.amount), holdCount: Number(item.holdCount) }))
-      .filter((item: { ledgerId: number; amount: number; holdCount: number }) => item.ledgerId > 0 && item.amount > 0)
-    : [];
-  const knownCnyFrozen = cnyFrozenByLedger.reduce((total: number, item: { amount: number }) => total + item.amount, 0);
-  const otherCnyFrozen = Math.max(0, Number(cnySummary.frozen ?? 0) - knownCnyFrozen);
   const usdtToCny = usdtTotalBalance * 7.25;
+  const cnyToUsdt = cnyBalance / 7.25;
   const multiAssetBalances = (multiAssetBalancesQuery.data ?? []) as any[];
   const multiAssetHistory = (multiAssetHistoryQuery.data ?? []) as any[];
   // 所有数字币均按用户全局余额展示；冻结担保也属于持有资产，不能因可用额为0而消失。
@@ -986,6 +1018,8 @@ export default function Wallet() {
     id: `cny-${m.id}`,
     amount: Math.abs(Number(m.amount)),
     isIn: Number(m.amount) > 0,
+    balanceAfter: Number(m.balance_after),
+    availableAfter: Number(m.available_after),
     note: (m.note || "").replace(/^\[CNY\]/, ""),
     wcCode: extractWcTeamCode((m.note || "").replace(/^\[CNY\]/, "")),
     createdAt: m.created_at,
@@ -1007,7 +1041,6 @@ export default function Wallet() {
     void usdtBalanceSummaryQuery.refetch();
     void cnyBalanceQuery.refetch();
     void cnyBalanceSummaryQuery.refetch();
-    void cnyBalanceBreakdownQuery.refetch();
     void recentRechargeQuery.refetch();
     void recentWithdrawQuery.refetch();
     void recentManualQuery.refetch();
@@ -1344,23 +1377,16 @@ export default function Wallet() {
         {/* CNY */}
         {activeAsset === "CNY" && <AccountCard
           icon="¥"
-          label="CNY 账户"
+          label="人民币账户"
           balance={mask(cnyBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
           unit="CNY"
-          subLine={!hideBalance && (
-            <div className="mt-1 space-y-1.5 text-xs">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span style={{ color: G.goldDim }}>可用 ¥{cnyAvailableBalance.toFixed(2)}</span>
-                {Number(cnySummary.frozen || 0) > 0 && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ color: G.goldLight, background: "rgba(201,168,76,0.12)", border: "1px solid rgba(201,168,76,0.28)" }}>占用合计 ¥{Number(cnySummary.frozen).toFixed(2)}</span>}
-              </div>
-              {(cnyFrozenByLedger.length > 0 || otherCnyFrozen > 0) && <div className="flex flex-wrap gap-1.5">
-                {cnyFrozenByLedger.map((item: { ledgerId: number; amount: number; holdCount: number }) => <span key={item.ledgerId} className="rounded-md px-1.5 py-0.5 text-[10px]" style={{ color: G.goldLight, background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.16)" }}>{item.ledgerId === 37 ? "37号担保" : `${item.ledgerId}号担保`} ¥{item.amount.toFixed(2)} · {item.holdCount}笔</span>)}
-                {otherCnyFrozen > 0 && <span className="rounded-md px-1.5 py-0.5 text-[10px]" style={{ color: G.whiteDim, background: G.whiteFaint, border: `1px solid ${G.divider}` }}>其他冻结 ¥{otherCnyFrozen.toFixed(2)}</span>}
-              </div>}
-            </div>
-          )}
+          balanceCaption="总资产估值"
+          balanceFontSize="2rem"
+          subLine={!hideBalance && <div className="mt-2 text-xs" style={{ color: G.goldDim }}>
+            ≈ {cnyToUsdt.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+          </div>}
           txPath="/wallet/cny-transactions"
-          onRefresh={() => { void cnyBalanceQuery.refetch(); void cnyBalanceSummaryQuery.refetch(); void cnyBalanceBreakdownQuery.refetch(); void cnyHistoryQuery.refetch(); }}
+          onRefresh={() => { void cnyBalanceQuery.refetch(); void cnyBalanceSummaryQuery.refetch(); void cnyHistoryQuery.refetch(); }}
           onRecharge={canRecharge ? () => setModal("cny-recharge") : undefined}
           onWithdraw={canWithdraw ? () => setModal("cny-withdraw") : undefined}
           onTransfer={canTransfer ? () => { setTransferAsset("CNY"); setModal("transfer"); } : undefined}
@@ -1369,46 +1395,56 @@ export default function Wallet() {
           isUsdt={false}
           readOnly={isReadOnlyMemberView}
           txList={
-            recentCnyTx.length > 0 ? (
-              <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${G.divider}` }}>
-                {recentCnyTx.map((tx, idx) => {
-                  const flowLabel = tx.note || (tx.isIn ? "充值" : "提现");
+            <div id="cny-wallet-history" className="mt-3 pt-3" style={{ borderTop: `1px solid ${G.divider}` }}>
+              <div className="mb-2 flex items-center gap-2">
+                <div>
+                  <span className="text-xs font-semibold" style={{ color: G.white }}>明细快览</span>
+                  <span className="ml-1.5 text-[10px]" style={{ color: G.whiteDim }}>最近 10 笔</span>
+                </div>
+              </div>
+              {recentCnyTx.length > 0 ? (
+                recentCnyTx.map((tx, idx) => {
+                  const presentation = getCnyQuickFlowPresentation(tx.note, tx.isIn);
+                  const cnyIconSrc = getCryptoAssetIconSrc("CNY");
                   return <div
                     key={tx.id}
-                    className="flex items-center justify-between py-2"
+                    className="flex items-start justify-between gap-3 py-2.5"
                     style={{ borderBottom: idx < recentCnyTx.length - 1 ? `1px solid ${G.divider}` : "none" }}
                   >
-                    <div className="flex items-center space-x-2">
-                      {/* 世界杯交易显示国旗 */}
-                      {(tx as any).wcCode ? (
-                        <img
-                          src={`/flags/${(tx as any).wcCode}.png`}
-                          alt={(tx as any).wcCode}
-                          className="w-7 h-7 rounded-full object-cover flex-shrink-0"
-                        />
-                      ) : null}
-                      <div>
+                    <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                      <div className="relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${G.cardBorder}` }}>
+                        {(tx as any).wcCode
+                          ? <img src={`/flags/${(tx as any).wcCode}.png`} alt={(tx as any).wcCode} className="h-full w-full object-cover" />
+                          : cnyIconSrc
+                            ? <img src={cnyIconSrc} alt="中国五星红旗" className="h-full w-full object-cover" />
+                            : <span className="text-xs font-bold" style={{ color: G.goldLight }}>¥</span>}
+                        <span className="absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full border-2" style={{ background: presentation.isIn ? G.green : G.red, borderColor: G.card }} />
+                      </div>
+                      <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-center gap-1.5">
-                          <WalletFlowTypeBadge label={flowLabel} note={tx.note} isIn={tx.isIn} />
-                          {!(tx as any).wcCode && <span className="max-w-48 truncate text-xs font-medium" style={{ color: G.white }}>{flowLabel}</span>}
+                          <WalletFlowTypeBadge label={presentation.label} note={presentation.detail} isIn={presentation.isIn} />
+                          <span className="min-w-0 flex-1 truncate text-xs font-medium" style={{ color: G.white }}>{presentation.label} · CNY</span>
                         </div>
                         <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(tx.createdAt)}</div>
+                        {presentation.detail && <div className="mt-0.5 break-words text-[10px] leading-4 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]" style={{ color: G.whiteDim }}>{presentation.detail}</div>}
                       </div>
                     </div>
                     <div
-                      className="text-sm font-bold tabular-nums"
+                      className="flex w-[124px] shrink-0 flex-col items-end text-right text-sm font-bold tabular-nums"
                       style={{ color: tx.isIn ? G.green : G.red }}
                     >
-                      {tx.isIn ? "+" : "-"}{mask(tx.amount.toFixed(2))} CNY
+                      {tx.isIn ? "+" : "-"}¥{mask(tx.amount.toFixed(2))}
+                      {Number.isFinite(tx.balanceAfter) && <div className="mt-0.5 text-[11px] font-normal tabular-nums" style={{ color: G.whiteDim }}>余额 ¥{mask(tx.balanceAfter.toFixed(2))}</div>}
+                      {Number.isFinite(tx.availableAfter) && <div className="mt-0.5 text-[11px] font-normal tabular-nums" style={{ color: G.whiteDim }}>可用 ¥{mask(tx.availableAfter.toFixed(2))}</div>}
                     </div>
                   </div>;
-                })}
-              </div>
-            ) : (
-              <div className="mt-4 pt-3 text-center text-xs" style={{ borderTop: `1px solid ${G.divider}`, color: G.whiteDim }}>
+                })
+              ) : (
+              <div className="py-4 text-center text-xs" style={{ color: G.whiteDim }}>
                 暂无交易记录
               </div>
-            )
+              )}
+            </div>
           }
         />}
 
@@ -1433,7 +1469,7 @@ export default function Wallet() {
           operationReceipt={renderOperationReceipt("DIGITAL")}
           isUsdt={false}
           readOnly={isReadOnlyMemberView}
-          balanceFontSize="1.65rem"
+          balanceFontSize="2rem"
           preActionsContent={
             <div className="mt-4">
               <div className="mb-2 flex items-center justify-between px-1 text-xs">
@@ -1448,6 +1484,8 @@ export default function Wallet() {
                 const frozenAmount = Number(asset.frozenBalance ?? 0);
                 const valueUsdt = amount * Number(asset.priceUsdt ?? 0);
                 const valueCny = valueUsdt * 7.25;
+                const hasMarketPrice = Number(asset.priceUsdt ?? 0) > 0;
+                const isUsdtAsset = assetCode === "USDT";
                 const hasCollateral = frozenAmount > 0;
                 const assetAccent = assetCode === "USDT" ? "#26A17B" : assetCode === "ETH" ? "#627EEA" : assetCode === "BTC" ? "#F7931A" : assetCode === "SOL" ? "#A55CFF" : assetCode === "BNB" ? "#F3BA2F" : assetCode === "SUI" ? "#4DA2FF" : "#8AA0B8";
                 const assetIconSrc = getCryptoAssetIconSrc(assetCode);
@@ -1460,10 +1498,10 @@ export default function Wallet() {
                       </div>
                       <div className="min-w-0 truncate text-sm font-semibold leading-5" style={{ color: G.white }}>{assetCode}</div>
                       <div className="shrink-0 text-right text-xl font-bold leading-5 tabular-nums" style={{ color: G.white }}>{mask(formatDigitalAssetAmount(assetCode, amount))}</div>
-                      <div className="min-w-0 truncate text-[10px] leading-4 tabular-nums" style={{ color: G.whiteDim }}>可用 {mask(formatDigitalAssetAmount(assetCode, availableAmount))} {assetCode}</div>
-                      <div className="shrink-0 text-right text-[11px] leading-4 tabular-nums" style={{ color: G.whiteDim }}>{Number(asset.priceUsdt ?? 0) > 0 ? `≈ ${mask(valueUsdt.toLocaleString("zh-CN", { maximumFractionDigits: 2 }))} u` : "行情加载中"}</div>
-                      <div className="min-w-0 truncate text-[10px] leading-4 tabular-nums" style={{ color: hasCollateral ? G.goldLight : G.whiteDim }}>担保 {mask(formatDigitalAssetAmount(assetCode, frozenAmount))} {assetCode}</div>
-                      <div className="shrink-0 text-right text-[11px] leading-4 tabular-nums" style={{ color: G.whiteDim }}>{Number(asset.priceUsdt ?? 0) > 0 ? `≈ ${mask(valueCny.toLocaleString("zh-CN", { maximumFractionDigits: 2 }))}元` : "—"}</div>
+                      <div className="min-w-0 truncate text-[10px] leading-4 tabular-nums" style={{ color: G.whiteDim }}>可用 {mask(formatDigitalAssetAmount(assetCode, availableAmount))}</div>
+                      <div className="shrink-0 text-right text-[11px] leading-4 tabular-nums" style={{ color: G.whiteDim }}>{hasMarketPrice ? (isUsdtAsset ? `≈ ¥${mask(valueCny.toLocaleString("zh-CN", { maximumFractionDigits: 2 }))}` : `≈ ${mask(valueUsdt.toLocaleString("zh-CN", { maximumFractionDigits: 2 }))} u`) : "行情加载中"}</div>
+                      <div className="min-w-0 truncate text-[10px] leading-4 tabular-nums" style={{ color: hasCollateral ? G.goldLight : G.whiteDim }}>担保 {mask(formatDigitalAssetAmount(assetCode, frozenAmount))}</div>
+                      {!isUsdtAsset && <div className="shrink-0 text-right text-[11px] leading-4 tabular-nums" style={{ color: G.whiteDim }}>{hasMarketPrice ? `≈ ${mask(valueCny.toLocaleString("zh-CN", { maximumFractionDigits: 2 }))}元` : "—"}</div>}
                     </div>
                     </div>
                 );
@@ -1490,29 +1528,30 @@ export default function Wallet() {
                   const assetCode = String(item.assetCode || "").toUpperCase();
                   const presentation = item.flowKind === "usdt" ? getUsdtFlowPresentation(item) : getDigitalFlowPresentation(item);
                   // 转账对象已经提升到主标题；不要再把编号、金额等审计元数据挤到预览第一屏。
-                  const flowDetail = presentation.detail || (item.flowKind === "usdt" ? undefined : cleanWalletFlowNote(item.note));
+                  const flowDetail = presentation.detail || (item.flowKind === "usdt" ? undefined : summarizeWalletFlowNote(item.note));
                   const assetIconSrc = getCryptoAssetIconSrc(assetCode);
                   return (
                     <div
                       key={`digital-flow-${item.id ?? index}`}
-                      className="flex w-full items-center justify-between gap-3 py-2 text-left"
+                      className="flex w-full items-start justify-between gap-3 py-2.5 text-left"
                       style={{ borderBottom: index < recentDigitalTx.length - 1 ? `1px solid ${G.divider}` : "none" }}
                     >
-                      <div className="flex min-w-0 items-start gap-2.5">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${G.cardBorder}` }}>
+                      <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                        <div className="relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${G.cardBorder}` }}>
                           {assetIconSrc ? <img src={assetIconSrc} alt={`${assetCode} 币种图标`} className="h-full w-full object-contain" /> : <span className="text-[10px] font-bold" style={{ color: G.goldLight }}>{assetCode.slice(0, 1)}</span>}
+                          <span className="absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full border-2" style={{ background: presentation.isIn ? G.green : G.red, borderColor: G.card }} />
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-1.5">
                             <WalletFlowTypeBadge label={presentation.label} note={flowDetail || item.note} isIn={presentation.isIn} />
-                            <span className="truncate text-xs font-medium" style={{ color: G.white }}>{presentation.label} · {assetCode}</span>
+                            <span className="min-w-0 flex-1 truncate text-xs font-medium" style={{ color: G.white }}>{presentation.label} · {assetCode}</span>
                           </div>
                           <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(item.createdAt)}</div>
-                          {flowDetail && <div className="mt-0.5 max-w-48 truncate text-[10px]" style={{ color: G.whiteDim }}>{flowDetail}</div>}
+                          {flowDetail && <div className="mt-0.5 break-words text-[10px] leading-4 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]" style={{ color: G.whiteDim }}>{flowDetail}</div>}
                         </div>
                       </div>
-                      <div className="shrink-0 text-right">
-                        <div className="text-sm font-bold tabular-nums" style={{ color: presentation.isIn ? G.green : G.red }}>
+                      <div className="flex w-[124px] shrink-0 flex-col items-end text-right">
+                        <div className="whitespace-nowrap text-sm font-bold tabular-nums" style={{ color: presentation.isIn ? G.green : G.red }}>
                           {presentation.isIn ? "+" : "-"}{mask(formatDigitalAssetAmount(assetCode, Math.abs(change)))} {assetCode}
                         </div>
                         <div className="mt-0.5 text-[11px]" style={{ color: G.whiteDim }}>{presentation.status || statusText(item.status || "completed")}</div>

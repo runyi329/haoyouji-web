@@ -316,7 +316,7 @@ export async function ensureLedger37WalletInfrastructure(): Promise<void> {
 
 async function getFundingBalanceForUpdate(transaction: any, userId: number, assetCode: "CNY" | "USDT") {
   const [userRows] = await transaction.execute(
-    "SELECT id, COALESCE(balance, 0) AS balance, COALESCE(balance_cny, 0) AS balance_cny FROM users WHERE id = ? LIMIT 1 FOR UPDATE",
+    "SELECT id, COALESCE(balance, 0) AS balance, COALESCE(cny_balance, 0) AS cny_balance FROM users WHERE id = ? LIMIT 1 FOR UPDATE",
     [userId],
   );
   const user = rowsOf(userRows)[0];
@@ -335,7 +335,7 @@ async function getFundingBalanceForUpdate(transaction: any, userId: number, asse
     [userId, assetCode],
   );
   const frozen = Number(rowsOf(holdRows)[0]?.frozen || 0);
-  const total = Number(assetCode === "CNY" ? user.balance_cny : user.balance) + manual;
+  const total = Number(assetCode === "CNY" ? user.cny_balance : user.balance) + manual;
   return { total, frozen, available: total - frozen };
 }
 
@@ -344,7 +344,7 @@ export async function getLedger37FundingBalanceSummary(userId: number, assetCode
   const conn = await getDbConnection();
   if (!conn) return { total: 0, frozen: 0, available: 0 };
   const [userRows] = await (conn as any).execute(
-    "SELECT COALESCE(balance, 0) AS balance, COALESCE(balance_cny, 0) AS balance_cny FROM users WHERE id = ? LIMIT 1",
+    "SELECT COALESCE(balance, 0) AS balance, COALESCE(cny_balance, 0) AS cny_balance FROM users WHERE id = ? LIMIT 1",
     [userId],
   );
   const user = rowsOf(userRows)[0];
@@ -360,7 +360,7 @@ export async function getLedger37FundingBalanceSummary(userId: number, assetCode
     "SELECT COALESCE(SUM(amount - COALESCE(released_amount, 0)), 0) AS frozen FROM ai_wallet_project_holds WHERE user_id = ? AND asset_code = ? AND status = 'active'",
     [userId, assetCode],
   );
-  const total = Number(assetCode === "CNY" ? user.balance_cny : user.balance) + Number(rowsOf(manualRows)[0]?.total || 0);
+  const total = Number(assetCode === "CNY" ? user.cny_balance : user.balance) + Number(rowsOf(manualRows)[0]?.total || 0);
   const frozen = Number(rowsOf(holdRows)[0]?.frozen || 0);
   return { total, frozen, available: total - frozen };
 }

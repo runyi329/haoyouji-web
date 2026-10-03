@@ -65,7 +65,7 @@ async function compressImageToWebP(
  */
 export async function uploadImageToCOS(
   imageData: string | Buffer,
-  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'posters' | 'lottery-images' | 'ag-prompts' | 'beauty-showcase' | 'signatures' | 'yaban-shop' | 'wecom-materials' = 'avatars',
+  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'recharge-proofs' | 'posters' | 'lottery-images' | 'ag-prompts' | 'beauty-showcase' | 'beauty-material' | 'diet-meals' | 'miban-reviews' | 'signatures' | 'yaban-shop' | 'wecom-materials' = 'avatars',
   filename?: string
 ): Promise<string> {
   try {
@@ -201,7 +201,7 @@ export async function uploadFileToCOS(
  */
 export async function batchUploadImagesToCOS(
   images: Array<{ data: string | Buffer; filename?: string }>,
-  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'posters' | 'beauty-showcase' | 'wecom-materials' = 'avatars'
+  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'recharge-proofs' | 'posters' | 'lottery-images' | 'ag-prompts' | 'beauty-showcase' | 'beauty-material' | 'diet-meals' | 'miban-reviews' | 'wecom-materials' = 'avatars'
 ): Promise<string[]> {
   const results = await Promise.all(
     images.map(img => uploadImageToCOS(img.data, folder, img.filename))

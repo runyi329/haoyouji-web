@@ -13,6 +13,58 @@ const SMS_NOTIFY_PHONES = ['13127919173', '18271901931'];
 const SMS_TEMPLATE_ORDER_UPDATE = '2630924'; // 账本订单信息有新更新
 const YJH_USER_ID_SMS = 4957151;
 const LEDGER_52_ID = 52;
+const RECHARGE_ORDER_EXPIRY_MINUTES = 30;
+
+// recharge_orders.expires_at 统一按 UTC 存储。MySQL DATETIME 本身不携带时区，
+// 因此前端读取时必须明确附带 Z，避免浏览器把裸字符串误解为本地时区。
+function asUtcIsoString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value.toISOString();
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const isoValue = /(?:Z|[+-]\d{2}:\d{2})$/i.test(raw)
+    ? raw
+    : `${raw.replace(' ', 'T')}Z`;
+  const date = new Date(isoValue);
+  return Number.isNaN(date.getTime()) ? raw : date.toISOString();
+}
+
+function normalizeChainTransactionId(value: string | undefined | null): string | null {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  const normalized = raw.replace(/^0x/i, '');
+  if (/^[0-9a-f]{64}$/i.test(normalized)) return normalized.toLowerCase();
+  // Aptos Indexer 当前向扫描器返回 transaction_version，因此兼容用户提交版本号。
+  if (/^\d{1,20}$/.test(raw)) return raw;
+  return null;
+}
+
+function normalizeUserSubmittedTransactionId(value: string | undefined | null): string | null {
+  const normalized = normalizeChainTransactionId(value);
+  if (value?.trim() && !normalized) {
+    throw new Error('交易哈希格式不正确，请粘贴完整的 TxID 或 Aptos 交易版本号');
+  }
+  return normalized;
+}
+
+const MAX_RECHARGE_PROOF_BYTES = 1024 * 1024;
+
+function validateRechargeProofImage(imageData: string | undefined | null): string | null {
+  if (!imageData) return null;
+  const match = imageData.match(/^data:image\/(?:jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/i);
+  if (!match) throw new Error('付款截图仅支持 JPG、PNG 或 WebP 图片');
+  const byteLength = Buffer.byteLength(match[1], 'base64');
+  if (byteLength > MAX_RECHARGE_PROOF_BYTES) throw new Error('付款截图压缩后不能超过 1MB');
+  return imageData;
+}
+
+function serializeRechargeOrderForClient(order: any) {
+  if (!order) return null;
+  return {
+    ...order,
+    expiresAt: asUtcIsoString(order.expiresAt),
+  };
+}
 
 /**
  * 检查用户是否是52号账本YJH的下线（通过invited_by_user_id链递归查找）
@@ -235,72 +287,190 @@ export async function createRechargeOrder(
   network: string = 'TRC20',
   ledgerId?: number  // 关联账本 ID，为空表示通用充値
 ) {
-  const db = await getDb();
-  
-  // 从数据库获取随机收款地址
-  const wallet = await getRandomWalletAddress(network);
-  if (!wallet) {
-    throw new Error('充値功能暂未开放，请联系管理员配置收款地址');
+  if (!Number.isFinite(baseAmount) || baseAmount < 500) {
+    throw new Error('最低充值金额为 500 USDT');
   }
-  
-  const uniqueAmount = generateUniqueAmount(baseAmount);
-  const orderNo = generateOrderNo();
-  
-  // 12小时后过期（覆盖时区差+链上确认延迟）
-  const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
-  
-  await db.insert(rechargeOrders).values({
-    userId,
-    orderNo,
-    amount: uniqueAmount.toString(),
-    currency: 'USDT',
-    network,
-    walletAddress: wallet.address,
-    status: 'pending',
-    ledgerId: ledgerId ?? null,  // 关联账本 ID
-    expiresAt: expiresAt.toISOString().slice(0, 19).replace('T', ' ')
-  });
-  
-  return {
-    orderNo,
-    amount: uniqueAmount,
-    currency: 'USDT',
-    network,
-    walletAddress: wallet.address,
-    expiresAt
-  };
+  const guardConnection = await getDbConnection();
+  if (!guardConnection) throw new Error('数据库连接失败');
+
+  // 用户级数据库锁防止在多个标签页或重复请求下并发创建多笔订单。
+  const lockName = `recharge-active-order:${userId}`;
+  const [lockRows] = await (guardConnection as any).execute('SELECT GET_LOCK(?, 5) AS acquired', [lockName]);
+  const acquired = Number((lockRows as any[])[0]?.acquired || 0);
+  if (acquired !== 1) throw new Error('订单处理繁忙，请稍后重试');
+
+  try {
+    // 待支付与确认中订单共用同一条30分钟扫描窗口，过期后均不再阻塞下一笔充值。
+    await (guardConnection as any).execute(
+      `UPDATE recharge_orders SET status = 'expired'
+       WHERE user_id = ? AND status IN ('pending', 'submitted') AND expires_at <= UTC_TIMESTAMP()`,
+      [userId]
+    );
+
+    const [activeRows] = await (guardConnection as any).execute(
+      `SELECT order_no, status FROM recharge_orders
+       WHERE user_id = ? AND status IN ('pending', 'submitted')
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId]
+    );
+    const activeOrder = (activeRows as any[])[0];
+    if (activeOrder) {
+      if (activeOrder.status === 'pending') {
+        throw new Error('您有一笔待支付订单，请先完成或取消后再创建新订单');
+      }
+      throw new Error('您有一笔确认中的订单，请等待到账结果后再创建新订单');
+    }
+
+    // 从数据库获取随机收款地址
+    const wallet = await getRandomWalletAddress(network);
+    if (!wallet) {
+      throw new Error('充值功能暂未开放，请联系平台配置收款地址');
+    }
+
+    const uniqueAmount = generateUniqueAmount(baseAmount);
+    const orderNo = generateOrderNo();
+    // 订单支付窗口统一为30分钟；直接使用数据库 UTC 时钟，避免应用服务器/数据库时区错位。
+    await (guardConnection as any).execute(
+      `INSERT INTO recharge_orders
+       (user_id, order_no, amount, currency, network, wallet_address, status, ledger_id, expires_at)
+       VALUES (?, ?, ?, 'USDT', ?, ?, 'pending', ?, UTC_TIMESTAMP() + INTERVAL ${RECHARGE_ORDER_EXPIRY_MINUTES} MINUTE)`,
+      [userId, orderNo, uniqueAmount.toString(), network, wallet.address, ledgerId ?? null]
+    );
+    const [createdRows] = await (guardConnection as any).execute(
+      `SELECT expires_at FROM recharge_orders WHERE order_no = ? AND user_id = ? LIMIT 1`,
+      [orderNo, userId]
+    );
+    const expiresAt = asUtcIsoString((createdRows as any[])[0]?.expires_at);
+
+    return {
+      orderNo,
+      amount: uniqueAmount,
+      currency: 'USDT',
+      network,
+      walletAddress: wallet.address,
+      expiresAt: expiresAt ?? new Date(Date.now() + RECHARGE_ORDER_EXPIRY_MINUTES * 60 * 1000).toISOString()
+    };
+  } finally {
+    await (guardConnection as any).execute('SELECT RELEASE_LOCK(?)', [lockName]).catch(() => undefined);
+  }
 }
 
-// 用户提交转账确认（将订单状态从pending改为submitted）
-export async function submitTransferConfirmation(orderNo: string, userId: number) {
-  const db = await getDb();
-  
-  // 查找订单并验证所有权
-  const orders = await db
-    .select()
-    .from(rechargeOrders)
-    .where(
-      and(
-        eq(rechargeOrders.orderNo, orderNo),
-        eq(rechargeOrders.userId, userId),
-        eq(rechargeOrders.status, 'pending')
-      )
-    )
-    .limit(1);
-  
-  if (orders.length === 0) {
-    throw new Error('订单不存在或已处理');
+// 用户提交转账确认（将订单状态从pending改为submitted，并可附带待链上校验的TxID与付款截图）
+export async function submitTransferConfirmation(
+  orderNo: string,
+  userId: number,
+  userTxnHash?: string,
+  paymentProofImage?: string,
+) {
+  const connection = await getDbConnection();
+  if (!connection) throw new Error('数据库连接失败');
+
+  const normalizedUserTxnHash = normalizeUserSubmittedTransactionId(userTxnHash);
+  const validProofImage = validateRechargeProofImage(paymentProofImage);
+
+  // 先校验订单归属、状态与有效期，避免为无效订单上传孤立付款截图。
+  const [eligibleRows] = await (connection as any).execute(
+    `SELECT id FROM recharge_orders
+     WHERE order_no = ? AND user_id = ? AND status = 'pending' AND expires_at > UTC_TIMESTAMP()
+     LIMIT 1`,
+    [orderNo, userId]
+  );
+  if ((eligibleRows as any[]).length === 0) {
+    const [rows] = await (connection as any).execute(
+      `SELECT id, status FROM recharge_orders WHERE order_no = ? AND user_id = ? LIMIT 1`,
+      [orderNo, userId]
+    );
+    const order = (rows as any[])[0];
+    if (!order) throw new Error('订单不存在或无权限');
+    if (order.status === 'pending') {
+      await (connection as any).execute(
+        `UPDATE recharge_orders SET status = 'expired'
+         WHERE id = ? AND status = 'pending' AND expires_at <= UTC_TIMESTAMP()`,
+        [order.id]
+      );
+      throw new Error('订单已过期，请重新创建充值订单');
+    }
+    throw new Error('订单当前状态不允许确认');
   }
-  
-  // 更新状态为submitted
-  await db
-    .update(rechargeOrders)
-    .set({ status: 'submitted' })
-    .where(eq(rechargeOrders.id, orders[0].id));
+
+  if (normalizedUserTxnHash) {
+    const [duplicateRows] = await (connection as any).execute(
+      `SELECT order_no FROM recharge_orders
+       WHERE user_txn_hash = ? AND order_no <> ? LIMIT 1`,
+      [normalizedUserTxnHash, orderNo]
+    );
+    if ((duplicateRows as any[]).length > 0) {
+      throw new Error('该交易哈希已关联其他订单，请核对后重试');
+    }
+  }
+
+  let paymentProofUrl: string | null = null;
+  if (validProofImage) {
+    const { uploadImageToCOS } = await import('./cos-upload');
+    paymentProofUrl = await uploadImageToCOS(validProofImage, 'recharge-proofs');
+  }
+
+  // 同一条条件更新同时校验归属、状态和到期时间，避免临界点确认已过期订单。
+  const [result] = await (connection as any).execute(
+    `UPDATE recharge_orders
+     SET status = 'submitted', user_txn_hash = ?, payment_proof_url = ?
+     WHERE order_no = ? AND user_id = ? AND status = 'pending' AND expires_at > UTC_TIMESTAMP()`,
+    [normalizedUserTxnHash, paymentProofUrl, orderNo, userId]
+  );
+  if (Number((result as any).affectedRows || 0) !== 1) {
+    const [rows] = await (connection as any).execute(
+      `SELECT id, status FROM recharge_orders WHERE order_no = ? AND user_id = ? LIMIT 1`,
+      [orderNo, userId]
+    );
+    const order = (rows as any[])[0];
+    if (!order) throw new Error('订单不存在或无权限');
+    if (order.status === 'pending') {
+      await (connection as any).execute(
+        `UPDATE recharge_orders SET status = 'expired'
+         WHERE id = ? AND status = 'pending' AND expires_at <= UTC_TIMESTAMP()`,
+        [order.id]
+      );
+      throw new Error('订单已过期，请重新创建充值订单');
+    }
+    throw new Error('订单当前状态不允许确认');
+  }
   
   console.log(`[Recharge] User ${userId} submitted transfer confirmation for order ${orderNo}`);
   
-  return { success: true, orderNo, status: 'submitted' };
+  return { success: true, orderNo, status: 'submitted', userTxnHash: normalizedUserTxnHash, paymentProofUrl };
+}
+
+// 用户仅可取消本人仍在支付窗口内的待支付订单。
+export async function cancelPendingRechargeOrder(orderNo: string, userId: number) {
+  const connection = await getDbConnection();
+  if (!connection) throw new Error('数据库连接失败');
+
+  const [result] = await (connection as any).execute(
+    `UPDATE recharge_orders
+     SET status = 'cancelled'
+     WHERE order_no = ? AND user_id = ? AND status = 'pending' AND expires_at > UTC_TIMESTAMP()`,
+    [orderNo, userId]
+  );
+
+  if (Number((result as any).affectedRows || 0) === 1) {
+    return { success: true, orderNo, status: 'cancelled' as const };
+  }
+
+  const [rows] = await (connection as any).execute(
+    `SELECT id, status, expires_at FROM recharge_orders WHERE order_no = ? AND user_id = ? LIMIT 1`,
+    [orderNo, userId]
+  );
+  const order = (rows as any[])[0];
+  if (!order) throw new Error('订单不存在或无权限');
+  if (order.status !== 'pending') throw new Error('订单当前状态不允许取消');
+
+  // 订单在点击取消前刚刚到期时，同步标记为过期而非取消。
+  await (connection as any).execute(
+    `UPDATE recharge_orders SET status = 'expired'
+     WHERE id = ? AND status = 'pending' AND expires_at <= UTC_TIMESTAMP()`,
+    [order.id]
+  );
+  throw new Error('订单已过期，请重新创建充值订单');
 }
 
 // 查询充值订单
@@ -313,7 +483,7 @@ export async function getRechargeOrder(orderNo: string) {
     .where(eq(rechargeOrders.orderNo, orderNo))
     .limit(1);
   
-  return orders[0] || null;
+  return serializeRechargeOrderForClient(orders[0]);
 }
 
 // 用户侧订单查询必须同时绑定订单号和归属用户，避免已登录用户按订单号横向读取。
@@ -324,19 +494,20 @@ export async function getRechargeOrderForUser(orderNo: string, userId: number) {
     .from(rechargeOrders)
     .where(and(eq(rechargeOrders.orderNo, orderNo), eq(rechargeOrders.userId, userId)))
     .limit(1);
-  return orders[0] || null;
+  return serializeRechargeOrderForClient(orders[0]);
 }
 
 // 查询用户的充值订单列表
 export async function getUserRechargeOrders(userId: number, limit: number = 20) {
   const db = await getDb();
   
-  return await db
+  const orders = await db
     .select()
     .from(rechargeOrders)
     .where(eq(rechargeOrders.userId, userId))
     .orderBy(sql`${rechargeOrders.createdAt} DESC`)
     .limit(limit);
+  return orders.map(serializeRechargeOrderForClient);
 }
 
 /**
@@ -374,16 +545,44 @@ export async function findOrderByAmount(amount: number, txnHash?: string, blockT
     }
   }
 
+  // 用户已提交交易哈希/版本号时，先将扫描到的链上交易与该凭证比对。
+  // 仍要求实际到账金额落在既有容差内，防止凭证正确但金额不属于该订单时提前结单。
+  const normalizedScannedTxnId = normalizeChainTransactionId(txnHash);
+  if (normalizedScannedTxnId) {
+    const proofMatchedOrders = await db
+      .select()
+      .from(rechargeOrders)
+      .where(and(
+        eq(rechargeOrders.userTxnHash, normalizedScannedTxnId),
+        sql`${rechargeOrders.status} IN ('pending', 'submitted')`,
+        sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
+      ))
+      .limit(1);
+    if (proofMatchedOrders.length > 0) {
+      const proofMatchedOrder = proofMatchedOrders[0];
+      const amountDiff = Math.abs(Number(proofMatchedOrder.amount) - amount);
+      if (amountDiff <= 1) {
+        console.log(`[Recharge] User-submitted transaction identifier matched order ${proofMatchedOrder.orderNo}`);
+        return {
+          order: proofMatchedOrder,
+          matchType: amountDiff <= 0.01 ? 'exact' : 'fuzzy',
+          amountDiff: Number((Number(proofMatchedOrder.amount) - amount).toFixed(4)),
+        };
+      }
+      console.warn(`[Recharge] User-submitted transaction identifier matched order ${proofMatchedOrder.orderNo}, but amount differs by ${amountDiff} USDT; continuing normal matching.`);
+    }
+  }
+
   // 防护2：区块链交易时间校验
   // 如果区块链交易发生时间早于订单系统最早的 pending/submitted 订单创建时间，
   // 说明这笔链上交易不可能对应任何当前待处理订单，直接拒绝（防止重放旧交易）
   if (blockTimestamp) {
     const txBlockTime = new Date(blockTimestamp);
-    // 查找最早的 pending/submitted 订单创建时间
+    // 查找当前30分钟扫描窗口内最早的 pending/submitted 订单创建时间
     const earliestOrder = await db
       .select({ createdAt: rechargeOrders.createdAt })
       .from(rechargeOrders)
-      .where(sql`${rechargeOrders.status} IN ('pending', 'submitted')`)
+      .where(sql`${rechargeOrders.status} IN ('pending', 'submitted') AND ${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`)
       .orderBy(sql`${rechargeOrders.createdAt} ASC`)
       .limit(1);
     if (earliestOrder.length > 0) {
@@ -420,22 +619,15 @@ export async function findOrderByAmount(amount: number, txnHash?: string, blockT
     }
   }
   
-  // 防护3：订单创建时间限制
-  // 只匹配最近48小时内创建的订单，防止旧的过期订单被新的链上交易错误匹配
-  // 48小时覆盖：12小时订单有效期 + 24小时链上确认延迟 + 12小时缓冲
-  const orderAgeLimitMs = 48 * 60 * 60 * 1000;
-  const orderAgeLimit = new Date(Date.now() - orderAgeLimitMs).toISOString().slice(0, 19).replace('T', ' ');
-
-  // 按优先级搜索：先submitted，再pending
-  // 注意：submitted 状态优先，因为用户已确认转账，即使订单过期也应尝试匹配
+  // 按优先级搜索：先submitted，再pending；两种状态均只在订单创建后的30分钟窗口内参与扫描。
   const statusPriority = ['submitted', 'pending'] as const;
   
   for (const status of statusPriority) {
-    // 精确匹配（误差 ±0.01 USDT），且未被其他交易使用，且订单在48小时内创建
+    // 精确匹配（误差 ±0.01 USDT），且订单仍在30分钟有效窗口内。
     const exactConditions = [
       eq(rechargeOrders.status, status),
       sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 0.01`,
-      sql`${rechargeOrders.createdAt} >= ${orderAgeLimit}`
+      sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
     ];
     
     // 如果提供了txnHash，排除已被其他交易使用的订单
@@ -464,7 +656,7 @@ export async function findOrderByAmount(amount: number, txnHash?: string, blockT
     const fuzzyConditions = [
       eq(rechargeOrders.status, status),
       sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 1.0`,
-      sql`${rechargeOrders.createdAt} >= ${orderAgeLimit}`
+      sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
     ];
     
     // 如果提供了txnHash，排除已被其他交易使用的订单
@@ -667,7 +859,7 @@ export async function adminDirectRecharge(
   return { success: true, userId, amount, newBalance };
 }
 
-// 获取所有待处理订单（管理员用）
+// 获取当前30分钟自动扫描窗口内的待处理订单（管理员用）
 export async function getAllPendingOrders() {
   const conn = await getDbConnection();
   if (!conn) return [];
@@ -675,7 +867,7 @@ export async function getAllPendingOrders() {
     SELECT r.*, u.username, u.name as userName, u.real_name as realName, u.phone
     FROM recharge_orders r
     LEFT JOIN users u ON r.user_id = u.id
-    WHERE r.status = 'pending'
+    WHERE r.status IN ('pending', 'submitted') AND r.expires_at > UTC_TIMESTAMP()
     ORDER BY r.created_at DESC
   `) as any[];
   return rows as any[];
@@ -1409,19 +1601,17 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
   }));
 }
 
-// 定期清理过期订单（只清理pending状态，submitted状态的不过期，因为用户已确认转账）
+// 定期清理过期订单：待支付与确认中均只在创建后的30分钟内参与扫描。
 export async function cleanExpiredOrders() {
   const db = await getDb();
-  
-  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-  
+
   await db
     .update(rechargeOrders)
     .set({ status: 'expired' })
     .where(
       and(
-        eq(rechargeOrders.status, 'pending'),
-        sql`${rechargeOrders.expiresAt} < ${now}`
+        sql`${rechargeOrders.status} IN ('pending', 'submitted')`,
+        sql`${rechargeOrders.expiresAt} <= UTC_TIMESTAMP()`
       )
     );
 }
@@ -2253,7 +2443,12 @@ export async function getUserCnyBalanceBreakdown(userId: number) {
   return await getLedger37FundingBalanceBreakdown(userId, 'CNY');
 }
 
-/** 获取用户 CNY 流水记录（af_manual_balances WHERE note LIKE '[CNY]%'） */
+/**
+ * 获取用户 CNY 流水记录。
+ *
+ * 每条记录同时返回 balance_after：新统一账本直接使用写入时的余额快照；早期
+ * 手工/担保流水则按第一笔事件正向累计，不从当前余额向过去倒推，保证展示口径可追溯。
+ */
 export async function getUserCnyHistory(userId: number, limit = 50): Promise<any[]> {
   const conn = await getDbConnection();
   if (!conn) return [];
@@ -2263,28 +2458,101 @@ export async function getUserCnyHistory(userId: number, limit = 50): Promise<any
   const safeLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 50)));
   await ensureLedger37WalletInfrastructure();
   const [rows] = await conn.execute(
-    // 历史手动调账表的 note 使用 utf8mb4_unicode_ci，而37号冻结台账使用
-    // utf8mb4_0900_ai_ci。邀请树钱包快照会在同一请求里读取本流水，故在
-    // UNION 边界显式归一为 unicode_ci，避免排序规则冲突中断整个快照。
-    `(SELECT id, user_id, amount,
-             CONVERT(COALESCE(note, '') USING utf8mb4) COLLATE utf8mb4_unicode_ci AS note,
-             created_at, 'balance' AS source_type
-       FROM af_manual_balances
-      WHERE user_id = ? AND note LIKE '[CNY]%')
-     UNION ALL
-     (SELECT h.id, h.user_id, -h.amount AS amount,
-             CONVERT(CONCAT('[CNY]37号账本保证金冻结 · ', h.tag_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci AS note,
-             h.created_at, 'hold' AS source_type
-       FROM ai_wallet_project_holds h
-      WHERE h.user_id = ? AND h.ledger_id = 37 AND h.asset_code = 'CNY')
-     UNION ALL
-     (SELECT h.id, h.user_id, h.amount AS amount,
-             CONVERT(CONCAT('[CNY]37号账本保证金解冻 · ', h.tag_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci AS note,
-             h.released_at AS created_at, 'hold_release' AS source_type
-       FROM ai_wallet_project_holds h
-      WHERE h.user_id = ? AND h.ledger_id = 37 AND h.asset_code = 'CNY' AND h.status = 'released')
-     ORDER BY created_at DESC LIMIT ${safeLimit}`,
-    [userId, userId, userId]
+    // 全部资金变动按发生时间从早到晚正向累计。担保只占用可用额，绝不从总余额扣除；
+    // 旧手工流水和新统一账本可并存，统一账本快照叠加同一时点已累计的旧手工余额。
+    `WITH cny_events AS (
+       SELECT h.id AS event_id, h.user_id, h.amount,
+              CONVERT(COALESCE(h.description, '') USING utf8mb4) COLLATE utf8mb4_unicode_ci AS note,
+              h.created_at, 'balance_history' AS source_type,
+              h.balance AS recorded_balance, 1 AS has_recorded_balance,
+              0 AS legacy_delta, 0 AS frozen_delta, 30 AS source_order
+         FROM balance_history h
+        WHERE h.user_id = ? AND h.currency = 'CNY'
+          AND COALESCE(h.description, '') NOT LIKE '%[迁移自af_manual_balances id=%'
+       UNION ALL
+       SELECT m.id AS event_id, m.user_id, m.amount,
+              CONVERT(COALESCE(m.note, '') USING utf8mb4) COLLATE utf8mb4_unicode_ci AS note,
+              m.created_at, 'manual_balance' AS source_type,
+              NULL AS recorded_balance, 0 AS has_recorded_balance,
+              m.amount AS legacy_delta, 0 AS frozen_delta, 10 AS source_order
+         FROM af_manual_balances m
+        WHERE m.user_id = ? AND m.note LIKE '[CNY]%'
+       UNION ALL
+       SELECT h.id AS event_id, h.user_id, -h.amount AS amount,
+              CONVERT(CONCAT('[CNY]37号账本担保冻结 · ', h.tag_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci AS note,
+              h.created_at, 'hold' AS source_type,
+              NULL AS recorded_balance, 0 AS has_recorded_balance,
+              0 AS legacy_delta, h.amount AS frozen_delta, 20 AS source_order
+         FROM ai_wallet_project_holds h
+        WHERE h.user_id = ? AND h.ledger_id = 37 AND h.asset_code = 'CNY'
+       UNION ALL
+       SELECT r.id AS event_id, h.user_id, r.amount AS amount,
+              CONVERT(CONCAT('[CNY]37号账本担保解冻 · ', h.tag_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci AS note,
+              r.created_at, 'hold_release' AS source_type,
+              NULL AS recorded_balance, 0 AS has_recorded_balance,
+              0 AS legacy_delta, -r.amount AS frozen_delta, 21 AS source_order
+         FROM ai_wallet_project_hold_releases r
+         JOIN ai_wallet_project_holds h ON h.id = r.hold_id
+        WHERE h.user_id = ? AND h.ledger_id = 37 AND h.asset_code = 'CNY'
+          AND r.entry_kind = 'release' AND r.status = 'active'
+       UNION ALL
+       SELECT r.id AS event_id, h.user_id, -r.amount AS amount,
+              CONVERT(CONCAT('[CNY]37号账本担保恢复 · ', h.tag_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci AS note,
+              r.created_at, 'hold_release_reversal' AS source_type,
+              NULL AS recorded_balance, 0 AS has_recorded_balance,
+              0 AS legacy_delta, r.amount AS frozen_delta, 22 AS source_order
+         FROM ai_wallet_project_hold_releases r
+         JOIN ai_wallet_project_holds h ON h.id = r.hold_id
+        WHERE h.user_id = ? AND h.ledger_id = 37 AND h.asset_code = 'CNY'
+          AND r.entry_kind = 'reversal' AND r.status = 'active'
+     ), sequenced_events AS (
+       SELECT *,
+              SUM(legacy_delta) OVER (
+                PARTITION BY user_id
+                ORDER BY created_at ASC, source_order ASC, event_id ASC
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+              ) AS legacy_balance_total,
+              SUM(frozen_delta) OVER (
+                PARTITION BY user_id
+                ORDER BY created_at ASC, source_order ASC, event_id ASC
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+              ) AS frozen_after,
+              SUM(has_recorded_balance) OVER (
+                PARTITION BY user_id
+                ORDER BY created_at ASC, source_order ASC, event_id ASC
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+              ) AS snapshot_sequence
+         FROM cny_events
+     ), state_after_snapshot AS (
+       SELECT *,
+              SUM(legacy_delta) OVER (
+                PARTITION BY user_id, snapshot_sequence
+                ORDER BY created_at ASC, source_order ASC, event_id ASC
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+              ) AS legacy_delta_since_snapshot
+         FROM sequenced_events
+     ), snapshot_values AS (
+       SELECT user_id, snapshot_sequence, recorded_balance, amount AS snapshot_amount, legacy_balance_total
+         FROM state_after_snapshot
+        WHERE has_recorded_balance = 1
+     )
+     SELECT CONCAT(e.source_type, '-', e.event_id) AS id, e.user_id, e.amount, e.note, e.created_at, e.source_type,
+            COALESCE(CASE WHEN e.snapshot_sequence = 0
+              THEN first_snapshot.recorded_balance - first_snapshot.snapshot_amount
+              ELSE current_snapshot.recorded_balance + current_snapshot.legacy_balance_total
+            END, 0) + e.legacy_delta_since_snapshot AS balance_after,
+            GREATEST(0, COALESCE(CASE WHEN e.snapshot_sequence = 0
+              THEN first_snapshot.recorded_balance - first_snapshot.snapshot_amount
+              ELSE current_snapshot.recorded_balance + current_snapshot.legacy_balance_total
+            END, 0) + e.legacy_delta_since_snapshot - e.frozen_after) AS available_after
+       FROM state_after_snapshot e
+       LEFT JOIN snapshot_values first_snapshot
+         ON first_snapshot.user_id = e.user_id AND first_snapshot.snapshot_sequence = 1
+       LEFT JOIN snapshot_values current_snapshot
+         ON current_snapshot.user_id = e.user_id AND current_snapshot.snapshot_sequence = e.snapshot_sequence
+      ORDER BY e.created_at DESC, e.source_order DESC, e.event_id DESC
+      LIMIT ${safeLimit}`,
+    [userId, userId, userId, userId, userId]
   ) as any;
   return Array.isArray(rows) ? rows : [];
 }
