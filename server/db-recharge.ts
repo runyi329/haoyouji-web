@@ -605,28 +605,26 @@ export async function findOrderByAmount(
 } | null> {
   const db = await getDb();
   const orderScope = getRechargeOrderScope(context);
-  // 小额订单使用 6 位小数的唯一金额，默认必须精确匹配，避免多个并行订单误配。
+  // 订单使用 6 位小数的唯一金额，默认必须精确匹配，避免多个并行订单误配。
   // 订单唯一尾数最高为 0.009999 USDT。按用户确认的测试口径，到账以用户输入额为中心
   // 正负 1 USDT 均可自动确认，因此匹配阈值需额外覆盖该唯一尾数（总计 1.01 USDT）。
-  // 小额仅在同一网络和收款地址不存在并行有效订单时放宽；出现并行订单时立即回到精确匹配。
-  const exactTolerance = amount < 10 ? 0.000001 : 0.01;
+  // 无论金额大小，仅在同一网络和收款地址不存在并行有效订单时自动放宽；出现并行订单时立即回到精确匹配。
+  // 用户已预先提交 TxID 的订单可独立按该 TxID 核验，不受并行订单限制。
+  const exactTolerance = 0.000001;
   const amountToleranceWithUniqueSuffix = 1.01;
-  let fuzzyTolerance = amount < 10 ? 0.000001 : amountToleranceWithUniqueSuffix;
-  if (amount < 10) {
-    const activeSmallOrderCandidates = await db
-      .select({ id: rechargeOrders.id })
-      .from(rechargeOrders)
-      .where(and(
-        ...orderScope,
-        sql`${rechargeOrders.status} IN ('pending', 'submitted')`,
-        sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
-      ))
-      .limit(2);
-
-    if (activeSmallOrderCandidates.length === 1) {
-      fuzzyTolerance = amountToleranceWithUniqueSuffix;
-      console.log('[Recharge] 单一有效小额订单：启用以用户输入额为中心的 ±1 USDT 受限匹配');
-    }
+  const activeOrderCandidates = await db
+    .select({ id: rechargeOrders.id })
+    .from(rechargeOrders)
+    .where(and(
+      ...orderScope,
+      sql`${rechargeOrders.status} IN ('pending', 'submitted')`,
+      sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
+    ))
+    .limit(2);
+  const hasSingleActiveOrder = activeOrderCandidates.length === 1;
+  const fuzzyTolerance = hasSingleActiveOrder ? amountToleranceWithUniqueSuffix : exactTolerance;
+  if (hasSingleActiveOrder) {
+    console.log('[Recharge] 单一有效订单：启用以用户输入额为中心的 ±1 USDT 受限匹配');
   }
 
   // ===== 双重防护 =====
@@ -662,7 +660,7 @@ export async function findOrderByAmount(
     if (proofMatchedOrders.length > 0) {
       const proofMatchedOrder = proofMatchedOrders[0];
       const amountDiff = Math.abs(Number(proofMatchedOrder.amount) - amount);
-      if (amountDiff <= fuzzyTolerance) {
+      if (amountDiff <= amountToleranceWithUniqueSuffix) {
         console.log(`[Recharge] User-submitted transaction identifier matched order ${proofMatchedOrder.orderNo}`);
         return {
           order: proofMatchedOrder,
@@ -756,9 +754,8 @@ export async function findOrderByAmount(
       };
     }
     
-    // 模糊匹配：双向容差 ≤1 USDT
-    // 说明：欧易等平台提币后转入，实际到账可能略多或略少于订单金额（手续费差异）
-    // 例：订单100.134，到账100.4729（多0.34），或到账99.9（兵0.234）均可匹配
+    // 模糊匹配：仅单一有效订单或用户预先提交 TxID 时，允许以用户输入额为中心 ±1 USDT（含唯一尾数缓冲）
+    // 并行有效订单已将 fuzzyTolerance 收紧为精确值，避免相近金额跨用户自动错配。
     const fuzzyConditions = [
       ...orderScope,
       eq(rechargeOrders.status, status),
