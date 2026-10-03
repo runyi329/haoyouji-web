@@ -33,6 +33,8 @@ async function callSolanaRpc(method: string, params: unknown[]): Promise<any | n
 
 // 已处理的交易签名
 const processedTxns = new Set<string>();
+// 已解析的 USDT Token Account：公共 RPC 的索引接口偶发限流时，避免每轮重复发现。
+const resolvedTokenAccounts = new Map<string, string>();
 
 // 扫描统计
 export let scanStats = {
@@ -79,15 +81,60 @@ export async function scanSolanaTransactions(targets?: RechargeScanTarget[]) {
 }
 
 /**
+ * 从主地址近期交易的代币余额回执中反查 USDT Token Account。
+ *
+ * 部分公共 RPC 会对 getTokenAccountsByOwner 的索引查询限流，但交易回执中的
+ * postTokenBalances 仍包含“代币账户 / mint / owner”。该路径只作为索引查询失败
+ * 时的降级方案，并且仅接受同时匹配当前主地址和官方 USDT mint 的账户。
+ */
+async function discoverUsdtTokenAccountFromOwnerHistory(walletAddress: string): Promise<string | null> {
+  const signatureData = await callSolanaRpc('getSignaturesForAddress', [
+    walletAddress,
+    { limit: 20, commitment: 'finalized' },
+  ]);
+  const signatures = signatureData?.result || [];
+
+  for (const entry of signatures) {
+    if (entry?.err !== null || !entry?.signature) continue;
+    const txData = await callSolanaRpc('getTransaction', [
+      entry.signature,
+      { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'finalized' },
+    ]);
+    const tx = txData?.result;
+    if (!tx) continue;
+
+    const accountKeys = tx.transaction?.message?.accountKeys || [];
+    const tokenBalance = (tx.meta?.postTokenBalances || []).find((balance: any) => (
+      String(balance.mint) === USDT_MINT_ADDRESS
+      && String(balance.owner) === walletAddress
+      && Number.isInteger(Number(balance.accountIndex))
+    ));
+    const tokenAccount = tokenBalance
+      ? accountKeys[Number(tokenBalance.accountIndex)]?.pubkey
+      : undefined;
+    if (tokenAccount) {
+      console.log(`[Solana Scanner] 从主地址历史回执发现 USDT Token Account: ${tokenAccount.slice(0, 10)}...`);
+      return tokenAccount;
+    }
+  }
+
+  return null;
+}
+
+/**
  * 获取钱包地址的USDT Token Account
  */
 async function getTokenAccount(walletAddress: string): Promise<string | null> {
   try {
+    const cached = resolvedTokenAccounts.get(walletAddress);
+    if (cached) return cached;
+
     // 部分交易所会直接展示 USDT Token Account，而不是其所有者主地址。
     // 若配置地址本身就是官方 USDT 的代币账户，直接扫描它即可。
     const directAccountData = await callSolanaRpc('getAccountInfo', [walletAddress, { encoding: 'jsonParsed' }]);
     const directMint = String(directAccountData?.result?.value?.data?.parsed?.info?.mint || '');
     if (directMint === USDT_MINT_ADDRESS) {
+      resolvedTokenAccounts.set(walletAddress, walletAddress);
       return walletAddress;
     }
 
@@ -97,20 +144,22 @@ async function getTokenAccount(walletAddress: string): Promise<string | null> {
       { encoding: 'jsonParsed' },
     ]);
     
-    if (!data) {
-      console.error(`[Solana Scanner] Error getting token account for ${walletAddress.slice(0, 10)}...`);
-      return null;
+    const accounts = data?.result?.value || [];
+
+    if (accounts.length > 0) {
+      const tokenAccount = accounts[0].pubkey;
+      resolvedTokenAccounts.set(walletAddress, tokenAccount);
+      return tokenAccount;
     }
 
-    const accounts = data.result?.value || [];
-    
-    if (accounts.length === 0) {
-      console.log(`[Solana Scanner] No USDT token account found for ${walletAddress.slice(0, 10)}...`);
-      return null;
+    const discovered = await discoverUsdtTokenAccountFromOwnerHistory(walletAddress);
+    if (discovered) {
+      resolvedTokenAccounts.set(walletAddress, discovered);
+      return discovered;
     }
 
-    // 返回第一个Token Account的地址
-    return accounts[0].pubkey;
+    console.error(`[Solana Scanner] 未能解析 USDT Token Account: ${walletAddress.slice(0, 10)}...`);
+    return null;
     
   } catch (error) {
     console.error(`[Solana Scanner] Error getting token account:`, error);
