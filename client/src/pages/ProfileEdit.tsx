@@ -107,12 +107,12 @@ export default function ProfileEdit() {
     },
     {
       key: "nickname",
-      label: "姓名",
+      label: "昵称",
       icon: User,
       iconBg: "bg-[#FFF3E0]",
       iconColor: "text-[#FF9800]",
       editable: true,
-      placeholder: "请输入真实姓名",
+      placeholder: "请输入昵称",
       type: "text",
     },
     {
@@ -207,7 +207,7 @@ export default function ProfileEdit() {
         </div>
         <div>
           <div className="text-base font-semibold text-gray-900">
-            {formData.nickname || formData.username || "未设置姓名"}
+            {formData.nickname || formData.username || "未设置昵称"}
           </div>
           <div className="text-sm text-gray-400 mt-0.5">
             {formData.company || "未填写公司"}

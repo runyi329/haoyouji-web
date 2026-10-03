@@ -2737,9 +2737,9 @@ ${klinesSummary}
         return await dbRecharge.getMyWalletPaymentIdentity(ctx.user.id);
       }),
 
-    // 全局站内钱包划转：只接受六码收款 ID 或完整用户名、昵称，不暴露模糊搜索或完整用户列表。
+    // 全局站内钱包划转：只接受收款 ID、完整用户名、昵称或完整手机号，不暴露模糊搜索或完整用户列表。
     lookupWalletTransferRecipient: protectedProcedure
-      .input(z.object({ identifier: z.string().trim().min(1, '请输入收款 ID、完整用户名或昵称').max(80, '输入内容过长') }))
+      .input(z.object({ identifier: z.string().trim().min(1, '请输入收款 ID、完整用户名、昵称或手机号').max(80, '输入内容过长') }))
       .query(async ({ ctx, input }) => {
         return await dbRecharge.lookupWalletTransferRecipient(ctx.user.id, input.identifier);
       }),

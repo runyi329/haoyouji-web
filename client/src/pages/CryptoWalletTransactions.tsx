@@ -176,7 +176,9 @@ export default function CryptoWalletTransactions() {
   const [customEndDate, setCustomEndDate] = useState("");
 
   const usdtHistoryQuery = trpc.ledger.afGetMyRechargeHistory.useQuery(
-    { ledgerId: 52, ...(viewAsUserId ? { viewAsUserId } : {}) },
+    sourceLedgerId === "52" && viewAsUserId
+      ? { ledgerId: 52, viewAsUserId }
+      : {},
     { staleTime: 30_000 },
   );
   const assetHistoryQuery = trpc.recharge.getMultiAssetHistory.useQuery(

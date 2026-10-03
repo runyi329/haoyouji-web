@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
   ArrowLeft,
@@ -12,6 +12,7 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
+  QrCode,
   TrendingUp,
   Wallet as WalletIcon,
   Send,
@@ -24,7 +25,6 @@ import { trpc } from "../lib/trpc";
 import { restoreLedgerViewAsState } from "../lib/authIdentity";
 import { getInternalTransferPresentation } from "../lib/walletTransferPresentation";
 import { getCryptoAssetIconSrc } from "../lib/cryptoAssetIcons";
-import { selectWalletAccountByLatestFlow } from "../lib/walletAccountSelection";
 import Recharge from "./Recharge";
 import Withdraw from "./Withdraw";
 import { AI_WALLET_SETTLEMENT_ASSETS, type AiWalletSettlementAsset } from "@shared/ai-wallet-assets";
@@ -75,7 +75,6 @@ type WalletTransferAsset = "USDT" | "CNY" | AiWalletSettlementAsset;
 type WalletAccountAsset = WalletTransferAsset | "CRYPTO";
 // 数字币账户内，USDT 与其他数字资产共用一个总览；USDT 仍是默认明细口径。
 type DigitalAssetHistoryCode = "USDT" | AiWalletSettlementAsset;
-type DigitalHistoryFilter = "ALL" | DigitalAssetHistoryCode;
 
 function getDigitalAssetDisplayDigits(assetCode: string, amount: number): number {
   if (assetCode === "USDT") return 2;
@@ -117,10 +116,15 @@ function formatTime(dateStr: string) {
 }
 
 function cleanWalletFlowNote(value: unknown) {
-  return String(value || "")
+  const note = String(value || "")
     .replace(/^\[CNY\]\s*/i, "")
     .replace(/\[站内转账\]\s*/g, "")
+    // 操作身份不属于客户资金明细；保留业务动作和用户实际填写的备注即可。
+    .replace(/[（(]\s*管理员[^）)]*[）)]/g, "")
+    .replace(/管理员/g, "")
     .trim();
+  // 未填写备注的手动调账不展示占位文案，避免把后台操作上下文暴露给客户。
+  return /^(?:手动)?调账[（(]未填写备注[）)]$/.test(note) ? "" : note;
 }
 
 function hasOrderContext(note: string) {
@@ -585,9 +589,9 @@ function WalletTransferContent({
             <AlertTriangle className="w-4 h-4" /> 请再次核对转账信息
           </div>
           <div className="pt-1 space-y-1.5 text-xs" style={{ color: G.whiteDim }}>
-            <div className="flex justify-between gap-4"><span>收款 ID</span><span className="text-right font-mono tracking-[0.12em]" style={{ color: G.goldLight }}>{recipient.paymentId}</span></div>
+            <div className="flex justify-between gap-4"><span>收款码</span><span className="text-right font-mono tracking-[0.12em]" style={{ color: G.goldLight }}>{recipient.paymentId}</span></div>
             <div className="flex justify-between gap-4"><span>昵称</span><span className="text-right" style={{ color: G.white }}>{recipient.nickname || recipient.name}</span></div>
-            <div className="flex justify-between gap-4"><span>用户名</span><span className="text-right" style={{ color: G.white }}>@{recipient.username}</span></div>
+            <div className="flex justify-between gap-4"><span>用户名</span><span className="text-right" style={{ color: G.white }}>{recipient.username}</span></div>
             <div className="flex justify-between gap-4"><span>转账金额</span><span className="text-right font-bold" style={{ color: G.goldLight }}>{amountDisplay} {currency}</span></div>
           </div>
         </div>
@@ -640,7 +644,7 @@ function WalletTransferContent({
       )}
 
       <div>
-        <div className="text-xs mb-1.5" style={{ color: G.whiteDim }}>收款 ID（邀请码）</div>
+        <div className="text-xs mb-1.5" style={{ color: G.whiteDim }}>收款人</div>
         <div className="flex gap-2">
           <input
             value={recipientInput}
@@ -650,7 +654,7 @@ function WalletTransferContent({
               setConfirming(false);
               setRequestId("");
             }}
-            placeholder="请输入六码收款 ID"
+            placeholder="收款码、用户名、昵称或手机号"
             autoComplete="off"
             className="min-w-0 flex-1 rounded-xl px-3 py-3 text-sm outline-none"
             style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.2)`, color: G.white }}
@@ -663,11 +667,11 @@ function WalletTransferContent({
             style={{ background: G.goldFaint, border: `1px solid ${G.goldDim}`, color: G.goldLight }}
           >{recipientQuery.isFetching ? "核验中" : "核验"}</button>
         </div>
-        <p className="mt-1.5 text-[11px] leading-4" style={{ color: G.whiteDim }}>收款 ID 与专属邀请码一致；也支持完整用户名或完整昵称核验，不提供模糊搜索。</p>
+        <p className="mt-1.5 text-[11px] leading-4" style={{ color: G.whiteDim }}>支持完整六码收款码、用户名、昵称或手机号核验；不提供模糊搜索。</p>
       </div>
 
       {lookupIdentifier && !recipientQuery.isFetching && recipientResult?.status === "not_found" && (
-        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: 'rgba(248,113,113,0.1)', color: '#fca5a5' }}>未找到该用户，请核对六码收款 ID、完整用户名或昵称。</div>
+        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: 'rgba(248,113,113,0.1)', color: '#fca5a5' }}>未找到该用户，请核对六码收款码、完整用户名、昵称或手机号。</div>
       )}
       {lookupIdentifier && !recipientQuery.isFetching && recipientResult?.status === "self" && (
         <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: 'rgba(248,113,113,0.1)', color: '#fca5a5' }}>不能转账给自己，请输入其他用户。</div>
@@ -679,9 +683,9 @@ function WalletTransferContent({
         <div className="rounded-2xl p-4" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)' }}>
           <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: G.green }}><UserRound className="w-4 h-4" />已确认收款用户</div>
           <div className="mt-2 grid grid-cols-[56px_1fr] gap-y-1.5 text-xs">
-            <span style={{ color: G.whiteDim }}>收款 ID</span><span className="font-mono tracking-[0.14em]" style={{ color: G.goldLight }}>{recipient.paymentId}</span>
+            <span style={{ color: G.whiteDim }}>收款码</span><span className="font-mono tracking-[0.14em]" style={{ color: G.goldLight }}>{recipient.paymentId}</span>
             <span style={{ color: G.whiteDim }}>昵称</span><span style={{ color: G.white }}>{recipient.nickname || recipient.name}</span>
-            <span style={{ color: G.whiteDim }}>用户名</span><span style={{ color: G.white }}>@{recipient.username}</span>
+            <span style={{ color: G.whiteDim }}>用户名</span><span style={{ color: G.white }}>{recipient.username}</span>
           </div>
           <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3" style={{ borderColor: 'rgba(52,211,153,0.18)' }}>
             <span className="text-[11px] leading-4" style={{ color: G.whiteDim }}>白名单仅用于下次快速带入收款人，仍需再次确认。</span>
@@ -743,37 +747,27 @@ export default function Wallet() {
   const isLedger52WalletEntry = searchParams.get("fromLedger") === "52";
   const isLedger37WalletEntry = searchParams.get("fromLedger") === "37";
   const isGlobalWalletLedgerEntry = isLedger52WalletEntry || isLedger37WalletEntry;
+  // 钱包资产仅按用户隔离，不按进入的项目隔离；任意入口均显示同一套数字币和人民币账户。
+  const isGlobalWalletView = true;
   const walletEntryLedgerId = isLedger52WalletEntry ? "52" : isLedger37WalletEntry ? "37" : null;
   const appendViewAs = (path: string) => viewAsUserId
     ? `${path}${path.includes("?") ? "&" : "?"}viewAs=${viewAsUserId}`
     : path;
   // 钱包详情页会离开本组件；把账户类别保存在 URL 中，返回时才能保持原来的账户上下文。
   const accountFromRoute = searchParams.get("account");
-  const hasExplicitAccountRoute = accountFromRoute === "USDT"
-    || accountFromRoute === "CNY"
-    || accountFromRoute === "CRYPTO";
   const initialAccount: WalletAccountAsset = accountFromRoute === "CNY"
     ? "CNY"
-    : accountFromRoute === "CRYPTO"
-      ? "CRYPTO"
-      : isGlobalWalletLedgerEntry
-        ? "CRYPTO"
-        : "USDT";
+    : "CRYPTO";
   const appendWalletAccount = (path: string, account: WalletAccountAsset) => appendViewAs(
     `${path}${path.includes("?") ? "&" : "?"}account=${account}${walletEntryLedgerId ? `&fromLedger=${walletEntryLedgerId}` : ""}`,
   );
   const [modal, setModal] = useState<ModalType>(null);
   const [hideBalance, setHideBalance] = useState(false);
   const [activeAsset, setActiveAsset] = useState<WalletAccountAsset>(initialAccount);
-  // 全局钱包固定以数字币账户作为默认首页；用户手动选择账户或通过 URL 指定账户后保留该选择。
-  // 仅非项目入口沿用“最近一笔真实动账决定首次账户”的既有逻辑。
-  const autoAccountSelectionRef = useRef(!hasExplicitAccountRoute && !isGlobalWalletLedgerEntry);
+  // 全局钱包固定以数字币账户作为默认首页；仅用户通过地址或双标签主动选择时切换账户。
   useEffect(() => {
     setActiveAsset(initialAccount);
   }, [initialAccount]);
-  useEffect(() => {
-    autoAccountSelectionRef.current = !hasExplicitAccountRoute && !isGlobalWalletLedgerEntry;
-  }, [hasExplicitAccountRoute, isGlobalWalletLedgerEntry]);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [transferAsset, setTransferAsset] = useState<WalletTransferAsset>("USDT");
   const [operationReceipt, setOperationReceipt] = useState<WalletOperationReceipt | null>(null);
@@ -782,12 +776,6 @@ export default function Wallet() {
     const timer = window.setTimeout(() => setOperationReceipt(null), 15_000);
     return () => window.clearTimeout(timer);
   }, [operationReceipt?.id]);
-  const [digitalHistoryFilter, setDigitalHistoryFilter] = useState<DigitalHistoryFilter>("USDT");
-  // 进入数字币账户时由最近一笔真实流水决定默认筛选；用户主动切换后不自动夺回选择权。
-  const autoDigitalHistoryFilterRef = useRef(true);
-  useEffect(() => {
-    if (activeAsset !== "CRYPTO") autoDigitalHistoryFilterRef.current = true;
-  }, [activeAsset]);
   // 转账能力属于全局统一钱包；从37、52号账本进入时使用同一套钱包档案与操作入口。
   const walletReturnPath = appendViewAs(
     isLedger52WalletEntry ? "/ledger/52" : isLedger37WalletEntry ? "/ledger/37" : "/",
@@ -800,7 +788,7 @@ export default function Wallet() {
   const canRecharge = !walletEntryLedgerId || walletPolicyQuery.data?.allowRecharge === true;
   const canWithdraw = !walletEntryLedgerId || walletPolicyQuery.data?.allowWithdrawal === true;
   // 配置仍在加载阶段先展示入口；档案明确关闭时才隐藏，服务端也会二次校验。
-  const canTransfer = isGlobalWalletLedgerEntry && walletPolicyQuery.data?.allowTransfer !== false;
+  const canTransfer = !walletEntryLedgerId || walletPolicyQuery.data?.allowTransfer !== false;
 
   const balanceQuery = trpc.recharge.getBalance.useQuery();
   // 详情页展示最近 10 笔，因此每个资金来源保留足够的候选记录后再统一排序。
@@ -809,14 +797,14 @@ export default function Wallet() {
   const recentManualQuery = trpc.recharge.getMyManualBalances.useQuery(
     isGlobalWalletLedgerEntry
       ? { limit: 500, ledgerId: 52, ...(viewAsUserId ? { viewAsUserId } : {}) }
-      : { limit: 20 },
+      : { limit: 500 },
   );
   const recentBalanceHistoryQuery = trpc.recharge.getBalanceHistory.useQuery({ limit: 20 });
   // 两个项目入口的数字币账户与“资金明细”共用同一条全局 USDT 流水；首页仅在最后截取最近10笔。
   // 非项目入口仍保留既有短列表，避免改变通用钱包的展示。
   const ledger52UsdtHistoryQuery = trpc.ledger.afGetMyRechargeHistory.useQuery(
     { ledgerId: 52, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: isGlobalWalletLedgerEntry, staleTime: 30_000 },
+    { enabled: isGlobalWalletView, staleTime: 30_000 },
   );
   const cnyBalanceQuery = trpc.recharge.getCnyBalance.useQuery();
   const cnyBalanceSummaryQuery = trpc.recharge.getCnyBalanceSummary.useQuery();
@@ -826,7 +814,7 @@ export default function Wallet() {
   const multiAssetBalancesQuery = trpc.recharge.getMultiAssetBalances.useQuery(
     viewAsUserId ? { viewAsUserId } : undefined,
     {
-    enabled: isGlobalWalletLedgerEntry,
+    enabled: isGlobalWalletView,
     staleTime: 15_000,
     },
   );
@@ -835,7 +823,7 @@ export default function Wallet() {
     limit: 100,
     ...(viewAsUserId ? { viewAsUserId } : {}),
   }, {
-    enabled: isGlobalWalletLedgerEntry,
+    enabled: isGlobalWalletView,
     staleTime: 15_000,
   });
 
@@ -856,13 +844,9 @@ export default function Wallet() {
   const usdtToCny = usdtTotalBalance * 7.25;
   const multiAssetBalances = (multiAssetBalancesQuery.data ?? []) as any[];
   const multiAssetHistory = (multiAssetHistoryQuery.data ?? []) as any[];
-  const configuredSettlementAssets = new Set(
-    ((walletPolicyQuery.data?.visibleAssets ?? []) as string[]).map((asset) => String(asset).toUpperCase()),
-  );
-  // 52号市场资产账户只收纳项目允许且用户实际持有的资产；冻结担保也属于持有资产，不能因可用额为0而消失。
+  // 所有数字币均按用户全局余额展示；冻结担保也属于持有资产，不能因可用额为0而消失。
   const visibleMultiAssetBalances = multiAssetBalances.filter((asset) =>
-    configuredSettlementAssets.has(String(asset.assetCode || "").toUpperCase())
-    && Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0))) > 0,
+    Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0))) > 0,
   );
   // 稳定币是数字资产主计价单位：有余额时始终固定首位，其余资产按真实 USDT 估值从高到低排列。
   const visibleDigitalAssetBalances = [
@@ -885,14 +869,6 @@ export default function Wallet() {
     if (rightValueUsdt !== leftValueUsdt) return rightValueUsdt - leftValueUsdt;
     return leftCode.localeCompare(rightCode);
   });
-  const digitalHistoryAssetCodes = Array.from(new Set([
-    "USDT",
-    ...visibleMultiAssetBalances.map((asset) => String(asset.assetCode || "").toUpperCase()),
-    ...multiAssetHistory.map((item) => String(item.assetCode || "").toUpperCase()),
-  ])).filter((asset): asset is DigitalAssetHistoryCode => (
-    asset === "USDT" || ((AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(asset)
-      && configuredSettlementAssets.has(asset))
-  ));
   const cryptoTotalUsdt = visibleMultiAssetBalances.reduce(
     (total, asset) => total + Number(asset.totalBalance ?? (Number(asset.availableBalance ?? 0) + Number(asset.frozenBalance ?? 0))) * Number(asset.priceUsdt ?? 0),
     0,
@@ -900,17 +876,11 @@ export default function Wallet() {
   const digitalTotalUsdt = usdtTotalBalance + cryptoTotalUsdt;
   // 钱包为全局共享账户；当前仅开放数字币和人民币两类账户。
   const cryptoAccountLabel = "数字币账户";
-  const accountMenuItems: Array<{ value: WalletAccountAsset; label: string; enabled: boolean }> = isGlobalWalletLedgerEntry
-    ? [
-      // 全局数字币账户始终可进入：即使当前没有资产，也可以使用其中的 USDT 充值通道。
-      { value: "CRYPTO", label: cryptoAccountLabel, enabled: true },
-      { value: "CNY", label: "人民币账户", enabled: true },
-    ]
-    : [
-      { value: "USDT", label: "稳定币账户 · USDT", enabled: true },
-      { value: "CNY", label: "人民币账户 · CNY", enabled: true },
-    ];
-  const currentAccountLabel = accountMenuItems.find((item) => item.value === activeAsset)?.label || (isGlobalWalletLedgerEntry ? "数字币账户" : "稳定币账户 · USDT");
+  const accountMenuItems: Array<{ value: WalletAccountAsset; label: string; enabled: boolean }> = [
+    { value: "CRYPTO", label: cryptoAccountLabel, enabled: true },
+    { value: "CNY", label: "人民币账户", enabled: true },
+  ];
+  const currentAccountLabel = accountMenuItems.find((item) => item.value === activeAsset)?.label || "数字币账户";
   const activeAssetDetailsPath = activeAsset === "USDT"
     ? appendWalletAccount("/wallet/transactions", "USDT")
     : activeAsset === "CNY"
@@ -919,18 +889,17 @@ export default function Wallet() {
         ? appendWalletAccount("/wallet/crypto-transactions", "CRYPTO")
         : "";
   const selectWalletAccount = (account: WalletAccountAsset) => {
-    autoAccountSelectionRef.current = false;
     setActiveAsset(account);
     setIsAccountMenuOpen(false);
     const params = new URLSearchParams(searchParams);
-    const isDefaultAccount = isGlobalWalletLedgerEntry ? account === "CRYPTO" : account === "USDT";
+    const isDefaultAccount = account === "CRYPTO";
     if (isDefaultAccount) params.delete("account");
     else params.set("account", account);
     setLocation(`/wallet${params.toString() ? `?${params.toString()}` : ""}`);
   };
 
   const recentUsdtTx = (() => {
-    if (isGlobalWalletLedgerEntry) {
+    if (isGlobalWalletView) {
       const byFingerprint = new Map<string, any>();
       const put = (item: any) => {
         const amount = Number(item.amount ?? 0);
@@ -1021,56 +990,16 @@ export default function Wallet() {
     wcCode: extractWcTeamCode((m.note || "").replace(/^\[CNY\]/, "")),
     createdAt: m.created_at,
   }));
-  // 先合并、排序所有真实数字币流水：最近一笔决定首次打开时的智能筛选币种。
+  // 先合并、排序所有真实数字币流水；快览统一展示最近十笔，不提供币种筛选。
   // 担保冻结/解冻属于余额内部状态搬移，不作为用户资金流水展示；冻结金额仍在资产卡片中可见。
   const allRecentDigitalTx = [
     ...recentUsdtTx.map((item) => ({ ...item, assetCode: "USDT", flowKind: "usdt" as const })),
     ...multiAssetHistory
-      .filter((item: any) => configuredSettlementAssets.has(String(item.assetCode || "").toUpperCase()))
       .filter((item: any) => item.eventType !== "collateral_lock" && item.eventType !== "collateral_release")
       .map((item: any) => ({ ...item, flowKind: "asset" as const })),
   ]
     .sort((left: any, right: any) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
-  const latestDigitalHistoryAsset = String(allRecentDigitalTx[0]?.assetCode || "").toUpperCase() as DigitalAssetHistoryCode | "";
-  const latestWalletAccount = selectWalletAccountByLatestFlow(allRecentDigitalTx, recentCnyTx);
-  const latestWalletActiveAsset: WalletAccountAsset = latestWalletAccount === "CNY"
-    ? "CNY"
-    : isGlobalWalletLedgerEntry ? "CRYPTO" : "USDT";
-  const latestWalletAccountDataLoading = isGlobalWalletLedgerEntry
-    ? (
-      walletPolicyQuery.isLoading
-      || recentManualQuery.isLoading
-      || ledger52UsdtHistoryQuery.isLoading
-      || multiAssetHistoryQuery.isLoading
-      || cnyHistoryQuery.isLoading
-    )
-    : (
-      recentRechargeQuery.isLoading
-      || recentWithdrawQuery.isLoading
-      || recentManualQuery.isLoading
-      || recentBalanceHistoryQuery.isLoading
-      || cnyHistoryQuery.isLoading
-    );
-  useEffect(() => {
-    if (!autoAccountSelectionRef.current || latestWalletAccountDataLoading) return;
-    setActiveAsset(latestWalletActiveAsset);
-    autoAccountSelectionRef.current = false;
-  }, [latestWalletActiveAsset, latestWalletAccountDataLoading]);
-  // 交易所式顺序：全部、USDT 固定在前；最近变动币种固定第三位，其余币种顺延。
-  const digitalHistoryFilterOptions: DigitalHistoryFilter[] = [
-    "ALL",
-    "USDT",
-    ...(latestDigitalHistoryAsset && latestDigitalHistoryAsset !== "USDT" ? [latestDigitalHistoryAsset] : []),
-    ...digitalHistoryAssetCodes.filter((code) => code !== "USDT" && code !== latestDigitalHistoryAsset),
-  ];
-  useEffect(() => {
-    if (activeAsset === "CRYPTO" && autoDigitalHistoryFilterRef.current) {
-      setDigitalHistoryFilter(latestDigitalHistoryAsset || "USDT");
-    }
-  }, [activeAsset, latestDigitalHistoryAsset]);
-  const recentDigitalTx = allRecentDigitalTx
-    .filter((item: any) => digitalHistoryFilter === "ALL" || String(item.assetCode || "").toUpperCase() === digitalHistoryFilter)
-    .slice(0, 10);
+  const recentDigitalTx = allRecentDigitalTx.slice(0, 10);
 
   const mask = (v: string) => hideBalance ? "••••••" : v;
   const refreshWalletData = () => {
@@ -1100,7 +1029,7 @@ export default function Wallet() {
     if (!operationReceipt || operationReceipt.account !== account) return undefined;
     const detailsPath = account === "CNY"
       ? appendWalletAccount("/wallet/cny-transactions", "CNY")
-      : isGlobalWalletLedgerEntry
+      : isGlobalWalletView
         ? appendWalletAccount("/wallet/crypto-transactions", "CRYPTO")
         : appendWalletAccount("/wallet/transactions", "USDT");
     return <WalletOperationReceiptCard
@@ -1114,12 +1043,12 @@ export default function Wallet() {
   // 账户卡片通用渲染
   const AccountCard = ({
     icon, label, balance: bal, unit, subLine, balanceCaption,
-    txPath, onRefresh, onRecharge, onWithdraw, onTransfer, onDetails,
-    operationReceipt: receipt, txList, isUsdt, readOnly = false, showDetails = true, rechargeDisabled = false, withdrawDisabled = false, balanceFontSize = "2rem",
+    txPath, onRefresh, onRecharge, onWithdraw, onTransfer, onReceive, onDetails,
+    preActionsContent, operationReceipt: receipt, txList, isUsdt, readOnly = false, showDetails = true, rechargeDisabled = false, withdrawDisabled = false, balanceFontSize = "2rem",
   }: {
     icon: string; label: string; balance: string; unit: string; subLine?: React.ReactNode; balanceCaption?: string;
-    txPath: string; onRefresh: () => void; onRecharge?: () => void; onWithdraw?: () => void; onTransfer?: () => void; onDetails?: () => void;
-    operationReceipt?: React.ReactNode; txList: React.ReactNode; isUsdt: boolean; readOnly?: boolean; showDetails?: boolean;
+    txPath: string; onRefresh: () => void; onRecharge?: () => void; onWithdraw?: () => void; onTransfer?: () => void; onReceive?: () => void; onDetails?: () => void;
+    preActionsContent?: React.ReactNode; operationReceipt?: React.ReactNode; txList: React.ReactNode; isUsdt: boolean; readOnly?: boolean; showDetails?: boolean;
     rechargeDisabled?: boolean; withdrawDisabled?: boolean; balanceFontSize?: string;
   }) => (
     <div
@@ -1149,7 +1078,7 @@ export default function Wallet() {
             >
               <ArrowLeft className="w-4 h-4" style={{ color: G.goldLight }} />
             </button>
-            {isGlobalWalletLedgerEntry ? (
+            {isGlobalWalletView ? (
               <div className="grid h-9 w-[144px] grid-cols-2 overflow-hidden rounded-lg border p-0.5" style={{ borderColor: "rgba(201,168,76,0.32)", background: "rgba(255,255,255,0.045)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035)" }} aria-label="切换全局钱包账户">
                 {accountMenuItems.map((item) => {
                   const selected = item.value === activeAsset;
@@ -1260,10 +1189,11 @@ export default function Wallet() {
           </div>
         </div>
         {subLine && <div className="mb-4">{subLine}</div>}
+        {preActionsContent}
 
         {/* 操作按钮：项目档案关闭入口后不渲染，服务端仍会二次校验。 */}
-        {(onRecharge || onWithdraw || onTransfer) && (
-          <div className={`grid gap-2 mb-0.5 ${[onRecharge, onWithdraw, onTransfer].filter(Boolean).length === 3 ? "grid-cols-3" : [onRecharge, onWithdraw, onTransfer].filter(Boolean).length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+        {(onRecharge || onWithdraw || onTransfer || onReceive) && (
+          <div className={`grid gap-2 mb-0.5 ${preActionsContent ? "mt-3" : ""} ${[onRecharge, onWithdraw, onTransfer, onReceive].filter(Boolean).length === 4 ? "grid-cols-4" : [onRecharge, onWithdraw, onTransfer, onReceive].filter(Boolean).length === 3 ? "grid-cols-3" : [onRecharge, onWithdraw, onTransfer, onReceive].filter(Boolean).length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
             {onRecharge && (
               <button
                 onClick={onRecharge}
@@ -1308,9 +1238,20 @@ export default function Wallet() {
                 <span>转账</span>
               </button>
             )}
+            {onReceive && (
+              <button
+                onClick={onReceive}
+                disabled={readOnly}
+                className="flex h-9 items-center justify-center gap-1 rounded-lg text-sm font-bold leading-none active:scale-[0.97] transition-transform"
+                style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}`, color: G.goldLight, opacity: readOnly ? 0.45 : 1 }}
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span>收款</span>
+              </button>
+            )}
           </div>
         )}
-        {readOnly && (onRecharge || onWithdraw || onTransfer) && (
+        {readOnly && (onRecharge || onWithdraw || onTransfer || onReceive) && (
           <div className="mt-2 flex items-start gap-1.5 rounded-lg px-2.5 py-2 text-[10px] leading-4" style={{ background: "rgba(255,255,255,0.035)", border: `1px solid ${G.divider}`, color: G.whiteDim }}>
             <Eye className="mt-0.5 h-3 w-3 shrink-0" style={{ color: G.goldDim }} />
             <span>成员只读视角：资金操作仅该成员本人可用；“明细”和“刷新”仍可正常使用。</span>
@@ -1350,6 +1291,7 @@ export default function Wallet() {
           onRecharge={canRecharge ? () => setModal("recharge") : undefined}
           onWithdraw={canWithdraw ? () => setModal("withdraw") : undefined}
           onTransfer={canTransfer ? () => { setTransferAsset("USDT"); setModal("transfer"); } : undefined}
+          onReceive={() => setLocation(appendWalletAccount("/wallet/receive", "USDT"))}
           operationReceipt={renderOperationReceipt("DIGITAL")}
           isUsdt={true}
           readOnly={isReadOnlyMemberView}
@@ -1422,6 +1364,7 @@ export default function Wallet() {
           onRecharge={canRecharge ? () => setModal("cny-recharge") : undefined}
           onWithdraw={canWithdraw ? () => setModal("cny-withdraw") : undefined}
           onTransfer={canTransfer ? () => { setTransferAsset("CNY"); setModal("transfer"); } : undefined}
+          onReceive={() => setLocation(appendWalletAccount("/wallet/receive", "CNY"))}
           operationReceipt={renderOperationReceipt("CNY")}
           isUsdt={false}
           readOnly={isReadOnlyMemberView}
@@ -1470,7 +1413,7 @@ export default function Wallet() {
         />}
 
         {/* 全局数字币汇总：下拉不再随持币种类无限增长；每个币种保留独立余额和流水。 */}
-        {isGlobalWalletLedgerEntry && activeAsset === "CRYPTO" && <AccountCard
+        {isGlobalWalletView && activeAsset === "CRYPTO" && <AccountCard
           icon="₿"
           label="数字币账户"
           balance={mask(digitalTotalUsdt.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
@@ -1485,13 +1428,14 @@ export default function Wallet() {
           onRecharge={canRecharge ? () => setModal("recharge") : undefined}
           onWithdraw={canWithdraw ? () => setModal("withdraw") : undefined}
           onTransfer={canTransfer ? () => setModal("crypto-transfer-select") : undefined}
+          onReceive={() => setLocation(appendWalletAccount("/wallet/receive", "CRYPTO"))}
           onDetails={() => setLocation(appendWalletAccount("/wallet/crypto-transactions", "CRYPTO"))}
           operationReceipt={renderOperationReceipt("DIGITAL")}
           isUsdt={false}
           readOnly={isReadOnlyMemberView}
           balanceFontSize="1.65rem"
-          txList={
-            <div id="digital-wallet-history" className="mt-4 pt-3" style={{ borderTop: `1px solid ${G.divider}` }}>
+          preActionsContent={
+            <div className="mt-4">
               <div className="mb-2 flex items-center justify-between px-1 text-xs">
                 <span className="font-semibold" style={{ color: G.white }}>我的数字资产</span>
                 <span style={{ color: G.whiteDim }}>{visibleDigitalAssetBalances.length > 0 ? "数量 / 估值" : "暂无持仓"}</span>
@@ -1531,37 +1475,15 @@ export default function Wallet() {
                 <p className="text-xs font-medium" style={{ color: G.whiteDim }}>暂无持仓资产</p>
                 <p className="mt-1 text-[10px] leading-4" style={{ color: G.whiteDim }}>数字币到账后，将在这里展示数量、估值与担保占用。</p>
               </div>}
-              <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${G.divider}` }}>
-                <div className="mb-2 flex items-center justify-between gap-2">
+            </div>
+          }
+          txList={
+              <div id="digital-wallet-history" className="mt-3 pt-3" style={{ borderTop: `1px solid ${G.divider}` }}>
+                <div className="mb-2 flex items-center gap-2">
                   <div>
-                    <span className="text-xs font-semibold" style={{ color: G.white }}>最近资金明细</span>
-                    <span className="ml-1.5 text-[10px]" style={{ color: G.whiteDim }}>仅显示最近 10 笔</span>
+                    <span className="text-xs font-semibold" style={{ color: G.white }}>明细快览</span>
+                    <span className="ml-1.5 text-[10px]" style={{ color: G.whiteDim }}>最近 10 笔</span>
                   </div>
-                  <span className="rounded-full px-2 py-0.5 text-[10px]" style={{ background: G.whiteFaint, color: G.whiteDim }}>按币种筛选</span>
-                </div>
-                <div className="-mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1" aria-label="筛选数字币资金明细">
-                  {digitalHistoryFilterOptions.map((code) => {
-                    const selected = digitalHistoryFilter === code;
-                    const assetIconSrc = code === "ALL" ? null : getCryptoAssetIconSrc(code);
-                    return <button
-                      key={code}
-                      type="button"
-                      onClick={() => {
-                        autoDigitalHistoryFilterRef.current = false;
-                        setDigitalHistoryFilter(code);
-                      }}
-                      className="flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-semibold transition-colors"
-                      style={{
-                        background: selected ? "linear-gradient(135deg, #F5D78E 0%, #C9A84C 100%)" : G.whiteFaint,
-                        color: selected ? "#15110A" : G.whiteDim,
-                        border: selected ? "1px solid transparent" : `1px solid ${G.cardBorder}`,
-                        boxShadow: selected ? "0 2px 8px rgba(201,168,76,0.22)" : "none",
-                      }}
-                    >
-                      {assetIconSrc && <img src={assetIconSrc} alt="" aria-hidden="true" className="h-3.5 w-3.5 shrink-0 rounded-full object-contain" />}
-                      {code === "ALL" ? "全部" : code}
-                    </button>;
-                  })}
                 </div>
                 {recentDigitalTx.length > 0 ? recentDigitalTx.map((item: any, index: number) => {
                   const change = Number(item.amount ?? 0);
@@ -1601,7 +1523,6 @@ export default function Wallet() {
                   <div className="py-4 text-center text-xs" style={{ color: G.whiteDim }}>暂无数字币资金明细</div>
                 )}
               </div>
-            </div>
           }
         />}
 

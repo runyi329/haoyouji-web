@@ -65,10 +65,13 @@ export default function WalletTransactions() {
   const isYaban = params.get("from") === "yaban";
   const viewAsUserId = restoreLedgerViewAsState(params.get("viewAs"));
   const sourceLedgerId = params.get("fromLedger") === "37" ? "37" : "52";
-  const walletQuery = viewAsUserId ? `?fromLedger=${sourceLedgerId}&account=USDT&viewAs=${viewAsUserId}` : `?fromLedger=${sourceLedgerId}&account=USDT`;
-  const walletQueryForAccount = (account: "USDT" | "CNY" | "CRYPTO") => viewAsUserId
-    ? `?fromLedger=${sourceLedgerId}&account=${account}&viewAs=${viewAsUserId}`
-    : `?fromLedger=${sourceLedgerId}&account=${account}`;
+  const walletQuery = viewAsUserId ? `?fromLedger=${sourceLedgerId}&account=CRYPTO&viewAs=${viewAsUserId}` : `?fromLedger=${sourceLedgerId}&account=CRYPTO`;
+  const walletQueryForAccount = (account: "USDT" | "CNY" | "CRYPTO") => {
+    const walletAccount = account === "USDT" ? "CRYPTO" : account;
+    return viewAsUserId
+      ? `?fromLedger=${sourceLedgerId}&account=${walletAccount}&viewAs=${viewAsUserId}`
+      : `?fromLedger=${sourceLedgerId}&account=${walletAccount}`;
+  };
   const backTo = isYaban ? "/yaban/wallet" : `/wallet${walletQuery}`;
   const switchAsset = (asset: string) => {
     if (asset === "USDT") return;

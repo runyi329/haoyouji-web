@@ -884,14 +884,30 @@ export type WalletTransferRecipientLookup =
   | { status: 'not_found' | 'self' | 'ambiguous' };
 
 export type WalletPaymentIdentity = { paymentId: string; name: string; nickname: string; username: string };
+export type WalletReceiveIdentity = WalletPaymentIdentity & { phone: string | null };
+
+/**
+ * 收款手机号只做完整精确匹配。去掉常见书写中的空格、短横线和中国区号，
+ * 既方便用户复制粘贴，也不提供任何手机号模糊搜索或联想结果。
+ */
+function normalizeWalletPhone(value: unknown): string {
+  let normalized = String(value ?? '').trim().replace(/[\s-]+/g, '');
+  if (normalized.startsWith('+86')) normalized = normalized.slice(3);
+  else if (normalized.startsWith('0086')) normalized = normalized.slice(4);
+  return normalized;
+}
+
+function isWalletPhoneIdentifier(value: string): boolean {
+  return /^\d{7,20}$/.test(normalizeWalletPhone(value));
+}
 
 /** 获取当前用户稳定的收款 ID；该 ID 即邀请码，不再额外创建第二套账号。 */
-export async function getMyWalletPaymentIdentity(userId: number): Promise<WalletPaymentIdentity> {
+export async function getMyWalletPaymentIdentity(userId: number): Promise<WalletReceiveIdentity> {
   await ensureWalletPaymentInfrastructure();
   const conn = await getDbConnection();
   if (!conn) throw new Error('数据库连接失败');
   const paymentId = await ensureUserWalletPaymentId(conn as any, userId);
-  const [rows] = await (conn as any).execute('SELECT username, name FROM users WHERE id = ? LIMIT 1', [userId]);
+  const [rows] = await (conn as any).execute('SELECT username, name, phone FROM users WHERE id = ? LIMIT 1', [userId]);
   const user = asRows(rows)[0];
   if (!user) throw new Error('用户不存在');
   return {
@@ -899,10 +915,11 @@ export async function getMyWalletPaymentIdentity(userId: number): Promise<Wallet
     name: transferDisplayName(user),
     nickname: String(user.name || '未设置昵称').slice(0, 80),
     username: transferUsername(user),
+    phone: String(user.phone || '').trim() || null,
   };
 }
 
-/** 只接受收款 ID 或用户名／昵称的完整匹配，不提供模糊联想或平台用户列表。 */
+/** 只接受收款 ID、用户名、昵称或手机号的完整匹配，不提供模糊联想或平台用户列表。 */
 export async function lookupWalletTransferRecipient(
   requesterUserId: number,
   identifier: string,
@@ -924,13 +941,18 @@ export async function lookupWalletTransferRecipient(
     ) as any[];
     rows = asRows(paymentIdRows);
   } else {
+    const normalizedPhone = normalizeWalletPhone(normalized);
     const [identityRows] = await (conn as any).execute(
       `SELECT id, username, name, invite_code
          FROM users
-        WHERE username = ? OR name = ?
+        WHERE username = ?
+           OR name = ?
+           OR (${isWalletPhoneIdentifier(normalized) ? `REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(phone, '')), ' ', ''), '-', ''), '+86', ''), '0086', '') = ?` : '1 = 0'})
         ORDER BY id ASC
         LIMIT 3`,
-      [normalized, normalized],
+      isWalletPhoneIdentifier(normalized)
+        ? [normalized, normalized, normalizedPhone]
+        : [normalized, normalized],
     ) as any[];
     rows = asRows(identityRows);
   }

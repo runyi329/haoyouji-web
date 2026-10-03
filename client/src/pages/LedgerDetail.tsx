@@ -1854,8 +1854,127 @@ import {
   Calculator,
   TrendingUp,
   WalletCards,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { AJOwnerPanel, FunderViewPanel } from "@/components/AJOwnerPanel";
+
+type AfSmartWalletCardProps = {
+  balance?: unknown;
+  isBalanceLoading?: boolean;
+  viewAsUserId?: number | null;
+  fundingRateTotal?: unknown;
+  onOpenWallet: () => void;
+  onRecharge: () => void;
+  onWithdraw: () => void;
+  onOpenFundingRateLogs: () => void;
+  className?: string;
+};
+
+// 52号账本的成员与资方共用同一张智能钱包卡，避免两处视觉和交互分别演进。
+function AfSmartWalletCard({
+  balance,
+  isBalanceLoading = false,
+  viewAsUserId,
+  fundingRateTotal,
+  onOpenWallet,
+  onRecharge,
+  onWithdraw,
+  onOpenFundingRateLogs,
+  className = '',
+}: AfSmartWalletCardProps) {
+  const numericBalance = Number(balance);
+  const balanceText = Number.isFinite(numericBalance) ? numericBalance.toFixed(2) : '0.00';
+  const numericFundingRate = Number(fundingRateTotal);
+  const fundingRateText = Number.isFinite(numericFundingRate) ? numericFundingRate.toFixed(2) : '0.00';
+
+  return (
+    <div className={`relative overflow-hidden rounded-[10px] ${className}`} style={{
+      background: 'linear-gradient(160deg, #111111 0%, #1c1c1c 45%, #0f0f0f 100%)',
+      border: '1px solid rgba(201,168,76,0.55)',
+      boxShadow: '0 6px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,228,100,0.18)',
+      padding: '10px 14px',
+      minHeight: 92,
+    }}>
+      <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
+      <div className="flex items-center justify-between mb-2">
+        <button
+          type="button"
+          onClick={onOpenWallet}
+          className="-ml-1 flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left transition active:scale-[0.985]"
+          title="查看智能钱包详情"
+        >
+          <div>
+            <div className="flex items-center gap-1.5 mb-1">
+              <div style={{ width: 14, height: 14, overflow: 'visible', position: 'relative', flexShrink: 0, marginLeft: -16 }}>
+                <div style={{ width: 400, height: 400, transform: 'scale(0.07)', transformOrigin: 'bottom left', position: 'absolute', bottom: -3, left: 0 }}>
+                  <WalletLottie />
+                </div>
+              </div>
+              <span className="text-[10px]" style={{ color: 'rgba(201,168,76,0.5)', marginLeft: 12 }}>智能錢包 · 余额</span>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              {isBalanceLoading ? (
+                <span className="block h-6 w-20 animate-pulse rounded-md" style={{ background: 'rgba(245,215,142,0.20)' }} aria-label="正在读取钱包余额" />
+              ) : (
+                <span className="font-bold tabular-nums" style={{ fontSize: '1.3rem', lineHeight: 1.1, color: '#F5D78E', textShadow: '0 0 16px rgba(245,215,142,0.3)' }}>
+                  {balanceText}
+                </span>
+              )}
+              <span className="text-xs font-medium" style={{ color: 'rgba(201,168,76,0.55)' }}>USDT</span>
+            </div>
+          </div>
+        </button>
+        <div className="grid shrink-0 grid-cols-3 gap-1.5">
+          <button
+            onClick={onRecharge}
+            disabled={!!viewAsUserId}
+            className="h-7 rounded-md text-xs font-semibold disabled:opacity-45"
+            style={{ minWidth: 52, background: 'linear-gradient(135deg, #C9A84C 0%, #F5D78E 50%, #C9A84C 100%)', color: '#000', boxShadow: '0 1px 4px rgba(201,168,76,0.35)' }}
+          >充値</button>
+          <button
+            onClick={onWithdraw}
+            disabled={!!viewAsUserId}
+            className="h-7 rounded-md text-xs font-semibold disabled:opacity-45"
+            style={{ minWidth: 52, background: 'transparent', border: '1px solid rgba(201,168,76,0.55)', color: '#F5D78E' }}
+          >提现</button>
+          <button
+            onClick={onOpenWallet}
+            disabled={!!viewAsUserId}
+            title={viewAsUserId ? '查看他人钱包时不可代为转账' : '站内转账'}
+            className="h-7 rounded-md text-xs font-semibold disabled:opacity-45"
+            style={{ minWidth: 52, background: 'rgba(201,168,76,0.14)', border: '1px solid rgba(201,168,76,0.55)', color: '#F5D78E' }}
+          >转账</button>
+        </div>
+      </div>
+      <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid rgba(201,168,76,0.18)' }}>
+        <div className="flex items-center gap-2">
+          <button
+            disabled
+            className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 opacity-50 cursor-not-allowed"
+            style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
+          >
+            <span
+              className="inline-block h-3.5 w-3.5 rounded-full shadow transition-transform"
+              style={{ backgroundColor: 'rgba(255,255,255,0.45)', transform: 'translateX(2px)' }}
+            />
+          </button>
+          <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>闲时自动赚费</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.5)' }}>赚费累计</span>
+          <span className="text-sm font-bold tabular-nums" style={{ color: '#F5D78E' }}>{fundingRateText}</span>
+          <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.45)' }}>USDT</span>
+          <button onClick={onOpenFundingRateLogs} className="flex" title="查看自动赚费详情">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(201,168,76,0.55)" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 
 // ========== 中国法定节假日数据（2025-2026年） ==========
@@ -2526,11 +2645,11 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId) },
     { enabled: isDiet }
   );
-  // AF 账本：总资产估值（充值到账 + 手动调账）
-  const { data: afTotalAsset } = trpc.ledger.afGetMyTotalAsset.useQuery(
+  // AF 账本：智能钱包余额。资方和普通成员共用全局钱包入口，因此两种视角均读取本人真实余额。
+  const { data: afTotalAsset, isLoading: afTotalAssetLoading } = trpc.ledger.afGetMyTotalAsset.useQuery(
     { ledgerId: Number(ledgerId) },
     {
-      enabled: isCustomAF && !effectiveIsFunder,
+      enabled: isCustomAF,
       refetchInterval: 15000,
       refetchIntervalInBackground: false,
       refetchOnWindowFocus: true,
@@ -2584,7 +2703,7 @@ export default function LedgerDetail() {
   // AF 账本：资金费率开关状态 + 累计金额
   const { data: fundingRateStatus } = trpc.ledger.afGetFundingRateStatus.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF && !effectiveIsFunder, refetchInterval: 30000 }
+    { enabled: isCustomAF, refetchInterval: 30000 }
   );
   // 独立本地 state，初始值为 undefined（未初始化），useEffect 在服务器数据到达后初始化一次
   // 短信通知开关
@@ -2687,7 +2806,7 @@ export default function LedgerDetail() {
   const [fundingRateQueryVersion, setFundingRateQueryVersion] = useState(0);
   const { data: fundingRateLogsData, isLoading: fundingRateLogsLoading } = trpc.ledger.afGetFundingRateLogs.useQuery(
     { ledgerId: Number(ledgerId), page: fundingRateLogsPage2, pageSize: 50 },
-    { enabled: isCustomAF && !effectiveIsFunder && showFundingRateLogs2 && fundingRateQueryVersion > 0, staleTime: 0 }
+    { enabled: isCustomAF && showFundingRateLogs2 && fundingRateQueryVersion > 0, staleTime: 0 }
   );
   // ETH 持仓计算预览数据（仅 isCustomAF 时加载）
   const { data: ethPositionSettings } = trpc.ethPositionGetSettings.useQuery(
@@ -2769,6 +2888,8 @@ export default function LedgerDetail() {
   // 资产订单视图模式：按账本和当前查看用户隔离保存，避免不同用户或账本之间互相覆盖。
   const funderViewModeStorageKey = `funder_view_mode_${ledgerId}_${viewAsUserId ?? (user as any)?.id ?? 'anonymous'}`;
   const [funderViewMode, setFunderViewMode] = useState<'card' | 'order'>('card');
+  // 仅隐藏当前浏览器会话中的合作金额显示，不影响真实余额、订单或其他用户的数据。
+  const [hideFunderSummaryAmounts, setHideFunderSummaryAmounts] = useState(false);
   // 订单卡是担保缺口的唯一完整计算源。共享担保弹窗按订单 ID 复用这些最终结果，
   // 不另行重算手工组合、37号标签或人民币利息。
   const [funderExposureGapMap, setFunderExposureGapMap] = useState<Record<number, number>>({});
@@ -3633,10 +3754,47 @@ export default function LedgerDetail() {
                 })()}
 
               </div>
-              {/* 右侧按钮组：独立flex容器，与左侧头像+名字真正两端对齐 */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {/* AJ账本：刷新/返回按钮（与劳/资开关同行，仅AJ账本显示） */}
-                {isCustomAJ && (
+	              {/* 右侧按钮组：独立flex容器，与左侧头像+名字真正两端对齐 */}
+	              <div className="ml-2 flex items-center gap-2 flex-shrink-0">
+	                {/* 52号资方：刷新和返回收至右上角，避免占用钱包所在的操作行。 */}
+	                {isCustomAF && effectiveIsFunder && (
+	                  <>
+	                    <button
+	                      type="button"
+	                      onClick={() => window.location.reload()}
+	                      className="flex h-8 items-center justify-center rounded-lg border px-2.5 text-xs font-semibold whitespace-nowrap transition active:scale-95"
+	                      style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.35)', color: '#fff' }}
+	                      aria-label="刷新52号账本"
+	                      title="刷新"
+	                    >
+	                      刷新
+	                    </button>
+	                    <button
+	                      type="button"
+	                      onClick={handleLedgerBack}
+	                      className="flex h-8 items-center justify-center rounded-lg border px-2.5 text-xs font-semibold whitespace-nowrap transition active:scale-95"
+	                      style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.35)', color: '#fff' }}
+	                      aria-label="返回上一级"
+	                      title="返回"
+	                    >
+	                      返回
+	                    </button>
+	                    {((user as any)?.id === 4957151 || (user as any)?.id === 870413) && (
+	                      <button
+	                        type="button"
+	                        onClick={() => setLocation(`/ledger/${ledgerId}/af-invite-tree${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+	                        className="flex h-8 w-8 items-center justify-center rounded-lg border transition active:scale-95"
+	                        style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.35)', color: '#fff' }}
+	                        aria-label="查看推荐关系"
+	                        title="推荐"
+	                      >
+	                        <Users className="h-3.5 w-3.5" strokeWidth={2} />
+	                      </button>
+	                    )}
+	                  </>
+	                )}
+	                {/* AJ账本：刷新/返回按钮（与劳/资开关同行，仅AJ账本显示） */}
+	                {isCustomAJ && (
                   <>
                     {/* 签约按钮：仅劳方（非资方、非管理员）可见 */}
                     {!isFunder && !isAdmin && (
@@ -3837,32 +3995,17 @@ export default function LedgerDetail() {
               {isCustomAH && (
                 <span className="text-xs text-white/70 mr-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>{ahRoleName}</span>
               )}
-              {/* 52号账本（AF）：操作按钮行（充值/提现/邀请/刷新/返回）横排一行 */}
-              {isCustomAF && (
-                <div className="flex items-center gap-2 w-full">
-                  {/* 充値和提现已内置到智能钱包卡片内 */}
-                  {!effectiveIsFunder && (
-                    <button
-                      onClick={() => setLocation(`/ledger/${ledgerId}/af-invite${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-                      className="flex-1 h-9 rounded-full text-sm font-medium border border-white/60 text-white text-center"
-                      style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-                    >
-                      邀请
-                    </button>
-                  )}
-                  {/* 资方不展示成员钱包卡片，改在右上操作栏提供本人智能钱包入口。 */}
-                  {effectiveIsFunder && (
-                    <button
-                      type="button"
-                      onClick={() => setLocation(`/wallet?fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
-                      aria-label="打开智能钱包"
-                      title="智能钱包"
-                      className="h-9 w-9 shrink-0 rounded-full border border-white/60 text-white transition active:scale-95"
-                      style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-                    >
-                      <WalletCards className="mx-auto h-[18px] w-[18px]" strokeWidth={1.9} />
-                    </button>
-                  )}
+	              {/* 52号普通成员：操作按钮行（资方的刷新、返回已收至右上角）。 */}
+	              {isCustomAF && !effectiveIsFunder && (
+	                <div className="flex items-center gap-2 w-full">
+	                  {/* 充値和提现已内置到智能钱包卡片内 */}
+	                  <button
+	                    onClick={() => setLocation(`/ledger/${ledgerId}/af-invite${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+	                    className="flex-1 h-9 rounded-full text-sm font-medium border border-white/60 text-white text-center"
+	                    style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+	                  >
+	                    邀请
+	                  </button>
                   <button
                     onClick={() => window.location.reload()}
                     className="flex-1 h-9 rounded-full text-sm font-medium text-center"
@@ -3877,8 +4020,8 @@ export default function LedgerDetail() {
                   >
                     返回
                   </button>
-                  {/* 推荐小标签：只有 YJH(4957151) 和 JIANG(870413) 可见 */}
-                  {((user as any)?.id === 4957151 || (user as any)?.id === 870413) && (
+	                  {/* 推荐小标签：只有 YJH(4957151) 和 JIANG(870413) 可见 */}
+	                  {((user as any)?.id === 4957151 || (user as any)?.id === 870413) && (
                     <button
                       onClick={() => setLocation(`/ledger/${ledgerId}/af-invite-tree${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
                       className="flex-1 h-9 rounded-full text-sm font-medium text-center"
@@ -3886,10 +4029,24 @@ export default function LedgerDetail() {
                     >
                       推荐
                     </button>
-                  )}
-                </div>
-              )}
-              {/* 资方视角：合作资金总额汇总 */}
+	                  )}
+	                </div>
+	              )}
+	              {/* 52号资方与普通成员使用同一张智能钱包卡。 */}
+	              {isCustomAF && effectiveIsFunder && (
+	                <AfSmartWalletCard
+	                  className="mt-3"
+	                  balance={(afTotalAsset as any)?.total}
+	                  isBalanceLoading={afTotalAssetLoading}
+	                  viewAsUserId={viewAsUserId}
+	                  fundingRateTotal={fundingRateStatus?.totalAccumulated}
+	                  onOpenWallet={() => setLocation(`/wallet?fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+	                  onRecharge={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+	                  onWithdraw={() => setLocation(`/ledger/${ledgerId}/af-withdraw${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+	                  onOpenFundingRateLogs={() => setShowFundingRateLogs(true)}
+	                />
+	              )}
+	              {/* 资方视角：合作资金总额汇总 */}
               {isCustomAF && effectiveIsFunder && (() => {
                 const activeOrders: any[] = (funderAssetOrders as any[] || []).filter((o: any) => o.status !== 'settled');
                 const effectiveCnyRate2 = (cnyRate && cnyRate > 0) ? cnyRate : 6.75;
@@ -3924,52 +4081,85 @@ export default function LedgerDetail() {
                   if (baseCur !== 'CNY') return sum + baseAmt * effectiveCnyRate2;
                   return sum + baseAmt;
                 }, 0);
-                const effectiveCnyRate = (cnyRate && cnyRate > 0) ? cnyRate : 6.75;
-                const usdtInCny = usdtTotal * effectiveCnyRate;
-                const totalInCny = cnyTotal + usdtInCny;
-                if (totalInCny <= 0) return null;
-                const fmtCny = (v: number) => v >= 10000
-                  ? (v / 10000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '万'
-                  : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+	                const effectiveCnyRate = (cnyRate && cnyRate > 0) ? cnyRate : 6.75;
+	                const usdtInCny = usdtTotal * effectiveCnyRate;
+	                const totalInCny = cnyTotal + usdtInCny;
+	                // 总览容器首屏始终占位：订单和行情稍后返回时仅回填内容，不让下方列表被再次挤开。
+	                const funderSummaryLoading = funderOrdersLoading || funderAssetData === undefined;
+	                const hasFunderSummary = totalInCny > 0;
+	                const displayCnyTotal = hasFunderSummary ? cnyTotal : 0;
+	                const displayUsdtTotal = hasFunderSummary ? usdtTotal : 0;
+	                const displayTotalInCny = hasFunderSummary ? totalInCny : 0;
+	                const fmtCny = (v: number) => v >= 10000
+	                  ? (v / 10000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '万'
+	                  : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 const fmtCnyFull = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                const fmtU = (v: number) => v >= 10000
-                  ? (v / 10000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '万'
-                  : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                return (
-                  <div className="mt-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(4px)' }}>
-                    {/* 主标题：TTL + 总金额 */}
-                    <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-sm font-bold tracking-widest" style={{ color: 'rgba(255,255,255,0.45)', letterSpacing: '0.12em' }}>TTL</span>
-                      <span className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>･</span>
-                      <span className="text-2xl font-bold tracking-tight" style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmtCnyFull(totalInCny)}</span>
-                    </div>
-                    {/* 占比进度条 + 标签 */}
-                    {(() => {
-                      const cnyPct = totalInCny > 0 ? Math.round(cnyTotal / totalInCny * 100) : 0;
-                      const usdtPct = 100 - cnyPct;
-                      return (
-                        <>
-                          {/* 进度条：分段圆角，中间留间隙 */}
-                          <div className="flex gap-0.5 mb-2" style={{ height: '6px' }}>
-                            {cnyPct > 0 && <div style={{ width: `calc(${cnyPct}% - 2px)`, background: '#F5C842', borderRadius: '3px', transition: 'width 0.4s' }} />}
-                            {usdtPct > 0 && <div style={{ width: `calc(${usdtPct}% - 2px)`, background: 'rgba(255,255,255,0.75)', borderRadius: '3px', transition: 'width 0.4s' }} />}
-                          </div>
-                          {/* 占比标签：两侧都有颜色 */}
-                          <div className="flex justify-between">
-                            <div className="flex flex-col gap-0">
-                              <span className="text-[11px] font-semibold" style={{ color: '#F5C842' }}>人民币 {cnyPct}%</span>
-                              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>･{fmtCny(cnyTotal)}</span>
-                            </div>
-                            <div className="flex flex-col gap-0 items-end">
-                              <span className="text-[11px] font-semibold" style={{ color: '#fff' }}>数字币 {usdtPct}%</span>
-                              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>{fmtU(usdtTotal)} USDT</span>
-                            </div>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                );
+	                const fmtU = (v: number) => v >= 10000
+	                  ? (v / 10000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '万'
+	                  : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+	                return (
+	                  <div className="relative mt-3 overflow-hidden rounded-[10px] px-3.5 py-2.5" style={{ minHeight: 110, background: 'linear-gradient(135deg, rgba(38,58,94,0.98) 0%, rgba(26,42,70,0.98) 58%, rgba(22,35,59,0.98) 100%)', border: '1px solid rgba(157,184,226,0.34)', boxShadow: '0 8px 22px rgba(10,21,39,0.32), inset 0 1px 0 rgba(213,229,255,0.13)' }}>
+	                    <div className="absolute inset-x-5 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(139,194,255,0.74) 28%, rgba(123,216,191,0.70) 72%, transparent)' }} />
+	                    {funderSummaryLoading ? (
+	                      <div className="animate-pulse" aria-label="正在加载合作金额总览">
+	                        <div className="flex items-center justify-between">
+	                          <span className="h-3 w-16 rounded" style={{ background: 'rgba(181,208,246,0.22)' }} />
+	                          <span className="h-5 w-28 rounded-md" style={{ background: 'rgba(231,241,255,0.16)' }} />
+	                        </div>
+	                        <div className="mt-2 grid grid-cols-2 gap-2">
+	                          <div className="h-11 rounded-md" style={{ background: 'rgba(104,207,181,0.12)', border: '1px solid rgba(104,207,181,0.13)' }} />
+	                          <div className="h-11 rounded-md" style={{ background: 'rgba(144,180,248,0.12)', border: '1px solid rgba(144,180,248,0.13)' }} />
+	                        </div>
+	                      </div>
+	                    ) : (() => {
+	                      const cnyPct = displayTotalInCny > 0 ? Math.round(displayCnyTotal / displayTotalInCny * 100) : 0;
+	                      const usdtPct = displayTotalInCny > 0 ? 100 - cnyPct : 0;
+	                      const amountText = (value: string) => hideFunderSummaryAmounts ? '******' : value;
+	                      return (
+	                        <>
+	                          <div className="flex items-baseline justify-start gap-2">
+	                            <span className="text-[10px] font-semibold tracking-[0.18em]" style={{ color: 'rgba(181,208,246,0.82)' }}>合作金额</span>
+	                            <span className="text-base font-bold tabular-nums" style={{ color: '#EFF6FF', textShadow: '0 0 16px rgba(136,184,255,0.18)' }}>{amountText(`¥${fmtCnyFull(displayTotalInCny)}`)}</span>
+	                            <button
+	                              type="button"
+	                              onClick={() => setHideFunderSummaryAmounts((hidden) => !hidden)}
+	                              className="inline-flex h-5 w-5 translate-y-[1px] items-center justify-center rounded-md transition-colors"
+	                              style={{ color: 'rgba(221,235,255,0.72)', background: 'rgba(172,202,244,0.10)', border: '1px solid rgba(172,202,244,0.18)' }}
+	                              aria-label={hideFunderSummaryAmounts ? '显示合作金额' : '隐藏合作金额'}
+	                              title={hideFunderSummaryAmounts ? '显示合作金额' : '隐藏合作金额'}
+	                            >
+	                              {hideFunderSummaryAmounts ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+	                            </button>
+	                          </div>
+	                          <div className="mt-2 grid grid-cols-2 gap-2">
+	                            <div className="min-w-0 rounded-md px-2.5 py-1.5" style={{ background: 'linear-gradient(135deg, rgba(83,196,165,0.18), rgba(83,196,165,0.06))', border: '1px solid rgba(116,219,187,0.26)' }}>
+	                              <div className="flex items-baseline gap-1 whitespace-nowrap">
+	                                <span className="text-[10px] font-medium" style={{ color: '#8DE0C4' }}>人民币</span>
+	                                <span className="truncate text-sm font-bold tabular-nums" style={{ color: '#E1FFF4' }}>{amountText(`¥${fmtCny(displayCnyTotal)}`)}</span>
+	                              </div>
+	                              <div className="mt-0.5 text-[9px] tabular-nums" style={{ color: 'rgba(217,248,236,0.54)' }}>≈ {amountText(`${fmtU(displayCnyTotal / effectiveCnyRate)} U`)}</div>
+	                              <div className="relative mt-1 h-3.5 overflow-hidden rounded-sm" style={{ background: 'rgba(81,216,178,0.15)' }}>
+	                                <div className="absolute inset-y-0 left-0 rounded-sm" style={{ width: `${cnyPct}%`, minWidth: cnyPct > 0 ? '14px' : 0, background: 'linear-gradient(90deg, #49B998, #8DE0C4)', transition: 'width 0.4s' }} />
+	                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-semibold tabular-nums" style={{ color: '#E7FFF7', textShadow: '0 1px 2px rgba(0,0,0,0.42)' }}>{cnyPct}%</span>
+	                              </div>
+	                            </div>
+	                            <div className="min-w-0 rounded-md px-2.5 py-1.5" style={{ background: 'linear-gradient(135deg, rgba(137,175,244,0.20), rgba(137,175,244,0.06))', border: '1px solid rgba(161,192,249,0.27)' }}>
+	                              <div className="flex items-baseline gap-1 whitespace-nowrap">
+	                                <span className="text-[10px] font-medium" style={{ color: '#C0D3FF' }}>数字币</span>
+	                                <span className="truncate text-sm font-bold tabular-nums" style={{ color: '#EDF3FF' }}>{amountText(`${fmtU(displayUsdtTotal)} U`)}</span>
+	                              </div>
+	                              <div className="mt-0.5 text-[9px] tabular-nums" style={{ color: 'rgba(222,233,255,0.56)' }}>≈ {amountText(`${fmtCny(usdtInCny)} 元`)}</div>
+	                              <div className="relative mt-1 h-3.5 overflow-hidden rounded-sm" style={{ background: 'rgba(159,190,255,0.15)' }}>
+	                                <div className="absolute inset-y-0 left-0 rounded-sm" style={{ width: `${usdtPct}%`, minWidth: usdtPct > 0 ? '14px' : 0, background: 'linear-gradient(90deg, #7195E3, #C0D3FF)', transition: 'width 0.4s' }} />
+	                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-semibold tabular-nums" style={{ color: '#EDF3FF', textShadow: '0 1px 2px rgba(0,0,0,0.42)' }}>{usdtPct}%</span>
+	                              </div>
+	                            </div>
+	                          </div>
+	                        </>
+	                      );
+	                    })()}
+	                  </div>
+	                );
               })()}
               {/* 网格交易模拟测算入口已移至 GTO 策略下方 */}
               {isCustomAH && (isOwner || isAdmin) && (
@@ -4169,98 +4359,22 @@ export default function LedgerDetail() {
           </div>
         )}
         {/* AF 账本：2×2 数据容器 */}
-        {isCustomAF && !isCustomAH && !effectiveIsFunder && (
-          <div className="px-4 pt-2 pb-4">
-            <div className="grid grid-cols-2 gap-3">
-              {/* 卡片 1：智能钱包 — 方案C：余额+按钮同行 */}
-              <div className="col-span-2 rounded-2xl relative overflow-hidden" style={{
-                background: 'linear-gradient(160deg, #111111 0%, #1c1c1c 45%, #0f0f0f 100%)',
-                border: '1px solid rgba(201,168,76,0.55)',
-                boxShadow: '0 6px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,228,100,0.18)',
-                padding: '10px 14px',
-              }}>
-                <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
-                {/* 余额+按鈕同行 */}
-                <div className="flex items-center justify-between mb-2">
-                  <button
-                    type="button"
-                    onClick={() => setLocation(`/wallet?fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
-                    className="-ml-1 flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1 py-1 text-left transition active:scale-[0.985]"
-                    title="查看智能钱包详情"
-                  >
-                    <div>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <div style={{ width: 14, height: 14, overflow: 'visible', position: 'relative', flexShrink: 0, marginLeft: -16 }}>
-                        <div style={{ width: 400, height: 400, transform: 'scale(0.07)', transformOrigin: 'bottom left', position: 'absolute', bottom: -3, left: 0 }}>
-                          <WalletLottie />
-                        </div>
-                      </div>
-                      <span className="text-[10px]" style={{ color: 'rgba(201,168,76,0.5)', marginLeft: 12 }}>智能錢包 · 余额</span>
-                    </div>
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="font-bold tabular-nums" style={{ fontSize: '1.3rem', lineHeight: 1.1, color: '#F5D78E', textShadow: '0 0 16px rgba(245,215,142,0.3)' }}>
-                        {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
-                      </span>
-                      <span className="text-xs font-medium" style={{ color: 'rgba(201,168,76,0.55)' }}>USDT</span>
-                    </div>
-                    </div>
-                  </button>
-                  {!effectiveIsFunder && (
-                    <div className="grid shrink-0 grid-cols-3 gap-1.5">
-                      <button
-                        onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
-                        disabled={!!viewAsUserId}
-                        className="h-7 rounded-full text-xs font-semibold disabled:opacity-45"
-                        style={{ minWidth: 52, background: 'linear-gradient(135deg, #C9A84C 0%, #F5D78E 50%, #C9A84C 100%)', color: '#000', boxShadow: '0 1px 4px rgba(201,168,76,0.35)' }}
-                      >充値</button>
-                      <button
-                        onClick={() => setLocation(`/ledger/${ledgerId}/af-withdraw${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-                        disabled={!!viewAsUserId}
-                        className="h-7 rounded-full text-xs font-semibold disabled:opacity-45"
-                        style={{ minWidth: 52, background: 'transparent', border: '1px solid rgba(201,168,76,0.55)', color: '#F5D78E' }}
-                      >提现</button>
-                      <button
-                        onClick={() => setLocation(`/wallet?fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
-                        disabled={!!viewAsUserId}
-                        title={viewAsUserId ? '查看他人钱包时不可代为转账' : '站内转账'}
-                        className="h-7 rounded-full text-xs font-semibold disabled:opacity-45"
-                        style={{ minWidth: 52, background: 'rgba(201,168,76,0.14)', border: '1px solid rgba(201,168,76,0.55)', color: '#F5D78E' }}
-                      >转账</button>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid rgba(201,168,76,0.18)' }}>
-                  <div className="flex items-center gap-2">
-                    {/* 闲时自动赚费功能已下线，开关强制禁用为关闭态 */}
-                    <button
-                      disabled
-                      className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 opacity-50 cursor-not-allowed"
-                      style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
-                    >
-                      <span
-                        className="inline-block h-3.5 w-3.5 rounded-full shadow transition-transform"
-                        style={{
-                          backgroundColor: 'rgba(255,255,255,0.45)',
-                          transform: 'translateX(2px)',
-                        }}
-                      />
-                    </button>
-                    <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>闲时自动赚费</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.5)' }}>赚费累计</span>
-                    <span className="text-sm font-bold tabular-nums" style={{ color: '#F5D78E' }}>{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(2)}</span>
-                    <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.45)' }}>USDT</span>
-                    <button onClick={() => setShowFundingRateLogs(true)} className="flex items-center" title="查看自动赚费详情">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(201,168,76,0.55)" strokeWidth="2">
-                        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
+	        {isCustomAF && !isCustomAH && !effectiveIsFunder && (
+	          <div className="px-4 pt-2 pb-4">
+	            <div className="grid grid-cols-2 gap-3">
+	              <AfSmartWalletCard
+	                className="col-span-2"
+	                balance={(afTotalAsset as any)?.total}
+	                isBalanceLoading={afTotalAssetLoading}
+	                viewAsUserId={viewAsUserId}
+	                fundingRateTotal={fundingRateStatus?.totalAccumulated}
+	                onOpenWallet={() => setLocation(`/wallet?fromLedger=52${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+	                onRecharge={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+	                onWithdraw={() => setLocation(`/ledger/${ledgerId}/af-withdraw${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+	                onOpenFundingRateLogs={() => setShowFundingRateLogs(true)}
+	              />
 
-              {/* 卡片 3：仓位 & 累计盈亏（合并，占满整行）——资金方不显示 */}
+	              {/* 卡片 3：仓位 & 累计盈亏（合并，占满整行）——资金方不显示 */}
               {!effectiveIsFunder && (
               <div className="col-span-2 rounded-2xl px-0 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.10)', overflow: 'hidden' }}>
 

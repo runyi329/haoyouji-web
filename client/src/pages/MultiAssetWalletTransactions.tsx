@@ -59,7 +59,7 @@ export default function MultiAssetWalletTransactions() {
   const query = new URLSearchParams(search);
   const viewAsUserId = restoreLedgerViewAsState(query.get("viewAs"));
   const sourceLedgerId = query.get("fromLedger") === "37" ? "37" : "52";
-  // 从单币种明细返回时保持数字币账户选中，并保留来自37号或52号账本的返回上下文。
+  // 从单币种明细返回时保持数字币账户选中，不回退到默认稳定币账户。
   const walletQuery = viewAsUserId ? `?fromLedger=${sourceLedgerId}&account=CRYPTO&viewAs=${viewAsUserId}` : `?fromLedger=${sourceLedgerId}&account=CRYPTO`;
   const walletQueryForAccount = (account: "USDT" | "CNY" | "CRYPTO") => viewAsUserId
     ? `?fromLedger=${sourceLedgerId}&account=${account}&viewAs=${viewAsUserId}`
