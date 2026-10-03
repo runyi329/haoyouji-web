@@ -605,10 +605,29 @@ export async function findOrderByAmount(
 } | null> {
   const db = await getDb();
   const orderScope = getRechargeOrderScope(context);
-  // 小额订单使用 6 位小数的唯一金额，必须精确匹配，避免原先 ±0.01 / ±1 的容差
-  // 在多个并行小额订单中发生跨用户误配。大额历史订单沿用既有容差策略。
+  // 小额订单使用 6 位小数的唯一金额，默认必须精确匹配，避免多个并行订单误配。
+  // 订单唯一尾数最高为 0.009999 USDT。按用户确认的测试口径，到账以用户输入额为中心
+  // 正负 1 USDT 均可自动确认，因此匹配阈值需额外覆盖该唯一尾数（总计 1.01 USDT）。
+  // 小额仅在同一网络和收款地址不存在并行有效订单时放宽；出现并行订单时立即回到精确匹配。
   const exactTolerance = amount < 10 ? 0.000001 : 0.01;
-  const fuzzyTolerance = amount < 10 ? 0.000001 : 1.0;
+  const amountToleranceWithUniqueSuffix = 1.01;
+  let fuzzyTolerance = amount < 10 ? 0.000001 : amountToleranceWithUniqueSuffix;
+  if (amount < 10) {
+    const activeSmallOrderCandidates = await db
+      .select({ id: rechargeOrders.id })
+      .from(rechargeOrders)
+      .where(and(
+        ...orderScope,
+        sql`${rechargeOrders.status} IN ('pending', 'submitted')`,
+        sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
+      ))
+      .limit(2);
+
+    if (activeSmallOrderCandidates.length === 1) {
+      fuzzyTolerance = amountToleranceWithUniqueSuffix;
+      console.log('[Recharge] 单一有效小额订单：启用以用户输入额为中心的 ±1 USDT 受限匹配');
+    }
+  }
 
   // ===== 双重防护 =====
   // 防护1：txn_hash 数据库唯一性检查
