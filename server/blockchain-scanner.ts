@@ -1,4 +1,5 @@
 import * as dbRecharge from "./db-recharge";
+import type { RechargeScanTarget } from "./db-recharge";
 import { getDb } from "./db";
 import { scannerHeartbeat } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -78,9 +79,10 @@ async function updateScannerHeartbeat(success: boolean, _error?: string) {
 }
 
 /**
- * 扫描所有启用的收款地址的TRC20 USDT交易
+ * 扫描处于支付窗口内订单绑定的TRC20收款地址。
+ * 不扫描全部启用地址，避免无订单交易以金额碰撞方式匹配到其他用户订单。
  */
-export async function scanTRC20Transactions() {
+export async function scanTRC20Transactions(targets?: RechargeScanTarget[]) {
   // 重置统计数据
   currentScanStats = {
     scannedAddresses: 0,
@@ -94,30 +96,32 @@ export async function scanTRC20Transactions() {
   lastScanTimestamp = Date.now() - 24 * 60 * 60 * 1000;
   
   try {
-    // 从数据库获取所有启用的TRC20收款地址
-    const wallets = await dbRecharge.getEnabledWalletAddresses('TRC20');
+    const wallets = targets ?? (await dbRecharge.getActiveRechargeScanTargets())
+      .filter((target) => target.network === 'TRC20');
     
     if (wallets.length === 0) {
-      console.warn('[Scanner] ⚠️  No enabled TRC20 wallet addresses found in database. Please add wallet addresses in admin panel.');
-      await updateScannerHeartbeat(false, 'No enabled wallet addresses');
-      return;
+      console.log('[Scanner] No active TRC20 recharge orders to scan');
+      await updateScannerHeartbeat(true);
+      return currentScanStats;
     }
 
     currentScanStats.scannedAddresses = wallets.length;
 
     // 扫描每个地址
     for (const wallet of wallets) {
-      await scanWalletAddress(wallet.address, wallet.label || wallet.address);
+      await scanWalletAddress(wallet.walletAddress, wallet.label || wallet.walletAddress);
     }
 
     console.log(`[Scanner] Scan completed for ${wallets.length} wallet(s)`);
     
     // 更新心跳（成功）
     await updateScannerHeartbeat(true);
+    return currentScanStats;
     
   } catch (error) {
     console.error('[Scanner] Scan error:', error);
     await updateScannerHeartbeat(false, error instanceof Error ? error.message : String(error));
+    throw error;
   }
 }
 
@@ -195,7 +199,10 @@ async function processTRC20Transaction(tx: any, walletAddress: string) {
     console.log(`[Scanner] Detected transfer: ${amount} USDT from ${fromAddress} to ${walletAddress.slice(0, 8)}... (tx: ${txnHash})`);
 
     // 使用改进的匹配算法查找订单（传入txnHash + blockTimestamp双重防重复）
-    const matchResult = await dbRecharge.findOrderByAmount(amount, txnHash, timestamp);
+    const matchResult = await dbRecharge.findOrderByAmount(amount, txnHash, timestamp, {
+      network: 'TRC20',
+      walletAddress,
+    });
 
     if (!matchResult) {
       // 未匹配时不加入 processedTxns，下次扫描会重试
@@ -231,9 +238,9 @@ async function processTRC20Transaction(tx: any, walletAddress: string) {
  * 启动扫描器（不再依赖环境变量，从数据库读取地址）
  */
 export function startScanner() {
-  console.log('[Scanner] Starting multi-chain blockchain scanner...');
+  console.log('[Scanner] Starting order-driven multi-chain blockchain scanner...');
   console.log('[Scanner] Supported chains: TRC20, APTOS, SOLANA, ERC20, BEP20');
-  console.log('[Scanner] Wallet addresses: loaded from database');
+  console.log('[Scanner] Scan targets: active recharge orders only');
   console.log('[Scanner] Scan interval: 60 seconds');
   console.log('[Scanner] Match strategy: exact (±0.01) → fuzzy (≤3 USDT fee tolerance) → record unmatched');
 

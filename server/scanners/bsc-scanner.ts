@@ -1,7 +1,8 @@
 import * as dbRecharge from "../db-recharge";
+import type { RechargeScanTarget } from "../db-recharge";
 
-// BscScan API配置
-const BSCSCAN_API_URL = 'https://api.bscscan.com/api';
+// Etherscan V2 API支持BSC（chainid=56），旧版 BscScan /api 已停止支持。
+const BSCSCAN_API_URL = 'https://api.etherscan.io/v2/api';
 const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY || ''; // 需要免费API key
 
 // USDT BEP20 Contract Address
@@ -19,9 +20,9 @@ export let scanStats = {
 };
 
 /**
- * 扫描BSC网络的USDT交易
+ * 扫描处于支付窗口内订单绑定的BEP20地址。
  */
-export async function scanBSCTransactions() {
+export async function scanBSCTransactions(targets?: RechargeScanTarget[]) {
   scanStats = {
     scannedAddresses: 0,
     foundTransactions: 0,
@@ -30,11 +31,11 @@ export async function scanBSCTransactions() {
   };
 
   try {
-    // 获取所有启用的BEP20地址
-    const wallets = await dbRecharge.getEnabledWalletAddresses('BEP20');
+    const wallets = targets ?? (await dbRecharge.getActiveRechargeScanTargets())
+      .filter((target) => target.network === 'BEP20');
     
     if (wallets.length === 0) {
-      console.log('[BSC Scanner] No enabled BEP20 wallet addresses found');
+      console.log('[BSC Scanner] No active BEP20 recharge orders to scan');
       return scanStats;
     }
 
@@ -46,7 +47,7 @@ export async function scanBSCTransactions() {
 
     // 扫描每个地址
     for (const wallet of wallets) {
-      await scanWalletAddress(wallet.address, wallet.label || wallet.address);
+      await scanWalletAddress(wallet.walletAddress, wallet.label || wallet.walletAddress);
     }
 
     console.log(`[BSC Scanner] Scan completed for ${wallets.length} wallet(s)`);
@@ -67,6 +68,7 @@ async function scanWalletAddress(walletAddress: string, label: string) {
     
     // 构建API请求
     const params = new URLSearchParams({
+      chainid: '56',
       module: 'account',
       action: 'tokentx',
       contractaddress: USDT_CONTRACT_ADDRESS,
@@ -125,12 +127,23 @@ async function processBSCTransaction(tx: any, walletAddress: string) {
       console.log(`[BSC Scanner] Detected transfer: ${amount} USDT from ${tx.from} to ${walletAddress.slice(0, 10)}... (tx: ${txnHash})`);
       
       // 匹配订单（传入txnHash + blockTimestamp双重防重复）
-      const matchResult = await dbRecharge.findOrderByAmount(amount, txnHash, blockTimestamp);
+      const matchResult = await dbRecharge.findOrderByAmount(amount, txnHash, blockTimestamp, {
+        network: 'BEP20',
+        walletAddress,
+      });
       
       if (matchResult) {
-        scanStats.matchedOrders++;
-        processedTxns.add(txnHash);
-        console.log(`[BSC Scanner] ✅ Matched order ${matchResult.orderNo}`);
+        const completed = await dbRecharge.completeRechargeOrder(
+          matchResult.order.id,
+          txnHash,
+          amount,
+          matchResult.matchType,
+        );
+        if (completed) {
+          scanStats.matchedOrders++;
+          processedTxns.add(txnHash);
+          console.log(`[BSC Scanner] ✅ Order ${matchResult.order.orderNo} completed`);
+        }
       } else {
         scanStats.unmatchedTransactions++;
       }

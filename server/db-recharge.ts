@@ -15,6 +15,37 @@ const YJH_USER_ID_SMS = 4957151;
 const LEDGER_52_ID = 52;
 const RECHARGE_ORDER_EXPIRY_MINUTES = 30;
 
+// 仅作为订单与扫描器之间的内部枚举；前端实际开放网络仍由充值路由单独控制。
+export const RECHARGE_NETWORKS = ['TRC20', 'APTOS', 'SOLANA', 'ERC20', 'BEP20'] as const;
+export type RechargeNetwork = typeof RECHARGE_NETWORKS[number];
+
+export interface RechargeScanTarget {
+  network: RechargeNetwork;
+  walletAddress: string;
+  label: string | null;
+}
+
+export interface RechargeOrderMatchContext {
+  network: RechargeNetwork;
+  walletAddress: string;
+}
+
+function isRechargeNetwork(value: string): value is RechargeNetwork {
+  return (RECHARGE_NETWORKS as readonly string[]).includes(value);
+}
+
+function getRechargeOrderScope(context: RechargeOrderMatchContext) {
+  const walletAddress = context.walletAddress.trim();
+  if (!walletAddress || !isRechargeNetwork(context.network)) {
+    throw new Error('缺少有效的链上订单匹配范围');
+  }
+  // 地址按二进制精确比较：Solana/Base58 地址区分大小写，不能受数据库默认排序规则影响。
+  return [
+    eq(rechargeOrders.network, context.network),
+    sql`BINARY ${rechargeOrders.walletAddress} = BINARY ${walletAddress}`,
+  ];
+}
+
 // recharge_orders.expires_at 统一按 UTC 存储。MySQL DATETIME 本身不携带时区，
 // 因此前端读取时必须明确附带 Z，避免浏览器把裸字符串误解为本地时区。
 function asUtcIsoString(value: unknown): string | null {
@@ -196,6 +227,33 @@ export async function getEnabledWalletAddresses(network?: string) {
     .select()
     .from(walletAddresses)
     .where(eq(walletAddresses.enabled, 1));
+}
+
+// 扫描器只读取仍处于支付窗口内订单绑定的网络和收款地址，绝不遍历所有启用钱包。
+// 收款地址即便在订单创建后被停用，仍需在该订单剩余窗口内被精确扫描，避免已创建订单漏记。
+export async function getActiveRechargeScanTargets(): Promise<RechargeScanTarget[]> {
+  const connection = await getDbConnection();
+  if (!connection) throw new Error('数据库连接失败');
+
+  const [rows] = await (connection as any).execute(
+    `SELECT DISTINCT r.network, r.wallet_address AS walletAddress, w.label
+     FROM recharge_orders r
+     LEFT JOIN wallet_addresses w
+       ON w.network = r.network AND w.address = r.wallet_address
+     WHERE r.status IN ('pending', 'submitted')
+       AND r.expires_at > UTC_TIMESTAMP()
+       AND r.wallet_address IS NOT NULL
+       AND r.wallet_address <> ''
+     ORDER BY r.network ASC, r.wallet_address ASC`
+  ) as any[];
+
+  return (rows as any[])
+    .filter((row) => isRechargeNetwork(String(row.network)) && String(row.walletAddress ?? '').trim())
+    .map((row) => ({
+      network: String(row.network) as RechargeNetwork,
+      walletAddress: String(row.walletAddress).trim(),
+      label: row.label ? String(row.label) : null,
+    }));
 }
 
 // 获取所有收款地址（管理员用）
@@ -521,13 +579,20 @@ export async function getUserRechargeOrders(userId: number, limit: number = 20) 
  * @param amount 交易金额
  * @param txnHash 交易哈希（用于防止重复匹配）
  * @param blockTimestamp 区块链交易时间戳（毫秒，用于时间校验防止重放旧交易）
+ * @param context 订单创建时绑定的网络和收款地址，禁止跨网络/地址按金额碰撞匹配
  */
-export async function findOrderByAmount(amount: number, txnHash?: string, blockTimestamp?: number): Promise<{
+export async function findOrderByAmount(
+  amount: number,
+  txnHash: string | undefined,
+  blockTimestamp: number | undefined,
+  context: RechargeOrderMatchContext,
+): Promise<{
   order: any;
-  matchType: 'exact' | 'fuzzy' | 'none';
+  matchType: 'exact' | 'fuzzy';
   amountDiff: number;
 } | null> {
   const db = await getDb();
+  const orderScope = getRechargeOrderScope(context);
 
   // ===== 双重防护 =====
   // 防护1：txn_hash 数据库唯一性检查
@@ -537,7 +602,7 @@ export async function findOrderByAmount(amount: number, txnHash?: string, blockT
     const existingByHash = await db
       .select({ id: rechargeOrders.id, orderNo: rechargeOrders.orderNo, status: rechargeOrders.status })
       .from(rechargeOrders)
-      .where(eq(rechargeOrders.txnHash, txnHash))
+      .where(and(eq(rechargeOrders.txnHash, txnHash), ...orderScope))
       .limit(1);
     if (existingByHash.length > 0) {
       console.warn(`[Recharge] ⛔ DUPLICATE txn_hash detected: ${txnHash} already used by order ${existingByHash[0].orderNo} (status: ${existingByHash[0].status}). Skipping.`);
@@ -547,13 +612,14 @@ export async function findOrderByAmount(amount: number, txnHash?: string, blockT
 
   // 用户已提交交易哈希/版本号时，先将扫描到的链上交易与该凭证比对。
   // 仍要求实际到账金额落在既有容差内，防止凭证正确但金额不属于该订单时提前结单。
-  const normalizedScannedTxnId = normalizeChainTransactionId(txnHash);
+  const normalizedScannedTxnId = normalizeChainTransactionId(txnHash) ?? String(txnHash ?? '').trim();
   if (normalizedScannedTxnId) {
     const proofMatchedOrders = await db
       .select()
       .from(rechargeOrders)
       .where(and(
         eq(rechargeOrders.userTxnHash, normalizedScannedTxnId),
+        ...orderScope,
         sql`${rechargeOrders.status} IN ('pending', 'submitted')`,
         sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
       ))
@@ -582,7 +648,10 @@ export async function findOrderByAmount(amount: number, txnHash?: string, blockT
     const earliestOrder = await db
       .select({ createdAt: rechargeOrders.createdAt })
       .from(rechargeOrders)
-      .where(sql`${rechargeOrders.status} IN ('pending', 'submitted') AND ${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`)
+      .where(and(
+        ...orderScope,
+        sql`${rechargeOrders.status} IN ('pending', 'submitted') AND ${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
+      ))
       .orderBy(sql`${rechargeOrders.createdAt} ASC`)
       .limit(1);
     if (earliestOrder.length > 0) {
@@ -608,6 +677,7 @@ export async function findOrderByAmount(amount: number, txnHash?: string, blockT
       .select({ id: rechargeOrders.id, orderNo: rechargeOrders.orderNo, amount: rechargeOrders.amount, userId: rechargeOrders.userId })
       .from(rechargeOrders)
       .where(and(
+        ...orderScope,
         eq(rechargeOrders.status, 'completed'),
         sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 1.0`,
         sql`${rechargeOrders.completedAt} >= ${recentCompletedLimit}`
@@ -625,6 +695,7 @@ export async function findOrderByAmount(amount: number, txnHash?: string, blockT
   for (const status of statusPriority) {
     // 精确匹配（误差 ±0.01 USDT），且订单仍在30分钟有效窗口内。
     const exactConditions = [
+      ...orderScope,
       eq(rechargeOrders.status, status),
       sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 0.01`,
       sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
@@ -654,6 +725,7 @@ export async function findOrderByAmount(amount: number, txnHash?: string, blockT
     // 说明：欧易等平台提币后转入，实际到账可能略多或略少于订单金额（手续费差异）
     // 例：订单100.134，到账100.4729（多0.34），或到账99.9（兵0.234）均可匹配
     const fuzzyConditions = [
+      ...orderScope,
       eq(rechargeOrders.status, status),
       sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 1.0`,
       sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
@@ -723,6 +795,10 @@ export async function completeRechargeOrder(
   actualAmount: number,
   matchType: 'exact' | 'fuzzy' = 'exact'
 ) {
+  if (!Number.isFinite(actualAmount) || actualAmount <= 0) {
+    console.error(`[Recharge] completeRechargeOrder: invalid actual amount for order ${orderId}`);
+    return false;
+  }
   const db = await getDb();
   
   // ⚠️ 安全检查：先查订单当前状态，只允许对 submitted/pending 状态的订单入账
@@ -755,7 +831,8 @@ export async function completeRechargeOrder(
     .where(
       and(
         eq(rechargeOrders.id, orderId),
-        sql`${rechargeOrders.status} IN ('submitted', 'pending')`
+        sql`${rechargeOrders.status} IN ('submitted', 'pending')`,
+        sql`${rechargeOrders.expiresAt} > UTC_TIMESTAMP()`
       )
     );
   
@@ -847,14 +924,15 @@ export async function adminConfirmRecharge(
   return { success: true, userId: order[0].userId, amount: actualAmount };
 }
 
-// 管理员直接给用户充值（无需链上交易）
+// 后台直接给用户充值（无需链上交易）
 export async function adminDirectRecharge(
-  adminId: number,
+  _operatorId: number,
   userId: number,
   amount: number,
   description?: string
 ) {
-  const desc = description || (amount >= 0 ? `管理员手动增加余额（操作人ID:${adminId}）` : `管理员手动扣减余额（操作人ID:${adminId}）`);
+  // 备注由操作时显式填写；留空时保持为空，不向用户展示操作角色或内部身份信息。
+  const desc = description?.trim() || undefined;
   const newBalance = await addUserBalance(userId, amount, 'recharge', undefined, desc);
   return { success: true, userId, amount, newBalance };
 }

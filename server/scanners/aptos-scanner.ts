@@ -1,10 +1,12 @@
 import * as dbRecharge from "../db-recharge";
+import type { RechargeScanTarget } from "../db-recharge";
 
 // Aptos Indexer GraphQL API配置
 const INDEXER_API_URL = 'https://api.mainnet.aptoslabs.com/v1/graphql';
 
 // USDT on Aptos (LayerZero USDT) - Fungible Asset Metadata地址
 const USDT_ASSET_TYPE = '0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDT';
+const USDT_METADATA_ADDRESS = USDT_ASSET_TYPE.split('::')[0].toLowerCase();
 
 // 已处理的交易版本号
 const processedTxns = new Set<string>();
@@ -18,9 +20,9 @@ export let scanStats = {
 };
 
 /**
- * 扫描Aptos网络的USDT交易
+ * 扫描处于支付窗口内订单绑定的Aptos地址。
  */
-export async function scanAptosTransactions() {
+export async function scanAptosTransactions(targets?: RechargeScanTarget[]) {
   scanStats = {
     scannedAddresses: 0,
     foundTransactions: 0,
@@ -29,11 +31,11 @@ export async function scanAptosTransactions() {
   };
 
   try {
-    // 获取所有启用的Aptos地址
-    const wallets = await dbRecharge.getEnabledWalletAddresses('APTOS');
+    const wallets = targets ?? (await dbRecharge.getActiveRechargeScanTargets())
+      .filter((target) => target.network === 'APTOS');
     
     if (wallets.length === 0) {
-      console.log('[Aptos Scanner] No enabled APTOS wallet addresses found');
+      console.log('[Aptos Scanner] No active APTOS recharge orders to scan');
       return scanStats;
     }
 
@@ -41,7 +43,7 @@ export async function scanAptosTransactions() {
 
     // 扫描每个地址
     for (const wallet of wallets) {
-      await scanWalletAddress(wallet.address, wallet.label || wallet.address);
+      await scanWalletAddress(wallet.walletAddress, wallet.label || wallet.walletAddress);
     }
 
     console.log(`[Aptos Scanner] Scan completed for ${wallets.length} wallet(s)`);
@@ -145,8 +147,12 @@ async function processDepositActivity(activity: any, walletAddress: string) {
       return;
     }
 
-    // 不过滤asset_type，因为USDT的asset_type是metadata对象地址，不包含"USDT"字符串
-    // 订单匹配时会按金额匹配，所以接受所有转入的fungible asset
+    // Aptos Indexer 的 asset_type 可能返回完整类型或 metadata 地址；两种表示均严格限定为 USDT。
+    const assetType = String(activity.asset_type ?? '').trim().toLowerCase();
+    if (assetType !== USDT_ASSET_TYPE.toLowerCase() && assetType !== USDT_METADATA_ADDRESS) {
+      console.warn(`[Aptos Scanner] Ignoring non-USDT deposit asset: ${assetType || 'unknown'}`);
+      return;
+    }
 
     // 解析金额（USDT有6位小数）
     const amount = parseFloat(activity.amount) / 1e6;
@@ -163,7 +169,10 @@ async function processDepositActivity(activity: any, walletAddress: string) {
     console.log(`[Aptos Scanner] 🎯 Detected INCOMING transfer: ${amount} USDT to ${walletAddress.slice(0, 10)}... (version: ${txVersion}, time: ${timestamp})`);
 
     // 匹配订单（传入txVersion + blockTimestamp双重防重复）
-    const matchResult = await dbRecharge.findOrderByAmount(amount, txVersion, blockTimestamp);
+    const matchResult = await dbRecharge.findOrderByAmount(amount, txVersion, blockTimestamp, {
+      network: 'APTOS',
+      walletAddress,
+    });
 
     if (!matchResult) {
       // 未匹配时不加入 processedTxns，下次扫描会重试

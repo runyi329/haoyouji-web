@@ -3,137 +3,143 @@ import { scanAptosTransactions } from "./scanners/aptos-scanner";
 import { scanSolanaTransactions } from "./scanners/solana-scanner";
 import { scanERC20Transactions } from "./scanners/erc20-scanner";
 import { scanBSCTransactions } from "./scanners/bsc-scanner";
+import * as dbRecharge from "./db-recharge";
+import type { RechargeNetwork, RechargeScanTarget } from "./db-recharge";
 import { getDb } from "./db";
 import { scannerHeartbeat } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 
+type ScanStats = {
+  scannedAddresses: number;
+  foundTransactions: number;
+  matchedOrders: number;
+  unmatchedTransactions: number;
+};
+
+type ChainScanner = (targets: RechargeScanTarget[]) => Promise<ScanStats>;
+
+const CHAIN_SCANNERS: Array<{ network: RechargeNetwork; label: string; scan: ChainScanner }> = [
+  { network: "TRC20", label: "TRC20", scan: scanTRC20Transactions },
+  { network: "APTOS", label: "Aptos", scan: scanAptosTransactions },
+  { network: "SOLANA", label: "Solana", scan: scanSolanaTransactions },
+  { network: "ERC20", label: "ERC20", scan: scanERC20Transactions },
+  { network: "BEP20", label: "BEP20", scan: scanBSCTransactions },
+];
+
+let scanInProgress = false;
+
+function emptyStats(): ScanStats {
+  return {
+    scannedAddresses: 0,
+    foundTransactions: 0,
+    matchedOrders: 0,
+    unmatchedTransactions: 0,
+  };
+}
+
+function addStats(total: ScanStats, current: ScanStats) {
+  total.scannedAddresses += current.scannedAddresses;
+  total.foundTransactions += current.foundTransactions;
+  total.matchedOrders += current.matchedOrders;
+  total.unmatchedTransactions += current.unmatchedTransactions;
+}
+
 /**
- * 扫描所有支持的区块链网络
+ * 扫描当前支付窗口内的充值订单。
+ *
+ * 每个扫描目标均直接从 pending/submitted 订单的 network + wallet_address 取得，
+ * 不会遍历全部启用钱包；每个扫描器再以相同网络和地址作为订单匹配范围。
+ * 前端未开放的网络不会被新订单使用，但历史有效订单仍可完成一次受限扫描。
  */
 export async function scanAllChains() {
-  console.log('[Multi-Chain Scanner] ========== Starting scan for all chains ==========');
-  
-  const startTime = Date.now();
-  const results: any = {
+  const results: {
+    success: boolean;
+    skipped?: boolean;
+    activeTargets: number;
+    chains: Record<string, unknown>;
+    totalStats: ScanStats;
+    errors: string[];
+  } = {
     success: true,
+    activeTargets: 0,
     chains: {},
-    totalStats: {
-      scannedAddresses: 0,
-      foundTransactions: 0,
-      matchedOrders: 0,
-      unmatchedTransactions: 0,
-    },
-    errors: []
+    totalStats: emptyStats(),
+    errors: [],
   };
 
-  // 1. 扫描 TRC20 (TRON)
-  try {
-    console.log('[Multi-Chain Scanner] Scanning TRC20...');
-    await scanTRC20Transactions();
-    results.chains.TRC20 = { success: true };
-  } catch (error) {
-    console.error('[Multi-Chain Scanner] TRC20 scan failed:', error);
-    results.chains.TRC20 = { success: false, error: String(error) };
-    results.errors.push(`TRC20: ${error}`);
+  if (scanInProgress) {
+    console.log("[Multi-Chain Scanner] Previous order-driven scan is still running; skipping overlap");
+    results.skipped = true;
+    return results;
   }
 
-  // 2. 扫描 Aptos
+  scanInProgress = true;
+  const startTime = Date.now();
   try {
-    console.log('[Multi-Chain Scanner] Scanning Aptos...');
-    const aptosStats = await scanAptosTransactions();
-    results.chains.APTOS = { success: true, stats: aptosStats };
-    results.totalStats.scannedAddresses += aptosStats.scannedAddresses;
-    results.totalStats.foundTransactions += aptosStats.foundTransactions;
-    results.totalStats.matchedOrders += aptosStats.matchedOrders;
-    results.totalStats.unmatchedTransactions += aptosStats.unmatchedTransactions;
-  } catch (error) {
-    console.error('[Multi-Chain Scanner] Aptos scan failed:', error);
-    results.chains.APTOS = { success: false, error: String(error) };
-    results.errors.push(`Aptos: ${error}`);
-  }
+    const targets = await dbRecharge.getActiveRechargeScanTargets();
+    results.activeTargets = targets.length;
 
-  // 3. 扫描 Solana
-  try {
-    console.log('[Multi-Chain Scanner] Scanning Solana...');
-    const solanaStats = await scanSolanaTransactions();
-    results.chains.SOLANA = { success: true, stats: solanaStats };
-    results.totalStats.scannedAddresses += solanaStats.scannedAddresses;
-    results.totalStats.foundTransactions += solanaStats.foundTransactions;
-    results.totalStats.matchedOrders += solanaStats.matchedOrders;
-    results.totalStats.unmatchedTransactions += solanaStats.unmatchedTransactions;
-  } catch (error) {
-    console.error('[Multi-Chain Scanner] Solana scan failed:', error);
-    results.chains.SOLANA = { success: false, error: String(error) };
-    results.errors.push(`Solana: ${error}`);
-  }
+    if (targets.length === 0) {
+      console.log("[Multi-Chain Scanner] No active recharge orders to scan");
+      await updateMultiChainHeartbeat(results);
+      return results;
+    }
 
-  // 4. 扫描 ERC20 (Ethereum)
-  try {
-    console.log('[Multi-Chain Scanner] Scanning ERC20...');
-    const erc20Stats = await scanERC20Transactions();
-    results.chains.ERC20 = { success: true, stats: erc20Stats };
-    results.totalStats.scannedAddresses += erc20Stats.scannedAddresses;
-    results.totalStats.foundTransactions += erc20Stats.foundTransactions;
-    results.totalStats.matchedOrders += erc20Stats.matchedOrders;
-    results.totalStats.unmatchedTransactions += erc20Stats.unmatchedTransactions;
-  } catch (error) {
-    console.error('[Multi-Chain Scanner] ERC20 scan failed:', error);
-    results.chains.ERC20 = { success: false, error: String(error) };
-    results.errors.push(`ERC20: ${error}`);
-  }
+    console.log(`[Multi-Chain Scanner] Starting order-driven scan for ${targets.length} active target(s)`);
+    for (const config of CHAIN_SCANNERS) {
+      const chainTargets = targets.filter((target) => target.network === config.network);
+      if (chainTargets.length === 0) continue;
 
-  // 5. 扫描 BSC (BEP20)
-  try {
-    console.log('[Multi-Chain Scanner] Scanning BSC...');
-    const bscStats = await scanBSCTransactions();
-    results.chains.BEP20 = { success: true, stats: bscStats };
-    results.totalStats.scannedAddresses += bscStats.scannedAddresses;
-    results.totalStats.foundTransactions += bscStats.foundTransactions;
-    results.totalStats.matchedOrders += bscStats.matchedOrders;
-    results.totalStats.unmatchedTransactions += bscStats.unmatchedTransactions;
-  } catch (error) {
-    console.error('[Multi-Chain Scanner] BSC scan failed:', error);
-    results.chains.BEP20 = { success: false, error: String(error) };
-    results.errors.push(`BSC: ${error}`);
-  }
+      try {
+        console.log(`[Multi-Chain Scanner] Scanning ${config.label}: ${chainTargets.length} order-bound address(es)`);
+        const stats = await config.scan(chainTargets);
+        results.chains[config.network] = { success: true, activeTargets: chainTargets.length, stats };
+        addStats(results.totalStats, stats);
+      } catch (error) {
+        console.error(`[Multi-Chain Scanner] ${config.label} scan failed:`, error);
+        results.chains[config.network] = {
+          success: false,
+          activeTargets: chainTargets.length,
+          error: String(error),
+        };
+        results.errors.push(`${config.network}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
 
-  const duration = Date.now() - startTime;
-  
-  console.log('[Multi-Chain Scanner] ========== Scan completed ==========');
-  console.log(`[Multi-Chain Scanner] Duration: ${duration}ms`);
-  console.log(`[Multi-Chain Scanner] Total addresses scanned: ${results.totalStats.scannedAddresses}`);
-  console.log(`[Multi-Chain Scanner] Total transactions found: ${results.totalStats.foundTransactions}`);
-  console.log(`[Multi-Chain Scanner] Total orders matched: ${results.totalStats.matchedOrders}`);
-  console.log(`[Multi-Chain Scanner] Total unmatched: ${results.totalStats.unmatchedTransactions}`);
-  
-  if (results.errors.length > 0) {
-    console.error(`[Multi-Chain Scanner] Errors: ${results.errors.join(', ')}`);
+    results.success = results.errors.length === 0;
+    console.log(`[Multi-Chain Scanner] Scan completed in ${Date.now() - startTime}ms; targets=${results.activeTargets}, matched=${results.totalStats.matchedOrders}`);
+    await updateMultiChainHeartbeat(results);
+    return results;
+  } catch (error) {
+    console.error("[Multi-Chain Scanner] Order-driven scan failed:", error);
     results.success = false;
+    results.errors.push(error instanceof Error ? error.message : String(error));
+    await updateMultiChainHeartbeat(results);
+    return results;
+  } finally {
+    scanInProgress = false;
   }
-
-  // 更新心跳
-  await updateMultiChainHeartbeat(results);
-
-  return results;
 }
 
 /**
  * 更新多链扫描器心跳
  */
-async function updateMultiChainHeartbeat(results: any) {
+async function updateMultiChainHeartbeat(results: {
+  success: boolean;
+  totalStats: ScanStats;
+  errors: string[];
+}) {
   try {
     const db = await getDb();
     const now = new Date();
-    
-    // 查找现有记录
+
     const existing = await db
       .select()
       .from(scannerHeartbeat)
-      .where(eq(scannerHeartbeat.scannerType, 'multi-chain'))
+      .where(eq(scannerHeartbeat.scannerType, "multi-chain"))
       .limit(1);
-    
+
     if (existing.length > 0) {
-      // 更新现有记录
       await db
         .update(scannerHeartbeat)
         .set({
@@ -141,22 +147,21 @@ async function updateMultiChainHeartbeat(results: any) {
           scanCount: existing[0].scanCount! + 1,
           successCount: results.success ? existing[0].successCount! + 1 : existing[0].successCount,
           errorCount: results.success ? existing[0].errorCount : existing[0].errorCount! + 1,
-          lastError: results.errors.length > 0 ? results.errors.join('; ') : null,
+          lastError: results.errors.length > 0 ? results.errors.join("; ") : null,
           scannedAddresses: results.totalStats.scannedAddresses,
           foundTransactions: results.totalStats.foundTransactions,
           matchedOrders: results.totalStats.matchedOrders,
           unmatchedTransactions: results.totalStats.unmatchedTransactions,
         })
-        .where(eq(scannerHeartbeat.scannerType, 'multi-chain'));
+        .where(eq(scannerHeartbeat.scannerType, "multi-chain"));
     } else {
-      // 插入新记录
       await db.insert(scannerHeartbeat).values({
-        scannerType: 'multi-chain',
+        scannerType: "multi-chain",
         lastScanAt: now,
         scanCount: 1,
         successCount: results.success ? 1 : 0,
         errorCount: results.success ? 0 : 1,
-        lastError: results.errors.length > 0 ? results.errors.join('; ') : null,
+        lastError: results.errors.length > 0 ? results.errors.join("; ") : null,
         scannedAddresses: results.totalStats.scannedAddresses,
         foundTransactions: results.totalStats.foundTransactions,
         matchedOrders: results.totalStats.matchedOrders,
@@ -164,6 +169,6 @@ async function updateMultiChainHeartbeat(results: any) {
       });
     }
   } catch (err) {
-    console.error('[Multi-Chain Scanner] Failed to update heartbeat:', err);
+    console.error("[Multi-Chain Scanner] Failed to update heartbeat:", err);
   }
 }

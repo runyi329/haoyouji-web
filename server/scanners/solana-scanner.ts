@@ -1,4 +1,5 @@
 import * as dbRecharge from "../db-recharge";
+import type { RechargeScanTarget } from "../db-recharge";
 
 // Solana RPC配置
 const SOLANA_RPC_URL = 'https://api.mainnet-beta.solana.com';
@@ -18,9 +19,9 @@ export let scanStats = {
 };
 
 /**
- * 扫描Solana网络的USDT交易
+ * 扫描处于支付窗口内订单绑定的Solana地址。
  */
-export async function scanSolanaTransactions() {
+export async function scanSolanaTransactions(targets?: RechargeScanTarget[]) {
   scanStats = {
     scannedAddresses: 0,
     foundTransactions: 0,
@@ -29,11 +30,11 @@ export async function scanSolanaTransactions() {
   };
 
   try {
-    // 获取所有启用的Solana地址
-    const wallets = await dbRecharge.getEnabledWalletAddresses('SOLANA');
+    const wallets = targets ?? (await dbRecharge.getActiveRechargeScanTargets())
+      .filter((target) => target.network === 'SOLANA');
     
     if (wallets.length === 0) {
-      console.log('[Solana Scanner] No enabled SOLANA wallet addresses found');
+      console.log('[Solana Scanner] No active SOLANA recharge orders to scan');
       return scanStats;
     }
 
@@ -41,7 +42,7 @@ export async function scanSolanaTransactions() {
 
     // 扫描每个地址
     for (const wallet of wallets) {
-      await scanWalletAddress(wallet.address, wallet.label || wallet.address);
+      await scanWalletAddress(wallet.walletAddress, wallet.label || wallet.walletAddress);
     }
 
     console.log(`[Solana Scanner] Scan completed for ${wallets.length} wallet(s)`);
@@ -216,12 +217,23 @@ async function processTransaction(signature: string, tokenAccount: string, walle
             console.log(`[Solana Scanner] ✅ Detected transfer: ${amount} USDT to ${walletAddress.slice(0, 10)}... (tx: ${signature.slice(0, 10)}...)`);
             
             // 匹配订单（传入signature + blockTimestamp双重防重复）
-            const matchResult = await dbRecharge.findOrderByAmount(amount, signature, blockTimestamp);
+            const matchResult = await dbRecharge.findOrderByAmount(amount, signature, blockTimestamp, {
+              network: 'SOLANA',
+              walletAddress,
+            });
             
             if (matchResult) {
-              scanStats.matchedOrders++;
-              processedTxns.add(signature);
-              console.log(`[Solana Scanner] ✅ Matched order ${matchResult.orderNo}`);
+              const completed = await dbRecharge.completeRechargeOrder(
+                matchResult.order.id,
+                signature,
+                amount,
+                matchResult.matchType,
+              );
+              if (completed) {
+                scanStats.matchedOrders++;
+                processedTxns.add(signature);
+                console.log(`[Solana Scanner] ✅ Order ${matchResult.order.orderNo} completed`);
+              }
             } else {
               scanStats.unmatchedTransactions++;
               console.log(`[Solana Scanner] ⚠️  No matching order found for ${amount} USDT`);
