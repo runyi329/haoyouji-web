@@ -1,11 +1,35 @@
 import * as dbRecharge from "../db-recharge";
 import type { RechargeScanTarget } from "../db-recharge";
 
-// Solana RPC配置
-const SOLANA_RPC_URL = 'https://api.mainnet-beta.solana.com';
+// Solana RPC配置：公共主节点被限流时，自动退回至可读取签名与交易详情的备用节点。
+const SOLANA_RPC_URLS = Array.from(new Set([
+  process.env.SOLANA_RPC_URL,
+  'https://api.mainnet-beta.solana.com',
+  'https://solana-rpc.publicnode.com',
+].filter((url): url is string => Boolean(url))));
 
 // USDT SPL Token Mint Address
 const USDT_MINT_ADDRESS = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
+
+async function callSolanaRpc(method: string, params: unknown[]): Promise<any | null> {
+  const failures: string[] = [];
+  for (const rpcUrl of SOLANA_RPC_URLS) {
+    try {
+      const response = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      });
+      const data = await response.json().catch(() => null);
+      if (response.ok && data && !data.error) return data;
+      failures.push(`${new URL(rpcUrl).host}: HTTP ${response.status}${data?.error?.message ? ` (${data.error.message})` : ''}`);
+    } catch (error: any) {
+      failures.push(`${new URL(rpcUrl).host}: ${error?.message ?? String(error)}`);
+    }
+  }
+  console.error(`[Solana Scanner] RPC ${method} failed on all endpoints: ${failures.join(' | ')}`);
+  return null;
+}
 
 // 已处理的交易签名
 const processedTxns = new Set<string>();
@@ -61,45 +85,20 @@ async function getTokenAccount(walletAddress: string): Promise<string | null> {
   try {
     // 部分交易所会直接展示 USDT Token Account，而不是其所有者主地址。
     // 若配置地址本身就是官方 USDT 的代币账户，直接扫描它即可。
-    const directAccountResponse = await fetch(SOLANA_RPC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getAccountInfo',
-        params: [walletAddress, { encoding: 'jsonParsed' }],
-      }),
-    });
-    const directAccountData = await directAccountResponse.json();
-    const directMint = String(directAccountData.result?.value?.data?.parsed?.info?.mint || '');
+    const directAccountData = await callSolanaRpc('getAccountInfo', [walletAddress, { encoding: 'jsonParsed' }]);
+    const directMint = String(directAccountData?.result?.value?.data?.parsed?.info?.mint || '');
     if (directMint === USDT_MINT_ADDRESS) {
       return walletAddress;
     }
 
-    const response = await fetch(SOLANA_RPC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getTokenAccountsByOwner',
-        params: [
-          walletAddress,
-          {
-            mint: USDT_MINT_ADDRESS
-          },
-          {
-            encoding: 'jsonParsed'
-          }
-        ]
-      })
-    });
-
-    const data = await response.json();
+    const data = await callSolanaRpc('getTokenAccountsByOwner', [
+      walletAddress,
+      { mint: USDT_MINT_ADDRESS },
+      { encoding: 'jsonParsed' },
+    ]);
     
-    if (data.error) {
-      console.error(`[Solana Scanner] Error getting token account:`, data.error);
+    if (!data) {
+      console.error(`[Solana Scanner] Error getting token account for ${walletAddress.slice(0, 10)}...`);
       return null;
     }
 
@@ -130,42 +129,31 @@ async function scanWalletAddress(walletAddress: string, label: string) {
     const tokenAccount = await getTokenAccount(walletAddress);
     
     if (!tokenAccount) {
-      console.log(`[Solana Scanner] Skipping ${label} - no token account`);
-      return;
+      console.warn(`[Solana Scanner] Token Account 查询失败，改用主地址签名扫描: ${label}`);
+    } else {
+      console.log(`[Solana Scanner] Token Account: ${tokenAccount.slice(0, 10)}...`);
     }
 
-    console.log(`[Solana Scanner] Token Account: ${tokenAccount.slice(0, 10)}...`);
-    
-    // 获取Token Account的签名记录
-    const signaturesResponse = await fetch(SOLANA_RPC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getSignaturesForAddress',
-        params: [
-          tokenAccount,
-          // 只查询已完成最终确认的签名，避免确认中交易回滚后提前入账。
-          { limit: 20, commitment: 'finalized' }
-        ]
-      })
-    });
+    // 同时扫描展示给用户的主地址和 USDT Token Account。
+    // 交易所首次转入时可能在同一笔交易中创建关联代币账户；主地址签名路径可避开
+    // getTokenAccountsByOwner 在部分公共 RPC 的索引限流，并通过交易回执的 owner 字段再次校验归属。
+    const scanAddresses = Array.from(new Set([walletAddress, ...(tokenAccount ? [tokenAccount] : [])]));
+    const scannedSignatures = new Set<string>();
+    for (const scanAddress of scanAddresses) {
+      const signaturesData = await callSolanaRpc('getSignaturesForAddress', [
+        scanAddress,
+        // 只查询已完成最终确认的签名，避免确认中交易回滚后提前入账。
+        { limit: 20, commitment: 'finalized' },
+      ]);
+      if (!signaturesData) continue;
 
-    const signaturesData = await signaturesResponse.json();
-    
-    if (signaturesData.error) {
-      console.error(`[Solana Scanner] API error:`, signaturesData.error);
-      return;
-    }
-
-    const signatures = signaturesData.result || [];
-    console.log(`[Solana Scanner] Found ${signatures.length} transactions for ${label}`);
-
-    // 获取每个交易的详情
-    for (const sig of signatures) {
-      if (sig.err === null && sig.confirmationStatus === 'finalized') { // 只处理最终确认的成功交易
-        await processTransaction(sig.signature, tokenAccount, walletAddress);
+      const signatures = signaturesData.result || [];
+      console.log(`[Solana Scanner] Found ${signatures.length} transactions for ${label} via ${scanAddress === walletAddress ? 'owner' : 'token account'}`);
+      for (const sig of signatures) {
+        if (sig.err === null && sig.confirmationStatus === 'finalized' && !scannedSignatures.has(sig.signature)) {
+          scannedSignatures.add(sig.signature);
+          await processTransaction(sig.signature, tokenAccount, walletAddress);
+        }
       }
     }
 
@@ -177,7 +165,28 @@ async function scanWalletAddress(walletAddress: string, label: string) {
 /**
  * 处理单笔Solana交易
  */
-async function processTransaction(signature: string, tokenAccount: string, walletAddress: string) {
+function isExpectedUsdtDestination(
+  tx: any,
+  destination: string | undefined,
+  tokenAccount: string | null,
+  walletAddress: string,
+): boolean {
+  if (!destination) return false;
+  if (tokenAccount && destination === tokenAccount) return true;
+
+  // 主地址签名扫描时，收款地址本身不会等于 SPL Token Account。
+  // 以交易回执中的“代币账户索引 + USDT mint + owner”三重条件验证其确属当前收款主地址。
+  const destinationIndex = (tx.transaction?.message?.accountKeys || [])
+    .findIndex((account: any) => account.pubkey === destination);
+  if (destinationIndex < 0) return false;
+  return Boolean((tx.meta?.postTokenBalances || []).some((balance: any) => (
+    Number(balance.accountIndex) === destinationIndex
+    && String(balance.mint) === USDT_MINT_ADDRESS
+    && String(balance.owner) === walletAddress
+  )));
+}
+
+async function processTransaction(signature: string, tokenAccount: string | null, walletAddress: string) {
   try {
     // 跳过已处理的交易
     if (processedTxns.has(signature)) {
@@ -185,23 +194,12 @@ async function processTransaction(signature: string, tokenAccount: string, walle
     }
 
     // 获取交易详情
-    const txResponse = await fetch(SOLANA_RPC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getTransaction',
-        params: [
-          signature,
-          { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'finalized' }
-        ]
-      })
-    });
-
-    const txData = await txResponse.json();
+    const txData = await callSolanaRpc('getTransaction', [
+      signature,
+      { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'finalized' },
+    ]);
     
-    if (txData.error || !txData.result) {
+    if (!txData?.result) {
       return;
     }
 
@@ -220,7 +218,7 @@ async function processTransaction(signature: string, tokenAccount: string, walle
         const info = instruction.parsed.info;
         
         // 检查是否是转入到我们的Token Account
-        if (info.destination && info.destination === tokenAccount) {
+        if (isExpectedUsdtDestination(tx, info.destination, tokenAccount, walletAddress)) {
           // 解析金额
           let amount = 0;
           if (info.tokenAmount?.uiAmount) {
