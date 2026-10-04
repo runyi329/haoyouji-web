@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { WalletCards, X } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 import { getCryptoAssetIconSrc } from "@/lib/cryptoAssetIcons";
 import { getInternalTransferPresentation } from "@/lib/walletTransferPresentation";
 import { selectWalletAccountByLatestFlow } from "@/lib/walletAccountSelection";
@@ -45,6 +46,11 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
   snapshot: any;
   onClose: () => void;
 }) {
+  // 余额快照负责数量与权限；当前估值统一按同一份三秒行情缓存重算。
+  const { data: unifiedPriceData } = trpc.getCryptoPrices.useQuery(undefined, {
+    refetchInterval: 3000,
+    staleTime: 2500,
+  });
   const [account, setAccount] = useState<'CRYPTO' | 'CNY'>(() => selectWalletAccountByLatestFlow(
     [
       ...(snapshot?.balanceHistory || []).filter((entry: any) => !String(entry.description || '').startsWith('[CNY]')),
@@ -56,12 +62,20 @@ export function ReadonlyWalletSnapshot({ snapshot, onClose }: {
   const autoFlowFilterRef = useRef(true);
   const usdtBalance = Number(snapshot?.usdtBalance || 0);
   const cnyBalance = Number(snapshot?.cnyBalance || 0);
-  const usdtCnyRate = Number(snapshot?.usdtCnyRate || 7.25);
+  const unifiedPrices = ((unifiedPriceData as any)?.prices ?? {}) as Record<string, number>;
+  const liveUsdtCnyRate = Number((unifiedPriceData as any)?.usdtCnyRate ?? 0);
+  const usdtCnyRate = liveUsdtCnyRate > 0 ? liveUsdtCnyRate : Number(snapshot?.usdtCnyRate || 7.25);
   const visibleAssets = new Set((snapshot?.visibleAssets || []).map((asset: unknown) => String(asset).toUpperCase()));
-  const multiAssets = (snapshot?.multiAssetBalances || []).filter((asset: any) =>
-    visibleAssets.has(String(asset.assetCode || '').toUpperCase())
-    && Number(asset.totalBalance ?? (Number(asset.availableBalance || 0) + Number(asset.frozenBalance || 0))) > 0,
-  );
+  const multiAssets = (snapshot?.multiAssetBalances || [])
+    .filter((asset: any) =>
+      visibleAssets.has(String(asset.assetCode || '').toUpperCase())
+      && Number(asset.totalBalance ?? (Number(asset.availableBalance || 0) + Number(asset.frozenBalance || 0))) > 0,
+    )
+    .map((asset: any) => {
+      const assetCode = String(asset.assetCode || '').toUpperCase();
+      const livePriceUsdt = assetCode === 'USDT' ? 1 : Number(unifiedPrices[assetCode] || 0);
+      return { ...asset, priceUsdt: livePriceUsdt > 0 ? livePriceUsdt : Number(asset.priceUsdt || 0) };
+    });
   const digitalAssets = [
     ...(usdtBalance > 0 ? [{ assetCode: 'USDT', totalBalance: usdtBalance, availableBalance: usdtBalance, frozenBalance: 0, priceUsdt: 1 }] : []),
     ...multiAssets,

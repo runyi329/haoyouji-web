@@ -1,0 +1,572 @@
+import { TRPCError } from "@trpc/server";
+import { getDbConnection, getDbTransactionConnection } from "./db";
+import * as dbLedger from "./db-ledger";
+
+export const LEDGER_52_T0_JOURNAL_ID = 52;
+/** OKX VIP 2 合约：挂单 0.0150%，市价吃单 0.0360%（2026-10-04由管理员确认）。 */
+export const OKX_VIP2_TAKER_FEE_RATE = "0.00036";
+const POSITION_ARCHIVE_STEP = 100;
+
+export type T0JournalAction = "openLong" | "closeLong" | "openShort" | "closeShort";
+
+export type T0JournalActor = {
+  id: number;
+  role?: string | null;
+  isViewingAs?: boolean;
+};
+
+export type SaveT0JournalEntryInput = {
+  actorUserId: number;
+  accountId?: number;
+  accountName?: string;
+  symbol: "ETH";
+  action: T0JournalAction;
+  quantity: string;
+  price: string;
+  targetPrice?: string;
+  note?: string;
+  clientRequestId: string;
+};
+
+let tablesReady: Promise<void> | null = null;
+
+function asRows(result: unknown): any[] {
+  if (Array.isArray(result) && Array.isArray(result[0])) return result[0] as any[];
+  return Array.isArray(result) ? result as any[] : [];
+}
+
+function isoTime(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString();
+}
+
+function toNumber(value: unknown): number {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+/** 输入可为整数或一/两位小数，入账统一使用两位小数字符串，避免浮点补零。 */
+function normalizeEthQuantity(value: string): string {
+  const [integerPart, fractionalPart = ""] = String(value).trim().split(".");
+  return `${integerPart}.${fractionalPart.padEnd(2, "0")}`;
+}
+
+function actionSide(action: T0JournalAction): "long" | "short" {
+  return action === "openLong" || action === "closeLong" ? "long" : "short";
+}
+
+function isOpeningAction(action: T0JournalAction): boolean {
+  return action === "openLong" || action === "openShort";
+}
+
+/**
+ * 开多向上归档：2600.x → 2700；开空向下归档：2600.x → 2600。
+ * 即使前端从其他价格行进入，归属档位也只能由实际成交价决定。
+ */
+function archivePriceForAction(action: T0JournalAction, value: unknown): number {
+  const numeric = toNumber(value);
+  if (numeric <= 0) return 0;
+  const scaled = numeric / POSITION_ARCHIVE_STEP;
+  const archive = actionSide(action) === "long"
+    ? Math.ceil(scaled - 1e-9)
+    : Math.floor(scaled + 1e-9);
+  return Number((archive * POSITION_ARCHIVE_STEP).toFixed(8));
+}
+
+function archivedTargetPrice(action: T0JournalAction, targetPrice: unknown, fallbackPrice?: unknown): number {
+  const target = toNumber(targetPrice);
+  return archivePriceForAction(action, target > 0 ? target : fallbackPrice);
+}
+
+function quantityToCents(value: unknown): number {
+  const normalized = normalizeEthQuantity(String(value));
+  const [integerPart = "0", fractionalPart = "00"] = normalized.split(".");
+  return Number(integerPart) * 100 + Number(fractionalPart.slice(0, 2).padEnd(2, "0"));
+}
+
+function priceKey(value: unknown): string {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "";
+  return numeric.toFixed(8);
+}
+
+function calculateAvailableCloseCents(rows: any[], action: T0JournalAction, targetPrice: string): number {
+  const balances = new Map<string, number>();
+  for (const row of rows) {
+    const rowAction = String(row.action) as T0JournalAction;
+    const side = actionSide(rowAction);
+    if (isOpeningAction(rowAction)) {
+      const archivePrice = archivedTargetPrice(rowAction, row.target_price, row.price);
+      const key = `${side}:${priceKey(archivePrice)}`;
+      balances.set(key, (balances.get(key) || 0) + quantityToCents(row.quantity));
+      continue;
+    }
+    if (row.target_price === null || row.target_price === undefined) continue;
+    const archivePrice = archivedTargetPrice(rowAction, row.target_price);
+    const key = `${side}:${priceKey(archivePrice)}`;
+    balances.set(key, Math.max(0, (balances.get(key) || 0) - quantityToCents(row.quantity)));
+  }
+  const archivePrice = archivedTargetPrice(action, targetPrice);
+  return balances.get(`${actionSide(action)}:${priceKey(archivePrice)}`) || 0;
+}
+
+function mapAccount(row: any) {
+  return {
+    id: Number(row.id),
+    name: String(row.name || ""),
+    lastUsedAt: row.last_used_at ? isoTime(row.last_used_at) : null,
+    createdAt: isoTime(row.created_at),
+  };
+}
+
+function mapEntry(row: any) {
+  return {
+    id: String(row.id),
+    accountId: Number(row.account_id),
+    accountName: String(row.account_name || ""),
+    symbol: String(row.symbol || "ETH"),
+    action: String(row.action) as T0JournalAction,
+    quantity: toNumber(row.quantity),
+    price: toNumber(row.price),
+    fee: toNumber(row.fee_usdt),
+    targetPrice: row.target_price === null || row.target_price === undefined ? undefined : toNumber(row.target_price),
+    note: row.note ? String(row.note) : undefined,
+    createdAt: isoTime(row.trade_time || row.created_at),
+  };
+}
+
+/**
+ * 账户与流水均按 ledger 52 + 当前管理员 user_id 分区。
+ * 不设外键，避免旧库迁移时受历史数据状态影响；所有读写均由接口侧权限校验保障。
+ */
+export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
+  if (tablesReady) return tablesReady;
+  tablesReady = (async () => {
+    const db = conn ?? await getDbConnection();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0 速记账本数据库连接失败" });
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_accounts (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        name VARCHAR(80) NOT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        last_used_at DATETIME(3) DEFAULT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_t0_journal_account_owner_name (ledger_id, user_id, name),
+        KEY idx_t0_journal_account_recent (ledger_id, user_id, is_active, last_used_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0速记账本：当前管理员可见的下单账户'
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_entries (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        account_id BIGINT UNSIGNED NOT NULL,
+        symbol VARCHAR(16) NOT NULL DEFAULT 'ETH',
+        action ENUM('openLong','closeLong','openShort','closeShort') NOT NULL,
+        quantity DECIMAL(36,18) NOT NULL,
+        price DECIMAL(36,18) NOT NULL,
+        fee_usdt DECIMAL(36,18) NOT NULL DEFAULT 0,
+        target_price DECIMAL(36,18) DEFAULT NULL,
+        note VARCHAR(500) DEFAULT NULL,
+        client_request_id VARCHAR(64) NOT NULL,
+        created_by_user_id INT NOT NULL,
+        trade_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_t0_journal_entry_request (ledger_id, user_id, client_request_id),
+        KEY idx_t0_journal_entry_account_time (ledger_id, user_id, account_id, trade_time),
+        KEY idx_t0_journal_entry_owner_time (ledger_id, user_id, trade_time)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0速记账本：管理员手工下单流水与创建审计'
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_entry_audits (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        entry_id BIGINT UNSIGNED NOT NULL,
+        operation ENUM('update','delete') NOT NULL,
+        before_snapshot LONGTEXT NOT NULL,
+        after_snapshot LONGTEXT DEFAULT NULL,
+        operator_user_id INT NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        KEY idx_t0_journal_audit_entry (ledger_id, user_id, entry_id, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0速记账本：编辑与删除审计快照'
+    `);
+  })().catch((error) => {
+    tablesReady = null;
+    throw error;
+  });
+  return tablesReady;
+}
+
+/** 当前管理员才能操作自己的下单账户和流水；身份代入场景一律拒绝。 */
+export async function assertLedger52T0JournalAccess(actor: T0JournalActor): Promise<void> {
+  if (actor.isViewingAs) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "代入成员视角不可操作T+0速记账本" });
+  }
+  if (actor.role === "super_admin" || actor.role === "admin") return;
+
+  const membership = await dbLedger.getUserMembership(LEDGER_52_T0_JOURNAL_ID, actor.id);
+  if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "仅52号账本管理员可操作T+0速记账本" });
+  }
+}
+
+export async function getLedger52T0Journal(userId: number) {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  await ensureLedger52T0JournalTables(conn);
+
+  const [accountResult, entryResult] = await Promise.all([
+    conn.execute(
+      `SELECT id, name, last_used_at, created_at
+         FROM ledger52_t0_journal_accounts
+        WHERE ledger_id = ? AND user_id = ? AND is_active = 1
+        ORDER BY last_used_at IS NULL ASC, last_used_at DESC, updated_at DESC, id DESC`,
+      [LEDGER_52_T0_JOURNAL_ID, userId],
+    ),
+    conn.execute(
+      `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
+              e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+         FROM ledger52_t0_journal_entries e
+         INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
+        WHERE e.ledger_id = ? AND e.user_id = ?
+        ORDER BY e.trade_time ASC, e.id ASC
+        LIMIT 2000`,
+      [LEDGER_52_T0_JOURNAL_ID, userId],
+    ),
+  ]);
+
+  return {
+    accounts: asRows(accountResult).map(mapAccount),
+    entries: asRows(entryResult).map(mapEntry),
+  };
+}
+
+export async function selectLedger52T0JournalAccount(userId: number, accountId: number) {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  await ensureLedger52T0JournalTables(conn);
+
+  const [result] = await conn.execute(
+    `UPDATE ledger52_t0_journal_accounts
+        SET last_used_at = NOW(3)
+      WHERE id = ? AND ledger_id = ? AND user_id = ? AND is_active = 1`,
+    [accountId, LEDGER_52_T0_JOURNAL_ID, userId],
+  ) as any[];
+  if (Number((result as any)?.affectedRows || 0) !== 1) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "下单账户不存在或无权选择" });
+  }
+
+  const [rows] = await conn.execute(
+    `SELECT id, name, last_used_at, created_at
+       FROM ledger52_t0_journal_accounts
+      WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1`,
+    [accountId, LEDGER_52_T0_JOURNAL_ID, userId],
+  );
+  const account = asRows(rows)[0];
+  if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "下单账户不存在" });
+  return { account: mapAccount(account) };
+}
+
+export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  const normalizedQuantity = normalizeEthQuantity(input.quantity);
+
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+
+    let accountId = Number(input.accountId || 0);
+    let accountName = String(input.accountName || "").trim();
+    if (accountId > 0) {
+      const [rows] = await tx.execute(
+        `SELECT id, name
+           FROM ledger52_t0_journal_accounts
+          WHERE id = ? AND ledger_id = ? AND user_id = ? AND is_active = 1
+          LIMIT 1 FOR UPDATE`,
+        [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+      );
+      const account = asRows(rows)[0];
+      if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "下单账户不存在或无权使用" });
+      accountName = String(account.name);
+    } else {
+      if (!accountName) throw new TRPCError({ code: "BAD_REQUEST", message: "请填写下单账户名称" });
+      const [result] = await tx.execute(
+        `INSERT INTO ledger52_t0_journal_accounts (ledger_id, user_id, name, is_active, last_used_at)
+         VALUES (?, ?, ?, 1, NOW(3))
+         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), is_active = 1, last_used_at = NOW(3), updated_at = NOW(3)`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, accountName],
+      );
+      accountId = Number((result as any).insertId || 0);
+      if (!accountId) {
+        const [rows] = await tx.execute(
+          `SELECT id FROM ledger52_t0_journal_accounts
+            WHERE ledger_id = ? AND user_id = ? AND name = ? LIMIT 1 FOR UPDATE`,
+          [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, accountName],
+        );
+        accountId = Number(asRows(rows)[0]?.id || 0);
+      }
+      if (!accountId) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "下单账户保存失败" });
+    }
+
+    await tx.execute(
+      `UPDATE ledger52_t0_journal_accounts
+          SET last_used_at = NOW(3)
+        WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+      [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+
+    const [existingRequestRows] = await tx.execute(
+      `SELECT id
+         FROM ledger52_t0_journal_entries
+        WHERE ledger_id = ? AND user_id = ? AND client_request_id = ?
+        LIMIT 1 FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.clientRequestId],
+    );
+    const isRetryOfExistingEntry = Boolean(asRows(existingRequestRows)[0]?.id);
+
+    const storedTargetPrice = isOpeningAction(input.action)
+      ? archivePriceForAction(input.action, input.price)
+      : archivedTargetPrice(input.action, input.targetPrice);
+
+    if (!isOpeningAction(input.action) && !isRetryOfExistingEntry) {
+      if (!storedTargetPrice) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "平仓记录必须指定对应的开仓价格档位" });
+      }
+      const [positionRows] = await tx.execute(
+        `SELECT action, quantity, price, target_price
+           FROM ledger52_t0_journal_entries
+          WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
+          ORDER BY trade_time ASC, id ASC FOR UPDATE`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, accountId, input.symbol],
+      );
+      const availableCents = calculateAvailableCloseCents(asRows(positionRows), input.action, String(storedTargetPrice));
+      const requestedCents = quantityToCents(normalizedQuantity);
+      if (requestedCents <= 0 || requestedCents > availableCents) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: availableCents > 0
+            ? `该价格档位最多可平 ${(availableCents / 100).toFixed(2)} ETH`
+            : "该价格档位已无可平数量",
+        });
+      }
+    }
+
+    const [entryResult] = await tx.execute(
+      `INSERT INTO ledger52_t0_journal_entries
+        (ledger_id, user_id, account_id, symbol, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18), ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+      [
+        LEDGER_52_T0_JOURNAL_ID,
+        input.actorUserId,
+        accountId,
+        input.symbol,
+        input.action,
+        normalizedQuantity,
+        input.price,
+        normalizedQuantity,
+        input.price,
+        storedTargetPrice || null,
+        input.note || null,
+        input.clientRequestId,
+        input.actorUserId,
+      ],
+    );
+    const entryId = Number((entryResult as any).insertId || 0);
+    if (!entryId) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "速记流水保存失败" });
+
+    const [accountRows, entryRows] = await Promise.all([
+      tx.execute(
+        `SELECT id, name, last_used_at, created_at
+           FROM ledger52_t0_journal_accounts
+          WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1`,
+        [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+      ),
+      tx.execute(
+        `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
+                e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+           FROM ledger52_t0_journal_entries e
+           INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
+          WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ? LIMIT 1`,
+        [entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+      ),
+    ]);
+    const account = asRows(accountRows)[0];
+    const entry = asRows(entryRows)[0];
+    if (!account || !entry) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "速记流水读取失败" });
+
+    await tx.commit();
+    return { account: mapAccount(account), entry: mapEntry(entry) };
+  } catch (error) {
+    try { await tx.rollback(); } catch {}
+    throw error;
+  } finally {
+    tx.release?.();
+  }
+}
+
+async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: number) {
+  const [rows] = await tx.execute(
+    `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
+            e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+       FROM ledger52_t0_journal_entries e
+       INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
+      WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ?
+      LIMIT 1 FOR UPDATE`,
+    [entryId, LEDGER_52_T0_JOURNAL_ID, actorUserId],
+  );
+  const entry = asRows(rows)[0];
+  if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "开仓记录不存在或无权操作" });
+  if (!isOpeningAction(String(entry.action) as T0JournalAction)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "当前仅支持编辑或删除开仓记录" });
+  }
+
+  const entryAction = String(entry.action) as T0JournalAction;
+  const closeAction = actionSide(entryAction) === "long" ? "closeLong" : "closeShort";
+  const archivePrice = archivedTargetPrice(entryAction, entry.target_price, entry.price);
+  const legacyActualPrice = toNumber(entry.price);
+  const [dependentRows] = await tx.execute(
+    `SELECT id
+       FROM ledger52_t0_journal_entries
+      WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
+        AND action = ? AND target_price IN (?, ?)
+      LIMIT 1 FOR UPDATE`,
+    [
+      LEDGER_52_T0_JOURNAL_ID,
+      actorUserId,
+      Number(entry.account_id),
+      String(entry.symbol),
+      closeAction,
+      archivePrice,
+      legacyActualPrice,
+    ],
+  );
+  if (asRows(dependentRows)[0]) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓价格档位已有平仓记录，请先处理对应平仓流水" });
+  }
+  return entry;
+}
+
+async function writeEntryAudit(tx: any, input: {
+  actorUserId: number;
+  entryId: number;
+  operation: "update" | "delete";
+  before: unknown;
+  after?: unknown;
+}) {
+  await tx.execute(
+    `INSERT INTO ledger52_t0_journal_entry_audits
+      (ledger_id, user_id, entry_id, operation, before_snapshot, after_snapshot, operator_user_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      LEDGER_52_T0_JOURNAL_ID,
+      input.actorUserId,
+      input.entryId,
+      input.operation,
+      JSON.stringify(input.before),
+      input.after === undefined ? null : JSON.stringify(input.after),
+      input.actorUserId,
+    ],
+  );
+}
+
+export async function updateLedger52T0JournalOpeningEntry(input: {
+  actorUserId: number;
+  entryId: number;
+  quantity: string;
+  price: string;
+  note?: string;
+}) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  const normalizedQuantity = normalizeEthQuantity(input.quantity);
+
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    const before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
+    const archivePrice = archivePriceForAction(String(before.action) as T0JournalAction, input.price);
+    await tx.execute(
+      `UPDATE ledger52_t0_journal_entries
+          SET quantity = ?, price = ?, target_price = ?,
+              fee_usdt = ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18),
+              note = ?, updated_at = NOW(3)
+        WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+      [
+        normalizedQuantity,
+        input.price,
+        archivePrice,
+        normalizedQuantity,
+        input.price,
+        input.note || null,
+        input.entryId,
+        LEDGER_52_T0_JOURNAL_ID,
+        input.actorUserId,
+      ],
+    );
+    const [updatedRows] = await tx.execute(
+      `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
+              e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+         FROM ledger52_t0_journal_entries e
+         INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
+        WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ? LIMIT 1`,
+      [input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    const after = asRows(updatedRows)[0];
+    if (!after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "编辑后的开仓记录读取失败" });
+    await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "update", before, after });
+    await tx.commit();
+    return { entry: mapEntry(after) };
+  } catch (error) {
+    try { await tx.rollback(); } catch {}
+    throw error;
+  } finally {
+    tx.release?.();
+  }
+}
+
+export async function deleteLedger52T0JournalOpeningEntry(input: { actorUserId: number; entryId: number }) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    const before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
+    await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "delete", before });
+    const [result] = await tx.execute(
+      `DELETE FROM ledger52_t0_journal_entries
+        WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+      [input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    if (Number((result as any)?.affectedRows || 0) !== 1) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "开仓记录删除失败" });
+    }
+    await tx.commit();
+    return { entryId: String(input.entryId) };
+  } catch (error) {
+    try { await tx.rollback(); } catch {}
+    throw error;
+  } finally {
+    tx.release?.();
+  }
+}

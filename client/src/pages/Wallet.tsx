@@ -828,6 +828,12 @@ export default function Wallet() {
   const canWithdraw = !walletEntryLedgerId || walletPolicyQuery.data?.allowWithdrawal === true;
   // 配置仍在加载阶段先展示入口；档案明确关闭时才隐藏，服务端也会二次校验。
   const canTransfer = !walletEntryLedgerId || walletPolicyQuery.data?.allowTransfer !== false;
+  // 钱包估值始终直接读取统一行情内存缓存；余额查询只负责数量，不携带陈旧的估值快照。
+  const walletPricesQuery = trpc.getCryptoPrices.useQuery(undefined, {
+    enabled: isGlobalWalletView,
+    refetchInterval: 3000,
+    staleTime: 2500,
+  });
 
   const balanceQuery = trpc.recharge.getBalance.useQuery();
   // 详情页展示最近 10 笔，因此每个资金来源保留足够的候选记录后再统一排序。
@@ -872,9 +878,21 @@ export default function Wallet() {
   const cnyBalance = typeof cnyBalanceQuery.data === "number" ? cnyBalanceQuery.data : 0;
   const cnySummary = cnyBalanceSummaryQuery.data ?? { total: cnyBalance, frozen: 0, available: cnyBalance };
   const cnyAvailableBalance = Number(cnySummary.available ?? cnyBalance);
-  const usdtToCny = usdtTotalBalance * 7.25;
-  const cnyToUsdt = cnyBalance / 7.25;
-  const multiAssetBalances = (multiAssetBalancesQuery.data ?? []) as any[];
+  const unifiedPrices = ((walletPricesQuery.data as any)?.prices ?? {}) as Record<string, number>;
+  const unifiedUsdtCnyRate = Number((walletPricesQuery.data as any)?.usdtCnyRate ?? 0);
+  const usdtCnyRate = unifiedUsdtCnyRate > 0 ? unifiedUsdtCnyRate : 7.25;
+  const usdtToCny = usdtTotalBalance * usdtCnyRate;
+  const cnyToUsdt = cnyBalance / usdtCnyRate;
+  const multiAssetBalances = ((multiAssetBalancesQuery.data ?? []) as any[]).map((asset) => {
+    const assetCode = String(asset.assetCode || '').trim().toUpperCase();
+    const livePriceUsdt = assetCode === 'USDT' ? 1 : Number(unifiedPrices[assetCode] || 0);
+    const priceUsdt = livePriceUsdt > 0 ? livePriceUsdt : Number(asset.priceUsdt || 0);
+    return {
+      ...asset,
+      priceUsdt,
+      priceCny: priceUsdt > 0 ? priceUsdt * usdtCnyRate : Number(asset.priceCny || 0),
+    };
+  });
   const multiAssetHistory = (multiAssetHistoryQuery.data ?? []) as any[];
   // 所有数字币均按用户全局余额展示；冻结担保也属于持有资产，不能因可用额为0而消失。
   const visibleMultiAssetBalances = multiAssetBalances.filter((asset) =>
@@ -1456,7 +1474,7 @@ export default function Wallet() {
           unit="USDT"
           balanceCaption="总资产估值"
           subLine={!hideBalance && <div className="mt-2 text-xs" style={{ color: G.goldDim }}>
-            ≈ ¥{(digitalTotalUsdt * 7.25).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币
+            ≈ ¥{(digitalTotalUsdt * usdtCnyRate).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币
           </div>}
           txPath=""
           onRefresh={refreshWalletData}
@@ -1483,7 +1501,7 @@ export default function Wallet() {
                 const availableAmount = Number(asset.availableBalance ?? 0);
                 const frozenAmount = Number(asset.frozenBalance ?? 0);
                 const valueUsdt = amount * Number(asset.priceUsdt ?? 0);
-                const valueCny = valueUsdt * 7.25;
+                const valueCny = valueUsdt * usdtCnyRate;
                 const hasMarketPrice = Number(asset.priceUsdt ?? 0) > 0;
                 const isUsdtAsset = assetCode === "USDT";
                 const hasCollateral = frozenAmount > 0;

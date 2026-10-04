@@ -305,6 +305,8 @@ const GujianPage = lazy(() => import("./pages/GujianPage"));
 const GutdiProductDemo = lazy(() => import("./pages/GutdiProductDemo"));
 // GTO 德州扑克
 const GtoPoker = lazy(() => import("./pages/GtoPoker"));
+// 52号账本 T+0 速记账本
+const T0Journal = lazy(() => import("./pages/T0Journal"));
 const LotteryEdit = lazy(() => import("./pages/LotteryEdit"));
 const LotteryActivity = lazy(() => import("./pages/LotteryActivity"));
 const LotteryList = lazy(() => import("./pages/LotteryList"));
@@ -705,6 +707,8 @@ function Router() {
         <Route path="/ledger/:id/product-demo" component={GutdiProductDemo} />
         {/* GTO 德州扑克 */}
         <Route path="/ledger/:id/gto" component={GtoPoker} />
+        {/* 52号账本 T+0 速记账本 */}
+        <Route path="/ledger/:id/t0-journal" component={T0Journal} />
         {/* QQ 在线人数记录 */}
         <Route path="/ledger/:id/qq" component={QQOnlinePage} />
         <Route path="/ledger/:id/qq/history" component={QQOnlineHistory} />

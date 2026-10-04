@@ -1,13 +1,9 @@
 /**
- * useLivePrice.ts — 前端直连行情工具库
- * 
- * 规则 G：金融数据获取规则（脉动网规则库 005-G）
- * 
- * 通道一：数字币 → 前端直连（币安主 → OKX备 → CoinGecko兜底）
- * 通道二：美股/港股/黄金/石油/汇率/指数 → Cloudflare Worker 代理新浪财经/Yahoo Finance
- * 
- * 老方案（服务器端 price-scanner / getRate / getLivePrices）代码保留不删，
- * 注释标注「已封存，新方案见 useLivePrice.ts / useDeribit.ts」，备用切回。
+ * useLivePrice.ts — 页面行情工具库。
+ *
+ * 数字币统一经 /api/trpc/getCryptoPrices 读取 server/price-scanner.ts 内存缓存；
+ * 前端绝不直接向交易所或行情网站发起数字币报价请求。
+ * 非数字币市场数据仍按各自受控服务端接口读取。
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -21,92 +17,47 @@ const _marketCache: Record<string, { price: number; prevClose: number; change: n
 const _rateCache: { rate: number; fetchedAt: number } | null = null;
 let _rateCacheValue: { rate: number; fetchedAt: number } | null = null;
 
-const CRYPTO_CACHE_TTL = 5000;   // 5秒
+const CRYPTO_CACHE_TTL = 2500;   // 与统一三秒扫描器同步，避免重复读取
 const MARKET_CACHE_TTL = 5000;   // 5秒
 const RATE_CACHE_TTL = 60000;    // 60秒
 
-// ===== 数字币代码映射 =====
-// 币安使用 USDT 交易对，CoinGecko 使用 id
-const BINANCE_SYMBOL_MAP: Record<string, string> = {
-  BTC: 'BTCUSDT', ETH: 'ETHUSDT', SOL: 'SOLUSDT', BNB: 'BNBUSDT',
-  AAVE: 'AAVEUSDT', SUI: 'SUIUSDT', ONDO: 'ONDOUSDT', ASTER: 'ASTERUSDT',
-  LDO: 'LDOUSDT', ENA: 'ENAUSDT', ARKM: 'ARKMUSDT', PLUME: 'PLUMEUSDT',
-  SEI: 'SEIUSDT', UNI: 'UNIUSDT', DRAM: 'DRAMUSDT', MU: 'MUUSDT', USDT: 'USDCUSDT',
-};
-const OKX_SYMBOL_MAP: Record<string, string> = {
-  BTC: 'BTC-USDT', ETH: 'ETH-USDT', SOL: 'SOL-USDT', BNB: 'BNB-USDT',
-  AAVE: 'AAVE-USDT', SUI: 'SUI-USDT', ONDO: 'ONDO-USDT', ASTER: 'ASTER-USDT',
-  LDO: 'LDO-USDT', ENA: 'ENA-USDT', ARKM: 'ARKM-USDT', PLUME: 'PLUME-USDT',
-  SEI: 'SEI-USDT', UNI: 'UNI-USDT', DRAM: 'DRAM-USDT', MU: 'MU-USDT',
-};
-const COINGECKO_ID_MAP: Record<string, string> = {
-  BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', BNB: 'binancecoin',
-  AAVE: 'aave', SUI: 'sui', ONDO: 'ondo-finance', LDO: 'lido-dao',
-  ENA: 'ethena', ARKM: 'arkham', UNI: 'uniswap', SEI: 'sei-network',
+type UnifiedCryptoPrices = {
+  prices: Record<string, number>;
+  changes: Record<string, number>;
+  opens: Record<string, number>;
+  usdtCnyRate: number;
 };
 
-// ===== 通道一：数字币价格（三重兜底）=====
+let _unifiedCryptoCache: (UnifiedCryptoPrices & { fetchedAt: number }) | null = null;
 
-async function fetchCryptoPriceBinance(coin: string): Promise<{ price: number; changePercent: number; open: number } | null> {
-  const symbol = BINANCE_SYMBOL_MAP[coin.toUpperCase()];
-  if (!symbol) return null;
+async function fetchUnifiedCryptoPrices(): Promise<UnifiedCryptoPrices | null> {
+  if (_unifiedCryptoCache && Date.now() - _unifiedCryptoCache.fetchedAt < CRYPTO_CACHE_TTL) {
+    return _unifiedCryptoCache;
+  }
   try {
-    const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`, {
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return null;
-    const d = await res.json();
-    const price = parseFloat(d.lastPrice) || 0;
-    const open = parseFloat(d.openPrice) || 0;
-    const changePercent = parseFloat(d.priceChangePercent) || 0;
-    if (price <= 0) return null;
-    return { price, changePercent, open };
+    const response = await fetch('/api/trpc/getCryptoPrices', { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) return _unifiedCryptoCache;
+    const raw = await response.json() as any;
+    const payload = raw?.result?.data?.json ?? raw?.result?.data ?? raw;
+    const prices = payload?.prices && typeof payload.prices === 'object' ? payload.prices : {};
+    const changes = payload?.changes && typeof payload.changes === 'object' ? payload.changes : {};
+    const opens = payload?.opens && typeof payload.opens === 'object' ? payload.opens : {};
+    const rate = Number(payload?.usdtCnyRate || 0);
+    if (Object.keys(prices).length === 0) return _unifiedCryptoCache;
+    _unifiedCryptoCache = {
+      prices,
+      changes,
+      opens,
+      usdtCnyRate: rate > 0 ? rate : (_unifiedCryptoCache?.usdtCnyRate || 6.8),
+      fetchedAt: Date.now(),
+    };
+    return _unifiedCryptoCache;
   } catch {
-    return null;
+    return _unifiedCryptoCache;
   }
 }
 
-async function fetchCryptoPriceOKX(coin: string): Promise<{ price: number; changePercent: number; open: number } | null> {
-  const instId = OKX_SYMBOL_MAP[coin.toUpperCase()];
-  if (!instId) return null;
-  try {
-    const res = await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${instId}`, {
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return null;
-    const d = await res.json();
-    const ticker = d?.data?.[0];
-    if (!ticker) return null;
-    const price = parseFloat(ticker.last) || 0;
-    const open = parseFloat(ticker.open24h) || 0;
-    const changePercent = open > 0 ? ((price - open) / open * 100) : 0;
-    if (price <= 0) return null;
-    return { price, changePercent, open };
-  } catch {
-    return null;
-  }
-}
-
-async function fetchCryptoPriceCoinGecko(coin: string): Promise<{ price: number; changePercent: number; open: number } | null> {
-  const id = COINGECKO_ID_MAP[coin.toUpperCase()];
-  if (!id) return null;
-  try {
-    const res = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd&include_24hr_change=true`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-    if (!res.ok) return null;
-    const d = await res.json();
-    const price = d?.[id]?.usd || 0;
-    const changePercent = d?.[id]?.usd_24h_change || 0;
-    if (price <= 0) return null;
-    return { price, changePercent, open: 0 };
-  } catch {
-    return null;
-  }
-}
-
-/** 获取单个数字币价格（三重兜底：币安→OKX→CoinGecko） */
+/** 获取单个数字币价格：只读取服务端统一多源缓存。 */
 export async function fetchCryptoPrice(coin: string): Promise<{ price: number; changePercent: number; open: number }> {
   const key = coin.toUpperCase();
   const cached = _cryptoCache[key];
@@ -114,11 +65,11 @@ export async function fetchCryptoPrice(coin: string): Promise<{ price: number; c
     return { price: cached.price, changePercent: cached.changePercent, open: cached.open };
   }
 
-  const result =
-    (await fetchCryptoPriceBinance(key)) ||
-    (await fetchCryptoPriceOKX(key)) ||
-    (await fetchCryptoPriceCoinGecko(key)) ||
-    { price: cached?.price || 0, changePercent: cached?.changePercent || 0, open: cached?.open || 0 };
+  const source = await fetchUnifiedCryptoPrices();
+  const price = Number(source?.prices?.[key] || 0);
+  const result = price > 0
+    ? { price, changePercent: Number(source?.changes?.[key] || 0), open: Number(source?.opens?.[key] || 0) }
+    : { price: cached?.price || 0, changePercent: cached?.changePercent || 0, open: cached?.open || 0 };
 
   if (result.price > 0) {
     _cryptoCache[key] = { ...result, fetchedAt: Date.now() };
@@ -126,28 +77,28 @@ export async function fetchCryptoPrice(coin: string): Promise<{ price: number; c
   return result;
 }
 
-/** 批量获取多个数字币价格 */
+/** 批量获取多个数字币价格：整页仅读取一次统一缓存。 */
 export async function fetchCryptoPrices(coins: string[]): Promise<{
   prices: Record<string, number>;
   changes: Record<string, number>;
   opens: Record<string, number>;
   usdtCnyRate: number;
 }> {
-  const results = await Promise.allSettled(coins.map(c => fetchCryptoPrice(c)));
+  const source = await fetchUnifiedCryptoPrices();
   const prices: Record<string, number> = {};
   const changes: Record<string, number> = {};
   const opens: Record<string, number> = {};
-  coins.forEach((coin, i) => {
-    const r = results[i];
-    if (r.status === 'fulfilled' && r.value.price > 0) {
-      prices[coin] = r.value.price;
-      changes[coin] = r.value.changePercent;
-      opens[coin] = r.value.open;
+  for (const coin of coins) {
+    const key = coin.toUpperCase();
+    const price = Number(source?.prices?.[key] || _cryptoCache[key]?.price || 0);
+    if (price > 0) {
+      prices[key] = price;
+      changes[key] = Number(source?.changes?.[key] ?? _cryptoCache[key]?.changePercent ?? 0);
+      opens[key] = Number(source?.opens?.[key] ?? _cryptoCache[key]?.open ?? 0);
+      _cryptoCache[key] = { price, changePercent: changes[key], open: opens[key], fetchedAt: Date.now() };
     }
-  });
-  // 汇率从 Worker 获取
-  const rate = await fetchUsdCnyRate();
-  return { prices, changes, opens, usdtCnyRate: rate };
+  }
+  return { prices, changes, opens, usdtCnyRate: Number(source?.usdtCnyRate || _unifiedCryptoCache?.usdtCnyRate || 6.8) };
 }
 
 // ===== 通道二：市场行情（直接调用服务器 tRPC，待 Cloudflare Worker 部署后切换）=====
@@ -322,13 +273,6 @@ async function fetchCustomCoinsFromDb(): Promise<string[]> {
       if (Array.isArray(coins)) {
         _customCoinsCache = coins;
         _customCoinsCacheAt = Date.now();
-        // 同步注册到三个 MAP，使 fetchCryptoPrice 能正确拉取
-        coins.forEach((c: any) => {
-          const sym = (c.symbol as string).toUpperCase();
-          if (c.binance) BINANCE_SYMBOL_MAP[sym] = c.binance;
-          if (c.okx) OKX_SYMBOL_MAP[sym] = c.okx;
-          if (c.coingecko) COINGECKO_ID_MAP[sym] = c.coingecko;
-        });
         return coins.map((c: any) => (c.symbol as string).toUpperCase());
       }
     }
@@ -336,7 +280,7 @@ async function fetchCustomCoinsFromDb(): Promise<string[]> {
   return _customCoinsCache.map(c => c.symbol.toUpperCase());
 }
 
-/** Hook：实时数字币价格（替换 trpc.getCryptoPrices.useQuery） */
+/** Hook：兼容旧页面调用，内部仍读取统一服务端行情缓存。 */
 export function useCryptoPrices(intervalMs = 3000) {
   const [data, setData] = useState<{
     prices: Record<string, number>;

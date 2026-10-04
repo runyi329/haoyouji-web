@@ -10529,6 +10529,110 @@ ${klinesSummary}
         return await dbLedger.getLedgerById(input.id, ctx.user.id);
       }),
 
+    // 52号账本 T+0 速记账本：下单账户和流水仅属于当前管理员本人；代入成员视角一律禁止。
+    t0GetJournal: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52) }))
+      .query(async ({ ctx }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.getLedger52T0Journal(ctx.user.id);
+      }),
+
+    t0SelectAccount: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        accountId: z.number().int().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.selectLedger52T0JournalAccount(ctx.user.id, input.accountId);
+      }),
+
+    t0CreateEntry: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        accountId: z.number().int().positive().optional(),
+        accountName: z.string().trim().min(1).max(80).optional(),
+        symbol: z.literal('ETH'),
+        action: z.enum(['openLong', 'closeLong', 'openShort', 'closeShort']),
+        quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, 'ETH 整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '数量必须大于0'),
+        price: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).refine((value) => Number(value) > 0, '价格必须大于0'),
+        targetPrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).optional(),
+        note: z.string().trim().max(500).optional(),
+        clientRequestId: z.string().trim().min(12).max(64),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.saveLedger52T0JournalEntry({
+          actorUserId: ctx.user.id,
+          accountId: input.accountId,
+          accountName: input.accountName,
+          symbol: input.symbol,
+          action: input.action,
+          quantity: input.quantity,
+          price: input.price,
+          targetPrice: input.targetPrice,
+          note: input.note,
+          clientRequestId: input.clientRequestId,
+        });
+      }),
+
+    t0UpdateOpeningEntry: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        entryId: z.number().int().positive(),
+        quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, 'ETH 整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '数量必须大于0'),
+        price: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).refine((value) => Number(value) > 0, '价格必须大于0'),
+        note: z.string().trim().max(500).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.updateLedger52T0JournalOpeningEntry({
+          actorUserId: ctx.user.id,
+          entryId: input.entryId,
+          quantity: input.quantity,
+          price: input.price,
+          note: input.note,
+        });
+      }),
+
+    t0DeleteOpeningEntry: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        entryId: z.number().int().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.deleteLedger52T0JournalOpeningEntry({
+          actorUserId: ctx.user.id,
+          entryId: input.entryId,
+        });
+      }),
+
     // 更新账本功能设置
     updateLedgerFeatures: protectedProcedure
       .input(z.object({

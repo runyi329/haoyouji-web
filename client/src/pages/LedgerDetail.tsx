@@ -1856,6 +1856,7 @@ import {
   WalletCards,
   Eye,
   EyeOff,
+  NotebookPen,
 } from "lucide-react";
 import { AJOwnerPanel, FunderViewPanel } from "@/components/AJOwnerPanel";
 
@@ -2650,13 +2651,13 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId) },
     {
       enabled: isCustomAF,
-      refetchInterval: 15000,
+      refetchInterval: 3000,
       refetchIntervalInBackground: false,
       refetchOnWindowFocus: true,
-      staleTime: 5000,
+      staleTime: 2000,
     }
   );
-  // 普通用户实时价格（从 afGetMyTotalAsset 返回的 livePrices，15秒刷新）
+  // 普通用户实时价格（从统一行情缓存返回的 livePrices，3秒刷新）
   const userLivePrices: Record<string, number> = (afTotalAsset as any)?.livePrices ?? {};
   // AF 账本：管理员统计（订单数 + 管理费）——后端控制权限，无权限返回null
   const { data: afAdminStats } = trpc.ledger.afAdminGetStats.useQuery(
@@ -2829,9 +2830,9 @@ export default function LedgerDetail() {
     {
       enabled: isCustomAF && effectiveIsFunder && !!ledgerId,
       refetchOnWindowFocus: true,
-      refetchInterval: 15000,
+      refetchInterval: 3000,
       refetchIntervalInBackground: false,
-      staleTime: 5000,
+      staleTime: 2000,
     }
   );
   const funderAssetOrders = (funderAssetData as any)?.orders ?? funderAssetData ?? [];
@@ -5615,6 +5616,24 @@ export default function LedgerDetail() {
                 </div>
               </button>
 
+              {/* T+0 速记账本入口 - 仅管理员可见，代入视角隐藏 */}
+              {isCustomAF && isAdmin && !viewAsUserId && <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/t0-journal`)}
+                className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
+                style={{ background: 'linear-gradient(135deg, #18213d 0%, #2d3d73 52%, #373078 100%)', border: '1px solid #4b5fa3', boxShadow: '0 2px 12px rgba(37,54,130,0.2)' }}
+              >
+                <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+                  <NotebookPen className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-left flex-1">
+                  <div className="font-semibold text-base text-white">T+0 速记账本</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.68)' }}>多币种 · 价格分档 · 账户总览</div>
+                </div>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)' }}>
+                  <ChevronRight className="w-4 h-4 text-white" />
+                </div>
+              </button>}
+
               {/* GTO 德州扑克入口 - 仅创建者/管理员可见，视角查看时隐藏 */}
               {(isOwner || isAdmin) && !viewAsUserId && <button
                 onClick={() => setLocation(`/ledger/${ledgerId}/gto`)}
@@ -5650,7 +5669,7 @@ export default function LedgerDetail() {
                   <ChevronRight className="w-4 h-4 text-white" />
                 </div>
               </button>}
-              {/* 固定差价止盈网格模拟测算入口 - 仅创建者可见，视角查看时隐藏 */}
+              {/* 网格交易模拟测算入口 - 仅创建者可见，视角查看时隐藏 */}
               {isCustomAF && isOwner && !viewAsUserId && <button
                 onClick={() => setLocation(`/ledger/${ledgerId}/grid-tp-simulator`)}
                 className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"

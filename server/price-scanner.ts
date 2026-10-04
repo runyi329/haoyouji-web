@@ -8,8 +8,11 @@ import fs from 'fs';
 import path from 'path';
 
 const CACHE_FILE = path.join(process.cwd(), 'price-cache.json');
-const SCAN_INTERVAL_MS = 15_000;
+const CRYPTO_SCAN_INTERVAL_MS = 3_000;
+const SLOW_MARKET_SCAN_INTERVAL_MS = 15_000;
 const REQUEST_TIMEOUT_MS = 7_000;
+const CRYPTO_REQUEST_TIMEOUT_MS = 2_000;
+const FAST_CRYPTO_CYCLE_TIMEOUT_MS = 2_500;
 
 type PriceEntry = {
   price: number;
@@ -35,6 +38,9 @@ const priceHealth: Record<string, PriceHealth> = {};
 let usdtCnyRate = 6.7;
 let scanInProgress = false;
 let nextScanTimer: NodeJS.Timeout | null = null;
+let lastSlowMarketScanAt = 0;
+let slowMarketScanInProgress = false;
+let usdtCnyRefreshInProgress = false;
 
 // 已覆盖原有行情需求，并包含52号账本当前的全部加密资产。
 // 数字币按 Gate.io → HTX → OKX 的顺序查询 USDT 现货报价；B2 为 Binance Alpha 的 B² Network 代币。
@@ -135,22 +141,30 @@ async function fetchJson(url: string, init?: RequestInit) {
   return response.json() as Promise<any>;
 }
 
+/** 数字币行情高频刷新不等待慢源，单个交易对请求最多占用两秒。 */
+async function fetchCryptoJson(url: string) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(CRYPTO_REQUEST_TIMEOUT_MS) });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json() as Promise<any>;
+}
+
 async function fetchCryptoQuote(coin: string): Promise<{ price: number; source: string; patch: Partial<PriceEntry> } | null> {
   const pair = `${coin}_USDT`;
   try {
-    const data = await fetchJson(`https://api.gateio.ws/api/v4/spot/tickers?currency_pair=${pair}`);
+    const data = await fetchCryptoJson(`https://api.gateio.ws/api/v4/spot/tickers?currency_pair=${pair}`);
     const row = Array.isArray(data) ? data[0] : null;
     const price = Number(row?.last);
-    if (isValidPrice(price)) return { price, source: 'Gate.io', patch: { high24h: Number(row.high_24h) || 0, low24h: Number(row.low_24h) || 0, volume24h: Number(row.base_volume) || 0, quoteVolume24h: Number(row.quote_volume) || 0 } };
+    const changePercent = Number(row?.change_percentage);
+    if (isValidPrice(price)) return { price, source: 'Gate.io', patch: { high24h: Number(row.high_24h) || 0, low24h: Number(row.low_24h) || 0, volume24h: Number(row.base_volume) || 0, quoteVolume24h: Number(row.quote_volume) || 0, changePercent: Number.isFinite(changePercent) ? changePercent : undefined } };
   } catch {}
   try {
-    const data = await fetchJson(`https://api.huobi.pro/market/detail/merged?symbol=${coin.toLowerCase()}usdt`);
+    const data = await fetchCryptoJson(`https://api.huobi.pro/market/detail/merged?symbol=${coin.toLowerCase()}usdt`);
     const tick = data?.status === 'ok' ? data.tick : null;
     const price = Number(tick?.close);
     if (isValidPrice(price)) return { price, source: 'HTX', patch: { high24h: Number(tick.high) || 0, low24h: Number(tick.low) || 0, volume24h: Number(tick.amount) || 0, quoteVolume24h: Number(tick.vol) || 0 } };
   } catch {}
   try {
-    const data = await fetchJson(`https://www.okx.com/api/v5/market/ticker?instId=${coin}-USDT`);
+    const data = await fetchCryptoJson(`https://www.okx.com/api/v5/market/ticker?instId=${coin}-USDT`);
     const row = data?.code === '0' ? data.data?.[0] : null;
     const price = Number(row?.last);
     if (isValidPrice(price)) return { price, source: 'OKX', patch: { high24h: Number(row.high24h) || 0, low24h: Number(row.low24h) || 0, volume24h: Number(row.vol) || 0, quoteVolume24h: Number(row.volCcy) || 0 } };
@@ -491,12 +505,12 @@ async function fetchOkxSpotQuote(instId: string): Promise<{ price: number; patch
 
 async function refreshUsdtCnyRate() {
   try {
-    const data = await fetchJson('https://api.gateio.ws/api/v4/spot/tickers?currency_pair=USDT_CNY');
+    const data = await fetchCryptoJson('https://api.gateio.ws/api/v4/spot/tickers?currency_pair=USDT_CNY');
     const rate = Number(Array.isArray(data) ? data[0]?.last : 0);
     if (rate > 5 && rate < 10) usdtCnyRate = rate;
   } catch {
     try {
-      const data = await fetchJson('https://www.okx.com/api/v5/market/ticker?instId=USDT-CNY');
+      const data = await fetchCryptoJson('https://www.okx.com/api/v5/market/ticker?instId=USDT-CNY');
       const rate = Number(data?.code === '0' ? data.data?.[0]?.last : 0);
       if (rate > 5 && rate < 10) usdtCnyRate = rate;
     } catch {}
@@ -509,6 +523,30 @@ async function updateCrypto(coin: string) {
   const open = await fetchTodayOpen(coin);
   const change = open && open > 0 ? ((quote.price - open) / open) * 100 : undefined;
   entryFromPrice(coin, quote.price, quote.source, { ...quote.patch, todayOpen: open ?? undefined, changePercent: change });
+}
+
+/** 高频轮询只更新成交价及交易所已返回的24小时字段，避免为每个币种再发一笔日K请求。 */
+async function updateCryptoFast(coin: string) {
+  // 个别交易对可能被上游限流且 fetch 的底层连接迟迟不释放；外层再兜一层硬时限，
+  // 不能让一枚冷门币阻塞全部资产的下一轮三秒报价。
+  let timeout: NodeJS.Timeout | null = null;
+  const quote = await Promise.race([
+    fetchCryptoQuote(coin),
+    new Promise<null>((resolve) => {
+      timeout = setTimeout(() => resolve(null), FAST_CRYPTO_CYCLE_TIMEOUT_MS);
+    }),
+  ]);
+  if (timeout) clearTimeout(timeout);
+  if (!quote) {
+    markFailure(coin, 'Gate.io、HTX、OKX均无有效报价');
+    return;
+  }
+  entryFromPrice(coin, quote.price, quote.source, quote.patch);
+}
+
+/** 所有数字币以小请求并发方式统一每三秒写入同一份内存缓存，并逐币执行多源兜底。 */
+async function updateAllCryptoFast() {
+  await Promise.all(CRYPTO_COINS.map(updateCryptoFast));
 }
 
 async function updateSecuritiesAndCommodities() {
@@ -541,9 +579,28 @@ async function updateSecuritiesAndCommodities() {
 }
 
 async function scanPricesInternal() {
-  await Promise.all(CRYPTO_COINS.map(updateCrypto));
-  await updateSecuritiesAndCommodities();
-  await refreshUsdtCnyRate();
+  await updateAllCryptoFast();
+  if (!usdtCnyRefreshInProgress) {
+    usdtCnyRefreshInProgress = true;
+    // 人民币估值与数字币报价同频更新；失败时保留上一笔有效汇率。
+    void refreshUsdtCnyRate()
+      .catch((error) => console.warn('[行情] USDT/CNY 刷新失败:', error))
+      .finally(() => {
+        usdtCnyRefreshInProgress = false;
+        saveCacheToFile();
+      });
+  }
+  const now = Date.now();
+  if (!slowMarketScanInProgress && now - lastSlowMarketScanAt >= SLOW_MARKET_SCAN_INTERVAL_MS) {
+    lastSlowMarketScanAt = now;
+    slowMarketScanInProgress = true;
+    void updateSecuritiesAndCommodities()
+      .catch((error) => console.warn('[行情] 慢速市场刷新失败:', error))
+      .finally(() => {
+        slowMarketScanInProgress = false;
+        saveCacheToFile();
+      });
+  }
   saveCacheToFile();
 }
 
@@ -555,18 +612,13 @@ async function scanPrices() {
   finally { scanInProgress = false; }
 }
 
-function scheduleNextScan() {
-  nextScanTimer = setTimeout(async () => {
-    await scanPrices();
-    scheduleNextScan();
-  }, SCAN_INTERVAL_MS);
-}
-
 export function startPriceScanner() {
   if (nextScanTimer) return;
   loadCacheFromFile();
-  void scanPrices().then(scheduleNextScan);
-  console.log(`[行情] 统一行情扫描已启动：并发扫描、非重入、每轮结束后${SCAN_INTERVAL_MS / 1000}秒再次执行`);
+  void scanPrices();
+  // 固定节拍：上一轮尚未完成时由 scanInProgress 丢弃本轮，避免“完成后再等三秒”变成六秒。
+  nextScanTimer = setInterval(() => { void scanPrices(); }, CRYPTO_SCAN_INTERVAL_MS);
+  console.log(`[行情] 统一行情扫描已启动：数字币固定每${CRYPTO_SCAN_INTERVAL_MS / 1000}秒刷新，证券与商品每${SLOW_MARKET_SCAN_INTERVAL_MS / 1000}秒刷新`);
 }
 
 export function getLatestPrice(coin: string): number | null {
