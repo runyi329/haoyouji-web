@@ -5616,8 +5616,8 @@ export default function LedgerDetail() {
                 </div>
               </button>
 
-              {/* T+0 速记账本入口 - 仅管理员可见，代入视角隐藏 */}
-              {isCustomAF && isAdmin && !viewAsUserId && <button
+              {/* T+0 速记账本入口 - 账本创建者/管理员可见，代入视角隐藏 */}
+              {isCustomAF && (isOwner || isAdmin) && !viewAsUserId && <button
                 onClick={() => setLocation(`/ledger/${ledgerId}/t0-journal`)}
                 className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
                 style={{ background: 'linear-gradient(135deg, #18213d 0%, #2d3d73 52%, #373078 100%)', border: '1px solid #4b5fa3', boxShadow: '0 2px 12px rgba(37,54,130,0.2)' }}
