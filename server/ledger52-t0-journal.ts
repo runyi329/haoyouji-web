@@ -5,7 +5,7 @@ import * as dbLedger from "./db-ledger";
 export const LEDGER_52_T0_JOURNAL_ID = 52;
 /** OKX VIP 2 合约：挂单 0.0150%，市价吃单 0.0360%（2026-10-04由管理员确认）。 */
 export const OKX_VIP2_TAKER_FEE_RATE = "0.00036";
-const POSITION_ARCHIVE_STEP = 100;
+const POSITION_ARCHIVE_STEP = 10;
 
 export type T0JournalAction = "openLong" | "closeLong" | "openShort" | "closeShort";
 
@@ -61,16 +61,14 @@ function isOpeningAction(action: T0JournalAction): boolean {
 }
 
 /**
- * 开多向上归档：2600.x → 2700；开空向下归档：2600.x → 2600。
- * 即使前端从其他价格行进入，归属档位也只能由实际成交价决定。
+ * 不分多空、也不受前端点击价格格影响：一律按实际成交价向上归入最近的 10U 档。
+ * 例如 2606 → 2610，2695 / 2696 → 2700。
  */
-function archivePriceForAction(action: T0JournalAction, value: unknown): number {
+function archivePriceForAction(_action: T0JournalAction, value: unknown): number {
   const numeric = toNumber(value);
   if (numeric <= 0) return 0;
   const scaled = numeric / POSITION_ARCHIVE_STEP;
-  const archive = actionSide(action) === "long"
-    ? Math.ceil(scaled - 1e-9)
-    : Math.floor(scaled + 1e-9);
+  const archive = Math.ceil(scaled - 1e-9);
   return Number((archive * POSITION_ARCHIVE_STEP).toFixed(8));
 }
 
@@ -97,7 +95,8 @@ function calculateAvailableCloseCents(rows: any[], action: T0JournalAction, targ
     const rowAction = String(row.action) as T0JournalAction;
     const side = actionSide(rowAction);
     if (isOpeningAction(rowAction)) {
-      const archivePrice = archivedTargetPrice(rowAction, row.target_price, row.price);
+      // 用实际开仓成交价重算，以自动兼容旧版按多空方向写入的归档档位。
+      const archivePrice = archivePriceForAction(rowAction, row.price);
       const key = `${side}:${priceKey(archivePrice)}`;
       balances.set(key, (balances.get(key) || 0) + quantityToCents(row.quantity));
       continue;
@@ -440,13 +439,14 @@ async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: n
 
   const entryAction = String(entry.action) as T0JournalAction;
   const closeAction = actionSide(entryAction) === "long" ? "closeLong" : "closeShort";
-  const archivePrice = archivedTargetPrice(entryAction, entry.target_price, entry.price);
+  const archivePrice = archivePriceForAction(entryAction, entry.price);
+  const legacyStoredTargetPrice = toNumber(entry.target_price);
   const legacyActualPrice = toNumber(entry.price);
   const [dependentRows] = await tx.execute(
     `SELECT id
        FROM ledger52_t0_journal_entries
       WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
-        AND action = ? AND target_price IN (?, ?)
+        AND action = ? AND target_price IN (?, ?, ?)
       LIMIT 1 FOR UPDATE`,
     [
       LEDGER_52_T0_JOURNAL_ID,
@@ -455,6 +455,7 @@ async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: n
       String(entry.symbol),
       closeAction,
       archivePrice,
+      legacyStoredTargetPrice || legacyActualPrice,
       legacyActualPrice,
     ],
   );

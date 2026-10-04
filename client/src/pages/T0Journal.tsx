@@ -109,7 +109,7 @@ const LADDER_MID_STEP = 50;
 const LADDER_FAR_STEP = 100;
 const LADDER_NEAR_RANGE = 100;
 const LADDER_MID_RANGE = 200;
-const POSITION_ARCHIVE_STEP = 100;
+const POSITION_ARCHIVE_STEP = 10;
 const T0_PRICE_REFRESH_INTERVAL_MS = 3_000;
 const DEFAULT_QUANTITY_QUICK_OPTIONS = ["10.00", "20.00", "30.00", "40.00", "50.00"];
 const OKX_VIP2_TAKER_FEE_RATE = 0.00036;
@@ -121,24 +121,23 @@ function priceKey(price: number) {
 }
 
 /**
- * 开多向上归档：2600.x → 2700；开空向下归档：2600.x → 2600。
- * 精确落在百位线上的价格保留在该档位，例如 2700.00 → 2700。
+ * 不分多空、也不受点击格影响：一律按实际成交价向上归入最近的 10U 档。
+ * 例如 2606 → 2610，2695 / 2696 → 2700；精确落在十位线的价格保留原档。
  */
-function archivePriceForSide(side: PositionSide, value: number) {
+function archivePriceForSide(_side: PositionSide, value: number) {
   if (!Number.isFinite(value) || value <= 0) return 0;
   const scaled = value / POSITION_ARCHIVE_STEP;
-  const rounded = side === "long"
-    ? Math.ceil(scaled - 1e-9)
-    : Math.floor(scaled + 1e-9);
+  const rounded = Math.ceil(scaled - 1e-9);
   return Number((rounded * POSITION_ARCHIVE_STEP).toFixed(2));
 }
 
 function archivePriceForTrade(trade: PreviewTrade) {
   const side = ACTIONS[trade.action].side;
-  // 新流水已落库归属档位；旧流水缺失时按同一规则即时兼容归档。
-  return trade.targetPrice !== undefined && trade.targetPrice > 0
-    ? archivePriceForSide(side, trade.targetPrice)
-    : archivePriceForSide(side, trade.price);
+  // 开仓永远以真实成交价归类，兼容此前被按方向写入错误百元档的旧流水。
+  const sourcePrice = ACTIONS[trade.action].opening
+    ? trade.price
+    : (trade.targetPrice !== undefined && trade.targetPrice > 0 ? trade.targetPrice : trade.price);
+  return archivePriceForSide(side, sourcePrice);
 }
 
 function formatPrice(value: number | null | undefined) {
@@ -156,7 +155,7 @@ function formatLadderPrice(value: number) {
  * - 外圈 100–200 U：每 50 U 一档；
  * - 更远区域：每 100 U 一档。
  */
-function buildAdaptiveLadderLevels(markLadderPrice: number | null) {
+function buildAdaptiveLadderLevels(markLadderPrice: number | null, positionPrices: number[] = []) {
   const defaultCenter = Math.round(((LADDER_MIN_PRICE + LADDER_MAX_PRICE) / 2) / LADDER_FAR_STEP) * LADDER_FAR_STEP;
   const center = Math.min(
     LADDER_MAX_PRICE,
@@ -175,6 +174,12 @@ function buildAdaptiveLadderLevels(markLadderPrice: number | null) {
     }
   }
   if (markLadderPrice !== null) levels.add(markLadderPrice);
+  // 远端空白价位可以折叠，但已有仓位的十元归档档位必须始终可见。
+  for (const price of positionPrices) {
+    if (Number.isFinite(price) && price >= LADDER_MIN_PRICE && price <= LADDER_MAX_PRICE) {
+      levels.add(price);
+    }
+  }
   return Array.from(levels).sort((a, b) => b - a);
 }
 
@@ -448,7 +453,10 @@ export default function T0Journal() {
     ? Math.min(LADDER_MAX_PRICE, Math.max(LADDER_MIN_PRICE, Math.round(markPrice / LADDER_STEP) * LADDER_STEP))
     : null;
   const priceRows = useMemo(() => {
-    return buildAdaptiveLadderLevels(markLadderPrice).map((price) => ({
+    const activePositionPrices = buckets
+      .filter((bucket) => bucket.remainingQuantity > 0.0000001)
+      .map((bucket) => bucket.price);
+    return buildAdaptiveLadderLevels(markLadderPrice, activePositionPrices).map((price) => ({
       price,
       long: buckets.find((bucket) => bucket.side === "long" && priceKey(bucket.price) === priceKey(price)),
       short: buckets.find((bucket) => bucket.side === "short" && priceKey(bucket.price) === priceKey(price)),
@@ -499,8 +507,7 @@ export default function T0Journal() {
     };
   }, [markLadderPrice, priceRows.length]);
 
-  const openEntrySheet = (action: TradeAction = "openLong", targetPrice?: number, presetPrice?: number) => {
-    const isOpening = ACTIONS[action].opening;
+  const openEntrySheet = (action: TradeAction = "openLong", targetPrice?: number) => {
     setEntrySide(ACTIONS[action].side);
     setCloseConfirmationStep("input");
     setShowOpenedTradeList(false);
@@ -509,7 +516,8 @@ export default function T0Journal() {
       accountId: selectedAccountId,
       accountName: selectedAccount?.name ?? "",
       quantity: "",
-      price: isOpening ? (presetPrice?.toFixed(2) ?? (markPrice ? markPrice.toFixed(2) : "")) : "",
+      // 开仓成交价由管理员实际录入；保留浅色 0.00 占位，避免误把参考价写入流水。
+      price: "",
       note: "",
       targetPrice,
     });
@@ -863,7 +871,7 @@ export default function T0Journal() {
                   side="long"
                   markPrice={markPrice}
                   onClose={() => row.long && openEntrySheet("closeLong", row.long.price)}
-                  onOpen={() => openEntrySheet("openLong", undefined, row.price)}
+                  onOpen={() => openEntrySheet("openLong")}
                 />
                 <div className={`border-x border-slate-100 flex flex-col items-center justify-center px-1 ${row.isMark ? "bg-amber-100/70" : "bg-slate-50"}`}>
                   <span className="text-sm tabular-nums font-semibold text-slate-900">{formatLadderPrice(row.price)}</span>
@@ -880,7 +888,7 @@ export default function T0Journal() {
                   side="short"
                   markPrice={markPrice}
                   onClose={() => row.short && openEntrySheet("closeShort", row.short.price)}
-                  onOpen={() => openEntrySheet("openShort", undefined, row.price)}
+                  onOpen={() => openEntrySheet("openShort")}
                 />
               </div>
             ))}
