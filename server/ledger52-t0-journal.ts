@@ -63,14 +63,16 @@ function isOpeningAction(action: T0JournalAction): boolean {
 }
 
 /**
- * 不分多空、也不受前端点击价格格影响：一律按实际成交价向上归入最近的 10U 档。
- * 例如 2606 → 2610，2695 / 2696 → 2700。
+ * 不受前端点击价格格影响，始终按实际成交价归入十美元档：
+ * 多仓向上归档（2701 → 2710），空仓向下归档（2701 → 2700）。
  */
-function archivePriceForAction(_action: T0JournalAction, value: unknown): number {
+function archivePriceForAction(action: T0JournalAction, value: unknown): number {
   const numeric = toNumber(value);
   if (numeric <= 0) return 0;
   const scaled = numeric / POSITION_ARCHIVE_STEP;
-  const archive = Math.ceil(scaled - 1e-9);
+  const archive = actionSide(action) === "long"
+    ? Math.ceil(scaled - 1e-9)
+    : Math.floor(scaled + 1e-9);
   return Number((archive * POSITION_ARCHIVE_STEP).toFixed(8));
 }
 

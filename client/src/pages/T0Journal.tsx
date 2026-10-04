@@ -142,13 +142,17 @@ function priceKey(price: number) {
 }
 
 /**
- * 不分多空、也不受点击格影响：一律按实际成交价向上归入最近的 10U 档。
- * 例如 2606 → 2610，2695 / 2696 → 2700；精确落在十位线的价格保留原档。
+ * 不受点击格影响，始终按实际成交价的十美元档归类：
+ * - 多仓向上归档，如 2701 → 2710；
+ * - 空仓向下归档，如 2701 → 2700；
+ * 精确落在十位线的价格保留原档。
  */
-function archivePriceForSide(_side: PositionSide, value: number) {
+function archivePriceForSide(side: PositionSide, value: number) {
   if (!Number.isFinite(value) || value <= 0) return 0;
   const scaled = value / POSITION_ARCHIVE_STEP;
-  const rounded = Math.ceil(scaled - 1e-9);
+  const rounded = side === "long"
+    ? Math.ceil(scaled - 1e-9)
+    : Math.floor(scaled + 1e-9);
   return Number((rounded * POSITION_ARCHIVE_STEP).toFixed(2));
 }
 
@@ -236,6 +240,11 @@ function formatBeijingMonthDayTime(value: string) {
 function formatSigned(value: number) {
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
   return `${sign}${numberFormatter.format(Math.abs(value))}`;
+}
+
+function formatSignedPercent(value: number) {
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  return `${sign}${(Math.abs(value) * 100).toFixed(2)}%`;
 }
 
 function formatAmount(value: number) {
@@ -468,12 +477,6 @@ export default function T0Journal() {
   const getTradeAccountName = (trade: PreviewTrade) => trade.accountName
     || accounts.find((account) => account.id === trade.accountId)?.name
     || "未命名账户";
-  const openedTradeList = useMemo(
-    () => selectedTrades
-      .filter((trade) => ACTIONS[trade.action].opening)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [selectedTrades],
-  );
   const quantityQuickOptions = useMemo(
     () => Array.from(new Set([lastSavedQuantity, ...DEFAULT_QUANTITY_QUICK_OPTIONS].filter(Boolean).map(normalizeEthQuantity))),
     [lastSavedQuantity],
@@ -498,7 +501,32 @@ export default function T0Journal() {
   }, [entryForm.action, entryForm.price]);
   const buckets = useMemo(() => buildPositionBuckets(selectedTrades), [selectedTrades]);
   const summary = useMemo(() => calculateSummary(buckets, markPrice, selectedTrades), [buckets, markPrice, selectedTrades]);
-  const entrySideSummary = entrySide === "long" ? summary.long : summary.short;
+  // 从某个T型档位进入时，详情仅展示该方向、该归属档位的订单和汇总；
+  // 从底部通用开平按钮进入时没有指定档位，才保留方向总览。
+  const entryScopedTrades = useMemo(() => selectedTrades.filter((trade) => {
+    if (ACTIONS[trade.action].side !== entrySide) return false;
+    return entryForm.targetPrice === undefined
+      || priceKey(archivePriceForTrade(trade)) === priceKey(entryForm.targetPrice);
+  }), [selectedTrades, entrySide, entryForm.targetPrice]);
+  const entryScopedBuckets = useMemo(() => buckets.filter((bucket) => {
+    if (bucket.side !== entrySide) return false;
+    return entryForm.targetPrice === undefined
+      || priceKey(bucket.price) === priceKey(entryForm.targetPrice);
+  }), [buckets, entrySide, entryForm.targetPrice]);
+  const entryScopedSummary = useMemo(
+    () => calculateSummary(entryScopedBuckets, markPrice, entryScopedTrades),
+    [entryScopedBuckets, markPrice, entryScopedTrades],
+  );
+  const entrySideSummary = entrySide === "long" ? entryScopedSummary.long : entryScopedSummary.short;
+  // 档位详情已由用户刚点击的价格格定位，无需在标题重复显示档位，避免移动端换行。
+  // 仅从账户总览进入时保留“汇总”标识，明确这是该方向的全量订单。
+  const entryScopeTitle = `${entrySide === "long" ? "多仓" : "空仓"}${entryForm.targetPrice === undefined ? "汇总" : ""}`;
+  const openedTradeList = useMemo(
+    () => entryScopedTrades
+      .filter((trade) => ACTIONS[trade.action].opening)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [entryScopedTrades],
+  );
   const isEditingEntry = Boolean(entryForm.editingEntryId);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
   const isCloseReview = isClosingEntry && closeConfirmationStep === "review";
@@ -947,6 +975,20 @@ export default function T0Journal() {
             summary={summary}
             showCumulativeData={showCumulativeData}
             onToggleCumulativeData={() => setShowCumulativeData((current) => !current)}
+            onViewSideOrders={(side) => {
+              setEntrySide(side);
+              setCloseConfirmationStep("input");
+              setShowOpenedTradeList(true);
+              setEntryForm({
+                action: side === "long" ? "openLong" : "openShort",
+                accountId: selectedAccountId,
+                accountName: selectedAccount?.name ?? "",
+                quantity: "",
+                price: "",
+                note: "",
+              });
+              setShowEntrySheet(true);
+            }}
           />
         </section>
 
@@ -1109,7 +1151,7 @@ export default function T0Journal() {
                   className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-x-3 text-left"
                 >
                   <div className="flex min-w-0 items-baseline gap-2">
-                    <span className={`text-base font-semibold ${entrySide === "long" ? "text-rose-600" : "text-emerald-600"}`}>{entrySide === "long" ? "多仓汇总" : "空仓汇总"}</span>
+                    <span className={`text-base font-semibold ${entrySide === "long" ? "text-rose-600" : "text-emerald-600"}`}>{entryScopeTitle}</span>
                     <span className="text-base font-semibold tabular-nums text-slate-900">{formatQuantity(entrySideSummary.quantity)} ETH</span>
                   </div>
                   <span className="shrink-0 text-base font-medium tabular-nums text-slate-500">均价 {entrySideSummary.quantity > 0 ? formatPrice(entrySideSummary.average) : "--"}</span>
@@ -1160,14 +1202,16 @@ export default function T0Journal() {
                             else next.add(trade.id);
                             return next;
                           })}
-                          className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-x-3 text-left"
+                          className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 text-left"
                         >
-                          <div className="flex min-w-0 items-baseline gap-2">
-                            <span className={`text-base font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].label}</span>
-                            <span className="text-base font-semibold tabular-nums text-slate-900">{formatQuantity(trade.quantity)} ETH</span>
-                            <span title={getTradeAccountName(trade)} className="min-w-0 truncate text-[11px] font-medium text-slate-500">账户 {getTradeAccountName(trade)}</span>
+                          <div className="flex min-w-0 items-center justify-between gap-3">
+                            <span className="flex min-w-0 shrink items-baseline gap-2 whitespace-nowrap">
+                              <span className={`text-base font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].label}</span>
+                              <span className="text-base font-semibold tabular-nums text-slate-900">{formatQuantity(trade.quantity)} ETH</span>
+                              <span className="text-sm font-medium tabular-nums text-slate-500">@ {formatPrice(trade.price)}</span>
+                            </span>
+                            <span title={getTradeAccountName(trade)} className="min-w-0 max-w-[42%] shrink truncate whitespace-nowrap text-right text-[11px] font-medium text-slate-500">{getTradeAccountName(trade)}</span>
                           </div>
-                          <span className="shrink-0 text-base font-medium tabular-nums text-slate-500">开仓价 {formatPrice(trade.price)}</span>
                           <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                         </button>
                         {isExpanded && (
@@ -1246,7 +1290,9 @@ export default function T0Journal() {
                           disabled={disabled}
                           onClick={() => {
                             setCloseConfirmationStep("input");
-                            setEntryForm((current) => ({ ...current, action, targetPrice: config.opening ? undefined : current.targetPrice }));
+                            // 从价格档位进入时，无论切换开仓或平仓，都继续查看当前档位；
+                            // 开仓保存仍会按实际成交价自动归档，不会被这里的查看范围覆盖。
+                            setEntryForm((current) => ({ ...current, action, targetPrice: current.targetPrice }));
                           }}
                           className={`h-10 rounded-xl border text-xs font-semibold disabled:opacity-35 ${selected ? config.activeClass : config.idleClass}`}
                         >
@@ -1499,6 +1545,7 @@ function AccountOverview({
   summary,
   showCumulativeData,
   onToggleCumulativeData,
+  onViewSideOrders,
 }: {
   summary: {
     long: { quantity: number; average: number; unrealized: number | null; realized: number; turnover: number; commission: number; closedQuantity: number; closedAverageCost: number; closedAveragePrice: number; activeLevels: number };
@@ -1506,6 +1553,7 @@ function AccountOverview({
   };
   showCumulativeData: boolean;
   onToggleCumulativeData: () => void;
+  onViewSideOrders: (side: PositionSide) => void;
 }) {
   const pnlColor = (value: number | null) => value === null ? "text-slate-400" : value >= 0 ? "text-rose-600" : "text-emerald-600";
   const sides: Array<{ side: PositionSide; data: typeof summary.long }> = [
@@ -1519,7 +1567,13 @@ function AccountOverview({
         {sides.map(({ side, data }) => {
           const isLong = side === "long";
           return (
-            <div key={side} className={`min-w-0 px-3 py-3 ${isLong ? "border-r border-slate-100" : ""}`}>
+            <button
+              key={side}
+              type="button"
+              onClick={() => onViewSideOrders(side)}
+              aria-label={`查看全部${isLong ? "多仓" : "空仓"}订单`}
+              className={`min-w-0 px-3 py-3 text-left transition-colors active:bg-slate-50 ${isLong ? "border-r border-slate-100" : ""}`}
+            >
               <div className="flex items-baseline justify-between gap-2">
                 <div className="flex min-w-0 items-baseline gap-1.5">
                   <span className={`shrink-0 text-xs font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{isLong ? "多仓" : "空仓"}</span>
@@ -1530,7 +1584,7 @@ function AccountOverview({
                   <span className="text-[11px] text-slate-500">ETH</span>
                 </div>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -1614,13 +1668,23 @@ function PositionCell({ bucket, side, markPrice, onClick }: { bucket?: PositionB
     : isLong
       ? (markPrice - averageCost) * bucket.remainingQuantity
       : (averageCost - markPrice) * bucket.remainingQuantity;
+  // 与金额盈亏保持同一口径：逐档未实现盈亏 ÷ 本档剩余持仓成本，不含尚未实际支付的资金费。
+  const floatingReturnRate = floatingPnl === null || bucket.costBasis <= 0
+    ? null
+    : floatingPnl / bucket.costBasis;
+  const pnlTone = floatingPnl !== null && floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600";
 
   return (
     <button onClick={onClick} className={`min-h-[52px] w-full min-w-0 px-3 py-1.5 text-left transition-colors active:brightness-95 ${tone}`}>
       <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
-        <span className="shrink-0 text-base font-bold leading-none tracking-tight">{formatQuantity(bucket.remainingQuantity)}</span>
+        <span className="shrink-0 text-lg font-bold leading-none tracking-tight">{formatQuantity(bucket.remainingQuantity)}</span>
         {floatingPnl !== null && (
-          <span className={`min-w-0 truncate text-right text-[11px] font-semibold ${floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(floatingPnl)}</span>
+          <span className={`flex min-w-0 flex-col items-end text-right ${pnlTone}`}>
+            <span className="truncate text-[11px] font-semibold leading-none">{formatSigned(floatingPnl)}</span>
+            {floatingReturnRate !== null && (
+              <span className="mt-1 text-[10px] font-medium leading-none opacity-85">{formatSignedPercent(floatingReturnRate)}</span>
+            )}
+          </span>
         )}
       </div>
     </button>
