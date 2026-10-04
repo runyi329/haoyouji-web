@@ -717,7 +717,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const openEntrySheet = (action: TradeAction = "openLong", targetPrice?: number, showOrders = false) => {
     setEntrySide(ACTIONS[action].side);
     setCloseConfirmationStep("input");
-    setShowOpenedTradeList(showOrders);
+    // 成员以独立详情页查看仓位，默认展开对应方向的订单列表；管理员保留原弹窗行为。
+    setShowOpenedTradeList(isMemberView || showOrders);
     const defaultRelatedFund = lastRelatedUser
       ? relatedFunds.find((fund) => fund.relatedUserId === lastRelatedUser.id)
       : null;
@@ -1214,25 +1215,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
   return (
     <div className={`${embedded ? "min-h-0 w-full" : "min-h-screen max-w-md mx-auto"} bg-slate-50 ${canManage ? "pb-28" : "pb-6"}`}>
-      <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200">
-        <div className="h-14 px-4 flex items-center gap-3">
-          {!embedded && <button onClick={backToLedger} aria-label="返回52号账本" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
-            <ArrowLeft className="w-5 h-5 text-slate-800" />
-          </button>}
-          <div className="min-w-0 flex-1">
-            <h1 className="font-semibold text-slate-900">T+0 速记账本</h1>
-            {isMemberView && <div className="mt-0.5 text-[10px] font-medium text-indigo-600">个人只读视图</div>}
+      {!(embedded && isMemberView) && (
+        <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200">
+          <div className="h-14 px-4 flex items-center gap-3">
+            {!embedded && <button onClick={backToLedger} aria-label="返回52号账本" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
+              <ArrowLeft className="w-5 h-5 text-slate-800" />
+            </button>}
+            <div className="min-w-0 flex-1">
+              <h1 className="font-semibold text-slate-900">T+0 速记账本</h1>
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              aria-label="强制刷新整个页面"
+              title="强制刷新整个页面"
+              className="h-8 rounded-lg border border-indigo-100 bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 active:scale-95"
+            >
+              刷新
+            </button>
           </div>
-          <button
-            onClick={() => window.location.reload()}
-            aria-label="强制刷新整个页面"
-            title="强制刷新整个页面"
-            className="h-8 rounded-lg border border-indigo-100 bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 active:scale-95"
-          >
-            刷新
-          </button>
-        </div>
-      </header>
+        </header>
+      )}
 
       <main className="px-4 pt-4 space-y-4">
         <section className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
@@ -1425,13 +1427,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           )}
         </section>
 
-        <section className="px-1 py-1">
-          <div className="text-[11px] leading-5 text-slate-500">
-            {isMemberView
-              ? "仅展示关联到当前用户的仓位与流水，不会显示其他用户信息，也不能发起或修改速记。"
-              : "速记仅记录交易信息，不会触发交易所下单；下单账户与流水仅对当前管理员本人可见。"}
-          </div>
-        </section>
+        {!isMemberView && (
+          <section className="px-1 py-1">
+            <div className="text-[11px] leading-5 text-slate-500">
+              速记仅记录交易信息，不会触发交易所下单；下单账户与流水仅对当前管理员本人可见。
+            </div>
+          </section>
+        )}
       </main>
 
       {canManage && <div className="fixed bottom-0 left-0 right-0 z-20 mx-auto max-w-md border-t border-slate-200 bg-white/95 backdrop-blur px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
@@ -1455,26 +1457,45 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       </div>}
 
       {showEntrySheet && (
-        <div className="fixed inset-0 z-40 flex items-end bg-slate-950/35" role="dialog" aria-modal="true" aria-label={isMemberView ? "我的仓位明细" : "速记一笔"}>
-          <div className="w-full max-w-md mx-auto rounded-t-3xl bg-white shadow-2xl max-h-[92vh] overflow-y-auto">
-            <div className="px-4 pt-3 pb-2 sticky top-0 bg-white z-10 border-b border-slate-100">
-              <div className="min-w-0">
-                <div className="text-base font-semibold text-slate-900">{isMemberView ? "我的仓位明细" : isEditingEntry ? "编辑开仓记录" : isClosingEntry ? `${ACTIONS[entryForm.action].label}设置` : "速记一笔"}</div>
-                <div className="mt-0.5 text-[11px] text-slate-500">{isMemberView ? "只展示关联到当前用户的订单与仓位，不能发起或修改速记" : isEditingEntry ? "可修改数量、成交价、关联用户、专项款与备注；修改会保留审计快照" : isClosingEntry ? "填写平仓数量与成交价后，需两次确认才会记账" : "本地先显示，后台立即保存；不会触发交易所下单"}</div>
+        <div
+          className={isMemberView ? "fixed inset-0 z-40 overflow-y-auto bg-slate-50" : "fixed inset-0 z-40 flex items-end bg-slate-950/35"}
+          role="dialog"
+          aria-modal="true"
+          aria-label={isMemberView ? "仓位明细" : "速记一笔"}
+        >
+          <div className={isMemberView ? "min-h-full w-full bg-slate-50" : "w-full max-w-md mx-auto rounded-t-3xl bg-white shadow-2xl max-h-[92vh] overflow-y-auto"}>
+            {isMemberView ? (
+              <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur">
+                <button
+                  type="button"
+                  onClick={backToLadder}
+                  aria-label="返回T加零价格簿"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-700 active:scale-95"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+                <h1 className="text-base font-semibold text-slate-900">仓位明细</h1>
+              </header>
+            ) : (
+              <div className="sticky top-0 z-10 border-b border-slate-100 bg-white px-4 pb-2 pt-3">
+                <div className="min-w-0">
+                  <div className="text-base font-semibold text-slate-900">{isEditingEntry ? "编辑开仓记录" : isClosingEntry ? `${ACTIONS[entryForm.action].label}设置` : "速记一笔"}</div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">{isEditingEntry ? "可修改数量、成交价、关联用户、专项款与备注；修改会保留审计快照" : isClosingEntry ? "填写平仓数量与成交价后，需两次确认才会记账" : "本地先显示，后台立即保存；不会触发交易所下单"}</div>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="p-4 space-y-4">
               <div className={`overflow-hidden rounded-2xl border ${entrySide === "long" ? "border-rose-200 bg-rose-50/70" : "border-emerald-200 bg-emerald-50/70"}`}>
                 <div className="flex items-center gap-1.5 px-3 py-2.5">
-                  <button
+                  {!isMemberView && <button
                     type="button"
                     onClick={backToLadder}
                     aria-label="返回T型报价"
                     className="shrink-0 rounded-md p-0.5 text-slate-500 transition hover:bg-white/70 hover:text-slate-900 active:scale-90"
                   >
                     <ArrowLeft className="h-4 w-4" />
-                  </button>
+                  </button>}
                 <button
                   type="button"
                   aria-expanded={showOpenedTradeList}
