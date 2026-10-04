@@ -3,7 +3,10 @@ import { useLocation, useParams, useSearch } from "wouter";
 import {
   ArrowLeft,
   ChevronRight,
+  Search,
   ShieldCheck,
+  UserRound,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -17,10 +20,22 @@ type PreviewAccount = {
   lastUsedAt?: string | null;
 };
 
+type PreviewRelatedUser = {
+  id: string;
+  name: string;
+  username?: string;
+  avatar?: string;
+  lastUsedAt?: string | null;
+};
+
 type PreviewTrade = {
   id: string;
   accountId: string;
   accountName?: string;
+  relatedUserId?: string;
+  relatedUserName?: string;
+  relatedUsername?: string;
+  relatedUserAvatar?: string;
   symbol: string;
   action: TradeAction;
   quantity: number;
@@ -45,6 +60,10 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     id: String(entry.id),
     accountId: String(entry.accountId),
     accountName: entry.accountName ? String(entry.accountName) : undefined,
+    relatedUserId: entry.relatedUserId === undefined || entry.relatedUserId === null ? undefined : String(entry.relatedUserId),
+    relatedUserName: entry.relatedUserName ? String(entry.relatedUserName) : undefined,
+    relatedUsername: entry.relatedUsername ? String(entry.relatedUsername) : undefined,
+    relatedUserAvatar: entry.relatedUserAvatar ? String(entry.relatedUserAvatar) : undefined,
     symbol: String(entry.symbol || "ETH"),
     action: entry.action as TradeAction,
     quantity: Number(entry.quantity),
@@ -78,6 +97,9 @@ type EntryForm = {
   action: TradeAction;
   accountId: string;
   accountName: string;
+  relatedUserId: string;
+  relatedUserName: string;
+  relatedUsername: string;
   quantity: string;
   price: string;
   note: string;
@@ -359,8 +381,13 @@ export default function T0Journal() {
   const search = useSearch();
   const searchParams = new URLSearchParams(search);
   const [accounts, setAccounts] = useState<PreviewAccount[]>([]);
+  const [recentRelatedUsers, setRecentRelatedUsers] = useState<PreviewRelatedUser[]>([]);
   const [trades, setTrades] = useState<PreviewTrade[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [relatedUserFilterId, setRelatedUserFilterId] = useState("all");
+  const [lastRelatedUserId, setLastRelatedUserId] = useState("");
+  const [relatedUserPickerOpen, setRelatedUserPickerOpen] = useState(false);
+  const [relatedUserSearch, setRelatedUserSearch] = useState("");
   const [showEntrySheet, setShowEntrySheet] = useState(false);
   const [closeConfirmationStep, setCloseConfirmationStep] = useState<"input" | "review">("input");
   const [expandedOpenedTradeIds, setExpandedOpenedTradeIds] = useState<Set<string>>(() => new Set());
@@ -382,6 +409,9 @@ export default function T0Journal() {
     action: "openLong",
     accountId: "",
     accountName: "",
+    relatedUserId: "",
+    relatedUserName: "",
+    relatedUsername: "",
     quantity: "",
     price: "",
     note: "",
@@ -395,7 +425,9 @@ export default function T0Journal() {
   );
   const isLedgerAdmin = (ledgerData as any)?.userRole === "admin" || (ledgerData as any)?.userRole === "owner";
   const isSuperAdmin = (me as any)?.role === "super_admin" || (me as any)?.role === "admin";
-  const canAccess = ledgerId === 52 && !viewAsUserId && (isLedgerAdmin || isSuperAdmin);
+  const hasLedgerMembership = Boolean((ledgerData as any)?.userRole);
+  // 账本成员可以进入个人只读视图；实际数据边界仍由后端以 ctx.user.id 强制限定。
+  const canAccess = ledgerId === 52 && !viewAsUserId && (hasLedgerMembership || isSuperAdmin);
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
     refetchInterval: T0_PRICE_REFRESH_INTERVAL_MS,
     staleTime: 2500,
@@ -404,8 +436,20 @@ export default function T0Journal() {
     { ledgerId: 52 },
     { enabled: canAccess, staleTime: 10_000 },
   );
+  const isMemberView = (t0JournalQuery.data as any)?.viewerMode === "member";
+  const canManage = canAccess && (t0JournalQuery.data as any)?.viewerMode === "admin";
+  const relatedUserSearchQuery = trpc.ledger.t0SearchRelatedUsers.useQuery(
+    { ledgerId: 52, query: relatedUserSearch.trim() },
+    {
+      enabled: canManage && relatedUserPickerOpen && relatedUserSearch.trim().length > 0,
+      staleTime: 30_000,
+    },
+  );
 
   const selectedAccount = accounts.find((account) => account.id === selectedAccountId) ?? null;
+  const lastRelatedUser = recentRelatedUsers.find((user) => user.id === lastRelatedUserId)
+    ?? recentRelatedUsers[0]
+    ?? null;
   // 合约速记只使用服务端统一缓存的 ETH 永续标记价（Gate → HTX）；失败时由后端保留最近成功价。
   const markPriceRaw = (cryptoPricesRaw as any)?.prices?.ETH_PERP
     ?? (cryptoPricesRaw as any)?.ETH_PERP;
@@ -432,6 +476,15 @@ export default function T0Journal() {
         lastUsedAt: account.lastUsedAt ?? null,
       }))
       : [];
+    const nextRecentRelatedUsers: PreviewRelatedUser[] = Array.isArray(journal.recentUsers)
+      ? journal.recentUsers.map((user: any) => ({
+        id: String(user.id),
+        name: String(user.name || user.username || `用户#${user.id}`),
+        username: user.username ? String(user.username) : undefined,
+        avatar: user.avatar ? String(user.avatar) : undefined,
+        lastUsedAt: user.lastUsedAt ?? null,
+      }))
+      : [];
     const nextTrades: PreviewTrade[] = Array.isArray(journal.entries)
       ? journal.entries.map(previewTradeFromEntry)
       : [];
@@ -444,6 +497,7 @@ export default function T0Journal() {
       }))
       : [];
     setAccounts(nextAccounts);
+    setRecentRelatedUsers(nextRecentRelatedUsers);
     setTrades(nextTrades);
     setRecoverableEntries(nextRecoverableEntries);
     const latestSavedEntry = nextTrades
@@ -455,6 +509,12 @@ export default function T0Journal() {
     setSelectedAccountId((current) => nextAccounts.some((account) => account.id === current)
       ? current
       : (nextAccounts.some((account) => account.id === latestTradeAccountId) ? latestTradeAccountId : (nextAccounts[0]?.id || "")));
+    setLastRelatedUserId((current) => nextRecentRelatedUsers.some((user) => user.id === current)
+      ? current
+      : (nextRecentRelatedUsers[0]?.id || ""));
+    setRelatedUserFilterId((current) => current === "all" || current === "unlinked" || nextRecentRelatedUsers.some((user) => user.id === current)
+      ? current
+      : "all");
   }, [t0JournalQuery.data]);
 
   const priceTrend = previousMarkPrice === null || markPrice === null
@@ -471,12 +531,20 @@ export default function T0Journal() {
       : "text-indigo-700";
 
   const selectedTrades = useMemo(
-    () => trades.filter((trade) => trade.accountId === selectedAccountId && trade.symbol === "ETH"),
-    [trades, selectedAccountId],
+    () => trades.filter((trade) => (
+      trade.accountId === selectedAccountId
+      && trade.symbol === "ETH"
+      && (relatedUserFilterId === "all"
+        || (relatedUserFilterId === "unlinked" ? !trade.relatedUserId : trade.relatedUserId === relatedUserFilterId))
+    )),
+    [trades, selectedAccountId, relatedUserFilterId],
   );
   const getTradeAccountName = (trade: PreviewTrade) => trade.accountName
     || accounts.find((account) => account.id === trade.accountId)?.name
     || "未命名账户";
+  const getTradeRelatedUserName = (trade: PreviewTrade) => trade.relatedUserName
+    || trade.relatedUsername
+    || (trade.relatedUserId ? `用户#${trade.relatedUserId}` : "未关联用户");
   const quantityQuickOptions = useMemo(
     () => Array.from(new Set([lastSavedQuantity, ...DEFAULT_QUANTITY_QUICK_OPTIONS].filter(Boolean).map(normalizeEthQuantity))),
     [lastSavedQuantity],
@@ -588,14 +656,17 @@ export default function T0Journal() {
     };
   }, [markLadderPrice, priceRows.length]);
 
-  const openEntrySheet = (action: TradeAction = "openLong", targetPrice?: number) => {
+  const openEntrySheet = (action: TradeAction = "openLong", targetPrice?: number, showOrders = false) => {
     setEntrySide(ACTIONS[action].side);
     setCloseConfirmationStep("input");
-    setShowOpenedTradeList(false);
+    setShowOpenedTradeList(showOrders);
     setEntryForm({
       action,
       accountId: selectedAccountId,
       accountName: selectedAccount?.name ?? "",
+      relatedUserId: lastRelatedUser?.id ?? "",
+      relatedUserName: lastRelatedUser?.name ?? "",
+      relatedUsername: lastRelatedUser?.username ?? "",
       quantity: "",
       // 开仓成交价由管理员实际录入；保留浅色 0.00 占位，避免误把参考价写入流水。
       price: "",
@@ -606,8 +677,13 @@ export default function T0Journal() {
   };
 
   const openQuickCloseSheet = (trade: PreviewTrade) => {
+    if (!trade.relatedUserId) {
+      toast.error("请先编辑该笔开仓记录并关联用户，再进行平仓");
+      return;
+    }
     const side = ACTIONS[trade.action].side;
-    const target = buckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(archivePriceForTrade(trade)));
+    const tradeUserBuckets = buildPositionBuckets(selectedTrades.filter((item) => item.relatedUserId === trade.relatedUserId));
+    const target = tradeUserBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(archivePriceForTrade(trade)));
     if (!target || target.remainingQuantity <= 0.0000001) {
       toast.error("该笔仓位已无可平数量");
       return;
@@ -620,6 +696,9 @@ export default function T0Journal() {
       action,
       accountId: selectedAccountId,
       accountName: selectedAccount?.name ?? "",
+      relatedUserId: trade.relatedUserId ?? "",
+      relatedUserName: trade.relatedUserName ?? trade.relatedUsername ?? "",
+      relatedUsername: trade.relatedUsername ?? "",
       quantity: formatQuantity(Math.min(target.remainingQuantity, trade.quantity)),
       price: markPrice ? markPrice.toFixed(2) : "",
       note: "",
@@ -640,6 +719,9 @@ export default function T0Journal() {
       action: trade.action,
       accountId: trade.accountId,
       accountName: accounts.find((account) => account.id === trade.accountId)?.name ?? "",
+      relatedUserId: trade.relatedUserId ?? "",
+      relatedUserName: trade.relatedUserName ?? trade.relatedUsername ?? "",
+      relatedUsername: trade.relatedUsername ?? "",
       quantity: formatQuantity(trade.quantity),
       price: trade.price.toFixed(2),
       note: trade.note ?? "",
@@ -671,6 +753,10 @@ export default function T0Journal() {
         id: String(data.entry.id),
         accountId: String(data.entry.accountId),
         accountName: data.entry.accountName ? String(data.entry.accountName) : account.name,
+        relatedUserId: data.entry.relatedUserId === undefined || data.entry.relatedUserId === null ? undefined : String(data.entry.relatedUserId),
+        relatedUserName: data.entry.relatedUserName ? String(data.entry.relatedUserName) : undefined,
+        relatedUsername: data.entry.relatedUsername ? String(data.entry.relatedUsername) : undefined,
+        relatedUserAvatar: data.entry.relatedUserAvatar ? String(data.entry.relatedUserAvatar) : undefined,
         symbol: String(data.entry.symbol || "ETH"),
         action: data.entry.action as TradeAction,
         quantity: Number(data.entry.quantity),
@@ -682,6 +768,17 @@ export default function T0Journal() {
         clientRequestId: variables.clientRequestId,
       };
       setAccounts((current) => [account, ...current.filter((item) => item.id !== account.id && item.name !== account.name)]);
+      if (entry.relatedUserId) {
+        const relatedUser: PreviewRelatedUser = {
+          id: entry.relatedUserId,
+          name: entry.relatedUserName || entry.relatedUsername || `用户#${entry.relatedUserId}`,
+          username: entry.relatedUsername,
+          avatar: entry.relatedUserAvatar,
+          lastUsedAt: new Date().toISOString(),
+        };
+        setLastRelatedUserId(relatedUser.id);
+        setRecentRelatedUsers((current) => [relatedUser, ...current.filter((item) => item.id !== relatedUser.id)]);
+      }
       setTrades((current) => current.map((trade) => trade.clientRequestId === variables.clientRequestId ? entry : trade));
       setSelectedAccountId(account.id);
       const savedQuantity = String(variables.quantity || "").trim();
@@ -707,6 +804,10 @@ export default function T0Journal() {
         accountName: data.entry.accountName
           ? String(data.entry.accountName)
           : accounts.find((account) => account.id === String(data.entry.accountId))?.name,
+        relatedUserId: data.entry.relatedUserId === undefined || data.entry.relatedUserId === null ? undefined : String(data.entry.relatedUserId),
+        relatedUserName: data.entry.relatedUserName ? String(data.entry.relatedUserName) : undefined,
+        relatedUsername: data.entry.relatedUsername ? String(data.entry.relatedUsername) : undefined,
+        relatedUserAvatar: data.entry.relatedUserAvatar ? String(data.entry.relatedUserAvatar) : undefined,
         symbol: String(data.entry.symbol || "ETH"),
         action: data.entry.action as TradeAction,
         quantity: Number(data.entry.quantity),
@@ -789,6 +890,19 @@ export default function T0Journal() {
     selectAccountMutation.mutate({ ledgerId: 52, accountId: Number(account.id) });
   };
 
+  const selectRelatedUser = (user: PreviewRelatedUser) => {
+    setEntryForm((current) => ({
+      ...current,
+      relatedUserId: user.id,
+      relatedUserName: user.name,
+      relatedUsername: user.username ?? "",
+    }));
+    setLastRelatedUserId(user.id);
+    setRecentRelatedUsers((current) => [{ ...user, lastUsedAt: new Date().toISOString() }, ...current.filter((item) => item.id !== user.id)]);
+    setRelatedUserSearch("");
+    setRelatedUserPickerOpen(false);
+  };
+
   const handleSaveEntry = () => {
     const normalizedQuantity = normalizeEthQuantity(entryForm.quantity);
     const quantity = Number(normalizedQuantity);
@@ -797,6 +911,7 @@ export default function T0Journal() {
     const selectedAction = ACTIONS[entryForm.action];
     const normalizedAccountName = entryForm.accountName.trim();
     const hasPersistedAccountId = /^\d+$/.test(entryForm.accountId);
+    const relatedUserId = Number(entryForm.relatedUserId);
 
     if (quantityFormatError) {
       toast.error(quantityFormatError);
@@ -819,6 +934,10 @@ export default function T0Journal() {
       toast.error("请在最后选择或新建下单账户");
       return;
     }
+    if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) {
+      toast.error("请选择关联用户");
+      return;
+    }
 
     if (entryForm.editingEntryId) {
       const entryId = Number(entryForm.editingEntryId);
@@ -829,6 +948,7 @@ export default function T0Journal() {
       updateOpeningEntryMutation.mutate({
         ledgerId: 52,
         entryId,
+        relatedUserId,
         quantity: normalizedQuantity,
         price: entryForm.price.trim(),
         note: entryForm.note.trim() || undefined,
@@ -869,6 +989,9 @@ export default function T0Journal() {
       id: `pending-entry-${clientRequestId}`,
       accountId,
       accountName: normalizedAccountName || selectedAccount?.name,
+      relatedUserId: entryForm.relatedUserId,
+      relatedUserName: entryForm.relatedUserName,
+      relatedUsername: entryForm.relatedUsername || undefined,
       symbol: "ETH",
       action: entryForm.action,
       quantity,
@@ -888,6 +1011,7 @@ export default function T0Journal() {
       ledgerId: 52,
       accountId: hasPersistedAccountId ? Number(entryForm.accountId) : undefined,
       accountName: hasPersistedAccountId ? undefined : normalizedAccountName,
+      relatedUserId,
       symbol: "ETH",
       action: entryForm.action,
       quantity: normalizedQuantity,
@@ -926,14 +1050,14 @@ export default function T0Journal() {
             <ShieldCheck className="w-6 h-6 text-slate-500" />
           </div>
           <div className="text-base font-semibold text-slate-800">当前身份不可访问</div>
-          <p className="mt-2 text-sm leading-6 text-slate-500">该工具只在 52 号账本的管理身份下显示，代入成员视角时不会开放。</p>
+          <p className="mt-2 text-sm leading-6 text-slate-500">仅 52 号账本成员可访问。管理员可管理全部关联用户数据；成员只可查看本人关联的仓位与流水，代入成员视角不会开放。</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 max-w-md mx-auto pb-28">
+    <div className={`min-h-screen bg-slate-50 max-w-md mx-auto ${canManage ? "pb-28" : "pb-6"}`}>
       <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="h-14 px-4 flex items-center gap-3">
           <button onClick={backToLedger} aria-label="返回52号账本" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
@@ -941,6 +1065,7 @@ export default function T0Journal() {
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="font-semibold text-slate-900">T+0 速记账本</h1>
+            {isMemberView && <div className="mt-0.5 text-[10px] font-medium text-indigo-600">个人只读视图</div>}
           </div>
           <button
             onClick={() => window.location.reload()}
@@ -969,6 +1094,33 @@ export default function T0Journal() {
                 </div>
               </div>
             </div>
+            <div className={`mt-2.5 grid gap-2 ${isMemberView ? "grid-cols-1" : "grid-cols-2"}`}>
+              <label className="min-w-0">
+                <span className="mb-1 block text-[10px] text-slate-400">{isMemberView ? "关联下单账户" : "下单账户"}</span>
+                <select
+                  value={selectedAccountId}
+                  onChange={(event) => setSelectedAccountId(event.target.value)}
+                  className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
+                >
+                  {accounts.length === 0 && <option value="">暂无账户</option>}
+                  {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+                </select>
+              </label>
+              {!isMemberView && <label className="min-w-0">
+                  <span className="mb-1 block text-[10px] text-slate-400">关联用户</span>
+                  <select
+                    value={relatedUserFilterId}
+                    onChange={(event) => setRelatedUserFilterId(event.target.value)}
+                    className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
+                  >
+                    <option value="all">全部用户</option>
+                    {trades.some((trade) => !trade.relatedUserId) && <option value="unlinked">未关联用户（历史）</option>}
+                    {recentRelatedUsers.map((user) => (
+                      <option key={user.id} value={user.id}>{user.name}{user.username ? ` · @${user.username}` : ""}</option>
+                    ))}
+                  </select>
+                </label>}
+            </div>
           </div>
 
           <AccountOverview
@@ -976,18 +1128,7 @@ export default function T0Journal() {
             showCumulativeData={showCumulativeData}
             onToggleCumulativeData={() => setShowCumulativeData((current) => !current)}
             onViewSideOrders={(side) => {
-              setEntrySide(side);
-              setCloseConfirmationStep("input");
-              setShowOpenedTradeList(true);
-              setEntryForm({
-                action: side === "long" ? "openLong" : "openShort",
-                accountId: selectedAccountId,
-                accountName: selectedAccount?.name ?? "",
-                quantity: "",
-                price: "",
-                note: "",
-              });
-              setShowEntrySheet(true);
+              openEntrySheet(side === "long" ? "openLong" : "openShort", undefined, true);
             }}
           />
         </section>
@@ -1004,7 +1145,23 @@ export default function T0Journal() {
                   bucket={row.long}
                   side="long"
                   markPrice={markPrice}
-                  onClose={() => row.long && openEntrySheet("closeLong", row.long.price)}
+                  readOnly={isMemberView}
+                  onClose={() => {
+                    if (!row.long) return;
+                    if (isMemberView) {
+                      openEntrySheet("openLong", row.long.price, true);
+                      return;
+                    }
+                    if (relatedUserFilterId === "all") {
+                      toast.error("请先在账户总览选择关联用户，再平仓");
+                      return;
+                    }
+                    if (relatedUserFilterId === "unlinked") {
+                      toast.error("历史未关联仓位请先展开订单并补充关联用户");
+                      return;
+                    }
+                    openEntrySheet("closeLong", row.long.price);
+                  }}
                   onOpen={() => openEntrySheet("openLong")}
                 />
                 <div className={`border-x border-slate-100 flex items-center justify-center px-1 ${row.isMark ? (priceTrend === "up" ? "bg-rose-200 shadow-[inset_0_0_0_1px_rgba(244,63,94,0.25)]" : priceTrend === "down" ? "bg-sky-200 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.25)]" : "bg-slate-200") : "bg-slate-50"}`}>
@@ -1016,7 +1173,23 @@ export default function T0Journal() {
                   bucket={row.short}
                   side="short"
                   markPrice={markPrice}
-                  onClose={() => row.short && openEntrySheet("closeShort", row.short.price)}
+                  readOnly={isMemberView}
+                  onClose={() => {
+                    if (!row.short) return;
+                    if (isMemberView) {
+                      openEntrySheet("openShort", row.short.price, true);
+                      return;
+                    }
+                    if (relatedUserFilterId === "all") {
+                      toast.error("请先在账户总览选择关联用户，再平仓");
+                      return;
+                    }
+                    if (relatedUserFilterId === "unlinked") {
+                      toast.error("历史未关联仓位请先展开订单并补充关联用户");
+                      return;
+                    }
+                    openEntrySheet("closeShort", row.short.price);
+                  }}
                   onOpen={() => openEntrySheet("openShort")}
                 />
               </div>
@@ -1042,6 +1215,7 @@ export default function T0Journal() {
                     <div className="flex items-center gap-1.5">
                       <span className={`text-xs font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-sky-700"}`}>{ACTIONS[trade.action].label}</span>
                       <span title={getTradeAccountName(trade)} className="max-w-[96px] truncate rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">账户 {getTradeAccountName(trade)}</span>
+                      <span title={getTradeRelatedUserName(trade)} className="max-w-[96px] truncate rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">用户 {getTradeRelatedUserName(trade)}</span>
                       {trade.targetPrice !== undefined && <span className="text-[11px] text-slate-400">{ACTIONS[trade.action].opening ? `归档 ${formatPrice(archivePriceForTrade(trade))}` : `对应 ${formatPrice(archivePriceForTrade(trade))}`}</span>}
                       {trade.isSyncing && <span className="text-[11px] text-amber-600">保存中</span>}
                     </div>
@@ -1050,18 +1224,18 @@ export default function T0Journal() {
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1.5">
                     <div className="text-right text-[11px] text-slate-400 whitespace-nowrap">{new Date(trade.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</div>
-                    <button
-                      type="button"
-                      disabled={Boolean(trade.isSyncing) || revertEntryMutation.isPending}
-                      onClick={() => setRevertCandidate(trade)}
-                      className="h-6 rounded-md border border-amber-200 bg-amber-50 px-1.5 text-[10px] font-semibold text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      回撤
-                    </button>
+                    {canManage && <button
+                        type="button"
+                        disabled={Boolean(trade.isSyncing) || revertEntryMutation.isPending}
+                        onClick={() => setRevertCandidate(trade)}
+                        className="h-6 rounded-md border border-amber-200 bg-amber-50 px-1.5 text-[10px] font-semibold text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        回撤
+                      </button>}
                   </div>
                 </div>
               ))}
-              {recoverableEntries.length > 0 && (
+              {canManage && recoverableEntries.length > 0 && (
                 <div className="border-t border-slate-200 bg-amber-50/45">
                   <button
                     type="button"
@@ -1077,7 +1251,7 @@ export default function T0Journal() {
                         <div key={item.auditId} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-amber-100 last:border-b-0">
                           <div className="min-w-0">
                             <div className="text-xs font-semibold text-slate-700">{ACTIONS[item.trade.action].label} {formatQuantity(item.trade.quantity)} ETH @ {formatPrice(item.trade.price)}</div>
-                            <div className="mt-0.5 text-[10px] text-slate-500">账户 {getTradeAccountName(item.trade)} · {item.operation === "delete" ? "删除" : "回撤"}于 {formatBeijingMonthDayTime(item.revertedAt)}</div>
+                            <div className="mt-0.5 text-[10px] text-slate-500">账户 {getTradeAccountName(item.trade)} · 用户 {getTradeRelatedUserName(item.trade)} · {item.operation === "delete" ? "删除" : "回撤"}于 {formatBeijingMonthDayTime(item.revertedAt)}</div>
                           </div>
                           <button
                             type="button"
@@ -1098,11 +1272,15 @@ export default function T0Journal() {
         </section>
 
         <section className="px-1 py-1">
-          <div className="text-[11px] leading-5 text-slate-500">速记仅记录交易信息，不会触发交易所下单；下单账户与流水仅对当前管理员本人可见。</div>
+          <div className="text-[11px] leading-5 text-slate-500">
+            {isMemberView
+              ? "仅展示关联到当前用户的仓位与流水，不会显示其他用户信息，也不能发起或修改速记。"
+              : "速记仅记录交易信息，不会触发交易所下单；下单账户与流水仅对当前管理员本人可见。"}
+          </div>
         </section>
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 z-20 mx-auto max-w-md border-t border-slate-200 bg-white/95 backdrop-blur px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+      {canManage && <div className="fixed bottom-0 left-0 right-0 z-20 mx-auto max-w-md border-t border-slate-200 bg-white/95 backdrop-blur px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
         <div className="grid grid-cols-4 gap-2">
           {(Object.keys(ACTIONS) as TradeAction[]).map((action) => {
             const config = ACTIONS[action];
@@ -1120,15 +1298,15 @@ export default function T0Journal() {
             );
           })}
         </div>
-      </div>
+      </div>}
 
       {showEntrySheet && (
-        <div className="fixed inset-0 z-40 flex items-end bg-slate-950/35" role="dialog" aria-modal="true" aria-label="速记一笔">
+        <div className="fixed inset-0 z-40 flex items-end bg-slate-950/35" role="dialog" aria-modal="true" aria-label={isMemberView ? "我的仓位明细" : "速记一笔"}>
           <div className="w-full max-w-md mx-auto rounded-t-3xl bg-white shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="px-4 pt-3 pb-2 sticky top-0 bg-white z-10 border-b border-slate-100">
               <div className="min-w-0">
-                <div className="text-base font-semibold text-slate-900">{isEditingEntry ? "编辑开仓记录" : isClosingEntry ? `${ACTIONS[entryForm.action].label}设置` : "速记一笔"}</div>
-                <div className="mt-0.5 text-[11px] text-slate-500">{isEditingEntry ? "仅可修改数量、成交价与备注；修改会保留审计快照" : isClosingEntry ? "填写平仓数量与成交价后，需两次确认才会记账" : "本地先显示，后台立即保存；不会触发交易所下单"}</div>
+                <div className="text-base font-semibold text-slate-900">{isMemberView ? "我的仓位明细" : isEditingEntry ? "编辑开仓记录" : isClosingEntry ? `${ACTIONS[entryForm.action].label}设置` : "速记一笔"}</div>
+                <div className="mt-0.5 text-[11px] text-slate-500">{isMemberView ? "只展示关联到当前用户的订单与仓位，不能发起或修改速记" : isEditingEntry ? "仅可修改数量、成交价与备注；修改会保留审计快照" : isClosingEntry ? "填写平仓数量与成交价后，需两次确认才会记账" : "本地先显示，后台立即保存；不会触发交易所下单"}</div>
               </div>
             </div>
 
@@ -1239,35 +1417,39 @@ export default function T0Journal() {
                                 <span className="text-[10px] text-slate-400">下单账户</span>
                                 <span className="text-xs font-medium text-slate-700">{getTradeAccountName(trade)}</span>
                               </div>
-                            </div>
-                            <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  disabled={isCloseReview || Boolean(trade.isSyncing)}
-                                  onClick={() => openEditOpeningTrade(trade)}
-                                  className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                  编辑
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={isCloseReview || Boolean(trade.isSyncing)}
-                                  onClick={() => setDeleteCandidate(trade)}
-                                  className="h-8 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                  删除
-                                </button>
+                              <div className="col-span-2 flex items-center justify-between border-t border-slate-200 pt-2">
+                                <span className="text-[10px] text-slate-400">关联用户</span>
+                                <span className="text-xs font-medium text-slate-700">{getTradeRelatedUserName(trade)}</span>
                               </div>
-                              <button
-                                type="button"
-                                disabled={isCloseReview || !canQuickClose}
-                                onClick={() => openQuickCloseSheet(trade)}
-                                className={`h-8 rounded-lg border px-3 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${ACTIONS[closeAction].idleClass}`}
-                              >
-                                {ACTIONS[closeAction].label}
-                              </button>
                             </div>
+                            {canManage && <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={isCloseReview || Boolean(trade.isSyncing)}
+                                    onClick={() => openEditOpeningTrade(trade)}
+                                    className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                                  >
+                                    编辑
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isCloseReview || Boolean(trade.isSyncing)}
+                                    onClick={() => setDeleteCandidate(trade)}
+                                    className="h-8 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                                  >
+                                    删除
+                                  </button>
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={isCloseReview || !canQuickClose}
+                                  onClick={() => openQuickCloseSheet(trade)}
+                                  className={`h-8 rounded-lg border px-3 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${ACTIONS[closeAction].idleClass}`}
+                                >
+                                  {ACTIONS[closeAction].label}
+                                </button>
+                              </div>}
                           </>
                         )}
                       </div>
@@ -1276,6 +1458,7 @@ export default function T0Journal() {
                 </div>
               )}
 
+              {canManage && <>
               <div>
                 <div className="text-xs font-medium text-slate-600 mb-2">{entrySide === "long" ? "多仓操作" : "空仓操作"}</div>
                 {ACTION_GROUPS.filter((group) => group.side === entrySide).map((group) => (
@@ -1380,33 +1563,130 @@ export default function T0Journal() {
                   />
                 </Field>
 
-                <Field label="下单账户">
-                  {accounts.length > 0 ? (
-                    <select
-                      disabled={isCloseReview || isEditingEntry}
-                      value={entryForm.accountId}
-                      onChange={(event) => selectOrderAccount(event.target.value)}
-                      className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-indigo-500"
+                <div className="grid grid-cols-2 items-start gap-3">
+                  <Field label={<span>下单账户 <span className="text-rose-500">*</span></span>}>
+                    {accounts.length > 0 ? (
+                      <select
+                        disabled={isCloseReview || isEditingEntry}
+                        value={entryForm.accountId}
+                        onChange={(event) => selectOrderAccount(event.target.value)}
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-indigo-500"
+                      >
+                        <option value="">新建账户</option>
+                        {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+                      </select>
+                    ) : null}
+                    {!entryForm.accountId && (
+                      <input
+                        disabled={isCloseReview || isEditingEntry}
+                        value={entryForm.accountName}
+                        onChange={(event) => setEntryForm((current) => ({ ...current, accountName: event.target.value }))}
+                        placeholder="新账户名称"
+                        className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500"
+                      />
+                    )}
+                  </Field>
+
+                  <Field label={<span>关联用户 <span className="text-rose-500">*</span></span>}>
+                    <button
+                      type="button"
+                      disabled={isCloseReview}
+                      onClick={() => {
+                        setRelatedUserPickerOpen((current) => !current);
+                        setRelatedUserSearch("");
+                      }}
+                      className={`flex h-11 w-full items-center gap-2 rounded-xl border px-3 text-left text-sm outline-none transition disabled:opacity-40 ${entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}
                     >
-                      <option value="">新建下单账户</option>
-                      {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-                    </select>
-                  ) : null}
-                  {!entryForm.accountId && (
-                    <input
-                      disabled={isCloseReview || isEditingEntry}
-                      value={entryForm.accountName}
-                      onChange={(event) => setEntryForm((current) => ({ ...current, accountName: event.target.value }))}
-                      placeholder="例如：AC账户、主账户"
-                      className="mt-2 w-full h-11 rounded-xl border border-slate-200 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500"
-                    />
-                  )}
-                  <div className="mt-1.5 text-[11px] leading-4 text-slate-400">新建后仅当前管理员可见；下次速记默认选用最近一次选择的账户。</div>
-                </Field>
+                      <UserRound className="h-4 w-4 shrink-0 text-indigo-500" />
+                      <span className="min-w-0 flex-1 truncate font-medium">{entryForm.relatedUserName || entryForm.relatedUsername || "搜索并选择"}</span>
+                      <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    </button>
+                  </Field>
+                </div>
+
+                <div className="-mt-1 grid grid-cols-2 gap-3 text-[10px] leading-4 text-slate-400">
+                  <span>首次可新建；后续默认最近账户。</span>
+                  <span>下次速记默认最近关联用户。</span>
+                </div>
+
+                {relatedUserPickerOpen && (
+                  <div className="overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-sm">
+                    <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
+                      <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                      <input
+                        autoFocus
+                        value={relatedUserSearch}
+                        onChange={(event) => setRelatedUserSearch(event.target.value)}
+                        placeholder="用户名或昵称模糊搜索"
+                        className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRelatedUserPickerOpen(false);
+                          setRelatedUserSearch("");
+                        }}
+                        aria-label="关闭关联用户搜索"
+                        className="rounded p-0.5 text-slate-400 active:scale-90"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {relatedUserSearch.trim().length === 0 ? (
+                      recentRelatedUsers.length > 0 ? (
+                        <div className="max-h-48 overflow-y-auto py-1">
+                          <div className="px-3 py-1.5 text-[10px] font-medium text-slate-400">最近选择</div>
+                          {recentRelatedUsers.map((user) => (
+                            <button
+                              key={user.id}
+                              type="button"
+                              onClick={() => selectRelatedUser(user)}
+                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left active:bg-indigo-50"
+                            >
+                              <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
+                              <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{user.name}</span>
+                              {user.username && <span className="max-w-[42%] truncate text-xs text-slate-400">@{user.username}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="px-3 py-4 text-center text-xs text-slate-400">输入用户名或昵称，搜索全局用户</div>
+                      )
+                    ) : relatedUserSearchQuery.isFetching ? (
+                      <div className="px-3 py-4 text-center text-xs text-slate-400">正在搜索用户…</div>
+                    ) : Array.isArray(relatedUserSearchQuery.data) && relatedUserSearchQuery.data.length > 0 ? (
+                      <div className="max-h-56 overflow-y-auto py-1">
+                        {(relatedUserSearchQuery.data as any[]).map((candidate) => {
+                          const user: PreviewRelatedUser = {
+                            id: String(candidate.id),
+                            name: String(candidate.name || candidate.username || `用户#${candidate.id}`),
+                            username: candidate.username ? String(candidate.username) : undefined,
+                            avatar: candidate.avatar ? String(candidate.avatar) : undefined,
+                          };
+                          return (
+                            <button
+                              key={user.id}
+                              type="button"
+                              onClick={() => selectRelatedUser(user)}
+                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left active:bg-indigo-50"
+                            >
+                              <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
+                              <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{user.name}</span>
+                              {user.username && <span className="max-w-[42%] truncate text-xs text-slate-400">@{user.username}</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="px-3 py-4 text-center text-xs text-slate-400">未找到匹配用户</div>
+                    )}
+                  </div>
+                )}
               </div>
+              </>}
 
             </div>
-            <div className="sticky bottom-0 border-t border-slate-100 bg-white/95 px-4 py-3 backdrop-blur">
+            {canManage && <div className="sticky bottom-0 border-t border-slate-100 bg-white/95 px-4 py-3 backdrop-blur">
               {isCloseReview ? (
                 <div className="grid grid-cols-2 gap-3">
                   <button
@@ -1433,12 +1713,12 @@ export default function T0Journal() {
                   {isEditingEntry ? "保存修改" : isClosingEntry ? `确认${ACTIONS[entryForm.action].label}参数` : "快速保存并记账"}
                 </button>
               )}
-            </div>
+            </div>}
           </div>
         </div>
       )}
 
-      {deleteCandidate && (
+      {canManage && deleteCandidate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="删除开仓记录">
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
             <div className="text-base font-semibold text-slate-900">删除这笔开仓记录？</div>
@@ -1467,7 +1747,7 @@ export default function T0Journal() {
         </div>
       )}
 
-      {revertCandidate && (
+      {canManage && revertCandidate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="回撤速记流水">
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
             <div className="text-base font-semibold text-slate-900">回撤这笔速记？</div>
@@ -1498,7 +1778,7 @@ export default function T0Journal() {
         </div>
       )}
 
-      {restoreCandidate && (
+      {canManage && restoreCandidate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="恢复速记流水">
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
             <div className="text-base font-semibold text-slate-900">恢复这笔速记？</div>
@@ -1697,18 +1977,23 @@ function LadderCell({
   markPrice,
   onClose,
   onOpen,
+  readOnly = false,
 }: {
   bucket?: PositionBucket;
   side: PositionSide;
   markPrice: number | null;
   onClose: () => void;
   onOpen: () => void;
+  readOnly?: boolean;
 }) {
   if (bucket && bucket.remainingQuantity > 0.0000001) {
     return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={onClose} />;
   }
 
   const isLong = side === "long";
+  if (readOnly) {
+    return <div className={`min-h-[52px] w-full ${isLong ? "bg-rose-50/45" : "bg-emerald-50/45"}`} />;
+  }
   return (
     <button
       onClick={onOpen}

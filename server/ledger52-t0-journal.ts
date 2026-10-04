@@ -17,10 +17,15 @@ export type T0JournalActor = {
   isViewingAs?: boolean;
 };
 
+export type T0JournalReadScope =
+  | { mode: "admin"; journalOwnerUserId: number }
+  | { mode: "member"; relatedUserId: number };
+
 export type SaveT0JournalEntryInput = {
   actorUserId: number;
   accountId?: number;
   accountName?: string;
+  relatedUserId: number;
   symbol: "ETH";
   action: T0JournalAction;
   quantity: string;
@@ -93,25 +98,31 @@ function priceKey(value: unknown): string {
   return numeric.toFixed(8);
 }
 
-function calculateAvailableCloseCents(rows: any[], action: T0JournalAction, targetPrice: string): number {
+function relatedUserKey(value: unknown): string {
+  const userId = toNumber(value);
+  return userId > 0 ? String(userId) : "legacy-unlinked";
+}
+
+function calculateAvailableCloseCents(rows: any[], action: T0JournalAction, targetPrice: string, relatedUserId: number): number {
   const balances = new Map<string, number>();
   for (const row of rows) {
     const rowAction = String(row.action) as T0JournalAction;
     const side = actionSide(rowAction);
+    const userKey = relatedUserKey(row.related_user_id);
     if (isOpeningAction(rowAction)) {
       // 用实际开仓成交价重算，以自动兼容旧版按多空方向写入的归档档位。
       const archivePrice = archivePriceForAction(rowAction, row.price);
-      const key = `${side}:${priceKey(archivePrice)}`;
+      const key = `${side}:${priceKey(archivePrice)}:${userKey}`;
       balances.set(key, (balances.get(key) || 0) + quantityToCents(row.quantity));
       continue;
     }
     if (row.target_price === null || row.target_price === undefined) continue;
     const archivePrice = archivedTargetPrice(rowAction, row.target_price);
-    const key = `${side}:${priceKey(archivePrice)}`;
+    const key = `${side}:${priceKey(archivePrice)}:${userKey}`;
     balances.set(key, Math.max(0, (balances.get(key) || 0) - quantityToCents(row.quantity)));
   }
   const archivePrice = archivedTargetPrice(action, targetPrice);
-  return balances.get(`${actionSide(action)}:${priceKey(archivePrice)}`) || 0;
+  return balances.get(`${actionSide(action)}:${priceKey(archivePrice)}:${relatedUserKey(relatedUserId)}`) || 0;
 }
 
 function mapAccount(row: any) {
@@ -123,11 +134,27 @@ function mapAccount(row: any) {
   };
 }
 
+function mapRelatedUser(row: any) {
+  const id = toNumber(row.related_user_id ?? row.id);
+  return {
+    id,
+    name: String(row.name || row.username || `用户#${id}`),
+    username: row.username ? String(row.username) : undefined,
+    avatar: row.avatar ? String(row.avatar) : undefined,
+    lastUsedAt: row.last_used_at ? isoTime(row.last_used_at) : null,
+  };
+}
+
 function mapEntry(row: any) {
+  const relatedUserId = toNumber(row.related_user_id ?? row.relatedUserId);
   return {
     id: String(row.id),
     accountId: Number(row.account_id),
     accountName: String(row.account_name || ""),
+    relatedUserId: relatedUserId > 0 ? relatedUserId : undefined,
+    relatedUserName: row.related_user_name ?? row.relatedUserName ?? undefined,
+    relatedUsername: row.related_username ?? row.relatedUsername ?? undefined,
+    relatedUserAvatar: row.related_user_avatar ?? row.relatedUserAvatar ?? undefined,
     symbol: String(row.symbol || "ETH"),
     action: String(row.action) as T0JournalAction,
     quantity: toNumber(row.quantity),
@@ -188,6 +215,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         ledger_id INT NOT NULL,
         user_id INT NOT NULL,
         account_id BIGINT UNSIGNED NOT NULL,
+        related_user_id BIGINT UNSIGNED DEFAULT NULL,
         symbol VARCHAR(16) NOT NULL DEFAULT 'ETH',
         action ENUM('openLong','closeLong','openShort','closeShort') NOT NULL,
         quantity DECIMAL(36,18) NOT NULL,
@@ -203,6 +231,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         PRIMARY KEY (id),
         UNIQUE KEY uq_t0_journal_entry_request (ledger_id, user_id, client_request_id),
         KEY idx_t0_journal_entry_account_time (ledger_id, user_id, account_id, trade_time),
+        KEY idx_t0_journal_entry_related_user_time (ledger_id, user_id, related_user_id, trade_time),
         KEY idx_t0_journal_entry_owner_time (ledger_id, user_id, trade_time)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         COMMENT='52号账本T+0速记账本：管理员手工下单流水与创建审计'
@@ -230,6 +259,16 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
       ALTER TABLE ledger52_t0_journal_entry_audits
         MODIFY COLUMN operation ENUM('update','delete','revert','restore') NOT NULL
     `);
+
+    // 兼容已创建的T+0流水表：关联用户为新增维度，旧流水保留为空，以免篡改历史记录。
+    const [relatedUserColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_entries LIKE 'related_user_id'`);
+    if (asRows(relatedUserColumns).length === 0) {
+      await db.execute(`
+        ALTER TABLE ledger52_t0_journal_entries
+          ADD COLUMN related_user_id BIGINT UNSIGNED DEFAULT NULL AFTER account_id,
+          ADD KEY idx_t0_journal_entry_related_user_time (ledger_id, user_id, related_user_id, trade_time)
+      `);
+    }
   })().catch((error) => {
     tablesReady = null;
     throw error;
@@ -237,43 +276,77 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
   return tablesReady;
 }
 
-/** 当前管理员才能操作自己的下单账户和流水；身份代入场景一律拒绝。 */
-export async function assertLedger52T0JournalAccess(actor: T0JournalActor): Promise<void> {
+/**
+ * T+0阅读权限：管理员读取其管理流水的全量关联用户数据；52号账本成员只读取自身关联用户ID的数据。
+ * 身份代入不是实际成员会话，不能借此浏览个人仓位。
+ */
+export async function resolveLedger52T0JournalReadScope(actor: T0JournalActor): Promise<T0JournalReadScope> {
   if (actor.isViewingAs) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "代入成员视角不可操作T+0速记账本" });
+    throw new TRPCError({ code: "FORBIDDEN", message: "代入成员视角不可访问T+0速记账本" });
   }
-  if (actor.role === "super_admin" || actor.role === "admin") return;
+  if (actor.role === "super_admin" || actor.role === "admin") {
+    return { mode: "admin", journalOwnerUserId: actor.id };
+  }
 
   const membership = await dbLedger.getUserMembership(LEDGER_52_T0_JOURNAL_ID, actor.id);
-  if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
+  if (!membership) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "仅52号账本成员可访问T+0速记账本" });
+  }
+  if (membership.role === "owner" || membership.role === "admin") {
+    return { mode: "admin", journalOwnerUserId: actor.id };
+  }
+  return { mode: "member", relatedUserId: actor.id };
+}
+
+/** 所有写入与关联用户搜索继续只开放给账本管理员。 */
+export async function assertLedger52T0JournalAccess(actor: T0JournalActor): Promise<void> {
+  const scope = await resolveLedger52T0JournalReadScope(actor);
+  if (scope.mode !== "admin") {
     throw new TRPCError({ code: "FORBIDDEN", message: "仅52号账本管理员可操作T+0速记账本" });
   }
 }
 
-export async function getLedger52T0Journal(userId: number) {
+export async function getLedger52T0Journal(scope: T0JournalReadScope) {
   const conn = await getDbConnection();
   if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
   await ensureLedger52T0JournalTables(conn);
 
-  const [accountResult, entryResult, recoverableAuditResult] = await Promise.all([
-    conn.execute(
-      `SELECT id, name, last_used_at, created_at
-         FROM ledger52_t0_journal_accounts
-        WHERE ledger_id = ? AND user_id = ? AND is_active = 1
-        ORDER BY last_used_at IS NULL ASC, last_used_at DESC, updated_at DESC, id DESC`,
-      [LEDGER_52_T0_JOURNAL_ID, userId],
-    ),
+  const isAdminScope = scope.mode === "admin";
+  const journalOwnerUserId = isAdminScope ? scope.journalOwnerUserId : 0;
+  const relatedUserId = scope.mode === "member" ? scope.relatedUserId : 0;
+  const [accountResult, entryResult, recoverableAuditResult, recentUserResult] = await Promise.all([
+    isAdminScope
+      ? conn.execute(
+        `SELECT id, name, last_used_at, created_at
+           FROM ledger52_t0_journal_accounts
+          WHERE ledger_id = ? AND user_id = ? AND is_active = 1
+          ORDER BY last_used_at IS NULL ASC, last_used_at DESC, updated_at DESC, id DESC`,
+        [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
+      )
+      : conn.execute(
+        `SELECT a.id, a.name, MAX(e.trade_time) AS last_used_at, MIN(a.created_at) AS created_at
+           FROM ledger52_t0_journal_entries e
+           INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id AND a.is_active = 1
+          WHERE e.ledger_id = ? AND e.related_user_id = ?
+          GROUP BY a.id, a.name
+          ORDER BY last_used_at DESC, a.id DESC`,
+        [LEDGER_52_T0_JOURNAL_ID, relatedUserId],
+      ),
     conn.execute(
       `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
+              e.related_user_id,
+              COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
+              u.username AS related_username, u.avatar AS related_user_avatar,
               e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
-        WHERE e.ledger_id = ? AND e.user_id = ?
+         LEFT JOIN users u ON u.id = e.related_user_id
+        WHERE e.ledger_id = ? AND ${isAdminScope ? "e.user_id = ?" : "e.related_user_id = ?"}
         ORDER BY e.trade_time ASC, e.id ASC
         LIMIT 2000`,
-      [LEDGER_52_T0_JOURNAL_ID, userId],
+      [LEDGER_52_T0_JOURNAL_ID, isAdminScope ? journalOwnerUserId : relatedUserId],
     ),
-    conn.execute(
+    isAdminScope ? conn.execute(
       `SELECT a.id AS audit_id, a.entry_id, a.operation, a.before_snapshot, a.created_at
          FROM ledger52_t0_journal_entry_audits a
          INNER JOIN (
@@ -286,17 +359,49 @@ export async function getLedger52T0Journal(userId: number) {
           AND a.operation IN ('delete', 'revert')
         ORDER BY a.created_at DESC, a.id DESC
         LIMIT 30`,
-      [LEDGER_52_T0_JOURNAL_ID, userId, LEDGER_52_T0_JOURNAL_ID, userId],
-    ),
+      [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId, LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
+    ) : Promise.resolve([[]]),
+    isAdminScope ? conn.execute(
+      `SELECT e.related_user_id, u.username, u.name, u.avatar, MAX(e.trade_time) AS last_used_at
+         FROM ledger52_t0_journal_entries e
+         LEFT JOIN users u ON u.id = e.related_user_id
+        WHERE e.ledger_id = ? AND e.user_id = ? AND e.related_user_id IS NOT NULL
+        GROUP BY e.related_user_id, u.username, u.name, u.avatar
+        ORDER BY last_used_at DESC, e.related_user_id DESC
+        LIMIT 30`,
+      [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
+    ) : Promise.resolve([[]]),
   ]);
 
   return {
+    viewerMode: scope.mode,
     accounts: asRows(accountResult).map(mapAccount),
     entries: asRows(entryResult).map(mapEntry),
+    recentUsers: asRows(recentUserResult).map(mapRelatedUser),
     recoverableEntries: asRows(recoverableAuditResult)
       .map(mapRecoverableAudit)
       .filter((item): item is NonNullable<typeof item> => Boolean(item)),
   };
+}
+
+/** 仅由已通过T+0管理员鉴权的路由调用，供关联用户的用户名/昵称模糊搜索使用。 */
+export async function searchLedger52T0JournalUsers(query: string) {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "用户搜索服务暂不可用" });
+  const keyword = String(query || "").trim();
+  if (!keyword) return [];
+  const like = `%${keyword}%`;
+  const [result] = await conn.execute(
+    `SELECT id, username, name, avatar
+       FROM users
+      WHERE COALESCE(username, '') LIKE ? OR COALESCE(name, '') LIKE ?
+      ORDER BY
+        CASE WHEN username = ? THEN 0 WHEN name = ? THEN 1 ELSE 2 END,
+        username ASC, id ASC
+      LIMIT 20`,
+    [like, like, keyword, keyword],
+  );
+  return asRows(result).map(mapRelatedUser);
 }
 
 export async function selectLedger52T0JournalAccount(userId: number, accountId: number) {
@@ -334,6 +439,18 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
   try {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
+
+    const relatedUserId = Number(input.relatedUserId || 0);
+    if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "请选择关联用户" });
+    }
+    const [relatedUserRows] = await tx.execute(
+      `SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE`,
+      [relatedUserId],
+    );
+    if (!asRows(relatedUserRows)[0]) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新选择" });
+    }
 
     let accountId = Number(input.accountId || 0);
     let accountName = String(input.accountName || "").trim();
@@ -393,13 +510,13 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         throw new TRPCError({ code: "BAD_REQUEST", message: "平仓记录必须指定对应的开仓价格档位" });
       }
       const [positionRows] = await tx.execute(
-        `SELECT action, quantity, price, target_price
+        `SELECT action, quantity, price, target_price, related_user_id
            FROM ledger52_t0_journal_entries
           WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
           ORDER BY trade_time ASC, id ASC FOR UPDATE`,
         [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, accountId, input.symbol],
       );
-      const availableCents = calculateAvailableCloseCents(asRows(positionRows), input.action, String(storedTargetPrice));
+      const availableCents = calculateAvailableCloseCents(asRows(positionRows), input.action, String(storedTargetPrice), relatedUserId);
       const requestedCents = quantityToCents(normalizedQuantity);
       if (requestedCents <= 0 || requestedCents > availableCents) {
         throw new TRPCError({
@@ -413,13 +530,14 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 
     const [entryResult] = await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (ledger_id, user_id, account_id, symbol, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18), ?, ?, ?, ?)
+        (ledger_id, user_id, account_id, related_user_id, symbol, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18), ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
       [
         LEDGER_52_T0_JOURNAL_ID,
         input.actorUserId,
         accountId,
+        relatedUserId,
         input.symbol,
         input.action,
         normalizedQuantity,
@@ -443,10 +561,13 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
       ),
       tx.execute(
-        `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
-                e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+        `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id,
+                COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
+                u.username AS related_username, u.avatar AS related_user_avatar,
+                e.symbol, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
            FROM ledger52_t0_journal_entries e
            INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
+           LEFT JOIN users u ON u.id = e.related_user_id
           WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ? LIMIT 1`,
         [entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
       ),
@@ -467,7 +588,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 
 async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: number) {
   const [rows] = await tx.execute(
-    `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
+    `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.symbol, e.action,
             e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
             e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
        FROM ledger52_t0_journal_entries e
@@ -537,6 +658,7 @@ async function writeEntryAudit(tx: any, input: {
 export async function updateLedger52T0JournalOpeningEntry(input: {
   actorUserId: number;
   entryId: number;
+  relatedUserId: number;
   quantity: string;
   price: string;
   note?: string;
@@ -550,10 +672,21 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     const before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
+    const relatedUserId = Number(input.relatedUserId || 0);
+    if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "请选择关联用户" });
+    }
+    const [relatedUserRows] = await tx.execute(
+      `SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE`,
+      [relatedUserId],
+    );
+    if (!asRows(relatedUserRows)[0]) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新选择" });
+    }
     const archivePrice = archivePriceForAction(String(before.action) as T0JournalAction, input.price);
     await tx.execute(
       `UPDATE ledger52_t0_journal_entries
-          SET quantity = ?, price = ?, target_price = ?,
+          SET quantity = ?, price = ?, target_price = ?, related_user_id = ?,
               fee_usdt = ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18),
               note = ?, updated_at = NOW(3)
         WHERE id = ? AND ledger_id = ? AND user_id = ?`,
@@ -561,6 +694,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         normalizedQuantity,
         input.price,
         archivePrice,
+        relatedUserId,
         normalizedQuantity,
         input.price,
         input.note || null,
@@ -570,10 +704,13 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       ],
     );
     const [updatedRows] = await tx.execute(
-      `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
-              e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+      `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id,
+              COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
+              u.username AS related_username, u.avatar AS related_user_avatar,
+              e.symbol, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
+         LEFT JOIN users u ON u.id = e.related_user_id
         WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ? LIMIT 1`,
       [input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
     );
@@ -631,7 +768,7 @@ export async function revertLedger52T0JournalEntry(input: { actorUserId: number;
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     const [rows] = await tx.execute(
-      `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
+      `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.symbol, e.action,
               e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
               e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
          FROM ledger52_t0_journal_entries e
@@ -709,6 +846,7 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
     const action = String(snapshot?.action || "") as T0JournalAction;
     const quantity = normalizeEthQuantity(String(snapshot?.quantity ?? ""));
     const price = String(snapshot?.price ?? "");
+    const relatedUserId = toNumber(snapshot?.related_user_id ?? snapshot?.relatedUserId);
     const clientRequestId = String(snapshot?.client_request_id || "");
     if (!entryId || !accountId || !T0_JOURNAL_ACTIONS.has(action) || !clientRequestId || !ETH_QUANTITY_RESTORE_PATTERN.test(quantity) || toNumber(price) <= 0) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "该历史审计快照不完整，无法安全恢复" });
@@ -731,14 +869,17 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
     if (!isOpeningAction(action)) {
       const targetPrice = archivedTargetPrice(action, snapshot.target_price);
       if (!targetPrice) throw new TRPCError({ code: "BAD_REQUEST", message: "历史平仓记录缺少对应开仓档位，无法恢复" });
+      if (relatedUserId <= 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "历史平仓记录缺少关联用户，无法安全恢复" });
+      }
       const [positionRows] = await tx.execute(
-        `SELECT action, quantity, price, target_price
+        `SELECT action, quantity, price, target_price, related_user_id
            FROM ledger52_t0_journal_entries
           WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
           ORDER BY trade_time ASC, id ASC FOR UPDATE`,
         [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, accountId, String(snapshot.symbol || "ETH")],
       );
-      const availableCents = calculateAvailableCloseCents(asRows(positionRows), action, String(targetPrice));
+      const availableCents = calculateAvailableCloseCents(asRows(positionRows), action, String(targetPrice), relatedUserId);
       if (quantityToCents(quantity) > availableCents) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "恢复后会超过该档位可平数量，请先恢复对应开仓流水" });
       }
@@ -746,13 +887,14 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
 
     await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (id, ledger_id, user_id, account_id, symbol, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
+        (id, ledger_id, user_id, account_id, related_user_id, symbol, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
       [
         entryId,
         LEDGER_52_T0_JOURNAL_ID,
         input.actorUserId,
         accountId,
+        relatedUserId > 0 ? relatedUserId : null,
         String(snapshot.symbol || "ETH"),
         action,
         quantity,
@@ -767,10 +909,13 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
       ],
     );
     const [restoredRows] = await tx.execute(
-      `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
-              e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+      `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id,
+              COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
+              u.username AS related_username, u.avatar AS related_user_avatar,
+              e.symbol, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
+         LEFT JOIN users u ON u.id = e.related_user_id
         WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ? LIMIT 1`,
       [entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
     );

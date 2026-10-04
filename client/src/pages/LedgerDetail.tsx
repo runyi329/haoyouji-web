@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
+import { toast } from "sonner";
 
 import { FunderOrderCard, FunderNoteRow, formatCoinQtyFunder, useAccruedInterestFunder, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType } from "@/components/FunderOrderCard";
 import { AI_WALLET_ASSET_COLORS, AI_WALLET_MARKET_ASSETS } from "@shared/ai-wallet-assets";
@@ -2621,6 +2622,37 @@ export default function LedgerDetail() {
   const isFunder = (ledgerData as any)?.userRole === 'funder';
   const isClient = (ledgerData as any)?.userRole === 'client';
   const isEmployee = (ledgerData as any)?.userRole === 'employee';
+  // 普通成员在首页仅用自己的关联订单状态决定是否可以进入个人T+0页面；管理员始终直接进入管理视图。
+  const shouldGateT0MemberEntry = isCustomAF
+    && Boolean((ledgerData as any)?.userRole)
+    && !isOwner
+    && !isAdmin
+    && !viewAsUserId;
+  const t0MemberJournalQuery = trpc.ledger.t0GetJournal.useQuery(
+    { ledgerId: 52 },
+    { enabled: shouldGateT0MemberEntry, retry: false, staleTime: 30_000 },
+  );
+  const memberHasT0Orders = Array.isArray((t0MemberJournalQuery.data as any)?.entries)
+    && (t0MemberJournalQuery.data as any).entries.length > 0;
+  const openT0Journal = () => {
+    if (isOwner || isAdmin) {
+      setLocation(`/ledger/${ledgerId}/t0-journal`);
+      return;
+    }
+    if (t0MemberJournalQuery.isLoading || t0MemberJournalQuery.isFetching) {
+      toast.message('正在核验订单');
+      return;
+    }
+    if (t0MemberJournalQuery.isError) {
+      toast.error('暂时无法核验订单，请稍后重试');
+      return;
+    }
+    if (!memberHasT0Orders) {
+      toast.message('您没有订单');
+      return;
+    }
+    setLocation(`/ledger/${ledgerId}/t0-journal`);
+  };
   // AH 账本角色名称映射
   const ahRoleName = isCustomAH ? (
     isOwner ? '创建者' : isAdmin ? '管理员' : (ledgerData as any)?.userRole === 'member' ? '普通用户' : isClient ? '客户' : isEmployee ? '企业员工' : '普通用户'
@@ -5616,9 +5648,9 @@ export default function LedgerDetail() {
                 </div>
               </button>
 
-              {/* T+0 速记账本入口 - 账本创建者/管理员可见，代入视角隐藏 */}
-              {isCustomAF && (isOwner || isAdmin) && !viewAsUserId && <button
-                onClick={() => setLocation(`/ledger/${ledgerId}/t0-journal`)}
+              {/* T+0 速记账本入口 - 管理员进入全量管理视图，普通成员进入本人关联仓位的只读视图；代入视角隐藏 */}
+              {isCustomAF && Boolean((ledgerData as any)?.userRole) && !viewAsUserId && <button
+                onClick={openT0Journal}
                 className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
                 style={{ background: 'linear-gradient(135deg, #18213d 0%, #2d3d73 52%, #373078 100%)', border: '1px solid #4b5fa3', boxShadow: '0 2px 12px rgba(37,54,130,0.2)' }}
               >
@@ -5627,7 +5659,7 @@ export default function LedgerDetail() {
                 </div>
                 <div className="text-left flex-1">
                   <div className="font-semibold text-base text-white">T+0 速记账本</div>
-                  <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.68)' }}>多币种 · 价格分档 · 账户总览</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.68)' }}>{isOwner || isAdmin ? '多币种 · 价格分档 · 账户总览' : '个人仓位 · 仅查看本人关联数据'}</div>
                 </div>
                 <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)' }}>
                   <ChevronRight className="w-4 h-4 text-white" />

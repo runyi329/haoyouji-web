@@ -10529,17 +10529,18 @@ ${klinesSummary}
         return await dbLedger.getLedgerById(input.id, ctx.user.id);
       }),
 
-    // 52号账本 T+0 速记账本：下单账户和流水仅属于当前管理员本人；代入成员视角一律禁止。
+    // 52号账本 T+0 速记账本：管理员读取其完整管理视图；普通成员只读取关联到本人用户ID的流水。
+    // 代入成员视角不是实际成员会话，一律禁止，避免管理员绕过个人数据范围。
     t0GetJournal: protectedProcedure
       .input(z.object({ ledgerId: z.literal(52) }))
       .query(async ({ ctx }) => {
         const journal = await import('./ledger52-t0-journal');
-        await journal.assertLedger52T0JournalAccess({
+        const scope = await journal.resolveLedger52T0JournalReadScope({
           id: ctx.user.id,
           role: ctx.user.role,
           isViewingAs: ctx.isViewingAs,
         });
-        return await journal.getLedger52T0Journal(ctx.user.id);
+        return await journal.getLedger52T0Journal(scope);
       }),
 
     t0SelectAccount: protectedProcedure
@@ -10557,11 +10558,27 @@ ${klinesSummary}
         return await journal.selectLedger52T0JournalAccount(ctx.user.id, input.accountId);
       }),
 
+    t0SearchRelatedUsers: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        query: z.string().trim().min(1).max(50),
+      }))
+      .query(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.searchLedger52T0JournalUsers(input.query);
+      }),
+
     t0CreateEntry: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),
         accountId: z.number().int().positive().optional(),
         accountName: z.string().trim().min(1).max(80).optional(),
+        relatedUserId: z.number().int().positive(),
         symbol: z.literal('ETH'),
         action: z.enum(['openLong', 'closeLong', 'openShort', 'closeShort']),
         quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, 'ETH 整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '数量必须大于0'),
@@ -10581,6 +10598,7 @@ ${klinesSummary}
           actorUserId: ctx.user.id,
           accountId: input.accountId,
           accountName: input.accountName,
+          relatedUserId: input.relatedUserId,
           symbol: input.symbol,
           action: input.action,
           quantity: input.quantity,
@@ -10595,6 +10613,7 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.literal(52),
         entryId: z.number().int().positive(),
+        relatedUserId: z.number().int().positive(),
         quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, 'ETH 整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '数量必须大于0'),
         price: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).refine((value) => Number(value) > 0, '价格必须大于0'),
         note: z.string().trim().max(500).optional(),
@@ -10609,6 +10628,7 @@ ${klinesSummary}
         return await journal.updateLedger52T0JournalOpeningEntry({
           actorUserId: ctx.user.id,
           entryId: input.entryId,
+          relatedUserId: input.relatedUserId,
           quantity: input.quantity,
           price: input.price,
           note: input.note,
