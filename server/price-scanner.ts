@@ -13,6 +13,8 @@ const SLOW_MARKET_SCAN_INTERVAL_MS = 15_000;
 const REQUEST_TIMEOUT_MS = 7_000;
 const CRYPTO_REQUEST_TIMEOUT_MS = 2_000;
 const FAST_CRYPTO_CYCLE_TIMEOUT_MS = 2_500;
+// T+0 永续标记价使用 Gate → HTX 主备；接口响应较慢时单独给足时限。
+const PERPETUAL_MARK_REQUEST_TIMEOUT_MS = 4_000;
 
 type PriceEntry = {
   price: number;
@@ -41,10 +43,13 @@ let nextScanTimer: NodeJS.Timeout | null = null;
 let lastSlowMarketScanAt = 0;
 let slowMarketScanInProgress = false;
 let usdtCnyRefreshInProgress = false;
+let perpetualMarkScanInProgress = false;
 
 // 已覆盖原有行情需求，并包含52号账本当前的全部加密资产。
 // 数字币按 Gate.io → HTX → OKX 的顺序查询 USDT 现货报价；B2 为 Binance Alpha 的 B² Network 代币。
 const CRYPTO_COINS = ['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'UNI', 'SEI', 'PLUME', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PEPE', 'B2'];
+// ETH 现货用于钱包估值；T+0 合约账本单独使用此键对应的永续合约标记价，绝不覆盖 ETH 现货报价。
+const ETH_PERP_MARK_CACHE_KEY = 'ETH_PERP';
 // 美股/指数化合约。优先走新浪美股，缺失才走 OKX SWAP。
 const STOCK_COINS = ['COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD'];
 // 商品与海外股票：新浪国内源优先，Yahoo 双域名兜底。
@@ -148,6 +153,13 @@ async function fetchCryptoJson(url: string) {
   return response.json() as Promise<any>;
 }
 
+/** 永续标记价独立使用略长时限，避免影响普通现货报价的高频熔断。 */
+async function fetchPerpetualMarkJson(url: string) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(PERPETUAL_MARK_REQUEST_TIMEOUT_MS) });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json() as Promise<any>;
+}
+
 async function fetchCryptoQuote(coin: string): Promise<{ price: number; source: string; patch: Partial<PriceEntry> } | null> {
   const pair = `${coin}_USDT`;
   try {
@@ -168,6 +180,40 @@ async function fetchCryptoQuote(coin: string): Promise<{ price: number; source: 
     const row = data?.code === '0' ? data.data?.[0] : null;
     const price = Number(row?.last);
     if (isValidPrice(price)) return { price, source: 'OKX', patch: { high24h: Number(row.high24h) || 0, low24h: Number(row.low24h) || 0, volume24h: Number(row.vol) || 0, quoteVolume24h: Number(row.volCcy) || 0 } };
+  } catch {}
+  return null;
+}
+
+/**
+ * ETH/USDT 永续合约标记价。Gate → HTX 主备；两者不可用时保留最后成功缓存，不调用 OKX。
+ * 仅用于合约速记，不影响钱包的 ETH 现货估值。
+ */
+async function fetchEthPerpetualMarkQuote(): Promise<{ price: number; source: string; patch: Partial<PriceEntry> } | null> {
+  try {
+    const data = await fetchPerpetualMarkJson('https://api.gateio.ws/api/v4/futures/usdt/tickers?contract=ETH_USDT');
+    const row = Array.isArray(data) ? data[0] : null;
+    const price = Number(row?.mark_price);
+    const changePercent = Number(row?.change_percentage);
+    if (isValidPrice(price)) {
+      return {
+        price,
+        source: 'Gate.io ETH/USDT 永续标记价',
+        patch: {
+          high24h: Number(row?.high_24h) || 0,
+          low24h: Number(row?.low_24h) || 0,
+          volume24h: Number(row?.volume_24h_base) || 0,
+          quoteVolume24h: Number(row?.volume_24h_quote) || 0,
+          changePercent: Number.isFinite(changePercent) ? changePercent : undefined,
+        },
+      };
+    }
+  } catch {}
+  try {
+    // HTX 公开接口返回最新 1 分钟标记价 K 线，作为 Gate 暂不可用时的永续价格兜底。
+    const data = await fetchPerpetualMarkJson('https://api.hbdm.com/index/market/history/linear_swap_mark_price_kline?contract_code=ETH-USDT&period=1min&size=1');
+    const row = data?.status === 'ok' ? data.data?.[0] : null;
+    const price = Number(row?.close);
+    if (isValidPrice(price)) return { price, source: 'HTX ETH/USDT 永续标记价', patch: {} };
   } catch {}
   return null;
 }
@@ -544,9 +590,33 @@ async function updateCryptoFast(coin: string) {
   entryFromPrice(coin, quote.price, quote.source, quote.patch);
 }
 
-/** 所有数字币以小请求并发方式统一每三秒写入同一份内存缓存，并逐币执行多源兜底。 */
+/** 以同一缓存与三秒节拍维护 ETH 永续标记价；失败时保留最近成功值。 */
+async function updateEthPerpetualMarkFast() {
+  const quote = await fetchEthPerpetualMarkQuote();
+  if (!quote) {
+    markFailure(ETH_PERP_MARK_CACHE_KEY, 'Gate、HTX均无有效ETH永续标记价，保留最近成功价');
+    return;
+  }
+  entryFromPrice(ETH_PERP_MARK_CACHE_KEY, quote.price, quote.source, quote.patch);
+}
+
+/** 常规数字币以小请求并发方式统一每三秒写入同一份内存缓存。 */
 async function updateAllCryptoFast() {
   await Promise.all(CRYPTO_COINS.map(updateCryptoFast));
+}
+
+/** 永续标记价独立调度，不让三源合约回退影响全站现货报价节拍。 */
+async function scanEthPerpetualMark() {
+  if (perpetualMarkScanInProgress) return;
+  perpetualMarkScanInProgress = true;
+  try {
+    await updateEthPerpetualMarkFast();
+  } catch (error) {
+    console.warn('[行情] ETH永续标记价刷新异常:', error);
+  } finally {
+    perpetualMarkScanInProgress = false;
+    saveCacheToFile();
+  }
 }
 
 async function updateSecuritiesAndCommodities() {
@@ -616,8 +686,10 @@ export function startPriceScanner() {
   if (nextScanTimer) return;
   loadCacheFromFile();
   void scanPrices();
+  void scanEthPerpetualMark();
   // 固定节拍：上一轮尚未完成时由 scanInProgress 丢弃本轮，避免“完成后再等三秒”变成六秒。
   nextScanTimer = setInterval(() => { void scanPrices(); }, CRYPTO_SCAN_INTERVAL_MS);
+  setInterval(() => { void scanEthPerpetualMark(); }, CRYPTO_SCAN_INTERVAL_MS);
   console.log(`[行情] 统一行情扫描已启动：数字币固定每${CRYPTO_SCAN_INTERVAL_MS / 1000}秒刷新，证券与商品每${SLOW_MARKET_SCAN_INTERVAL_MS / 1000}秒刷新`);
 }
 
@@ -646,7 +718,7 @@ export function getMarketPriceHealth() {
   for (const [coin, health] of Object.entries(priceHealth)) {
     const ageSeconds = health.lastSuccessAt ? Math.max(0, Math.floor((now - new Date(health.lastSuccessAt).getTime()) / 1000)) : Number.MAX_SAFE_INTEGER;
     // 开盘资产120秒、休市资产30分钟后标记为需要人工核查；不删除最后有效价。
-    const limit = CRYPTO_COINS.includes(coin) ? 120 : 1800;
+    const limit = CRYPTO_COINS.includes(coin) || coin === ETH_PERP_MARK_CACHE_KEY ? 120 : 1800;
     result[coin] = { ...health, ageSeconds, stale: ageSeconds > limit };
   }
   return result;

@@ -8,6 +8,8 @@ export const OKX_VIP2_TAKER_FEE_RATE = "0.00036";
 const POSITION_ARCHIVE_STEP = 10;
 
 export type T0JournalAction = "openLong" | "closeLong" | "openShort" | "closeShort";
+const T0_JOURNAL_ACTIONS = new Set<T0JournalAction>(["openLong", "closeLong", "openShort", "closeShort"]);
+const ETH_QUANTITY_RESTORE_PATTERN = /^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/;
 
 export type T0JournalActor = {
   id: number;
@@ -135,6 +137,22 @@ function mapEntry(row: any) {
   };
 }
 
+function mapRecoverableAudit(row: any) {
+  try {
+    const snapshot = JSON.parse(String(row.before_snapshot || ""));
+    // 旧版删除审计未保存重建所需的请求标识，保留审计但不在“可恢复”中展示，避免误恢复。
+    if (!snapshot?.id || !snapshot?.client_request_id) return null;
+    return {
+      auditId: String(row.audit_id),
+      operation: String(row.operation),
+      revertedAt: isoTime(row.created_at),
+      entry: mapEntry(snapshot),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * 账户与流水均按 ledger 52 + 当前管理员 user_id 分区。
  * 不设外键，避免旧库迁移时受历史数据状态影响；所有读写均由接口侧权限校验保障。
@@ -194,7 +212,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         ledger_id INT NOT NULL,
         user_id INT NOT NULL,
         entry_id BIGINT UNSIGNED NOT NULL,
-        operation ENUM('update','delete') NOT NULL,
+        operation ENUM('update','delete','revert','restore') NOT NULL,
         before_snapshot LONGTEXT NOT NULL,
         after_snapshot LONGTEXT DEFAULT NULL,
         operator_user_id INT NOT NULL,
@@ -203,6 +221,12 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         KEY idx_t0_journal_audit_entry (ledger_id, user_id, entry_id, created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         COMMENT='52号账本T+0速记账本：编辑与删除审计快照'
+    `);
+
+    // 兼容已经创建过旧版审计表的生产库，使其可记录速记回撤与恢复动作。
+    await db.execute(`
+      ALTER TABLE ledger52_t0_journal_entry_audits
+        MODIFY COLUMN operation ENUM('update','delete','revert','restore') NOT NULL
     `);
   })().catch((error) => {
     tablesReady = null;
@@ -229,7 +253,7 @@ export async function getLedger52T0Journal(userId: number) {
   if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
   await ensureLedger52T0JournalTables(conn);
 
-  const [accountResult, entryResult] = await Promise.all([
+  const [accountResult, entryResult, recoverableAuditResult] = await Promise.all([
     conn.execute(
       `SELECT id, name, last_used_at, created_at
          FROM ledger52_t0_journal_accounts
@@ -247,11 +271,29 @@ export async function getLedger52T0Journal(userId: number) {
         LIMIT 2000`,
       [LEDGER_52_T0_JOURNAL_ID, userId],
     ),
+    conn.execute(
+      `SELECT a.id AS audit_id, a.entry_id, a.operation, a.before_snapshot, a.created_at
+         FROM ledger52_t0_journal_entry_audits a
+         INNER JOIN (
+           SELECT entry_id, MAX(id) AS latest_audit_id
+             FROM ledger52_t0_journal_entry_audits
+            WHERE ledger_id = ? AND user_id = ?
+            GROUP BY entry_id
+         ) latest ON latest.latest_audit_id = a.id
+        WHERE a.ledger_id = ? AND a.user_id = ?
+          AND a.operation IN ('delete', 'revert')
+        ORDER BY a.created_at DESC, a.id DESC
+        LIMIT 30`,
+      [LEDGER_52_T0_JOURNAL_ID, userId, LEDGER_52_T0_JOURNAL_ID, userId],
+    ),
   ]);
 
   return {
     accounts: asRows(accountResult).map(mapAccount),
     entries: asRows(entryResult).map(mapEntry),
+    recoverableEntries: asRows(recoverableAuditResult)
+      .map(mapRecoverableAudit)
+      .filter((item): item is NonNullable<typeof item> => Boolean(item)),
   };
 }
 
@@ -424,7 +466,8 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: number) {
   const [rows] = await tx.execute(
     `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
-            e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+            e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
+            e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
        FROM ledger52_t0_journal_entries e
        INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
       WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ?
@@ -468,11 +511,11 @@ async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: n
 async function writeEntryAudit(tx: any, input: {
   actorUserId: number;
   entryId: number;
-  operation: "update" | "delete";
+  operation: "update" | "delete" | "revert" | "restore";
   before: unknown;
   after?: unknown;
 }) {
-  await tx.execute(
+  const [result] = await tx.execute(
     `INSERT INTO ledger52_t0_journal_entry_audits
       (ledger_id, user_id, entry_id, operation, before_snapshot, after_snapshot, operator_user_id)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -486,6 +529,7 @@ async function writeEntryAudit(tx: any, input: {
       input.actorUserId,
     ],
   );
+  return Number((result as any)?.insertId || 0);
 }
 
 export async function updateLedger52T0JournalOpeningEntry(input: {
@@ -553,7 +597,7 @@ export async function deleteLedger52T0JournalOpeningEntry(input: { actorUserId: 
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     const before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
-    await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "delete", before });
+    const auditId = await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "delete", before });
     const [result] = await tx.execute(
       `DELETE FROM ledger52_t0_journal_entries
         WHERE id = ? AND ledger_id = ? AND user_id = ?`,
@@ -563,7 +607,182 @@ export async function deleteLedger52T0JournalOpeningEntry(input: { actorUserId: 
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "开仓记录删除失败" });
     }
     await tx.commit();
-    return { entryId: String(input.entryId) };
+    return { entryId: String(input.entryId), auditId: String(auditId), entry: mapEntry(before) };
+  } catch (error) {
+    try { await tx.rollback(); } catch {}
+    throw error;
+  } finally {
+    tx.release?.();
+  }
+}
+
+/**
+ * 从“最近速记”回撤一笔流水。开仓若已有关联平仓，必须先回撤对应平仓，防止仓位账不平。
+ * 所有回撤只删活动流水，不抹掉审计快照，后续可由恢复接口原样恢复。
+ */
+export async function revertLedger52T0JournalEntry(input: { actorUserId: number; entryId: number }) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    const [rows] = await tx.execute(
+      `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
+              e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
+              e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
+         FROM ledger52_t0_journal_entries e
+         INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
+        WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ?
+        LIMIT 1 FOR UPDATE`,
+      [input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    let before = asRows(rows)[0];
+    if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "该速记流水不存在或无权回撤" });
+
+    const action = String(before.action) as T0JournalAction;
+    if (isOpeningAction(action)) {
+      // 复用开仓依赖校验，防止回撤开仓后遗留无法匹配的平仓流水。
+      before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
+    }
+
+    const auditId = await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "revert", before });
+    const [result] = await tx.execute(
+      `DELETE FROM ledger52_t0_journal_entries
+        WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+      [input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    if (Number((result as any)?.affectedRows || 0) !== 1) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "速记流水回撤失败" });
+    }
+
+    await tx.commit();
+    return { entryId: String(input.entryId), auditId: String(auditId), entry: mapEntry(before) };
+  } catch (error) {
+    try { await tx.rollback(); } catch {}
+    throw error;
+  } finally {
+    tx.release?.();
+  }
+}
+
+/** 将最近被删除或回撤的流水从审计快照恢复；恢复平仓前会再次校验可平数量。 */
+export async function restoreLedger52T0JournalEntry(input: { actorUserId: number; auditId: number }) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    const [auditRows] = await tx.execute(
+      `SELECT id, entry_id, operation, before_snapshot
+         FROM ledger52_t0_journal_entry_audits
+        WHERE id = ? AND ledger_id = ? AND user_id = ? AND operation IN ('delete', 'revert')
+        LIMIT 1 FOR UPDATE`,
+      [input.auditId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    const audit = asRows(auditRows)[0];
+    if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "可恢复的速记记录不存在或已恢复" });
+
+    const [latestAuditRows] = await tx.execute(
+      `SELECT id, operation
+         FROM ledger52_t0_journal_entry_audits
+        WHERE ledger_id = ? AND user_id = ? AND entry_id = ?
+        ORDER BY id DESC LIMIT 1 FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, Number(audit.entry_id)],
+    );
+    const latestAudit = asRows(latestAuditRows)[0];
+    if (!latestAudit || Number(latestAudit.id) !== Number(audit.id)) {
+      throw new TRPCError({ code: "CONFLICT", message: "该流水状态已有更新，请刷新后再操作" });
+    }
+
+    let snapshot: any;
+    try { snapshot = JSON.parse(String(audit.before_snapshot || "")); } catch {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "该历史审计快照无法恢复" });
+    }
+    const entryId = Number(snapshot?.id || 0);
+    const accountId = Number(snapshot?.account_id || 0);
+    const action = String(snapshot?.action || "") as T0JournalAction;
+    const quantity = normalizeEthQuantity(String(snapshot?.quantity ?? ""));
+    const price = String(snapshot?.price ?? "");
+    const clientRequestId = String(snapshot?.client_request_id || "");
+    if (!entryId || !accountId || !T0_JOURNAL_ACTIONS.has(action) || !clientRequestId || !ETH_QUANTITY_RESTORE_PATTERN.test(quantity) || toNumber(price) <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "该历史审计快照不完整，无法安全恢复" });
+    }
+
+    const [existingRows] = await tx.execute(
+      `SELECT id FROM ledger52_t0_journal_entries
+        WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1 FOR UPDATE`,
+      [entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    if (asRows(existingRows)[0]) throw new TRPCError({ code: "CONFLICT", message: "该速记流水已存在，无需重复恢复" });
+
+    const [accountRows] = await tx.execute(
+      `SELECT id FROM ledger52_t0_journal_accounts
+        WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1 FOR UPDATE`,
+      [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    if (!asRows(accountRows)[0]) throw new TRPCError({ code: "NOT_FOUND", message: "原下单账户已不存在，无法恢复" });
+
+    if (!isOpeningAction(action)) {
+      const targetPrice = archivedTargetPrice(action, snapshot.target_price);
+      if (!targetPrice) throw new TRPCError({ code: "BAD_REQUEST", message: "历史平仓记录缺少对应开仓档位，无法恢复" });
+      const [positionRows] = await tx.execute(
+        `SELECT action, quantity, price, target_price
+           FROM ledger52_t0_journal_entries
+          WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
+          ORDER BY trade_time ASC, id ASC FOR UPDATE`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, accountId, String(snapshot.symbol || "ETH")],
+      );
+      const availableCents = calculateAvailableCloseCents(asRows(positionRows), action, String(targetPrice));
+      if (quantityToCents(quantity) > availableCents) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "恢复后会超过该档位可平数量，请先恢复对应开仓流水" });
+      }
+    }
+
+    await tx.execute(
+      `INSERT INTO ledger52_t0_journal_entries
+        (id, ledger_id, user_id, account_id, symbol, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
+      [
+        entryId,
+        LEDGER_52_T0_JOURNAL_ID,
+        input.actorUserId,
+        accountId,
+        String(snapshot.symbol || "ETH"),
+        action,
+        quantity,
+        price,
+        String(snapshot.fee_usdt ?? "0"),
+        snapshot.target_price ?? null,
+        snapshot.note ?? null,
+        clientRequestId,
+        Number(snapshot.created_by_user_id || input.actorUserId),
+        snapshot.trade_time || snapshot.created_at || new Date().toISOString(),
+        snapshot.created_at || snapshot.trade_time || new Date().toISOString(),
+      ],
+    );
+    const [restoredRows] = await tx.execute(
+      `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
+              e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+         FROM ledger52_t0_journal_entries e
+         INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
+        WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ? LIMIT 1`,
+      [entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    const restored = asRows(restoredRows)[0];
+    if (!restored) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "恢复后的速记流水读取失败" });
+    await writeEntryAudit(tx, {
+      actorUserId: input.actorUserId,
+      entryId,
+      operation: "restore",
+      before: { auditId: input.auditId, snapshot },
+      after: restored,
+    });
+    await tx.commit();
+    return { entry: mapEntry(restored) };
   } catch (error) {
     try { await tx.rollback(); } catch {}
     throw error;

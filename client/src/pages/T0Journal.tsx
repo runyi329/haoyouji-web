@@ -3,12 +3,7 @@ import { useLocation, useParams, useSearch } from "wouter";
 import {
   ArrowLeft,
   ChevronRight,
-  NotebookPen,
-  Plus,
-  RefreshCw,
   ShieldCheck,
-  TrendingDown,
-  TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -25,6 +20,7 @@ type PreviewAccount = {
 type PreviewTrade = {
   id: string;
   accountId: string;
+  accountName?: string;
   symbol: string;
   action: TradeAction;
   quantity: number;
@@ -36,6 +32,29 @@ type PreviewTrade = {
   clientRequestId?: string;
   isSyncing?: boolean;
 };
+
+type RecoverableTrade = {
+  auditId: string;
+  operation: "delete" | "revert";
+  revertedAt: string;
+  trade: PreviewTrade;
+};
+
+function previewTradeFromEntry(entry: any): PreviewTrade {
+  return {
+    id: String(entry.id),
+    accountId: String(entry.accountId),
+    accountName: entry.accountName ? String(entry.accountName) : undefined,
+    symbol: String(entry.symbol || "ETH"),
+    action: entry.action as TradeAction,
+    quantity: Number(entry.quantity),
+    price: Number(entry.price),
+    fee: Number(entry.fee || 0),
+    createdAt: String(entry.createdAt),
+    targetPrice: entry.targetPrice === undefined || entry.targetPrice === null ? undefined : Number(entry.targetPrice),
+    note: entry.note || undefined,
+  };
+}
 
 type PositionBucket = {
   key: string;
@@ -105,10 +124,7 @@ const numberFormatter = new Intl.NumberFormat("zh-CN", {
 const LADDER_MIN_PRICE = 2500;
 const LADDER_MAX_PRICE = 3000;
 const LADDER_STEP = 10;
-const LADDER_MID_STEP = 50;
-const LADDER_FAR_STEP = 100;
-const LADDER_NEAR_RANGE = 100;
-const LADDER_MID_RANGE = 200;
+const LADDER_NEAR_VISIBLE_STEPS = 3;
 const POSITION_ARCHIVE_STEP = 10;
 const T0_PRICE_REFRESH_INTERVAL_MS = 3_000;
 const DEFAULT_QUANTITY_QUICK_OPTIONS = ["10.00", "20.00", "30.00", "40.00", "50.00"];
@@ -150,28 +166,19 @@ function formatLadderPrice(value: number) {
 }
 
 /**
- * 以实时参考价附近的百元区间为中心：
- * - 中心 ±100 U：每 10 U 一档；
- * - 外圈 100–200 U：每 50 U 一档；
- * - 更远区域：每 100 U 一档。
+ * 只保留必要价格档：
+ * - 实时价所在十元档上下各 3 档，便于快速开平；
+ * - 每个已有未平仓的归属档，无论距离当前价多远都固定保留；
+ * - 没有仓位、且不在实时价附近的空白档自动隐藏。
  */
 function buildAdaptiveLadderLevels(markLadderPrice: number | null, positionPrices: number[] = []) {
-  const defaultCenter = Math.round(((LADDER_MIN_PRICE + LADDER_MAX_PRICE) / 2) / LADDER_FAR_STEP) * LADDER_FAR_STEP;
-  const center = Math.min(
-    LADDER_MAX_PRICE,
-    Math.max(LADDER_MIN_PRICE, Math.round((markLadderPrice ?? defaultCenter) / LADDER_FAR_STEP) * LADDER_FAR_STEP),
-  );
-  const levels = new Set<number>([LADDER_MIN_PRICE, LADDER_MAX_PRICE]);
+  const defaultCenter = Math.round((LADDER_MIN_PRICE + LADDER_MAX_PRICE) / 2 / LADDER_STEP) * LADDER_STEP;
+  const center = Math.min(LADDER_MAX_PRICE, Math.max(LADDER_MIN_PRICE, markLadderPrice ?? defaultCenter));
+  const levels = new Set<number>();
 
-  for (let price = LADDER_MIN_PRICE; price <= LADDER_MAX_PRICE; price += LADDER_STEP) {
-    const distance = Math.abs(price - center);
-    if (distance <= LADDER_NEAR_RANGE) {
-      levels.add(price);
-    } else if (distance <= LADDER_MID_RANGE && price % LADDER_MID_STEP === 0) {
-      levels.add(price);
-    } else if (price % LADDER_FAR_STEP === 0) {
-      levels.add(price);
-    }
+  for (let offset = -LADDER_NEAR_VISIBLE_STEPS; offset <= LADDER_NEAR_VISIBLE_STEPS; offset += 1) {
+    const price = center + offset * LADDER_STEP;
+    if (price >= LADDER_MIN_PRICE && price <= LADDER_MAX_PRICE) levels.add(price);
   }
   if (markLadderPrice !== null) levels.add(markLadderPrice);
   // 远端空白价位可以折叠，但已有仓位的十元归档档位必须始终可见。
@@ -226,6 +233,10 @@ function formatSigned(value: number) {
   return `${sign}${numberFormatter.format(Math.abs(value))}`;
 }
 
+function formatAmount(value: number) {
+  return Number.isFinite(value) ? numberFormatter.format(value) : "--";
+}
+
 function buildPositionBuckets(trades: PreviewTrade[]) {
   const buckets = new Map<string, PositionBucket>();
   const orderedTrades = [...trades].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -276,10 +287,11 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
   return Array.from(buckets.values()).filter((bucket) => bucket.originalQuantity > 0);
 }
 
-function calculateSummary(buckets: PositionBucket[], markPrice: number | null) {
+function calculateSummary(buckets: PositionBucket[], markPrice: number | null, trades: PreviewTrade[]) {
   const calculateSide = (side: PositionSide) => {
     const active = buckets.filter((bucket) => bucket.side === side && bucket.remainingQuantity > 0.0000001);
     const all = buckets.filter((bucket) => bucket.side === side);
+    const sideTrades = trades.filter((trade) => ACTIONS[trade.action].side === side);
     const quantity = active.reduce((total, bucket) => total + bucket.remainingQuantity, 0);
     const weightedCost = active.reduce((total, bucket) => total + bucket.costBasis, 0);
     const average = quantity > 0 ? weightedCost / quantity : 0;
@@ -287,7 +299,9 @@ function calculateSummary(buckets: PositionBucket[], markPrice: number | null) {
       ? (side === "long" ? markPrice - average : average - markPrice) * quantity
       : null;
     const realized = all.reduce((total, bucket) => total + bucket.realizedPnl, 0);
-    return { quantity, average, unrealized, realized, activeLevels: active.length };
+    // 累计交易额口径：当前账户、当前方向下，所有已保存开/平仓成交名义金额之和。
+    const turnover = sideTrades.reduce((total, trade) => total + trade.quantity * trade.price, 0);
+    return { quantity, average, unrealized, realized, turnover, activeLevels: active.length };
   };
 
   const long = calculateSide("long");
@@ -314,6 +328,10 @@ export default function T0Journal() {
   const [expandedOpenedTradeIds, setExpandedOpenedTradeIds] = useState<Set<string>>(() => new Set());
   const [showOpenedTradeList, setShowOpenedTradeList] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<PreviewTrade | null>(null);
+  const [revertCandidate, setRevertCandidate] = useState<PreviewTrade | null>(null);
+  const [restoreCandidate, setRestoreCandidate] = useState<RecoverableTrade | null>(null);
+  const [recoverableEntries, setRecoverableEntries] = useState<RecoverableTrade[]>([]);
+  const [showRecoverableRecords, setShowRecoverableRecords] = useState(false);
   const [entrySide, setEntrySide] = useState<PositionSide>("long");
   const [lastSavedQuantity, setLastSavedQuantity] = useState("");
   const [showRecentRecords, setShowRecentRecords] = useState(true);
@@ -339,7 +357,7 @@ export default function T0Journal() {
   const isLedgerAdmin = (ledgerData as any)?.userRole === "admin" || (ledgerData as any)?.userRole === "owner";
   const isSuperAdmin = (me as any)?.role === "super_admin" || (me as any)?.role === "admin";
   const canAccess = ledgerId === 52 && !viewAsUserId && (isLedgerAdmin || isSuperAdmin);
-  const { data: cryptoPricesRaw, refetch: refetchPrices, isFetching: isRefreshingPrices } = trpc.getCryptoPrices.useQuery(undefined, {
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
     refetchInterval: T0_PRICE_REFRESH_INTERVAL_MS,
     staleTime: 2500,
   });
@@ -349,7 +367,9 @@ export default function T0Journal() {
   );
 
   const selectedAccount = accounts.find((account) => account.id === selectedAccountId) ?? null;
-  const markPriceRaw = (cryptoPricesRaw as any)?.prices?.ETH ?? (cryptoPricesRaw as any)?.ETH;
+  // 合约速记只使用服务端统一缓存的 ETH 永续标记价（Gate → HTX）；失败时由后端保留最近成功价。
+  const markPriceRaw = (cryptoPricesRaw as any)?.prices?.ETH_PERP
+    ?? (cryptoPricesRaw as any)?.ETH_PERP;
   const fetchedMarkPrice = Number(markPriceRaw) > 0 ? Number(markPriceRaw) : null;
   const markPrice = fetchedMarkPrice ?? lastMarkPrice;
 
@@ -374,28 +394,28 @@ export default function T0Journal() {
       }))
       : [];
     const nextTrades: PreviewTrade[] = Array.isArray(journal.entries)
-      ? journal.entries.map((entry: any) => ({
-        id: String(entry.id),
-        accountId: String(entry.accountId),
-        symbol: String(entry.symbol || "ETH"),
-        action: entry.action as TradeAction,
-        quantity: Number(entry.quantity),
-        price: Number(entry.price),
-        fee: Number(entry.fee || 0),
-        createdAt: String(entry.createdAt),
-        targetPrice: entry.targetPrice === undefined || entry.targetPrice === null ? undefined : Number(entry.targetPrice),
-        note: entry.note || undefined,
+      ? journal.entries.map(previewTradeFromEntry)
+      : [];
+    const nextRecoverableEntries: RecoverableTrade[] = Array.isArray(journal.recoverableEntries)
+      ? journal.recoverableEntries.map((item: any) => ({
+        auditId: String(item.auditId),
+        operation: item.operation === "delete" ? "delete" : "revert",
+        revertedAt: String(item.revertedAt),
+        trade: previewTradeFromEntry(item.entry),
       }))
       : [];
     setAccounts(nextAccounts);
     setTrades(nextTrades);
+    setRecoverableEntries(nextRecoverableEntries);
     const latestSavedEntry = nextTrades
       .filter((entry) => entry.symbol === "ETH")
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     setLastSavedQuantity(latestSavedEntry ? normalizeEthQuantity(String(latestSavedEntry.quantity)) : "");
+    // 首次进入优先展示最近有速记流水的账户，避免空账户标签把已保存的价格簿和流水“遮住”。
+    const latestTradeAccountId = latestSavedEntry?.accountId || "";
     setSelectedAccountId((current) => nextAccounts.some((account) => account.id === current)
       ? current
-      : (nextAccounts[0]?.id || ""));
+      : (nextAccounts.some((account) => account.id === latestTradeAccountId) ? latestTradeAccountId : (nextAccounts[0]?.id || "")));
   }, [t0JournalQuery.data]);
 
   const priceTrend = previousMarkPrice === null || markPrice === null
@@ -415,6 +435,9 @@ export default function T0Journal() {
     () => trades.filter((trade) => trade.accountId === selectedAccountId && trade.symbol === "ETH"),
     [trades, selectedAccountId],
   );
+  const getTradeAccountName = (trade: PreviewTrade) => trade.accountName
+    || accounts.find((account) => account.id === trade.accountId)?.name
+    || "未命名账户";
   const openedTradeList = useMemo(
     () => selectedTrades
       .filter((trade) => ACTIONS[trade.action].opening)
@@ -444,7 +467,7 @@ export default function T0Journal() {
     return archivePriceForSide(ACTIONS[entryForm.action].side, price);
   }, [entryForm.action, entryForm.price]);
   const buckets = useMemo(() => buildPositionBuckets(selectedTrades), [selectedTrades]);
-  const summary = useMemo(() => calculateSummary(buckets, markPrice), [buckets, markPrice]);
+  const summary = useMemo(() => calculateSummary(buckets, markPrice, selectedTrades), [buckets, markPrice, selectedTrades]);
   const entrySideSummary = entrySide === "long" ? summary.long : summary.short;
   const isEditingEntry = Boolean(entryForm.editingEntryId);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
@@ -589,6 +612,7 @@ export default function T0Journal() {
       const entry: PreviewTrade = {
         id: String(data.entry.id),
         accountId: String(data.entry.accountId),
+        accountName: data.entry.accountName ? String(data.entry.accountName) : account.name,
         symbol: String(data.entry.symbol || "ETH"),
         action: data.entry.action as TradeAction,
         quantity: Number(data.entry.quantity),
@@ -622,6 +646,9 @@ export default function T0Journal() {
       const entry: PreviewTrade = {
         id: String(data.entry.id),
         accountId: String(data.entry.accountId),
+        accountName: data.entry.accountName
+          ? String(data.entry.accountName)
+          : accounts.find((account) => account.id === String(data.entry.accountId))?.name,
         symbol: String(data.entry.symbol || "ETH"),
         action: data.entry.action as TradeAction,
         quantity: Number(data.entry.quantity),
@@ -649,9 +676,51 @@ export default function T0Journal() {
         return next;
       });
       setDeleteCandidate(null);
-      toast.success("开仓记录已删除，审计记录已保留");
+      if (data.auditId && data.entry) {
+        setRecoverableEntries((current) => [{
+          auditId: String(data.auditId),
+          operation: "delete",
+          revertedAt: new Date().toISOString(),
+          trade: previewTradeFromEntry(data.entry),
+        }, ...current.filter((item) => item.auditId !== String(data.auditId))]);
+      }
+      toast.success("开仓记录已删除，可在最近撤回中恢复");
     },
     onError: (error) => toast.error(error.message || "开仓记录删除失败"),
+  });
+
+  const revertEntryMutation = trpc.ledger.t0RevertEntry.useMutation({
+    onSuccess: (data: any) => {
+      const entryId = String(data.entryId);
+      setTrades((current) => current.filter((trade) => trade.id !== entryId));
+      setExpandedOpenedTradeIds((current) => {
+        const next = new Set(current);
+        next.delete(entryId);
+        return next;
+      });
+      if (data.auditId && data.entry) {
+        setRecoverableEntries((current) => [{
+          auditId: String(data.auditId),
+          operation: "revert",
+          revertedAt: new Date().toISOString(),
+          trade: previewTradeFromEntry(data.entry),
+        }, ...current.filter((item) => item.auditId !== String(data.auditId))]);
+      }
+      setRevertCandidate(null);
+      toast.success("速记已回撤，可在最近撤回中恢复");
+    },
+    onError: (error) => toast.error(error.message || "速记回撤失败"),
+  });
+
+  const restoreEntryMutation = trpc.ledger.t0RestoreEntry.useMutation({
+    onSuccess: (data: any, variables: any) => {
+      const entry = previewTradeFromEntry(data.entry);
+      setTrades((current) => [...current.filter((trade) => trade.id !== entry.id), entry]);
+      setRecoverableEntries((current) => current.filter((item) => item.auditId !== String(variables.auditId)));
+      setRestoreCandidate(null);
+      toast.success("速记已恢复");
+    },
+    onError: (error) => toast.error(error.message || "速记恢复失败"),
   });
 
   const selectOrderAccount = (accountId: string) => {
@@ -741,6 +810,7 @@ export default function T0Journal() {
     const trade: PreviewTrade = {
       id: `pending-entry-${clientRequestId}`,
       accountId,
+      accountName: normalizedAccountName || selectedAccount?.name,
       symbol: "ETH",
       action: entryForm.action,
       quantity,
@@ -812,59 +882,50 @@ export default function T0Journal() {
             <ArrowLeft className="w-5 h-5 text-slate-800" />
           </button>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <NotebookPen className="w-4 h-4 text-indigo-600" />
-              <h1 className="font-semibold text-slate-900">T+0 速记账本</h1>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-0.5">多币种交易 · 价格分档 · 账户总览</p>
+            <h1 className="font-semibold text-slate-900">T+0 速记账本</h1>
           </div>
           <button
-            onClick={() => void refetchPrices()}
-            aria-label="刷新 ETH 参考价"
-            className="w-9 h-9 rounded-full bg-indigo-50 flex items-center justify-center active:scale-95"
+            onClick={() => window.location.reload()}
+            aria-label="强制刷新整个页面"
+            title="强制刷新整个页面"
+            className="h-8 rounded-lg border border-indigo-100 bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 active:scale-95"
           >
-            <RefreshCw className={`w-4 h-4 text-indigo-600 ${isRefreshingPrices ? "animate-spin" : ""}`} />
+            刷新
           </button>
         </div>
       </header>
 
       <main className="px-4 pt-4 space-y-4">
         <section className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-slate-100 flex justify-end">
-            <div className="text-right">
-              <div className="text-[10px] text-slate-400">实时参考价</div>
-              <div className={`mt-0.5 flex items-center justify-end gap-0.5 text-sm font-semibold tabular-nums ${priceTrendClass}`}>
-                {priceTrend === "up" && <span role="img" aria-label="价格上涨" className="inline-block h-0 w-0 border-x-[4px] border-b-[6px] border-x-transparent border-b-current" />}
-                {priceTrend === "down" && <span role="img" aria-label="价格下跌" className="inline-block h-0 w-0 border-x-[4px] border-t-[6px] border-x-transparent border-t-current" />}
-                {formatPrice(markPrice)}
+          <div className="border-b border-slate-100 px-4 py-2.5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] text-slate-400">账户总览</div>
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-[10px] text-slate-400">实时参考价</div>
+                <div className={`mt-0.5 flex items-center justify-end gap-0.5 text-sm font-semibold tabular-nums ${priceTrendClass}`}>
+                  {priceTrend === "up" && <span role="img" aria-label="价格上涨" className="inline-block h-0 w-0 border-x-[4px] border-b-[6px] border-x-transparent border-b-current" />}
+                  {priceTrend === "down" && <span role="img" aria-label="价格下跌" className="inline-block h-0 w-0 border-x-[4px] border-t-[6px] border-x-transparent border-t-current" />}
+                  {formatPrice(markPrice)}
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-[1fr_88px_1fr] bg-slate-50 border-b border-slate-100 text-[11px] font-medium text-slate-500">
-            <div className="px-3 py-2 text-left">
-              <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-                <span>多仓位</span>
-                <span className="font-semibold tabular-nums text-rose-600">{formatQuantity(summary.long.quantity)} ETH</span>
-              </div>
-              <div className="mt-0.5 text-[10px] tabular-nums text-slate-400">均价 {summary.long.quantity > 0 ? formatPrice(summary.long.average) : "--"}</div>
-            </div>
-            <div className="px-1 py-2 text-center border-x border-slate-100 flex items-center justify-center">价格档位</div>
-            <div className="px-3 py-2 text-right">
-              <div className="flex items-baseline justify-end gap-1.5 whitespace-nowrap">
-                <span className="font-semibold tabular-nums text-emerald-600">{formatQuantity(summary.short.quantity)} ETH</span>
-                <span>空仓位</span>
-              </div>
-              <div className="mt-0.5 text-[10px] tabular-nums text-slate-400">均价 {summary.short.quantity > 0 ? formatPrice(summary.short.average) : "--"}</div>
-            </div>
+          <div className="grid grid-cols-2 border-b border-slate-100">
+            <SummaryCard side="long" summary={summary.long} />
+            <SummaryCard side="short" summary={summary.short} />
           </div>
+        </section>
 
-          <div ref={ladderScrollRef} className="h-[calc(100vh-250px)] min-h-[420px] max-h-[620px] overflow-y-auto overscroll-contain">
+        <section className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+          <div ref={ladderScrollRef} className="max-h-[calc(100vh-250px)] overflow-y-auto overscroll-contain">
             {priceRows.map((row) => (
               <div
                 key={priceKey(row.price)}
                 data-ladder-price={row.price}
-                className={`grid grid-cols-[1fr_88px_1fr] min-h-[52px] border-b border-slate-100 last:border-b-0 ${row.isMark ? "bg-amber-50/80" : "bg-white"}`}
+                className={`grid grid-cols-[1fr_88px_1fr] min-h-[52px] border-b border-slate-100 last:border-b-0 ${row.isMark ? (priceTrend === "up" ? "bg-rose-100/80" : priceTrend === "down" ? "bg-sky-100/80" : "bg-slate-100") : "bg-white"}`}
               >
                 <LadderCell
                   bucket={row.long}
@@ -873,15 +934,10 @@ export default function T0Journal() {
                   onClose={() => row.long && openEntrySheet("closeLong", row.long.price)}
                   onOpen={() => openEntrySheet("openLong")}
                 />
-                <div className={`border-x border-slate-100 flex flex-col items-center justify-center px-1 ${row.isMark ? "bg-amber-100/70" : "bg-slate-50"}`}>
-                  <span className="text-sm tabular-nums font-semibold text-slate-900">{formatLadderPrice(row.price)}</span>
-                  {row.isMark && markPrice && (
-                    <span className={`mt-0.5 flex items-center gap-0.5 text-[9px] tabular-nums font-semibold ${priceTrendClass}`}>
-                      {priceTrend === "up" && <span className="inline-block h-0 w-0 border-x-[3px] border-b-[5px] border-x-transparent border-b-current" />}
-                      {priceTrend === "down" && <span className="inline-block h-0 w-0 border-x-[3px] border-t-[5px] border-x-transparent border-t-current" />}
-                      {formatPrice(markPrice)}
-                    </span>
-                  )}
+                <div className={`border-x border-slate-100 flex items-center justify-center px-1 ${row.isMark ? (priceTrend === "up" ? "bg-rose-200 shadow-[inset_0_0_0_1px_rgba(244,63,94,0.25)]" : priceTrend === "down" ? "bg-sky-200 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.25)]" : "bg-slate-200") : "bg-slate-50"}`}>
+                  <span className={`text-sm tabular-nums font-bold ${row.isMark && priceTrend === "up" ? "text-rose-700" : row.isMark && priceTrend === "down" ? "text-sky-700" : "text-slate-900"}`}>
+                    {row.isMark && markPrice ? markPrice.toFixed(2) : formatLadderPrice(row.price)}
+                  </span>
                 </div>
                 <LadderCell
                   bucket={row.short}
@@ -892,26 +948,6 @@ export default function T0Journal() {
                 />
               </div>
             ))}
-          </div>
-        </section>
-
-        <section className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-visible">
-          <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-xs text-slate-500">当前下单账户</div>
-              <div className="mt-1 max-w-[220px] truncate text-sm font-semibold text-slate-900">
-                {selectedAccount?.name || (t0JournalQuery.isLoading ? "正在读取账户" : "请在速记末尾选择")}
-              </div>
-            </div>
-            <button onClick={() => openEntrySheet("openLong")} className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white flex items-center gap-1.5 shadow-sm active:scale-[0.98]">
-              <Plus className="w-4 h-4" />
-              速记一笔
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 border-t border-slate-100">
-            <SummaryCard title="多仓位" side="long" summary={summary.long} />
-            <SummaryCard title="空仓位" side="short" summary={summary.short} />
           </div>
         </section>
 
@@ -926,21 +962,64 @@ export default function T0Journal() {
           {showRecentRecords && (
             <div className="border-t border-slate-100">
               {selectedTrades.length === 0 ? (
-                <div className="px-4 py-5 text-center text-xs text-slate-500">当前下单账户还没有速记记录</div>
+                <div className="px-4 py-5 text-center text-xs text-slate-500">所选账户还没有速记记录</div>
               ) : [...selectedTrades].reverse().map((trade) => (
-                <div key={trade.id} className="px-4 py-3 border-b border-slate-100 last:border-b-0 flex items-start justify-between gap-3">
+                  <div key={trade.id} className="px-4 py-3 border-b border-slate-100 last:border-b-0 flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className={`text-xs font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-sky-700"}`}>{ACTIONS[trade.action].label}</span>
+                      <span title={getTradeAccountName(trade)} className="max-w-[96px] truncate rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">账户 {getTradeAccountName(trade)}</span>
                       {trade.targetPrice !== undefined && <span className="text-[11px] text-slate-400">{ACTIONS[trade.action].opening ? `归档 ${formatPrice(archivePriceForTrade(trade))}` : `对应 ${formatPrice(archivePriceForTrade(trade))}`}</span>}
                       {trade.isSyncing && <span className="text-[11px] text-amber-600">保存中</span>}
                     </div>
                     <div className="mt-1 text-xs text-slate-700 tabular-nums">{formatQuantity(trade.quantity)} ETH @ {formatPrice(trade.price)}</div>
                     {trade.note && <div className="mt-1 text-[11px] text-slate-500 truncate">{trade.note}</div>}
                   </div>
-                  <div className="text-right text-[11px] text-slate-400 whitespace-nowrap">{new Date(trade.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</div>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <div className="text-right text-[11px] text-slate-400 whitespace-nowrap">{new Date(trade.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</div>
+                    <button
+                      type="button"
+                      disabled={Boolean(trade.isSyncing) || revertEntryMutation.isPending}
+                      onClick={() => setRevertCandidate(trade)}
+                      className="h-6 rounded-md border border-amber-200 bg-amber-50 px-1.5 text-[10px] font-semibold text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      回撤
+                    </button>
+                  </div>
                 </div>
               ))}
+              {recoverableEntries.length > 0 && (
+                <div className="border-t border-slate-200 bg-amber-50/45">
+                  <button
+                    type="button"
+                    onClick={() => setShowRecoverableRecords((value) => !value)}
+                    className="flex w-full items-center justify-between px-4 py-2.5 text-left"
+                  >
+                    <span className="text-xs font-semibold text-amber-800">最近撤回 · 可恢复 {recoverableEntries.length} 笔</span>
+                    <ChevronRight className={`h-4 w-4 text-amber-600 transition-transform ${showRecoverableRecords ? "rotate-90" : ""}`} />
+                  </button>
+                  {showRecoverableRecords && (
+                    <div className="border-t border-amber-100 bg-white/75">
+                      {recoverableEntries.map((item) => (
+                        <div key={item.auditId} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-amber-100 last:border-b-0">
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold text-slate-700">{ACTIONS[item.trade.action].label} {formatQuantity(item.trade.quantity)} ETH @ {formatPrice(item.trade.price)}</div>
+                            <div className="mt-0.5 text-[10px] text-slate-500">账户 {getTradeAccountName(item.trade)} · {item.operation === "delete" ? "删除" : "回撤"}于 {formatBeijingMonthDayTime(item.revertedAt)}</div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={restoreEntryMutation.isPending}
+                            onClick={() => setRestoreCandidate(item)}
+                            className="h-7 shrink-0 rounded-lg border border-indigo-200 bg-white px-2 text-[11px] font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            恢复
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -1054,6 +1133,7 @@ export default function T0Journal() {
                           <div className="flex min-w-0 items-baseline gap-2">
                             <span className={`text-base font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].label}</span>
                             <span className="text-base font-semibold tabular-nums text-slate-900">{formatQuantity(trade.quantity)} ETH</span>
+                            <span title={getTradeAccountName(trade)} className="min-w-0 truncate text-[11px] font-medium text-slate-500">账户 {getTradeAccountName(trade)}</span>
                           </div>
                           <span className="shrink-0 text-base font-medium tabular-nums text-slate-500">开仓价 {formatPrice(trade.price)}</span>
                           <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
@@ -1078,6 +1158,10 @@ export default function T0Journal() {
                                 <div className={`mt-0.5 text-xs font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                                   {floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}
                                 </div>
+                              </div>
+                              <div className="col-span-2 flex items-center justify-between border-t border-slate-200 pt-2">
+                                <span className="text-[10px] text-slate-400">下单账户</span>
+                                <span className="text-xs font-medium text-slate-700">{getTradeAccountName(trade)}</span>
                               </div>
                             </div>
                             <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
@@ -1304,6 +1388,68 @@ export default function T0Journal() {
           </div>
         </div>
       )}
+
+      {revertCandidate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="回撤速记流水">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="text-base font-semibold text-slate-900">回撤这笔速记？</div>
+            <div className="mt-2 text-sm tabular-nums text-slate-700">
+              {ACTIONS[revertCandidate.action].label} {formatQuantity(revertCandidate.quantity)} ETH @ {formatPrice(revertCandidate.price)}
+            </div>
+            <div className="mt-2 text-[11px] leading-5 text-slate-500">
+              回撤后，该笔不会再影响价格簿、多空仓位和盈亏；原始流水会保留在“最近撤回”中，可随时恢复。
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={revertEntryMutation.isPending}
+                onClick={() => setRevertCandidate(null)}
+                className="h-11 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-40"
+              >
+                取消
+              </button>
+              <button
+                disabled={revertEntryMutation.isPending}
+                onClick={() => revertEntryMutation.mutate({ ledgerId: 52, entryId: Number(revertCandidate.id) })}
+                className="h-11 rounded-xl bg-amber-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
+              >
+                确认回撤
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {restoreCandidate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="恢复速记流水">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="text-base font-semibold text-slate-900">恢复这笔速记？</div>
+            <div className="mt-2 text-sm tabular-nums text-slate-700">
+              {ACTIONS[restoreCandidate.trade.action].label} {formatQuantity(restoreCandidate.trade.quantity)} ETH @ {formatPrice(restoreCandidate.trade.price)}
+            </div>
+            <div className="mt-2 text-[11px] leading-5 text-slate-500">
+              恢复后将重新计入价格簿、仓位和盈亏。若其为平仓记录，系统会先复核对应档位的可平数量。
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={restoreEntryMutation.isPending}
+                onClick={() => setRestoreCandidate(null)}
+                className="h-11 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-40"
+              >
+                取消
+              </button>
+              <button
+                disabled={restoreEntryMutation.isPending}
+                onClick={() => restoreEntryMutation.mutate({ ledgerId: 52, auditId: Number(restoreCandidate.auditId) })}
+                className="h-11 rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
+              >
+                确认恢复
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1318,41 +1464,38 @@ function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
 }
 
 function SummaryCard({
-  title,
   side,
   summary,
 }: {
-  title: string;
   side: PositionSide;
-  summary: { quantity: number; average: number; unrealized: number | null; realized: number; activeLevels: number };
+  summary: { quantity: number; average: number; unrealized: number | null; realized: number; turnover: number; activeLevels: number };
 }) {
   const isLong = side === "long";
-  const accent = isLong ? "rose" : "emerald";
-  const Icon = isLong ? TrendingUp : TrendingDown;
-  const pnlColor = (value: number | null) => value === null ? "text-slate-400" : value >= 0 ? "text-emerald-600" : "text-rose-600";
+  const pnlColor = (value: number | null) => value === null ? "text-slate-400" : value >= 0 ? "text-rose-600" : "text-emerald-600";
 
   return (
     <div className={`p-3 ${isLong ? "border-r border-slate-100" : ""}`}>
-      <div className="flex items-center gap-1.5 text-xs text-slate-500">
-        <Icon className={`w-3.5 h-3.5 ${accent === "rose" ? "text-rose-500" : "text-emerald-600"}`} />
-        {title}
-      </div>
-      <div className="mt-2 flex items-baseline gap-1">
+      <div className="flex items-baseline gap-1.5">
         <span className="text-lg tabular-nums font-semibold text-slate-900">{formatQuantity(summary.quantity)}</span>
         <span className="text-[11px] text-slate-500">ETH</span>
+        <span className={`text-xs font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{isLong ? "多仓" : "空仓"}</span>
       </div>
-      <div className="mt-1 text-[11px] text-slate-500">均价 {summary.quantity > 0 ? formatPrice(summary.average) : "--"}</div>
+      <div className="mt-1 text-[11px] text-slate-500">均价 {summary.quantity > 0 ? formatPrice(summary.average) : formatAmount(0)}</div>
       <div className="mt-2 flex items-center justify-between text-[11px]">
         <span className="text-slate-500">浮动结果</span>
-        <span className={`font-semibold tabular-nums ${pnlColor(summary.unrealized)}`}>{summary.unrealized === null ? "--" : `${formatSigned(summary.unrealized)} U`}</span>
+        <span className={`font-semibold tabular-nums ${pnlColor(summary.unrealized)}`}>{formatSigned(summary.unrealized ?? 0)} U</span>
       </div>
       <div className="mt-1 flex items-center justify-between text-[11px]">
-        <span className="text-slate-500">已实现</span>
+        <span className="text-slate-500">累计盈利</span>
         <span className={`font-semibold tabular-nums ${pnlColor(summary.realized)}`}>{formatSigned(summary.realized)} U</span>
       </div>
       <div className="mt-1 flex items-center justify-between text-[11px]">
         <span className="text-slate-500">价格档位</span>
         <span className="font-medium tabular-nums text-slate-700">{summary.activeLevels}</span>
+      </div>
+      <div className="mt-1 flex items-center justify-between text-[11px]">
+        <span className="text-slate-500">累计交易额</span>
+        <span className="font-semibold tabular-nums text-slate-700">{formatAmount(summary.turnover)} U</span>
       </div>
     </div>
   );
@@ -1375,11 +1518,11 @@ function PositionCell({ bucket, side, markPrice, onClick }: { bucket?: PositionB
       : (averageCost - markPrice) * bucket.remainingQuantity;
 
   return (
-    <button onClick={onClick} className={`min-h-[52px] w-full min-w-0 px-3 py-1.5 text-left transition-colors active:brightness-95 ${!isLong ? "text-right" : ""} ${tone}`}>
-      <div className={`flex min-w-0 items-baseline gap-1 tabular-nums ${isLong ? "justify-start" : "justify-end"}`}>
-        <span className="shrink-0 text-xs font-semibold">{formatQuantity(bucket.remainingQuantity)}</span>
+    <button onClick={onClick} className={`min-h-[52px] w-full min-w-0 px-3 py-1.5 text-left transition-colors active:brightness-95 ${tone}`}>
+      <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
+        <span className="shrink-0 text-base font-bold leading-none tracking-tight">{formatQuantity(bucket.remainingQuantity)}</span>
         {floatingPnl !== null && (
-          <span className={`min-w-0 truncate text-[10px] font-medium ${floatingPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{formatSigned(floatingPnl)}</span>
+          <span className={`min-w-0 truncate text-right text-[11px] font-semibold ${floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(floatingPnl)}</span>
         )}
       </div>
     </button>

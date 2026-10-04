@@ -10633,6 +10633,43 @@ ${klinesSummary}
         });
       }),
 
+    // “最近速记”可回撤任何开平流水；服务器保留审计快照，以便恢复误回撤或误删除。
+    t0RevertEntry: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        entryId: z.number().int().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.revertLedger52T0JournalEntry({
+          actorUserId: ctx.user.id,
+          entryId: input.entryId,
+        });
+      }),
+
+    t0RestoreEntry: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        auditId: z.number().int().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.restoreLedger52T0JournalEntry({
+          actorUserId: ctx.user.id,
+          auditId: input.auditId,
+        });
+      }),
+
     // 更新账本功能设置
     updateLedgerFeatures: protectedProcedure
       .input(z.object({
