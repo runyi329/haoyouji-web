@@ -3201,8 +3201,8 @@ export default function LedgerDetailAA({
                   {focusSortActive ? (overviewSort?.dir === 'desc' ? '降序↓' : '升序↑') : '排序'}
                 </button>
               </div>
-              {/* 单一原生滚动层：表头和数据共同横向移动，不存在两层同步延迟。 */}
-              <div ref={overviewNativeScrollRef} style={{ position: 'relative', isolation: 'isolate', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100dvh - 186px)', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'none', overscrollBehaviorX: 'none', overscrollBehaviorY: 'none', touchAction: 'pan-x pan-y', backgroundColor: '#FFFFFF' }}>
+              {/* 保留原生横向滑动；纵向不再锁在固定窗口内，整张概览表随页面自然上滑。 */}
+              <div ref={overviewNativeScrollRef} style={{ position: 'relative', isolation: 'isolate', overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehaviorX: 'none', touchAction: 'pan-x pan-y', backgroundColor: '#FFFFFF' }}>
                 {/* 表头直接挂在原生滚动层：iOS 从第13项继续上滑时仍保持固定，不受名称列移动端合成层影响。 */}
                 <div style={{ display: 'flex', width: overviewTableWidth, minWidth: overviewTableWidth, position: 'sticky', top: 0, zIndex: 50, backgroundColor: '#FFFFFF', boxShadow: '0 1px 0 #F5F5F5' }}>
                   <div className={cellCls} style={{ width: 104, minWidth: 104, maxWidth: 104, flexShrink: 0, position: 'sticky', left: 0, zIndex: 60, borderRight: '1px solid #F0F0F0', backgroundColor: '#FFFFFF', boxShadow: '2px 0 0 #FFFFFF, 3px 0 0 #F0F0F0', height: rowHeight }}>
