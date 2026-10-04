@@ -387,7 +387,12 @@ function calculateSummary(buckets: PositionBucket[], markPrice: number | null, t
   };
 }
 
-export default function T0Journal() {
+type T0JournalProps = {
+  /** 资金方“融资复息订单”页内直接展示个人只读仓位时使用，不再显示路由返回按钮。 */
+  embedded?: boolean;
+};
+
+export function T0JournalView({ embedded = false }: T0JournalProps) {
   const { id } = useParams<{ id: string }>();
   const ledgerId = Number(id);
   const [, setLocation] = useLocation();
@@ -1167,7 +1172,9 @@ export default function T0Journal() {
     });
   };
 
-  const backToLedger = () => setLocation(`/ledger/${ledgerId}`);
+  const backToLedger = () => {
+    if (!embedded) setLocation(`/ledger/${ledgerId}`);
+  };
   const backToLadder = () => {
     setCloseConfirmationStep("input");
     setShowOpenedTradeList(false);
@@ -1180,11 +1187,11 @@ export default function T0Journal() {
 
   if (!canAccess) {
     return (
-      <div className="min-h-screen bg-slate-50 max-w-md mx-auto flex flex-col">
+      <div className={`${embedded ? "min-h-0 w-full" : "min-h-screen max-w-md mx-auto"} bg-slate-50 flex flex-col`}>
         <div className="flex items-center gap-3 px-4 py-4 bg-white border-b border-slate-100">
-          <button onClick={backToLedger} aria-label="返回52号账本" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
+          {!embedded && <button onClick={backToLedger} aria-label="返回52号账本" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
             <ArrowLeft className="w-5 h-5 text-slate-700" />
-          </button>
+          </button>}
           <div className="min-w-0">
             <div className="font-semibold text-slate-900">T+0 速记账本</div>
             <div className="text-xs text-slate-500 mt-0.5">52 号账本内部工具</div>
@@ -1202,12 +1209,12 @@ export default function T0Journal() {
   }
 
   return (
-    <div className={`min-h-screen bg-slate-50 max-w-md mx-auto ${canManage ? "pb-28" : "pb-6"}`}>
+    <div className={`${embedded ? "min-h-0 w-full" : "min-h-screen max-w-md mx-auto"} bg-slate-50 ${canManage ? "pb-28" : "pb-6"}`}>
       <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="h-14 px-4 flex items-center gap-3">
-          <button onClick={backToLedger} aria-label="返回52号账本" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
+          {!embedded && <button onClick={backToLedger} aria-label="返回52号账本" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
             <ArrowLeft className="w-5 h-5 text-slate-800" />
-          </button>
+          </button>}
           <div className="min-w-0 flex-1">
             <h1 className="font-semibold text-slate-900">T+0 速记账本</h1>
             {isMemberView && <div className="mt-0.5 text-[10px] font-medium text-indigo-600">个人只读视图</div>}
@@ -2194,4 +2201,9 @@ function LadderCell({
       className={`min-h-[52px] w-full transition-colors active:brightness-95 ${isLong ? "bg-rose-50/45 hover:bg-rose-100/80" : "bg-emerald-50/45 hover:bg-emerald-100/80"}`}
     />
   );
+}
+
+/** 独立路由继续使用无参数组件，避免影响 wouter 的路由组件签名。 */
+export default function T0Journal() {
+  return <T0JournalView />;
 }

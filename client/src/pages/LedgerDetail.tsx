@@ -1810,6 +1810,7 @@ function FunderOrderCardLegacy({
 const FunderOrderDetailModal = lazy(() => import('@/components/FunderOrderDetailModal'));
 const FunderOrderCardV2Silver = lazy(() => import('@/components/FunderOrderCardV2').then(module => ({ default: module.FunderOrderCardV2Silver })));
 const FunderLenderCardSilver = lazy(() => import('@/components/FunderOrderCardV2').then(module => ({ default: module.FunderLenderCardSilver })));
+const T0Journal = lazy(() => import('./T0Journal').then(module => ({ default: module.T0JournalView })));
 const RecentAfOrderDetail = lazy(() => import('@/pages/CryptoPrediction').then(module => ({ default: module.OrderDetail })));
 const LedgerDetailAA = lazy(() => import('./LedgerDetailAA'));
 const LedgerDetailAG = lazy(() => import('./LedgerDetailAG'));
@@ -2634,6 +2635,9 @@ export default function LedgerDetail() {
   );
   const memberHasT0Orders = Array.isArray((t0MemberJournalQuery.data as any)?.entries)
     && (t0MemberJournalQuery.data as any).entries.length > 0;
+  const memberT0OrderCount = Array.isArray((t0MemberJournalQuery.data as any)?.entries)
+    ? (t0MemberJournalQuery.data as any).entries.length
+    : 0;
   const openT0Journal = () => {
     if (isOwner || isAdmin) {
       setLocation(`/ledger/${ledgerId}/t0-journal`);
@@ -2944,7 +2948,10 @@ export default function LedgerDetail() {
     setFunderViewMode(nextMode);
     try { localStorage.setItem(funderViewModeStorageKey, nextMode); } catch {}
   };
-  const [funderOrderTab, setFunderOrderTab] = useState<'mine' | 'participant'>('mine');
+  const [funderOrderTab, setFunderOrderTab] = useState<'mine' | 'participant' | 't0'>('mine');
+  useEffect(() => {
+    if (funderOrderTab === 't0' && !memberHasT0Orders) setFunderOrderTab('mine');
+  }, [funderOrderTab, memberHasT0Orders]);
   // 资方前端的本人/参与订单均使用统一资产分类；期权归入数字币。
   const [funderAssetFilter, setFunderAssetFilter] = useState<'all' | 'stock' | 'crypto' | 'settled'>('all');
   // 本人 / 参与分组：主订单拥有者的 owner 协作快照只用于独立配置，仍属于“本人”。
@@ -5735,17 +5742,29 @@ export default function LedgerDetail() {
               const allActive = (funderAssetOrders as any[]).filter((o: any) => o.status !== 'settled');
               const mineOrders = allActive.filter((o: any) => !isFunderParticipantOrder(o));
               const participantOrders = allActive.filter((o: any) => isFunderParticipantOrder(o));
+              const funderTabs = [
+                { key: 'mine' as const, label: '本人', count: mineOrders.length },
+                { key: 'participant' as const, label: '参与', count: participantOrders.length },
+                ...(memberHasT0Orders ? [{ key: 't0' as const, label: 'T', count: memberT0OrderCount }] : []),
+              ];
               return (
                 <div className="flex rounded p-1 gap-1 mb-3" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
-                  {([['mine', '本人', mineOrders.length], ['participant', '参与', participantOrders.length]] as const).map(([key, label, cnt]) => (
+                  {funderTabs.map(({ key, label, count }) => (
                     <button key={key} onClick={() => setFunderOrderTab(key)}
                       style={{ flex: 1, padding: '6px 0', borderRadius: '4px', fontSize: '15px', fontWeight: 700, transition: 'all 0.15s', backgroundColor: funderOrderTab === key ? '#1A56DB' : 'transparent', color: funderOrderTab === key ? '#fff' : '#6B7280', boxShadow: funderOrderTab === key ? '0 1px 3px rgba(26,86,219,0.3)' : 'none' }}>
-                      {label} <span style={{ opacity: 0.75, fontSize: '11px' }}>{cnt}</span>
+                      {label}<span style={{ marginLeft: '5px', opacity: 0.75, fontSize: '11px' }}>{count}</span>
                     </button>
                   ))}
                 </div>
               );
             })()}
+            {funderOrderTab === 't0' && memberHasT0Orders ? (
+              <Suspense fallback={<div className="rounded-2xl bg-white p-5 text-center text-sm text-slate-400">正在加载 T+0 仓位…</div>}>
+                <div className="-mx-4">
+                  <T0Journal embedded />
+                </div>
+              </Suspense>
+            ) : <>
             {(() => {
               // 数量与当前“本人 / 参与”身份页同步；期权归入数字币。
               const currentTabOrders = funderDisplayOrders.filter((order: any) =>
@@ -5913,6 +5932,7 @@ export default function LedgerDetail() {
                 ))}
               </div>
             )}
+            </>}
           </div>
         </div>
       )}
