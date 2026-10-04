@@ -66,6 +66,11 @@ type PositionBucket = {
   /** 剩余仓位按实际成交价累计的成本，用于均价与盈亏。 */
   costBasis: number;
   realizedPnl: number;
+  /** 已平部分按原始开仓成本累计，用于已平仓成本统计。 */
+  closedQuantity: number;
+  closedCostBasis: number;
+  /** 已平部分的实际平仓成交名义金额。 */
+  closedNotional: number;
   openedAt: string;
 };
 
@@ -262,6 +267,9 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
           remainingQuantity: trade.quantity,
           costBasis: trade.quantity * trade.price,
           realizedPnl: 0,
+          closedQuantity: 0,
+          closedCostBasis: 0,
+          closedNotional: 0,
           openedAt: trade.createdAt,
         });
       }
@@ -282,6 +290,9 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
     target.remainingQuantity -= closedQuantity;
     target.costBasis = Math.max(0, target.costBasis - averageCost * closedQuantity);
     target.realizedPnl += grossPnl - trade.fee;
+    target.closedQuantity += closedQuantity;
+    target.closedCostBasis += averageCost * closedQuantity;
+    target.closedNotional += trade.price * closedQuantity;
   }
 
   return Array.from(buckets.values()).filter((bucket) => bucket.originalQuantity > 0);
@@ -299,9 +310,27 @@ function calculateSummary(buckets: PositionBucket[], markPrice: number | null, t
       ? (side === "long" ? markPrice - average : average - markPrice) * quantity
       : null;
     const realized = all.reduce((total, bucket) => total + bucket.realizedPnl, 0);
+    const closedQuantity = all.reduce((total, bucket) => total + bucket.closedQuantity, 0);
+    const closedCostBasis = all.reduce((total, bucket) => total + bucket.closedCostBasis, 0);
+    const closedNotional = all.reduce((total, bucket) => total + bucket.closedNotional, 0);
+    const closedAverageCost = closedQuantity > 0 ? closedCostBasis / closedQuantity : 0;
+    const closedAveragePrice = closedQuantity > 0 ? closedNotional / closedQuantity : 0;
     // 累计交易额口径：当前账户、当前方向下，所有已保存开/平仓成交名义金额之和。
     const turnover = sideTrades.reduce((total, trade) => total + trade.quantity * trade.price, 0);
-    return { quantity, average, unrealized, realized, turnover, activeLevels: active.length };
+    // 累计佣金口径：当前账户、当前方向下，所有已保存开/平仓实际发生的手续费之和。
+    const commission = sideTrades.reduce((total, trade) => total + trade.fee, 0);
+    return {
+      quantity,
+      average,
+      unrealized,
+      realized,
+      turnover,
+      commission,
+      closedQuantity,
+      closedAverageCost,
+      closedAveragePrice,
+      activeLevels: active.length,
+    };
   };
 
   const long = calculateSide("long");
@@ -335,6 +364,7 @@ export default function T0Journal() {
   const [entrySide, setEntrySide] = useState<PositionSide>("long");
   const [lastSavedQuantity, setLastSavedQuantity] = useState("");
   const [showRecentRecords, setShowRecentRecords] = useState(true);
+  const [showCumulativeData, setShowCumulativeData] = useState(false);
   const [lastMarkPrice, setLastMarkPrice] = useState<number | null>(null);
   const [previousMarkPrice, setPreviousMarkPrice] = useState<number | null>(null);
   const previousFetchedMarkPriceRef = useRef<number | null>(null);
@@ -913,10 +943,11 @@ export default function T0Journal() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 border-b border-slate-100">
-            <SummaryCard side="long" summary={summary.long} />
-            <SummaryCard side="short" summary={summary.short} />
-          </div>
+          <AccountOverview
+            summary={summary}
+            showCumulativeData={showCumulativeData}
+            onToggleCumulativeData={() => setShowCumulativeData((current) => !current)}
+          />
         </section>
 
         <section className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
@@ -1052,16 +1083,7 @@ export default function T0Journal() {
       {showEntrySheet && (
         <div className="fixed inset-0 z-40 flex items-end bg-slate-950/35" role="dialog" aria-modal="true" aria-label="速记一笔">
           <div className="w-full max-w-md mx-auto rounded-t-3xl bg-white shadow-2xl max-h-[92vh] overflow-y-auto">
-            <div className="px-4 pt-3 pb-2 flex items-center gap-3 sticky top-0 bg-white z-10 border-b border-slate-100">
-              <button
-                type="button"
-                onClick={backToLadder}
-                aria-label="返回梯形报价"
-                className="h-9 shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-slate-700 flex items-center gap-1 active:scale-[0.98]"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                返回报价
-              </button>
+            <div className="px-4 pt-3 pb-2 sticky top-0 bg-white z-10 border-b border-slate-100">
               <div className="min-w-0">
                 <div className="text-base font-semibold text-slate-900">{isEditingEntry ? "编辑开仓记录" : isClosingEntry ? `${ACTIONS[entryForm.action].label}设置` : "速记一笔"}</div>
                 <div className="mt-0.5 text-[11px] text-slate-500">{isEditingEntry ? "仅可修改数量、成交价与备注；修改会保留审计快照" : isClosingEntry ? "填写平仓数量与成交价后，需两次确认才会记账" : "本地先显示，后台立即保存；不会触发交易所下单"}</div>
@@ -1070,12 +1092,21 @@ export default function T0Journal() {
 
             <div className="p-4 space-y-4">
               <div className={`overflow-hidden rounded-2xl border ${entrySide === "long" ? "border-rose-200 bg-rose-50/70" : "border-emerald-200 bg-emerald-50/70"}`}>
+                <div className="flex items-center gap-1.5 px-3 py-2.5">
+                  <button
+                    type="button"
+                    onClick={backToLadder}
+                    aria-label="返回T型报价"
+                    className="shrink-0 rounded-md p-0.5 text-slate-500 transition hover:bg-white/70 hover:text-slate-900 active:scale-90"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
                 <button
                   type="button"
                   aria-expanded={showOpenedTradeList}
                   aria-label={`展开${entrySide === "long" ? "多仓" : "空仓"}订单列表`}
                   onClick={() => setShowOpenedTradeList((value) => !value)}
-                  className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-x-3 px-3 py-2.5 text-left"
+                  className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-x-3 text-left"
                 >
                   <div className="flex min-w-0 items-baseline gap-2">
                     <span className={`text-base font-semibold ${entrySide === "long" ? "text-rose-600" : "text-emerald-600"}`}>{entrySide === "long" ? "多仓汇总" : "空仓汇总"}</span>
@@ -1084,6 +1115,7 @@ export default function T0Journal() {
                   <span className="shrink-0 text-base font-medium tabular-nums text-slate-500">均价 {entrySideSummary.quantity > 0 ? formatPrice(entrySideSummary.average) : "--"}</span>
                   <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${showOpenedTradeList ? "rotate-90" : ""}`} />
                 </button>
+                </div>
                 <div className={`mx-3 flex items-center justify-between border-t pt-2 pb-2.5 text-[10px] tabular-nums ${entrySide === "long" ? "border-rose-200/80" : "border-emerald-200/80"}`}>
                   <span className={entrySideSummary.unrealized === null ? "text-slate-400" : entrySideSummary.unrealized >= 0 ? "text-emerald-600" : "text-rose-600"}>
                     当前盈亏 {entrySideSummary.unrealized === null ? "--" : `${formatSigned(entrySideSummary.unrealized)} U`}
@@ -1463,41 +1495,107 @@ function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
   );
 }
 
-function SummaryCard({
-  side,
+function AccountOverview({
   summary,
+  showCumulativeData,
+  onToggleCumulativeData,
 }: {
-  side: PositionSide;
-  summary: { quantity: number; average: number; unrealized: number | null; realized: number; turnover: number; activeLevels: number };
+  summary: {
+    long: { quantity: number; average: number; unrealized: number | null; realized: number; turnover: number; commission: number; closedQuantity: number; closedAverageCost: number; closedAveragePrice: number; activeLevels: number };
+    short: { quantity: number; average: number; unrealized: number | null; realized: number; turnover: number; commission: number; closedQuantity: number; closedAverageCost: number; closedAveragePrice: number; activeLevels: number };
+  };
+  showCumulativeData: boolean;
+  onToggleCumulativeData: () => void;
 }) {
-  const isLong = side === "long";
   const pnlColor = (value: number | null) => value === null ? "text-slate-400" : value >= 0 ? "text-rose-600" : "text-emerald-600";
+  const sides: Array<{ side: PositionSide; data: typeof summary.long }> = [
+    { side: "long", data: summary.long },
+    { side: "short", data: summary.short },
+  ];
 
   return (
-    <div className={`p-3 ${isLong ? "border-r border-slate-100" : ""}`}>
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-lg tabular-nums font-semibold text-slate-900">{formatQuantity(summary.quantity)}</span>
-        <span className="text-[11px] text-slate-500">ETH</span>
-        <span className={`text-xs font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{isLong ? "多仓" : "空仓"}</span>
+    <>
+      <div className="grid grid-cols-2">
+        {sides.map(({ side, data }) => {
+          const isLong = side === "long";
+          return (
+            <div key={side} className={`min-w-0 px-3 py-3 ${isLong ? "border-r border-slate-100" : ""}`}>
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="flex min-w-0 items-baseline gap-1.5">
+                  <span className={`shrink-0 text-xs font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{isLong ? "多仓" : "空仓"}</span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-slate-400">{data.activeLevels}档</span>
+                </div>
+                <div className="flex shrink-0 items-baseline gap-1">
+                  <span className="text-sm tabular-nums font-semibold text-slate-900">{formatQuantity(data.quantity)}</span>
+                  <span className="text-[11px] text-slate-500">ETH</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
-      <div className="mt-1 text-[11px] text-slate-500">均价 {summary.quantity > 0 ? formatPrice(summary.average) : formatAmount(0)}</div>
-      <div className="mt-2 flex items-center justify-between text-[11px]">
-        <span className="text-slate-500">浮动结果</span>
-        <span className={`font-semibold tabular-nums ${pnlColor(summary.unrealized)}`}>{formatSigned(summary.unrealized ?? 0)} U</span>
+
+      <div className="grid grid-cols-2 border-t border-slate-100">
+        {sides.map(({ side, data }) => (
+          <div key={side} className={`flex items-center justify-between gap-2 px-3 py-2.5 text-[11px] ${side === "long" ? "border-r border-slate-100" : ""}`}>
+            <span className="text-slate-500">持仓均价</span>
+            <div className="flex shrink-0 items-baseline gap-1">
+              <span className="text-sm font-semibold tabular-nums text-slate-700">{data.quantity > 0 ? formatPrice(data.average) : formatAmount(0)}</span>
+              <span className="text-[11px] text-slate-500">U</span>
+            </div>
+          </div>
+        ))}
       </div>
-      <div className="mt-1 flex items-center justify-between text-[11px]">
-        <span className="text-slate-500">累计盈利</span>
-        <span className={`font-semibold tabular-nums ${pnlColor(summary.realized)}`}>{formatSigned(summary.realized)} U</span>
-      </div>
-      <div className="mt-1 flex items-center justify-between text-[11px]">
-        <span className="text-slate-500">价格档位</span>
-        <span className="font-medium tabular-nums text-slate-700">{summary.activeLevels}</span>
-      </div>
-      <div className="mt-1 flex items-center justify-between text-[11px]">
-        <span className="text-slate-500">累计交易额</span>
-        <span className="font-semibold tabular-nums text-slate-700">{formatAmount(summary.turnover)} U</span>
-      </div>
-    </div>
+
+      <button
+        type="button"
+        onClick={onToggleCumulativeData}
+        className="flex w-full items-center justify-between border-t border-slate-100 px-3 py-2.5 text-[11px] text-slate-500"
+        aria-expanded={showCumulativeData}
+      >
+        <span>累计数据</span>
+        <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showCumulativeData ? "rotate-90" : ""}`} />
+      </button>
+      {showCumulativeData && (
+        <div className="border-t border-slate-100 text-[11px] tabular-nums">
+          <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center border-b border-slate-100 px-3 py-2 text-[10px] font-semibold">
+            <span className="text-slate-400"> </span>
+            <span className="text-right text-rose-600">多仓</span>
+            <span className="text-right text-emerald-600">空仓</span>
+          </div>
+          <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center px-3 py-2">
+            <span className="text-slate-500">累计平仓</span>
+            <span className="text-right font-semibold text-slate-700">{formatQuantity(summary.long.closedQuantity)} ETH</span>
+            <span className="text-right font-semibold text-slate-700">{formatQuantity(summary.short.closedQuantity)} ETH</span>
+          </div>
+          <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center border-t border-slate-100 px-3 py-2">
+            <span className="text-slate-500">原始平均成本</span>
+            <span className="text-right font-semibold text-slate-700">{summary.long.closedQuantity > 0 ? formatPrice(summary.long.closedAverageCost) : formatAmount(0)} U</span>
+            <span className="text-right font-semibold text-slate-700">{summary.short.closedQuantity > 0 ? formatPrice(summary.short.closedAverageCost) : formatAmount(0)} U</span>
+          </div>
+          <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center border-t border-slate-100 px-3 py-2">
+            <span className="text-slate-500">平均平仓价</span>
+            <span className="text-right font-semibold text-slate-700">{summary.long.closedQuantity > 0 ? formatPrice(summary.long.closedAveragePrice) : formatAmount(0)} U</span>
+            <span className="text-right font-semibold text-slate-700">{summary.short.closedQuantity > 0 ? formatPrice(summary.short.closedAveragePrice) : formatAmount(0)} U</span>
+          </div>
+          <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center px-3 py-2">
+            <span className="text-slate-500">累计盈利</span>
+            <span className={`text-right font-semibold ${pnlColor(summary.long.realized)}`}>{formatSigned(summary.long.realized)} U</span>
+            <span className={`text-right font-semibold ${pnlColor(summary.short.realized)}`}>{formatSigned(summary.short.realized)} U</span>
+          </div>
+          <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center border-t border-slate-100 px-3 py-2">
+            <span className="text-slate-500">累计交易额</span>
+            <span className="text-right font-semibold text-slate-700">{formatAmount(summary.long.turnover)} U</span>
+            <span className="text-right font-semibold text-slate-700">{formatAmount(summary.short.turnover)} U</span>
+          </div>
+          <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center border-t border-slate-100 px-3 py-2">
+            <span className="text-slate-500">累计佣金</span>
+            <span className="text-right font-semibold text-slate-700">{formatAmount(summary.long.commission)} U</span>
+            <span className="text-right font-semibold text-slate-700">{formatAmount(summary.short.commission)} U</span>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
