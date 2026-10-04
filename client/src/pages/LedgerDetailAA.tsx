@@ -3201,8 +3201,8 @@ export default function LedgerDetailAA({
                   {focusSortActive ? (overviewSort?.dir === 'desc' ? '降序↓' : '升序↑') : '排序'}
                 </button>
               </div>
-              {/* 保留原生横向滑动；纵向不再锁在固定窗口内，整张概览表随页面自然上滑。 */}
-              <div ref={overviewNativeScrollRef} style={{ position: 'relative', isolation: 'isolate', overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehaviorX: 'none', touchAction: 'pan-x pan-y', backgroundColor: '#FFFFFF' }}>
+              {/* 单一原生滚动层：保留手机端横向、纵向手势滚动；表头和数据共同横向移动。 */}
+              <div ref={overviewNativeScrollRef} style={{ position: 'relative', isolation: 'isolate', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100dvh - 186px)', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'none', overscrollBehaviorX: 'none', overscrollBehaviorY: 'none', touchAction: 'pan-x pan-y', backgroundColor: '#FFFFFF' }}>
                 {/* 表头直接挂在原生滚动层：iOS 从第13项继续上滑时仍保持固定，不受名称列移动端合成层影响。 */}
                 <div style={{ display: 'flex', width: overviewTableWidth, minWidth: overviewTableWidth, position: 'sticky', top: 0, zIndex: 50, backgroundColor: '#FFFFFF', boxShadow: '0 1px 0 #F5F5F5' }}>
                   <div className={cellCls} style={{ width: 104, minWidth: 104, maxWidth: 104, flexShrink: 0, position: 'sticky', left: 0, zIndex: 60, borderRight: '1px solid #F0F0F0', backgroundColor: '#FFFFFF', boxShadow: '2px 0 0 #FFFFFF, 3px 0 0 #F0F0F0', height: rowHeight }}>
@@ -3281,7 +3281,7 @@ export default function LedgerDetailAA({
                   )}
                   {/* 合计名称格 */}
                   {visibleTags.length > 0 && (
-                    <div className="px-1 flex items-center justify-center" style={{ position: 'relative', zIndex: 1, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 8px', flex: '0 0 auto', height: 36 }}>
+                    <div className="px-1 flex items-center justify-center" style={{ position: 'sticky', bottom: 0, zIndex: 70, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 8px', boxShadow: '0 -1px 0 #F0F0F0', flex: '0 0 auto', height: 36 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: '#9E9E9E' }}>合计</span>
                     </div>
                   )}
@@ -3745,7 +3745,7 @@ export default function LedgerDetailAA({
                   })()}
                   {/* 汇总行右侧各列 */}
                 {visibleTags.length > 0 && (
-                  <>
+                  <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: rightGridCols, position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#FAFAFA', boxShadow: '0 -1px 0 #F0F0F0' }}>
                     {/* 今日变动合计（第1列，对应表头"当天X/X"）*/}
                     {(() => {
                       // 只统计有彩色数字的标签：已更新（latestDate === _latestDataDate）且 todayPnl 非零非空
@@ -3808,7 +3808,7 @@ export default function LedgerDetailAA({
                     <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 8px 0', height: rowHeight }}>
                       <span style={{ fontSize: 13, color: '#BDBDBD' }}>--</span>
                     </div>
-                  </>
+                  </div>
                 )}
                     </div>
                 </div>
