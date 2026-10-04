@@ -1037,6 +1037,9 @@ export default function LedgerDetailAA({
   }, [overviewTab]);
   const overviewNativeScrollRef = useRef<HTMLDivElement>(null);
   const overviewPageScrollRef = useRef<HTMLDivElement>(null);
+  // 表格高度必须按它在当前手机视口中的真实顶部计算。固定减去常数会遗漏头像、筛选
+  // 与焦点栏高度，使“已暂停”后的总汇总行落到实际屏幕外却无法继续上滑。
+  const [overviewScrollMaxHeight, setOverviewScrollMaxHeight] = useState<number | null>(null);
   const [overviewSort, setOverviewSort] = useState<{ col: OverviewSortColumn; dir: 'asc' | 'desc' } | null>(null);
   const [overviewFocusMetric, setOverviewFocusMetric] = useState<OverviewFocusMetric>('pnl');
   const focusOverviewMetric = useCallback((metric: OverviewFocusMetric, behavior: ScrollBehavior = 'smooth') => {
@@ -1274,6 +1277,39 @@ export default function LedgerDetailAA({
       window.clearTimeout(timer);
     };
   }, [selectedTagId, overviewTab, allTagsChartData.length, overviewFocusMetric, focusOverviewMetric]);
+
+  // 地址栏收起/展开、屏幕旋转及概览数据挂载后均重新取真实可视剩余高度。
+  // 只限制当前表格的纵向滚动范围，不改变横向表格与“已暂停 → 合计”的原有行结构。
+  useEffect(() => {
+    if (overviewTab !== 'overview') return;
+
+    let frame = 0;
+    const updateOverviewScrollHeight = () => {
+      frame = 0;
+      const scrollLayer = overviewNativeScrollRef.current;
+      if (!scrollLayer) return;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const availableHeight = Math.max(180, Math.floor(viewportHeight - scrollLayer.getBoundingClientRect().top - 8));
+      setOverviewScrollMaxHeight((previous) => previous === availableHeight ? previous : availableHeight);
+    };
+    const scheduleUpdate = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(updateOverviewScrollHeight);
+    };
+
+    scheduleUpdate();
+    const delayedUpdate = window.setTimeout(scheduleUpdate, 120);
+    window.addEventListener('resize', scheduleUpdate);
+    window.visualViewport?.addEventListener('resize', scheduleUpdate);
+    window.visualViewport?.addEventListener('scroll', scheduleUpdate);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.clearTimeout(delayedUpdate);
+      window.removeEventListener('resize', scheduleUpdate);
+      window.visualViewport?.removeEventListener('resize', scheduleUpdate);
+      window.visualViewport?.removeEventListener('scroll', scheduleUpdate);
+    };
+  }, [overviewTab, selectedTagId, allTagsChartData.length, showPausedTagDetails]);
 
   // 下拉菜单的顺序以概览表默认顺序为基准：运行中的标签在前，暂停标签在后。
   // 没有任何概览数据的标签保留可选，但放在所有概览标签之后，避免打乱概览序号。
@@ -3202,7 +3238,7 @@ export default function LedgerDetailAA({
                 </button>
               </div>
               {/* 单一原生滚动层：保留手机端横向、纵向手势滚动；表头和数据共同横向移动。 */}
-              <div ref={overviewNativeScrollRef} style={{ position: 'relative', isolation: 'isolate', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100dvh - 186px)', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'none', overscrollBehaviorX: 'none', overscrollBehaviorY: 'none', touchAction: 'pan-x pan-y', backgroundColor: '#FFFFFF' }}>
+              <div ref={overviewNativeScrollRef} style={{ position: 'relative', isolation: 'isolate', overflowX: 'auto', overflowY: 'auto', maxHeight: overviewScrollMaxHeight ? `${overviewScrollMaxHeight}px` : 'calc(100dvh - 260px)', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'none', overscrollBehaviorX: 'none', overscrollBehaviorY: 'none', touchAction: 'pan-x pan-y', backgroundColor: '#FFFFFF' }}>
                 {/* 表头直接挂在原生滚动层：iOS 从第13项继续上滑时仍保持固定，不受名称列移动端合成层影响。 */}
                 <div style={{ display: 'flex', width: overviewTableWidth, minWidth: overviewTableWidth, position: 'sticky', top: 0, zIndex: 50, backgroundColor: '#FFFFFF', boxShadow: '0 1px 0 #F5F5F5' }}>
                   <div className={cellCls} style={{ width: 104, minWidth: 104, maxWidth: 104, flexShrink: 0, position: 'sticky', left: 0, zIndex: 60, borderRight: '1px solid #F0F0F0', backgroundColor: '#FFFFFF', boxShadow: '2px 0 0 #FFFFFF, 3px 0 0 #F0F0F0', height: rowHeight }}>
@@ -3281,7 +3317,7 @@ export default function LedgerDetailAA({
                   )}
                   {/* 合计名称格 */}
                   {visibleTags.length > 0 && (
-                    <div className="px-1 flex items-center justify-center" style={{ position: 'sticky', bottom: 0, zIndex: 70, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 8px', boxShadow: '0 -1px 0 #F0F0F0', flex: '0 0 auto', height: 36 }}>
+                    <div className="px-1 flex items-center justify-center" style={{ position: 'relative', zIndex: 1, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 8px', flex: '0 0 auto', height: 36 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: '#9E9E9E' }}>合计</span>
                     </div>
                   )}
@@ -3745,7 +3781,7 @@ export default function LedgerDetailAA({
                   })()}
                   {/* 汇总行右侧各列 */}
                 {visibleTags.length > 0 && (
-                  <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: rightGridCols, position: 'sticky', bottom: 0, zIndex: 30, backgroundColor: '#FAFAFA', boxShadow: '0 -1px 0 #F0F0F0' }}>
+                  <>
                     {/* 今日变动合计（第1列，对应表头"当天X/X"）*/}
                     {(() => {
                       // 只统计有彩色数字的标签：已更新（latestDate === _latestDataDate）且 todayPnl 非零非空
@@ -3808,7 +3844,7 @@ export default function LedgerDetailAA({
                     <div className="px-1 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 8px 0', height: rowHeight }}>
                       <span style={{ fontSize: 13, color: '#BDBDBD' }}>--</span>
                     </div>
-                  </div>
+                  </>
                 )}
                     </div>
                 </div>
