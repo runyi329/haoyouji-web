@@ -10578,7 +10578,7 @@ ${klinesSummary}
         ledgerId: z.literal(52),
         accountId: z.number().int().positive().optional(),
         accountName: z.string().trim().min(1).max(80).optional(),
-        relatedUserId: z.number().int().positive(),
+        relatedUserId: z.number().int().positive().optional(),
         symbol: z.literal('ETH'),
         action: z.enum(['openLong', 'closeLong', 'openShort', 'closeShort']),
         quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, 'ETH 整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '数量必须大于0'),
@@ -10613,7 +10613,7 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.literal(52),
         entryId: z.number().int().positive(),
-        relatedUserId: z.number().int().positive(),
+        relatedUserId: z.number().int().positive().optional(),
         quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, 'ETH 整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '数量必须大于0'),
         price: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).refine((value) => Number(value) > 0, '价格必须大于0'),
         note: z.string().trim().max(500).optional(),

@@ -504,11 +504,15 @@ export default function T0Journal() {
       .filter((entry) => entry.symbol === "ETH")
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     setLastSavedQuantity(latestSavedEntry ? normalizeEthQuantity(String(latestSavedEntry.quantity)) : "");
-    // 首次进入优先展示最近有速记流水的账户，避免空账户标签把已保存的价格簿和流水“遮住”。
+    // 管理员默认汇总全部下单账户，避免新增一笔订单后把其他账户的历史仓位“遮住”；
+    // 成员个人视图仍默认最近有流水的账户。
     const latestTradeAccountId = latestSavedEntry?.accountId || "";
-    setSelectedAccountId((current) => nextAccounts.some((account) => account.id === current)
+    const defaultAccountId = journal.viewerMode === "admin"
+      ? "all"
+      : (nextAccounts.some((account) => account.id === latestTradeAccountId) ? latestTradeAccountId : (nextAccounts[0]?.id || ""));
+    setSelectedAccountId((current) => current === "all" || nextAccounts.some((account) => account.id === current)
       ? current
-      : (nextAccounts.some((account) => account.id === latestTradeAccountId) ? latestTradeAccountId : (nextAccounts[0]?.id || "")));
+      : defaultAccountId);
     setLastRelatedUserId((current) => nextRecentRelatedUsers.some((user) => user.id === current)
       ? current
       : (nextRecentRelatedUsers[0]?.id || ""));
@@ -532,7 +536,7 @@ export default function T0Journal() {
 
   const selectedTrades = useMemo(
     () => trades.filter((trade) => (
-      trade.accountId === selectedAccountId
+      (selectedAccountId === "all" || trade.accountId === selectedAccountId)
       && trade.symbol === "ETH"
       && (relatedUserFilterId === "all"
         || (relatedUserFilterId === "unlinked" ? !trade.relatedUserId : trade.relatedUserId === relatedUserFilterId))
@@ -662,7 +666,7 @@ export default function T0Journal() {
     setShowOpenedTradeList(showOrders);
     setEntryForm({
       action,
-      accountId: selectedAccountId,
+      accountId: selectedAccountId === "all" ? "" : selectedAccountId,
       accountName: selectedAccount?.name ?? "",
       relatedUserId: lastRelatedUser?.id ?? "",
       relatedUserName: lastRelatedUser?.name ?? "",
@@ -677,12 +681,13 @@ export default function T0Journal() {
   };
 
   const openQuickCloseSheet = (trade: PreviewTrade) => {
-    if (!trade.relatedUserId) {
-      toast.error("请先编辑该笔开仓记录并关联用户，再进行平仓");
-      return;
-    }
     const side = ACTIONS[trade.action].side;
-    const tradeUserBuckets = buildPositionBuckets(selectedTrades.filter((item) => item.relatedUserId === trade.relatedUserId));
+    // 未关联用户的订单也可独立平仓；空关联值会稳定归到同一“未关联”仓位池，
+    // 不会和任何已关联用户的订单互相抵扣。
+    const relatedUserKey = trade.relatedUserId ?? "";
+    const tradeUserBuckets = buildPositionBuckets(selectedTrades.filter((item) => (
+      item.accountId === trade.accountId && (item.relatedUserId ?? "") === relatedUserKey
+    )));
     const target = tradeUserBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(archivePriceForTrade(trade)));
     if (!target || target.remainingQuantity <= 0.0000001) {
       toast.error("该笔仓位已无可平数量");
@@ -694,8 +699,8 @@ export default function T0Journal() {
     setShowOpenedTradeList(false);
     setEntryForm({
       action,
-      accountId: selectedAccountId,
-      accountName: selectedAccount?.name ?? "",
+      accountId: trade.accountId,
+      accountName: getTradeAccountName(trade),
       relatedUserId: trade.relatedUserId ?? "",
       relatedUserName: trade.relatedUserName ?? trade.relatedUsername ?? "",
       relatedUsername: trade.relatedUsername ?? "",
@@ -780,7 +785,7 @@ export default function T0Journal() {
         setRecentRelatedUsers((current) => [relatedUser, ...current.filter((item) => item.id !== relatedUser.id)]);
       }
       setTrades((current) => current.map((trade) => trade.clientRequestId === variables.clientRequestId ? entry : trade));
-      setSelectedAccountId(account.id);
+      setSelectedAccountId((current) => current === "all" ? current : account.id);
       const savedQuantity = String(variables.quantity || "").trim();
       if (savedQuantity) {
         setLastSavedQuantity(savedQuantity);
@@ -903,6 +908,17 @@ export default function T0Journal() {
     setRelatedUserPickerOpen(false);
   };
 
+  const clearRelatedUser = () => {
+    setEntryForm((current) => ({
+      ...current,
+      relatedUserId: "",
+      relatedUserName: "",
+      relatedUsername: "",
+    }));
+    setRelatedUserSearch("");
+    setRelatedUserPickerOpen(false);
+  };
+
   const handleSaveEntry = () => {
     const normalizedQuantity = normalizeEthQuantity(entryForm.quantity);
     const quantity = Number(normalizedQuantity);
@@ -912,6 +928,9 @@ export default function T0Journal() {
     const normalizedAccountName = entryForm.accountName.trim();
     const hasPersistedAccountId = /^\d+$/.test(entryForm.accountId);
     const relatedUserId = Number(entryForm.relatedUserId);
+    const normalizedRelatedUserId = Number.isInteger(relatedUserId) && relatedUserId > 0
+      ? relatedUserId
+      : undefined;
 
     if (quantityFormatError) {
       toast.error(quantityFormatError);
@@ -934,8 +953,8 @@ export default function T0Journal() {
       toast.error("请在最后选择或新建下单账户");
       return;
     }
-    if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) {
-      toast.error("请选择关联用户");
+    if (entryForm.relatedUserId && !normalizedRelatedUserId) {
+      toast.error("关联用户信息无效，请重新选择或暂不关联");
       return;
     }
 
@@ -948,7 +967,7 @@ export default function T0Journal() {
       updateOpeningEntryMutation.mutate({
         ledgerId: 52,
         entryId,
-        relatedUserId,
+        relatedUserId: normalizedRelatedUserId,
         quantity: normalizedQuantity,
         price: entryForm.price.trim(),
         note: entryForm.note.trim() || undefined,
@@ -962,7 +981,13 @@ export default function T0Journal() {
         return;
       }
       const side = selectedAction.side;
-      const target = buckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(archiveTargetPrice));
+      const closeScopeTrades = trades.filter((trade) => (
+        trade.accountId === entryForm.accountId
+        && trade.symbol === "ETH"
+        && (trade.relatedUserId ?? "") === (entryForm.relatedUserId ?? "")
+      ));
+      const closeScopeBuckets = buildPositionBuckets(closeScopeTrades);
+      const target = closeScopeBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(archiveTargetPrice));
       if (!target || target.remainingQuantity <= 0) {
         toast.error("该价格档位已无可平数量");
         return;
@@ -989,8 +1014,8 @@ export default function T0Journal() {
       id: `pending-entry-${clientRequestId}`,
       accountId,
       accountName: normalizedAccountName || selectedAccount?.name,
-      relatedUserId: entryForm.relatedUserId,
-      relatedUserName: entryForm.relatedUserName,
+      relatedUserId: entryForm.relatedUserId || undefined,
+      relatedUserName: entryForm.relatedUserName || undefined,
       relatedUsername: entryForm.relatedUsername || undefined,
       symbol: "ETH",
       action: entryForm.action,
@@ -1011,7 +1036,7 @@ export default function T0Journal() {
       ledgerId: 52,
       accountId: hasPersistedAccountId ? Number(entryForm.accountId) : undefined,
       accountName: hasPersistedAccountId ? undefined : normalizedAccountName,
-      relatedUserId,
+      relatedUserId: normalizedRelatedUserId,
       symbol: "ETH",
       action: entryForm.action,
       quantity: normalizedQuantity,
@@ -1102,6 +1127,7 @@ export default function T0Journal() {
                   onChange={(event) => setSelectedAccountId(event.target.value)}
                   className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
                 >
+                  {!isMemberView && <option value="all">全部账户</option>}
                   {accounts.length === 0 && <option value="">暂无账户</option>}
                   {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                 </select>
@@ -1148,19 +1174,9 @@ export default function T0Journal() {
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.long) return;
-                    if (isMemberView) {
-                      openEntrySheet("openLong", row.long.price, true);
-                      return;
-                    }
-                    if (relatedUserFilterId === "all") {
-                      toast.error("请先在账户总览选择关联用户，再平仓");
-                      return;
-                    }
-                    if (relatedUserFilterId === "unlinked") {
-                      toast.error("历史未关联仓位请先展开订单并补充关联用户");
-                      return;
-                    }
-                    openEntrySheet("closeLong", row.long.price);
+                    // 点已有仓位永远先进入本档订单详情，管理员可继续展开、编辑或对单笔快捷平仓；
+                    // 不因关联用户尚未标注而阻断查看。
+                    openEntrySheet("openLong", row.long.price, true);
                   }}
                   onOpen={() => openEntrySheet("openLong")}
                 />
@@ -1176,19 +1192,8 @@ export default function T0Journal() {
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.short) return;
-                    if (isMemberView) {
-                      openEntrySheet("openShort", row.short.price, true);
-                      return;
-                    }
-                    if (relatedUserFilterId === "all") {
-                      toast.error("请先在账户总览选择关联用户，再平仓");
-                      return;
-                    }
-                    if (relatedUserFilterId === "unlinked") {
-                      toast.error("历史未关联仓位请先展开订单并补充关联用户");
-                      return;
-                    }
-                    openEntrySheet("closeShort", row.short.price);
+                    // 同上：空仓格点击仅打开当前档订单详情，不强制先筛选关联用户。
+                    openEntrySheet("openShort", row.short.price, true);
                   }}
                   onOpen={() => openEntrySheet("openShort")}
                 />
@@ -1306,7 +1311,7 @@ export default function T0Journal() {
             <div className="px-4 pt-3 pb-2 sticky top-0 bg-white z-10 border-b border-slate-100">
               <div className="min-w-0">
                 <div className="text-base font-semibold text-slate-900">{isMemberView ? "我的仓位明细" : isEditingEntry ? "编辑开仓记录" : isClosingEntry ? `${ACTIONS[entryForm.action].label}设置` : "速记一笔"}</div>
-                <div className="mt-0.5 text-[11px] text-slate-500">{isMemberView ? "只展示关联到当前用户的订单与仓位，不能发起或修改速记" : isEditingEntry ? "仅可修改数量、成交价与备注；修改会保留审计快照" : isClosingEntry ? "填写平仓数量与成交价后，需两次确认才会记账" : "本地先显示，后台立即保存；不会触发交易所下单"}</div>
+                <div className="mt-0.5 text-[11px] text-slate-500">{isMemberView ? "只展示关联到当前用户的订单与仓位，不能发起或修改速记" : isEditingEntry ? "可修改数量、成交价、关联用户与备注；修改会保留审计快照" : isClosingEntry ? "填写平仓数量与成交价后，需两次确认才会记账" : "本地先显示，后台立即保存；不会触发交易所下单"}</div>
               </div>
             </div>
 
@@ -1587,7 +1592,7 @@ export default function T0Journal() {
                     )}
                   </Field>
 
-                  <Field label={<span>关联用户 <span className="text-rose-500">*</span></span>}>
+                  <Field label={<span>关联用户 <span className="text-slate-400">（可选）</span></span>}>
                     <button
                       type="button"
                       disabled={isCloseReview}
@@ -1598,7 +1603,7 @@ export default function T0Journal() {
                       className={`flex h-11 w-full items-center gap-2 rounded-xl border px-3 text-left text-sm outline-none transition disabled:opacity-40 ${entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}
                     >
                       <UserRound className="h-4 w-4 shrink-0 text-indigo-500" />
-                      <span className="min-w-0 flex-1 truncate font-medium">{entryForm.relatedUserName || entryForm.relatedUsername || "搜索并选择"}</span>
+                      <span className="min-w-0 flex-1 truncate font-medium">{entryForm.relatedUserName || entryForm.relatedUsername || "暂不关联"}</span>
                       <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                     </button>
                   </Field>
@@ -1606,7 +1611,7 @@ export default function T0Journal() {
 
                 <div className="-mt-1 grid grid-cols-2 gap-3 text-[10px] leading-4 text-slate-400">
                   <span>首次可新建；后续默认最近账户。</span>
-                  <span>下次速记默认最近关联用户。</span>
+                  <span>可暂不关联，之后在订单编辑中补充。</span>
                 </div>
 
                 {relatedUserPickerOpen && (
@@ -1632,6 +1637,14 @@ export default function T0Journal() {
                         <X className="h-4 w-4" />
                       </button>
                     </div>
+                    <button
+                      type="button"
+                      onClick={clearRelatedUser}
+                      className="flex w-full items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-xs font-medium text-slate-600 active:bg-slate-50"
+                    >
+                      <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
+                      <span>暂不关联，稍后补充</span>
+                    </button>
                     {relatedUserSearch.trim().length === 0 ? (
                       recentRelatedUsers.length > 0 ? (
                         <div className="max-h-48 overflow-y-auto py-1">

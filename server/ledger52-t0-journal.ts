@@ -25,7 +25,8 @@ export type SaveT0JournalEntryInput = {
   actorUserId: number;
   accountId?: number;
   accountName?: string;
-  relatedUserId: number;
+  /** 管理员可在开单后补充；未设置时按未关联订单归集。 */
+  relatedUserId?: number;
   symbol: "ETH";
   action: T0JournalAction;
   quantity: string;
@@ -441,15 +442,17 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     await tx.beginTransaction();
 
     const relatedUserId = Number(input.relatedUserId || 0);
-    if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "请选择关联用户" });
-    }
-    const [relatedUserRows] = await tx.execute(
-      `SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE`,
-      [relatedUserId],
-    );
-    if (!asRows(relatedUserRows)[0]) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新选择" });
+    if (relatedUserId > 0) {
+      if (!Number.isInteger(relatedUserId)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "关联用户信息无效" });
+      }
+      const [relatedUserRows] = await tx.execute(
+        `SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE`,
+        [relatedUserId],
+      );
+      if (!asRows(relatedUserRows)[0]) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新选择" });
+      }
     }
 
     let accountId = Number(input.accountId || 0);
@@ -537,7 +540,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         LEDGER_52_T0_JOURNAL_ID,
         input.actorUserId,
         accountId,
-        relatedUserId,
+        relatedUserId > 0 ? relatedUserId : null,
         input.symbol,
         input.action,
         normalizedQuantity,
@@ -658,7 +661,8 @@ async function writeEntryAudit(tx: any, input: {
 export async function updateLedger52T0JournalOpeningEntry(input: {
   actorUserId: number;
   entryId: number;
-  relatedUserId: number;
+  /** 允许管理员保留未关联状态，之后再补充关联用户。 */
+  relatedUserId?: number;
   quantity: string;
   price: string;
   note?: string;
@@ -673,15 +677,17 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     await tx.beginTransaction();
     const before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
     const relatedUserId = Number(input.relatedUserId || 0);
-    if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "请选择关联用户" });
-    }
-    const [relatedUserRows] = await tx.execute(
-      `SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE`,
-      [relatedUserId],
-    );
-    if (!asRows(relatedUserRows)[0]) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新选择" });
+    if (relatedUserId > 0) {
+      if (!Number.isInteger(relatedUserId)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "关联用户信息无效" });
+      }
+      const [relatedUserRows] = await tx.execute(
+        `SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE`,
+        [relatedUserId],
+      );
+      if (!asRows(relatedUserRows)[0]) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新选择" });
+      }
     }
     const archivePrice = archivePriceForAction(String(before.action) as T0JournalAction, input.price);
     await tx.execute(
@@ -694,7 +700,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         normalizedQuantity,
         input.price,
         archivePrice,
-        relatedUserId,
+        relatedUserId > 0 ? relatedUserId : null,
         normalizedQuantity,
         input.price,
         input.note || null,
@@ -869,9 +875,6 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
     if (!isOpeningAction(action)) {
       const targetPrice = archivedTargetPrice(action, snapshot.target_price);
       if (!targetPrice) throw new TRPCError({ code: "BAD_REQUEST", message: "历史平仓记录缺少对应开仓档位，无法恢复" });
-      if (relatedUserId <= 0) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "历史平仓记录缺少关联用户，无法安全恢复" });
-      }
       const [positionRows] = await tx.execute(
         `SELECT action, quantity, price, target_price, related_user_id
            FROM ledger52_t0_journal_entries
