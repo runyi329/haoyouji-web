@@ -27,6 +27,9 @@ export type SaveT0JournalEntryInput = {
   accountName?: string;
   /** 管理员可在开单后补充；未设置时按未关联订单归集。 */
   relatedUserId?: number;
+  /** 同一关联用户下的独立专项款；开仓关联用户时必须指定，旧流水保留为空。 */
+  relatedFundId?: number;
+  relatedFundName?: string;
   symbol: "ETH";
   action: T0JournalAction;
   quantity: string;
@@ -104,26 +107,32 @@ function relatedUserKey(value: unknown): string {
   return userId > 0 ? String(userId) : "legacy-unlinked";
 }
 
-function calculateAvailableCloseCents(rows: any[], action: T0JournalAction, targetPrice: string, relatedUserId: number): number {
+function relatedFundKey(value: unknown): string {
+  const fundId = toNumber(value);
+  return fundId > 0 ? String(fundId) : "legacy-unclassified";
+}
+
+function calculateAvailableCloseCents(rows: any[], action: T0JournalAction, targetPrice: string, relatedUserId: number, relatedFundId: number): number {
   const balances = new Map<string, number>();
   for (const row of rows) {
     const rowAction = String(row.action) as T0JournalAction;
     const side = actionSide(rowAction);
     const userKey = relatedUserKey(row.related_user_id);
+    const fundKey = relatedFundKey(row.related_fund_id);
     if (isOpeningAction(rowAction)) {
       // 用实际开仓成交价重算，以自动兼容旧版按多空方向写入的归档档位。
       const archivePrice = archivePriceForAction(rowAction, row.price);
-      const key = `${side}:${priceKey(archivePrice)}:${userKey}`;
+      const key = `${side}:${priceKey(archivePrice)}:${userKey}:${fundKey}`;
       balances.set(key, (balances.get(key) || 0) + quantityToCents(row.quantity));
       continue;
     }
     if (row.target_price === null || row.target_price === undefined) continue;
     const archivePrice = archivedTargetPrice(rowAction, row.target_price);
-    const key = `${side}:${priceKey(archivePrice)}:${userKey}`;
+    const key = `${side}:${priceKey(archivePrice)}:${userKey}:${fundKey}`;
     balances.set(key, Math.max(0, (balances.get(key) || 0) - quantityToCents(row.quantity)));
   }
   const archivePrice = archivedTargetPrice(action, targetPrice);
-  return balances.get(`${actionSide(action)}:${priceKey(archivePrice)}:${relatedUserKey(relatedUserId)}`) || 0;
+  return balances.get(`${actionSide(action)}:${priceKey(archivePrice)}:${relatedUserKey(relatedUserId)}:${relatedFundKey(relatedFundId)}`) || 0;
 }
 
 function mapAccount(row: any) {
@@ -146,8 +155,20 @@ function mapRelatedUser(row: any) {
   };
 }
 
+function mapRelatedFund(row: any) {
+  const id = toNumber(row.related_fund_id ?? row.id);
+  const relatedUserId = toNumber(row.related_user_id);
+  return {
+    id,
+    relatedUserId: relatedUserId > 0 ? relatedUserId : undefined,
+    name: String(row.name || "未命名专项款"),
+    lastUsedAt: row.last_used_at ? isoTime(row.last_used_at) : null,
+  };
+}
+
 function mapEntry(row: any) {
   const relatedUserId = toNumber(row.related_user_id ?? row.relatedUserId);
+  const relatedFundId = toNumber(row.related_fund_id ?? row.relatedFundId);
   return {
     id: String(row.id),
     accountId: Number(row.account_id),
@@ -156,6 +177,8 @@ function mapEntry(row: any) {
     relatedUserName: row.related_user_name ?? row.relatedUserName ?? undefined,
     relatedUsername: row.related_username ?? row.relatedUsername ?? undefined,
     relatedUserAvatar: row.related_user_avatar ?? row.relatedUserAvatar ?? undefined,
+    relatedFundId: relatedFundId > 0 ? relatedFundId : undefined,
+    relatedFundName: row.related_fund_name ?? row.relatedFundName ?? undefined,
     symbol: String(row.symbol || "ETH"),
     action: String(row.action) as T0JournalAction,
     quantity: toNumber(row.quantity),
@@ -211,12 +234,31 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
     `);
 
     await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_related_funds (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        related_user_id BIGINT UNSIGNED NOT NULL,
+        name VARCHAR(80) NOT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        last_used_at DATETIME(3) DEFAULT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_t0_journal_related_fund_owner_name (ledger_id, user_id, related_user_id, name),
+        KEY idx_t0_journal_related_fund_recent (ledger_id, user_id, related_user_id, is_active, last_used_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0速记账本：关联用户下的专项款目录'
+    `);
+
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS ledger52_t0_journal_entries (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
         ledger_id INT NOT NULL,
         user_id INT NOT NULL,
         account_id BIGINT UNSIGNED NOT NULL,
         related_user_id BIGINT UNSIGNED DEFAULT NULL,
+        related_fund_id BIGINT UNSIGNED DEFAULT NULL,
         symbol VARCHAR(16) NOT NULL DEFAULT 'ETH',
         action ENUM('openLong','closeLong','openShort','closeShort') NOT NULL,
         quantity DECIMAL(36,18) NOT NULL,
@@ -233,6 +275,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         UNIQUE KEY uq_t0_journal_entry_request (ledger_id, user_id, client_request_id),
         KEY idx_t0_journal_entry_account_time (ledger_id, user_id, account_id, trade_time),
         KEY idx_t0_journal_entry_related_user_time (ledger_id, user_id, related_user_id, trade_time),
+        KEY idx_t0_journal_entry_related_fund_time (ledger_id, user_id, related_fund_id, trade_time),
         KEY idx_t0_journal_entry_owner_time (ledger_id, user_id, trade_time)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         COMMENT='52号账本T+0速记账本：管理员手工下单流水与创建审计'
@@ -268,6 +311,16 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         ALTER TABLE ledger52_t0_journal_entries
           ADD COLUMN related_user_id BIGINT UNSIGNED DEFAULT NULL AFTER account_id,
           ADD KEY idx_t0_journal_entry_related_user_time (ledger_id, user_id, related_user_id, trade_time)
+      `);
+    }
+
+    // 兼容已创建的流水表：专项款为新增维度，所有历史记录保留为空，前端标记为“未区分专项款（历史）”。
+    const [relatedFundColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_entries LIKE 'related_fund_id'`);
+    if (asRows(relatedFundColumns).length === 0) {
+      await db.execute(`
+        ALTER TABLE ledger52_t0_journal_entries
+          ADD COLUMN related_fund_id BIGINT UNSIGNED DEFAULT NULL AFTER related_user_id,
+          ADD KEY idx_t0_journal_entry_related_fund_time (ledger_id, user_id, related_fund_id, trade_time)
       `);
     }
   })().catch((error) => {
@@ -307,6 +360,62 @@ export async function assertLedger52T0JournalAccess(actor: T0JournalActor): Prom
   }
 }
 
+async function resolveLedger52T0JournalRelatedFund(tx: any, input: {
+  actorUserId: number;
+  relatedUserId: number;
+  relatedFundId?: number;
+  relatedFundName?: string;
+  required?: boolean;
+}): Promise<{ id: number; name: string } | null> {
+  const relatedFundId = Number(input.relatedFundId || 0);
+  const relatedFundName = String(input.relatedFundName || "").trim();
+  if (input.relatedUserId <= 0) {
+    if (relatedFundId > 0 || relatedFundName) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "请先选择关联用户，再选择专项款" });
+    }
+    return null;
+  }
+  if (relatedFundId > 0) {
+    if (!Number.isInteger(relatedFundId)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "专项款信息无效" });
+    }
+    const [fundRows] = await tx.execute(
+      `SELECT id, name
+         FROM ledger52_t0_journal_related_funds
+        WHERE id = ? AND ledger_id = ? AND user_id = ? AND related_user_id = ? AND is_active = 1
+        LIMIT 1 FOR UPDATE`,
+      [relatedFundId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.relatedUserId],
+    );
+    const fund = asRows(fundRows)[0];
+    if (!fund) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "专项款不存在、已停用或不属于该关联用户" });
+    }
+    await tx.execute(
+      `UPDATE ledger52_t0_journal_related_funds SET last_used_at = NOW(3)
+        WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+      [relatedFundId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    return { id: relatedFundId, name: String(fund.name || "") };
+  }
+  if (relatedFundName) {
+    const [result] = await tx.execute(
+      `INSERT INTO ledger52_t0_journal_related_funds (ledger_id, user_id, related_user_id, name, is_active, last_used_at)
+       VALUES (?, ?, ?, ?, 1, NOW(3))
+       ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), is_active = 1, last_used_at = NOW(3), updated_at = NOW(3)`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.relatedUserId, relatedFundName],
+    );
+    const createdFundId = Number((result as any).insertId || 0);
+    if (!createdFundId) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "专项款保存失败" });
+    }
+    return { id: createdFundId, name: relatedFundName };
+  }
+  if (input.required) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "关联用户开仓时，请选择或新建专项款" });
+  }
+  return null;
+}
+
 export async function getLedger52T0Journal(scope: T0JournalReadScope) {
   const conn = await getDbConnection();
   if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
@@ -315,7 +424,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
   const isAdminScope = scope.mode === "admin";
   const journalOwnerUserId = isAdminScope ? scope.journalOwnerUserId : 0;
   const relatedUserId = scope.mode === "member" ? scope.relatedUserId : 0;
-  const [accountResult, entryResult, recoverableAuditResult, recentUserResult] = await Promise.all([
+  const [accountResult, entryResult, recoverableAuditResult, recentUserResult, relatedFundResult] = await Promise.all([
     isAdminScope
       ? conn.execute(
         `SELECT id, name, last_used_at, created_at
@@ -335,13 +444,14 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
       ),
     conn.execute(
       `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
-              e.related_user_id,
+              e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
               u.username AS related_username, u.avatar AS related_user_avatar,
               e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id
+         LEFT JOIN ledger52_t0_journal_related_funds f ON f.id = e.related_fund_id AND f.ledger_id = e.ledger_id AND f.user_id = e.user_id
         WHERE e.ledger_id = ? AND ${isAdminScope ? "e.user_id = ?" : "e.related_user_id = ?"}
         ORDER BY e.trade_time ASC, e.id ASC
         LIMIT 2000`,
@@ -372,6 +482,21 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
         LIMIT 30`,
       [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
     ) : Promise.resolve([[]]),
+    isAdminScope ? conn.execute(
+      `SELECT id, related_user_id, name, last_used_at
+         FROM ledger52_t0_journal_related_funds
+        WHERE ledger_id = ? AND user_id = ? AND is_active = 1
+        ORDER BY last_used_at IS NULL ASC, last_used_at DESC, updated_at DESC, id DESC
+        LIMIT 200`,
+      [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
+    ) : conn.execute(
+      `SELECT id, related_user_id, name, last_used_at
+         FROM ledger52_t0_journal_related_funds
+        WHERE ledger_id = ? AND related_user_id = ? AND is_active = 1
+        ORDER BY last_used_at IS NULL ASC, last_used_at DESC, updated_at DESC, id DESC
+        LIMIT 200`,
+      [LEDGER_52_T0_JOURNAL_ID, relatedUserId],
+    ),
   ]);
 
   return {
@@ -379,6 +504,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
     accounts: asRows(accountResult).map(mapAccount),
     entries: asRows(entryResult).map(mapEntry),
     recentUsers: asRows(recentUserResult).map(mapRelatedUser),
+    relatedFunds: asRows(relatedFundResult).map(mapRelatedFund),
     recoverableEntries: asRows(recoverableAuditResult)
       .map(mapRecoverableAudit)
       .filter((item): item is NonNullable<typeof item> => Boolean(item)),
@@ -454,6 +580,14 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新选择" });
       }
     }
+    const relatedFund = await resolveLedger52T0JournalRelatedFund(tx, {
+      actorUserId: input.actorUserId,
+      relatedUserId,
+      relatedFundId: input.relatedFundId,
+      relatedFundName: input.relatedFundName,
+      // 新开仓关联到具体用户后，必须归属于该用户的一笔专项款；旧流水的平仓仍可保留空专项款。
+      required: isOpeningAction(input.action) && relatedUserId > 0,
+    });
 
     let accountId = Number(input.accountId || 0);
     let accountName = String(input.accountName || "").trim();
@@ -513,13 +647,13 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         throw new TRPCError({ code: "BAD_REQUEST", message: "平仓记录必须指定对应的开仓价格档位" });
       }
       const [positionRows] = await tx.execute(
-        `SELECT action, quantity, price, target_price, related_user_id
+        `SELECT action, quantity, price, target_price, related_user_id, related_fund_id
            FROM ledger52_t0_journal_entries
           WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
           ORDER BY trade_time ASC, id ASC FOR UPDATE`,
         [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, accountId, input.symbol],
       );
-      const availableCents = calculateAvailableCloseCents(asRows(positionRows), input.action, String(storedTargetPrice), relatedUserId);
+      const availableCents = calculateAvailableCloseCents(asRows(positionRows), input.action, String(storedTargetPrice), relatedUserId, relatedFund?.id ?? 0);
       const requestedCents = quantityToCents(normalizedQuantity);
       if (requestedCents <= 0 || requestedCents > availableCents) {
         throw new TRPCError({
@@ -533,14 +667,15 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 
     const [entryResult] = await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (ledger_id, user_id, account_id, related_user_id, symbol, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18), ?, ?, ?, ?)
+        (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18), ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
       [
         LEDGER_52_T0_JOURNAL_ID,
         input.actorUserId,
         accountId,
         relatedUserId > 0 ? relatedUserId : null,
+        relatedFund?.id ?? null,
         input.symbol,
         input.action,
         normalizedQuantity,
@@ -564,13 +699,14 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
       ),
       tx.execute(
-        `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id,
+        `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
                 COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
                 u.username AS related_username, u.avatar AS related_user_avatar,
                 e.symbol, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
            FROM ledger52_t0_journal_entries e
            INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
            LEFT JOIN users u ON u.id = e.related_user_id
+           LEFT JOIN ledger52_t0_journal_related_funds f ON f.id = e.related_fund_id AND f.ledger_id = e.ledger_id AND f.user_id = e.user_id
           WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ? LIMIT 1`,
         [entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
       ),
@@ -591,7 +727,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 
 async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: number) {
   const [rows] = await tx.execute(
-    `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.symbol, e.action,
+    `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.action,
             e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
             e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
        FROM ledger52_t0_journal_entries e
@@ -616,6 +752,8 @@ async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: n
        FROM ledger52_t0_journal_entries
       WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
         AND action = ? AND target_price IN (?, ?, ?)
+        AND COALESCE(related_user_id, 0) = ?
+        AND COALESCE(related_fund_id, 0) = ?
       LIMIT 1 FOR UPDATE`,
     [
       LEDGER_52_T0_JOURNAL_ID,
@@ -626,6 +764,8 @@ async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: n
       archivePrice,
       legacyStoredTargetPrice || legacyActualPrice,
       legacyActualPrice,
+      toNumber(entry.related_user_id),
+      toNumber(entry.related_fund_id),
     ],
   );
   if (asRows(dependentRows)[0]) {
@@ -663,6 +803,8 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   entryId: number;
   /** 允许管理员保留未关联状态，之后再补充关联用户。 */
   relatedUserId?: number;
+  relatedFundId?: number;
+  relatedFundName?: string;
   quantity: string;
   price: string;
   note?: string;
@@ -689,10 +831,18 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新选择" });
       }
     }
+    const relatedFund = await resolveLedger52T0JournalRelatedFund(tx, {
+      actorUserId: input.actorUserId,
+      relatedUserId,
+      relatedFundId: input.relatedFundId,
+      relatedFundName: input.relatedFundName,
+      // 旧开仓可能在专项款功能上线前已关联用户，编辑时允许暂时保留“未区分专项款（历史）”。
+      required: false,
+    });
     const archivePrice = archivePriceForAction(String(before.action) as T0JournalAction, input.price);
     await tx.execute(
       `UPDATE ledger52_t0_journal_entries
-          SET quantity = ?, price = ?, target_price = ?, related_user_id = ?,
+          SET quantity = ?, price = ?, target_price = ?, related_user_id = ?, related_fund_id = ?,
               fee_usdt = ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18),
               note = ?, updated_at = NOW(3)
         WHERE id = ? AND ledger_id = ? AND user_id = ?`,
@@ -701,6 +851,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         input.price,
         archivePrice,
         relatedUserId > 0 ? relatedUserId : null,
+        relatedFund?.id ?? null,
         normalizedQuantity,
         input.price,
         input.note || null,
@@ -710,13 +861,14 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       ],
     );
     const [updatedRows] = await tx.execute(
-      `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id,
+      `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
               u.username AS related_username, u.avatar AS related_user_avatar,
               e.symbol, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id
+         LEFT JOIN ledger52_t0_journal_related_funds f ON f.id = e.related_fund_id AND f.ledger_id = e.ledger_id AND f.user_id = e.user_id
         WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ? LIMIT 1`,
       [input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
     );
@@ -774,7 +926,7 @@ export async function revertLedger52T0JournalEntry(input: { actorUserId: number;
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     const [rows] = await tx.execute(
-      `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.symbol, e.action,
+      `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.action,
               e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
               e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
          FROM ledger52_t0_journal_entries e
@@ -853,6 +1005,7 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
     const quantity = normalizeEthQuantity(String(snapshot?.quantity ?? ""));
     const price = String(snapshot?.price ?? "");
     const relatedUserId = toNumber(snapshot?.related_user_id ?? snapshot?.relatedUserId);
+    const relatedFundId = toNumber(snapshot?.related_fund_id ?? snapshot?.relatedFundId);
     const clientRequestId = String(snapshot?.client_request_id || "");
     if (!entryId || !accountId || !T0_JOURNAL_ACTIONS.has(action) || !clientRequestId || !ETH_QUANTITY_RESTORE_PATTERN.test(quantity) || toNumber(price) <= 0) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "该历史审计快照不完整，无法安全恢复" });
@@ -876,13 +1029,13 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
       const targetPrice = archivedTargetPrice(action, snapshot.target_price);
       if (!targetPrice) throw new TRPCError({ code: "BAD_REQUEST", message: "历史平仓记录缺少对应开仓档位，无法恢复" });
       const [positionRows] = await tx.execute(
-        `SELECT action, quantity, price, target_price, related_user_id
+        `SELECT action, quantity, price, target_price, related_user_id, related_fund_id
            FROM ledger52_t0_journal_entries
           WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
           ORDER BY trade_time ASC, id ASC FOR UPDATE`,
         [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, accountId, String(snapshot.symbol || "ETH")],
       );
-      const availableCents = calculateAvailableCloseCents(asRows(positionRows), action, String(targetPrice), relatedUserId);
+      const availableCents = calculateAvailableCloseCents(asRows(positionRows), action, String(targetPrice), relatedUserId, relatedFundId);
       if (quantityToCents(quantity) > availableCents) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "恢复后会超过该档位可平数量，请先恢复对应开仓流水" });
       }
@@ -890,14 +1043,15 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
 
     await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (id, ledger_id, user_id, account_id, related_user_id, symbol, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
+        (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
       [
         entryId,
         LEDGER_52_T0_JOURNAL_ID,
         input.actorUserId,
         accountId,
         relatedUserId > 0 ? relatedUserId : null,
+        relatedFundId > 0 ? relatedFundId : null,
         String(snapshot.symbol || "ETH"),
         action,
         quantity,
@@ -912,13 +1066,14 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
       ],
     );
     const [restoredRows] = await tx.execute(
-      `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id,
+      `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
               u.username AS related_username, u.avatar AS related_user_avatar,
               e.symbol, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id
+         LEFT JOIN ledger52_t0_journal_related_funds f ON f.id = e.related_fund_id AND f.ledger_id = e.ledger_id AND f.user_id = e.user_id
         WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ? LIMIT 1`,
       [entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
     );

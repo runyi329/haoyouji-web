@@ -28,6 +28,13 @@ type PreviewRelatedUser = {
   lastUsedAt?: string | null;
 };
 
+type PreviewRelatedFund = {
+  id: string;
+  relatedUserId?: string;
+  name: string;
+  lastUsedAt?: string | null;
+};
+
 type PreviewTrade = {
   id: string;
   accountId: string;
@@ -36,6 +43,8 @@ type PreviewTrade = {
   relatedUserName?: string;
   relatedUsername?: string;
   relatedUserAvatar?: string;
+  relatedFundId?: string;
+  relatedFundName?: string;
   symbol: string;
   action: TradeAction;
   quantity: number;
@@ -64,6 +73,8 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     relatedUserName: entry.relatedUserName ? String(entry.relatedUserName) : undefined,
     relatedUsername: entry.relatedUsername ? String(entry.relatedUsername) : undefined,
     relatedUserAvatar: entry.relatedUserAvatar ? String(entry.relatedUserAvatar) : undefined,
+    relatedFundId: entry.relatedFundId === undefined || entry.relatedFundId === null ? undefined : String(entry.relatedFundId),
+    relatedFundName: entry.relatedFundName ? String(entry.relatedFundName) : undefined,
     symbol: String(entry.symbol || "ETH"),
     action: entry.action as TradeAction,
     quantity: Number(entry.quantity),
@@ -100,6 +111,8 @@ type EntryForm = {
   relatedUserId: string;
   relatedUserName: string;
   relatedUsername: string;
+  relatedFundId: string;
+  relatedFundName: string;
   quantity: string;
   price: string;
   note: string;
@@ -382,9 +395,11 @@ export default function T0Journal() {
   const searchParams = new URLSearchParams(search);
   const [accounts, setAccounts] = useState<PreviewAccount[]>([]);
   const [recentRelatedUsers, setRecentRelatedUsers] = useState<PreviewRelatedUser[]>([]);
+  const [relatedFunds, setRelatedFunds] = useState<PreviewRelatedFund[]>([]);
   const [trades, setTrades] = useState<PreviewTrade[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [relatedUserFilterId, setRelatedUserFilterId] = useState("all");
+  const [relatedFundFilterId, setRelatedFundFilterId] = useState("all");
   const [lastRelatedUserId, setLastRelatedUserId] = useState("");
   const [relatedUserPickerOpen, setRelatedUserPickerOpen] = useState(false);
   const [relatedUserSearch, setRelatedUserSearch] = useState("");
@@ -412,6 +427,8 @@ export default function T0Journal() {
     relatedUserId: "",
     relatedUserName: "",
     relatedUsername: "",
+    relatedFundId: "",
+    relatedFundName: "",
     quantity: "",
     price: "",
     note: "",
@@ -485,6 +502,14 @@ export default function T0Journal() {
         lastUsedAt: user.lastUsedAt ?? null,
       }))
       : [];
+    const nextRelatedFunds: PreviewRelatedFund[] = Array.isArray(journal.relatedFunds)
+      ? journal.relatedFunds.map((fund: any) => ({
+        id: String(fund.id),
+        relatedUserId: fund.relatedUserId === undefined || fund.relatedUserId === null ? undefined : String(fund.relatedUserId),
+        name: String(fund.name || "未命名专项款"),
+        lastUsedAt: fund.lastUsedAt ?? null,
+      }))
+      : [];
     const nextTrades: PreviewTrade[] = Array.isArray(journal.entries)
       ? journal.entries.map(previewTradeFromEntry)
       : [];
@@ -498,27 +523,31 @@ export default function T0Journal() {
       : [];
     setAccounts(nextAccounts);
     setRecentRelatedUsers(nextRecentRelatedUsers);
+    setRelatedFunds(nextRelatedFunds);
     setTrades(nextTrades);
     setRecoverableEntries(nextRecoverableEntries);
     const latestSavedEntry = nextTrades
       .filter((entry) => entry.symbol === "ETH")
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     setLastSavedQuantity(latestSavedEntry ? normalizeEthQuantity(String(latestSavedEntry.quantity)) : "");
-    // 管理员默认汇总全部下单账户，避免新增一笔订单后把其他账户的历史仓位“遮住”；
-    // 成员个人视图仍默认最近有流水的账户。
-    const latestTradeAccountId = latestSavedEntry?.accountId || "";
-    const defaultAccountId = journal.viewerMode === "admin"
-      ? "all"
-      : (nextAccounts.some((account) => account.id === latestTradeAccountId) ? latestTradeAccountId : (nextAccounts[0]?.id || ""));
-    setSelectedAccountId((current) => current === "all" || nextAccounts.some((account) => account.id === current)
-      ? current
-      : defaultAccountId);
+    // 总览始终跨全部下单账户汇总：管理员默认“全部账户 + 全部用户 + 全部专项款”，
+    // 成员个人视图则固定聚合本人关联的全部账户，避免账户维度遮住同一用户的资金仓位。
+    if (journal.viewerMode === "admin") {
+      setSelectedAccountId("all");
+      setRelatedUserFilterId("all");
+      setRelatedFundFilterId("all");
+    } else {
+      setSelectedAccountId("all");
+      setRelatedUserFilterId((current) => current === "all" || current === "unlinked" || nextRecentRelatedUsers.some((user) => user.id === current)
+        ? current
+        : "all");
+      setRelatedFundFilterId((current) => current === "all" || current === "unclassified" || nextRelatedFunds.some((fund) => fund.id === current)
+        ? current
+        : "all");
+    }
     setLastRelatedUserId((current) => nextRecentRelatedUsers.some((user) => user.id === current)
       ? current
       : (nextRecentRelatedUsers[0]?.id || ""));
-    setRelatedUserFilterId((current) => current === "all" || current === "unlinked" || nextRecentRelatedUsers.some((user) => user.id === current)
-      ? current
-      : "all");
   }, [t0JournalQuery.data]);
 
   const priceTrend = previousMarkPrice === null || markPrice === null
@@ -540,8 +569,10 @@ export default function T0Journal() {
       && trade.symbol === "ETH"
       && (relatedUserFilterId === "all"
         || (relatedUserFilterId === "unlinked" ? !trade.relatedUserId : trade.relatedUserId === relatedUserFilterId))
+      && (relatedFundFilterId === "all"
+        || (relatedFundFilterId === "unclassified" ? !trade.relatedFundId : trade.relatedFundId === relatedFundFilterId))
     )),
-    [trades, selectedAccountId, relatedUserFilterId],
+    [trades, selectedAccountId, relatedUserFilterId, relatedFundFilterId],
   );
   const getTradeAccountName = (trade: PreviewTrade) => trade.accountName
     || accounts.find((account) => account.id === trade.accountId)?.name
@@ -549,6 +580,20 @@ export default function T0Journal() {
   const getTradeRelatedUserName = (trade: PreviewTrade) => trade.relatedUserName
     || trade.relatedUsername
     || (trade.relatedUserId ? `用户#${trade.relatedUserId}` : "未关联用户");
+  const getTradeRelatedFundName = (trade: PreviewTrade) => trade.relatedFundName
+    || (trade.relatedFundId ? `专项款#${trade.relatedFundId}` : "未区分专项款（历史）");
+  const getRelatedFundOwnerName = (fund: PreviewRelatedFund) => {
+    const user = recentRelatedUsers.find((item) => item.id === fund.relatedUserId);
+    return user ? (user.username ? `${user.name} · @${user.username}` : user.name) : "关联用户";
+  };
+  const availableRelatedFunds = useMemo(
+    () => relatedFunds.filter((fund) => relatedUserFilterId === "all" || fund.relatedUserId === relatedUserFilterId),
+    [relatedFunds, relatedUserFilterId],
+  );
+  const entryRelatedFunds = useMemo(
+    () => relatedFunds.filter((fund) => fund.relatedUserId === entryForm.relatedUserId),
+    [relatedFunds, entryForm.relatedUserId],
+  );
   const quantityQuickOptions = useMemo(
     () => Array.from(new Set([lastSavedQuantity, ...DEFAULT_QUANTITY_QUICK_OPTIONS].filter(Boolean).map(normalizeEthQuantity))),
     [lastSavedQuantity],
@@ -664,6 +709,9 @@ export default function T0Journal() {
     setEntrySide(ACTIONS[action].side);
     setCloseConfirmationStep("input");
     setShowOpenedTradeList(showOrders);
+    const defaultRelatedFund = lastRelatedUser
+      ? relatedFunds.find((fund) => fund.relatedUserId === lastRelatedUser.id)
+      : null;
     setEntryForm({
       action,
       accountId: selectedAccountId === "all" ? "" : selectedAccountId,
@@ -671,6 +719,8 @@ export default function T0Journal() {
       relatedUserId: lastRelatedUser?.id ?? "",
       relatedUserName: lastRelatedUser?.name ?? "",
       relatedUsername: lastRelatedUser?.username ?? "",
+      relatedFundId: defaultRelatedFund?.id ?? "",
+      relatedFundName: defaultRelatedFund?.name ?? "",
       quantity: "",
       // 开仓成交价由管理员实际录入；保留浅色 0.00 占位，避免误把参考价写入流水。
       price: "",
@@ -685,8 +735,11 @@ export default function T0Journal() {
     // 未关联用户的订单也可独立平仓；空关联值会稳定归到同一“未关联”仓位池，
     // 不会和任何已关联用户的订单互相抵扣。
     const relatedUserKey = trade.relatedUserId ?? "";
+    const relatedFundKey = trade.relatedFundId ?? "";
     const tradeUserBuckets = buildPositionBuckets(selectedTrades.filter((item) => (
-      item.accountId === trade.accountId && (item.relatedUserId ?? "") === relatedUserKey
+      item.accountId === trade.accountId
+      && (item.relatedUserId ?? "") === relatedUserKey
+      && (item.relatedFundId ?? "") === relatedFundKey
     )));
     const target = tradeUserBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(archivePriceForTrade(trade)));
     if (!target || target.remainingQuantity <= 0.0000001) {
@@ -704,6 +757,8 @@ export default function T0Journal() {
       relatedUserId: trade.relatedUserId ?? "",
       relatedUserName: trade.relatedUserName ?? trade.relatedUsername ?? "",
       relatedUsername: trade.relatedUsername ?? "",
+      relatedFundId: trade.relatedFundId ?? "legacy",
+      relatedFundName: trade.relatedFundName ?? "",
       quantity: formatQuantity(Math.min(target.remainingQuantity, trade.quantity)),
       price: markPrice ? markPrice.toFixed(2) : "",
       note: "",
@@ -727,6 +782,8 @@ export default function T0Journal() {
       relatedUserId: trade.relatedUserId ?? "",
       relatedUserName: trade.relatedUserName ?? trade.relatedUsername ?? "",
       relatedUsername: trade.relatedUsername ?? "",
+      relatedFundId: trade.relatedFundId ?? "legacy",
+      relatedFundName: trade.relatedFundName ?? "",
       quantity: formatQuantity(trade.quantity),
       price: trade.price.toFixed(2),
       note: trade.note ?? "",
@@ -762,6 +819,8 @@ export default function T0Journal() {
         relatedUserName: data.entry.relatedUserName ? String(data.entry.relatedUserName) : undefined,
         relatedUsername: data.entry.relatedUsername ? String(data.entry.relatedUsername) : undefined,
         relatedUserAvatar: data.entry.relatedUserAvatar ? String(data.entry.relatedUserAvatar) : undefined,
+        relatedFundId: data.entry.relatedFundId === undefined || data.entry.relatedFundId === null ? undefined : String(data.entry.relatedFundId),
+        relatedFundName: data.entry.relatedFundName ? String(data.entry.relatedFundName) : undefined,
         symbol: String(data.entry.symbol || "ETH"),
         action: data.entry.action as TradeAction,
         quantity: Number(data.entry.quantity),
@@ -783,6 +842,15 @@ export default function T0Journal() {
         };
         setLastRelatedUserId(relatedUser.id);
         setRecentRelatedUsers((current) => [relatedUser, ...current.filter((item) => item.id !== relatedUser.id)]);
+      }
+      if (entry.relatedFundId && entry.relatedFundName && entry.relatedUserId) {
+        const fund: PreviewRelatedFund = {
+          id: entry.relatedFundId,
+          relatedUserId: entry.relatedUserId,
+          name: entry.relatedFundName,
+          lastUsedAt: new Date().toISOString(),
+        };
+        setRelatedFunds((current) => [fund, ...current.filter((item) => item.id !== fund.id)]);
       }
       setTrades((current) => current.map((trade) => trade.clientRequestId === variables.clientRequestId ? entry : trade));
       setSelectedAccountId((current) => current === "all" ? current : account.id);
@@ -813,6 +881,8 @@ export default function T0Journal() {
         relatedUserName: data.entry.relatedUserName ? String(data.entry.relatedUserName) : undefined,
         relatedUsername: data.entry.relatedUsername ? String(data.entry.relatedUsername) : undefined,
         relatedUserAvatar: data.entry.relatedUserAvatar ? String(data.entry.relatedUserAvatar) : undefined,
+        relatedFundId: data.entry.relatedFundId === undefined || data.entry.relatedFundId === null ? undefined : String(data.entry.relatedFundId),
+        relatedFundName: data.entry.relatedFundName ? String(data.entry.relatedFundName) : undefined,
         symbol: String(data.entry.symbol || "ETH"),
         action: data.entry.action as TradeAction,
         quantity: Number(data.entry.quantity),
@@ -823,6 +893,15 @@ export default function T0Journal() {
         note: data.entry.note || undefined,
       };
       setTrades((current) => current.map((trade) => trade.id === entry.id ? entry : trade));
+      if (entry.relatedFundId && entry.relatedFundName && entry.relatedUserId) {
+        const fund: PreviewRelatedFund = {
+          id: entry.relatedFundId,
+          relatedUserId: entry.relatedUserId,
+          name: entry.relatedFundName,
+          lastUsedAt: new Date().toISOString(),
+        };
+        setRelatedFunds((current) => [fund, ...current.filter((item) => item.id !== fund.id)]);
+      }
       setShowEntrySheet(false);
       setCloseConfirmationStep("input");
       toast.success("开仓记录已修改");
@@ -891,21 +970,36 @@ export default function T0Journal() {
     const account = accounts.find((item) => item.id === accountId);
     setEntryForm((current) => ({ ...current, accountId, accountName: account?.name ?? "" }));
     if (!account) return;
-    setSelectedAccountId(account.id);
     selectAccountMutation.mutate({ ledgerId: 52, accountId: Number(account.id) });
   };
 
   const selectRelatedUser = (user: PreviewRelatedUser) => {
+    const defaultFund = relatedFunds.find((fund) => fund.relatedUserId === user.id);
     setEntryForm((current) => ({
       ...current,
       relatedUserId: user.id,
       relatedUserName: user.name,
       relatedUsername: user.username ?? "",
+      relatedFundId: defaultFund?.id ?? "",
+      relatedFundName: defaultFund?.name ?? "",
     }));
     setLastRelatedUserId(user.id);
     setRecentRelatedUsers((current) => [{ ...user, lastUsedAt: new Date().toISOString() }, ...current.filter((item) => item.id !== user.id)]);
     setRelatedUserSearch("");
     setRelatedUserPickerOpen(false);
+  };
+
+  const selectRelatedFund = (fundId: string) => {
+    if (fundId === "legacy") {
+      setEntryForm((current) => ({ ...current, relatedFundId: "legacy", relatedFundName: "" }));
+      return;
+    }
+    const fund = entryRelatedFunds.find((item) => item.id === fundId);
+    setEntryForm((current) => ({
+      ...current,
+      relatedFundId: fundId,
+      relatedFundName: fund?.name ?? "",
+    }));
   };
 
   const clearRelatedUser = () => {
@@ -914,6 +1008,8 @@ export default function T0Journal() {
       relatedUserId: "",
       relatedUserName: "",
       relatedUsername: "",
+      relatedFundId: "",
+      relatedFundName: "",
     }));
     setRelatedUserSearch("");
     setRelatedUserPickerOpen(false);
@@ -931,6 +1027,11 @@ export default function T0Journal() {
     const normalizedRelatedUserId = Number.isInteger(relatedUserId) && relatedUserId > 0
       ? relatedUserId
       : undefined;
+    const relatedFundId = Number(entryForm.relatedFundId);
+    const normalizedRelatedFundId = Number.isInteger(relatedFundId) && relatedFundId > 0
+      ? relatedFundId
+      : undefined;
+    const normalizedRelatedFundName = entryForm.relatedFundName.trim();
 
     if (quantityFormatError) {
       toast.error(quantityFormatError);
@@ -957,6 +1058,18 @@ export default function T0Journal() {
       toast.error("关联用户信息无效，请重新选择或暂不关联");
       return;
     }
+    if (entryForm.relatedFundId && entryForm.relatedFundId !== "legacy" && !normalizedRelatedFundId) {
+      toast.error("专项款信息无效，请重新选择或新建");
+      return;
+    }
+    if (!normalizedRelatedUserId && (normalizedRelatedFundId || normalizedRelatedFundName)) {
+      toast.error("请先选择关联用户，再选择专项款");
+      return;
+    }
+    if (selectedAction.opening && !entryForm.editingEntryId && normalizedRelatedUserId && !normalizedRelatedFundId && !normalizedRelatedFundName) {
+      toast.error("关联用户开仓时，请选择或新建专项款");
+      return;
+    }
 
     if (entryForm.editingEntryId) {
       const entryId = Number(entryForm.editingEntryId);
@@ -968,6 +1081,8 @@ export default function T0Journal() {
         ledgerId: 52,
         entryId,
         relatedUserId: normalizedRelatedUserId,
+        relatedFundId: normalizedRelatedFundId,
+        relatedFundName: normalizedRelatedFundName || undefined,
         quantity: normalizedQuantity,
         price: entryForm.price.trim(),
         note: entryForm.note.trim() || undefined,
@@ -985,6 +1100,7 @@ export default function T0Journal() {
         trade.accountId === entryForm.accountId
         && trade.symbol === "ETH"
         && (trade.relatedUserId ?? "") === (entryForm.relatedUserId ?? "")
+        && (trade.relatedFundId ?? "") === (normalizedRelatedFundId ? String(normalizedRelatedFundId) : "")
       ));
       const closeScopeBuckets = buildPositionBuckets(closeScopeTrades);
       const target = closeScopeBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(archiveTargetPrice));
@@ -1009,7 +1125,7 @@ export default function T0Journal() {
     if (!entryForm.accountId) {
       setAccounts((current) => [{ id: accountId, name: normalizedAccountName }, ...current]);
     }
-    setSelectedAccountId(accountId);
+    setSelectedAccountId((current) => current === "all" ? current : accountId);
     const trade: PreviewTrade = {
       id: `pending-entry-${clientRequestId}`,
       accountId,
@@ -1017,6 +1133,8 @@ export default function T0Journal() {
       relatedUserId: entryForm.relatedUserId || undefined,
       relatedUserName: entryForm.relatedUserName || undefined,
       relatedUsername: entryForm.relatedUsername || undefined,
+      relatedFundId: normalizedRelatedFundId ? String(normalizedRelatedFundId) : undefined,
+      relatedFundName: normalizedRelatedFundId || !normalizedRelatedFundName ? undefined : normalizedRelatedFundName,
       symbol: "ETH",
       action: entryForm.action,
       quantity,
@@ -1037,6 +1155,8 @@ export default function T0Journal() {
       accountId: hasPersistedAccountId ? Number(entryForm.accountId) : undefined,
       accountName: hasPersistedAccountId ? undefined : normalizedAccountName,
       relatedUserId: normalizedRelatedUserId,
+      relatedFundId: normalizedRelatedFundId,
+      relatedFundName: normalizedRelatedFundName || undefined,
       symbol: "ETH",
       action: entryForm.action,
       quantity: normalizedQuantity,
@@ -1119,33 +1239,50 @@ export default function T0Journal() {
                 </div>
               </div>
             </div>
-            <div className={`mt-2.5 grid gap-2 ${isMemberView ? "grid-cols-1" : "grid-cols-2"}`}>
-              <label className="min-w-0">
-                <span className="mb-1 block text-[10px] text-slate-400">{isMemberView ? "关联下单账户" : "下单账户"}</span>
+            <div className={`mt-2.5 grid gap-2 ${isMemberView ? "grid-cols-1" : "grid-cols-3"}`}>
+              {!isMemberView && <label className="min-w-0">
+                <span className="mb-1 block text-[10px] text-slate-400">下单账户</span>
                 <select
                   value={selectedAccountId}
                   onChange={(event) => setSelectedAccountId(event.target.value)}
                   className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
                 >
-                  {!isMemberView && <option value="all">全部账户</option>}
+                  <option value="all">全部账户</option>
                   {accounts.length === 0 && <option value="">暂无账户</option>}
                   {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                 </select>
-              </label>
+              </label>}
               {!isMemberView && <label className="min-w-0">
-                  <span className="mb-1 block text-[10px] text-slate-400">关联用户</span>
-                  <select
-                    value={relatedUserFilterId}
-                    onChange={(event) => setRelatedUserFilterId(event.target.value)}
-                    className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
-                  >
-                    <option value="all">全部用户</option>
-                    {trades.some((trade) => !trade.relatedUserId) && <option value="unlinked">未关联用户（历史）</option>}
-                    {recentRelatedUsers.map((user) => (
-                      <option key={user.id} value={user.id}>{user.name}{user.username ? ` · @${user.username}` : ""}</option>
-                    ))}
-                  </select>
-                </label>}
+                <span className="mb-1 block text-[10px] text-slate-400">关联用户</span>
+                <select
+                  value={relatedUserFilterId}
+                  onChange={(event) => {
+                    setRelatedUserFilterId(event.target.value);
+                    setRelatedFundFilterId("all");
+                  }}
+                  className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
+                >
+                  <option value="all">全部用户</option>
+                  {trades.some((trade) => !trade.relatedUserId) && <option value="unlinked">未关联用户（历史）</option>}
+                  {recentRelatedUsers.map((user) => (
+                    <option key={user.id} value={user.id}>{user.name}{user.username ? ` · @${user.username}` : ""}</option>
+                  ))}
+                </select>
+              </label>}
+              <label className="min-w-0">
+                <span className="mb-1 block text-[10px] text-slate-400">专项款</span>
+                <select
+                  value={relatedFundFilterId}
+                  onChange={(event) => setRelatedFundFilterId(event.target.value)}
+                  className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
+                >
+                  <option value="all">全部专项款</option>
+                  {trades.some((trade) => !trade.relatedFundId) && <option value="unclassified">未区分专项款（历史）</option>}
+                  {availableRelatedFunds.map((fund) => (
+                    <option key={fund.id} value={fund.id}>{fund.name}{!isMemberView && relatedUserFilterId === "all" ? ` · ${getRelatedFundOwnerName(fund)}` : ""}</option>
+                  ))}
+                </select>
+              </label>
             </div>
           </div>
 
@@ -1213,14 +1350,15 @@ export default function T0Journal() {
           {showRecentRecords && (
             <div className="border-t border-slate-100">
               {selectedTrades.length === 0 ? (
-                <div className="px-4 py-5 text-center text-xs text-slate-500">所选账户还没有速记记录</div>
+                <div className="px-4 py-5 text-center text-xs text-slate-500">当前筛选范围还没有速记记录</div>
               ) : [...selectedTrades].reverse().map((trade) => (
                   <div key={trade.id} className="px-4 py-3 border-b border-slate-100 last:border-b-0 flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className={`text-xs font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-sky-700"}`}>{ACTIONS[trade.action].label}</span>
-                      <span title={getTradeAccountName(trade)} className="max-w-[96px] truncate rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">账户 {getTradeAccountName(trade)}</span>
+                      {!isMemberView && <span title={getTradeAccountName(trade)} className="max-w-[72px] truncate rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">账户 {getTradeAccountName(trade)}</span>}
                       <span title={getTradeRelatedUserName(trade)} className="max-w-[96px] truncate rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">用户 {getTradeRelatedUserName(trade)}</span>
+                      <span title={getTradeRelatedFundName(trade)} className="max-w-[96px] truncate rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">专项 {getTradeRelatedFundName(trade)}</span>
                       {trade.targetPrice !== undefined && <span className="text-[11px] text-slate-400">{ACTIONS[trade.action].opening ? `归档 ${formatPrice(archivePriceForTrade(trade))}` : `对应 ${formatPrice(archivePriceForTrade(trade))}`}</span>}
                       {trade.isSyncing && <span className="text-[11px] text-amber-600">保存中</span>}
                     </div>
@@ -1311,7 +1449,7 @@ export default function T0Journal() {
             <div className="px-4 pt-3 pb-2 sticky top-0 bg-white z-10 border-b border-slate-100">
               <div className="min-w-0">
                 <div className="text-base font-semibold text-slate-900">{isMemberView ? "我的仓位明细" : isEditingEntry ? "编辑开仓记录" : isClosingEntry ? `${ACTIONS[entryForm.action].label}设置` : "速记一笔"}</div>
-                <div className="mt-0.5 text-[11px] text-slate-500">{isMemberView ? "只展示关联到当前用户的订单与仓位，不能发起或修改速记" : isEditingEntry ? "可修改数量、成交价、关联用户与备注；修改会保留审计快照" : isClosingEntry ? "填写平仓数量与成交价后，需两次确认才会记账" : "本地先显示，后台立即保存；不会触发交易所下单"}</div>
+                <div className="mt-0.5 text-[11px] text-slate-500">{isMemberView ? "只展示关联到当前用户的订单与仓位，不能发起或修改速记" : isEditingEntry ? "可修改数量、成交价、关联用户、专项款与备注；修改会保留审计快照" : isClosingEntry ? "填写平仓数量与成交价后，需两次确认才会记账" : "本地先显示，后台立即保存；不会触发交易所下单"}</div>
               </div>
             </div>
 
@@ -1372,7 +1510,12 @@ export default function T0Journal() {
                         : (trade.price - markPrice) * trade.quantity;
                     const openingValue = trade.quantity * trade.price;
                     const closeAction: TradeAction = ACTIONS[trade.action].side === "long" ? "closeLong" : "closeShort";
-                    const canQuickClose = buckets.some((bucket) => bucket.side === ACTIONS[trade.action].side && priceKey(bucket.price) === priceKey(archivePriceForTrade(trade)) && bucket.remainingQuantity > 0.0000001);
+                    const tradeScopedBuckets = buildPositionBuckets(selectedTrades.filter((item) => (
+                      item.accountId === trade.accountId
+                      && (item.relatedUserId ?? "") === (trade.relatedUserId ?? "")
+                      && (item.relatedFundId ?? "") === (trade.relatedFundId ?? "")
+                    )));
+                    const canQuickClose = tradeScopedBuckets.some((bucket) => bucket.side === ACTIONS[trade.action].side && priceKey(bucket.price) === priceKey(archivePriceForTrade(trade)) && bucket.remainingQuantity > 0.0000001);
                     const isExpanded = expandedOpenedTradeIds.has(trade.id);
                     return (
                       <div key={trade.id} className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2.5">
@@ -1387,13 +1530,21 @@ export default function T0Journal() {
                           })}
                           className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 text-left"
                         >
-                          <div className="flex min-w-0 items-center justify-between gap-3">
-                            <span className="flex min-w-0 shrink items-baseline gap-2 whitespace-nowrap">
+                          <div className="min-w-0">
+                            <span className="flex min-w-0 items-baseline gap-2 whitespace-nowrap">
                               <span className={`text-base font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].label}</span>
                               <span className="text-base font-semibold tabular-nums text-slate-900">{formatQuantity(trade.quantity)} ETH</span>
                               <span className="text-sm font-medium tabular-nums text-slate-500">@ {formatPrice(trade.price)}</span>
                             </span>
-                            <span title={getTradeAccountName(trade)} className="min-w-0 max-w-[42%] shrink truncate whitespace-nowrap text-right text-[11px] font-medium text-slate-500">{getTradeAccountName(trade)}</span>
+                            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-medium">
+                              {!isMemberView && <>
+                                <span title={getTradeAccountName(trade)} className="max-w-[32%] truncate text-slate-500">{getTradeAccountName(trade)}</span>
+                                <span className="text-slate-300">·</span>
+                              </>}
+                              <span title={getTradeRelatedUserName(trade)} className="max-w-[34%] truncate text-slate-500">{getTradeRelatedUserName(trade)}</span>
+                              <span className="text-slate-300">·</span>
+                              <span title={getTradeRelatedFundName(trade)} className="max-w-[38%] truncate text-slate-500">{getTradeRelatedFundName(trade)}</span>
+                            </div>
                           </div>
                           <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                         </button>
@@ -1418,13 +1569,17 @@ export default function T0Journal() {
                                   {floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}
                                 </div>
                               </div>
-                              <div className="col-span-2 flex items-center justify-between border-t border-slate-200 pt-2">
-                                <span className="text-[10px] text-slate-400">下单账户</span>
-                                <span className="text-xs font-medium text-slate-700">{getTradeAccountName(trade)}</span>
-                              </div>
+                              {!isMemberView && <div className="col-span-2 flex items-center justify-between border-t border-slate-200 pt-2">
+                                  <span className="text-[10px] text-slate-400">下单账户</span>
+                                  <span className="text-xs font-medium text-slate-700">{getTradeAccountName(trade)}</span>
+                                </div>}
                               <div className="col-span-2 flex items-center justify-between border-t border-slate-200 pt-2">
                                 <span className="text-[10px] text-slate-400">关联用户</span>
                                 <span className="text-xs font-medium text-slate-700">{getTradeRelatedUserName(trade)}</span>
+                              </div>
+                              <div className="col-span-2 flex items-center justify-between border-t border-slate-200 pt-2">
+                                <span className="text-[10px] text-slate-400">专项款</span>
+                                <span className="text-xs font-medium text-slate-700">{getTradeRelatedFundName(trade)}</span>
                               </div>
                             </div>
                             {canManage && <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
@@ -1558,16 +1713,6 @@ export default function T0Journal() {
                   })}
                 </div>
 
-                <Field label="备注（可选）">
-                  <input
-                    disabled={isCloseReview}
-                    value={entryForm.note}
-                    onChange={(event) => setEntryForm((current) => ({ ...current, note: event.target.value }))}
-                    placeholder="不填则不生成默认备注"
-                    className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500"
-                  />
-                </Field>
-
                 <div className="grid grid-cols-2 items-start gap-3">
                   <Field label={<span>下单账户 <span className="text-rose-500">*</span></span>}>
                     {accounts.length > 0 ? (
@@ -1611,8 +1756,43 @@ export default function T0Journal() {
 
                 <div className="-mt-1 grid grid-cols-2 gap-3 text-[10px] leading-4 text-slate-400">
                   <span>首次可新建；后续默认最近账户。</span>
-                  <span>可暂不关联，之后在订单编辑中补充。</span>
+                  <span>可暂不关联；关联后按专项款区分资金。</span>
                 </div>
+
+                <Field label={<span>专项款 {entryForm.relatedUserId && <span className="text-rose-500">*</span>} {!entryForm.relatedUserId && <span className="text-slate-400">（请先选关联用户）</span>}</span>}>
+                  <select
+                    disabled={!entryForm.relatedUserId || isCloseReview || isClosingEntry}
+                    value={entryForm.relatedFundId}
+                    onChange={(event) => selectRelatedFund(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    <option value="">新建专项款</option>
+                    {(isEditingEntry || isClosingEntry) && entryForm.relatedFundId === "legacy" && <option value="legacy">未区分专项款（历史）</option>}
+                    {entryRelatedFunds.map((fund) => <option key={fund.id} value={fund.id}>{fund.name}</option>)}
+                  </select>
+                  {entryForm.relatedUserId && entryForm.relatedFundId === "" && (
+                    <input
+                      disabled={isCloseReview || isClosingEntry}
+                      value={entryForm.relatedFundName}
+                      onChange={(event) => setEntryForm((current) => ({ ...current, relatedFundName: event.target.value }))}
+                      placeholder="新专项款名称，例如：10月拼单"
+                      className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-50"
+                    />
+                  )}
+                  {entryForm.relatedFundId === "legacy" && (
+                    <div className="mt-1.5 text-[10px] leading-4 text-amber-700">这是功能上线前的未区分专项款记录；编辑时可改为该用户的专项款。</div>
+                  )}
+                </Field>
+
+                <Field label="备注（可选）">
+                  <input
+                    disabled={isCloseReview}
+                    value={entryForm.note}
+                    onChange={(event) => setEntryForm((current) => ({ ...current, note: event.target.value }))}
+                    placeholder="不填则不生成默认备注"
+                    className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500"
+                  />
+                </Field>
 
                 {relatedUserPickerOpen && (
                   <div className="overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-sm">
@@ -1968,11 +2148,11 @@ function PositionCell({ bucket, side, markPrice, onClick }: { bucket?: PositionB
   const pnlTone = floatingPnl !== null && floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600";
 
   return (
-    <button onClick={onClick} className={`min-h-[52px] w-full min-w-0 px-3 py-1.5 text-left transition-colors active:brightness-95 ${tone}`}>
-      <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
+    <button onClick={onClick} className={`min-h-[52px] w-full min-w-0 px-2 py-1.5 text-left transition-colors active:brightness-95 ${tone}`}>
+      <div className="flex w-full min-w-0 items-center justify-between gap-3 tabular-nums">
         <span className="shrink-0 text-lg font-bold leading-none tracking-tight">{formatQuantity(bucket.remainingQuantity)}</span>
         {floatingPnl !== null && (
-          <span className={`flex min-w-0 flex-col items-end text-right ${pnlTone}`}>
+          <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`}>
             <span className="truncate text-[11px] font-semibold leading-none">{formatSigned(floatingPnl)}</span>
             {floatingReturnRate !== null && (
               <span className="mt-1 text-[10px] font-medium leading-none opacity-85">{formatSignedPercent(floatingReturnRate)}</span>
