@@ -2623,12 +2623,13 @@ export default function LedgerDetail() {
   const isFunder = (ledgerData as any)?.userRole === 'funder';
   const isClient = (ledgerData as any)?.userRole === 'client';
   const isEmployee = (ledgerData as any)?.userRole === 'employee';
-  // 普通成员在首页仅用自己的关联订单状态决定是否可以进入个人T+0页面；管理员始终直接进入管理视图。
+  // 管理员代入成员时沿用成员本人相同的只读范围；普通成员则仅查询自己的关联订单。
+  const canReadT0InAdminViewAs = Boolean(viewAsUserId && realUserIsManagerInLedger);
   const shouldGateT0MemberEntry = isCustomAF
     && Boolean((ledgerData as any)?.userRole)
     && !isOwner
     && !isAdmin
-    && !viewAsUserId;
+    && (!viewAsUserId || canReadT0InAdminViewAs);
   const t0MemberJournalQuery = trpc.ledger.t0GetJournal.useQuery(
     { ledgerId: 52 },
     { enabled: shouldGateT0MemberEntry, retry: false, staleTime: 30_000 },
@@ -5761,7 +5762,7 @@ export default function LedgerDetail() {
             {funderOrderTab === 't0' && memberHasT0Orders ? (
               <Suspense fallback={<div className="rounded-2xl bg-white p-5 text-center text-sm text-slate-400">正在加载 T+0 仓位…</div>}>
                 <div className="-mx-4">
-                  <T0Journal embedded />
+                  <T0Journal embedded allowAdminViewAs={canReadT0InAdminViewAs} />
                 </div>
               </Suspense>
             ) : <>

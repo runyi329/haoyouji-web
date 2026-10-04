@@ -390,9 +390,11 @@ function calculateSummary(buckets: PositionBucket[], markPrice: number | null, t
 type T0JournalProps = {
   /** 资金方“融资复息订单”页内直接展示个人只读仓位时使用，不再显示路由返回按钮。 */
   embedded?: boolean;
+  /** 仅由52号账本管理员代入成员时传入；后端仍会强制返回目标成员的只读范围。 */
+  allowAdminViewAs?: boolean;
 };
 
-export function T0JournalView({ embedded = false }: T0JournalProps) {
+export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0JournalProps) {
   const { id } = useParams<{ id: string }>();
   const ledgerId = Number(id);
   const [, setLocation] = useLocation();
@@ -448,8 +450,10 @@ export function T0JournalView({ embedded = false }: T0JournalProps) {
   const isLedgerAdmin = (ledgerData as any)?.userRole === "admin" || (ledgerData as any)?.userRole === "owner";
   const isSuperAdmin = (me as any)?.role === "super_admin" || (me as any)?.role === "admin";
   const hasLedgerMembership = Boolean((ledgerData as any)?.userRole);
-  // 账本成员可以进入个人只读视图；实际数据边界仍由后端以 ctx.user.id 强制限定。
-  const canAccess = ledgerId === 52 && !viewAsUserId && (hasLedgerMembership || isSuperAdmin);
+  // 账本成员可读取个人范围；仅嵌入页允许管理员代入成员读取该成员的同一只读范围。
+  const canAccess = ledgerId === 52
+    && (hasLedgerMembership || isSuperAdmin)
+    && (!viewAsUserId || (embedded && allowAdminViewAs));
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
     refetchInterval: T0_PRICE_REFRESH_INTERVAL_MS,
     staleTime: 2500,

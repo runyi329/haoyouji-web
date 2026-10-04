@@ -10530,11 +10530,31 @@ ${klinesSummary}
       }),
 
     // 52号账本 T+0 速记账本：管理员读取其完整管理视图；普通成员只读取关联到本人用户ID的流水。
-    // 代入成员视角不是实际成员会话，一律禁止，避免管理员绕过个人数据范围。
+    // 管理员代入成员时，保持与成员本人相同的只读个人范围，不返回管理员全量流水。
     t0GetJournal: protectedProcedure
       .input(z.object({ ledgerId: z.literal(52) }))
       .query(async ({ ctx }) => {
         const journal = await import('./ledger52-t0-journal');
+        if (ctx.isViewingAs) {
+          const realUser = ctx.realUser;
+          if (!realUser) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '无法确认代入管理员身份' });
+          }
+          const realMembership = await dbLedger.getUserMembership(52, realUser.id);
+          const realSystemRole = String((realUser as any).role || '');
+          const realUserIsManager = realSystemRole === 'super_admin'
+            || realSystemRole === 'admin'
+            || realMembership?.role === 'owner'
+            || realMembership?.role === 'admin';
+          if (!realUserIsManager) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可代入查看T+0速记账本' });
+          }
+          const targetMembership = await dbLedger.getUserMembership(52, ctx.user.id);
+          if (!targetMembership) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '目标用户不是52号账本成员' });
+          }
+          return await journal.getLedger52T0Journal({ mode: 'member', relatedUserId: ctx.user.id });
+        }
         const scope = await journal.resolveLedger52T0JournalReadScope({
           id: ctx.user.id,
           role: ctx.user.role,
