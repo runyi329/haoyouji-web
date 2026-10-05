@@ -184,6 +184,7 @@ const LADDER_STEP = 10;
 const LADDER_NEAR_VISIBLE_STEPS = 3;
 const POSITION_ARCHIVE_STEP = 10;
 const T0_PRICE_REFRESH_INTERVAL_MS = 3_000;
+const T0_JOURNAL_REFRESH_INTERVAL_MS = 5_000;
 const DEFAULT_QUANTITY_QUICK_OPTIONS = ["10.00", "20.00", "30.00", "40.00", "50.00"];
 const OKX_VIP2_TAKER_FEE_RATE = 0.00036;
 const OKX_VIP2_TAKER_FEE_LABEL = "0.0360%";
@@ -624,6 +625,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [lastMarkPrice, setLastMarkPrice] = useState<number | null>(null);
   const [previousMarkPrice, setPreviousMarkPrice] = useState<number | null>(null);
   const previousFetchedMarkPriceRef = useRef<number | null>(null);
+  const hasInitializedJournalFiltersRef = useRef(false);
   const ladderScrollRef = useRef<HTMLDivElement>(null);
   const [entryForm, setEntryForm] = useState<EntryForm>({
     action: "openLong",
@@ -658,7 +660,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   });
   const t0JournalQuery = trpc.ledger.t0GetJournal.useQuery(
     { ledgerId: 52 },
-    { enabled: canAccess, staleTime: 10_000 },
+    {
+      enabled: canAccess,
+      staleTime: T0_JOURNAL_REFRESH_INTERVAL_MS,
+      // 仅在用户停留于当前T+0页面时静默同步；回到页面时立即补拉一次。
+      refetchInterval: T0_JOURNAL_REFRESH_INTERVAL_MS,
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true,
+    },
   );
   const isMemberView = (t0JournalQuery.data as any)?.viewerMode === "member";
   const canManage = canAccess && (t0JournalQuery.data as any)?.viewerMode === "admin";
@@ -765,12 +774,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       .filter((entry) => entry.symbol === "ETH")
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     setLastSavedQuantity(latestSavedEntry ? normalizeEthQuantity(String(latestSavedEntry.quantity)) : "");
-    // 总览始终跨全部下单账户汇总：管理员默认“全部账户 + 全部用户 + 全部专项款”，
-    // 成员个人视图则固定聚合本人关联的全部账户，避免账户维度遮住同一用户的资金仓位。
+    // 首次进入时，管理员默认“全部账户 + 全部用户 + 全部专项款”；
+    // 后续静默同步只校验当前选择仍然有效，不能每五秒覆盖正在查看的筛选。
+    const isFirstJournalHydration = !hasInitializedJournalFiltersRef.current;
     if (journal.viewerMode === "admin") {
-      setSelectedAccountId("all");
-      setRelatedUserFilterId("all");
-      setRelatedFundFilterId("all");
+      setSelectedAccountId((current) => isFirstJournalHydration || (current !== "all" && !nextAccounts.some((account) => account.id === current)) ? "all" : current);
+      setRelatedUserFilterId((current) => isFirstJournalHydration || (current !== "all" && current !== "unlinked" && !nextRecentRelatedUsers.some((user) => user.id === current)) ? "all" : current);
+      setRelatedFundFilterId((current) => isFirstJournalHydration || (current !== "all" && current !== "unclassified" && !nextRelatedFunds.some((fund) => fund.id === current)) ? "all" : current);
     } else {
       setSelectedAccountId("all");
       setRelatedUserFilterId((current) => current === "all" || current === "unlinked" || nextRecentRelatedUsers.some((user) => user.id === current)
@@ -783,6 +793,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setLastRelatedUserId((current) => nextRecentRelatedUsers.some((user) => user.id === current)
       ? current
       : (nextRecentRelatedUsers[0]?.id || ""));
+    hasInitializedJournalFiltersRef.current = true;
   }, [t0JournalQuery.data]);
 
   const priceTrend = previousMarkPrice === null || markPrice === null
