@@ -57,6 +57,12 @@ type PreviewTrade = {
   isSyncing?: boolean;
 };
 
+const UNLINKED_USER_ACCOUNT_MEMORY_KEY = "__unlinked__";
+
+function relatedUserAccountMemoryKey(relatedUserId?: string) {
+  return relatedUserId || UNLINKED_USER_ACCOUNT_MEMORY_KEY;
+}
+
 type RecoverableTrade = {
   auditId: string;
   operation: "delete" | "revert";
@@ -95,6 +101,14 @@ type PositionBucket = {
   remainingQuantity: number;
   /** 剩余仓位按实际成交价累计的成本，用于均价与盈亏。 */
   costBasis: number;
+  /** 尚未随已平数量分摊的开仓手续费。 */
+  openingFeeBasis: number;
+  /** 已平部分未扣任何手续费的毛利润。 */
+  realizedGrossPnl: number;
+  /** 已平部分分摊的开仓手续费。 */
+  realizedOpeningFee: number;
+  /** 已平部分实际发生的平仓手续费。 */
+  realizedClosingFee: number;
   realizedPnl: number;
   /** 已平部分按原始开仓成本累计，用于已平仓成本统计。 */
   closedQuantity: number;
@@ -282,18 +296,22 @@ function formatAmount(value: number) {
 }
 
 /**
- * 最近速记中的平仓展示按实际买卖口径计算毛收益：
- * 多仓为卖出价－买入均价，空仓为卖出均价－买入价；不扣手续费。
+ * 最近速记中的平仓展示按实际买卖口径计算净利润：
+ * 多仓为卖出价－买入均价，空仓为卖出均价－买入价；
+ * 再按已平数量分摊开仓手续费，并扣除本笔平仓手续费。
  * 同一账户、关联用户、专项款与十美元归属档位分别独立核算，避免拼单资金互相串仓。
  */
 type RecentJournalTradeDetail = {
   buyPrice?: number;
   sellPrice?: number;
   grossPnl?: number;
+  netPnl?: number;
+  allocatedOpeningFee?: number;
+  closingFee?: number;
 };
 
 function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
-  const positions = new Map<string, { quantity: number; costBasis: number }>();
+  const positions = new Map<string, { quantity: number; costBasis: number; openingFeeBasis: number }>();
   const details = new Map<string, RecentJournalTradeDetail>();
   const orderedTrades = [...trades]
     .filter((trade) => trade.symbol === "ETH")
@@ -311,9 +329,10 @@ function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
     ].join(":");
 
     if (config.opening) {
-      const current = positions.get(key) ?? { quantity: 0, costBasis: 0 };
+      const current = positions.get(key) ?? { quantity: 0, costBasis: 0, openingFeeBasis: 0 };
       current.quantity += trade.quantity;
       current.costBasis += trade.quantity * trade.price;
+      current.openingFeeBasis += trade.fee;
       positions.set(key, current);
       details.set(trade.id, side === "long" ? { buyPrice: trade.price } : { sellPrice: trade.price });
       continue;
@@ -322,27 +341,39 @@ function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
     const current = positions.get(key);
     const matchedQuantity = current ? Math.min(current.quantity, trade.quantity) : 0;
     const openingAverage = current && current.quantity > 0 ? current.costBasis / current.quantity : undefined;
+    const allocatedOpeningFee = current && current.quantity > 0 && matchedQuantity > 0
+      ? current.openingFeeBasis * (matchedQuantity / current.quantity)
+      : 0;
     if (current && openingAverage !== undefined && matchedQuantity > 0) {
       current.quantity -= matchedQuantity;
       current.costBasis = Math.max(0, current.costBasis - openingAverage * matchedQuantity);
+      current.openingFeeBasis = Math.max(0, current.openingFeeBasis - allocatedOpeningFee);
       positions.set(key, current);
     }
 
     if (side === "long") {
+      const grossPnl = openingAverage === undefined || matchedQuantity <= 0
+        ? undefined
+        : (trade.price - openingAverage) * matchedQuantity;
       details.set(trade.id, {
         buyPrice: openingAverage,
         sellPrice: trade.price,
-        grossPnl: openingAverage === undefined || matchedQuantity <= 0
-          ? undefined
-          : (trade.price - openingAverage) * matchedQuantity,
+        grossPnl,
+        netPnl: grossPnl === undefined ? undefined : grossPnl - allocatedOpeningFee - trade.fee,
+        allocatedOpeningFee,
+        closingFee: trade.fee,
       });
     } else {
+      const grossPnl = openingAverage === undefined || matchedQuantity <= 0
+        ? undefined
+        : (openingAverage - trade.price) * matchedQuantity;
       details.set(trade.id, {
         buyPrice: trade.price,
         sellPrice: openingAverage,
-        grossPnl: openingAverage === undefined || matchedQuantity <= 0
-          ? undefined
-          : (openingAverage - trade.price) * matchedQuantity,
+        grossPnl,
+        netPnl: grossPnl === undefined ? undefined : grossPnl - allocatedOpeningFee - trade.fee,
+        allocatedOpeningFee,
+        closingFee: trade.fee,
       });
     }
   }
@@ -366,6 +397,7 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
         existing.originalQuantity += trade.quantity;
         existing.remainingQuantity += trade.quantity;
         existing.costBasis += trade.quantity * trade.price;
+        existing.openingFeeBasis += trade.fee;
       } else {
         buckets.set(key, {
           key,
@@ -374,6 +406,10 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
           originalQuantity: trade.quantity,
           remainingQuantity: trade.quantity,
           costBasis: trade.quantity * trade.price,
+          openingFeeBasis: trade.fee,
+          realizedGrossPnl: 0,
+          realizedOpeningFee: 0,
+          realizedClosingFee: 0,
           realizedPnl: 0,
           closedQuantity: 0,
           closedCostBasis: 0,
@@ -392,12 +428,17 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
 
     const closedQuantity = Math.min(target.remainingQuantity, trade.quantity);
     const averageCost = target.costBasis / target.remainingQuantity;
+    const allocatedOpeningFee = target.openingFeeBasis * (closedQuantity / target.remainingQuantity);
     const grossPnl = side === "long"
       ? (trade.price - averageCost) * closedQuantity
       : (averageCost - trade.price) * closedQuantity;
     target.remainingQuantity -= closedQuantity;
     target.costBasis = Math.max(0, target.costBasis - averageCost * closedQuantity);
-    target.realizedPnl += grossPnl - trade.fee;
+    target.openingFeeBasis = Math.max(0, target.openingFeeBasis - allocatedOpeningFee);
+    target.realizedGrossPnl += grossPnl;
+    target.realizedOpeningFee += allocatedOpeningFee;
+    target.realizedClosingFee += trade.fee;
+    target.realizedPnl += grossPnl - allocatedOpeningFee - trade.fee;
     target.closedQuantity += closedQuantity;
     target.closedCostBasis += averageCost * closedQuantity;
     target.closedNotional += trade.price * closedQuantity;
@@ -418,6 +459,9 @@ function calculateSummary(buckets: PositionBucket[], markPrice: number | null, t
       ? (side === "long" ? markPrice - average : average - markPrice) * quantity
       : null;
     const realized = all.reduce((total, bucket) => total + bucket.realizedPnl, 0);
+    const realizedGross = all.reduce((total, bucket) => total + bucket.realizedGrossPnl, 0);
+    const realizedOpeningFee = all.reduce((total, bucket) => total + bucket.realizedOpeningFee, 0);
+    const realizedClosingFee = all.reduce((total, bucket) => total + bucket.realizedClosingFee, 0);
     const closedQuantity = all.reduce((total, bucket) => total + bucket.closedQuantity, 0);
     const closedCostBasis = all.reduce((total, bucket) => total + bucket.closedCostBasis, 0);
     const closedNotional = all.reduce((total, bucket) => total + bucket.closedNotional, 0);
@@ -431,6 +475,9 @@ function calculateSummary(buckets: PositionBucket[], markPrice: number | null, t
       quantity,
       average,
       unrealized,
+      realizedGross,
+      realizedOpeningFee,
+      realizedClosingFee,
       realized,
       turnover,
       commission,
@@ -471,7 +518,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [relatedUserFilterId, setRelatedUserFilterId] = useState("all");
   const [relatedFundFilterId, setRelatedFundFilterId] = useState("all");
+  const [journalAccountFilterId, setJournalAccountFilterId] = useState("all");
+  const [journalRelatedUserFilterId, setJournalRelatedUserFilterId] = useState("all");
+  const [journalRelatedFundFilterId, setJournalRelatedFundFilterId] = useState("all");
   const [lastRelatedUserId, setLastRelatedUserId] = useState("");
+  const [lastAccountIdByRelatedUser, setLastAccountIdByRelatedUser] = useState<Record<string, string>>({});
+  const [lastFundIdByRelatedUser, setLastFundIdByRelatedUser] = useState<Record<string, string>>({});
   const [relatedUserPickerOpen, setRelatedUserPickerOpen] = useState(false);
   const [relatedUserSearch, setRelatedUserSearch] = useState("");
   const [showEntrySheet, setShowEntrySheet] = useState(false);
@@ -480,6 +532,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [showOpenedTradeList, setShowOpenedTradeList] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<PreviewTrade | null>(null);
   const [revertCandidate, setRevertCandidate] = useState<PreviewTrade | null>(null);
+  const [netProfitDetail, setNetProfitDetail] = useState<{ trade: PreviewTrade; detail: RecentJournalTradeDetail } | null>(null);
+  const [grossProfitDetail, setGrossProfitDetail] = useState<{
+    side: PositionSide;
+    gross: number;
+    openingFee: number;
+    closingFee: number;
+    net: number;
+  } | null>(null);
   const [restoreCandidate, setRestoreCandidate] = useState<RecoverableTrade | null>(null);
   const [recoverableEntries, setRecoverableEntries] = useState<RecoverableTrade[]>([]);
   const [showRecoverableRecords, setShowRecoverableRecords] = useState(false);
@@ -536,10 +596,34 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
   );
 
-  const selectedAccount = accounts.find((account) => account.id === selectedAccountId) ?? null;
   const lastRelatedUser = recentRelatedUsers.find((user) => user.id === lastRelatedUserId)
     ?? recentRelatedUsers[0]
     ?? null;
+  /**
+   * 下单账户按关联用户单独记忆；没有关联用户时使用独立的“未关联”记忆。
+   * 刷新页面后优先从该用户最近保存的流水恢复，因此不受点击哪个价格档位影响。
+   */
+  const getRememberedAccountForRelatedUser = (relatedUserId?: string) => {
+    const memoryKey = relatedUserAccountMemoryKey(relatedUserId);
+    const rememberedId = lastAccountIdByRelatedUser[memoryKey];
+    const rememberedAccount = rememberedId ? accounts.find((account) => account.id === rememberedId) : undefined;
+    if (rememberedAccount) return rememberedAccount;
+
+    const savedTrade = trades
+      .filter((trade) => trade.symbol === "ETH" && relatedUserAccountMemoryKey(trade.relatedUserId) === memoryKey)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    return savedTrade ? accounts.find((account) => account.id === savedTrade.accountId) : undefined;
+  };
+  /** 专项款同样按关联用户独立记忆，避免不同用户的资金项目串用。 */
+  const getRememberedFundForRelatedUser = (relatedUserId?: string) => {
+    if (!relatedUserId) return undefined;
+    const rememberedId = lastFundIdByRelatedUser[relatedUserId];
+    const rememberedFund = rememberedId ? relatedFunds.find((fund) => fund.id === rememberedId && fund.relatedUserId === relatedUserId) : undefined;
+    if (rememberedFund) return rememberedFund;
+    return [...relatedFunds]
+      .filter((fund) => fund.relatedUserId === relatedUserId)
+      .sort((a, b) => String(b.lastUsedAt ?? "").localeCompare(String(a.lastUsedAt ?? "")))[0];
+  };
   // 合约速记只使用服务端统一缓存的 ETH 永续标记价（Gate → HTX）；失败时由后端保留最近成功价。
   const markPriceRaw = (cryptoPricesRaw as any)?.prices?.ETH_PERP
     ?? (cryptoPricesRaw as any)?.ETH_PERP;
@@ -647,6 +731,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     )),
     [trades, selectedAccountId, relatedUserFilterId, relatedFundFilterId],
   );
+  const recentJournalTrades = useMemo(
+    () => trades.filter((trade) => (
+      trade.symbol === "ETH"
+      && (journalAccountFilterId === "all" || trade.accountId === journalAccountFilterId)
+      && (journalRelatedUserFilterId === "all"
+        || (journalRelatedUserFilterId === "unlinked" ? !trade.relatedUserId : trade.relatedUserId === journalRelatedUserFilterId))
+      && (journalRelatedFundFilterId === "all"
+        || (journalRelatedFundFilterId === "unclassified" ? !trade.relatedFundId : trade.relatedFundId === journalRelatedFundFilterId))
+    )),
+    [trades, journalAccountFilterId, journalRelatedUserFilterId, journalRelatedFundFilterId],
+  );
   const recentJournalTradeDetails = useMemo(() => buildRecentJournalTradeDetails(trades), [trades]);
   const getTradeAccountName = (trade: PreviewTrade) => trade.accountName
     || accounts.find((account) => account.id === trade.accountId)?.name
@@ -667,6 +762,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const availableRelatedFunds = useMemo(
     () => relatedFunds.filter((fund) => relatedUserFilterId === "all" || fund.relatedUserId === relatedUserFilterId),
     [relatedFunds, relatedUserFilterId],
+  );
+  const journalAvailableRelatedFunds = useMemo(
+    () => relatedFunds.filter((fund) => journalRelatedUserFilterId === "all" || fund.relatedUserId === journalRelatedUserFilterId),
+    [relatedFunds, journalRelatedUserFilterId],
   );
   const entryRelatedFunds = useMemo(
     () => relatedFunds.filter((fund) => fund.relatedUserId === entryForm.relatedUserId),
@@ -696,6 +795,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   }, [entryForm.action, entryForm.price]);
   const buckets = useMemo(() => buildPositionBuckets(selectedTrades), [selectedTrades]);
   const summary = useMemo(() => calculateSummary(buckets, markPrice, selectedTrades), [buckets, markPrice, selectedTrades]);
+  // 首屏总览：累计利润保持与多/空“累计利润”一致的未扣手续费口径；总仓位为多仓减空仓后的净额。
+  const totalGrossProfit = summary.long.realizedGross + summary.short.realizedGross;
+  const netPositionQuantity = summary.long.quantity - summary.short.quantity;
+  const totalGrossProfitClass = totalGrossProfit > 0 ? "text-rose-600" : totalGrossProfit < 0 ? "text-emerald-600" : "text-slate-700";
+  const netPositionClass = "text-slate-800";
+  const totalGrossProfitSurfaceClass = "border-slate-200 bg-white";
+  const netPositionSurfaceClass = netPositionQuantity > 0
+    ? "border-rose-100/80 bg-white"
+    : netPositionQuantity < 0
+      ? "border-emerald-100/80 bg-white"
+      : "border-slate-200 bg-white";
+  const markPriceSurfaceClass = priceTrend === "up"
+    ? "border-rose-100/80 bg-white"
+    : priceTrend === "down"
+      ? "border-emerald-100/80 bg-white"
+      : "border-indigo-100/80 bg-white";
+  const roundedNetPositionText = (() => {
+    const rounded = Math.round(netPositionQuantity);
+    return `${rounded < 0 ? "−" : ""}${Math.abs(rounded).toLocaleString("en-US")}`;
+  })();
   // 从某个T型档位进入时，详情仅展示该方向、该归属档位的订单和汇总；
   // 从底部通用开平按钮进入时没有指定档位，才保留方向总览。
   const entryScopedTrades = useMemo(() => selectedTrades.filter((trade) => {
@@ -788,13 +907,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setCloseConfirmationStep("input");
     // 成员以独立详情页查看仓位，默认展开对应方向的订单列表；管理员保留原弹窗行为。
     setShowOpenedTradeList(isMemberView || showOrders);
-    const defaultRelatedFund = lastRelatedUser
-      ? relatedFunds.find((fund) => fund.relatedUserId === lastRelatedUser.id)
-      : null;
+    const rememberedAccount = getRememberedAccountForRelatedUser(lastRelatedUser?.id);
+    const defaultRelatedFund = getRememberedFundForRelatedUser(lastRelatedUser?.id);
     setEntryForm({
       action,
-      accountId: selectedAccountId === "all" ? "" : selectedAccountId,
-      accountName: selectedAccount?.name ?? "",
+      accountId: rememberedAccount?.id ?? "",
+      accountName: rememberedAccount?.name ?? "",
       relatedUserId: lastRelatedUser?.id ?? "",
       relatedUserName: lastRelatedUser?.name ?? "",
       relatedUsername: lastRelatedUser?.username ?? "",
@@ -911,6 +1029,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         clientRequestId: variables.clientRequestId,
       };
       setAccounts((current) => [account, ...current.filter((item) => item.id !== account.id && item.name !== account.name)]);
+      setLastAccountIdByRelatedUser((current) => ({
+        ...current,
+        [relatedUserAccountMemoryKey(entry.relatedUserId)]: account.id,
+      }));
       if (entry.relatedUserId) {
         const relatedUser: PreviewRelatedUser = {
           id: entry.relatedUserId,
@@ -930,6 +1052,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           lastUsedAt: new Date().toISOString(),
         };
         setRelatedFunds((current) => [fund, ...current.filter((item) => item.id !== fund.id)]);
+        setLastFundIdByRelatedUser((current) => ({ ...current, [entry.relatedUserId!]: fund.id }));
       }
       setTrades((current) => current.map((trade) => trade.clientRequestId === variables.clientRequestId ? entry : trade));
       setSelectedAccountId((current) => current === "all" ? current : account.id);
@@ -980,6 +1103,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           lastUsedAt: new Date().toISOString(),
         };
         setRelatedFunds((current) => [fund, ...current.filter((item) => item.id !== fund.id)]);
+        setLastFundIdByRelatedUser((current) => ({ ...current, [entry.relatedUserId!]: fund.id }));
       }
       setShowEntrySheet(false);
       setCloseConfirmationStep("input");
@@ -1048,14 +1172,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const selectOrderAccount = (accountId: string) => {
     const account = accounts.find((item) => item.id === accountId);
     setEntryForm((current) => ({ ...current, accountId, accountName: account?.name ?? "" }));
+    if (account) {
+      const memoryKey = relatedUserAccountMemoryKey(entryForm.relatedUserId);
+      setLastAccountIdByRelatedUser((current) => ({ ...current, [memoryKey]: account.id }));
+    }
     if (!account) return;
     selectAccountMutation.mutate({ ledgerId: 52, accountId: Number(account.id) });
   };
 
   const selectRelatedUser = (user: PreviewRelatedUser) => {
-    const defaultFund = relatedFunds.find((fund) => fund.relatedUserId === user.id);
+    const rememberedAccount = getRememberedAccountForRelatedUser(user.id);
+    const defaultFund = getRememberedFundForRelatedUser(user.id);
     setEntryForm((current) => ({
       ...current,
+      accountId: rememberedAccount?.id ?? "",
+      accountName: rememberedAccount?.name ?? "",
       relatedUserId: user.id,
       relatedUserName: user.name,
       relatedUsername: user.username ?? "",
@@ -1079,11 +1210,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundId: fundId,
       relatedFundName: fund?.name ?? "",
     }));
+    if (fund && entryForm.relatedUserId) {
+      setLastFundIdByRelatedUser((current) => ({ ...current, [entryForm.relatedUserId]: fund.id }));
+    }
   };
 
   const clearRelatedUser = () => {
+    const rememberedAccount = getRememberedAccountForRelatedUser();
     setEntryForm((current) => ({
       ...current,
+      accountId: rememberedAccount?.id ?? "",
+      accountName: rememberedAccount?.name ?? "",
       relatedUserId: "",
       relatedUserName: "",
       relatedUsername: "",
@@ -1208,7 +1345,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const trade: PreviewTrade = {
       id: `pending-entry-${clientRequestId}`,
       accountId,
-      accountName: normalizedAccountName || selectedAccount?.name,
+      accountName: normalizedAccountName || entryForm.accountName,
       relatedUserId: entryForm.relatedUserId || undefined,
       relatedUserName: entryForm.relatedUserName || undefined,
       relatedUsername: entryForm.relatedUsername || undefined,
@@ -1272,7 +1409,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           </div>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-7 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-slate-200 flex items-center justify-center mb-4">
+          <div className="w-12 h-12 rounded bg-slate-200 flex items-center justify-center mb-4">
             <ShieldCheck className="w-6 h-6 text-slate-500" />
           </div>
           <div className="text-base font-semibold text-slate-800">当前身份不可访问</div>
@@ -1297,7 +1434,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               onClick={() => window.location.reload()}
               aria-label="强制刷新整个页面"
               title="强制刷新整个页面"
-              className="h-8 rounded-lg border border-indigo-100 bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 active:scale-95"
+              className="h-8 rounded border border-indigo-100 bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 active:scale-95"
             >
               刷新
             </button>
@@ -1306,28 +1443,40 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       )}
 
       <main className="px-4 pt-4 space-y-4">
-        <section className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-          <div className="border-b border-slate-100 px-4 py-2.5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-[10px] text-slate-400">账户总览</div>
-              </div>
-              <div className="shrink-0 text-right">
-                <div className="text-[10px] text-slate-400">实时参考价</div>
-                <div className={`mt-0.5 flex items-center justify-end gap-0.5 text-sm font-semibold tabular-nums ${priceTrendClass}`}>
-                  {priceTrend === "up" && <span role="img" aria-label="价格上涨" className="inline-block h-0 w-0 border-x-[4px] border-b-[6px] border-x-transparent border-b-current" />}
-                  {priceTrend === "down" && <span role="img" aria-label="价格下跌" className="inline-block h-0 w-0 border-x-[4px] border-t-[6px] border-x-transparent border-t-current" />}
-                  {formatPrice(markPrice)}
-                </div>
+        <section className="overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
+          <div className="grid grid-cols-3 gap-1.5 bg-gradient-to-br from-slate-50 via-white to-indigo-50/60 p-2">
+            <div className={`min-w-0 rounded border px-1.5 py-2.5 text-center shadow-[0_1px_2px_rgba(15,23,42,0.025)] ${totalGrossProfitSurfaceClass}`}>
+              <div className="text-[10px] font-semibold text-slate-500">总利润</div>
+              <div className={`mt-1 flex items-baseline justify-center gap-0.5 whitespace-nowrap text-[17px] font-bold leading-none tabular-nums ${totalGrossProfitClass}`}>
+                <span>{formatSigned(totalGrossProfit)}</span>
+                <span className="text-[10px] font-semibold opacity-65">U</span>
               </div>
             </div>
-            <div className="mt-2.5 grid grid-cols-3 gap-2">
+            <div className={`min-w-0 rounded border px-1.5 py-2.5 text-center shadow-[0_1px_2px_rgba(15,23,42,0.025)] ${netPositionSurfaceClass}`}>
+              <div className="text-[10px] font-semibold text-slate-500">实时总仓位</div>
+              <div className={`mt-1 flex items-baseline justify-center gap-0.5 whitespace-nowrap text-[15px] font-bold leading-none tabular-nums ${netPositionClass}`}>
+                <span>{roundedNetPositionText}</span>
+                <span className="text-[10px] font-semibold opacity-65">ETH</span>
+              </div>
+            </div>
+            <div className={`min-w-0 rounded border px-1.5 py-2.5 text-center shadow-[0_1px_2px_rgba(15,23,42,0.025)] ${markPriceSurfaceClass}`}>
+              <div className="text-[10px] font-semibold text-slate-500">实时参考价</div>
+              <div className={`mt-1 flex items-baseline justify-center gap-0.5 whitespace-nowrap text-[15px] font-bold leading-none tabular-nums ${priceTrendClass}`}>
+                {priceTrend === "up" && <span role="img" aria-label="价格上涨" className="inline-block h-0 w-0 border-x-[3px] border-b-[5px] border-x-transparent border-b-current" />}
+                {priceTrend === "down" && <span role="img" aria-label="价格下跌" className="inline-block h-0 w-0 border-x-[3px] border-t-[5px] border-x-transparent border-t-current" />}
+                <span>{formatPrice(markPrice)}</span>
+                <span className="text-[10px] font-semibold opacity-65">U</span>
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-slate-200/80 bg-white px-4 py-2.5">
+            <div className="grid grid-cols-3 gap-2">
               <label className="min-w-0">
                 <span className="mb-1 block text-[10px] text-slate-400">下单账户</span>
                 <select
                   value={selectedAccountId}
                   onChange={(event) => setSelectedAccountId(event.target.value)}
-                  className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
+                  className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
                 >
                   <option value="all">全部账户</option>
                   {accounts.length === 0 && <option value="">暂无账户</option>}
@@ -1343,7 +1492,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     setRelatedFundFilterId("all");
                   }}
                   disabled={isMemberView}
-                  className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
+                  className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
                 >
                   {isMemberView ? <option value="all">{memberRelatedUserName}</option> : <>
                     <option value="all">全部用户</option>
@@ -1359,7 +1508,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <select
                   value={relatedFundFilterId}
                   onChange={(event) => setRelatedFundFilterId(event.target.value)}
-                  className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
+                  className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
                 >
                   <option value="all">全部专项款</option>
                   {trades.some((trade) => !trade.relatedFundId) && <option value="unclassified">未区分专项款（历史）</option>}
@@ -1376,13 +1525,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             showCumulativeData={showCumulativeData}
             onToggleCumulativeData={() => setShowCumulativeData((current) => !current)}
             showCommission={!isMemberView}
-            onViewSideOrders={(side) => {
-              openEntrySheet(side === "long" ? "openLong" : "openShort", undefined, true);
-            }}
+            isMemberView={isMemberView}
+            onExplainGrossProfit={(side, data) => setGrossProfitDetail({
+              side,
+              gross: data.realizedGross,
+              openingFee: data.realizedOpeningFee,
+              closingFee: data.realizedClosingFee,
+              net: data.realized,
+            })}
           />
         </section>
 
-        <section className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+        <section className="rounded bg-white border border-slate-200 shadow-sm overflow-hidden">
           <div ref={ladderScrollRef} className="max-h-[calc(100vh-250px)] overflow-y-auto overscroll-contain">
             {priceRows.map((row) => (
               <div
@@ -1428,7 +1582,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           </div>
         </section>
 
-        <section className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+        <section className="rounded bg-white border border-slate-200 shadow-sm overflow-hidden">
           <button onClick={() => setShowRecentRecords((value) => !value)} className="w-full px-4 py-3 flex items-center justify-between text-left">
             <div>
               <div className="text-sm font-semibold text-slate-900">最近速记</div>
@@ -1438,25 +1592,79 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           </button>
           {showRecentRecords && (
             <div className="border-t border-slate-100">
-              {selectedTrades.length === 0 ? (
+              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5">
+                <label className="min-w-0">
+                  <span className="mb-1 block text-[10px] text-slate-400">下单账户</span>
+                  <select
+                    value={journalAccountFilterId}
+                    onChange={(event) => setJournalAccountFilterId(event.target.value)}
+                    className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
+                  >
+                    <option value="all">全部账户</option>
+                    {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+                  </select>
+                </label>
+                <label className="min-w-0">
+                  <span className="mb-1 block text-[10px] text-slate-400">关联用户</span>
+                  <select
+                    value={journalRelatedUserFilterId}
+                    disabled={isMemberView}
+                    onChange={(event) => {
+                      setJournalRelatedUserFilterId(event.target.value);
+                      setJournalRelatedFundFilterId("all");
+                    }}
+                    className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
+                  >
+                    {isMemberView ? <option value="all">{memberRelatedUserName}</option> : <>
+                      <option value="all">全部用户</option>
+                      {trades.some((trade) => !trade.relatedUserId) && <option value="unlinked">未关联用户</option>}
+                      {recentRelatedUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
+                    </>}
+                  </select>
+                </label>
+                <label className="min-w-0">
+                  <span className="mb-1 block text-[10px] text-slate-400">专项款</span>
+                  <select
+                    value={journalRelatedFundFilterId}
+                    onChange={(event) => setJournalRelatedFundFilterId(event.target.value)}
+                    className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
+                  >
+                    <option value="all">全部专项款</option>
+                    {trades.some((trade) => !trade.relatedFundId) && <option value="unclassified">未区分专项</option>}
+                    {journalAvailableRelatedFunds.map((fund) => (
+                      <option key={fund.id} value={fund.id}>{fund.name}{!isMemberView && journalRelatedUserFilterId === "all" ? ` · ${getRelatedFundOwnerName(fund)}` : ""}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {recentJournalTrades.length === 0 ? (
                 <div className="px-4 py-5 text-center text-xs text-slate-500">当前筛选范围还没有速记记录</div>
-              ) : [...selectedTrades].reverse().map((trade) => {
+              ) : [...recentJournalTrades].reverse().map((trade) => {
                 const detail = recentJournalTradeDetails.get(trade.id);
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
-                const pnlTone = detail?.grossPnl === undefined
-                  ? ""
-                  : detail.grossPnl >= 0 ? "text-rose-600" : "text-emerald-600";
                 return (
                   <div key={trade.id} className="px-4 py-2.5 border-b border-slate-100 last:border-b-0">
-                    <div className="flex min-w-0 items-baseline gap-x-1.5 whitespace-nowrap text-xs tabular-nums">
-                      <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].label}</span>
-                      <span className="shrink-0 font-medium text-slate-800">{formatQuantity(trade.quantity)} ETH</span>
-                      {detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{formatPrice(detail.sellPrice)}</span>}
-                      {detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{formatPrice(detail.buyPrice)}</span>}
-                      {!detail && <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{formatPrice(trade.price)}</span>}
-                      {!isOpening && detail?.grossPnl !== undefined && <span className={`shrink-0 font-semibold ${pnlTone}`}>{formatSigned(detail.grossPnl)}</span>}
-                      {trade.isSyncing && <span className="shrink-0 text-amber-600">保存中</span>}
+                    <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
+                      <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
+                        <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].label}</span>
+                        <span className="shrink-0 font-medium text-slate-800">{formatQuantity(trade.quantity)} ETH</span>
+                        {detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{formatPrice(detail.buyPrice)}</span>}
+                        {detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{formatPrice(detail.sellPrice)}</span>}
+                        {!detail && <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{formatPrice(trade.price)}</span>}
+                        {trade.isSyncing && <span className="shrink-0 text-amber-600">保存中</span>}
+                      </div>
+                      {!isOpening && detail?.netPnl !== undefined && <>
+                        <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
+                        <button
+                          type="button"
+                          onClick={() => setNetProfitDetail({ trade, detail })}
+                          className={`shrink-0 border-b border-dotted pb-0.5 font-semibold outline-none ${detail.netPnl >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}
+                          aria-label="查看净利润计算明细"
+                        >
+                          {formatSigned(detail.netPnl)}
+                        </button>
+                      </>}
                     </div>
                     <div className="mt-1 flex min-w-0 items-center gap-x-1.5 whitespace-nowrap text-[11px] text-slate-500">
                       <span className="min-w-0 truncate" title={getTradeAccountName(trade)}>{getTradeAccountName(trade)}</span>
@@ -1466,16 +1674,41 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       <span className="min-w-0 truncate" title={getTradeRelatedFundName(trade)}>{getTradeRelatedFundName(trade)}</span>
                       <span className="text-slate-300">·</span>
                       <span className="shrink-0">{formatBeijingMonthDayTime(trade.createdAt)}</span>
-                      {canManage && <button
-                        type="button"
-                        disabled={Boolean(trade.isSyncing) || revertEntryMutation.isPending}
-                        onClick={() => setRevertCandidate(trade)}
-                        className="ml-auto h-5 shrink-0 rounded border border-amber-200 bg-amber-50 px-1.5 text-[10px] font-semibold text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        回撤
-                      </button>}
+                      {!isOpening && detail?.netPnl !== undefined && <>
+                        <span className="text-slate-300">·</span>
+                        <span className="ml-auto shrink-0 text-[10px] text-slate-500">净利润</span>
+                      </>}
                     </div>
-                    {trade.note && <div className="mt-1 truncate text-[11px] text-slate-500">{trade.note}</div>}
+                    {canManage && <div className="mt-1 flex min-h-5 items-center justify-between gap-3">
+                      {trade.note ? <span className="min-w-0 truncate text-[11px] text-slate-500">{trade.note}</span> : <span />}
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {isOpening && <button
+                          type="button"
+                          disabled={Boolean(trade.isSyncing)}
+                          onClick={() => openEditOpeningTrade(trade)}
+                          className="h-5 rounded border border-slate-200 bg-white px-1.5 text-[10px] font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          编辑
+                        </button>}
+                        <button
+                          type="button"
+                          disabled={Boolean(trade.isSyncing) || revertEntryMutation.isPending}
+                          onClick={() => setRevertCandidate(trade)}
+                          className="h-5 rounded border border-amber-200 bg-amber-50 px-1.5 text-[10px] font-semibold text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          回撤
+                        </button>
+                        {isOpening && <button
+                          type="button"
+                          disabled={Boolean(trade.isSyncing) || deleteOpeningEntryMutation.isPending}
+                          onClick={() => setDeleteCandidate(trade)}
+                          className="h-5 rounded border border-rose-200 bg-rose-50 px-1.5 text-[10px] font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          删除
+                        </button>}
+                      </div>
+                    </div>}
+                    {!canManage && trade.note && <div className="mt-1 truncate text-[11px] text-slate-500">{trade.note}</div>}
                   </div>
                 );
               })}
@@ -1501,7 +1734,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                             type="button"
                             disabled={restoreEntryMutation.isPending}
                             onClick={() => setRestoreCandidate(item)}
-                            className="h-7 shrink-0 rounded-lg border border-indigo-200 bg-white px-2 text-[11px] font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="h-7 shrink-0 rounded border border-indigo-200 bg-white px-2 text-[11px] font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             恢复
                           </button>
@@ -1531,7 +1764,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           aria-modal="true"
           aria-label={isMemberView ? "仓位明细" : "速记一笔"}
         >
-          <div className={isMemberView ? "min-h-full w-full bg-slate-50" : "w-full max-w-md mx-auto rounded-t-3xl bg-white shadow-2xl max-h-[92vh] overflow-y-auto"}>
+          <div className={isMemberView ? "min-h-full w-full bg-slate-50" : "w-full max-w-md mx-auto rounded-t bg-white shadow-2xl max-h-[92vh] overflow-y-auto"}>
             {isMemberView ? (
               <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur">
                 <button
@@ -1554,13 +1787,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             )}
 
             <div className="p-4 space-y-4">
-              <div className={`overflow-hidden rounded-2xl border ${entrySide === "long" ? "border-rose-200 bg-rose-50/70" : "border-emerald-200 bg-emerald-50/70"}`}>
+              <div className={`overflow-hidden rounded border ${entrySide === "long" ? "border-rose-200 bg-rose-50/70" : "border-emerald-200 bg-emerald-50/70"}`}>
                 <div className="flex items-center gap-1.5 px-3 py-2.5">
                   {!isMemberView && <button
                     type="button"
                     onClick={backToLadder}
                     aria-label="返回T型报价"
-                    className="shrink-0 rounded-md p-0.5 text-slate-500 transition hover:bg-white/70 hover:text-slate-900 active:scale-90"
+                    className="shrink-0 rounded p-0.5 text-slate-500 transition hover:bg-white/70 hover:text-slate-900 active:scale-90"
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </button>}
@@ -1588,7 +1821,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </div>
 
               {isCloseReview && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2.5">
                   <div className="text-xs font-semibold text-amber-800">第 2 次确认</div>
                   <div className="mt-1 text-sm font-semibold tabular-nums text-slate-900">
                     {ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH @ {formatPrice(Number(entryForm.price))}
@@ -1600,7 +1833,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               {showOpenedTradeList && (
                 <div className="space-y-1.5">
                   {openedTradeList.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">当前方向没有已开订单</div>
+                    <div className="rounded border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">当前方向没有已开订单</div>
                   )}
                   {openedTradeList.map((trade) => {
                     const floatingPnl = markPrice === null
@@ -1618,7 +1851,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     const canQuickClose = tradeScopedBuckets.some((bucket) => bucket.side === ACTIONS[trade.action].side && priceKey(bucket.price) === priceKey(archivePriceForTrade(trade)) && bucket.remainingQuantity > 0.0000001);
                     const isExpanded = expandedOpenedTradeIds.has(trade.id);
                     return (
-                      <div key={trade.id} className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2.5">
+                      <div key={trade.id} className="rounded border border-slate-200 bg-slate-50/80 px-3 py-2.5">
                         <button
                           type="button"
                           aria-expanded={isExpanded}
@@ -1688,7 +1921,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                                     type="button"
                                     disabled={isCloseReview || Boolean(trade.isSyncing)}
                                     onClick={() => openEditOpeningTrade(trade)}
-                                    className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                                    className="h-8 rounded border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
                                   >
                                     编辑
                                   </button>
@@ -1696,7 +1929,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                                     type="button"
                                     disabled={isCloseReview || Boolean(trade.isSyncing)}
                                     onClick={() => setDeleteCandidate(trade)}
-                                    className="h-8 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                                    className="h-8 rounded border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
                                   >
                                     删除
                                   </button>
@@ -1705,7 +1938,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                                   type="button"
                                   disabled={isCloseReview || !canQuickClose}
                                   onClick={() => openQuickCloseSheet(trade)}
-                                  className={`h-8 rounded-lg border px-3 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${ACTIONS[closeAction].idleClass}`}
+                                  className={`h-8 rounded border px-3 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${ACTIONS[closeAction].idleClass}`}
                                 >
                                   {ACTIONS[closeAction].label}
                                 </button>
@@ -1731,7 +1964,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       onChange={(event) => setEntryForm((current) => ({ ...current, quantity: event.target.value }))}
                       onBlur={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(current.quantity) }))}
                       placeholder="0.00"
-                      className={`w-full h-14 rounded-xl border px-3 text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
+                      className={`w-full h-14 rounded border px-3 text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                     />
                     <div className={`mt-1.5 text-[10px] leading-4 ${quantityFormatError ? "font-medium text-rose-600" : "text-slate-400"}`}>
                       {quantityFormatError || "整数最多4位 · 离开后固定显示2位小数"}
@@ -1750,7 +1983,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       value={entryForm.price}
                       onChange={(event) => setEntryForm((current) => ({ ...current, price: event.target.value }))}
                       placeholder="0.00"
-                      className="w-full h-14 rounded-xl border border-slate-200 px-3 text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-indigo-500"
+                      className="w-full h-14 rounded border border-slate-200 px-3 text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-indigo-500"
                     />
                     {openingArchivePrice !== null && (
                       <div className={`mt-1.5 text-[10px] tabular-nums ${ACTIONS[entryForm.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>
@@ -1771,7 +2004,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         type="button"
                         disabled={isCloseReview}
                         onClick={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(value) }))}
-                        className={`h-7 rounded-lg border px-2 text-[11px] font-medium tabular-nums transition active:scale-95 ${isActive ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
+                        className={`h-7 rounded border px-2 text-[11px] font-medium tabular-nums transition active:scale-95 ${isActive ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
                       >
                         {index === 0 && lastSavedQuantity ? `最近 ${displayValue}` : displayValue}
                       </button>
@@ -1786,7 +2019,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         disabled={isCloseReview || isEditingEntry}
                         value={entryForm.accountId}
                         onChange={(event) => selectOrderAccount(event.target.value)}
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-indigo-500"
+                        className="h-11 w-full rounded border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-indigo-500"
                       >
                         <option value="">新建账户</option>
                         {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
@@ -1798,7 +2031,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         value={entryForm.accountName}
                         onChange={(event) => setEntryForm((current) => ({ ...current, accountName: event.target.value }))}
                         placeholder="新账户名称"
-                        className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500"
+                        className="mt-2 h-11 w-full rounded border border-slate-200 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500"
                       />
                     )}
                   </Field>
@@ -1811,7 +2044,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         setRelatedUserPickerOpen((current) => !current);
                         setRelatedUserSearch("");
                       }}
-                      className={`flex h-11 w-full items-center gap-2 rounded-xl border px-3 text-left text-sm outline-none transition disabled:opacity-40 ${entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}
+                      className={`flex h-11 w-full items-center gap-2 rounded border px-3 text-left text-sm outline-none transition disabled:opacity-40 ${entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}
                     >
                       <UserRound className="h-4 w-4 shrink-0 text-indigo-500" />
                       <span className="min-w-0 flex-1 truncate font-medium">{entryForm.relatedUserName || entryForm.relatedUsername || "暂不关联"}</span>
@@ -1821,7 +2054,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
 
                 <div className="-mt-1 grid grid-cols-2 gap-3 text-[10px] leading-4 text-slate-400">
-                  <span>首次可新建；后续默认最近账户。</span>
+                  <span>首次可新建；后续按关联用户记忆账户。</span>
                   <span>可暂不关联；关联后按专项款区分资金。</span>
                 </div>
 
@@ -1830,7 +2063,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     disabled={!entryForm.relatedUserId || isCloseReview || isClosingEntry}
                     value={entryForm.relatedFundId}
                     onChange={(event) => selectRelatedFund(event.target.value)}
-                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                    className="h-11 w-full rounded border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                   >
                     <option value="">新建专项款</option>
                     {(isEditingEntry || isClosingEntry) && entryForm.relatedFundId === "legacy" && <option value="legacy">未区分专项款（历史）</option>}
@@ -1842,7 +2075,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       value={entryForm.relatedFundName}
                       onChange={(event) => setEntryForm((current) => ({ ...current, relatedFundName: event.target.value }))}
                       placeholder="新专项款名称，例如：10月拼单"
-                      className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      className="mt-2 h-11 w-full rounded border border-slate-200 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-50"
                     />
                   )}
                   {entryForm.relatedFundId === "legacy" && (
@@ -1856,12 +2089,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     value={entryForm.note}
                     onChange={(event) => setEntryForm((current) => ({ ...current, note: event.target.value }))}
                     placeholder="不填则不生成默认备注"
-                    className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500"
+                    className="w-full h-11 rounded border border-slate-200 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500"
                   />
                 </Field>
 
                 {relatedUserPickerOpen && (
-                  <div className="overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-sm">
+                  <div className="overflow-hidden rounded border border-indigo-100 bg-white shadow-sm">
                     <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
                       <Search className="h-4 w-4 shrink-0 text-slate-400" />
                       <input
@@ -1951,14 +2184,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <button
                     type="button"
                     onClick={() => setCloseConfirmationStep("input")}
-                    className="h-12 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 active:scale-[0.99]"
+                    className="h-12 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700 active:scale-[0.99]"
                   >
                     返回修改
                   </button>
                   <button
                     disabled={saveEntryMutation.isPending}
                     onClick={handleSaveEntry}
-                    className="h-12 rounded-xl bg-amber-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99]"
+                    className="h-12 rounded bg-amber-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99]"
                   >
                     再次确认并记账
                   </button>
@@ -1967,7 +2200,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <button
                   disabled={isEditingEntry ? updateOpeningEntryMutation.isPending : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)}
                   onClick={handleSaveEntry}
-                  className="w-full h-12 rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99]"
+                  className="w-full h-12 rounded bg-indigo-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99]"
                 >
                   {isEditingEntry ? "保存修改" : isClosingEntry ? `确认${ACTIONS[entryForm.action].label}参数` : "快速保存并记账"}
                 </button>
@@ -1977,27 +2210,85 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         </div>
       )}
 
+      {grossProfitDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="累计利润说明">
+          <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-base font-semibold text-slate-900">{isMemberView ? "累计利润说明" : `${grossProfitDetail.side === "long" ? "多仓" : "空仓"}累计利润明细`}</div>
+                {!isMemberView && <div className="mt-1 text-xs text-slate-500">已平仓部分按实际成交价汇总</div>}
+              </div>
+              <button type="button" onClick={() => setGrossProfitDetail(null)} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭累计利润说明">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {isMemberView ? (
+              <div className="mt-5 rounded bg-slate-50 px-4 py-4 text-center text-sm leading-6 text-slate-600">未扣除交易手续费、未扣除交易成本的毛利润。</div>
+            ) : <>
+              <div className="mt-4 space-y-2 text-sm tabular-nums">
+                <div className="flex items-center justify-between gap-4"><span className="text-slate-500">毛收益</span><span className={`font-medium ${grossProfitDetail.gross >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(grossProfitDetail.gross)} U</span></div>
+                <div className="flex items-center justify-between gap-4"><span className="text-slate-500">开仓手续费分摊</span><span className="font-medium text-slate-700">−{formatFee(grossProfitDetail.openingFee)} U</span></div>
+                <div className="flex items-center justify-between gap-4"><span className="text-slate-500">平仓手续费</span><span className="font-medium text-slate-700">−{formatFee(grossProfitDetail.closingFee)} U</span></div>
+                <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-2"><span className="font-semibold text-slate-800">净利润</span><span className={`font-semibold ${grossProfitDetail.net >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(grossProfitDetail.net)} U</span></div>
+              </div>
+              <div className="mt-3 rounded bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-500">累计利润为未扣手续费的毛收益；净利润已扣除已平部分的开仓手续费分摊及平仓手续费。</div>
+            </>}
+            <button type="button" onClick={() => setGrossProfitDetail(null)} className="mt-5 h-11 w-full rounded bg-slate-800 text-sm font-semibold text-white active:scale-[0.99]">知道了</button>
+          </div>
+        </div>
+      )}
+
+      {netProfitDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="净利润计算明细">
+          <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-base font-semibold text-slate-900">{isMemberView ? "净利润说明" : "净利润计算明细"}</div>
+                {!isMemberView && <div className="mt-1 text-xs text-slate-500">已扣除开仓与平仓两次实际手续费</div>}
+              </div>
+              <button type="button" onClick={() => setNetProfitDetail(null)} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭净利润说明">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {isMemberView ? (
+              <div className="mt-5 rounded bg-slate-50 px-4 py-4 text-center text-sm text-slate-600">已扣除交易成本后的净利润。</div>
+            ) : <>
+              <div className="mt-4 rounded bg-slate-50 px-3 py-2.5 text-xs tabular-nums text-slate-700">
+                {ACTIONS[netProfitDetail.trade.action].label} {formatQuantity(netProfitDetail.trade.quantity)} ETH
+              </div>
+              <div className="mt-3 space-y-2 text-sm tabular-nums">
+                <div className="flex items-center justify-between gap-4"><span className="text-slate-500">毛收益</span><span className="font-medium text-slate-700">{formatSigned(netProfitDetail.detail.grossPnl ?? 0)} U</span></div>
+                <div className="flex items-center justify-between gap-4"><span className="text-slate-500">开仓手续费分摊</span><span className="font-medium text-slate-700">−{formatFee(netProfitDetail.detail.allocatedOpeningFee ?? 0)} U</span></div>
+                <div className="flex items-center justify-between gap-4"><span className="text-slate-500">本笔平仓手续费</span><span className="font-medium text-slate-700">−{formatFee(netProfitDetail.detail.closingFee ?? 0)} U</span></div>
+                <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-2"><span className="font-semibold text-slate-800">净利润</span><span className={`font-semibold ${(netProfitDetail.detail.netPnl ?? 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(netProfitDetail.detail.netPnl ?? 0)} U</span></div>
+              </div>
+            </>}
+            <button type="button" onClick={() => setNetProfitDetail(null)} className="mt-5 h-11 w-full rounded bg-slate-800 text-sm font-semibold text-white active:scale-[0.99]">知道了</button>
+          </div>
+        </div>
+      )}
+
       {canManage && deleteCandidate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="删除开仓记录">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
             <div className="text-base font-semibold text-slate-900">删除这笔开仓记录？</div>
             <div className="mt-2 text-sm tabular-nums text-slate-700">
               {ACTIONS[deleteCandidate.action].label} {formatQuantity(deleteCandidate.quantity)} ETH @ {formatPrice(deleteCandidate.price)}
             </div>
-            <div className="mt-2 text-[11px] leading-5 text-slate-500">删除后不再显示于速记账本；删除前记录、操作时间与操作人会保留在审计记录中。</div>
+            <div className="mt-2 text-[11px] leading-5 text-slate-500">删除后该开仓不再计入价格簿、仓位和盈亏，删除前记录、操作时间与操作人会保留在审计记录中。若此开仓已有对应平仓记录，系统会拒绝删除，须先回撤对应平仓流水。</div>
             <div className="mt-5 grid grid-cols-2 gap-3">
               <button
                 type="button"
                 disabled={deleteOpeningEntryMutation.isPending}
                 onClick={() => setDeleteCandidate(null)}
-                className="h-11 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-40"
+                className="h-11 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-40"
               >
                 取消
               </button>
               <button
                 disabled={deleteOpeningEntryMutation.isPending}
                 onClick={() => deleteOpeningEntryMutation.mutate({ ledgerId: 52, entryId: Number(deleteCandidate.id) })}
-                className="h-11 rounded-xl bg-rose-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
+                className="h-11 rounded bg-rose-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
               >
                 确认删除
               </button>
@@ -2008,7 +2299,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
       {canManage && revertCandidate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="回撤速记流水">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
             <div className="text-base font-semibold text-slate-900">回撤这笔速记？</div>
             <div className="mt-2 text-sm tabular-nums text-slate-700">
               {ACTIONS[revertCandidate.action].label} {formatQuantity(revertCandidate.quantity)} ETH @ {formatPrice(revertCandidate.price)}
@@ -2021,14 +2312,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 type="button"
                 disabled={revertEntryMutation.isPending}
                 onClick={() => setRevertCandidate(null)}
-                className="h-11 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-40"
+                className="h-11 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-40"
               >
                 取消
               </button>
               <button
                 disabled={revertEntryMutation.isPending}
                 onClick={() => revertEntryMutation.mutate({ ledgerId: 52, entryId: Number(revertCandidate.id) })}
-                className="h-11 rounded-xl bg-amber-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
+                className="h-11 rounded bg-amber-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
               >
                 确认回撤
               </button>
@@ -2039,7 +2330,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
       {canManage && restoreCandidate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="恢复速记流水">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
             <div className="text-base font-semibold text-slate-900">恢复这笔速记？</div>
             <div className="mt-2 text-sm tabular-nums text-slate-700">
               {ACTIONS[restoreCandidate.trade.action].label} {formatQuantity(restoreCandidate.trade.quantity)} ETH @ {formatPrice(restoreCandidate.trade.price)}
@@ -2052,14 +2343,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 type="button"
                 disabled={restoreEntryMutation.isPending}
                 onClick={() => setRestoreCandidate(null)}
-                className="h-11 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-40"
+                className="h-11 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-40"
               >
                 取消
               </button>
               <button
                 disabled={restoreEntryMutation.isPending}
                 onClick={() => restoreEntryMutation.mutate({ ledgerId: 52, auditId: Number(restoreCandidate.auditId) })}
-                className="h-11 rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
+                className="h-11 rounded bg-indigo-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
               >
                 确认恢复
               </button>
@@ -2085,16 +2376,18 @@ function AccountOverview({
   showCumulativeData,
   onToggleCumulativeData,
   showCommission = true,
-  onViewSideOrders,
+  isMemberView = false,
+  onExplainGrossProfit,
 }: {
   summary: {
-    long: { quantity: number; average: number; unrealized: number | null; realized: number; turnover: number; commission: number; closedQuantity: number; closedAverageCost: number; closedAveragePrice: number; activeLevels: number };
-    short: { quantity: number; average: number; unrealized: number | null; realized: number; turnover: number; commission: number; closedQuantity: number; closedAverageCost: number; closedAveragePrice: number; activeLevels: number };
+    long: { quantity: number; average: number; unrealized: number | null; realizedGross: number; realizedOpeningFee: number; realizedClosingFee: number; realized: number; turnover: number; commission: number; closedQuantity: number; closedAverageCost: number; closedAveragePrice: number; activeLevels: number };
+    short: { quantity: number; average: number; unrealized: number | null; realizedGross: number; realizedOpeningFee: number; realizedClosingFee: number; realized: number; turnover: number; commission: number; closedQuantity: number; closedAverageCost: number; closedAveragePrice: number; activeLevels: number };
   };
   showCumulativeData: boolean;
   onToggleCumulativeData: () => void;
   showCommission?: boolean;
-  onViewSideOrders: (side: PositionSide) => void;
+  isMemberView?: boolean;
+  onExplainGrossProfit: (side: PositionSide, data: { realizedGross: number; realizedOpeningFee: number; realizedClosingFee: number; realized: number }) => void;
 }) {
   const pnlColor = (value: number | null) => value === null ? "text-slate-400" : value >= 0 ? "text-rose-600" : "text-emerald-600";
   const sides: Array<{ side: PositionSide; data: typeof summary.long }> = [
@@ -2103,94 +2396,96 @@ function AccountOverview({
   ];
 
   return (
-    <>
-      <div className="grid grid-cols-2">
-        {sides.map(({ side, data }) => {
-          const isLong = side === "long";
-          return (
-            <button
-              key={side}
-              type="button"
-              onClick={() => onViewSideOrders(side)}
-              aria-label={`查看全部${isLong ? "多仓" : "空仓"}订单`}
-              className={`min-w-0 px-3 py-3 text-left transition-colors active:bg-slate-50 ${isLong ? "border-r border-slate-100" : ""}`}
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="flex min-w-0 items-baseline gap-1.5">
-                  <span className={`shrink-0 text-xs font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{isLong ? "多仓" : "空仓"}</span>
-                  <span className="shrink-0 text-[11px] tabular-nums text-slate-400">{data.activeLevels}档</span>
-                </div>
-                <div className="flex shrink-0 items-baseline gap-1">
-                  <span className="text-sm tabular-nums font-semibold text-slate-900">{formatQuantity(data.quantity)}</span>
-                  <span className="text-[11px] text-slate-500">ETH</span>
+    <div className="border-t border-slate-200/80 bg-slate-50/80 p-2.5">
+      <div className="overflow-hidden rounded border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+          <span className="text-[11px] text-slate-500">持仓详情</span>
+          <button
+            type="button"
+            onClick={onToggleCumulativeData}
+            aria-label={showCumulativeData ? "收起持仓与累计数据" : "展开持仓与累计数据"}
+            aria-expanded={showCumulativeData}
+            className="flex h-4 w-4 items-center justify-center text-slate-400 transition-colors active:text-slate-700"
+          >
+            <ChevronRight className={`h-4 w-4 transition-transform ${showCumulativeData ? "rotate-90" : ""}`} />
+          </button>
+        </div>
+        <div className="grid grid-cols-2">
+          {sides.map(({ side, data }) => {
+            const isLong = side === "long";
+            return (
+              <div
+                key={side}
+                className={`min-w-0 px-3 py-3 text-left ${isLong ? "border-r border-slate-100" : ""}`}
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="flex min-w-0 items-baseline gap-1.5">
+                    <span className={`shrink-0 text-xs font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{isLong ? "多仓" : "空仓"}</span>
+                    <span className="shrink-0 text-[11px] tabular-nums text-slate-400">{data.activeLevels}档</span>
+                  </div>
+                  <div className="flex shrink-0 items-baseline gap-1">
+                    <span className="text-sm tabular-nums font-semibold text-slate-900">{formatQuantity(data.quantity)}</span>
+                    <span className="text-[11px] text-slate-500">ETH</span>
+                  </div>
                 </div>
               </div>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-2 border-t border-slate-100">
-        {sides.map(({ side, data }) => (
-          <div key={side} className={`flex items-center justify-between gap-2 px-3 py-2.5 text-[11px] ${side === "long" ? "border-r border-slate-100" : ""}`}>
-            <span className="text-slate-500">持仓均价</span>
-            <div className="flex shrink-0 items-baseline gap-1">
-              <span className="text-sm font-semibold tabular-nums text-slate-700">{data.quantity > 0 ? formatPrice(data.average) : formatAmount(0)}</span>
-              <span className="text-[11px] text-slate-500">U</span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <button
-        type="button"
-        onClick={onToggleCumulativeData}
-        className="flex w-full items-center justify-between border-t border-slate-100 px-3 py-2.5 text-[11px] text-slate-500"
-        aria-expanded={showCumulativeData}
-      >
-        <span>累计数据</span>
-        <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showCumulativeData ? "rotate-90" : ""}`} />
-      </button>
-      {showCumulativeData && (
-        <div className="border-t border-slate-100 text-[11px] tabular-nums">
-          <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center border-b border-slate-100 px-3 py-2 text-[10px] font-semibold">
-            <span className="text-slate-400"> </span>
-            <span className="text-right text-rose-600">多仓</span>
-            <span className="text-right text-emerald-600">空仓</span>
-          </div>
-          <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center px-3 py-2">
-            <span className="text-slate-500">累计平仓</span>
-            <span className="text-right font-semibold text-slate-700">{formatQuantity(summary.long.closedQuantity)} ETH</span>
-            <span className="text-right font-semibold text-slate-700">{formatQuantity(summary.short.closedQuantity)} ETH</span>
-          </div>
-          <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center border-t border-slate-100 px-3 py-2">
-            <span className="text-slate-500">原始平均成本</span>
-            <span className="text-right font-semibold text-slate-700">{summary.long.closedQuantity > 0 ? formatPrice(summary.long.closedAverageCost) : formatAmount(0)} U</span>
-            <span className="text-right font-semibold text-slate-700">{summary.short.closedQuantity > 0 ? formatPrice(summary.short.closedAverageCost) : formatAmount(0)} U</span>
-          </div>
-          <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center border-t border-slate-100 px-3 py-2">
-            <span className="text-slate-500">平均平仓价</span>
-            <span className="text-right font-semibold text-slate-700">{summary.long.closedQuantity > 0 ? formatPrice(summary.long.closedAveragePrice) : formatAmount(0)} U</span>
-            <span className="text-right font-semibold text-slate-700">{summary.short.closedQuantity > 0 ? formatPrice(summary.short.closedAveragePrice) : formatAmount(0)} U</span>
-          </div>
-          <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center px-3 py-2">
-            <span className="text-slate-500">累计盈利</span>
-            <span className={`text-right font-semibold ${pnlColor(summary.long.realized)}`}>{formatSigned(summary.long.realized)} U</span>
-            <span className={`text-right font-semibold ${pnlColor(summary.short.realized)}`}>{formatSigned(summary.short.realized)} U</span>
-          </div>
-          <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center border-t border-slate-100 px-3 py-2">
-            <span className="text-slate-500">累计交易额</span>
-            <span className="text-right font-semibold text-slate-700">{formatAmount(summary.long.turnover)} U</span>
-            <span className="text-right font-semibold text-slate-700">{formatAmount(summary.short.turnover)} U</span>
-          </div>
-          {showCommission && <div className="grid grid-cols-[72px_minmax(0,1fr)_minmax(0,1fr)] items-center border-t border-slate-100 px-3 py-2">
-              <span className="text-slate-500">累计佣金</span>
-              <span className="text-right font-semibold text-slate-700">{formatAmount(summary.long.commission)} U</span>
-              <span className="text-right font-semibold text-slate-700">{formatAmount(summary.short.commission)} U</span>
-            </div>}
+            );
+          })}
         </div>
-      )}
-    </>
+
+        {showCumulativeData && (
+          <div className="grid grid-cols-2 border-t border-slate-100 text-[11px] tabular-nums">
+            {sides.map(({ side, data }) => {
+              const isLong = side === "long";
+              const labelTone = isLong ? "text-rose-600 bg-rose-50/50" : "text-emerald-600 bg-emerald-50/50";
+              const profitTone = data.realizedGross >= 0 ? "text-rose-600 border-rose-500" : "text-emerald-600 border-emerald-500";
+              return (
+                <section key={side} className={`min-w-0 ${isLong ? "border-r border-slate-100" : ""}`}>
+                  <div className={`px-3 py-2 text-[11px] font-semibold ${labelTone}`}>{isLong ? "多仓详情" : "空仓详情"}</div>
+                  <div className="space-y-0">
+                    <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                      <span className="whitespace-nowrap text-slate-500">累计利润</span>
+                      <button
+                        type="button"
+                        onClick={() => onExplainGrossProfit(side, data)}
+                        className={`whitespace-nowrap border-b border-dotted pb-0.5 text-[11px] font-semibold outline-none ${profitTone}`}
+                        aria-label={`查看${isLong ? "多仓" : "空仓"}累计利润说明`}
+                      >
+                        {formatSigned(data.realizedGross)} U
+                      </button>
+                    </div>
+                    <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                      <span className="whitespace-nowrap text-slate-500">持仓均价</span>
+                      <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{data.quantity > 0 ? formatPrice(data.average) : formatAmount(0)} U</span>
+                    </div>
+                    <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                      <span className="whitespace-nowrap text-slate-500">累计平仓</span>
+                      <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{formatQuantity(data.closedQuantity)} ETH</span>
+                    </div>
+                    <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                      <span className="whitespace-nowrap text-slate-500">原始平均成本</span>
+                      <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{data.closedQuantity > 0 ? formatPrice(data.closedAverageCost) : formatAmount(0)} U</span>
+                    </div>
+                    <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                      <span className="whitespace-nowrap text-slate-500">平均平仓价</span>
+                      <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{data.closedQuantity > 0 ? formatPrice(data.closedAveragePrice) : formatAmount(0)} U</span>
+                    </div>
+                    <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                      <span className="whitespace-nowrap text-slate-500">累计交易额</span>
+                      <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{formatAmount(data.turnover)} U</span>
+                    </div>
+                    {showCommission && <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
+                      <span className="whitespace-nowrap text-slate-500">累计佣金</span>
+                      <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">{formatAmount(data.commission)} U</span>
+                    </div>}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
