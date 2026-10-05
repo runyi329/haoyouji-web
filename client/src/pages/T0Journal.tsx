@@ -171,6 +171,8 @@ const ACTIONS: Record<TradeAction, { label: string; side: PositionSide; opening:
   },
 };
 
+const RECENT_JOURNAL_ACTIONS: TradeAction[] = ["openLong", "openShort", "closeLong", "closeShort"];
+
 const numberFormatter = new Intl.NumberFormat("zh-CN", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -186,6 +188,25 @@ const DEFAULT_QUANTITY_QUICK_OPTIONS = ["10.00", "20.00", "30.00", "40.00", "50.
 const OKX_VIP2_TAKER_FEE_RATE = 0.00036;
 const OKX_VIP2_TAKER_FEE_LABEL = "0.0360%";
 const ETH_QUANTITY_PATTERN = /^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/;
+
+/**
+ * 未平仓利润统一按开仓名义金额预提双边手续费：已发生开仓手续费 + 按同价估算的未来平仓手续费。
+ * 这是展示层的净利润预估，不计资金费；实际平仓后仍以实际成交价及实际手续费结算。
+ */
+function calculateEstimatedUnrealizedNetPnl(
+  side: PositionSide,
+  markPrice: number | null,
+  quantity: number,
+  openingCostBasis: number,
+): number | null {
+  if (markPrice === null || quantity <= 0 || openingCostBasis <= 0) return null;
+  const openingAverage = openingCostBasis / quantity;
+  const grossPnl = side === "long"
+    ? (markPrice - openingAverage) * quantity
+    : (openingAverage - markPrice) * quantity;
+  const estimatedRoundTripFee = openingCostBasis * OKX_VIP2_TAKER_FEE_RATE * 2;
+  return grossPnl - estimatedRoundTripFee;
+}
 
 function priceKey(price: number) {
   return Number(price).toFixed(2);
@@ -507,9 +528,7 @@ function calculateSummary(buckets: PositionBucket[], markPrice: number | null, t
     const quantity = active.reduce((total, bucket) => total + bucket.remainingQuantity, 0);
     const weightedCost = active.reduce((total, bucket) => total + bucket.costBasis, 0);
     const average = quantity > 0 ? weightedCost / quantity : 0;
-    const unrealized = markPrice && quantity > 0
-      ? (side === "long" ? markPrice - average : average - markPrice) * quantity
-      : null;
+    const unrealized = calculateEstimatedUnrealizedNetPnl(side, markPrice, quantity, weightedCost);
     const realized = all.reduce((total, bucket) => total + bucket.realizedPnl, 0);
     const realizedGross = all.reduce((total, bucket) => total + bucket.realizedGrossPnl, 0);
     const realizedOpeningFee = all.reduce((total, bucket) => total + bucket.realizedOpeningFee, 0);
@@ -573,6 +592,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [journalAccountFilterId, setJournalAccountFilterId] = useState("all");
   const [journalRelatedUserFilterId, setJournalRelatedUserFilterId] = useState("all");
   const [journalRelatedFundFilterId, setJournalRelatedFundFilterId] = useState("all");
+  const [journalActionFilters, setJournalActionFilters] = useState<Set<TradeAction>>(
+    () => new Set(RECENT_JOURNAL_ACTIONS),
+  );
   const [lastRelatedUserId, setLastRelatedUserId] = useState("");
   const [lastAccountIdByRelatedUser, setLastAccountIdByRelatedUser] = useState<Record<string, string>>({});
   const [lastFundIdByRelatedUser, setLastFundIdByRelatedUser] = useState<Record<string, string>>({});
@@ -790,8 +812,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         || (journalRelatedUserFilterId === "unlinked" ? !trade.relatedUserId : trade.relatedUserId === journalRelatedUserFilterId))
       && (journalRelatedFundFilterId === "all"
         || (journalRelatedFundFilterId === "unclassified" ? !trade.relatedFundId : trade.relatedFundId === journalRelatedFundFilterId))
+      && journalActionFilters.has(trade.action)
     )),
-    [trades, journalAccountFilterId, journalRelatedUserFilterId, journalRelatedFundFilterId],
+    [trades, journalAccountFilterId, journalRelatedUserFilterId, journalRelatedFundFilterId, journalActionFilters],
   );
   const recentJournalTradeDetails = useMemo(() => buildRecentJournalTradeDetails(trades), [trades]);
   const getTradeAccountName = (trade: PreviewTrade) => trade.accountName
@@ -818,6 +841,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => relatedFunds.filter((fund) => journalRelatedUserFilterId === "all" || fund.relatedUserId === journalRelatedUserFilterId),
     [relatedFunds, journalRelatedUserFilterId],
   );
+  const allJournalActionsSelected = RECENT_JOURNAL_ACTIONS.every((action) => journalActionFilters.has(action));
+  const toggleJournalActionFilter = (action: TradeAction) => {
+    setJournalActionFilters((current) => {
+      // “全部”状态下点某一动作，直接聚焦该动作；后续可继续复选其他动作。
+      if (RECENT_JOURNAL_ACTIONS.every((item) => current.has(item))) {
+        return new Set([action]);
+      }
+      const next = new Set(current);
+      if (next.has(action)) {
+        next.delete(action);
+      } else {
+        next.add(action);
+      }
+      return next;
+    });
+  };
   const entryRelatedFunds = useMemo(
     () => relatedFunds.filter((fund) => fund.relatedUserId === entryForm.relatedUserId),
     [relatedFunds, entryForm.relatedUserId],
@@ -1494,19 +1533,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
       <main className="px-4 pt-4 space-y-4">
         <section className="overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
-          <div className="grid grid-cols-3 gap-1.5 bg-gradient-to-br from-slate-50 via-white to-indigo-50/60 p-2">
-            <div className={`min-w-0 rounded border px-1.5 py-2.5 text-center shadow-[0_1px_2px_rgba(15,23,42,0.025)] ${totalGrossProfitSurfaceClass}`}>
+          <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(68px,max-content)_minmax(0,1fr)] gap-1.5 bg-gradient-to-br from-slate-50 via-white to-indigo-50/60 p-2">
+            <div className={`min-w-0 rounded border px-2 py-2.5 text-center shadow-[0_1px_2px_rgba(15,23,42,0.025)] ${totalGrossProfitSurfaceClass}`}>
               <div className="text-[10px] font-semibold text-slate-500">总利润</div>
-              <div className={`mt-1 flex items-baseline justify-center gap-0.5 whitespace-nowrap text-[17px] font-bold leading-none tabular-nums ${totalGrossProfitClass}`}>
+              <div className={`mt-1 flex items-baseline justify-center gap-0.5 whitespace-nowrap text-[clamp(15px,4.25vw,17px)] font-bold leading-none tabular-nums ${totalGrossProfitClass}`}>
                 <span>{formatSigned(totalGrossProfit)}</span>
                 <span className="text-[10px] font-semibold opacity-65">U</span>
               </div>
             </div>
-            <div className={`min-w-0 rounded border px-1.5 py-2.5 text-center shadow-[0_1px_2px_rgba(15,23,42,0.025)] ${netPositionSurfaceClass}`}>
+            <div className={`min-w-0 rounded border px-1 py-2.5 text-center shadow-[0_1px_2px_rgba(15,23,42,0.025)] ${netPositionSurfaceClass}`}>
               <div className="text-[10px] font-semibold text-slate-500">实时总仓位</div>
-              <div className={`mt-1 flex items-baseline justify-center gap-0.5 whitespace-nowrap text-[15px] font-bold leading-none tabular-nums ${netPositionClass}`}>
+              <div className={`mt-1 flex items-baseline justify-center gap-px whitespace-nowrap text-[14px] font-bold leading-none tabular-nums ${netPositionClass}`}>
                 <span>{roundedNetPositionText}</span>
-                <span className="text-[10px] font-semibold opacity-65">ETH</span>
+                <span className="text-[9px] font-semibold opacity-65">ETH</span>
               </div>
             </div>
             <div className={`min-w-0 rounded border px-1.5 py-2.5 text-center shadow-[0_1px_2px_rgba(15,23,42,0.025)] ${markPriceSurfaceClass}`}>
@@ -1633,13 +1672,47 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         </section>
 
         <section className="rounded bg-white border border-slate-200 shadow-sm overflow-hidden">
-          <button onClick={() => setShowRecentRecords((value) => !value)} className="w-full px-4 py-3 flex items-center justify-between text-left">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">最近速记</div>
+          <div className="flex items-center gap-2 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
+                <span className="shrink-0 text-sm font-semibold text-slate-900">最近速记</span>
+                <div className="flex shrink-0 items-center gap-1" role="group" aria-label="最近速记动作筛选">
+                  <button
+                    type="button"
+                    aria-pressed={allJournalActionsSelected}
+                    onClick={() => setJournalActionFilters(new Set(RECENT_JOURNAL_ACTIONS))}
+                    className={`h-6 rounded border px-2 text-[11px] font-medium transition-colors ${allJournalActionsSelected ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 bg-white text-slate-500"}`}
+                  >
+                    全部
+                  </button>
+                  {RECENT_JOURNAL_ACTIONS.map((action) => {
+                    const selected = journalActionFilters.has(action);
+                    return (
+                      <button
+                        key={action}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => toggleJournalActionFilter(action)}
+                        className={`h-6 rounded border px-2 text-[11px] font-medium transition-colors ${selected ? ACTIONS[action].activeClass : "border-slate-200 bg-white text-slate-500"}`}
+                      >
+                        {ACTIONS[action].label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <div className="mt-0.5 text-[11px] text-slate-500">已保存的开平记录会同步影响上方价格簿</div>
             </div>
-            <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${showRecentRecords ? "rotate-90" : ""}`} />
-          </button>
+            <button
+              type="button"
+              aria-label={showRecentRecords ? "收起最近速记" : "展开最近速记"}
+              aria-expanded={showRecentRecords}
+              onClick={() => setShowRecentRecords((value) => !value)}
+              className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-slate-100"
+            >
+              <ChevronRight className={`w-4 h-4 transition-transform ${showRecentRecords ? "rotate-90" : ""}`} />
+            </button>
+          </div>
           {showRecentRecords && (
             <div className="border-t border-slate-100">
               <div className="grid grid-cols-3 gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5">
@@ -1885,11 +1958,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
                     const linkedClosedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
                     const remainingQuantity = Math.max(0, trade.quantity - linkedClosedQuantity);
-                    const floatingPnl = markPrice === null
-                      ? null
-                      : ACTIONS[trade.action].side === "long"
-                        ? (markPrice - trade.price) * remainingQuantity
-                        : (trade.price - markPrice) * remainingQuantity;
+                    const floatingPnl = calculateEstimatedUnrealizedNetPnl(
+                      ACTIONS[trade.action].side,
+                      markPrice,
+                      remainingQuantity,
+                      trade.price * remainingQuantity,
+                    );
                     const openingValue = trade.quantity * trade.price;
                     const closeAction: TradeAction = ACTIONS[trade.action].side === "long" ? "closeLong" : "closeShort";
                     const canQuickClose = remainingQuantity > 0.0000001;
@@ -2562,13 +2636,8 @@ function PositionCell({ bucket, side, markPrice, onClick }: { bucket?: PositionB
   const tone = isLong
     ? "bg-rose-50/75 text-rose-800 hover:bg-rose-100"
     : "bg-emerald-50/75 text-emerald-800 hover:bg-emerald-100";
-  const averageCost = bucket.remainingQuantity > 0 ? bucket.costBasis / bucket.remainingQuantity : 0;
-  const floatingPnl = markPrice === null
-    ? null
-    : isLong
-      ? (markPrice - averageCost) * bucket.remainingQuantity
-      : (averageCost - markPrice) * bucket.remainingQuantity;
-  // 与金额盈亏保持同一口径：逐档未实现盈亏 ÷ 本档剩余持仓成本，不含尚未实际支付的资金费。
+  const floatingPnl = calculateEstimatedUnrealizedNetPnl(side, markPrice, bucket.remainingQuantity, bucket.costBasis);
+  // 与金额盈亏保持同一口径：逐档预估净盈亏 ÷ 本档剩余持仓成本；不计资金费。
   const floatingReturnRate = floatingPnl === null || bucket.costBasis <= 0
     ? null
     : floatingPnl / bucket.costBasis;
