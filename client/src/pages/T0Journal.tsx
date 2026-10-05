@@ -118,6 +118,12 @@ type PositionBucket = {
   openedAt: string;
 };
 
+/** 某一开仓主单被分批平掉时，对应的平仓流水及本次分配数量。 */
+type LinkedClosingAllocation = {
+  trade: PreviewTrade;
+  quantity: number;
+};
+
 type EntryForm = {
   action: TradeAction;
   accountId: string;
@@ -447,6 +453,52 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
   return Array.from(buckets.values()).filter((bucket) => bucket.originalQuantity > 0);
 }
 
+/**
+ * 将平仓流水按同一账户、关联用户、专项款、方向和十美元归属档位，依时间顺序分配至开仓主单。
+ * 这是价格簿现有平仓可用量口径的逐笔展开：一笔平仓若跨越多张主单，会在各主单下显示实际分配量。
+ */
+function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
+  const openingQueues = new Map<string, Array<{ entryId: string; remainingQuantity: number }>>();
+  const allocations = new Map<string, LinkedClosingAllocation[]>();
+  const orderedTrades = [...trades]
+    .filter((trade) => trade.symbol === "ETH")
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+
+  const scopeKeyFor = (trade: PreviewTrade) => [
+    ACTIONS[trade.action].side,
+    priceKey(archivePriceForTrade(trade)),
+    trade.accountId,
+    trade.relatedUserId ?? "legacy-user",
+    trade.relatedFundId ?? "legacy-fund",
+  ].join(":");
+
+  for (const trade of orderedTrades) {
+    const config = ACTIONS[trade.action];
+    const scopeKey = scopeKeyFor(trade);
+    if (config.opening) {
+      const queue = openingQueues.get(scopeKey) ?? [];
+      queue.push({ entryId: trade.id, remainingQuantity: trade.quantity });
+      openingQueues.set(scopeKey, queue);
+      continue;
+    }
+
+    let remainingToAllocate = trade.quantity;
+    const queue = openingQueues.get(scopeKey) ?? [];
+    for (const opening of queue) {
+      if (remainingToAllocate <= 0.0000001) break;
+      if (opening.remainingQuantity <= 0.0000001) continue;
+      const allocatedQuantity = Math.min(opening.remainingQuantity, remainingToAllocate);
+      opening.remainingQuantity -= allocatedQuantity;
+      remainingToAllocate -= allocatedQuantity;
+      const linkedRows = allocations.get(opening.entryId) ?? [];
+      linkedRows.push({ trade, quantity: allocatedQuantity });
+      allocations.set(opening.entryId, linkedRows);
+    }
+  }
+
+  return allocations;
+}
+
 function calculateSummary(buckets: PositionBucket[], markPrice: number | null, trades: PreviewTrade[]) {
   const calculateSide = (side: PositionSide) => {
     const active = buckets.filter((bucket) => bucket.side === side && bucket.remainingQuantity > 0.0000001);
@@ -529,7 +581,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [showEntrySheet, setShowEntrySheet] = useState(false);
   const [closeConfirmationStep, setCloseConfirmationStep] = useState<"input" | "review">("input");
   const [expandedOpenedTradeIds, setExpandedOpenedTradeIds] = useState<Set<string>>(() => new Set());
-  const [showOpenedTradeList, setShowOpenedTradeList] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<PreviewTrade | null>(null);
   const [revertCandidate, setRevertCandidate] = useState<PreviewTrade | null>(null);
   const [netProfitDetail, setNetProfitDetail] = useState<{ trade: PreviewTrade; detail: RecentJournalTradeDetail } | null>(null);
@@ -833,12 +884,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   const entrySideSummary = entrySide === "long" ? entryScopedSummary.long : entryScopedSummary.short;
   // 档位详情已由用户刚点击的价格格定位，无需在标题重复显示档位，避免移动端换行。
-  // 仅从账户总览进入时保留“汇总”标识，明确这是该方向的全量订单。
-  const entryScopeTitle = `${entrySide === "long" ? "多仓" : "空仓"}${entryForm.targetPrice === undefined ? "汇总" : ""}`;
+  // 顶部始终明确为当前档位或当前方向范围的汇总，逐笔订单在下方直接展示。
+  const entryScopeTitle = `${entrySide === "long" ? "多仓" : "空仓"}汇总`;
   const openedTradeList = useMemo(
     () => entryScopedTrades
       .filter((trade) => ACTIONS[trade.action].opening)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [entryScopedTrades],
+  );
+  const openingClosingAllocations = useMemo(
+    () => buildOpeningClosingAllocations(entryScopedTrades),
     [entryScopedTrades],
   );
   const isEditingEntry = Boolean(entryForm.editingEntryId);
@@ -902,11 +957,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     };
   }, [markLadderPrice, priceRows.length]);
 
-  const openEntrySheet = (action: TradeAction = "openLong", targetPrice?: number, showOrders = false) => {
+  const openEntrySheet = (action: TradeAction = "openLong", targetPrice?: number) => {
     setEntrySide(ACTIONS[action].side);
     setCloseConfirmationStep("input");
-    // 成员以独立详情页查看仓位，默认展开对应方向的订单列表；管理员保留原弹窗行为。
-    setShowOpenedTradeList(isMemberView || showOrders);
     const rememberedAccount = getRememberedAccountForRelatedUser(lastRelatedUser?.id);
     const defaultRelatedFund = getRememberedFundForRelatedUser(lastRelatedUser?.id);
     setEntryForm({
@@ -946,7 +999,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const action: TradeAction = side === "long" ? "closeLong" : "closeShort";
     setEntrySide(side);
     setCloseConfirmationStep("input");
-    setShowOpenedTradeList(false);
     setEntryForm({
       action,
       accountId: trade.accountId,
@@ -971,7 +1023,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
     setEntrySide(ACTIONS[trade.action].side);
     setCloseConfirmationStep("input");
-    setShowOpenedTradeList(false);
     setEntryForm({
       action: trade.action,
       accountId: trade.accountId,
@@ -1388,7 +1439,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   };
   const backToLadder = () => {
     setCloseConfirmationStep("input");
-    setShowOpenedTradeList(false);
     setShowEntrySheet(false);
   };
 
@@ -1551,9 +1601,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.long) return;
-                    // 点已有仓位永远先进入本档订单详情，管理员可继续展开、编辑或对单笔快捷平仓；
+                    // 点已有仓位永远先进入本档订单详情，管理员可逐笔编辑或对单笔快捷平仓；
                     // 不因关联用户尚未标注而阻断查看。
-                    openEntrySheet("openLong", row.long.price, true);
+                    openEntrySheet("openLong", row.long.price);
                   }}
                   // 空档位新建订单也保留当前十美元档位作为“查看范围”；
                   // 最终归档仍只按实际录入成交价计算，绝不按点击格写入。
@@ -1572,7 +1622,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   onClose={() => {
                     if (!row.short) return;
                     // 同上：空仓格点击仅打开当前档订单详情，不强制先筛选关联用户。
-                    openEntrySheet("openShort", row.short.price, true);
+                    openEntrySheet("openShort", row.short.price);
                   }}
                   // 同上：从空仓空档位开单时，详情只展示当前空仓价格档的订单。
                   onOpen={() => openEntrySheet("openShort", row.price)}
@@ -1797,20 +1847,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </button>}
-                <button
-                  type="button"
-                  aria-expanded={showOpenedTradeList}
-                  aria-label={`展开${entrySide === "long" ? "多仓" : "空仓"}订单列表`}
-                  onClick={() => setShowOpenedTradeList((value) => !value)}
-                  className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-x-3 text-left"
-                >
+                <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 text-left">
                   <div className="flex min-w-0 items-baseline gap-2">
                     <span className={`text-base font-semibold ${entrySide === "long" ? "text-rose-600" : "text-emerald-600"}`}>{entryScopeTitle}</span>
                     <span className="text-base font-semibold tabular-nums text-slate-900">{formatQuantity(entrySideSummary.quantity)} ETH</span>
                   </div>
                   <span className="shrink-0 text-base font-medium tabular-nums text-slate-500">均价 {entrySideSummary.quantity > 0 ? formatPrice(entrySideSummary.average) : "--"}</span>
-                  <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${showOpenedTradeList ? "rotate-90" : ""}`} />
-                </button>
+                </div>
                 </div>
                 <div className={`mx-3 flex items-center justify-between border-t pt-2 pb-2.5 text-[10px] tabular-nums ${entrySide === "long" ? "border-rose-200/80" : "border-emerald-200/80"}`}>
                   <span className={entrySideSummary.unrealized === null ? "text-slate-400" : entrySideSummary.unrealized >= 0 ? "text-emerald-600" : "text-rose-600"}>
@@ -1830,25 +1873,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
               )}
 
-              {showOpenedTradeList && (
-                <div className="space-y-1.5">
+              <div className="space-y-1.5">
+                  <div className="flex items-center justify-between px-0.5 text-[11px] text-slate-500">
+                    <span>逐笔开仓记录</span>
+                    <span className="tabular-nums">{openedTradeList.length} 笔</span>
+                  </div>
                   {openedTradeList.length === 0 && (
                     <div className="rounded border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">当前方向没有已开订单</div>
                   )}
                   {openedTradeList.map((trade) => {
+                    const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
+                    const linkedClosedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
+                    const remainingQuantity = Math.max(0, trade.quantity - linkedClosedQuantity);
                     const floatingPnl = markPrice === null
                       ? null
                       : ACTIONS[trade.action].side === "long"
-                        ? (markPrice - trade.price) * trade.quantity
-                        : (trade.price - markPrice) * trade.quantity;
+                        ? (markPrice - trade.price) * remainingQuantity
+                        : (trade.price - markPrice) * remainingQuantity;
                     const openingValue = trade.quantity * trade.price;
                     const closeAction: TradeAction = ACTIONS[trade.action].side === "long" ? "closeLong" : "closeShort";
-                    const tradeScopedBuckets = buildPositionBuckets(selectedTrades.filter((item) => (
-                      item.accountId === trade.accountId
-                      && (item.relatedUserId ?? "") === (trade.relatedUserId ?? "")
-                      && (item.relatedFundId ?? "") === (trade.relatedFundId ?? "")
-                    )));
-                    const canQuickClose = tradeScopedBuckets.some((bucket) => bucket.side === ACTIONS[trade.action].side && priceKey(bucket.price) === priceKey(archivePriceForTrade(trade)) && bucket.remainingQuantity > 0.0000001);
+                    const canQuickClose = remainingQuantity > 0.0000001;
                     const isExpanded = expandedOpenedTradeIds.has(trade.id);
                     return (
                       <div key={trade.id} className="rounded border border-slate-200 bg-slate-50/80 px-3 py-2.5">
@@ -1883,40 +1927,61 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         </button>
                         {isExpanded && (
                           <>
-                            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-slate-200 pt-2 tabular-nums">
-                              <div>
+                            <div className="mt-2 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2 tabular-nums">
+                              <div className="min-w-0">
                                 <div className="text-[10px] text-slate-400">开仓价值</div>
-                                <div className="mt-0.5 text-xs font-medium text-slate-700">{formatPrice(openingValue)} U</div>
+                                <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{formatPrice(openingValue)} U</div>
                               </div>
-                              <div className="text-right">
-                                <div className="text-[10px] text-slate-400">开仓时间</div>
-                                <div className="mt-0.5 text-xs font-medium text-slate-700">{trade.isSyncing ? "后台保存中" : formatBeijingMonthDayTime(trade.createdAt)}</div>
-                              </div>
-                              <div>
-                                <div className="text-[10px] text-slate-400">手续费</div>
-                                <div className="mt-0.5 text-xs font-medium text-slate-700">{formatFee(trade.fee)} U</div>
-                              </div>
-                              <div className="text-right">
+                              <div className="min-w-0 text-center">
                                 <div className="text-[10px] text-slate-400">当前盈亏</div>
-                                <div className={`mt-0.5 text-xs font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                <div className={`mt-0.5 whitespace-nowrap text-[11px] font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                                   {floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}
                                 </div>
                               </div>
-                              {!isMemberView && <div className="col-span-2 flex items-center justify-between border-t border-slate-200 pt-2">
-                                  <span className="text-[10px] text-slate-400">下单账户</span>
-                                  <span className="text-xs font-medium text-slate-700">{getTradeAccountName(trade)}</span>
-                                </div>}
-                              <div className="col-span-2 flex items-center justify-between border-t border-slate-200 pt-2">
-                                <span className="text-[10px] text-slate-400">关联用户</span>
-                                <span className="text-xs font-medium text-slate-700">{getTradeRelatedUserName(trade)}</span>
+                              <div className="min-w-0 text-right">
+                                <div className="text-[10px] text-slate-400">开仓时间</div>
+                                <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.isSyncing ? "后台保存中" : formatBeijingMonthDayTime(trade.createdAt)}</div>
                               </div>
-                              <div className="col-span-2 flex items-center justify-between border-t border-slate-200 pt-2">
-                                <span className="text-[10px] text-slate-400">专项款</span>
-                                <span className="text-xs font-medium text-slate-700">{getTradeRelatedFundName(trade)}</span>
+                              <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2">
+                                <div className="min-w-0">
+                                  <div className="text-[10px] text-slate-400">下单账户</div>
+                                  <div title={getTradeAccountName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeAccountName(trade)}</div>
+                                </div>
+                                <div className="min-w-0 text-center">
+                                  <div className="text-[10px] text-slate-400">关联用户</div>
+                                  <div title={getTradeRelatedUserName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeRelatedUserName(trade)}</div>
+                                </div>
+                                <div className="min-w-0 text-right">
+                                  <div className="text-[10px] text-slate-400">专项款</div>
+                                  <div title={getTradeRelatedFundName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeRelatedFundName(trade)}</div>
+                                </div>
                               </div>
                             </div>
+                            {linkedClosings.length > 0 && (
+                              <div className="mt-2 border-t border-slate-200 pt-2">
+                                <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
+                                  <span className="font-medium text-slate-600">关联平仓记录</span>
+                                  <span className="whitespace-nowrap tabular-nums">已平 {formatQuantity(linkedClosedQuantity)} · 剩 {formatQuantity(remainingQuantity)} ETH</span>
+                                </div>
+                                <div className="mt-1.5 space-y-1">
+                                  {linkedClosings.map(({ trade: closingTrade, quantity }, index) => {
+                                    const isLongPosition = ACTIONS[trade.action].side === "long";
+                                    return (
+                                      <div key={`${closingTrade.id}-${index}`} className="flex items-center justify-between gap-2 border-l-2 border-slate-200 bg-white/70 px-2 py-1.5 text-[11px] tabular-nums">
+                                        <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+                                          <span className={`font-semibold ${isLongPosition ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closingTrade.action].label}</span>
+                                          <span className="font-medium text-slate-700">{formatQuantity(quantity)} ETH</span>
+                                          <span className="text-slate-500">{isLongPosition ? "卖" : "买"} {formatPrice(closingTrade.price)}</span>
+                                        </div>
+                                        <span className="shrink-0 whitespace-nowrap text-slate-400">{formatBeijingMonthDayTime(closingTrade.createdAt)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                             {canManage && <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
-                                <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2">
                                   <button
                                     type="button"
                                     disabled={isCloseReview || Boolean(trade.isSyncing)}
@@ -1948,8 +2013,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </div>
                     );
                   })}
-                </div>
-              )}
+              </div>
 
               {canManage && <>
               <div className="grid grid-cols-1 gap-3">

@@ -52,6 +52,13 @@ function isoTime(value: unknown): string {
   return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString();
 }
 
+/** 将 JSON 审计快照中的 ISO 时间还原为 MySQL DATETIME(3) 可接受的 UTC 字符串。 */
+function mysqlDateTime(value: unknown): string {
+  const date = value instanceof Date ? value : new Date(String(value || ""));
+  const resolved = Number.isNaN(date.getTime()) ? new Date() : date;
+  return resolved.toISOString().slice(0, 23).replace("T", " ");
+}
+
 function toNumber(value: unknown): number {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
@@ -61,6 +68,19 @@ function toNumber(value: unknown): number {
 function normalizeEthQuantity(value: string): string {
   const [integerPart, fractionalPart = ""] = String(value).trim().split(".");
   return `${integerPart}.${fractionalPart.padEnd(2, "0")}`;
+}
+
+/**
+ * 审计快照来自 MySQL DECIMAL 字段，常带 18 位零补位；恢复时仅接受超过两位部分均为零的数量，
+ * 既兼容历史快照，也不会静默截断真实的超精度数量。
+ */
+function normalizeStoredEthQuantity(value: unknown): string | null {
+  const raw = String(value ?? "").trim();
+  const match = /^(0|[1-9]\d{0,3})(?:\.(\d+))?$/.exec(raw);
+  if (!match) return null;
+  const [, integerPart, fractionalPart = ""] = match;
+  if (fractionalPart.length > 2 && /[1-9]/.test(fractionalPart.slice(2))) return null;
+  return `${integerPart}.${fractionalPart.slice(0, 2).padEnd(2, "0")}`;
 }
 
 function actionSide(action: T0JournalAction): "long" | "short" {
@@ -1002,12 +1022,12 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
     const entryId = Number(snapshot?.id || 0);
     const accountId = Number(snapshot?.account_id || 0);
     const action = String(snapshot?.action || "") as T0JournalAction;
-    const quantity = normalizeEthQuantity(String(snapshot?.quantity ?? ""));
+    const quantity = normalizeStoredEthQuantity(snapshot?.quantity);
     const price = String(snapshot?.price ?? "");
     const relatedUserId = toNumber(snapshot?.related_user_id ?? snapshot?.relatedUserId);
     const relatedFundId = toNumber(snapshot?.related_fund_id ?? snapshot?.relatedFundId);
     const clientRequestId = String(snapshot?.client_request_id || "");
-    if (!entryId || !accountId || !T0_JOURNAL_ACTIONS.has(action) || !clientRequestId || !ETH_QUANTITY_RESTORE_PATTERN.test(quantity) || toNumber(price) <= 0) {
+    if (!entryId || !accountId || !T0_JOURNAL_ACTIONS.has(action) || !clientRequestId || !quantity || !ETH_QUANTITY_RESTORE_PATTERN.test(quantity) || toNumber(price) <= 0) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "该历史审计快照不完整，无法安全恢复" });
     }
 
@@ -1041,6 +1061,9 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
       }
     }
 
+    const restoredTradeTime = mysqlDateTime(snapshot.trade_time || snapshot.created_at);
+    const restoredCreatedAt = mysqlDateTime(snapshot.created_at || snapshot.trade_time);
+
     await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
         (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
@@ -1061,8 +1084,8 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
         snapshot.note ?? null,
         clientRequestId,
         Number(snapshot.created_by_user_id || input.actorUserId),
-        snapshot.trade_time || snapshot.created_at || new Date().toISOString(),
-        snapshot.created_at || snapshot.trade_time || new Date().toISOString(),
+        restoredTradeTime,
+        restoredCreatedAt,
       ],
     );
     const [restoredRows] = await tx.execute(
