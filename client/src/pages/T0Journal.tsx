@@ -1315,7 +1315,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <div
                 key={priceKey(row.price)}
                 data-ladder-price={row.price}
-                className={`grid grid-cols-[1fr_88px_1fr] min-h-[52px] border-b border-slate-100 last:border-b-0 ${row.isMark ? (priceTrend === "up" ? "bg-rose-100/80" : priceTrend === "down" ? "bg-sky-100/80" : "bg-slate-100") : "bg-white"}`}
+                className={`grid grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] min-h-[52px] border-b border-slate-100 last:border-b-0 ${row.isMark ? (priceTrend === "up" ? "bg-rose-100/80" : priceTrend === "down" ? "bg-sky-100/80" : "bg-slate-100") : "bg-white"}`}
               >
                 <LadderCell
                   bucket={row.long}
@@ -1332,9 +1332,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   // 最终归档仍只按实际录入成交价计算，绝不按点击格写入。
                   onOpen={() => openEntrySheet("openLong", row.price)}
                 />
-                <div className={`border-x border-slate-100 flex items-center justify-center px-1 ${row.isMark ? (priceTrend === "up" ? "bg-rose-200 shadow-[inset_0_0_0_1px_rgba(244,63,94,0.25)]" : priceTrend === "down" ? "bg-sky-200 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.25)]" : "bg-slate-200") : "bg-slate-50"}`}>
-                  <span className={`text-sm tabular-nums font-bold ${row.isMark && priceTrend === "up" ? "text-rose-700" : row.isMark && priceTrend === "down" ? "text-sky-700" : "text-slate-900"}`}>
-                    {row.isMark && markPrice ? markPrice.toFixed(2) : formatLadderPrice(row.price)}
+                <div className={`border-x border-slate-100 flex items-center justify-center px-0.5 ${row.isMark ? (priceTrend === "up" ? "bg-rose-200 shadow-[inset_0_0_0_1px_rgba(244,63,94,0.25)]" : priceTrend === "down" ? "bg-sky-200 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.25)]" : "bg-slate-200") : "bg-slate-50"}`}>
+                  <span className={`text-[13px] tabular-nums font-bold ${row.isMark && priceTrend === "up" ? "text-rose-700" : row.isMark && priceTrend === "down" ? "text-sky-700" : "text-slate-900"}`}>
+                    {formatLadderPrice(row.isMark && markPrice ? markPrice : row.price)}
                   </span>
                 </div>
                 <LadderCell
@@ -2183,12 +2183,12 @@ function PositionCell({ bucket, side, markPrice, onClick }: { bucket?: PositionB
   const pnlTone = floatingPnl !== null && floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600";
 
   return (
-    <button onClick={onClick} className={`min-h-[52px] w-full min-w-0 px-2 py-1.5 text-left transition-colors active:brightness-95 ${tone}`}>
-      <div className="flex w-full min-w-0 items-center justify-between gap-3 tabular-nums">
+    <button onClick={onClick} className={`min-h-[52px] w-full min-w-0 px-1.5 py-1.5 text-left transition-colors active:brightness-95 ${tone}`}>
+      <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
         <span className="shrink-0 text-lg font-bold leading-none tracking-tight">{formatQuantity(bucket.remainingQuantity)}</span>
         {floatingPnl !== null && (
           <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`}>
-            <span className="truncate text-[11px] font-semibold leading-none">{formatSigned(floatingPnl)}</span>
+            <span className="whitespace-nowrap text-[11px] font-semibold leading-none">{formatSigned(floatingPnl)}</span>
             {floatingReturnRate !== null && (
               <span className="mt-1 text-[10px] font-medium leading-none opacity-85">{formatSignedPercent(floatingReturnRate)}</span>
             )}
