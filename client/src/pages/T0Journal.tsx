@@ -603,6 +603,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [showEntrySheet, setShowEntrySheet] = useState(false);
   const [closeConfirmationStep, setCloseConfirmationStep] = useState<"input" | "review">("input");
   const [expandedOpenedTradeIds, setExpandedOpenedTradeIds] = useState<Set<string>>(() => new Set());
+  const [showSettledOpeningHistory, setShowSettledOpeningHistory] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<PreviewTrade | null>(null);
   const [revertCandidate, setRevertCandidate] = useState<PreviewTrade | null>(null);
   const [netProfitDetail, setNetProfitDetail] = useState<{ trade: PreviewTrade; detail: RecentJournalTradeDetail } | null>(null);
@@ -712,6 +713,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     previousFetchedMarkPriceRef.current = fetchedMarkPrice;
     setLastMarkPrice(fetchedMarkPrice);
   }, [fetchedMarkPrice]);
+
+  useEffect(() => {
+    if (showEntrySheet) setShowSettledOpeningHistory(false);
+  }, [showEntrySheet, entryForm.targetPrice, entrySide]);
 
   useEffect(() => {
     const journal = t0JournalQuery.data as any;
@@ -925,16 +930,34 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 档位详情已由用户刚点击的价格格定位，无需在标题重复显示档位，避免移动端换行。
   // 顶部始终明确为当前档位或当前方向范围的汇总，逐笔订单在下方直接展示。
   const entryScopeTitle = `${entrySide === "long" ? "多仓" : "空仓"}汇总`;
+  const openingClosingAllocations = useMemo(
+    () => buildOpeningClosingAllocations(entryScopedTrades),
+    [entryScopedTrades],
+  );
   const openedTradeList = useMemo(
     () => entryScopedTrades
       .filter((trade) => ACTIONS[trade.action].opening)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [entryScopedTrades],
   );
-  const openingClosingAllocations = useMemo(
-    () => buildOpeningClosingAllocations(entryScopedTrades),
-    [entryScopedTrades],
-  );
+  const { activeOpenedTradeList, settledOpenedTradeList } = useMemo(() => {
+    const active: PreviewTrade[] = [];
+    const settled: PreviewTrade[] = [];
+    for (const trade of openedTradeList) {
+      const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
+      const closedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
+      if (trade.quantity - closedQuantity > 0.0000001) active.push(trade);
+      else settled.push(trade);
+    }
+    return { activeOpenedTradeList: active, settledOpenedTradeList: settled };
+  }, [openedTradeList, openingClosingAllocations]);
+  const visibleOpenedTradeRows = useMemo(() => [
+    ...activeOpenedTradeList.map((trade) => ({ kind: "active" as const, trade })),
+    ...(settledOpenedTradeList.length > 0 ? [{ kind: "history-toggle" as const }] : []),
+    ...(showSettledOpeningHistory
+      ? settledOpenedTradeList.map((trade) => ({ kind: "history" as const, trade }))
+      : []),
+  ], [activeOpenedTradeList, settledOpenedTradeList, showSettledOpeningHistory]);
   const isEditingEntry = Boolean(entryForm.editingEntryId);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
   const isCloseReview = isClosingEntry && closeConfirmationStep === "review";
@@ -1932,7 +1955,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <span className={entrySideSummary.unrealized === null ? "text-slate-400" : entrySideSummary.unrealized >= 0 ? "text-emerald-600" : "text-rose-600"}>
                     当前盈亏 {entrySideSummary.unrealized === null ? "--" : `${formatSigned(entrySideSummary.unrealized)} U`}
                   </span>
-                  <span className="text-slate-500">已开 {openedTradeList.length} 笔</span>
+                  <span className="text-slate-500">当前 {activeOpenedTradeList.length} 笔</span>
                 </div>
               </div>
 
@@ -1948,13 +1971,31 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
               <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-0.5 text-[11px] text-slate-500">
-                    <span>逐笔开仓记录</span>
-                    <span className="tabular-nums">{openedTradeList.length} 笔</span>
+                    <span>当前未平仓主单</span>
+                    <span className="tabular-nums">{activeOpenedTradeList.length} 笔 · {formatQuantity(entrySideSummary.quantity)} ETH</span>
                   </div>
-                  {openedTradeList.length === 0 && (
-                    <div className="rounded border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">当前方向没有已开订单</div>
+                  {activeOpenedTradeList.length === 0 && (
+                    <div className="rounded border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">当前档位没有未平仓主单</div>
                   )}
-                  {openedTradeList.map((trade) => {
+                  {visibleOpenedTradeRows.map((row) => {
+                    if (row.kind === "history-toggle") {
+                      return (
+                        <button
+                          key="settled-opening-history-toggle"
+                          type="button"
+                          onClick={() => setShowSettledOpeningHistory((current) => !current)}
+                          aria-expanded={showSettledOpeningHistory}
+                          className="mt-3 flex w-full items-center justify-between rounded border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] text-slate-600 transition active:bg-slate-100"
+                        >
+                          <span className="font-medium">已平仓历史主单</span>
+                          <span className="flex items-center gap-1 tabular-nums text-slate-500">
+                            {settledOpenedTradeList.length} 笔
+                            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showSettledOpeningHistory ? "rotate-90" : ""}`} />
+                          </span>
+                        </button>
+                      );
+                    }
+                    const trade = row.trade;
                     const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
                     const linkedClosedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
                     const remainingQuantity = Math.max(0, trade.quantity - linkedClosedQuantity);
