@@ -1328,7 +1328,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     // 不因关联用户尚未标注而阻断查看。
                     openEntrySheet("openLong", row.long.price, true);
                   }}
-                  onOpen={() => openEntrySheet("openLong")}
+                  // 空档位新建订单也保留当前十美元档位作为“查看范围”；
+                  // 最终归档仍只按实际录入成交价计算，绝不按点击格写入。
+                  onOpen={() => openEntrySheet("openLong", row.price)}
                 />
                 <div className={`border-x border-slate-100 flex items-center justify-center px-1 ${row.isMark ? (priceTrend === "up" ? "bg-rose-200 shadow-[inset_0_0_0_1px_rgba(244,63,94,0.25)]" : priceTrend === "down" ? "bg-sky-200 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.25)]" : "bg-slate-200") : "bg-slate-50"}`}>
                   <span className={`text-sm tabular-nums font-bold ${row.isMark && priceTrend === "up" ? "text-rose-700" : row.isMark && priceTrend === "down" ? "text-sky-700" : "text-slate-900"}`}>
@@ -1345,7 +1347,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     // 同上：空仓格点击仅打开当前档订单详情，不强制先筛选关联用户。
                     openEntrySheet("openShort", row.short.price, true);
                   }}
-                  onOpen={() => openEntrySheet("openShort")}
+                  // 同上：从空仓空档位开单时，详情只展示当前空仓价格档的订单。
+                  onOpen={() => openEntrySheet("openShort", row.price)}
                 />
               </div>
             ))}
