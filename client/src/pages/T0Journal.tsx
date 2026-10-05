@@ -172,6 +172,7 @@ const ACTIONS: Record<TradeAction, { label: string; side: PositionSide; opening:
 };
 
 const RECENT_JOURNAL_ACTIONS: TradeAction[] = ["openLong", "openShort", "closeLong", "closeShort"];
+const RECENT_JOURNAL_PAGE_SIZE = 20;
 
 const numberFormatter = new Intl.NumberFormat("zh-CN", {
   minimumFractionDigits: 2,
@@ -596,6 +597,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [journalActionFilters, setJournalActionFilters] = useState<Set<TradeAction>>(
     () => new Set(RECENT_JOURNAL_ACTIONS),
   );
+  const [recentJournalPage, setRecentJournalPage] = useState(1);
   const [lastRelatedUserId, setLastRelatedUserId] = useState("");
   const [lastAccountIdByRelatedUser, setLastAccountIdByRelatedUser] = useState<Record<string, string>>({});
   const [lastFundIdByRelatedUser, setLastFundIdByRelatedUser] = useState<Record<string, string>>({});
@@ -832,6 +834,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     )),
     [trades, journalAccountFilterId, journalRelatedUserFilterId, journalRelatedFundFilterId, journalActionFilters],
   );
+  const recentJournalTotalPages = Math.max(1, Math.ceil(recentJournalTrades.length / RECENT_JOURNAL_PAGE_SIZE));
+  const pagedRecentJournalTrades = useMemo(() => {
+    const newestFirst = [...recentJournalTrades].reverse();
+    const start = (recentJournalPage - 1) * RECENT_JOURNAL_PAGE_SIZE;
+    return newestFirst.slice(start, start + RECENT_JOURNAL_PAGE_SIZE);
+  }, [recentJournalTrades, recentJournalPage]);
+  useEffect(() => {
+    setRecentJournalPage((current) => Math.min(current, recentJournalTotalPages));
+  }, [recentJournalTotalPages]);
   const recentJournalTradeDetails = useMemo(() => buildRecentJournalTradeDetails(trades), [trades]);
   const getTradeAccountName = (trade: PreviewTrade) => trade.accountName
     || accounts.find((account) => account.id === trade.accountId)?.name
@@ -859,6 +870,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   const allJournalActionsSelected = RECENT_JOURNAL_ACTIONS.every((action) => journalActionFilters.has(action));
   const toggleJournalActionFilter = (action: TradeAction) => {
+    setRecentJournalPage(1);
     setJournalActionFilters((current) => {
       // “全部”状态下点某一动作，直接聚焦该动作；后续可继续复选其他动作。
       if (RECENT_JOURNAL_ACTIONS.every((item) => current.has(item))) {
@@ -962,6 +974,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
     return { activeOpenedTradeList: active, settledOpenedTradeList: settled };
   }, [openedTradeList, openingClosingAllocations]);
+  const settledOpenedTradeSummary = useMemo(() => {
+    const realizedNet = settledOpenedTradeList.reduce((total, openingTrade) => {
+      const isLongPosition = ACTIONS[openingTrade.action].side === "long";
+      const linkedClosings = openingClosingAllocations.get(openingTrade.id) ?? [];
+      const openingNet = linkedClosings.reduce((openingTotal, { trade: closingTrade, quantity }) => {
+        const grossPnl = isLongPosition
+          ? (closingTrade.price - openingTrade.price) * quantity
+          : (openingTrade.price - closingTrade.price) * quantity;
+        const allocatedOpeningFee = openingTrade.quantity > 0
+          ? openingTrade.fee * (quantity / openingTrade.quantity)
+          : 0;
+        const allocatedClosingFee = closingTrade.quantity > 0
+          ? closingTrade.fee * (quantity / closingTrade.quantity)
+          : 0;
+        return openingTotal + grossPnl - allocatedOpeningFee - allocatedClosingFee;
+      }, 0);
+      return total + openingNet;
+    }, 0);
+    return { count: settledOpenedTradeList.length, realizedNet };
+  }, [settledOpenedTradeList, openingClosingAllocations]);
   const visibleOpenedTradeRows = useMemo(() => [
     ...activeOpenedTradeList.map((trade) => ({ kind: "active" as const, trade })),
     ...(settledOpenedTradeList.length > 0 ? [{ kind: "history-toggle" as const }] : []),
@@ -1714,7 +1746,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <button
                     type="button"
                     aria-pressed={allJournalActionsSelected}
-                    onClick={() => setJournalActionFilters(new Set(RECENT_JOURNAL_ACTIONS))}
+                    onClick={() => {
+                      setJournalActionFilters(new Set(RECENT_JOURNAL_ACTIONS));
+                      setRecentJournalPage(1);
+                    }}
                     className={`h-6 rounded border px-2 text-[11px] font-medium transition-colors ${allJournalActionsSelected ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 bg-white text-slate-500"}`}
                   >
                     全部
@@ -1754,7 +1789,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <span className="mb-1 block text-[10px] text-slate-400">下单账户</span>
                   <select
                     value={journalAccountFilterId}
-                    onChange={(event) => setJournalAccountFilterId(event.target.value)}
+                    onChange={(event) => {
+                      setJournalAccountFilterId(event.target.value);
+                      setRecentJournalPage(1);
+                    }}
                     className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
                   >
                     <option value="all">全部账户</option>
@@ -1769,6 +1807,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     onChange={(event) => {
                       setJournalRelatedUserFilterId(event.target.value);
                       setJournalRelatedFundFilterId("all");
+                      setRecentJournalPage(1);
                     }}
                     className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
                   >
@@ -1783,7 +1822,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <span className="mb-1 block text-[10px] text-slate-400">专项款</span>
                   <select
                     value={journalRelatedFundFilterId}
-                    onChange={(event) => setJournalRelatedFundFilterId(event.target.value)}
+                    onChange={(event) => {
+                      setJournalRelatedFundFilterId(event.target.value);
+                      setRecentJournalPage(1);
+                    }}
                     className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
                   >
                     <option value="all">全部专项款</option>
@@ -1796,7 +1838,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </div>
               {recentJournalTrades.length === 0 ? (
                 <div className="px-4 py-5 text-center text-xs text-slate-500">当前筛选范围还没有速记记录</div>
-              ) : [...recentJournalTrades].reverse().map((trade) => {
+              ) : pagedRecentJournalTrades.map((trade) => {
                 const detail = recentJournalTradeDetails.get(trade.id);
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
@@ -1819,7 +1861,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           className={`shrink-0 border-b border-dotted pb-0.5 font-semibold outline-none ${detail.netPnl >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}
                           aria-label="查看净利润计算明细"
                         >
-                          {formatSigned(detail.netPnl)}
+                          {formatSigned(detail.netPnl)}<span className="ml-0.5 text-slate-500">u</span>
                         </button>
                       </>}
                     </div>
@@ -1869,6 +1911,27 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </div>
                 );
               })}
+              {recentJournalTrades.length > 0 && recentJournalTotalPages > 1 && (
+                <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/70 px-4 py-2.5 text-[11px] tabular-nums">
+                  <button
+                    type="button"
+                    disabled={recentJournalPage <= 1}
+                    onClick={() => setRecentJournalPage((current) => Math.max(1, current - 1))}
+                    className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    上一页
+                  </button>
+                  <span className="whitespace-nowrap text-slate-500">第 {recentJournalPage} 页 / 共 {recentJournalTotalPages} 页</span>
+                  <button
+                    type="button"
+                    disabled={recentJournalPage >= recentJournalTotalPages}
+                    onClick={() => setRecentJournalPage((current) => Math.min(recentJournalTotalPages, current + 1))}
+                    className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    下一页
+                  </button>
+                </div>
+              )}
               {canManage && recoverableEntries.length > 0 && (
                 <div className="border-t border-slate-200 bg-amber-50/45">
                   <button
@@ -1944,17 +2007,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             )}
 
             <div className="p-4 space-y-4">
+              {!isMemberView && <div className="flex h-7 items-center">
+                <button
+                  type="button"
+                  onClick={backToLadder}
+                  aria-label="返回T型报价"
+                  className="-ml-1 inline-flex h-7 items-center gap-1 rounded px-1 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 active:scale-95"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>返回报价</span>
+                </button>
+              </div>}
               <div className={`overflow-hidden rounded border ${entrySide === "long" ? "border-rose-200 bg-rose-50/70" : "border-emerald-200 bg-emerald-50/70"}`}>
-                <div className="flex items-center gap-1.5 px-3 py-2.5">
-                  {!isMemberView && <button
-                    type="button"
-                    onClick={backToLadder}
-                    aria-label="返回T型报价"
-                    className="shrink-0 rounded p-0.5 text-slate-500 transition hover:bg-white/70 hover:text-slate-900 active:scale-90"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                  </button>}
-                <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 text-left">
+                <div className="px-3 py-2.5">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 text-left">
                   <div className="flex min-w-0 items-baseline gap-2">
                     <span className={`text-base font-semibold ${entrySide === "long" ? "text-rose-600" : "text-emerald-600"}`}>{entryScopeTitle}</span>
                     <span className="text-base font-semibold tabular-nums text-slate-900">{formatQuantity(entrySideSummary.quantity)} ETH</span>
@@ -1963,7 +2029,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
                 </div>
                 <div className={`mx-3 flex items-center justify-between border-t pt-2 pb-2.5 text-[10px] tabular-nums ${entrySide === "long" ? "border-rose-200/80" : "border-emerald-200/80"}`}>
-                  <span className={entrySideSummary.unrealized === null ? "text-slate-400" : entrySideSummary.unrealized >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                  <span className={entrySideSummary.unrealized === null ? "text-slate-400" : entrySideSummary.unrealized >= 0 ? "text-rose-600" : "text-emerald-600"}>
                     当前盈亏 {entrySideSummary.unrealized === null ? "--" : `${formatSigned(entrySideSummary.unrealized)} U`}
                   </span>
                   <span className="text-slate-500">当前 {activeOpenedTradeList.length} 笔</span>
@@ -1998,9 +2064,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           aria-expanded={showSettledOpeningHistory}
                           className="mt-3 flex w-full items-center justify-between rounded border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] text-slate-600 transition active:bg-slate-100"
                         >
-                          <span className="font-medium">已平仓历史主单</span>
-                          <span className="flex items-center gap-1 tabular-nums text-slate-500">
-                            {settledOpenedTradeList.length} 笔
+                          <span className="min-w-0 shrink-0 font-medium">已平仓历史主单</span>
+                          <span className="ml-2 flex min-w-0 items-center gap-1 tabular-nums">
+                            <span className="whitespace-nowrap text-[10px] text-slate-500">已归档 {settledOpenedTradeSummary.count} 笔 / 已实现利润</span>
+                            <span className={`whitespace-nowrap text-[10px] font-semibold ${settledOpenedTradeSummary.realizedNet > 0 ? "text-rose-600" : settledOpenedTradeSummary.realizedNet < 0 ? "text-emerald-600" : "text-slate-600"}`}>
+                              {formatSigned(settledOpenedTradeSummary.realizedNet)} U
+                            </span>
                             <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showSettledOpeningHistory ? "rotate-90" : ""}`} />
                           </span>
                         </button>
@@ -2035,11 +2104,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         >
                           <div className="min-w-0">
                             <span className="flex min-w-0 items-baseline gap-2 whitespace-nowrap">
-                              <span className={`text-base font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].label}</span>
-                              <span className="text-base font-semibold tabular-nums text-slate-900">{formatQuantity(trade.quantity)} ETH</span>
-                              <span className="text-sm font-medium tabular-nums text-slate-500">@ {formatPrice(trade.price)}</span>
+                              <span className="text-sm font-medium text-slate-700">{ACTIONS[trade.action].label}</span>
+                              <span className="text-sm font-medium tabular-nums text-slate-700">{formatQuantity(trade.quantity)} ETH</span>
+                              <span className="text-sm font-medium tabular-nums text-slate-700">@ {formatPrice(trade.price)}</span>
+                              <span className="shrink-0 text-sm font-medium tabular-nums text-slate-700">
+                                {floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}
+                              </span>
                             </span>
                             <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-medium">
+                              {linkedClosedQuantity > 0.0000001 && <>
+                                <span className="shrink-0 tabular-nums text-slate-600">已平 {formatQuantity(linkedClosedQuantity)} · 剩 {formatQuantity(remainingQuantity)} ETH</span>
+                                <span className="text-slate-300">·</span>
+                              </>}
                               {!isMemberView && <>
                                 <span title={getTradeAccountName(trade)} className="max-w-[32%] truncate text-slate-500">{getTradeAccountName(trade)}</span>
                                 <span className="text-slate-300">·</span>
@@ -2060,7 +2136,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                               </div>
                               <div className="min-w-0 text-center">
                                 <div className="text-[10px] text-slate-400">当前盈亏</div>
-                                <div className={`mt-0.5 whitespace-nowrap text-[11px] font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                <div className={`mt-0.5 whitespace-nowrap text-[11px] font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
                                   {floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}
                                 </div>
                               </div>
