@@ -124,6 +124,13 @@ type LinkedClosingAllocation = {
   quantity: number;
 };
 
+/** 历史记录“关联”模式的一组开仓主单及其 FIFO 分配的平仓流水。 */
+type LinkedJournalGroup = {
+  id: string;
+  opening?: PreviewTrade;
+  closings: LinkedClosingAllocation[];
+};
+
 type EntryForm = {
   action: TradeAction;
   accountId: string;
@@ -145,7 +152,7 @@ const ACTIONS: Record<TradeAction, { label: string; side: PositionSide; opening:
     label: "开多",
     side: "long",
     opening: true,
-    activeClass: "border-rose-500 bg-rose-600 text-white",
+    activeClass: "border-rose-600 bg-rose-700 text-white",
     idleClass: "border-rose-200 bg-rose-50 text-rose-700",
   },
   closeLong: {
@@ -172,7 +179,8 @@ const ACTIONS: Record<TradeAction, { label: string; side: PositionSide; opening:
 };
 
 const RECENT_JOURNAL_ACTIONS: TradeAction[] = ["openLong", "openShort", "closeLong", "closeShort"];
-const RECENT_JOURNAL_PAGE_SIZE = 20;
+const RECENT_JOURNAL_PAGE_SIZE = 10;
+const TOTAL_REVENUE_DETAIL_PAGE_SIZE = 10;
 
 const numberFormatter = new Intl.NumberFormat("zh-CN", {
   minimumFractionDigits: 2,
@@ -184,7 +192,8 @@ const LADDER_MAX_PRICE = 3000;
 const LADDER_STEP = 10;
 const LADDER_NEAR_VISIBLE_STEPS = 3;
 const POSITION_ARCHIVE_STEP = 10;
-const T0_PRICE_REFRESH_INTERVAL_MS = 3_000;
+// T+0 只读取服务端的 ETH 永续专用内存缓存；500ms 的页面节拍可呈现实时流，同时不直连外部交易所。
+const T0_PRICE_REFRESH_INTERVAL_MS = 500;
 const T0_JOURNAL_REFRESH_INTERVAL_MS = 5_000;
 const DEFAULT_QUANTITY_QUICK_OPTIONS = ["10.00", "20.00", "30.00", "40.00", "50.00"];
 const OKX_VIP2_TAKER_FEE_RATE = 0.00036;
@@ -310,6 +319,21 @@ function formatBeijingMonthDayTime(value: string) {
   return `${Number(values.month)}/${Number(values.day)} ${values.hour}:${values.minute}`;
 }
 
+function formatBeijingLiveTime(value: Date) {
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(value);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}/${values.month}/${values.day} ${values.hour}:${values.minute}:${values.second}`;
+}
+
 function formatSigned(value: number) {
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
   return `${sign}${numberFormatter.format(Math.abs(value))}`;
@@ -337,6 +361,13 @@ type RecentJournalTradeDetail = {
   netPnl?: number;
   allocatedOpeningFee?: number;
   closingFee?: number;
+};
+
+/** 与顶部总利润采用同一档位匹配口径的单笔已实现毛收益。 */
+type RealizedGrossProfitDetail = {
+  trade: PreviewTrade;
+  quantity: number;
+  grossPnl: number;
 };
 
 function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
@@ -410,6 +441,34 @@ function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
   return details;
 }
 
+/** 按单张开仓主单的实际分配数量计算关联平仓的净利润，避免跨主单平仓时重复展示总利润。 */
+function buildLinkedClosingDetail(opening: PreviewTrade, allocation: LinkedClosingAllocation): RecentJournalTradeDetail {
+  const { trade: closing, quantity } = allocation;
+  const side = ACTIONS[opening.action].side;
+  const allocatedOpeningFee = opening.quantity > 0 ? opening.fee * (quantity / opening.quantity) : 0;
+  const closingFee = closing.quantity > 0 ? closing.fee * (quantity / closing.quantity) : 0;
+  const grossPnl = side === "long"
+    ? (closing.price - opening.price) * quantity
+    : (opening.price - closing.price) * quantity;
+  return side === "long"
+    ? {
+      buyPrice: opening.price,
+      sellPrice: closing.price,
+      grossPnl,
+      netPnl: grossPnl - allocatedOpeningFee - closingFee,
+      allocatedOpeningFee,
+      closingFee,
+    }
+    : {
+      buyPrice: closing.price,
+      sellPrice: opening.price,
+      grossPnl,
+      netPnl: grossPnl - allocatedOpeningFee - closingFee,
+      allocatedOpeningFee,
+      closingFee,
+    };
+}
+
 function buildPositionBuckets(trades: PreviewTrade[]) {
   const buckets = new Map<string, PositionBucket>();
   const orderedTrades = [...trades].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -477,6 +536,57 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
 }
 
 /**
+ * 按顶部“总利润”完全一致的归属档位 FIFO 口径，逐笔还原每条平仓流水的毛收益。
+ * 该函数不计入任何手续费或资金费，所有明细相加应与总利润一致。
+ */
+function buildRealizedGrossProfitDetails(trades: PreviewTrade[]) {
+  const positions = new Map<string, { quantity: number; costBasis: number }>();
+  const details: RealizedGrossProfitDetail[] = [];
+  const orderedTrades = [...trades]
+    .filter((trade) => trade.symbol === "ETH")
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+
+  for (const trade of orderedTrades) {
+    const config = ACTIONS[trade.action];
+    const side = config.side;
+    if (config.opening) {
+      const archivePrice = archivePriceForTrade(trade);
+      const key = `${side}:${priceKey(archivePrice)}`;
+      const current = positions.get(key);
+      if (current) {
+        current.quantity += trade.quantity;
+        current.costBasis += trade.quantity * trade.price;
+      } else {
+        positions.set(key, { quantity: trade.quantity, costBasis: trade.quantity * trade.price });
+      }
+      continue;
+    }
+
+    if (!trade.targetPrice) continue;
+    const archivePrice = archivePriceForSide(side, trade.targetPrice);
+    const key = `${side}:${priceKey(archivePrice)}`;
+    const target = positions.get(key);
+    if (!target || target.quantity <= 0) continue;
+
+    const quantity = Math.min(target.quantity, trade.quantity);
+    const openingAverage = target.costBasis / target.quantity;
+    const grossPnl = side === "long"
+      ? (trade.price - openingAverage) * quantity
+      : (openingAverage - trade.price) * quantity;
+    target.quantity -= quantity;
+    target.costBasis = Math.max(0, target.costBasis - openingAverage * quantity);
+    positions.set(key, target);
+    details.push({
+      trade,
+      quantity,
+      grossPnl,
+    });
+  }
+
+  return details.sort((a, b) => b.trade.createdAt.localeCompare(a.trade.createdAt) || b.trade.id.localeCompare(a.trade.id));
+}
+
+/**
  * 将平仓流水按同一账户、关联用户、专项款、方向和十美元归属档位，依时间顺序分配至开仓主单。
  * 这是价格簿现有平仓可用量口径的逐笔展开：一笔平仓若跨越多张主单，会在各主单下显示实际分配量。
  */
@@ -520,6 +630,32 @@ function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
   }
 
   return allocations;
+}
+
+/**
+ * 历史记录的关联视图：每张开仓单与其对应平仓流水组成一组。
+ * 无法由现有 FIFO 口径匹配到开仓单的平仓记录也单独保留，避免审计流水被隐藏。
+ */
+function buildLinkedJournalGroups(trades: PreviewTrade[]): LinkedJournalGroup[] {
+  const allocations = buildOpeningClosingAllocations(trades);
+  const linkedClosingIds = new Set<string>();
+  const openingGroups = trades
+    .filter((trade) => trade.symbol === "ETH" && ACTIONS[trade.action].opening)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+    .map((opening) => {
+      const closings = allocations.get(opening.id) ?? [];
+      closings.forEach(({ trade }) => linkedClosingIds.add(trade.id));
+      return { id: `opening-${opening.id}`, opening, closings } satisfies LinkedJournalGroup;
+    });
+  const unmatchedClosingGroups = trades
+    .filter((trade) => trade.symbol === "ETH" && !ACTIONS[trade.action].opening && !linkedClosingIds.has(trade.id))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+    .map((trade) => ({
+      id: `unmatched-${trade.id}`,
+      closings: [{ trade, quantity: trade.quantity }],
+    }) satisfies LinkedJournalGroup);
+
+  return [...openingGroups, ...unmatchedClosingGroups];
 }
 
 function calculateSummary(buckets: PositionBucket[], markPrice: number | null, trades: PreviewTrade[]) {
@@ -591,12 +727,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [relatedUserFilterId, setRelatedUserFilterId] = useState("all");
   const [relatedFundFilterId, setRelatedFundFilterId] = useState("all");
-  const [journalAccountFilterId, setJournalAccountFilterId] = useState("all");
-  const [journalRelatedUserFilterId, setJournalRelatedUserFilterId] = useState("all");
-  const [journalRelatedFundFilterId, setJournalRelatedFundFilterId] = useState("all");
   const [journalActionFilters, setJournalActionFilters] = useState<Set<TradeAction>>(
     () => new Set(RECENT_JOURNAL_ACTIONS),
   );
+  const [showLinkedJournalGroups, setShowLinkedJournalGroups] = useState(false);
   const [recentJournalPage, setRecentJournalPage] = useState(1);
   const [lastRelatedUserId, setLastRelatedUserId] = useState("");
   const [lastAccountIdByRelatedUser, setLastAccountIdByRelatedUser] = useState<Record<string, string>>({});
@@ -610,6 +744,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [deleteCandidate, setDeleteCandidate] = useState<PreviewTrade | null>(null);
   const [revertCandidate, setRevertCandidate] = useState<PreviewTrade | null>(null);
   const [netProfitDetail, setNetProfitDetail] = useState<{ trade: PreviewTrade; detail: RecentJournalTradeDetail } | null>(null);
+  const [showTotalGrossProfitDetail, setShowTotalGrossProfitDetail] = useState(false);
+  const [showTotalRevenueCostHint, setShowTotalRevenueCostHint] = useState(false);
+  const [totalRevenueDetailPage, setTotalRevenueDetailPage] = useState(1);
+  const [showNetPositionDetail, setShowNetPositionDetail] = useState(false);
   const [grossProfitDetail, setGrossProfitDetail] = useState<{
     side: PositionSide;
     gross: number;
@@ -622,10 +760,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [showRecoverableRecords, setShowRecoverableRecords] = useState(false);
   const [entrySide, setEntrySide] = useState<PositionSide>("long");
   const [lastSavedQuantity, setLastSavedQuantity] = useState("");
-  const [showRecentRecords, setShowRecentRecords] = useState(true);
   const [showCumulativeData, setShowCumulativeData] = useState(false);
   const [lastMarkPrice, setLastMarkPrice] = useState<number | null>(null);
   const [previousMarkPrice, setPreviousMarkPrice] = useState<number | null>(null);
+  const [liveClock, setLiveClock] = useState(() => new Date());
   const previousFetchedMarkPriceRef = useRef<number | null>(null);
   const hasInitializedJournalFiltersRef = useRef(false);
   const ladderScrollRef = useRef<HTMLDivElement>(null);
@@ -656,9 +794,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const canAccess = ledgerId === 52
     && (hasLedgerMembership || isSuperAdmin)
     && (!viewAsUserId || (embedded && allowAdminViewAs));
-  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
+  const { data: t0MarkPriceRaw } = trpc.getT0EthPerpetualMark.useQuery(undefined, {
+    enabled: canAccess,
     refetchInterval: T0_PRICE_REFRESH_INTERVAL_MS,
-    staleTime: 2500,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    staleTime: 250,
   });
   const t0JournalQuery = trpc.ledger.t0GetJournal.useQuery(
     { ledgerId: 52 },
@@ -709,9 +850,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       .filter((fund) => fund.relatedUserId === relatedUserId)
       .sort((a, b) => String(b.lastUsedAt ?? "").localeCompare(String(a.lastUsedAt ?? "")))[0];
   };
-  // 合约速记只使用服务端统一缓存的 ETH 永续标记价（Gate → HTX）；失败时由后端保留最近成功价。
-  const markPriceRaw = (cryptoPricesRaw as any)?.prices?.ETH_PERP
-    ?? (cryptoPricesRaw as any)?.ETH_PERP;
+  // 合约速记只使用服务端统一缓存的 ETH 永续标记价；Gate实时流断线时由 Gate → HTX REST 保温。
+  const markPriceRaw = (t0MarkPriceRaw as any)?.price;
   const fetchedMarkPrice = Number(markPriceRaw) > 0 ? Number(markPriceRaw) : null;
   const markPrice = fetchedMarkPrice ?? lastMarkPrice;
 
@@ -724,6 +864,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     previousFetchedMarkPriceRef.current = fetchedMarkPrice;
     setLastMarkPrice(fetchedMarkPrice);
   }, [fetchedMarkPrice]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setLiveClock(new Date()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const liveBeijingTime = useMemo(() => formatBeijingLiveTime(liveClock), [liveClock]);
 
   useEffect(() => {
     if (showEntrySheet) setShowSettledOpeningHistory(false);
@@ -799,9 +946,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setSelectedAccountId((current) => normalizeMemberFilter(current, nextAccounts.map((account) => account.id)));
       setRelatedUserFilterId("all");
       setRelatedFundFilterId((current) => normalizeMemberFilter(current, memberFundFilterIds));
-      setJournalAccountFilterId((current) => normalizeMemberFilter(current, nextAccounts.map((account) => account.id)));
-      setJournalRelatedUserFilterId("all");
-      setJournalRelatedFundFilterId((current) => normalizeMemberFilter(current, memberFundFilterIds));
     }
     setLastRelatedUserId((current) => nextRecentRelatedUsers.some((user) => user.id === current)
       ? current
@@ -820,7 +964,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ? "text-rose-600"
     : priceTrend === "down"
       ? "text-emerald-600"
-      : "text-indigo-700";
+      : "text-rose-600";
 
   const selectedTrades = useMemo(
     () => trades.filter((trade) => (
@@ -833,27 +977,67 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     )),
     [trades, selectedAccountId, relatedUserFilterId, relatedFundFilterId],
   );
-  const recentJournalTrades = useMemo(
+  const journalScopeTrades = useMemo(
     () => trades.filter((trade) => (
       trade.symbol === "ETH"
-      && (journalAccountFilterId === "all" || trade.accountId === journalAccountFilterId)
-      && (journalRelatedUserFilterId === "all"
-        || (journalRelatedUserFilterId === "unlinked" ? !trade.relatedUserId : trade.relatedUserId === journalRelatedUserFilterId))
-      && (journalRelatedFundFilterId === "all"
-        || (journalRelatedFundFilterId === "unclassified" ? !trade.relatedFundId : trade.relatedFundId === journalRelatedFundFilterId))
-      && journalActionFilters.has(trade.action)
+      && (selectedAccountId === "all" || trade.accountId === selectedAccountId)
+      && (relatedUserFilterId === "all"
+        || (relatedUserFilterId === "unlinked" ? !trade.relatedUserId : trade.relatedUserId === relatedUserFilterId))
+      && (relatedFundFilterId === "all"
+        || (relatedFundFilterId === "unclassified" ? !trade.relatedFundId : trade.relatedFundId === relatedFundFilterId))
     )),
-    [trades, journalAccountFilterId, journalRelatedUserFilterId, journalRelatedFundFilterId, journalActionFilters],
+    [trades, selectedAccountId, relatedUserFilterId, relatedFundFilterId],
   );
-  const recentJournalTotalPages = Math.max(1, Math.ceil(recentJournalTrades.length / RECENT_JOURNAL_PAGE_SIZE));
+  const availableJournalActions = useMemo(
+    () => RECENT_JOURNAL_ACTIONS.filter((action) => journalScopeTrades.some((trade) => trade.action === action)),
+    [journalScopeTrades],
+  );
+  const availableJournalActionKey = availableJournalActions.join("|");
+  const recentJournalTrades = useMemo(
+    () => showLinkedJournalGroups
+      ? journalScopeTrades
+      : journalScopeTrades.filter((trade) => journalActionFilters.has(trade.action)),
+    [journalScopeTrades, journalActionFilters, showLinkedJournalGroups],
+  );
+  const linkedJournalGroups = useMemo(
+    () => buildLinkedJournalGroups(journalScopeTrades),
+    [journalScopeTrades],
+  );
+  const hasLinkedJournalPairs = useMemo(
+    () => linkedJournalGroups.some((group) => Boolean(group.opening) && group.closings.length > 0),
+    [linkedJournalGroups],
+  );
+  const recentJournalTotalPages = Math.max(1, Math.ceil(
+    (showLinkedJournalGroups ? linkedJournalGroups.length : recentJournalTrades.length) / RECENT_JOURNAL_PAGE_SIZE,
+  ));
   const pagedRecentJournalTrades = useMemo(() => {
     const newestFirst = [...recentJournalTrades].reverse();
     const start = (recentJournalPage - 1) * RECENT_JOURNAL_PAGE_SIZE;
     return newestFirst.slice(start, start + RECENT_JOURNAL_PAGE_SIZE);
   }, [recentJournalTrades, recentJournalPage]);
+  const pagedLinkedJournalGroups = useMemo(() => {
+    const start = (recentJournalPage - 1) * RECENT_JOURNAL_PAGE_SIZE;
+    return linkedJournalGroups.slice(start, start + RECENT_JOURNAL_PAGE_SIZE);
+  }, [linkedJournalGroups, recentJournalPage]);
   useEffect(() => {
     setRecentJournalPage((current) => Math.min(current, recentJournalTotalPages));
   }, [recentJournalTotalPages]);
+  useEffect(() => {
+    setJournalActionFilters((current) => {
+      const availableSet = new Set(availableJournalActions);
+      const validCurrent = new Set(Array.from(current).filter((action) => availableSet.has(action)));
+      if (validCurrent.size === 0 && availableJournalActions.length > 0) {
+        return new Set(availableJournalActions);
+      }
+      if (validCurrent.size === current.size) return current;
+      return validCurrent;
+    });
+  }, [availableJournalActionKey]);
+  useEffect(() => {
+    if (!hasLinkedJournalPairs && showLinkedJournalGroups) {
+      setShowLinkedJournalGroups(false);
+    }
+  }, [hasLinkedJournalPairs, showLinkedJournalGroups]);
   const recentJournalTradeDetails = useMemo(() => buildRecentJournalTradeDetails(trades), [trades]);
   const getTradeAccountName = (trade: PreviewTrade) => trade.accountName
     || accounts.find((account) => account.id === trade.accountId)?.name
@@ -875,22 +1059,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => relatedFunds.filter((fund) => relatedUserFilterId === "all" || fund.relatedUserId === relatedUserFilterId),
     [relatedFunds, relatedUserFilterId],
   );
-  const journalAvailableRelatedFunds = useMemo(
-    () => relatedFunds.filter((fund) => journalRelatedUserFilterId === "all" || fund.relatedUserId === journalRelatedUserFilterId),
-    [relatedFunds, journalRelatedUserFilterId],
-  );
   const memberFundFilterOptionIds = useMemo(() => [
     ...relatedFunds.map((fund) => fund.id),
     ...(trades.some((trade) => !trade.relatedFundId) ? ["unclassified"] : []),
   ], [relatedFunds, trades]);
   const shouldLockMemberAccountFilter = isMemberView && accounts.length === 1;
   const shouldLockMemberFundFilter = isMemberView && memberFundFilterOptionIds.length === 1;
-  const allJournalActionsSelected = RECENT_JOURNAL_ACTIONS.every((action) => journalActionFilters.has(action));
+  const lockedAccountName = accounts.find((account) => account.id === selectedAccountId)?.name
+    || accounts[0]?.name
+    || "暂无账户";
+  const lockedRelatedFundName = availableRelatedFunds.find((fund) => fund.id === relatedFundFilterId)?.name
+    || availableRelatedFunds[0]?.name
+    || (trades.some((trade) => !trade.relatedFundId) ? "未区分项目（历史）" : "暂无项目");
+  const allJournalActionsSelected = availableJournalActions.length > 0
+    && availableJournalActions.every((action) => journalActionFilters.has(action));
   const toggleJournalActionFilter = (action: TradeAction) => {
     setRecentJournalPage(1);
     setJournalActionFilters((current) => {
       // “全部”状态下点某一动作，直接聚焦该动作；后续可继续复选其他动作。
-      if (RECENT_JOURNAL_ACTIONS.every((item) => current.has(item))) {
+      if (availableJournalActions.every((item) => current.has(item))) {
         return new Set([action]);
       }
       const next = new Set(current);
@@ -932,24 +1119,40 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const summary = useMemo(() => calculateSummary(buckets, markPrice, selectedTrades), [buckets, markPrice, selectedTrades]);
   // 首屏总览：累计利润保持与多/空“累计利润”一致的未扣手续费口径；总仓位为多仓减空仓后的净额。
   const totalGrossProfit = summary.long.realizedGross + summary.short.realizedGross;
+  const totalGrossProfitDetails = useMemo(
+    () => buildRealizedGrossProfitDetails(selectedTrades),
+    [selectedTrades],
+  );
+  const totalRevenueDetailTotalPages = Math.max(1, Math.ceil(
+    totalGrossProfitDetails.length / TOTAL_REVENUE_DETAIL_PAGE_SIZE,
+  ));
+  const pagedTotalGrossProfitDetails = useMemo(() => {
+    const start = (totalRevenueDetailPage - 1) * TOTAL_REVENUE_DETAIL_PAGE_SIZE;
+    return totalGrossProfitDetails.slice(start, start + TOTAL_REVENUE_DETAIL_PAGE_SIZE);
+  }, [totalGrossProfitDetails, totalRevenueDetailPage]);
+  useEffect(() => {
+    setTotalRevenueDetailPage((current) => Math.min(current, totalRevenueDetailTotalPages));
+  }, [totalRevenueDetailTotalPages]);
   const netPositionQuantity = summary.long.quantity - summary.short.quantity;
   const totalGrossProfitClass = totalGrossProfit > 0 ? "text-rose-600" : totalGrossProfit < 0 ? "text-emerald-600" : "text-slate-700";
   const netPositionClass = "text-slate-800";
-  const totalGrossProfitSurfaceClass = "border-slate-200 bg-white";
-  const netPositionSurfaceClass = netPositionQuantity > 0
-    ? "border-rose-100/80 bg-white"
-    : netPositionQuantity < 0
-      ? "border-emerald-100/80 bg-white"
-      : "border-slate-200 bg-white";
-  const markPriceSurfaceClass = priceTrend === "up"
-    ? "border-rose-100/80 bg-white"
-    : priceTrend === "down"
-      ? "border-emerald-100/80 bg-white"
-      : "border-indigo-100/80 bg-white";
   const roundedNetPositionText = (() => {
     const rounded = Math.round(netPositionQuantity);
     return `${rounded < 0 ? "−" : ""}${Math.abs(rounded).toLocaleString("en-US")}`;
   })();
+  const netPositionBreakdown = useMemo(() => {
+    const buildSide = (side: PositionSide) => {
+      const levels = buckets
+        .filter((bucket) => bucket.side === side && bucket.remainingQuantity > 0.0000001)
+        .sort((a, b) => b.price - a.price);
+      return {
+        levels,
+        quantity: levels.reduce((total, bucket) => total + bucket.remainingQuantity, 0),
+      };
+    };
+    return { long: buildSide("long"), short: buildSide("short") };
+  }, [buckets]);
+  const netPositionDetailText = `${netPositionQuantity < 0 ? "−" : ""}${formatQuantity(Math.abs(netPositionQuantity))}`;
   // 从某个T型档位进入时，详情仅展示该方向、该归属档位的订单和汇总；
   // 从底部通用开平按钮进入时没有指定档位，才保留方向总览。
   const entryScopedTrades = useMemo(() => selectedTrades.filter((trade) => {
@@ -1564,6 +1767,162 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setShowEntrySheet(false);
   };
 
+  const renderLinkedJournalGroup = (group: LinkedJournalGroup) => {
+    if (!group.opening) {
+      const allocation = group.closings[0];
+      if (!allocation) return null;
+      const closing = allocation.trade;
+      const detail = recentJournalTradeDetails.get(closing.id);
+      const isLong = ACTIONS[closing.action].side === "long";
+      return (
+        <div key={group.id} className="mx-3 my-2 rounded border border-dashed border-amber-200 bg-amber-50/35 px-3 py-2.5">
+          <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
+            <span className="shrink-0 text-[10px] font-medium text-amber-700">未匹配开仓</span>
+            <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closing.action].label}</span>
+            <span className="shrink-0 font-medium text-slate-800">{formatQuantity(closing.quantity)} ETH</span>
+            {detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{formatPrice(detail.buyPrice)}</span>}
+            {detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{formatPrice(detail.sellPrice)}</span>}
+            {!detail && <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
+          </div>
+          <div className="mt-1 flex min-w-0 items-center gap-x-1.5 whitespace-nowrap text-[11px] text-slate-500">
+            <span className="min-w-0 truncate" title={getTradeAccountName(closing)}>{getTradeAccountName(closing)}</span>
+            <span className="text-slate-300">·</span>
+            <span className="min-w-0 truncate" title={getTradeRelatedUserName(closing)}>{getTradeRelatedUserName(closing)}</span>
+            <span className="text-slate-300">·</span>
+            <span className="min-w-0 truncate" title={getTradeRelatedFundName(closing)}>{getTradeRelatedFundName(closing)}</span>
+            <span className="text-slate-300">·</span>
+            <span className="shrink-0">{formatBeijingMonthDayTime(closing.createdAt)}</span>
+          </div>
+          {canManage && <div className="mt-1 flex min-h-5 items-center justify-between gap-3">
+            {closing.note ? <span className="min-w-0 truncate text-[11px] text-slate-500">{closing.note}</span> : <span />}
+            <button
+              type="button"
+              disabled={Boolean(closing.isSyncing) || revertEntryMutation.isPending}
+              onClick={() => setRevertCandidate(closing)}
+              className="h-5 shrink-0 rounded border border-amber-200 bg-white px-1.5 text-[10px] font-semibold text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              回撤
+            </button>
+          </div>}
+        </div>
+      );
+    }
+
+    const opening = group.opening;
+    const isLong = ACTIONS[opening.action].side === "long";
+    const closedQuantity = group.closings.reduce((total, allocation) => total + allocation.quantity, 0);
+    const remainingQuantity = Math.max(0, opening.quantity - closedQuantity);
+    const groupTone = isLong
+      ? "border-rose-200 border-l-rose-500"
+      : "border-emerald-200 border-l-emerald-500";
+    const openingSurface = isLong ? "bg-rose-50/35" : "bg-emerald-50/35";
+
+    return (
+      <div key={group.id} className={`mx-3 my-2 overflow-hidden rounded border border-l-[3px] ${groupTone}`}>
+        <div className={`px-3 py-2.5 ${openingSurface}`}>
+          <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
+            <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
+              <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[opening.action].label}</span>
+              <span className="shrink-0 font-medium text-slate-800">{formatQuantity(opening.quantity)} ETH</span>
+              <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{formatPrice(opening.price)}</span>
+            </div>
+            <span className="ml-auto shrink-0 text-[10px] font-medium text-slate-500">
+              {closedQuantity > 0 ? `已平 ${formatQuantity(closedQuantity)} · 剩 ${formatQuantity(remainingQuantity)}` : "未平"}
+            </span>
+          </div>
+          <div className="mt-1 flex min-w-0 items-center gap-x-1.5 whitespace-nowrap text-[11px] text-slate-500">
+            <span className="min-w-0 truncate" title={getTradeAccountName(opening)}>{getTradeAccountName(opening)}</span>
+            <span className="text-slate-300">·</span>
+            <span className="min-w-0 truncate" title={getTradeRelatedUserName(opening)}>{getTradeRelatedUserName(opening)}</span>
+            <span className="text-slate-300">·</span>
+            <span className="min-w-0 truncate" title={getTradeRelatedFundName(opening)}>{getTradeRelatedFundName(opening)}</span>
+            <span className="text-slate-300">·</span>
+            <span className="shrink-0">{formatBeijingMonthDayTime(opening.createdAt)}</span>
+          </div>
+          {canManage && <div className="mt-1 flex min-h-5 items-center justify-between gap-3">
+            {opening.note ? <span className="min-w-0 truncate text-[11px] text-slate-500">{opening.note}</span> : <span />}
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                disabled={Boolean(opening.isSyncing)}
+                onClick={() => openEditOpeningTrade(opening)}
+                className="h-5 rounded border border-slate-200 bg-white px-1.5 text-[10px] font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                编辑
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(opening.isSyncing) || revertEntryMutation.isPending}
+                onClick={() => setRevertCandidate(opening)}
+                className="h-5 rounded border border-amber-200 bg-white px-1.5 text-[10px] font-semibold text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                回撤
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(opening.isSyncing) || deleteOpeningEntryMutation.isPending}
+                onClick={() => setDeleteCandidate(opening)}
+                className="h-5 rounded border border-rose-200 bg-white px-1.5 text-[10px] font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                删除
+              </button>
+            </div>
+          </div>}
+          {!canManage && opening.note && <div className="mt-1 truncate text-[11px] text-slate-500">{opening.note}</div>}
+        </div>
+        {group.closings.map((allocation, index) => {
+          const closing = allocation.trade;
+          const detail = buildLinkedClosingDetail(opening, allocation);
+          const allocatedClosing = { ...closing, quantity: allocation.quantity, fee: detail.closingFee ?? closing.fee };
+          const isLastClosing = index === group.closings.length - 1;
+          return (
+            <div key={`${closing.id}-${index}`} className="relative border-t border-[#c7d0d7]/60 bg-white/28 px-3 py-2.5 pl-8">
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none absolute left-3 top-0 border-l border-dashed border-slate-300 ${isLastClosing ? "h-1/2" : "bottom-0"}`}
+              />
+              <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 w-3 border-t border-dashed border-slate-300" />
+              <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
+                <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
+                  <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closing.action].label}</span>
+                  <span className="shrink-0 font-medium text-slate-800">{formatQuantity(allocation.quantity)} ETH</span>
+                  <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>
+                </div>
+                <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
+                <button
+                  type="button"
+                  onClick={() => setNetProfitDetail({ trade: allocatedClosing, detail })}
+                  className={`shrink-0 border-b border-dotted pb-0.5 font-semibold outline-none ${detail.netPnl! >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}
+                  aria-label="查看关联平仓净利润计算明细"
+                >
+                  {formatSigned(detail.netPnl!)}<span className="ml-0.5 text-slate-500">u</span>
+                </button>
+              </div>
+              <div className="mt-1 flex min-w-0 items-center gap-x-1.5 whitespace-nowrap text-[11px] text-slate-500">
+                <span className="text-[10px] text-slate-400">关联平仓</span>
+                <span className="text-slate-300">·</span>
+                <span className="text-slate-400">{formatBeijingMonthDayTime(closing.createdAt)}</span>
+                <span className="ml-auto shrink-0 text-[10px] text-slate-500">净利润</span>
+              </div>
+              {canManage && <div className="mt-1 flex min-h-5 items-center justify-between gap-3">
+                {closing.note ? <span className="min-w-0 truncate text-[11px] text-slate-500">{closing.note}</span> : <span />}
+                <button
+                  type="button"
+                  disabled={Boolean(closing.isSyncing) || revertEntryMutation.isPending}
+                  onClick={() => setRevertCandidate(closing)}
+                  className="h-5 shrink-0 rounded border border-amber-200 bg-white px-1.5 text-[10px] font-semibold text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  回撤
+                </button>
+              </div>}
+              {!canManage && closing.note && <div className="mt-1 truncate text-[11px] text-slate-500">{closing.note}</div>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   if (meLoading || ledgerLoading) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-slate-500">正在核验访问权限…</div>;
   }
@@ -1592,21 +1951,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   }
 
   return (
-    <div className={`${embedded ? "min-h-0 w-full" : "min-h-screen max-w-md mx-auto"} bg-slate-50 pb-6`}>
+    <div className={`${embedded ? "min-h-0 w-full" : "min-h-screen max-w-md mx-auto"} bg-slate-50 pb-8`}>
       {!(embedded && isMemberView) && (
-        <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200">
+        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 shadow-[0_1px_3px_rgba(15,23,42,0.05)] backdrop-blur">
           <div className="h-14 px-4 flex items-center gap-3">
-            {!embedded && <button onClick={backToLedger} aria-label="返回52号账本" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
-              <ArrowLeft className="w-5 h-5 text-slate-800" />
+            {!embedded && <button onClick={backToLedger} aria-label="返回52号账本" className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white active:scale-95">
+              <ArrowLeft className="w-4 h-4 text-slate-700" />
             </button>}
             <div className="min-w-0 flex-1">
-              <h1 className="font-semibold text-slate-900">T+0 速记账本</h1>
+              <h1 className="font-semibold tracking-[0.01em] text-slate-900">T+0 速记账本</h1>
             </div>
             <button
               onClick={() => window.location.reload()}
               aria-label="强制刷新整个页面"
               title="强制刷新整个页面"
-              className="h-8 rounded border border-indigo-100 bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 active:scale-95"
+              className="h-8 rounded border border-slate-200 bg-slate-900 px-3 text-xs font-semibold text-white active:scale-95"
             >
               刷新
             </button>
@@ -1614,109 +1973,215 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         </header>
       )}
 
-      <main className="px-4 pt-4 space-y-4">
-        <section className="overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
-          <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(68px,max-content)_minmax(0,1fr)] gap-1.5 bg-gradient-to-br from-slate-50 via-white to-indigo-50/60 p-2">
-            <div className={`min-w-0 rounded border px-2 py-2.5 text-center shadow-[0_1px_2px_rgba(15,23,42,0.025)] ${totalGrossProfitSurfaceClass}`}>
-              <div className="text-[10px] font-semibold text-slate-500">总利润</div>
-              <div className={`mt-1 flex items-baseline justify-center gap-0.5 whitespace-nowrap text-[clamp(15px,4.25vw,17px)] font-bold leading-none tabular-nums ${totalGrossProfitClass}`}>
-                <span>{formatSigned(totalGrossProfit)}</span>
-                <span className="text-[10px] font-semibold opacity-65">U</span>
-              </div>
-            </div>
-            <div className={`min-w-0 rounded border px-1 py-2.5 text-center shadow-[0_1px_2px_rgba(15,23,42,0.025)] ${netPositionSurfaceClass}`}>
-              <div className="text-[10px] font-semibold text-slate-500">实时总仓位</div>
-              <div className={`mt-1 flex items-baseline justify-center gap-px whitespace-nowrap text-[14px] font-bold leading-none tabular-nums ${netPositionClass}`}>
-                <span>{roundedNetPositionText}</span>
-                <span className="text-[9px] font-semibold opacity-65">ETH</span>
-              </div>
-            </div>
-            <div className={`min-w-0 rounded border px-1.5 py-2.5 text-center shadow-[0_1px_2px_rgba(15,23,42,0.025)] ${markPriceSurfaceClass}`}>
-              <div className="text-[10px] font-semibold text-slate-500">实时参考价</div>
-              <div className={`mt-1 flex items-baseline justify-center gap-0.5 whitespace-nowrap text-[15px] font-bold leading-none tabular-nums ${priceTrendClass}`}>
-                {priceTrend === "up" && <span role="img" aria-label="价格上涨" className="inline-block h-0 w-0 border-x-[3px] border-b-[5px] border-x-transparent border-b-current" />}
-                {priceTrend === "down" && <span role="img" aria-label="价格下跌" className="inline-block h-0 w-0 border-x-[3px] border-t-[5px] border-x-transparent border-t-current" />}
-                <span>{formatPrice(markPrice)}</span>
-                <span className="text-[10px] font-semibold opacity-65">U</span>
-              </div>
-            </div>
-          </div>
-          <div className="border-t border-slate-200/80 bg-white px-4 py-2.5">
-            <div className="grid grid-cols-3 gap-2">
-              <label className="min-w-0">
-                <span className="mb-1 block text-[10px] text-slate-400">下单账户</span>
-                <select
-                  value={selectedAccountId}
-                  onChange={(event) => setSelectedAccountId(event.target.value)}
-                  disabled={shouldLockMemberAccountFilter}
-                  className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
-                >
-                  {!shouldLockMemberAccountFilter && <option value="all">全部账户</option>}
-                  {accounts.length === 0 && <option value="">暂无账户</option>}
-                  {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-                </select>
+      <main className="space-y-4 px-4 pt-4">
+        <section
+          className="relative overflow-hidden rounded"
+          style={{
+            background: [
+              "linear-gradient(135deg, rgba(255,255,255,0.86) 0%, rgba(255,255,255,0.32) 25%, rgba(255,255,255,0) 50%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.19) 100%)",
+              "linear-gradient(90deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.06) 40%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.12) 100%)",
+              "linear-gradient(180deg, rgba(0,0,0,0.07) 0%, rgba(255,255,255,0.20) 36%, rgba(255,255,255,0.28) 52%, rgba(255,255,255,0.09) 70%, rgba(0,0,0,0.10) 100%)",
+              "linear-gradient(160deg, #e4e7eb 0%, #c9cfd6 20%, #dde1e6 45%, #bec6cf 65%, #d7dce2 80%, #e2e6ea 100%)",
+            ].join(", "),
+            border: "1.5px solid rgba(178,187,198,0.96)",
+            boxShadow: "0 7px 18px rgba(15,23,42,0.16), 0 2px 4px rgba(15,23,42,0.10), inset 0 2px 0 rgba(255,255,255,0.94), inset 0 -2px 0 rgba(71,85,105,0.44), inset 1.5px 0 rgba(255,255,255,0.50), inset -1.5px 0 rgba(71,85,105,0.14)",
+          }}
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-0 rounded"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75 0.02' numOctaves='4' seed='5'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.30'/%3E%3C/svg%3E")`,
+              backgroundSize: "160px 160px",
+              mixBlendMode: "overlay",
+              filter: "contrast(1.16)",
+            }}
+          />
+          <div
+            className="relative z-[1] border-b px-3 py-2.5"
+            style={{
+              background: "rgba(255,255,255,0.34)",
+              borderColor: "rgba(109,121,137,0.22)",
+              boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.62)",
+            }}
+          >
+            <div className="grid grid-cols-[minmax(62px,0.8fr)_minmax(74px,0.95fr)_minmax(112px,1.5fr)] gap-1.5">
+              <label className="relative min-w-0">
+                {!shouldLockMemberAccountFilter && <span className="pointer-events-none absolute left-1.5 top-1/2 z-10 -translate-y-1/2 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>账户</span>}
+                {shouldLockMemberAccountFilter ? <LockedFilterValue label="账户" value={lockedAccountName} /> : (
+                  <select
+                    value={selectedAccountId}
+                    onChange={(event) => {
+                      setSelectedAccountId(event.target.value);
+                      setRecentJournalPage(1);
+                    }}
+                    className="h-9 w-full rounded border border-slate-300 bg-white/70 pl-8 pr-4 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
+                    style={{
+                      textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
+                      boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
+                    }}
+                  >
+                    <option value="all">全部账户</option>
+                    {accounts.length === 0 && <option value="">暂无账户</option>}
+                    {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+                  </select>
+                )}
               </label>
-              <label className="min-w-0">
-                <span className="mb-1 block text-[10px] text-slate-400">关联用户</span>
-                <select
-                  value={relatedUserFilterId}
-                  onChange={(event) => {
-                    setRelatedUserFilterId(event.target.value);
-                    setRelatedFundFilterId("all");
-                  }}
-                  disabled={isMemberView}
-                  className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
-                >
-                  {isMemberView ? <option value="all">{memberRelatedUserName}</option> : <>
+              <label className="relative min-w-0">
+                {!isMemberView && <span className="pointer-events-none absolute left-1.5 top-1/2 z-10 -translate-y-1/2 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>用户</span>}
+                {isMemberView ? <LockedFilterValue label="用户" value={memberRelatedUserName} /> : (
+                  <select
+                    value={relatedUserFilterId}
+                    onChange={(event) => {
+                      setRelatedUserFilterId(event.target.value);
+                      setRelatedFundFilterId("all");
+                      setRecentJournalPage(1);
+                    }}
+                    className="h-9 w-full rounded border border-slate-300 bg-white/70 pl-8 pr-4 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
+                    style={{
+                      textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
+                      boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
+                    }}
+                  >
                     <option value="all">全部用户</option>
                     {trades.some((trade) => !trade.relatedUserId) && <option value="unlinked">未关联用户（历史）</option>}
                     {recentRelatedUsers.map((user) => (
                       <option key={user.id} value={user.id}>{user.name}{user.username ? ` · @${user.username}` : ""}</option>
                     ))}
-                  </>}
-                </select>
+                  </select>
+                )}
               </label>
-              <label className="min-w-0">
-                <span className="mb-1 block text-[10px] text-slate-400">专项款</span>
-                <select
-                  value={relatedFundFilterId}
-                  onChange={(event) => setRelatedFundFilterId(event.target.value)}
-                  disabled={shouldLockMemberFundFilter}
-                  className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
-                >
-                  {!shouldLockMemberFundFilter && <option value="all">全部专项款</option>}
-                  {trades.some((trade) => !trade.relatedFundId) && <option value="unclassified">未区分专项款（历史）</option>}
-                  {availableRelatedFunds.map((fund) => (
-                    <option key={fund.id} value={fund.id}>{fund.name}{!isMemberView && relatedUserFilterId === "all" ? ` · ${getRelatedFundOwnerName(fund)}` : ""}</option>
-                  ))}
-                </select>
+              <label className="relative min-w-0">
+                {!shouldLockMemberFundFilter && <span className="pointer-events-none absolute left-1.5 top-1/2 z-10 -translate-y-1/2 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>项目</span>}
+                {shouldLockMemberFundFilter ? <LockedFilterValue label="项目" value={lockedRelatedFundName} /> : (
+                  <select
+                    value={relatedFundFilterId}
+                    onChange={(event) => {
+                      setRelatedFundFilterId(event.target.value);
+                      setRecentJournalPage(1);
+                    }}
+                    className="h-9 w-full rounded border border-slate-300 bg-white/70 pl-8 pr-4 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
+                    style={{
+                      textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
+                      boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
+                    }}
+                  >
+                    <option value="all">全部项目</option>
+                    {trades.some((trade) => !trade.relatedFundId) && <option value="unclassified">未区分项目（历史）</option>}
+                    {availableRelatedFunds.map((fund) => (
+                      <option key={fund.id} value={fund.id}>{fund.name}{!isMemberView && relatedUserFilterId === "all" ? ` · ${getRelatedFundOwnerName(fund)}` : ""}</option>
+                    ))}
+                  </select>
+                )}
               </label>
             </div>
           </div>
 
-          <AccountOverview
-            summary={summary}
-            showCumulativeData={showCumulativeData}
-            onToggleCumulativeData={() => setShowCumulativeData((current) => !current)}
-            showCommission={!isMemberView}
-            isMemberView={isMemberView}
-            onExplainGrossProfit={(side, data) => setGrossProfitDetail({
-              side,
-              gross: data.realizedGross,
-              openingFee: data.realizedOpeningFee,
-              closingFee: data.realizedClosingFee,
-              net: data.realized,
-            })}
-          />
+          <div
+            className="relative z-[1] grid grid-cols-[minmax(0,1.45fr)_minmax(max-content,0.9fr)] p-2"
+            style={{
+              background: "linear-gradient(180deg, rgba(255,255,255,0.14), rgba(203,213,225,0.14))",
+              borderTop: "1px solid rgba(100,116,139,0.20)",
+              borderBottom: "1px solid rgba(255,255,255,0.62)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.42), inset 0 -1px 0 rgba(71,85,105,0.10)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setShowTotalRevenueCostHint(false);
+                setTotalRevenueDetailPage(1);
+                setShowTotalGrossProfitDetail(true);
+              }}
+              aria-haspopup="dialog"
+              aria-label="查看总收益明细"
+              className="flex min-w-0 items-center justify-between gap-2 border-r px-3 py-3 text-left transition-opacity active:opacity-60"
+              style={{
+                borderColor: "rgba(100,116,139,0.26)",
+                boxShadow: "inset -1px 0 0 rgba(255,255,255,0.70)",
+              }}
+            >
+              <div className="shrink-0 text-[11px] font-semibold text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>总利润</div>
+              <div className={`ml-auto flex items-baseline gap-0.5 whitespace-nowrap text-[clamp(18px,5vw,22px)] font-bold leading-none tabular-nums ${totalGrossProfitClass}`} style={{ textShadow: "-0.9px -0.9px 0 rgba(255,255,255,0.88), 1.15px 1.15px 1px rgba(15,23,42,0.22)" }}>
+                <span>{formatSigned(totalGrossProfit)}</span>
+                <span className="text-[12px] font-semibold opacity-65">U</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowNetPositionDetail(true)}
+              aria-haspopup="dialog"
+              aria-label="查看总仓位对冲明细"
+              className="flex min-w-0 items-center justify-between gap-2 px-3 py-3 text-left transition-opacity active:opacity-60"
+            >
+              <div className="shrink-0 text-[11px] font-semibold text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>总仓位</div>
+              <div className={`ml-auto flex items-baseline gap-0.5 whitespace-nowrap text-[clamp(18px,5vw,22px)] font-bold leading-none tabular-nums ${netPositionClass}`} style={{ textShadow: "-0.9px -0.9px 0 rgba(255,255,255,0.88), 1.15px 1.15px 1px rgba(15,23,42,0.22)" }}>
+                <span>{roundedNetPositionText}</span>
+                <span className="text-[12px] font-semibold opacity-65">ETH</span>
+              </div>
+            </button>
+          </div>
+
+          <div className="relative z-[1]">
+            <AccountOverview
+              summary={summary}
+              showCumulativeData={showCumulativeData}
+              onToggleCumulativeData={() => setShowCumulativeData((current) => !current)}
+              showCommission={!isMemberView}
+              isMemberView={isMemberView}
+              onExplainGrossProfit={(side, data) => setGrossProfitDetail({
+                side,
+                gross: data.realizedGross,
+                openingFee: data.realizedOpeningFee,
+                closingFee: data.realizedClosingFee,
+                net: data.realized,
+              })}
+            />
+          </div>
         </section>
 
-        <section className="rounded bg-white border border-slate-200 shadow-sm overflow-hidden">
-          <div ref={ladderScrollRef} className="max-h-[calc(100vh-250px)] overflow-y-auto overscroll-contain">
+        <section
+          className="overflow-hidden rounded border border-[#b9c2ca] bg-[#eef1f3]"
+          style={{
+            background: "linear-gradient(145deg, rgba(249,250,251,0.96), rgba(218,224,229,0.88))",
+            boxShadow: "0 5px 12px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.94), inset 0 -1px 0 rgba(71,85,105,0.20)",
+          }}
+        >
+          <div
+            className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-b border-[#aeb8c1]/50 px-3 py-2.5"
+            style={{
+              background: "linear-gradient(180deg, rgba(255,255,255,0.72), rgba(208,215,221,0.56))",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.92), inset 0 -1px 0 rgba(71,85,105,0.14)",
+            }}
+          >
+            <time className="min-w-0 truncate whitespace-nowrap text-[10px] font-medium tabular-nums text-slate-500" style={{ textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)" }} dateTime={liveClock.toISOString()}>
+              {liveBeijingTime}
+            </time>
+            <span className="text-[13px] font-semibold tracking-[0.08em] text-slate-800" style={{ textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>T形交割表</span>
+            <div className={`flex min-w-0 justify-self-end items-center justify-end gap-0.5 whitespace-nowrap text-[10px] font-medium tabular-nums ${priceTrendClass}`} style={{ textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)" }}>
+              <span className="text-slate-500">实时参考价</span>
+              {priceTrend === "up" && <span role="img" aria-label="价格上涨" className="inline-block h-0 w-0 border-x-[3px] border-b-[5px] border-x-transparent border-b-current" />}
+              {priceTrend === "down" && <span role="img" aria-label="价格下跌" className="inline-block h-0 w-0 border-x-[3px] border-t-[5px] border-x-transparent border-t-current" />}
+              <span>{formatPrice(markPrice)}</span>
+            </div>
+          </div>
+          <div
+            ref={ladderScrollRef}
+            className="max-h-[calc(100vh-250px)] overflow-y-auto overscroll-contain"
+            style={{
+              background: [
+                "linear-gradient(135deg, rgba(255,255,255,0.62) 0%, rgba(255,255,255,0.18) 24%, rgba(255,255,255,0) 48%, rgba(0,0,0,0) 64%, rgba(71,85,105,0.08) 100%)",
+                "linear-gradient(180deg, rgba(71,85,105,0.04) 0%, rgba(255,255,255,0.18) 42%, rgba(255,255,255,0.12) 62%, rgba(71,85,105,0.05) 100%)",
+                "linear-gradient(160deg, #eef1f3 0%, #e3e8ec 44%, #f1f3f5 100%)",
+              ].join(", "),
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.86), inset 0 -1px 0 rgba(71,85,105,0.10)",
+            }}
+          >
             {priceRows.map((row) => (
               <div
                 key={priceKey(row.price)}
                 data-ladder-price={row.price}
-                className={`grid grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] min-h-[52px] border-b border-slate-100 last:border-b-0 ${row.isMark ? (priceTrend === "up" ? "bg-rose-100/80" : priceTrend === "down" ? "bg-sky-100/80" : "bg-slate-100") : "bg-white"}`}
+                className="grid grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] min-h-[52px] border-b border-[#c7d0d7]/60 last:border-b-0"
               >
                 <LadderCell
                   bucket={row.long}
@@ -1733,8 +2198,32 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   // 最终归档仍只按实际录入成交价计算，绝不按点击格写入。
                   onOpen={() => openEntrySheet("openLong", row.price)}
                 />
-                <div className={`border-x border-slate-100 flex items-center justify-center px-0.5 ${row.isMark ? (priceTrend === "up" ? "bg-rose-200 shadow-[inset_0_0_0_1px_rgba(244,63,94,0.25)]" : priceTrend === "down" ? "bg-sky-200 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.25)]" : "bg-slate-200") : "bg-slate-50"}`}>
-                  <span className={`text-[13px] tabular-nums font-bold ${row.isMark && priceTrend === "up" ? "text-rose-700" : row.isMark && priceTrend === "down" ? "text-sky-700" : "text-slate-900"}`}>
+                <div
+                  className="flex items-center justify-center border-x border-[#b9c2ca] px-0.5"
+                  style={{
+                    background: row.isMark
+                      ? priceTrend === "down"
+                        ? [
+                          "linear-gradient(135deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.15) 22%, rgba(255,255,255,0) 45%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.20) 100%)",
+                          "linear-gradient(90deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.05) 38%, rgba(0,0,0,0) 58%, rgba(0,0,0,0.12) 100%)",
+                          "linear-gradient(180deg, rgba(0,0,0,0.06) 0%, rgba(255,255,255,0.14) 35%, rgba(255,255,255,0.20) 50%, rgba(255,255,255,0.06) 70%, rgba(0,0,0,0.08) 100%)",
+                          "linear-gradient(160deg, #064e3b 0%, #065f46 18%, #047857 40%, #059669 62%, #047857 80%, #064e3b 100%)",
+                        ].join(", ")
+                        : [
+                          "linear-gradient(135deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.15) 22%, rgba(255,255,255,0) 45%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.20) 100%)",
+                          "linear-gradient(90deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.05) 38%, rgba(0,0,0,0) 58%, rgba(0,0,0,0.12) 100%)",
+                          "linear-gradient(180deg, rgba(0,0,0,0.06) 0%, rgba(255,255,255,0.14) 35%, rgba(255,255,255,0.20) 50%, rgba(255,255,255,0.06) 70%, rgba(0,0,0,0.08) 100%)",
+                          "linear-gradient(160deg, #7f1d1d 0%, #991b1b 18%, #b91c1c 40%, #dc2626 62%, #b91c1c 80%, #7f1d1d 100%)",
+                        ].join(", ")
+                      : "linear-gradient(90deg, rgba(210,217,224,0.94), rgba(244,247,249,0.98) 48%, rgba(205,213,220,0.94))",
+                    boxShadow: row.isMark
+                      ? priceTrend === "down"
+                        ? "inset 0 1.5px 0 rgba(167,243,208,0.88), inset 0 -1.5px 0 rgba(2,44,34,0.62), inset 1.5px 0 rgba(110,231,183,0.28), inset -1.5px 0 rgba(0,0,0,0.16)"
+                        : "inset 0 1.5px 0 rgba(254,202,202,0.88), inset 0 -1.5px 0 rgba(69,10,10,0.62), inset 1.5px 0 rgba(252,165,165,0.28), inset -1.5px 0 rgba(0,0,0,0.16)"
+                      : "inset 1px 0 0 rgba(255,255,255,0.84), inset -1px 0 0 rgba(71,85,105,0.22), inset 0 1px 0 rgba(255,255,255,0.76)",
+                  }}
+                >
+                  <span className={`text-[13px] tabular-nums font-bold ${row.isMark ? (priceTrend === "down" ? "text-emerald-50" : "text-rose-50") : "text-slate-800"}`} style={{ textShadow: row.isMark ? "0 1px 2px rgba(0,0,0,0.60), 0 -0.5px 1px rgba(255,255,255,0.22)" : "-0.55px -0.55px 0 rgba(255,255,255,0.92), 0.75px 0.75px 0 rgba(71,85,105,0.28)" }}>
                     {formatLadderPrice(row.isMark && markPrice ? markPrice : row.price)}
                   </span>
                 </div>
@@ -1756,115 +2245,85 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           </div>
         </section>
 
-        <section className="rounded bg-white border border-slate-200 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
-                <span className="shrink-0 text-sm font-semibold text-slate-900">最近速记</span>
-                <div className="flex shrink-0 items-center gap-1" role="group" aria-label="最近速记动作筛选">
-                  <button
+        <section
+          className="overflow-hidden rounded border border-[#b9c2ca] shadow-[0_1px_2px_rgba(15,23,42,0.06)]"
+          style={{
+            background: [
+              "linear-gradient(135deg, rgba(255,255,255,0.52) 0%, rgba(255,255,255,0.12) 24%, rgba(255,255,255,0) 48%, rgba(0,0,0,0) 64%, rgba(71,85,105,0.07) 100%)",
+              "linear-gradient(180deg, rgba(71,85,105,0.04) 0%, rgba(255,255,255,0.14) 42%, rgba(255,255,255,0.10) 62%, rgba(71,85,105,0.05) 100%)",
+              "linear-gradient(160deg, #edf0f2 0%, #e1e6ea 48%, #eff2f4 100%)",
+            ].join(", "),
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.88), inset 0 -1px 0 rgba(71,85,105,0.12)",
+          }}
+        >
+          <div
+            className="flex items-center justify-center border-b border-[#c7d0d7]/80 px-4 py-2.5"
+            style={{
+              background: "linear-gradient(180deg, rgba(255,255,255,0.58), rgba(208,215,221,0.34))",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.78), inset 0 -1px 0 rgba(71,85,105,0.10)",
+            }}
+          >
+            <span className="inline-flex items-baseline gap-1.5 text-[13px] font-semibold tracking-[0.08em] text-slate-700" style={{ textShadow: "-0.4px -0.4px 0 rgba(255,255,255,0.88), 0.55px 0.55px 0 rgba(71,85,105,0.18)" }}>
+              历史记录
+              <span className="text-[11px] font-medium tracking-normal text-slate-500">{recentJournalTrades.length} 笔</span>
+            </span>
+          </div>
+          <div>
+              <div
+                className="border-b border-[#c7d0d7]/70 px-4 py-2.5"
+                style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.30), rgba(208,215,221,0.16))" }}
+              >
+                <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none]" role="group" aria-label="历史记录动作筛选">
+                  {availableJournalActions.length > 1 && <button
                     type="button"
                     aria-pressed={allJournalActionsSelected}
+                    disabled={showLinkedJournalGroups}
                     onClick={() => {
-                      setJournalActionFilters(new Set(RECENT_JOURNAL_ACTIONS));
+                      setJournalActionFilters(new Set(availableJournalActions));
                       setRecentJournalPage(1);
                     }}
-                    className={`h-6 rounded border px-2 text-[11px] font-medium transition-colors ${allJournalActionsSelected ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 bg-white text-slate-500"}`}
+                    className={`h-6 rounded-[3px] border px-2 text-[11px] font-medium transition-colors disabled:cursor-default disabled:opacity-40 ${allJournalActionsSelected ? "border-[#75818c] bg-[#75818c] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
                   >
                     全部
-                  </button>
-                  {RECENT_JOURNAL_ACTIONS.map((action) => {
+                  </button>}
+                  {availableJournalActions.map((action) => {
                     const selected = journalActionFilters.has(action);
                     return (
                       <button
                         key={action}
                         type="button"
                         aria-pressed={selected}
+                        disabled={showLinkedJournalGroups}
                         onClick={() => toggleJournalActionFilter(action)}
-                        className={`h-6 rounded border px-2 text-[11px] font-medium transition-colors ${selected ? ACTIONS[action].activeClass : "border-slate-200 bg-white text-slate-500"}`}
+                        className={`h-6 rounded-[3px] border px-2 text-[11px] font-medium transition-colors disabled:cursor-default disabled:opacity-40 ${selected ? ACTIONS[action].activeClass : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
                       >
                         {ACTIONS[action].label}
                       </button>
                     );
                   })}
+                  {hasLinkedJournalPairs && <button
+                    type="button"
+                    aria-pressed={showLinkedJournalGroups}
+                    onClick={() => {
+                      setShowLinkedJournalGroups((current) => !current);
+                      setRecentJournalPage(1);
+                    }}
+                    className={`h-6 rounded-[3px] border px-2 text-[11px] font-medium transition-colors ${showLinkedJournalGroups ? "border-[#75818c] bg-[#75818c] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
+                  >
+                    关联
+                  </button>}
                 </div>
               </div>
-              <div className="mt-0.5 text-[11px] text-slate-500">已保存的开平记录会同步影响上方价格簿</div>
-            </div>
-            <button
-              type="button"
-              aria-label={showRecentRecords ? "收起最近速记" : "展开最近速记"}
-              aria-expanded={showRecentRecords}
-              onClick={() => setShowRecentRecords((value) => !value)}
-              className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-slate-100"
-            >
-              <ChevronRight className={`w-4 h-4 transition-transform ${showRecentRecords ? "rotate-90" : ""}`} />
-            </button>
-          </div>
-          {showRecentRecords && (
-            <div className="border-t border-slate-100">
-              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5">
-                <label className="min-w-0">
-                  <span className="mb-1 block text-[10px] text-slate-400">下单账户</span>
-                  <select
-                    value={journalAccountFilterId}
-                    onChange={(event) => {
-                      setJournalAccountFilterId(event.target.value);
-                      setRecentJournalPage(1);
-                    }}
-                    disabled={shouldLockMemberAccountFilter}
-                    className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
-                  >
-                    {!shouldLockMemberAccountFilter && <option value="all">全部账户</option>}
-                    {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-                  </select>
-                </label>
-                <label className="min-w-0">
-                  <span className="mb-1 block text-[10px] text-slate-400">关联用户</span>
-                  <select
-                    value={journalRelatedUserFilterId}
-                    disabled={isMemberView}
-                    onChange={(event) => {
-                      setJournalRelatedUserFilterId(event.target.value);
-                      setJournalRelatedFundFilterId("all");
-                      setRecentJournalPage(1);
-                    }}
-                    className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
-                  >
-                    {isMemberView ? <option value="all">{memberRelatedUserName}</option> : <>
-                      <option value="all">全部用户</option>
-                      {trades.some((trade) => !trade.relatedUserId) && <option value="unlinked">未关联用户</option>}
-                      {recentRelatedUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
-                    </>}
-                  </select>
-                </label>
-                <label className="min-w-0">
-                  <span className="mb-1 block text-[10px] text-slate-400">专项款</span>
-                  <select
-                    value={journalRelatedFundFilterId}
-                    onChange={(event) => {
-                      setJournalRelatedFundFilterId(event.target.value);
-                      setRecentJournalPage(1);
-                    }}
-                    disabled={shouldLockMemberFundFilter}
-                    className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
-                  >
-                    {!shouldLockMemberFundFilter && <option value="all">全部专项款</option>}
-                    {trades.some((trade) => !trade.relatedFundId) && <option value="unclassified">未区分专项</option>}
-                    {journalAvailableRelatedFunds.map((fund) => (
-                      <option key={fund.id} value={fund.id}>{fund.name}{!isMemberView && journalRelatedUserFilterId === "all" ? ` · ${getRelatedFundOwnerName(fund)}` : ""}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
               {recentJournalTrades.length === 0 ? (
-                <div className="px-4 py-5 text-center text-xs text-slate-500">当前筛选范围还没有速记记录</div>
+                <div className="px-4 py-5 text-center text-xs text-slate-500">当前筛选范围还没有历史记录</div>
+              ) : showLinkedJournalGroups ? (
+                pagedLinkedJournalGroups.map((group) => renderLinkedJournalGroup(group))
               ) : pagedRecentJournalTrades.map((trade) => {
                 const detail = recentJournalTradeDetails.get(trade.id);
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
                 return (
-                  <div key={trade.id} className="px-4 py-2.5 border-b border-slate-100 last:border-b-0">
+                <div key={trade.id} className="border-b border-[#c7d0d7]/60 px-4 py-2.5 last:border-b-0">
                     <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
                       <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
                         <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].label}</span>
@@ -1932,22 +2391,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </div>
                 );
               })}
-              {recentJournalTrades.length > 0 && recentJournalTotalPages > 1 && (
-                <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/70 px-4 py-2.5 text-[11px] tabular-nums">
+              {(showLinkedJournalGroups ? linkedJournalGroups.length : recentJournalTrades.length) > 0 && recentJournalTotalPages > 1 && (
+                <div
+                  className="flex items-center justify-between gap-3 border-t border-[#c7d0d7]/80 px-4 py-2.5 text-[11px] tabular-nums"
+                  style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.42), rgba(208,215,221,0.34))", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)" }}
+                >
                   <button
-                    type="button"
-                    disabled={recentJournalPage <= 1}
-                    onClick={() => setRecentJournalPage((current) => Math.max(1, current - 1))}
-                    className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+                  type="button"
+                  disabled={recentJournalPage <= 1}
+                  onClick={() => setRecentJournalPage((current) => Math.max(1, current - 1))}
+                  className="h-7 rounded-[3px] border border-[#b9c2ca] bg-white/38 px-2.5 font-medium text-slate-600 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     上一页
                   </button>
                   <span className="whitespace-nowrap text-slate-500">第 {recentJournalPage} 页 / 共 {recentJournalTotalPages} 页</span>
                   <button
-                    type="button"
-                    disabled={recentJournalPage >= recentJournalTotalPages}
-                    onClick={() => setRecentJournalPage((current) => Math.min(recentJournalTotalPages, current + 1))}
-                    className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+                  type="button"
+                  disabled={recentJournalPage >= recentJournalTotalPages}
+                  onClick={() => setRecentJournalPage((current) => Math.min(recentJournalTotalPages, current + 1))}
+                  className="h-7 rounded-[3px] border border-[#b9c2ca] bg-white/38 px-2.5 font-medium text-slate-600 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     下一页
                   </button>
@@ -1985,16 +2447,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   )}
                 </div>
               )}
-            </div>
-          )}
+          </div>
         </section>
 
         {!isMemberView && (
-          <section className="px-1 py-1">
-            <div className="text-[11px] leading-5 text-slate-500">
-              速记仅记录交易信息，不会触发交易所下单；下单账户与流水仅对当前管理员本人可见。
-            </div>
-          </section>
+          <footer className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-slate-200 px-1 pt-2 text-[10px] leading-4 text-slate-400">
+            <span>内部速记账本 · 不触发交易所下单</span>
+            <span>下单账户与管理流水仅当前管理员可见</span>
+          </footer>
         )}
       </main>
 
@@ -2167,11 +2627,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                               </div>
                               <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2">
                                 <div className="min-w-0">
-                                  <div className="text-[10px] text-slate-400">下单账户</div>
+                                  <div className="text-[10px] text-slate-400">账户</div>
                                   <div title={getTradeAccountName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeAccountName(trade)}</div>
                                 </div>
                                 <div className="min-w-0 text-center">
-                                  <div className="text-[10px] text-slate-400">关联用户</div>
+                                  <div className="text-[10px] text-slate-400">用户</div>
                                   <div title={getTradeRelatedUserName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeRelatedUserName(trade)}</div>
                                 </div>
                                 <div className="min-w-0 text-right">
@@ -2497,6 +2957,167 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         </div>
       )}
 
+      {showTotalGrossProfitDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="总收益明细">
+          <div className="max-h-[88vh] w-full max-w-sm overflow-y-auto rounded bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-base font-semibold text-slate-900">总收益明细</div>
+                <div className="mt-1 text-xs text-slate-500">当前筛选范围内的已平仓订单</div>
+              </div>
+              <button type="button" onClick={() => {
+                setShowTotalRevenueCostHint(false);
+                setShowTotalGrossProfitDetail(false);
+              }} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭总收益明细">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 rounded border border-slate-200 bg-slate-50 px-3 py-3">
+              <div className="flex items-baseline justify-between gap-4">
+                <span className="text-sm font-semibold text-slate-700">总收益</span>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowTotalRevenueCostHint((current) => !current)}
+                    aria-expanded={showTotalRevenueCostHint}
+                    aria-label="查看总收益交易成本提示"
+                    className={`whitespace-nowrap border-b border-dashed pb-0.5 text-lg font-bold ${totalGrossProfitClass}`}
+                  >
+                    {formatSigned(totalGrossProfit)} <span className="text-xs font-semibold text-slate-500">U</span>
+                  </button>
+                  {showTotalRevenueCostHint && (
+                    <div role="status" className="absolute right-0 top-full z-10 mt-2 whitespace-nowrap rounded border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-600 shadow-md">
+                      未扣除交易成本
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 overflow-hidden rounded border border-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+                <span>订单</span>
+                <span>{totalGrossProfitDetails.length} 笔</span>
+              </div>
+              {totalGrossProfitDetails.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {pagedTotalGrossProfitDetails.map((detail) => {
+                    const isLong = ACTIONS[detail.trade.action].side === "long";
+                    return (
+                      <div key={detail.trade.id} className="flex min-w-0 items-center gap-2 px-3 py-2 text-[11px] tabular-nums whitespace-nowrap">
+                        <span className="shrink-0 text-slate-400">{formatBeijingMonthDayTime(detail.trade.createdAt)}</span>
+                        <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[detail.trade.action].label}</span>
+                        <span className="shrink-0 font-medium text-slate-700">{formatQuantity(detail.quantity)} ETH</span>
+                        <span className={`ml-auto shrink-0 font-semibold ${detail.grossPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(detail.grossPnl)} U</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : <div className="px-3 py-5 text-center text-xs text-slate-400">当前筛选范围暂无已平仓记录</div>}
+              {totalGrossProfitDetails.length > 0 && totalRevenueDetailTotalPages > 1 && (
+                <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-3 py-2 text-[11px] tabular-nums">
+                  <button
+                  type="button"
+                  disabled={totalRevenueDetailPage <= 1}
+                  onClick={() => setTotalRevenueDetailPage((current) => Math.max(1, current - 1))}
+                    className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    上一页
+                  </button>
+                  <span className="whitespace-nowrap text-slate-500">第 {totalRevenueDetailPage} 页 / 共 {totalRevenueDetailTotalPages} 页</span>
+                  <button
+                  type="button"
+                  disabled={totalRevenueDetailPage >= totalRevenueDetailTotalPages}
+                  onClick={() => setTotalRevenueDetailPage((current) => Math.min(totalRevenueDetailTotalPages, current + 1))}
+                    className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    下一页
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button type="button" onClick={() => {
+              setShowTotalRevenueCostHint(false);
+              setShowTotalGrossProfitDetail(false);
+            }} className="mt-5 h-11 w-full rounded bg-[#1a56db] text-sm font-semibold text-white active:scale-[0.99]">知道了</button>
+          </div>
+        </div>
+      )}
+
+      {showNetPositionDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="总仓位对冲明细">
+          <div className="max-h-[88vh] w-full max-w-sm overflow-y-auto rounded bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-base font-semibold text-slate-900">总仓位明细</div>
+                <div className="mt-1 text-xs text-slate-500">当前筛选范围内的未平仓档位</div>
+              </div>
+              <button type="button" onClick={() => setShowNetPositionDetail(false)} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭总仓位明细">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3 tabular-nums">
+              <section className="overflow-hidden rounded border border-rose-200">
+                <div className="flex items-center justify-between gap-3 bg-rose-50/70 px-3 py-2">
+                  <span
+                    className="min-w-0 truncate text-sm font-semibold text-rose-600"
+                    title={netPositionBreakdown.long.levels.length > 0 ? `多仓 · ${netPositionBreakdown.long.levels.length}档（${netPositionBreakdown.long.levels.map((bucket) => `${formatLadderPrice(bucket.price)}档`).join("、")}）` : "多仓 · 0档"}
+                  >
+                    多仓 · {netPositionBreakdown.long.levels.length}档{netPositionBreakdown.long.levels.length > 0 ? `（${netPositionBreakdown.long.levels.map((bucket) => formatLadderPrice(bucket.price)).join("、")}）` : ""}
+                  </span>
+                  <span className="whitespace-nowrap text-xs font-semibold text-slate-700">合计 {formatQuantity(netPositionBreakdown.long.quantity)} ETH</span>
+                </div>
+                {netPositionBreakdown.long.levels.length > 0 ? (
+                  <div className="divide-y divide-rose-100">
+                    {netPositionBreakdown.long.levels.map((bucket) => (
+                      <div key={bucket.key} className="flex items-center justify-between gap-4 px-3 py-2 text-xs">
+                        <span className="text-slate-500">{formatLadderPrice(bucket.price)} 档</span>
+                        <span className="font-medium text-slate-800">{formatQuantity(bucket.remainingQuantity)} ETH</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : <div className="px-3 py-3 text-center text-xs text-slate-400">暂无多仓</div>}
+              </section>
+
+              <section className="overflow-hidden rounded border border-emerald-200">
+                <div className="flex items-center justify-between gap-3 bg-emerald-50/70 px-3 py-2">
+                  <span
+                    className="min-w-0 truncate text-sm font-semibold text-emerald-600"
+                    title={netPositionBreakdown.short.levels.length > 0 ? `空仓 · ${netPositionBreakdown.short.levels.length}档（${netPositionBreakdown.short.levels.map((bucket) => `${formatLadderPrice(bucket.price)}档`).join("、")}）` : "空仓 · 0档"}
+                  >
+                    空仓 · {netPositionBreakdown.short.levels.length}档{netPositionBreakdown.short.levels.length > 0 ? `（${netPositionBreakdown.short.levels.map((bucket) => formatLadderPrice(bucket.price)).join("、")}）` : ""}
+                  </span>
+                  <span className="whitespace-nowrap text-xs font-semibold text-slate-700">合计 {formatQuantity(netPositionBreakdown.short.quantity)} ETH</span>
+                </div>
+                {netPositionBreakdown.short.levels.length > 0 ? (
+                  <div className="divide-y divide-emerald-100">
+                    {netPositionBreakdown.short.levels.map((bucket) => (
+                      <div key={bucket.key} className="flex items-center justify-between gap-4 px-3 py-2 text-xs">
+                        <span className="text-slate-500">{formatLadderPrice(bucket.price)} 档</span>
+                        <span className="font-medium text-slate-800">{formatQuantity(bucket.remainingQuantity)} ETH</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : <div className="px-3 py-3 text-center text-xs text-slate-400">暂无空仓</div>}
+              </section>
+
+              <div className="rounded border border-slate-200 bg-slate-50 px-3 py-3">
+                <div className="flex items-baseline justify-between gap-4">
+                  <span className="text-sm font-semibold text-slate-700">合计总仓位</span>
+                  <span className="whitespace-nowrap text-lg font-bold text-slate-900">{netPositionDetailText} <span className="text-xs font-semibold text-slate-500">ETH</span></span>
+                </div>
+                <div className="mt-1 text-[11px] text-slate-500">多 {formatQuantity(netPositionBreakdown.long.quantity)} ETH − 空 {formatQuantity(netPositionBreakdown.short.quantity)} ETH</div>
+              </div>
+            </div>
+
+            <button type="button" onClick={() => setShowNetPositionDetail(false)} className="mt-5 h-11 w-full rounded bg-[#1a56db] text-sm font-semibold text-white active:scale-[0.99]">知道了</button>
+          </div>
+        </div>
+      )}
+
       {grossProfitDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="累计利润说明">
           <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
@@ -2658,6 +3279,22 @@ function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
   );
 }
 
+function LockedFilterValue({ label, value }: { label?: string; value: string }) {
+  return (
+    <div
+      title={value}
+      className="flex h-9 w-full items-center gap-2 truncate rounded border border-slate-300 bg-white/60 px-2 text-[12px] font-medium text-slate-700"
+      style={{
+        textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
+        boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
+      }}
+    >
+      {label && <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>{label}</span>}
+      <span className="truncate">{value}</span>
+    </div>
+  );
+}
+
 function AccountOverview({
   summary,
   showCumulativeData,
@@ -2682,32 +3319,22 @@ function AccountOverview({
     { side: "short", data: summary.short },
   ];
 
+  if (isMemberView) return null;
+
   return (
-    <div className="border-t border-slate-200/80 bg-slate-50/80 p-2.5">
-      <div className="overflow-hidden rounded border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-        <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
-          <span className="text-[11px] text-slate-500">持仓详情</span>
-          <button
-            type="button"
-            onClick={onToggleCumulativeData}
-            aria-label={showCumulativeData ? "收起持仓与累计数据" : "展开持仓与累计数据"}
-            aria-expanded={showCumulativeData}
-            className="flex h-4 w-4 items-center justify-center text-slate-400 transition-colors active:text-slate-700"
-          >
-            <ChevronRight className={`h-4 w-4 transition-transform ${showCumulativeData ? "rotate-90" : ""}`} />
-          </button>
-        </div>
+    <div className="border-t border-slate-100 bg-slate-50 p-2">
+      <div className="overflow-hidden rounded border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.035)]">
         <div className="grid grid-cols-2">
           {sides.map(({ side, data }) => {
             const isLong = side === "long";
             return (
               <div
                 key={side}
-                className={`min-w-0 px-3 py-3 text-left ${isLong ? "border-r border-slate-100" : ""}`}
+                className={`min-w-0 px-3 py-2.5 text-left ${isLong ? "border-r border-slate-100" : ""}`}
               >
                 <div className="flex items-baseline justify-between gap-2">
                   <div className="flex min-w-0 items-baseline gap-1.5">
-                    <span className={`shrink-0 text-xs font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{isLong ? "多仓" : "空仓"}</span>
+                    <span className={`shrink-0 text-xs font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{isLong ? "多" : "空"}</span>
                     <span className="shrink-0 text-[11px] tabular-nums text-slate-400">{data.activeLevels}档</span>
                   </div>
                   <div className="flex shrink-0 items-baseline gap-1">
@@ -2720,15 +3347,13 @@ function AccountOverview({
           })}
         </div>
 
-        {showCumulativeData && (
+        {!isMemberView && showCumulativeData && (
           <div className="grid grid-cols-2 border-t border-slate-100 text-[11px] tabular-nums">
             {sides.map(({ side, data }) => {
               const isLong = side === "long";
-              const labelTone = isLong ? "text-rose-600 bg-rose-50/50" : "text-emerald-600 bg-emerald-50/50";
               const profitTone = data.realizedGross >= 0 ? "text-rose-600 border-rose-500" : "text-emerald-600 border-emerald-500";
               return (
                 <section key={side} className={`min-w-0 ${isLong ? "border-r border-slate-100" : ""}`}>
-                  <div className={`px-3 py-2 text-[11px] font-semibold ${labelTone}`}>{isLong ? "多仓详情" : "空仓详情"}</div>
                   <div className="space-y-0">
                     <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
                       <span className="whitespace-nowrap text-slate-500">累计利润</span>
@@ -2771,40 +3396,63 @@ function AccountOverview({
             })}
           </div>
         )}
+        {!isMemberView && <button
+          type="button"
+          onClick={onToggleCumulativeData}
+          aria-label={showCumulativeData ? "收起持仓与累计数据" : "展开持仓与累计数据"}
+          aria-expanded={showCumulativeData}
+          className="flex w-full items-center justify-between border-t border-slate-100 bg-slate-50 px-3 py-2 text-left text-slate-600 transition-colors active:bg-slate-100"
+        >
+          <span className="text-[11px] font-medium">{showCumulativeData ? "收起" : "详情"}</span>
+          <ChevronRight className={`h-4 w-4 text-slate-400 transition-transform ${showCumulativeData ? "-rotate-90" : "rotate-90"}`} />
+        </button>}
       </div>
     </div>
   );
 }
 
-function PositionCell({ bucket, side, markPrice, onClick }: { bucket?: PositionBucket; side: PositionSide; markPrice: number | null; onClick: () => void }) {
+function PositionCell({ bucket, side, markPrice, onClick, readOnly = false }: { bucket?: PositionBucket; side: PositionSide; markPrice: number | null; onClick: () => void; readOnly?: boolean }) {
   const isLong = side === "long";
   if (!bucket || bucket.remainingQuantity <= 0.0000001) {
     return <div className="px-3 flex items-center text-xs text-slate-300">—</div>;
   }
-
   const tone = isLong
-    ? "bg-rose-50/75 text-rose-800 hover:bg-rose-100"
-    : "bg-emerald-50/75 text-emerald-800 hover:bg-emerald-100";
+    ? `text-rose-600${readOnly ? "" : " hover:brightness-105"}`
+    : `text-emerald-800${readOnly ? "" : " hover:brightness-105"}`;
+  const sideSurfaceStyle = isLong
+    ? {
+      background: "linear-gradient(90deg, rgba(255,255,255,0.56), rgba(255,228,230,0.70) 58%, rgba(254,205,211,0.54))",
+      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.88), inset 0 -1px 0 rgba(159,18,57,0.11)",
+    }
+    : {
+      background: "linear-gradient(90deg, rgba(209,250,229,0.54), rgba(236,253,245,0.70) 42%, rgba(255,255,255,0.56))",
+      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.88), inset 0 -1px 0 rgba(6,95,70,0.11)",
+    };
   const floatingPnl = calculateEstimatedUnrealizedNetPnl(side, markPrice, bucket.remainingQuantity, bucket.costBasis);
   // 与金额盈亏保持同一口径：逐档预估净盈亏 ÷ 本档剩余持仓成本；不计资金费。
   const floatingReturnRate = floatingPnl === null || bucket.costBasis <= 0
     ? null
     : floatingPnl / bucket.costBasis;
   const pnlTone = floatingPnl !== null && floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600";
-
+  const content = (
+    <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
+      <span className="shrink-0 text-lg font-bold leading-none tracking-tight" style={{ textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.88), 0.75px 0.75px 0 rgba(71,85,105,0.20)" }}>{formatQuantity(bucket.remainingQuantity)}</span>
+      {floatingPnl !== null && (
+        <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`}>
+          <span className="whitespace-nowrap text-[11px] font-semibold leading-none" style={{ textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.84), 0.55px 0.55px 0 rgba(71,85,105,0.18)" }}>{formatSigned(floatingPnl)}</span>
+          {floatingReturnRate !== null && (
+            <span className="mt-1 text-[10px] font-medium leading-none opacity-85">{formatSignedPercent(floatingReturnRate)}</span>
+          )}
+        </span>
+      )}
+    </div>
+  );
+  if (readOnly) {
+    return <div className={`flex min-h-[52px] w-full min-w-0 items-center px-1.5 py-1.5 ${tone}`} style={sideSurfaceStyle}>{content}</div>;
+  }
   return (
-    <button onClick={onClick} className={`min-h-[52px] w-full min-w-0 px-1.5 py-1.5 text-left transition-colors active:brightness-95 ${tone}`}>
-      <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
-        <span className="shrink-0 text-lg font-bold leading-none tracking-tight">{formatQuantity(bucket.remainingQuantity)}</span>
-        {floatingPnl !== null && (
-          <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`}>
-            <span className="whitespace-nowrap text-[11px] font-semibold leading-none">{formatSigned(floatingPnl)}</span>
-            {floatingReturnRate !== null && (
-              <span className="mt-1 text-[10px] font-medium leading-none opacity-85">{formatSignedPercent(floatingReturnRate)}</span>
-            )}
-          </span>
-        )}
-      </div>
+    <button onClick={onClick} className={`flex min-h-[52px] w-full min-w-0 items-center px-1.5 py-1.5 text-left transition-[filter] active:brightness-95 ${tone}`} style={sideSurfaceStyle}>
+      {content}
     </button>
   );
 }
@@ -2825,18 +3473,18 @@ function LadderCell({
   readOnly?: boolean;
 }) {
   if (bucket && bucket.remainingQuantity > 0.0000001) {
-    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={onClose} />;
+    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={onClose} readOnly={readOnly} />;
   }
 
   const isLong = side === "long";
   if (readOnly) {
-    return <div className={`min-h-[52px] w-full ${isLong ? "bg-rose-50/45" : "bg-emerald-50/45"}`} />;
+    return <div className="min-h-[52px] w-full" />;
   }
   return (
     <button
       onClick={onOpen}
       aria-label={isLong ? "在该价格档位开多" : "在该价格档位开空"}
-      className={`min-h-[52px] w-full transition-colors active:brightness-95 ${isLong ? "bg-rose-50/45 hover:bg-rose-100/80" : "bg-emerald-50/45 hover:bg-emerald-100/80"}`}
+      className="min-h-[52px] w-full transition-colors hover:bg-white/25 active:brightness-95"
     />
   );
 }

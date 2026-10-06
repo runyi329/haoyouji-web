@@ -5656,8 +5656,8 @@ export default function LedgerDetail() {
                 </div>
               </button>
 
-              {/* T+0 速记账本入口 - 管理员进入全量管理视图，普通成员进入本人关联仓位的只读视图；代入视角隐藏 */}
-              {isCustomAF && Boolean((ledgerData as any)?.userRole) && !viewAsUserId && <button
+              {/* 管理员保留独立的 T+0 管理入口；成员统一在融资付息页的“本人 / 参与 / T”中查看只读仓位。 */}
+              {isCustomAF && (isOwner || isAdmin) && !viewAsUserId && <button
                 onClick={openT0Journal}
                 className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
                 style={{ background: 'linear-gradient(135deg, #18213d 0%, #2d3d73 52%, #373078 100%)', border: '1px solid #4b5fa3', boxShadow: '0 2px 12px rgba(37,54,130,0.2)' }}

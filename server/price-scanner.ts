@@ -15,6 +15,12 @@ const CRYPTO_REQUEST_TIMEOUT_MS = 2_000;
 const FAST_CRYPTO_CYCLE_TIMEOUT_MS = 2_500;
 // T+0 永续标记价使用 Gate → HTX 主备；接口响应较慢时单独给足时限。
 const PERPETUAL_MARK_REQUEST_TIMEOUT_MS = 4_000;
+const GATE_ETH_PERPETUAL_WS_URL = 'wss://fx-ws.gateio.ws/v4/ws/usdt';
+const PERPETUAL_MARK_STREAM_STALE_MS = 12_000;
+const PERPETUAL_MARK_STREAM_PING_MS = 20_000;
+const PERPETUAL_MARK_RECONNECT_MIN_MS = 1_000;
+const PERPETUAL_MARK_RECONNECT_MAX_MS = 30_000;
+const PERPETUAL_MARK_CACHE_SAVE_DELAY_MS = 2_000;
 
 type PriceEntry = {
   price: number;
@@ -44,6 +50,13 @@ let lastSlowMarketScanAt = 0;
 let slowMarketScanInProgress = false;
 let usdtCnyRefreshInProgress = false;
 let perpetualMarkScanInProgress = false;
+let perpetualMarkSocket: WebSocket | null = null;
+let perpetualMarkStreamStarted = false;
+let perpetualMarkStreamLastMessageAt = 0;
+let perpetualMarkStreamReconnectDelayMs = PERPETUAL_MARK_RECONNECT_MIN_MS;
+let perpetualMarkStreamReconnectTimer: NodeJS.Timeout | null = null;
+let perpetualMarkStreamPingTimer: NodeJS.Timeout | null = null;
+let perpetualMarkCacheSaveTimer: NodeJS.Timeout | null = null;
 
 // 已覆盖原有行情需求，并包含52号账本当前的全部加密资产。
 // 数字币按 Gate.io → HTX → OKX 的顺序查询 USDT 现货报价；B2 为 Binance Alpha 的 B² Network 代币。
@@ -138,6 +151,15 @@ function loadCacheFromFile() {
 function saveCacheToFile() {
   try { fs.writeFileSync(CACHE_FILE, JSON.stringify(latestPrices, null, 2), 'utf8'); }
   catch (error) { console.warn('[行情] 写入本地缓存失败:', (error as Error).message); }
+}
+
+/** Gate WebSocket 可能在短时间内连续推送；合并落盘，内存价格仍逐条即时更新。 */
+function schedulePerpetualMarkCacheSave() {
+  if (perpetualMarkCacheSaveTimer) return;
+  perpetualMarkCacheSaveTimer = setTimeout(() => {
+    perpetualMarkCacheSaveTimer = null;
+    saveCacheToFile();
+  }, PERPETUAL_MARK_CACHE_SAVE_DELAY_MS);
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -619,6 +641,111 @@ async function scanEthPerpetualMark() {
   }
 }
 
+function isEthPerpetualMarkStreamFresh() {
+  return perpetualMarkSocket?.readyState === WebSocket.OPEN
+    && Date.now() - perpetualMarkStreamLastMessageAt < PERPETUAL_MARK_STREAM_STALE_MS;
+}
+
+function clearEthPerpetualMarkStreamPing() {
+  if (!perpetualMarkStreamPingTimer) return;
+  clearInterval(perpetualMarkStreamPingTimer);
+  perpetualMarkStreamPingTimer = null;
+}
+
+function scheduleEthPerpetualMarkReconnect() {
+  if (!perpetualMarkStreamStarted || perpetualMarkStreamReconnectTimer) return;
+  const delay = perpetualMarkStreamReconnectDelayMs;
+  perpetualMarkStreamReconnectDelayMs = Math.min(
+    PERPETUAL_MARK_RECONNECT_MAX_MS,
+    perpetualMarkStreamReconnectDelayMs * 2,
+  );
+  perpetualMarkStreamReconnectTimer = setTimeout(() => {
+    perpetualMarkStreamReconnectTimer = null;
+    connectEthPerpetualMarkStream();
+  }, delay);
+}
+
+function connectEthPerpetualMarkStream() {
+  if (!perpetualMarkStreamStarted) return;
+  if (perpetualMarkSocket && (
+    perpetualMarkSocket.readyState === WebSocket.CONNECTING
+    || perpetualMarkSocket.readyState === WebSocket.OPEN
+  )) return;
+
+  let socket: WebSocket;
+  try {
+    socket = new WebSocket(GATE_ETH_PERPETUAL_WS_URL);
+  } catch (error) {
+    console.warn('[行情] T+0 ETH永续实时流创建失败:', (error as Error).message);
+    scheduleEthPerpetualMarkReconnect();
+    return;
+  }
+  perpetualMarkSocket = socket;
+
+  socket.addEventListener('open', () => {
+    if (perpetualMarkSocket !== socket) return;
+    perpetualMarkStreamReconnectDelayMs = PERPETUAL_MARK_RECONNECT_MIN_MS;
+    socket.send(JSON.stringify({
+      time: Math.floor(Date.now() / 1000),
+      channel: 'futures.tickers',
+      event: 'subscribe',
+      payload: ['ETH_USDT'],
+    }));
+    clearEthPerpetualMarkStreamPing();
+    perpetualMarkStreamPingTimer = setInterval(() => {
+      if (socket.readyState !== WebSocket.OPEN) return;
+      socket.send(JSON.stringify({ time: Math.floor(Date.now() / 1000), channel: 'futures.ping' }));
+    }, PERPETUAL_MARK_STREAM_PING_MS);
+    console.log('[行情] T+0 ETH永续实时流已连接');
+  });
+
+  socket.addEventListener('message', (event) => {
+    if (perpetualMarkSocket !== socket) return;
+    try {
+      const payload = JSON.parse(String(event.data));
+      if (payload?.channel !== 'futures.tickers' || payload?.event !== 'update') return;
+      const rows = Array.isArray(payload?.result) ? payload.result : [];
+      const row = rows.find((item: any) => item?.contract === 'ETH_USDT');
+      const price = Number(row?.mark_price);
+      if (!isValidPrice(price)) return;
+      const changePercent = Number(row?.change_percentage);
+      entryFromPrice(ETH_PERP_MARK_CACHE_KEY, price, 'Gate.io ETH/USDT 永续标记价（实时）', {
+        high24h: Number(row?.high_24h) || 0,
+        low24h: Number(row?.low_24h) || 0,
+        volume24h: Number(row?.volume_24h_base) || 0,
+        quoteVolume24h: Number(row?.volume_24h_quote) || 0,
+        changePercent: Number.isFinite(changePercent) ? changePercent : undefined,
+      });
+      perpetualMarkStreamLastMessageAt = Date.now();
+      schedulePerpetualMarkCacheSave();
+    } catch (error) {
+      console.warn('[行情] T+0 ETH永续实时流消息解析失败:', (error as Error).message);
+    }
+  });
+
+  socket.addEventListener('error', () => {
+    // close 事件会统一清理并安排退避重连，避免同一异常重复打印。
+  });
+
+  socket.addEventListener('close', () => {
+    if (perpetualMarkSocket !== socket) return;
+    perpetualMarkSocket = null;
+    clearEthPerpetualMarkStreamPing();
+    console.warn('[行情] T+0 ETH永续实时流已断开，临时回退REST并准备重连');
+    scheduleEthPerpetualMarkReconnect();
+  });
+}
+
+/**
+ * T+0 专属常驻实时流：仅订阅一个 ETH 永续合约，不影响全站现货扫描。
+ * 页面打开时直接读取持久化/内存缓存；WebSocket 首包与后续推送持续更新该缓存，断线时保留 REST 主备兜底。
+ */
+function startEthPerpetualMarkStream() {
+  if (perpetualMarkStreamStarted) return;
+  perpetualMarkStreamStarted = true;
+  connectEthPerpetualMarkStream();
+}
+
 async function updateSecuritiesAndCommodities() {
   const sinaCoins = [...STOCK_COINS, 'CRCL', 'DRAM', 'MU', 'MSTR', ...COMMODITY_COINS];
   const sina = await fetchSinaQuotes(sinaCoins);
@@ -686,11 +813,15 @@ export function startPriceScanner() {
   if (nextScanTimer) return;
   loadCacheFromFile();
   void scanPrices();
+  startEthPerpetualMarkStream();
+  // WebSocket 建连或收流异常时才以 Gate → HTX REST 保温；实时流健康时不再重复轮询 ETH 永续标记价。
   void scanEthPerpetualMark();
   // 固定节拍：上一轮尚未完成时由 scanInProgress 丢弃本轮，避免“完成后再等三秒”变成六秒。
   nextScanTimer = setInterval(() => { void scanPrices(); }, CRYPTO_SCAN_INTERVAL_MS);
-  setInterval(() => { void scanEthPerpetualMark(); }, CRYPTO_SCAN_INTERVAL_MS);
-  console.log(`[行情] 统一行情扫描已启动：数字币固定每${CRYPTO_SCAN_INTERVAL_MS / 1000}秒刷新，证券与商品每${SLOW_MARKET_SCAN_INTERVAL_MS / 1000}秒刷新`);
+  setInterval(() => {
+    if (!isEthPerpetualMarkStreamFresh()) void scanEthPerpetualMark();
+  }, CRYPTO_SCAN_INTERVAL_MS);
+  console.log(`[行情] 统一行情扫描已启动：数字币固定每${CRYPTO_SCAN_INTERVAL_MS / 1000}秒刷新，ETH永续由T+0专属实时流维护，证券与商品每${SLOW_MARKET_SCAN_INTERVAL_MS / 1000}秒刷新`);
 }
 
 export function getLatestPrice(coin: string): number | null {
@@ -704,6 +835,16 @@ export function getLatestPrice(coin: string): number | null {
 }
 
 export function getAllLatestPrices() { return { ...latestPrices }; }
+export function getT0EthPerpetualMark() {
+  const entry = latestPrices[ETH_PERP_MARK_CACHE_KEY];
+  const health = priceHealth[ETH_PERP_MARK_CACHE_KEY];
+  return {
+    price: entry?.price ?? null,
+    updatedAt: entry?.updatedAt ?? null,
+    source: health?.source ?? 'none',
+    ageMilliseconds: entry ? Math.max(0, Date.now() - new Date(entry.updatedAt).getTime()) : null,
+  };
+}
 export function getLatestChangePercent(coin: string): number | null { return latestPrices[coin.toUpperCase()]?.changePercent ?? null; }
 export function getLatestTickerData(coin: string): Omit<PriceEntry, 'updatedAt'> | null {
   const entry = latestPrices[coin.toUpperCase()];

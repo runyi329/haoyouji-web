@@ -17,6 +17,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+// 与资金方订单页复用同一份只读 T+0 视图，避免普通成员与资金方出现两套口径。
+const T0Journal = React.lazy(() => import("./T0Journal").then(module => ({ default: module.T0JournalView })));
+
 // ─── 币种配置 ──────────────────────────────────────────────────
 // 委买价格档位（低于市价，抄底用）
 const BUY_PRICE_OPTIONS: Record<string, number[]> = {
@@ -2391,6 +2394,21 @@ export default function CryptoPrediction() {
   );
   const isCustomAF = (ledgerInfo as any)?.type === 'custom_af';
   const isOwner = (ledgerInfo as any)?.userRole === 'owner';
+  // 非管理员成员的 T+0 入口统一放在融资付息的“本人 / 参与 / T”二级页签中。
+  // 服务端仍按当前用户（或经校验的代入用户）强制隔离为个人只读数据。
+  const canLoadMemberT0Tab = ledgerId === 52
+    && tab === 'finance'
+    && Boolean((ledgerInfo as any)?.userRole)
+    && !isOwner;
+  const t0MemberJournalQuery = trpc.ledger.t0GetJournal.useQuery(
+    { ledgerId: 52 },
+    { enabled: canLoadMemberT0Tab, retry: false, staleTime: 30_000 },
+  );
+  const memberT0OrderCount = Array.isArray((t0MemberJournalQuery.data as any)?.entries)
+    ? (t0MemberJournalQuery.data as any).entries.length
+    : 0;
+  const memberHasT0Orders = (t0MemberJournalQuery.data as any)?.viewerMode === 'member'
+    && memberT0OrderCount > 0;
 
   // 融资付息：所有自定义账本成员均可在融资付息 Tab 查询自己的订单与参与订单
   // 52号账本是固定的 custom_af。普通成员首次进入时，getById 还会执行自动准入检查；
@@ -2412,8 +2430,11 @@ export default function CryptoPrediction() {
   const [mySoloCollExpanded, setMySoloCollExpanded] = useState(true);
   // 融资订单子tab：全部 / 股 / 币 / 共享
   // 融资订单三层筛选
-  const [financeL2Tab, setFinanceL2Tab] = useState<'mine' | 'shared'>('mine');
+  const [financeL2Tab, setFinanceL2Tab] = useState<'mine' | 'shared' | 't0'>('mine');
   const [financeL3Tab, setFinanceL3Tab] = useState<'all' | 'stock' | 'crypto' | 'settled'>('all');
+  useEffect(() => {
+    if (financeL2Tab === 't0' && !memberHasT0Orders) setFinanceL2Tab('mine');
+  }, [financeL2Tab, memberHasT0Orders]);
   const [financeOrderSearch, setFinanceOrderSearch] = useState('');
   const financeOrderSearchTokens = useMemo(
     () => financeOrderSearch.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean),
@@ -3855,6 +3876,29 @@ export default function CryptoPrediction() {
                 boxShadow: active ? '0 1px 3px rgba(26,86,219,0.3)' : 'none',
               } as React.CSSProperties);
 
+              const financeLevelTwoTabs = [
+                { key: 'mine' as const, label: '本人', count: cntMine },
+                { key: 'shared' as const, label: '参与', count: cntShared },
+                ...(memberHasT0Orders ? [{ key: 't0' as const, label: 'T', count: memberT0OrderCount }] : []),
+              ];
+
+              if (financeL2Tab === 't0' && memberHasT0Orders) {
+                return (
+                  <>
+                    <div className="mb-3 flex rounded p-1 gap-1" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
+                      {financeLevelTwoTabs.map(({ key, label, count }) => (
+                        <button key={key} onClick={() => { setFinanceL2Tab(key); setFinanceL3Tab('all'); }} style={tabBtnStyle(financeL2Tab === key)}>
+                          {label}<span style={{ marginLeft: '5px', opacity: 0.75, fontSize: '11px' }}>{count}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <React.Suspense fallback={<div className="rounded bg-white p-5 text-center text-sm text-slate-400">正在加载 T+0 仓位…</div>}>
+                      <div className="-mx-4"><T0Journal embedded allowAdminViewAs /></div>
+                    </React.Suspense>
+                  </>
+                );
+              }
+
               const subBtnStyle = (active: boolean) => ({
                 flex: 1,
                 padding: '5px 0',
@@ -3869,16 +3913,13 @@ export default function CryptoPrediction() {
 
               return (
                 <>
-                  {/* 第2层仅保留本人和参与：他人设置与真实参与订单统一进入参与。 */}
+                  {/* 第2层统一展示本人、参与与有 T+0 流水时的 T 页签。 */}
                   <div className="flex items-center gap-2 mb-3">
                     <div className="flex min-w-0 flex-1 rounded p-1 gap-1" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
-                      {([
-                        ['mine',   '本人', cntMine],
-                        ['shared', '参与', cntShared],
-                      ] as const).map(([key, label, cnt]) => (
+                      {financeLevelTwoTabs.map(({ key, label, count }) => (
                         <button key={key} onClick={() => { setFinanceL2Tab(key as any); setFinanceL3Tab('all'); }}
                           style={tabBtnStyle(financeL2Tab === key)}>
-                          {label} <span style={{ opacity: 0.75, fontSize: '11px' }}>{cnt}</span>
+                          {label} <span style={{ opacity: 0.75, fontSize: '11px' }}>{count}</span>
                         </button>
                       ))}
                     </div>
