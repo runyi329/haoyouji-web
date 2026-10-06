@@ -155,6 +155,46 @@ function calculateAvailableCloseCents(rows: any[], action: T0JournalAction, targ
   return balances.get(`${actionSide(action)}:${priceKey(archivePrice)}:${relatedUserKey(relatedUserId)}:${relatedFundKey(relatedFundId)}`) || 0;
 }
 
+/**
+ * 删除或编辑开仓前，按与平仓可用量一致的 FIFO 口径判断该主单是否真的被后续平仓消耗。
+ * 不能仅因同一十美元档存在历史平仓就拒绝：平仓可能早于该开仓，或已由更早的主单承接。
+ */
+function openingHasDependentClose(rows: any[], openingEntryId: number): boolean {
+  const opening = rows.find((row) => Number(row.id) === openingEntryId);
+  if (!opening) return false;
+
+  const openingAction = String(opening.action) as T0JournalAction;
+  if (!isOpeningAction(openingAction)) return false;
+
+  const closingAction: T0JournalAction = actionSide(openingAction) === "long" ? "closeLong" : "closeShort";
+  const archivePrice = archivePriceForAction(openingAction, opening.price);
+  const archiveKey = priceKey(archivePrice);
+  const openingQueue: Array<{ entryId: number; remainingCents: number }> = [];
+
+  for (const row of rows) {
+    const rowAction = String(row.action) as T0JournalAction;
+    if (rowAction === openingAction) {
+      if (priceKey(archivePriceForAction(rowAction, row.price)) !== archiveKey) continue;
+      openingQueue.push({ entryId: Number(row.id), remainingCents: quantityToCents(row.quantity) });
+      continue;
+    }
+    if (rowAction !== closingAction || row.target_price === null || row.target_price === undefined) continue;
+    if (priceKey(archivedTargetPrice(rowAction, row.target_price, row.price)) !== archiveKey) continue;
+
+    let remainingCloseCents = quantityToCents(row.quantity);
+    for (const queuedOpening of openingQueue) {
+      if (remainingCloseCents <= 0) break;
+      if (queuedOpening.remainingCents <= 0) continue;
+      const allocatedCents = Math.min(queuedOpening.remainingCents, remainingCloseCents);
+      queuedOpening.remainingCents -= allocatedCents;
+      remainingCloseCents -= allocatedCents;
+      if (queuedOpening.entryId === openingEntryId && allocatedCents > 0) return true;
+    }
+  }
+
+  return false;
+}
+
 function mapAccount(row: any) {
   return {
     id: Number(row.id),
@@ -763,33 +803,24 @@ async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: n
   }
 
   const entryAction = String(entry.action) as T0JournalAction;
-  const closeAction = actionSide(entryAction) === "long" ? "closeLong" : "closeShort";
-  const archivePrice = archivePriceForAction(entryAction, entry.price);
-  const legacyStoredTargetPrice = toNumber(entry.target_price);
-  const legacyActualPrice = toNumber(entry.price);
-  const [dependentRows] = await tx.execute(
-    `SELECT id
+  const [scopeRows] = await tx.execute(
+    `SELECT id, action, quantity, price, target_price, trade_time, created_at
        FROM ledger52_t0_journal_entries
       WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
-        AND action = ? AND target_price IN (?, ?, ?)
         AND COALESCE(related_user_id, 0) = ?
         AND COALESCE(related_fund_id, 0) = ?
-      LIMIT 1 FOR UPDATE`,
+      ORDER BY trade_time ASC, id ASC FOR UPDATE`,
     [
       LEDGER_52_T0_JOURNAL_ID,
       actorUserId,
       Number(entry.account_id),
       String(entry.symbol),
-      closeAction,
-      archivePrice,
-      legacyStoredTargetPrice || legacyActualPrice,
-      legacyActualPrice,
       toNumber(entry.related_user_id),
       toNumber(entry.related_fund_id),
     ],
   );
-  if (asRows(dependentRows)[0]) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓价格档位已有平仓记录，请先处理对应平仓流水" });
+  if (openingHasDependentClose(asRows(scopeRows), Number(entry.id))) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已被后续平仓使用，请先处理关联平仓流水" });
   }
   return entry;
 }
