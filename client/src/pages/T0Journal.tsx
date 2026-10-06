@@ -784,13 +784,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setRelatedUserFilterId((current) => isFirstJournalHydration || (current !== "all" && current !== "unlinked" && !nextRecentRelatedUsers.some((user) => user.id === current)) ? "all" : current);
       setRelatedFundFilterId((current) => isFirstJournalHydration || (current !== "all" && current !== "unclassified" && !nextRelatedFunds.some((fund) => fund.id === current)) ? "all" : current);
     } else {
-      setSelectedAccountId("all");
-      setRelatedUserFilterId((current) => current === "all" || current === "unlinked" || nextRecentRelatedUsers.some((user) => user.id === current)
-        ? current
-        : "all");
-      setRelatedFundFilterId((current) => current === "all" || current === "unclassified" || nextRelatedFunds.some((fund) => fund.id === current)
-        ? current
-        : "all");
+      // 成员端：一个选项直接锁定；两个及以上选项才保留“全部 + 分项”的筛选。
+      // 后续五秒静默同步只修正已失效的选项，不会覆盖成员主动选择的单项筛选。
+      const memberFundFilterIds = [
+        ...nextRelatedFunds.map((fund) => fund.id),
+        ...(nextTrades.some((trade) => !trade.relatedFundId) ? ["unclassified"] : []),
+      ];
+      const normalizeMemberFilter = (current: string, optionIds: string[]) => {
+        if (optionIds.length === 1) return optionIds[0];
+        return isFirstJournalHydration || (current !== "all" && !optionIds.includes(current))
+          ? "all"
+          : current;
+      };
+      setSelectedAccountId((current) => normalizeMemberFilter(current, nextAccounts.map((account) => account.id)));
+      setRelatedUserFilterId("all");
+      setRelatedFundFilterId((current) => normalizeMemberFilter(current, memberFundFilterIds));
+      setJournalAccountFilterId((current) => normalizeMemberFilter(current, nextAccounts.map((account) => account.id)));
+      setJournalRelatedUserFilterId("all");
+      setJournalRelatedFundFilterId((current) => normalizeMemberFilter(current, memberFundFilterIds));
     }
     setLastRelatedUserId((current) => nextRecentRelatedUsers.some((user) => user.id === current)
       ? current
@@ -868,6 +879,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => relatedFunds.filter((fund) => journalRelatedUserFilterId === "all" || fund.relatedUserId === journalRelatedUserFilterId),
     [relatedFunds, journalRelatedUserFilterId],
   );
+  const memberFundFilterOptionIds = useMemo(() => [
+    ...relatedFunds.map((fund) => fund.id),
+    ...(trades.some((trade) => !trade.relatedFundId) ? ["unclassified"] : []),
+  ], [relatedFunds, trades]);
+  const shouldLockMemberAccountFilter = isMemberView && accounts.length === 1;
+  const shouldLockMemberFundFilter = isMemberView && memberFundFilterOptionIds.length === 1;
   const allJournalActionsSelected = RECENT_JOURNAL_ACTIONS.every((action) => journalActionFilters.has(action));
   const toggleJournalActionFilter = (action: TradeAction) => {
     setRecentJournalPage(1);
@@ -1631,9 +1648,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <select
                   value={selectedAccountId}
                   onChange={(event) => setSelectedAccountId(event.target.value)}
-                  className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
+                  disabled={shouldLockMemberAccountFilter}
+                  className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
                 >
-                  <option value="all">全部账户</option>
+                  {!shouldLockMemberAccountFilter && <option value="all">全部账户</option>}
                   {accounts.length === 0 && <option value="">暂无账户</option>}
                   {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                 </select>
@@ -1663,9 +1681,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <select
                   value={relatedFundFilterId}
                   onChange={(event) => setRelatedFundFilterId(event.target.value)}
-                  className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
+                  disabled={shouldLockMemberFundFilter}
+                  className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
                 >
-                  <option value="all">全部专项款</option>
+                  {!shouldLockMemberFundFilter && <option value="all">全部专项款</option>}
                   {trades.some((trade) => !trade.relatedFundId) && <option value="unclassified">未区分专项款（历史）</option>}
                   {availableRelatedFunds.map((fund) => (
                     <option key={fund.id} value={fund.id}>{fund.name}{!isMemberView && relatedUserFilterId === "all" ? ` · ${getRelatedFundOwnerName(fund)}` : ""}</option>
@@ -1793,9 +1812,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       setJournalAccountFilterId(event.target.value);
                       setRecentJournalPage(1);
                     }}
-                    className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
+                    disabled={shouldLockMemberAccountFilter}
+                    className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
                   >
-                    <option value="all">全部账户</option>
+                    {!shouldLockMemberAccountFilter && <option value="all">全部账户</option>}
                     {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                   </select>
                 </label>
@@ -1826,9 +1846,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       setJournalRelatedFundFilterId(event.target.value);
                       setRecentJournalPage(1);
                     }}
-                    className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
+                    disabled={shouldLockMemberFundFilter}
+                    className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:cursor-default disabled:bg-slate-50"
                   >
-                    <option value="all">全部专项款</option>
+                    {!shouldLockMemberFundFilter && <option value="all">全部专项款</option>}
                     {trades.some((trade) => !trade.relatedFundId) && <option value="unclassified">未区分专项</option>}
                     {journalAvailableRelatedFunds.map((fund) => (
                       <option key={fund.id} value={fund.id}>{fund.name}{!isMemberView && journalRelatedUserFilterId === "all" ? ` · ${getRelatedFundOwnerName(fund)}` : ""}</option>
