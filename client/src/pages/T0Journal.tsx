@@ -2005,7 +2005,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.62)",
             }}
           >
-            <div className="grid grid-cols-[minmax(62px,0.8fr)_minmax(74px,0.95fr)_minmax(112px,1.5fr)] gap-1.5">
+            <div className="grid grid-cols-[minmax(78px,0.85fr)_minmax(84px,0.95fr)_minmax(110px,1.35fr)] gap-1.5 min-[375px]:grid-cols-[minmax(96px,0.85fr)_minmax(96px,0.95fr)_minmax(124px,1.35fr)]">
               <label className="relative min-w-0">
                 {!shouldLockMemberAccountFilter && <span className="pointer-events-none absolute left-1.5 top-1/2 z-10 -translate-y-1/2 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>账户</span>}
                 {shouldLockMemberAccountFilter ? <LockedFilterValue label="账户" value={lockedAccountName} /> : (
@@ -2021,7 +2021,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
                     }}
                   >
-                    <option value="all">全部账户</option>
+                    <option value="all">全部</option>
                     {accounts.length === 0 && <option value="">暂无账户</option>}
                     {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                   </select>
@@ -2043,7 +2043,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
                     }}
                   >
-                    <option value="all">全部用户</option>
+                    <option value="all">全部</option>
                     {trades.some((trade) => !trade.relatedUserId) && <option value="unlinked">未关联用户（历史）</option>}
                     {recentRelatedUsers.map((user) => (
                       <option key={user.id} value={user.id}>{user.name}{user.username ? ` · @${user.username}` : ""}</option>
@@ -2066,7 +2066,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
                     }}
                   >
-                    <option value="all">全部项目</option>
+                    <option value="all">全部</option>
                     {trades.some((trade) => !trade.relatedFundId) && <option value="unclassified">未区分项目（历史）</option>}
                     {availableRelatedFunds.map((fund) => (
                       <option key={fund.id} value={fund.id}>{fund.name}{!isMemberView && relatedUserFilterId === "all" ? ` · ${getRelatedFundOwnerName(fund)}` : ""}</option>
