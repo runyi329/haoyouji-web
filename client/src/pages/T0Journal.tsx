@@ -327,8 +327,10 @@ function buildAdaptiveLadderLevels(markLadderPrice: number | null, positionPrice
   }
   if (markLadderPrice !== null) levels.add(markLadderPrice);
   // 远端空白价位可以折叠，但已有仓位的十元归档档位必须始终可见。
+  // 不能复用实时价格的2500–3000展示边界：旧仓可能在区间外，
+  // 仍须保留为一个独立档位，且不补齐两者之间的数百个空白档。
   for (const price of positionPrices) {
-    if (Number.isFinite(price) && price >= LADDER_MIN_PRICE && price <= LADDER_MAX_PRICE) {
+    if (Number.isFinite(price) && price > 0) {
       levels.add(price);
     }
   }
@@ -1525,7 +1527,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedUsername: trade.relatedUsername ?? "",
       relatedFundId: trade.relatedFundId ?? "legacy",
       relatedFundName: trade.relatedFundName ?? "",
-      quantity: formatQuantity(Math.min(target.remainingQuantity, trade.quantity)),
+      // 表单值不能带千分位逗号，否则超过千位的数量会无法通过数值校验。
+      quantity: normalizeEthQuantity(String(Math.min(target.remainingQuantity, trade.quantity))),
       price: markPrice ? markPrice.toFixed(2) : "",
       note: "",
       targetPrice: target.price,
@@ -1549,7 +1552,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedUsername: trade.relatedUsername ?? "",
       relatedFundId: trade.relatedFundId ?? "legacy",
       relatedFundName: trade.relatedFundName ?? "",
-      quantity: formatQuantity(trade.quantity),
+      // 编辑输入使用机器可解析的原始数值；展示层才使用千分位格式。
+      quantity: normalizeEthQuantity(String(trade.quantity)),
       price: trade.price.toFixed(2),
       note: trade.note ?? "",
       editingEntryId: trade.id,
@@ -2926,7 +2930,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
               )}
 
-              <div className="space-y-1.5">
+              {!isEditingEntry && <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-0.5 text-[11px] text-slate-500">
                     <span>当前未平仓主单</span>
                     <span className="tabular-nums">{activeOpenedTradeList.length} 笔 · {formatQuantity(entrySideSummary.quantity)} ETH</span>
@@ -3095,10 +3099,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </div>
                     );
                   })}
-              </div>
+              </div>}
 
               {canManage && <>
               <div className="grid grid-cols-1 gap-3">
+                {isEditingEntry && (
+                  <div className="rounded border border-indigo-200 bg-indigo-50/70 px-3 py-2.5">
+                    <div className="text-xs font-semibold text-indigo-800">正在编辑本笔开仓</div>
+                    <div className="mt-1 text-sm font-semibold tabular-nums text-slate-800">
+                      {ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH @ {formatPrice(Number(entryForm.price))}
+                    </div>
+                    <div className="mt-1 text-[11px] leading-4 text-indigo-700/80">请直接修改下方字段，完成后点击底部“保存修改”。</div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3 items-start">
                   <Field label={<span className="text-sm font-semibold text-slate-800">数量（ETH）</span>}>
                     <input
