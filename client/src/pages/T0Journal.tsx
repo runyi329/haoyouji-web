@@ -58,6 +58,39 @@ type PreviewTrade = {
   note?: string;
   clientRequestId?: string;
   isSyncing?: boolean;
+  /** 成员仅在作为受益人查看项目分配镜像订单时使用，不向订单本人展示分配明细。 */
+  profitShareProjectName?: string;
+  profitSharePercentage?: number;
+};
+
+type ProfitShareSnapshot = {
+  entryId: string;
+  openingEntryId: string;
+  relatedFundId: number;
+  relatedFundName?: string;
+  sourceUserId: number;
+  beneficiaryUserId: number;
+  percentage: number;
+  matchedQuantity: number;
+  sourceUserName?: string;
+  beneficiaryUserName?: string;
+};
+
+type ProfitShareRule = {
+  id: number;
+  relatedFundId: number;
+  relatedFundName: string;
+  sourceUserId: number;
+  sourceUserName: string;
+  beneficiaryUserId: number;
+  beneficiaryUserName: string;
+  percentage: number;
+  createdAt: string;
+};
+
+type ProfitShareAllocationDraft = {
+  user: PreviewRelatedUser;
+  percentage: string;
 };
 
 const UNLINKED_USER_ACCOUNT_MEMORY_KEY = "__unlinked__";
@@ -653,6 +686,49 @@ function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
   return allocations;
 }
 
+/** 开平仓都按同一开仓的多人快照切分数量和交易成本；所有受益人比例严格合计100%。 */
+function projectMemberProfitShareTrades(rawTrades: PreviewTrade[], snapshots: ProfitShareSnapshot[], viewerUserId: string) {
+  const viewerId = Number(viewerUserId);
+  if (!Number.isInteger(viewerId) || viewerId <= 0) return rawTrades;
+  const beneficiarySnapshotsByEntry = new Map<string, ProfitShareSnapshot[]>();
+  const entriesWithSnapshots = new Set<string>();
+  for (const snapshot of snapshots) {
+    entriesWithSnapshots.add(snapshot.entryId);
+    if (snapshot.beneficiaryUserId === viewerId) {
+      const entryRows = beneficiarySnapshotsByEntry.get(snapshot.entryId) ?? [];
+      entryRows.push(snapshot);
+      beneficiarySnapshotsByEntry.set(snapshot.entryId, entryRows);
+    }
+  }
+  const projected: PreviewTrade[] = [];
+  for (const trade of rawTrades) {
+    const beneficiarySnapshots = beneficiarySnapshotsByEntry.get(trade.id) ?? [];
+    if (beneficiarySnapshots.length === 0) {
+      // 规则上线前的历史订单没有快照，订单本人继续按完整原单查看，保证历史可追溯。
+      if (!entriesWithSnapshots.has(trade.id) && Number(trade.relatedUserId || 0) === viewerId) projected.push(trade);
+      continue;
+    }
+    for (const snapshot of beneficiarySnapshots) {
+      const rate = Number(snapshot.percentage || 0) / 100;
+      if (rate <= 0.0000001) continue;
+      const matchedQuantity = ACTIONS[trade.action].opening ? trade.quantity : snapshot.matchedQuantity;
+      if (!Number.isFinite(matchedQuantity) || matchedQuantity <= 0) continue;
+      const allocatedFee = ACTIONS[trade.action].opening
+        ? trade.fee * rate
+        : (trade.quantity > 0 ? trade.fee * (matchedQuantity / trade.quantity) * rate : 0);
+      projected.push({
+        ...trade,
+        id: `beneficiary-${trade.id}-${snapshot.openingEntryId}-${snapshot.beneficiaryUserId}`,
+        quantity: matchedQuantity * rate,
+        fee: allocatedFee,
+        profitShareProjectName: snapshot.relatedFundName || trade.relatedFundName,
+        profitSharePercentage: Number(snapshot.percentage || 0),
+      });
+    }
+  }
+  return projected.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+}
+
 /**
  * 历史记录的关联视图：每张开仓单与其对应平仓流水组成一组。
  * 无法由现有 FIFO 口径匹配到开仓单的平仓记录也单独保留，避免审计流水被隐藏。
@@ -758,6 +834,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [lastFundIdByRelatedUser, setLastFundIdByRelatedUser] = useState<Record<string, string>>({});
   const [relatedUserPickerOpen, setRelatedUserPickerOpen] = useState(false);
   const [relatedUserSearch, setRelatedUserSearch] = useState("");
+  const [profitShareSource, setProfitShareSource] = useState<PreviewRelatedFund | null>(null);
+  const [profitShareRecipientSearch, setProfitShareRecipientSearch] = useState("");
+  const [profitShareAllocations, setProfitShareAllocations] = useState<ProfitShareAllocationDraft[]>([]);
   const [directoryManagerKind, setDirectoryManagerKind] = useState<JournalDirectoryKind | null>(null);
   const [directoryRenameTarget, setDirectoryRenameTarget] = useState<JournalDirectoryRenameTarget | null>(null);
   const [directoryDeleteTarget, setDirectoryDeleteTarget] = useState<JournalDirectoryTarget | null>(null);
@@ -864,6 +943,31 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       staleTime: 30_000,
     },
   );
+  const profitShareRecipientSearchQuery = trpc.ledger.t0SearchRelatedUsers.useQuery(
+    { ledgerId: 52, query: profitShareRecipientSearch.trim() },
+    {
+      enabled: canManage && Boolean(profitShareSource) && profitShareRecipientSearch.trim().length > 0,
+      staleTime: 30_000,
+    },
+  );
+  const profitShareRules = useMemo<ProfitShareRule[]>(() => {
+    const rows = (t0JournalQuery.data as any)?.profitShareRules;
+    return Array.isArray(rows) ? rows.map((rule: any) => ({
+      id: Number(rule.id),
+      relatedFundId: Number(rule.relatedFundId),
+      relatedFundName: String(rule.relatedFundName || `项目#${rule.relatedFundId}`),
+      sourceUserId: Number(rule.sourceUserId),
+      sourceUserName: String(rule.sourceUserName || `用户#${rule.sourceUserId}`),
+      beneficiaryUserId: Number(rule.beneficiaryUserId),
+      beneficiaryUserName: String(rule.beneficiaryUserName || `用户#${rule.beneficiaryUserId}`),
+      percentage: Number(rule.percentage || 0),
+      createdAt: String(rule.createdAt || ""),
+    })) : [];
+  }, [t0JournalQuery.data]);
+  const activeProfitShareRules = profitShareSource
+    ? profitShareRules.filter((rule) => rule.relatedFundId === Number(profitShareSource.id))
+    : [];
+  const profitShareDraftTotal = profitShareAllocations.reduce((total, allocation) => total + (Number.isInteger(Number(allocation.percentage)) ? Number(allocation.percentage) : 0), 0);
 
   const lastRelatedUser = recentRelatedUsers.find((user) => user.id === lastRelatedUserId)
     ?? recentRelatedUsers[0]
@@ -946,9 +1050,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         lastUsedAt: fund.lastUsedAt ?? null,
       }))
       : [];
-    const nextTrades: PreviewTrade[] = Array.isArray(journal.entries)
+    const rawTrades: PreviewTrade[] = Array.isArray(journal.entries)
       ? journal.entries.map(previewTradeFromEntry)
       : [];
+    const profitShareSnapshots: ProfitShareSnapshot[] = Array.isArray(journal.profitShareSnapshots)
+      ? journal.profitShareSnapshots.map((snapshot: any) => ({
+        entryId: String(snapshot.entryId),
+        openingEntryId: String(snapshot.openingEntryId),
+        relatedFundId: Number(snapshot.relatedFundId || 0),
+        relatedFundName: snapshot.relatedFundName ? String(snapshot.relatedFundName) : undefined,
+        sourceUserId: Number(snapshot.sourceUserId),
+        beneficiaryUserId: Number(snapshot.beneficiaryUserId),
+        percentage: Number(snapshot.percentage || 0),
+        matchedQuantity: Number(snapshot.matchedQuantity || 0),
+        sourceUserName: snapshot.sourceUserName ? String(snapshot.sourceUserName) : undefined,
+        beneficiaryUserName: snapshot.beneficiaryUserName ? String(snapshot.beneficiaryUserName) : undefined,
+      }))
+      : [];
+    const nextTrades = journal.viewerMode === "member"
+      ? projectMemberProfitShareTrades(rawTrades, profitShareSnapshots, String(journal.viewerRelatedUserId || ""))
+      : rawTrades;
     const nextRecoverableEntries: RecoverableTrade[] = Array.isArray(journal.recoverableEntries)
       ? journal.recoverableEntries.map((item: any) => ({
         auditId: String(item.auditId),
@@ -1096,10 +1217,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ? "未关联项目"
     : trade.relatedFundName
       || (trade.relatedFundId ? `专项款#${trade.relatedFundId}` : "未区分专项款（历史）");
+  const getProfitShareSourceLabel = (trade: PreviewTrade) => trade.profitShareProjectName && trade.profitSharePercentage
+    ? `项目${trade.profitShareProjectName}的收益分配 ${Number(trade.profitSharePercentage).toFixed(2).replace(/\.00$/, "")}%`
+    : null;
   const memberRelatedUserName = useMemo(() => {
+    const selfName = String((me as any)?.name || (me as any)?.username || "").trim();
+    if (selfName) return selfName;
     const ownTrade = trades.find((trade) => Boolean(trade.relatedUserId));
     return ownTrade ? getTradeRelatedUserName(ownTrade) : "本人";
-  }, [trades]);
+  }, [me, trades]);
   const availableRelatedFunds = useMemo(
     () => relatedFunds.filter((fund) => relatedUserFilterId === "all" || fund.relatedUserId === relatedUserFilterId),
     [relatedFunds, relatedUserFilterId],
@@ -1514,6 +1640,27 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     onError: (error) => toast.error(error.message || "目录删除失败"),
   });
 
+  const setProfitShareRuleMutation = trpc.ledger.t0SetProfitShareRule.useMutation({
+    onSuccess: (data: any) => {
+      const savedFund = Array.isArray(data?.rules) ? data.rules[0] : null;
+      if (savedFund?.relatedFundId && profitShareSource && !profitShareSource.id) {
+        const id = String(savedFund.relatedFundId);
+        const name = String(savedFund.relatedFundName || profitShareSource.name);
+        const fund: PreviewRelatedFund = { id, name, relatedUserId: profitShareSource.relatedUserId };
+        setRelatedFunds((current) => [fund, ...current.filter((item) => item.id !== id)]);
+        setEntryForm((current) => current.relatedFundId
+          ? current
+          : { ...current, relatedFundId: id, relatedFundName: name });
+      }
+      setProfitShareSource(null);
+      setProfitShareAllocations([]);
+      setProfitShareRecipientSearch("");
+      void t0JournalQuery.refetch();
+      toast.success("收益分配已保存，仅影响此后新开的订单");
+    },
+    onError: (error) => toast.error(error.message || "收益分配保存失败"),
+  });
+
   const saveEntryMutation = trpc.ledger.t0CreateEntry.useMutation({
     onSuccess: (data: any, variables: any) => {
       const account: PreviewAccount = {
@@ -1681,6 +1828,59 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
     onError: (error) => toast.error(error.message || "速记恢复失败"),
   });
+
+  const openProfitShareManager = (source: PreviewRelatedFund) => {
+    const currentRules = profitShareRules.filter((rule) => rule.relatedFundId === Number(source.id));
+    setRelatedUserPickerOpen(false);
+    setDirectoryManagerKind(null);
+    setDirectoryRenameTarget(null);
+    setDirectoryDeleteTarget(null);
+    setProfitShareSource(source);
+    setProfitShareAllocations(currentRules.length > 0
+      ? currentRules.map((rule) => ({
+        user: { id: String(rule.beneficiaryUserId), name: rule.beneficiaryUserName },
+        percentage: String(rule.percentage),
+      }))
+      : (() => {
+        const owner = recentRelatedUsers.find((user) => user.id === source.relatedUserId);
+        return owner ? [{ user: owner, percentage: "100" }] : [];
+      })());
+    setProfitShareRecipientSearch("");
+  };
+
+  const closeProfitShareManager = () => {
+    if (setProfitShareRuleMutation.isPending) return;
+    setProfitShareSource(null);
+    setProfitShareAllocations([]);
+    setProfitShareRecipientSearch("");
+  };
+
+  const submitProfitShareRule = () => {
+    if (!profitShareSource || profitShareAllocations.length === 0) {
+      toast.error("请设置完整的收益分配清单");
+      return;
+    }
+    const allocations = profitShareAllocations.map((allocation) => ({
+      beneficiaryUserId: Number(allocation.user.id),
+      percentage: Number(allocation.percentage),
+    }));
+    if (allocations.some((allocation) => !Number.isInteger(allocation.beneficiaryUserId) || !Number.isFinite(allocation.percentage) || allocation.percentage <= 0 || allocation.percentage > 100)) {
+      toast.error("每位分配人的比例必须大于0%且不超过100%");
+      return;
+    }
+    const totalPercentage = allocations.reduce((total, allocation) => total + allocation.percentage, 0);
+    if (Math.abs(totalPercentage - 100) > 0.00001) {
+      toast.error(`分配合计必须为100%，当前为${totalPercentage.toFixed(2)}%`);
+      return;
+    }
+    setProfitShareRuleMutation.mutate({
+      ledgerId: 52,
+      relatedFundId: profitShareSource.id ? Number(profitShareSource.id) : undefined,
+      relatedUserId: profitShareSource.id ? undefined : Number(profitShareSource.relatedUserId),
+      relatedFundName: profitShareSource.id ? undefined : profitShareSource.name,
+      allocations,
+    });
+  };
 
   const openDirectoryManager = (kind: JournalDirectoryKind) => {
     if (kind === "relatedFund" && !entryForm.relatedUserId) {
@@ -1851,6 +2051,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
     if (selectedAction.opening && !entryForm.editingEntryId && normalizedRelatedUserId && !normalizedRelatedFundId && !normalizedRelatedFundName) {
       toast.error("关联用户开仓时，请选择或新建专项款");
+      return;
+    }
+    if (selectedAction.opening && !entryForm.editingEntryId && normalizedRelatedUserId
+      && ((normalizedRelatedFundId && !profitShareRules.some((rule) => rule.relatedFundId === normalizedRelatedFundId))
+        || (!normalizedRelatedFundId && Boolean(normalizedRelatedFundName)))) {
+      toast.error("请先点击项目右侧的“收益分配”，完成合计100%的用户分配设置");
       return;
     }
 
@@ -2513,6 +2719,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 const detail = recentJournalTradeDetails.get(trade.id);
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
+                const profitShareSourceLabel = getProfitShareSourceLabel(trade);
                 return (
                 <div key={trade.id} className="border-b border-[#c7d0d7]/60 px-4 py-2.5 last:border-b-0">
                     <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
@@ -2549,6 +2756,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         <span className="ml-auto shrink-0 text-[10px] text-slate-500">净利润</span>
                       </>}
                     </div>
+                    {profitShareSourceLabel && <div className="mt-1 text-[10px] font-medium text-indigo-600">{profitShareSourceLabel}</div>}
                     {canManage && <div className="mt-1 flex min-h-5 items-center justify-between gap-3">
                       {trade.note ? <span className="min-w-0 truncate text-[11px] text-slate-500">{trade.note}</span> : <span />}
                       <div className="flex shrink-0 items-center gap-1.5">
@@ -2981,7 +3189,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     )}
                   </Field>
 
-                  <Field label={<span className="flex items-center justify-between gap-1"><span>关联用户 <span className="text-slate-400">（可选）</span></span>{recentRelatedUsers.length > 0 && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
+                  <Field label={<span className="flex items-center justify-between gap-1"><span>关联用户</span><span className="flex shrink-0 items-center gap-2">{recentRelatedUsers.length > 0 && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
                     <button
                       type="button"
                       disabled={isCloseReview}
@@ -3003,7 +3211,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <span>仅搜索并引用全局已有用户；关联后按项目区分资金。</span>
                 </div>
 
-                <Field label={<span className="flex items-center justify-between gap-1"><span>专项款 {entryForm.relatedUserId && <span className="text-rose-500">*</span>} {!entryForm.relatedUserId && <span className="text-slate-400">（请先选关联用户）</span>}</span>{entryRelatedFunds.length > 0 && !isClosingEntry && <button type="button" onClick={() => openDirectoryManager("relatedFund")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
+                <Field label={<span className="flex items-center justify-between gap-1"><span>项目 {entryForm.relatedUserId && <span className="text-rose-500">*</span>} {!entryForm.relatedUserId && <span className="text-slate-400">（请先选关联用户）</span>}</span><span className="flex shrink-0 items-center gap-2">{(entryForm.relatedFundId || entryForm.relatedFundName.trim()) && entryForm.relatedFundId !== "legacy" && !isClosingEntry && !isEditingEntry && <button type="button" onClick={() => { const fund = entryRelatedFunds.find((item) => item.id === entryForm.relatedFundId) ?? { id: "", name: entryForm.relatedFundName.trim(), relatedUserId: entryForm.relatedUserId || undefined }; if (fund.name) openProfitShareManager(fund); }} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">收益分配</button>}{entryRelatedFunds.length > 0 && !isClosingEntry && <button type="button" onClick={() => openDirectoryManager("relatedFund")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
                   <select
                     disabled={!entryForm.relatedUserId || isCloseReview || isClosingEntry}
                     value={entryForm.relatedFundId}
@@ -3168,6 +3376,73 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </button>
               )}
             </div>}
+          </div>
+        </div>
+      )}
+
+      {canManage && profitShareSource && (
+        <div className="fixed inset-0 z-[60] flex items-end bg-slate-950/40 sm:items-center sm:justify-center sm:px-5" role="dialog" aria-modal="true" aria-label="管理收益分配">
+          <div className="max-h-[88vh] w-full max-w-sm overflow-y-auto rounded-t bg-white p-5 shadow-2xl sm:rounded">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-base font-semibold text-slate-900">收益分配</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">为项目 {profitShareSource.name} 设置用户收益分配清单</p>
+              </div>
+              <button type="button" onClick={closeProfitShareManager} aria-label="关闭收益分配" className="rounded p-1 text-slate-400 active:scale-90">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 rounded border border-slate-200 bg-slate-50 px-3 py-2.5 text-[11px] leading-5 text-slate-600">
+              项目是下单归属，受益人只能选择全局用户。每位比例为1–100的整数，所有用户合计必须恰好100%。仅之后新开的订单会固化本清单；平仓沿用对应开仓当时比例，并按同一比例承担开、平交易成本。
+            </div>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-semibold text-slate-700">收益分配人（全局用户）</div>
+                <div className={`text-xs font-semibold tabular-nums ${profitShareDraftTotal === 100 ? "text-emerald-600" : "text-rose-600"}`}>合计 {profitShareDraftTotal}% / 100%</div>
+              </div>
+              <div className="mt-2 overflow-hidden rounded border border-slate-200">
+                {profitShareAllocations.map((allocation, index) => {
+                  return <div key={allocation.user.id} className={`flex items-center gap-2 px-3 py-2.5 ${index > 0 ? "border-t border-slate-100" : ""}`}>
+                    <UserRound className="h-4 w-4 shrink-0 text-indigo-500" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-slate-800">{allocation.user.name}</div>
+                      <div className="text-[10px] text-slate-400">{allocation.user.username ? `@${allocation.user.username}` : "收益分配人"}</div>
+                    </div>
+                    <div className="flex w-[76px] items-center rounded border border-slate-200 px-2 focus-within:border-indigo-500">
+                      <input type="number" inputMode="numeric" min={1} max={100} step={1} value={allocation.percentage} onChange={(event) => setProfitShareAllocations((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, percentage: event.target.value } : item))} className="h-9 min-w-0 flex-1 text-right text-sm font-semibold tabular-nums text-slate-800 outline-none" />
+                      <span className="text-xs text-slate-500">%</span>
+                    </div>
+                    <button type="button" onClick={() => setProfitShareAllocations((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="text-xs font-semibold text-rose-600">移除</button>
+                  </div>;
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded border border-slate-200">
+              <div className="flex items-center gap-2 bg-slate-50 px-3 py-2">
+                <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                <input value={profitShareRecipientSearch} onChange={(event) => setProfitShareRecipientSearch(event.target.value)} placeholder="搜索并添加分配人" className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400" />
+              </div>
+              {profitShareRecipientSearch.trim().length === 0 ? <div className="px-3 py-2.5 text-xs text-slate-400">仅可搜索引用全局已有用户；添加后请在上方调整整数比例。</div>
+                : profitShareRecipientSearchQuery.isFetching ? <div className="px-3 py-2.5 text-xs text-slate-400">正在搜索用户…</div>
+                  : Array.isArray(profitShareRecipientSearchQuery.data) && profitShareRecipientSearchQuery.data.length > 0 ? <div className="max-h-40 overflow-y-auto border-t border-slate-100 py-1">
+                    {(profitShareRecipientSearchQuery.data as any[]).map((candidate) => {
+                      const candidateUser: PreviewRelatedUser = { id: String(candidate.id), name: String(candidate.name || candidate.username || `用户#${candidate.id}`), username: candidate.username ? String(candidate.username) : undefined };
+                      const alreadyAdded = profitShareAllocations.some((allocation) => allocation.user.id === candidateUser.id);
+                      return <button key={candidateUser.id} type="button" disabled={alreadyAdded || profitShareAllocations.length >= 20} onClick={() => { setProfitShareAllocations((current) => [...current, { user: candidateUser, percentage: "1" }]); setProfitShareRecipientSearch(""); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-left disabled:opacity-40 active:bg-indigo-50">
+                        <UserRound className="h-4 w-4 shrink-0 text-slate-400" /><span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{candidateUser.name}</span>{candidateUser.username && <span className="max-w-[35%] truncate text-xs text-slate-400">@{candidateUser.username}</span>}
+                      </button>;
+                    })}
+                  </div> : <div className="px-3 py-2.5 text-xs text-slate-400">未找到匹配用户</div>}
+            </div>
+
+            {activeProfitShareRules.length > 0 && <div className="mt-3 text-[11px] leading-5 text-slate-500">当前规则已生效；保存修改后仅后续新开订单使用新清单，历史订单保持原快照。</div>}
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button type="button" onClick={closeProfitShareManager} className="h-11 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700">取消</button>
+              <button type="button" disabled={setProfitShareRuleMutation.isPending || profitShareDraftTotal !== 100} onClick={submitProfitShareRule} className="h-11 rounded bg-indigo-600 text-sm font-semibold text-white disabled:opacity-40">保存清单</button>
+            </div>
           </div>
         </div>
       )}

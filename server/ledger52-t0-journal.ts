@@ -39,6 +39,36 @@ export type SaveT0JournalEntryInput = {
   clientRequestId: string;
 };
 
+/**
+ * 收益分配规则绑定专项项目，只作用于未来新开仓：修改比例时保留旧规则，并由订单快照持续引用，
+ * 因此历史开平仓绝不会被新比例回溯改写。
+ */
+export type T0JournalProfitShareRule = {
+  id: number;
+  relatedFundId: number;
+  relatedFundName: string;
+  sourceUserId: number;
+  sourceUserName: string;
+  beneficiaryUserId: number;
+  beneficiaryUserName: string;
+  percentage: number;
+  createdAt: string;
+};
+
+/** 开仓或平仓的不可变收益分配快照；平仓可按 FIFO 拆到多个开仓来源。 */
+export type T0JournalProfitShareSnapshot = {
+  entryId: string;
+  openingEntryId: string;
+  relatedFundId: number;
+  relatedFundName?: string;
+  sourceUserId: number;
+  beneficiaryUserId: number;
+  percentage: number;
+  matchedQuantity: number;
+  sourceUserName?: string;
+  beneficiaryUserName?: string;
+};
+
 let tablesReady: Promise<void> | null = null;
 
 function asRows(result: unknown): any[] {
@@ -253,6 +283,41 @@ function mapEntry(row: any) {
   };
 }
 
+function mapProfitShareRule(row: any): T0JournalProfitShareRule {
+  const sourceUserId = toNumber(row.source_user_id ?? row.sourceUserId);
+  const relatedFundId = toNumber(row.related_fund_id ?? row.relatedFundId);
+  const beneficiaryUserId = toNumber(row.beneficiary_user_id ?? row.beneficiaryUserId);
+  return {
+    id: toNumber(row.id),
+    relatedFundId,
+    relatedFundName: String(row.related_fund_name ?? row.relatedFundName ?? `项目#${relatedFundId}`),
+    sourceUserId,
+    sourceUserName: String(row.source_user_name ?? row.sourceUserName ?? `用户#${sourceUserId}`),
+    beneficiaryUserId,
+    beneficiaryUserName: String(row.beneficiary_user_name ?? row.beneficiaryUserName ?? `用户#${beneficiaryUserId}`),
+    percentage: toNumber(row.share_percentage ?? row.percentage),
+    createdAt: isoTime(row.created_at ?? row.createdAt),
+  };
+}
+
+function mapProfitShareSnapshot(row: any): T0JournalProfitShareSnapshot {
+  const sourceUserId = toNumber(row.source_user_id ?? row.sourceUserId);
+  const relatedFundId = toNumber(row.related_fund_id ?? row.relatedFundId);
+  const beneficiaryUserId = toNumber(row.beneficiary_user_id ?? row.beneficiaryUserId);
+  return {
+    entryId: String(row.entry_id ?? row.entryId),
+    openingEntryId: String(row.opening_entry_id ?? row.openingEntryId),
+    relatedFundId,
+    relatedFundName: row.related_fund_name ?? row.relatedFundName ?? undefined,
+    sourceUserId,
+    beneficiaryUserId,
+    percentage: toNumber(row.share_percentage ?? row.percentage),
+    matchedQuantity: toNumber(row.matched_quantity ?? row.matchedQuantity),
+    sourceUserName: row.source_user_name ?? row.sourceUserName ?? undefined,
+    beneficiaryUserName: row.beneficiary_user_name ?? row.beneficiaryUserName ?? undefined,
+  };
+}
+
 function mapRecoverableAudit(row: any) {
   try {
     const snapshot = JSON.parse(String(row.before_snapshot || ""));
@@ -308,7 +373,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
         updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
         PRIMARY KEY (id),
-        UNIQUE KEY uq_t0_journal_related_fund_owner_name (ledger_id, user_id, related_user_id, name),
+        UNIQUE KEY uq_t0_journal_related_fund_name (ledger_id, user_id, name),
         KEY idx_t0_journal_related_fund_recent (ledger_id, user_id, related_user_id, is_active, last_used_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         COMMENT='52号账本T+0速记账本：关联用户下的专项款目录'
@@ -399,6 +464,68 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         COMMENT='52号账本T+0速记账本：已隐藏目录，保留稳定键供历史核对'
     `);
 
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_profit_share_rules (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        source_user_id BIGINT UNSIGNED NOT NULL,
+        related_fund_id BIGINT UNSIGNED DEFAULT NULL,
+        beneficiary_user_id BIGINT UNSIGNED NOT NULL,
+        share_percentage DECIMAL(7,4) NOT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        superseded_by_rule_id BIGINT UNSIGNED DEFAULT NULL,
+        ended_at DATETIME(3) DEFAULT NULL,
+        created_by_user_id INT NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        KEY idx_t0_journal_profit_share_source_active (ledger_id, user_id, source_user_id, is_active, id),
+        KEY idx_t0_journal_profit_share_fund_active (ledger_id, user_id, related_fund_id, is_active, id),
+        KEY idx_t0_journal_profit_share_beneficiary_active (ledger_id, user_id, beneficiary_user_id, is_active, id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0速记账本：按专项项目配置的未来新开仓收益分配规则'
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_profit_share_source_settings (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        source_user_id BIGINT UNSIGNED NOT NULL,
+        configured_by_user_id INT NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_t0_journal_profit_share_source_setting (ledger_id, user_id, source_user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0速记账本：关联用户是否已完成首次收益分配决定'
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_entry_profit_shares (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        entry_id BIGINT UNSIGNED NOT NULL,
+        opening_entry_id BIGINT UNSIGNED NOT NULL,
+        source_user_id BIGINT UNSIGNED NOT NULL,
+        related_fund_id BIGINT UNSIGNED DEFAULT NULL,
+        beneficiary_user_id BIGINT UNSIGNED NOT NULL,
+        profit_share_rule_id BIGINT UNSIGNED DEFAULT NULL,
+        share_percentage DECIMAL(7,4) NOT NULL,
+        matched_quantity DECIMAL(36,18) NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_t0_journal_entry_profit_share (ledger_id, user_id, entry_id, opening_entry_id, beneficiary_user_id),
+        KEY idx_t0_journal_entry_profit_share_entry (ledger_id, user_id, entry_id),
+        KEY idx_t0_journal_entry_profit_share_beneficiary (ledger_id, user_id, beneficiary_user_id, entry_id),
+        KEY idx_t0_journal_entry_profit_share_fund (ledger_id, user_id, related_fund_id, entry_id),
+        KEY idx_t0_journal_entry_profit_share_opening (ledger_id, user_id, opening_entry_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0速记账本：开平仓收益分配不可变快照'
+    `);
+
     const [dimensionAuditOperationColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_dimension_audits LIKE 'operation'`);
     if (asRows(dimensionAuditOperationColumns).length === 0) {
       await db.execute(`
@@ -431,6 +558,38 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         ALTER TABLE ledger52_t0_journal_entries
           ADD COLUMN related_fund_id BIGINT UNSIGNED DEFAULT NULL AFTER related_user_id,
           ADD KEY idx_t0_journal_entry_related_fund_time (ledger_id, user_id, related_fund_id, trade_time)
+      `);
+    }
+
+    // 项目名称在同一账本管理员范围内全局唯一，不能被不同关联用户重复使用。
+    // 如历史数据已有重名，保留其可读性并由服务层阻止新的重复创建，避免初始化失败影响账本访问。
+    const [duplicateFundNameRows] = await db.execute(`
+      SELECT name FROM ledger52_t0_journal_related_funds
+       WHERE ledger_id = ?
+       GROUP BY user_id, name
+      HAVING COUNT(*) > 1
+       LIMIT 1
+    `, [LEDGER_52_T0_JOURNAL_ID]);
+    const [globalFundNameIndexRows] = await db.execute(`SHOW INDEX FROM ledger52_t0_journal_related_funds WHERE Key_name = 'uq_t0_journal_related_fund_name'`);
+    if (asRows(duplicateFundNameRows).length === 0 && asRows(globalFundNameIndexRows).length === 0) {
+      await db.execute(`ALTER TABLE ledger52_t0_journal_related_funds ADD UNIQUE KEY uq_t0_journal_related_fund_name (ledger_id, user_id, name)`);
+    }
+
+    // 项目级收益分配：旧的用户级规则保留审计，但不再被新订单读取；新规则和快照均固定专项项目键。
+    const [profitShareRuleFundColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_profit_share_rules LIKE 'related_fund_id'`);
+    if (asRows(profitShareRuleFundColumns).length === 0) {
+      await db.execute(`
+        ALTER TABLE ledger52_t0_journal_profit_share_rules
+          ADD COLUMN related_fund_id BIGINT UNSIGNED DEFAULT NULL AFTER source_user_id,
+          ADD KEY idx_t0_journal_profit_share_fund_active (ledger_id, user_id, related_fund_id, is_active, id)
+      `);
+    }
+    const [profitShareSnapshotFundColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_entry_profit_shares LIKE 'related_fund_id'`);
+    if (asRows(profitShareSnapshotFundColumns).length === 0) {
+      await db.execute(`
+        ALTER TABLE ledger52_t0_journal_entry_profit_shares
+          ADD COLUMN related_fund_id BIGINT UNSIGNED DEFAULT NULL AFTER source_user_id,
+          ADD KEY idx_t0_journal_entry_profit_share_fund (ledger_id, user_id, related_fund_id, entry_id)
       `);
     }
   })().catch((error) => {
@@ -511,10 +670,32 @@ async function resolveLedger52T0JournalRelatedFund(tx: any, input: {
     return { id: relatedFundId, name: String(fund.name || "") };
   }
   if (relatedFundName) {
+    const [sameNameRows] = await tx.execute(
+      `SELECT id, related_user_id, name
+         FROM ledger52_t0_journal_related_funds
+        WHERE ledger_id = ? AND user_id = ? AND name = ?
+        ORDER BY id ASC FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, relatedFundName],
+    );
+    const sameNameFunds = asRows(sameNameRows);
+    const fundForOtherUser = sameNameFunds.find((fund) => toNumber(fund.related_user_id) !== input.relatedUserId);
+    if (fundForOtherUser) {
+      throw new TRPCError({ code: "CONFLICT", message: `项目名称“${relatedFundName}”已归属于其他关联用户，请使用不同名称` });
+    }
+    const existingFund = sameNameFunds[0];
+    if (existingFund) {
+      const existingFundId = toNumber(existingFund.id);
+      await tx.execute(
+        `UPDATE ledger52_t0_journal_related_funds
+            SET is_active = 1, last_used_at = NOW(3), updated_at = NOW(3)
+          WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+        [existingFundId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+      );
+      return { id: existingFundId, name: String(existingFund.name || relatedFundName) };
+    }
     const [result] = await tx.execute(
       `INSERT INTO ledger52_t0_journal_related_funds (ledger_id, user_id, related_user_id, name, is_active, last_used_at)
-       VALUES (?, ?, ?, ?, 1, NOW(3))
-       ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), is_active = 1, last_used_at = NOW(3), updated_at = NOW(3)`,
+       VALUES (?, ?, ?, ?, 1, NOW(3))`,
       [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.relatedUserId, relatedFundName],
     );
     const createdFundId = Number((result as any).insertId || 0);
@@ -537,6 +718,17 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
   const isAdminScope = scope.mode === "admin";
   const journalOwnerUserId = isAdminScope ? scope.journalOwnerUserId : 0;
   const relatedUserId = scope.mode === "member" ? scope.relatedUserId : 0;
+  const memberVisibilitySql = `(
+    e.related_user_id = ?
+    OR EXISTS (
+      SELECT 1
+        FROM ledger52_t0_journal_entry_profit_shares shared_entry
+       WHERE shared_entry.ledger_id = e.ledger_id
+         AND shared_entry.user_id = e.user_id
+         AND shared_entry.entry_id = e.id
+         AND shared_entry.beneficiary_user_id = ?
+    )
+  )`;
   const [accountResult, entryResult, recoverableAuditResult, recentUserResult, relatedFundResult] = await Promise.all([
     isAdminScope
       ? conn.execute(
@@ -550,10 +742,10 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
         `SELECT a.id, a.name, MAX(e.trade_time) AS last_used_at, MIN(a.created_at) AS created_at
            FROM ledger52_t0_journal_entries e
            INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id AND a.is_active = 1
-          WHERE e.ledger_id = ? AND e.related_user_id = ?
+          WHERE e.ledger_id = ? AND ${memberVisibilitySql}
           GROUP BY a.id, a.name
           ORDER BY last_used_at DESC, a.id DESC`,
-        [LEDGER_52_T0_JOURNAL_ID, relatedUserId],
+        [LEDGER_52_T0_JOURNAL_ID, relatedUserId, relatedUserId],
       ),
     conn.execute(
       `SELECT e.id, e.account_id,
@@ -574,10 +766,12 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
          LEFT JOIN ledger52_t0_journal_deleted_dimensions deleted_user
            ON deleted_user.ledger_id = e.ledger_id AND deleted_user.user_id = e.user_id
           AND deleted_user.dimension = 'related_user' AND deleted_user.dimension_id = e.related_user_id
-        WHERE e.ledger_id = ? AND ${isAdminScope ? "e.user_id = ?" : "e.related_user_id = ?"}
+        WHERE e.ledger_id = ? AND ${isAdminScope ? "e.user_id = ?" : memberVisibilitySql}
         ORDER BY e.trade_time ASC, e.id ASC
         LIMIT 2000`,
-      [LEDGER_52_T0_JOURNAL_ID, isAdminScope ? journalOwnerUserId : relatedUserId],
+      isAdminScope
+        ? [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId]
+        : [LEDGER_52_T0_JOURNAL_ID, relatedUserId, relatedUserId],
     ),
     isAdminScope ? conn.execute(
       `SELECT a.id AS audit_id, a.entry_id, a.operation, a.before_snapshot, a.created_at
@@ -624,28 +818,63 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
         LIMIT 200`,
       [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
     ) : conn.execute(
-      `SELECT id, related_user_id, name, last_used_at
-         FROM ledger52_t0_journal_related_funds
-        WHERE ledger_id = ? AND related_user_id = ? AND is_active = 1
-          AND NOT EXISTS (
-            SELECT 1 FROM ledger52_t0_journal_deleted_dimensions deleted_user
-             WHERE deleted_user.ledger_id = ledger52_t0_journal_related_funds.ledger_id
-               AND deleted_user.user_id = ledger52_t0_journal_related_funds.user_id
-               AND deleted_user.dimension = 'related_user'
-               AND deleted_user.dimension_id = ledger52_t0_journal_related_funds.related_user_id
-          )
-        ORDER BY last_used_at IS NULL ASC, last_used_at DESC, updated_at DESC, id DESC
+      `SELECT f.id, f.related_user_id, f.name, MAX(e.trade_time) AS last_used_at
+         FROM ledger52_t0_journal_entries e
+         INNER JOIN ledger52_t0_journal_related_funds f
+           ON f.id = e.related_fund_id AND f.ledger_id = e.ledger_id AND f.user_id = e.user_id AND f.is_active = 1
+        WHERE e.ledger_id = ? AND ${memberVisibilitySql}
+        GROUP BY f.id, f.related_user_id, f.name
+        ORDER BY last_used_at DESC, f.id DESC
         LIMIT 200`,
-      [LEDGER_52_T0_JOURNAL_ID, relatedUserId],
+      [LEDGER_52_T0_JOURNAL_ID, relatedUserId, relatedUserId],
     ),
+  ]);
+
+  const entryRows = asRows(entryResult);
+  const entryIds = entryRows.map((row) => toNumber(row.id)).filter((id) => id > 0);
+  const [profitShareSnapshotResult, profitShareRuleResult] = await Promise.all([
+    entryIds.length > 0
+      ? conn.execute(
+        `SELECT shared_entry.entry_id, shared_entry.opening_entry_id, shared_entry.source_user_id, shared_entry.related_fund_id,
+                shared_entry.beneficiary_user_id, shared_entry.share_percentage, shared_entry.matched_quantity,
+                COALESCE(NULLIF(source_user.name, ''), NULLIF(source_user.username, ''), CONCAT('用户#', shared_entry.source_user_id)) AS source_user_name,
+                fund.name AS related_fund_name,
+                COALESCE(NULLIF(beneficiary_user.name, ''), NULLIF(beneficiary_user.username, ''), CONCAT('用户#', shared_entry.beneficiary_user_id)) AS beneficiary_user_name
+           FROM ledger52_t0_journal_entry_profit_shares shared_entry
+           LEFT JOIN users source_user ON source_user.id = shared_entry.source_user_id
+           LEFT JOIN ledger52_t0_journal_related_funds fund ON fund.id = shared_entry.related_fund_id AND fund.ledger_id = shared_entry.ledger_id AND fund.user_id = shared_entry.user_id
+           LEFT JOIN users beneficiary_user ON beneficiary_user.id = shared_entry.beneficiary_user_id
+          WHERE shared_entry.ledger_id = ? AND shared_entry.entry_id IN (${entryIds.map(() => "?").join(", ")})
+          ORDER BY shared_entry.entry_id ASC, shared_entry.opening_entry_id ASC, shared_entry.id ASC`,
+        [LEDGER_52_T0_JOURNAL_ID, ...entryIds],
+      )
+      : Promise.resolve([[]]),
+    isAdminScope
+      ? conn.execute(
+        `SELECT rule_row.id, rule_row.source_user_id, rule_row.related_fund_id, rule_row.beneficiary_user_id, rule_row.share_percentage, rule_row.created_at,
+                COALESCE(NULLIF(source_user.name, ''), NULLIF(source_user.username, ''), CONCAT('用户#', rule_row.source_user_id)) AS source_user_name,
+                fund.name AS related_fund_name,
+                COALESCE(NULLIF(beneficiary_user.name, ''), NULLIF(beneficiary_user.username, ''), CONCAT('用户#', rule_row.beneficiary_user_id)) AS beneficiary_user_name
+           FROM ledger52_t0_journal_profit_share_rules rule_row
+           LEFT JOIN users source_user ON source_user.id = rule_row.source_user_id
+           LEFT JOIN ledger52_t0_journal_related_funds fund ON fund.id = rule_row.related_fund_id AND fund.ledger_id = rule_row.ledger_id AND fund.user_id = rule_row.user_id
+           LEFT JOIN users beneficiary_user ON beneficiary_user.id = rule_row.beneficiary_user_id
+          WHERE rule_row.ledger_id = ? AND rule_row.user_id = ? AND rule_row.is_active = 1
+          ORDER BY rule_row.created_at DESC, rule_row.id DESC`,
+        [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
+      )
+      : Promise.resolve([[]]),
   ]);
 
   return {
     viewerMode: scope.mode,
+    viewerRelatedUserId: isAdminScope ? undefined : relatedUserId,
     accounts: asRows(accountResult).map(mapAccount),
-    entries: asRows(entryResult).map(mapEntry),
+    entries: entryRows.map(mapEntry),
     recentUsers: asRows(recentUserResult).map(mapRelatedUser),
     relatedFunds: asRows(relatedFundResult).map(mapRelatedFund),
+    profitShareSnapshots: asRows(profitShareSnapshotResult).map(mapProfitShareSnapshot),
+    profitShareRules: asRows(profitShareRuleResult).map(mapProfitShareRule),
     recoverableEntries: asRows(recoverableAuditResult)
       .map(mapRecoverableAudit)
       .filter((item): item is NonNullable<typeof item> => Boolean(item)),
@@ -670,6 +899,331 @@ export async function searchLedger52T0JournalUsers(query: string) {
     [like, like, keyword, keyword],
   );
   return asRows(result).map(mapRelatedUser);
+}
+
+function normalizeProfitSharePercentage(value: number): number {
+  const percentage = Number(value);
+  if (!Number.isInteger(percentage) || percentage < 1 || percentage > 100) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "每位收益分配人比例必须为1至100的整数" });
+  }
+  return percentage;
+}
+
+async function assertExistingGlobalUser(tx: any, userId: number, label: string) {
+  const [rows] = await tx.execute(`SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE`, [userId]);
+  if (!asRows(rows)[0]) throw new TRPCError({ code: "NOT_FOUND", message: `${label}不存在或已失效，请重新搜索选择` });
+}
+
+async function getActiveLedger52T0JournalProfitShareRules(tx: any, input: { actorUserId: number; relatedFundId: number; lock?: boolean }) {
+  const [rows] = await tx.execute(
+    `SELECT id, source_user_id, related_fund_id, beneficiary_user_id, share_percentage, created_at
+       FROM ledger52_t0_journal_profit_share_rules
+      WHERE ledger_id = ? AND user_id = ? AND related_fund_id = ? AND is_active = 1
+      ORDER BY beneficiary_user_id ASC, id ASC${input.lock ? " FOR UPDATE" : ""}`,
+    [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.relatedFundId],
+  );
+  return asRows(rows);
+}
+
+/**
+ * 将完整的多人比例清单另存为新版本，并停用旧清单；任何已落库开仓都只读取自身快照，绝不跟随后续修改。
+ */
+export async function setLedger52T0JournalProfitShareRules(input: {
+  actorUserId: number;
+  relatedFundId?: number;
+  relatedUserId?: number;
+  relatedFundName?: string;
+  allocations: Array<{ beneficiaryUserId: number; percentage: number }>;
+}) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  const requestedFundId = Number(input.relatedFundId || 0);
+  const requestedRelatedUserId = Number(input.relatedUserId || 0);
+  const requestedFundName = String(input.relatedFundName || "").trim();
+  if ((!Number.isInteger(requestedFundId) || requestedFundId <= 0)
+    && (!Number.isInteger(requestedRelatedUserId) || requestedRelatedUserId <= 0 || !requestedFundName)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请选择已有项目，或填写新项目名称后设置收益分配" });
+  }
+  const normalizedAllocations = input.allocations.map((allocation) => ({
+    beneficiaryUserId: Number(allocation.beneficiaryUserId),
+    percentage: normalizeProfitSharePercentage(allocation.percentage),
+  }));
+  if (normalizedAllocations.length === 0 || normalizedAllocations.length > 20) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请设置1至20位收益分配人" });
+  }
+  const beneficiaryIds = new Set<number>();
+  for (const allocation of normalizedAllocations) {
+    if (!Number.isInteger(allocation.beneficiaryUserId) || allocation.beneficiaryUserId <= 0 || beneficiaryIds.has(allocation.beneficiaryUserId)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "收益分配人不能重复，且必须来自全局用户库" });
+    }
+    beneficiaryIds.add(allocation.beneficiaryUserId);
+  }
+  const totalPercentage = normalizedAllocations.reduce((total, allocation) => total + allocation.percentage, 0);
+  if (Math.abs(totalPercentage - 100) > 0.00001) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `收益分配合计必须为100%，当前为${totalPercentage.toFixed(4).replace(/\.0+$/, "")}%` });
+  }
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    let relatedFundId = requestedFundId;
+    let sourceUserId = 0;
+    if (relatedFundId > 0) {
+      const [fundRows] = await tx.execute(
+        `SELECT related_user_id FROM ledger52_t0_journal_related_funds
+          WHERE id = ? AND ledger_id = ? AND user_id = ? AND is_active = 1 LIMIT 1 FOR UPDATE`,
+        [relatedFundId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+      );
+      sourceUserId = toNumber(asRows(fundRows)[0]?.related_user_id);
+      if (sourceUserId <= 0) throw new TRPCError({ code: "NOT_FOUND", message: "项目不存在、已停用或不属于当前账本" });
+    } else {
+      await assertExistingGlobalUser(tx, requestedRelatedUserId, "关联用户");
+      const fund = await resolveLedger52T0JournalRelatedFund(tx, {
+        actorUserId: input.actorUserId,
+        relatedUserId: requestedRelatedUserId,
+        relatedFundName: requestedFundName,
+        required: true,
+      });
+      if (!fund) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "新项目创建失败" });
+      relatedFundId = fund.id;
+      sourceUserId = requestedRelatedUserId;
+    }
+    for (const allocation of normalizedAllocations) {
+      await assertExistingGlobalUser(tx, allocation.beneficiaryUserId, "收益分配人");
+    }
+    const activeRules = await getActiveLedger52T0JournalProfitShareRules(tx, {
+      actorUserId: input.actorUserId,
+      relatedFundId,
+      lock: true,
+    });
+    const orderedAllocations = [...normalizedAllocations].sort((a, b) => a.beneficiaryUserId - b.beneficiaryUserId);
+    const unchanged = activeRules.length === orderedAllocations.length && activeRules.every((rule, index) => (
+      toNumber(rule.beneficiary_user_id) === orderedAllocations[index].beneficiaryUserId
+      && Math.abs(toNumber(rule.share_percentage) - orderedAllocations[index].percentage) < 0.00001
+    ));
+    if (unchanged) {
+      await tx.commit();
+      return { rules: activeRules.map(mapProfitShareRule) };
+    }
+    if (activeRules.length > 0) {
+      await tx.execute(
+        `UPDATE ledger52_t0_journal_profit_share_rules
+            SET is_active = 0, ended_at = NOW(3), updated_at = NOW(3)
+          WHERE ledger_id = ? AND user_id = ? AND related_fund_id = ? AND is_active = 1`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, relatedFundId],
+      );
+    }
+    for (const allocation of orderedAllocations) {
+      await tx.execute(
+        `INSERT INTO ledger52_t0_journal_profit_share_rules
+          (ledger_id, user_id, source_user_id, related_fund_id, beneficiary_user_id, share_percentage, is_active, created_by_user_id)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, sourceUserId, relatedFundId, allocation.beneficiaryUserId, allocation.percentage, input.actorUserId],
+      );
+    }
+    const [rows] = await tx.execute(
+      `SELECT rule_row.id, rule_row.source_user_id, rule_row.related_fund_id, rule_row.beneficiary_user_id, rule_row.share_percentage, rule_row.created_at,
+              COALESCE(NULLIF(source_user.name, ''), NULLIF(source_user.username, ''), CONCAT('用户#', rule_row.source_user_id)) AS source_user_name,
+              fund.name AS related_fund_name,
+              COALESCE(NULLIF(beneficiary_user.name, ''), NULLIF(beneficiary_user.username, ''), CONCAT('用户#', rule_row.beneficiary_user_id)) AS beneficiary_user_name
+         FROM ledger52_t0_journal_profit_share_rules rule_row
+         LEFT JOIN users source_user ON source_user.id = rule_row.source_user_id
+         LEFT JOIN ledger52_t0_journal_related_funds fund ON fund.id = rule_row.related_fund_id AND fund.ledger_id = rule_row.ledger_id AND fund.user_id = rule_row.user_id
+         LEFT JOIN users beneficiary_user ON beneficiary_user.id = rule_row.beneficiary_user_id
+        WHERE rule_row.ledger_id = ? AND rule_row.user_id = ? AND rule_row.related_fund_id = ? AND rule_row.is_active = 1
+        ORDER BY rule_row.beneficiary_user_id ASC, rule_row.id ASC`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, relatedFundId],
+    );
+    const rules = asRows(rows);
+    if (rules.length !== orderedAllocations.length) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "收益分配规则读取失败" });
+    await tx.commit();
+    return { rules: rules.map(mapProfitShareRule) };
+  } catch (error) {
+    try { await tx.rollback(); } catch {}
+    throw error;
+  } finally {
+    tx.release?.();
+  }
+}
+
+type ProfitShareOpeningMatch = { openingEntryId: number; matchedQuantityCents: number };
+
+/**
+ * 与平仓可用量完全相同的 FIFO 口径，额外返回本次平仓实际消耗到的开仓主单。
+ * 这让平仓永远继承其对应开仓当时的收益分配快照，而不是读取当前规则。
+ */
+function buildProfitShareOpeningMatches(rows: any[], action: T0JournalAction, targetPrice: string, relatedUserId: number, relatedFundId: number, requestedCents: number): ProfitShareOpeningMatch[] {
+  const side = actionSide(action);
+  const openingAction: T0JournalAction = side === "long" ? "openLong" : "openShort";
+  const closingAction: T0JournalAction = side === "long" ? "closeLong" : "closeShort";
+  const archiveKey = priceKey(archivedTargetPrice(action, targetPrice));
+  const expectedUserKey = relatedUserKey(relatedUserId);
+  const expectedFundKey = relatedFundKey(relatedFundId);
+  const openingQueue: Array<{ entryId: number; remainingCents: number }> = [];
+  const consume = (cents: number, capture: boolean): ProfitShareOpeningMatch[] => {
+    const matches: ProfitShareOpeningMatch[] = [];
+    let remaining = cents;
+    for (const opening of openingQueue) {
+      if (remaining <= 0) break;
+      if (opening.remainingCents <= 0) continue;
+      const allocated = Math.min(opening.remainingCents, remaining);
+      opening.remainingCents -= allocated;
+      remaining -= allocated;
+      if (capture && allocated > 0) matches.push({ openingEntryId: opening.entryId, matchedQuantityCents: allocated });
+    }
+    return matches;
+  };
+
+  for (const row of rows) {
+    const rowAction = String(row.action) as T0JournalAction;
+    if (relatedUserKey(row.related_user_id) !== expectedUserKey || relatedFundKey(row.related_fund_id) !== expectedFundKey) continue;
+    if (rowAction === openingAction && priceKey(archivePriceForAction(rowAction, row.price)) === archiveKey) {
+      openingQueue.push({ entryId: toNumber(row.id), remainingCents: quantityToCents(row.quantity) });
+      continue;
+    }
+    if (rowAction === closingAction
+      && priceKey(archivedTargetPrice(rowAction, row.target_price, row.price)) === archiveKey) {
+      consume(quantityToCents(row.quantity), false);
+    }
+  }
+  return consume(requestedCents, true);
+}
+
+async function getEntryProfitShareSnapshotRows(tx: any, input: { actorUserId: number; entryIds: number[]; lock?: boolean }) {
+  if (input.entryIds.length === 0) return [];
+  const [rows] = await tx.execute(
+    `SELECT id, entry_id, opening_entry_id, source_user_id, related_fund_id, beneficiary_user_id, profit_share_rule_id, share_percentage, matched_quantity
+       FROM ledger52_t0_journal_entry_profit_shares
+      WHERE ledger_id = ? AND user_id = ? AND entry_id IN (${input.entryIds.map(() => "?").join(", ")})
+      ORDER BY entry_id ASC, opening_entry_id ASC, id ASC${input.lock ? " FOR UPDATE" : ""}`,
+    [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, ...input.entryIds],
+  );
+  return asRows(rows);
+}
+
+async function writeOpeningProfitShareSnapshot(tx: any, input: {
+  actorUserId: number;
+  entryId: number;
+  sourceUserId: number;
+  relatedFundId: number;
+  quantity: string;
+}) {
+  if (input.sourceUserId <= 0 || input.relatedFundId <= 0) return;
+  const activeRules = await getActiveLedger52T0JournalProfitShareRules(tx, {
+    actorUserId: input.actorUserId,
+    relatedFundId: input.relatedFundId,
+    lock: true,
+  });
+  if (activeRules.length === 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请先完成该项目的收益分配设置" });
+  }
+  const totalPercentage = activeRules.reduce((total, rule) => total + toNumber(rule.share_percentage), 0);
+  if (Math.abs(totalPercentage - 100) > 0.00001) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "该项目的收益分配必须合计为100%" });
+  }
+  for (const activeRule of activeRules) {
+    await tx.execute(
+      `INSERT INTO ledger52_t0_journal_entry_profit_shares
+        (ledger_id, user_id, entry_id, opening_entry_id, source_user_id, related_fund_id, beneficiary_user_id, profit_share_rule_id, share_percentage, matched_quantity)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        LEDGER_52_T0_JOURNAL_ID,
+        input.actorUserId,
+        input.entryId,
+        input.entryId,
+        input.sourceUserId,
+        input.relatedFundId,
+        toNumber(activeRule.beneficiary_user_id),
+        toNumber(activeRule.id) || null,
+        toNumber(activeRule.share_percentage),
+        input.quantity,
+      ],
+    );
+  }
+}
+
+async function writeClosingProfitShareSnapshots(tx: any, input: {
+  actorUserId: number;
+  entryId: number;
+  sourceUserId: number;
+  positionRows: any[];
+  action: T0JournalAction;
+  targetPrice: string;
+  relatedFundId: number;
+  quantity: string;
+}) {
+  if (input.sourceUserId <= 0) return;
+  const matches = buildProfitShareOpeningMatches(
+    input.positionRows,
+    input.action,
+    input.targetPrice,
+    input.sourceUserId,
+    input.relatedFundId,
+    quantityToCents(input.quantity),
+  );
+  const openingSnapshotRows = await getEntryProfitShareSnapshotRows(tx, {
+    actorUserId: input.actorUserId,
+    entryIds: matches.map((match) => match.openingEntryId),
+    lock: true,
+  });
+  const snapshotsByOpening = new Map<number, any[]>();
+  for (const snapshot of openingSnapshotRows) {
+    const openingEntryId = toNumber(snapshot.opening_entry_id);
+    const current = snapshotsByOpening.get(openingEntryId) || [];
+    current.push(snapshot);
+    snapshotsByOpening.set(openingEntryId, current);
+  }
+  for (const match of matches) {
+    const openingSnapshots = snapshotsByOpening.get(match.openingEntryId) || [];
+    for (const openingSnapshot of openingSnapshots) {
+      await tx.execute(
+        `INSERT INTO ledger52_t0_journal_entry_profit_shares
+          (ledger_id, user_id, entry_id, opening_entry_id, source_user_id, related_fund_id, beneficiary_user_id, profit_share_rule_id, share_percentage, matched_quantity)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          LEDGER_52_T0_JOURNAL_ID,
+          input.actorUserId,
+          input.entryId,
+          match.openingEntryId,
+          toNumber(openingSnapshot.source_user_id) || input.sourceUserId,
+          toNumber(openingSnapshot.related_fund_id) || input.relatedFundId,
+          toNumber(openingSnapshot.beneficiary_user_id),
+          toNumber(openingSnapshot.profit_share_rule_id) || null,
+          toNumber(openingSnapshot.share_percentage),
+          (match.matchedQuantityCents / 100).toFixed(2),
+        ],
+      );
+    }
+  }
+}
+
+async function restoreEntryProfitShareSnapshots(tx: any, input: { actorUserId: number; entryId: number; snapshots: any[] }) {
+  for (const snapshot of input.snapshots) {
+    const openingEntryId = toNumber(snapshot.opening_entry_id ?? snapshot.openingEntryId);
+    const beneficiaryUserId = toNumber(snapshot.beneficiary_user_id ?? snapshot.beneficiaryUserId);
+    const sourceUserId = toNumber(snapshot.source_user_id ?? snapshot.sourceUserId);
+    const relatedFundId = toNumber(snapshot.related_fund_id ?? snapshot.relatedFundId);
+    const percentage = toNumber(snapshot.share_percentage ?? snapshot.percentage);
+    const quantity = String(snapshot.matched_quantity ?? snapshot.matchedQuantity ?? "");
+    if (!openingEntryId || !beneficiaryUserId || !sourceUserId || percentage <= 0 || !quantity) continue;
+    await tx.execute(
+      `INSERT INTO ledger52_t0_journal_entry_profit_shares
+        (ledger_id, user_id, entry_id, opening_entry_id, source_user_id, related_fund_id, beneficiary_user_id, profit_share_rule_id, share_percentage, matched_quantity)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        LEDGER_52_T0_JOURNAL_ID,
+        input.actorUserId,
+        input.entryId,
+        openingEntryId,
+        sourceUserId,
+        relatedFundId || null,
+        beneficiaryUserId,
+        toNumber(snapshot.profit_share_rule_id ?? snapshot.profitShareRuleId) || null,
+        percentage,
+        quantity,
+      ],
+    );
+  }
 }
 
 export async function selectLedger52T0JournalAccount(userId: number, accountId: number) {
@@ -814,12 +1368,12 @@ export async function renameLedger52T0JournalRelatedFund(input: { actorUserId: n
     if (oldName !== name) {
       const [duplicateRows] = await tx.execute(
         `SELECT id FROM ledger52_t0_journal_related_funds
-          WHERE ledger_id = ? AND user_id = ? AND related_user_id = ? AND name = ? AND id <> ?
+          WHERE ledger_id = ? AND user_id = ? AND name = ? AND id <> ?
           LIMIT 1 FOR UPDATE`,
-        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, relatedUserId, name, input.relatedFundId],
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, name, input.relatedFundId],
       );
       if (asRows(duplicateRows)[0]) {
-        throw new TRPCError({ code: "CONFLICT", message: "该用户下已存在同名项目，请换一个名称" });
+        throw new TRPCError({ code: "CONFLICT", message: "该账本已存在同名项目，请换一个名称" });
       }
       await tx.execute(
         `UPDATE ledger52_t0_journal_related_funds SET name = ?, updated_at = NOW(3) WHERE id = ?`,
@@ -1023,6 +1577,12 @@ export async function deleteLedger52T0JournalDirectory(input: {
           WHERE id = ? AND ledger_id = ? AND user_id = ?`,
         [input.dimensionId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
       );
+      await tx.execute(
+        `UPDATE ledger52_t0_journal_profit_share_rules
+            SET is_active = 0, ended_at = NOW(3), updated_at = NOW(3)
+          WHERE ledger_id = ? AND user_id = ? AND related_fund_id = ? AND is_active = 1`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.dimensionId],
+      );
     } else {
       await tx.execute(
         `INSERT INTO ledger52_t0_journal_deleted_dimensions
@@ -1037,6 +1597,14 @@ export async function deleteLedger52T0JournalDirectory(input: {
           impact.name,
           input.actorUserId,
         ],
+      );
+      // 目录移除后不再为该用户创建未来新开仓的分配快照；既有订单快照与审计保持不变。
+      await tx.execute(
+        `UPDATE ledger52_t0_journal_profit_share_rules
+            SET is_active = 0, ended_at = NOW(3), updated_at = NOW(3)
+          WHERE ledger_id = ? AND user_id = ? AND is_active = 1
+            AND (source_user_id = ? OR beneficiary_user_id = ?)`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.dimensionId, input.dimensionId],
       );
     }
 
@@ -1155,13 +1723,14 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     const storedTargetPrice = isOpeningAction(input.action)
       ? archivePriceForAction(input.action, input.price)
       : archivedTargetPrice(input.action, input.targetPrice);
+    let positionRowsForProfitShare: any[] = [];
 
     if (!isOpeningAction(input.action) && !isRetryOfExistingEntry) {
       if (!storedTargetPrice) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "平仓记录必须指定对应的开仓价格档位" });
       }
       const [positionRows] = await tx.execute(
-        `SELECT action, quantity, price, target_price, related_user_id, related_fund_id
+        `SELECT id, action, quantity, price, target_price, related_user_id, related_fund_id
            FROM ledger52_t0_journal_entries
           WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
           ORDER BY trade_time ASC, id ASC FOR UPDATE`,
@@ -1177,6 +1746,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
             : "该价格档位已无可平数量",
         });
       }
+      positionRowsForProfitShare = asRows(positionRows);
     }
 
     const [entryResult] = await tx.execute(
@@ -1204,6 +1774,29 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     );
     const entryId = Number((entryResult as any).insertId || 0);
     if (!entryId) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "速记流水保存失败" });
+
+    if (!isRetryOfExistingEntry) {
+      if (isOpeningAction(input.action)) {
+        await writeOpeningProfitShareSnapshot(tx, {
+          actorUserId: input.actorUserId,
+          entryId,
+          sourceUserId: relatedUserId,
+          relatedFundId: relatedFund?.id ?? 0,
+          quantity: normalizedQuantity,
+        });
+      } else if (storedTargetPrice) {
+        await writeClosingProfitShareSnapshots(tx, {
+          actorUserId: input.actorUserId,
+          entryId,
+          sourceUserId: relatedUserId,
+          positionRows: positionRowsForProfitShare,
+          action: input.action,
+          targetPrice: String(storedTargetPrice),
+          relatedFundId: relatedFund?.id ?? 0,
+          quantity: normalizedQuantity,
+        });
+      }
+    }
 
     const [accountRows, entryRows] = await Promise.all([
       tx.execute(
@@ -1303,6 +1896,15 @@ async function writeEntryAudit(tx: any, input: {
   return Number((result as any)?.insertId || 0);
 }
 
+async function buildEntryAuditSnapshot(tx: any, actorUserId: number, entry: any) {
+  const profitShareSnapshots = await getEntryProfitShareSnapshotRows(tx, {
+    actorUserId,
+    entryIds: [toNumber(entry.id)],
+    lock: true,
+  });
+  return { ...entry, profitShareSnapshots };
+}
+
 export async function updateLedger52T0JournalOpeningEntry(input: {
   actorUserId: number;
   entryId: number;
@@ -1323,6 +1925,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     const before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
+    const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
     const relatedUserId = Number(input.relatedUserId || 0);
     if (relatedUserId > 0) {
       if (!Number.isInteger(relatedUserId)) {
@@ -1335,6 +1938,9 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       if (!asRows(relatedUserRows)[0]) {
         throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新选择" });
       }
+    }
+    if (beforeForAudit.profitShareSnapshots.length > 0 && relatedUserId !== toNumber(before.related_user_id)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓已固化收益分配快照；如需修改关联用户，请先回撤后重新录入" });
     }
     const relatedFund = await resolveLedger52T0JournalRelatedFund(tx, {
       actorUserId: input.actorUserId,
@@ -1365,6 +1971,14 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         input.actorUserId,
       ],
     );
+    if (beforeForAudit.profitShareSnapshots.length > 0) {
+      await tx.execute(
+        `UPDATE ledger52_t0_journal_entry_profit_shares
+            SET matched_quantity = ?
+          WHERE ledger_id = ? AND user_id = ? AND entry_id = ? AND opening_entry_id = ?`,
+        [normalizedQuantity, LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId, input.entryId],
+      );
+    }
     const [updatedRows] = await tx.execute(
       `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
@@ -1379,7 +1993,8 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     );
     const after = asRows(updatedRows)[0];
     if (!after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "编辑后的开仓记录读取失败" });
-    await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "update", before, after });
+    const afterForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, after);
+    await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "update", before: beforeForAudit, after: afterForAudit });
     await tx.commit();
     return { entry: mapEntry(after) };
   } catch (error) {
@@ -1399,7 +2014,13 @@ export async function deleteLedger52T0JournalOpeningEntry(input: { actorUserId: 
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     const before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
-    const auditId = await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "delete", before });
+    const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
+    const auditId = await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "delete", before: beforeForAudit });
+    await tx.execute(
+      `DELETE FROM ledger52_t0_journal_entry_profit_shares
+        WHERE ledger_id = ? AND user_id = ? AND entry_id = ?`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId],
+    );
     const [result] = await tx.execute(
       `DELETE FROM ledger52_t0_journal_entries
         WHERE id = ? AND ledger_id = ? AND user_id = ?`,
@@ -1449,7 +2070,13 @@ export async function revertLedger52T0JournalEntry(input: { actorUserId: number;
       before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
     }
 
-    const auditId = await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "revert", before });
+    const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
+    const auditId = await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "revert", before: beforeForAudit });
+    await tx.execute(
+      `DELETE FROM ledger52_t0_journal_entry_profit_shares
+        WHERE ledger_id = ? AND user_id = ? AND entry_id = ?`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId],
+    );
     const [result] = await tx.execute(
       `DELETE FROM ledger52_t0_journal_entries
         WHERE id = ? AND ledger_id = ? AND user_id = ?`,
@@ -1573,6 +2200,11 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
         restoredCreatedAt,
       ],
     );
+    await restoreEntryProfitShareSnapshots(tx, {
+      actorUserId: input.actorUserId,
+      entryId,
+      snapshots: Array.isArray(snapshot.profitShareSnapshots) ? snapshot.profitShareSnapshots : [],
+    });
     const [restoredRows] = await tx.execute(
       `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
@@ -1587,12 +2219,13 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
     );
     const restored = asRows(restoredRows)[0];
     if (!restored) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "恢复后的速记流水读取失败" });
+    const restoredForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, restored);
     await writeEntryAudit(tx, {
       actorUserId: input.actorUserId,
       entryId,
       operation: "restore",
       before: { auditId: input.auditId, snapshot },
-      after: restored,
+      after: restoredForAudit,
     });
     await tx.commit();
     return { entry: mapEntry(restored) };

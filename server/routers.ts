@@ -10578,7 +10578,7 @@ ${klinesSummary}
         return await journal.selectLedger52T0JournalAccount(ctx.user.id, input.accountId);
       }),
 
-    // 改名仅更新T+0目录名称或全局用户显示名；流水继续按稳定ID关联，历史展示会自动同步。
+    // 改名仅更新T+0私有目录名称；关联用户始终只是全局用户库的引用。
     t0RenameAccount: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),
@@ -10659,6 +10659,34 @@ ${klinesSummary}
           dimension: input.dimension,
           dimensionId: input.dimensionId,
           expectedAffectedEntryCount: input.expectedAffectedEntryCount,
+        });
+      }),
+
+    // 收益分配绑定专项项目；受益人仅能为全局用户，比例精确合计100%，每笔开平仓写不可变快照。
+    t0SetProfitShareRule: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        relatedFundId: z.number().int().positive().optional(),
+        relatedUserId: z.number().int().positive().optional(),
+        relatedFundName: z.string().trim().min(1).max(80).optional(),
+        allocations: z.array(z.object({
+          beneficiaryUserId: z.number().int().positive(),
+          percentage: z.number().int().min(1).max(100),
+        })).min(1).max(20),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.setLedger52T0JournalProfitShareRules({
+          actorUserId: ctx.user.id,
+          relatedFundId: input.relatedFundId,
+          relatedUserId: input.relatedUserId,
+          relatedFundName: input.relatedFundName,
+          allocations: input.allocations,
         });
       }),
 
