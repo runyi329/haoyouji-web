@@ -10578,6 +10578,90 @@ ${klinesSummary}
         return await journal.selectLedger52T0JournalAccount(ctx.user.id, input.accountId);
       }),
 
+    // 改名仅更新T+0目录名称或全局用户显示名；流水继续按稳定ID关联，历史展示会自动同步。
+    t0RenameAccount: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        accountId: z.number().int().positive(),
+        name: z.string().trim().min(1, '账户名称不能为空').max(80, '账户名称最多80个字符'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.renameLedger52T0JournalAccount({
+          actorUserId: ctx.user.id,
+          accountId: input.accountId,
+          name: input.name,
+        });
+      }),
+
+    t0RenameRelatedFund: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        relatedFundId: z.number().int().positive(),
+        name: z.string().trim().min(1, '项目名称不能为空').max(80, '项目名称最多80个字符'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.renameLedger52T0JournalRelatedFund({
+          actorUserId: ctx.user.id,
+          relatedFundId: input.relatedFundId,
+          name: input.name,
+        });
+      }),
+
+    // 删除前先返回受影响历史流水，前端必须向管理员展示明确范围后再做二次确认。
+    t0GetDirectoryImpact: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        dimension: z.enum(['account', 'related_user', 'related_fund']),
+        dimensionId: z.number().int().positive(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.getLedger52T0JournalDirectoryImpact({
+          actorUserId: ctx.user.id,
+          dimension: input.dimension,
+          dimensionId: input.dimensionId,
+        });
+      }),
+
+    t0DeleteDirectoryItem: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        dimension: z.enum(['account', 'related_user', 'related_fund']),
+        dimensionId: z.number().int().positive(),
+        expectedAffectedEntryCount: z.number().int().nonnegative().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.deleteLedger52T0JournalDirectory({
+          actorUserId: ctx.user.id,
+          dimension: input.dimension,
+          dimensionId: input.dimensionId,
+          expectedAffectedEntryCount: input.expectedAffectedEntryCount,
+        });
+      }),
+
     t0SearchRelatedUsers: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),

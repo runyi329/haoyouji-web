@@ -233,12 +233,15 @@ function mapEntry(row: any) {
     id: String(row.id),
     accountId: Number(row.account_id),
     accountName: String(row.account_name || ""),
+    accountHidden: Boolean(toNumber(row.account_hidden ?? row.accountHidden)),
     relatedUserId: relatedUserId > 0 ? relatedUserId : undefined,
     relatedUserName: row.related_user_name ?? row.relatedUserName ?? undefined,
     relatedUsername: row.related_username ?? row.relatedUsername ?? undefined,
     relatedUserAvatar: row.related_user_avatar ?? row.relatedUserAvatar ?? undefined,
+    relatedUserHidden: Boolean(toNumber(row.related_user_hidden ?? row.relatedUserHidden)),
     relatedFundId: relatedFundId > 0 ? relatedFundId : undefined,
     relatedFundName: row.related_fund_name ?? row.relatedFundName ?? undefined,
+    relatedFundHidden: Boolean(toNumber(row.related_fund_hidden ?? row.relatedFundHidden)),
     symbol: String(row.symbol || "ETH"),
     action: String(row.action) as T0JournalAction,
     quantity: toNumber(row.quantity),
@@ -358,6 +361,53 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         COMMENT='52号账本T+0速记账本：编辑与删除审计快照'
     `);
 
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_dimension_audits (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        dimension ENUM('account','related_user','related_fund') NOT NULL,
+        dimension_id BIGINT UNSIGNED NOT NULL,
+        related_user_id BIGINT UNSIGNED DEFAULT NULL,
+        operation ENUM('rename','delete') NOT NULL DEFAULT 'rename',
+        old_name VARCHAR(80) NOT NULL,
+        new_name VARCHAR(80) NOT NULL,
+        affected_entry_count INT UNSIGNED NOT NULL DEFAULT 0,
+        operator_user_id INT NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        KEY idx_t0_journal_dimension_audit (ledger_id, user_id, dimension, dimension_id, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0速记账本：账户、关联用户及项目目录变更审计'
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_deleted_dimensions (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        dimension ENUM('account','related_user','related_fund') NOT NULL,
+        dimension_id BIGINT UNSIGNED NOT NULL,
+        related_user_id BIGINT UNSIGNED DEFAULT NULL,
+        deleted_name VARCHAR(80) NOT NULL,
+        operator_user_id INT NOT NULL,
+        deleted_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_t0_journal_deleted_dimension (ledger_id, user_id, dimension, dimension_id),
+        KEY idx_t0_journal_deleted_dimension_owner (ledger_id, user_id, dimension, deleted_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0速记账本：已隐藏目录，保留稳定键供历史核对'
+    `);
+
+    const [dimensionAuditOperationColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_dimension_audits LIKE 'operation'`);
+    if (asRows(dimensionAuditOperationColumns).length === 0) {
+      await db.execute(`
+        ALTER TABLE ledger52_t0_journal_dimension_audits
+          ADD COLUMN operation ENUM('rename','delete') NOT NULL DEFAULT 'rename' AFTER related_user_id,
+          ADD COLUMN affected_entry_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER new_name
+      `);
+    }
+
     // 兼容已经创建过旧版审计表的生产库，使其可记录速记回撤与恢复动作。
     await db.execute(`
       ALTER TABLE ledger52_t0_journal_entry_audits
@@ -426,6 +476,8 @@ async function resolveLedger52T0JournalRelatedFund(tx: any, input: {
   relatedFundId?: number;
   relatedFundName?: string;
   required?: boolean;
+  /** 平仓可沿用已逻辑删除的历史项目，避免删除目录后无法完成既有仓位的平仓。 */
+  allowInactive?: boolean;
 }): Promise<{ id: number; name: string } | null> {
   const relatedFundId = Number(input.relatedFundId || 0);
   const relatedFundName = String(input.relatedFundName || "").trim();
@@ -442,9 +494,10 @@ async function resolveLedger52T0JournalRelatedFund(tx: any, input: {
     const [fundRows] = await tx.execute(
       `SELECT id, name
          FROM ledger52_t0_journal_related_funds
-        WHERE id = ? AND ledger_id = ? AND user_id = ? AND related_user_id = ? AND is_active = 1
+        WHERE id = ? AND ledger_id = ? AND user_id = ? AND related_user_id = ?
+          AND (is_active = 1 OR ? = 1)
         LIMIT 1 FOR UPDATE`,
-      [relatedFundId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.relatedUserId],
+      [relatedFundId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.relatedUserId, input.allowInactive ? 1 : 0],
     );
     const fund = asRows(fundRows)[0];
     if (!fund) {
@@ -503,15 +556,24 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
         [LEDGER_52_T0_JOURNAL_ID, relatedUserId],
       ),
     conn.execute(
-      `SELECT e.id, e.account_id, a.name AS account_name, e.symbol, e.action,
-              e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
-              COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
-              u.username AS related_username, u.avatar AS related_user_avatar,
+      `SELECT e.id, e.account_id,
+              CASE WHEN a.is_active = 1 THEN a.name ELSE NULL END AS account_name,
+              CASE WHEN a.is_active = 1 THEN 0 ELSE 1 END AS account_hidden,
+              e.symbol, e.action, e.related_user_id, e.related_fund_id,
+              CASE WHEN f.is_active = 1 THEN f.name ELSE NULL END AS related_fund_name,
+              CASE WHEN f.is_active = 1 THEN 0 ELSE 1 END AS related_fund_hidden,
+              CASE WHEN deleted_user.id IS NULL THEN COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) ELSE NULL END AS related_user_name,
+              CASE WHEN deleted_user.id IS NULL THEN u.username ELSE NULL END AS related_username,
+              CASE WHEN deleted_user.id IS NULL THEN u.avatar ELSE NULL END AS related_user_avatar,
+              CASE WHEN deleted_user.id IS NULL THEN 0 ELSE 1 END AS related_user_hidden,
               e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id
          LEFT JOIN ledger52_t0_journal_related_funds f ON f.id = e.related_fund_id AND f.ledger_id = e.ledger_id AND f.user_id = e.user_id
+         LEFT JOIN ledger52_t0_journal_deleted_dimensions deleted_user
+           ON deleted_user.ledger_id = e.ledger_id AND deleted_user.user_id = e.user_id
+          AND deleted_user.dimension = 'related_user' AND deleted_user.dimension_id = e.related_user_id
         WHERE e.ledger_id = ? AND ${isAdminScope ? "e.user_id = ?" : "e.related_user_id = ?"}
         ORDER BY e.trade_time ASC, e.id ASC
         LIMIT 2000`,
@@ -537,6 +599,11 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
          FROM ledger52_t0_journal_entries e
          LEFT JOIN users u ON u.id = e.related_user_id
         WHERE e.ledger_id = ? AND e.user_id = ? AND e.related_user_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM ledger52_t0_journal_deleted_dimensions deleted_user
+             WHERE deleted_user.ledger_id = e.ledger_id AND deleted_user.user_id = e.user_id
+               AND deleted_user.dimension = 'related_user' AND deleted_user.dimension_id = e.related_user_id
+          )
         GROUP BY e.related_user_id, u.username, u.name, u.avatar
         ORDER BY last_used_at DESC, e.related_user_id DESC
         LIMIT 30`,
@@ -546,6 +613,13 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
       `SELECT id, related_user_id, name, last_used_at
          FROM ledger52_t0_journal_related_funds
         WHERE ledger_id = ? AND user_id = ? AND is_active = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM ledger52_t0_journal_deleted_dimensions deleted_user
+             WHERE deleted_user.ledger_id = ledger52_t0_journal_related_funds.ledger_id
+               AND deleted_user.user_id = ledger52_t0_journal_related_funds.user_id
+               AND deleted_user.dimension = 'related_user'
+               AND deleted_user.dimension_id = ledger52_t0_journal_related_funds.related_user_id
+          )
         ORDER BY last_used_at IS NULL ASC, last_used_at DESC, updated_at DESC, id DESC
         LIMIT 200`,
       [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
@@ -553,6 +627,13 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
       `SELECT id, related_user_id, name, last_used_at
          FROM ledger52_t0_journal_related_funds
         WHERE ledger_id = ? AND related_user_id = ? AND is_active = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM ledger52_t0_journal_deleted_dimensions deleted_user
+             WHERE deleted_user.ledger_id = ledger52_t0_journal_related_funds.ledger_id
+               AND deleted_user.user_id = ledger52_t0_journal_related_funds.user_id
+               AND deleted_user.dimension = 'related_user'
+               AND deleted_user.dimension_id = ledger52_t0_journal_related_funds.related_user_id
+          )
         ORDER BY last_used_at IS NULL ASC, last_used_at DESC, updated_at DESC, id DESC
         LIMIT 200`,
       [LEDGER_52_T0_JOURNAL_ID, relatedUserId],
@@ -617,6 +698,369 @@ export async function selectLedger52T0JournalAccount(userId: number, accountId: 
   return { account: mapAccount(account) };
 }
 
+function normalizeJournalDirectoryName(value: string, label: string): string {
+  const name = String(value || "").trim();
+  if (!name) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `${label}不能为空` });
+  }
+  if (name.length > 80) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `${label}最多80个字符` });
+  }
+  return name;
+}
+
+async function writeLedger52T0JournalDimensionAudit(tx: any, input: {
+  userId: number;
+  dimension: "account" | "related_user" | "related_fund";
+  dimensionId: number;
+  relatedUserId?: number;
+  operation?: "rename" | "delete";
+  oldName: string;
+  newName: string;
+  affectedEntryCount?: number;
+  operatorUserId: number;
+}) {
+  await tx.execute(
+    `INSERT INTO ledger52_t0_journal_dimension_audits
+      (ledger_id, user_id, dimension, dimension_id, related_user_id, operation, old_name, new_name, affected_entry_count, operator_user_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      LEDGER_52_T0_JOURNAL_ID,
+      input.userId,
+      input.dimension,
+      input.dimensionId,
+      input.relatedUserId && input.relatedUserId > 0 ? input.relatedUserId : null,
+      input.operation ?? "rename",
+      input.oldName,
+      input.newName,
+      Math.max(0, Number(input.affectedEntryCount || 0)),
+      input.operatorUserId,
+    ],
+  );
+}
+
+/** 改名只更新账户目录；全部历史流水仍通过 account_id 自动展示为新名称。 */
+export async function renameLedger52T0JournalAccount(input: { actorUserId: number; accountId: number; name: string }) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  const name = normalizeJournalDirectoryName(input.name, "账户名称");
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    const [rows] = await tx.execute(
+      `SELECT id, name, last_used_at, created_at
+         FROM ledger52_t0_journal_accounts
+        WHERE id = ? AND ledger_id = ? AND user_id = ? AND is_active = 1
+        LIMIT 1 FOR UPDATE`,
+      [input.accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    const account = asRows(rows)[0];
+    if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "账户不存在或已停用" });
+    const oldName = String(account.name || "");
+    if (oldName !== name) {
+      const [duplicateRows] = await tx.execute(
+        `SELECT id FROM ledger52_t0_journal_accounts
+          WHERE ledger_id = ? AND user_id = ? AND name = ? AND id <> ?
+          LIMIT 1 FOR UPDATE`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, name, input.accountId],
+      );
+      if (asRows(duplicateRows)[0]) {
+        throw new TRPCError({ code: "CONFLICT", message: "已存在同名账户，请换一个名称" });
+      }
+      await tx.execute(
+        `UPDATE ledger52_t0_journal_accounts SET name = ?, updated_at = NOW(3) WHERE id = ?`,
+        [name, input.accountId],
+      );
+      await writeLedger52T0JournalDimensionAudit(tx, {
+        userId: input.actorUserId,
+        dimension: "account",
+        dimensionId: input.accountId,
+        oldName,
+        newName: name,
+        operatorUserId: input.actorUserId,
+      });
+    }
+    await tx.commit();
+    return { account: mapAccount({ ...account, name }) };
+  } catch (error) {
+    await tx.rollback();
+    throw error;
+  } finally {
+    await tx.release();
+  }
+}
+
+/** 改名只更新项目目录；历史流水通过 related_fund_id 联表，因此会同步显示新名称。 */
+export async function renameLedger52T0JournalRelatedFund(input: { actorUserId: number; relatedFundId: number; name: string }) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  const name = normalizeJournalDirectoryName(input.name, "项目名称");
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    const [rows] = await tx.execute(
+      `SELECT id, related_user_id, name, last_used_at, created_at
+         FROM ledger52_t0_journal_related_funds
+        WHERE id = ? AND ledger_id = ? AND user_id = ? AND is_active = 1
+        LIMIT 1 FOR UPDATE`,
+      [input.relatedFundId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    const fund = asRows(rows)[0];
+    if (!fund) throw new TRPCError({ code: "NOT_FOUND", message: "项目不存在或已停用" });
+    const oldName = String(fund.name || "");
+    const relatedUserId = toNumber(fund.related_user_id);
+    if (oldName !== name) {
+      const [duplicateRows] = await tx.execute(
+        `SELECT id FROM ledger52_t0_journal_related_funds
+          WHERE ledger_id = ? AND user_id = ? AND related_user_id = ? AND name = ? AND id <> ?
+          LIMIT 1 FOR UPDATE`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, relatedUserId, name, input.relatedFundId],
+      );
+      if (asRows(duplicateRows)[0]) {
+        throw new TRPCError({ code: "CONFLICT", message: "该用户下已存在同名项目，请换一个名称" });
+      }
+      await tx.execute(
+        `UPDATE ledger52_t0_journal_related_funds SET name = ?, updated_at = NOW(3) WHERE id = ?`,
+        [name, input.relatedFundId],
+      );
+      await writeLedger52T0JournalDimensionAudit(tx, {
+        userId: input.actorUserId,
+        dimension: "related_fund",
+        dimensionId: input.relatedFundId,
+        relatedUserId,
+        oldName,
+        newName: name,
+        operatorUserId: input.actorUserId,
+      });
+    }
+    await tx.commit();
+    return { relatedFund: mapRelatedFund({ ...fund, name }) };
+  } catch (error) {
+    await tx.rollback();
+    throw error;
+  } finally {
+    await tx.release();
+  }
+}
+
+type T0JournalDirectoryDimension = "account" | "related_user" | "related_fund";
+type T0JournalDirectoryImpact = {
+  dimension: T0JournalDirectoryDimension;
+  dimensionId: number;
+  name: string;
+  relatedUserId?: number;
+  affectedEntryCount: number;
+  outstandingQuantity: number;
+  accounts: Array<{ id: number; name: string; count: number }>;
+  users: Array<{ id: number; name: string; count: number }>;
+  funds: Array<{ id: number; name: string; count: number }>;
+};
+
+function calculateOutstandingOpeningQuantity(rows: any[]): number {
+  const balances = new Map<string, number>();
+  for (const row of rows) {
+    const action = String(row.action) as T0JournalAction;
+    const accountId = toNumber(row.account_id);
+    const relatedUserId = toNumber(row.related_user_id);
+    const relatedFundId = toNumber(row.related_fund_id);
+    const archivePrice = isOpeningAction(action)
+      ? archivePriceForAction(action, row.price)
+      : archivedTargetPrice(action, row.target_price, row.price);
+    if (!accountId || !archivePrice) continue;
+    const key = `${actionSide(action)}:${priceKey(archivePrice)}:${accountId}:${relatedUserKey(relatedUserId)}:${relatedFundKey(relatedFundId)}`;
+    const quantity = quantityToCents(row.quantity);
+    balances.set(key, Math.max(0, (balances.get(key) || 0) + (isOpeningAction(action) ? quantity : -quantity)));
+  }
+  return Array.from(balances.values()).reduce((sum, cents) => sum + cents, 0) / 100;
+}
+
+function summarizeDirectoryImpactRows(rows: any[], input: {
+  dimension: T0JournalDirectoryDimension;
+  dimensionId: number;
+  name: string;
+  relatedUserId?: number;
+}): T0JournalDirectoryImpact {
+  const summarize = (idField: string, nameField: string) => {
+    const values = new Map<number, { id: number; name: string; count: number }>();
+    for (const row of rows) {
+      const id = toNumber(row[idField]);
+      if (!id) continue;
+      const current = values.get(id);
+      values.set(id, {
+        id,
+        name: String(row[nameField] || `未命名#${id}`),
+        count: (current?.count || 0) + 1,
+      });
+    }
+    return Array.from(values.values()).sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, "zh-CN"));
+  };
+
+  return {
+    dimension: input.dimension,
+    dimensionId: input.dimensionId,
+    name: input.name,
+    relatedUserId: input.relatedUserId,
+    affectedEntryCount: rows.length,
+    outstandingQuantity: calculateOutstandingOpeningQuantity(rows),
+    accounts: summarize("account_id", "account_name"),
+    users: summarize("related_user_id", "related_user_name"),
+    funds: summarize("related_fund_id", "related_fund_name"),
+  };
+}
+
+async function getLedger52T0JournalDirectoryImpactWithConnection(tx: any, input: {
+  actorUserId: number;
+  dimension: T0JournalDirectoryDimension;
+  dimensionId: number;
+  lock?: boolean;
+}): Promise<T0JournalDirectoryImpact> {
+  const lock = input.lock ? " FOR UPDATE" : "";
+  let target: any;
+  let relatedUserId: number | undefined;
+  if (input.dimension === "account") {
+    const [rows] = await tx.execute(
+      `SELECT id, name FROM ledger52_t0_journal_accounts
+        WHERE id = ? AND ledger_id = ? AND user_id = ? AND is_active = 1 LIMIT 1${lock}`,
+      [input.dimensionId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    target = asRows(rows)[0];
+  } else if (input.dimension === "related_fund") {
+    const [rows] = await tx.execute(
+      `SELECT id, related_user_id, name FROM ledger52_t0_journal_related_funds
+        WHERE id = ? AND ledger_id = ? AND user_id = ? AND is_active = 1 LIMIT 1${lock}`,
+      [input.dimensionId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    target = asRows(rows)[0];
+    relatedUserId = target ? toNumber(target.related_user_id) : undefined;
+  } else {
+    const [entryRows] = await tx.execute(
+      `SELECT e.related_user_id AS id, COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS name
+         FROM ledger52_t0_journal_entries e
+         LEFT JOIN users u ON u.id = e.related_user_id
+        WHERE e.ledger_id = ? AND e.user_id = ? AND e.related_user_id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM ledger52_t0_journal_deleted_dimensions deleted_user
+             WHERE deleted_user.ledger_id = e.ledger_id AND deleted_user.user_id = e.user_id
+               AND deleted_user.dimension = 'related_user' AND deleted_user.dimension_id = e.related_user_id
+          )
+        LIMIT 1${lock}`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.dimensionId],
+    );
+    target = asRows(entryRows)[0];
+    relatedUserId = target ? toNumber(target.id) : undefined;
+  }
+  if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "要操作的目录项不存在、已删除或无权访问" });
+
+  const condition = input.dimension === "account"
+    ? "e.account_id = ?"
+    : input.dimension === "related_fund"
+      ? "e.related_fund_id = ?"
+      : "e.related_user_id = ?";
+  const [entryRows] = await tx.execute(
+    `SELECT e.action, e.quantity, e.price, e.target_price, e.account_id, e.related_user_id, e.related_fund_id,
+            a.name AS account_name,
+            COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
+            f.name AS related_fund_name
+       FROM ledger52_t0_journal_entries e
+       INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
+       LEFT JOIN users u ON u.id = e.related_user_id
+       LEFT JOIN ledger52_t0_journal_related_funds f ON f.id = e.related_fund_id AND f.ledger_id = e.ledger_id AND f.user_id = e.user_id
+      WHERE e.ledger_id = ? AND e.user_id = ? AND ${condition}
+      ORDER BY e.trade_time ASC, e.id ASC${lock}`,
+    [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.dimensionId],
+  );
+  return summarizeDirectoryImpactRows(asRows(entryRows), {
+    dimension: input.dimension,
+    dimensionId: input.dimensionId,
+    name: String(target.name || `项目#${input.dimensionId}`),
+    relatedUserId,
+  });
+}
+
+/** 返回编辑/删除前的精确影响范围，供前端在二次确认前展示。 */
+export async function getLedger52T0JournalDirectoryImpact(input: {
+  actorUserId: number;
+  dimension: T0JournalDirectoryDimension;
+  dimensionId: number;
+}) {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  await ensureLedger52T0JournalTables(conn);
+  return getLedger52T0JournalDirectoryImpactWithConnection(conn, input);
+}
+
+/**
+ * 目录删除是逻辑删除：从新订单的可选目录与前端展示中移除，历史流水仍保留稳定键以维持FIFO、盈亏与审计核对。
+ * 删除后旧开仓仍可按稳定ID完成平仓，目录不会重新出现在新订单选择中。
+ */
+export async function deleteLedger52T0JournalDirectory(input: {
+  actorUserId: number;
+  dimension: T0JournalDirectoryDimension;
+  dimensionId: number;
+  expectedAffectedEntryCount?: number;
+}) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    const impact = await getLedger52T0JournalDirectoryImpactWithConnection(tx, { ...input, lock: true });
+    if (input.expectedAffectedEntryCount !== undefined && input.expectedAffectedEntryCount !== impact.affectedEntryCount) {
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: "目录关联的历史流水已变化，请刷新影响预览后重新确认" });
+    }
+    if (input.dimension === "account") {
+      await tx.execute(
+        `UPDATE ledger52_t0_journal_accounts SET is_active = 0, updated_at = NOW(3)
+          WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+        [input.dimensionId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+      );
+    } else if (input.dimension === "related_fund") {
+      await tx.execute(
+        `UPDATE ledger52_t0_journal_related_funds SET is_active = 0, updated_at = NOW(3)
+          WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+        [input.dimensionId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+      );
+    } else {
+      await tx.execute(
+        `INSERT INTO ledger52_t0_journal_deleted_dimensions
+          (ledger_id, user_id, dimension, dimension_id, related_user_id, deleted_name, operator_user_id)
+         VALUES (?, ?, 'related_user', ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE deleted_name = VALUES(deleted_name), operator_user_id = VALUES(operator_user_id), deleted_at = NOW(3)`,
+        [
+          LEDGER_52_T0_JOURNAL_ID,
+          input.actorUserId,
+          input.dimensionId,
+          impact.relatedUserId || input.dimensionId,
+          impact.name,
+          input.actorUserId,
+        ],
+      );
+    }
+
+    await writeLedger52T0JournalDimensionAudit(tx, {
+      userId: input.actorUserId,
+      dimension: input.dimension,
+      dimensionId: input.dimensionId,
+      relatedUserId: impact.relatedUserId,
+      operation: "delete",
+      oldName: impact.name,
+      newName: "",
+      affectedEntryCount: impact.affectedEntryCount,
+      operatorUserId: input.actorUserId,
+    });
+    await tx.commit();
+    return { impact };
+  } catch (error) {
+    await tx.rollback();
+    throw error;
+  } finally {
+    await tx.release();
+  }
+}
+
 export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput) {
   const connection = await getDbTransactionConnection();
   if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
@@ -639,6 +1083,14 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
       if (!asRows(relatedUserRows)[0]) {
         throw new TRPCError({ code: "NOT_FOUND", message: "关联用户不存在或已失效，请重新选择" });
       }
+      // 新开仓再次明确选择该用户时才恢复目录可见性；旧仓平仓沿用ID时保持删除状态。
+      if (isOpeningAction(input.action)) {
+        await tx.execute(
+          `DELETE FROM ledger52_t0_journal_deleted_dimensions
+            WHERE ledger_id = ? AND user_id = ? AND dimension = 'related_user' AND dimension_id = ?`,
+          [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, relatedUserId],
+        );
+      }
     }
     const relatedFund = await resolveLedger52T0JournalRelatedFund(tx, {
       actorUserId: input.actorUserId,
@@ -647,6 +1099,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
       relatedFundName: input.relatedFundName,
       // 新开仓关联到具体用户后，必须归属于该用户的一笔专项款；旧流水的平仓仍可保留空专项款。
       required: isOpeningAction(input.action) && relatedUserId > 0,
+      allowInactive: !isOpeningAction(input.action),
     });
 
     let accountId = Number(input.accountId || 0);
@@ -655,9 +1108,10 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
       const [rows] = await tx.execute(
         `SELECT id, name
            FROM ledger52_t0_journal_accounts
-          WHERE id = ? AND ledger_id = ? AND user_id = ? AND is_active = 1
+          WHERE id = ? AND ledger_id = ? AND user_id = ?
+            AND (is_active = 1 OR ? = 1)
           LIMIT 1 FOR UPDATE`,
-        [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+        [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId, isOpeningAction(input.action) ? 0 : 1],
       );
       const account = asRows(rows)[0];
       if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "下单账户不存在或无权使用" });

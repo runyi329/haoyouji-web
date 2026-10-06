@@ -39,12 +39,15 @@ type PreviewTrade = {
   id: string;
   accountId: string;
   accountName?: string;
+  accountHidden?: boolean;
   relatedUserId?: string;
   relatedUserName?: string;
   relatedUsername?: string;
   relatedUserAvatar?: string;
+  relatedUserHidden?: boolean;
   relatedFundId?: string;
   relatedFundName?: string;
+  relatedFundHidden?: boolean;
   symbol: string;
   action: TradeAction;
   quantity: number;
@@ -75,12 +78,15 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     id: String(entry.id),
     accountId: String(entry.accountId),
     accountName: entry.accountName ? String(entry.accountName) : undefined,
+    accountHidden: Boolean(entry.accountHidden),
     relatedUserId: entry.relatedUserId === undefined || entry.relatedUserId === null ? undefined : String(entry.relatedUserId),
     relatedUserName: entry.relatedUserName ? String(entry.relatedUserName) : undefined,
     relatedUsername: entry.relatedUsername ? String(entry.relatedUsername) : undefined,
     relatedUserAvatar: entry.relatedUserAvatar ? String(entry.relatedUserAvatar) : undefined,
+    relatedUserHidden: Boolean(entry.relatedUserHidden),
     relatedFundId: entry.relatedFundId === undefined || entry.relatedFundId === null ? undefined : String(entry.relatedFundId),
     relatedFundName: entry.relatedFundName ? String(entry.relatedFundName) : undefined,
+    relatedFundHidden: Boolean(entry.relatedFundHidden),
     symbol: String(entry.symbol || "ETH"),
     action: entry.action as TradeAction,
     quantity: Number(entry.quantity),
@@ -145,6 +151,21 @@ type EntryForm = {
   note: string;
   targetPrice?: number;
   editingEntryId?: string;
+};
+
+type JournalDirectoryKind = "account" | "relatedUser" | "relatedFund";
+type JournalDirectoryRenameKind = Exclude<JournalDirectoryKind, "relatedUser">;
+type JournalDirectoryTarget = {
+  kind: JournalDirectoryKind;
+  id: string;
+  name: string;
+  username?: string;
+};
+type JournalDirectoryRenameTarget = {
+  kind: JournalDirectoryRenameKind;
+  id: string;
+  name: string;
+  username?: string;
 };
 
 const ACTIONS: Record<TradeAction, { label: string; side: PositionSide; opening: boolean; activeClass: string; idleClass: string }> = {
@@ -737,6 +758,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [lastFundIdByRelatedUser, setLastFundIdByRelatedUser] = useState<Record<string, string>>({});
   const [relatedUserPickerOpen, setRelatedUserPickerOpen] = useState(false);
   const [relatedUserSearch, setRelatedUserSearch] = useState("");
+  const [directoryManagerKind, setDirectoryManagerKind] = useState<JournalDirectoryKind | null>(null);
+  const [directoryRenameTarget, setDirectoryRenameTarget] = useState<JournalDirectoryRenameTarget | null>(null);
+  const [directoryDeleteTarget, setDirectoryDeleteTarget] = useState<JournalDirectoryTarget | null>(null);
+  const [directoryRenameDraft, setDirectoryRenameDraft] = useState("");
   const [showEntrySheet, setShowEntrySheet] = useState(false);
   const [closeConfirmationStep, setCloseConfirmationStep] = useState<"input" | "review">("input");
   const [expandedOpenedTradeIds, setExpandedOpenedTradeIds] = useState<Set<string>>(() => new Set());
@@ -814,6 +839,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   const isMemberView = (t0JournalQuery.data as any)?.viewerMode === "member";
   const canManage = canAccess && (t0JournalQuery.data as any)?.viewerMode === "admin";
+  const directoryImpactTarget = directoryRenameTarget || directoryDeleteTarget;
+  const directoryImpactDimension = directoryImpactTarget?.kind === "account"
+    ? "account"
+    : directoryImpactTarget?.kind === "relatedFund"
+      ? "related_fund"
+      : "related_user";
+  const directoryImpactQuery = trpc.ledger.t0GetDirectoryImpact.useQuery(
+    {
+      ledgerId: 52,
+      dimension: directoryImpactDimension,
+      dimensionId: Number(directoryImpactTarget?.id || 0),
+    },
+    {
+      enabled: canManage && Boolean(directoryImpactTarget?.id),
+      staleTime: 0,
+      refetchOnWindowFocus: false,
+    },
+  );
   const relatedUserSearchQuery = trpc.ledger.t0SearchRelatedUsers.useQuery(
     { ledgerId: 52, query: relatedUserSearch.trim() },
     {
@@ -971,9 +1014,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       (selectedAccountId === "all" || trade.accountId === selectedAccountId)
       && trade.symbol === "ETH"
       && (relatedUserFilterId === "all"
-        || (relatedUserFilterId === "unlinked" ? !trade.relatedUserId : trade.relatedUserId === relatedUserFilterId))
+        || (relatedUserFilterId === "unlinked" ? (!trade.relatedUserId || trade.relatedUserHidden) : trade.relatedUserId === relatedUserFilterId))
       && (relatedFundFilterId === "all"
-        || (relatedFundFilterId === "unclassified" ? !trade.relatedFundId : trade.relatedFundId === relatedFundFilterId))
+        || (relatedFundFilterId === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === relatedFundFilterId))
     )),
     [trades, selectedAccountId, relatedUserFilterId, relatedFundFilterId],
   );
@@ -982,9 +1025,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       trade.symbol === "ETH"
       && (selectedAccountId === "all" || trade.accountId === selectedAccountId)
       && (relatedUserFilterId === "all"
-        || (relatedUserFilterId === "unlinked" ? !trade.relatedUserId : trade.relatedUserId === relatedUserFilterId))
+        || (relatedUserFilterId === "unlinked" ? (!trade.relatedUserId || trade.relatedUserHidden) : trade.relatedUserId === relatedUserFilterId))
       && (relatedFundFilterId === "all"
-        || (relatedFundFilterId === "unclassified" ? !trade.relatedFundId : trade.relatedFundId === relatedFundFilterId))
+        || (relatedFundFilterId === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === relatedFundFilterId))
     )),
     [trades, selectedAccountId, relatedUserFilterId, relatedFundFilterId],
   );
@@ -1039,22 +1082,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
   }, [hasLinkedJournalPairs, showLinkedJournalGroups]);
   const recentJournalTradeDetails = useMemo(() => buildRecentJournalTradeDetails(trades), [trades]);
-  const getTradeAccountName = (trade: PreviewTrade) => trade.accountName
+  const getTradeAccountName = (trade: PreviewTrade) => trade.accountHidden
+    ? "未关联账户"
+    : trade.accountName
     || accounts.find((account) => account.id === trade.accountId)?.name
     || "未命名账户";
-  const getTradeRelatedUserName = (trade: PreviewTrade) => trade.relatedUserName
+  const getTradeRelatedUserName = (trade: PreviewTrade) => trade.relatedUserHidden
+    ? "未关联用户"
+    : trade.relatedUserName
     || trade.relatedUsername
     || (trade.relatedUserId ? `用户#${trade.relatedUserId}` : "未关联用户");
-  const getTradeRelatedFundName = (trade: PreviewTrade) => trade.relatedFundName
-    || (trade.relatedFundId ? `专项款#${trade.relatedFundId}` : "未区分专项款（历史）");
+  const getTradeRelatedFundName = (trade: PreviewTrade) => trade.relatedFundHidden
+    ? "未关联项目"
+    : trade.relatedFundName
+      || (trade.relatedFundId ? `专项款#${trade.relatedFundId}` : "未区分专项款（历史）");
   const memberRelatedUserName = useMemo(() => {
     const ownTrade = trades.find((trade) => Boolean(trade.relatedUserId));
     return ownTrade ? getTradeRelatedUserName(ownTrade) : "本人";
   }, [trades]);
-  const getRelatedFundOwnerName = (fund: PreviewRelatedFund) => {
-    const user = recentRelatedUsers.find((item) => item.id === fund.relatedUserId);
-    return user ? (user.username ? `${user.name} · @${user.username}` : user.name) : "关联用户";
-  };
   const availableRelatedFunds = useMemo(
     () => relatedFunds.filter((fund) => relatedUserFilterId === "all" || fund.relatedUserId === relatedUserFilterId),
     [relatedFunds, relatedUserFilterId],
@@ -1093,6 +1138,27 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => relatedFunds.filter((fund) => fund.relatedUserId === entryForm.relatedUserId),
     [relatedFunds, entryForm.relatedUserId],
   );
+  const directoryManagerItems = useMemo<Array<{ id: string; name: string; secondary?: string }>>(() => {
+    if (directoryManagerKind === "account") {
+      return accounts.map((account) => ({ id: account.id, name: account.name }));
+    }
+    if (directoryManagerKind === "relatedFund") {
+      return entryRelatedFunds.map((fund) => ({ id: fund.id, name: fund.name }));
+    }
+    if (directoryManagerKind === "relatedUser") {
+      return recentRelatedUsers.map((user) => ({
+        id: user.id,
+        name: user.name,
+        secondary: user.username ? `@${user.username}` : undefined,
+      }));
+    }
+    return [];
+  }, [accounts, directoryManagerKind, entryRelatedFunds, recentRelatedUsers]);
+  const directoryManagerTitle = directoryManagerKind === "account"
+    ? "管理账户名称"
+    : directoryManagerKind === "relatedFund"
+      ? "管理项目名称"
+      : "管理已关联用户";
   const quantityQuickOptions = useMemo(
     () => Array.from(new Set([lastSavedQuantity, ...DEFAULT_QUANTITY_QUICK_OPTIONS].filter(Boolean).map(normalizeEthQuantity))),
     [lastSavedQuantity],
@@ -1377,6 +1443,77 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     onError: (error) => toast.error(error.message || "下单账户选择未保存"),
   });
 
+  const renameAccountMutation = trpc.ledger.t0RenameAccount.useMutation({
+    onSuccess: (data: any) => {
+      const account: PreviewAccount = {
+        id: String(data.account.id),
+        name: String(data.account.name),
+        lastUsedAt: data.account.lastUsedAt ?? null,
+      };
+      setAccounts((current) => current.map((item) => item.id === account.id ? { ...item, name: account.name } : item));
+      setTrades((current) => current.map((trade) => trade.accountId === account.id ? { ...trade, accountName: account.name } : trade));
+      setEntryForm((current) => current.accountId === account.id ? { ...current, accountName: account.name } : current);
+      setDirectoryRenameTarget(null);
+      setDirectoryDeleteTarget(null);
+      void t0JournalQuery.refetch();
+      toast.success("账户名称已更新，历史记录已同步显示新名称");
+    },
+    onError: (error) => toast.error(error.message || "账户名称修改失败"),
+  });
+
+  const renameRelatedFundMutation = trpc.ledger.t0RenameRelatedFund.useMutation({
+    onSuccess: (data: any) => {
+      const fund: PreviewRelatedFund = {
+        id: String(data.relatedFund.id),
+        relatedUserId: data.relatedFund.relatedUserId === undefined ? undefined : String(data.relatedFund.relatedUserId),
+        name: String(data.relatedFund.name),
+        lastUsedAt: data.relatedFund.lastUsedAt ?? null,
+      };
+      setRelatedFunds((current) => current.map((item) => item.id === fund.id ? { ...item, name: fund.name } : item));
+      setTrades((current) => current.map((trade) => trade.relatedFundId === fund.id ? { ...trade, relatedFundName: fund.name } : trade));
+      setEntryForm((current) => current.relatedFundId === fund.id ? { ...current, relatedFundName: fund.name } : current);
+      setDirectoryRenameTarget(null);
+      setDirectoryDeleteTarget(null);
+      void t0JournalQuery.refetch();
+      toast.success("项目名称已更新，历史记录已同步显示新名称");
+    },
+    onError: (error) => toast.error(error.message || "项目名称修改失败"),
+  });
+
+  const deleteDirectoryItemMutation = trpc.ledger.t0DeleteDirectoryItem.useMutation({
+    onSuccess: (data: any, variables: any) => {
+      const target = directoryDeleteTarget;
+      if (variables.dimension === "account") {
+        const deletedId = String(variables.dimensionId);
+        setAccounts((current) => current.filter((item) => item.id !== deletedId));
+        setEntryForm((current) => current.accountId === deletedId
+          ? { ...current, accountId: "", accountName: "" }
+          : current);
+        setSelectedAccountId((current) => current === deletedId ? "all" : current);
+      } else if (variables.dimension === "related_fund") {
+        const deletedId = String(variables.dimensionId);
+        setRelatedFunds((current) => current.filter((item) => item.id !== deletedId));
+        setEntryForm((current) => current.relatedFundId === deletedId
+          ? { ...current, relatedFundId: "", relatedFundName: "" }
+          : current);
+        setRelatedFundFilterId((current) => current === deletedId ? "all" : current);
+      } else {
+        const deletedId = String(variables.dimensionId);
+        setRecentRelatedUsers((current) => current.filter((item) => item.id !== deletedId));
+        setEntryForm((current) => current.relatedUserId === deletedId
+          ? { ...current, relatedUserId: "", relatedUserName: "", relatedUsername: "", relatedFundId: "", relatedFundName: "" }
+          : current);
+        setRelatedUserFilterId((current) => current === deletedId ? "all" : current);
+      }
+      setDirectoryDeleteTarget(null);
+      void t0JournalQuery.refetch();
+      toast.success(target?.kind === "relatedUser"
+        ? `关联用户已从当前T+0账本移除；${Number(data?.impact?.affectedEntryCount || 0)} 条历史记录现显示为未关联`
+        : `${target?.kind === "account" ? "账户" : "项目"}已删除；${Number(data?.impact?.affectedEntryCount || 0)} 条历史记录现显示为未关联`);
+    },
+    onError: (error) => toast.error(error.message || "目录删除失败"),
+  });
+
   const saveEntryMutation = trpc.ledger.t0CreateEntry.useMutation({
     onSuccess: (data: any, variables: any) => {
       const account: PreviewAccount = {
@@ -1544,6 +1681,60 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
     onError: (error) => toast.error(error.message || "速记恢复失败"),
   });
+
+  const openDirectoryManager = (kind: JournalDirectoryKind) => {
+    if (kind === "relatedFund" && !entryForm.relatedUserId) {
+      toast.error("请先选择关联用户，再管理该用户的项目名称");
+      return;
+    }
+    setRelatedUserPickerOpen(false);
+    setRelatedUserSearch("");
+    setDirectoryRenameTarget(null);
+    setDirectoryDeleteTarget(null);
+    setDirectoryRenameDraft("");
+    setDirectoryManagerKind(kind);
+  };
+
+  const openDirectoryRename = (target: JournalDirectoryRenameTarget) => {
+    setDirectoryRenameTarget(target);
+    setDirectoryRenameDraft(target.name);
+  };
+
+  const openDirectoryDelete = (target: JournalDirectoryTarget) => {
+    setDirectoryRenameTarget(null);
+    setDirectoryDeleteTarget(target);
+  };
+
+  const closeDirectoryManager = () => {
+    setDirectoryRenameTarget(null);
+    setDirectoryDeleteTarget(null);
+    setDirectoryRenameDraft("");
+    setDirectoryManagerKind(null);
+  };
+
+  const submitDirectoryRename = () => {
+    if (!directoryRenameTarget) return;
+    const name = directoryRenameDraft.trim();
+    if (!name) {
+      toast.error("请输入新名称");
+      return;
+    }
+    if (name === directoryRenameTarget.name) {
+      setDirectoryRenameTarget(null);
+      return;
+    }
+    if (directoryRenameTarget.kind === "account") {
+      renameAccountMutation.mutate({ ledgerId: 52, accountId: Number(directoryRenameTarget.id), name });
+      return;
+    }
+    if (directoryRenameTarget.kind === "relatedFund") {
+      renameRelatedFundMutation.mutate({ ledgerId: 52, relatedFundId: Number(directoryRenameTarget.id), name });
+    }
+  };
+
+  const isDirectoryRenamePending = renameAccountMutation.isPending
+    || renameRelatedFundMutation.isPending;
+  const isDirectoryDeletePending = deleteDirectoryItemMutation.isPending;
 
   const selectOrderAccount = (accountId: string) => {
     const account = accounts.find((item) => item.id === accountId);
@@ -2069,7 +2260,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     <option value="all">全部</option>
                     {trades.some((trade) => !trade.relatedFundId) && <option value="unclassified">未区分项目（历史）</option>}
                     {availableRelatedFunds.map((fund) => (
-                      <option key={fund.id} value={fund.id}>{fund.name}{!isMemberView && relatedUserFilterId === "all" ? ` · ${getRelatedFundOwnerName(fund)}` : ""}</option>
+                      <option key={fund.id} value={fund.id}>{fund.name}</option>
                     ))}
                   </select>
                 )}
@@ -2760,15 +2951,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
 
                 <div className="grid grid-cols-2 items-start gap-3">
-                  <Field label={<span>下单账户 <span className="text-rose-500">*</span></span>}>
+                  <Field label={<span className="flex items-center justify-between gap-1"><span>下单账户 <span className="text-rose-500">*</span></span>{accounts.length > 0 && !isEditingEntry && <button type="button" onClick={() => openDirectoryManager("account")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
                     {accounts.length > 0 ? (
                       <select
                         disabled={isCloseReview || isEditingEntry}
                         value={entryForm.accountId}
-                        onChange={(event) => selectOrderAccount(event.target.value)}
+                        onChange={(event) => {
+                          if (event.target.value === "__manage_accounts__") {
+                            openDirectoryManager("account");
+                            return;
+                          }
+                          selectOrderAccount(event.target.value);
+                        }}
                         className="h-11 w-full rounded border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-indigo-500"
                       >
                         <option value="">新建账户</option>
+                        <option value="__manage_accounts__">编辑 / 删除账户…</option>
                         {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                       </select>
                     ) : null}
@@ -2783,7 +2981,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     )}
                   </Field>
 
-                  <Field label={<span>关联用户 <span className="text-slate-400">（可选）</span></span>}>
+                  <Field label={<span className="flex items-center justify-between gap-1"><span>关联用户 <span className="text-slate-400">（可选）</span></span>{recentRelatedUsers.length > 0 && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
                     <button
                       type="button"
                       disabled={isCloseReview}
@@ -2802,17 +3000,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
                 <div className="-mt-1 grid grid-cols-2 gap-3 text-[10px] leading-4 text-slate-400">
                   <span>首次可新建；后续按关联用户记忆账户。</span>
-                  <span>可暂不关联；关联后按专项款区分资金。</span>
+                  <span>仅搜索并引用全局已有用户；关联后按项目区分资金。</span>
                 </div>
 
-                <Field label={<span>专项款 {entryForm.relatedUserId && <span className="text-rose-500">*</span>} {!entryForm.relatedUserId && <span className="text-slate-400">（请先选关联用户）</span>}</span>}>
+                <Field label={<span className="flex items-center justify-between gap-1"><span>专项款 {entryForm.relatedUserId && <span className="text-rose-500">*</span>} {!entryForm.relatedUserId && <span className="text-slate-400">（请先选关联用户）</span>}</span>{entryRelatedFunds.length > 0 && !isClosingEntry && <button type="button" onClick={() => openDirectoryManager("relatedFund")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
                   <select
                     disabled={!entryForm.relatedUserId || isCloseReview || isClosingEntry}
                     value={entryForm.relatedFundId}
-                    onChange={(event) => selectRelatedFund(event.target.value)}
+                    onChange={(event) => {
+                      if (event.target.value === "__manage_related_funds__") {
+                        openDirectoryManager("relatedFund");
+                        return;
+                      }
+                      selectRelatedFund(event.target.value);
+                    }}
                     className="h-11 w-full rounded border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                   >
                     <option value="">新建专项款</option>
+                    {entryRelatedFunds.length > 0 && <option value="__manage_related_funds__">编辑 / 删除项目…</option>}
                     {(isEditingEntry || isClosingEntry) && entryForm.relatedFundId === "legacy" && <option value="legacy">未区分专项款（历史）</option>}
                     {entryRelatedFunds.map((fund) => <option key={fund.id} value={fund.id}>{fund.name}</option>)}
                   </select>
@@ -2871,6 +3076,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
                       <span>暂不关联，稍后补充</span>
                     </button>
+                    {recentRelatedUsers.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => openDirectoryManager("relatedUser")}
+                        className="flex w-full items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-xs font-semibold text-indigo-700 active:bg-indigo-50"
+                      >
+                        <UserRound className="h-4 w-4 shrink-0 text-indigo-500" />
+                        <span>管理已关联用户…</span>
+                      </button>
+                    )}
                     {relatedUserSearch.trim().length === 0 ? (
                       recentRelatedUsers.length > 0 ? (
                         <div className="max-h-48 overflow-y-auto py-1">
@@ -2953,6 +3168,180 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </button>
               )}
             </div>}
+          </div>
+        </div>
+      )}
+
+      {canManage && directoryManagerKind && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label={directoryManagerTitle}>
+          <div className="max-h-[84vh] w-full max-w-sm overflow-y-auto rounded bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-base font-semibold text-slate-900">{directoryManagerTitle}</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {directoryManagerKind === "relatedUser"
+                    ? "关联用户仅引用全局已有用户，本页不能创建或改名；移除只在当前T+0账本隐藏该关联，不会更改全局用户资料。"
+                    : "改名会同步历史展示；删除后不再用于新订单，历史字段显示为未关联。"}
+                </p>
+              </div>
+              <button type="button" onClick={closeDirectoryManager} aria-label="关闭名称管理" className="rounded p-1 text-slate-400 active:scale-90">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded border border-slate-200">
+              {directoryManagerItems.length > 0 ? directoryManagerItems.map((item, index) => (
+                <div
+                  key={item.id}
+                  className={`flex items-center gap-3 px-3 py-3 ${index > 0 ? "border-t border-slate-100" : ""}`}
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{item.name}</span>
+                  {item.secondary && <span className="max-w-[34%] truncate text-xs text-slate-400">{item.secondary}</span>}
+                  <div className="flex shrink-0 items-center gap-2">
+                    {directoryManagerKind !== "relatedUser" && (
+                      <button
+                        type="button"
+                        onClick={() => openDirectoryRename({ kind: directoryManagerKind, id: item.id, name: item.name, username: item.secondary })}
+                        className="text-xs font-semibold text-indigo-600"
+                      >
+                        编辑
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => openDirectoryDelete({ kind: directoryManagerKind, id: item.id, name: item.name, username: item.secondary })}
+                      className="text-xs font-semibold text-rose-600"
+                    >
+                      {directoryManagerKind === "relatedUser" ? "移除" : "删除"}
+                    </button>
+                  </div>
+                </div>
+              )) : (
+                <div className="px-4 py-8 text-center text-sm text-slate-400">
+                  {directoryManagerKind === "relatedFund" ? "该用户暂未保存项目" : "暂未保存可管理的名称"}
+                </div>
+              )}
+            </div>
+
+            <button type="button" onClick={closeDirectoryManager} className="mt-4 h-10 w-full rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700 active:bg-slate-50">
+              完成
+            </button>
+          </div>
+        </div>
+      )}
+
+      {canManage && directoryRenameTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/45 px-5" role="dialog" aria-modal="true" aria-label="确认修改名称">
+          <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
+            <div className="text-base font-semibold text-slate-900">
+              修改{directoryRenameTarget.kind === "account" ? "账户" : "项目"}名称
+            </div>
+            {directoryImpactQuery.isLoading ? (
+              <div className="mt-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">正在核对历史流水影响范围…</div>
+            ) : directoryImpactQuery.data ? (
+              <div className="mt-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                <div className="font-semibold text-slate-700">改名会同步更新 {(directoryImpactQuery.data as any).affectedEntryCount} 条历史记录</div>
+                {(directoryImpactQuery.data as any).accounts?.length > 0 && (
+                  <div className="mt-1 truncate">涉及账户：{(directoryImpactQuery.data as any).accounts.map((item: any) => `${item.name}（${item.count}条）`).join("、")}</div>
+                )}
+              </div>
+            ) : null}
+            <input
+              autoFocus
+              value={directoryRenameDraft}
+              maxLength={80}
+              onChange={(event) => setDirectoryRenameDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submitDirectoryRename();
+              }}
+              className="mt-4 h-11 w-full rounded border border-slate-300 px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500"
+            />
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={isDirectoryRenamePending}
+                onClick={() => setDirectoryRenameTarget(null)}
+                className="h-11 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700 active:bg-slate-50 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={isDirectoryRenamePending || !directoryRenameDraft.trim()}
+                onClick={submitDirectoryRename}
+                className="h-11 rounded bg-indigo-600 text-sm font-semibold text-white active:bg-indigo-700 disabled:opacity-50"
+              >
+                {isDirectoryRenamePending ? "保存中…" : "确认改名"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {canManage && directoryDeleteTarget && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-5" role="dialog" aria-modal="true" aria-label="确认删除目录项">
+          <div className="max-h-[86vh] w-full max-w-sm overflow-y-auto rounded bg-white p-5 shadow-2xl">
+            <div className="text-base font-semibold text-slate-900">
+              {directoryDeleteTarget.kind === "relatedUser" ? "移除关联用户？" : `删除${directoryDeleteTarget.kind === "account" ? "账户" : "项目"}？`}
+            </div>
+            <div className="mt-1 truncate text-sm font-semibold text-slate-700">{directoryDeleteTarget.name}</div>
+            {directoryImpactQuery.isLoading ? (
+              <div className="mt-4 rounded border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">正在核对历史流水与未平仓数量…</div>
+            ) : directoryImpactQuery.data ? (() => {
+              const impact: any = directoryImpactQuery.data;
+              const hasOutstandingPosition = Number(impact.outstandingQuantity || 0) > 0;
+              const summaryRows = [
+                ["账户", impact.accounts],
+                ["用户", impact.users],
+                ["项目", impact.funds],
+              ].filter(([, items]: any) => Array.isArray(items) && items.length > 0) as Array<[string, Array<{ id: number; name: string; count: number }>]>;
+              return <>
+                <div className="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-900">
+                  <div className="font-semibold">将影响 {impact.affectedEntryCount} 条已保存历史记录</div>
+                  <div className="mt-1">{directoryDeleteTarget.kind === "relatedUser"
+                    ? "移除后，该用户仅从当前T+0账本的新订单选择与筛选中隐藏；不会创建、修改或删除全局用户资料。相关历史字段会显示为“未关联”。"
+                    : "删除后，该项不再出现在新订单选择与筛选中；相关历史字段会显示为“未关联”。"} 稳定关联键仍保留在审计与仓位核对中，不会破坏既有开平匹配。</div>
+                </div>
+                <div className="mt-3 overflow-hidden rounded border border-slate-200 text-xs leading-5">
+                  {summaryRows.map(([label, items], index) => (
+                    <div key={label} className={`px-3 py-2 ${index > 0 ? "border-t border-slate-100" : ""}`}>
+                      <span className="font-semibold text-slate-700">涉及{label}：</span>
+                      <span className="text-slate-600">{items.map((item) => `${item.name}（${item.count}条）`).join("、")}</span>
+                    </div>
+                  ))}
+                </div>
+                {hasOutstandingPosition && (
+                  <div className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">
+                    当前仍有 {Number(impact.outstandingQuantity).toFixed(2)} ETH 未平仓。删除后不会影响这部分旧仓继续平仓与FIFO核对，但其历史字段会立即显示为“未关联”。
+                  </div>
+                )}
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    disabled={isDirectoryDeletePending}
+                    onClick={() => setDirectoryDeleteTarget(null)}
+                    className="h-11 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700 active:bg-slate-50 disabled:opacity-50"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDirectoryDeletePending}
+                    onClick={() => deleteDirectoryItemMutation.mutate({
+                      ledgerId: 52,
+                      dimension: directoryDeleteTarget.kind === "account" ? "account" : directoryDeleteTarget.kind === "relatedFund" ? "related_fund" : "related_user",
+                      dimensionId: Number(directoryDeleteTarget.id),
+                      expectedAffectedEntryCount: Number(impact.affectedEntryCount || 0),
+                    })}
+                    className="h-11 rounded bg-rose-600 text-sm font-semibold text-white active:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {isDirectoryDeletePending ? "处理中…" : directoryDeleteTarget.kind === "relatedUser" ? "确认移除关联" : "确认删除"}
+                  </button>
+                </div>
+              </>;
+            })() : (
+              <div className="mt-4 rounded border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-700">无法读取影响范围，请关闭后重试。</div>
+            )}
           </div>
         </div>
       )}
