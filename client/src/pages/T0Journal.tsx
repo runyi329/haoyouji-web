@@ -157,6 +157,18 @@ type PositionBucket = {
   openedAt: string;
 };
 
+type AdminLadderDisplayMode = "integrated" | "individual";
+
+type LadderPriceRow = {
+  key: string;
+  price: number;
+  long?: PositionBucket;
+  short?: PositionBucket;
+  isMark: boolean;
+  /** 管理员“逐笔报价”模式中对应的单条未平仓主单。 */
+  openingTrade?: PreviewTrade;
+};
+
 /** 某一开仓主单被分批平掉时，对应的平仓流水及本次分配数量。 */
 type LinkedClosingAllocation = {
   trade: PreviewTrade;
@@ -340,6 +352,12 @@ function buildAdaptiveLadderLevels(markLadderPrice: number | null, positionPrice
 function formatQuantity(value: number) {
   if (!Number.isFinite(value) || value === 0) return "0.00";
   return value.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// 梯形报价表空间有限：只压缩展示精度，不影响订单原始数量、FIFO 或盈亏计算。
+function formatLadderQuantity(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  return Math.trunc(value).toLocaleString("zh-CN", { maximumFractionDigits: 0 });
 }
 
 function formatQuantityQuickOption(value: string) {
@@ -867,6 +885,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [entrySide, setEntrySide] = useState<PositionSide>("long");
   const [lastSavedQuantity, setLastSavedQuantity] = useState("");
   const [showCumulativeData, setShowCumulativeData] = useState(false);
+  const [adminLadderDisplayMode, setAdminLadderDisplayMode] = useState<AdminLadderDisplayMode>("integrated");
   const [lastMarkPrice, setLastMarkPrice] = useState<number | null>(null);
   const [previousMarkPrice, setPreviousMarkPrice] = useState<number | null>(null);
   const [liveClock, setLiveClock] = useState(() => new Date());
@@ -1421,17 +1440,85 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const markLadderPrice = markPrice
     ? Math.min(LADDER_MAX_PRICE, Math.max(LADDER_MIN_PRICE, Math.round(markPrice / LADDER_STEP) * LADDER_STEP))
     : null;
-  const priceRows = useMemo(() => {
+  const ladderOpeningClosingAllocations = useMemo(
+    () => buildOpeningClosingAllocations(selectedTrades),
+    [selectedTrades],
+  );
+  const priceRows = useMemo<LadderPriceRow[]>(() => {
     const activePositionPrices = buckets
       .filter((bucket) => bucket.remainingQuantity > 0.0000001)
       .map((bucket) => bucket.price);
     return buildAdaptiveLadderLevels(markLadderPrice, activePositionPrices).map((price) => ({
+      key: `integrated-${priceKey(price)}`,
       price,
       long: buckets.find((bucket) => bucket.side === "long" && priceKey(bucket.price) === priceKey(price)),
       short: buckets.find((bucket) => bucket.side === "short" && priceKey(bucket.price) === priceKey(price)),
       isMark: markLadderPrice === price,
     }));
   }, [buckets, markLadderPrice]);
+  const individualPriceRows = useMemo<LadderPriceRow[]>(() => {
+    const individualBuckets: Array<{ trade: PreviewTrade; bucket: PositionBucket }> = [];
+    for (const trade of selectedTrades) {
+      if (!ACTIONS[trade.action].opening) continue;
+      const linkedClosings = ladderOpeningClosingAllocations.get(trade.id) ?? [];
+      const closedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
+      const remainingQuantity = Math.max(0, trade.quantity - closedQuantity);
+      if (remainingQuantity <= 0.0000001) continue;
+      const side = ACTIONS[trade.action].side;
+      const price = archivePriceForTrade(trade);
+      const remainingRatio = trade.quantity > 0 ? remainingQuantity / trade.quantity : 0;
+      individualBuckets.push({
+        trade,
+        bucket: {
+          key: `entry:${trade.id}`,
+          side,
+          price,
+          originalQuantity: trade.quantity,
+          remainingQuantity,
+          costBasis: trade.price * remainingQuantity,
+          openingFeeBasis: trade.fee * remainingRatio,
+          realizedGrossPnl: 0,
+          realizedOpeningFee: 0,
+          realizedClosingFee: 0,
+          realizedPnl: 0,
+          closedQuantity,
+          closedCostBasis: trade.price * closedQuantity,
+          closedNotional: 0,
+          openedAt: trade.createdAt,
+        },
+      });
+    }
+    const rowsByPrice = new Map<string, Array<{ trade: PreviewTrade; bucket: PositionBucket }>>();
+    for (const item of individualBuckets) {
+      const key = priceKey(item.bucket.price);
+      const rows = rowsByPrice.get(key) ?? [];
+      rows.push(item);
+      rowsByPrice.set(key, rows);
+    }
+    const activePositionPrices = individualBuckets.map((item) => item.bucket.price);
+    return buildAdaptiveLadderLevels(markLadderPrice, activePositionPrices).flatMap((price) => {
+      const rowsAtPrice = [...(rowsByPrice.get(priceKey(price)) ?? [])]
+        .sort((a, b) => b.trade.createdAt.localeCompare(a.trade.createdAt) || b.trade.id.localeCompare(a.trade.id));
+      if (rowsAtPrice.length === 0) {
+        return [{
+          key: `individual-empty-${priceKey(price)}`,
+          price,
+          isMark: markLadderPrice === price,
+        }];
+      }
+      return rowsAtPrice.map(({ trade, bucket }, index) => ({
+        key: `individual-entry-${trade.id}`,
+        price,
+        long: bucket.side === "long" ? bucket : undefined,
+        short: bucket.side === "short" ? bucket : undefined,
+        // 同一报价档可以连续出现多条主单；实时价只强调其中第一条，避免连续高亮干扰阅读。
+        isMark: markLadderPrice === price && index === 0,
+        openingTrade: trade,
+      }));
+    });
+  }, [selectedTrades, ladderOpeningClosingAllocations, markLadderPrice]);
+  const isIndividualLadderView = canManage && adminLadderDisplayMode === "individual";
+  const displayedPriceRows = isIndividualLadderView ? individualPriceRows : priceRows;
 
   useEffect(() => {
     if (markLadderPrice === null) return;
@@ -1474,7 +1561,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       window.removeEventListener("pageshow", scheduleCentering);
       window.removeEventListener("resize", scheduleCentering);
     };
-  }, [markLadderPrice, priceRows.length]);
+  }, [markLadderPrice, displayedPriceRows.length]);
 
   const openEntrySheet = (action: TradeAction = "openLong", targetPrice?: number) => {
     setEntrySide(ACTIONS[action].side);
@@ -2548,6 +2635,34 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             boxShadow: "0 5px 12px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.94), inset 0 -1px 0 rgba(71,85,105,0.20)",
           }}
         >
+          {canManage && <div
+            className="flex h-9 items-center justify-center gap-1.5 border-b border-[#aeb8c1]/50 px-3"
+            role="tablist"
+            aria-label="T形交割表报价模式"
+            style={{
+              background: "linear-gradient(180deg, rgba(255,255,255,0.82), rgba(218,224,229,0.60))",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.94), inset 0 -1px 0 rgba(71,85,105,0.10)",
+            }}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={adminLadderDisplayMode === "integrated"}
+              onClick={() => setAdminLadderDisplayMode("integrated")}
+              className={`h-6 rounded border px-3 text-[11px] font-semibold transition active:scale-[0.98] ${adminLadderDisplayMode === "integrated" ? "border-rose-600 bg-rose-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]" : "border-slate-300 bg-white/70 text-slate-600"}`}
+            >
+              整合报价
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={adminLadderDisplayMode === "individual"}
+              onClick={() => setAdminLadderDisplayMode("individual")}
+              className={`h-6 rounded border px-3 text-[11px] font-semibold transition active:scale-[0.98] ${adminLadderDisplayMode === "individual" ? "border-rose-600 bg-rose-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]" : "border-slate-300 bg-white/70 text-slate-600"}`}
+            >
+              逐笔报价
+            </button>
+          </div>}
           <div
             className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-b border-[#aeb8c1]/50 px-3 py-2.5"
             style={{
@@ -2578,19 +2693,32 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               boxShadow: "inset 0 1px 0 rgba(255,255,255,0.86), inset 0 -1px 0 rgba(71,85,105,0.10)",
             }}
           >
-            {priceRows.map((row) => (
-              <div
-                key={priceKey(row.price)}
-                data-ladder-price={row.price}
-                className="grid grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] min-h-[52px] border-b border-[#c7d0d7]/60 last:border-b-0"
-              >
+            {displayedPriceRows.map((row) => {
+              const individualMetadata = isIndividualLadderView && row.openingTrade
+                ? {
+                  accountName: getTradeAccountName(row.openingTrade),
+                  relatedUserName: getTradeRelatedUserName(row.openingTrade),
+                  relatedFundName: getTradeRelatedFundName(row.openingTrade),
+                }
+                : undefined;
+              return (
+                <div
+                  key={row.key}
+                  data-ladder-price={row.price}
+                  className="grid grid-cols-[minmax(0,1fr)_64px_minmax(0,1fr)] min-h-[52px] border-b border-[#c7d0d7]/60 last:border-b-0"
+                >
                 <LadderCell
                   bucket={row.long}
                   side="long"
                   markPrice={markPrice}
+                  metadata={individualMetadata}
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.long) return;
+                    if (isIndividualLadderView && row.openingTrade) {
+                      openEditOpeningTrade(row.openingTrade);
+                      return;
+                    }
                     // 点已有仓位永远先进入本档订单详情，管理员可逐笔编辑或对单笔快捷平仓；
                     // 不因关联用户尚未标注而阻断查看。
                     openEntrySheet("openLong", row.long.price);
@@ -2632,17 +2760,23 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   bucket={row.short}
                   side="short"
                   markPrice={markPrice}
+                  metadata={individualMetadata}
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.short) return;
+                    if (isIndividualLadderView && row.openingTrade) {
+                      openEditOpeningTrade(row.openingTrade);
+                      return;
+                    }
                     // 同上：空仓格点击仅打开当前档订单详情，不强制先筛选关联用户。
                     openEntrySheet("openShort", row.short.price);
                   }}
                   // 同上：从空仓空档位开单时，详情只展示当前空仓价格档的订单。
                   onOpen={() => openEntrySheet("openShort", row.price)}
                 />
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         </section>
 
@@ -4088,7 +4222,14 @@ function AccountOverview({
   );
 }
 
-function PositionCell({ bucket, side, markPrice, onClick, readOnly = false }: { bucket?: PositionBucket; side: PositionSide; markPrice: number | null; onClick: () => void; readOnly?: boolean }) {
+function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata }: {
+  bucket?: PositionBucket;
+  side: PositionSide;
+  markPrice: number | null;
+  onClick: () => void;
+  readOnly?: boolean;
+  metadata?: { accountName: string; relatedUserName: string; relatedFundName: string };
+}) {
   const isLong = side === "long";
   if (!bucket || bucket.remainingQuantity <= 0.0000001) {
     return <div className="px-3 flex items-center text-xs text-slate-300">—</div>;
@@ -4112,23 +4253,33 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false }: { 
     : floatingPnl / bucket.costBasis;
   const pnlTone = floatingPnl !== null && floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600";
   const content = (
-    <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
-      <span className="shrink-0 text-lg font-bold leading-none tracking-tight" style={{ textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.88), 0.75px 0.75px 0 rgba(71,85,105,0.20)" }}>{formatQuantity(bucket.remainingQuantity)}</span>
-      {floatingPnl !== null && (
-        <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`}>
-          <span className="whitespace-nowrap text-[11px] font-semibold leading-none" style={{ textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.84), 0.55px 0.55px 0 rgba(71,85,105,0.18)" }}>{formatSigned(floatingPnl)}</span>
-          {floatingReturnRate !== null && (
-            <span className="mt-1 text-[10px] font-medium leading-none opacity-85">{formatSignedPercent(floatingReturnRate)}</span>
-          )}
-        </span>
-      )}
+    <div className="w-full min-w-0">
+      <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
+        <span className="shrink-0 text-lg font-bold leading-none tracking-tight" style={{ textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.88), 0.75px 0.75px 0 rgba(71,85,105,0.20)" }}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
+        {floatingPnl !== null && (
+          <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`}>
+            <span className="whitespace-nowrap text-[11px] font-semibold leading-none" style={{ textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.84), 0.55px 0.55px 0 rgba(71,85,105,0.18)" }}>{formatSigned(floatingPnl)}</span>
+            {floatingReturnRate !== null && (
+              <span className="mt-1 text-[10px] font-medium leading-none opacity-85">{formatSignedPercent(floatingReturnRate)}</span>
+            )}
+          </span>
+        )}
+      </div>
+      {metadata && <div className="mt-1 flex min-w-0 items-center overflow-hidden text-left text-[9px] font-medium leading-none text-slate-500" aria-label={`账户 ${metadata.accountName}，用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}`}>
+        <span className="min-w-0 shrink truncate" title={`账户：${metadata.accountName}`}>{metadata.accountName}</span>
+        <span className="shrink-0">·</span>
+        <span className="min-w-0 shrink truncate" title={`用户：${metadata.relatedUserName}`}>{metadata.relatedUserName}</span>
+        <span className="shrink-0">·</span>
+        <span className="min-w-0 shrink truncate" title={`项目：${metadata.relatedFundName}`}>{metadata.relatedFundName}</span>
+      </div>}
     </div>
   );
+  const minHeightClass = metadata ? "min-h-[58px]" : "min-h-[52px]";
   if (readOnly) {
-    return <div className={`flex min-h-[52px] w-full min-w-0 items-center px-1.5 py-1.5 ${tone}`} style={sideSurfaceStyle}>{content}</div>;
+    return <div className={`flex ${minHeightClass} w-full min-w-0 items-center px-1.5 py-1.5 ${tone}`} style={sideSurfaceStyle}>{content}</div>;
   }
   return (
-    <button onClick={onClick} className={`flex min-h-[52px] w-full min-w-0 items-center px-1.5 py-1.5 text-left transition-[filter] active:brightness-95 ${tone}`} style={sideSurfaceStyle}>
+    <button onClick={onClick} className={`flex ${minHeightClass} w-full min-w-0 items-center px-1.5 py-1.5 text-left transition-[filter] active:brightness-95 ${tone}`} style={sideSurfaceStyle}>
       {content}
     </button>
   );
@@ -4141,6 +4292,7 @@ function LadderCell({
   onClose,
   onOpen,
   readOnly = false,
+  metadata,
 }: {
   bucket?: PositionBucket;
   side: PositionSide;
@@ -4148,9 +4300,10 @@ function LadderCell({
   onClose: () => void;
   onOpen: () => void;
   readOnly?: boolean;
+  metadata?: { accountName: string; relatedUserName: string; relatedFundName: string };
 }) {
   if (bucket && bucket.remainingQuantity > 0.0000001) {
-    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={onClose} readOnly={readOnly} />;
+    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={onClose} readOnly={readOnly} metadata={metadata} />;
   }
 
   const isLong = side === "long";
