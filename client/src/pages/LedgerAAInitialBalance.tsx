@@ -509,6 +509,10 @@ export default function LedgerAAInitialBalance() {
     let derivedField: 'amount' | 'ratio' | 'targetAmount' | null = derivedAllocationFields[key] ?? null;
     const display = { amount: entry.amount, ratio: entry.ratio, targetAmount: entry.targetAmount };
 
+    // 手机输入法会先把旧值清空再写入新值。此时不能立即用另外两项把空值反推回去，
+    // 否则用户永远无法把 5 改为 0。用户完成下一次输入后再恢复正常三联动。
+    if (clearedAllocationFields[key]) return { ...display, derivedField: null };
+
     const canDeriveActual = hasAmount && hasRatio;
     const canDeriveRatio = hasAmount && hasActualAmount;
     const canDeriveAmount = hasRatio && ratio > 0 && hasActualAmount;
@@ -549,6 +553,7 @@ export default function LedgerAAInitialBalance() {
     const next = { amount: current.amount, ratio: current.ratio, targetAmount: current.targetAmount, [changedField]: rawValue };
     const key = allocationKey(userId, tagName);
     if (rawValue.trim() === '') {
+      setClearedAllocationFields(prev => ({ ...prev, [key]: changedField }));
       setDerivedAllocationFields(prev => {
         const nextDerived = { ...prev };
         delete nextDerived[key];
@@ -558,6 +563,13 @@ export default function LedgerAAInitialBalance() {
       return;
     }
 
+    setClearedAllocationFields(prev => {
+      if (!prev[key]) return prev;
+      const nextCleared = { ...prev };
+      delete nextCleared[key];
+      return nextCleared;
+    });
+
     const amount = Number(next.amount);
     const ratio = Number(next.ratio);
     const actualAmount = Number(next.targetAmount);
@@ -566,7 +578,11 @@ export default function LedgerAAInitialBalance() {
     const hasActualAmount = Number.isFinite(actualAmount) && actualAmount >= 0;
     let derivedField: 'amount' | 'ratio' | 'targetAmount' | null = null;
 
-    if (changedField === 'amount') {
+    if (changedField === 'amount' && amount === 0) {
+      // 初始金额直接填 0 也视为明确退出：三项同时归零，避免留下“50% 但权益为 0”的歧义状态。
+      next.ratio = '0';
+      next.targetAmount = '0';
+    } else if (changedField === 'amount') {
       if (hasRatio) {
         next.targetAmount = formatLinkedNumber(amount * ratio / 100, 2);
         derivedField = 'targetAmount';
@@ -611,7 +627,7 @@ export default function LedgerAAInitialBalance() {
 
   // 37号：只有本次改动过初始金额/比例/实际权益的非股票标签才进行三项完整校验，
   // 让未改动的历史遗留数据不妨碍其他标签的维护；服务端同步执行同一规则兜底。
-  // 比例为 0% 是明确的“不参与”状态，实际权益必须同步为 0，初始金额仍保留作历史标签资料。
+  // 比例为 0% 是明确的“不参与”状态，实际权益必须同步为 0；初始金额直接填 0 时三项会同步归零。
   const getChangedAllocationError = (userId: number, userEdit: Record<string, TagEntry>) => {
     if (ledgerId !== 37) return null;
     const originalBalances = ((allBalancesData as any)?.balancesMap?.[userId] ?? {}) as Record<string, unknown>;
@@ -626,8 +642,9 @@ export default function LedgerAAInitialBalance() {
       const amount = Number(entry.amount);
       const ratio = Number(entry.ratio);
       const actualAmount = Number(entry.targetAmount);
-      if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(ratio) || ratio < 0 || ratio > 100 || !Number.isFinite(actualAmount) || actualAmount < 0) {
-        return `「${tagName}」需同时填写有效的初始金额、比例（0–100%）和实际权益`;
+      const isZeroParticipation = amount === 0 && ratio === 0 && actualAmount === 0;
+      if (!Number.isFinite(amount) || (!isZeroParticipation && amount <= 0) || !Number.isFinite(ratio) || ratio < 0 || ratio > 100 || !Number.isFinite(actualAmount) || actualAmount < 0) {
+        return `「${tagName}」需填写完整的正数金额与比例，或三项均为 0 表示不参与`;
       }
       const expectedActual = amount * ratio / 100;
       if (Math.abs(actualAmount - expectedActual) > 0.01) {
@@ -1537,6 +1554,8 @@ export default function LedgerAAInitialBalance() {
   const [expandedHiddenTagGroups, setExpandedHiddenTagGroups] = useState<Set<number>>(new Set());
   // 三联动字段本次由系统反推的来源，仅影响当前编辑会话的展示颜色，不改变历史数据结构。
   const [derivedAllocationFields, setDerivedAllocationFields] = useState<Record<string, 'amount' | 'ratio' | 'targetAmount'>>({});
+  // 当前正在清空、尚未完成新输入的字段；避免移动端逐字符输入被旧值反推覆盖。
+  const [clearedAllocationFields, setClearedAllocationFields] = useState<Record<string, 'amount' | 'ratio' | 'targetAmount'>>({});
   // 标签维度双击编辑弹窗
   const [tagEditModal, setTagEditModal] = useState<{ userId: number; tagName: string; catColor: string } | null>(null);
   const [activeStockParticipationCategoryId, setActiveStockParticipationCategoryId] = useState<number | null>(null);
@@ -3499,7 +3518,7 @@ export default function LedgerAAInitialBalance() {
                 <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs font-medium text-gray-700">金额与比例</div>
-                    <span className="text-[11px] text-gray-400 whitespace-nowrap">0%=不参与，自动归零</span>
+                    <span className="text-[11px] text-gray-400 whitespace-nowrap">填 0=不参与，自动归零</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <label className="min-w-0">

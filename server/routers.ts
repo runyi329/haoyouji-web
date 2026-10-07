@@ -172,7 +172,7 @@ function sameLedger37Number(left: unknown, right: unknown): boolean {
 
 /**
  * 37号非股票标签的初始金额、比例、实际权益必须完整且严格满足公式。
- * 比例为 0% 表示该成员不参与该标签，此时实际权益必须为 0；初始金额仍保留为标签基数。
+ * 比例为 0% 表示该成员不参与该标签，此时实际权益必须为 0；三项均为 0 也表示不参与。
  * 仅阻止本次实际修改过这三项的标签，避免遗留不完整配置阻塞其他字段维护。
  */
 async function assertLedger37AllocationTripletOnChange(params: {
@@ -192,13 +192,14 @@ async function assertLedger37AllocationTripletOnChange(params: {
     if (!hasTripletChange) continue;
 
     const effective = (key: string) => Object.prototype.hasOwnProperty.call(params.balances, key) ? params.balances[key] : previous[key];
-    const amount = readLedger37PositiveNumber(effective(tagName));
+    const amount = readLedger37NonNegativeNumber(effective(tagName));
     const ratio = readLedger37NonNegativeNumber(effective(`${tagName}__ratio`));
     const actualAmount = readLedger37NonNegativeNumber(effective(`${tagName}__targetAmount`));
-    if (amount === null || ratio === null || ratio > 100 || actualAmount === null) {
+    const isZeroParticipation = amount === 0 && ratio === 0 && actualAmount === 0;
+    if (amount === null || ratio === null || ratio > 100 || actualAmount === null || (!isZeroParticipation && amount <= 0)) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
-        message: `「${tagName}」保存需要同时填写有效的初始金额、比例（0–100%）和实际权益`,
+        message: `「${tagName}」需填写完整的正数金额与比例，或三项均为 0 表示不参与`,
       });
     }
     const expectedActual = amount * ratio / 100;
