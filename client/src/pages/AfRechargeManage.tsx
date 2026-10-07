@@ -1886,7 +1886,7 @@ export default function AfRechargeManage() {
                 <div className="flex gap-2 mt-2.5">
                   <div className="flex-1 bg-white rounded-lg px-2.5 py-1.5 border border-orange-100">
                     <p className="text-[10px] text-gray-400 mb-0.5">USDT 余额</p>
-                    <p className="text-[15px] font-bold text-orange-500">{Number(adjSelectedUser.usdtBalance ?? 0).toFixed(4)}</p>
+                    <p className="text-[15px] font-bold text-orange-500">{Number(adjSelectedUser.usdtBalance ?? 0).toFixed(2)}</p>
                   </div>
                   <div className="flex-1 bg-white rounded-lg px-2.5 py-1.5 border border-orange-100">
                     <p className="text-[10px] text-gray-400 mb-0.5">CNY 余额</p>
@@ -2289,7 +2289,7 @@ export default function AfRechargeManage() {
                           </div>
                           <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
                             <p className={`text-[14px] font-bold ${amount >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                              {amount >= 0 ? '+' : ''}{amount.toFixed(4)}
+                              {amount >= 0 ? '+' : ''}{amount.toFixed(2)}
                             </p>
                             {canRevoke && (
                               <button
@@ -2386,7 +2386,7 @@ export default function AfRechargeManage() {
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
                   <p className="text-[10px] text-blue-500">全部用户 USDT 总余额</p>
-                  <p className="mt-0.5 truncate text-[16px] font-bold text-blue-700">{formatWalletAmount(adjBalanceTotals.usdt, 4)}</p>
+                  <p className="mt-0.5 truncate text-[16px] font-bold text-blue-700">{formatWalletAmount(adjBalanceTotals.usdt, 2)}</p>
                 </div>
                 <div className="rounded-xl border border-green-100 bg-green-50 px-3 py-2.5">
                   <p className="text-[10px] text-green-600">全部用户 CNY 总余额</p>
@@ -2612,7 +2612,10 @@ export default function AfRechargeManage() {
                     || sourceType === 'balance_history'
                     || isMultiAssetAdminAdjustment
                   );
-                  const displayDigits = r.currency === 'CNY' ? 2 : (AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(String(r.currency ?? '').toUpperCase()) ? 8 : 4;
+                  const currencyCode = String(r.currency ?? '').toUpperCase();
+                  const displayDigits = ['CNY', 'USDT'].includes(currencyCode)
+                    ? 2
+                    : (AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(currencyCode) ? 8 : 4;
                   return (
                     <div key={r.id ?? i} className="py-2.5 border-b border-gray-50 last:border-0">
                       <div className="flex items-start justify-between">
@@ -2727,7 +2730,7 @@ export default function AfRechargeManage() {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{order.amount} USDT</span>
+                              <span className="font-medium text-sm">{Number(order.amount ?? 0).toFixed(2)} USDT</span>
                               <span className={`text-xs px-1.5 py-0.5 rounded-full ${config.bgColor} ${config.color}`}>{config.label}</span>
                             </div>
                             <span className="text-xs text-gray-400">{order.network}</span>
@@ -2753,7 +2756,7 @@ export default function AfRechargeManage() {
                 <div className="bg-gray-50 rounded-lg p-3 text-xs space-y-1">
                   <div className="flex justify-between">
                     <span className="text-gray-500">订单金额</span>
-                    <span className="font-medium">{selectedOrder.amount} USDT</span>
+                    <span className="font-medium">{Number(selectedOrder.amount ?? 0).toFixed(2)} USDT</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">网络</span>
@@ -2811,7 +2814,7 @@ export default function AfRechargeManage() {
                 <div className="bg-gray-50 rounded-lg p-3 text-xs space-y-1">
                   <div className="flex justify-between">
                     <span className="text-gray-500">订单金额</span>
-                    <span className="font-medium">{monitorSelectedOrder.amount} USDT</span>
+                    <span className="font-medium">{Number(monitorSelectedOrder.amount ?? 0).toFixed(2)} USDT</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">网络</span>
@@ -2872,7 +2875,7 @@ export default function AfRechargeManage() {
                           className="px-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-medium text-sm">{order.amount} USDT</span>
+                            <span className="font-medium text-sm">{Number(order.amount ?? 0).toFixed(2)} USDT</span>
                             <span className="text-xs text-gray-400">{order.network}</span>
                           </div>
                           <div className="text-xs text-gray-500 mt-0.5">
@@ -2985,8 +2988,8 @@ export default function AfRechargeManage() {
             <h3 className="text-base font-semibold text-gray-900 mb-1">撤回误操作</h3>
             <p className="text-sm text-gray-500 mb-1">
               {revokeTarget.type === 'order'
-                ? `订单金额：${revokeTarget.amount.toFixed(4)} USDT`
-                : `流水金额：${revokeTarget.amount.toFixed(revokeTarget.currency === 'CNY' ? 2 : (revokeTarget.type === 'multi_asset' ? 8 : 4))} ${revokeTarget.currency}`
+                ? `订单金额：${revokeTarget.amount.toFixed(2)} USDT`
+                : `流水金额：${revokeTarget.amount.toFixed(['CNY', 'USDT'].includes(revokeTarget.currency) ? 2 : (revokeTarget.type === 'multi_asset' ? 8 : 4))} ${revokeTarget.currency}`
               }
             </p>
             <p className="text-xs text-gray-400 mb-4">请选择撤回方式：</p>
