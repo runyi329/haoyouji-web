@@ -25,7 +25,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import ReactECharts from "echarts-for-react";
 import { useLocation, useSearch } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
-import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X, RefreshCw, PauseCircle, AlertTriangle, HelpCircle, Pencil, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, Users, X, RefreshCw, PauseCircle, AlertTriangle, HelpCircle, Pencil, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import StockTagPortfolio from "@/pages/StockTagPortfolio";
 import {
@@ -534,7 +534,6 @@ export default function LedgerDetailAA({
     }
   }, [selectedTagId, sessionKey]);
 
-
   // 获取分红汇总数据
   const { data: dividendSummaryData } = trpc.getDividendSummary.useQuery(
     { ledgerId, viewAsUserId: viewAsUserId ?? undefined },
@@ -624,6 +623,11 @@ export default function LedgerDetailAA({
     return categories.find((c: any) => c.id === selectedTagId) || null;
   }, [selectedTagId, categories]);;
   const isSelectedStockPortfolio = selectedTag?.accountingMode === 'stock_portfolio';
+  // 普通标签通常围绕固定本金看账户值；股票持仓会持续新增或减少份额，
+  // 因此切换到这类标签时默认展示剔除份额变化后的“日”收益。
+  useEffect(() => {
+    setCalendarMode(isSelectedStockPortfolio ? 'daily' : 'balance');
+  }, [selectedTagId, isSelectedStockPortfolio]);
   // 仅胡大叔直看标签整体的盘尾快照；其他用户及观察视角只看自己的逐笔分层快照。
   // 两者都复用日历首页，差异只在日历中显示的盈亏口径。
   const stockCalendarSnapshotsQuery = trpc.ledger.getStockTagDailySnapshots.useQuery(
@@ -666,6 +670,16 @@ export default function LedgerDetailAA({
     () => new Map(stockCalendarPoints.map((point) => [point.date, point])),
     [stockCalendarPoints],
   );
+  // 股票标签首次进入或从持仓维护页回退时，主动刷新完整盘尾快照。
+  // 避免客户端复用旧缓存而让最早一个交易日暂时显示为空，必须逐日点开后才补齐。
+  useEffect(() => {
+    if (!isSelectedStockPortfolio || !selectedTagId || showStockPortfolio) return;
+    if (stockParticipantView) {
+      void stockTagOverviewQuery.refetch();
+      return;
+    }
+    void stockCalendarSnapshotsQuery.refetch();
+  }, [isSelectedStockPortfolio, selectedTagId, showStockPortfolio, stockParticipantView]);
   const latestStockCalendarPoint = stockCalendarPoints[stockCalendarPoints.length - 1] || null;
   // 获取当前选中标签的配置（暂停日期、结束日期等）——从 initialBalancesData 读取（用户×标签维度）
   const selectedTagName = selectedTag?.name ?? null;
@@ -703,6 +717,7 @@ export default function LedgerDetailAA({
   const [memoComposerVisibility, setMemoComposerVisibility] = useState<MemoVisibility>('private');
   const [memoDraft, setMemoDraft] = useState('');
   const [showAllModeHelp, setShowAllModeHelp] = useState<'value' | 'pnl' | 'margin' | null>(null);
+  const [showActiveMarginSummary, setShowActiveMarginSummary] = useState(false);
   // 概览表格盘价总和：用 ref 存储，在概览渲染时赋值，弹窗直接读取
   const overviewTotalPnlRef = useRef<number>(0);
 
@@ -1118,6 +1133,21 @@ export default function LedgerDetailAA({
     if (!marginNoteTag || !initialBalancesData?.balances) return null;
     const balances = initialBalancesData.balances as Record<string, any>;
     const category = categories.find((item: any) => item.name === marginNoteTag);
+    // 与标签列表、日历和回报区的暂停判断保持一致：仅最后一段尚未重启时，才属于当前暂停。
+    // 此状态只追加“当前所需押金为零”的说明，绝不改写暂停前保留的参考押金或押金流水。
+    let activePauseDate: string | null = null;
+    const pauseHistoryRaw = balances[`${marginNoteTag}__pauseHistory`];
+    if (pauseHistoryRaw) {
+      try {
+        const pauseHistory = JSON.parse(String(pauseHistoryRaw)) as Array<{ pauseDate?: string; resumeDate?: string }>;
+        const lastPause = pauseHistory[pauseHistory.length - 1];
+        if (lastPause?.pauseDate && !lastPause.resumeDate) activePauseDate = String(lastPause.pauseDate);
+      } catch {
+        // 保留既有弹窗计算；无有效暂停记录时不额外显示当前暂停状态。
+      }
+    } else if (balances[`${marginNoteTag}__pauseDate`]) {
+      activePauseDate = String(balances[`${marginNoteTag}__pauseDate`]);
+    }
     const stockOverview = category?.accountingMode === 'stock_portfolio'
       ? stockTagOverviewById.get(Number(category.id))
       : null;
@@ -1140,6 +1170,7 @@ export default function LedgerDetailAA({
         actualDeposit,
         shortfall: referenceDeposit - actualDeposit,
         hasUnpricedEntry: latestMarketValue === null || currentMarginDetailEntries.some((entry) => entry.cnyValue === null),
+        activePauseDate,
       };
     }
     const currentPrincipal = Number(balances[marginNoteTag] ?? 0) + (capitalByTag[marginNoteTag] || 0);
@@ -1155,6 +1186,7 @@ export default function LedgerDetailAA({
       actualDeposit,
       shortfall: referenceDeposit - actualDeposit,
       hasUnpricedEntry: currentMarginDetailEntries.some((entry) => entry.cnyValue === null),
+      activePauseDate,
     };
   }, [marginNoteTag, initialBalancesData, categories, stockTagOverviewById, capitalByTag, currentMarginDetailEntries]);
 
@@ -1871,6 +1903,11 @@ export default function LedgerDetailAA({
         return hasYearSnapshot ? formatMoney(Math.abs(value), value > 0 ? "+" : value < 0 ? "-" : "") : null;
       }
       if (!point) return null;
+      // “值”展示当日盘尾持仓市值：成员仅汇总自己已分配且仍持有的股票，
+      // 胡大叔的总盘则汇总该标签全部有效持仓。它不是累计盈亏。
+      if (calendarMode === "balance") {
+        return point.marketValue === null ? null : formatMoney(point.marketValue);
+      }
       const value = calendarMode === "daily" ? point.dailyPnl : point.totalPnl;
       return formatMoney(Math.abs(value), value > 0 ? "+" : value < 0 ? "-" : "");
     }
@@ -2546,11 +2583,7 @@ export default function LedgerDetailAA({
                       borderRadius: 8,
                     }}
                   >
-                    {mode === "balance" ? (
-                      <CircleDollarSign className="w-3.5 h-3.5" />
-                    ) : (
-                      { daily: "日", monthly: "月", yearly: "年" }[mode]
-                    )}
+                    {mode === "balance" ? "值" : { daily: "日", monthly: "月", yearly: "年" }[mode]}
                   </button>
                 );
               })}
@@ -2602,10 +2635,15 @@ export default function LedgerDetailAA({
                         const dateStr = getDateStr(day);
                         if (isSelectedStockPortfolio) {
                           const point = stockCalendarPointByDate.get(dateStr);
-                          const value = calendarMode === "daily" ? point?.dailyPnl : point?.totalPnl;
-                          valueColor = value === undefined || value === null || value === 0
-                            ? "#9E9E9E"
-                            : value > 0 ? "#D32F2F" : "#4CAF50";
+                          if (calendarMode === "balance") {
+                            // 市值是存量值，不以涨跌色表达，避免误读为收益。
+                            valueColor = point?.marketValue === null || point?.marketValue === undefined ? "#9E9E9E" : "#222222";
+                          } else {
+                            const value = calendarMode === "daily" ? point?.dailyPnl : point?.totalPnl;
+                            valueColor = value === undefined || value === null || value === 0
+                              ? "#9E9E9E"
+                              : value > 0 ? "#D32F2F" : "#4CAF50";
+                          }
                         } else if (calendarMode === "daily") {
                           const diff = getDailyDiff(dateStr);
                           valueColor = diff === null ? "#9E9E9E" : diff > 0 ? "#D32F2F" : diff < 0 ? "#4CAF50" : "#9E9E9E";
@@ -2850,7 +2888,7 @@ export default function LedgerDetailAA({
         <div className="px-4 pt-4 pb-2 flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold" style={{ color: "#1A1A1A" }}>余额走势</span>
+              <span className="text-sm font-bold" style={{ color: "#1A1A1A" }}>{isSelectedStockPortfolio && calendarMode === 'balance' ? '市值走势' : '余额走势'}</span>
               {selectedTag && (
                 <span className="text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}>
                   {selectedTag.name}
@@ -2858,7 +2896,9 @@ export default function LedgerDetailAA({
               )}
             </div>
             <div className="text-[11px] mt-0.5" style={{ color: "#9E9E9E" }}>
-              {calendarMode === 'balance' ? '当月日度余额变化' : calendarMode === 'daily' ? '当月日盈亏走势' : calendarMode === 'monthly' ? '全年月度盈亏' : '全部记录余额走势'}
+              {calendarMode === 'balance'
+                ? (isSelectedStockPortfolio ? '当月日度持仓市值' : '当月日度余额变化')
+                : calendarMode === 'daily' ? '当月日盈亏走势' : calendarMode === 'monthly' ? '全年月度盈亏' : '全部记录余额走势'}
             </div>
           </div>
           {/* 日盈亏模式：显示当月所有交易日盈亏累加总和；月/年模式：显示区间变化；余额模式：不显示数字 */}
@@ -3210,6 +3250,44 @@ export default function LedgerDetailAA({
             const pausedSummaryDividend = pausedTagData.reduce((sum, td) => sum + td.divAmt, 0);
             const activeFocusOption = OVERVIEW_FOCUS_OPTIONS.find((option) => option.key === overviewFocusMetric)!;
             const focusSortActive = overviewSort?.col === overviewFocusMetric;
+            // 押金汇总只统计当前仍在进行中的标签；暂停标签的历史押金保留在各自明细中，
+            // 但不能混入用户当前应补缴的总额。
+            const activeMarginItems = tagData
+              .filter((item) => !item.isPaused)
+              .map((item) => {
+                const actualDeposit = Number(item.tag.marginCny || 0);
+                const rawRequiredDeposit = item.tag.isStockPortfolio
+                  ? (item.latestBalance === null ? 0 : Number(item.latestBalance) * 0.2)
+                  : (Number(item.tag.initialBalance || 0) + Number(capitalByTag[item.tag.name] || 0))
+                    * (Number(initialBalancesData?.balances?.[`${item.tag.name}__ratio`] ?? 100) / 100)
+                    * 0.2;
+                const requiredDeposit = Number.isFinite(rawRequiredDeposit) ? Math.max(0, rawRequiredDeposit) : 0;
+                const tagAlias = String((initialBalancesData?.balances as any)?.[`${item.tag.name}__alias`] || item.tag.name);
+                return {
+                  tagName: item.tag.name,
+                  tagAlias,
+                  requiredDeposit,
+                  actualDeposit,
+                  shortfall: requiredDeposit - actualDeposit,
+                };
+              });
+            const activeRequiredDeposit = activeMarginItems.reduce((sum, item) => sum + item.requiredDeposit, 0);
+            const activeActualDeposit = activeMarginItems.reduce((sum, item) => sum + item.actualDeposit, 0);
+            const activeMarginShortfall = activeRequiredDeposit - activeActualDeposit;
+            const activeMarginProgress = activeRequiredDeposit > 0
+              ? Math.min(100, Math.max(0, (activeActualDeposit / activeRequiredDeposit) * 100))
+              : 0;
+            const formatMarginTotal = (value: number) => `¥${Math.abs(value).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`;
+            const activeMarginShortfallText = activeMarginShortfall > 0
+              ? formatMarginTotal(activeMarginShortfall)
+              : activeMarginShortfall < 0
+                ? `已超交 ${formatMarginTotal(activeMarginShortfall)}`
+                : '¥0';
+            const openActiveMarginSummary = () => {
+              focusOverviewMetric('amount');
+              if (overviewSort?.col === 'amount') setOverviewSort(null);
+              setShowActiveMarginSummary(true);
+            };
             return (
               <>
               <div className="flex items-center gap-1 overflow-x-auto px-2 py-2" style={{ borderBottom: '1px solid #F5F5F5', scrollbarWidth: 'none' }}>
@@ -3221,20 +3299,25 @@ export default function LedgerDetailAA({
                       key={option.key}
                       type="button"
                       onClick={() => {
+                        if (option.key === 'amount') {
+                          openActiveMarginSummary();
+                          return;
+                        }
+                        setShowActiveMarginSummary(false);
                         focusOverviewMetric(option.key);
                         // 切换观察指标时不沿用其他指标的旧排序，避免列表顺序造成误判。
                         if (overviewSort?.col !== option.key) setOverviewSort(null);
                       }}
                       className="shrink-0 px-2 py-1 text-xs font-medium"
-                      style={{ borderRadius: 5, backgroundColor: active ? '#D32F2F' : '#FAFAFA', color: active ? '#FFFFFF' : '#757575', border: active ? '1px solid #D32F2F' : '1px solid #E8E8E8' }}
+                      style={{ borderRadius: 5, backgroundColor: active ? '#D32F2F' : '#FFFFFF', color: active ? '#FFFFFF' : '#757575', border: active ? '1px solid #D32F2F' : '1px solid #E8E8E8' }}
                       aria-pressed={active}
-                      aria-label={`将${option.label}列置于名称列旁`}
+                      aria-label={option.key === 'amount' ? '查看进行中标签押金汇总' : `将${option.label}列置于名称列旁`}
                     >
-                      {option.label}
+                      {option.key === 'amount' ? <span style={{ textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: 3, textDecorationColor: active ? 'rgba(255,255,255,0.9)' : '#9E9E9E' }}>{option.label}</span> : option.label}
                     </button>
                   );
                 })}
-                <button
+                {overviewFocusMetric !== 'amount' && <button
                   type="button"
                   onClick={() => handleOverviewSort(overviewFocusMetric)}
                   className="ml-1 shrink-0 px-2 py-1 text-xs font-medium"
@@ -3242,8 +3325,51 @@ export default function LedgerDetailAA({
                   aria-label={`按${activeFocusOption.label}排序`}
                 >
                   {focusSortActive ? (overviewSort?.dir === 'desc' ? '降序↓' : '升序↑') : '排序'}
-                </button>
+                </button>}
               </div>
+              {showActiveMarginSummary && (
+                <div className="fixed inset-0 z-[600] flex items-center justify-center px-5" onClick={() => setShowActiveMarginSummary(false)}>
+                  <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }} />
+                  <section className="active-margin-summary-scroll relative w-full max-w-sm overflow-y-auto rounded-2xl bg-white shadow-xl" style={{ maxHeight: '90dvh', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y', overscrollBehavior: 'contain', scrollbarWidth: 'auto', scrollbarColor: '#708797 #E8EEF2' }} aria-label="进行中标签押金汇总" onClick={(event) => event.stopPropagation()}>
+                    <style>{`
+                      .active-margin-summary-scroll::-webkit-scrollbar { width: 10px; }
+                      .active-margin-summary-scroll::-webkit-scrollbar-track { background: #E8EEF2; border-radius: 10px; }
+                      .active-margin-summary-scroll::-webkit-scrollbar-thumb { background: #708797; border: 2px solid #E8EEF2; border-radius: 10px; }
+                    `}</style>
+                    <div className="flex items-center justify-between gap-3 px-4 py-2" style={{ borderBottom: '1px solid #E7EDF3' }}>
+                      <div className="flex min-w-0 items-baseline gap-2">
+                        <div className="text-sm font-bold" style={{ color: '#263442' }}>进行中标签押金</div>
+                        <div className="truncate text-[10px]" style={{ color: '#7A8794' }}>{activeMarginItems.length} 项，仅进行中</div>
+                      </div>
+                      <button type="button" onClick={() => setShowActiveMarginSummary(false)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: '#F3F5F7', color: '#6D7B88' }} aria-label="关闭进行中标签押金汇总"><X size={15} /></button>
+                    </div>
+                    <div className="px-4 py-1">
+                      <div className="grid items-center border-b px-0.5 pb-1 text-[9px]" style={{ gridTemplateColumns: 'minmax(0, 1fr) 72px 72px 72px', color: '#8A99A8', borderColor: '#E7EDF3' }}>
+                        <span>标签</span><span className="border-l pl-1.5 text-right" style={{ borderColor: '#E7EDF3' }}>需交</span><span className="border-l pl-1.5 text-right" style={{ borderColor: '#E7EDF3' }}>已交</span><span className="border-l pl-1.5 text-right" style={{ borderColor: '#E7EDF3' }}>缺口</span>
+                      </div>
+                      {activeMarginItems.map((item, index) => (
+                        <div key={item.tagName} className="grid items-center border-b px-0.5 py-1 text-[10px]" style={{ gridTemplateColumns: 'minmax(0, 1fr) 72px 72px 72px', borderColor: '#EDF1F4' }}>
+                          <span className="min-w-0 truncate font-medium" style={{ color: '#424242' }}><span className="mr-1 text-[9px]" style={{ color: '#8A99A8' }}>{index + 1}.</span>{item.tagAlias}</span>
+                          <span className="whitespace-nowrap border-l pl-1.5 text-right font-mono" style={{ color: '#1F4E79', borderColor: '#EDF1F4' }}>{formatMarginTotal(item.requiredDeposit)}</span>
+                          <span className="whitespace-nowrap border-l pl-1.5 text-right font-mono" style={{ color: '#424242', borderColor: '#EDF1F4' }}>{formatMarginTotal(item.actualDeposit)}</span>
+                          <span className="whitespace-nowrap border-l pl-1.5 text-right font-mono" style={{ color: item.shortfall > 0 ? '#C62828' : item.shortfall < 0 ? '#2E7D32' : '#7A8794', borderColor: '#EDF1F4' }}>{item.shortfall > 0 ? formatMarginTotal(item.shortfall) : item.shortfall < 0 ? `超${formatMarginTotal(item.shortfall)}` : '¥0'}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="border-t border-dashed px-4 py-2" style={{ borderColor: '#C9D5E0', backgroundColor: '#FCFDFE' }}>
+                      <div className="grid grid-cols-3 divide-x text-center text-[10px]" style={{ color: '#72808D' }}>
+                        <div className="px-1"><div>总所需</div><div className="text-xs font-bold font-mono" style={{ color: '#1F4E79' }}>{formatMarginTotal(activeRequiredDeposit)}</div></div>
+                        <div className="px-1"><div>总已交</div><div className="text-xs font-bold font-mono" style={{ color: '#424242' }}>{formatMarginTotal(activeActualDeposit)}</div></div>
+                        <div className="px-1"><div>总缺口</div><div className="text-xs font-bold font-mono" style={{ color: activeMarginShortfall > 0 ? '#C62828' : activeMarginShortfall < 0 ? '#2E7D32' : '#757575' }}>{activeMarginShortfallText}</div></div>
+                      </div>
+                      <div className="mt-1.5 overflow-hidden rounded-full" role="progressbar" aria-label="进行中标签押金覆盖进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(activeMarginProgress)} style={{ height: 3, backgroundColor: '#F3B6B6' }}>
+                        <div style={{ width: `${activeMarginProgress}%`, height: '100%', borderRadius: 999, backgroundColor: '#86C99A', transition: 'width 300ms ease' }} />
+                      </div>
+                      <div className="mt-0.5 text-center text-[10px]" style={{ color: '#7A8794' }}>进行中标签押金覆盖 {activeMarginProgress.toFixed(0)}%</div>
+                    </div>
+                  </section>
+                </div>
+              )}
               {/* 单一原生滚动层：保留手机端横向、纵向手势滚动；表头和数据共同横向移动。 */}
               <div ref={overviewNativeScrollRef} style={{ position: 'relative', isolation: 'isolate', overflowX: 'auto', overflowY: 'auto', maxHeight: overviewScrollMaxHeight ? `${overviewScrollMaxHeight}px` : 'calc(100dvh - 260px)', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'none', overscrollBehaviorX: 'none', overscrollBehaviorY: 'none', touchAction: 'pan-x pan-y', backgroundColor: '#FFFFFF' }}>
                 {/* 表头直接挂在原生滚动层：iOS 从第13项继续上滑时仍保持固定，不受名称列移动端合成层影响。 */}
@@ -3256,7 +3382,12 @@ export default function LedgerDetailAA({
                     <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                     <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报￥</span><SortArrow col="pnl" /></div>
                     <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                    <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E' }}>押金￥</span><SortArrow col="amount" /></div>
+                    <div className={cellCls + ' cursor-pointer select-none'} style={{ position: 'relative', borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => { if (overviewSort?.col === 'amount') setOverviewSort(null); setShowActiveMarginSummary(true); }} aria-label="查看进行中标签押金汇总">
+                      <span style={{ position: 'absolute', left: 4, right: 4, top: '50%', transform: 'translateY(-50%)', color: '#9E9E9E', lineHeight: 1, textAlign: 'center' }}>押金￥</span>
+                      <span className="block overflow-hidden rounded-full" role="progressbar" aria-label="进行中标签总押金覆盖进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(activeMarginProgress)} title={`进行中标签总押金覆盖 ${activeMarginProgress.toFixed(0)}%`} style={{ position: 'absolute', left: '50%', top: 27, transform: 'translateX(-50%)', width: 56, height: 2, backgroundColor: '#EF5350' }}>
+                        <span className="block h-full rounded-full" style={{ width: `${activeMarginProgress}%`, backgroundColor: '#86EFAC', transition: 'width 300ms ease' }} />
+                      </span>
+                    </div>
                     <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                     <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('dividend')}>
                       <span
@@ -6074,6 +6205,26 @@ export default function LedgerDetailAA({
                 const summary = currentMarginDetailSummary;
                 const formatCny = (value: number) => formatSignedMarginCny(value);
                 const formatAbsoluteCny = (value: number) => `¥${Math.abs(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const pausedMarginNotice = summary.activePauseDate ? (() => {
+                  const [year, month, day] = summary.activePauseDate.split('-').map(Number);
+                  const pauseDateText = year && month && day ? `${year}年${month}月${day}日` : summary.activePauseDate;
+                  return (
+                    <div className="rounded-xl px-3.5 py-3 shadow-sm" style={{ backgroundColor: '#FFF7E8', border: '1.5px solid #E7A42A' }}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-bold" style={{ color: '#875C00' }}>当前暂停状态</div>
+                          <div className="mt-0.5 text-[11px]" style={{ color: '#A46F00' }}>{pauseDateText} 起暂停</div>
+                        </div>
+                        <span className="rounded-full px-2 py-1 text-[11px] font-bold" style={{ backgroundColor: '#A66B00', color: '#FFFFFF' }}>暂停中</span>
+                      </div>
+                      <div className="mt-3 flex items-end justify-between gap-3 border-t pt-2.5" style={{ borderColor: '#F2D49A' }}>
+                        <span className="text-xs font-semibold" style={{ color: '#424242' }}>当前所需押金</span>
+                        <span className="text-lg font-bold font-mono leading-none" style={{ color: '#A65D00' }}>¥0.00</span>
+                      </div>
+                      <div className="mt-2 text-[11px] leading-4" style={{ color: '#7B6A48' }}>暂停期间不再产生新的所需押金。下方保留暂停前的押金记录，不受当前零需求影响。</div>
+                    </div>
+                  );
+                })() : null;
                 if (summary.isStockPortfolio) {
                   const shortfallText = summary.shortfall > 0
                     ? formatAbsoluteCny(summary.shortfall)
@@ -6081,29 +6232,33 @@ export default function LedgerDetailAA({
                       ? `已超出 ${formatAbsoluteCny(summary.shortfall)}`
                       : '¥0.00（已达标）';
                   return (
-                    <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ backgroundColor: '#F4F8FF', border: '1px solid #D7E6FF' }}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold" style={{ color: '#1565C0' }}>参考所需押金</span>
-                        <span className="text-sm font-bold font-mono" style={{ color: '#1565C0' }}>{formatCny(summary.referenceDeposit)}</span>
+                    <>
+                      {pausedMarginNotice}
+                      <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ backgroundColor: '#F4F8FF', border: '1px solid #D7E6FF' }}>
+                        {summary.activePauseDate && <div className="border-b pb-1.5 text-[11px] font-semibold" style={{ color: '#607D8B', borderColor: '#D7E6FF' }}>暂停前保留记录</div>}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold" style={{ color: '#1565C0' }}>参考所需押金</span>
+                          <span className="text-sm font-bold font-mono" style={{ color: '#1565C0' }}>{formatCny(summary.referenceDeposit)}</span>
+                        </div>
+                        {summary.latestMarketValue === null ? (
+                          <div className="text-[11px]" style={{ color: '#B26A00' }}>当前个人持仓尚无完整价格，暂无法计算参考押金</div>
+                        ) : (
+                          <>
+                            <div className="text-[11px]" style={{ color: '#78909C' }}>当前个人持仓价值 {formatCny(summary.latestMarketValue)} × 20%</div>
+                            <div className="text-[11px]" style={{ color: '#78909C' }}>个人持仓成本 {formatCny(summary.currentPrincipal)}；已按所有当前获配股票逐笔市值相加</div>
+                          </>
+                        )}
+                        <div className="flex items-center justify-between" style={{ borderTop: '1px solid #D7E6FF', paddingTop: 7 }}>
+                          <span className="text-xs font-semibold" style={{ color: '#424242' }}>当前实际押金净额</span>
+                          <span className="text-sm font-bold font-mono" style={{ color: summary.actualDeposit < 0 ? '#D32F2F' : '#424242' }}>{formatCny(summary.actualDeposit)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold" style={{ color: summary.shortfall > 0 ? '#D32F2F' : '#388E3C' }}>押金缺口</span>
+                          <span className="text-sm font-bold font-mono" style={{ color: summary.shortfall > 0 ? '#D32F2F' : summary.shortfall < 0 ? '#388E3C' : '#757575' }}>{shortfallText}</span>
+                        </div>
+                        {summary.hasUnpricedEntry && <div className="text-[11px]" style={{ color: '#B26A00' }}>部分价格或实际押金币种暂无可靠报价，人民币净额未纳入该部分</div>}
                       </div>
-                      {summary.latestMarketValue === null ? (
-                        <div className="text-[11px]" style={{ color: '#B26A00' }}>当前个人持仓尚无完整价格，暂无法计算参考押金</div>
-                      ) : (
-                        <>
-                          <div className="text-[11px]" style={{ color: '#78909C' }}>当前个人持仓价值 {formatCny(summary.latestMarketValue)} × 20%</div>
-                          <div className="text-[11px]" style={{ color: '#78909C' }}>个人持仓成本 {formatCny(summary.currentPrincipal)}；已按所有当前获配股票逐笔市值相加</div>
-                        </>
-                      )}
-                      <div className="flex items-center justify-between" style={{ borderTop: '1px solid #D7E6FF', paddingTop: 7 }}>
-                        <span className="text-xs font-semibold" style={{ color: '#424242' }}>当前实际押金净额</span>
-                        <span className="text-sm font-bold font-mono" style={{ color: summary.actualDeposit < 0 ? '#D32F2F' : '#424242' }}>{formatCny(summary.actualDeposit)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold" style={{ color: summary.shortfall > 0 ? '#D32F2F' : '#388E3C' }}>押金缺口</span>
-                        <span className="text-sm font-bold font-mono" style={{ color: summary.shortfall > 0 ? '#D32F2F' : summary.shortfall < 0 ? '#388E3C' : '#757575' }}>{shortfallText}</span>
-                      </div>
-                      {summary.hasUnpricedEntry && <div className="text-[11px]" style={{ color: '#B26A00' }}>部分价格或实际押金币种暂无可靠报价，人民币净额未纳入该部分</div>}
-                    </div>
+                    </>
                   );
                 }
                 const shortfallText = summary.shortfall > 0
@@ -6112,22 +6267,26 @@ export default function LedgerDetailAA({
                     ? `已超出 ${formatAbsoluteCny(summary.shortfall)}`
                     : '¥0.00（已达标）';
                 return (
-                  <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ backgroundColor: '#F4F8FF', border: '1px solid #D7E6FF' }}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold" style={{ color: '#1565C0' }}>参考押金</span>
-                      <span className="text-sm font-bold font-mono" style={{ color: '#1565C0' }}>{formatCny(summary.referenceDeposit)}</span>
+                  <>
+                    {pausedMarginNotice}
+                    <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ backgroundColor: '#F4F8FF', border: '1px solid #D7E6FF' }}>
+                      {summary.activePauseDate && <div className="border-b pb-1.5 text-[11px] font-semibold" style={{ color: '#607D8B', borderColor: '#D7E6FF' }}>暂停前保留记录</div>}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold" style={{ color: '#1565C0' }}>参考押金</span>
+                        <span className="text-sm font-bold font-mono" style={{ color: '#1565C0' }}>{formatCny(summary.referenceDeposit)}</span>
+                      </div>
+                      <div className="text-[11px]" style={{ color: '#78909C' }}>当前本金 {formatCny(summary.currentPrincipal)} × 占比 {summary.ratioPercent.toFixed(2)}% × 20%</div>
+                      <div className="flex items-center justify-between" style={{ borderTop: '1px solid #D7E6FF', paddingTop: 7 }}>
+                        <span className="text-xs font-semibold" style={{ color: '#424242' }}>当前实际押金净额</span>
+                        <span className="text-sm font-bold font-mono" style={{ color: summary.actualDeposit < 0 ? '#D32F2F' : '#424242' }}>{formatCny(summary.actualDeposit)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold" style={{ color: summary.shortfall > 0 ? '#D32F2F' : '#388E3C' }}>押金缺口</span>
+                        <span className="text-sm font-bold font-mono" style={{ color: summary.shortfall > 0 ? '#D32F2F' : summary.shortfall < 0 ? '#388E3C' : '#757575' }}>{shortfallText}</span>
+                      </div>
+                      {summary.hasUnpricedEntry && <div className="text-[11px]" style={{ color: '#B26A00' }}>无可靠报价的外币明细未计入当前实际押金</div>}
                     </div>
-                    <div className="text-[11px]" style={{ color: '#78909C' }}>当前本金 {formatCny(summary.currentPrincipal)} × 占比 {summary.ratioPercent.toFixed(2)}% × 20%</div>
-                    <div className="flex items-center justify-between" style={{ borderTop: '1px solid #D7E6FF', paddingTop: 7 }}>
-                      <span className="text-xs font-semibold" style={{ color: '#424242' }}>当前实际押金净额</span>
-                      <span className="text-sm font-bold font-mono" style={{ color: summary.actualDeposit < 0 ? '#D32F2F' : '#424242' }}>{formatCny(summary.actualDeposit)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold" style={{ color: summary.shortfall > 0 ? '#D32F2F' : '#388E3C' }}>押金缺口</span>
-                      <span className="text-sm font-bold font-mono" style={{ color: summary.shortfall > 0 ? '#D32F2F' : summary.shortfall < 0 ? '#388E3C' : '#757575' }}>{shortfallText}</span>
-                    </div>
-                    {summary.hasUnpricedEntry && <div className="text-[11px]" style={{ color: '#B26A00' }}>无可靠报价的外币明细未计入当前实际押金</div>}
-                  </div>
+                  </>
                 );
               })()}
               {currentMarginDetailEntries.length === 0 ? (
