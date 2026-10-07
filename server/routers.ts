@@ -154,6 +154,12 @@ function readLedger37PositiveNumber(value: unknown): number | null {
   return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
 }
 
+function readLedger37NonNegativeNumber(value: unknown): number | null {
+  if (value === undefined || value === null || String(value).trim() === '') return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue >= 0 ? numberValue : null;
+}
+
 function sameLedger37Number(left: unknown, right: unknown): boolean {
   const leftText = left === undefined || left === null ? '' : String(left).trim();
   const rightText = right === undefined || right === null ? '' : String(right).trim();
@@ -166,6 +172,7 @@ function sameLedger37Number(left: unknown, right: unknown): boolean {
 
 /**
  * 37号非股票标签的初始金额、比例、实际权益必须完整且严格满足公式。
+ * 比例为 0% 表示该成员不参与该标签，此时实际权益必须为 0；初始金额仍保留为标签基数。
  * 仅阻止本次实际修改过这三项的标签，避免遗留不完整配置阻塞其他字段维护。
  */
 async function assertLedger37AllocationTripletOnChange(params: {
@@ -186,8 +193,8 @@ async function assertLedger37AllocationTripletOnChange(params: {
 
     const effective = (key: string) => Object.prototype.hasOwnProperty.call(params.balances, key) ? params.balances[key] : previous[key];
     const amount = readLedger37PositiveNumber(effective(tagName));
-    const ratio = readLedger37PositiveNumber(effective(`${tagName}__ratio`));
-    const actualAmount = readLedger37PositiveNumber(effective(`${tagName}__targetAmount`));
+    const ratio = readLedger37NonNegativeNumber(effective(`${tagName}__ratio`));
+    const actualAmount = readLedger37NonNegativeNumber(effective(`${tagName}__targetAmount`));
     if (amount === null || ratio === null || ratio > 100 || actualAmount === null) {
       throw new TRPCError({
         code: 'BAD_REQUEST',

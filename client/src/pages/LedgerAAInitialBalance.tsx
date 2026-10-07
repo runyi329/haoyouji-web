@@ -611,6 +611,7 @@ export default function LedgerAAInitialBalance() {
 
   // 37号：只有本次改动过初始金额/比例/实际权益的非股票标签才进行三项完整校验，
   // 让未改动的历史遗留数据不妨碍其他标签的维护；服务端同步执行同一规则兜底。
+  // 比例为 0% 是明确的“不参与”状态，实际权益必须同步为 0，初始金额仍保留作历史标签资料。
   const getChangedAllocationError = (userId: number, userEdit: Record<string, TagEntry>) => {
     if (ledgerId !== 37) return null;
     const originalBalances = ((allBalancesData as any)?.balancesMap?.[userId] ?? {}) as Record<string, unknown>;
@@ -625,7 +626,7 @@ export default function LedgerAAInitialBalance() {
       const amount = Number(entry.amount);
       const ratio = Number(entry.ratio);
       const actualAmount = Number(entry.targetAmount);
-      if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(ratio) || ratio <= 0 || ratio > 100 || !Number.isFinite(actualAmount) || actualAmount <= 0) {
+      if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(ratio) || ratio < 0 || ratio > 100 || !Number.isFinite(actualAmount) || actualAmount < 0) {
         return `「${tagName}」需同时填写有效的初始金额、比例（0–100%）和实际权益`;
       }
       const expectedActual = amount * ratio / 100;
@@ -3154,7 +3155,7 @@ export default function LedgerAAInitialBalance() {
                           {isStockTag ? renderStockParticipationEditor({ selectedUserId: userId, accentColor: cat.color || '#2F6F85' }) : <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
                             <div className="flex items-center justify-between gap-2">
                               <div className="text-xs font-medium text-gray-700">金额与比例</div>
-                              <span className="text-[11px] text-gray-400 whitespace-nowrap">任意两项自动反推第三项</span>
+                              <span className="text-[11px] text-gray-400 whitespace-nowrap">0%=不参与，自动归零</span>
                             </div>
                             <div className="grid grid-cols-3 gap-2">
                               <label className="min-w-0">
@@ -3181,6 +3182,7 @@ export default function LedgerAAInitialBalance() {
                                     placeholder="0"
                                     min={0}
                                     max={100}
+                                    step="0.01"
                                     value={allocationDisplay.ratio}
                                     onChange={e => updateAllocationLink(userId, cat.name, 'ratio', e.target.value)}
                                     className="min-w-0 w-full bg-transparent text-right text-sm py-1.5 outline-none"
@@ -3497,7 +3499,7 @@ export default function LedgerAAInitialBalance() {
                 <section className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#FAFAFA', border: '1px solid #E8E8E8' }}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs font-medium text-gray-700">金额与比例</div>
-                    <span className="text-[11px] text-gray-400 whitespace-nowrap">任意两项自动反推第三项</span>
+                    <span className="text-[11px] text-gray-400 whitespace-nowrap">0%=不参与，自动归零</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <label className="min-w-0">
@@ -3524,6 +3526,7 @@ export default function LedgerAAInitialBalance() {
                           placeholder="0"
                           min={0}
                           max={100}
+                          step="0.01"
                           value={allocationDisplay.ratio}
                           onChange={e => updateAllocationLink(userId, tagName, 'ratio', e.target.value)}
                           className="min-w-0 w-full bg-transparent text-right text-sm py-1.5 outline-none"
