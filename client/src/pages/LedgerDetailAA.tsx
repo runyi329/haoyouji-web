@@ -22,6 +22,7 @@
  *   注意：balance 是当天 income - expense，不是累计余额
  */
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import ReactECharts from "echarts-for-react";
 import { useLocation, useSearch } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -3313,7 +3314,7 @@ export default function LedgerDetailAA({
                       aria-pressed={active}
                       aria-label={option.key === 'amount' ? '查看进行中标签押金汇总' : `将${option.label}列置于名称列旁`}
                     >
-                      {option.key === 'amount' ? <span style={{ textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: 3, textDecorationColor: active ? 'rgba(255,255,255,0.9)' : '#9E9E9E' }}>{option.label}</span> : option.label}
+                      {option.label}
                     </button>
                   );
                 })}
@@ -3327,8 +3328,8 @@ export default function LedgerDetailAA({
                   {focusSortActive ? (overviewSort?.dir === 'desc' ? '降序↓' : '升序↑') : '排序'}
                 </button>}
               </div>
-              {showActiveMarginSummary && (
-                <div className="fixed inset-0 z-[600] flex items-center justify-center px-5" onClick={() => setShowActiveMarginSummary(false)}>
+              {showActiveMarginSummary && typeof document !== 'undefined' && createPortal(
+                <div className="fixed inset-0 flex items-center justify-center px-5" style={{ zIndex: 10000 }} onClick={() => setShowActiveMarginSummary(false)}>
                   <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }} />
                   <section className="active-margin-summary-scroll relative w-full max-w-sm overflow-y-auto rounded-2xl bg-white shadow-xl" style={{ maxHeight: '90dvh', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y', overscrollBehavior: 'contain', scrollbarWidth: 'auto', scrollbarColor: '#708797 #E8EEF2' }} aria-label="进行中标签押金汇总" onClick={(event) => event.stopPropagation()}>
                     <style>{`
@@ -3368,7 +3369,8 @@ export default function LedgerDetailAA({
                       <div className="mt-0.5 text-center text-[10px]" style={{ color: '#7A8794' }}>进行中标签押金覆盖 {activeMarginProgress.toFixed(0)}%</div>
                     </div>
                   </section>
-                </div>
+                </div>,
+                document.body,
               )}
               {/* 单一原生滚动层：保留手机端横向、纵向手势滚动；表头和数据共同横向移动。 */}
               <div ref={overviewNativeScrollRef} style={{ position: 'relative', isolation: 'isolate', overflowX: 'auto', overflowY: 'auto', maxHeight: overviewScrollMaxHeight ? `${overviewScrollMaxHeight}px` : 'calc(100dvh - 260px)', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'none', overscrollBehaviorX: 'none', overscrollBehaviorY: 'none', touchAction: 'pan-x pan-y', backgroundColor: '#FFFFFF' }}>
@@ -3383,8 +3385,8 @@ export default function LedgerDetailAA({
                     <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报￥</span><SortArrow col="pnl" /></div>
                     <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                     <div className={cellCls + ' cursor-pointer select-none'} style={{ position: 'relative', borderBottom: '1px solid #F5F5F5', fontSize: 12, height: rowHeight }} onClick={() => { if (overviewSort?.col === 'amount') setOverviewSort(null); setShowActiveMarginSummary(true); }} aria-label="查看进行中标签押金汇总">
-                      <span style={{ position: 'absolute', left: 4, right: 4, top: '50%', transform: 'translateY(-50%)', color: '#9E9E9E', lineHeight: 1, textAlign: 'center' }}>押金￥</span>
-                      <span className="block overflow-hidden rounded-full" role="progressbar" aria-label="进行中标签总押金覆盖进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(activeMarginProgress)} title={`进行中标签总押金覆盖 ${activeMarginProgress.toFixed(0)}%`} style={{ position: 'absolute', left: '50%', top: 27, transform: 'translateX(-50%)', width: 56, height: 2, backgroundColor: '#EF5350' }}>
+                      <span style={{ position: 'absolute', left: 4, right: 4, top: '50%', transform: 'translateY(-50%)', color: '#9E9E9E', lineHeight: 1, textAlign: 'center', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#9E9E9E', textUnderlineOffset: '2px' }}>押金￥</span>
+                      <span className="block overflow-hidden rounded-full" role="progressbar" aria-label="进行中标签总押金覆盖进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(activeMarginProgress)} title={`进行中标签总押金覆盖 ${activeMarginProgress.toFixed(0)}%`} style={{ position: 'absolute', left: '50%', top: 28, transform: 'translateX(-50%)', width: 56, height: 2, backgroundColor: '#EF5350' }}>
                         <span className="block h-full rounded-full" style={{ width: `${activeMarginProgress}%`, backgroundColor: '#86EFAC', transition: 'width 300ms ease' }} />
                       </span>
                     </div>
