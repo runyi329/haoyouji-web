@@ -369,6 +369,27 @@ export default function LedgerAAInitialBalance() {
   const [savingUsers, setSavingUsers] = useState<Set<number>>(new Set());
   // 逐笔押金备注的未提交输入，按用户、标签和押金明细ID隔离。
   const [marginNoteDrafts, setMarginNoteDrafts] = useState<Record<string, string>>({});
+  // 有账务记录的标签隐藏必须完成两次确认；立即保存的股票标签与普通草稿保存共用同一保护。
+  const [hideConfirmation, setHideConfirmation] = useState<{
+    userId: number;
+    tagName: string;
+    mode: 'draft' | 'immediate';
+    stage: 'loading' | 'first' | 'final';
+  } | null>(null);
+  const [hideAcknowledgements, setHideAcknowledgements] = useState<Record<string, string>>({});
+  const hideImpactQuery = trpc.ledger.adminGetMemberTagHideImpact.useQuery(
+    {
+      ledgerId,
+      targetUserId: hideConfirmation?.userId || 0,
+      tagName: hideConfirmation?.tagName || '__pending__',
+    },
+    {
+      enabled: !!hideConfirmation && !!ledgerId,
+      staleTime: 0,
+      refetchOnMount: 'always',
+      retry: false,
+    },
+  );
 
   // 数字币价格（走服务器tRPC，price-scanner缓存，3秒刷新）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
@@ -485,6 +506,88 @@ export default function LedgerAAInitialBalance() {
     }));
     setDirtyUsers((prev) => new Set(prev).add(userId));
   };
+
+  const hideAcknowledgementKey = (userId: number, tagName: string) => `${userId}::${tagName}`;
+
+  const applyConfirmedTagHide = (
+    confirmation: NonNullable<typeof hideConfirmation>,
+    impactHash?: string,
+  ) => {
+    const { userId, tagName, mode } = confirmation;
+    const previousVisible = editState[userId]?.[tagName]?.visible ?? true;
+    updateEntry(userId, tagName, { visible: false });
+    if (mode === 'draft') {
+      if (impactHash) {
+        setHideAcknowledgements((previous) => ({
+          ...previous,
+          [hideAcknowledgementKey(userId, tagName)]: impactHash,
+        }));
+      }
+      return;
+    }
+    if (isLocalHotPreview) {
+      toast.info('热预览仅演示隐藏确认，不会修改正式成员可见性');
+      return;
+    }
+    setSavingUsers((previous) => new Set(previous).add(userId));
+    setMutation.mutate({
+      ledgerId,
+      targetUserId: userId,
+      balances: { [`${tagName}__visible`]: 0 },
+      migratedMarginNoteIds: [],
+      hideAcknowledgements: impactHash ? [{ tagName, impactHash }] : [],
+    }, {
+      onError: () => updateEntry(userId, tagName, { visible: previousVisible }),
+    });
+  };
+
+  const requestTagVisibilityChange = (
+    userId: number,
+    tagName: string,
+    nextVisible: boolean,
+    mode: 'draft' | 'immediate' = 'draft',
+  ) => {
+    if (!nextVisible) {
+      const currentlyVisible = editState[userId]?.[tagName]?.visible ?? true;
+      if (!currentlyVisible) return;
+      setHideConfirmation({ userId, tagName, mode, stage: 'loading' });
+      return;
+    }
+
+    updateEntry(userId, tagName, { visible: true });
+    setHideAcknowledgements((previous) => {
+      const next = { ...previous };
+      delete next[hideAcknowledgementKey(userId, tagName)];
+      return next;
+    });
+    if (mode === 'draft' || isLocalHotPreview) return;
+    setSavingUsers((previous) => new Set(previous).add(userId));
+    setMutation.mutate({
+      ledgerId,
+      targetUserId: userId,
+      balances: { [`${tagName}__visible`]: 1 },
+      migratedMarginNoteIds: [],
+      hideAcknowledgements: [],
+    });
+  };
+
+  useEffect(() => {
+    if (!hideConfirmation || hideConfirmation.stage !== 'loading') return;
+    if (hideImpactQuery.isError) {
+      toast.error((hideImpactQuery.error as any)?.message || '无法核对该标签的分红与保证金记录');
+      setHideConfirmation(null);
+      return;
+    }
+    const impact = hideImpactQuery.data as any;
+    if (!impact) return;
+    if (impact.hasFinancialRecords) {
+      setHideConfirmation((previous) => previous ? { ...previous, stage: 'first' } : null);
+      return;
+    }
+    applyConfirmedTagHide(hideConfirmation);
+    setHideConfirmation(null);
+    toast.success('该标签没有分红或保证金账务，已设为隐藏');
+  }, [hideConfirmation, hideImpactQuery.data, hideImpactQuery.error, hideImpactQuery.isError]);
 
   // 比例、初始金额、实际占用金额三联动：任意修改一项时，使用已存在的另一项反推第三项。
   // 优先以“初始金额”为基数；空值只清空当前项，不覆盖用户尚未完成的输入。
@@ -747,6 +850,12 @@ export default function LedgerAAInitialBalance() {
     }
     setSavingUsers((prev) => new Set(prev).add(userId));
     const migratedMarginNoteIds = categories.flatMap((cat: any) => userEdit[cat.name]?.legacyMarginNoteIds ?? []);
+    const memberHideAcknowledgements = categories
+      .map((cat: any) => ({
+        tagName: String(cat.name),
+        impactHash: hideAcknowledgements[hideAcknowledgementKey(userId, String(cat.name))],
+      }))
+      .filter((item) => !!item.impactHash);
     try {
       // 先持久化暂停状态；只有保存成功后才允许退回钱包，避免“钱已退、标签仍运行”的状态。
       await setMutation.mutateAsync({
@@ -754,6 +863,7 @@ export default function LedgerAAInitialBalance() {
         targetUserId: userId,
         balances: balances as Record<string, number>,
         migratedMarginNoteIds,
+        hideAcknowledgements: memberHideAcknowledgements,
       });
       const releasePlans = memberPausePlans.filter((plan) => plan.action === 'release_wallet_holds');
       if (releasePlans.length > 0) {
@@ -1618,21 +1728,7 @@ export default function LedgerAAInitialBalance() {
     if (discardDrafts) discardStockLotDrafts(lotId);
   };
   const saveStockTagVisibility = (targetUserId: number, tagName: string, nextVisible: boolean) => {
-    const previousVisible = editState[targetUserId]?.[tagName]?.visible ?? true;
-    updateEntry(targetUserId, tagName, { visible: nextVisible });
-    if (isLocalHotPreview) {
-      toast.info('热预览仅切换本地显示，不会修改正式成员可见性');
-      return;
-    }
-    setSavingUsers((previous) => new Set(previous).add(targetUserId));
-    setMutation.mutate({
-      ledgerId,
-      targetUserId,
-      balances: { [`${tagName}__visible`]: nextVisible ? 1 : 0 },
-      migratedMarginNoteIds: [],
-    }, {
-      onError: () => updateEntry(targetUserId, tagName, { visible: previousVisible }),
-    });
+    requestTagVisibilityChange(targetUserId, tagName, nextVisible, 'immediate');
   };
   // 批量选择模式
   const [batchSelectMode, setBatchSelectMode] = useState(false);
@@ -3054,7 +3150,7 @@ export default function LedgerAAInitialBalance() {
                                 <button
                                   type="button"
                                   aria-label={entry.visible ? '隐藏该标签' : '显示该标签'}
-                                  onClick={(event) => { event.stopPropagation(); updateEntry(userId, cat.name, { visible: !entry.visible }); }}
+                                  onClick={(event) => { event.stopPropagation(); requestTagVisibilityChange(userId, cat.name, !entry.visible); }}
                                   className="relative inline-flex h-4.5 w-8 items-center rounded-full transition-colors flex-shrink-0"
                                   style={{ backgroundColor: entry.visible ? '#D32F2F' : '#D1D5DB' }}
                                 >
@@ -3287,7 +3383,7 @@ export default function LedgerAAInitialBalance() {
                   <button
                     type="button"
                     aria-label={entry.visible ? '隐藏该标签' : '显示该标签'}
-                    onClick={() => updateEntry(userId, tagName, { visible: !entry.visible })}
+                    onClick={() => requestTagVisibilityChange(userId, tagName, !entry.visible)}
                     className="relative inline-flex h-4.5 w-8 items-center rounded-full transition-colors flex-shrink-0"
                     style={{ backgroundColor: entry.visible ? catColor : '#D1D5DB' }}
                   >
@@ -3589,6 +3685,63 @@ export default function LedgerAAInitialBalance() {
                   {isSaving ? '保存中...' : '保存'}
                 </button>
               </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {hideConfirmation && (() => {
+        const impact = hideImpactQuery.data as any;
+        const member = ((allBalancesData as any)?.members ?? []).find((item: any) => Number(item.userId) === Number(hideConfirmation.userId));
+        const memberName = member?.nickname || member?.realName || member?.username || `用户${hideConfirmation.userId}`;
+        const formatRiskAmount = (value: unknown) => `¥${Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const marginAssets = ((impact?.margin?.assets ?? []) as Array<{ assetCode: string; netAmount: number }>)
+          .map((item) => `${Number(item.netAmount || 0).toLocaleString('zh-CN', { maximumFractionDigits: 8 })} ${item.assetCode}`)
+          .join(' · ');
+        const closeConfirmation = () => setHideConfirmation(null);
+        const confirmFinalHide = () => {
+          if (!impact?.impactHash) {
+            toast.error('账务确认快照已失效，请重新打开隐藏操作');
+            closeConfirmation();
+            return;
+          }
+          applyConfirmedTagHide(hideConfirmation, String(impact.impactHash));
+          closeConfirmation();
+        };
+        return (
+          <div className="fixed inset-0 z-[240] flex items-end justify-center bg-black/55 px-3 sm:items-center" onClick={closeConfirmation}>
+            <div className="w-full max-w-md rounded-t-2xl bg-white p-5 shadow-2xl sm:rounded-2xl" onClick={(event) => event.stopPropagation()}>
+              {hideConfirmation.stage === 'loading' || !impact ? (
+                <div className="py-5 text-center">
+                  <div className="text-sm font-semibold text-gray-800">正在核对标签账务…</div>
+                  <div className="mt-1 text-xs leading-5 text-gray-400">检查已分红、历史押金和仍冻结的钱包保证金。</div>
+                </div>
+              ) : hideConfirmation.stage === 'first' ? (
+                <>
+                  <div className="text-base font-semibold" style={{ color: '#B91C1C' }}>发现未隐藏的账务记录</div>
+                  <div className="mt-1 text-sm leading-5 text-gray-600">准备隐藏 <b>{memberName}</b> 的「<b>{hideConfirmation.tagName}</b>」标签。隐藏只影响成员端可见性，不会删除以下账务。</div>
+                  <div className="mt-4 divide-y rounded-xl border" style={{ borderColor: '#F3CDD1', backgroundColor: '#FFF9F9' }}>
+                    {impact.dividend?.recordCount > 0 && <div className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"><span className="text-gray-600">已分红记录</span><span className="text-right font-semibold" style={{ color: '#B91C1C' }}>{impact.dividend.recordCount} 笔 · 净额 {formatRiskAmount(impact.dividend.netAmount)}</span></div>}
+                    {impact.margin?.recordCount > 0 && <div className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"><span className="text-gray-600">历史押金记录</span><span className="text-right font-semibold text-gray-800">{impact.margin.recordCount} 笔{marginAssets ? ` · ${marginAssets}` : ''}</span></div>}
+                    {impact.walletHolds?.recordCount > 0 && <div className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"><span className="text-gray-600">钱包保证金台账</span><span className="text-right font-semibold text-gray-800">{impact.walletHolds.recordCount} 笔{impact.walletHolds.activeCount > 0 ? ` · 仍冻结 ${impact.walletHolds.activeCount} 笔` : ''}</span></div>}
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-gray-500">请先核对这些记录；继续后仍需进行一次最终确认，避免标签被隐藏后遗漏分红或押金。</p>
+                  <div className="mt-5 flex gap-3">
+                    <button type="button" onClick={closeConfirmation} className="flex-1 rounded-xl border py-2.5 text-sm font-medium" style={{ borderColor: '#E0E0E0', color: '#6B7280' }}>取消</button>
+                    <button type="button" onClick={() => setHideConfirmation((previous) => previous ? { ...previous, stage: 'final' } : null)} className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: '#B91C1C' }}>已核对，继续</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-base font-semibold" style={{ color: '#B91C1C' }}>最后确认隐藏标签</div>
+                  <p className="mt-2 text-sm leading-6 text-gray-700">确认后，「<b>{hideConfirmation.tagName}</b>」将不再展示给 <b>{memberName}</b>；已有分红、押金和钱包台账不会删除，也不会自动结清。</p>
+                  <div className="mt-3 rounded-xl px-3 py-2.5 text-xs leading-5" style={{ backgroundColor: '#FFF3F3', color: '#9F1D1D', border: '1px solid #F3CDD1' }}>后续如需核对或处理该标签账务，管理员需先重新显示该标签。</div>
+                  <div className="mt-5 flex gap-3">
+                    <button type="button" onClick={closeConfirmation} className="flex-1 rounded-xl border py-2.5 text-sm font-medium" style={{ borderColor: '#E0E0E0', color: '#6B7280' }}>返回</button>
+                    <button type="button" onClick={confirmFinalHide} className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: '#B91C1C' }}>确认隐藏</button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         );

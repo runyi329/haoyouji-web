@@ -6117,7 +6117,6 @@ export default function LedgerDetailAA({
                       const assetAmount = Number.isFinite(rawAssetAmount) && rawAssetAmount !== 0 ? rawAssetAmount : cnyAmount;
                       const isReversal = r.reversal_mode === 'reverse' || cnyAmount < 0;
                       const isWalletEntry = Number(r.wallet_entry_id || 0) > 0;
-                      const walletSnapshot = readWalletBalanceSnapshot(r.wallet_snapshot_json);
                       const formattedAssetAmount = assetCode === 'CNY'
                         ? `¥${Math.abs(assetAmount).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                         : `${Math.abs(assetAmount).toLocaleString('zh-CN', { maximumFractionDigits: 8 })} ${assetCode}`;
@@ -6142,16 +6141,8 @@ export default function LedgerDetailAA({
                             </div>
                           </div>
                           {isWalletEntry ? (
-                            <div className="mt-2.5 rounded-lg px-2.5 py-2" style={{ backgroundColor: '#F2F8FF', border: '1px solid #D7E6FF' }}>
-                              <div className="text-xs font-semibold" style={{ color: '#1565C0' }}>{isReversal ? '冲正去向：已从' : '分红去向：已入账至'} {destination}</div>
-                              {walletSnapshot ? (
-                                <div className="mt-1 text-[11px] leading-5 tabular-nums" style={{ color: '#607D8B' }}>
-                                  {isReversal ? '冲正后' : '入账后'}钱包余额 <span className="font-semibold" style={{ color: '#1565C0' }}>{formatWalletSnapshotBalance(walletSnapshot.total, walletSnapshot.assetCode)}</span>
-                                  <span> · 可用 {formatWalletSnapshotBalance(walletSnapshot.available, walletSnapshot.assetCode)} · 已冻结 {formatWalletSnapshotBalance(walletSnapshot.frozen, walletSnapshot.assetCode)}</span>
-                                </div>
-                              ) : (
-                                <div className="mt-1 text-[11px] leading-5" style={{ color: '#78909C' }}>该笔已进入智能钱包；历史余额快照正在补录，不影响钱包真实余额。</div>
-                              )}
+                            <div className="mt-1 text-xs leading-5" style={{ color: '#607D8B' }}>
+                              {isReversal ? '冲正去向：已从' : '分红去向：已入账至'} {destination}
                             </div>
                           ) : (
                             <div className="mt-2 text-[11px] leading-5" style={{ color: '#9E9E9E' }}>历史人工登记记录，未关联智能钱包入账。</div>
@@ -6173,7 +6164,7 @@ export default function LedgerDetailAA({
                   <div className="mt-3 px-3 py-2 rounded-xl flex items-center justify-between" style={{ backgroundColor: '#FFF3E0', borderTop: '1px solid #FFE0B2' }}>
                     <span className="text-sm font-medium" style={{ color: '#E65100' }}>累计分红</span>
                     <span className="text-base font-bold" style={{ color: '#D32F2F' }}>
-                      {currentDividendRecords.reduce((s: number, r: any) => s + Number(r.amount), 0).toLocaleString('zh-CN', { maximumFractionDigits: 0 })} 元
+                      {currentDividendRecords.reduce((s: number, r: any) => s + Number(r.amount), 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元
                     </span>
                   </div>
                 </>

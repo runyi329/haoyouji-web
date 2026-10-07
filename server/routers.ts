@@ -212,6 +212,147 @@ async function assertLedger37AllocationTripletOnChange(params: {
   }
 }
 
+/**
+ * 标签可见性只影响成员端展示，绝不能让已存在的分红或保证金账务被无提示地藏起来。
+ * 该快照同时供前端两次确认和保存接口的最终防并发校验使用。
+ */
+type LedgerMemberTagHideImpact = {
+  ledgerId: number;
+  targetUserId: number;
+  tagName: string;
+  dividend: { recordCount: number; netAmount: number };
+  margin: { recordCount: number; assets: Array<{ assetCode: string; netAmount: number }> };
+  walletHolds: { recordCount: number; activeCount: number; remainingAmount: number };
+  hasFinancialRecords: boolean;
+  impactHash: string;
+};
+
+function parseLedgerMemberMarginEntries(balances: Record<string, unknown>, tagName: string): Array<{ coin: string; amount: number }> {
+  const marginKey = `${tagName}__margins`;
+  let entries: unknown[] = [];
+  try {
+    const raw = balances[marginKey];
+    entries = Array.isArray(raw) ? raw : JSON.parse(String(raw || '[]'));
+  } catch {
+    entries = [];
+  }
+  const normalized = entries
+    .map((entry: any) => ({
+      coin: String(entry?.coin || 'CNY').trim().toUpperCase() || 'CNY',
+      amount: Number(entry?.amount),
+    }))
+    .filter((entry) => Number.isFinite(entry.amount) && Math.abs(entry.amount) > 1e-12);
+
+  // 兼容仍未迁到 __margins 的旧单笔保证金；新旧格式不能重复计数。
+  if (normalized.length > 0) return normalized;
+  const legacyAmount = Number(balances[`${tagName}__margin`]);
+  if (!Number.isFinite(legacyAmount) || Math.abs(legacyAmount) <= 1e-12) return [];
+  return [{
+    coin: String(balances[`${tagName}__marginCoin`] || 'CNY').trim().toUpperCase() || 'CNY',
+    amount: legacyAmount,
+  }];
+}
+
+async function getLedgerMemberTagHideImpact(params: {
+  ledgerId: number;
+  targetUserId: number;
+  tagName: string;
+}): Promise<LedgerMemberTagHideImpact> {
+  const balances = (await dbLedger.getMyInitialBalances(params.ledgerId, params.targetUserId)) as Record<string, unknown>;
+  const marginEntries = parseLedgerMemberMarginEntries(balances, params.tagName);
+  const marginByAsset = new Map<string, number>();
+  for (const entry of marginEntries) {
+    marginByAsset.set(entry.coin, (marginByAsset.get(entry.coin) || 0) + entry.amount);
+  }
+  const margin = {
+    recordCount: marginEntries.length,
+    assets: Array.from(marginByAsset.entries())
+      .map(([assetCode, netAmount]) => ({ assetCode, netAmount }))
+      .sort((left, right) => left.assetCode.localeCompare(right.assetCode)),
+  };
+
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败，无法核对隐藏标签的账务记录' });
+  const [dividendRows] = await conn.execute(
+    `SELECT COUNT(*) AS record_count, COALESCE(SUM(amount), 0) AS net_amount
+       FROM dividend_records
+      WHERE ledger_id = ? AND user_id = ? AND tag_name = ?`,
+    [params.ledgerId, params.targetUserId, params.tagName],
+  );
+  const dividendRow = asRows(dividendRows)[0] || {};
+  const dividend = {
+    recordCount: Number(dividendRow.record_count || 0),
+    netAmount: Number(dividendRow.net_amount || 0),
+  };
+
+  let walletHolds = { recordCount: 0, activeCount: 0, remainingAmount: 0 };
+  if (params.ledgerId === LEDGER_37_ID) {
+    try {
+      const [holdRows] = await conn.execute(
+        `SELECT COUNT(*) AS record_count,
+                COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) AS active_count,
+                COALESCE(SUM(CASE WHEN status = 'active' THEN amount - COALESCE(released_amount, 0) ELSE 0 END), 0) AS remaining_amount
+           FROM ai_wallet_project_holds
+          WHERE ledger_id = ? AND user_id = ? AND tag_name = ?`,
+        [params.ledgerId, params.targetUserId, params.tagName],
+      );
+      const holdRow = asRows(holdRows)[0] || {};
+      walletHolds = {
+        recordCount: Number(holdRow.record_count || 0),
+        activeCount: Number(holdRow.active_count || 0),
+        remainingAmount: Number(holdRow.remaining_amount || 0),
+      };
+    } catch (error) {
+      // 钱包表尚未启用时仍保留分红与历史押金保护，不因读取可选钱包台账而放开隐藏。
+      console.warn('[LedgerTagHideImpact] 钱包保证金台账读取失败:', error);
+    }
+  }
+
+  const snapshot = {
+    ledgerId: params.ledgerId,
+    targetUserId: params.targetUserId,
+    tagName: params.tagName,
+    dividend,
+    margin,
+    walletHolds,
+  };
+  return {
+    ...snapshot,
+    hasFinancialRecords: dividend.recordCount > 0 || margin.recordCount > 0 || walletHolds.recordCount > 0,
+    impactHash: createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'),
+  };
+}
+
+async function assertLedgerMemberTagHideAcknowledgements(params: {
+  ledgerId: number;
+  targetUserId: number;
+  balances: Record<string, number | string>;
+  hideAcknowledgements?: Array<{ tagName: string; impactHash: string }>;
+}) {
+  const previousBalances = (await dbLedger.getMyInitialBalances(params.ledgerId, params.targetUserId)) as Record<string, unknown>;
+  const acknowledgementByTag = new Map((params.hideAcknowledgements || []).map((item) => [item.tagName, item.impactHash]));
+  for (const [key, nextValue] of Object.entries(params.balances)) {
+    if (!key.endsWith('__visible')) continue;
+    const tagName = key.slice(0, -'__visible'.length);
+    if (!tagName) continue;
+    const wasVisible = previousBalances[key] === undefined || Number(previousBalances[key]) !== 0;
+    const becomesHidden = Number(nextValue) === 0;
+    if (!wasVisible || !becomesHidden) continue;
+    const impact = await getLedgerMemberTagHideImpact({
+      ledgerId: params.ledgerId,
+      targetUserId: params.targetUserId,
+      tagName,
+    });
+    if (!impact.hasFinancialRecords) continue;
+    if (acknowledgementByTag.get(tagName) !== impact.impactHash) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: `「${tagName}」存在${impact.dividend.recordCount}笔分红或${impact.margin.recordCount + impact.walletHolds.recordCount}笔保证金账务；请重新完成两次隐藏确认后保存`,
+      });
+    }
+  }
+}
+
 async function appendLedger37WalletMarginRecord(transaction: any, params: {
   userId: number;
   tagName: string;
@@ -14260,6 +14401,26 @@ ${klinesSummary}
         }
         return { members: realMembers, balancesMap: result, marginNotesMap };
       }),
+    // 管理员：隐藏某成员的某标签前，读取仍会留在账本和钱包中的分红、保证金账务。
+    adminGetMemberTagHideImpact: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        targetUserId: z.number().int().positive(),
+        tagName: z.string().trim().min(1).max(160),
+      }))
+      .query(async ({ ctx, input }) => {
+        await requireLedger52Creator(ctx.user.id, input.ledgerId);
+        const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可核对标签隐藏影响' });
+        }
+        const targetMembership = await dbLedger.getUserMembership(input.ledgerId, input.targetUserId);
+        if (!targetMembership) throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是该账本成员' });
+        const categories = await dbLedger.getLedgerCategories(input.ledgerId, ctx.user.id, undefined, null) as any[];
+        const category = categories.find((item) => !item?.isDefault && String(item?.name || '') === input.tagName);
+        if (!category) throw new TRPCError({ code: 'NOT_FOUND', message: '标签不存在或不可隐藏' });
+        return getLedgerMemberTagHideImpact(input);
+      }),
     // 管理员：设置指定成员的初始金额配置（定制账本AA）
     adminSetMemberInitialBalances: protectedProcedure
       .input(z.object({
@@ -14268,6 +14429,11 @@ ${klinesSummary}
         balances: z.record(z.string(), z.union([z.number(), z.string()])),
         // 已嵌入逐笔押金明细的历史标签备注；只在初始余额保存成功后删除旧行。
         migratedMarginNoteIds: z.array(z.number().int().positive()).optional(),
+        // 由隐藏操作的两次确认生成；服务端按当前账务快照复核，防止确认后账务变化。
+        hideAcknowledgements: z.array(z.object({
+          tagName: z.string().trim().min(1).max(160),
+          impactHash: z.string().length(64),
+        })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         await requireLedger52Creator(ctx.user.id, input.ledgerId);
@@ -14283,6 +14449,12 @@ ${klinesSummary}
             balances: input.balances,
           });
         }
+        await assertLedgerMemberTagHideAcknowledgements({
+          ledgerId: input.ledgerId,
+          targetUserId: input.targetUserId,
+          balances: input.balances,
+          hideAcknowledgements: input.hideAcknowledgements,
+        });
         await dbLedger.updateMyInitialBalances(input.ledgerId, input.targetUserId, input.balances);
 
         // 旧版保证金备注按“用户 + 标签”共享。新版已归入首笔押金的 notes，
