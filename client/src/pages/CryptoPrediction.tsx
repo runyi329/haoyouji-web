@@ -3786,11 +3786,22 @@ export default function CryptoPrediction() {
               </div>
             ) : (() => {
               // 前端现有两类位置：本人 / 参与。
-              // 真实参与订单或订单设置为“他人”时，均进入“参与”Tab；本人仅显示本人且非参与的订单。
-              const isParticipantOrder = (o: any) => !!o.participantInfo || !!o._isParticipant || !!o._fromFunder;
+              // 共同拥有者虽带有个人配置快照 participantInfo，但与主拥有者平级，必须归入“本人”。
+              // 只有 funder / broker 等实际参与角色才归入“参与”Tab。
+              const financeViewerId = Number(viewAsUserId ?? currentUserId ?? 0);
+              const isCoOwnerOrder = (o: any) => (
+                String(o?.participantInfo?.role ?? o?._collaborator_role ?? '').toLowerCase() === 'owner'
+                || o?.participantInfo?.isPersonalOwnerView === true
+              );
+              const isOwnedOrder = (o: any) => isCoOwnerOrder(o)
+                || (financeViewerId > 0 && Number(o?.user_id) === financeViewerId);
+              const isParticipantOrder = (o: any) => !isOwnedOrder(o)
+                && (!!o.participantInfo || !!o._isParticipant || !!o._fromFunder);
+              const isOtherPerspective = (o: any) => !isOwnedOrder(o)
+                && (o.order_perspective || 'self') === 'other';
               const isSettledOrder = (o: any) => o.status === 'settled' || o.status === 'completed';
-              const mineOrders = financeOrders.filter((o: any) => !isParticipantOrder(o) && (o.order_perspective || 'self') !== 'other');
-              const sharedOrders = financeOrders.filter((o: any) => isParticipantOrder(o) || (o.order_perspective || 'self') === 'other');
+              const mineOrders = financeOrders.filter((o: any) => isOwnedOrder(o) || (!isParticipantOrder(o) && !isOtherPerspective(o)));
+              const sharedOrders = financeOrders.filter((o: any) => !isOwnedOrder(o) && (isParticipantOrder(o) || isOtherPerspective(o)));
               // 本人和参与使用同一套第3层分类；默认分类仅展示进行中订单，已结单独收纳历史记录。
               const l2Pool = financeL2Tab === 'shared' ? sharedOrders : mineOrders;
               const activePool = l2Pool.filter((o: any) => o.status === 'active');
