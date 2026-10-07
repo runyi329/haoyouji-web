@@ -554,7 +554,14 @@ export default function LedgerDetailAA({
   );
   // 股票标签没有“初始金额”。普通成员（以及创建者切换到成员观察视角）
   // 仅在至少获得一笔股票份额且到达该份额开始日期后，才会在首页和标签下拉中看到它。
-  const stockParticipantView = ledgerId === 37 && (!!viewAsUserId || !canEdit);
+  // 股票总盘只属于37号账本的胡大叔本人。其他任何身份（包括账本管理员）进入时，
+  // 都必须按自己被分配的股票批次核算；创建者代入成员时同样只能看到目标成员的份额。
+  // 这样“本人登录”与“创建者代入该用户”始终采用同一套个人盈亏口径。
+  const canViewLedger37StockTotal = ledgerId === 37
+    && Number(user?.id) === 870413
+    && userRole === 'owner'
+    && !viewAsUserId;
+  const stockParticipantView = ledgerId === 37 && !canViewLedger37StockTotal;
   const stockTagOverviewQuery = trpc.ledger.getMyStockTagOverview.useQuery(
     { ledgerId: 37 },
     // owner/admin 也可能是某一批次的参与人。概览必须同时读取其个人分层，
@@ -617,7 +624,7 @@ export default function LedgerDetailAA({
     return categories.find((c: any) => c.id === selectedTagId) || null;
   }, [selectedTagId, categories]);;
   const isSelectedStockPortfolio = selectedTag?.accountingMode === 'stock_portfolio';
-  // 管理员看标签整体的盘尾快照；成员/观察视角只看自己的逐笔分层快照。
+  // 仅胡大叔直看标签整体的盘尾快照；其他用户及观察视角只看自己的逐笔分层快照。
   // 两者都复用日历首页，差异只在日历中显示的盈亏口径。
   const stockCalendarSnapshotsQuery = trpc.ledger.getStockTagDailySnapshots.useQuery(
     { ledgerId, categoryId: selectedTagId || 0 },
