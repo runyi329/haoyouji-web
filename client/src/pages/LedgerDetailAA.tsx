@@ -3728,6 +3728,7 @@ export default function LedgerDetailAA({
                           const displayedDividend = Math.round(distributedDividend);
                           const displayedReturn = Math.round(referenceReturn);
                           const isOverDistributed = displayedDividend > 0 && displayedDividend > displayedReturn;
+                          const dividendTextColor = isOverDistributed ? '#1565C0' : distributedDividend > 0 ? '#D32F2F' : '#BDBDBD';
                           const dividendProgressPercent = referenceReturn > 0
                             ? Math.min(100, Math.max(0, (distributedDividend / referenceReturn) * 100))
                             : isOverDistributed ? 100 : 0;
@@ -3738,11 +3739,12 @@ export default function LedgerDetailAA({
                               : '当前回报未转正，暂不计算分红比例';
                           return (
                             <>
-                              <div style={{ fontSize: 13, lineHeight: 1, color: distributedDividend > 0 ? '#D32F2F' : '#BDBDBD', whiteSpace: 'normal', wordBreak: 'break-all' }}>
+                              <div style={{ fontSize: 13, lineHeight: 1, color: dividendTextColor, whiteSpace: 'normal', wordBreak: 'break-all' }}>
                                 {distributedDividend > 0 ? (
                                   <span
                                     onClick={(e) => { e.stopPropagation(); setDividendNoteTag(tag.name); }}
-                                    style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#D32F2F', textUnderlineOffset: '2px' }}
+                                    title={isOverDistributed ? '已超额分红，点击查看待补回金额' : '点击查看分红记录'}
+                                    style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: dividendTextColor, textUnderlineOffset: '2px' }}
                                   >{distributedDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(dividendNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{dividendNoteCounts[tag.name]}</sup>)}</span>
                                 ) : '--'}
                               </div>
@@ -6109,6 +6111,23 @@ export default function LedgerDetailAA({
                 <div className="text-center py-6" style={{ color: '#BDBDBD' }}>暂无分红记录</div>
               ) : (
                 <>
+                  {(() => {
+                    const paidDividend = Number(dividendByTag[dividendNoteTag] ?? 0);
+                    const currentReturn = Number((allTagsStats.perTagDetail ?? []).find((tag) => tag.tagName === dividendNoteTag)?.tagPnl ?? 0);
+                    const recoveryAmount = paidDividend - currentReturn;
+                    if (paidDividend <= 0 || recoveryAmount <= 0) return null;
+                    return (
+                      <div className="mb-3 px-3 py-2.5 rounded-xl" style={{ backgroundColor: '#EEF6FF', border: '1px solid #BBD7F5' }}>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-semibold" style={{ color: '#1565C0' }}>分红风险提示</span>
+                          <span className="text-base font-bold tabular-nums" style={{ color: '#1565C0' }}>待补回 ¥{recoveryAmount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="mt-1 text-[11px] leading-5" style={{ color: '#4676A5' }}>
+                          当前累计回报 ¥{currentReturn.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}，累计已分红 ¥{paidDividend.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}。该提示仅反映分红与回报的差额，不影响押金、保证金或钱包余额。
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="space-y-2">
                     {currentDividendRecords.map((r: any) => {
                       const assetCode = normalizeMarginCoin(r.asset_code || 'CNY');
