@@ -388,8 +388,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     assetFundingType: '',
     // 兼容已保存的早期“自有资金”展示标记。
     selfFundedAsset: false,
-    // 开启借出本金后，左上角主数字默认展示借出本金；可按订单改为展示标的数量。
-    principalLentOutPrimary: 'principal',
+    // 左上角主展示由订单按需保存；不设默认值，以保持历史订单原有的展示口径。
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | string>>(DEFAULT_DISPLAY_CONFIG);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
@@ -2706,30 +2705,73 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       { value: 'self', label: '自有资产', active: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
                       { value: 'financing', label: '融资付息', active: 'bg-blue-50 text-blue-700 border-blue-300' },
                     ] as const;
+                    const explicitPrimaryDisplay = displayConfig.primaryAssetDisplay === 'financing' || displayConfig.primaryAssetDisplay === 'quantity'
+                      ? displayConfig.primaryAssetDisplay
+                      : null;
+                    // 未明确选择的新字段时，严格沿用旧订单的主展示：借出本金/CNY 默认显示金额，
+                    // 其余数字币默认显示数量。管理员选过后才写入新的独立展示偏好。
+                    const legacyPrimaryDisplay = displayConfig.principalLentOutPrimary === 'quantity'
+                      ? 'quantity'
+                      : displayConfig.principalLentOutPrimary === 'principal'
+                        ? 'financing'
+                        : (formData.principalLentOut || formData.amountCurrency === 'CNY' ? 'financing' : 'quantity');
+                    const selectedPrimaryDisplay = explicitPrimaryDisplay ?? legacyPrimaryDisplay;
                     return (
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-xs text-gray-500 shrink-0">资金属性</span>
-                        <div className="flex items-center gap-1.5">
-                          {options.map(option => {
-                            const isSelected = selectedFundingType === option.value;
-                            return (
-                              <button
-                                key={option.value}
-                                type="button"
-                                onClick={() => setDisplayConfig(config => ({
-                                  ...config,
-                                  assetFundingType: isSelected ? '' : option.value,
-                                  selfFundedAsset: isSelected ? false : option.value === 'self',
-                                }))}
-                                className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${isSelected ? option.active : 'bg-gray-50 text-gray-500 border-gray-200'}`}
-                                aria-pressed={isSelected}
-                              >
-                                {option.label}
-                              </button>
-                            );
-                          })}
+                      <div className="mt-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500 shrink-0">资金属性</span>
+                          <div className="flex items-center gap-1.5">
+                            {options.map(option => {
+                              const isSelected = selectedFundingType === option.value;
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() => setDisplayConfig(config => ({
+                                    ...config,
+                                    assetFundingType: isSelected ? '' : option.value,
+                                    selfFundedAsset: isSelected ? false : option.value === 'self',
+                                  }))}
+                                  className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${isSelected ? option.active : 'bg-gray-50 text-gray-500 border-gray-200'}`}
+                                  aria-pressed={isSelected}
+                                >
+                                  {option.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <span className="text-[11px] text-gray-400">可选一项</span>
                         </div>
-                        <span className="text-[11px] text-gray-400">可选一项</span>
+                        {formData.assetType !== 'stock' && (
+                          <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50/80 px-2.5 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-medium text-slate-600">左上角主展示</span>
+                              <span className="text-[11px] text-slate-400">仅影响展示，不改变资金计算</span>
+                            </div>
+                            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                              {([
+                                { value: 'financing', label: '融资金额' },
+                                { value: 'quantity', label: formData.assetType === 'crypto_option' ? '合约张数' : '币种数量' },
+                              ] as const).map(({ value, label }) => {
+                                const active = selectedPrimaryDisplay === value;
+                                return (
+                                  <button
+                                    key={value}
+                                    type="button"
+                                    onClick={() => setDisplayConfig(config => ({ ...config, primaryAssetDisplay: value }))}
+                                    className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
+                                      active
+                                        ? 'border-blue-400 bg-white text-blue-700'
+                                        : 'border-gray-200 bg-white text-gray-500'
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
@@ -3140,6 +3182,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       <input
                         type="number"
                         inputMode="decimal"
+                        step={['BTC', 'ETH', 'SOL'].includes(optionFormData.premiumDenomination) ? '0.0001' : '0.01'}
                         value={optionFormData.premium}
                         onChange={e => setOptionFormData(d => ({ ...d, premium: e.target.value }))}
                         className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200 bg-white"
@@ -4436,36 +4479,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       }`} />
                     </button>
                   </div>
-                  {formData.principalLentOut && formData.assetType !== 'stock' && (
-                    <div className="mt-3 rounded-xl border border-orange-100 bg-orange-50/40 p-2.5">
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="text-xs font-medium text-gray-600">左上角主要展示</span>
-                        <span className="text-[11px] text-gray-400">仅影响展示，不改变资金计算</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {([
-                          { value: 'principal', label: '借出本金' },
-                          { value: 'quantity', label: '币种数量' },
-                        ] as const).map(({ value, label }) => {
-                          const active = (displayConfig.principalLentOutPrimary || 'principal') === value;
-                          return (
-                            <button
-                              key={value}
-                              type="button"
-                              onClick={() => setDisplayConfig(config => ({ ...config, principalLentOutPrimary: value }))}
-                              className={`rounded-lg border px-2 py-2 text-xs font-medium transition-colors ${
-                                active
-                                  ? 'border-orange-400 bg-white text-orange-700'
-                                  : 'border-gray-200 bg-white text-gray-500'
-                              }`}
-                            >
-                              {label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </div>
                 <div className="mx-4 h-px bg-gray-100 my-2" />
                 {/* Greeks 开关（仅期权类型显示） */}

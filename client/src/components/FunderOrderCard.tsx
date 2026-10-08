@@ -50,6 +50,18 @@ const SOFT_BLUE_INDICATOR_STYLE = {
 export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'UNI', 'BZ'] as const;
 export type CoinType = typeof COIN_OPTIONS[number];
 
+// 期权权利金按实际计价币种展示：BTC、ETH、SOL 的币本位金额需保留四位，
+// 法币与 U 本位继续保持两位。仅影响前端显示，不改变保存值与任何计算。
+export function getOptionPremiumDisplayDecimals(denomination: unknown): 2 | 4 {
+  const unit = String(denomination || '').trim().toUpperCase();
+  return unit === 'BTC' || unit === 'ETH' || unit === 'SOL' ? 4 : 2;
+}
+
+export function formatOptionPremium(value: unknown, denomination: unknown): string {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount.toFixed(getOptionPremiumDisplayDecimals(denomination)) : '--';
+}
+
 export const STATUS_OPTIONS = [
   { value: 'active', label: '持有中' },
   { value: 'settled', label: '已结算' },
@@ -1636,14 +1648,17 @@ export function FunderOrderCard({
   const principalLentOut = order.principal_lent_out === 1
     || order.principal_lent_out === true
     || (!isOptionOrder && assetFundingType === 'financing');
-  // 借出本金时允许管理员决定左上角主展示：默认展示借出本金，也可保留标的币种数量。
-  // 该配置纯属展示，不参与计息、担保缺口或任何资金计算。
-  const principalLentOutPrimary = financingDisplayConfig?.principalLentOutPrimary === 'quantity'
+  // 左上角主展示独立于“借出本金”风险开关：可按订单显示融资金额或标的数量。
+  // 新字段优先；未设置的新旧订单则严格保留过去的默认展示，且不参与任何资金计算。
+  const configuredPrimaryAssetDisplay = financingDisplayConfig?.primaryAssetDisplay === 'financing' || financingDisplayConfig?.primaryAssetDisplay === 'quantity'
+    ? financingDisplayConfig.primaryAssetDisplay
+    : null;
+  const legacyPrimaryAssetDisplay = financingDisplayConfig?.principalLentOutPrimary === 'quantity'
     ? 'quantity'
-    : 'principal';
-  const displayFinancingAsPrimary = principalLentOut
-    ? principalLentOutPrimary !== 'quantity'
-    : isStockOrder || amountCurrency === 'CNY';
+    : financingDisplayConfig?.principalLentOutPrimary === 'principal'
+      ? 'financing'
+      : (principalLentOut || isStockOrder || amountCurrency === 'CNY' ? 'financing' : 'quantity');
+  const displayFinancingAsPrimary = (configuredPrimaryAssetDisplay ?? legacyPrimaryAssetDisplay) === 'financing';
   const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'u' : amountCurrency;
   const quotedBuyValue = qty > 0 && price > 0 ? qty * price : financingDisplayAmount;
   // 利息货币逻辑与 LedgerDetail FunderOrderCardRight 完全一致。
@@ -2356,9 +2371,9 @@ export function FunderOrderCard({
         <div className="w-1/2 p-4 pr-3">
           <div className="flex items-center gap-0.5 mb-0.5">
             <span className="text-[10px] font-medium" style={{ color: '#3B82F6' }}>
-              {principalLentOut
-                ? `借出本金 (${amountCurrency})`
-                : '持有资产'}
+              {displayFinancingAsPrimary
+                ? `融资金额 (${amountCurrency})`
+                : `币种数量 (${isOptionOrder ? '张' : order.coin})`}
             </span>
             {(order as any).order_fill_status === 'pending' && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#F97316' }}>挂单中</span>
@@ -2465,7 +2480,7 @@ export function FunderOrderCard({
                 {optionInfo.premium && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 shrink-0">权利金</span>
-                    <span className="font-medium" style={{ color: '#1A2340' }}>{parseFloat(optionInfo.premium).toFixed(2)} {optionPremiumDisplayUnit}</span>
+                    <span className="font-medium" style={{ color: '#1A2340' }}>{formatOptionPremium(optionInfo.premium, optionPremiumUnit)} {optionPremiumDisplayUnit}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">

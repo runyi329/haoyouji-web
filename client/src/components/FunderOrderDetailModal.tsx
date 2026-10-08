@@ -210,6 +210,20 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
     : legacyInterestBase > 0 && legacyInterestCurrency === amountCurrency && Math.abs(legacyInterestBase - calculatedFinancingDisplayAmount) <= 0.05
       ? legacyInterestBase
       : calculatedFinancingDisplayAmount;
+  // 与订单卡片保持相同的独立主展示口径：管理员可随时选择融资金额或标的数量，
+  // 不再依赖“借出本金”风险开关；缺少新字段的历史订单仍按旧规则展示。
+  const detailPrincipalLentOut = order.principal_lent_out === 1
+    || order.principal_lent_out === true
+    || (order.asset_type !== 'crypto_option' && financingDisplayConfig?.assetFundingType === 'financing');
+  const configuredPrimaryDisplay = financingDisplayConfig?.primaryAssetDisplay === 'financing' || financingDisplayConfig?.primaryAssetDisplay === 'quantity'
+    ? financingDisplayConfig.primaryAssetDisplay
+    : null;
+  const legacyPrimaryDisplay = financingDisplayConfig?.principalLentOutPrimary === 'quantity'
+    ? 'quantity'
+    : financingDisplayConfig?.principalLentOutPrimary === 'principal'
+      ? 'financing'
+      : (detailPrincipalLentOut || order.asset_type === 'stock' || amountCurrency === 'CNY' ? 'financing' : 'quantity');
+  const displayFinancingAsPrimary = (configuredPrimaryDisplay ?? legacyPrimaryDisplay) === 'financing';
   const baseCurrency = String(order.interest_base_currency || 'USDT').toUpperCase();
   const rateCurrency = String(order.interest_rate_currency || 'USDT').toUpperCase();
   const baseUnit = baseCurrency === 'CNY' ? '元' : baseCurrency === 'USDT' ? 'USDT' : baseCurrency;
@@ -255,17 +269,17 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
         </div>
 
         <div className="px-5 py-5 space-y-4">
-          {/* 持仓核心卡片：突出币数 */}
+          {/* 持仓核心卡片：按订单展示偏好突出融资金额或数量 */}
           <div
             className="rounded-2xl p-4"
             style={{ background: `linear-gradient(135deg, ${coinColor} 0%, ${coinColor}BB 100%)` }}
           >
-            <div className="text-xs text-white/70 mb-1">{amountCurrency === 'CNY' ? '融资金额' : '持仓数量'}</div>
+            <div className="text-xs text-white/70 mb-1">{displayFinancingAsPrimary ? `融资金额 (${amountCurrency})` : `币种数量 (${order.asset_type === 'crypto_option' ? '张' : order.coin})`}</div>
             <div className="flex items-baseline gap-2 mb-1">
               <span className="text-4xl font-bold text-white tabular-nums">
-                {amountCurrency === 'CNY' ? financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 }) : (qty > 0 ? qty : '—')}
+                {displayFinancingAsPrimary ? financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 }) : (qty > 0 ? qty : '—')}
               </span>
-              <span className="text-xl font-semibold text-white/80">{amountCurrency === 'CNY' ? '元' : order.coin}</span>
+              <span className="text-xl font-semibold text-white/80">{displayFinancingAsPrimary ? amountUnit : (order.asset_type === 'crypto_option' ? '张' : order.coin)}</span>
             </div>
             {price > 0 && (
               <div className="text-sm text-white/70 mb-2">
@@ -274,7 +288,9 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
             )}
             <div className="flex items-center justify-between">
               <div className="text-sm text-white/60">
-                {amountCurrency === 'CNY' ? `折算 ${totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT` : `买入价值 ${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${amountUnit}`}
+                {displayFinancingAsPrimary && amountCurrency === 'CNY'
+                  ? `折算 ${totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT`
+                  : `融资金额 ${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${amountUnit}`}
               </div>
               <span className="text-xs px-2 py-0.5 rounded-full bg-white/20 text-white">
                 {order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : '已取消'}

@@ -18,6 +18,7 @@ import {
   fmtDate,
   formatSettledTimestamp,
   formatCoinQtyFunder,
+  formatOptionPremium,
   useAccruedInterestFunder,
   FunderNoteRow,
   parseNotes,
@@ -1309,10 +1310,15 @@ export function FunderOrderCardV2Silver({
   const cardPrincipalLentOut = (order as any).principal_lent_out === 1
     || (order as any).principal_lent_out === true
     || (!_isOptCard && cardDisplayConfig.assetFundingType === 'financing');
-  // 借出本金的左上角主展示可选择本金或标的数量；选择仅影响展示。
-  const cardPrincipalLentOutPrimary = cardDisplayConfig.principalLentOutPrimary === 'quantity'
+  // 左上角主展示独立于“借出本金”开关：新字段优先，未配置订单沿用旧默认口径。
+  const cardConfiguredPrimaryDisplay = cardDisplayConfig.primaryAssetDisplay === 'financing' || cardDisplayConfig.primaryAssetDisplay === 'quantity'
+    ? cardDisplayConfig.primaryAssetDisplay
+    : null;
+  const cardLegacyPrimaryDisplay = cardDisplayConfig.principalLentOutPrimary === 'quantity'
     ? 'quantity'
-    : 'principal';
+    : cardDisplayConfig.principalLentOutPrimary === 'principal'
+      ? 'financing'
+      : (cardPrincipalLentOut || order.asset_type === 'stock' || amountCurrency === 'CNY' ? 'financing' : 'quantity');
   const storedAmount = parseFloat(order.amount || '0');
   const amountCurrencyPrice = livePrices[amountCurrency as CoinType];
   const storedAmountUsdt = order.asset_type === 'stock'
@@ -1334,9 +1340,7 @@ export function FunderOrderCardV2Silver({
       : (amountCurrencyPrice && amountCurrencyPrice > 0 ? storedAmountUsdt / amountCurrencyPrice : storedAmountUsdt);
   const financingDisplayAmount = getExactFinancingDisplayAmount(order, amountCurrency, calculatedFinancingDisplayAmount);
   const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'U' : amountCurrency;
-  const displayFinancingAsPrimary = cardPrincipalLentOut
-    ? cardPrincipalLentOutPrimary !== 'quantity'
-    : order.asset_type === 'stock' || amountCurrency === 'CNY';
+  const displayFinancingAsPrimary = (cardConfiguredPrimaryDisplay ?? cardLegacyPrimaryDisplay) === 'financing';
 
   // BTC/ETH期权使用真实合约标记价；无可信合约报价时不以标的现货替代。
   const optionGreeksSupported = coin === 'BTC' || coin === 'ETH';
@@ -1347,6 +1351,11 @@ export function FunderOrderCardV2Silver({
     : optionPremiumCurrencyRaw === 'U'
       ? 'USDT'
       : optionPremiumCurrencyRaw;
+  const optionPremiumDisplayUnit = optionPremiumCurrency === 'USDT'
+    ? 'U'
+    : optionPremiumCurrency === 'CNY'
+      ? '元'
+      : optionPremiumCurrency;
   const optionPremiumUnitPrice = livePrices[optionPremiumCurrency as CoinType];
   const optionPremiumUsdt = _optInfo?.premium
     ? optionPremiumCurrency === 'CNY'
@@ -1889,10 +1898,10 @@ export function FunderOrderCardV2Silver({
               </div>
             </>
           ) : (
-            // 数字币：人民币融资时优先显示融资金额，其余保持显示持有数量。
+            // 数字币：按订单独立展示偏好显示融资金额或币种数量。
             <>
               <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-                <span className="shrink-0 whitespace-nowrap">{cardPrincipalLentOut ? `借出本金 (${amountCurrency})` : `持有资产 (${displayFinancingAsPrimary ? amountCurrency : coin})`}</span>
+                <span className="shrink-0 whitespace-nowrap">{displayFinancingAsPrimary ? `融资金额 (${amountCurrency})` : `币种数量 (${_isOptCard ? '张' : coin})`}</span>
                 {isParticipant && (
                   <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.7)' }}>参与</span>
                 )}
@@ -1954,13 +1963,13 @@ export function FunderOrderCardV2Silver({
         {!isStockCard && (
           <>
 
-            {/* 开仓价/权利金单价：靠右对齐 */}
+            {/* 开仓价/权利金单价：靠右对齐；币本位权利金显示四位小数。 */}
             <div className="text-right" style={{ flex: 1 }}>
-              <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>{isOptionCard ? '权利金 (U)' : `开仓价 (${buyQuoteUnit})`}</div>
+              <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>{isOptionCard ? `权利金 (${optionPremiumDisplayUnit})` : `开仓价 (${buyQuoteUnit})`}</div>
               <div style={{ lineHeight: 1 }}>
                 <span className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
                   {isOptionCard
-                    ? (_optInfo?.premium ? fmt(parseFloat(_optInfo.premium), 2) : '--')
+                    ? (_optInfo?.premium ? formatOptionPremium(_optInfo.premium, optionPremiumCurrency) : '--')
                     : (buyPrice > 0 ? fmt(buyPrice, 2) : '--')}
                 </span>
               </div>
@@ -3482,7 +3491,15 @@ export function FunderLenderCardSilver({
   // 读取 display_config 开关（与订单模式一致）
   const dc = lenderDisplayConfig;
   const showField = (key: string) => dc ? (dc[key] !== false) : true;
-  const lenderShowsPrincipal = lenderPrincipalLentOut && dc?.principalLentOutPrimary !== 'quantity';
+  const lenderConfiguredPrimaryDisplay = dc?.primaryAssetDisplay === 'financing' || dc?.primaryAssetDisplay === 'quantity'
+    ? dc.primaryAssetDisplay
+    : null;
+  const lenderLegacyPrimaryDisplay = dc?.principalLentOutPrimary === 'quantity'
+    ? 'quantity'
+    : dc?.principalLentOutPrimary === 'principal'
+      ? 'financing'
+      : (lenderPrincipalLentOut || isStock || amountCurrency === 'CNY' ? 'financing' : 'quantity');
+  const lenderShowsPrincipal = (lenderConfiguredPrimaryDisplay ?? lenderLegacyPrimaryDisplay) === 'financing';
   const lenderFinancingUnit = amountCurrency === 'USDT' ? 'U' : amountCurrency === 'CNY' ? '元' : amountCurrency;
   // 仅用于前端资产标题旁的展示标签，不影响订单、利息或担保计算。
   // 旧订单的 selfFundedAsset 继续视为“自有资产”。
@@ -3999,11 +4016,11 @@ export function FunderLenderCardSilver({
 
             {/* ── 担保物块 ── */}
             <div style={{ borderTop: `1px solid ${DIVIDER}`, marginTop: 6, paddingTop: 6 }}>
-              {/* 借出本金订单可配置主展示为本金或标的数量。 */}
+              {/* 订单可独立选择融资金额或标的数量作为左上角主展示。 */}
               {(qty > 0 || storedAmountUsdt > 0) && (
                 <div className="flex justify-between mb-1 gap-3">
                   <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
-                    <span>{lenderPrincipalLentOut ? `借出本金 (${amountCurrency})` : '持有资产'}</span>
+                    <span>{lenderShowsPrincipal ? `融资金额 (${amountCurrency})` : `币种数量 (${_lnIsOpt ? '张' : coin})`}</span>
                     {assetFundingType && <CardFundingAttributeBadge type={assetFundingType} surface="silver" />}
                   </span>
                   <span className="text-right" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
@@ -4011,8 +4028,6 @@ export function FunderLenderCardSilver({
                       ? (amountCurrency === 'CNY' && storedAmountUsdt > 0
                         ? `${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元（≈${storedAmountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} U）`
                         : `${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${lenderFinancingUnit}`)
-                      : !lenderPrincipalLentOut && amountCurrency === 'CNY' && storedAmountUsdt > 0
-                      ? `${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元（≈${storedAmountUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} U）`
                       : buyPrice > 0
                         ? `（开仓价 ${fmt(buyPrice, 2)} ${buyQuoteUnit}） ${fmtQty(qty)} ${coin}`
                         : `${fmtQty(qty)} ${coin}`}
