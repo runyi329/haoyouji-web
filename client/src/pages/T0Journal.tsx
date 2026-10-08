@@ -1976,6 +1976,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         targetPrice: data.entry.targetPrice === undefined || data.entry.targetPrice === null ? undefined : Number(data.entry.targetPrice),
         note: data.entry.note || undefined,
       };
+      const account: PreviewAccount = {
+        id: String(data.account?.id ?? entry.accountId),
+        name: String(data.account?.name ?? entry.accountName ?? ""),
+        lastUsedAt: data.account?.lastUsedAt ?? new Date().toISOString(),
+      };
+      setAccounts((current) => [account, ...current.filter((item) => item.id !== account.id && item.name !== account.name)]);
+      setLastAccountIdByRelatedUser((current) => ({
+        ...current,
+        [relatedUserAccountMemoryKey(entry.relatedUserId)]: account.id,
+      }));
       setTrades((current) => current.map((trade) => trade.id === entry.id ? entry : trade));
       if (entry.relatedFundId && entry.relatedFundName && entry.relatedUserId) {
         const fund: PreviewRelatedFund = {
@@ -2265,10 +2275,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       toast.error("请在最后选择或新建下单账户");
       return;
     }
-    if (entryForm.editingEntryId && !hasPersistedAccountId) {
-      toast.error("编辑开仓时请选择一个已有下单账户");
-      return;
-    }
     if (entryForm.relatedUserId && !normalizedRelatedUserId) {
       toast.error("关联用户信息无效，请重新选择或暂不关联");
       return;
@@ -2301,7 +2307,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       updateOpeningEntryMutation.mutate({
         ledgerId: 52,
         entryId,
-        accountId: Number(entryForm.accountId),
+        accountId: hasPersistedAccountId ? Number(entryForm.accountId) : undefined,
+        accountName: hasPersistedAccountId ? undefined : normalizedAccountName,
         relatedUserId: normalizedRelatedUserId,
         relatedFundId: normalizedRelatedFundId,
         relatedFundName: normalizedRelatedFundName || undefined,
@@ -3482,7 +3489,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>}
 
                 <div className="grid grid-cols-2 items-start gap-3">
-                  <Field label={<span className="flex items-center justify-between gap-1"><span>下单账户 <span className="text-rose-500">*</span></span>{accounts.length > 0 && !isEditingEntry && <button type="button" onClick={() => openDirectoryManager("account")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
+                  <Field label={<span className="flex items-center justify-between gap-1"><span>下单账户 <span className="text-rose-500">*</span></span>{accounts.length > 0 && <button type="button" onClick={() => openDirectoryManager("account")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
                     {accounts.length > 0 ? (
                       <select
                         disabled={isAccountSelectionLocked}
@@ -3496,14 +3503,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         }}
                         className="h-11 w-full rounded border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-indigo-500"
                       >
-                        {!isEditingEntry && <option value="">新建账户</option>}
-                        {!isEditingEntry && <option value="__manage_accounts__">编辑 / 删除账户…</option>}
+                        <option value="">新建账户</option>
+                        <option value="__manage_accounts__">编辑 / 删除账户…</option>
                         {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                       </select>
                     ) : null}
                     {!entryForm.accountId && (
                       <input
-                        disabled={isAccountSelectionLocked || isEditingEntry}
+                        disabled={isAccountSelectionLocked}
                         value={entryForm.accountName}
                         onChange={(event) => setEntryForm((current) => ({ ...current, accountName: event.target.value }))}
                         placeholder="新账户名称"
@@ -3530,7 +3537,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
 
                 <div className="-mt-1 grid grid-cols-2 gap-3 text-[10px] leading-4 text-slate-400">
-                  <span>{isEditingEntry ? "未发生后续平仓时可调整账户；前后归属均保留审计。" : "首次可新建；后续按关联用户记忆账户。"}</span>
+                  <span>{isEditingEntry ? "可选择、新建或管理账户；保存前校验后续平仓并保留审计。" : "首次可新建；后续按关联用户记忆账户。"}</span>
                   <span>仅搜索并引用全局已有用户；关联后按项目区分资金。</span>
                 </div>
 

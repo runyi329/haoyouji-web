@@ -1963,8 +1963,9 @@ async function buildEntryAuditSnapshot(tx: any, actorUserId: number, entry: any)
 export async function updateLedger52T0JournalOpeningEntry(input: {
   actorUserId: number;
   entryId: number;
-  /** 仅允许改为当前管理员名下的既有有效账户；未传时保留原账户。 */
+  /** 可改为当前管理员名下的既有有效账户；未传时可配合 accountName 新建账户，否则保留原账户。 */
   accountId?: number;
+  accountName?: string;
   /** 允许管理员保留未关联状态，之后再补充关联用户。 */
   relatedUserId?: number;
   relatedFundId?: number;
@@ -1989,11 +1990,31 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     await tx.beginTransaction();
     const before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
     const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
-    const accountId = input.accountId === undefined ? toNumber(before.account_id) : Number(input.accountId);
-    if (!Number.isInteger(accountId) || accountId <= 0) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "下单账户信息无效，请重新选择" });
+    let accountId = input.accountId === undefined ? toNumber(before.account_id) : Number(input.accountId);
+    const requestedAccountName = input.accountName === undefined
+      ? ""
+      : normalizeJournalDirectoryName(input.accountName, "账户名称");
+    if (requestedAccountName) {
+      const [accountResult] = await tx.execute(
+        `INSERT INTO ledger52_t0_journal_accounts (ledger_id, user_id, name, is_active, last_used_at)
+         VALUES (?, ?, ?, 1, NOW(3))
+         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), is_active = 1, last_used_at = NOW(3), updated_at = NOW(3)`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, requestedAccountName],
+      );
+      accountId = Number((accountResult as any).insertId || 0);
+      if (!accountId) {
+        const [accountRows] = await tx.execute(
+          `SELECT id FROM ledger52_t0_journal_accounts
+            WHERE ledger_id = ? AND user_id = ? AND name = ? LIMIT 1 FOR UPDATE`,
+          [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, requestedAccountName],
+        );
+        accountId = toNumber(asRows(accountRows)[0]?.id);
+      }
     }
-    if (accountId !== toNumber(before.account_id)) {
+    if (!Number.isInteger(accountId) || accountId <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "下单账户信息无效，请重新选择或新建" });
+    }
+    if (accountId !== toNumber(before.account_id) && !requestedAccountName) {
       const [targetAccountRows] = await tx.execute(
         `SELECT id
            FROM ledger52_t0_journal_accounts
@@ -2005,6 +2026,12 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         throw new TRPCError({ code: "NOT_FOUND", message: "目标下单账户不存在、已停用或无权选择" });
       }
     }
+    await tx.execute(
+      `UPDATE ledger52_t0_journal_accounts
+          SET last_used_at = NOW(3)
+        WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+      [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
     const relatedUserId = Number(input.relatedUserId || 0);
     if (relatedUserId > 0) {
       if (!Number.isInteger(relatedUserId)) {
@@ -2089,7 +2116,14 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         [normalizedQuantity, LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId, input.entryId],
       );
     }
-    const [updatedRows] = await tx.execute(
+    const [[accountRows], [updatedRows]] = await Promise.all([
+      tx.execute(
+        `SELECT id, name, last_used_at, created_at
+           FROM ledger52_t0_journal_accounts
+          WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1`,
+        [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+      ),
+      tx.execute(
       `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
               u.username AS related_username, u.avatar AS related_user_avatar,
@@ -2100,13 +2134,15 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
          LEFT JOIN ledger52_t0_journal_related_funds f ON f.id = e.related_fund_id AND f.ledger_id = e.ledger_id AND f.user_id = e.user_id
         WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ? LIMIT 1`,
       [input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
-    );
+      ),
+    ]);
+    const account = asRows(accountRows)[0];
     const after = asRows(updatedRows)[0];
-    if (!after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "编辑后的开仓记录读取失败" });
+    if (!account || !after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "编辑后的开仓记录读取失败" });
     const afterForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, after);
     await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "update", before: beforeForAudit, after: afterForAudit });
     await tx.commit();
-    return { entry: mapEntry(after) };
+    return { account: mapAccount(account), entry: mapEntry(after) };
   } catch (error) {
     try { await tx.rollback(); } catch {}
     throw error;
