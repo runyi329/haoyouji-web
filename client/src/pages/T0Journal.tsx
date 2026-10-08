@@ -1007,7 +1007,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [liveClock, setLiveClock] = useState(() => new Date());
   const previousFetchedMarkPriceRef = useRef<number | null>(null);
   const hasInitializedJournalFiltersRef = useRef(false);
-  const ladderScrollRef = useRef<HTMLDivElement>(null);
   const [entryForm, setEntryForm] = useState<EntryForm>({
     action: "openLong",
     accountId: "",
@@ -1648,49 +1647,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   }, [selectedTrades, ladderOpeningClosingAllocations, markLadderPrice]);
   const isIndividualLadderView = canManage && adminLadderDisplayMode === "individual";
   const displayedPriceRows = isIndividualLadderView ? individualPriceRows : priceRows;
-
-  useEffect(() => {
-    if (markLadderPrice === null) return;
-    let firstFrame = 0;
-    let secondFrame = 0;
-    let settledFrame = 0;
-
-    const centerCurrentPriceRow = () => {
-      const container = ladderScrollRef.current;
-      if (!container || container.clientHeight <= 0) return;
-      const row = container.querySelector<HTMLElement>(`[data-ladder-price="${markLadderPrice}"]`);
-      if (!row) return;
-      // offsetTop 会受页面外层定位上下文影响；以两者当前可视坐标换算，才能精确居中。
-      const containerRect = container.getBoundingClientRect();
-      const rowRect = row.getBoundingClientRect();
-      const rowCenterInViewport = rowRect.top - containerRect.top + rowRect.height / 2;
-      const targetTop = Math.max(0, container.scrollTop + rowCenterInViewport - container.clientHeight / 2);
-      container.scrollTo({ top: targetTop, behavior: "auto" });
-    };
-
-    const scheduleCentering = () => {
-      window.cancelAnimationFrame(firstFrame);
-      window.cancelAnimationFrame(secondFrame);
-      window.clearTimeout(settledFrame);
-      firstFrame = window.requestAnimationFrame(() => {
-        centerCurrentPriceRow();
-        secondFrame = window.requestAnimationFrame(centerCurrentPriceRow);
-        // 覆盖浏览器返回页面或首屏布局完成后可能恢复的旧滚动位置。
-        settledFrame = window.setTimeout(centerCurrentPriceRow, 180);
-      });
-    };
-
-    scheduleCentering();
-    window.addEventListener("pageshow", scheduleCentering);
-    window.addEventListener("resize", scheduleCentering);
-    return () => {
-      window.cancelAnimationFrame(firstFrame);
-      window.cancelAnimationFrame(secondFrame);
-      window.clearTimeout(settledFrame);
-      window.removeEventListener("pageshow", scheduleCentering);
-      window.removeEventListener("resize", scheduleCentering);
-    };
-  }, [markLadderPrice, displayedPriceRows.length]);
 
   const openEntrySheet = (action: TradeAction = "openLong", targetPrice?: number) => {
     setEntrySide(ACTIONS[action].side);
@@ -2845,8 +2801,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             </div>
           </div>
           <div
-            ref={ladderScrollRef}
-            className="max-h-[calc(100vh-250px)] overflow-y-auto overscroll-contain"
             style={{
               background: [
                 "linear-gradient(135deg, rgba(255,255,255,0.62) 0%, rgba(255,255,255,0.18) 24%, rgba(255,255,255,0) 48%, rgba(0,0,0,0) 64%, rgba(71,85,105,0.08) 100%)",
