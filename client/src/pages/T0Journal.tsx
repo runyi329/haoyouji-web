@@ -1583,6 +1583,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const isEditingEntry = Boolean(entryForm.editingEntryId);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
   const isCloseReview = isClosingEntry && closeConfirmationStep === "review";
+  // 仅平仓的第二次确认需要冻结账户，不能让该状态误伤“编辑开仓”。
+  // 开仓编辑受后端 FIFO 依赖校验保护；未发生后续平仓时，管理员必须能改到既有账户。
+  const isAccountSelectionLocked = isCloseReview && !isEditingEntry;
   const markLadderPrice = markPrice
     ? Math.min(LADDER_MAX_PRICE, Math.max(LADDER_MIN_PRICE, Math.round(markPrice / LADDER_STEP) * LADDER_STEP))
     : null;
@@ -3482,7 +3485,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <Field label={<span className="flex items-center justify-between gap-1"><span>下单账户 <span className="text-rose-500">*</span></span>{accounts.length > 0 && !isEditingEntry && <button type="button" onClick={() => openDirectoryManager("account")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
                     {accounts.length > 0 ? (
                       <select
-                        disabled={isCloseReview}
+                        disabled={isAccountSelectionLocked}
                         value={entryForm.accountId}
                         onChange={(event) => {
                           if (event.target.value === "__manage_accounts__") {
@@ -3500,7 +3503,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     ) : null}
                     {!entryForm.accountId && (
                       <input
-                        disabled={isCloseReview || isEditingEntry}
+                        disabled={isAccountSelectionLocked || isEditingEntry}
                         value={entryForm.accountName}
                         onChange={(event) => setEntryForm((current) => ({ ...current, accountName: event.target.value }))}
                         placeholder="新账户名称"
