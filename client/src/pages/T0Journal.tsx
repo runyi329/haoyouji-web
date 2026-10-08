@@ -69,9 +69,8 @@ type PreviewTrade = {
   note?: string;
   clientRequestId?: string;
   isSyncing?: boolean;
-  /** 成员仅在作为受益人查看项目分配镜像订单时使用，不向订单本人展示分配明细。 */
-  profitShareProjectName?: string;
-  profitSharePercentage?: number;
+  /** 仅成员收益投影视图使用：ETH 数量保持完整，利润与交易成本按此比例结算。 */
+  profitShareRate?: number;
 };
 
 type ProfitShareSnapshot = {
@@ -154,6 +153,10 @@ type PositionBucket = {
   remainingQuantity: number;
   /** 剩余仓位按实际成交价累计的成本，用于均价与盈亏。 */
   costBasis: number;
+  /** 收益分配后参与净利润计算的等效数量，不改变展示、开平仓与 FIFO 的实际 ETH 数量。 */
+  financialQuantity: number;
+  /** 收益分配后参与净利润计算的成本，用于未平仓净利润与收益率。 */
+  financialCostBasis: number;
   /** 尚未随已平数量分摊的开仓手续费。 */
   openingFeeBasis: number;
   /** 已平部分未扣任何手续费的毛利润。 */
@@ -300,6 +303,21 @@ function calculateEstimatedUnrealizedNetPnl(
   return grossPnl - estimatedRoundTripFee;
 }
 
+/**
+ * 会员收益分配仅影响利润与交易成本，不得缩减订单本身的 ETH 数量。
+ * 非收益投影视图没有该字段，按完整订单（100%）核算。
+ */
+function getTradeProfitShareRate(trade: PreviewTrade) {
+  const rate = Number(trade.profitShareRate);
+  return Number.isFinite(rate) && rate > 0 && rate <= 1 ? rate : 1;
+}
+
+function getTradeFinancialQuantity(trade: PreviewTrade, quantity = trade.quantity) {
+  const normalizedQuantity = Number(quantity);
+  if (!Number.isFinite(normalizedQuantity) || normalizedQuantity <= 0) return 0;
+  return normalizedQuantity * getTradeProfitShareRate(trade);
+}
+
 function priceKey(price: number) {
   return Number(price).toFixed(2);
 }
@@ -372,7 +390,10 @@ function formatQuantity(value: number) {
 // 梯形报价表空间有限：只压缩展示精度，不影响订单原始数量、FIFO 或盈亏计算。
 function formatLadderQuantity(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "0";
-  return Math.trunc(value).toLocaleString("zh-CN", { maximumFractionDigits: 0 });
+  if (Math.abs(value) < 100) {
+    return value.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return Math.round(value).toLocaleString("zh-CN", { maximumFractionDigits: 0 });
 }
 
 function formatQuantityQuickOption(value: string) {
@@ -460,7 +481,13 @@ type RealizedGrossProfitDetail = {
 };
 
 function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
-  const positions = new Map<string, { quantity: number; costBasis: number; openingFeeBasis: number }>();
+  const positions = new Map<string, {
+    quantity: number;
+    costBasis: number;
+    financialQuantity: number;
+    financialCostBasis: number;
+    openingFeeBasis: number;
+  }>();
   const details = new Map<string, RecentJournalTradeDetail>();
   const orderedTrades = [...trades]
     .filter((trade) => trade.symbol === "ETH")
@@ -478,9 +505,18 @@ function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
     ].join(":");
 
     if (config.opening) {
-      const current = positions.get(key) ?? { quantity: 0, costBasis: 0, openingFeeBasis: 0 };
+      const current = positions.get(key) ?? {
+        quantity: 0,
+        costBasis: 0,
+        financialQuantity: 0,
+        financialCostBasis: 0,
+        openingFeeBasis: 0,
+      };
+      const financialQuantity = getTradeFinancialQuantity(trade);
       current.quantity += trade.quantity;
       current.costBasis += trade.quantity * trade.price;
+      current.financialQuantity += financialQuantity;
+      current.financialCostBasis += financialQuantity * trade.price;
       current.openingFeeBasis += trade.fee;
       positions.set(key, current);
       details.set(trade.id, side === "long" ? { buyPrice: trade.price } : { sellPrice: trade.price });
@@ -490,39 +526,46 @@ function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
     const current = positions.get(key);
     const matchedQuantity = current ? Math.min(current.quantity, trade.quantity) : 0;
     const openingAverage = current && current.quantity > 0 ? current.costBasis / current.quantity : undefined;
-    const allocatedOpeningFee = current && current.quantity > 0 && matchedQuantity > 0
-      ? current.openingFeeBasis * (matchedQuantity / current.quantity)
+    const matchedFinancialQuantity = current ? getTradeFinancialQuantity(trade, matchedQuantity) : 0;
+    const openingFinancialAverage = current && current.financialQuantity > 0
+      ? current.financialCostBasis / current.financialQuantity
+      : undefined;
+    const allocatedOpeningFee = current && current.financialQuantity > 0 && matchedFinancialQuantity > 0
+      ? current.openingFeeBasis * (matchedFinancialQuantity / current.financialQuantity)
       : 0;
-    if (current && openingAverage !== undefined && matchedQuantity > 0) {
+    const closingFee = trade.quantity > 0 ? trade.fee * (matchedQuantity / trade.quantity) : 0;
+    if (current && openingAverage !== undefined && openingFinancialAverage !== undefined && matchedQuantity > 0) {
       current.quantity -= matchedQuantity;
       current.costBasis = Math.max(0, current.costBasis - openingAverage * matchedQuantity);
+      current.financialQuantity = Math.max(0, current.financialQuantity - matchedFinancialQuantity);
+      current.financialCostBasis = Math.max(0, current.financialCostBasis - openingFinancialAverage * matchedFinancialQuantity);
       current.openingFeeBasis = Math.max(0, current.openingFeeBasis - allocatedOpeningFee);
       positions.set(key, current);
     }
 
     if (side === "long") {
-      const grossPnl = openingAverage === undefined || matchedQuantity <= 0
+      const grossPnl = openingFinancialAverage === undefined || matchedFinancialQuantity <= 0
         ? undefined
-        : (trade.price - openingAverage) * matchedQuantity;
+        : (trade.price - openingFinancialAverage) * matchedFinancialQuantity;
       details.set(trade.id, {
         buyPrice: openingAverage,
         sellPrice: trade.price,
         grossPnl,
-        netPnl: grossPnl === undefined ? undefined : grossPnl - allocatedOpeningFee - trade.fee,
+        netPnl: grossPnl === undefined ? undefined : grossPnl - allocatedOpeningFee - closingFee,
         allocatedOpeningFee,
-        closingFee: trade.fee,
+        closingFee,
       });
     } else {
-      const grossPnl = openingAverage === undefined || matchedQuantity <= 0
+      const grossPnl = openingFinancialAverage === undefined || matchedFinancialQuantity <= 0
         ? undefined
-        : (openingAverage - trade.price) * matchedQuantity;
+        : (openingFinancialAverage - trade.price) * matchedFinancialQuantity;
       details.set(trade.id, {
         buyPrice: trade.price,
         sellPrice: openingAverage,
         grossPnl,
-        netPnl: grossPnl === undefined ? undefined : grossPnl - allocatedOpeningFee - trade.fee,
+        netPnl: grossPnl === undefined ? undefined : grossPnl - allocatedOpeningFee - closingFee,
         allocatedOpeningFee,
-        closingFee: trade.fee,
+        closingFee,
       });
     }
   }
@@ -536,9 +579,10 @@ function buildLinkedClosingDetail(opening: PreviewTrade, allocation: LinkedClosi
   const side = ACTIONS[opening.action].side;
   const allocatedOpeningFee = opening.quantity > 0 ? opening.fee * (quantity / opening.quantity) : 0;
   const closingFee = closing.quantity > 0 ? closing.fee * (quantity / closing.quantity) : 0;
+  const financialQuantity = getTradeFinancialQuantity(closing, quantity);
   const grossPnl = side === "long"
-    ? (closing.price - opening.price) * quantity
-    : (opening.price - closing.price) * quantity;
+    ? (closing.price - opening.price) * financialQuantity
+    : (opening.price - closing.price) * financialQuantity;
   return side === "long"
     ? {
       buyPrice: opening.price,
@@ -570,10 +614,13 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
       const archivePrice = archivePriceForTrade(trade);
       const key = `${side}:${priceKey(archivePrice)}`;
       const existing = buckets.get(key);
+      const financialQuantity = getTradeFinancialQuantity(trade);
       if (existing) {
         existing.originalQuantity += trade.quantity;
         existing.remainingQuantity += trade.quantity;
         existing.costBasis += trade.quantity * trade.price;
+        existing.financialQuantity += financialQuantity;
+        existing.financialCostBasis += financialQuantity * trade.price;
         existing.openingFeeBasis += trade.fee;
       } else {
         buckets.set(key, {
@@ -583,6 +630,8 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
           originalQuantity: trade.quantity,
           remainingQuantity: trade.quantity,
           costBasis: trade.quantity * trade.price,
+          financialQuantity,
+          financialCostBasis: financialQuantity * trade.price,
           openingFeeBasis: trade.fee,
           realizedGrossPnl: 0,
           realizedOpeningFee: 0,
@@ -604,18 +653,27 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
     if (!target || target.remainingQuantity <= 0) continue;
 
     const closedQuantity = Math.min(target.remainingQuantity, trade.quantity);
+    const closedFinancialQuantity = getTradeFinancialQuantity(trade, closedQuantity);
     const averageCost = target.costBasis / target.remainingQuantity;
-    const allocatedOpeningFee = target.openingFeeBasis * (closedQuantity / target.remainingQuantity);
+    const financialAverageCost = target.financialQuantity > 0
+      ? target.financialCostBasis / target.financialQuantity
+      : averageCost;
+    const allocatedOpeningFee = target.financialQuantity > 0
+      ? target.openingFeeBasis * (closedFinancialQuantity / target.financialQuantity)
+      : 0;
+    const closingFee = trade.quantity > 0 ? trade.fee * (closedQuantity / trade.quantity) : 0;
     const grossPnl = side === "long"
-      ? (trade.price - averageCost) * closedQuantity
-      : (averageCost - trade.price) * closedQuantity;
+      ? (trade.price - financialAverageCost) * closedFinancialQuantity
+      : (financialAverageCost - trade.price) * closedFinancialQuantity;
     target.remainingQuantity -= closedQuantity;
     target.costBasis = Math.max(0, target.costBasis - averageCost * closedQuantity);
+    target.financialQuantity = Math.max(0, target.financialQuantity - closedFinancialQuantity);
+    target.financialCostBasis = Math.max(0, target.financialCostBasis - financialAverageCost * closedFinancialQuantity);
     target.openingFeeBasis = Math.max(0, target.openingFeeBasis - allocatedOpeningFee);
     target.realizedGrossPnl += grossPnl;
     target.realizedOpeningFee += allocatedOpeningFee;
-    target.realizedClosingFee += trade.fee;
-    target.realizedPnl += grossPnl - allocatedOpeningFee - trade.fee;
+    target.realizedClosingFee += closingFee;
+    target.realizedPnl += grossPnl - allocatedOpeningFee - closingFee;
     target.closedQuantity += closedQuantity;
     target.closedCostBasis += averageCost * closedQuantity;
     target.closedNotional += trade.price * closedQuantity;
@@ -629,7 +687,12 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
  * 该函数不计入任何手续费或资金费，所有明细相加应与总利润一致。
  */
 function buildRealizedGrossProfitDetails(trades: PreviewTrade[]) {
-  const positions = new Map<string, { quantity: number; costBasis: number }>();
+  const positions = new Map<string, {
+    quantity: number;
+    costBasis: number;
+    financialQuantity: number;
+    financialCostBasis: number;
+  }>();
   const details: RealizedGrossProfitDetail[] = [];
   const orderedTrades = [...trades]
     .filter((trade) => trade.symbol === "ETH")
@@ -642,11 +705,19 @@ function buildRealizedGrossProfitDetails(trades: PreviewTrade[]) {
       const archivePrice = archivePriceForTrade(trade);
       const key = `${side}:${priceKey(archivePrice)}`;
       const current = positions.get(key);
+      const financialQuantity = getTradeFinancialQuantity(trade);
       if (current) {
         current.quantity += trade.quantity;
         current.costBasis += trade.quantity * trade.price;
+        current.financialQuantity += financialQuantity;
+        current.financialCostBasis += financialQuantity * trade.price;
       } else {
-        positions.set(key, { quantity: trade.quantity, costBasis: trade.quantity * trade.price });
+        positions.set(key, {
+          quantity: trade.quantity,
+          costBasis: trade.quantity * trade.price,
+          financialQuantity,
+          financialCostBasis: financialQuantity * trade.price,
+        });
       }
       continue;
     }
@@ -659,11 +730,17 @@ function buildRealizedGrossProfitDetails(trades: PreviewTrade[]) {
 
     const quantity = Math.min(target.quantity, trade.quantity);
     const openingAverage = target.costBasis / target.quantity;
+    const financialQuantity = getTradeFinancialQuantity(trade, quantity);
+    const financialOpeningAverage = target.financialQuantity > 0
+      ? target.financialCostBasis / target.financialQuantity
+      : openingAverage;
     const grossPnl = side === "long"
-      ? (trade.price - openingAverage) * quantity
-      : (openingAverage - trade.price) * quantity;
+      ? (trade.price - financialOpeningAverage) * financialQuantity
+      : (financialOpeningAverage - trade.price) * financialQuantity;
     target.quantity -= quantity;
     target.costBasis = Math.max(0, target.costBasis - openingAverage * quantity);
+    target.financialQuantity = Math.max(0, target.financialQuantity - financialQuantity);
+    target.financialCostBasis = Math.max(0, target.financialCostBasis - financialOpeningAverage * financialQuantity);
     positions.set(key, target);
     details.push({
       trade,
@@ -742,7 +819,7 @@ function filterTradesByInstrumentType(trades: PreviewTrade[], filter: T0Instrume
   return [...openings, ...closings].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 }
 
-/** 开平仓都按同一开仓的多人快照切分数量和交易成本；所有受益人比例严格合计100%。 */
+/** 开平仓保持完整 ETH 数量，收益与交易成本按同一开仓的多人快照分配；所有受益人比例严格合计100%。 */
 function projectMemberProfitShareTrades(rawTrades: PreviewTrade[], snapshots: ProfitShareSnapshot[], viewerUserId: string) {
   const viewerId = Number(viewerUserId);
   if (!Number.isInteger(viewerId) || viewerId <= 0) return rawTrades;
@@ -775,10 +852,9 @@ function projectMemberProfitShareTrades(rawTrades: PreviewTrade[], snapshots: Pr
       projected.push({
         ...trade,
         id: `beneficiary-${trade.id}-${snapshot.openingEntryId}-${snapshot.beneficiaryUserId}`,
-        quantity: matchedQuantity * rate,
+        quantity: matchedQuantity,
         fee: allocatedFee,
-        profitShareProjectName: snapshot.relatedFundName || trade.relatedFundName,
-        profitSharePercentage: Number(snapshot.percentage || 0),
+        profitShareRate: rate,
       });
     }
   }
@@ -819,7 +895,9 @@ function calculateSummary(buckets: PositionBucket[], markPrice: number | null, t
     const quantity = active.reduce((total, bucket) => total + bucket.remainingQuantity, 0);
     const weightedCost = active.reduce((total, bucket) => total + bucket.costBasis, 0);
     const average = quantity > 0 ? weightedCost / quantity : 0;
-    const unrealized = calculateEstimatedUnrealizedNetPnl(side, markPrice, quantity, weightedCost);
+    const financialQuantity = active.reduce((total, bucket) => total + bucket.financialQuantity, 0);
+    const financialCostBasis = active.reduce((total, bucket) => total + bucket.financialCostBasis, 0);
+    const unrealized = calculateEstimatedUnrealizedNetPnl(side, markPrice, financialQuantity, financialCostBasis);
     const realized = all.reduce((total, bucket) => total + bucket.realizedPnl, 0);
     const realizedGross = all.reduce((total, bucket) => total + bucket.realizedGrossPnl, 0);
     const realizedOpeningFee = all.reduce((total, bucket) => total + bucket.realizedOpeningFee, 0);
@@ -1286,10 +1364,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const getTradeRelatedFundName = (trade: PreviewTrade) => trade.relatedFundHidden
     ? "未关联项目"
     : trade.relatedFundName
-      || (trade.relatedFundId ? `专项款#${trade.relatedFundId}` : "未区分专项款（历史）");
-  const getProfitShareSourceLabel = (trade: PreviewTrade) => trade.profitShareProjectName && trade.profitSharePercentage
-    ? `项目${trade.profitShareProjectName}的收益分配 ${Number(trade.profitSharePercentage).toFixed(2).replace(/\.00$/, "")}%`
-    : null;
+      || (trade.relatedFundId ? `专项款#${trade.relatedFundId}` : "未区分专项款（历史） ");
   const memberRelatedUserName = useMemo(() => {
     const selfName = String((me as any)?.name || (me as any)?.username || "").trim();
     if (selfName) return selfName;
@@ -1461,9 +1536,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const isLongPosition = ACTIONS[openingTrade.action].side === "long";
       const linkedClosings = openingClosingAllocations.get(openingTrade.id) ?? [];
       const openingNet = linkedClosings.reduce((openingTotal, { trade: closingTrade, quantity }) => {
+        const financialQuantity = getTradeFinancialQuantity(closingTrade, quantity);
         const grossPnl = isLongPosition
-          ? (closingTrade.price - openingTrade.price) * quantity
-          : (openingTrade.price - closingTrade.price) * quantity;
+          ? (closingTrade.price - openingTrade.price) * financialQuantity
+          : (openingTrade.price - closingTrade.price) * financialQuantity;
         const allocatedOpeningFee = openingTrade.quantity > 0
           ? openingTrade.fee * (quantity / openingTrade.quantity)
           : 0;
@@ -1527,6 +1603,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           originalQuantity: trade.quantity,
           remainingQuantity,
           costBasis: trade.price * remainingQuantity,
+          financialQuantity: getTradeFinancialQuantity(trade, remainingQuantity),
+          financialCostBasis: trade.price * getTradeFinancialQuantity(trade, remainingQuantity),
           openingFeeBasis: trade.fee * remainingRatio,
           realizedGrossPnl: 0,
           realizedOpeningFee: 0,
@@ -2943,7 +3021,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 const detail = recentJournalTradeDetails.get(trade.id);
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
-                const profitShareSourceLabel = getProfitShareSourceLabel(trade);
                 return (
                 <div key={trade.id} className="border-b border-[#c7d0d7]/60 px-4 py-2.5 last:border-b-0">
                     <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
@@ -2980,7 +3057,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         <span className="ml-auto shrink-0 text-[10px] text-slate-500">净利润</span>
                       </>}
                     </div>
-                    {profitShareSourceLabel && <div className="mt-1 text-[10px] font-medium text-indigo-600">{profitShareSourceLabel}</div>}
                     {canManage && <div className="mt-1 flex min-h-5 items-center justify-between gap-3">
                       {trade.note ? <span className="min-w-0 truncate text-[11px] text-slate-500">{trade.note}</span> : <span />}
                       <div className="flex shrink-0 items-center gap-1.5">
@@ -3183,11 +3259,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
                     const linkedClosedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
                     const remainingQuantity = Math.max(0, trade.quantity - linkedClosedQuantity);
+                    const financialRemainingQuantity = getTradeFinancialQuantity(trade, remainingQuantity);
                     const floatingPnl = calculateEstimatedUnrealizedNetPnl(
                       ACTIONS[trade.action].side,
                       markPrice,
-                      remainingQuantity,
-                      trade.price * remainingQuantity,
+                      financialRemainingQuantity,
+                      trade.price * financialRemainingQuantity,
                     );
                     const openingValue = trade.quantity * trade.price;
                     const closeAction: TradeAction = ACTIONS[trade.action].side === "long" ? "closeLong" : "closeShort";
@@ -4349,11 +4426,11 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
       background: "linear-gradient(90deg, rgba(209,250,229,0.54), rgba(236,253,245,0.70) 42%, rgba(255,255,255,0.56))",
       boxShadow: "inset 0 1px 0 rgba(255,255,255,0.88), inset 0 -1px 0 rgba(6,95,70,0.11)",
     };
-  const floatingPnl = calculateEstimatedUnrealizedNetPnl(side, markPrice, bucket.remainingQuantity, bucket.costBasis);
+  const floatingPnl = calculateEstimatedUnrealizedNetPnl(side, markPrice, bucket.financialQuantity, bucket.financialCostBasis);
   // 与金额盈亏保持同一口径：逐档预估净盈亏 ÷ 本档剩余持仓成本；不计资金费。
-  const floatingReturnRate = floatingPnl === null || bucket.costBasis <= 0
+  const floatingReturnRate = floatingPnl === null || bucket.financialCostBasis <= 0
     ? null
-    : floatingPnl / bucket.costBasis;
+    : floatingPnl / bucket.financialCostBasis;
   const pnlTone = floatingPnl !== null && floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600";
   const content = (
     <div className="w-full min-w-0">
