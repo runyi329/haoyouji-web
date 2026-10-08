@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useParams, useSearch } from "wouter";
 import {
   ArrowLeft,
+  Check,
+  ChevronDown,
   ChevronRight,
   Search,
   ShieldCheck,
@@ -955,9 +957,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [recentRelatedUsers, setRecentRelatedUsers] = useState<PreviewRelatedUser[]>([]);
   const [relatedFunds, setRelatedFunds] = useState<PreviewRelatedFund[]>([]);
   const [trades, setTrades] = useState<PreviewTrade[]>([]);
-  const [selectedAccountId, setSelectedAccountId] = useState("");
-  const [relatedUserFilterId, setRelatedUserFilterId] = useState("all");
-  const [relatedFundFilterId, setRelatedFundFilterId] = useState("all");
+  // 空数组代表“全部”；有选择时按同一维度的并集、不同维度的交集筛选。
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
+  const [relatedUserFilterIds, setRelatedUserFilterIds] = useState<string[]>([]);
+  const [relatedFundFilterIds, setRelatedFundFilterIds] = useState<string[]>([]);
   const [instrumentTypeFilter, setInstrumentTypeFilter] = useState<T0InstrumentFilter>("all");
   const [journalActionFilters, setJournalActionFilters] = useState<Set<TradeAction>>(
     () => new Set(RECENT_JOURNAL_ACTIONS),
@@ -1230,13 +1233,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       .filter((entry) => entry.symbol === "ETH")
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     setLastSavedQuantity(latestSavedEntry ? normalizeEthQuantity(String(latestSavedEntry.quantity)) : "");
-    // 首次进入时，管理员默认“全部账户 + 全部用户 + 全部专项款”；
-    // 后续静默同步只校验当前选择仍然有效，不能每五秒覆盖正在查看的筛选。
+    // 首次进入时，管理员默认“全部账户 + 全部用户 + 全部项目”；
+    // 后续静默同步只剔除已失效的多选项，不能每五秒覆盖正在查看的筛选。
     const isFirstJournalHydration = !hasInitializedJournalFiltersRef.current;
     if (journal.viewerMode === "admin") {
-      setSelectedAccountId((current) => isFirstJournalHydration || (current !== "all" && !nextAccounts.some((account) => account.id === current)) ? "all" : current);
-      setRelatedUserFilterId((current) => isFirstJournalHydration || (current !== "all" && current !== "unlinked" && !nextRecentRelatedUsers.some((user) => user.id === current)) ? "all" : current);
-      setRelatedFundFilterId((current) => isFirstJournalHydration || (current !== "all" && current !== "unclassified" && !nextRelatedFunds.some((fund) => fund.id === current)) ? "all" : current);
+      setSelectedAccountIds((current) => isFirstJournalHydration ? [] : current.filter((id) => nextAccounts.some((account) => account.id === id)));
+      setRelatedUserFilterIds((current) => isFirstJournalHydration ? [] : current.filter((id) => id === "unlinked" || nextRecentRelatedUsers.some((user) => user.id === id)));
+      setRelatedFundFilterIds((current) => isFirstJournalHydration ? [] : current.filter((id) => id === "unclassified" || nextRelatedFunds.some((fund) => fund.id === id)));
     } else {
       // 成员端：一个选项直接锁定；两个及以上选项才保留“全部 + 分项”的筛选。
       // 后续五秒静默同步只修正已失效的选项，不会覆盖成员主动选择的单项筛选。
@@ -1244,15 +1247,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ...nextRelatedFunds.map((fund) => fund.id),
         ...(nextTrades.some((trade) => !trade.relatedFundId) ? ["unclassified"] : []),
       ];
-      const normalizeMemberFilter = (current: string, optionIds: string[]) => {
-        if (optionIds.length === 1) return optionIds[0];
-        return isFirstJournalHydration || (current !== "all" && !optionIds.includes(current))
-          ? "all"
-          : current;
+      const normalizeMemberFilter = (current: string[], optionIds: string[]) => {
+        if (optionIds.length === 1) return optionIds;
+        return isFirstJournalHydration ? [] : current.filter((id) => optionIds.includes(id));
       };
-      setSelectedAccountId((current) => normalizeMemberFilter(current, nextAccounts.map((account) => account.id)));
-      setRelatedUserFilterId("all");
-      setRelatedFundFilterId((current) => normalizeMemberFilter(current, memberFundFilterIds));
+      setSelectedAccountIds((current) => normalizeMemberFilter(current, nextAccounts.map((account) => account.id)));
+      setRelatedUserFilterIds([]);
+      setRelatedFundFilterIds((current) => normalizeMemberFilter(current, memberFundFilterIds));
     }
     setLastRelatedUserId((current) => nextRecentRelatedUsers.some((user) => user.id === current)
       ? current
@@ -1279,25 +1280,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   const selectedTrades = useMemo(
     () => instrumentScopedTrades.filter((trade) => (
-      (selectedAccountId === "all" || trade.accountId === selectedAccountId)
+      (selectedAccountIds.length === 0 || selectedAccountIds.includes(trade.accountId))
       && trade.symbol === "ETH"
-      && (relatedUserFilterId === "all"
-        || (relatedUserFilterId === "unlinked" ? (!trade.relatedUserId || trade.relatedUserHidden) : trade.relatedUserId === relatedUserFilterId))
-      && (relatedFundFilterId === "all"
-        || (relatedFundFilterId === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === relatedFundFilterId))
+      && (relatedUserFilterIds.length === 0
+        || relatedUserFilterIds.some((id) => id === "unlinked" ? (!trade.relatedUserId || trade.relatedUserHidden) : trade.relatedUserId === id))
+      && (relatedFundFilterIds.length === 0
+        || relatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
-    [instrumentScopedTrades, selectedAccountId, relatedUserFilterId, relatedFundFilterId],
+    [instrumentScopedTrades, selectedAccountIds, relatedUserFilterIds, relatedFundFilterIds],
   );
   const journalScopeTrades = useMemo(
     () => instrumentScopedTrades.filter((trade) => (
       trade.symbol === "ETH"
-      && (selectedAccountId === "all" || trade.accountId === selectedAccountId)
-      && (relatedUserFilterId === "all"
-        || (relatedUserFilterId === "unlinked" ? (!trade.relatedUserId || trade.relatedUserHidden) : trade.relatedUserId === relatedUserFilterId))
-      && (relatedFundFilterId === "all"
-        || (relatedFundFilterId === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === relatedFundFilterId))
+      && (selectedAccountIds.length === 0 || selectedAccountIds.includes(trade.accountId))
+      && (relatedUserFilterIds.length === 0
+        || relatedUserFilterIds.some((id) => id === "unlinked" ? (!trade.relatedUserId || trade.relatedUserHidden) : trade.relatedUserId === id))
+      && (relatedFundFilterIds.length === 0
+        || relatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
-    [instrumentScopedTrades, selectedAccountId, relatedUserFilterId, relatedFundFilterId],
+    [instrumentScopedTrades, selectedAccountIds, relatedUserFilterIds, relatedFundFilterIds],
   );
   const availableJournalActions = useMemo(
     () => RECENT_JOURNAL_ACTIONS.filter((action) => journalScopeTrades.some((trade) => trade.action === action)),
@@ -1371,8 +1372,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     return ownTrade ? getTradeRelatedUserName(ownTrade) : "本人";
   }, [me, trades]);
   const availableRelatedFunds = useMemo(
-    () => relatedFunds.filter((fund) => relatedUserFilterId === "all" || fund.relatedUserId === relatedUserFilterId),
-    [relatedFunds, relatedUserFilterId],
+    () => relatedUserFilterIds.length === 0
+      ? relatedFunds
+      : relatedFunds.filter((fund) => Boolean(fund.relatedUserId) && relatedUserFilterIds.includes(fund.relatedUserId!)),
+    [relatedFunds, relatedUserFilterIds],
   );
   const memberFundFilterOptionIds = useMemo(() => [
     ...relatedFunds.map((fund) => fund.id),
@@ -1380,12 +1383,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   ], [relatedFunds, trades]);
   const shouldLockMemberAccountFilter = isMemberView && accounts.length === 1;
   const shouldLockMemberFundFilter = isMemberView && memberFundFilterOptionIds.length === 1;
-  const lockedAccountName = accounts.find((account) => account.id === selectedAccountId)?.name
+  const lockedAccountName = accounts.find((account) => selectedAccountIds.includes(account.id))?.name
     || accounts[0]?.name
     || "暂无账户";
-  const lockedRelatedFundName = availableRelatedFunds.find((fund) => fund.id === relatedFundFilterId)?.name
+  const lockedRelatedFundName = availableRelatedFunds.find((fund) => relatedFundFilterIds.includes(fund.id))?.name
     || availableRelatedFunds[0]?.name
     || (trades.some((trade) => !trade.relatedFundId) ? "未区分项目（历史）" : "暂无项目");
+  const accountFilterOptions = accounts.map((account) => ({ id: account.id, label: account.name }));
+  const relatedUserFilterOptions = [
+    ...(trades.some((trade) => !trade.relatedUserId) ? [{ id: "unlinked", label: "未关联用户（历史）" }] : []),
+    ...recentRelatedUsers.map((user) => ({ id: user.id, label: `${user.name}${user.username ? ` · @${user.username}` : ""}` })),
+  ];
+  const relatedFundFilterOptions = [
+    ...(trades.some((trade) => !trade.relatedFundId) ? [{ id: "unclassified", label: "未区分项目（历史）" }] : []),
+    ...availableRelatedFunds.map((fund) => ({ id: fund.id, label: fund.name })),
+  ];
   const allJournalActionsSelected = availableJournalActions.length > 0
     && availableJournalActions.every((action) => journalActionFilters.has(action));
   const toggleJournalActionFilter = (action: TradeAction) => {
@@ -1797,21 +1809,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         setEntryForm((current) => current.accountId === deletedId
           ? { ...current, accountId: "", accountName: "" }
           : current);
-        setSelectedAccountId((current) => current === deletedId ? "all" : current);
+        setSelectedAccountIds((current) => current.filter((id) => id !== deletedId));
       } else if (variables.dimension === "related_fund") {
         const deletedId = String(variables.dimensionId);
         setRelatedFunds((current) => current.filter((item) => item.id !== deletedId));
         setEntryForm((current) => current.relatedFundId === deletedId
           ? { ...current, relatedFundId: "", relatedFundName: "" }
           : current);
-        setRelatedFundFilterId((current) => current === deletedId ? "all" : current);
+        setRelatedFundFilterIds((current) => current.filter((id) => id !== deletedId));
       } else {
         const deletedId = String(variables.dimensionId);
         setRecentRelatedUsers((current) => current.filter((item) => item.id !== deletedId));
         setEntryForm((current) => current.relatedUserId === deletedId
           ? { ...current, relatedUserId: "", relatedUserName: "", relatedUsername: "", relatedFundId: "", relatedFundName: "" }
           : current);
-        setRelatedUserFilterId((current) => current === deletedId ? "all" : current);
+        setRelatedUserFilterIds((current) => current.filter((id) => id !== deletedId));
       }
       setDirectoryDeleteTarget(null);
       void t0JournalQuery.refetch();
@@ -1900,7 +1912,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         setLastFundIdByRelatedUser((current) => ({ ...current, [entry.relatedUserId!]: fund.id }));
       }
       setTrades((current) => current.map((trade) => trade.clientRequestId === variables.clientRequestId ? entry : trade));
-      setSelectedAccountId((current) => current === "all" ? current : account.id);
+      setSelectedAccountIds((current) => current.length === 0 ? current : Array.from(new Set([...current, account.id])));
       const savedQuantity = String(variables.quantity || "").trim();
       if (savedQuantity) {
         setLastSavedQuantity(savedQuantity);
@@ -2309,7 +2321,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (!entryForm.accountId) {
       setAccounts((current) => [{ id: accountId, name: normalizedAccountName }, ...current]);
     }
-    setSelectedAccountId((current) => current === "all" ? current : accountId);
+    setSelectedAccountIds((current) => current.length === 0 ? current : Array.from(new Set([...current, accountId])));
     const trade: PreviewTrade = {
       id: `pending-entry-${clientRequestId}`,
       accountId,
@@ -2600,74 +2612,45 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             }}
           >
             <div className="grid grid-cols-[minmax(78px,0.85fr)_minmax(84px,0.95fr)_minmax(110px,1.35fr)] gap-1.5 min-[375px]:grid-cols-[minmax(96px,0.85fr)_minmax(96px,0.95fr)_minmax(124px,1.35fr)]">
-              <label className="relative min-w-0">
-                {!shouldLockMemberAccountFilter && <span className="pointer-events-none absolute left-1.5 top-1/2 z-10 -translate-y-1/2 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>账户</span>}
-                {shouldLockMemberAccountFilter ? <LockedFilterValue label="账户" value={lockedAccountName} /> : (
-                  <select
-                    value={selectedAccountId}
-                    onChange={(event) => {
-                      setSelectedAccountId(event.target.value);
-                      setRecentJournalPage(1);
-                    }}
-                    className="h-9 w-full rounded border border-slate-300 bg-white/70 pl-8 pr-4 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
-                    style={{
-                      textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
-                      boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
-                    }}
-                  >
-                    <option value="all">全部</option>
-                    {accounts.length === 0 && <option value="">暂无账户</option>}
-                    {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-                  </select>
-                )}
-              </label>
-              <label className="relative min-w-0">
-                {!isMemberView && <span className="pointer-events-none absolute left-1.5 top-1/2 z-10 -translate-y-1/2 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>用户</span>}
-                {isMemberView ? <LockedFilterValue label="用户" value={memberRelatedUserName} /> : (
-                  <select
-                    value={relatedUserFilterId}
-                    onChange={(event) => {
-                      setRelatedUserFilterId(event.target.value);
-                      setRelatedFundFilterId("all");
-                      setRecentJournalPage(1);
-                    }}
-                    className="h-9 w-full rounded border border-slate-300 bg-white/70 pl-8 pr-4 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
-                    style={{
-                      textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
-                      boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
-                    }}
-                  >
-                    <option value="all">全部</option>
-                    {trades.some((trade) => !trade.relatedUserId) && <option value="unlinked">未关联用户（历史）</option>}
-                    {recentRelatedUsers.map((user) => (
-                      <option key={user.id} value={user.id}>{user.name}{user.username ? ` · @${user.username}` : ""}</option>
-                    ))}
-                  </select>
-                )}
-              </label>
-              <label className="relative min-w-0">
-                {!shouldLockMemberFundFilter && <span className="pointer-events-none absolute left-1.5 top-1/2 z-10 -translate-y-1/2 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>项目</span>}
-                {shouldLockMemberFundFilter ? <LockedFilterValue label="项目" value={lockedRelatedFundName} /> : (
-                  <select
-                    value={relatedFundFilterId}
-                    onChange={(event) => {
-                      setRelatedFundFilterId(event.target.value);
-                      setRecentJournalPage(1);
-                    }}
-                    className="h-9 w-full rounded border border-slate-300 bg-white/70 pl-8 pr-4 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
-                    style={{
-                      textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
-                      boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
-                    }}
-                  >
-                    <option value="all">全部</option>
-                    {trades.some((trade) => !trade.relatedFundId) && <option value="unclassified">未区分项目（历史）</option>}
-                    {availableRelatedFunds.map((fund) => (
-                      <option key={fund.id} value={fund.id}>{fund.name}</option>
-                    ))}
-                  </select>
-                )}
-              </label>
+              {shouldLockMemberAccountFilter ? <LockedFilterValue label="账户" value={lockedAccountName} /> : (
+                <T0MultiSelect
+                  label="账户"
+                  options={accountFilterOptions}
+                  selectedIds={selectedAccountIds}
+                  emptyLabel="暂无账户"
+                  onChange={(ids) => {
+                    setSelectedAccountIds(ids);
+                    setRecentJournalPage(1);
+                  }}
+                />
+              )}
+              {isMemberView ? <LockedFilterValue label="用户" value={memberRelatedUserName} /> : (
+                <T0MultiSelect
+                  label="用户"
+                  options={relatedUserFilterOptions}
+                  selectedIds={relatedUserFilterIds}
+                  emptyLabel="暂无用户"
+                  onChange={(ids) => {
+                    setRelatedUserFilterIds(ids);
+                    // 项目只属于用户；改动用户范围后重置项目，避免保留不可见的跨用户项目条件。
+                    setRelatedFundFilterIds([]);
+                    setRecentJournalPage(1);
+                  }}
+                />
+              )}
+              {shouldLockMemberFundFilter ? <LockedFilterValue label="项目" value={lockedRelatedFundName} /> : (
+                <T0MultiSelect
+                  label="项目"
+                  options={relatedFundFilterOptions}
+                  selectedIds={relatedFundFilterIds}
+                  emptyLabel="暂无项目"
+                  align="right"
+                  onChange={(ids) => {
+                    setRelatedFundFilterIds(ids);
+                    setRecentJournalPage(1);
+                  }}
+                />
+              )}
             </div>
             {canManage && <label className="mt-2 flex items-center gap-2">
               <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>类型</span>
@@ -4239,6 +4222,140 @@ function LockedFilterValue({ label, value }: { label?: string; value: string }) 
     >
       {label && <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>{label}</span>}
       <span className="truncate">{value}</span>
+    </div>
+  );
+}
+
+type T0MultiSelectOption = {
+  id: string;
+  label: string;
+};
+
+/**
+ * T+0 顶部筛选专用：不选任一项即代表全部；勾选多项时在同一维度按并集筛选。
+ * 使用普通按钮与小方框勾选，避免移动端原生 multiple select 的长按交互。
+ */
+function T0MultiSelect({
+  label,
+  options,
+  selectedIds,
+  onChange,
+  emptyLabel,
+  align = "left",
+}: {
+  label: string;
+  options: T0MultiSelectOption[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  emptyLabel: string;
+  align?: "left" | "right";
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selectedSet = new Set(selectedIds);
+  const selectedOptions = options.filter((option) => selectedSet.has(option.id));
+  const summary = selectedOptions.length === 0
+    ? "全部"
+    : selectedOptions.length === 1
+      ? selectedOptions[0].label
+      : `已选 ${selectedOptions.length} 项`;
+  const selectedTitle = selectedOptions.length === 0
+    ? `${label}：全部`
+    : `${label}：${selectedOptions.map((option) => option.label).join("、")}`;
+
+  useEffect(() => {
+    const closeWhenOutside = (event: PointerEvent) => {
+      if (rootRef.current && event.target instanceof Node && !rootRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const closeWhenEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("pointerdown", closeWhenOutside);
+    window.addEventListener("keydown", closeWhenEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeWhenOutside);
+      window.removeEventListener("keydown", closeWhenEscape);
+    };
+  }, []);
+
+  const toggleOption = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    onChange(options.filter((option) => next.has(option.id)).map((option) => option.id));
+  };
+
+  const renderCheck = (checked: boolean) => (
+    <span
+      aria-hidden="true"
+      className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border ${checked ? "border-[#1a56db] bg-[#1a56db] text-white" : "border-slate-300 bg-white text-transparent"}`}
+    >
+      <Check className="h-3 w-3 stroke-[3]" />
+    </span>
+  );
+
+  if (options.length === 0) {
+    return <LockedFilterValue label={label} value={emptyLabel} />;
+  }
+
+  return (
+    <div ref={rootRef} className="relative min-w-0">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title={selectedTitle}
+        className="flex h-9 w-full min-w-0 items-center gap-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none transition-colors focus:border-[#1a56db] active:bg-white"
+        style={{
+          textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
+          boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
+        }}
+      >
+        <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500">{label}</span>
+        <span className="min-w-0 flex-1 truncate text-left">{summary}</span>
+        <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-label={`${label}多选`}
+          className={`absolute top-[calc(100%+4px)] z-40 max-h-60 w-[220px] overflow-y-auto rounded border border-slate-200 bg-white py-1 shadow-lg ${align === "right" ? "right-0" : "left-0"}`}
+        >
+          <button
+            type="button"
+            role="option"
+            aria-selected={selectedIds.length === 0}
+            onClick={() => onChange([])}
+            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold ${selectedIds.length === 0 ? "bg-indigo-50 text-indigo-700" : "text-slate-600 active:bg-slate-50"}`}
+          >
+            {renderCheck(selectedIds.length === 0)}
+            <span>全部</span>
+          </button>
+          <div className="my-1 border-t border-slate-100" />
+          {options.map((option) => {
+            const checked = selectedSet.has(option.id);
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="option"
+                aria-selected={checked}
+                onClick={() => toggleOption(option.id)}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs ${checked ? "bg-indigo-50/70 text-indigo-700" : "text-slate-700 active:bg-slate-50"}`}
+              >
+                {renderCheck(checked)}
+                <span className="min-w-0 flex-1 truncate" title={option.label}>{option.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
