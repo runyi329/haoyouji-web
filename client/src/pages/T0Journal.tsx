@@ -13,6 +13,16 @@ import { trpc } from "@/lib/trpc";
 
 type TradeAction = "openLong" | "closeLong" | "openShort" | "closeShort";
 type PositionSide = "long" | "short";
+type T0InstrumentType = "spot" | "contract" | "option";
+type T0InstrumentFilter = "all" | T0InstrumentType | "unlabeled";
+const T0_INSTRUMENT_TYPES: Array<{ value: T0InstrumentType; label: string; shortLabel: string }> = [
+  { value: "spot", label: "现货", shortLabel: "现" },
+  { value: "contract", label: "合约", shortLabel: "合" },
+  { value: "option", label: "期权", shortLabel: "期" },
+];
+function getInstrumentShortLabel(value?: T0InstrumentType) {
+  return T0_INSTRUMENT_TYPES.find((item) => item.value === value)?.shortLabel;
+}
 
 type PreviewAccount = {
   id: string;
@@ -50,6 +60,7 @@ type PreviewTrade = {
   relatedFundHidden?: boolean;
   symbol: string;
   action: TradeAction;
+  instrumentType?: T0InstrumentType;
   quantity: number;
   price: number;
   fee: number;
@@ -122,6 +133,9 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     relatedFundHidden: Boolean(entry.relatedFundHidden),
     symbol: String(entry.symbol || "ETH"),
     action: entry.action as TradeAction,
+    instrumentType: entry.instrumentType === "spot" || entry.instrumentType === "contract" || entry.instrumentType === "option"
+      ? entry.instrumentType
+      : undefined,
     quantity: Number(entry.quantity),
     price: Number(entry.price),
     fee: Number(entry.fee || 0),
@@ -191,6 +205,7 @@ type EntryForm = {
   relatedUsername: string;
   relatedFundId: string;
   relatedFundName: string;
+  instrumentType?: T0InstrumentType;
   quantity: string;
   price: string;
   note: string;
@@ -706,6 +721,27 @@ function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
   return allocations;
 }
 
+/**
+ * 类型是开仓研究维度。筛选时不能直接过滤平仓流水，否则已平数量会被错误地回补为未平仓；
+ * 因此先按完整 FIFO 找到每张开仓对应的平仓，再仅投影该类型开仓所分摊的平仓数量。
+ */
+function filterTradesByInstrumentType(trades: PreviewTrade[], filter: T0InstrumentFilter) {
+  if (filter === "all") return trades;
+  const matches = (trade: PreviewTrade) => filter === "unlabeled"
+    ? !trade.instrumentType
+    : trade.instrumentType === filter;
+  const openings = trades.filter((trade) => ACTIONS[trade.action].opening && matches(trade));
+  const allocations = buildOpeningClosingAllocations(trades);
+  const closings = openings.flatMap((opening) => (allocations.get(opening.id) ?? []).map(({ trade, quantity }) => ({
+    ...trade,
+    id: `instrument-${filter}-${trade.id}-${opening.id}`,
+    quantity,
+    fee: trade.quantity > 0 ? trade.fee * (quantity / trade.quantity) : 0,
+    instrumentType: opening.instrumentType,
+  })));
+  return [...openings, ...closings].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+}
+
 /** 开平仓都按同一开仓的多人快照切分数量和交易成本；所有受益人比例严格合计100%。 */
 function projectMemberProfitShareTrades(rawTrades: PreviewTrade[], snapshots: ProfitShareSnapshot[], viewerUserId: string) {
   const viewerId = Number(viewerUserId);
@@ -844,6 +880,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [relatedUserFilterId, setRelatedUserFilterId] = useState("all");
   const [relatedFundFilterId, setRelatedFundFilterId] = useState("all");
+  const [instrumentTypeFilter, setInstrumentTypeFilter] = useState<T0InstrumentFilter>("all");
   const [journalActionFilters, setJournalActionFilters] = useState<Set<TradeAction>>(
     () => new Set(RECENT_JOURNAL_ACTIONS),
   );
@@ -884,6 +921,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [showRecoverableRecords, setShowRecoverableRecords] = useState(false);
   const [entrySide, setEntrySide] = useState<PositionSide>("long");
   const [lastSavedQuantity, setLastSavedQuantity] = useState("");
+  const [lastOpeningInstrumentType, setLastOpeningInstrumentType] = useState<T0InstrumentType>("contract");
   const [showCumulativeData, setShowCumulativeData] = useState(false);
   const [adminLadderDisplayMode, setAdminLadderDisplayMode] = useState<AdminLadderDisplayMode>("integrated");
   const [lastMarkPrice, setLastMarkPrice] = useState<number | null>(null);
@@ -901,6 +939,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     relatedUsername: "",
     relatedFundId: "",
     relatedFundName: "",
+    instrumentType: "contract",
     quantity: "",
     price: "",
     note: "",
@@ -1104,6 +1143,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setRelatedFunds(nextRelatedFunds);
     setTrades(nextTrades);
     setRecoverableEntries(nextRecoverableEntries);
+    const latestTypedOpening = nextTrades
+      .filter((entry) => ACTIONS[entry.action].opening && entry.instrumentType)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    if (latestTypedOpening?.instrumentType) {
+      setLastOpeningInstrumentType(latestTypedOpening.instrumentType);
+    }
     const latestSavedEntry = nextTrades
       .filter((entry) => entry.symbol === "ETH")
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
@@ -1151,8 +1196,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       ? "text-emerald-600"
       : "text-rose-600";
 
+  const instrumentScopedTrades = useMemo(
+    () => filterTradesByInstrumentType(trades, instrumentTypeFilter),
+    [trades, instrumentTypeFilter],
+  );
   const selectedTrades = useMemo(
-    () => trades.filter((trade) => (
+    () => instrumentScopedTrades.filter((trade) => (
       (selectedAccountId === "all" || trade.accountId === selectedAccountId)
       && trade.symbol === "ETH"
       && (relatedUserFilterId === "all"
@@ -1160,10 +1209,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && (relatedFundFilterId === "all"
         || (relatedFundFilterId === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === relatedFundFilterId))
     )),
-    [trades, selectedAccountId, relatedUserFilterId, relatedFundFilterId],
+    [instrumentScopedTrades, selectedAccountId, relatedUserFilterId, relatedFundFilterId],
   );
   const journalScopeTrades = useMemo(
-    () => trades.filter((trade) => (
+    () => instrumentScopedTrades.filter((trade) => (
       trade.symbol === "ETH"
       && (selectedAccountId === "all" || trade.accountId === selectedAccountId)
       && (relatedUserFilterId === "all"
@@ -1171,7 +1220,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && (relatedFundFilterId === "all"
         || (relatedFundFilterId === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === relatedFundFilterId))
     )),
-    [trades, selectedAccountId, relatedUserFilterId, relatedFundFilterId],
+    [instrumentScopedTrades, selectedAccountId, relatedUserFilterId, relatedFundFilterId],
   );
   const availableJournalActions = useMemo(
     () => RECENT_JOURNAL_ACTIONS.filter((action) => journalScopeTrades.some((trade) => trade.action === action)),
@@ -1579,6 +1628,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedUsername: lastRelatedUser?.username ?? "",
       relatedFundId: defaultRelatedFund?.id ?? "",
       relatedFundName: defaultRelatedFund?.name ?? "",
+      instrumentType: ACTIONS[action].opening ? lastOpeningInstrumentType : undefined,
       quantity: "",
       // 开仓成交价由管理员实际录入；保留浅色 0.00 占位，避免误把参考价写入流水。
       price: "",
@@ -1616,6 +1666,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedUsername: trade.relatedUsername ?? "",
       relatedFundId: trade.relatedFundId ?? "legacy",
       relatedFundName: trade.relatedFundName ?? "",
+      instrumentType: trade.instrumentType,
       // 表单值不能带千分位逗号，否则超过千位的数量会无法通过数值校验。
       quantity: normalizeEthQuantity(String(Math.min(target.remainingQuantity, trade.quantity))),
       price: markPrice ? markPrice.toFixed(2) : "",
@@ -1641,6 +1692,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedUsername: trade.relatedUsername ?? "",
       relatedFundId: trade.relatedFundId ?? "legacy",
       relatedFundName: trade.relatedFundName ?? "",
+      instrumentType: trade.instrumentType,
       // 编辑输入使用机器可解析的原始数值；展示层才使用千分位格式。
       quantity: normalizeEthQuantity(String(trade.quantity)),
       price: trade.price.toFixed(2),
@@ -1773,6 +1825,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         relatedFundName: data.entry.relatedFundName ? String(data.entry.relatedFundName) : undefined,
         symbol: String(data.entry.symbol || "ETH"),
         action: data.entry.action as TradeAction,
+        instrumentType: data.entry.instrumentType === "spot" || data.entry.instrumentType === "contract" || data.entry.instrumentType === "option"
+          ? data.entry.instrumentType
+          : undefined,
         quantity: Number(data.entry.quantity),
         price: Number(data.entry.price),
         fee: Number(data.entry.fee || 0),
@@ -1813,6 +1868,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       if (savedQuantity) {
         setLastSavedQuantity(savedQuantity);
       }
+      if (entry.instrumentType) setLastOpeningInstrumentType(entry.instrumentType);
       toast.success("速记已保存");
     },
     onError: (error, variables: any) => {
@@ -1840,6 +1896,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         relatedFundName: data.entry.relatedFundName ? String(data.entry.relatedFundName) : undefined,
         symbol: String(data.entry.symbol || "ETH"),
         action: data.entry.action as TradeAction,
+        instrumentType: data.entry.instrumentType === "spot" || data.entry.instrumentType === "contract" || data.entry.instrumentType === "option"
+          ? data.entry.instrumentType
+          : undefined,
         quantity: Number(data.entry.quantity),
         price: Number(data.entry.price),
         fee: Number(data.entry.fee || 0),
@@ -1860,6 +1919,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }
       setShowEntrySheet(false);
       setCloseConfirmationStep("input");
+      if (entry.instrumentType) setLastOpeningInstrumentType(entry.instrumentType);
       toast.success("开仓记录已修改");
     },
     onError: (error) => toast.error(error.message || "开仓记录修改失败"),
@@ -2121,6 +2181,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       toast.error("请输入成交价格");
       return;
     }
+    if (selectedAction.opening && !entryForm.editingEntryId && !entryForm.instrumentType) {
+      toast.error("请选择现货、合约或期权");
+      return;
+    }
     const archiveTargetPrice = selectedAction.opening
       ? archivePriceForSide(selectedAction.side, price)
       : entryForm.targetPrice === undefined
@@ -2165,6 +2229,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         relatedUserId: normalizedRelatedUserId,
         relatedFundId: normalizedRelatedFundId,
         relatedFundName: normalizedRelatedFundName || undefined,
+        instrumentType: entryForm.instrumentType,
         quantity: normalizedQuantity,
         price: entryForm.price.trim(),
         note: entryForm.note.trim() || undefined,
@@ -2219,6 +2284,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundName: normalizedRelatedFundId || !normalizedRelatedFundName ? undefined : normalizedRelatedFundName,
       symbol: "ETH",
       action: entryForm.action,
+      instrumentType: selectedAction.opening ? entryForm.instrumentType : undefined,
       quantity,
       price,
       fee,
@@ -2241,6 +2307,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundName: normalizedRelatedFundName || undefined,
       symbol: "ETH",
       action: entryForm.action,
+      instrumentType: selectedAction.opening ? entryForm.instrumentType : undefined,
       quantity: normalizedQuantity,
       price: entryForm.price.trim(),
       targetPrice: archiveTargetPrice === undefined ? undefined : String(archiveTargetPrice),
@@ -2565,6 +2632,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 )}
               </label>
             </div>
+            {canManage && <label className="mt-2 flex items-center gap-2">
+              <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>类型</span>
+              <select
+                value={instrumentTypeFilter}
+                onChange={(event) => {
+                  setInstrumentTypeFilter(event.target.value as T0InstrumentFilter);
+                  setRecentJournalPage(1);
+                }}
+                className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
+                aria-label="按订单类型筛选"
+              >
+                <option value="all">全部类型</option>
+                {T0_INSTRUMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                <option value="unlabeled">未标注（历史）</option>
+              </select>
+            </label>}
           </div>
 
           <div
@@ -2701,6 +2784,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   accountName: getTradeAccountName(row.openingTrade),
                   relatedUserName: getTradeRelatedUserName(row.openingTrade),
                   relatedFundName: getTradeRelatedFundName(row.openingTrade),
+                  instrumentShortLabel: getInstrumentShortLabel(row.openingTrade.instrumentType),
                 }
                 : undefined;
               return (
@@ -3261,9 +3345,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       placeholder="0.00"
                       className={`w-full h-14 rounded border px-3 text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                     />
-                    <div className={`mt-1.5 text-[10px] leading-4 ${quantityFormatError ? "font-medium text-rose-600" : "text-slate-400"}`}>
-                      {quantityFormatError || "整数最多4位 · 离开后固定显示2位小数"}
-                    </div>
+                    {quantityFormatError && <div className="mt-1.5 text-[10px] font-medium leading-4 text-rose-600">{quantityFormatError}</div>}
                   </Field>
 
                   <Field label={
@@ -3306,6 +3388,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     );
                   })}
                 </div>
+
+                {ACTIONS[entryForm.action].opening && <div className="-mt-0.5 flex flex-wrap items-center gap-1.5">
+                  <span className="mr-0.5 text-[11px] text-slate-400">类型</span>
+                  {T0_INSTRUMENT_TYPES.map((instrument) => {
+                    const isActive = entryForm.instrumentType === instrument.value;
+                    return (
+                      <button
+                        key={instrument.value}
+                        type="button"
+                        disabled={isCloseReview}
+                        onClick={() => setEntryForm((current) => ({ ...current, instrumentType: instrument.value }))}
+                        className={`h-7 rounded border px-3 text-[11px] font-medium transition active:scale-95 ${isActive ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
+                        aria-pressed={isActive}
+                      >
+                        {instrument.label}
+                      </button>
+                    );
+                  })}
+                </div>}
 
                 <div className="grid grid-cols-2 items-start gap-3">
                   <Field label={<span className="flex items-center justify-between gap-1"><span>下单账户 <span className="text-rose-500">*</span></span>{accounts.length > 0 && !isEditingEntry && <button type="button" onClick={() => openDirectoryManager("account")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
@@ -4230,7 +4331,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   markPrice: number | null;
   onClick: () => void;
   readOnly?: boolean;
-  metadata?: { accountName: string; relatedUserName: string; relatedFundName: string };
+  metadata?: { accountName: string; relatedUserName: string; relatedFundName: string; instrumentShortLabel?: string };
 }) {
   const isLong = side === "long";
   if (!bucket || bucket.remainingQuantity <= 0.0000001) {
@@ -4267,12 +4368,15 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           </span>
         )}
       </div>
-      {metadata && <div className="mt-1 flex min-w-0 items-center overflow-hidden text-left text-[9px] font-medium leading-none text-slate-500" aria-label={`账户 ${metadata.accountName}，用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}`}>
-        <span className="min-w-0 shrink truncate" title={`账户：${metadata.accountName}`}>{metadata.accountName}</span>
-        <span className="shrink-0">·</span>
-        <span className="min-w-0 shrink truncate" title={`用户：${metadata.relatedUserName}`}>{metadata.relatedUserName}</span>
-        <span className="shrink-0">·</span>
-        <span className="min-w-0 shrink truncate" title={`项目：${metadata.relatedFundName}`}>{metadata.relatedFundName}</span>
+      {metadata && <div className="mt-1 flex min-w-0 items-center text-left text-[9px] font-medium leading-none text-slate-500" aria-label={`账户 ${metadata.accountName}，用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}`}>
+        <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+          <span className="min-w-0 shrink truncate" title={`账户：${metadata.accountName}`}>{metadata.accountName}</span>
+          <span className="shrink-0">·</span>
+          <span className="min-w-0 shrink truncate" title={`用户：${metadata.relatedUserName}`}>{metadata.relatedUserName}</span>
+          <span className="shrink-0">·</span>
+          <span className="min-w-0 shrink truncate" title={`项目：${metadata.relatedFundName}`}>{metadata.relatedFundName}</span>
+        </div>
+        {metadata.instrumentShortLabel && <span className="ml-1 shrink-0 text-slate-500" title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
       </div>}
     </div>
   );
@@ -4309,7 +4413,7 @@ function LadderCell({
   onClose: () => void;
   onOpen: () => void;
   readOnly?: boolean;
-  metadata?: { accountName: string; relatedUserName: string; relatedFundName: string };
+  metadata?: { accountName: string; relatedUserName: string; relatedFundName: string; instrumentShortLabel?: string };
 }) {
   // 统一由报价格本身处理：移动端与桌面端都必须在同一格 700ms 内连续点击两次，
   // 才允许打开已有订单详情、编辑页或空档位的新开仓录入，杜绝单击误触。

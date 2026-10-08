@@ -9,6 +9,8 @@ const POSITION_ARCHIVE_STEP = 10;
 
 export type T0JournalAction = "openLong" | "closeLong" | "openShort" | "closeShort";
 const T0_JOURNAL_ACTIONS = new Set<T0JournalAction>(["openLong", "closeLong", "openShort", "closeShort"]);
+export type T0JournalInstrumentType = "spot" | "contract" | "option";
+const T0_JOURNAL_INSTRUMENT_TYPES = new Set<T0JournalInstrumentType>(["spot", "contract", "option"]);
 const ETH_QUANTITY_RESTORE_PATTERN = /^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/;
 
 export type T0JournalActor = {
@@ -32,6 +34,8 @@ export type SaveT0JournalEntryInput = {
   relatedFundName?: string;
   symbol: "ETH";
   action: T0JournalAction;
+  /** 仅开仓主单记录交易类型；平仓继续按既有 FIFO 口径匹配，不额外分型。 */
+  instrumentType?: T0JournalInstrumentType;
   quantity: string;
   price: string;
   targetPrice?: string;
@@ -74,6 +78,18 @@ let tablesReady: Promise<void> | null = null;
 function asRows(result: unknown): any[] {
   if (Array.isArray(result) && Array.isArray(result[0])) return result[0] as any[];
   return Array.isArray(result) ? result as any[] : [];
+}
+
+function normalizeInstrumentType(value: unknown, required = false): T0JournalInstrumentType | undefined {
+  const normalized = String(value || "").trim() as T0JournalInstrumentType;
+  if (!normalized) {
+    if (required) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择现货、合约或期权" });
+    return undefined;
+  }
+  if (!T0_JOURNAL_INSTRUMENT_TYPES.has(normalized)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "订单类型无效，请重新选择" });
+  }
+  return normalized;
 }
 
 function isoTime(value: unknown): string {
@@ -274,6 +290,9 @@ function mapEntry(row: any) {
     relatedFundHidden: Boolean(toNumber(row.related_fund_hidden ?? row.relatedFundHidden)),
     symbol: String(row.symbol || "ETH"),
     action: String(row.action) as T0JournalAction,
+    instrumentType: T0_JOURNAL_INSTRUMENT_TYPES.has(String(row.instrument_type ?? row.instrumentType ?? "") as T0JournalInstrumentType)
+      ? String(row.instrument_type ?? row.instrumentType) as T0JournalInstrumentType
+      : undefined,
     quantity: toNumber(row.quantity),
     price: toNumber(row.price),
     fee: toNumber(row.fee_usdt),
@@ -388,6 +407,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         related_user_id BIGINT UNSIGNED DEFAULT NULL,
         related_fund_id BIGINT UNSIGNED DEFAULT NULL,
         symbol VARCHAR(16) NOT NULL DEFAULT 'ETH',
+        instrument_type ENUM('spot','contract','option') DEFAULT NULL,
         action ENUM('openLong','closeLong','openShort','closeShort') NOT NULL,
         quantity DECIMAL(36,18) NOT NULL,
         price DECIMAL(36,18) NOT NULL,
@@ -404,6 +424,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         KEY idx_t0_journal_entry_account_time (ledger_id, user_id, account_id, trade_time),
         KEY idx_t0_journal_entry_related_user_time (ledger_id, user_id, related_user_id, trade_time),
         KEY idx_t0_journal_entry_related_fund_time (ledger_id, user_id, related_fund_id, trade_time),
+        KEY idx_t0_journal_entry_instrument_time (ledger_id, user_id, instrument_type, trade_time),
         KEY idx_t0_journal_entry_owner_time (ledger_id, user_id, trade_time)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         COMMENT='52号账本T+0速记账本：管理员手工下单流水与创建审计'
@@ -558,6 +579,16 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         ALTER TABLE ledger52_t0_journal_entries
           ADD COLUMN related_fund_id BIGINT UNSIGNED DEFAULT NULL AFTER related_user_id,
           ADD KEY idx_t0_journal_entry_related_fund_time (ledger_id, user_id, related_fund_id, trade_time)
+      `);
+    }
+
+    // 开仓类型是新增研究维度：历史流水保持 NULL，管理员可在编辑开仓时按实际情况补录。
+    const [instrumentTypeColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_entries LIKE 'instrument_type'`);
+    if (asRows(instrumentTypeColumns).length === 0) {
+      await db.execute(`
+        ALTER TABLE ledger52_t0_journal_entries
+          ADD COLUMN instrument_type ENUM('spot','contract','option') DEFAULT NULL AFTER symbol,
+          ADD KEY idx_t0_journal_entry_instrument_time (ledger_id, user_id, instrument_type, trade_time)
       `);
     }
 
@@ -751,7 +782,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
       `SELECT e.id, e.account_id,
               CASE WHEN a.is_active = 1 THEN a.name ELSE NULL END AS account_name,
               CASE WHEN a.is_active = 1 THEN 0 ELSE 1 END AS account_hidden,
-              e.symbol, e.action, e.related_user_id, e.related_fund_id,
+              e.symbol, e.instrument_type, e.action, e.related_user_id, e.related_fund_id,
               CASE WHEN f.is_active = 1 THEN f.name ELSE NULL END AS related_fund_name,
               CASE WHEN f.is_active = 1 THEN 0 ELSE 1 END AS related_fund_hidden,
               CASE WHEN deleted_user.id IS NULL THEN COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) ELSE NULL END AS related_user_name,
@@ -1634,6 +1665,9 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
   if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
   const tx: any = connection;
   const normalizedQuantity = normalizeEthQuantity(input.quantity);
+  const instrumentType = isOpeningAction(input.action)
+    ? normalizeInstrumentType(input.instrumentType, true)
+    : undefined;
 
   try {
     await ensureLedger52T0JournalTables(tx);
@@ -1751,8 +1785,8 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 
     const [entryResult] = await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18), ?, ?, ?, ?)
+        (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18), ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
       [
         LEDGER_52_T0_JOURNAL_ID,
@@ -1761,6 +1795,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         relatedUserId > 0 ? relatedUserId : null,
         relatedFund?.id ?? null,
         input.symbol,
+        instrumentType ?? null,
         input.action,
         normalizedQuantity,
         input.price,
@@ -1809,7 +1844,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
                 COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
                 u.username AS related_username, u.avatar AS related_user_avatar,
-                e.symbol, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+                e.symbol, e.instrument_type, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
            FROM ledger52_t0_journal_entries e
            INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
            LEFT JOIN users u ON u.id = e.related_user_id
@@ -1834,7 +1869,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 
 async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: number) {
   const [rows] = await tx.execute(
-    `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.action,
+    `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.instrument_type, e.action,
             e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
             e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
        FROM ledger52_t0_journal_entries e
@@ -1912,6 +1947,8 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   relatedUserId?: number;
   relatedFundId?: number;
   relatedFundName?: string;
+  /** 旧开仓未标注时可留空；管理员选择后即固化该类型。 */
+  instrumentType?: T0JournalInstrumentType;
   quantity: string;
   price: string;
   note?: string;
@@ -1920,6 +1957,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
   const tx: any = connection;
   const normalizedQuantity = normalizeEthQuantity(input.quantity);
+  const instrumentType = normalizeInstrumentType(input.instrumentType);
 
   try {
     await ensureLedger52T0JournalTables(tx);
@@ -1954,6 +1992,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     await tx.execute(
       `UPDATE ledger52_t0_journal_entries
           SET quantity = ?, price = ?, target_price = ?, related_user_id = ?, related_fund_id = ?,
+              instrument_type = COALESCE(?, instrument_type),
               fee_usdt = ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18),
               note = ?, updated_at = NOW(3)
         WHERE id = ? AND ledger_id = ? AND user_id = ?`,
@@ -1963,6 +2002,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         archivePrice,
         relatedUserId > 0 ? relatedUserId : null,
         relatedFund?.id ?? null,
+        instrumentType ?? null,
         normalizedQuantity,
         input.price,
         input.note || null,
@@ -1983,7 +2023,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
               u.username AS related_username, u.avatar AS related_user_avatar,
-              e.symbol, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+              e.symbol, e.instrument_type, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id
@@ -2052,7 +2092,7 @@ export async function revertLedger52T0JournalEntry(input: { actorUserId: number;
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     const [rows] = await tx.execute(
-      `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.action,
+      `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.instrument_type, e.action,
               e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
               e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
          FROM ledger52_t0_journal_entries e
@@ -2178,8 +2218,8 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
 
     await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
+        (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
       [
         entryId,
         LEDGER_52_T0_JOURNAL_ID,
@@ -2188,6 +2228,7 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
         relatedUserId > 0 ? relatedUserId : null,
         relatedFundId > 0 ? relatedFundId : null,
         String(snapshot.symbol || "ETH"),
+        normalizeInstrumentType(snapshot.instrument_type ?? snapshot.instrumentType),
         action,
         quantity,
         price,
@@ -2209,7 +2250,7 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
       `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
               u.username AS related_username, u.avatar AS related_user_avatar,
-              e.symbol, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+              e.symbol, e.instrument_type, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id
