@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-10-08
+// 生成时间：2026-10-09
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9520,5 +9520,25 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-10-07T09:07:09Z", type: "fix", cleanMessage: "show USDT with two decimals" },
     { date: "2026-10-07T13:34:48Z", type: "feat", cleanMessage: "add admin quote display modes" },
     { date: "2026-10-07T15:31:38Z", type: "fix", cleanMessage: "keep co-owners in personal orders" },
+  ],
+  "2026-10-08": [
+    { date: "2026-10-07T22:19:20Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-10-08T00:47:23Z", type: "fix", cleanMessage: "require double tap for ladder actions" },
+    { date: "2026-10-08T02:48:00Z", type: "feat", cleanMessage: "add instrument type tracking" },
+    { date: "2026-10-08T03:23:54Z", type: "fix", cleanMessage: "preserve ETH quantity for profit shares" },
+    { date: "2026-10-08T03:42:00Z", type: "fix", cleanMessage: "restore continuous scrolling in WeChat" },
+    { date: "2026-10-08T04:18:32Z", type: "refactor", cleanMessage: "compact individual price levels" },
+    { date: "2026-10-08T04:53:03Z", type: "fix", cleanMessage: "decouple primary display and precision" },
+    { date: "2026-10-08T05:39:50Z", type: "feat", cleanMessage: "add multi-select journal filters" },
+    { date: "2026-10-08T05:48:53Z", type: "style", cleanMessage: "compact funding attribute badges" },
+    { date: "2026-10-08T07:37:41Z", type: "refactor", cleanMessage: "streamline finance order editor" },
+    { date: "2026-10-08T12:07:22Z", type: "feat", cleanMessage: "lock individual quotes and allow account correction" },
+    { date: "2026-10-08T12:38:52Z", type: "style", cleanMessage: "align lock marker with instrument label" },
+    { date: "2026-10-08T13:08:07Z", type: "fix", cleanMessage: "preserve manual stock pnl across source switches" },
+    { date: "2026-10-08T14:01:59Z", type: "fix", cleanMessage: "keep account selectable when editing opening" },
+    { date: "2026-10-08T14:35:07Z", type: "feat", cleanMessage: "allow account management while editing entries" },
+  ],
+  "2026-10-09": [
+    { date: "2026-10-08T17:24:32Z", type: "feat", cleanMessage: "支持融资订单人民币和USDT钱包担保" },
   ],
 };
