@@ -56,7 +56,7 @@ function CardFundingAttributeBadge({
   type: 'self' | 'financing';
   surface: 'silver' | 'gold' | 'purple' | 'green';
 }) {
-  const label = type === 'self' ? '自有资产' : '融资付息';
+  const label = type === 'self' ? '自' : '融';
   const styles: Record<typeof surface, React.CSSProperties> = {
     silver: {
       color: type === 'self' ? 'rgba(13, 99, 78, 0.92)' : 'rgba(35, 71, 108, 0.92)',

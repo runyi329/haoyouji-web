@@ -2702,8 +2702,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       ? displayConfig.assetFundingType
                       : displayConfig.selfFundedAsset ? 'self' : '';
                     const options = [
-                      { value: 'self', label: '自有资产', active: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
-                      { value: 'financing', label: '融资付息', active: 'bg-blue-50 text-blue-700 border-blue-300' },
+                      { value: 'self', label: '自', active: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
+                      { value: 'financing', label: '融', active: 'bg-blue-50 text-blue-700 border-blue-300' },
                     ] as const;
                     const explicitPrimaryDisplay = displayConfig.primaryAssetDisplay === 'financing' || displayConfig.primaryAssetDisplay === 'quantity'
                       ? displayConfig.primaryAssetDisplay

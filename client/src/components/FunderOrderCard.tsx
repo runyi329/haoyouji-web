@@ -2388,7 +2388,7 @@ export function FunderOrderCard({
                   ? { borderRadius: '4px', color: '#047857', backgroundColor: '#ECFDF5', border: '1px solid #6EE7B7' }
                   : { borderRadius: '4px', color: '#1D4ED8', backgroundColor: '#EFF6FF', border: '1px solid #93C5FD' }}
               >
-                {assetFundingType === 'self' ? '自有资产' : '融资付息'}
+                {assetFundingType === 'self' ? '自' : '融'}
               </span>
             )}
             {order.asset_type === 'crypto' && show('showTradeDirection') && (order as any).trade_direction === 'long' && (
