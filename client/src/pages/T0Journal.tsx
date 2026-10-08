@@ -1465,7 +1465,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const remainingQuantity = Math.max(0, trade.quantity - closedQuantity);
       if (remainingQuantity <= 0.0000001) continue;
       const side = ACTIONS[trade.action].side;
-      const price = archivePriceForTrade(trade);
+      // 管理员逐笔模式一张主单只对应一行，价位取本笔真实成交价的四舍五入整数；
+      // 原始成交价仍用于成本、盈亏和 FIFO，十美元归档价仅服务于整合报价和可用量校验。
+      const price = Math.round(trade.price);
       const remainingRatio = trade.quantity > 0 ? remainingQuantity / trade.quantity : 0;
       individualBuckets.push({
         trade,
@@ -4255,12 +4257,12 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   const content = (
     <div className="w-full min-w-0">
       <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
-        <span className="shrink-0 text-lg font-bold leading-none tracking-tight" style={{ textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.88), 0.75px 0.75px 0 rgba(71,85,105,0.20)" }}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
+        <span className={`shrink-0 font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"}`} style={{ textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.88), 0.75px 0.75px 0 rgba(71,85,105,0.20)" }}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
         {floatingPnl !== null && (
           <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`}>
-            <span className="whitespace-nowrap text-[11px] font-semibold leading-none" style={{ textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.84), 0.55px 0.55px 0 rgba(71,85,105,0.18)" }}>{formatSigned(floatingPnl)}</span>
+            <span className={`whitespace-nowrap font-semibold leading-none ${metadata ? "text-[10px]" : "text-[11px]"}`} style={{ textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.84), 0.55px 0.55px 0 rgba(71,85,105,0.18)" }}>{formatSigned(floatingPnl)}</span>
             {floatingReturnRate !== null && (
-              <span className="mt-1 text-[10px] font-medium leading-none opacity-85">{formatSignedPercent(floatingReturnRate)}</span>
+              <span className={`${metadata ? "mt-0.5 text-[9px]" : "mt-1 text-[10px]"} font-medium leading-none opacity-85`}>{formatSignedPercent(floatingReturnRate)}</span>
             )}
           </span>
         )}
@@ -4279,7 +4281,14 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
     return <div className={`flex ${minHeightClass} w-full min-w-0 items-center px-1.5 py-1.5 ${tone}`} style={sideSurfaceStyle}>{content}</div>;
   }
   return (
-    <button onClick={onClick} className={`flex ${minHeightClass} w-full min-w-0 items-center px-1.5 py-1.5 text-left transition-[filter] active:brightness-95 ${tone}`} style={sideSurfaceStyle}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={metadata ? "双击编辑该开仓订单" : "双击查看该价格档订单详情"}
+      title={metadata ? "双击编辑" : "双击查看详情"}
+      className={`flex ${minHeightClass} w-full min-w-0 items-center px-1.5 py-1.5 text-left transition-[filter] active:brightness-95 ${tone}`}
+      style={{ ...sideSurfaceStyle, touchAction: "manipulation" }}
+    >
       {content}
     </button>
   );
@@ -4302,8 +4311,20 @@ function LadderCell({
   readOnly?: boolean;
   metadata?: { accountName: string; relatedUserName: string; relatedFundName: string };
 }) {
+  // 统一由报价格本身处理：移动端与桌面端都必须在同一格 700ms 内连续点击两次，
+  // 才允许打开已有订单详情、编辑页或空档位的新开仓录入，杜绝单击误触。
+  const activationTapAtRef = useRef(0);
+  const requireDoubleActivation = (action: () => void) => () => {
+    const now = Date.now();
+    if (now - activationTapAtRef.current > 700) {
+      activationTapAtRef.current = now;
+      return;
+    }
+    activationTapAtRef.current = 0;
+    action();
+  };
   if (bucket && bucket.remainingQuantity > 0.0000001) {
-    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={onClose} readOnly={readOnly} metadata={metadata} />;
+    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} />;
   }
 
   const isLong = side === "long";
@@ -4312,9 +4333,12 @@ function LadderCell({
   }
   return (
     <button
-      onClick={onOpen}
-      aria-label={isLong ? "在该价格档位开多" : "在该价格档位开空"}
+      type="button"
+      onClick={requireDoubleActivation(onOpen)}
+      aria-label={isLong ? "双击在该价格档位开多" : "双击在该价格档位开空"}
+      title={isLong ? "双击开多" : "双击开空"}
       className="min-h-[52px] w-full transition-colors hover:bg-white/25 active:brightness-95"
+      style={{ touchAction: "manipulation" }}
     />
   );
 }
