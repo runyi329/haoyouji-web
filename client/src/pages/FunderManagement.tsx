@@ -3992,7 +3992,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
                   <div>
                     <div className="text-sm font-semibold text-amber-800">钱包担保物（可与下方手工担保并行）</div>
-                    <p className="mt-1 text-xs leading-5 text-amber-700">冻结后总持币不变，但冻结部分不能提现、转账或再次担保；订单结清或移入回收站时自动恢复为可用余额。手工担保与钱包担保分别保存、互不覆盖。</p>
+                    <p className="mt-1 text-xs leading-5 text-amber-700">冻结后钱包总余额不变，但冻结部分不能提现、转账或再次担保；订单结清或移入回收站时自动恢复为可用余额。人民币、USDT与数字资产均可担保，手工担保与钱包担保分别保存、互不覆盖。</p>
                   </div>
                   {editingOrder?.id && collateralAssets.every(isWalletCollateralAsset) && recoverableManualCollateral.length > 0 && (
                     <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
@@ -4014,11 +4014,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     </div>
                   )}
                   {walletCollateralUserId <= 0 ? (
-                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-3 text-xs text-amber-700">请先选择订单拥有者，才能读取其钱包数字资产。</div>
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-3 text-xs text-amber-700">请先选择订单拥有者，才能读取其钱包资产。</div>
                   ) : walletCollateralBalancesQuery.isLoading ? (
                     <div className="rounded-lg bg-white px-3 py-4 text-center text-xs text-gray-400">正在读取钱包可用余额…</div>
                   ) : (walletCollateralBalancesQuery.data ?? []).length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-amber-300 bg-white px-3 py-4 text-center text-xs text-amber-700">该用户暂无可用于担保的数字资产。</div>
+                    <div className="rounded-lg border border-dashed border-amber-300 bg-white px-3 py-4 text-center text-xs text-amber-700">该用户暂无可用于担保的钱包资产。</div>
                   ) : (
                     <div className="space-y-2">
                       {(walletCollateralBalancesQuery.data ?? []).map((asset: any) => {
@@ -4028,12 +4028,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         const frozen = Number(asset.frozenBalance ?? 0);
                         const selectedAmount = Number(selected?.qty ?? 0);
                         const maximum = Math.max(0, available + selectedAmount);
+                        const fractionDigits = assetCode === 'CNY' ? 2 : assetCode === 'USDT' ? 4 : 8;
+                        const inputStep = assetCode === 'CNY' ? '0.01' : assetCode === 'USDT' ? '0.0001' : '0.00000001';
                         return (
                           <div key={assetCode} className="rounded-lg border border-amber-100 bg-white px-3 py-2.5">
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
                                 <div className="text-sm font-semibold text-gray-800">{assetCode} <span className="text-xs font-normal text-gray-400">{asset.assetName || ''}</span></div>
-                                <div className="mt-0.5 text-[11px] text-gray-500">可用 {available.toLocaleString('zh-CN', { maximumFractionDigits: 8 })} · 已冻结 {frozen.toLocaleString('zh-CN', { maximumFractionDigits: 8 })}</div>
+                                <div className="mt-0.5 text-[11px] text-gray-500">可用 {available.toLocaleString('zh-CN', { maximumFractionDigits: fractionDigits })} · 已冻结 {frozen.toLocaleString('zh-CN', { maximumFractionDigits: fractionDigits })}</div>
                               </div>
                               {selected ? (
                                 <button
@@ -4057,11 +4059,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                   type="number"
                                   min="0"
                                   max={maximum > 0 ? maximum : undefined}
-                                  step="0.00000001"
+                                  step={inputStep}
                                   value={selected.qty}
                                   disabled={!walletCollateralEditMode && !!editingOrder?.id}
                                   onChange={(event) => setCollateralAssets((previous) => previous.map((item) => isWalletCollateralAsset(item) && item.coin === assetCode ? { ...item, qty: event.target.value, source: 'wallet' } : item))}
-                                  placeholder={`最多 ${maximum.toLocaleString('zh-CN', { maximumFractionDigits: 8 })}`}
+                                  placeholder={`最多 ${maximum.toLocaleString('zh-CN', { maximumFractionDigits: fractionDigits })}`}
                                   className="min-w-0 flex-1 rounded-lg border border-amber-200 px-3 py-2 text-sm font-semibold outline-none focus:border-amber-500 disabled:bg-gray-50"
                                 />
                                 <span className="text-xs font-semibold text-amber-700">{assetCode}</span>

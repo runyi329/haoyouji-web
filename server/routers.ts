@@ -81,15 +81,18 @@ import { yabanStaffRouter } from "./yaban-staff-router";
 import { yabanTreatmentRouter } from "./yaban-treatment-router";
 import { versionRouter } from "./version-router";
 import { aiWalletRouter, assertAiWalletOperationEnabled } from "./ai-wallet-router";
-import { AI_WALLET_MARKET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
+import { AI_WALLET_FUNDING_ASSETS, AI_WALLET_MARKET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
 import * as dbMultiAssetWallet from "./db-multi-asset-wallet";
 import {
   LEDGER_37_ID,
   LEDGER_37_WALLET_OPERATOR_ID,
   freezeLedger37WalletHold,
+  getLedger52FundingCollateralHoldsForOrder,
   getLedger37FundingBalanceSummary,
   listLedger37WalletHolds,
+  releaseLedger52FundingCollateralHoldsForOrder,
   releaseLedger37WalletHold,
+  syncLedger52FundingCollateralHolds,
   migrateLedger37ManualMarginToWalletHold,
   deleteLedger37ManualMarginMigration,
   transferLedger37ManualMarginWalletHold,
@@ -21844,7 +21847,7 @@ ${klinesSummary}
         };
       }),
 
-    // 52号融资订单的钱包担保：仅管理员可读取订单拥有者的可用/冻结数字资产，绝不暴露非成员资产。
+    // 52号融资订单的钱包担保：仅管理员可读取订单拥有者的可用/冻结钱包资产，绝不暴露非成员资产。
     funderGetWalletCollateralBalances: protectedProcedure
       .input(z.object({ ledgerId: z.literal(52), userId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
@@ -21861,7 +21864,16 @@ ${klinesSummary}
           [input.ledgerId, input.userId],
         );
         if (!asRows(memberRows)[0]) throw new TRPCError({ code: 'FORBIDDEN', message: '仅可选择52号账本成员的钱包资产' });
-        return await dbMultiAssetWallet.getUserMultiAssetBalances(input.userId);
+        const [marketAssets, cny, usdt] = await Promise.all([
+          dbMultiAssetWallet.getUserMultiAssetBalances(input.userId),
+          getLedger37FundingBalanceSummary(input.userId, 'CNY'),
+          getLedger37FundingBalanceSummary(input.userId, 'USDT'),
+        ]);
+        const fundingAssets = [
+          { assetCode: 'CNY', assetName: '人民币', availableBalance: String(cny.available), frozenBalance: String(cny.frozen), totalBalance: String(cny.total), updatedAt: '' },
+          { assetCode: 'USDT', assetName: '泰达币', availableBalance: String(usdt.available), frozenBalance: String(usdt.frozen), totalBalance: String(usdt.total), updatedAt: '' },
+        ].filter((asset) => Math.abs(Number(asset.totalBalance)) > 1e-8 || Math.abs(Number(asset.frozenBalance)) > 1e-8);
+        return [...fundingAssets, ...marketAssets];
       }),
 
     // 保存钱包担保：订单字段与“可用→冻结”在一个数据库事务中完成，禁止余额被重复担保或转出。
@@ -21871,9 +21883,9 @@ ${klinesSummary}
         orderId: z.number().int().positive(),
         userId: z.number().int().positive(),
         assets: z.array(z.object({
-          coin: z.enum(AI_WALLET_SETTLEMENT_ASSETS),
+          coin: z.enum(['CNY', 'USDT', ...AI_WALLET_SETTLEMENT_ASSETS]),
           qty: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '担保数量格式无效，最多支持18位小数'),
-        })).max(AI_WALLET_SETTLEMENT_ASSETS.length),
+        })).max(AI_WALLET_FUNDING_ASSETS.length + AI_WALLET_SETTLEMENT_ASSETS.length),
       }))
       .mutation(async ({ ctx, input }) => {
         const conn = await getDbTransactionConnection();
@@ -21915,11 +21927,22 @@ ${klinesSummary}
           if (!isOrderHolder) throw new TRPCError({ code: 'FORBIDDEN', message: '钱包担保物必须属于本订单的拥有者或参与者' });
 
           const normalizedAssets = input.assets.map((asset) => ({ coin: asset.coin, qty: asset.qty, source: 'wallet', note: '钱包担保冻结' }));
+          const fundingAssets = input.assets
+            .filter((asset) => asset.coin === 'CNY' || asset.coin === 'USDT')
+            .map((asset) => ({ coin: asset.coin as 'CNY' | 'USDT', qty: asset.qty }));
+          const marketAssets = input.assets.filter((asset) => asset.coin !== 'CNY' && asset.coin !== 'USDT');
           const result = await dbMultiAssetWallet.syncWalletCollateralLocks({
             ledgerId: input.ledgerId,
             orderId: input.orderId,
             userId: input.userId,
-            assets: input.assets,
+            assets: marketAssets,
+            actorUserId: ctx.user.id,
+            transaction,
+          });
+          const fundingResult = await syncLedger52FundingCollateralHolds({
+            orderId: input.orderId,
+            userId: input.userId,
+            assets: fundingAssets,
             actorUserId: ctx.user.id,
             transaction,
           });
@@ -21969,7 +21992,7 @@ ${klinesSummary}
             [input.ledgerId, input.orderId, ctx.user.id, collateralBeforeData, collateralAfterData, `钱包担保同步：${normalizedAssets.map((asset) => `${asset.qty} ${asset.coin}`).join(', ') || '已解除'}`],
           );
           await transaction.commit();
-          return { success: true, locks: result.locks };
+          return { success: true, locks: result.locks, fundingHolds: fundingResult.holds };
         } catch (error: any) {
           try { await transaction.rollback(); } catch {}
           if (error instanceof TRPCError) throw error;
@@ -22039,6 +22062,9 @@ ${klinesSummary}
           if (input.ledgerId === 52) {
             await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
               ledgerId: 52, orderId: input.id, actorUserId: ctx.user.id, reason: 'order_deleted', transaction,
+            });
+            await releaseLedger52FundingCollateralHoldsForOrder({
+              orderId: input.id, actorUserId: ctx.user.id, reason: 'order_deleted', transaction,
             });
           }
           await transaction.commit();
@@ -23349,6 +23375,12 @@ ${klinesSummary}
               reason: 'order_settled',
               transaction: conn,
             });
+            await releaseLedger52FundingCollateralHoldsForOrder({
+              orderId: input.id,
+              actorUserId: ctx.user.id,
+              reason: 'order_settled',
+              transaction: conn,
+            });
           }
           if (input.ledgerId === 52 && input.status === 'active') {
             const [walletSourceRows] = await conn.execute(
@@ -23359,8 +23391,11 @@ ${klinesSummary}
             let collateralAssets: any[] = [];
             try { collateralAssets = walletSourceOrder?.collateral_assets ? JSON.parse(String(walletSourceOrder.collateral_assets)) : []; } catch {}
             if (collateralAssets.some((asset: any) => asset?.source === 'wallet')) {
-              const activeLocks = await dbMultiAssetWallet.getActiveWalletCollateralLocks(52, input.id);
-              if (activeLocks.length === 0) {
+              const [activeLocks, activeFundingHolds] = await Promise.all([
+                dbMultiAssetWallet.getActiveWalletCollateralLocks(52, input.id),
+                getLedger52FundingCollateralHoldsForOrder(input.id),
+              ]);
+              if (activeLocks.length + activeFundingHolds.length === 0) {
                 throw new TRPCError({ code: 'BAD_REQUEST', message: '该订单的钱包担保已随结清解除；恢复持有前请重新绑定并冻结钱包担保物' });
               }
             }
@@ -24779,6 +24814,9 @@ ${klinesSummary}
           if (input.ledgerId === 52) {
             await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
               ledgerId: 52, orderId: input.id, actorUserId: ctx.user.id, reason: 'order_deleted', transaction,
+            });
+            await releaseLedger52FundingCollateralHoldsForOrder({
+              orderId: input.id, actorUserId: ctx.user.id, reason: 'order_deleted', transaction,
             });
           }
           await transaction.commit();

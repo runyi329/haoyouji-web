@@ -8,6 +8,7 @@ import * as dbMultiAssetWallet from "./db-multi-asset-wallet";
 
 export const LEDGER_37_ID = 37;
 export const LEDGER_37_WALLET_OPERATOR_ID = 870413;
+export const LEDGER_52_ID = 52;
 
 // 37号账本当前业务范围是人民币、USDT与数字币；52号新增的证券/商品市场资产不进入37号分红或保证金流程。
 export type Ledger37WalletAsset = "CNY" | "USDT" | (typeof AI_WALLET_CRYPTO_MARKET_ASSETS)[number];
@@ -95,6 +96,23 @@ export function normalizeLedger37WalletAsset(value: unknown): Ledger37WalletAsse
 
 function isFundingAsset(assetCode: Ledger37WalletAsset): assetCode is "CNY" | "USDT" {
   return assetCode === "CNY" || assetCode === "USDT";
+}
+
+function normalizeWalletHoldLedgerId(value: unknown): typeof LEDGER_37_ID | typeof LEDGER_52_ID {
+  const ledgerId = Number(value ?? LEDGER_37_ID);
+  if (ledgerId !== LEDGER_37_ID && ledgerId !== LEDGER_52_ID) {
+    throw new Error("钱包担保仅支持37号或52号账本");
+  }
+  return ledgerId as typeof LEDGER_37_ID | typeof LEDGER_52_ID;
+}
+
+function buildWalletHoldRequestId(ledgerId: number, prefix: string): string {
+  return `L${ledgerId}${prefix}${Date.now().toString(36).toUpperCase()}${randomBytes(6).toString("hex").toUpperCase()}`;
+}
+
+function decimalFromNumber(value: number): string {
+  if (!Number.isFinite(value) || value < 0) throw new Error("担保金额无效");
+  return value.toFixed(18).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
 }
 
 /** 37号项目的冻结台账。冻结不改变总资产，只改变可用余额。 */
@@ -339,7 +357,7 @@ async function getFundingBalanceForUpdate(transaction: any, userId: number, asse
   return { total, frozen, available: total - frozen };
 }
 
-export async function getLedger37FundingBalanceSummary(userId: number, assetCode: "CNY" | "USDT") {
+export async function getWalletFundingBalanceSummary(userId: number, assetCode: "CNY" | "USDT") {
   await ensureLedger37WalletInfrastructure();
   const conn = await getDbConnection();
   if (!conn) return { total: 0, frozen: 0, available: 0 };
@@ -364,6 +382,9 @@ export async function getLedger37FundingBalanceSummary(userId: number, assetCode
   const frozen = Number(rowsOf(holdRows)[0]?.frozen || 0);
   return { total, frozen, available: total - frozen };
 }
+
+/** 兼容37号账本既有调用；资金账户冻结会合并计算37号与52号占用。 */
+export const getLedger37FundingBalanceSummary = getWalletFundingBalanceSummary;
 
 /**
  * 资金型钱包冻结的可审计来源分组。
@@ -488,15 +509,18 @@ export async function freezeLedger37WalletHold(params: {
   assetCode: Ledger37WalletAsset | string;
   amount: string;
   actorUserId: number;
+  /** 默认37号；52号仅用于融资订单钱包担保。 */
+  ledgerId?: typeof LEDGER_37_ID | typeof LEDGER_52_ID;
   requestId?: string;
   transaction?: any;
 }): Promise<{ hold: Ledger37WalletHold; walletBalanceSnapshot: Ledger37WalletBalanceSnapshot | null; alreadyCompleted: boolean }> {
   await ensureLedger37WalletInfrastructure();
+  const ledgerId = normalizeWalletHoldLedgerId(params.ledgerId);
   const assetCode = normalizeLedger37WalletAsset(params.assetCode);
   const amount = decimalText(params.amount);
   const tagName = String(params.tagName || "").trim().slice(0, 160);
   if (!tagName) throw new Error("标签名称不能为空");
-  const requestId = params.requestId || buildRequestId("H");
+  const requestId = params.requestId || buildWalletHoldRequestId(ledgerId, "H");
   const ownConnection = !params.transaction;
   const conn = params.transaction || await getDbTransactionConnection();
   if (!conn) throw new Error("数据库连接失败");
@@ -531,10 +555,10 @@ export async function freezeLedger37WalletHold(params: {
         assetCode,
         amount,
         direction: "freeze",
-        note: `37号账本保证金冻结 · ${tagName}`,
+        note: `${ledgerId}号账本保证金冻结 · ${tagName}`,
         requestId: `${requestId}_ASSET`,
         actorUserId: params.actorUserId,
-        sourceLedgerId: LEDGER_37_ID,
+        sourceLedgerId: ledgerId,
         transaction,
       });
       const [assetRows] = await transaction.execute(
@@ -554,12 +578,12 @@ export async function freezeLedger37WalletHold(params: {
         available: balanceSnapshotText(assetBalance.available),
       };
     }
-    const holdNo = `H37${Date.now().toString(36).toUpperCase()}${randomBytes(4).toString("hex").toUpperCase()}`;
+    const holdNo = `H${ledgerId}${Date.now().toString(36).toUpperCase()}${randomBytes(4).toString("hex").toUpperCase()}`;
     const [insert] = await transaction.execute(
       `INSERT INTO ai_wallet_project_holds
         (hold_no, request_id, ledger_id, user_id, tag_name, asset_code, amount, cny_value_snapshot, status, created_by)
        VALUES (?, ?, ?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), CAST(? AS DECIMAL(36,8)), 'active', ?)`,
-      [holdNo, requestId, LEDGER_37_ID, params.userId, tagName, assetCode, amount, cnyValueSnapshot, params.actorUserId],
+      [holdNo, requestId, ledgerId, params.userId, tagName, assetCode, amount, cnyValueSnapshot, params.actorUserId],
     );
     const [holdRows] = await transaction.execute("SELECT * FROM ai_wallet_project_holds WHERE id = ? LIMIT 1", [Number((insert as any).insertId)]);
     if (ownConnection) await transaction.commit();
@@ -987,11 +1011,14 @@ export async function releaseLedger37WalletHold(params: {
   /** 未传时释放该笔剩余冻结金额；传入时仅减少指定数量。 */
   amount?: string;
   /** 平移时从来源标签释放，但资金会在同一事务中冻结到目标标签。 */
-  reason?: 'ledger37_margin_release' | 'ledger37_margin_partial_release' | 'ledger37_margin_transfer';
+  reason?: string;
   actorUserId: number;
+  /** 默认37号；52号仅用于融资订单钱包担保。 */
+  ledgerId?: typeof LEDGER_37_ID | typeof LEDGER_52_ID;
   transaction?: any;
 }): Promise<{ hold: Ledger37WalletHold; releasedAmount: string; remainingAmount: string; fullyReleased: boolean; releaseNo: string; releasedAt: string }> {
   await ensureLedger37WalletInfrastructure();
+  const ledgerId = normalizeWalletHoldLedgerId(params.ledgerId);
   const ownConnection = !params.transaction;
   const conn = params.transaction || await getDbTransactionConnection();
   if (!conn) throw new Error("数据库连接失败");
@@ -1000,7 +1027,7 @@ export async function releaseLedger37WalletHold(params: {
     if (ownConnection) await transaction.beginTransaction();
     const [holdRows] = await transaction.execute(
       "SELECT * FROM ai_wallet_project_holds WHERE id = ? AND ledger_id = ? LIMIT 1 FOR UPDATE",
-      [params.holdId, LEDGER_37_ID],
+      [params.holdId, ledgerId],
     );
     const hold = rowsOf(holdRows)[0];
     if (!hold) throw new Error("保证金冻结记录不存在");
@@ -1018,15 +1045,15 @@ export async function releaseLedger37WalletHold(params: {
     }
     const nextReleased = previouslyReleased + Number(amount);
     const fullyReleased = nextReleased >= originalAmount - 0.00000001;
-    const releaseNo = `R37${Date.now().toString(36).toUpperCase()}${randomBytes(4).toString("hex").toUpperCase()}`;
-    const releaseRequestId = buildRequestId("R");
+    const releaseNo = `R${ledgerId}${Date.now().toString(36).toUpperCase()}${randomBytes(4).toString("hex").toUpperCase()}`;
+    const releaseRequestId = buildWalletHoldRequestId(ledgerId, "R");
     const releasedAt = new Date().toISOString();
     if (!isFundingAsset(assetCode)) {
       await dbMultiAssetWallet.moveMultiAssetBalanceToFrozen({
         userId: Number(hold.user_id), assetCode, amount, direction: "release",
-        note: `37号账本保证金解冻 · ${String(hold.tag_name)}`,
+        note: `${ledgerId}号账本保证金解冻 · ${String(hold.tag_name)}`,
         requestId: `${releaseRequestId}_ASSET`, actorUserId: params.actorUserId,
-        sourceLedgerId: LEDGER_37_ID, transaction,
+        sourceLedgerId: ledgerId, transaction,
       });
     } else {
       // 资金型资产冻结没有改变总额；标记释放即可使该笔金额重新计入可用余额。
@@ -1041,18 +1068,144 @@ export async function releaseLedger37WalletHold(params: {
     if (fullyReleased) {
       await transaction.execute(
         "UPDATE ai_wallet_project_holds SET released_amount = amount, status = 'released', released_by = ?, released_reason = ?, released_at = NOW(), updated_at = NOW() WHERE id = ?",
-        [params.actorUserId, params.reason || 'ledger37_margin_release', params.holdId],
+        [params.actorUserId, params.reason || `ledger${ledgerId}_margin_release`, params.holdId],
       );
     } else {
       await transaction.execute(
         "UPDATE ai_wallet_project_holds SET released_amount = released_amount + CAST(? AS DECIMAL(36,18)), released_by = ?, released_reason = ?, updated_at = NOW() WHERE id = ?",
-        [amount, params.actorUserId, params.reason || 'ledger37_margin_partial_release', params.holdId],
+        [amount, params.actorUserId, params.reason || `ledger${ledgerId}_margin_partial_release`, params.holdId],
       );
     }
     const [releasedRows] = await transaction.execute("SELECT * FROM ai_wallet_project_holds WHERE id = ? LIMIT 1", [params.holdId]);
     if (ownConnection) await transaction.commit();
     const updatedHold = holdResult(rowsOf(releasedRows)[0]);
     return { hold: updatedHold, releasedAmount: amount, remainingAmount: updatedHold.remainingAmount, fullyReleased, releaseNo, releasedAt };
+  } catch (error) {
+    if (ownConnection) try { await transaction.rollback(); } catch {}
+    throw error;
+  } finally {
+    if (ownConnection) transaction.release?.();
+  }
+}
+
+const ledger52FundingCollateralTag = (orderId: number) => `52号融资订单 #${orderId} 钱包担保`;
+
+type Ledger52FundingCollateralInput = { coin: "CNY" | "USDT"; qty: string };
+
+/** 52号融资订单的人民币与USDT担保；冻结不改变资产总额，只占用可用余额。 */
+export async function syncLedger52FundingCollateralHolds(params: {
+  orderId: number;
+  userId: number;
+  assets: Ledger52FundingCollateralInput[];
+  actorUserId: number;
+  transaction?: any;
+}): Promise<{ holds: Ledger37WalletHold[] }> {
+  if (!Number.isInteger(params.orderId) || params.orderId <= 0 || !Number.isInteger(params.userId) || params.userId <= 0) {
+    throw new Error("订单或担保用户无效");
+  }
+  await ensureLedger37WalletInfrastructure();
+  const desired = new Map<"CNY" | "USDT", number>();
+  for (const asset of params.assets || []) {
+    const assetCode = String(asset.coin || "").toUpperCase();
+    if (assetCode !== "CNY" && assetCode !== "USDT") throw new Error("仅人民币和USDT使用兼容资金钱包担保");
+    if (desired.has(assetCode)) throw new Error(`同一币种只能作为一条钱包担保物：${assetCode}`);
+    desired.set(assetCode, Number(decimalText(asset.qty)));
+  }
+  const ownConnection = !params.transaction;
+  const conn = params.transaction || await getDbTransactionConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const transaction = conn as any;
+  const tagName = ledger52FundingCollateralTag(params.orderId);
+  try {
+    if (ownConnection) await transaction.beginTransaction();
+    const [existingRows] = await transaction.execute(
+      `SELECT * FROM ai_wallet_project_holds
+        WHERE ledger_id = ? AND tag_name = ? AND user_id = ? AND status = 'active' AND asset_code IN ('CNY', 'USDT')
+        ORDER BY asset_code ASC, id ASC FOR UPDATE`,
+      [LEDGER_52_ID, tagName, params.userId],
+    );
+    const existingByAsset = new Map<"CNY" | "USDT", any[]>();
+    for (const row of rowsOf(existingRows)) {
+      const assetCode = String(row.asset_code || "").toUpperCase();
+      if (assetCode !== "CNY" && assetCode !== "USDT") continue;
+      existingByAsset.set(assetCode, [...(existingByAsset.get(assetCode) || []), row]);
+    }
+    for (const assetCode of ["CNY", "USDT"] as const) {
+      const rows = existingByAsset.get(assetCode) || [];
+      const current = rows.reduce((total, row) => total + Math.max(0, Number(row.amount || 0) - Number(row.released_amount || 0)), 0);
+      const delta = (desired.get(assetCode) || 0) - current;
+      if (delta > 1e-8) {
+        await freezeLedger37WalletHold({ ledgerId: LEDGER_52_ID, userId: params.userId, tagName, assetCode, amount: decimalFromNumber(delta), actorUserId: params.actorUserId, transaction });
+      } else if (delta < -1e-8) {
+        let pendingRelease = -delta;
+        for (const row of rows) {
+          if (pendingRelease <= 1e-8) break;
+          const remaining = Math.max(0, Number(row.amount || 0) - Number(row.released_amount || 0));
+          if (remaining <= 1e-8) continue;
+          const amount = Math.min(remaining, pendingRelease);
+          await releaseLedger37WalletHold({ ledgerId: LEDGER_52_ID, holdId: Number(row.id), amount: decimalFromNumber(amount), actorUserId: params.actorUserId, reason: "ledger52_funding_collateral_sync", transaction });
+          pendingRelease -= amount;
+        }
+        if (pendingRelease > 1e-8) throw new Error(`${assetCode} 钱包担保冻结台账异常，无法解除`);
+      }
+    }
+    const [finalRows] = await transaction.execute(
+      `SELECT * FROM ai_wallet_project_holds
+        WHERE ledger_id = ? AND tag_name = ? AND user_id = ? AND status = 'active' AND amount > COALESCE(released_amount, 0)
+        ORDER BY asset_code ASC, id ASC`,
+      [LEDGER_52_ID, tagName, params.userId],
+    );
+    if (ownConnection) await transaction.commit();
+    return { holds: rowsOf(finalRows).map(holdResult) };
+  } catch (error) {
+    if (ownConnection) try { await transaction.rollback(); } catch {}
+    throw error;
+  } finally {
+    if (ownConnection) transaction.release?.();
+  }
+}
+
+export async function getLedger52FundingCollateralHoldsForOrder(orderId: number): Promise<Ledger37WalletHold[]> {
+  if (!Number.isInteger(orderId) || orderId <= 0) return [];
+  await ensureLedger37WalletInfrastructure();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const [rows] = await (conn as any).execute(
+    `SELECT * FROM ai_wallet_project_holds
+      WHERE ledger_id = ? AND tag_name = ? AND status = 'active' AND amount > COALESCE(released_amount, 0)
+      ORDER BY user_id ASC, asset_code ASC, id ASC`,
+    [LEDGER_52_ID, ledger52FundingCollateralTag(orderId)],
+  );
+  return rowsOf(rows).map(holdResult);
+}
+
+/** 结清或移入回收站时，自动解除该融资订单全部人民币与USDT钱包担保。 */
+export async function releaseLedger52FundingCollateralHoldsForOrder(params: {
+  orderId: number;
+  actorUserId: number;
+  reason: "order_settled" | "order_deleted";
+  transaction?: any;
+}): Promise<{ releasedCount: number }> {
+  if (!Number.isInteger(params.orderId) || params.orderId <= 0) return { releasedCount: 0 };
+  await ensureLedger37WalletInfrastructure();
+  const ownConnection = !params.transaction;
+  const conn = params.transaction || await getDbTransactionConnection();
+  if (!conn) throw new Error("数据库连接失败");
+  const transaction = conn as any;
+  try {
+    if (ownConnection) await transaction.beginTransaction();
+    const [rows] = await transaction.execute(
+      `SELECT id FROM ai_wallet_project_holds
+        WHERE ledger_id = ? AND tag_name = ? AND status = 'active' AND amount > COALESCE(released_amount, 0)
+        ORDER BY user_id ASC, asset_code ASC, id ASC FOR UPDATE`,
+      [LEDGER_52_ID, ledger52FundingCollateralTag(params.orderId)],
+    );
+    const holds = rowsOf(rows);
+    for (const row of holds) {
+      await releaseLedger37WalletHold({ ledgerId: LEDGER_52_ID, holdId: Number(row.id), actorUserId: params.actorUserId, reason: `ledger52_funding_collateral_${params.reason}`, transaction });
+    }
+    if (ownConnection) await transaction.commit();
+    return { releasedCount: holds.length };
   } catch (error) {
     if (ownConnection) try { await transaction.rollback(); } catch {}
     throw error;
