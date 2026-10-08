@@ -217,8 +217,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
   // 同一份草稿同时供实时预览、底部订单保存和「保存37号引用」使用，
   // 避免任一入口遗漏待结／已结的独立标签字段。
+  // 钱包担保只控制担保物来源，不应抹掉已配置的37号引用或手工股票组合缓存。
   const linkedInterestSourceDraft = useMemo(() => {
-    if (collateralSourceMode !== 'external' || !collateralSource) return null;
+    if (!collateralSource) return null;
     const floatingPnlTagName = collateralSource.floatingPnlTagName
       || (collateralSource.useFloatingPnl !== false ? collateralSource.tagName : '');
     const collateralTagName = collateralSource.collateralTagName
@@ -331,14 +332,35 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   );
   const manualStockPreviewQuotes = ((manualStockClosePreviewQuery.data as any)?.quotes ?? {}) as Record<string, { price?: number; currency?: string; priceDate?: string; updatedAt?: string }>;
 
+  // 手工股票组合是订单可回切的配置缓存，与当前浮盈来源分离保存。
+  // 切换为37号标签或不引用时，缓存必须保留，避免再次切回时丢失已录入的股票与参数。
+  const manualStockPnlCache = useMemo(() => {
+    if (formData.assetType !== 'stock' || validManualStockPositions.length === 0) return null;
+    return {
+      calculationMode: manualStockPnlCalculationMode,
+      positions: validManualStockPositions,
+      totalCapital: manualStockPnlCalculationMode === 'total_capital' ? manualStockTotalCapital.trim() : undefined,
+      capitalCurrency: manualStockPnlCalculationMode === 'total_capital' ? manualStockCapitalCurrency : undefined,
+      coefficient: normalizedManualStockPnlCoefficient,
+    };
+  }, [formData.assetType, validManualStockPositions, manualStockPnlCalculationMode, manualStockTotalCapital, manualStockCapitalCurrency, normalizedManualStockPnlCoefficient]);
+
   // 与37号引用共用同一份 collateral_source JSON：允许37号担保/利息与手工股票浮盈并存，
   // 但浮动盈亏本身只取一种来源，避免同一笔风险被重复计入。
   const orderCollateralSourceDraft = useMemo(() => {
-    if (formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions' && validManualStockPositions.length > 0) {
+    if (formData.assetType === 'stock' && manualStockPnlCache) {
+      const baseSource = linkedInterestSourceDraft || {
+        ledgerId: 0,
+        tagName: 'manual-stock-positions-cache',
+      };
+      if (stockPnlSourceMode !== 'manual_positions') {
+        return {
+          ...baseSource,
+          stockManualPnl: manualStockPnlCache,
+        };
+      }
       return {
-        ...(linkedInterestSourceDraft || {}),
-        ledgerId: linkedInterestSourceDraft?.ledgerId ?? 0,
-        tagName: linkedInterestSourceDraft?.tagName || 'manual-stock-positions',
+        ...baseSource,
         floatingPnlTagName: undefined,
         useFloatingPnl: false,
         stockPnlSource: 'manual_positions' as const,
@@ -348,10 +370,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         stockCapitalCurrency: manualStockPnlCalculationMode === 'total_capital' ? manualStockCapitalCurrency : undefined,
         // 先汇总每只股票的原始盈亏，再乘此系数；默认 1 表示不放大或缩小。
         stockPnlCoefficient: normalizedManualStockPnlCoefficient,
+        stockManualPnl: manualStockPnlCache,
       };
     }
     return linkedInterestSourceDraft;
-  }, [formData.assetType, stockPnlSourceMode, validManualStockPositions, manualStockPnlCalculationMode, manualStockTotalCapital, manualStockCapitalCurrency, normalizedManualStockPnlCoefficient, linkedInterestSourceDraft]);
+  }, [formData.assetType, stockPnlSourceMode, validManualStockPositions, manualStockPnlCalculationMode, manualStockTotalCapital, manualStockCapitalCurrency, normalizedManualStockPnlCoefficient, linkedInterestSourceDraft, manualStockPnlCache]);
 
   // 字段展示配置（控制订单卡片各字段的显示/隐藏）
   const DEFAULT_DISPLAY_CONFIG: Record<string, boolean | string> = {
@@ -1258,7 +1281,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       toast.error('请先创建订单，再单独保存37号利息引用');
       return;
     }
-    if (!linkedInterestSourceDraft) {
+    if (!orderCollateralSourceDraft) {
       toast.error('请至少选择一个37号引用标签');
       return;
     }
@@ -1272,14 +1295,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         orderId: Number(editingOrder.id),
         ledgerId,
         userId: Number(participantUserId),
-        snapshot: { collateral_source: JSON.stringify(linkedInterestSourceDraft) },
+        snapshot: { collateral_source: JSON.stringify(orderCollateralSourceDraft) },
       });
       return;
     }
     saveLinkedInterestSourceMutation.mutate({
       id: Number(editingOrder.id),
       ledgerId,
-      collateralSource: linkedInterestSourceDraft,
+      collateralSource: orderCollateralSourceDraft,
     });
   };
   const saveManualStockPnlSource = () => {
@@ -1789,24 +1812,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     // 加载共享担保模式
     const csm = (order as any).collateral_share_mode;
     setCollateralShareMode(csm === 'self' || csm === 'cross' ? csm : 'none');
-    // 加载调用其他账本担保物
+    // 加载37号引用与手工股票缓存。钱包担保只切换担保物展示，不能覆盖这两组订单配置。
     try {
       const cs = (order as any).collateral_source;
-      if (hasWalletCollateralSource) {
-        setCollateralSourceMode('wallet');
-        setCollateralSource(null);
-        setPendingInterestTagName('');
-        setPaidInterestTagName('');
-        setStockPnlSourceMode('none');
-        setManualStockPnlCalculationMode('position_cost');
-        setManualStockPositions([]);
-        setManualStockTotalCapital('');
-        setManualStockCapitalCurrency('CNY');
-        setManualStockPnlCoefficient('1');
-      } else if (cs) {
+      if (cs) {
         const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
-        const savedManualPositions = parsed?.stockPnlSource === 'manual_positions' && Array.isArray(parsed?.stockPositions)
-          ? parsed.stockPositions.map((position: any) => ({
+        const savedManualPnl = parsed?.stockManualPnl && typeof parsed.stockManualPnl === 'object'
+          ? parsed.stockManualPnl
+          : parsed;
+        const savedManualPositions = Array.isArray(savedManualPnl?.positions)
+          ? savedManualPnl.positions.map((position: any) => ({
               name: String(position?.name || '').trim(),
               symbol: String(position?.symbol || '').trim().toUpperCase(),
               buyPrice: String(position?.buyPrice ?? ''),
@@ -1818,22 +1833,33 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               latestPriceDate: String(position?.latestPriceDate || position?.initialPriceDate || ''),
               latestPriceUpdatedAt: String(position?.latestPriceUpdatedAt || ''),
             }))
-          : [];
+          : (Array.isArray(parsed?.stockPositions)
+            ? parsed.stockPositions.map((position: any) => ({
+                name: String(position?.name || '').trim(),
+                symbol: String(position?.symbol || '').trim().toUpperCase(),
+                buyPrice: String(position?.buyPrice ?? ''),
+                sellPrice: String(position?.sellPrice ?? ''),
+                quantity: String(position?.quantity ?? ''),
+                latestPrice: position?.latestPrice ?? position?.initialPrice ?? '',
+                latestPriceDate: String(position?.latestPriceDate || position?.initialPriceDate || ''),
+                latestPriceUpdatedAt: String(position?.latestPriceUpdatedAt || ''),
+              }))
+            : []);
         setManualStockPositions(savedManualPositions);
-        setManualStockPnlCalculationMode(parsed?.stockPnlCalculationMode === 'total_capital' ? 'total_capital' : 'position_cost');
-        setManualStockTotalCapital(parsed?.stockTotalCapital === null || parsed?.stockTotalCapital === undefined ? '' : String(parsed.stockTotalCapital));
-        setManualStockCapitalCurrency(String(parsed?.stockCapitalCurrency || '').toUpperCase() === 'USD' ? 'USD' : 'CNY');
-        const savedStockCoefficient = Number(parsed?.stockPnlCoefficient);
+        setManualStockPnlCalculationMode(savedManualPnl?.calculationMode === 'total_capital' || parsed?.stockPnlCalculationMode === 'total_capital' ? 'total_capital' : 'position_cost');
+        const savedTotalCapital = savedManualPnl?.totalCapital ?? parsed?.stockTotalCapital;
+        setManualStockTotalCapital(savedTotalCapital === null || savedTotalCapital === undefined ? '' : String(savedTotalCapital));
+        setManualStockCapitalCurrency(String(savedManualPnl?.capitalCurrency ?? parsed?.stockCapitalCurrency ?? '').toUpperCase() === 'USD' ? 'USD' : 'CNY');
+        const savedStockCoefficient = Number(savedManualPnl?.coefficient ?? parsed?.stockPnlCoefficient);
         setManualStockPnlCoefficient(
           Number.isFinite(savedStockCoefficient) && savedStockCoefficient > 0 && savedStockCoefficient <= 100000
             ? String(savedStockCoefficient)
             : '1',
         );
-        setStockPnlSourceMode(savedManualPositions.length > 0
+        setStockPnlSourceMode(parsed?.stockPnlSource === 'manual_positions' && savedManualPositions.length > 0
           ? 'manual_positions'
-          : (parsed?.floatingPnlTagName || (parsed?.useFloatingPnl !== false && parsed?.tagName) ? 'reference37' : 'none'));
-        if (parsed && parsed.ledgerId && parsed.tagName) {
-          setCollateralSourceMode('external');
+          : (parsed?.floatingPnlTagName || (parsed?.useFloatingPnl !== false && Number(parsed?.ledgerId) === 37 && parsed?.tagName) ? 'reference37' : 'none'));
+        if (parsed && Number(parsed.ledgerId) === 37 && parsed.tagName) {
           const floatingPnlTagName = parsed.floatingPnlTagName || (parsed.useFloatingPnl !== false ? parsed.tagName : '');
           const collateralTagName = parsed.collateralTagName || (parsed.useCollateral !== false ? parsed.tagName : '');
           setCollateralSource({
@@ -1849,16 +1875,17 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             useCollateral: !!collateralTagName,
           });
           setPendingInterestTagName(parsed.pendingInterestTagName || (parsed.usePendingInterest === true ? parsed.tagName : ''));
-          // 旧的 interestTagName/useInterest 在本次升级前只代表“已结利息”，不能误当成待结引用。
+          // 旧的 interestTagName/useInterest 在本次升级前只代表“已结引用”，不能误当成待结引用。
           setPaidInterestTagName(parsed.paidInterestTagName || parsed.interestTagName || ((parsed.usePaidInterest === true || parsed.useInterest === true) ? parsed.tagName : ''));
+          setCollateralSourceMode(hasWalletCollateralSource ? 'wallet' : 'external');
         } else {
-          setCollateralSourceMode('manual');
+          setCollateralSourceMode(hasWalletCollateralSource ? 'wallet' : 'manual');
           setCollateralSource(null);
           setPendingInterestTagName('');
           setPaidInterestTagName('');
         }
       } else {
-        setCollateralSourceMode('manual');
+        setCollateralSourceMode(hasWalletCollateralSource ? 'wallet' : 'manual');
         setCollateralSource(null);
         setPendingInterestTagName('');
         setPaidInterestTagName('');
@@ -3583,7 +3610,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     onChange={e => {
                       const tag = e.target.value;
                       setStockPnlSourceMode(tag ? 'reference37' : 'none');
-                      if (tag) setManualStockPositions([]);
                       setCollateralSource(prev => {
                         if (!tag) return prev ? { ...prev, floatingPnlTagName: '', useFloatingPnl: false } : prev;
                         const collateralTagName = prev?.collateralTagName || '';
@@ -3745,11 +3771,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         onClick={() => {
                           setStockPnlSourceMode(value);
                           if (value === 'none') {
-                            setManualStockPnlCalculationMode('position_cost');
-                            setManualStockPositions([]);
-                            setManualStockTotalCapital('');
-                            setManualStockCapitalCurrency('CNY');
-                            setManualStockPnlCoefficient('1');
                             setCollateralSource(prev => prev ? { ...prev, floatingPnlTagName: '', useFloatingPnl: false } : prev);
                           }
                           if (value === 'manual_positions') {
@@ -3765,6 +3786,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       >{label}</button>
                     ))}
                   </div>
+                  {stockPnlSourceMode !== 'manual_positions' && manualStockPositions.length > 0 && (
+                    <div className="rounded-lg border border-dashed border-violet-200 bg-white/80 px-2.5 py-2 text-[11px] leading-4 text-violet-700">
+                      已保留 {manualStockPositions.length} 只手工股票及全部计算参数；当前仅切换浮盈来源，不会删除，切回“手工股票”即可继续查看和编辑。
+                    </div>
+                  )}
                   {stockPnlSourceMode === 'reference37' && !collateralSource?.floatingPnlTagName && (
                     <div className="rounded-lg border border-dashed border-violet-300 bg-white px-3 py-2 text-xs text-violet-700">请在上方「调用37号数据」中选择盈亏标签。</div>
                   )}
