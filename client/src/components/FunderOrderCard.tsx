@@ -1619,6 +1619,8 @@ export function FunderOrderCard({
     : financingDisplayConfig?.assetFundingType === 'self' || financingDisplayConfig?.selfFundedAsset === true || financingDisplayConfig?.selfFundedAsset === 'true'
       ? 'self'
       : null;
+  const hasExplicitPrincipalLentOut = order.principal_lent_out === 1 || order.principal_lent_out === true;
+  const primaryAmountLabel = hasExplicitPrincipalLentOut ? '借出本金' : assetFundingType === 'self' ? '订单金额' : '融资金额';
   // 自有资产期权的浮盈定义为当前合约价值，不将自有权利金重复作为融资成本扣除。
   const isSelfFundedOption = isOptionOrder && assetFundingType === 'self';
   const calculatedFinancingDisplayAmount = amountCurrency === 'USDT'
@@ -1645,8 +1647,7 @@ export function FunderOrderCard({
   // 导致 FK9201 一类订单把融资本金误当成持仓价值而重复计入。
   // 对明确的融资付息非期权单，资金属性即为本金待覆盖口径；期权单沿用独立的
   // 「实时价值－权利金成本」公式，不能走这里的本金扣减分支。
-  const principalLentOut = order.principal_lent_out === 1
-    || order.principal_lent_out === true
+  const principalLentOut = hasExplicitPrincipalLentOut
     || (!isOptionOrder && assetFundingType === 'financing');
   // 左上角主展示独立于“借出本金”风险开关：可按订单显示融资金额或标的数量。
   // 新字段优先；未设置的新旧订单则严格保留过去的默认展示，且不参与任何资金计算。
@@ -2372,7 +2373,7 @@ export function FunderOrderCard({
           <div className="flex items-center gap-0.5 mb-0.5">
             <span className="text-[10px] font-medium" style={{ color: '#3B82F6' }}>
               {displayFinancingAsPrimary
-                ? `融资金额 (${amountCurrency})`
+                ? `${primaryAmountLabel} (${amountCurrency})`
                 : `币种数量 (${isOptionOrder ? '张' : order.coin})`}
             </span>
             {(order as any).order_fill_status === 'pending' && (

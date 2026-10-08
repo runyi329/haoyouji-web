@@ -38,6 +38,37 @@ const formatChineseStockPriceDate = (value?: string | null) => {
   return text;
 };
 
+type CompactDisplayToggleProps = {
+  label: string;
+  checked: boolean;
+  onToggle: () => void;
+  tone?: 'blue' | 'indigo' | 'orange' | 'purple';
+};
+
+function CompactDisplayToggle({ label, checked, onToggle, tone = 'blue' }: CompactDisplayToggleProps) {
+  const activeTone = {
+    blue: 'bg-blue-500',
+    indigo: 'bg-indigo-500',
+    orange: 'bg-orange-500',
+    purple: 'bg-purple-500',
+  }[tone];
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={checked}
+      aria-label={`切换${label}`}
+      className="flex min-h-8 min-w-0 items-center justify-between gap-1 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
+    >
+      <span className="min-w-0 truncate text-[11px] font-medium text-gray-600">{label}</span>
+      <span className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-200 ${checked ? activeTone : 'bg-gray-200'}`} aria-hidden="true">
+        <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${checked ? 'translate-x-3' : 'translate-x-1'}`} />
+      </span>
+    </button>
+  );
+}
+
 export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, financeOnly, onRecycleBinRef }: FunderManagementProps = {}) {
   const [, params] = useRoute("/ledger/:id/funder-management");
   const [, routeParams2] = useRoute("/ledger/:id/finance-unified");
@@ -391,6 +422,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     // 左上角主展示由订单按需保存；不设默认值，以保持历史订单原有的展示口径。
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | string>>(DEFAULT_DISPLAY_CONFIG);
+  const amountDisplayLabel = formData.principalLentOut
+    ? '借出本金'
+    : displayConfig.assetFundingType === 'self' || displayConfig.selfFundedAsset === true || displayConfig.selfFundedAsset === 'true'
+      ? '订单金额'
+      : '融资金额';
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
   const [showPreviewCollateralInfo, setShowPreviewCollateralInfo] = useState(false); // 预览卡片-担保缺口说明
   const [showPreviewMarginInfo, setShowPreviewMarginInfo] = useState(false); // 预览卡片-保证金率说明
@@ -689,6 +725,26 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     const p = formLivePrices[cur];
     if (!p || p <= 0) return null;
     return usdtVal / p;
+  };
+
+  // 期权订单只以专属参数为准：单张权利金 × 合约数量，统一折算为 U 供订单金额、担保与预览使用。
+  const getOptionPremiumSummary = () => {
+    const premium = Number(optionFormData.premium || 0);
+    const quantity = Number(optionFormData.buyQty || 0);
+    const totalInDenomination = Number.isFinite(premium) && premium > 0 && Number.isFinite(quantity) && quantity > 0
+      ? premium * quantity
+      : 0;
+    const totalUsdt = totalInDenomination > 0
+      ? toUsdtBase(totalInDenomination, optionFormData.premiumDenomination)
+      : null;
+    return {
+      premium,
+      quantity,
+      totalInDenomination,
+      totalUsdt,
+      totalInput: totalInDenomination > 0 ? String(Number(totalInDenomination.toFixed(8))) : '',
+      denomination: optionFormData.premiumDenomination,
+    };
   };
 
   const formatLinkedAmountValue = (value: number, field: LinkedAmountField): string => {
@@ -1973,26 +2029,23 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     // 股票历史订单的 amount 按所选融资币种原值保存；数字币和期权统一保存USDT基准。
     // 三种类型都支持融资金额、买入价格、币数任选两项推算第三项。
     let finalAmount: string;
+    const isOptionOrder = formData.assetType === 'crypto_option';
+    const optionPremiumSummary = isOptionOrder ? getOptionPremiumSummary() : null;
     const price = parseFloat(formData.buyPrice || '0');
     const quantity = parseFloat(formData.buyQuantity || '0');
     const hasCompleteLinkedValues = !!financingAmountUsdt && parseFloat(financingAmountUsdt) > 0 && price > 0 && quantity > 0;
     if (formData.assetType === 'stock') {
       finalAmount = (() => { const v = parseFloat(amountInputValue); return isNaN(v) ? '' : v.toFixed(2); })();
       if (!finalAmount || parseFloat(finalAmount) <= 0) {
-        toast.error('请填写融资金额');
+        toast.error(`请填写${amountDisplayLabel}`);
         return;
       }
-    } else if (formData.assetType === 'crypto_option' && !hasCompleteLinkedValues) {
-      const premium = parseFloat(optionFormData.premium || '0');
-      const optionQty = parseFloat(optionFormData.buyQty || '0');
-      const premiumTotalUsdt = premium > 0 && optionQty > 0
-        ? toUsdtBase(premium * optionQty, optionFormData.premiumDenomination)
-        : null;
-      finalAmount = premiumTotalUsdt && premiumTotalUsdt > 0
-        ? premiumTotalUsdt.toFixed(4)
-        : (editingOrder ? formData.originalAmount : '');
+    } else if (isOptionOrder) {
+      finalAmount = optionPremiumSummary?.totalUsdt && optionPremiumSummary.totalUsdt > 0
+        ? optionPremiumSummary.totalUsdt.toFixed(4)
+        : '';
       if (!finalAmount || parseFloat(finalAmount) <= 0) {
-        toast.error('请在三字段中手动输入任意两项，或填写权利金和数量');
+        toast.error('请填写单张权利金和合约数量');
         return;
       }
     } else {
@@ -2020,12 +2073,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     }
     const payload = {
       ledgerId,
-      coin: formData.coin,
+      coin: isOptionOrder ? optionFormData.optionCurrency : formData.coin,
       amount: finalAmount,
-      amountCurrency: formData.amountCurrency || undefined,
-      buyPrice: formData.buyPrice || undefined,
+      amountCurrency: isOptionOrder ? optionPremiumSummary?.denomination || 'USDT' : formData.amountCurrency || undefined,
+      buyPrice: isOptionOrder ? optionFormData.premium || undefined : formData.buyPrice || undefined,
       buyDate: formData.buyDate || undefined,
-      buyQuantity: formData.buyQuantity || undefined,
+      buyQuantity: isOptionOrder ? optionFormData.buyQty || undefined : formData.buyQuantity || undefined,
       storageAccount: formData.storageAccount || undefined,
       adminNote: formData.adminNote || undefined,
       publicNote: formData.publicNote || undefined,
@@ -2057,13 +2110,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
         rate_negative: normalizeFunderAnnualRate(formData.interestRateAnnual).startsWith('-'),
         ownerNameDisplay: 'self',
-        financingInputAmount: amountInputValue || '',
-        financingInputCurrency: formData.amountCurrency || 'USDT',
-        linkedManualFields: manualLinkedFieldsRef.current.join(','),
-        linkedDerivedField: derivedLinkedField || '',
+        financingInputAmount: isOptionOrder ? optionPremiumSummary?.totalInput || '' : amountInputValue || '',
+        financingInputCurrency: isOptionOrder ? optionPremiumSummary?.denomination || 'USDT' : formData.amountCurrency || 'USDT',
+        linkedManualFields: isOptionOrder ? '' : manualLinkedFieldsRef.current.join(','),
+        linkedDerivedField: isOptionOrder ? '' : derivedLinkedField || '',
       } as Record<string, boolean | number | string>,
       assetType: formData.assetType || undefined,
-      tradeDirection: (['long', 'short'] as const).includes(formData.tradeDirection as any) ? (formData.tradeDirection as 'long' | 'short') : null,
+      tradeDirection: !isOptionOrder && (['long', 'short'] as const).includes(formData.tradeDirection as any) ? (formData.tradeDirection as 'long' | 'short') : null,
       ownerLabel: formData.ownerLabel || undefined,
       personalHeaderLabel: formData.personalHeaderLabel.trim() || undefined,
       ownerVisibilityMode: formData.ownerVisibilityMode,
@@ -2585,198 +2638,187 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </div>
                 </div>
               ) : (
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">类型<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
-                  <div className="flex gap-2 flex-wrap">
-                    {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }, { value: 'crypto_option', label: '期权' }] as const).map(opt => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => {
-                          if (editingOrder && !editingOrder.participantInfo) {
-                            toast.error('\u5df2\u521b\u5efa\u8ba2\u5355\u7684\u8d44\u4ea7\u7c7b\u578b\u4e0d\u53ef\u4fee\u6539');
-                            return;
-                          }
-                          const newType = formData.assetType === opt.value ? '' : opt.value;
-                          setFormData(d => ({ ...d, assetType: newType }));
-                          if (newType === 'crypto_option') {
-                            setOptionFormData(d => ({ ...d, optionCurrency: formData.coin }));
-                          }
-                        }}
-                        className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
-                        style={
-                          formData.assetType === opt.value
-                            ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
-                            : { backgroundColor: '#F3F4F6', color: '#6B7280' }
-                        }
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                <div className="grid grid-cols-5 gap-3">
+                  <div className={(formData.assetType === 'crypto' || formData.assetType === '') ? 'col-span-3' : 'col-span-5'}>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">类型</label>
+                    <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+                      {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }, { value: 'crypto_option', label: '期权' }] as const).map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            if (editingOrder && !editingOrder.participantInfo) {
+                              toast.error('\u5df2\u521b\u5efa\u8ba2\u5355\u7684\u8d44\u4ea7\u7c7b\u578b\u4e0d\u53ef\u4fee\u6539');
+                              return;
+                            }
+                            const newType = formData.assetType === opt.value ? '' : opt.value;
+                            setFormData(d => ({ ...d, assetType: newType }));
+                            if (newType === 'crypto_option') {
+                              setOptionFormData(d => ({ ...d, optionCurrency: formData.coin }));
+                            }
+                          }}
+                          className="flex-1 min-w-0 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-all last:border-r-0"
+                          style={formData.assetType === opt.value
+                            ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' }
+                            : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+                  {(formData.assetType === 'crypto' || formData.assetType === '') && (
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">方向</label>
+                      <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+                        <button
+                          type="button"
+                          onClick={() => setFormData(d => ({ ...d, tradeDirection: d.tradeDirection === 'long' ? null : 'long' }))}
+                          className="flex-1 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-all"
+                          style={formData.tradeDirection === 'long'
+                            ? { background: 'linear-gradient(135deg, #059669, #10B981)', color: '#fff', borderColor: 'transparent' }
+                            : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
+                        >
+                          做多
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(d => ({ ...d, tradeDirection: d.tradeDirection === 'short' ? null : 'short' }))}
+                          className="flex-1 px-1 py-1.5 text-xs font-semibold transition-all"
+                          style={formData.tradeDirection === 'short'
+                            ? { background: 'linear-gradient(135deg, #DC2626, #EF4444)', color: '#fff', borderColor: 'transparent' }
+                            : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
+                        >
+                          做空
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* 做多/做空 — 仅数字币时显示 */}
-              {(formData.assetType === 'crypto' || formData.assetType === '') && (
+              {/* 成交状态 + 归属分类 */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">方向<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，数字币专用</span></label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFormData(d => ({ ...d, tradeDirection: d.tradeDirection === 'long' ? null : 'long' }))}
-                      className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
-                      style={formData.tradeDirection === 'long'
-                        ? { background: 'linear-gradient(135deg, #059669, #10B981)', color: '#fff' }
-                        : { backgroundColor: '#F0FDF4', color: '#059669', border: '1px solid #A7F3D0' }
-                      }
-                    >
-                      做多
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(d => ({ ...d, tradeDirection: d.tradeDirection === 'short' ? null : 'short' }))}
-                      className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
-                      style={formData.tradeDirection === 'short'
-                        ? { background: 'linear-gradient(135deg, #DC2626, #EF4444)', color: '#fff' }
-                        : { backgroundColor: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }
-                      }
-                    >
-                      做空
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* 成交状态 */}
-              {(
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">成交状态</label>
-                  <div className="flex gap-3">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">成交状态</label>
+                  <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
                     {([{ value: 'filled', label: '已成交' }, { value: 'pending', label: '挂单中' }] as const).map(opt => (
                       <button
                         key={opt.value}
                         type="button"
                         onClick={() => setFormData(d => ({ ...d, orderFillStatus: opt.value }))}
-                        className="flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors"
-                        style={
-                          formData.orderFillStatus === opt.value
-                            ? opt.value === 'filled'
-                              ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' }
-                              : { background: 'linear-gradient(135deg, #EA580C, #F97316)', color: '#fff', borderColor: 'transparent' }
-                            : { backgroundColor: '#F3F4F6', color: '#6B7280', borderColor: 'transparent' }
-                        }
+                        className="flex-1 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-colors last:border-r-0"
+                        style={formData.orderFillStatus === opt.value
+                          ? opt.value === 'filled'
+                            ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' }
+                            : { background: 'linear-gradient(135deg, #EA580C, #F97316)', color: '#fff', borderColor: 'transparent' }
+                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
                       >
                         {opt.label}
                       </button>
                     ))}
                   </div>
                 </div>
-              )}
-
-              {/* 归属分类 */}
-              {(
                 <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">归属分类</label>
-                  <div className="flex gap-3">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">归属分类</label>
+                  <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
                     {([{ value: 'self', label: '本人' }, { value: 'other', label: '他人' }] as const).map(opt => (
                       <button
                         key={opt.value}
                         type="button"
                         onClick={() => setFormData(d => ({ ...d, orderPerspective: opt.value }))}
-                        className="flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors"
-                        style={
-                          formData.orderPerspective === opt.value
-                            ? opt.value === 'self'
-                              ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' }
-                              : { background: 'linear-gradient(135deg, #7C3AED, #8B5CF6)', color: '#fff', borderColor: 'transparent' }
-                            : { backgroundColor: '#F3F4F6', color: '#6B7280', borderColor: 'transparent' }
-                        }
+                        className="flex-1 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-colors last:border-r-0"
+                        style={formData.orderPerspective === opt.value
+                          ? opt.value === 'self'
+                            ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' }
+                            : { background: 'linear-gradient(135deg, #7C3AED, #8B5CF6)', color: '#fff', borderColor: 'transparent' }
+                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
                       >
                         {opt.label}
                       </button>
                     ))}
                   </div>
-                  {ledgerId === 52 && (() => {
-                    const selectedFundingType = displayConfig.assetFundingType === 'self' || displayConfig.assetFundingType === 'financing'
-                      ? displayConfig.assetFundingType
-                      : displayConfig.selfFundedAsset ? 'self' : '';
-                    const options = [
-                      { value: 'self', label: '自', active: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
-                      { value: 'financing', label: '融', active: 'bg-blue-50 text-blue-700 border-blue-300' },
-                    ] as const;
-                    const explicitPrimaryDisplay = displayConfig.primaryAssetDisplay === 'financing' || displayConfig.primaryAssetDisplay === 'quantity'
-                      ? displayConfig.primaryAssetDisplay
-                      : null;
-                    // 未明确选择的新字段时，严格沿用旧订单的主展示：借出本金/CNY 默认显示金额，
-                    // 其余数字币默认显示数量。管理员选过后才写入新的独立展示偏好。
-                    const legacyPrimaryDisplay = displayConfig.principalLentOutPrimary === 'quantity'
-                      ? 'quantity'
-                      : displayConfig.principalLentOutPrimary === 'principal'
-                        ? 'financing'
-                        : (formData.principalLentOut || formData.amountCurrency === 'CNY' ? 'financing' : 'quantity');
-                    const selectedPrimaryDisplay = explicitPrimaryDisplay ?? legacyPrimaryDisplay;
-                    return (
-                      <div className="mt-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500 shrink-0">资金属性</span>
-                          <div className="flex items-center gap-1.5">
-                            {options.map(option => {
-                              const isSelected = selectedFundingType === option.value;
-                              return (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  onClick={() => setDisplayConfig(config => ({
-                                    ...config,
-                                    assetFundingType: isSelected ? '' : option.value,
-                                    selfFundedAsset: isSelected ? false : option.value === 'self',
-                                  }))}
-                                  className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${isSelected ? option.active : 'bg-gray-50 text-gray-500 border-gray-200'}`}
-                                  aria-pressed={isSelected}
-                                >
-                                  {option.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <span className="text-[11px] text-gray-400">可选一项</span>
-                        </div>
-                        {formData.assetType !== 'stock' && (
-                          <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50/80 px-2.5 py-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-medium text-slate-600">左上角主展示</span>
-                              <span className="text-[11px] text-slate-400">仅影响展示，不改变资金计算</span>
-                            </div>
-                            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-                              {([
-                                { value: 'financing', label: '融资金额' },
-                                { value: 'quantity', label: formData.assetType === 'crypto_option' ? '合约张数' : '币种数量' },
-                              ] as const).map(({ value, label }) => {
-                                const active = selectedPrimaryDisplay === value;
-                                return (
-                                  <button
-                                    key={value}
-                                    type="button"
-                                    onClick={() => setDisplayConfig(config => ({ ...config, primaryAssetDisplay: value }))}
-                                    className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
-                                      active
-                                        ? 'border-blue-400 bg-white text-blue-700'
-                                        : 'border-gray-200 bg-white text-gray-500'
-                                    }`}
-                                  >
-                                    {label}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
                 </div>
-              )}
+              </div>
+
+              {/* 52号账本：资金属性 + 左上角展示 */}
+              {ledgerId === 52 && (() => {
+                const selectedFundingType = displayConfig.assetFundingType === 'self' || displayConfig.assetFundingType === 'financing'
+                  ? displayConfig.assetFundingType
+                  : displayConfig.selfFundedAsset ? 'self' : 'financing';
+                const fundingOptions = [
+                  { value: 'self', label: '自', active: { background: 'linear-gradient(135deg, #047857, #10B981)', color: '#fff', borderColor: 'transparent' } },
+                  { value: 'financing', label: '融', active: { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' } },
+                ] as const;
+                const explicitPrimaryDisplay = displayConfig.primaryAssetDisplay === 'financing' || displayConfig.primaryAssetDisplay === 'quantity'
+                  ? displayConfig.primaryAssetDisplay
+                  : null;
+                // 未明确选择的新字段时，严格沿用旧订单的主展示：借出本金/CNY 默认显示金额，
+                // 其余数字币默认显示数量。管理员选过后才写入新的独立展示偏好。
+                const legacyPrimaryDisplay = displayConfig.principalLentOutPrimary === 'quantity'
+                  ? 'quantity'
+                  : displayConfig.principalLentOutPrimary === 'principal'
+                    ? 'financing'
+                    : (formData.principalLentOut || formData.amountCurrency === 'CNY' ? 'financing' : 'quantity');
+                const selectedPrimaryDisplay = explicitPrimaryDisplay ?? legacyPrimaryDisplay;
+                const showPrimaryDisplay = formData.assetType !== 'stock';
+                return (
+                  <div className={`grid gap-3 ${showPrimaryDisplay ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">资金属性</label>
+                      <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+                        {fundingOptions.map(option => {
+                          const isSelected = selectedFundingType === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => setDisplayConfig(config => ({
+                                ...config,
+                                assetFundingType: option.value,
+                                selfFundedAsset: option.value === 'self',
+                              }))}
+                              className="flex-1 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-colors last:border-r-0"
+                              style={isSelected
+                                ? option.active
+                                : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
+                              aria-pressed={isSelected}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {showPrimaryDisplay && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">左上角展示</label>
+                        <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+                          {([
+                            { value: 'financing', label: amountDisplayLabel },
+                            { value: 'quantity', label: formData.assetType === 'crypto_option' ? '合约张数' : '币种数量' },
+                          ] as const).map(({ value, label }) => {
+                            const active = selectedPrimaryDisplay === value;
+                            return (
+                              <button
+                                key={value}
+                                type="button"
+                                onClick={() => setDisplayConfig(config => ({ ...config, primaryAssetDisplay: value }))}
+                                className="flex-1 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-colors last:border-r-0"
+                                style={active
+                                  ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' }
+                                  : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* 自定义标签 */}
               {(
@@ -2929,6 +2971,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </div>
                 </div>
               )}
+              {formData.assetType !== 'crypto_option' && (
+                <>
                 {/* 开仓日期（与用户同行并排） */}
                 <div className="flex-1 min-w-0" style={{}}>
                   <label className="block text-sm font-medium text-gray-600 mb-2">开仓日期</label>
@@ -2950,15 +2994,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     )}
                   </div>
                 </div>
+                </>
+              )}
               </div>
               {/* 购买币种已移至三联最后一行（与币数并排） */}
 
-              {/* 融资金额 / 买入价格 / 购买币种+币数 三字段联动（统一圆角容器框） */}
-              {formData.assetType === 'crypto_option' && (
-                <div className="text-xs text-purple-500 bg-purple-50 rounded-xl px-3 py-2">
-                  期权参数保留在下方；融资金额、买入价格、币数仍可任选两项自动推算第三项
-                </div>
-              )}
+              {/* 非期权订单：金额 / 买入价格 / 购买币种+币数三字段联动 */}
+              {formData.assetType !== 'crypto_option' && (
               <div className="space-y-3">
                 <span className="block text-xs text-gray-400">
                   最后手动输入的两项保持不变，第三项显示“≈ 自动推算”
@@ -2966,7 +3008,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 {/* 融资金额 + 融资币种（同行并排） */}
                 <div className="flex items-end gap-3">
                   <div className="flex-1 min-w-0">
-                    <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1.5">融资金额{derivedLinkedField === 'amount' && <span className="font-normal text-orange-500">≈ 自动推算</span>}</label>
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1.5">{amountDisplayLabel}{derivedLinkedField === 'amount' && <span className="font-normal text-orange-500">≈ 自动推算</span>}</label>
                     <input
                       type="number"
                       inputMode="decimal"
@@ -3066,11 +3108,36 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </div>
                 </div>
               </div>
+              )}
 
               {/* 期权专属字段（在隐藏 div 外面，期权类型时正常显示） */}
               {formData.assetType === 'crypto_option' && (
                 <div className="space-y-3 rounded-xl border border-purple-200 bg-purple-50 p-3">
-                  <div className="text-xs font-semibold text-purple-600 mb-1">期权参数</div>
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <div className="text-xs font-semibold text-purple-600">期权参数</div>
+                    <div className="text-[11px] text-purple-500">总投入自动计算</div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">开仓日期</label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowDatePicker(v => !v)}
+                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-left focus:outline-none focus:ring-2 focus:ring-purple-200 bg-white"
+                        style={{ color: formData.buyDate ? '#1A2340' : '#9CA3AF' }}
+                      >
+                        {formData.buyDate || '点击选择日期'}
+                      </button>
+                      {showDatePicker && (
+                        <div className="absolute top-full left-0 right-0 z-30 mt-2">
+                          <DatePicker
+                            value={formData.buyDate}
+                            onChange={v => { setFormData(d => ({ ...d, buyDate: v })); setShowDatePicker(false); }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   {/* 标的币种 + 方向 */}
                   <div className="flex gap-2">
                     <div style={{ width: '40%' }}>
@@ -3216,6 +3283,22 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       />
                     </div>
                   </div>
+                  {(() => {
+                    const summary = getOptionPremiumSummary();
+                    if (summary.totalInDenomination <= 0) return null;
+                    const digits = ['BTC', 'ETH', 'SOL'].includes(summary.denomination) ? 4 : 2;
+                    return (
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-purple-200 bg-white/80 px-3 py-2 text-xs">
+                        <span className="font-medium text-purple-600">总权利金</span>
+                        <span className="text-right font-semibold text-purple-800 tabular-nums">
+                          {summary.totalInDenomination.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })} {summary.denomination}
+                          {summary.denomination !== 'USDT' && summary.totalUsdt !== null && (
+                            <span className="ml-1 font-normal text-purple-500">≈ {summary.totalUsdt.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -4208,124 +4291,97 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               <div className="rounded-xl border border-gray-100 overflow-hidden" style={{ backgroundColor: '#FAFBFF' }}>
                 {/* 用户前端权限 */}
                 <div className="px-4 py-3">
-                  <div className="text-xs font-medium text-indigo-500 mb-2">用户前端权限</div>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm text-gray-700">允许用户下载图片</div>
-                      <div className="mt-0.5 text-xs leading-5 text-gray-400">默认开启；只控制用户前端，管理员订单列表始终可下载</div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setDisplayConfig(c => ({ ...c, allowUserImageDownload: !c.allowUserImageDownload }))}
-                      className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                        displayConfig.allowUserImageDownload ? 'bg-indigo-500' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                        displayConfig.allowUserImageDownload ? 'translate-x-5' : 'translate-x-1'
-                      }`} />
-                    </button>
+                  <div className="mb-1.5 text-xs font-medium text-indigo-500">用户权限</div>
+                  <div className="grid grid-cols-3 gap-x-2 gap-y-1">
+                    <CompactDisplayToggle
+                      label="图片下载"
+                      checked={Boolean(displayConfig.allowUserImageDownload)}
+                      onToggle={() => setDisplayConfig(c => ({ ...c, allowUserImageDownload: !c.allowUserImageDownload }))}
+                      tone="indigo"
+                    />
                   </div>
+                  <p className="mt-1 text-[10px] leading-4 text-gray-400">仅控制用户前端；管理员订单列表始终可下载。</p>
                 </div>
                 <div className="mx-4 h-px bg-gray-100" />
                 {/* 左栏字段 */}
-                <div className="px-4 pt-3 pb-1">
-                  <div className="text-xs font-medium text-blue-500 mb-2">左栏：持有资产</div>
-                  <div className="space-y-2">
+                <div className="px-4 py-3">
+                  <div className="mb-1.5 text-xs font-medium text-blue-500">左栏 · 持有资产</div>
+                  <div className="grid grid-cols-3 gap-x-2 gap-y-1">
                     {[
                       { key: 'buyPrice', label: '买入币价' },
-                      { key: 'buyValue', label: '买入价値' },
+                      { key: 'buyValue', label: '买入价值' },
                       { key: 'buyDate', label: '开仓时间' },
                       { key: 'openPrice', label: '开仓币价' },
                       { key: 'todayPrice', label: '当前币价' },
                       { key: 'floatPnl', label: '浮动盈亏' },
-                      // 当前价値已移至持有资产括号显示，不再单独作为开关
                       { key: 'holdDuration', label: '持有时长' },
                       { key: 'orderNo', label: '订单编号' },
-                      { key: 'aiIcon', label: 'AI图标（持有资产右上角）' },
-                      { key: 'assetType', label: '资产类型标签（股票/数字币）' },
-                      { key: 'showOwnerName', label: '显示订单所有者名字' },
+                      { key: 'assetType', label: '资产标签' },
+                      { key: 'showOwnerName', label: '显示名字' },
                       ...(formData.assetType === 'crypto' ? [
-                        { key: 'showTradeDirection', label: '多空方向标签（数字币专属）' },
+                        { key: 'showTradeDirection', label: '多空标签' },
                       ] : []),
                       ...(formData.assetType === 'stock' ? [
-                        { key: 'brokerName', label: '证券公司（股票专属）' },
-                        { key: 'brokerAccount', label: '证券账号（股票专属）' },
+                        { key: 'brokerName', label: '证券公司' },
+                        { key: 'brokerAccount', label: '证券账号' },
                       ] : []),
+                      { key: 'aiIcon', label: 'AI图标' },
                     ].map(({ key, label }) => (
-                      <div key={key} className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">{label}</span>
-                        <button
-                          type="button"
-                          onClick={() => setDisplayConfig(c => ({ ...c, [key]: !c[key] }))}
-                          className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                            displayConfig[key] ? 'bg-blue-500' : 'bg-gray-200'
-                          }`}
-                        >
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                            displayConfig[key] ? 'translate-x-5' : 'translate-x-1'
-                          }`} />
-                        </button>
-                      </div>
+                      <CompactDisplayToggle
+                        key={key}
+                        label={label}
+                        checked={Boolean(displayConfig[key])}
+                        onToggle={() => setDisplayConfig(c => ({ ...c, [key]: !c[key] }))}
+                      />
                     ))}
                   </div>
                 </div>
                 <div className="mx-4 h-px bg-gray-100 my-2" />
                 {/* 右栏上半：待结利息区 */}
-                <div className="px-4 pb-2">
-                  <div className="text-xs font-medium text-blue-500 mb-2">右栏上半：待结利息区</div>
-                  <div className="space-y-2">
+                <div className="px-4 py-3">
+                  <div className="mb-1.5 text-xs font-medium text-blue-500">右栏 · 利息担保</div>
+                  <div className="grid grid-cols-3 gap-x-2 gap-y-1">
                     {[
-                      { key: 'accruedInterest', label: '待结利息（标题+大数字）' },
+                      { key: 'accruedInterest', label: '待结利息' },
                       { key: 'paidInterest', label: '已结利息' },
                       { key: 'interestBase', label: '计息基数' },
                       { key: 'interestStartDate', label: '计息日期' },
                       { key: 'interestDuration', label: '计息时长' },
                       { key: 'interestPaymentType', label: '付息方式' },
                       { key: 'collateralCoin', label: '担保货币' },
-                      { key: 'collateralValue', label: '担保价値' },
+                      { key: 'collateralValue', label: '担保价值' },
                       { key: 'collateral', label: '担保缺口' },
                       { key: 'marginRate', label: '保证金率' },
                     ].map(({ key, label }) => (
-                      <div key={key}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">{label}</span>
-                          <button
-                            type="button"
-                            onClick={() => setDisplayConfig(c => ({ ...c, [key]: !c[key] }))}
-                            className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                              displayConfig[key] ? 'bg-blue-500' : 'bg-gray-200'
-                            }`}
-                          >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                              displayConfig[key] ? 'translate-x-5' : 'translate-x-1'
-                            }`} />
-                          </button>
-                        </div>
-                        {/* 保证金率预警阈值输入框（仅在保证金率开关打开时显示） */}
-                        {key === 'marginRate' && displayConfig.marginRate && (
-                          <div className="mt-1.5 flex items-center gap-2 pl-1">
-                            <span className="text-xs text-gray-400 shrink-0">低于</span>
-                            <input
-                              type="number"
-                              min="0"
-                              max="200"
-                              step="1"
-                              value={marginAlertThreshold}
-                              onChange={e => setMarginAlertThreshold(e.target.value)}
-                              placeholder="如：80"
-                              className="w-16 text-xs text-center border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-orange-400"
-                              style={{ color: '#D97706' }}
-                            />
-                            <span className="text-xs text-gray-400 shrink-0">% 时预警</span>
-                            {marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 && (
-                              <span className="text-xs text-orange-500 font-medium">已设置</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                      <CompactDisplayToggle
+                        key={key}
+                        label={label}
+                        checked={Boolean(displayConfig[key])}
+                        onToggle={() => setDisplayConfig(c => ({ ...c, [key]: !c[key] }))}
+                      />
                     ))}
                   </div>
+                  {/* 保证金率预警阈值输入框（仅在保证金率开关打开时显示） */}
+                  {displayConfig.marginRate && (
+                    <div className="mt-2 flex items-center gap-2 rounded-lg bg-orange-50 px-2.5 py-2">
+                      <span className="text-xs text-orange-600 shrink-0">低于</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="200"
+                        step="1"
+                        value={marginAlertThreshold}
+                        onChange={e => setMarginAlertThreshold(e.target.value)}
+                        placeholder="80"
+                        className="w-14 rounded-md border border-orange-200 bg-white px-1.5 py-1 text-center text-xs focus:outline-none focus:border-orange-400"
+                        style={{ color: '#D97706' }}
+                      />
+                      <span className="text-xs text-orange-600 shrink-0">% 时预警</span>
+                      {marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 && (
+                        <span className="text-xs text-orange-500 font-medium">已设</span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 {ledgerId === 52 && (
                   <>
@@ -4379,25 +4435,25 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </>
                 )}
                 {/* 约等于显示控制 */}
-                <div className="px-4 pb-2">
-                  <div className="text-xs font-medium text-blue-500 mb-2">约等于显示控制</div>
-                  <div className="space-y-3">
+                <div className="px-4 py-3">
+                  <div className="mb-1.5 text-xs font-medium text-blue-500">约等于显示</div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-3">
                     {([
-                      { key: 'approxHolding', label: '持有资产约等于' },
-                      { key: 'approxInterest', label: '待结利息约等于' },
-                      { key: 'approxPaid', label: '已结利息约等于' },
-                      { key: 'approxCollateralItem', label: '担保货币约等于' },
-                      { key: 'approxCollateralTotal', label: '担保总值约等于' },
-                      { key: 'approxCollateralGap', label: '担保缺口约等于' },
+                      { key: 'approxHolding', label: '持有资产' },
+                      { key: 'approxInterest', label: '待结利息' },
+                      { key: 'approxPaid', label: '已结利息' },
+                      { key: 'approxCollateralItem', label: '担保货币' },
+                      { key: 'approxCollateralTotal', label: '担保总值' },
+                      { key: 'approxCollateralGap', label: '担保缺口' },
                       ...(formData.assetType === 'stock' && !isUsing37Collateral ? [
-                        { key: 'stockManualCollateralValueDisplay', label: '担保价值主显示' },
+                        { key: 'stockManualCollateralValueDisplay', label: '担保价值' },
                       ] : formData.assetType === 'stock' ? [
-                        { key: 'externalCollateralValueDisplay', label: '37号担保货币主显示' },
+                        { key: 'externalCollateralValueDisplay', label: '担保货币' },
                       ] : []),
                     ] as { key: string; label: string }[]).map(({ key, label }) => (
-                      <div key={key}>
-                        <div className="text-sm text-gray-600 mb-1">{label}</div>
-                        <div className="flex gap-2">
+                      <div key={key} className={key === 'approxCollateralGap' || key === 'stockManualCollateralValueDisplay' ? 'col-span-2' : ''}>
+                        <div className="mb-1 text-[11px] font-medium text-gray-600">{label}</div>
+                        <div className="flex gap-1">
                           {(key === 'externalCollateralValueDisplay'
                             ? ['CRYPTO', 'U', 'CNY']
                             : key === 'stockManualCollateralValueDisplay'
@@ -4407,7 +4463,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               key={opt}
                               type="button"
                               onClick={() => setDisplayConfig(c => ({ ...c, [key]: opt }))}
-                              className={`flex-1 py-1 text-xs rounded-lg border transition-colors ${
+                              className={`min-h-7 flex-1 rounded-md border px-1 py-1 text-[11px] transition-colors ${
                                 (key === 'externalCollateralValueDisplay'
                                   ? (['CRYPTO', 'U', 'CNY'].includes(String(displayConfig[key])) ? displayConfig[key] : 'CNY')
                                   : key === 'stockManualCollateralValueDisplay'
@@ -4428,99 +4484,55 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           ))}
                         </div>
                         {key === 'stockManualCollateralValueDisplay' && (
-                          <div className="text-[11px] text-gray-400 mt-1">手工担保物仍按实际输入逐笔展示；此处只控制下方担保价值合计。</div>
+                          <div className="mt-1 text-[10px] leading-4 text-gray-400">手工担保物仍按实际输入逐笔展示；此处只控制下方担保价值合计。</div>
                         )}
                         {key === 'approxCollateralGap' && (
-                          <div className="text-[11px] text-gray-400 mt-1">主值固定按资产类型显示：股票为元，数字币和期权为 U；此处只控制下方是否额外显示折算值。</div>
+                          <div className="mt-1 text-[10px] leading-4 text-gray-400">主值固定按资产类型显示：股票为元，数字币和期权为 U；此处只控制下方是否额外显示折算值。</div>
                         )}
                       </div>
                     ))}
                   </div>
                 </div>
-                {ledgerId === 52 && (
-                  <div className="px-4 pb-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">手续费</span>
-                        <p className="text-xs text-gray-400 mt-0.5">开启后，订单卡片和订单详情显示参考手续费及已付进度</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setDisplayConfig(c => ({ ...c, tradingFee: !Boolean(c.tradingFee) }))}
-                        className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                          displayConfig.tradingFee ? 'bg-blue-500' : 'bg-gray-200'
-                        }`}
-                        aria-label="显示手续费"
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                          displayConfig.tradingFee ? 'translate-x-5' : 'translate-x-1'
-                        }`} />
-                      </button>
-                    </div>
-                  </div>
-                )}
                 <div className="mx-4 h-px bg-gray-100 my-2" />
-                {/* 借出本金开关 */}
-                <div className="px-4 pb-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">借出本金</span>
-                      <p className="text-xs text-gray-400 mt-0.5">开启后担保缺口计算将扣除计息基数（本金）</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(d => ({ ...d, principalLentOut: !d.principalLentOut }))}
-                      className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                        formData.principalLentOut ? 'bg-orange-500' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                        formData.principalLentOut ? 'translate-x-5' : 'translate-x-1'
-                      }`} />
-                    </button>
+                {/* 功能开关 */}
+                <div className="px-4 py-3">
+                  <div className="mb-1.5 text-xs font-medium text-blue-500">功能开关</div>
+                  <div className="grid grid-cols-3 gap-x-2 gap-y-1">
+                    {ledgerId === 52 && (
+                      <CompactDisplayToggle
+                        label="手续费"
+                        checked={Boolean(displayConfig.tradingFee)}
+                        onToggle={() => setDisplayConfig(c => ({ ...c, tradingFee: !Boolean(c.tradingFee) }))}
+                      />
+                    )}
+                    <CompactDisplayToggle
+                      label="借出本金"
+                      checked={formData.principalLentOut}
+                      onToggle={() => setFormData(d => ({ ...d, principalLentOut: !d.principalLentOut }))}
+                      tone="orange"
+                    />
+                    {formData.assetType === 'crypto_option' && (
+                      <CompactDisplayToggle
+                        label="Greeks"
+                        checked={displayConfig.showGreeks !== false}
+                        onToggle={() => setDisplayConfig(c => ({ ...c, showGreeks: !c.showGreeks, showGreeksManualOverride: true }))}
+                        tone="purple"
+                      />
+                    )}
                   </div>
+                  <p className="mt-1 text-[10px] leading-4 text-gray-400">借出本金开启后，担保缺口按计息基数扣减。</p>
                 </div>
                 <div className="mx-4 h-px bg-gray-100 my-2" />
-                {/* Greeks 开关（仅期权类型显示） */}
-                {formData.assetType === 'crypto_option' && (
-                  <div className="px-4 pb-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Greeks 面板</span>
-                        <p className="text-xs text-gray-400 mt-0.5">开启后显示 Delta / Gamma / Vega / Theta 等期权参数</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setDisplayConfig(c => ({ ...c, showGreeks: !c.showGreeks, showGreeksManualOverride: true }))}
-                        className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                          displayConfig.showGreeks !== false ? 'bg-purple-500' : 'bg-gray-200'
-                        }`}
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                          displayConfig.showGreeks !== false ? 'translate-x-5' : 'translate-x-1'
-                        }`} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-                <div className="mx-4 h-px bg-gray-100 my-2" />
                 {/* 右栏下半：收益分成区 */}
-                <div className="px-4 pb-3">
-                  <div className="text-xs font-medium text-blue-500 mb-2">右栏下半：收益分成区</div>
+                <div className="px-4 py-3">
+                  <div className="mb-1.5 text-xs font-medium text-blue-500">右栏 · 收益分成</div>
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">收益分成（开启后显示下半区）</span>
-                      <button
-                        type="button"
-                        onClick={() => setDisplayConfig(c => ({ ...c, profitShare: !c.profitShare }))}
-                        className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                          displayConfig.profitShare ? 'bg-blue-500' : 'bg-gray-200'
-                        }`}
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                          displayConfig.profitShare ? 'translate-x-5' : 'translate-x-1'
-                        }`} />
-                      </button>
+                    <div className="grid grid-cols-3 gap-x-2 gap-y-1">
+                      <CompactDisplayToggle
+                        label="收益分成"
+                        checked={Boolean(displayConfig.profitShare)}
+                        onToggle={() => setDisplayConfig(c => ({ ...c, profitShare: !c.profitShare }))}
+                      />
                     </div>
                     {displayConfig.profitShare && (
                       <div className="space-y-2 pt-1">
@@ -4575,6 +4587,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   }
                   return editingOrder?.owner_display_name || editingOrder?.userName || null;
                 })();
+                const previewIsOptionOrder = formData.assetType === 'crypto_option';
+                const previewOptionSummary = previewIsOptionOrder ? getOptionPremiumSummary() : null;
+                const previewCoin = previewIsOptionOrder ? optionFormData.optionCurrency : formData.coin;
+                const previewAmountCurrency = previewIsOptionOrder ? previewOptionSummary?.denomination || 'USDT' : formData.amountCurrency || 'USDT';
+                const previewBuyPrice = previewIsOptionOrder ? optionFormData.premium || null : formData.buyPrice || null;
+                const previewBuyQuantity = previewIsOptionOrder ? optionFormData.buyQty || null : formData.buyQuantity || null;
+                const previewAmount = previewIsOptionOrder
+                  ? (previewOptionSummary?.totalUsdt && previewOptionSummary.totalUsdt > 0 ? previewOptionSummary.totalUsdt.toFixed(4) : null)
+                  : formData.assetType === 'stock' ? amountInputValue || null : financingAmountUsdt || null;
+                const previewDisplayInputAmount = previewIsOptionOrder ? previewOptionSummary?.totalInput || '' : amountInputValue || '';
                 const previewOrder: any = {
                   id: editingOrder?.id ?? -1,
                   order_no: editingOrder?.order_no ?? null,
@@ -4588,12 +4610,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     ? participants.filter(participant => participant.role === 'owner').map(participant => ({ userId: participant.userId, name: participant.userName }))
                     : undefined,
                   personal_header_label: formData.personalHeaderLabel.trim() || null,
-                  coin: formData.coin,
+                  coin: previewCoin,
                   asset_type: formData.assetType || null,
-                  buy_price: formData.buyPrice || null,
-                  buy_quantity: formData.buyQuantity || null,
-                  amount: formData.assetType === 'stock' ? (amountInputValue || null) : (financingAmountUsdt || null),
-                  amount_currency: formData.amountCurrency || 'USDT',
+                  buy_price: previewBuyPrice,
+                  buy_quantity: previewBuyQuantity,
+                  amount: previewAmount,
+                  amount_currency: previewAmountCurrency,
                   buy_date: formData.buyDate || null,
                   status: formData.status || 'active',
                   order_fill_status: formData.orderFillStatus || 'filled',
@@ -4625,14 +4647,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   collateral_share_mode: collateralShareMode || 'none',
                   // 预览使用与保存完全相同的来源草稿，37号引用和手工股票组合都会即时同步。
                   collateral_source: orderCollateralSourceDraft ? JSON.stringify(orderCollateralSourceDraft) : null,
-                  trade_direction: formData.tradeDirection || null,
+                  trade_direction: previewIsOptionOrder ? null : formData.tradeDirection || null,
                   display_config: JSON.stringify({
                     ...displayConfig,
                     ownerNameDisplay: 'self',
                     marginAlertThreshold: marginAlertThreshold || undefined,
                     rate_negative: normalizeFunderAnnualRate(formData.interestRateAnnual).startsWith('-'),
-                    financingInputAmount: amountInputValue || '',
-                    financingInputCurrency: formData.amountCurrency || 'USDT',
+                    financingInputAmount: previewDisplayInputAmount,
+                    financingInputCurrency: previewAmountCurrency,
                   }),
                   tags: formData.tags && formData.tags.length > 0 ? JSON.stringify(formData.tags) : null,
                   public_note: null,
@@ -4645,7 +4667,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 };
                 const rateValPreview = parseFloat(String(previewOrder.interest_rate_annual || '0'));
                 // 字段展示开关改变时强制重建预览卡片，避免卡片内部状态保留旧配置。
-                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${String(displayConfig.floatPnl)}-${JSON.stringify(orderCollateralSourceDraft)}`;
+                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${String(displayConfig.floatPnl)}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}`;
                 return (
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -4708,11 +4730,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 );
               })()}
               </>)}
-            </div>
 
-            {/* ===== 共同拥有者与历史参与者管理 ===== */}
+            {/* ===== 表单末尾：共同拥有者与历史参与者管理 ===== */}
             {canManageCollaboratorsInEditor && (
-              <div className="px-5 pb-4" ref={participantsSectionRef}>
+              <div className="border-t border-gray-100 pt-4" ref={participantsSectionRef}>
                 <button type="button" onClick={() => setParticipantsSectionExpanded(value => !value)} className="mb-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-left">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -5013,7 +5034,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
             {/* 第一位拥有者的订单内容收起后，不显示其保存按钮；其他成员各自在个人订单页保存。 */}
             {(!hasPrimaryOwnerDrawer || primaryOwnerEditorExpanded) && (
-            <div className="flex-shrink-0 bg-white px-5 py-4 border-t border-gray-100">
+            <div className="border-t border-gray-100 pt-4 pb-2">
               <button
                 onClick={handleSubmit}
                 disabled={createMutation.isPending || updateMutation.isPending || updateParticipantOrderMutation.isPending}
@@ -5030,6 +5051,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               </button>
             </div>
             )}
+            </div>
           </div>
         </div>
       )}

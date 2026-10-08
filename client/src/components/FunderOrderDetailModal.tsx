@@ -210,10 +210,16 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
     : legacyInterestBase > 0 && legacyInterestCurrency === amountCurrency && Math.abs(legacyInterestBase - calculatedFinancingDisplayAmount) <= 0.05
       ? legacyInterestBase
       : calculatedFinancingDisplayAmount;
+  const detailAssetFundingType = financingDisplayConfig?.assetFundingType === 'financing'
+    ? 'financing'
+    : financingDisplayConfig?.assetFundingType === 'self' || financingDisplayConfig?.selfFundedAsset === true || financingDisplayConfig?.selfFundedAsset === 'true'
+      ? 'self'
+      : null;
+  const hasExplicitPrincipalLentOut = order.principal_lent_out === 1 || order.principal_lent_out === true;
+  const primaryAmountLabel = hasExplicitPrincipalLentOut ? '借出本金' : detailAssetFundingType === 'self' ? '订单金额' : '融资金额';
   // 与订单卡片保持相同的独立主展示口径：管理员可随时选择融资金额或标的数量，
   // 不再依赖“借出本金”风险开关；缺少新字段的历史订单仍按旧规则展示。
-  const detailPrincipalLentOut = order.principal_lent_out === 1
-    || order.principal_lent_out === true
+  const detailPrincipalLentOut = hasExplicitPrincipalLentOut
     || (order.asset_type !== 'crypto_option' && financingDisplayConfig?.assetFundingType === 'financing');
   const configuredPrimaryDisplay = financingDisplayConfig?.primaryAssetDisplay === 'financing' || financingDisplayConfig?.primaryAssetDisplay === 'quantity'
     ? financingDisplayConfig.primaryAssetDisplay
@@ -274,7 +280,7 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
             className="rounded-2xl p-4"
             style={{ background: `linear-gradient(135deg, ${coinColor} 0%, ${coinColor}BB 100%)` }}
           >
-            <div className="text-xs text-white/70 mb-1">{displayFinancingAsPrimary ? `融资金额 (${amountCurrency})` : `币种数量 (${order.asset_type === 'crypto_option' ? '张' : order.coin})`}</div>
+            <div className="text-xs text-white/70 mb-1">{displayFinancingAsPrimary ? `${primaryAmountLabel} (${amountCurrency})` : `币种数量 (${order.asset_type === 'crypto_option' ? '张' : order.coin})`}</div>
             <div className="flex items-baseline gap-2 mb-1">
               <span className="text-4xl font-bold text-white tabular-nums">
                 {displayFinancingAsPrimary ? financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 }) : (qty > 0 ? qty : '—')}
@@ -290,7 +296,7 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
               <div className="text-sm text-white/60">
                 {displayFinancingAsPrimary && amountCurrency === 'CNY'
                   ? `折算 ${totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT`
-                  : `融资金额 ${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${amountUnit}`}
+                  : `${primaryAmountLabel} ${financingDisplayAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${amountUnit}`}
               </div>
               <span className="text-xs px-2 py-0.5 rounded-full bg-white/20 text-white">
                 {order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : '已取消'}

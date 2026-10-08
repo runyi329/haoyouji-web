@@ -1307,8 +1307,8 @@ export function FunderOrderCardV2Silver({
     : 'hidden';
   // 明确选择“融资付息”的非期权订单，其融资本金是待覆盖负债；
   // 历史数据里该属性与 principal_lent_out 曾不同步，不能再把本金当持仓计入。
-  const cardPrincipalLentOut = (order as any).principal_lent_out === 1
-    || (order as any).principal_lent_out === true
+  const cardHasExplicitPrincipalLentOut = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true;
+  const cardPrincipalLentOut = cardHasExplicitPrincipalLentOut
     || (!_isOptCard && cardDisplayConfig.assetFundingType === 'financing');
   // 左上角主展示独立于“借出本金”开关：新字段优先，未配置订单沿用旧默认口径。
   const cardConfiguredPrimaryDisplay = cardDisplayConfig.primaryAssetDisplay === 'financing' || cardDisplayConfig.primaryAssetDisplay === 'quantity'
@@ -1704,6 +1704,7 @@ export function FunderOrderCardV2Silver({
     : cardDisplayConfig.assetFundingType === 'self' || cardDisplayConfig.selfFundedAsset === true || cardDisplayConfig.selfFundedAsset === 'true'
       ? 'self'
       : null;
+  const primaryAmountLabel = cardHasExplicitPrincipalLentOut ? '借出本金' : assetFundingType === 'self' ? '订单金额' : '融资金额';
   // 52号账本的手续费只有在订单控制区明确开启后才向前端展示
   const isLedger52 = Number(ledgerId ?? (order as any).ledger_id) === 52;
   const showTradingFee = isLedger52 && cardDisplayConfig.tradingFee === true;
@@ -1901,7 +1902,7 @@ export function FunderOrderCardV2Silver({
             // 数字币：按订单独立展示偏好显示融资金额或币种数量。
             <>
               <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-                <span className="shrink-0 whitespace-nowrap">{displayFinancingAsPrimary ? `融资金额 (${amountCurrency})` : `币种数量 (${_isOptCard ? '张' : coin})`}</span>
+                <span className="shrink-0 whitespace-nowrap">{displayFinancingAsPrimary ? `${primaryAmountLabel} (${amountCurrency})` : `币种数量 (${_isOptCard ? '张' : coin})`}</span>
                 {isParticipant && (
                   <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.7)' }}>参与</span>
                 )}
@@ -3451,8 +3452,8 @@ export function FunderLenderCardSilver({
   const effectiveCnyRate = cnyRate && cnyRate > 0 ? cnyRate : 6.8;
   const accruedInU = interestUnit === '元' ? displayAccrued / effectiveCnyRate : displayAccrued;
   const paidInU = interestUnit === '元' ? displayPaid / effectiveCnyRate : displayPaid;
-  const lenderPrincipalLentOut = (order as any).principal_lent_out === 1
-    || (order as any).principal_lent_out === true
+  const lenderHasExplicitPrincipalLentOut = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true;
+  const lenderPrincipalLentOut = lenderHasExplicitPrincipalLentOut
     || (!_lnIsOpt && lenderDisplayConfig?.assetFundingType === 'financing');
   // 约定融资本金是固定负债，不能跟随标的实时市值重估。
   const lenderFinancingPrincipalRaw = Number(_effectiveInterestBase || storedAmountUsdt || 0);
@@ -3508,6 +3509,7 @@ export function FunderLenderCardSilver({
     : dc?.assetFundingType === 'self' || dc?.selfFundedAsset === true || dc?.selfFundedAsset === 'true'
       ? 'self'
       : null;
+  const lenderPrimaryAmountLabel = lenderHasExplicitPrincipalLentOut ? '借出本金' : assetFundingType === 'self' ? '订单金额' : '融资金额';
 
   // 天数算法与 hook 一致：北京时间自然日，开始日算第1天
   const calcDays = (startDateStr: string, endTs: number): number => {
@@ -4020,7 +4022,7 @@ export function FunderLenderCardSilver({
               {(qty > 0 || storedAmountUsdt > 0) && (
                 <div className="flex justify-between mb-1 gap-3">
                   <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
-                    <span>{lenderShowsPrincipal ? `融资金额 (${amountCurrency})` : `币种数量 (${_lnIsOpt ? '张' : coin})`}</span>
+                    <span>{lenderShowsPrincipal ? `${lenderPrimaryAmountLabel} (${amountCurrency})` : `币种数量 (${_lnIsOpt ? '张' : coin})`}</span>
                     {assetFundingType && <CardFundingAttributeBadge type={assetFundingType} surface="silver" />}
                   </span>
                   <span className="text-right" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
