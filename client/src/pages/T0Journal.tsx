@@ -5,6 +5,8 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Lock,
+  LockOpen,
   Search,
   ShieldCheck,
   UserRound,
@@ -63,6 +65,8 @@ type PreviewTrade = {
   symbol: string;
   action: TradeAction;
   instrumentType?: T0InstrumentType;
+  /** 管理员开仓主单的展示锁定标记；成员端不下发、不渲染。 */
+  isLocked?: boolean;
   quantity: number;
   price: number;
   fee: number;
@@ -137,6 +141,7 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     instrumentType: entry.instrumentType === "spot" || entry.instrumentType === "contract" || entry.instrumentType === "option"
       ? entry.instrumentType
       : undefined,
+    isLocked: Boolean(entry.isLocked),
     quantity: Number(entry.quantity),
     price: Number(entry.price),
     fee: Number(entry.fee || 0),
@@ -211,6 +216,8 @@ type EntryForm = {
   relatedFundId: string;
   relatedFundName: string;
   instrumentType?: T0InstrumentType;
+  /** 开仓订单默认为未锁；锁定后仅管理员逐笔报价使用黑金标识。 */
+  isLocked: boolean;
   quantity: string;
   price: string;
   note: string;
@@ -1010,6 +1017,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [liveClock, setLiveClock] = useState(() => new Date());
   const previousFetchedMarkPriceRef = useRef<number | null>(null);
   const hasInitializedJournalFiltersRef = useRef(false);
+  // 从报价表进入表单后，返回与保存必须回到原先的整合/逐笔模式。
+  const entrySheetLadderDisplayModeRef = useRef<AdminLadderDisplayMode>("integrated");
   const [entryForm, setEntryForm] = useState<EntryForm>({
     action: "openLong",
     accountId: "",
@@ -1020,6 +1029,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     relatedFundId: "",
     relatedFundName: "",
     instrumentType: "contract",
+    isLocked: false,
     quantity: "",
     price: "",
     note: "",
@@ -1664,6 +1674,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const displayedPriceRows = isIndividualLadderView ? individualPriceRows : priceRows;
 
   const openEntrySheet = (action: TradeAction = "openLong", targetPrice?: number) => {
+    entrySheetLadderDisplayModeRef.current = adminLadderDisplayMode;
     setEntrySide(ACTIONS[action].side);
     setCloseConfirmationStep("input");
     const rememberedAccount = getRememberedAccountForRelatedUser(lastRelatedUser?.id);
@@ -1678,6 +1689,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundId: defaultRelatedFund?.id ?? "",
       relatedFundName: defaultRelatedFund?.name ?? "",
       instrumentType: ACTIONS[action].opening ? lastOpeningInstrumentType : undefined,
+      isLocked: false,
       quantity: "",
       // 开仓成交价由管理员实际录入；保留浅色 0.00 占位，避免误把参考价写入流水。
       price: "",
@@ -1688,6 +1700,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   };
 
   const openQuickCloseSheet = (trade: PreviewTrade) => {
+    entrySheetLadderDisplayModeRef.current = adminLadderDisplayMode;
     const side = ACTIONS[trade.action].side;
     // 未关联用户的订单也可独立平仓；空关联值会稳定归到同一“未关联”仓位池，
     // 不会和任何已关联用户的订单互相抵扣。
@@ -1716,6 +1729,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundId: trade.relatedFundId ?? "legacy",
       relatedFundName: trade.relatedFundName ?? "",
       instrumentType: trade.instrumentType,
+      isLocked: false,
       // 表单值不能带千分位逗号，否则超过千位的数量会无法通过数值校验。
       quantity: normalizeEthQuantity(String(Math.min(target.remainingQuantity, trade.quantity))),
       price: markPrice ? markPrice.toFixed(2) : "",
@@ -1730,6 +1744,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       toast.error("当前仅支持编辑开仓记录");
       return;
     }
+    entrySheetLadderDisplayModeRef.current = adminLadderDisplayMode;
     setEntrySide(ACTIONS[trade.action].side);
     setCloseConfirmationStep("input");
     setEntryForm({
@@ -1742,6 +1757,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundId: trade.relatedFundId ?? "legacy",
       relatedFundName: trade.relatedFundName ?? "",
       instrumentType: trade.instrumentType,
+      isLocked: Boolean(trade.isLocked),
       // 编辑输入使用机器可解析的原始数值；展示层才使用千分位格式。
       quantity: normalizeEthQuantity(String(trade.quantity)),
       price: trade.price.toFixed(2),
@@ -1877,6 +1893,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         instrumentType: data.entry.instrumentType === "spot" || data.entry.instrumentType === "contract" || data.entry.instrumentType === "option"
           ? data.entry.instrumentType
           : undefined,
+        isLocked: Boolean(data.entry.isLocked),
         quantity: Number(data.entry.quantity),
         price: Number(data.entry.price),
         fee: Number(data.entry.fee || 0),
@@ -1918,7 +1935,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         setLastSavedQuantity(savedQuantity);
       }
       if (entry.instrumentType) setLastOpeningInstrumentType(entry.instrumentType);
-      toast.success("速记已保存");
+      toast.success(entry.isLocked ? "速记已保存，逐笔报价将显示黑金锁标" : "速记已保存");
     },
     onError: (error, variables: any) => {
       setTrades((current) => current.filter((trade) => trade.clientRequestId !== variables.clientRequestId));
@@ -1948,6 +1965,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         instrumentType: data.entry.instrumentType === "spot" || data.entry.instrumentType === "contract" || data.entry.instrumentType === "option"
           ? data.entry.instrumentType
           : undefined,
+        isLocked: Boolean(data.entry.isLocked),
         quantity: Number(data.entry.quantity),
         price: Number(data.entry.price),
         fee: Number(data.entry.fee || 0),
@@ -1968,8 +1986,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }
       setShowEntrySheet(false);
       setCloseConfirmationStep("input");
+      if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
       if (entry.instrumentType) setLastOpeningInstrumentType(entry.instrumentType);
-      toast.success("开仓记录已修改");
+      toast.success(entry.isLocked ? "开仓已锁定，逐笔报价将显示黑金锁标" : "开仓记录已修改");
     },
     onError: (error) => toast.error(error.message || "开仓记录修改失败"),
   });
@@ -2243,6 +2262,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       toast.error("请在最后选择或新建下单账户");
       return;
     }
+    if (entryForm.editingEntryId && !hasPersistedAccountId) {
+      toast.error("编辑开仓时请选择一个已有下单账户");
+      return;
+    }
     if (entryForm.relatedUserId && !normalizedRelatedUserId) {
       toast.error("关联用户信息无效，请重新选择或暂不关联");
       return;
@@ -2275,10 +2298,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       updateOpeningEntryMutation.mutate({
         ledgerId: 52,
         entryId,
+        accountId: Number(entryForm.accountId),
         relatedUserId: normalizedRelatedUserId,
         relatedFundId: normalizedRelatedFundId,
         relatedFundName: normalizedRelatedFundName || undefined,
         instrumentType: entryForm.instrumentType,
+        isLocked: entryForm.isLocked,
         quantity: normalizedQuantity,
         price: entryForm.price.trim(),
         note: entryForm.note.trim() || undefined,
@@ -2334,6 +2359,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       symbol: "ETH",
       action: entryForm.action,
       instrumentType: selectedAction.opening ? entryForm.instrumentType : undefined,
+      isLocked: selectedAction.opening ? entryForm.isLocked : false,
       quantity,
       price,
       fee,
@@ -2346,6 +2372,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setTrades((current) => [...current, trade]);
     setShowEntrySheet(false);
     setCloseConfirmationStep("input");
+    if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
     toast.message("已速记，正在后台保存");
     saveEntryMutation.mutate({
       ledgerId: 52,
@@ -2357,6 +2384,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       symbol: "ETH",
       action: entryForm.action,
       instrumentType: selectedAction.opening ? entryForm.instrumentType : undefined,
+      isLocked: selectedAction.opening ? entryForm.isLocked : undefined,
       quantity: normalizedQuantity,
       price: entryForm.price.trim(),
       targetPrice: archiveTargetPrice === undefined ? undefined : String(archiveTargetPrice),
@@ -2371,6 +2399,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const backToLadder = () => {
     setCloseConfirmationStep("input");
     setShowEntrySheet(false);
+    if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
   };
 
   const renderLinkedJournalGroup = (group: LinkedJournalGroup) => {
@@ -2581,7 +2610,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
       <main className="space-y-4 px-4 pt-4">
         <section
-          className="relative overflow-hidden rounded"
+          className="relative rounded"
           style={{
             background: [
               "linear-gradient(135deg, rgba(255,255,255,0.86) 0%, rgba(255,255,255,0.32) 25%, rgba(255,255,255,0) 50%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.19) 100%)",
@@ -2604,7 +2633,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             }}
           />
           <div
-            className="relative z-[1] border-b px-3 py-2.5"
+            className="relative z-30 border-b px-3 py-2.5"
             style={{
               background: "rgba(255,255,255,0.34)",
               borderColor: "rgba(109,121,137,0.22)",
@@ -2816,6 +2845,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   side="long"
                   markPrice={markPrice}
                   metadata={individualMetadata}
+                  isLocked={Boolean(isIndividualLadderView && row.long && row.openingTrade?.isLocked)}
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.long) return;
@@ -2865,6 +2895,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   side="short"
                   markPrice={markPrice}
                   metadata={individualMetadata}
+                  isLocked={Boolean(isIndividualLadderView && row.short && row.openingTrade?.isLocked)}
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.short) return;
@@ -3351,17 +3382,39 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 )}
                 <div className="grid grid-cols-2 gap-3 items-start">
                   <Field label={<span className="text-sm font-semibold text-slate-800">数量（ETH）</span>}>
-                    <input
-                      inputMode="decimal"
-                      maxLength={7}
-                      disabled={isCloseReview}
-                      aria-invalid={Boolean(quantityFormatError)}
-                      value={entryForm.quantity}
-                      onChange={(event) => setEntryForm((current) => ({ ...current, quantity: event.target.value }))}
-                      onBlur={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(current.quantity) }))}
-                      placeholder="0.00"
-                      className={`w-full h-14 rounded border px-3 text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
-                    />
+                    <div className="relative">
+                      <input
+                        inputMode="decimal"
+                        maxLength={7}
+                        disabled={isCloseReview}
+                        aria-invalid={Boolean(quantityFormatError)}
+                        value={entryForm.quantity}
+                        onChange={(event) => setEntryForm((current) => ({ ...current, quantity: event.target.value }))}
+                        onBlur={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(current.quantity) }))}
+                        placeholder="0.00"
+                        className={`h-14 w-full rounded border px-3 pr-14 text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
+                      />
+                      {ACTIONS[entryForm.action].opening && <button
+                        type="button"
+                        disabled={isCloseReview}
+                        aria-pressed={entryForm.isLocked}
+                        aria-label={entryForm.isLocked ? "解除本笔开仓锁定" : "锁定本笔开仓"}
+                        title={entryForm.isLocked ? "已锁定，点击解除" : "未锁定，点击锁定"}
+                        onClick={() => {
+                          const nextLocked = !entryForm.isLocked;
+                          setEntryForm((current) => ({ ...current, isLocked: nextLocked }));
+                          toast.message(nextLocked ? "已设为锁定，请点击底部“保存修改”后生效" : "已解除锁定，请点击底部“保存修改”后生效");
+                        }}
+                        className={`absolute right-1 top-1 flex h-12 w-12 flex-col items-center justify-center rounded-md border transition active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isLocked ? "border-[#c9a84c]/75 bg-[#141414] text-[#f5d78e] shadow-[inset_0_1px_0_rgba(245,215,142,0.16),inset_0_-1px_0_rgba(0,0,0,0.7)]" : "border-slate-400 bg-slate-100 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"}`}
+                      >
+                        {entryForm.isLocked ? <Lock className="h-4.5 w-4.5" /> : <LockOpen className="h-4.5 w-4.5" />}
+                        <span className="mt-0.5 text-[10px] font-bold leading-none">{entryForm.isLocked ? "已锁" : "锁定"}</span>
+                      </button>}
+                    </div>
+                    {ACTIONS[entryForm.action].opening && entryForm.isLocked && <div className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold leading-4 text-[#8b6d24]">
+                      <Lock className="h-3 w-3 shrink-0" />
+                      待保存：保存修改后，在管理员“逐笔报价”显示黑金锁标
+                    </div>}
                     {quantityFormatError && <div className="mt-1.5 text-[10px] font-medium leading-4 text-rose-600">{quantityFormatError}</div>}
                   </Field>
 
@@ -3429,7 +3482,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <Field label={<span className="flex items-center justify-between gap-1"><span>下单账户 <span className="text-rose-500">*</span></span>{accounts.length > 0 && !isEditingEntry && <button type="button" onClick={() => openDirectoryManager("account")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
                     {accounts.length > 0 ? (
                       <select
-                        disabled={isCloseReview || isEditingEntry}
+                        disabled={isCloseReview}
                         value={entryForm.accountId}
                         onChange={(event) => {
                           if (event.target.value === "__manage_accounts__") {
@@ -3440,8 +3493,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         }}
                         className="h-11 w-full rounded border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-indigo-500"
                       >
-                        <option value="">新建账户</option>
-                        <option value="__manage_accounts__">编辑 / 删除账户…</option>
+                        {!isEditingEntry && <option value="">新建账户</option>}
+                        {!isEditingEntry && <option value="__manage_accounts__">编辑 / 删除账户…</option>}
                         {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                       </select>
                     ) : null}
@@ -3474,7 +3527,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
 
                 <div className="-mt-1 grid grid-cols-2 gap-3 text-[10px] leading-4 text-slate-400">
-                  <span>首次可新建；后续按关联用户记忆账户。</span>
+                  <span>{isEditingEntry ? "未发生后续平仓时可调整账户；前后归属均保留审计。" : "首次可新建；后续按关联用户记忆账户。"}</span>
                   <span>仅搜索并引用全局已有用户；关联后按项目区分资金。</span>
                 </div>
 
@@ -4293,9 +4346,9 @@ function T0MultiSelect({
   const renderCheck = (checked: boolean) => (
     <span
       aria-hidden="true"
-      className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border ${checked ? "border-[#1a56db] bg-[#1a56db] text-white" : "border-slate-300 bg-white text-transparent"}`}
+      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border ${checked ? "border-[#1a56db] bg-[#1a56db] text-white" : "border-slate-300 bg-white text-transparent"}`}
     >
-      <Check className="h-3 w-3 stroke-[3]" />
+      <Check className="h-3.5 w-3.5 stroke-[3]" />
     </span>
   );
 
@@ -4311,33 +4364,43 @@ function T0MultiSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         title={selectedTitle}
-        className="flex h-9 w-full min-w-0 items-center gap-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none transition-colors focus:border-[#1a56db] active:bg-white"
+        className="flex h-10 w-full min-w-0 items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2.5 text-[13px] font-medium text-slate-700 outline-none transition-colors focus:border-[#1a56db] active:bg-white"
         style={{
           textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
           boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
         }}
       >
-        <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500">{label}</span>
+        {selectedOptions.length === 0 && <span className="shrink-0 text-[12px] font-semibold tracking-wide text-slate-500">{label}</span>}
         <span className="min-w-0 flex-1 truncate text-left">{summary}</span>
-        <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <div
           role="listbox"
           aria-label={`${label}多选`}
-          className={`absolute top-[calc(100%+4px)] z-40 max-h-60 w-[220px] overflow-y-auto rounded border border-slate-200 bg-white py-1 shadow-lg ${align === "right" ? "right-0" : "left-0"}`}
+          className={`absolute top-[calc(100%+4px)] z-40 max-h-80 w-[min(260px,calc(100vw-32px))] overflow-y-auto rounded border py-1.5 shadow-xl ${align === "right" ? "right-0" : "left-0"}`}
+          style={{
+            background: [
+              "linear-gradient(135deg, rgba(255,255,255,0.86) 0%, rgba(255,255,255,0.32) 25%, rgba(255,255,255,0) 50%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.19) 100%)",
+              "linear-gradient(90deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.06) 40%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.12) 100%)",
+              "linear-gradient(180deg, rgba(0,0,0,0.07) 0%, rgba(255,255,255,0.20) 36%, rgba(255,255,255,0.28) 52%, rgba(255,255,255,0.09) 70%, rgba(0,0,0,0.10) 100%)",
+              "linear-gradient(160deg, #e4e7eb 0%, #c9cfd6 20%, #dde1e6 45%, #bec6cf 65%, #d7dce2 80%, #e2e6ea 100%)",
+            ].join(", "),
+            borderColor: "rgba(153,164,177,0.96)",
+            boxShadow: "0 12px 22px rgba(15,23,42,0.20), 0 3px 7px rgba(15,23,42,0.12), inset 0 1.5px 0 rgba(255,255,255,0.92), inset 0 -1.5px 0 rgba(71,85,105,0.28)",
+          }}
         >
           <button
             type="button"
             role="option"
             aria-selected={selectedIds.length === 0}
             onClick={() => onChange([])}
-            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold ${selectedIds.length === 0 ? "bg-indigo-50 text-indigo-700" : "text-slate-600 active:bg-slate-50"}`}
+            className={`flex min-h-12 w-full items-center gap-3 px-3.5 py-3 text-left text-[15px] font-bold ${selectedIds.length === 0 ? "bg-white/60 text-[#1a56db]" : "text-slate-700 active:bg-white/55"}`}
           >
             {renderCheck(selectedIds.length === 0)}
             <span>全部</span>
           </button>
-          <div className="my-1 border-t border-slate-100" />
+          <div className="my-1 border-t border-slate-500/20" />
           {options.map((option) => {
             const checked = selectedSet.has(option.id);
             return (
@@ -4347,7 +4410,7 @@ function T0MultiSelect({
                 role="option"
                 aria-selected={checked}
                 onClick={() => toggleOption(option.id)}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs ${checked ? "bg-indigo-50/70 text-indigo-700" : "text-slate-700 active:bg-slate-50"}`}
+                className={`flex min-h-12 w-full items-center gap-3 px-3.5 py-3 text-left text-[15px] font-bold ${checked ? "bg-white/55 text-[#1a56db]" : "text-slate-700 active:bg-white/55"}`}
               >
                 {renderCheck(checked)}
                 <span className="min-w-0 flex-1 truncate" title={option.label}>{option.label}</span>
@@ -4476,19 +4539,23 @@ function AccountOverview({
   );
 }
 
-function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata }: {
+function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false }: {
   bucket?: PositionBucket;
   side: PositionSide;
   markPrice: number | null;
   onClick: () => void;
   readOnly?: boolean;
   metadata?: { accountName: string; relatedUserName: string; relatedFundName: string; instrumentShortLabel?: string };
+  /** 仅管理员逐笔报价使用的黑金锁定外观。 */
+  isLocked?: boolean;
 }) {
   const isLong = side === "long";
   if (!bucket || bucket.remainingQuantity <= 0.0000001) {
     return <div className="px-3 flex items-center text-xs text-slate-300">—</div>;
   }
-  const tone = isLong
+  const tone = isLocked
+    ? `text-[#f5d78e]${readOnly ? "" : " hover:brightness-110"}`
+    : isLong
     ? `text-rose-600${readOnly ? "" : " hover:brightness-105"}`
     : `text-emerald-800${readOnly ? "" : " hover:brightness-105"}`;
   const sideSurfaceStyle = isLong
@@ -4500,6 +4567,24 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
       background: "linear-gradient(90deg, rgba(209,250,229,0.54), rgba(236,253,245,0.70) 42%, rgba(255,255,255,0.56))",
       boxShadow: "inset 0 1px 0 rgba(255,255,255,0.88), inset 0 -1px 0 rgba(6,95,70,0.11)",
     };
+  const lockedSurfaceStyle = {
+    background: [
+      "linear-gradient(115deg, rgba(245,215,142,0.18) 0%, rgba(245,215,142,0.04) 23%, transparent 46%, rgba(201,168,76,0.12) 100%)",
+      "repeating-linear-gradient(170deg, rgba(255,255,255,0.045) 0px, rgba(255,255,255,0.045) 1px, transparent 1px, transparent 4px)",
+      "linear-gradient(135deg, #090909 0%, #19150e 48%, #11100d 100%)",
+    ].join(", "),
+    boxShadow: "inset 0 1px 0 rgba(245,215,142,0.24), inset 0 -1px 0 rgba(0,0,0,0.82), inset 1px 0 0 rgba(201,168,76,0.22), inset -1px 0 0 rgba(201,168,76,0.16)",
+  };
+  const surfaceStyle = isLocked ? lockedSurfaceStyle : sideSurfaceStyle;
+  const quantityTextStyle = isLocked
+    ? {
+      background: "linear-gradient(180deg, #fff1bd 0%, #f5d78e 38%, #c9a84c 72%, #f5d78e 100%)",
+      WebkitBackgroundClip: "text",
+      WebkitTextFillColor: "transparent",
+      backgroundClip: "text",
+      filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.92))",
+    }
+    : { textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.88), 0.75px 0.75px 0 rgba(71,85,105,0.20)" };
   const floatingPnl = calculateEstimatedUnrealizedNetPnl(side, markPrice, bucket.financialQuantity, bucket.financialCostBasis);
   // 与金额盈亏保持同一口径：逐档预估净盈亏 ÷ 本档剩余持仓成本；不计资金费。
   const floatingReturnRate = floatingPnl === null || bucket.financialCostBasis <= 0
@@ -4509,7 +4594,10 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   const content = (
     <div className="w-full min-w-0">
       <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
-        <span className={`shrink-0 font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"}`} style={{ textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.88), 0.75px 0.75px 0 rgba(71,85,105,0.20)" }}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className={`shrink-0 font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"}`} style={quantityTextStyle}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
+          {isLocked && <Lock className="h-3.5 w-3.5 shrink-0 text-[#f5d78e] drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]" strokeWidth={2.5} aria-label="已锁定" />}
+        </div>
         {floatingPnl !== null && (
           <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`}>
             <span className={`whitespace-nowrap font-semibold leading-none ${metadata ? "text-[10px]" : "text-[11px]"}`} style={{ textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.84), 0.55px 0.55px 0 rgba(71,85,105,0.18)" }}>{formatSigned(floatingPnl)}</span>
@@ -4519,7 +4607,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           </span>
         )}
       </div>
-      {metadata && <div className="mt-1 flex min-w-0 items-center text-left text-[9px] font-medium leading-none text-slate-500" aria-label={`账户 ${metadata.accountName}，用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}`}>
+      {metadata && <div className={`mt-1 flex min-w-0 items-center text-left text-[9px] font-medium leading-none ${isLocked ? "text-[#c9a84c]/85" : "text-slate-500"}`} aria-label={`账户 ${metadata.accountName}，用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}`}>
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <span className="min-w-0 shrink truncate" title={`账户：${metadata.accountName}`}>{metadata.accountName}</span>
           <span className="shrink-0">·</span>
@@ -4527,13 +4615,13 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           <span className="shrink-0">·</span>
           <span className="min-w-0 shrink truncate" title={`项目：${metadata.relatedFundName}`}>{metadata.relatedFundName}</span>
         </div>
-        {metadata.instrumentShortLabel && <span className="ml-1 shrink-0 text-slate-500" title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
+        {metadata.instrumentShortLabel && <span className={`ml-1 shrink-0 ${isLocked ? "text-[#f5d78e]/85" : "text-slate-500"}`} title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
       </div>}
     </div>
   );
   const minHeightClass = metadata ? "min-h-[58px]" : "min-h-[52px]";
   if (readOnly) {
-    return <div className={`flex ${minHeightClass} w-full min-w-0 items-center px-1.5 py-1.5 ${tone}`} style={sideSurfaceStyle}>{content}</div>;
+    return <div className={`flex ${minHeightClass} w-full min-w-0 items-center px-1.5 py-1.5 ${tone}`} style={surfaceStyle}>{content}</div>;
   }
   return (
     <button
@@ -4542,7 +4630,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
       aria-label={metadata ? "双击编辑该开仓订单" : "双击查看该价格档订单详情"}
       title={metadata ? "双击编辑" : "双击查看详情"}
       className={`flex ${minHeightClass} w-full min-w-0 items-center px-1.5 py-1.5 text-left transition-[filter] active:brightness-95 ${tone}`}
-      style={{ ...sideSurfaceStyle, touchAction: "manipulation" }}
+      style={{ ...surfaceStyle, touchAction: "manipulation" }}
     >
       {content}
     </button>
@@ -4557,6 +4645,7 @@ function LadderCell({
   onOpen,
   readOnly = false,
   metadata,
+  isLocked = false,
 }: {
   bucket?: PositionBucket;
   side: PositionSide;
@@ -4565,6 +4654,7 @@ function LadderCell({
   onOpen: () => void;
   readOnly?: boolean;
   metadata?: { accountName: string; relatedUserName: string; relatedFundName: string; instrumentShortLabel?: string };
+  isLocked?: boolean;
 }) {
   // 统一由报价格本身处理：移动端与桌面端都必须在同一格 700ms 内连续点击两次，
   // 才允许打开已有订单详情、编辑页或空档位的新开仓录入，杜绝单击误触。
@@ -4579,7 +4669,7 @@ function LadderCell({
     action();
   };
   if (bucket && bucket.remainingQuantity > 0.0000001) {
-    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} />;
+    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} isLocked={isLocked} />;
   }
 
   const isLong = side === "long";

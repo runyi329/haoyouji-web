@@ -34,8 +34,9 @@ export type SaveT0JournalEntryInput = {
   relatedFundName?: string;
   symbol: "ETH";
   action: T0JournalAction;
-  /** 仅开仓主单记录交易类型；平仓继续按既有 FIFO 口径匹配，不额外分型。 */
+  /** 仅开仓主单可锁定，供管理员逐笔报价黑金标识使用。 */
   instrumentType?: T0JournalInstrumentType;
+  isLocked?: boolean;
   quantity: string;
   price: string;
   targetPrice?: string;
@@ -293,6 +294,7 @@ function mapEntry(row: any) {
     instrumentType: T0_JOURNAL_INSTRUMENT_TYPES.has(String(row.instrument_type ?? row.instrumentType ?? "") as T0JournalInstrumentType)
       ? String(row.instrument_type ?? row.instrumentType) as T0JournalInstrumentType
       : undefined,
+    isLocked: Boolean(toNumber(row.is_locked ?? row.isLocked)),
     quantity: toNumber(row.quantity),
     price: toNumber(row.price),
     fee: toNumber(row.fee_usdt),
@@ -408,6 +410,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         related_fund_id BIGINT UNSIGNED DEFAULT NULL,
         symbol VARCHAR(16) NOT NULL DEFAULT 'ETH',
         instrument_type ENUM('spot','contract','option') DEFAULT NULL,
+        is_locked TINYINT(1) NOT NULL DEFAULT 0 COMMENT '仅T+0开仓主单的管理员锁定展示标记',
         action ENUM('openLong','closeLong','openShort','closeShort') NOT NULL,
         quantity DECIMAL(36,18) NOT NULL,
         price DECIMAL(36,18) NOT NULL,
@@ -589,6 +592,15 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         ALTER TABLE ledger52_t0_journal_entries
           ADD COLUMN instrument_type ENUM('spot','contract','option') DEFAULT NULL AFTER symbol,
           ADD KEY idx_t0_journal_entry_instrument_time (ledger_id, user_id, instrument_type, trade_time)
+      `);
+    }
+
+    // 开仓锁定仅供管理员逐笔报价做黑金视觉标识；历史订单默认未锁，绝不影响数量、FIFO 或收益计算。
+    const [lockedColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_entries LIKE 'is_locked'`);
+    if (asRows(lockedColumns).length === 0) {
+      await db.execute(`
+        ALTER TABLE ledger52_t0_journal_entries
+          ADD COLUMN is_locked TINYINT(1) NOT NULL DEFAULT 0 COMMENT '仅T+0开仓主单的管理员锁定展示标记' AFTER instrument_type
       `);
     }
 
@@ -782,7 +794,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
       `SELECT e.id, e.account_id,
               CASE WHEN a.is_active = 1 THEN a.name ELSE NULL END AS account_name,
               CASE WHEN a.is_active = 1 THEN 0 ELSE 1 END AS account_hidden,
-              e.symbol, e.instrument_type, e.action, e.related_user_id, e.related_fund_id,
+              e.symbol, e.instrument_type, e.is_locked, e.action, e.related_user_id, e.related_fund_id,
               CASE WHEN f.is_active = 1 THEN f.name ELSE NULL END AS related_fund_name,
               CASE WHEN f.is_active = 1 THEN 0 ELSE 1 END AS related_fund_hidden,
               CASE WHEN deleted_user.id IS NULL THEN COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) ELSE NULL END AS related_user_name,
@@ -901,7 +913,13 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
     viewerMode: scope.mode,
     viewerRelatedUserId: isAdminScope ? undefined : relatedUserId,
     accounts: asRows(accountResult).map(mapAccount),
-    entries: entryRows.map(mapEntry),
+    // 成员端无锁定功能，且始终使用整合报价：响应中完全不下发锁定展示字段。
+    entries: entryRows.map((row) => {
+      const entry = mapEntry(row);
+      if (isAdminScope) return entry;
+      const { isLocked: _isLocked, ...memberEntry } = entry;
+      return memberEntry;
+    }),
     recentUsers: asRows(recentUserResult).map(mapRelatedUser),
     relatedFunds: asRows(relatedFundResult).map(mapRelatedFund),
     profitShareSnapshots: asRows(profitShareSnapshotResult).map(mapProfitShareSnapshot),
@@ -1668,6 +1686,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
   const instrumentType = isOpeningAction(input.action)
     ? normalizeInstrumentType(input.instrumentType, true)
     : undefined;
+  const isLocked = isOpeningAction(input.action) && input.isLocked === true ? 1 : 0;
 
   try {
     await ensureLedger52T0JournalTables(tx);
@@ -1785,8 +1804,8 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 
     const [entryResult] = await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18), ?, ?, ?, ?)
+        (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, is_locked, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18), ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
       [
         LEDGER_52_T0_JOURNAL_ID,
@@ -1796,6 +1815,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         relatedFund?.id ?? null,
         input.symbol,
         instrumentType ?? null,
+        isLocked,
         input.action,
         normalizedQuantity,
         input.price,
@@ -1844,7 +1864,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
                 COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
                 u.username AS related_username, u.avatar AS related_user_avatar,
-                e.symbol, e.instrument_type, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+                e.symbol, e.instrument_type, e.is_locked, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
            FROM ledger52_t0_journal_entries e
            INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
            LEFT JOIN users u ON u.id = e.related_user_id
@@ -1870,7 +1890,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: number) {
   const [rows] = await tx.execute(
     `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.instrument_type, e.action,
-            e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
+            e.is_locked, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
             e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
        FROM ledger52_t0_journal_entries e
        INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
@@ -1943,12 +1963,16 @@ async function buildEntryAuditSnapshot(tx: any, actorUserId: number, entry: any)
 export async function updateLedger52T0JournalOpeningEntry(input: {
   actorUserId: number;
   entryId: number;
+  /** 仅允许改为当前管理员名下的既有有效账户；未传时保留原账户。 */
+  accountId?: number;
   /** 允许管理员保留未关联状态，之后再补充关联用户。 */
   relatedUserId?: number;
   relatedFundId?: number;
   relatedFundName?: string;
   /** 旧开仓未标注时可留空；管理员选择后即固化该类型。 */
   instrumentType?: T0JournalInstrumentType;
+  /** 未传时保持历史锁定状态，传入时可锁定或解除。 */
+  isLocked?: boolean;
   quantity: string;
   price: string;
   note?: string;
@@ -1958,12 +1982,29 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   const tx: any = connection;
   const normalizedQuantity = normalizeEthQuantity(input.quantity);
   const instrumentType = normalizeInstrumentType(input.instrumentType);
+  const isLocked = input.isLocked === undefined ? null : input.isLocked ? 1 : 0;
 
   try {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     const before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
     const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
+    const accountId = input.accountId === undefined ? toNumber(before.account_id) : Number(input.accountId);
+    if (!Number.isInteger(accountId) || accountId <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "下单账户信息无效，请重新选择" });
+    }
+    if (accountId !== toNumber(before.account_id)) {
+      const [targetAccountRows] = await tx.execute(
+        `SELECT id
+           FROM ledger52_t0_journal_accounts
+          WHERE id = ? AND ledger_id = ? AND user_id = ? AND is_active = 1
+          LIMIT 1 FOR UPDATE`,
+        [accountId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+      );
+      if (!asRows(targetAccountRows)[0]) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "目标下单账户不存在、已停用或无权选择" });
+      }
+    }
     const relatedUserId = Number(input.relatedUserId || 0);
     if (relatedUserId > 0) {
       if (!Number.isInteger(relatedUserId)) {
@@ -1988,21 +2029,50 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       // 旧开仓可能在专项款功能上线前已关联用户，编辑时允许暂时保留“未区分专项款（历史）”。
       required: false,
     });
+    if (accountId !== toNumber(before.account_id)) {
+      // 目标账户若已有本单之后的平仓，移入该开仓会改写目标账户既有 FIFO 配对，必须先处理平仓流水。
+      const [targetCloseRows] = await tx.execute(
+        `SELECT id
+           FROM ledger52_t0_journal_entries
+          WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
+            AND action IN ('closeLong', 'closeShort')
+            AND COALESCE(related_user_id, 0) = ?
+            AND COALESCE(related_fund_id, 0) = ?
+            AND trade_time >= ?
+          ORDER BY trade_time ASC, id ASC
+          LIMIT 1 FOR UPDATE`,
+        [
+          LEDGER_52_T0_JOURNAL_ID,
+          input.actorUserId,
+          accountId,
+          String(before.symbol),
+          relatedUserId,
+          relatedFund?.id ?? 0,
+          before.trade_time,
+        ],
+      );
+      if (asRows(targetCloseRows)[0]) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "目标账户已有后续平仓流水；请先处理关联平仓后再调整下单账户" });
+      }
+    }
     const archivePrice = archivePriceForAction(String(before.action) as T0JournalAction, input.price);
     await tx.execute(
       `UPDATE ledger52_t0_journal_entries
-          SET quantity = ?, price = ?, target_price = ?, related_user_id = ?, related_fund_id = ?,
+          SET account_id = ?, quantity = ?, price = ?, target_price = ?, related_user_id = ?, related_fund_id = ?,
               instrument_type = COALESCE(?, instrument_type),
+              is_locked = COALESCE(?, is_locked),
               fee_usdt = ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18),
               note = ?, updated_at = NOW(3)
         WHERE id = ? AND ledger_id = ? AND user_id = ?`,
       [
+        accountId,
         normalizedQuantity,
         input.price,
         archivePrice,
         relatedUserId > 0 ? relatedUserId : null,
         relatedFund?.id ?? null,
         instrumentType ?? null,
+        isLocked,
         normalizedQuantity,
         input.price,
         input.note || null,
@@ -2023,7 +2093,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
               u.username AS related_username, u.avatar AS related_user_avatar,
-              e.symbol, e.instrument_type, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+              e.symbol, e.instrument_type, e.is_locked, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id
@@ -2093,7 +2163,7 @@ export async function revertLedger52T0JournalEntry(input: { actorUserId: number;
     await tx.beginTransaction();
     const [rows] = await tx.execute(
       `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.instrument_type, e.action,
-              e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
+              e.is_locked, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
               e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
@@ -2174,6 +2244,7 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
     const entryId = Number(snapshot?.id || 0);
     const accountId = Number(snapshot?.account_id || 0);
     const action = String(snapshot?.action || "") as T0JournalAction;
+    const isLocked = isOpeningAction(action) && Boolean(toNumber(snapshot?.is_locked ?? snapshot?.isLocked));
     const quantity = normalizeStoredEthQuantity(snapshot?.quantity);
     const price = String(snapshot?.price ?? "");
     const relatedUserId = toNumber(snapshot?.related_user_id ?? snapshot?.relatedUserId);
@@ -2218,8 +2289,8 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
 
     await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
+        (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, is_locked, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
       [
         entryId,
         LEDGER_52_T0_JOURNAL_ID,
@@ -2229,6 +2300,7 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
         relatedFundId > 0 ? relatedFundId : null,
         String(snapshot.symbol || "ETH"),
         normalizeInstrumentType(snapshot.instrument_type ?? snapshot.instrumentType),
+        isLocked ? 1 : 0,
         action,
         quantity,
         price,
@@ -2250,7 +2322,7 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
       `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
               u.username AS related_username, u.avatar AS related_user_avatar,
-              e.symbol, e.instrument_type, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+              e.symbol, e.instrument_type, e.is_locked, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id
