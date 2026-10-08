@@ -4596,7 +4596,6 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
       <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className={`shrink-0 font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"}`} style={quantityTextStyle}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
-          {isLocked && <Lock className="h-3.5 w-3.5 shrink-0 text-[#f5d78e] drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]" strokeWidth={2.5} aria-label="已锁定" />}
         </div>
         {floatingPnl !== null && (
           <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`}>
@@ -4615,7 +4614,10 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           <span className="shrink-0">·</span>
           <span className="min-w-0 shrink truncate" title={`项目：${metadata.relatedFundName}`}>{metadata.relatedFundName}</span>
         </div>
-        {metadata.instrumentShortLabel && <span className={`ml-1 shrink-0 ${isLocked ? "text-[#f5d78e]/85" : "text-slate-500"}`} title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
+        {(isLocked || metadata.instrumentShortLabel) && <div className={`ml-1 flex shrink-0 items-center gap-0.5 ${isLocked ? "text-[#f5d78e]/85" : "text-slate-500"}`}>
+          {isLocked && <Lock className="h-2.5 w-2.5 shrink-0" strokeWidth={2.5} aria-label="已锁定" />}
+          {metadata.instrumentShortLabel && <span title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
+        </div>}
       </div>}
     </div>
   );
