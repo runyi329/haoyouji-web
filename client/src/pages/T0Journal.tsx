@@ -1623,8 +1623,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       rows.push(item);
       rowsByPrice.set(key, rows);
     }
-    const activePositionPrices = individualBuckets.map((item) => item.bucket.price);
-    return buildAdaptiveLadderLevels(markLadderPrice, activePositionPrices).flatMap((price) => {
+    // 逐笔报价只展示每笔未平仓订单的实际成交价位；不沿用整合报价的实时价邻近空档。
+    // 为确认当前市场位置，若实时价档尚无订单，只额外保留这一条可为空的参考价档。
+    const individualLevels = new Set<number>(individualBuckets.map((item) => item.bucket.price));
+    if (markLadderPrice !== null) individualLevels.add(markLadderPrice);
+    return Array.from(individualLevels).sort((a, b) => b - a).flatMap((price) => {
       const rowsAtPrice = [...(rowsByPrice.get(priceKey(price)) ?? [])]
         .sort((a, b) => b.trade.createdAt.localeCompare(a.trade.createdAt) || b.trade.id.localeCompare(a.trade.id));
       if (rowsAtPrice.length === 0) {
