@@ -26,6 +26,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ReadonlyWalletSnapshot } from "@/components/ReadonlyWalletSnapshot";
+import { StockTagTradeDialog } from "@/components/StockTagTradeDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { COIN_OPTIONS } from "@/components/FunderOrderCard";
 import { AI_WALLET_CRYPTO_MARKET_ASSETS } from "@shared/ai-wallet-assets";
@@ -1741,6 +1742,7 @@ export default function LedgerAAInitialBalance() {
   // 标签维度双击编辑弹窗
   const [tagEditModal, setTagEditModal] = useState<{ userId: number; tagName: string; catColor: string } | null>(null);
   const [activeStockParticipationCategoryId, setActiveStockParticipationCategoryId] = useState<number | null>(null);
+  const [stockTradeDialog, setStockTradeDialog] = useState<{ categoryId: number; categoryName: string; type: "buy" | "sell" } | null>(null);
   const { data: stockParticipationMatrix, error: stockParticipationError, refetch: refetchStockParticipationMatrix } = trpc.ledger.getStockLotParticipationMatrix.useQuery(
     { ledgerId: 37, categoryId: Number(activeStockParticipationCategoryId || 0) },
     { enabled: ledgerId === 37 && !!activeStockParticipationCategoryId },
@@ -2135,6 +2137,11 @@ export default function LedgerAAInitialBalance() {
                       }}
                     >
                       {[...categories].sort((a: any, b: any) => {
+                        // R1 标签固定在第一位；其余标签仍按暂停状态排序。
+                        const aIsR1 = String(a.name || '').trim().toUpperCase() === 'R1';
+                        const bIsR1 = String(b.name || '').trim().toUpperCase() === 'R1';
+                        if (aIsR1 && !bIsR1) return -1;
+                        if (!aIsR1 && bIsR1) return 1;
                         // 有任意用户有暂停日期的标签排到最后
                         const aMembers = Object.values(editState) as Record<string, TagEntry>[];
                         const aPaused = aMembers.some(u => !!(u as any)[a.name]?.pauseDate);
@@ -2215,9 +2222,13 @@ export default function LedgerAAInitialBalance() {
                   <div className="flex items-center gap-2 px-1 pb-2">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat?.color || '#2F6F85' }} />
                     <span className="text-sm font-semibold text-gray-800">{selectedTagName}</span>
-                    <span className="ml-auto text-xs" style={{ color: '#2F6F85' }}>股票批次参与管理</span>
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <button type="button" onClick={() => setStockTradeDialog({ categoryId: Number(cat.id), categoryName: selectedTagName, type: 'buy' })} className="rounded-md px-2 py-1 text-xs font-medium text-white" style={{ backgroundColor: '#D32F2F' }}>买入</button>
+                      <button type="button" onClick={() => setStockTradeDialog({ categoryId: Number(cat.id), categoryName: selectedTagName, type: 'sell' })} className="rounded-md border bg-white px-2 py-1 text-xs font-medium" style={{ borderColor: '#D32F2F', color: '#D32F2F' }}>卖出</button>
+                    </div>
                   </div>
                   {renderStockParticipationEditor({ selectedUserId: 0, accentColor: cat?.color || '#2F6F85' })}
+                  {stockTradeDialog?.categoryId === Number(cat.id) && <StockTagTradeDialog categoryId={stockTradeDialog.categoryId} categoryName={stockTradeDialog.categoryName} type={stockTradeDialog.type} open={true} onOpenChange={(open) => !open && setStockTradeDialog(null)} onSaved={() => { void refetchStockParticipationMatrix(); }} />}
                 </div>
               );
             }

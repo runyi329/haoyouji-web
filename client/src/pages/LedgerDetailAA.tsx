@@ -310,6 +310,10 @@ function getPrevTradingDay(dateStr: string): string {
   return fallback.toISOString().slice(0, 10);
 }
 
+function isR1Tag(name: unknown): boolean {
+  return String(name ?? '').trim().toUpperCase() === 'R1';
+}
+
 export default function LedgerDetailAA({
   ledgerId,
   ledgerData,
@@ -609,6 +613,13 @@ export default function LedgerDetailAA({
       if (!stillVisible) setSelectedTagId(null);
     }
   }, [categories]);
+
+  // 普通标签的日历由父层一次性交易记录筛选而来。切换标签时主动重拉，避免首屏
+  // 仍短暂使用上一个标签加载期的记录，必须切换月份才触发下一次渲染的问题。
+  useEffect(() => {
+    if (selectedTagId === null) return;
+    void refetchTransactions();
+  }, [selectedTagId, refetchTransactions]);
 
   // admin 进入账本时默认选中 YH 标签（仅首次加载，未手动选过时生效）
   useEffect(() => {
@@ -1196,7 +1207,11 @@ export default function LedgerDetailAA({
     if (!initialBalancesData?.balances || !categories || categories.length === 0) return [];
     // 颜色列表（每个标签一个颜色）
     const COLORS = ['#D32F2F', '#1976D2', '#388E3C', '#F57C00', '#7B1FA2', '#00838F', '#C62828', '#283593', '#2E7D32'];
-    return categories.map((cat: any, idx: number) => {
+    return [...categories].sort((left: any, right: any) => {
+      if (isR1Tag(left.name) && !isR1Tag(right.name)) return -1;
+      if (!isR1Tag(left.name) && isR1Tag(right.name)) return 1;
+      return 0;
+    }).map((cat: any, idx: number) => {
       const tagName = cat.name;
       const color = COLORS[idx % COLORS.length];
       // 股票标签的成员视图严格按“成员 × 股票批次”的开始日、入场价与盘尾价计算，
@@ -1370,6 +1385,8 @@ export default function LedgerDetailAA({
     const overviewNames = [...allTagsChartData]
       .filter((tag: any) => tag.points.length > 0)
       .sort((left: any, right: any) => {
+        if (isR1Tag(left.name) && !isR1Tag(right.name)) return -1;
+        if (!isR1Tag(left.name) && isR1Tag(right.name)) return 1;
         const leftPaused = getIsPaused(left.name);
         const rightPaused = getIsPaused(right.name);
         if (leftPaused && !rightPaused) return 1;
@@ -1380,6 +1397,8 @@ export default function LedgerDetailAA({
     const overviewOrder = new Map(overviewNames.map((name, index) => [name, index]));
 
     return [...categories].sort((left: any, right: any) => {
+      if (isR1Tag(left.name) && !isR1Tag(right.name)) return -1;
+      if (!isR1Tag(left.name) && isR1Tag(right.name)) return 1;
       const leftOrder = overviewOrder.get(left.name);
       const rightOrder = overviewOrder.get(right.name);
       if (leftOrder !== undefined && rightOrder !== undefined) return leftOrder - rightOrder;
@@ -3186,7 +3205,9 @@ export default function LedgerDetailAA({
               else if (overviewSort.col === 'dividend') { va = a.divAmt; vb = b.divAmt; }
               return overviewSort.dir === 'desc' ? vb - va : va - vb;
             }) : [...tagData].sort((a, b) => {
-              // 默认排序：暂停(isPaused)的排最下面
+              // 默认排序：R1 固定首位，暂停(isPaused)的其余标签排最下面。
+              if (isR1Tag(a.tag.name) && !isR1Tag(b.tag.name)) return -1;
+              if (!isR1Tag(a.tag.name) && isR1Tag(b.tag.name)) return 1;
               if (a.isPaused && !b.isPaused) return 1;
               if (!a.isPaused && b.isPaused) return -1;
               return 0; // 同状态保持原始顺序

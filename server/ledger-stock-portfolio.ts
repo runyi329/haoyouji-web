@@ -1075,6 +1075,48 @@ async function allocateFifo(
   }
 }
 
+/** A newly entered sale must close one numbered lot in full; it may not reduce it or spill into another lot. */
+async function allocateWholeLot(
+  conn: any,
+  eventId: number,
+  categoryId: number,
+  lotId: number,
+  symbol: string,
+  quantity: number,
+  salePrice: number,
+) {
+  const [lotRows] = await conn.execute(
+    `SELECT l.id, l.symbol, l.initial_quantity
+     FROM ledger_stock_lots l
+     INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
+     WHERE l.id = ? AND l.category_id = ? AND opening_event.status = 'active'
+     LIMIT 1 FOR UPDATE`,
+    [lotId, categoryId],
+  );
+  const lot = (lotRows as any[])[0];
+  if (!lot) throw new Error("所选持仓编号不存在或已作废");
+  if (String(lot.symbol) !== symbol) throw new Error("所选持仓编号与股票代码不一致");
+
+  const [allocationRows] = await conn.execute(
+    `SELECT COALESCE(SUM(a.quantity), 0) AS allocated_quantity
+     FROM ledger_stock_event_lot_allocations a
+     INNER JOIN ledger_stock_events closing_event ON closing_event.id = a.event_id
+     WHERE a.lot_id = ? AND closing_event.status = 'active'`,
+    [lotId],
+  );
+  const remainingQuantity = Math.max(0, numberValue(lot.initial_quantity) - numberValue((allocationRows as any[])[0]?.allocated_quantity));
+  if (remainingQuantity <= EPSILON) throw new Error("该持仓编号已经全部卖出");
+  if (Math.abs(quantity - remainingQuantity) > EPSILON) {
+    throw new Error(`持仓编号只能整笔卖出：请以剩余 ${remainingQuantity} 股结清`);
+  }
+
+  await conn.execute(
+    `INSERT INTO ledger_stock_event_lot_allocations (event_id, lot_id, quantity) VALUES (?, ?, ?)`,
+    [eventId, lotId, remainingQuantity],
+  );
+  await closeLotParticipationsFifo(conn, lotId, eventId, salePrice, remainingQuantity);
+}
+
 export async function createStockTagEvent(input: {
   ledgerId: number;
   categoryId: number;
@@ -1084,6 +1126,7 @@ export async function createStockTagEvent(input: {
   symbol?: string;
   quantity?: number;
   executionPrice?: number;
+  lotId?: number;
   actualTradedAt?: string;
   note?: string;
   correctsEventId?: number;
@@ -1093,16 +1136,30 @@ export async function createStockTagEvent(input: {
   const note = String(input.note || "").trim().slice(0, 3000);
   const actualTradedAt = input.actualTradedAt ? new Date(input.actualTradedAt) : new Date();
   if (Number.isNaN(actualTradedAt.getTime())) throw new Error("实际成交时间无效");
+  const isNewOperation = !input.correctsEventId;
+  if (isNewOperation && type !== "buy" && type !== "sell") {
+    throw new Error("股票标签仅可新登记买入或卖出；历史加仓、减仓和备注记录仍可查看");
+  }
 
   let stock: Awaited<ReturnType<typeof verifyStockForTrade>> | null = null;
   let quantity: number | null = null;
   let executionPrice: number | null = null;
   if (type !== "note") {
-    stock = await verifyStockForTrade(String(input.symbol || ""));
-    quantity = Number(input.quantity);
     executionPrice = Number(input.executionPrice);
-    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("成交数量必须大于0");
     if (!Number.isFinite(executionPrice) || executionPrice <= 0) throw new Error("成交价格必须大于0");
+    if (type === "sell" && isNewOperation) {
+      const lotId = Number(input.lotId);
+      if (!Number.isInteger(lotId) || lotId <= 0) throw new Error("卖出时请选择持仓编号");
+      const lots = await getActiveLots(access.categoryId);
+      const selectedLot = lots.find((lot) => lot.id === lotId && lot.remainingQuantity > EPSILON);
+      if (!selectedLot) throw new Error("所选持仓编号不存在或已全部卖出");
+      stock = await verifyStockForTrade(selectedLot.symbol);
+      quantity = selectedLot.remainingQuantity;
+    } else {
+      stock = await verifyStockForTrade(String(input.symbol || ""));
+      quantity = Number(input.quantity);
+      if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("成交数量必须大于0");
+    }
   } else if (!note) {
     throw new Error("备注内容不能为空");
   }
@@ -1164,7 +1221,11 @@ export async function createStockTagEvent(input: {
       );
     }
     if (type === "reduce" || type === "sell") {
-      await allocateFifo(tx, eventId, access.categoryId, stock!.symbol, quantity!, executionPrice!);
+      if (type === "sell" && isNewOperation && input.lotId) {
+        await allocateWholeLot(tx, eventId, access.categoryId, Number(input.lotId), stock!.symbol, quantity!, executionPrice!);
+      } else {
+        await allocateFifo(tx, eventId, access.categoryId, stock!.symbol, quantity!, executionPrice!);
+      }
     }
     await (tx as any).commit();
     return { id: eventId };

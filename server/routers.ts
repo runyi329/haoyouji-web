@@ -11431,15 +11431,19 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.literal(37),
         categoryId: z.number(),
-        eventType: z.enum(['buy', 'add', 'reduce', 'sell', 'note']),
+        eventType: z.enum(['buy', 'sell']),
         symbol: z.string().max(16).optional(),
         quantity: z.number().positive().max(1_000_000_000).optional(),
         executionPrice: z.number().positive().max(10_000_000).optional(),
+        lotId: z.number().int().positive().optional(),
         actualTradedAt: z.string().datetime().optional(),
         note: z.string().max(3000).optional(),
       }).superRefine((value, issue) => {
-        if (value.eventType !== 'note' && (!value.symbol || !value.quantity || !value.executionPrice)) {
-          issue.addIssue({ code: z.ZodIssueCode.custom, message: '股票成交需要代码、数量和成交价格' });
+        if (value.eventType === 'buy' && (!value.symbol || !value.quantity || !value.executionPrice)) {
+          issue.addIssue({ code: z.ZodIssueCode.custom, message: '买入需要股票代码、数量和成交价格' });
+        }
+        if (value.eventType === 'sell' && (!value.lotId || !value.executionPrice)) {
+          issue.addIssue({ code: z.ZodIssueCode.custom, message: '卖出需要持仓编号和成交价格' });
         }
       }))
       .mutation(async ({ ctx, input }) => {
