@@ -50,6 +50,9 @@ export default function LedgerAADividendManage() {
   const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
   // 展开某个标签的明细（key: `${userId}__${tagName}`）
   const [expandedTagKey, setExpandedTagKey] = useState<string | null>(null);
+  // 暂停成员默认折叠；混合成员的暂停标签也单独折叠，避免和进行中标签混排。
+  const [showPausedMembers, setShowPausedMembers] = useState(false);
+  const [expandedPausedTagsUserId, setExpandedPausedTagsUserId] = useState<number | null>(null);
   // 针对某标签快捷添加分红（行内输入）
   const [quickAdd, setQuickAdd] = useState<{ userId: number; tagName: string } | null>(null);
   const [quickAmount, setQuickAmount] = useState("");
@@ -208,6 +211,60 @@ export default function LedgerAADividendManage() {
     }
     return result;
   }, [dividendsByUser, balancesMap, members, availabilityByUserTag]);
+
+  // 分红操作不能因成员或标签暂停而失去入口。成员目录、余额配置、已有分红和可分红汇总取并集，
+  // 兼容历史成员已不在常规成员数组、但仍有待分红或分红记录的情形。
+  const dividendMembers = useMemo(() => {
+    const memberById = new Map<number, any>();
+    const memberOrder = new Map<number, number>();
+    members.forEach((member: any, index: number) => {
+      const userId = Number(member.userId);
+      if (!Number.isFinite(userId) || userId <= 0 || member.memberType === 'ai') return;
+      memberById.set(userId, member);
+      memberOrder.set(userId, index);
+    });
+    const userIds = new Set<number>([
+      ...members.map((member: any) => Number(member.userId)),
+      ...Object.keys(balancesMap).map(Number),
+      ...Object.keys(dividendsByUser).map(Number),
+      ...Array.from(availabilityByUserTag.keys()),
+    ]);
+    return Array.from(userIds)
+      .filter((userId) => Number.isFinite(userId) && userId > 0 && memberById.get(userId)?.memberType !== 'ai')
+      .map((userId) => {
+        const member = memberById.get(userId) ?? { userId };
+        const groups = tagGroupsByUser[userId] ?? [];
+        const activeTagCount = groups.filter((group) => !group.isPaused).length;
+        const pausedTagCount = groups.length - activeTagCount;
+        const displayName = dividendsByUser[userId]?.userName ?? member.nickname ?? member.realName ?? member.username ?? `用户${userId}`;
+        return {
+          ...member,
+          userId,
+          displayName,
+          activeTagCount,
+          pausedTagCount,
+          hasOnlyPausedTags: groups.length > 0 && activeTagCount === 0 && pausedTagCount > 0,
+        };
+      })
+      .sort((left, right) => {
+        const leftOrder = memberOrder.get(left.userId) ?? Number.MAX_SAFE_INTEGER;
+        const rightOrder = memberOrder.get(right.userId) ?? Number.MAX_SAFE_INTEGER;
+        return leftOrder - rightOrder || String(left.displayName).localeCompare(String(right.displayName), 'zh-CN');
+      });
+  }, [members, balancesMap, dividendsByUser, availabilityByUserTag, tagGroupsByUser]);
+  const activeDividendMembers = useMemo(
+    () => dividendMembers.filter((member) => !member.hasOnlyPausedTags),
+    [dividendMembers],
+  );
+  const pausedDividendMembers = useMemo(
+    () => dividendMembers.filter((member) => member.hasOnlyPausedTags),
+    [dividendMembers],
+  );
+  const dividendMemberRows = useMemo(() => [
+    ...activeDividendMembers,
+    ...(pausedDividendMembers.length > 0 ? [{ __pausedMemberSection: true, count: pausedDividendMembers.length }] : []),
+    ...(showPausedMembers ? pausedDividendMembers : []),
+  ], [activeDividendMembers, pausedDividendMembers, showPausedMembers]);
 
   // ── 普通成员：获取自己的分红明细 ──
   const { data: myDividendData, refetch: refetchMyDividends } = trpc.getDividendRecords.useQuery(
@@ -463,15 +520,49 @@ export default function LedgerAADividendManage() {
 
       {/* 成员分红列表 */}
       <div className="px-3 mt-3 space-y-3">
-        {members.length === 0 && (
+        {dividendMembers.length === 0 && (
           <div className="text-center py-10" style={{ color: '#BDBDBD' }}>暂无成员数据</div>
         )}
-        {members.map((member: any) => {
-          const userId = member.userId;
+        {dividendMemberRows.map((member: any) => {
+          if (member.__pausedMemberSection) {
+            return (
+              <button
+                key="paused-members-section"
+                type="button"
+                onClick={() => {
+                  if (showPausedMembers) {
+                    setShowPausedMembers(false);
+                    setExpandedUserId((currentUserId) => pausedDividendMembers.some((pausedMember) => Number(pausedMember.userId) === Number(currentUserId)) ? null : currentUserId);
+                    setExpandedPausedTagsUserId(null);
+                  } else {
+                    setShowPausedMembers(true);
+                  }
+                }}
+                className="flex w-full items-center rounded-2xl px-4 py-3 text-left shadow-sm"
+                style={{ backgroundColor: '#F1F7FF', border: '1px solid #D7E8FA', color: '#1565C0' }}
+              >
+                <PauseCircle className="mr-2 h-4 w-4 flex-shrink-0" />
+                <span className="flex-1 text-sm font-semibold">已暂停成员</span>
+                <span className="mr-2 text-[11px] font-medium">{member.count} 人 · 仍可分红</span>
+                {showPausedMembers ? <ChevronUp className="h-4 w-4 flex-shrink-0" /> : <ChevronDown className="h-4 w-4 flex-shrink-0" />}
+              </button>
+            );
+          }
+          const userId = Number(member.userId);
           const userDiv = dividendsByUser[userId];
           const total = userDiv?.total ?? 0;
           const records = userDiv?.records ?? [];
           const isExpanded = expandedUserId === userId;
+          const memberTagGroups = tagGroupsByUser[userId] ?? [];
+          const activeTagGroups = memberTagGroups.filter((group) => !group.isPaused);
+          const pausedTagGroups = memberTagGroups.filter((group) => group.isPaused);
+          const hasPausedTagSection = pausedTagGroups.length > 0 && !member.hasOnlyPausedTags;
+          const isPausedTagSectionExpanded = expandedPausedTagsUserId === userId;
+          const displayedTagRows: any[] = [
+            ...activeTagGroups,
+            ...(hasPausedTagSection ? [{ __pausedTagSection: true, count: pausedTagGroups.length }] : []),
+            ...(!hasPausedTagSection || isPausedTagSectionExpanded ? pausedTagGroups : []),
+          ];
 
           return (
             <div key={userId} className="rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: '#FFFFFF' }}>
@@ -487,13 +578,13 @@ export default function LedgerAADividendManage() {
                       event.stopPropagation();
                       setWalletSnapshotUser({
                         id: Number(userId),
-                        name: userDiv?.userName ?? member.nickname ?? member.realName ?? member.username ?? `用户${userId}`,
+                        name: member.displayName,
                         username: member.username ?? undefined,
                       });
                     }}
                     className="block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A84C] focus-visible:ring-offset-2"
-                    title={`查看 ${userDiv?.userName ?? member.nickname ?? member.username ?? `用户${userId}`} 的只读钱包快照`}
-                    aria-label={`查看 ${userDiv?.userName ?? member.nickname ?? member.username ?? `用户${userId}`} 的只读钱包快照`}
+                    title={`查看 ${member.displayName} 的只读钱包快照`}
+                    aria-label={`查看 ${member.displayName} 的只读钱包快照`}
                   >
                     <UserAvatar
                       username={member.username ?? `用户${userId}`}
@@ -511,7 +602,7 @@ export default function LedgerAADividendManage() {
                   />
                 )}
                 <div className="ml-3 flex-1 min-w-0">
-                  <div className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{userDiv?.userName ?? member.nickname ?? member.username ?? `用户${userId}`}</div>
+                  <div className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{member.displayName}</div>
                   <div className="text-xs mt-0.5" style={{ color: '#9E9E9E' }}>
                     {records.length > 0 ? `共 ${records.length} 笔分红` : '暂无分红记录'}
                   </div>
@@ -522,7 +613,7 @@ export default function LedgerAADividendManage() {
                   </div>
                   <div className="text-[10px]" style={{ color: '#BDBDBD' }}>累计分红</div>
                 </div>
-                {(tagGroupsByUser[userId]?.length ?? 0) > 0 && (
+                {memberTagGroups.length > 0 && (
                   isExpanded
                     ? <ChevronUp className="w-4 h-4 flex-shrink-0" style={{ color: '#BDBDBD' }} />
                     : <ChevronDown className="w-4 h-4 flex-shrink-0" style={{ color: '#BDBDBD' }} />
@@ -530,9 +621,25 @@ export default function LedgerAADividendManage() {
               </div>
 
               {/* 标签分组（第一级：每个标签汇总；点开第二级：该标签下每笔明细） */}
-              {isExpanded && (tagGroupsByUser[userId]?.length ?? 0) > 0 && (
+              {isExpanded && memberTagGroups.length > 0 && (
                 <div style={{ borderTop: '1px solid #F5F5F5' }}>
-                  {(tagGroupsByUser[userId] ?? []).map((grp) => {
+                  {displayedTagRows.map((grp: any) => {
+                    if (grp.__pausedTagSection) {
+                      return (
+                        <button
+                          key={`${userId}__paused-tags-section`}
+                          type="button"
+                          onClick={() => setExpandedPausedTagsUserId(isPausedTagSectionExpanded ? null : userId)}
+                          className="flex w-full items-center px-4 py-2.5 text-left"
+                          style={{ backgroundColor: '#F1F7FF', borderTop: '1px solid #D7E8FA', color: '#1565C0' }}
+                        >
+                          <PauseCircle className="mr-1.5 h-3.5 w-3.5 flex-shrink-0" />
+                          <span className="flex-1 text-xs font-semibold">已暂停标签</span>
+                          <span className="mr-2 text-[10px] font-medium">{grp.count} 项 · 仍可分红</span>
+                          {isPausedTagSectionExpanded ? <ChevronUp className="h-4 w-4 flex-shrink-0" /> : <ChevronDown className="h-4 w-4 flex-shrink-0" />}
+                        </button>
+                      );
+                    }
                     const tagKey = `${userId}__${grp.tagName}`;
                     const tagExpanded = expandedTagKey === tagKey;
                     const availability = availabilityByUserTag.get(Number(userId))?.get(grp.tagName);
@@ -732,7 +839,7 @@ export default function LedgerAADividendManage() {
                                     <Plus className="w-3.5 h-3.5" /> 加一笔
                                   </button>
                                   <button
-                                    onClick={() => setShowNoteModal({ userId, userName: userDiv?.userName ?? member.nickname ?? member.username ?? `用户${userId}`, tagName: grp.tagName })}
+                                    onClick={() => setShowNoteModal({ userId, userName: member.displayName, tagName: grp.tagName })}
                                     className="px-2.5 py-1 rounded-full text-xs font-medium underline"
                                     style={{ color: '#1565C0' }}
                                   >
@@ -775,7 +882,7 @@ export default function LedgerAADividendManage() {
               <div>
                 <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>选择成员</div>
                 <div className="flex flex-wrap gap-2">
-                  {members.map((m: any) => (
+                  {dividendMembers.map((m: any) => (
                     <button
                       key={m.userId}
                       onClick={() => setAddForm(f => ({ ...f, targetUserId: m.userId, tagName: "" }))}
@@ -786,7 +893,7 @@ export default function LedgerAADividendManage() {
                         borderColor: addForm.targetUserId === m.userId ? '#D32F2F' : '#E0E0E0',
                       }}
                     >
-                      {m.nickname ?? m.username ?? `用户${m.userId}`}
+                      {m.displayName}{m.hasOnlyPausedTags ? ' · 暂停' : ''}
                     </button>
                   ))}
                 </div>

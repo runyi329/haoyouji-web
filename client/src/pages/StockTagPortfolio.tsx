@@ -122,9 +122,18 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   const tagData = (participantView ? publicPortfolioQuery.data : globalPortfolioQuery.data) as any;
   const tagSummary = tagData?.summary;
   const tagPositions = tagData?.positions || [];
-  // 只有15:05盘尾任务已为某日成功写入有效快照时，才显示日结印章；不以前端当前时间伪造结算。
+  // 只有当前展示报价已被15:05盘尾任务固化为同日快照时，才显示日结印章。
+  // 盘中报价会覆盖当前市值，但不应被昨日盘尾水印误标为“已结算”。
   const settledSnapshot = participantView ? (memberPortfolioQuery.data as any)?.summary?.latestSnapshot : tagSummary?.latestSnapshot;
-  const snapshotStamp = settledSnapshot?.snapshotDate ? `${settledSnapshot.snapshotDate} · 15:05 盘尾快照` : null;
+  const latestQuoteDate = tagPositions
+    .map((position: any) => String(position?.quoteDate || ""))
+    .filter((value: string) => value.length > 0)
+    .sort()
+    .at(-1) || null;
+  const snapshotDate = settledSnapshot?.snapshotDate ? String(settledSnapshot.snapshotDate) : null;
+  const snapshotStamp = snapshotDate && snapshotDate === latestQuoteDate
+    ? `${snapshotDate} · 15:05 盘尾快照`
+    : null;
 
   const [showHistory, setShowHistory] = useState(false);
   const [showPnlFormula, setShowPnlFormula] = useState(false);
@@ -534,15 +543,15 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       });
       return <div key={`${holding.symbol}-${holding.lot.id}`}>
         <div className="relative overflow-hidden rounded-[3px] border border-[#D9D9D9] bg-white text-xs">
-          <div className="flex items-center justify-between gap-3 border-b border-[#E6E6E6] px-2.5 py-2.5">
-            <div className="flex min-w-0 items-center gap-1.5">
-              <span aria-label={`持仓编号 ${positionNumber}`} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#EDB6B6] text-[9px] font-bold leading-none text-[#9F1D1D]" style={{ background: "radial-gradient(circle at 31% 24%, #FFFFFF 0%, #FFFFFF 12%, #FFF7F7 13%, #FFD8D8 48%, #F09D9D 74%, #B71C1C 100%)", boxShadow: "inset 1px 1px 2px rgba(255,255,255,.95), inset -2px -2px 3px rgba(125,20,20,.42), 0 2px 3px rgba(77,12,12,.30)" }}>{positionNumber}</span>
-              <div className="flex min-w-0 items-center gap-1"><span className="min-w-0 truncate font-semibold text-[#222222]">{holding.stockName}</span><span className="shrink-0 whitespace-nowrap font-normal text-gray-400">{holding.symbol}</span></div>
+          <div className="border-b border-[#E6E6E6] px-2.5 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <span aria-label={`持仓编号 ${positionNumber}`} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#EDB6B6] text-[9px] font-bold leading-none text-[#9F1D1D]" style={{ background: "radial-gradient(circle at 31% 24%, #FFFFFF 0%, #FFFFFF 12%, #FFF7F7 13%, #FFD8D8 48%, #F09D9D 74%, #B71C1C 100%)", boxShadow: "inset 1px 1px 2px rgba(255,255,255,.95), inset -2px -2px 3px rgba(125,20,20,.42), 0 2px 3px rgba(77,12,12,.30)" }}>{positionNumber}</span>
+                <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5"><span className="font-semibold leading-5 text-[#222222]">{holding.stockName}</span><span className="shrink-0 whitespace-nowrap font-normal text-gray-400">{holding.symbol}</span></div>
+              </div>
+              {canEdit && <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={() => setSelectedPosition(holding.position)} className="text-[#C62828]">审计</button><button type="button" aria-label={isAdminLotExpanded ? `收起持仓编号 ${positionNumber}` : `展开持仓编号 ${positionNumber}`} title={isAdminLotExpanded ? "收起详情" : "展开详情"} onClick={toggleAdminLotExpanded} className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100"><ChevronDown size={15} className="transition-transform" style={{ transform: isAdminLotExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} /></button></div>}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <div className="text-right"><span className="text-[11px] text-gray-400">买入</span><span className="ml-1 font-medium text-[#222222]">{formatDateTime(holding.lot.openedAt)}</span></div>
-              {canEdit && <div className="flex items-center gap-2"><button type="button" onClick={() => setSelectedPosition(holding.position)} className="text-[#C62828]">审计</button><button type="button" aria-label={isAdminLotExpanded ? `收起持仓编号 ${positionNumber}` : `展开持仓编号 ${positionNumber}`} title={isAdminLotExpanded ? "收起详情" : "展开详情"} onClick={toggleAdminLotExpanded} className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100"><ChevronDown size={15} className="transition-transform" style={{ transform: isAdminLotExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} /></button></div>}
-            </div>
+            <div className="ml-[26px] mt-0.5 text-[11px] leading-4 text-gray-400"><span>买入</span><span className="ml-1 font-medium text-[#555555]">{formatDateTime(holding.lot.openedAt)}</span></div>
           </div>
           {!participantView && canEdit && !isAdminLotExpanded && <div className={`${responsiveMetricGridClass} bg-[#FCFCFC]`}><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{formatQuantity(ownerHolding.quantity)} 股</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">均价</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(holding.lot.unitCost)}</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">当前价</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(holding.marketPrice)}</div></div><div className="min-w-0 px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">浮动盈亏</div><div className={`mt-0.5 break-all text-[11px] leading-4 font-medium ${holdingPnlTone}`}>{ownerHolding.floatingPnl === null ? "—" : signedMoney(ownerHolding.floatingPnl)}</div></div></div>}
           {(participantView || isAdminLotExpanded) && <>
@@ -683,7 +692,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
                 </div>)}
               </div>
             </div>
-            <div className="rounded-lg bg-[#F5F7FA] px-3 py-2 text-[10px] leading-4 text-gray-500">{participantView ? "按个人对应批次的买入价与当前盘尾报价计算；当前价格未更新的批次不会纳入总浮动盈亏。" : "按各股票批次的实际持仓成本与当前盘尾报价计算；当前价格未更新的批次不会纳入账户浮动盈亏。"}</div>
+            <div className="rounded-lg bg-[#F5F7FA] px-3 py-2 text-[10px] leading-4 text-gray-500">{participantView ? "按个人对应批次的买入价与当前报价计算；盘中报价每五分钟更新，15:05 固化盘尾快照。当前价格未更新的批次不会纳入总浮动盈亏。" : "按各股票批次的实际持仓成本与当前报价计算；盘中报价每五分钟更新，15:05 固化盘尾快照。当前价格未更新的批次不会纳入账户浮动盈亏。"}</div>
           </div>}
         </DialogContent>
       </Dialog>

@@ -1,5 +1,5 @@
 import { getDbConnection, getDbTransactionConnection } from "./db";
-import { fetchEndOfDayStockCloseSnapshots, searchManualAshareStocks } from "./price-scanner";
+import { fetchEndOfDayStockCloseSnapshots, fetchIntradayStockQuotes, searchManualAshareStocks } from "./price-scanner";
 
 export type StockEventType = "buy" | "add" | "reduce" | "sell" | "note";
 export type AccountingMode = "manual_balance" | "stock_portfolio";
@@ -20,6 +20,7 @@ type StoredQuote = {
 
 let tablesReady: Promise<void> | null = null;
 let closeRefreshInProgress = false;
+let intradayRefreshInProgress = false;
 
 const STOCK_LEDGER_ID = 37;
 const EPSILON = 0.00000001;
@@ -183,6 +184,21 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           UNIQUE KEY uk_ledger_stock_price_snapshot (category_id, symbol, price_date),
           INDEX idx_ledger_stock_price_latest (category_id, symbol, price_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      // 盘中报价与15:05日结报价分表保存：盘中价格只影响当前市值，不能伪造当日历史快照。
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ledger_stock_intraday_quotes (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL,
+          category_id INT NOT NULL,
+          symbol VARCHAR(16) NOT NULL,
+          price DECIMAL(20,8) NOT NULL,
+          price_date DATE NOT NULL,
+          captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_ledger_stock_intraday_quote (category_id, symbol),
+          INDEX idx_ledger_stock_intraday_latest (category_id, price_date, captured_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
 
@@ -396,6 +412,50 @@ async function getLatestQuotes(categoryId: number, symbols: string[]): Promise<R
   return result;
 }
 
+/** 只返回当日盘中报价；跨日残留不能覆盖上一交易日的正式盘尾价。 */
+async function getLatestIntradayQuotes(categoryId: number, symbols: string[]): Promise<Record<string, StoredQuote>> {
+  if (symbols.length === 0) return {};
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  const unique = Array.from(new Set(symbols));
+  const placeholders = unique.map(() => "?").join(",");
+  const [rows] = await (conn as any).execute(
+    `SELECT symbol, price, price_date, captured_at
+     FROM ledger_stock_intraday_quotes
+     WHERE category_id = ? AND price_date = ? AND symbol IN (${placeholders})`,
+    [categoryId, beijingDate(), ...unique],
+  );
+  const result: Record<string, StoredQuote> = {};
+  for (const row of rows as any[]) {
+    const price = numberValue(row.price);
+    if (price > 0) {
+      result[String(row.symbol)] = {
+        symbol: String(row.symbol),
+        price,
+        priceDate: normalizeStoredDate(row.price_date) || "",
+        updatedAt: toIso(row.captured_at),
+      };
+    }
+  }
+  return result;
+}
+
+/** 同一交易日内以更晚时间为准，让15:05盘尾价优先替代15:00盘中参考价。 */
+function mergeLatestQuoteMaps(...maps: Array<Record<string, StoredQuote>>): Record<string, StoredQuote> {
+  const result: Record<string, StoredQuote> = {};
+  for (const map of maps) {
+    for (const [symbol, quote] of Object.entries(map)) {
+      const current = result[symbol];
+      if (!current
+        || quote.priceDate > current.priceDate
+        || (quote.priceDate === current.priceDate && quote.updatedAt >= current.updatedAt)) {
+        result[symbol] = quote;
+      }
+    }
+  }
+  return result;
+}
+
 async function getLatestReferenceQuotes(categoryId: number): Promise<Record<string, StoredQuote>> {
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
@@ -510,9 +570,13 @@ async function getLatestDailySnapshots(categoryId: number) {
 
 async function buildPortfolio(categoryId: number) {
   const allLots = await getActiveLots(categoryId);
-  const referenceQuotes = await getLatestReferenceQuotes(categoryId);
-  const storedQuotes = await getLatestQuotes(categoryId, allLots.map((lot) => lot.symbol));
-  const quoteMap = { ...referenceQuotes, ...storedQuotes };
+  const symbols = allLots.map((lot) => lot.symbol);
+  const [referenceQuotes, storedQuotes, intradayQuotes] = await Promise.all([
+    getLatestReferenceQuotes(categoryId),
+    getLatestQuotes(categoryId, symbols),
+    getLatestIntradayQuotes(categoryId, symbols),
+  ]);
+  const quoteMap = mergeLatestQuoteMaps(referenceQuotes, storedQuotes, intradayQuotes);
   const positionMap = new Map<string, any>();
 
   for (const lot of allLots) {
@@ -729,9 +793,12 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   const visibleParticipations = participations.filter((item) => item.startDate <= today);
   const activeParticipations = visibleParticipations.filter((item) => item.remainingQuantity > EPSILON);
   const symbols = Array.from(new Set(activeParticipations.map((item) => item.symbol)));
-  // Member P&L begins from the explicit entry reference, so only actual end-of-day
-  // snapshots may update it.  A registration-time quote is not a fabricated close.
-  const quotes = await getLatestQuotes(categoryId, symbols);
+  // 当前浮盈可读取当日盘中报价；按日历史与日历仍只使用15:05盘尾快照。
+  const [storedQuotes, intradayQuotes] = await Promise.all([
+    getLatestQuotes(categoryId, symbols),
+    getLatestIntradayQuotes(categoryId, symbols),
+  ]);
+  const quotes = mergeLatestQuoteMaps(storedQuotes, intradayQuotes);
   const grouped = new Map<string, any>();
   for (const item of activeParticipations) {
     const current = grouped.get(item.symbol) || {
@@ -1317,6 +1384,64 @@ export async function refreshLedgerStockTagCloseSnapshots(): Promise<{ categorie
     closeRefreshInProgress = false;
   }
 }
+
+/**
+ * 交易时段每五分钟刷新37号股票标签当前市值。
+ * 盘中报价单独保存，不触碰日历、每日盈亏或15:05才固化的盘尾快照。
+ */
+export async function refreshLedgerStockTagIntradaySnapshots(): Promise<{ categories: number; symbols: number; updated: number }> {
+  if (intradayRefreshInProgress) return { categories: 0, symbols: 0, updated: 0 };
+  intradayRefreshInProgress = true;
+  try {
+    await ensureLedgerStockPortfolioTables();
+    const conn = await getDbConnection();
+    if (!conn) throw new Error("数据库连接不可用");
+    const [rows] = await (conn as any).execute(
+      `SELECT id FROM ledger_categories
+       WHERE ledgerId = ? AND parentId IS NULL AND accounting_mode = 'stock_portfolio'`,
+      [STOCK_LEDGER_ID],
+    );
+    const categoryIds = (rows as any[]).map((row) => Number(row.id));
+    const symbolsByCategory = new Map<number, string[]>();
+    const allSymbols = new Set<string>();
+    for (const categoryId of categoryIds) {
+      const lots = await getActiveLots(categoryId);
+      const symbols = Array.from(new Set(
+        lots.filter((lot) => lot.remainingQuantity > EPSILON).map((lot) => lot.symbol),
+      ));
+      symbolsByCategory.set(categoryId, symbols);
+      symbols.forEach((symbol) => allSymbols.add(symbol));
+    }
+    if (allSymbols.size === 0) return { categories: categoryIds.length, symbols: 0, updated: 0 };
+
+    const quotes = await fetchIntradayStockQuotes(Array.from(allSymbols));
+    const date = beijingDate();
+    let updated = 0;
+    for (const [categoryId, symbols] of Array.from(symbolsByCategory.entries())) {
+      for (const symbol of symbols) {
+        const quote = quotes[symbol];
+        if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) continue;
+        const priceDate = quote.priceDate || date;
+        // 节假日或上游返回前一交易日价格时，不能伪装成本交易日的实时行情。
+        if (priceDate !== date) continue;
+        await (conn as any).execute(
+          `INSERT INTO ledger_stock_intraday_quotes
+           (ledger_id, category_id, symbol, price, price_date, captured_at)
+           VALUES (?, ?, ?, ?, ?, NOW())
+           ON DUPLICATE KEY UPDATE
+             price = VALUES(price), price_date = VALUES(price_date), captured_at = NOW()`,
+          [STOCK_LEDGER_ID, categoryId, symbol, quote.price, priceDate],
+        );
+        updated += 1;
+      }
+    }
+    console.log(`[37股票盘中] ${date}：标签 ${categoryIds.length} 个，跟踪 ${allSymbols.size} 只，更新 ${updated} 条行情`);
+    return { categories: categoryIds.length, symbols: allSymbols.size, updated };
+  } finally {
+    intradayRefreshInProgress = false;
+  }
+}
+
 async function getStockLotParticipationMatrixInternal(categoryId: number) {
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");

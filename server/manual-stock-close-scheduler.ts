@@ -1,6 +1,6 @@
 import { getDbConnection } from "./db";
 import { fetchEndOfDayStockCloseSnapshots, fetchIntradayStockQuotes } from "./price-scanner";
-import { ensureLedgerStockPortfolioTables, refreshLedgerStockTagCloseSnapshots } from "./ledger-stock-portfolio";
+import { ensureLedgerStockPortfolioTables, refreshLedgerStockTagCloseSnapshots, refreshLedgerStockTagIntradaySnapshots } from "./ledger-stock-portfolio";
 import { getTagMarginStockSymbols, parseTagMarginRecords } from "@shared/tag-margin-assets";
 
 type StoredManualStockClose = {
@@ -79,7 +79,7 @@ async function getTrackedSymbols(options: { includeLedger37MarginStocks?: boolea
     }
   }
   if (!options.includeLedger37MarginStocks) return Array.from(symbols).slice(0, 200);
-  // 37号标签的股票保证金使用同一套盘尾快照，不在管理员打开页面时发起第三方报价请求。
+  // 37号标签的股票保证金使用同一套服务端快照，不在管理员打开页面时发起第三方报价请求。
   const [marginRows] = await (conn as any).execute(`
     SELECT margin_by_coin
     FROM ledger_tag_config
@@ -136,7 +136,7 @@ export async function refreshManualStockCloseSnapshots(): Promise<{ symbols: num
 }
 
 /**
- * 盘中每五分钟刷新 52 号账本手工股票组合的参考价。
+ * 盘中每五分钟刷新52号手工股票与37号股票保证金引用的参考价。
  * 只更新当前可见价格与浮动盈亏，不创建日结记录；15:05 的独立盘尾任务仍负责固化收盘价。
  */
 export async function refreshManualStockIntradaySnapshots(): Promise<{ symbols: number; updated: number }> {
@@ -144,7 +144,7 @@ export async function refreshManualStockIntradaySnapshots(): Promise<{ symbols: 
   refreshInProgress = true;
   try {
     await ensureTable();
-    const symbols = await getTrackedSymbols({ includeLedger37MarginStocks: false });
+    const symbols = await getTrackedSymbols({ includeLedger37MarginStocks: true });
     if (!symbols.length) return { symbols: 0, updated: 0 };
     const quotes = await fetchIntradayStockQuotes(symbols);
     const conn = await getDbConnection();
@@ -257,7 +257,12 @@ function millisecondsUntilNextFiveMinuteBoundary(now = new Date()): number {
 function scheduleNextManualStockIntradayRefresh(): void {
   intradayTimer = setTimeout(async () => {
     try {
-      if (isBeijingTradingWindow()) await refreshManualStockIntradaySnapshots();
+      if (isBeijingTradingWindow()) {
+        await Promise.all([
+          refreshManualStockIntradaySnapshots(),
+          refreshLedgerStockTagIntradaySnapshots(),
+        ]);
+      }
     } catch (error) {
       console.error("[股票盘中] 同步失败:", error instanceof Error ? error.message : error);
     } finally {
@@ -268,12 +273,15 @@ function scheduleNextManualStockIntradayRefresh(): void {
 
 function refreshIntradayQuotesOnStartup(): void {
   if (!isBeijingTradingWindow()) return;
-  void refreshManualStockIntradaySnapshots().catch((error) => {
+  void Promise.all([
+    refreshManualStockIntradaySnapshots(),
+    refreshLedgerStockTagIntradaySnapshots(),
+  ]).catch((error) => {
     console.error("[股票盘中] 启动即时同步失败:", error instanceof Error ? error.message : error);
   });
 }
 
-/** 启动 52 号订单盘中报价与每日 15:05 盘尾快照任务。 */
+/** 启动52号订单与37号股票标签的盘中报价及每日15:05盘尾快照任务。 */
 export function startManualStockCloseScheduler(): void {
   if (dailyTimer || intradayTimer) return;
   void ensureTable().catch((error) => {
@@ -286,5 +294,5 @@ export function startManualStockCloseScheduler(): void {
   // 部署或 PM2 重启发生在交易时段时，先立即取一次报价，之后再对齐每五分钟整点。
   refreshIntradayQuotesOnStartup();
   scheduleNextManualStockIntradayRefresh();
-  console.log("[股票行情] 52订单交易时段每5分钟更新，37标签仅每日北京时间15:05盘尾快照");
+  console.log("[股票行情] 52订单、37股票标签及其股票保证金在交易时段每5分钟更新，15:05固化盘尾快照");
 }
