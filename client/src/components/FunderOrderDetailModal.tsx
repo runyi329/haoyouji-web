@@ -219,8 +219,7 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
   const primaryAmountLabel = hasExplicitPrincipalLentOut ? '借出本金' : detailAssetFundingType === 'self' ? '订单金额' : '融资金额';
   // 与订单卡片保持相同的独立主展示口径：管理员可随时选择融资金额或标的数量，
   // 不再依赖“借出本金”风险开关；缺少新字段的历史订单仍按旧规则展示。
-  const detailPrincipalLentOut = hasExplicitPrincipalLentOut
-    || (order.asset_type !== 'crypto_option' && financingDisplayConfig?.assetFundingType === 'financing');
+  const detailPrincipalLentOut = hasExplicitPrincipalLentOut;
   const configuredPrimaryDisplay = financingDisplayConfig?.primaryAssetDisplay === 'financing' || financingDisplayConfig?.primaryAssetDisplay === 'quantity'
     ? financingDisplayConfig.primaryAssetDisplay
     : null;
@@ -228,7 +227,7 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
     ? 'quantity'
     : financingDisplayConfig?.principalLentOutPrimary === 'principal'
       ? 'financing'
-      : (detailPrincipalLentOut || order.asset_type === 'stock' || amountCurrency === 'CNY' ? 'financing' : 'quantity');
+      : (detailPrincipalLentOut || detailAssetFundingType === 'financing' || order.asset_type === 'stock' || amountCurrency === 'CNY' ? 'financing' : 'quantity');
   const displayFinancingAsPrimary = (configuredPrimaryDisplay ?? legacyPrimaryDisplay) === 'financing';
   const baseCurrency = String(order.interest_base_currency || 'USDT').toUpperCase();
   const rateCurrency = String(order.interest_rate_currency || 'USDT').toUpperCase();

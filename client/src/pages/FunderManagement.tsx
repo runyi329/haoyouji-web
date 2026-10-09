@@ -192,8 +192,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     // 默认使用未乘倍率的真实净值盈亏；只有管理员主动选择时才使用37号页的倍数后净值盈亏。
     floatingPnlCalculationMode?: 'raw_net_pnl' | 'leveraged_net_pnl';
     collateralTagName?: string;
+    // 37号“剩余保证金占基数比”独立引用；仅用于52号卡片的保证金率展示。
+    marginRateTagName?: string;
     useFloatingPnl?: boolean;
     useCollateral?: boolean;
+    useMarginRate?: boolean;
     useInterest?: boolean;
   } | null>(null);
   // 股票浮动盈亏可独立选择：37号标签、管理员录入的股票组合，或不调用外部来源。
@@ -224,7 +227,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       || (collateralSource.useFloatingPnl !== false ? collateralSource.tagName : '');
     const collateralTagName = collateralSource.collateralTagName
       || (collateralSource.useCollateral !== false ? collateralSource.tagName : '');
-    const legacyTagName = collateralTagName || floatingPnlTagName || pendingInterestTagName || paidInterestTagName;
+    const marginRateTagName = collateralSource.marginRateTagName || '';
+    const legacyTagName = collateralTagName || floatingPnlTagName || marginRateTagName || pendingInterestTagName || paidInterestTagName;
     if (!legacyTagName) return null;
     return {
       ledgerId: 37,
@@ -234,6 +238,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       collateralTagName: collateralTagName || undefined,
       useFloatingPnl: !!floatingPnlTagName,
       useCollateral: !!collateralTagName,
+      marginRateTagName: marginRateTagName || undefined,
+      useMarginRate: !!marginRateTagName,
       pendingInterestTagName: pendingInterestTagName || undefined,
       usePendingInterest: !!pendingInterestTagName,
       paidInterestTagName: paidInterestTagName || undefined,
@@ -393,7 +399,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     collateralCoin: true,
     collateralValue: true,
     collateral: true,
-    marginRate: true,
+    // 保证金率仅在编辑时主动开启，避免所有订单默认占用卡片空间。
+    marginRate: false,
     profitShare: false,
     commissionShare: false,
     aiIcon: false,
@@ -1077,14 +1084,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     return ['CNY', 'RMB', '人民币'].includes(currency) ? base / cnyRate : base;
   }, [collateralGapBaseMode, financingAmountUsdt, formData.interestBase, formData.interestBaseCurrency, cnyRate]);
 
-  // 融资付息的本金是创建时约定的固定债务，不能随标的行情变化。
-  // “借出本金”开关是旧订单的兼容标记；新版融资付息属性也必须进入同一口径。
-  const previewIsFinancingOrder = useMemo(() => {
-    const fundingType = String(displayConfig.assetFundingType || '').trim().toLowerCase();
-    return Boolean(formData.principalLentOut)
-      || (!Boolean(displayConfig.selfFundedAsset) && ['financing', 'finance', '融资付息'].includes(fundingType));
-  }, [displayConfig.assetFundingType, displayConfig.selfFundedAsset, formData.principalLentOut]);
-  const previewFinancingPrincipalU = useMemo(() => {
+  // 资金属性“融”只用于订单展示；只有明确开启“借出本金”才把本金视为待覆盖负债。
+  // 未开启时，37号引用按净值盈亏、担保物和利息计算，不扣原始融资本金。
+  const previewIsPrincipalLoan = useMemo(() => Boolean(formData.principalLentOut), [formData.principalLentOut]);
+  const previewBorrowedPrincipalU = useMemo(() => {
     const principal = parseFloat(formData.interestBase || '0');
     if (Number.isFinite(principal) && principal > 0) {
       const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
@@ -1120,7 +1123,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   }, [formData.interestBase, formData.interestRateAnnual, formData.interestStartDate]);
 
   // 普通订单：当前持有资产 − 基准 − 待结 + 已结 + 担保物。
-  // 融资付息：担保物 − 固定融资本金 − 待结 + 已结；借出的币不可再当成持有资产。
+  // 明确借出本金：担保物 − 固定融资本金 − 待结 + 已结；借出的币不可再当成持有资产。
   const previewPendingInterestU = useMemo(() => {
     const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
     return ['CNY', 'RMB', '人民币'].includes(currency) ? previewAccrued / cnyRate : previewAccrued;
@@ -1131,15 +1134,15 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   }, [previewPaidInterest, previewPaidInterestCurrency, cnyRate]);
   const computedCollateralGap = useMemo(() => {
     if (collateralGapBaseValue <= 0) return null;
-    if (previewIsFinancingOrder) {
-      return computedCollateralValue - previewFinancingPrincipalU - previewPendingInterestU + previewPaidInterestU;
+    if (previewIsPrincipalLoan) {
+      return computedCollateralValue - previewBorrowedPrincipalU - previewPendingInterestU + previewPaidInterestU;
     }
     return (previewCurrentHoldingValue ?? 0)
       - collateralGapBaseValue
       - previewPendingInterestU
       + previewPaidInterestU
       + computedCollateralValue;
-  }, [computedCollateralValue, collateralGapBaseValue, previewIsFinancingOrder, previewFinancingPrincipalU, previewCurrentHoldingValue, previewPendingInterestU, previewPaidInterestU]);
+  }, [computedCollateralValue, collateralGapBaseValue, previewIsPrincipalLoan, previewBorrowedPrincipalU, previewCurrentHoldingValue, previewPendingInterestU, previewPaidInterestU]);
 
   // 预览卡片实时待结佣金（受邀订单专用，每秒更新）
   const [previewCommission, setPreviewCommission] = useState<number>(0);
@@ -1166,14 +1169,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     const buyPriceNum = parseFloat(formData.buyPrice || '0');
     const buyValue = buyPriceNum * buyQty;
     const currentValue = liveP ? liveP * buyQty : null;
-    if (previewIsFinancingOrder) {
-      return computedCollateralValue - previewFinancingPrincipalU - previewPendingInterestU + previewPaidInterestU;
+    if (previewIsPrincipalLoan) {
+      return computedCollateralValue - previewBorrowedPrincipalU - previewPendingInterestU + previewPaidInterestU;
     }
     const floatPnl = currentValue !== null ? currentValue - buyValue : null;
     return floatPnl !== null
       ? computedCollateralValue + floatPnl - previewAccrued
       : computedCollateralValue - previewAccrued;
-  }, [computedCollateralValue, formLivePrices, formData.coin, formData.buyQuantity, formData.buyPrice, previewAccrued, previewFinancingPrincipalU, previewIsFinancingOrder, previewPaidInterestU, previewPendingInterestU]);
+  }, [computedCollateralValue, formLivePrices, formData.coin, formData.buyQuantity, formData.buyPrice, previewAccrued, previewBorrowedPrincipalU, previewIsPrincipalLoan, previewPaidInterestU, previewPendingInterestU]);
 
   const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
     onSuccess: async (result) => {
@@ -3683,6 +3686,36 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </select>
                   <div className="text-[11px] text-blue-500">可与盈亏标签不同；未选择时，下方手工担保货币区域可直接使用。</div>
                 </div>
+                <div className="space-y-1.5">
+                  <div className="text-xs font-medium text-blue-600">保证金率标签（37号账本）</div>
+                  <select
+                    value={collateralSource?.marginRateTagName || ''}
+                    onChange={e => {
+                      const tag = e.target.value;
+                      setCollateralSource(prev => {
+                        if (!tag) return prev ? { ...prev, marginRateTagName: '', useMarginRate: false } : prev;
+                        if (prev) return { ...prev, marginRateTagName: tag, useMarginRate: true };
+                        return {
+                          ledgerId: 37,
+                          tagName: tag,
+                          floatingPnlTagName: '',
+                          collateralTagName: '',
+                          marginRateTagName: tag,
+                          useFloatingPnl: false,
+                          useCollateral: false,
+                          useMarginRate: true,
+                        };
+                      });
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 appearance-none bg-white"
+                  >
+                    <option value="">不引用37号保证金率</option>
+                    {(activeMarginTags as any[])?.map((t: any) => (
+                      <option key={t.tagName} value={t.tagName}>{get37ReferenceTagLabel(t)}</option>
+                    ))}
+                  </select>
+                  <div className="text-[11px] leading-4 text-blue-500">选中后，打开“保证金率”将直接显示该标签的“剩余保证金占基数比”；不选则继续按52号订单自身的担保缺口口径计算。</div>
+                </div>
                 <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/50 p-2.5">
                   <div className="text-xs font-semibold text-blue-700">利息引用（37号账本，可分别选择）</div>
                   <div className="space-y-1.5">
@@ -3726,12 +3759,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     <div className="text-[11px] leading-4 text-blue-500">只读取37号标签中“计入已付”的手工减息累计；选中后，订单页尾的52号手工记录结息会锁定。</div>
                   </div>
                 </div>
-                {(collateralSource?.floatingPnlTagName || collateralSource?.collateralTagName || pendingInterestTagName || paidInterestTagName) && (
+                {(collateralSource?.floatingPnlTagName || collateralSource?.collateralTagName || collateralSource?.marginRateTagName || pendingInterestTagName || paidInterestTagName) && (
                   <div className="text-xs text-blue-500 pt-0.5 leading-5">
                     {collateralSource?.floatingPnlTagName && <span>盈亏：{collateralSource.floatingPnlTagName}</span>}
-                    {collateralSource?.floatingPnlTagName && (collateralSource?.collateralTagName || pendingInterestTagName || paidInterestTagName) && <span className="mx-1.5 text-blue-300">·</span>}
+                    {collateralSource?.floatingPnlTagName && (collateralSource?.collateralTagName || collateralSource?.marginRateTagName || pendingInterestTagName || paidInterestTagName) && <span className="mx-1.5 text-blue-300">·</span>}
                     {collateralSource?.collateralTagName && <span>担保：{collateralSource.collateralTagName}</span>}
-                    {collateralSource?.collateralTagName && (pendingInterestTagName || paidInterestTagName) && <span className="mx-1.5 text-blue-300">·</span>}
+                    {collateralSource?.collateralTagName && (collateralSource?.marginRateTagName || pendingInterestTagName || paidInterestTagName) && <span className="mx-1.5 text-blue-300">·</span>}
+                    {collateralSource?.marginRateTagName && <span>保证金率：{collateralSource.marginRateTagName}</span>}
+                    {collateralSource?.marginRateTagName && (pendingInterestTagName || paidInterestTagName) && <span className="mx-1.5 text-blue-300">·</span>}
                     {pendingInterestTagName && <span>待结：{pendingInterestTagName}</span>}
                     {pendingInterestTagName && paidInterestTagName && <span className="mx-1.5 text-blue-300">·</span>}
                     {paidInterestTagName && <span>已结：{paidInterestTagName}</span>}
@@ -4213,12 +4248,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         </span>
                       </div>
                     )}
-                    {ledgerId === 52 && previewIsFinancingOrder && (
+                    {ledgerId === 52 && previewIsPrincipalLoan && (
                       <div className="mt-2 border-t border-blue-100 pt-2 text-[11px] text-slate-500">
-                        融资付息订单固定按：担保物市值 − 原始融资本金 − 待结利息 + 已结利息计算；不随标的实时价格重复改变本金。
+                        借出本金订单固定按：担保物市值 − 原始融资本金 − 待结利息 + 已结利息计算；不随标的实时价格重复改变本金。
                       </div>
                     )}
-                    {ledgerId === 52 && !previewIsFinancingOrder && (
+                    {ledgerId === 52 && !previewIsPrincipalLoan && (
                       <div className="mt-2 border-t border-blue-100 pt-2">
                         <div className="mb-1.5 text-xs font-medium text-slate-600">担保缺口计算基准</div>
                         <div className="grid grid-cols-2 gap-2">
@@ -4465,21 +4500,25 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 {/* 约等于显示控制 */}
                 <div className="px-4 py-3">
                   <div className="mb-1.5 text-xs font-medium text-blue-500">约等于显示</div>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-2">
                     {([
                       { key: 'approxHolding', label: '持有资产' },
                       { key: 'approxInterest', label: '待结利息' },
                       { key: 'approxPaid', label: '已结利息' },
-                      { key: 'approxCollateralItem', label: '担保货币' },
-                      { key: 'approxCollateralTotal', label: '担保总值' },
+                      // 逐笔担保与37号担保汇总是两条不同的展示路径：
+                      // 引用37号担保时不渲染手工逐笔/合计配置，避免出现两个“担保货币”。
+                      ...(!isUsing37Collateral ? [
+                        { key: 'approxCollateralItem', label: '逐笔担保货币' },
+                        ...(formData.assetType !== 'stock' ? [{ key: 'approxCollateralTotal', label: '担保总值' }] : []),
+                      ] : []),
                       { key: 'approxCollateralGap', label: '担保缺口' },
                       ...(formData.assetType === 'stock' && !isUsing37Collateral ? [
                         { key: 'stockManualCollateralValueDisplay', label: '担保价值' },
                       ] : formData.assetType === 'stock' ? [
-                        { key: 'externalCollateralValueDisplay', label: '担保货币' },
+                        { key: 'externalCollateralValueDisplay', label: '37号担保展示' },
                       ] : []),
                     ] as { key: string; label: string }[]).map(({ key, label }) => (
-                      <div key={key} className={key === 'approxCollateralGap' || key === 'stockManualCollateralValueDisplay' ? 'col-span-2' : ''}>
+                      <div key={key} className="min-w-0">
                         <div className="mb-1 text-[11px] font-medium text-gray-600">{label}</div>
                         <div className="flex gap-1">
                           {(key === 'externalCollateralValueDisplay'
@@ -4504,7 +4543,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               }`}
                             >
                               {key === 'externalCollateralValueDisplay'
-                                ? (opt === 'CRYPTO' ? '数字币' : opt === 'U' ? '≈ U' : '≈ 元')
+                                ? (opt === 'CRYPTO' ? '明细' : opt === 'U' ? '≈ U' : '≈ 元')
                                 : key === 'stockManualCollateralValueDisplay'
                                     ? (opt === 'U' ? '≈ U' : '≈ 元')
                                     : (opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ U' : '≈ 元')}
@@ -4512,10 +4551,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           ))}
                         </div>
                         {key === 'stockManualCollateralValueDisplay' && (
-                          <div className="mt-1 text-[10px] leading-4 text-gray-400">手工担保物仍按实际输入逐笔展示；此处只控制下方担保价值合计。</div>
+                          <div className="mt-1 text-[10px] leading-4 text-gray-400">逐笔照常显示；此处只控合计。</div>
                         )}
                         {key === 'approxCollateralGap' && (
-                          <div className="mt-1 text-[10px] leading-4 text-gray-400">主值固定按资产类型显示：股票为元，数字币和期权为 U；此处只控制下方是否额外显示折算值。</div>
+                          <div className="mt-1 text-[10px] leading-4 text-gray-400">主值：股票元；数字币、期权 U。</div>
                         )}
                       </div>
                     ))}
@@ -5250,7 +5289,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     const rateStr = order.interest_rate_annual || '';
                     const rateAbs = formatFunderAnnualRate(rateStr);
                     const dc = (() => { try { const raw = order.display_config; if (!raw) return null; return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; } })();
-                    const show = (key: string) => dc ? (dc[key] !== false) : true;
+                    const show = (key: string) => key === 'marginRate'
+                      ? dc?.marginRate === true
+                      : dc ? (dc[key] !== false) : true;
                     return (
                       <div key={order.id} className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}>
                         {/* 帽子：标签行 */}

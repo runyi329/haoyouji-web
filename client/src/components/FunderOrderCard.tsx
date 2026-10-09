@@ -964,9 +964,9 @@ export function FunderOrderCard({
       const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
       if (parsed && parsed.tagName && (parsed.ledgerId || parsed.stockPnlSource === 'manual_positions')) return parsed as {
         ledgerId: number; tagName: string; floatingPnlTagName?: string;
-        floatingPnlCalculationMode?: 'raw_net_pnl' | 'initial_minus_latest' | 'leveraged_net_pnl'; collateralTagName?: string;
+        floatingPnlCalculationMode?: 'raw_net_pnl' | 'initial_minus_latest' | 'leveraged_net_pnl'; collateralTagName?: string; marginRateTagName?: string;
         pendingInterestTagName?: string; paidInterestTagName?: string; interestTagName?: string;
-        useFloatingPnl?: boolean; useCollateral?: boolean; usePendingInterest?: boolean; usePaidInterest?: boolean; useInterest?: boolean;
+        useFloatingPnl?: boolean; useCollateral?: boolean; useMarginRate?: boolean; usePendingInterest?: boolean; usePaidInterest?: boolean; useInterest?: boolean;
         stockPnlSource?: 'manual_positions'; stockPnlCalculationMode?: 'position_cost' | 'total_capital'; stockTotalCapital?: string | number; stockCapitalCurrency?: 'CNY' | 'USD'; stockPnlCoefficient?: number; stockPositions?: Array<{ name?: string; symbol?: string; buyPrice?: string; sellPrice?: string; quantity?: string; latestPrice?: string; latestPriceDate?: string; latestPriceUpdatedAt?: string; initialPrice?: string; initialPriceDate?: string }>;
       };
     } catch {}
@@ -981,6 +981,11 @@ export function FunderOrderCard({
     : 'raw_net_pnl';
   const linkedCollateralTagName = _parsedCollateralSource?.collateralTagName
     || (sourceIsLedger37 && _parsedCollateralSource?.useCollateral !== false ? _parsedCollateralSource?.tagName : '');
+  // 保证金率仅在管理员显式选择37号标签后才引用；未选择时继续沿用52号订单自身的计算口径。
+  const linkedMarginRateTagName = sourceIsLedger37 && _parsedCollateralSource?.useMarginRate === true
+    ? String(_parsedCollateralSource?.marginRateTagName || '').trim()
+    : '';
+  const hasExternalMarginRateReference = !!linkedMarginRateTagName;
   // 待结、已结利息必须显式选择。旧 interestTagName/useInterest 仅兼容为“已结引用”，
   // 不会在升级后被误解为待结利息来源。
   const linkedPendingInterestTagName = _parsedCollateralSource?.pendingInterestTagName
@@ -991,7 +996,7 @@ export function FunderOrderCard({
   const hasExternalPendingInterest = Number(_parsedCollateralSource?.ledgerId) === 37 && !!linkedPendingInterestTagName;
   const hasExternalPaidInterest = Number(_parsedCollateralSource?.ledgerId) === 37 && !!linkedPaidInterestTagName;
   const hasExternalInterest = hasExternalPendingInterest || hasExternalPaidInterest;
-  const hasExternalDataSource = !!(linkedPnlTagName || linkedCollateralTagName || linkedPendingInterestTagName || linkedPaidInterestTagName);
+  const hasExternalDataSource = !!(linkedPnlTagName || linkedCollateralTagName || linkedMarginRateTagName || linkedPendingInterestTagName || linkedPaidInterestTagName);
   const hasExternalCollateral = !!linkedCollateralTagName;
   const manualStockPnlCalculationMode = _parsedCollateralSource?.stockPnlCalculationMode === 'total_capital'
     ? 'total_capital'
@@ -1047,11 +1052,42 @@ export function FunderOrderCard({
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '' },
     { enabled: !!linkedCollateralTagName, staleTime: 3000 }
   );
+  const { data: _marginRateTagConfig } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedMarginRateTagName || '' },
+    { enabled: hasExternalMarginRateReference, staleTime: 3000 }
+  );
+  const { data: _marginRateTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedMarginRateTagName || '' },
+    { enabled: hasExternalMarginRateReference, staleTime: 3000 }
+  );
   // 37号原页面与52引用页共享同一个服务端估值快照，禁止两边各自用不同时间点的ETH价格重算。
   const { data: _canonicalCollateralValuation } = (trpc.ledger as any).getTagMarginValuation.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '' },
     { enabled: hasExternalCollateral && !!linkedCollateralTagName, staleTime: 25_000, refetchInterval: 30_000, refetchIntervalInBackground: true }
   );
+  const { data: _canonicalMarginRateValuation } = (trpc.ledger as any).getTagMarginValuation.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedMarginRateTagName || '' },
+    { enabled: hasExternalMarginRateReference, staleTime: 25_000, refetchInterval: 30_000, refetchIntervalInBackground: true }
+  );
+  // 与37号右侧“剩余保证金占基数比”完全一致：
+  // (最新余额 − 初始金额) × 账号倍率 + 已付保证金，再除以37号保证金基数；
+  // 未设置基数时，沿用37号页的“占余额”降级口径。
+  const referencedMarginRate = useMemo(() => {
+    if (!hasExternalMarginRateReference) return { percent: null as number | null, denominator: 'base' as 'base' | 'balance' | null };
+    const canonicalTotalCny = Number((_canonicalMarginRateValuation as any)?.totalCny);
+    const valuationReady = _canonicalMarginRateValuation !== undefined;
+    const latestBalance = Number((_marginRateTagSummary as any)?.latestBalance?.balance);
+    if (!valuationReady || !Number.isFinite(canonicalTotalCny) || !Number.isFinite(latestBalance)) {
+      return { percent: null as number | null, denominator: null as 'base' | 'balance' | null };
+    }
+    const initialAmount = Number((_marginRateTagConfig as any)?.initial_amount ?? 0) || 0;
+    const accountMultiplier = Number((_marginRateTagConfig as any)?.account_multiplier ?? 1) || 1;
+    const remainingMarginCny = (latestBalance - initialAmount) * accountMultiplier + canonicalTotalCny;
+    const marginBase = Number((_marginRateTagConfig as any)?.margin_base ?? 0) || 0;
+    if (marginBase > 0) return { percent: remainingMarginCny / marginBase * 100, denominator: 'base' as const };
+    if (latestBalance > 0) return { percent: canonicalTotalCny / latestBalance * 100, denominator: 'balance' as const };
+    return { percent: null as number | null, denominator: null as 'base' | 'balance' | null };
+  }, [hasExternalMarginRateReference, _canonicalMarginRateValuation, _marginRateTagConfig, _marginRateTagSummary]);
   // 与 RightInterestDetail 共用同一份标签分段；待结、已结分别拉取，允许引用不同标签。
   const { data: _linkedPendingInterestPeriods } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPendingInterestTagName },
@@ -1322,7 +1358,7 @@ export function FunderOrderCard({
         collateralCoin: parsedDC.collateralCoin !== false,
         collateralValue: parsedDC.collateralValue !== false,
         collateral: parsedDC.collateral !== false,
-        marginRate: parsedDC.marginRate !== false,
+        marginRate: parsedDC.marginRate === true,
       });
       setQuickStockManualCollateralValueDisplay(parsedDC.stockManualCollateralValueDisplay === 'U' ? 'U' : 'CNY');
       setQuickExternalCollateralValueDisplay(
@@ -1611,8 +1647,8 @@ export function FunderOrderCard({
       return typeof raw === 'string' ? JSON.parse(raw) : raw;
     } catch { return null; }
   })();
-  // 52号账本的资金属性是担保缺口的业务口径：明确标为“融资付息”的
-  // 非期权订单，融资金额本身是待覆盖本金，不能再作为本订单持有资产。
+  // 52号账本的资金属性只用于展示标签与主金额默认显示，不参与担保缺口。
+  // 是否扣除融资本金由下方独立的 principal_lent_out 开关唯一决定；
   // 旧订单的 selfFundedAsset 继续视为“自有资产”。
   const assetFundingType = financingDisplayConfig?.assetFundingType === 'financing'
     ? 'financing'
@@ -1643,12 +1679,10 @@ export function FunderOrderCard({
         ? legacyInterestBase
         : calculatedFinancingDisplayAmount;
   const financingDisplayUnit = amountCurrency === 'USDT' ? 'u' : amountCurrency === 'CNY' ? '元' : amountCurrency;
-  // 历史订单曾把“融资付息”展示属性与 principal_lent_out 存成两套开关，
-  // 导致 FK9201 一类订单把融资本金误当成持仓价值而重复计入。
-  // 对明确的融资付息非期权单，资金属性即为本金待覆盖口径；期权单沿用独立的
-  // 「实时价值－权利金成本」公式，不能走这里的本金扣减分支。
-  const principalLentOut = hasExplicitPrincipalLentOut
-    || (!isOptionOrder && assetFundingType === 'financing');
+  // “融”仅表示资金属性，不等同于实际将本金借出。只有管理员在功能开关中
+  // 明确启用“借出本金”时，担保缺口才额外扣除约定的融资本金。
+  // 这使37号账本引用可稳定按其净值盈亏、担保物与利息计算，不会重复扣本金。
+  const principalLentOut = hasExplicitPrincipalLentOut;
   // 左上角主展示独立于“借出本金”风险开关：可按订单显示融资金额或标的数量。
   // 新字段优先；未设置的新旧订单则严格保留过去的默认展示，且不参与任何资金计算。
   const configuredPrimaryAssetDisplay = financingDisplayConfig?.primaryAssetDisplay === 'financing' || financingDisplayConfig?.primaryAssetDisplay === 'quantity'
@@ -1658,7 +1692,7 @@ export function FunderOrderCard({
     ? 'quantity'
     : financingDisplayConfig?.principalLentOutPrimary === 'principal'
       ? 'financing'
-      : (principalLentOut || isStockOrder || amountCurrency === 'CNY' ? 'financing' : 'quantity');
+      : (hasExplicitPrincipalLentOut || assetFundingType === 'financing' || isStockOrder || amountCurrency === 'CNY' ? 'financing' : 'quantity');
   const displayFinancingAsPrimary = (configuredPrimaryAssetDisplay ?? legacyPrimaryAssetDisplay) === 'financing';
   const buyQuoteUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'u' : amountCurrency;
   const quotedBuyValue = qty > 0 && price > 0 ? qty * price : financingDisplayAmount;
@@ -1718,9 +1752,11 @@ export function FunderOrderCard({
     return days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
   })();
 
-  // 读取 display_config（与 LedgerDetail show() 函数一致：默认全部显示，除非明确设为 false）
+  // 读取 display_config：保证金率默认隐藏，其他字段默认显示，除非明确设为 false。
   const dc = financingDisplayConfig;
-  const show = (key: string) => dc ? (dc[key] !== false) : true;
+  const show = (key: string) => key === 'marginRate'
+    ? dc?.marginRate === true
+    : dc ? (dc[key] !== false) : true;
   // 担保总值独立于逐笔担保货币的约等于配置。历史订单未保存新字段时，
   // 保留旧配置为“元”的明确选择；其他历史情形默认显示 USD，避免总值被隐藏。
   const approxCollateralTotal = dc?.approxCollateralTotal === 'hidden'
@@ -1728,8 +1764,26 @@ export function FunderOrderCard({
     || dc?.approxCollateralTotal === 'CNY'
     ? dc.approxCollateralTotal
     : dc?.approxCollateralValue === 'CNY' ? 'CNY' : 'U';
-  // 仅明确引用37号担保货币的股票订单，前端只展示已汇总的 U / 人民币总值。
-  // 不披露引用标签中各币种或股票的逐项加减；手工担保仍逐笔展示实际录入内容。
+  // 37号担保汇总可在“原始明细 / U 汇总 / 人民币汇总”之间切换。
+  // 历史订单未保存该字段时，维持原有默认的人民币汇总展示。
+  const externalCollateralDisplayMode: 'CRYPTO' | 'U' | 'CNY' = dc?.externalCollateralValueDisplay === 'CRYPTO'
+    || dc?.externalCollateralValueDisplay === 'U'
+    || dc?.externalCollateralValueDisplay === 'CNY'
+    ? dc.externalCollateralValueDisplay
+    : 'CNY';
+  const externalCollateralDetailRows = linkedCollateralMarginRecords
+    .map((item: any) => {
+      const quantity = Number(item.assetType === 'stock' ? (item.quantity ?? item.amount) : item.amount);
+      if (!Number.isFinite(quantity) || quantity === 0) return null;
+      const formattedQuantity = quantity.toLocaleString(undefined, { maximumFractionDigits: 4 });
+      if (item.assetType === 'stock') {
+        const stockName = String(item.name || item.code || item.symbol || item.coin || '股票').trim();
+        return `${stockName} ${formattedQuantity}股`;
+      }
+      const coin = String(item.coin || 'CNY').trim().toUpperCase();
+      return `${formattedQuantity} ${['CNY', 'RMB', '人民币', '元'].includes(coin) ? '元' : coin}`;
+    })
+    .filter((row): row is string => Boolean(row));
   // 缺口基准是订单级配置：历史订单未存时按“买入价值”处理。
   const collateralGapBaseMode = dc?.collateralGapBaseMode === 'interest_base'
     ? 'interest_base'
@@ -1953,7 +2007,7 @@ export function FunderOrderCard({
     : (collateralGapBaseMode === 'interest_base' ? interestBaseForRisk : buyValueForRisk);
   const floatPnlForRisk = isStockOrder && floatPnl !== null ? floatPnl / cnyRate : floatPnl;
   // 普通订单：当前持有资产 − 所选基准 − 待结 + 已结 + 担保物。
-  // 融资付息/借出本金：借出的本金不是本订单可用持仓，必须用
+  // 明确借出本金：借出的本金不是本订单可用持仓，必须用
   // “担保物 − 原始融资本金 − 待结 + 已结”。本金是约定融资金额，
   // 不是标的币的实时市值；否则币价上涨会被误当作本金增加而重复扣减。
   const currentHoldingValueForRisk = isExternalStockPnlSource
@@ -2193,10 +2247,6 @@ export function FunderOrderCard({
     : (externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU)
       ? externalCollateralValueU * cnyRate
       : null);
-  // 37号担保标签的主卡行只显示统一总额，不展示标签内各资产的组成。
-  const externalCollateralAssetLabel = isSharedMode
-    ? '共享担保（按池合计）'
-    : '担保货币合计';
   // 共享模式：优先显示本订单含担保物的余量/缺口；担保物价格未就绪时保持加载状态，
   // 不再退回成漏算担保物的数值。
   // 非共享的37号标签订单用含利息的外部担保公式，其他订单沿用原有 exposure 逻辑。
@@ -3023,9 +3073,18 @@ export function FunderOrderCard({
                 </span>
                 {externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU) ? (
                   <span className="min-w-0 max-w-[68%] font-medium tabular-nums text-right" style={{ color: '#1A2340' }}>
-                    <span className="block break-words">{externalCollateralAssetLabel}<span className="text-gray-500">（≈{externalCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span></span>
-                    {externalCollateralValueCny !== null && (
-                      <span className="mt-0.5 block">= {externalCollateralValueCny.toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>
+                    {externalCollateralDisplayMode === 'CRYPTO' ? (
+                      externalCollateralDetailRows.length > 0 ? (
+                        <span className="block break-words text-gray-500">
+                          {externalCollateralDetailRows.map((row, index) => (
+                            <span key={`${row}-${index}`} className="block whitespace-nowrap">{row}</span>
+                          ))}
+                        </span>
+                      ) : <span className="block whitespace-nowrap text-gray-400">暂无担保明细</span>
+                    ) : externalCollateralDisplayMode === 'U' ? (
+                      <span className="block whitespace-nowrap text-gray-500">≈{externalCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
+                    ) : (
+                      <span className="block whitespace-nowrap text-gray-500">≈{(externalCollateralValueCny ?? externalCollateralValueU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>
                     )}
                   </span>
                 ) : <span style={{ color: '#9CA3AF' }}>{isSharedMode ? '共享担保加载中...' : '加载中...'}</span>}
@@ -3140,7 +3199,8 @@ export function FunderOrderCard({
                 </div>
               );
             })()}
-            {(show('collateral') || hasExternalCollateral || isConfiguredStockPnlSource) && (
+            {/* 外部37号数据只影响缺口数值来源，不能绕过“担保缺口”字段展示开关。 */}
+            {show('collateral') && (
               <>
               {(showCollateralInfo || showCollateralGapFormulaInfo) && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={closeCollateralInfoDialog}>
@@ -3391,7 +3451,7 @@ export function FunderOrderCard({
                             const allHaveGap = sharedHoldingGapReady;
                             const holdingBalance = sharedHoldingGapTotal;
                             const diff = holdingBalance + totalColl;
-                            // 普通订单使用保存的买入价值/计息基数；融资付息使用创建时的固定融资本金。
+                            // 普通订单使用保存的买入价值/计息基数；仅明确借出本金使用固定融资本金。
                             const totalGapBase = orders.reduce((sum: number, o: any) => {
                               const isPrincipalLoan = o.principalLentOut === true || o.principalLentOut === 1;
                               if (isPrincipalLoan) {
@@ -3428,7 +3488,7 @@ export function FunderOrderCard({
                                       ? <>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalGapBase.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
                                       : <span style={{ color: '#9CA3AF' }}>订单余额加载中...</span>}
                                   </div>
-                                  <div className="text-xs" style={{ color: '#9CA3AF' }}>总风险基准 {totalGapBase.toFixed(2)} u（融资付息按原始融资本金；其余按保存口径）</div>
+                                  <div className="text-xs" style={{ color: '#9CA3AF' }}>总风险基准 {totalGapBase.toFixed(2)} u（借出本金按原始融资本金；其余按保存口径）</div>
                                 </div>
                               </>
                             );
@@ -3437,10 +3497,10 @@ export function FunderOrderCard({
                           {/* ③ 所有共享订单的持仓差额（不含担保物；担保物在第④项一次性汇总） */}
                           <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
                             <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>③ 各订单持仓差额</div>
-                            <div className="mb-1" style={{ color: '#9CA3AF' }}>普通订单：当前持有资产 − 缺口基准；融资付息：−原始融资本金；均再减待结、加已结，且此处不含担保物</div>
-                            {sharedPoolInfo ? (
-                              <>
-                                <div className="space-y-1.5">
+                                    <div className="mb-1" style={{ color: '#9CA3AF' }}>普通订单：当前持有资产 − 缺口基准；借出本金：−原始融资本金；均再减待结、加已结，且此处不含担保物</div>
+                                    {sharedPoolInfo ? (
+                                      <>
+                                        <div className="space-y-1.5">
                                   {((sharedPoolInfo as any).orders ?? []).map((o: any, index: number) => {
                                     // balance = 当前持有资产市值 − 所选基准 − 待结利息 + 已结利息。
                                     // 此处不含担保物，担保物统一在第④项只加一次。
@@ -3875,15 +3935,29 @@ export function FunderOrderCard({
                       })()
                 )}
               </div>
-              {/* 保证金率：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100% */}
-              {show('marginRate') && !hasExternalCollateral && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && (() => {
+              {/* 保证金率：默认按52号订单风险口径计算；可显式改为引用37号原始比例。 */}
+              {show('marginRate') && (() => {
+                const usesExternalMarginRate = hasExternalMarginRateReference;
+                const uses52ExternalInputs = hasExternalCollateral;
                 const effectiveCollateral = floatPnlForRisk !== null
                   ? collateralValue + floatPnlForRisk - accruedForRisk + paidInterestForRisk
                   : collateralValue - accruedForRisk + paidInterestForRisk;
-                const marginRatio = interestBaseForRisk > 0 ? effectiveCollateral / interestBaseForRisk : 0;
-                const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
+                const marginRateNumerator = uses52ExternalInputs ? externalNonSharedGapU : effectiveCollateral;
+                const marginRateBaseU = uses52ExternalInputs ? collateralGapBaseForRisk : interestBaseForRisk;
+                const canShowMarginRate = usesExternalMarginRate
+                  ? true
+                  : uses52ExternalInputs
+                    ? marginRateNumerator !== null && Number.isFinite(marginRateNumerator) && marginRateBaseU > 0
+                    : collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0;
+                if (!canShowMarginRate || (!usesExternalMarginRate && marginRateNumerator === null)) return null;
+                const resolvedMarginRateNumerator = marginRateNumerator ?? 0;
+                const marginRatio = usesExternalMarginRate
+                  ? (referencedMarginRate.percent === null ? null : referencedMarginRate.percent / 100)
+                  : (marginRateBaseU > 0 ? resolvedMarginRateNumerator / marginRateBaseU : 0);
+                const marginColor = marginRatio === null ? '#9CA3AF' : marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
+                const marginRiskRatio = marginRatio ?? 0;
                 const alertThreshold = (dc && typeof (dc as any).marginAlertThreshold === 'number') ? (dc as any).marginAlertThreshold as number : null;
-                const isAlerting = alertThreshold !== null && (marginRatio * 100) < alertThreshold;
+                const isAlerting = marginRatio !== null && alertThreshold !== null && (marginRatio * 100) < alertThreshold;
                 return (
                   <>
                     <div className="flex items-center justify-between mt-0.5">
@@ -3898,7 +3972,7 @@ export function FunderOrderCard({
                           style={{ ...SOFT_BLUE_INDICATOR_STYLE, cursor: 'pointer' }}
                         ><HelpMarkerText symbol="?" /></button>
                       </div>
-                      <span className="font-bold" style={{ color: isAlerting ? '#EF4444' : marginColor }}>{(marginRatio * 100).toFixed(1)}%{isAlerting ? ' ⚠' : ''}</span>
+                      <span className="font-bold" style={{ color: isAlerting ? '#EF4444' : marginColor }}>{marginRatio === null ? '加载中...' : `${(marginRatio * 100).toFixed(1)}%${isAlerting ? ' ⚠' : ''}`}</span>
                     </div>
                     {showMarginInfo && (
                       <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowMarginInfo(false)}>
@@ -3910,41 +3984,77 @@ export function FunderOrderCard({
                           <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
                             <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                               <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 公式</div>
-                              <div>保证金率 = (担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100%</div>
-                              <div className="mt-1 font-mono text-[10px]">
-                                <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ''} − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}) ÷ {interestBaseNum.toFixed(2)} × 100% = </span>
-                                <strong style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</strong>
-                              </div>
-                            </div>
-                            <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                              <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保物当前市值</div>
-                              {collateralAssets.map((a, idx) => {
-                                const itemVal = collateralItemValues[idx];
-                                return (
-                                  <div key={idx} className="mt-1 flex justify-between">
-                                    <span className="font-mono" style={{ color: '#6B7280' }}>{a.qty} {a.coin}</span>
-                                    {itemVal !== null
-                                      ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{(itemVal as number).toFixed(2)} u</span>
-                                      : <span className="font-mono" style={{ color: '#D1D5DB' }}>暂无实时价</span>
-                                    }
+                              {usesExternalMarginRate ? (
+                                <>
+                                  <div>保证金率 = 37号账本“剩余保证金占基数比”</div>
+                                  <div className="mt-1 font-mono text-[10px]">
+                                    <span style={{ color: '#3B82F6' }}>标签「{linkedMarginRateTagName}」原始比例 = </span>
+                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '加载中...' : `${(marginRatio * 100).toFixed(1)}%`}</strong>
                                   </div>
-                                );
-                              })}
-                              {collateralAssets.length > 1 && (
-                                <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
-                                  合计 {collateralValue.toFixed(2)} u
-                                </div>
+                                  <div className="mt-1 text-[10px] text-gray-400">{referencedMarginRate.denominator === 'balance' ? '37号未设置保证金基数，已按其原页面的“占余额”备用口径显示。' : '直接引用37号原始比例，不混入52号订单的本金、利息或担保缺口。'}</div>
+                                </>
+                              ) : uses52ExternalInputs ? (
+                                <>
+                                  <div>{principalLentOut
+                                    ? '保证金率 = (37号担保物 − 借出本金 − 待结利息 + 已结利息) ÷ 借出本金 × 100%'
+                                    : `保证金率 = (37号净值盈亏 + 37号担保物 − 待结利息 + 已结利息) ÷ ${collateralGapBaseLabel} × 100%`}</div>
+                                  <div className="mt-1 font-mono text-[10px]">
+                                    <span style={{ color: '#3B82F6' }}>
+                                      {principalLentOut
+                                        ? `= (${Number(linkedCollateralValueU ?? 0).toFixed(2)} − ${principalLentOutValueForRisk.toFixed(2)} − ${accruedForRisk.toFixed(2)} + ${paidInterestForRisk.toFixed(2)}) ÷ ${marginRateBaseU.toFixed(2)} × 100% = `
+                                        : `= (${Number(linkedStockContributionU ?? 0).toFixed(2)} + ${Number(linkedCollateralValueU ?? 0).toFixed(2)} − ${accruedForRisk.toFixed(2)} + ${paidInterestForRisk.toFixed(2)}) ÷ ${marginRateBaseU.toFixed(2)} × 100% = `}
+                                    </span>
+                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${(marginRatio * 100).toFixed(1)}%`}</strong>
+                                  </div>
+                                  <div className="mt-1 text-[10px] text-gray-400">当前未引用37号原始比例，按52号订单自身担保缺口口径计算。</div>
+                                </>
+                              ) : (
+                                <>
+                                  <div>保证金率 = (担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100%</div>
+                                  <div className="mt-1 font-mono text-[10px]">
+                                    <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ''} − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}) ÷ {interestBaseNum.toFixed(2)} × 100% = </span>
+                                    <strong style={{ color: marginColor }}>{marginRatio === null ? '--' : `${(marginRatio * 100).toFixed(1)}%`}</strong>
+                                  </div>
+                                </>
                               )}
                             </div>
-                            <div className="p-2.5 rounded-lg" style={{ background: marginRatio >= 1 ? '#F0FDF4' : marginRatio >= 0.5 ? '#FFFBEB' : '#FFF1F1' }}>
-                              <div className="font-semibold mb-1" style={{ color: marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626' }}>③ 风险评估</div>
+                            {usesExternalMarginRate ? (
+                              <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 引用范围</div>
+                                <div className="font-mono text-[10px] text-gray-600">37号标签：{linkedMarginRateTagName}</div>
+                                <div className="mt-1 text-[10px] text-gray-400">仅影响本行“保证金率”的展示，不改变52号订单的担保缺口或结算数据。</div>
+                              </div>
+                            ) : (
+                              <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保物当前市值</div>
+                                {collateralAssets.map((a, idx) => {
+                                  const itemVal = collateralItemValues[idx];
+                                  return (
+                                    <div key={idx} className="mt-1 flex justify-between">
+                                      <span className="font-mono" style={{ color: '#6B7280' }}>{a.qty} {a.coin}</span>
+                                      {itemVal !== null
+                                        ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{(itemVal as number).toFixed(2)} u</span>
+                                        : <span className="font-mono" style={{ color: '#D1D5DB' }}>暂无实时价</span>
+                                      }
+                                    </div>
+                                  );
+                                })}
+                                {collateralAssets.length > 1 && (
+                                  <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
+                                    合计 {collateralValue.toFixed(2)} u
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            <div className="p-2.5 rounded-lg" style={{ background: marginRiskRatio >= 1 ? '#F0FDF4' : marginRiskRatio >= 0.5 ? '#FFFBEB' : '#FFF1F1' }}>
+                              <div className="font-semibold mb-1" style={{ color: marginRiskRatio >= 1 ? '#16A34A' : marginRiskRatio >= 0.5 ? '#D97706' : '#DC2626' }}>③ 风险评估</div>
                               <div className="space-y-1">
                                 <div className="flex items-center gap-1.5"><span style={{ color: '#16A34A' }}>≥ 100%</span><span>担保充足，风险可控</span></div>
                                 <div className="flex items-center gap-1.5"><span style={{ color: '#D97706' }}>50% ~ 100%</span><span>担保偏低，建议补充</span></div>
                                 <div className="flex items-center gap-1.5"><span style={{ color: '#DC2626' }}>&lt; 50%</span><span>担保严重不足，高风险</span></div>
                               </div>
-                              <div className="mt-2 font-semibold" style={{ color: marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626' }}>
-                                当前状态：{marginRatio >= 1 ? '担保充足' : marginRatio >= 0.5 ? '担保偏低，建议补充' : '担保严重不足，高风险'}
+                              <div className="mt-2 font-semibold" style={{ color: marginRiskRatio >= 1 ? '#16A34A' : marginRiskRatio >= 0.5 ? '#D97706' : '#DC2626' }}>
+                                当前状态：{marginRatio === null ? '等待37号比例数据' : marginRiskRatio >= 1 ? '担保充足' : marginRiskRatio >= 0.5 ? '担保偏低，建议补充' : '担保严重不足，高风险'}
                               </div>
                             </div>
                           </div>
@@ -4252,7 +4362,25 @@ export function FunderOrderCard({
           {/* 担保价值 / 担保总值显示控制：与完整编辑中的不同资产类型规则一致。 */}
           <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 space-y-2">
             {isStockOrder && hasExternalCollateral ? (
-              <div className="text-xs leading-5 text-gray-500">引用 37 号账本时，担保货币固定仅显示汇总合计（≈ u 与人民币），不展开各币种明细。</div>
+              <>
+                <div className="text-xs text-gray-500">37号担保展示</div>
+                <div className="flex gap-2">
+                  {(['CRYPTO', 'U', 'CNY'] as const).map(opt => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setQuickExternalCollateralValueDisplay(opt)}
+                      className="flex-1 py-1 text-xs rounded-lg border transition-colors"
+                      style={{
+                        backgroundColor: quickExternalCollateralValueDisplay === opt ? '#3B82F6' : '#fff',
+                        color: quickExternalCollateralValueDisplay === opt ? '#fff' : '#6B7280',
+                        borderColor: quickExternalCollateralValueDisplay === opt ? '#3B82F6' : '#E5E7EB',
+                      }}
+                    >{opt === 'CRYPTO' ? '明细' : opt === 'U' ? '≈ u' : '≈ 元'}</button>
+                  ))}
+                </div>
+                <div className="text-[10px] leading-4 text-gray-400">明细按37号担保物的原始币种或资产逐项列出。</div>
+              </>
             ) : isStockOrder ? (
               <>
                 <div className="text-xs text-gray-500">担保价值约等于</div>

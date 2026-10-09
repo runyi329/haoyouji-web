@@ -1305,11 +1305,10 @@ export function FunderOrderCardV2Silver({
   const cardCollateralGapApprox = ['hidden', 'U', 'CNY'].includes(cardDisplayConfig.approxCollateralGap)
     ? cardDisplayConfig.approxCollateralGap
     : 'hidden';
-  // 明确选择“融资付息”的非期权订单，其融资本金是待覆盖负债；
-  // 历史数据里该属性与 principal_lent_out 曾不同步，不能再把本金当持仓计入。
+  // “融”只表达资金属性；本金扣减只由明确的“借出本金”开关决定。
+  // 这样37号引用订单只按净值盈亏、担保物与利息计算，不会重复扣本金。
   const cardHasExplicitPrincipalLentOut = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true;
-  const cardPrincipalLentOut = cardHasExplicitPrincipalLentOut
-    || (!_isOptCard && cardDisplayConfig.assetFundingType === 'financing');
+  const cardPrincipalLentOut = cardHasExplicitPrincipalLentOut;
   // 左上角主展示独立于“借出本金”开关：新字段优先，未配置订单沿用旧默认口径。
   const cardConfiguredPrimaryDisplay = cardDisplayConfig.primaryAssetDisplay === 'financing' || cardDisplayConfig.primaryAssetDisplay === 'quantity'
     ? cardDisplayConfig.primaryAssetDisplay
@@ -1318,7 +1317,7 @@ export function FunderOrderCardV2Silver({
     ? 'quantity'
     : cardDisplayConfig.principalLentOutPrimary === 'principal'
       ? 'financing'
-      : (cardPrincipalLentOut || order.asset_type === 'stock' || amountCurrency === 'CNY' ? 'financing' : 'quantity');
+      : (cardHasExplicitPrincipalLentOut || cardDisplayConfig.assetFundingType === 'financing' || order.asset_type === 'stock' || amountCurrency === 'CNY' ? 'financing' : 'quantity');
   const storedAmount = parseFloat(order.amount || '0');
   const amountCurrencyPrice = livePrices[amountCurrency as CoinType];
   const storedAmountUsdt = order.asset_type === 'stock'
@@ -1476,11 +1475,17 @@ export function FunderOrderCardV2Silver({
         ledgerId: number;
         tagName: string;
         floatingPnlCalculationMode?: 'raw_net_pnl' | 'initial_minus_latest' | 'leveraged_net_pnl';
+        marginRateTagName?: string;
+        useMarginRate?: boolean;
       };
     } catch {}
     return null;
   }, [(order as any).collateral_source]);
   const hasExternalCollateral = !!_parsedCollateralSource;
+  const marginRateReferenceTagName = _parsedCollateralSource?.useMarginRate === true
+    ? String(_parsedCollateralSource?.marginRateTagName || '').trim()
+    : '';
+  const hasExternalMarginRateReference = !!marginRateReferenceTagName;
   const externalFloatingPnlCalculationMode = _parsedCollateralSource?.floatingPnlCalculationMode === 'leveraged_net_pnl'
     ? 'leveraged_net_pnl'
     : 'raw_net_pnl';
@@ -1493,6 +1498,18 @@ export function FunderOrderCardV2Silver({
   const { data: _fc2977TagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: _parsedCollateralSource?.tagName ?? '' },
     { enabled: hasExternalCollateral, staleTime: 3000 }
+  );
+  const { data: _marginRateTagConfig } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: marginRateReferenceTagName },
+    { enabled: hasExternalMarginRateReference, staleTime: 3000 }
+  );
+  const { data: _marginRateTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: marginRateReferenceTagName },
+    { enabled: hasExternalMarginRateReference, staleTime: 3000 }
+  );
+  const { data: _canonicalMarginRateValuation } = (trpc.ledger as any).getTagMarginValuation.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: marginRateReferenceTagName },
+    { enabled: hasExternalMarginRateReference, staleTime: 25_000, refetchInterval: 30_000, refetchIntervalInBackground: true }
   );
   // 规则G：数字币价格前端直连（老方案已封存：trpc.getCryptoPrices）
   const { data: _fc2977CryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { enabled: hasExternalCollateral, refetchInterval: 3000, staleTime: 2000 });
@@ -1531,6 +1548,19 @@ export function FunderOrderCardV2Silver({
     const pct = marginBaseNum > 0 ? (remainingCNY / marginBaseNum * 100) : null;
     return { fc2977RemainingMarginU: remainingU, fc2977MarginBasePct: pct, fc2977CnyRate: _cnyR };
   })();
+  const referencedMarginRatePct = useMemo(() => {
+    if (!hasExternalMarginRateReference) return null;
+    const totalCny = Number((_canonicalMarginRateValuation as any)?.totalCny);
+    const latestBalance = Number((_marginRateTagSummary as any)?.latestBalance?.balance);
+    if (_canonicalMarginRateValuation === undefined || !Number.isFinite(totalCny) || !Number.isFinite(latestBalance)) return null;
+    const initialAmount = Number((_marginRateTagConfig as any)?.initial_amount ?? 0) || 0;
+    const accountMultiplier = Number((_marginRateTagConfig as any)?.account_multiplier ?? 1) || 1;
+    const remainingMargin = (latestBalance - initialAmount) * accountMultiplier + totalCny;
+    const marginBase = Number((_marginRateTagConfig as any)?.margin_base ?? 0) || 0;
+    return marginBase > 0
+      ? remainingMargin / marginBase * 100
+      : (latestBalance > 0 ? totalCny / latestBalance * 100 : null);
+  }, [hasExternalMarginRateReference, _canonicalMarginRateValuation, _marginRateTagConfig, _marginRateTagSummary]);
   // 外部37号订单的最终担保缺口必须与订单详情卡完全一致：
   // 37号「浮盈 + 担保物」余量 − 本订单待结利息 + 已结利息。不能只上报前两项。
   const fc2977InterestCnyRate = fc2977CnyRate && fc2977CnyRate > 0 ? fc2977CnyRate : cnyRate;
@@ -2477,13 +2507,13 @@ export function FunderOrderCardV2Silver({
                 )}
               </div>
             )}
-            {/* 保证金率行（FC2977专属，显示剩余保证金占基数比） */}
-            {isFC2977 && isStockCard && !isSharedMode && (
+            {/* 保证金率行：只有显式选择37号比例引用时，才显示37号“剩余保证金占基数比”。 */}
+            {cardDisplayConfig.marginRate === true && hasExternalMarginRateReference && isStockCard && !isSharedMode && (
               <div className="flex justify-between items-center" style={{ borderTop: `1px solid ${DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
                 <span style={{ color: TXT_SEC }}>保证金率</span>
-                {fc2977MarginBasePct !== null ? (
+                {referencedMarginRatePct !== null ? (
                   <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: TXT_PRI }}>
-                    {fc2977MarginBasePct >= 0 ? '+' : '-'}{Math.abs(fc2977MarginBasePct).toFixed(1)}%
+                    {referencedMarginRatePct >= 0 ? '+' : '-'}{Math.abs(referencedMarginRatePct).toFixed(1)}%
                   </span>
                 ) : (
                   <span style={{ color: TXT_DIM, fontSize: '0.75rem' }}>--</span>
@@ -2491,7 +2521,7 @@ export function FunderOrderCardV2Silver({
               </div>
             )}
             {/* 共享担保标记行（共享担保模式才显示） */}
-            {isSharedMode && (
+            {cardDisplayConfig.collateral !== false && isSharedMode && (
               <>
                 {/* 共享担保缺口弹窗 */}
                 {showCollateralInfo && (
@@ -2813,7 +2843,7 @@ export function FunderOrderCardV2Silver({
               </>
             )}
             {/* 非共享担保：担保货币 / 担保总值 / 担保缺口 */}
-            {!isSharedMode && !isStockCard && collateralAssets.length > 0 && (
+            {cardDisplayConfig.collateral !== false && !isSharedMode && !isStockCard && collateralAssets.length > 0 && (
               <>
                 {collateralAssets.map((a, idx) => (
                   <div key={idx}>
@@ -3453,8 +3483,7 @@ export function FunderLenderCardSilver({
   const accruedInU = interestUnit === '元' ? displayAccrued / effectiveCnyRate : displayAccrued;
   const paidInU = interestUnit === '元' ? displayPaid / effectiveCnyRate : displayPaid;
   const lenderHasExplicitPrincipalLentOut = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true;
-  const lenderPrincipalLentOut = lenderHasExplicitPrincipalLentOut
-    || (!_lnIsOpt && lenderDisplayConfig?.assetFundingType === 'financing');
+  const lenderPrincipalLentOut = lenderHasExplicitPrincipalLentOut;
   // 约定融资本金是固定负债，不能跟随标的实时市值重估。
   const lenderFinancingPrincipalRaw = Number(_effectiveInterestBase || storedAmountUsdt || 0);
   const lenderFinancingPrincipalU = baseCur === 'CNY'
@@ -3491,7 +3520,9 @@ export function FunderLenderCardSilver({
 
   // 读取 display_config 开关（与订单模式一致）
   const dc = lenderDisplayConfig;
-  const showField = (key: string) => dc ? (dc[key] !== false) : true;
+  const showField = (key: string) => key === 'marginRate'
+    ? dc?.marginRate === true
+    : dc ? (dc[key] !== false) : true;
   const lenderConfiguredPrimaryDisplay = dc?.primaryAssetDisplay === 'financing' || dc?.primaryAssetDisplay === 'quantity'
     ? dc.primaryAssetDisplay
     : null;
@@ -3499,7 +3530,7 @@ export function FunderLenderCardSilver({
     ? 'quantity'
     : dc?.principalLentOutPrimary === 'principal'
       ? 'financing'
-      : (lenderPrincipalLentOut || isStock || amountCurrency === 'CNY' ? 'financing' : 'quantity');
+      : (lenderHasExplicitPrincipalLentOut || lenderDisplayConfig?.assetFundingType === 'financing' || isStock || amountCurrency === 'CNY' ? 'financing' : 'quantity');
   const lenderShowsPrincipal = (lenderConfiguredPrimaryDisplay ?? lenderLegacyPrimaryDisplay) === 'financing';
   const lenderFinancingUnit = amountCurrency === 'USDT' ? 'U' : amountCurrency === 'CNY' ? '元' : amountCurrency;
   // 仅用于前端资产标题旁的展示标签，不影响订单、利息或担保计算。
