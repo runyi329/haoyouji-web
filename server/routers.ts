@@ -31424,24 +31424,26 @@ insights 数组每项包含：
       };
 
       const daysByTag = new Map<string, Map<string, { income: number; expense: number }>>();
-      const cashFlowsByTag = new Map<string, { capitalChange: number; withdraw: number }>();
+      // 普通标签的暂停日是“成员 × 标签”的结算截点。现金流也必须保留日期，
+      // 以便管理员事后把暂停日回填到历史日期时，不会把暂停日之后的本金变动或取回带入该成员结算。
+      const cashFlowsByTag = new Map<string, Array<{ date: string; capitalChange: number; withdraw: number }>>();
       for (const record of asRows(recordResult)) {
         const category = categoryById.get(Number(record.categoryId));
         if (!category) continue;
         const amount = Math.abs(num(record.amount));
-        if (String(record.type) === 'transfer') {
-          const flow = cashFlowsByTag.get(category.name) || { capitalChange: 0, withdraw: 0 };
-          const description = String(record.description || '');
-          if (description.startsWith('capital_')) {
-            flow.capitalChange += description.startsWith('capital_add') ? amount : -amount;
-          } else {
-            flow.withdraw += amount;
-          }
-          cashFlowsByTag.set(category.name, flow);
-          continue;
-        }
         const date = dateOf(record.recordDate);
         if (!date) continue;
+        if (String(record.type) === 'transfer') {
+          const flows = cashFlowsByTag.get(category.name) || [];
+          const description = String(record.description || '');
+          flows.push({
+            date,
+            capitalChange: description.startsWith('capital_') ? (description.startsWith('capital_add') ? amount : -amount) : 0,
+            withdraw: description.startsWith('capital_') ? 0 : amount,
+          });
+          cashFlowsByTag.set(category.name, flows);
+          continue;
+        }
         const tagDays = daysByTag.get(category.name) || new Map<string, { income: number; expense: number }>();
         const total = tagDays.get(date) || { income: 0, expense: 0 };
         if (String(record.type) === 'income') total.income += amount;
@@ -31504,7 +31506,14 @@ insights 数组每项包含：
               .sort((left, right) => left.date.localeCompare(right.date));
             const latest = daily[daily.length - 1];
             if (latest) {
-              const flow = cashFlowsByTag.get(tagName) || { capitalChange: 0, withdraw: 0 };
+              // 回填暂停日时，暂停日之后即使已经存在很多日历、加减本金或取回记录，
+              // 该成员的这次结算都只使用暂停日及以前的数据。
+              const flow = (cashFlowsByTag.get(tagName) || [])
+                .filter((item) => !pausedAt || item.date <= pausedAt)
+                .reduce((total, item) => ({
+                  capitalChange: total.capitalChange + item.capitalChange,
+                  withdraw: total.withdraw + item.withdraw,
+                }), { capitalChange: 0, withdraw: 0 });
               const effectiveInitial = num(balances[tagName]) + flow.capitalChange;
               const ratio = num(balances[`${tagName}__ratio`] ?? 100) / 100;
               cumulativeReturn = effectiveInitial > 0
