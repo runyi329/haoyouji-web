@@ -14,6 +14,7 @@ import { startTierScanner } from "../af-tier-scanner";
 import { startPriceScanner } from "../price-scanner";
 import { startManualStockCloseScheduler } from "../manual-stock-close-scheduler";
 import { ensureLedgerStockPortfolioTables } from "../ledger-stock-portfolio";
+import { startLedger52T0PendingOrderScanner } from "../ledger52-t0-journal";
 import { startFunderScanner } from "../funder-price-scanner";
 import { startEnergyPriceScanner } from "../energy-price-scanner";
 import { smsService } from "../sms-service";
@@ -779,6 +780,9 @@ async function startServer() {
 
     // 启动实时价格扫描器（每60秒刷新 BTC/ETH/SOL 现货价格）
     startPriceScanner();
+
+    // 管理员T+0逐笔挂单以统一 ETH 永续标记价自动确认成交；挂单未成交前不计入真实仓位和收益。
+    startLedger52T0PendingOrderScanner();
 
     // 52号手工股票、37号股票标签与其股票保证金在开盘时段每5分钟更新；15:05统一固化盘尾价。
     startManualStockCloseScheduler();

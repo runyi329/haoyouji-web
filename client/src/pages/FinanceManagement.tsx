@@ -22,6 +22,21 @@ function formatCoinQty(qty: string | number | null | undefined, coin: string): s
   return parseFloat(num.toFixed(6)).toString();
 }
 
+function isPrincipalLentOutForDisplay(order: any): boolean {
+  const rawPrincipalLentOut = order?.principal_lent_out === 1 || order?.principal_lent_out === true;
+  if (!rawPrincipalLentOut) return false;
+  try {
+    const rawConfig = order?.display_config;
+    const displayConfig = rawConfig ? (typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig) : {};
+    const isSelfFunded = displayConfig?.assetFundingType === 'self'
+      || displayConfig?.selfFundedAsset === true
+      || displayConfig?.selfFundedAsset === 'true';
+    return !isSelfFunded;
+  } catch {
+    return rawPrincipalLentOut;
+  }
+}
+
 // 担保价值实时显示小组件
 function CollateralValueDisplay({ coin, qty, ledgerId }: { coin: string; qty: string; ledgerId: number }) {
   const { data: summary } = trpc.ledger.financeGetAssetSummary.useQuery(
@@ -391,7 +406,7 @@ function FinanceOrderCard({
   // 将利息统一折算为U（accrued单位跟interest_base一致，totalPaid单位也interest_base一致）
   const accruedInU = baseCur === 'CNY' ? accrued / cnyRate : accrued;
   const totalPaidInU = baseCur === 'CNY' ? totalPaid / cnyRate : totalPaid;
-  const principalLentOut = order.principal_lent_out === 1 || order.principal_lent_out === true;
+  const principalLentOut = isPrincipalLentOutForDisplay(order);
   const exposure = floatPnl !== null
     ? collateralValue + floatPnl - accruedInU + totalPaidInU - lentOutValueU - (principalLentOut ? interestBaseNum : 0)
     : collateralValue - accruedInU + totalPaidInU - lentOutValueU - (principalLentOut ? interestBaseNum : 0);
@@ -538,7 +553,7 @@ function FinanceOrderCard({
         <div className="flex-1 p-4 pr-3">
           <div className="flex items-center gap-0.5 mb-0.5">
             <span className="text-[10px] font-medium" style={{ color: isGreenOrder ? '#16A34A' : '#3B82F6' }}>
-              {(order.principal_lent_out === 1 || order.principal_lent_out === true)
+              {principalLentOut
                 ? (() => {
                     const optInfo = (() => { try { const oi = order.option_info; return typeof oi === 'string' ? JSON.parse(oi) : oi; } catch { return null; } })();
                     const unit = order.asset_type === 'crypto_option' ? (optInfo?.coin || 'ETH') : order.asset_type === 'stock' ? (baseCur === 'CNY' ? '元' : 'U') : order.coin;
@@ -546,7 +561,7 @@ function FinanceOrderCard({
                   })()
                 : (isGreenOrder ? '持有资产' : '融资资产')}
             </span>
-            {!isGreenOrder && !(order.principal_lent_out === 1 || order.principal_lent_out === true) && <span className="text-[10px] text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span>}
+            {!isGreenOrder && !principalLentOut && <span className="text-[10px] text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span>}
             {order.asset_type === 'crypto' && order.trade_direction && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: order.trade_direction === 'long' ? '#DC2626' : '#16A34A' }}>
                 {order.trade_direction === 'long' ? '多' : '空'}
@@ -1943,7 +1958,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
           return parsed;
         } catch { return order.owner_label ? [order.owner_label] : []; }
       })(),
-      principalLentOut: !!(order.principal_lent_out),
+      principalLentOut: isPrincipalLentOutForDisplay(order),
       orderFillStatus: (order.order_fill_status === 'pending' ? 'pending' : 'filled') as 'pending' | 'filled',
     });
     // 加载字段展示配置

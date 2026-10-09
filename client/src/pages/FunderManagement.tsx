@@ -43,9 +43,10 @@ type CompactDisplayToggleProps = {
   checked: boolean;
   onToggle: () => void;
   tone?: 'blue' | 'indigo' | 'orange' | 'purple';
+  disabled?: boolean;
 };
 
-function CompactDisplayToggle({ label, checked, onToggle, tone = 'blue' }: CompactDisplayToggleProps) {
+function CompactDisplayToggle({ label, checked, onToggle, tone = 'blue', disabled = false }: CompactDisplayToggleProps) {
   const activeTone = {
     blue: 'bg-blue-500',
     indigo: 'bg-indigo-500',
@@ -56,10 +57,12 @@ function CompactDisplayToggle({ label, checked, onToggle, tone = 'blue' }: Compa
   return (
     <button
       type="button"
-      onClick={onToggle}
+      onClick={disabled ? undefined : onToggle}
+      disabled={disabled}
       aria-pressed={checked}
+      aria-disabled={disabled}
       aria-label={`切换${label}`}
-      className="flex min-h-8 min-w-0 items-center justify-between gap-1 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
+      className={`flex min-h-8 min-w-0 items-center justify-between gap-1 rounded-lg px-1.5 py-1 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200 ${disabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-white'}`}
     >
       <span className="min-w-0 truncate text-[11px] font-medium text-gray-600">{label}</span>
       <span className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-200 ${checked ? activeTone : 'bg-gray-200'}`} aria-hidden="true">
@@ -452,9 +455,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     // 左上角主展示由订单按需保存；不设默认值，以保持历史订单原有的展示口径。
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | string>>(DEFAULT_DISPLAY_CONFIG);
-  const amountDisplayLabel = formData.principalLentOut
+  const isSelfFundedAsset = displayConfig.assetFundingType === 'self'
+    || displayConfig.selfFundedAsset === true
+    || displayConfig.selfFundedAsset === 'true';
+  const effectivePrincipalLentOut = formData.principalLentOut && !isSelfFundedAsset;
+  const amountDisplayLabel = effectivePrincipalLentOut
     ? '借出本金'
-    : displayConfig.assetFundingType === 'self' || displayConfig.selfFundedAsset === true || displayConfig.selfFundedAsset === 'true'
+    : isSelfFundedAsset
       ? '订单金额'
       : '融资金额';
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
@@ -585,7 +592,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       buyDate: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.buy_date ? String(snapshot.buy_date).slice(0, 10) : (formData.buyDate || ''); } catch { return formData.buyDate || ''; } })(),
       brokerName: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.broker_name || ''; } catch { return ''; } })(),
       brokerAccount: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.broker_account || ''; } catch { return ''; } })(),
-      principalLentOut: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.principal_lent_out === 1 || snapshot?.principal_lent_out === true; } catch { return false; } })(),
+      principalLentOut: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; const config = snapshot?.display_config ? (typeof snapshot.display_config === 'string' ? JSON.parse(snapshot.display_config) : snapshot.display_config) : {}; const isSelfFunded = config?.assetFundingType === 'self' || config?.selfFundedAsset === true || config?.selfFundedAsset === 'true'; return !isSelfFunded && (snapshot?.principal_lent_out === 1 || snapshot?.principal_lent_out === true); } catch { return false; } })(),
       collateralShareMode: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.collateral_share_mode === 'self' || snapshot?.collateral_share_mode === 'cross' ? snapshot.collateral_share_mode : 'none'; } catch { return 'none'; } })(),
       collateralSource: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.collateral_source || null; } catch { return null; } })(),
       tradingFeeRate: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.trading_fee_rate_per_mille != null ? String(snapshot.trading_fee_rate_per_mille) : '2'; } catch { return '2'; } })(),
@@ -1086,7 +1093,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
   // 资金属性“融”只用于订单展示；只有明确开启“借出本金”才把本金视为待覆盖负债。
   // 未开启时，37号引用按净值盈亏、担保物和利息计算，不扣原始融资本金。
-  const previewIsPrincipalLoan = useMemo(() => Boolean(formData.principalLentOut), [formData.principalLentOut]);
+  const previewIsPrincipalLoan = effectivePrincipalLentOut;
   const previewBorrowedPrincipalU = useMemo(() => {
     const principal = parseFloat(formData.interestBase || '0');
     if (Number.isFinite(principal) && principal > 0) {
@@ -1761,7 +1768,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         ? (order as any).visible_owner_ids.map(Number).filter(Boolean)
         : (() => { try { const ids = typeof (order as any).visible_owner_ids === 'string' ? JSON.parse((order as any).visible_owner_ids) : []; return Array.isArray(ids) ? ids.map(Number).filter(Boolean) : []; } catch { return []; } })(),
       tags: (() => { try { const t = order.tags; return Array.isArray(t) ? t : (typeof t === 'string' ? JSON.parse(t) : []); } catch { return []; } })(),
-      principalLentOut: !!(order.principal_lent_out),
+      principalLentOut: !!(order.principal_lent_out) && !(editDisplayConfig?.assetFundingType === 'self' || editDisplayConfig?.selfFundedAsset === true || editDisplayConfig?.selfFundedAsset === 'true'),
       tradingFeeRate: order.trading_fee_rate_per_mille != null ? String(order.trading_fee_rate_per_mille) : '2',
       tradingFeeStatus: (['unpaid', 'half_paid', 'paid'].includes(order.trading_fee_status) ? order.trading_fee_status : 'unpaid') as 'unpaid' | 'half_paid' | 'paid',
       brokerName: order.broker_name || '',
@@ -2154,7 +2161,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       tags: formData.tags.length > 0 ? formData.tags : undefined,
       collateralShareMode: collateralShareMode !== 'none' ? collateralShareMode : undefined,
       collateralSource: orderCollateralSourceDraft,
-      principalLentOut: formData.principalLentOut,
+      principalLentOut: effectivePrincipalLentOut,
       tradingFeeRate: ledgerId === 52 ? (Number.isFinite(Number(formData.tradingFeeRate)) ? Math.max(0, Number(formData.tradingFeeRate)) : 2) : undefined,
       tradingFeeStatus: ledgerId === 52 ? formData.tradingFeeStatus : undefined,
       orderFillStatus: formData.orderFillStatus,
@@ -2789,7 +2796,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   ? 'quantity'
                   : displayConfig.principalLentOutPrimary === 'principal'
                     ? 'financing'
-                    : (formData.principalLentOut || formData.amountCurrency === 'CNY' ? 'financing' : 'quantity');
+                    : (effectivePrincipalLentOut || formData.amountCurrency === 'CNY' ? 'financing' : 'quantity');
                 const selectedPrimaryDisplay = explicitPrimaryDisplay ?? legacyPrimaryDisplay;
                 const showPrimaryDisplay = formData.assetType !== 'stock';
                 return (
@@ -2803,11 +2810,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             <button
                               key={option.value}
                               type="button"
-                              onClick={() => setDisplayConfig(config => ({
-                                ...config,
-                                assetFundingType: option.value,
-                                selfFundedAsset: option.value === 'self',
-                              }))}
+                              onClick={() => {
+                                setDisplayConfig(config => ({
+                                  ...config,
+                                  assetFundingType: option.value,
+                                  selfFundedAsset: option.value === 'self',
+                                }));
+                                if (option.value === 'self') {
+                                  setFormData(data => ({ ...data, principalLentOut: false }));
+                                }
+                              }}
                               className="flex-1 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-colors last:border-r-0"
                               style={isSelected
                                 ? option.active
@@ -4574,9 +4586,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     )}
                     <CompactDisplayToggle
                       label="借出本金"
-                      checked={formData.principalLentOut}
+                      checked={effectivePrincipalLentOut}
                       onToggle={() => setFormData(d => ({ ...d, principalLentOut: !d.principalLentOut }))}
                       tone="orange"
+                      disabled={isSelfFundedAsset}
                     />
                     {formData.assetType === 'crypto_option' && (
                       <CompactDisplayToggle
@@ -4587,7 +4600,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       />
                     )}
                   </div>
-                  <p className="mt-1 text-[10px] leading-4 text-gray-400">借出本金开启后，担保缺口按计息基数扣减。</p>
+                  <p className="mt-1 text-[10px] leading-4 text-gray-400">{isSelfFundedAsset ? '自有资金不形成对外借款，本金去向固定为公司自有资金。' : '融资付息下：关闭表示资金留在公司账户；开启表示本金已实际借出。'}</p>
                 </div>
                 <div className="mx-4 h-px bg-gray-100 my-2" />
                 {/* 右栏下半：收益分成区 */}
@@ -4699,7 +4712,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   commission_share: formData.commissionShare || null,
                   profit_share_ratio: formData.profitShareRatio || null,
                   profit_share_type: formData.profitShareType || 'interest',
-                  principal_lent_out: formData.principalLentOut ? 1 : 0,
+                  principal_lent_out: effectivePrincipalLentOut ? 1 : 0,
                   collateral_assets: collateralAssets.length > 0 ? JSON.stringify(collateralAssets) : null,
                   option_info: formData.assetType === 'crypto_option' ? JSON.stringify({
                     coin: optionFormData.optionCurrency,

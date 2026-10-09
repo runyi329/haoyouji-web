@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Clock3,
   Lock,
   LockOpen,
   Search,
@@ -19,6 +20,7 @@ type TradeAction = "openLong" | "closeLong" | "openShort" | "closeShort";
 type PositionSide = "long" | "short";
 type T0InstrumentType = "spot" | "contract" | "option";
 type T0InstrumentFilter = "all" | T0InstrumentType | "unlabeled";
+type T0ExecutionFilter = "all" | "filled" | "pending";
 const T0_INSTRUMENT_TYPES: Array<{ value: T0InstrumentType; label: string; shortLabel: string }> = [
   { value: "spot", label: "现货", shortLabel: "现" },
   { value: "contract", label: "合约", shortLabel: "合" },
@@ -67,6 +69,11 @@ type PreviewTrade = {
   instrumentType?: T0InstrumentType;
   /** 管理员开仓主单的展示锁定标记；成员端不下发、不渲染。 */
   isLocked?: boolean;
+  /** 管理员报价专用：挂单在触发前不进入真实仓位、盈亏或费用计算。 */
+  isPending?: boolean;
+  /** 挂单实际触发成交的系统时间与统一行情价格；仅管理员可见。 */
+  filledAt?: string;
+  filledPrice?: number;
   quantity: number;
   price: number;
   fee: number;
@@ -142,6 +149,9 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
       ? entry.instrumentType
       : undefined,
     isLocked: Boolean(entry.isLocked),
+    isPending: Boolean(entry.isPending),
+    filledAt: entry.filledAt ? String(entry.filledAt) : undefined,
+    filledPrice: entry.filledPrice === undefined || entry.filledPrice === null ? undefined : Number(entry.filledPrice),
     quantity: Number(entry.quantity),
     price: Number(entry.price),
     fee: Number(entry.fee || 0),
@@ -218,6 +228,8 @@ type EntryForm = {
   instrumentType?: T0InstrumentType;
   /** 开仓订单默认为未锁；锁定后仅管理员逐笔报价使用黑金标识。 */
   isLocked: boolean;
+  /** 仅开仓：默认直接成交；设为挂单后等待统一标记价自动触发。 */
+  isPending: boolean;
   quantity: string;
   price: string;
   note: string;
@@ -969,6 +981,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [relatedUserFilterIds, setRelatedUserFilterIds] = useState<string[]>([]);
   const [relatedFundFilterIds, setRelatedFundFilterIds] = useState<string[]>([]);
   const [instrumentTypeFilter, setInstrumentTypeFilter] = useState<T0InstrumentFilter>("all");
+  const [executionFilter, setExecutionFilter] = useState<T0ExecutionFilter>("all");
   const [journalActionFilters, setJournalActionFilters] = useState<Set<TradeAction>>(
     () => new Set(RECENT_JOURNAL_ACTIONS),
   );
@@ -1030,6 +1043,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     relatedFundName: "",
     instrumentType: "contract",
     isLocked: false,
+    isPending: false,
     quantity: "",
     price: "",
     note: "",
@@ -1284,9 +1298,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       ? "text-emerald-600"
       : "text-rose-600";
 
+  const executionScopedTrades = useMemo(
+    () => executionFilter === "all"
+      ? trades
+      : trades.filter((trade) => executionFilter === "pending" ? Boolean(trade.isPending) : !trade.isPending),
+    [trades, executionFilter],
+  );
   const instrumentScopedTrades = useMemo(
-    () => filterTradesByInstrumentType(trades, instrumentTypeFilter),
-    [trades, instrumentTypeFilter],
+    () => filterTradesByInstrumentType(executionScopedTrades, instrumentTypeFilter),
+    [executionScopedTrades, instrumentTypeFilter],
   );
   const selectedTrades = useMemo(
     () => instrumentScopedTrades.filter((trade) => (
@@ -1298,6 +1318,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         || relatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
     [instrumentScopedTrades, selectedAccountIds, relatedUserFilterIds, relatedFundFilterIds],
+  );
+  // 挂单仅作管理员报价与状态统计展示；成交前绝不进入真实仓位、FIFO、手续费、浮盈或收益汇总。
+  const selectedFilledTrades = useMemo(
+    () => selectedTrades.filter((trade) => !trade.isPending),
+    [selectedTrades],
   );
   const journalScopeTrades = useMemo(
     () => instrumentScopedTrades.filter((trade) => (
@@ -1473,13 +1498,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (!ACTIONS[entryForm.action].opening || !Number.isFinite(price) || price <= 0) return null;
     return archivePriceForSide(ACTIONS[entryForm.action].side, price);
   }, [entryForm.action, entryForm.price]);
-  const buckets = useMemo(() => buildPositionBuckets(selectedTrades), [selectedTrades]);
-  const summary = useMemo(() => calculateSummary(buckets, markPrice, selectedTrades), [buckets, markPrice, selectedTrades]);
+  const buckets = useMemo(() => buildPositionBuckets(selectedFilledTrades), [selectedFilledTrades]);
+  const summary = useMemo(() => calculateSummary(buckets, markPrice, selectedFilledTrades), [buckets, markPrice, selectedFilledTrades]);
   // 首屏总览：累计利润保持与多/空“累计利润”一致的未扣手续费口径；总仓位为多仓减空仓后的净额。
   const totalGrossProfit = summary.long.realizedGross + summary.short.realizedGross;
   const totalGrossProfitDetails = useMemo(
-    () => buildRealizedGrossProfitDetails(selectedTrades),
-    [selectedTrades],
+    () => buildRealizedGrossProfitDetails(selectedFilledTrades),
+    [selectedFilledTrades],
   );
   const totalRevenueDetailTotalPages = Math.max(1, Math.ceil(
     totalGrossProfitDetails.length / TOTAL_REVENUE_DETAIL_PAGE_SIZE,
@@ -1532,7 +1557,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 顶部始终明确为当前档位或当前方向范围的汇总，逐笔订单在下方直接展示。
   const entryScopeTitle = `${entrySide === "long" ? "多仓" : "空仓"}汇总`;
   const openingClosingAllocations = useMemo(
-    () => buildOpeningClosingAllocations(entryScopedTrades),
+    () => buildOpeningClosingAllocations(entryScopedTrades.filter((trade) => !trade.isPending)),
     [entryScopedTrades],
   );
   const openedTradeList = useMemo(
@@ -1583,6 +1608,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const isEditingEntry = Boolean(entryForm.editingEntryId);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
   const isCloseReview = isClosingEntry && closeConfirmationStep === "review";
+  // 逐笔报价每一格只对应一笔开仓主单；详情内直接给出平仓入口，
+  // 不要求管理员再先展开该主单，避免误以为逐笔模式只能新增、不能平仓。
+  const isIndividualQuoteDetail = entrySheetLadderDisplayModeRef.current === "individual";
   // 仅平仓的第二次确认需要冻结账户，不能让该状态误伤“编辑开仓”。
   // 开仓编辑受后端 FIFO 依赖校验保护；未发生后续平仓时，管理员必须能改到既有账户。
   const isAccountSelectionLocked = isCloseReview && !isEditingEntry;
@@ -1590,8 +1618,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ? Math.min(LADDER_MAX_PRICE, Math.max(LADDER_MIN_PRICE, Math.round(markPrice / LADDER_STEP) * LADDER_STEP))
     : null;
   const ladderOpeningClosingAllocations = useMemo(
-    () => buildOpeningClosingAllocations(selectedTrades),
-    [selectedTrades],
+    () => buildOpeningClosingAllocations(selectedFilledTrades),
+    [selectedFilledTrades],
   );
   const priceRows = useMemo<LadderPriceRow[]>(() => {
     const activePositionPrices = buckets
@@ -1614,6 +1642,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const remainingQuantity = Math.max(0, trade.quantity - closedQuantity);
       if (remainingQuantity <= 0.0000001) continue;
       const side = ACTIONS[trade.action].side;
+      const isPending = Boolean(trade.isPending);
       // 管理员逐笔模式一张主单只对应一行，价位取本笔真实成交价的四舍五入整数；
       // 原始成交价仍用于成本、盈亏和 FIFO，十美元归档价仅服务于整合报价和可用量校验。
       const price = Math.round(trade.price);
@@ -1627,9 +1656,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           originalQuantity: trade.quantity,
           remainingQuantity,
           costBasis: trade.price * remainingQuantity,
-          financialQuantity: getTradeFinancialQuantity(trade, remainingQuantity),
-          financialCostBasis: trade.price * getTradeFinancialQuantity(trade, remainingQuantity),
-          openingFeeBasis: trade.fee * remainingRatio,
+          financialQuantity: isPending ? 0 : getTradeFinancialQuantity(trade, remainingQuantity),
+          financialCostBasis: isPending ? 0 : trade.price * getTradeFinancialQuantity(trade, remainingQuantity),
+          openingFeeBasis: isPending ? 0 : trade.fee * remainingRatio,
           realizedGrossPnl: 0,
           realizedOpeningFee: 0,
           realizedClosingFee: 0,
@@ -1698,6 +1727,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundName: defaultRelatedFund?.name ?? "",
       instrumentType: ACTIONS[action].opening ? lastOpeningInstrumentType : undefined,
       isLocked: false,
+      isPending: false,
       quantity: "",
       // 开仓成交价由管理员实际录入；保留浅色 0.00 占位，避免误把参考价写入流水。
       price: "",
@@ -1716,7 +1746,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     // 不会和任何已关联用户的订单互相抵扣。
     const relatedUserKey = trade.relatedUserId ?? "";
     const relatedFundKey = trade.relatedFundId ?? "";
-    const tradeUserBuckets = buildPositionBuckets(selectedTrades.filter((item) => (
+    const tradeUserBuckets = buildPositionBuckets(selectedFilledTrades.filter((item) => (
       item.accountId === trade.accountId
       && (item.relatedUserId ?? "") === relatedUserKey
       && (item.relatedFundId ?? "") === relatedFundKey
@@ -1740,6 +1770,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundName: trade.relatedFundName ?? "",
       instrumentType: trade.instrumentType,
       isLocked: false,
+      isPending: false,
       // 表单值不能带千分位逗号，否则超过千位的数量会无法通过数值校验。
       quantity: normalizeEthQuantity(String(Math.min(target.remainingQuantity, trade.quantity))),
       price: markPrice ? markPrice.toFixed(2) : "",
@@ -1769,6 +1800,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundName: trade.relatedFundName ?? "",
       instrumentType: trade.instrumentType,
       isLocked: Boolean(trade.isLocked),
+      isPending: Boolean(trade.isPending),
       // 编辑输入使用机器可解析的原始数值；展示层才使用千分位格式。
       quantity: normalizeEthQuantity(String(trade.quantity)),
       price: trade.price.toFixed(2),
@@ -1905,6 +1937,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           ? data.entry.instrumentType
           : undefined,
         isLocked: Boolean(data.entry.isLocked),
+        isPending: Boolean(data.entry.isPending),
+        filledAt: data.entry.filledAt ? String(data.entry.filledAt) : undefined,
+        filledPrice: data.entry.filledPrice === undefined || data.entry.filledPrice === null ? undefined : Number(data.entry.filledPrice),
         quantity: Number(data.entry.quantity),
         price: Number(data.entry.price),
         fee: Number(data.entry.fee || 0),
@@ -1946,7 +1981,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         setLastSavedQuantity(savedQuantity);
       }
       if (entry.instrumentType) setLastOpeningInstrumentType(entry.instrumentType);
-      toast.success(entry.isLocked ? "速记已保存，逐笔报价将显示黑金锁标" : "速记已保存");
+      toast.success(entry.isPending ? "挂单已保存，等待统一参考价触发成交" : entry.isLocked ? "速记已保存，逐笔报价将显示黑金锁标" : "速记已保存");
     },
     onError: (error, variables: any) => {
       setTrades((current) => current.filter((trade) => trade.clientRequestId !== variables.clientRequestId));
@@ -1977,6 +2012,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           ? data.entry.instrumentType
           : undefined,
         isLocked: Boolean(data.entry.isLocked),
+        isPending: Boolean(data.entry.isPending),
+        filledAt: data.entry.filledAt ? String(data.entry.filledAt) : undefined,
+        filledPrice: data.entry.filledPrice === undefined || data.entry.filledPrice === null ? undefined : Number(data.entry.filledPrice),
         quantity: Number(data.entry.quantity),
         price: Number(data.entry.price),
         fee: Number(data.entry.fee || 0),
@@ -2009,7 +2047,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setCloseConfirmationStep("input");
       if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
       if (entry.instrumentType) setLastOpeningInstrumentType(entry.instrumentType);
-      toast.success(entry.isLocked ? "开仓已锁定，逐笔报价将显示黑金锁标" : "开仓记录已修改");
+      toast.success(entry.isPending ? "挂单已保存，等待统一参考价触发成交" : entry.isLocked ? "开仓已锁定，逐笔报价将显示黑金锁标" : "开仓记录已修改");
     },
     onError: (error) => toast.error(error.message || "开仓记录修改失败"),
   });
@@ -2322,6 +2360,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         relatedFundName: normalizedRelatedFundName || undefined,
         instrumentType: entryForm.instrumentType,
         isLocked: entryForm.isLocked,
+        isPending: entryForm.isPending,
         quantity: normalizedQuantity,
         price: entryForm.price.trim(),
         note: entryForm.note.trim() || undefined,
@@ -2335,7 +2374,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         return;
       }
       const side = selectedAction.side;
-      const closeScopeTrades = trades.filter((trade) => (
+      const closeScopeTrades = trades.filter((trade) => !trade.isPending && (
         trade.accountId === entryForm.accountId
         && trade.symbol === "ETH"
         && (trade.relatedUserId ?? "") === (entryForm.relatedUserId ?? "")
@@ -2378,6 +2417,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       action: entryForm.action,
       instrumentType: selectedAction.opening ? entryForm.instrumentType : undefined,
       isLocked: selectedAction.opening ? entryForm.isLocked : false,
+      isPending: selectedAction.opening ? entryForm.isPending : false,
       quantity,
       price,
       fee,
@@ -2403,6 +2443,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       action: entryForm.action,
       instrumentType: selectedAction.opening ? entryForm.instrumentType : undefined,
       isLocked: selectedAction.opening ? entryForm.isLocked : undefined,
+      isPending: selectedAction.opening ? entryForm.isPending : undefined,
       quantity: normalizedQuantity,
       price: entryForm.price.trim(),
       targetPrice: archiveTargetPrice === undefined ? undefined : String(archiveTargetPrice),
@@ -2699,22 +2740,40 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 />
               )}
             </div>
-            {canManage && <label className="mt-2 flex items-center gap-2">
-              <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>类型</span>
-              <select
-                value={instrumentTypeFilter}
-                onChange={(event) => {
-                  setInstrumentTypeFilter(event.target.value as T0InstrumentFilter);
-                  setRecentJournalPage(1);
-                }}
-                className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
-                aria-label="按订单类型筛选"
-              >
-                <option value="all">全部类型</option>
-                {T0_INSTRUMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                <option value="unlabeled">未标注（历史）</option>
-              </select>
-            </label>}
+            {canManage && <div className="mt-2 grid grid-cols-2 gap-2">
+              <label className="flex min-w-0 items-center gap-1.5">
+                <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>类型</span>
+                <select
+                  value={instrumentTypeFilter}
+                  onChange={(event) => {
+                    setInstrumentTypeFilter(event.target.value as T0InstrumentFilter);
+                    setRecentJournalPage(1);
+                  }}
+                  className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
+                  aria-label="按订单类型筛选"
+                >
+                  <option value="all">全部类型</option>
+                  {T0_INSTRUMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  <option value="unlabeled">未标注（历史）</option>
+                </select>
+              </label>
+              <label className="flex min-w-0 items-center gap-1.5">
+                <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>状态</span>
+                <select
+                  value={executionFilter}
+                  onChange={(event) => {
+                    setExecutionFilter(event.target.value as T0ExecutionFilter);
+                    setRecentJournalPage(1);
+                  }}
+                  className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-sky-600"
+                  aria-label="按成交状态筛选"
+                >
+                  <option value="all">全部</option>
+                  <option value="filled">已成交</option>
+                  <option value="pending">挂单</option>
+                </select>
+              </label>
+            </div>}
           </div>
 
           <div
@@ -2864,6 +2923,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   markPrice={markPrice}
                   metadata={individualMetadata}
                   isLocked={Boolean(isIndividualLadderView && row.long && row.openingTrade?.isLocked)}
+                  isPending={Boolean(isIndividualLadderView && row.long && row.openingTrade?.isPending)}
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.long) return;
@@ -2915,6 +2975,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   markPrice={markPrice}
                   metadata={individualMetadata}
                   isLocked={Boolean(isIndividualLadderView && row.short && row.openingTrade?.isLocked)}
+                  isPending={Boolean(isIndividualLadderView && row.short && row.openingTrade?.isPending)}
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.short) return;
@@ -3252,7 +3313,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     const linkedClosedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
                     const remainingQuantity = Math.max(0, trade.quantity - linkedClosedQuantity);
                     const financialRemainingQuantity = getTradeFinancialQuantity(trade, remainingQuantity);
-                    const floatingPnl = calculateEstimatedUnrealizedNetPnl(
+                    const floatingPnl = trade.isPending ? null : calculateEstimatedUnrealizedNetPnl(
                       ACTIONS[trade.action].side,
                       markPrice,
                       financialRemainingQuantity,
@@ -3280,9 +3341,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                               <span className="text-sm font-medium text-slate-700">{ACTIONS[trade.action].label}</span>
                               <span className="text-sm font-medium tabular-nums text-slate-700">{formatQuantity(trade.quantity)} ETH</span>
                               <span className="text-sm font-medium tabular-nums text-slate-700">@ {formatPrice(trade.price)}</span>
-                              <span className="shrink-0 text-sm font-medium tabular-nums text-slate-700">
-                                {floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}
-                              </span>
+                              {trade.isPending ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span> : <span className="shrink-0 text-sm font-medium tabular-nums text-slate-700">{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>}
                             </span>
                             <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-medium">
                               {linkedClosedQuantity > 0.0000001 && <>
@@ -3300,15 +3359,28 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           </div>
                           <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                         </button>
+                        {isIndividualQuoteDetail && row.kind === "active" && canManage && !isClosingEntry && !trade.isPending && (
+                          <div className="mt-2 flex items-center justify-between gap-3 border-t border-slate-200 pt-2">
+                            <span className="text-[11px] font-medium text-slate-500">逐笔订单直达操作</span>
+                            <button
+                              type="button"
+                              disabled={!canQuickClose || Boolean(trade.isSyncing)}
+                              onClick={() => openQuickCloseSheet(trade)}
+                              className={`h-8 shrink-0 rounded border px-3 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${ACTIONS[closeAction].idleClass}`}
+                            >
+                              {ACTIONS[closeAction].label} {formatQuantity(remainingQuantity)} ETH
+                            </button>
+                          </div>
+                        )}
                         {isExpanded && (
                           <>
                             <div className="mt-2 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2 tabular-nums">
                               <div className="min-w-0">
-                                <div className="text-[10px] text-slate-400">开仓价值</div>
-                                <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{formatPrice(openingValue)} U</div>
+                                <div className="text-[10px] text-slate-400">{trade.isPending ? "挂单状态" : "开仓价值"}</div>
+                                <div className={`mt-0.5 whitespace-nowrap text-[11px] font-medium ${trade.isPending ? "text-sky-700" : "text-slate-700"}`}>{trade.isPending ? "等待触发" : `${formatPrice(openingValue)} U`}</div>
                               </div>
                               <div className="min-w-0 text-center">
-                                <div className="text-[10px] text-slate-400">当前盈亏</div>
+                                <div className="text-[10px] text-slate-400">{trade.isPending ? "盈亏" : "当前盈亏"}</div>
                                 <div className={`mt-0.5 whitespace-nowrap text-[11px] font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
                                   {floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}
                                 </div>
@@ -3332,6 +3404,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                                 </div>
                               </div>
                             </div>
+                            {trade.filledAt && <div className="mt-2 flex items-center gap-1.5 border-t border-slate-200 pt-2 text-[10px] font-medium text-slate-500">
+                              <Clock3 className="h-3 w-3 shrink-0 text-sky-600" />
+                              自动成交：{formatBeijingMonthDayTime(trade.filledAt)} · 参考价触发 {formatPrice(trade.filledPrice ?? trade.price)} U
+                            </div>}
                             {linkedClosings.length > 0 && (
                               <div className="mt-2 border-t border-slate-200 pt-2">
                                 <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
@@ -3374,14 +3450,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                                     删除
                                   </button>
                                 </div>
-                                <button
+                                {!isIndividualQuoteDetail && !trade.isPending && <button
                                   type="button"
                                   disabled={isCloseReview || !canQuickClose}
                                   onClick={() => openQuickCloseSheet(trade)}
                                   className={`h-8 rounded border px-3 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${ACTIONS[closeAction].idleClass}`}
                                 >
                                   {ACTIONS[closeAction].label}
-                                </button>
+                                </button>}
                               </div>}
                           </>
                         )}
@@ -3402,7 +3478,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3 items-start">
-                  <Field label={<span className="text-sm font-semibold text-slate-800">数量（ETH）</span>}>
+                  <Field label={<span className="inline-flex items-center gap-1 text-sm font-semibold text-slate-800">数量（ETH）{ACTIONS[entryForm.action].opening && entryForm.isPending && <span className="text-[10px] font-bold text-sky-600">挂单</span>}</span>}>
                     <div className="relative">
                       <input
                         inputMode="decimal"
@@ -3413,29 +3489,33 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         onChange={(event) => setEntryForm((current) => ({ ...current, quantity: event.target.value }))}
                         onBlur={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(current.quantity) }))}
                         placeholder="0.00"
-                        className={`h-14 w-full rounded border px-3 pr-14 text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
+                        className={`h-14 w-full rounded border px-3 pr-[4.75rem] text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                       />
-                      {ACTIONS[entryForm.action].opening && <button
-                        type="button"
-                        disabled={isCloseReview}
-                        aria-pressed={entryForm.isLocked}
-                        aria-label={entryForm.isLocked ? "解除本笔开仓锁定" : "锁定本笔开仓"}
-                        title={entryForm.isLocked ? "已锁定，点击解除" : "未锁定，点击锁定"}
-                        onClick={() => {
-                          const nextLocked = !entryForm.isLocked;
-                          setEntryForm((current) => ({ ...current, isLocked: nextLocked }));
-                          toast.message(nextLocked ? "已设为锁定，请点击底部“保存修改”后生效" : "已解除锁定，请点击底部“保存修改”后生效");
-                        }}
-                        className={`absolute right-1 top-1 flex h-12 w-12 flex-col items-center justify-center rounded-md border transition active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isLocked ? "border-[#c9a84c]/75 bg-[#141414] text-[#f5d78e] shadow-[inset_0_1px_0_rgba(245,215,142,0.16),inset_0_-1px_0_rgba(0,0,0,0.7)]" : "border-slate-400 bg-slate-100 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"}`}
-                      >
-                        {entryForm.isLocked ? <Lock className="h-4.5 w-4.5" /> : <LockOpen className="h-4.5 w-4.5" />}
-                        <span className="mt-0.5 text-[10px] font-bold leading-none">{entryForm.isLocked ? "已锁" : "锁定"}</span>
-                      </button>}
+                      {ACTIONS[entryForm.action].opening && <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={isCloseReview}
+                          aria-pressed={entryForm.isLocked}
+                          aria-label={entryForm.isLocked ? "解除本笔开仓锁定" : "锁定本笔开仓"}
+                          title={entryForm.isLocked ? "已锁定，点击解除" : "未锁定，点击锁定"}
+                          onClick={() => setEntryForm((current) => ({ ...current, isLocked: !current.isLocked }))}
+                          className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isLocked ? "border-[#c9a84c]/75 bg-[#141414] text-[#f5d78e] shadow-[inset_0_1px_0_rgba(245,215,142,0.16),inset_0_-1px_0_rgba(0,0,0,0.7)]" : "border-slate-300 bg-slate-50 text-slate-500"}`}
+                        >
+                          {entryForm.isLocked ? <Lock className="h-4 w-4" strokeWidth={2.3} /> : <LockOpen className="h-4 w-4" strokeWidth={2.3} />}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isCloseReview}
+                          aria-pressed={entryForm.isPending}
+                          aria-label={entryForm.isPending ? "取消本笔开仓挂单，改为直接成交" : "设为本笔开仓挂单"}
+                          title={entryForm.isPending ? "挂单中，点击改为直接成交" : "直接成交，点击改为挂单"}
+                          onClick={() => setEntryForm((current) => ({ ...current, isPending: !current.isPending }))}
+                          className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isPending ? "border-sky-500/75 bg-sky-50 text-sky-600" : "border-slate-300 bg-slate-50 text-slate-500"}`}
+                        >
+                          <Clock3 className="h-4 w-4" strokeWidth={2.3} />
+                        </button>
+                      </div>}
                     </div>
-                    {ACTIONS[entryForm.action].opening && entryForm.isLocked && <div className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold leading-4 text-[#8b6d24]">
-                      <Lock className="h-3 w-3 shrink-0" />
-                      待保存：保存修改后，在管理员“逐笔报价”显示黑金锁标
-                    </div>}
                     {quantityFormatError && <div className="mt-1.5 text-[10px] font-medium leading-4 text-rose-600">{quantityFormatError}</div>}
                   </Field>
 
@@ -4560,7 +4640,7 @@ function AccountOverview({
   );
 }
 
-function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false }: {
+function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, isPending = false }: {
   bucket?: PositionBucket;
   side: PositionSide;
   markPrice: number | null;
@@ -4569,12 +4649,16 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   metadata?: { accountName: string; relatedUserName: string; relatedFundName: string; instrumentShortLabel?: string };
   /** 仅管理员逐笔报价使用的黑金锁定外观。 */
   isLocked?: boolean;
+  /** 仅管理员逐笔报价使用：挂单未成交，采用浅蓝状态底并不展示盈亏。 */
+  isPending?: boolean;
 }) {
   const isLong = side === "long";
   if (!bucket || bucket.remainingQuantity <= 0.0000001) {
     return <div className="px-3 flex items-center text-xs text-slate-300">—</div>;
   }
-  const tone = isLocked
+  const tone = isPending
+    ? `text-slate-700${readOnly ? "" : " hover:brightness-[0.98]"}`
+    : isLocked
     ? `text-[#f5d78e]${readOnly ? "" : " hover:brightness-110"}`
     : isLong
     ? `text-rose-600${readOnly ? "" : " hover:brightness-105"}`
@@ -4596,8 +4680,14 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
     ].join(", "),
     boxShadow: "inset 0 1px 0 rgba(245,215,142,0.24), inset 0 -1px 0 rgba(0,0,0,0.82), inset 1px 0 0 rgba(201,168,76,0.22), inset -1px 0 0 rgba(201,168,76,0.16)",
   };
-  const surfaceStyle = isLocked ? lockedSurfaceStyle : sideSurfaceStyle;
-  const quantityTextStyle = isLocked
+  const pendingSurfaceStyle = {
+    background: "linear-gradient(90deg, rgba(239,246,255,0.96), rgba(219,234,254,0.78) 58%, rgba(224,242,254,0.64))",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.92), inset 0 -1px 0 rgba(2,132,199,0.14), inset 1px 0 0 rgba(56,189,248,0.10)",
+  };
+  const surfaceStyle = isPending ? pendingSurfaceStyle : isLocked ? lockedSurfaceStyle : sideSurfaceStyle;
+  const quantityTextStyle = isPending
+    ? { textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.92), 0.75px 0.75px 0 rgba(2,132,199,0.18)" }
+    : isLocked
     ? {
       background: "linear-gradient(180deg, #fff1bd 0%, #f5d78e 38%, #c9a84c 72%, #f5d78e 100%)",
       WebkitBackgroundClip: "text",
@@ -4606,7 +4696,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
       filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.92))",
     }
     : { textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.88), 0.75px 0.75px 0 rgba(71,85,105,0.20)" };
-  const floatingPnl = calculateEstimatedUnrealizedNetPnl(side, markPrice, bucket.financialQuantity, bucket.financialCostBasis);
+  const floatingPnl = isPending ? null : calculateEstimatedUnrealizedNetPnl(side, markPrice, bucket.financialQuantity, bucket.financialCostBasis);
   // 与金额盈亏保持同一口径：逐档预估净盈亏 ÷ 本档剩余持仓成本；不计资金费。
   const floatingReturnRate = floatingPnl === null || bucket.financialCostBasis <= 0
     ? null
@@ -4616,7 +4706,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
     <div className="w-full min-w-0">
       <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className={`shrink-0 font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"}`} style={quantityTextStyle}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
+          <span className={`shrink-0 font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"} ${isPending ? "text-sky-700" : ""}`} style={quantityTextStyle}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
         </div>
         {floatingPnl !== null && (
           <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`}>
@@ -4627,7 +4717,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           </span>
         )}
       </div>
-      {metadata && <div className={`mt-1 flex min-w-0 items-center text-left text-[9px] font-medium leading-none ${isLocked ? "text-[#c9a84c]/85" : "text-slate-500"}`} aria-label={`账户 ${metadata.accountName}，用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}`}>
+      {metadata && <div className={`mt-1 flex min-w-0 items-center text-left text-[9px] font-medium leading-none ${isLocked && !isPending ? "text-[#c9a84c]/85" : "text-slate-500"}`} aria-label={`账户 ${metadata.accountName}，用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}${isPending ? "，挂单待成交" : ""}`}>
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <span className="min-w-0 shrink truncate" title={`账户：${metadata.accountName}`}>{metadata.accountName}</span>
           <span className="shrink-0">·</span>
@@ -4635,9 +4725,10 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           <span className="shrink-0">·</span>
           <span className="min-w-0 shrink truncate" title={`项目：${metadata.relatedFundName}`}>{metadata.relatedFundName}</span>
         </div>
-        {(isLocked || metadata.instrumentShortLabel) && <div className={`ml-1 flex shrink-0 items-center gap-0.5 ${isLocked ? "text-[#f5d78e]/85" : "text-slate-500"}`}>
-          {isLocked && <Lock className="h-2.5 w-2.5 shrink-0" strokeWidth={2.5} aria-label="已锁定" />}
-          {metadata.instrumentShortLabel && <span title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
+        {(isLocked || isPending || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
+          {isLocked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#f5d78e]/85" strokeWidth={2.5} aria-label="已锁定" />}
+          {isPending && <Clock3 className="h-2.5 w-2.5 shrink-0 text-sky-600" strokeWidth={2.5} aria-label="挂单待成交" />}
+          {metadata.instrumentShortLabel && <span className={isLocked && !isPending ? "text-[#f5d78e]/85" : "text-slate-500"} title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
         </div>}
       </div>}
     </div>
@@ -4669,6 +4760,7 @@ function LadderCell({
   readOnly = false,
   metadata,
   isLocked = false,
+  isPending = false,
 }: {
   bucket?: PositionBucket;
   side: PositionSide;
@@ -4678,6 +4770,7 @@ function LadderCell({
   readOnly?: boolean;
   metadata?: { accountName: string; relatedUserName: string; relatedFundName: string; instrumentShortLabel?: string };
   isLocked?: boolean;
+  isPending?: boolean;
 }) {
   // 统一由报价格本身处理：移动端与桌面端都必须在同一格 700ms 内连续点击两次，
   // 才允许打开已有订单详情、编辑页或空档位的新开仓录入，杜绝单击误触。
@@ -4692,7 +4785,7 @@ function LadderCell({
     action();
   };
   if (bucket && bucket.remainingQuantity > 0.0000001) {
-    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} isLocked={isLocked} />;
+    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} isLocked={isLocked} isPending={isPending} />;
   }
 
   const isLong = side === "long";

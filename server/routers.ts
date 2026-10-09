@@ -1330,6 +1330,28 @@ function parseFunderParticipantSnapshot(value: unknown): Record<string, any> | n
   }
 }
 
+function parseFunderDisplayConfig(value: unknown): Record<string, any> {
+  if (!value) return {};
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, any> : {};
+  } catch {
+    return {};
+  }
+}
+
+function isSelfFundedFunderOrder(displayConfig: unknown): boolean {
+  const config = parseFunderDisplayConfig(displayConfig);
+  return config.assetFundingType === 'self'
+    || config.selfFundedAsset === true
+    || config.selfFundedAsset === 'true';
+}
+
+// 自有资金不构成对外本金债权；只有融资付息订单才可明确记录本金已实际借出。
+function normalizeFunderPrincipalLentOut(requested: unknown, displayConfig: unknown): boolean {
+  return !isSelfFundedFunderOrder(displayConfig) && requested === true;
+}
+
 // 默认情况下，参与者与主订单共用同一组担保物。参与者的金额、利率、展示配置、备注等
 // 仍然保留在其独立快照中；只有管理员在参与者视角明确单独保存担保物时，才允许其覆盖
 // 主订单的担保字段。这样主订单日后增加或删除担保物时，历史参与者不会继续展示旧快照。
@@ -10891,6 +10913,7 @@ ${klinesSummary}
         action: z.enum(['openLong', 'closeLong', 'openShort', 'closeShort']),
         instrumentType: z.enum(['spot', 'contract', 'option']).optional(),
         isLocked: z.boolean().optional(),
+        isPending: z.boolean().optional(),
         quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, 'ETH 整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '数量必须大于0'),
         price: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).refine((value) => Number(value) > 0, '价格必须大于0'),
         targetPrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).optional(),
@@ -10915,6 +10938,7 @@ ${klinesSummary}
           action: input.action,
           instrumentType: input.instrumentType,
           isLocked: input.isLocked,
+          isPending: input.isPending,
           quantity: input.quantity,
           price: input.price,
           targetPrice: input.targetPrice,
@@ -10934,6 +10958,7 @@ ${klinesSummary}
         relatedFundName: z.string().trim().min(1).max(80).optional(),
         instrumentType: z.enum(['spot', 'contract', 'option']).optional(),
         isLocked: z.boolean().optional(),
+        isPending: z.boolean().optional(),
         quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, 'ETH 整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '数量必须大于0'),
         price: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).refine((value) => Number(value) > 0, '价格必须大于0'),
         note: z.string().trim().max(500).optional(),
@@ -10955,6 +10980,7 @@ ${klinesSummary}
           relatedFundName: input.relatedFundName,
           instrumentType: input.instrumentType,
           isLocked: input.isLocked,
+          isPending: input.isPending,
           quantity: input.quantity,
           price: input.price,
           note: input.note,
@@ -21280,8 +21306,10 @@ ${klinesSummary}
             // 资金属性“融”只影响订单展示，不能隐含本金扣减。
             // 仅 principal_lent_out 明确开启时，原始融资本金才是待覆盖负债；
             // 否则37号引用严格按标签净值盈亏、担保物与利息计算。
-            const principalLentOut = o.principal_lent_out === 1
-              || o.principal_lent_out === true;
+            const principalLentOut = normalizeFunderPrincipalLentOut(
+              o.principal_lent_out === 1 || o.principal_lent_out === true,
+              displayConfig,
+            );
             // 普通订单：当前持有资产 − 所选基准 − 待结 + 已结。
             // 明确借出本金：借出的资金不是可用持仓，待覆盖额必须是
             // “−约定融资本金 − 待结 + 已结”。本金固定取计息基数，不能随标的市值变动。
@@ -21764,6 +21792,7 @@ ${klinesSummary}
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000`).catch(() => {});
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`).catch(() => {});
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_source JSON DEFAULT NULL`).catch(() => {});
+        const principalLentOut = normalizeFunderPrincipalLentOut(input.principalLentOut, input.displayConfig);
         // 生成唯一订单号（2个大写字母 + 4个数字）
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         const digits = '0123456789';
@@ -21779,7 +21808,7 @@ ${klinesSummary}
         }
         const insertResult = await db.execute(
           sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, lent_out_assets, display_config, asset_type, tags, collateral_share_mode, collateral_source, principal_lent_out, option_info, trading_fee_rate_per_mille, trading_fee_status, created_by)
-              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.collateralSource ? JSON.stringify(input.collateralSource) : null}, ${input.principalLentOut ? 1 : 0}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
+              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.collateralSource ? JSON.stringify(input.collateralSource) : null}, ${principalLentOut ? 1 : 0}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
         ) as any;
         // 新订单创建后触发即时扫描
         const newOrderId = insertResult?.insertId || (insertResult?.[0] as any)?.insertId;
@@ -23120,9 +23149,10 @@ ${klinesSummary}
           const exists = ((existRows[0] || existRows) as any[]).length > 0;
           if (!exists) isUnique = true;
         }
+        const principalLentOut = normalizeFunderPrincipalLentOut(input.principalLentOut, input.displayConfig);
         const insertResult = await db.execute(
           sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, collateral_source, principal_lent_out, broker_name, broker_account, option_info, trade_direction, order_fill_status, order_perspective, trading_fee_rate_per_mille, trading_fee_status, created_by)
-              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${(input.assetType === 'crypto_option' && input.optionInfo?.coin) ? input.optionInfo.coin : input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.collateralSource ? JSON.stringify(input.collateralSource) : null}, ${input.principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${input.orderFillStatus || 'filled'}, ${input.orderPerspective || 'self'}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
+              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${(input.assetType === 'crypto_option' && input.optionInfo?.coin) ? input.optionInfo.coin : input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.collateralSource ? JSON.stringify(input.collateralSource) : null}, ${principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${input.orderFillStatus || 'filled'}, ${input.orderPerspective || 'self'}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
         );
         const newOrderId = (insertResult as any)?.insertId || ((insertResult as any)?.[0] as any)?.insertId;
         return { success: true, orderId: newOrderId ? Number(newOrderId) : null };
@@ -23200,6 +23230,19 @@ ${klinesSummary}
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS principal_lent_out TINYINT(1) DEFAULT 0`).catch(() => {});
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS order_fill_status VARCHAR(20) DEFAULT 'filled'`).catch(() => {});
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN order_perspective VARCHAR(10) DEFAULT 'self'`).catch(() => {});
+        const existingOrderRows = await db.execute(
+          sql`SELECT display_config, principal_lent_out FROM ledger_orders WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} LIMIT 1`
+        ) as any;
+        const existingOrder = (existingOrderRows[0]?.[0] ?? existingOrderRows[0]) as any;
+        const effectiveDisplayConfig = input.displayConfig !== undefined
+          ? input.displayConfig
+          : existingOrder?.display_config;
+        const isSelfFundedOrder = isSelfFundedFunderOrder(effectiveDisplayConfig);
+        const normalizedPrincipalLentOut = isSelfFundedOrder
+          ? false
+          : (input.principalLentOut === undefined
+            ? (existingOrder?.principal_lent_out === 1 || existingOrder?.principal_lent_out === true)
+            : input.principalLentOut);
         // 动态构建 UPDATE，直接使用 mysql2 连接执行带占位符的原始 SQL
         const updateCols: string[] = [];
         const updateVals: any[] = [];
@@ -23221,7 +23264,7 @@ ${klinesSummary}
         if (input.ownerLabel !== undefined) { updateCols.push('owner_label = ?'); updateVals.push(input.ownerLabel || null); }
         if (input.tags !== undefined) { updateCols.push('tags = ?'); updateVals.push(input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null); }
         if (input.collateralShareMode !== undefined) { updateCols.push('collateral_share_mode = ?'); updateVals.push(input.collateralShareMode || 'none'); }
-        if (input.principalLentOut !== undefined) { updateCols.push('principal_lent_out = ?'); updateVals.push(input.principalLentOut ? 1 : 0); }
+        if (input.principalLentOut !== undefined || isSelfFundedOrder) { updateCols.push('principal_lent_out = ?'); updateVals.push(normalizedPrincipalLentOut ? 1 : 0); }
         if (input.tradingFeeRate !== undefined) { updateCols.push('trading_fee_rate_per_mille = ?'); updateVals.push(input.tradingFeeRate); }
         if (input.tradingFeeStatus !== undefined) { updateCols.push('trading_fee_status = ?'); updateVals.push(input.tradingFeeStatus); }
         if (input.optionInfo !== undefined) { updateCols.push('option_info = ?'); updateVals.push(input.optionInfo ? JSON.stringify(input.optionInfo) : null); }
@@ -24319,6 +24362,9 @@ ${klinesSummary}
           mergedSnapshot.personal_header_label = typeof mergedSnapshot.personal_header_label === 'string'
             ? mergedSnapshot.personal_header_label.replace(/\s+/g, ' ').trim().slice(0, 32)
             : null;
+        }
+        if (isSelfFundedFunderOrder(mergedSnapshot.display_config)) {
+          mergedSnapshot.principal_lent_out = 0;
         }
         if (row.participant_role === 'owner') {
           let ownerDisplayConfig: Record<string, any> = {};

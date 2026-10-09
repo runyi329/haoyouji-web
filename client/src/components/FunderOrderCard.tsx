@@ -1655,7 +1655,8 @@ export function FunderOrderCard({
     : financingDisplayConfig?.assetFundingType === 'self' || financingDisplayConfig?.selfFundedAsset === true || financingDisplayConfig?.selfFundedAsset === 'true'
       ? 'self'
       : null;
-  const hasExplicitPrincipalLentOut = order.principal_lent_out === 1 || order.principal_lent_out === true;
+  const hasExplicitPrincipalLentOut = (order.principal_lent_out === 1 || order.principal_lent_out === true)
+    && assetFundingType !== 'self';
   const primaryAmountLabel = hasExplicitPrincipalLentOut ? '借出本金' : assetFundingType === 'self' ? '订单金额' : '融资金额';
   // 自有资产期权的浮盈定义为当前合约价值，不将自有权利金重复作为融资成本扣除。
   const isSelfFundedOption = isOptionOrder && assetFundingType === 'self';
@@ -2025,8 +2026,12 @@ export function FunderOrderCard({
     ? (assetFundingType === 'self'
       // 自有资金期权不需要扣除历史买入成本，也不叠加订单利息或外部担保物。
       ? optionCurrentValue
-      // 融资付息期权：实时价值 − 权利金总成本 − 待结 + 已结 + 担保物。
-      : (optionFloatPnl === null ? null : optionFloatPnl - accruedForRisk + paidInterestForRisk + collateralValue))
+      // 借出本金后，该笔本金已离开公司账户；期权市值和权利金不再作为公司持仓，
+      // 必须由担保物全额覆盖固定融资本金以及未结利息。
+      : principalLentOut
+        ? collateralValue - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk
+        // 未借出本金时，期权仍在公司账户，按实时价值减权利金成本计算浮盈亏。
+        : (optionFloatPnl === null ? null : optionFloatPnl - accruedForRisk + paidInterestForRisk + collateralValue))
     : null;
   const exposure = isOptionOrder
     ? optionExposure
@@ -2139,8 +2144,7 @@ export function FunderOrderCard({
     return sharedOrderHoldingValueU ?? sharedOrderGapBaseU;
   })();
   const sharedOrderExposure = isOptionOrder
-    // 「借出本金」对期权仅标识融资来源，不能把期权实时市值当作已借出本金再次扣除。
-    // 共享担保卡片行必须直接复用期权单订单口径：浮盈亏 − 待结 + 已结 + 本订单担保物。
+    // 期权共享担保复用同一单订单口径：未借出本金按浮盈亏，借出本金按固定本金负债。
     ? optionExposure
     : sharedOrderCollateralValueU !== null
       ? (sharedOrderPrincipalLentOut
@@ -3744,17 +3748,21 @@ export function FunderOrderCard({
                         <>
                           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                             <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>
-                              {isOptionOrder
+                              {principalLentOut ? '① 借出本金' : isOptionOrder
                                 ? (isSelfFundedOption ? '① 自有资产期权实时价值' : '① 期权实时价值与权利金')
                                 : '① 浮动盈亏'}
                             </div>
-                            <div>{isOptionOrder
-                              ? (isSelfFundedOption
-                                ? '= 期权标记价 × 持有张数（不扣自有权利金）'
-                                : '= 期权标记价 × 持有张数 − 初始权利金 × 持有张数')
-                              : '= 当前市值 - 买入价值（正数为浮盈，负数为亏损）'}</div>
+                            <div>{principalLentOut
+                              ? '本金已借出，不再作为公司账户持仓，需由担保物全额覆盖'
+                              : isOptionOrder
+                                ? (isSelfFundedOption
+                                  ? '= 期权标记价 × 持有张数（不扣自有权利金）'
+                                  : '= 期权标记价 × 持有张数 − 初始权利金 × 持有张数')
+                                : '= 当前市值 - 买入价值（正数为浮盈，负数为亏损）'}</div>
                             <div className="mt-1 font-mono">
-                              {floatPnl !== null
+                              {principalLentOut
+                                ? <span style={{ color: '#3B82F6' }}>= −{principalLentOutValueForRisk.toFixed(2)} u（约定融资本金）</span>
+                                : floatPnl !== null
                                 ? (isSelfFundedOption
                                   ? <><span style={{ color: '#3B82F6' }}>= {(optionMarkPrice ?? 0).toFixed(2)} × {optionContractQty.toFixed(2)} = </span><strong style={{ color: '#DC2626' }}>+{floatPnl.toFixed(2)} u（自有资产实时价值）</strong></>
                                   : <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {(floatPnlBase ?? 0).toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>)
@@ -3792,17 +3800,21 @@ export function FunderOrderCard({
                             <div>{isOptionOrder
                               ? (assetFundingType === 'self'
                                 ? '自有资金：期权实时价值（不扣历史权利金、不叠加利息或担保物）'
-                                : '融资付息：期权实时价值 − 初始权利金总成本 − 待结利息 + 已结利息 + 担保物')
+                                : principalLentOut
+                                  ? '融资付息（借出本金）：担保物市值 − 原始融资本金 − 待结利息 + 已结利息'
+                                  : '融资付息（本金在公司）：期权实时价值 − 初始权利金总成本 − 待结利息 + 已结利息 + 担保物')
                               : principalLentOut
-                              ? '担保物市值 − 原始融资本金 − 待结利息 + 已结利息（正数有余量，负数需补足）'
-                              : `当前持有资产价值 − ${collateralGapBaseLabel} − 待结利息 + 已结利息 + 担保物（正数有余量，负数需补足）`}</div>
+                                ? '担保物市值 − 原始融资本金 − 待结利息 + 已结利息（正数有余量，负数需补足）'
+                                : `当前持有资产价值 − ${collateralGapBaseLabel} − 待结利息 + 已结利息 + 担保物（正数有余量，负数需补足）`}</div>
                             <div className="mt-1 font-mono">
                               {exposure === null
                                 ? <span className="text-gray-400">期权标记价加载中...</span>
                                 : isOptionOrder
                                 ? (assetFundingType === 'self'
                                   ? <span style={{ color: '#3B82F6' }}>= {(optionCurrentValue ?? 0).toFixed(2)}（期权实时价值） = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>+{exposure.toFixed(2)} u</strong></span>
-                                  : <span style={{ color: '#3B82F6' }}>= {(optionCurrentValue ?? 0).toFixed(2)}（实时价值） − {(optionPremiumTotal ?? 0).toFixed(2)}（权利金总成本） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} + {collateralValue.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>)
+                                  : principalLentOut
+                                    ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)}（担保物） − {principalLentOutValueForRisk.toFixed(2)}（原始融资本金） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
+                                    : <span style={{ color: '#3B82F6' }}>= {(optionCurrentValue ?? 0).toFixed(2)}（实时价值） − {(optionPremiumTotal ?? 0).toFixed(2)}（权利金总成本） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} + {collateralValue.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>)
                                 : principalLentOut
                                 ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)}（担保物） − {principalLentOutValueForRisk.toFixed(2)}（原始融资本金） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
                                 : floatPnl !== null
@@ -3827,7 +3839,8 @@ export function FunderOrderCard({
                         {isOptionOrder ? (
                           <>
                             <div>• <strong>自有资金期权</strong> = 期权标记价 × 持有张数；不扣历史权利金，也不叠加订单利息或担保物。</div>
-                            <div>• <strong>融资付息期权</strong> = 期权标记价 × 持有张数 − 初始权利金 × 持有张数 − 待结利息 + 已结利息 + 担保物市值。</div>
+                            <div>• <strong>融资付息期权（本金在公司）</strong> = 期权标记价 × 持有张数 − 初始权利金 × 持有张数 − 待结利息 + 已结利息 + 担保物市值。</div>
+                            <div>• <strong>融资付息期权（借出本金）</strong> = 担保物市值 − 原始融资本金 − 待结利息 + 已结利息；此时不再把期权市值或权利金作为公司持仓计入。</div>
                             <div>• <strong>行权价</strong>只用于到期行权及 Greeks，不参与当前担保缺口。</div>
                           </>
                         ) : principalLentOut ? (

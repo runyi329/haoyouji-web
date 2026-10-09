@@ -29,6 +29,21 @@ import {
   OwnerCollaborationInfoButton,
 } from "./FunderOrderCard";
 
+function isPrincipalLentOutForDisplay(order: any): boolean {
+  const rawPrincipalLentOut = order?.principal_lent_out === 1 || order?.principal_lent_out === true;
+  if (!rawPrincipalLentOut) return false;
+  try {
+    const rawConfig = order?.display_config;
+    const displayConfig = rawConfig ? (typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig) : {};
+    const isSelfFunded = displayConfig?.assetFundingType === 'self'
+      || displayConfig?.selfFundedAsset === true
+      || displayConfig?.selfFundedAsset === 'true';
+    return !isSelfFunded;
+  } catch {
+    return rawPrincipalLentOut;
+  }
+}
+
 /** 用户端卡片的结清状态标识：与订单模式同等比例，居中但保持半透明。 */
 function SettledCardStamp({ settledAt }: { settledAt?: string | Date | null }) {
   const settledTime = formatSettledTimestamp(settledAt);
@@ -672,7 +687,7 @@ export function FunderOrderCardV2({
         {/* 持有数量 */}
         <div>
           <div className="text-[10px] mb-1" style={{ color: OKX_TEXT_SEC }}>
-            {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? `借出本金 (${coin})` : '持有数量'}
+            {isPrincipalLentOutForDisplay(order) ? `借出本金 (${coin})` : '持有数量'}
           </div>
           <div className="flex items-baseline gap-1" style={{ lineHeight: 1 }}>
             <span
@@ -986,7 +1001,7 @@ export function FunderOrderCardV2Light({
       <div className="grid grid-cols-4 gap-0 px-3 py-3" style={{ borderTop: `1px solid ${LT_BORDER}` }}>
         <div>
           <div className="text-[10px] mb-1" style={{ color: LT_TEXT_SEC }}>
-            {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? `借出本金 (${coin})` : '持有数量'}
+            {isPrincipalLentOutForDisplay(order) ? `借出本金 (${coin})` : '持有数量'}
           </div>
           <div className="flex items-baseline gap-1" style={{ lineHeight: 1 }}>
             <span style={{ fontSize: "1.15rem", fontWeight: 800, color: LT_TEXT_PRI, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
@@ -1307,7 +1322,7 @@ export function FunderOrderCardV2Silver({
     : 'hidden';
   // “融”只表达资金属性；本金扣减只由明确的“借出本金”开关决定。
   // 这样37号引用订单只按净值盈亏、担保物与利息计算，不会重复扣本金。
-  const cardHasExplicitPrincipalLentOut = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true;
+  const cardHasExplicitPrincipalLentOut = isPrincipalLentOutForDisplay(order);
   const cardPrincipalLentOut = cardHasExplicitPrincipalLentOut;
   // 左上角主展示独立于“借出本金”开关：新字段优先，未配置订单沿用旧默认口径。
   const cardConfiguredPrimaryDisplay = cardDisplayConfig.primaryAssetDisplay === 'financing' || cardDisplayConfig.primaryAssetDisplay === 'quantity'
@@ -1660,12 +1675,15 @@ export function FunderOrderCardV2Silver({
       else { collateralItemValues.push(null); collateralValueKnown = false; }
     }
   }
-  // 期权行权价不参与当前担保缺口。自有资金直接以实时合约价值计，融资付息则以
-  // 「实时价值 − 权利金总成本 − 待结 + 已结 + 担保物」计，和订单模式保持一致。
+  // 期权行权价不参与当前担保缺口。自有资金直接以实时合约价值计；融资付息未借出本金时以
+  // 「实时价值 − 权利金总成本 − 待结 + 已结 + 担保物」计；一旦明确借出本金，
+  // 本金已离开公司账户，统一改为「担保物 − 融资本金 − 待结 + 已结」。
   const exposure = _isOptCard
     ? (isSelfFundedOption
       ? (optCurrentValue ?? 0)
-      : (optionFloatPnl ?? 0) + collateralValue - silverAccruedInterestU + silverPaidInterestU)
+      : (cardPrincipalLentOut
+        ? collateralValue - silverFinancingPrincipalU - silverAccruedInterestU + silverPaidInterestU
+        : (optionFloatPnl ?? 0) + collateralValue - silverAccruedInterestU + silverPaidInterestU))
     : (cardPrincipalLentOut
       ? collateralValue - silverFinancingPrincipalU - silverAccruedInterestU + silverPaidInterestU
       : (floatPnl !== null
@@ -1914,7 +1932,7 @@ export function FunderOrderCardV2Silver({
             // 股票类：显示持有资产（计息基数，单位元）
             <>
               <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-                <span className="shrink-0 whitespace-nowrap">{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true
+                <span className="shrink-0 whitespace-nowrap">{isPrincipalLentOutForDisplay(order)
                   ? `借出本金 (${baseCur === 'CNY' ? '元' : 'U'})`
                   : '仓位额度 (元)'}</span>
                 {isParticipant && (
@@ -2534,32 +2552,12 @@ export function FunderOrderCardV2Silver({
                       <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
                         {/* ①② 总计风险敞口 + 保证金比例：与订单模式使用同一口径 */}
                         {sharedPoolInfo && (() => {
-                          const orders = (sharedPoolInfo as any).orders ?? [];
-                          let totalRequired = 0;
-                          let allHaveGap = true;
-                          for (const o of orders) {
-                            const oQty = Number(o.quantity ?? 0);
-                            const oPrincipal = Number(o.principal ?? 0);
-                            const oCoin = (o.coin || '').toUpperCase();
-                            const isCNYr = oCoin === 'CNY';
-                            const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
-                            const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                            const oPrincipalLentOutR = o.principalLentOut === true || o.principalLentOut === 1;
-                            const oPrincipalDeductR = oPrincipalLentOutR ? oPrincipalUR : 0;
-                            // 数量为零的期权/借出本金订单没有可估值持仓，不能重复扣除本金。
-                            const isOptionNoQtyR = o.assetType === 'crypto_option' || (oQty === 0 && oPrincipalLentOutR);
-                            if (isOptionNoQtyR) {
-                              totalRequired -= oPendingInterestR + oPrincipalDeductR;
-                              continue;
-                            }
-                            const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
-                            if (!isCNYr && oLiveP === null) { allHaveGap = false; continue; }
-                            const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
-                            const oFloatPnlR = oCurrentValueR - oPrincipalUR;
-                            totalRequired += oFloatPnlR - oPendingInterestR - oPrincipalDeductR;
-                          }
-                          const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
-                          const diff = totalColl + totalRequired;
+                          // 共享池缺口由服务端按订单逐笔统一计算：借出本金时只计本金负债，
+                          // 未借出时才计标的浮盈亏。前端不得用实时市值再次扣本金。
+                          const totalRequired = Number((sharedPoolInfo as any).totalCollateralRequired);
+                          const totalColl = Number((sharedPoolInfo as any).totalCollateralValue ?? 0);
+                          const diff = Number((sharedPoolInfo as any).totalGap);
+                          const allHaveGap = Number.isFinite(totalRequired) && Number.isFinite(totalColl) && Number.isFinite(diff);
                           const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;
                           const marginRatio = totalBuyValue > 0 ? (diff / totalBuyValue) * 100 : null;
                           const diffColor = diff < 0 ? '#16A34A' : '#DC2626';
@@ -2592,41 +2590,14 @@ export function FunderOrderCardV2Silver({
                         {/* ③ 共享订单缺口汇总 */}
                         <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
                           <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>③ 共享订单缺口汇总</div>
-                          <div className="mb-1" style={{ color: '#9CA3AF' }}>每张订单缺口 = 浮动盈亏 − 待结利息（已扣除已结利息）</div>
+                          <div className="mb-1" style={{ color: '#9CA3AF' }}>借出本金：−融资本金 − 待结 + 已结；未借出：浮动盈亏 − 待结 + 已结</div>
                           {sharedPoolInfo ? (
                             <>
                               <div className="space-y-0">
                                 {((sharedPoolInfo as any).orders ?? []).map((o: any, _idx: number, _arr: any[]) => {
-                                  const oQty = Number(o.quantity ?? 0);
-                                  const oPrincipal = Number(o.principal ?? 0);
-                                  const oCoin = (o.coin || '').toUpperCase();
                                   const assetTypeLabel = o.assetType === 'stock' ? '股' : o.assetType === 'crypto_option' ? '期' : '币';
-                                  const isCNY = oCoin === 'CNY';
-                                  const oPendingInterestRaw = Number(o.pendingInterest ?? 0);
-                                  const oPendingInterest = isCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
-                                  const oPrincipalU = isCNY ? oPrincipal / cnyRate : oPrincipal;
-                                  const oPrincipalLentOut = o.principalLentOut === true || o.principalLentOut === 1;
-                                  const oPrincipalDeduct = oPrincipalLentOut ? oPrincipalU : 0;
-                                  // 期权或零数量的借出本金订单没有可估值持仓，只计待结利息及借出本金。
-                                  const isOptionNoQty = o.assetType === 'crypto_option' || (oQty === 0 && oPrincipalLentOut);
-                                  if (isOptionNoQty) {
-                                    const gap = -(oPendingInterest + oPrincipalDeduct);
-                                    return (
-                                      <div key={o.orderId} className="flex justify-between items-center py-1" style={_idx < _arr.length - 1 ? { borderBottom: '1px dashed #E5E7EB' } : undefined}>
-                                        <div>
-                                          <span className="mr-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none" style={{ backgroundColor: '#E5E7EB', color: '#4B5563' }}>{_idx + 1}</span>
-                                          <span className="mr-1.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
-                                          <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
-                                          <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
-                                        </div>
-                                        <div className="text-right"><span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span></div>
-                                      </div>
-                                    );
-                                  }
-                                  const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
-                                  const oCurrentValue = isCNY ? oQty / cnyRate : (oLiveP !== null ? oLiveP * oQty : null);
-                                  const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipalU : null;
-                                  const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest - oPrincipalDeduct : null;
+                                  const gap = Number(o.collateralRequired);
+                                  const gapKnown = Number.isFinite(gap);
                                   return (
                                     <div key={o.orderId} className="flex justify-between items-center py-1" style={_idx < _arr.length - 1 ? { borderBottom: '1px dashed #E5E7EB' } : undefined}>
                                       <div>
@@ -2634,10 +2605,10 @@ export function FunderOrderCardV2Silver({
                                         <span className="mr-1.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
                                         <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                         <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
-                                        {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {oCoin === 'BTC' ? oQty.toFixed(2) : oQty}</span> : null}
+                                        {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {o.coin === 'BTC' ? Number(o.quantity).toFixed(2) : o.quantity}</span> : null}
                                       </div>
                                       <div className="text-right">
-                                        {gap !== null
+                                        {gapKnown
                                           ? <span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span>
                                           : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                       </div>
@@ -2646,30 +2617,13 @@ export function FunderOrderCardV2Silver({
                                 })}
                               </div>
                               {(() => {
-                                const orders = (sharedPoolInfo as any).orders ?? [];
-                                let totalGapLive = 0; let allKnown = true;
-                                for (const o of orders) {
-                                  const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
-                                  const oCoin = (o.coin || '').toUpperCase();
-                                  const isCNYt = oCoin === 'CNY';
-                                  const oPrincipalUT = isCNYt ? oPrincipal / cnyRate : oPrincipal;
-                                  const oPendingInterestT = isCNYt ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                                  const oPrincipalLentOutT = o.principalLentOut === true || o.principalLentOut === 1;
-                                  const isOptionNoQtyT = o.assetType === 'crypto_option' || (oQty === 0 && oPrincipalLentOutT);
-                                  if (isOptionNoQtyT) {
-                                    totalGapLive -= oPendingInterestT + (oPrincipalLentOutT ? oPrincipalUT : 0);
-                                    continue;
-                                  }
-                                  const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
-                                  if (!isCNYt && oLiveP === null) { allKnown = false; continue; }
-                                  const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
-                                  totalGapLive += oCurrentValueT - oPrincipalUT - oPendingInterestT - (oPrincipalLentOutT ? oPrincipalUT : 0);
-                                }
+                                const totalRequired = Number((sharedPoolInfo as any).totalCollateralRequired);
+                                const allKnown = Number.isFinite(totalRequired);
                                 return (
                                   <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                                     <span style={{ color: '#374151' }}>合计持仓差额</span>
                                     {allKnown
-                                      ? <span className="font-mono" style={{ color: totalGapLive >= 0 ? '#DC2626' : '#16A34A' }}>{totalGapLive >= 0 ? '+' : ''}{totalGapLive.toFixed(2)} u</span>
+                                      ? <span className="font-mono" style={{ color: totalRequired >= 0 ? '#DC2626' : '#16A34A' }}>{totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)} u</span>
                                       : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                   </div>
                                 );
@@ -2772,10 +2726,10 @@ export function FunderOrderCardV2Silver({
                         {/* 共享担保计算说明：与订单模式保持一致 */}
                         <div className="mt-2 p-2.5 rounded-lg text-[10px] space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
                           <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
-                          <div>• <strong>每张订单缺口</strong> = 浮动盈亏 − 待结利息（已扣除已结利息），盈利订单缺口为正（盈余），亏损订单缺口为负</div>
+                          <div>• <strong>每张订单缺口</strong>：未借出本金 = 浮动盈亏 − 待结利息 + 已结利息；借出本金 = −原始融资本金 − 待结利息 + 已结利息。</div>
                           <div>• <strong>总计风险敞口</strong> = 共享担保物合计 + 各订单缺口合计（正数表示担保充足，负数表示担保不足）</div>
                           <div>• <strong>保证金比例</strong> = 风险敞口 ÷ 全部订单买入价值，负数表示担保不足需补仓</div>
-                          <div>• <strong>期权订单缺口</strong>：开启「借出本金」开关→ 缺口 = 计息基数 + 待结利息；未开启→ 缺口 = 只有待结利息</div>
+                          <div>• <strong>期权订单缺口</strong>：开启「借出本金」后，按原始融资本金与利息计算，不再把期权标记价或权利金作为公司持仓；未开启时，仍按期权实时浮盈亏计算。</div>
                         </div>
 
                         {/* 已在弹窗顶部按订单模式统一展示总计风险敞口与保证金比例，隐藏旧的重复计算区。 */}
@@ -3482,21 +3436,24 @@ export function FunderLenderCardSilver({
   const effectiveCnyRate = cnyRate && cnyRate > 0 ? cnyRate : 6.8;
   const accruedInU = interestUnit === '元' ? displayAccrued / effectiveCnyRate : displayAccrued;
   const paidInU = interestUnit === '元' ? displayPaid / effectiveCnyRate : displayPaid;
-  const lenderHasExplicitPrincipalLentOut = (order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true;
+  const lenderHasExplicitPrincipalLentOut = isPrincipalLentOutForDisplay(order);
   const lenderPrincipalLentOut = lenderHasExplicitPrincipalLentOut;
   // 约定融资本金是固定负债，不能跟随标的实时市值重估。
   const lenderFinancingPrincipalRaw = Number(_effectiveInterestBase || storedAmountUsdt || 0);
   const lenderFinancingPrincipalU = baseCur === 'CNY'
     ? lenderFinancingPrincipalRaw / effectiveCnyRate
     : lenderFinancingPrincipalRaw;
-  // 期权行权价不作为担保风险基准：自有资金仅保留实时合约市值；融资付息使用
-  // 实时价值 − 初始权利金总成本 − 待结 + 已结 + 担保物。
+  // 期权行权价不作为担保风险基准：自有资金仅保留实时合约市值；融资付息未借出本金时
+  // 使用实时价值 − 初始权利金总成本 − 待结 + 已结 + 担保物；借出本金时本金已离开
+  // 公司账户，改用担保物 − 融资本金 − 待结 + 已结。
   const collateralGap = _lnIsOpt
     ? (lenderIsSelfFundedOption
       ? optionCurrentValue
-      : (optionFloatPnl === null || collateralValue === null
-        ? null
-        : optionFloatPnl + collateralValue - accruedInU + paidInU))
+      : (lenderPrincipalLentOut
+        ? (collateralValue === null ? null : collateralValue - lenderFinancingPrincipalU - accruedInU + paidInU)
+        : (optionFloatPnl === null || collateralValue === null
+          ? null
+          : optionFloatPnl + collateralValue - accruedInU + paidInU)))
     : (collateralValue !== null
       ? (lenderPrincipalLentOut
         ? collateralValue - lenderFinancingPrincipalU - accruedInU + paidInU
@@ -4103,25 +4060,13 @@ export function FunderLenderCardSilver({
                               {/* ① 共享订单缺口汇总 */}
                               <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
                                 <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>① 共享订单缺口汇总</div>
-                                <div className="mb-1" style={{ color: '#9CA3AF' }}>每张订单缺口 = 浮动盈亏 - 待结利息</div>
+                                <div className="mb-1" style={{ color: '#9CA3AF' }}>借出本金：−融资本金 − 待结 + 已结；未借出：浮动盈亏 − 待结 + 已结</div>
                                 {sharedPoolInfo ? (
                                   <>
                                     <div className="space-y-1.5">
                                       {((sharedPoolInfo as any).orders ?? []).map((o: any) => {
-                                        const oQty = Number(o.quantity ?? 0);
-                                        const oPrincipal = Number(o.principal ?? 0);
-                                        const oCoin = (o.coin || '').toUpperCase();
-                                        const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
-                                        // CNY 订单：金额单位是人民币，除以汇率换算成 U
-                                        const isCNY = oCoin === 'CNY';
-                                        const oCurrentValue = isCNY ? oQty / cnyRate : (oLiveP !== null ? oLiveP * oQty : null);
-                                        const oPrincipalU = isCNY ? oPrincipal / cnyRate : oPrincipal;
-                                        const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipalU : null;
-                                        const oPendingInterestRaw = Number(o.pendingInterest ?? 0);
-                                        const oPendingInterest = isCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
-                                        const oPrincipalLentOut = o.principalLentOut === true || o.principalLentOut === 1;
-                                        const oPrincipalDeduct = oPrincipalLentOut ? oPrincipalU : 0;
-                                        const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest - oPrincipalDeduct : null;
+                                        const gap = Number(o.collateralRequired);
+                                        const gapKnown = Number.isFinite(gap);
                                         return (
                                           <div key={o.orderId} className="flex justify-between items-center">
                                             <div>
@@ -4129,7 +4074,7 @@ export function FunderLenderCardSilver({
                                               <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
                                             </div>
                                             <div className="text-right">
-                                              {gap !== null
+                                              {gapKnown
                                                 ? <span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span>
                                                 : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                             </div>
@@ -4138,25 +4083,13 @@ export function FunderLenderCardSilver({
                                       })}
                                     </div>
                                     {(() => {
-                                      const orders = (sharedPoolInfo as any).orders ?? [];
-                                      let totalGapLive = 0; let allKnown = true;
-                                      for (const o of orders) {
-                                        const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
-                                        const oCoin = (o.coin || '').toUpperCase();
-                                        const isCNYt = oCoin === 'CNY';
-                                        const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
-                                        if (!isCNYt && oLiveP === null) { allKnown = false; continue; }
-                                        const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
-                                        const oPrincipalUT = isCNYt ? oPrincipal / cnyRate : oPrincipal;
-                                        const oPendingInterestT = isCNYt ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                                        const oPrincipalLentOutT = o.principalLentOut === true || o.principalLentOut === 1;
-                                        totalGapLive += oCurrentValueT - oPrincipalUT - oPendingInterestT - (oPrincipalLentOutT ? oPrincipalUT : 0);
-                                      }
+                                      const totalRequired = Number((sharedPoolInfo as any).totalCollateralRequired);
+                                      const allKnown = Number.isFinite(totalRequired);
                                       return (
                                         <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                                           <span style={{ color: '#374151' }}>合计缺口需求</span>
                                           {allKnown
-                                            ? <span className="font-mono" style={{ color: totalGapLive >= 0 ? '#DC2626' : '#16A34A' }}>{totalGapLive >= 0 ? '+' : ''}{totalGapLive.toFixed(2)} u</span>
+                                            ? <span className="font-mono" style={{ color: totalRequired >= 0 ? '#DC2626' : '#16A34A' }}>{totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)} u</span>
                                             : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                         </div>
                                       );
@@ -4188,23 +4121,11 @@ export function FunderLenderCardSilver({
                               </div>
                               {/* ③ 总计风险敎口 */}
                               {sharedPoolInfo && (() => {
-                                const orders = (sharedPoolInfo as any).orders ?? [];
-                                let totalRequired = 0; let allHaveGap = true;
-                                for (const o of orders) {
-                                  const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
-                                  const oCoin = (o.coin || '').toUpperCase();
-                                  const isCNYr = oCoin === 'CNY';
-                                  const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
-                                  if (!isCNYr && oLiveP === null) { allHaveGap = false; continue; }
-                                  const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
-                                  const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
-                                  const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                                  const oPrincipalLentOutR = o.principalLentOut === true || o.principalLentOut === 1;
-                                  totalRequired += oCurrentValueR - oPrincipalUR - oPendingInterestR - (oPrincipalLentOutR ? oPrincipalUR : 0);
-                                }
-                                const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
-                                const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;
-                                const diff = totalColl + totalRequired;
+                                const totalRequired = Number((sharedPoolInfo as any).totalCollateralRequired);
+                                const totalColl = Number((sharedPoolInfo as any).totalCollateralValue ?? 0);
+                                const totalBuyValue = Number((sharedPoolInfo as any).totalBuyValue ?? 0);
+                                const diff = Number((sharedPoolInfo as any).totalGap);
+                                const allHaveGap = Number.isFinite(totalRequired) && Number.isFinite(totalColl) && Number.isFinite(diff);
                                 const diffColor = diff < 0 ? '#16A34A' : '#DC2626';
                                 const marginRatio = totalBuyValue > 0 ? (diff / totalBuyValue) * 100 : null;
                                 const ratioColor = marginRatio === null ? '#9CA3AF' : (marginRatio < 0 ? '#16A34A' : '#DC2626');
@@ -4237,14 +4158,18 @@ export function FunderLenderCardSilver({
                             <>
                               {/* 普通担保：原有三段式 */}
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>{isOption && lenderIsSelfFundedOption ? '① 自有资产期权实时价值' : '① 浮动盈亏'}</div>
-                                <div>{isOption
-                                  ? (lenderIsSelfFundedOption
-                                    ? '期权标记价 × 持有张数（不扣自有权利金）'
-                                    : '期权当前市值 − 权利金总成本（正数为浮盈，负数为亏损）')
-                                  : '= 当前市值 − 计息基数（正数为浮盈，负数为亏损）'}</div>
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>{lenderPrincipalLentOut ? '① 借出本金' : isOption && lenderIsSelfFundedOption ? '① 自有资产期权实时价值' : '① 浮动盈亏'}</div>
+                                <div>{lenderPrincipalLentOut
+                                  ? '本金已借出，不作为公司账户持仓；担保缺口需全额覆盖约定融资本金'
+                                  : isOption
+                                    ? (lenderIsSelfFundedOption
+                                      ? '期权标记价 × 持有张数（不扣自有权利金）'
+                                      : '期权当前市值 − 权利金总成本（正数为浮盈，负数为亏损）')
+                                    : '= 当前市值 − 计息基数（正数为浮盈，负数为亏损）'}</div>
                                 <div className="mt-1 font-mono">
-                                  {floatPnl !== null
+                                  {lenderPrincipalLentOut
+                                    ? <span style={{ color: '#3B82F6' }}>= −{lenderFinancingPrincipalU.toFixed(2)} U（约定融资本金）</span>
+                                    : floatPnl !== null
                                     ? (lenderIsSelfFundedOption
                                       ? <><span style={{ color: '#3B82F6' }}>= {(optionMarkPrice ?? 0).toFixed(2)} × {qty.toFixed(2)} = </span><strong style={{ color: '#DC2626' }}>+{floatPnl.toFixed(2)} u（自有资产实时价值）</strong></>
                                       : <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} − {buyValue!.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>)
@@ -4282,7 +4207,9 @@ export function FunderLenderCardSilver({
                                   <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敎口</div>
                                   <div>{lenderIsSelfFundedOption
                                     ? '自有资产期权仅采用实时合约价值，不扣权利金、不叠加利息或担保物'
-                                    : '担保物 + 浮动盈亏 − 待结利息(U) + 已结利息(U)（正数充足，负数缺口）'}</div>
+                                    : lenderPrincipalLentOut
+                                      ? '担保物 − 融资本金 − 待结利息(U) + 已结利息(U)（正数充足，负数缺口）'
+                                      : '担保物 + 浮动盈亏 − 待结利息(U) + 已结利息(U)（正数充足，负数缺口）'}</div>
                                   {interestUnit === '元' && (
                                     <div className="text-[10px] mt-0.5" style={{ color: '#9CA3AF' }}>利息已按汇率 {effectiveCnyRate.toFixed(2)} 换算为 U</div>
                                   )}
@@ -4291,6 +4218,9 @@ export function FunderLenderCardSilver({
                                       const gap = collateralGap!;
                                       if (lenderIsSelfFundedOption) {
                                         return <span style={{ color: '#3B82F6' }}>= {(optionCurrentValue ?? 0).toFixed(2)}（期权实时价值） = <strong style={{ color: '#DC2626' }}>+{gap.toFixed(2)} U</strong></span>;
+                                      }
+                                      if (lenderPrincipalLentOut) {
+                                        return <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} − {lenderFinancingPrincipalU.toFixed(2)}（本金） − {accruedInU.toFixed(2)} + {paidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</strong></span>;
                                       }
                                       return floatPnl !== null
                                         ? <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accruedInU.toFixed(2)} + {paidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</strong></span>
@@ -4333,35 +4263,15 @@ export function FunderLenderCardSilver({
                           </span>
                         ) : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>加载中...</span>
                       ) : isSharedMode ? (() => {
-                        // 共享模式：用 livePrices 重算共享池缺口（与弹窗内①总计风险敞口同一口径）
+                        // 共享池摘要复用服务端的逐笔结果，避免将已经借出的本金按市值再扣一次。
                         if (!sharedPoolInfo) return <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>计算中...</span>;
-                        const orders = (sharedPoolInfo as any).orders ?? [];
-                        let totalRequired = 0; let allKnown = true;
-                        for (const o of orders) {
-                          const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
-                          const oCoin = (o.coin || '').toUpperCase();
-                          const isCNYtl = oCoin === 'CNY';
-                          const oPrincipalUtl = isCNYtl ? oPrincipal / cnyRate : oPrincipal;
-                          const oPendingItl = isCNYtl ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                          const oPrincipalLentOutTl = o.principalLentOut === true || o.principalLentOut === 1;
-                          const oPrincipalDeductTl = oPrincipalLentOutTl ? oPrincipalUtl : 0;
-                          const isOptionNoQtyTl = o.assetType === 'crypto_option' || (oQty === 0 && oPrincipalLentOutTl);
-                          if (isOptionNoQtyTl) {
-                            totalRequired -= oPendingItl + oPrincipalDeductTl;
-                            continue;
-                          }
-                          const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
-                          if (!isCNYtl && oLiveP === null) { allKnown = false; continue; }
-                          const oCurrentValueTl = isCNYtl ? oQty / cnyRate : oLiveP! * oQty;
-                          totalRequired += oCurrentValueTl - oPrincipalUtl - oPendingItl - oPrincipalDeductTl;
-                        }
-                        const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
-                        const diff = totalColl + totalRequired;
-                        const diffSufficient = diff >= 0;
-                        return allKnown
+                        const totalGap = Number((sharedPoolInfo as any).totalGap);
+                        const gapKnown = Number.isFinite(totalGap);
+                        const gapSufficient = totalGap >= 0;
+                        return gapKnown
                           ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                              <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{diffSufficient ? '充足' : '不足'}</span>
-                              <span style={{ color: TXT_PRI }}>{diffSufficient ? '+' : ''}{diff.toFixed(2)} U</span>
+                              <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{gapSufficient ? '充足' : '不足'}</span>
+                              <span style={{ color: TXT_PRI }}>{gapSufficient ? '+' : ''}{totalGap.toFixed(2)} U</span>
                             </span>
                           : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>计算中...</span>;
                       })() : (
