@@ -518,6 +518,23 @@ function normalizeFunderCurrency(value: unknown): 'CNY' | 'USDT' {
   return ['CNY', 'RMB', '人民币'].includes(currency) ? 'CNY' : 'USDT';
 }
 
+// 实时行情中的 CNY=1 是“1 元”，不是“1 U”。融资订单内部风控统一以 U 计，
+// 因而数字币标的为 CNY 时必须先把数量折算为 U，再与买入价值相减。
+function getSpotCurrentValueUsdt(
+  coin: unknown,
+  quantity: number,
+  livePrice: number | null,
+  cnyRate: number,
+  isStockOrder = false,
+): number | null {
+  if (!Number.isFinite(quantity) || quantity <= 0) return null;
+  const normalizedCoin = String(coin || '').trim().toUpperCase();
+  if (!isStockOrder && ['CNY', 'RMB', '人民币', '元'].includes(normalizedCoin)) {
+    return cnyRate > 0 ? quantity / cnyRate : null;
+  }
+  return livePrice !== null && Number.isFinite(livePrice) && livePrice > 0 ? livePrice * quantity : null;
+}
+
 function getRateStr(order: any): string {
   const r = String(order.interest_rate_annual ?? '');
   if (r.startsWith('-')) return r;
@@ -1404,7 +1421,9 @@ export function FunderOrderCardV2Silver({
   const optionFloatPnl = _isOptCard && optCurrentValue !== null && optPremiumTotal !== null && optPremiumTotal > 0
     ? (optIsShort ? optPremiumTotal - optCurrentValue : optCurrentValue - optPremiumTotal)
     : null;
-  const currentValue = _isOptCard ? optCurrentValue : (liveP !== null && qty > 0 ? liveP * qty : null);
+  const currentValue = _isOptCard
+    ? optCurrentValue
+    : getSpotCurrentValueUsdt(coin, qty, liveP, cnyRate, order.asset_type === 'stock');
   const buyValue = _isOptCard ? optPremiumTotal : (qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : storedAmountUsdt);
   const _isShortSl = _isOptCard ? optIsShort : (order as any).trade_direction === 'short';
   const floatPnl = _isOptCard
@@ -3359,7 +3378,9 @@ export function FunderLenderCardSilver({
   const optionFloatPnl = _lnIsOpt && optionCurrentValue !== null && optionPremiumTotal !== null && optionPremiumTotal > 0
     ? (optionIsShort ? optionPremiumTotal - optionCurrentValue : optionCurrentValue - optionPremiumTotal)
     : null;
-  const currentValue = _lnIsOpt ? optionCurrentValue : (liveP !== null && qty > 0 ? liveP * qty : null);
+  const currentValue = _lnIsOpt
+    ? optionCurrentValue
+    : getSpotCurrentValueUsdt(coin, qty, liveP, cnyRate, order.asset_type === 'stock');
   const buyValue = _lnIsOpt ? optionPremiumTotal : (qty > 0 && buyPriceUsdt > 0 ? qty * buyPriceUsdt : storedAmountUsdt);
   const floatPnl = _lnIsOpt
     ? (lenderIsSelfFundedOption ? optionCurrentValue : optionFloatPnl)

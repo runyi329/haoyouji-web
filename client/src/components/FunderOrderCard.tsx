@@ -1790,9 +1790,10 @@ export function FunderOrderCard({
     ? 'interest_base'
     : 'buy_value';
   const collateralGapBaseLabel = collateralGapBaseMode === 'interest_base' ? '计息基数' : '买入价值';
-  // 担保缺口的主值不再由编辑配置切换：股票固定显示人民币，数字币和期权固定显示 U。
-  // 管理员仅可通过 approxCollateralGap 决定是否在下一行额外显示折算值。
-  const collateralGapPrimaryDisplay: 'U' | 'CNY' = isStockOrder ? 'CNY' : 'U';
+  // 担保缺口的主值跟随订单的资金计价币种：人民币订单应整笔显示人民币，
+  // 不能把当前 CNY 市值直接当成 U，再与已经折为 U 的买入价值混算。
+  // 管理员仍可通过 approxCollateralGap 决定是否在下一行额外显示折算值。
+  const collateralGapPrimaryDisplay: 'U' | 'CNY' = isStockOrder || amountCurrency === 'CNY' ? 'CNY' : 'U';
   const rawApproxCollateralGap = dc?.approxCollateralGap;
   const approxCollateralGap: 'hidden' | 'U' | 'CNY' = rawApproxCollateralGap === 'hidden'
     || rawApproxCollateralGap === 'U'
@@ -1971,15 +1972,31 @@ export function FunderOrderCard({
   const optionFloatPnl = isOptionOrder && optionCurrentValue !== null && optionPremiumTotal !== null && optionPremiumTotal > 0
     ? (isShortOption ? optionPremiumTotal - optionCurrentValue : optionCurrentValue - optionPremiumTotal)
     : null;
-  const currentValue = isOptionOrder ? optionCurrentValue : (liveP !== null ? liveP * qty : null);
+  // 统一行情中的 CNY=1 表示“1 元”，不是“1 U”。因此 CNY 标的的当前市值先
+  // 折为 U，才能与内部保存的 U 基准（amount）进行担保、浮盈与分成计算。
+  const isCnyDenominatedAsset = ['CNY', 'RMB', '人民币', '元'].includes(String(order.coin || '').trim().toUpperCase());
+  const currentValue = isOptionOrder
+    ? optionCurrentValue
+    : isCnyDenominatedAsset && qty > 0
+      ? qty
+      : (liveP !== null ? liveP * qty : null);
+  const currentValueForRisk = currentValue !== null && !isOptionOrder && isCnyDenominatedAsset
+    ? currentValue / cnyRate
+    : currentValue;
+  const riskValueInOrderCurrency = (value: number) => {
+    if (amountCurrency === 'CNY') return value * cnyRate;
+    if (amountCurrency === 'USDT') return value;
+    return amountCurrencyPrice && amountCurrencyPrice > 0 ? value / amountCurrencyPrice : value;
+  };
+  const riskDisplayUnit = amountCurrency === 'CNY' ? '元' : amountCurrency === 'USDT' ? 'u' : amountCurrency;
   const isShort = isOptionOrder ? isShortOption : (order as any).trade_direction === 'short';
   // 数字币现货使用资产市值与买入价值比较；期权使用独立的合约标记价差额。
   const spotBuyValueUsdt = qty > 0 && quotedPriceUsdt > 0 ? qty * quotedPriceUsdt : totalU;
   const floatPnlBase = isOptionOrder ? optionPremiumTotal : (!isStockOrder ? spotBuyValueUsdt : interestBaseNum);
   const floatPnl = isOptionOrder
     ? (isSelfFundedOption ? optionCurrentValue : optionFloatPnl)
-    : (currentValue !== null && floatPnlBase !== null && floatPnlBase > 0
-      ? (isShort ? floatPnlBase - currentValue : currentValue - floatPnlBase)
+    : (currentValueForRisk !== null && floatPnlBase !== null && floatPnlBase > 0
+      ? (isShort ? floatPnlBase - currentValueForRisk : currentValueForRisk - floatPnlBase)
       : null);
   // 内部担保和风险敞口统一以 U 计算。是否需要把利息折为 U，只取决于订单保存的
   // 计息/结息币种，绝不能根据资产类型判断：例如 FG9975 的标的分类为“币”，但
@@ -2013,8 +2030,8 @@ export function FunderOrderCard({
   // 不是标的币的实时市值；否则币价上涨会被误当作本金增加而重复扣减。
   const currentHoldingValueForRisk = isExternalStockPnlSource
     ? extTagHoldingValueU
-    : currentValue !== null
-    ? (isStockOrder ? currentValue / cnyRate : currentValue)
+    : currentValueForRisk !== null
+    ? (isStockOrder ? currentValueForRisk / cnyRate : currentValueForRisk)
     : (floatPnlForRisk !== null ? buyValueForRisk + floatPnlForRisk : null);
   const holdingGapForRisk = currentHoldingValueForRisk !== null
     ? currentHoldingValueForRisk - collateralGapBaseForRisk
@@ -2634,7 +2651,7 @@ export function FunderOrderCard({
                     />
                   ) : (
                   <span className="font-medium tabular-nums whitespace-nowrap" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
-                    {floatPnl >= 0 ? '+' : ''}{floatPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })} u
+                    {floatPnl >= 0 ? '+' : ''}{riskValueInOrderCurrency(floatPnl).toLocaleString(undefined, { maximumFractionDigits: 2 })} {riskDisplayUnit}
                   </span>
                   )
                 ) : (
@@ -3761,11 +3778,11 @@ export function FunderOrderCard({
                                 : '= 当前市值 - 买入价值（正数为浮盈，负数为亏损）'}</div>
                             <div className="mt-1 font-mono">
                               {principalLentOut
-                                ? <span style={{ color: '#3B82F6' }}>= −{principalLentOutValueForRisk.toFixed(2)} u（约定融资本金）</span>
+                                ? <span style={{ color: '#3B82F6' }}>= −{riskValueInOrderCurrency(principalLentOutValueForRisk).toFixed(2)} {riskDisplayUnit}（约定融资本金）</span>
                                 : floatPnl !== null
                                 ? (isSelfFundedOption
                                   ? <><span style={{ color: '#3B82F6' }}>= {(optionMarkPrice ?? 0).toFixed(2)} × {optionContractQty.toFixed(2)} = </span><strong style={{ color: '#DC2626' }}>+{floatPnl.toFixed(2)} u（自有资产实时价值）</strong></>
-                                  : <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {(floatPnlBase ?? 0).toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>)
+                                  : <><span style={{ color: '#3B82F6' }}>= {riskValueInOrderCurrency(currentValueForRisk ?? 0).toFixed(2)} {riskDisplayUnit} − {riskValueInOrderCurrency(floatPnlBase ?? 0).toFixed(2)} {riskDisplayUnit} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{riskValueInOrderCurrency(floatPnl).toFixed(2)} {riskDisplayUnit}{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>)
                                 : <span className="text-gray-400">当前市值暂无实时价格，暂无法计算浮动盈亏</span>
                               }
                             </div>
@@ -3816,10 +3833,10 @@ export function FunderOrderCard({
                                     ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)}（担保物） − {principalLentOutValueForRisk.toFixed(2)}（原始融资本金） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
                                     : <span style={{ color: '#3B82F6' }}>= {(optionCurrentValue ?? 0).toFixed(2)}（实时价值） − {(optionPremiumTotal ?? 0).toFixed(2)}（权利金总成本） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} + {collateralValue.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>)
                                 : principalLentOut
-                                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)}（担保物） − {principalLentOutValueForRisk.toFixed(2)}（原始融资本金） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
+                                ? <span style={{ color: '#3B82F6' }}>= {riskValueInOrderCurrency(collateralValue).toFixed(2)} {riskDisplayUnit}（担保物） − {riskValueInOrderCurrency(principalLentOutValueForRisk).toFixed(2)} {riskDisplayUnit}（原始融资本金） − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
                                 : floatPnl !== null
-                                ? <span style={{ color: '#3B82F6' }}>= {(currentHoldingValueForRisk ?? 0).toFixed(2)}（当前持有资产） − {collateralGapBaseForRisk.toFixed(2)}（{collateralGapBaseLabel}） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} + {collateralValue.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
-                                : <span style={{ color: '#3B82F6' }}>= −{collateralGapBaseForRisk.toFixed(2)}（{collateralGapBaseLabel}） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} + {collateralValue.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
+                                ? <span style={{ color: '#3B82F6' }}>= {riskValueInOrderCurrency(currentHoldingValueForRisk ?? 0).toFixed(2)} {riskDisplayUnit}（当前持有资产） − {riskValueInOrderCurrency(collateralGapBaseForRisk).toFixed(2)} {riskDisplayUnit}（{collateralGapBaseLabel}） − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(collateralValue).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
+                                : <span style={{ color: '#3B82F6' }}>= −{riskValueInOrderCurrency(collateralGapBaseForRisk).toFixed(2)} {riskDisplayUnit}（{collateralGapBaseLabel}） − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(collateralValue).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
                               }
                             </div>
                             <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
@@ -4138,8 +4155,9 @@ export function FunderOrderCard({
                   // 分成只从正利润中计提；亏损或持平时待分利润为0。
                   shareAmt = Math.max(0, floatPnl) * ratio;
                 }
-              } else if (liveP != null && price > 0 && qty > 0 && ratio > 0) {
-                shareAmt = Math.max(0, (liveP - price) * qty) * ratio;
+              } else if (floatPnl !== null && ratio > 0) {
+                // floatPnl 已统一为 U：人民币标的不能再用“CNY 现价 − U 买入价”直接相减。
+                shareAmt = Math.max(0, floatPnl) * ratio;
               }
               const shareAmountLabel = isCoin ? '待分利润' : '待分金额';
               return (
