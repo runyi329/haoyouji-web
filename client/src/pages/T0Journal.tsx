@@ -1676,8 +1676,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const isIndividualLadderView = canManage && adminLadderDisplayMode === "individual";
   const displayedPriceRows = isIndividualLadderView ? individualPriceRows : priceRows;
 
-  const openEntrySheet = (action: TradeAction = "openLong", targetPrice?: number) => {
-    entrySheetLadderDisplayModeRef.current = adminLadderDisplayMode;
+  const openEntrySheet = (
+    action: TradeAction = "openLong",
+    targetPrice?: number,
+    sourceLadderDisplayMode?: AdminLadderDisplayMode,
+  ) => {
+    // 从报价单元格直接进入时显式携带来源模式，避免 React 状态批处理期间误回退到整合报价。
+    entrySheetLadderDisplayModeRef.current = sourceLadderDisplayMode ?? adminLadderDisplayMode;
     setEntrySide(ACTIONS[action].side);
     setCloseConfirmationStep("input");
     const rememberedAccount = getRememberedAccountForRelatedUser(lastRelatedUser?.id);
@@ -1703,7 +1708,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   };
 
   const openQuickCloseSheet = (trade: PreviewTrade) => {
-    entrySheetLadderDisplayModeRef.current = adminLadderDisplayMode;
+    // 在报价详情内切换至平仓表单时，沿用最初进入详情页的报价模式；
+    // 从历史记录直接打开时才以当前管理员模式为来源。
+    if (!showEntrySheet) entrySheetLadderDisplayModeRef.current = adminLadderDisplayMode;
     const side = ACTIONS[trade.action].side;
     // 未关联用户的订单也可独立平仓；空关联值会稳定归到同一“未关联”仓位池，
     // 不会和任何已关联用户的订单互相抵扣。
@@ -1747,7 +1754,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       toast.error("当前仅支持编辑开仓记录");
       return;
     }
-    entrySheetLadderDisplayModeRef.current = adminLadderDisplayMode;
+    // 同上：详情页中的“编辑”不得覆盖其原始逐笔/整合报价来源。
+    if (!showEntrySheet) entrySheetLadderDisplayModeRef.current = adminLadderDisplayMode;
     setEntrySide(ACTIONS[trade.action].side);
     setCloseConfirmationStep("input");
     setEntryForm({
@@ -2859,17 +2867,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.long) return;
-                    if (isIndividualLadderView && row.openingTrade) {
-                      openEditOpeningTrade(row.openingTrade);
-                      return;
-                    }
-                    // 点已有仓位永远先进入本档订单详情，管理员可逐笔编辑或对单笔快捷平仓；
-                    // 不因关联用户尚未标注而阻断查看。
-                    openEntrySheet("openLong", row.long.price);
+                    // 不论整合或逐笔报价，已有多仓均进入同一报价详情页：
+                    // 可新增多仓，并可对该价档内的老单逐笔编辑或卖出平仓。
+                    // 逐笔行展示真实成交价的四舍五入整数，详情页/FIFO 则仍按十美元归档价定位。
+                    openEntrySheet(
+                      "openLong",
+                      row.openingTrade ? archivePriceForTrade(row.openingTrade) : row.long.price,
+                      isIndividualLadderView ? "individual" : "integrated",
+                    );
                   }}
                   // 空档位新建订单也保留当前十美元档位作为“查看范围”；
                   // 最终归档仍只按实际录入成交价计算，绝不按点击格写入。
-                  onOpen={() => openEntrySheet("openLong", row.price)}
+                  onOpen={() => openEntrySheet("openLong", row.price, isIndividualLadderView ? "individual" : "integrated")}
                 />
                 <div
                   className="flex items-center justify-center border-x border-[#b9c2ca] px-0.5"
@@ -2909,15 +2918,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.short) return;
-                    if (isIndividualLadderView && row.openingTrade) {
-                      openEditOpeningTrade(row.openingTrade);
-                      return;
-                    }
-                    // 同上：空仓格点击仅打开当前档订单详情，不强制先筛选关联用户。
-                    openEntrySheet("openShort", row.short.price);
+                    // 不论整合或逐笔报价，已有空仓均进入同一报价详情页：
+                    // 可新增空仓，并可对该价档内的老单逐笔编辑或买入平仓。
+                    // 逐笔行展示真实成交价的四舍五入整数，详情页/FIFO 则仍按十美元归档价定位。
+                    openEntrySheet(
+                      "openShort",
+                      row.openingTrade ? archivePriceForTrade(row.openingTrade) : row.short.price,
+                      isIndividualLadderView ? "individual" : "integrated",
+                    );
                   }}
                   // 同上：从空仓空档位开单时，详情只展示当前空仓价格档的订单。
-                  onOpen={() => openEntrySheet("openShort", row.price)}
+                  onOpen={() => openEntrySheet("openShort", row.price, isIndividualLadderView ? "individual" : "integrated")}
                 />
                 </div>
               );
@@ -4639,8 +4650,8 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
     <button
       type="button"
       onClick={onClick}
-      aria-label={metadata ? "双击编辑该开仓订单" : "双击查看该价格档订单详情"}
-      title={metadata ? "双击编辑" : "双击查看详情"}
+      aria-label="双击查看该价格档订单详情"
+      title="双击查看详情"
       className={`flex ${minHeightClass} w-full min-w-0 items-center px-1.5 py-1.5 text-left transition-[filter] active:brightness-95 ${tone}`}
       style={{ ...surfaceStyle, touchAction: "manipulation" }}
     >
