@@ -410,6 +410,9 @@ export default function LedgerDetailAA({
 
   // ── 视角切换（管理员/创建者可切换到其他成员视角）──
   const [viewAsUserId, setViewAsUserId] = useState<number | null>(() => viewAsUserIdFromUrl);
+  const viewAsMember = viewAsUserId ? (membersData || []).find((member: any) => member.userId === viewAsUserId) : null;
+  // 普通成员及管理员代入普通成员时，日历不应暴露单日资金/维护快览；仅管理员自身或代入管理角色时保留它。
+  const canOpenCalendarDayDetail = canEdit && (!viewAsMember || viewAsMember.role === 'owner' || viewAsMember.role === 'admin');
   // 胡大叔（JiamG）超级管理员专属：仅本人在37号账本首页可见利息与保证金快捷入口。
   const isJiamGSuperAdmin = ledgerId === 37 && Number(user?.id) === 870413 && !viewAsUserId;
   const [showViewAsPicker, setShowViewAsPicker] = useState(false);
@@ -1824,32 +1827,6 @@ export default function LedgerDetailAA({
   // 兼容旧代码：calendarCells 保持为一维数组
   const calendarCells = useMemo(() => calendarWeeks.flat(), [calendarWeeks]);
 
-  // 单标签月度经营摘要：与日度日历的“实际回报”同口径，剔除本金与提现资金流。
-  // 手工余额标签需乘以该用户在标签中的实际比例；股票持仓已是用户/标签口径，无需再次折算。
-  const selectedCalendarMonthSummaries = useMemo(() => {
-    const currentPrefix = `${calendarDate.year}-${String(calendarDate.month + 1).padStart(2, '0')}`;
-    const previousMonthDate = new Date(calendarDate.year, calendarDate.month - 1, 1);
-    const previousPrefix = `${previousMonthDate.getFullYear()}-${String(previousMonthDate.getMonth() + 1).padStart(2, '0')}`;
-    if (isSelectedStockPortfolio) {
-      const points = stockCalendarPoints.map((point) => ({ date: point.date, value: Number(point.dailyPnl || 0) }));
-      return {
-        current: buildCalendarMonthSummary(points.filter((point) => point.date.startsWith(currentPrefix))),
-        previous: buildCalendarMonthSummary(points.filter((point) => point.date.startsWith(previousPrefix))),
-      };
-    }
-    const configuredRatio = selectedTag?.name && initialBalancesData?.balances
-      ? Number(initialBalancesData.balances[`${selectedTag.name}__ratio`] ?? 100) / 100
-      : 1;
-    const ratio = Number.isFinite(configuredRatio) ? configuredRatio : 1;
-    const points = Array.from(selectedDailyReturnMap.entries())
-      .filter(([, value]) => value !== null)
-      .map(([date, value]) => ({ date, value: Number(value) * ratio }));
-    return {
-      current: buildCalendarMonthSummary(points.filter((point) => point.date.startsWith(currentPrefix))),
-      previous: buildCalendarMonthSummary(points.filter((point) => point.date.startsWith(previousPrefix))),
-    };
-  }, [calendarDate, isSelectedStockPortfolio, stockCalendarPoints, selectedDailyReturnMap, selectedTag?.name, initialBalancesData]);
-
   // 月份切换后自动滚动到周一（让周六周日在屏幕外）
   useEffect(() => {
     const el = calendarScrollRef.current;
@@ -2095,11 +2072,24 @@ export default function LedgerDetailAA({
     return s;
   }, [selectedTagPauseHistory]);
 
-  // 日期快览不直接写入数据；保留原有的编辑/新增能力，改由快览底部显式进入。
+  // IE 股票标签是例外：普通成员点击交易日进入自己的持仓界面；其他标签仅能通过照片标记查看附件。
+  // 管理员保留单日维护快览。
   const handleDayClick = (day: number) => {
+    const date = getDateStr(day);
+    if (!canOpenCalendarDayDetail) {
+      if (isSelectedStockPortfolio && selectedTagId) {
+        setShowStockPortfolio(true);
+        return;
+      }
+      const hasImages = dayMap.get(date)?.records?.some((record: any) => (
+        (Array.isArray(record.images) && record.images.length > 0) || Boolean(record.imageUrl)
+      ));
+      if (hasImages) openCalendarDayAttachments(date);
+      return;
+    }
     setCalendarDateDetail({
       scope: 'tag',
-      date: getDateStr(day),
+      date,
       tagName: selectedTag?.name,
       isStockPortfolio: isSelectedStockPortfolio,
     });
@@ -2610,10 +2600,6 @@ export default function LedgerDetailAA({
             </div>
           </div>
 
-          {(calendarMode === 'balance' || calendarMode === 'daily') && (
-            <CalendarMonthSummaryStrip summary={selectedCalendarMonthSummaries.current} previousSummary={selectedCalendarMonthSummaries.previous} />
-          )}
-
           {/* 日视图 / 月视图 / 年视图 */}
           {(calendarMode === "balance" || calendarMode === "daily") && (
             <>
@@ -2714,11 +2700,12 @@ export default function LedgerDetailAA({
                         return r.stockCodes && Array.isArray(r.stockCodes) && r.stockCodes.length > 0;
                       });
                       const dotColor = (hasImages && hasStocks) ? '#7B1FA2' : hasImages ? '#D32F2F' : hasStocks ? '#1565C0' : null;
+                      const canOpenCalendarCell = !isNonTrading && (canOpenCalendarDayDetail || Boolean(hasImages) || (isSelectedStockPortfolio && Boolean(selectedTagId)));
                       return (
                         <button
                           key={day}
-                          onClick={() => isNonTrading ? undefined : handleDayClick(day)}
-                          disabled={isNonTrading}
+                          onClick={() => { if (canOpenCalendarCell) handleDayClick(day); }}
+                          disabled={!canOpenCalendarCell}
                           className="rounded-none flex flex-col items-center justify-center transition-all active:scale-95"
                           style={{
                             height: '50px',
@@ -2726,7 +2713,7 @@ export default function LedgerDetailAA({
                             border: cellBorder,
                             borderRadius: 8,
                             padding: '3px 2px',
-                            cursor: isNonTrading ? 'default' : 'pointer',
+                            cursor: canOpenCalendarCell ? 'pointer' : 'default',
                             position: 'relative',
                           }}
                         >
@@ -3094,7 +3081,9 @@ export default function LedgerDetailAA({
           <div className="mx-3 mt-3 rounded-lg shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF', borderRadius: 8, overflow: overviewTab === 'overview' ? 'visible' : 'hidden' }}>
           {/* 概览表格数据行 */}
           {overviewTab === 'overview' && (() => {
-            const visibleTags = allTagsChartData.filter(tag => tag.points.length > 0);
+            // 新建普通标签在首次录入日末数据前没有 points；它仍应出现在用户概览中，
+            // 以“--”表示尚无回报，而不是被静默隐藏。走势图和日历仍只使用已有点位。
+            const visibleTags = allTagsChartData;
             const validTags = visibleTags.filter(t => t.marginCny > 0);
             // 计算每个 tag 的数据
             const tagData = visibleTags.map((tag, idx) => {
@@ -4148,9 +4137,10 @@ export default function LedgerDetailAA({
                                   <button
                                     key={day}
                                     type="button"
-                                    onClick={() => setCalendarDateDetail({ scope: 'summary', date: dateStr, summaryTags: entry?.tags ?? [] })}
+                                    onClick={() => { if (canOpenCalendarDayDetail) setCalendarDateDetail({ scope: 'summary', date: dateStr, summaryTags: entry?.tags ?? [] }); }}
+                                    disabled={!canOpenCalendarDayDetail}
                                     className="rounded-none flex flex-col items-center justify-center transition-all active:scale-95"
-                                    style={{ height: '50px', backgroundColor: cellBg, border: cellBorder, borderRadius: 8, padding: '3px 2px', cursor: 'pointer' }}
+                                    style={{ height: '50px', backgroundColor: cellBg, border: cellBorder, borderRadius: 8, padding: '3px 2px', cursor: canOpenCalendarDayDetail ? 'pointer' : 'default' }}
                                   >
                                     <span style={{ fontSize: '12px', fontWeight: 500, lineHeight: 1, color: dayNumColor, marginBottom: '1px' }}>{day}</span>
                                     {isNonTrading ? (

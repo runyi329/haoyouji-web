@@ -794,11 +794,14 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   const activeParticipations = visibleParticipations.filter((item) => item.remainingQuantity > EPSILON);
   const symbols = Array.from(new Set(activeParticipations.map((item) => item.symbol)));
   // 当前浮盈可读取当日盘中报价；按日历史与日历仍只使用15:05盘尾快照。
-  const [storedQuotes, intradayQuotes] = await Promise.all([
+  // 买入审计已保存的参考价仅作为“没有任何已存价格”的最后回退，不能覆盖盘中或盘尾报价。
+  // 这样盘后新登记的股票在下一个15:05盘尾前，个人概览仍可按可追溯的登记参考价计算。
+  const [referenceQuotes, storedQuotes, intradayQuotes] = await Promise.all([
+    getLatestReferenceQuotes(categoryId),
     getLatestQuotes(categoryId, symbols),
     getLatestIntradayQuotes(categoryId, symbols),
   ]);
-  const quotes = mergeLatestQuoteMaps(storedQuotes, intradayQuotes);
+  const quotes = mergeLatestQuoteMaps(referenceQuotes, storedQuotes, intradayQuotes);
   const grouped = new Map<string, any>();
   for (const item of activeParticipations) {
     const current = grouped.get(item.symbol) || {
@@ -859,6 +862,10 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   const allPositionsPriced = positions.every((position) => position.marketValue !== null);
   const marketValue = allPositionsPriced ? positions.reduce((total, position) => total + (position.marketValue ?? 0), 0) : null;
   const floatingPnl = allPositionsPriced ? positions.reduce((total, position) => total + (position.floatingPnl ?? 0), 0) : null;
+  const quoteDates = positions.map((position) => position.quoteDate).filter((date): date is string => Boolean(date));
+  const valuationDate = allPositionsPriced && quoteDates.length === positions.length && new Set(quoteDates).size === 1
+    ? quoteDates[0]
+    : null;
 
   const [priceRows] = symbols.length > 0
     ? await (conn as any).execute(
@@ -925,6 +932,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       dailyChangePercent,
       latestSnapshot,
       priorSnapshot,
+      valuationDate,
       awaitingFirstClose: positions.length > 0 && latestSnapshot === null,
     },
   };
@@ -973,6 +981,28 @@ export async function getMyStockTagOverview(input: { ledgerId: number; userId: n
     const portfolio = await buildMemberStockPortfolio(Number(category.id), input.userId);
     if (!portfolio.isEligible) continue;
     const chronological = portfolio.dailySnapshots.slice().reverse();
+    const valuationDate = portfolio.summary.valuationDate;
+    const valuationPnl = portfolio.summary.totalPnl;
+    const valuationMarketValue = portfolio.summary.marketValue;
+    // 历史日历只认15:05盘尾；但当该日期的某个新批次尚未被盘尾任务覆盖时，
+    // 使用同一批次已落库的审计参考价补齐“当前累计回报”。不覆盖任何已有有效盘尾。
+    if (valuationDate && valuationPnl !== null && valuationMarketValue !== null) {
+      const valuationSnapshot = {
+        snapshotDate: valuationDate,
+        marketValue: valuationMarketValue,
+        costValue: portfolio.summary.costValue,
+        floatingPnl: portfolio.summary.floatingPnl,
+        realizedPnl: portfolio.summary.realizedPnl,
+        totalPnl: valuationPnl,
+        positionCount: portfolio.summary.positionCount,
+      };
+      const sameDateIndex = chronological.findIndex((snapshot) => snapshot.snapshotDate === valuationDate);
+      if (sameDateIndex >= 0 && chronological[sameDateIndex].totalPnl === null) {
+        chronological[sameDateIndex] = valuationSnapshot;
+      } else if (sameDateIndex < 0 && (chronological.length === 0 || chronological[chronological.length - 1].snapshotDate < valuationDate)) {
+        chronological.push(valuationSnapshot);
+      }
+    }
     const points = chronological.map((snapshot, index) => ({
       date: snapshot.snapshotDate,
       pnl: snapshot.totalPnl ?? 0,
