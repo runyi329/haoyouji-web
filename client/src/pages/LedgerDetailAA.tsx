@@ -1078,7 +1078,8 @@ export default function LedgerDetailAA({
   // 与焦点栏高度，使“已暂停”后的总汇总行落到实际屏幕外却无法继续上滑。
   const [overviewScrollMaxHeight, setOverviewScrollMaxHeight] = useState<number | null>(null);
   const [overviewSort, setOverviewSort] = useState<{ col: OverviewSortColumn; dir: 'asc' | 'desc' } | null>(null);
-  const [overviewFocusMetric, setOverviewFocusMetric] = useState<OverviewFocusMetric>('pnl');
+  // 概览首屏固定展示“名称 → 今日 → 回报”，不再默认横移到回报列。
+  const [overviewFocusMetric, setOverviewFocusMetric] = useState<OverviewFocusMetric>('today');
   const focusOverviewMetric = useCallback((metric: OverviewFocusMetric, behavior: ScrollBehavior = 'smooth') => {
     setOverviewFocusMetric(metric);
     const scrollLeft = OVERVIEW_FOCUS_OPTIONS.find((option) => option.key === metric)?.scrollLeft ?? 0;
@@ -1323,12 +1324,12 @@ export default function LedgerDetailAA({
     });
   }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, tagCashFlows, stockParticipantView, stockTagOverviewById]);
 
-  // 概览默认把“回报”紧贴名称列；切换焦点仅移动当前表格视口，不改变表格的完整列结构或排序。
+  // 概览默认从“今日”开始；切换焦点仅移动当前表格视口，不改变表格的完整列结构或排序。
   useEffect(() => {
     if (selectedTagId !== null || overviewTab !== 'overview' || allTagsChartData.length === 0) return;
     const applyFocus = () => focusOverviewMetric(overviewFocusMetric, 'auto');
     const frame = requestAnimationFrame(applyFocus);
-    // 数据、卡片及原生滚动层可能分批挂载；补一次定位确保手机首次进入即可看到默认回报列。
+    // 数据、卡片及原生滚动层可能分批挂载；补一次定位确保手机首次进入即可看到“今日”列。
     const timer = window.setTimeout(applyFocus, 80);
     return () => {
       cancelAnimationFrame(frame);
