@@ -299,6 +299,8 @@ const LADDER_MAX_PRICE = 3000;
 const LADDER_STEP = 10;
 const LADDER_NEAR_VISIBLE_STEPS = 3;
 const POSITION_ARCHIVE_STEP = 10;
+const INTEGRATED_ARCHIVE_STEPS = [10, 25, 50, 100, 250, 500] as const;
+type IntegratedArchiveStep = (typeof INTEGRATED_ARCHIVE_STEPS)[number];
 // T+0 只读取服务端的 ETH 永续专用内存缓存；500ms 的页面节拍可呈现实时流，同时不直连外部交易所。
 const T0_PRICE_REFRESH_INTERVAL_MS = 500;
 const T0_JOURNAL_REFRESH_INTERVAL_MS = 5_000;
@@ -346,27 +348,26 @@ function priceKey(price: number) {
 }
 
 /**
- * 不受点击格影响，始终按实际成交价的十美元档归类：
- * - 多仓向上归档，如 2701 → 2710；
- * - 空仓向下归档，如 2701 → 2700；
- * 精确落在十位线的价格保留原档。
+ * 多仓向上、空仓向下归档；默认十美元档用于真实开平匹配。
+ * 整合报价可传入更宽的展示档位，但绝不改变真实成交、FIFO 或可平数量口径。
  */
-function archivePriceForSide(side: PositionSide, value: number) {
+function archivePriceForSide(side: PositionSide, value: number, archiveStep = POSITION_ARCHIVE_STEP) {
   if (!Number.isFinite(value) || value <= 0) return 0;
-  const scaled = value / POSITION_ARCHIVE_STEP;
+  const safeArchiveStep = Number.isFinite(archiveStep) && archiveStep > 0 ? archiveStep : POSITION_ARCHIVE_STEP;
+  const scaled = value / safeArchiveStep;
   const rounded = side === "long"
     ? Math.ceil(scaled - 1e-9)
     : Math.floor(scaled + 1e-9);
-  return Number((rounded * POSITION_ARCHIVE_STEP).toFixed(2));
+  return Number((rounded * safeArchiveStep).toFixed(2));
 }
 
-function archivePriceForTrade(trade: PreviewTrade) {
+function archivePriceForTrade(trade: PreviewTrade, archiveStep = POSITION_ARCHIVE_STEP) {
   const side = ACTIONS[trade.action].side;
   // 开仓永远以真实成交价归类，兼容此前被按方向写入错误百元档的旧流水。
   const sourcePrice = ACTIONS[trade.action].opening
     ? trade.price
     : (trade.targetPrice !== undefined && trade.targetPrice > 0 ? trade.targetPrice : trade.price);
-  return archivePriceForSide(side, sourcePrice);
+  return archivePriceForSide(side, sourcePrice, archiveStep);
 }
 
 function formatPrice(value: number | null | undefined) {
@@ -393,13 +394,14 @@ function splitLadderMarkPrice(value: number) {
  * - 每个已有未平仓的归属档，无论距离当前价多远都固定保留；
  * - 没有仓位、且不在实时价附近的空白档自动隐藏。
  */
-function buildAdaptiveLadderLevels(markLadderPrice: number | null, positionPrices: number[] = []) {
-  const defaultCenter = Math.round((LADDER_MIN_PRICE + LADDER_MAX_PRICE) / 2 / LADDER_STEP) * LADDER_STEP;
+function buildAdaptiveLadderLevels(markLadderPrice: number | null, positionPrices: number[] = [], step = LADDER_STEP) {
+  const safeStep = Number.isFinite(step) && step > 0 ? step : LADDER_STEP;
+  const defaultCenter = Math.round((LADDER_MIN_PRICE + LADDER_MAX_PRICE) / 2 / safeStep) * safeStep;
   const center = Math.min(LADDER_MAX_PRICE, Math.max(LADDER_MIN_PRICE, markLadderPrice ?? defaultCenter));
   const levels = new Set<number>();
 
   for (let offset = -LADDER_NEAR_VISIBLE_STEPS; offset <= LADDER_NEAR_VISIBLE_STEPS; offset += 1) {
-    const price = center + offset * LADDER_STEP;
+    const price = center + offset * safeStep;
     if (price >= LADDER_MIN_PRICE && price <= LADDER_MAX_PRICE) levels.add(price);
   }
   if (markLadderPrice !== null) levels.add(markLadderPrice);
@@ -831,6 +833,67 @@ function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
 }
 
 /**
+ * 整合报价的宽档仅聚合展示：先沿用十美元真实 FIFO 得出每张主单的剩余数量，
+ * 再按所选宽度归档。因此切换 25/50/100U 等宽度不会让已平仓位回补，也不会改变真实可平数量。
+ */
+function buildIntegratedDisplayBuckets(
+  trades: PreviewTrade[],
+  allocations: Map<string, LinkedClosingAllocation[]>,
+  archiveStep: number,
+) {
+  const displayBuckets = new Map<string, PositionBucket>();
+
+  for (const trade of trades) {
+    if (!ACTIONS[trade.action].opening || trade.isPending || trade.symbol !== "ETH") continue;
+    const linkedClosings = allocations.get(trade.id) ?? [];
+    const closedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
+    const remainingQuantity = Math.max(0, trade.quantity - closedQuantity);
+    if (remainingQuantity <= 0.0000001) continue;
+
+    const side = ACTIONS[trade.action].side;
+    const displayPrice = archivePriceForTrade(trade, archiveStep);
+    const key = `${side}:${priceKey(displayPrice)}`;
+    const remainingFinancialQuantity = getTradeFinancialQuantity(trade, remainingQuantity);
+    const remainingOpeningFee = trade.quantity > 0 ? trade.fee * (remainingQuantity / trade.quantity) : 0;
+    const existing = displayBuckets.get(key);
+
+    if (existing) {
+      existing.originalQuantity += remainingQuantity;
+      existing.remainingQuantity += remainingQuantity;
+      existing.costBasis += remainingQuantity * trade.price;
+      existing.financialQuantity += remainingFinancialQuantity;
+      existing.financialCostBasis += remainingFinancialQuantity * trade.price;
+      existing.openingFeeBasis += remainingOpeningFee;
+      if (trade.createdAt < existing.openedAt) existing.openedAt = trade.createdAt;
+      continue;
+    }
+
+    displayBuckets.set(key, {
+      key,
+      side,
+      price: displayPrice,
+      originalQuantity: remainingQuantity,
+      remainingQuantity,
+      costBasis: remainingQuantity * trade.price,
+      financialQuantity: remainingFinancialQuantity,
+      financialCostBasis: remainingFinancialQuantity * trade.price,
+      openingFeeBasis: remainingOpeningFee,
+      // 宽档只承担未平仓展示，已平仓明细仍按真实十美元档与主单 FIFO 展示。
+      realizedGrossPnl: 0,
+      realizedOpeningFee: 0,
+      realizedClosingFee: 0,
+      realizedPnl: 0,
+      closedQuantity: 0,
+      closedCostBasis: 0,
+      closedNotional: 0,
+      openedAt: trade.createdAt,
+    });
+  }
+
+  return Array.from(displayBuckets.values());
+}
+
+/**
  * 类型是开仓研究维度。筛选时不能直接过滤平仓流水，否则已平数量会被错误地回补为未平仓；
  * 因此先按完整 FIFO 找到每张开仓对应的平仓，再仅投影该类型开仓所分摊的平仓数量。
  */
@@ -1047,6 +1110,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [lastOpeningInstrumentType, setLastOpeningInstrumentType] = useState<T0InstrumentType>("contract");
   const [showCumulativeData, setShowCumulativeData] = useState(false);
   const [adminLadderDisplayMode, setAdminLadderDisplayMode] = useState<AdminLadderDisplayMode>("individual");
+  /** 仅控制整合报价的显示聚合宽度；真实成交、FIFO 与平仓匹配始终使用十美元档。 */
+  const [integratedArchiveStep, setIntegratedArchiveStep] = useState<IntegratedArchiveStep>(POSITION_ARCHIVE_STEP);
   const [lastMarkPrice, setLastMarkPrice] = useState<number | null>(null);
   const [previousMarkPrice, setPreviousMarkPrice] = useState<number | null>(null);
   const [liveClock, setLiveClock] = useState(() => new Date());
@@ -1054,6 +1119,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const hasInitializedJournalFiltersRef = useRef(false);
   // 从报价表进入表单后，返回与保存必须回到原先的整合/逐笔模式。
   const entrySheetLadderDisplayModeRef = useRef<AdminLadderDisplayMode>("individual");
+  // 整合报价详情必须沿用进入时的展示归档宽度，避免详情范围在交互中漂移。
+  const entrySheetArchiveStepRef = useRef<number>(POSITION_ARCHIVE_STEP);
   const [entryForm, setEntryForm] = useState<EntryForm>({
     action: "openLong",
     accountId: "",
@@ -1595,6 +1662,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     return archivePriceForSide(ACTIONS[entryForm.action].side, price);
   }, [entryForm.action, entryForm.price]);
   const buckets = useMemo(() => buildPositionBuckets(selectedFilledTrades), [selectedFilledTrades]);
+  const ladderOpeningClosingAllocations = useMemo(
+    () => buildOpeningClosingAllocations(selectedFilledTrades),
+    [selectedFilledTrades],
+  );
+  const integratedDisplayBuckets = useMemo(
+    () => buildIntegratedDisplayBuckets(selectedFilledTrades, ladderOpeningClosingAllocations, integratedArchiveStep),
+    [selectedFilledTrades, ladderOpeningClosingAllocations, integratedArchiveStep],
+  );
+  // 逐笔详情恒定按真实十美元档展开；整合详情沿用进入时选定的宽档。
+  const isIndividualQuoteDetail = entrySheetLadderDisplayModeRef.current === "individual";
+  const entryArchiveStep = isIndividualQuoteDetail || (!ACTIONS[entryForm.action].opening && closingSourceTrade)
+    ? POSITION_ARCHIVE_STEP
+    : entrySheetArchiveStepRef.current;
   const summary = useMemo(() => calculateSummary(buckets, markPrice, selectedFilledTrades), [buckets, markPrice, selectedFilledTrades]);
   // 首屏总览：累计利润保持与多/空“累计利润”一致的未扣手续费口径；总仓位为多仓减空仓后的净额。
   const totalGrossProfit = summary.long.realizedGross + summary.short.realizedGross;
@@ -1634,16 +1714,39 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const netPositionDetailText = `${netPositionQuantity < 0 ? "−" : ""}${formatQuantity(Math.abs(netPositionQuantity))}`;
   // 从某个T型档位进入时，详情仅展示该方向、该归属档位的订单和汇总；
   // 从底部通用开平按钮进入时没有指定档位，才保留方向总览。
-  const entryScopedTrades = useMemo(() => selectedTrades.filter((trade) => {
-    if (ACTIONS[trade.action].side !== entrySide) return false;
-    return entryForm.targetPrice === undefined
-      || priceKey(archivePriceForTrade(trade)) === priceKey(entryForm.targetPrice);
-  }), [selectedTrades, entrySide, entryForm.targetPrice]);
-  const entryScopedBuckets = useMemo(() => buckets.filter((bucket) => {
-    if (bucket.side !== entrySide) return false;
-    return entryForm.targetPrice === undefined
-      || priceKey(bucket.price) === priceKey(entryForm.targetPrice);
-  }), [buckets, entrySide, entryForm.targetPrice]);
+  const entryScopedTrades = useMemo(() => {
+    const matchingSide = (trade: PreviewTrade) => ACTIONS[trade.action].side === entrySide;
+    const targetPrice = entryForm.targetPrice;
+    if (targetPrice === undefined) return selectedTrades.filter(matchingSide);
+
+    if (entryArchiveStep === POSITION_ARCHIVE_STEP) {
+      return selectedTrades.filter((trade) => matchingSide(trade)
+        && priceKey(archivePriceForTrade(trade)) === priceKey(targetPrice));
+    }
+
+    // 宽档详情按每张开仓主单的实际成交价归类，并投影其真实 FIFO 平仓分配。
+    // 这样 25/50/100U 的展示合并不会误把已经平掉的十美元档重新显示为未平仓。
+    const openings = selectedTrades.filter((trade) => matchingSide(trade)
+      && ACTIONS[trade.action].opening
+      && !trade.isPending
+      && priceKey(archivePriceForTrade(trade, entryArchiveStep)) === priceKey(targetPrice));
+    const scopedClosings = openings.flatMap((opening) => (
+      (ladderOpeningClosingAllocations.get(opening.id) ?? []).map(({ trade, quantity }) => ({
+        ...trade,
+        id: `display-${entryArchiveStep}-${trade.id}-${opening.id}`,
+        quantity,
+        fee: trade.quantity > 0 ? trade.fee * (quantity / trade.quantity) : 0,
+      }))
+    ));
+    return [...openings, ...scopedClosings]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  }, [selectedTrades, entrySide, entryForm.targetPrice, entryArchiveStep, ladderOpeningClosingAllocations]);
+  const entryScopedBuckets = useMemo(() => {
+    const source = entryArchiveStep === POSITION_ARCHIVE_STEP ? buckets : integratedDisplayBuckets;
+    return source.filter((bucket) => bucket.side === entrySide && (
+      entryForm.targetPrice === undefined || priceKey(bucket.price) === priceKey(entryForm.targetPrice)
+    ));
+  }, [buckets, integratedDisplayBuckets, entryArchiveStep, entrySide, entryForm.targetPrice]);
   const entryScopedSummary = useMemo(
     () => calculateSummary(entryScopedBuckets, markPrice, entryScopedTrades),
     [entryScopedBuckets, markPrice, entryScopedTrades],
@@ -1704,9 +1807,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const isEditingEntry = Boolean(entryForm.editingEntryId);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
   const isCloseReview = isClosingEntry && closeConfirmationStep === "review";
-  // 逐笔报价每一格只对应一笔开仓主单；详情内直接给出平仓入口，
-  // 不要求管理员再先展开该主单，避免误以为逐笔模式只能新增、不能平仓。
-  const isIndividualQuoteDetail = entrySheetLadderDisplayModeRef.current === "individual";
   // 平仓必须继承所选开仓单的账户、用户与项目归属，首次输入和二次确认均不可改。
   // 开仓编辑受后端 FIFO 依赖校验保护；未发生后续平仓时，管理员必须能改到既有账户。
   const isAccountSelectionLocked = isClosingEntry || (isCloseReview && !isEditingEntry);
@@ -1714,10 +1814,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const markLadderPrice = markPrice
     ? Math.min(LADDER_MAX_PRICE, Math.max(LADDER_MIN_PRICE, Math.round(markPrice / LADDER_STEP) * LADDER_STEP))
     : null;
-  const ladderOpeningClosingAllocations = useMemo(
-    () => buildOpeningClosingAllocations(selectedFilledTrades),
-    [selectedFilledTrades],
-  );
+  const integratedMarkLadderPrice = markPrice
+    ? Math.min(
+      LADDER_MAX_PRICE,
+      Math.max(LADDER_MIN_PRICE, Math.round(markPrice / integratedArchiveStep) * integratedArchiveStep),
+    )
+    : null;
   // 平仓百分比快捷键以“本张开仓主单尚未平掉的数量”和当前价档可平数量两者较小者为基数。
   // 因此同价位存在多张订单或已有部分平仓时，快捷键也不会超过本次实际可平上限。
   const closingAvailableQuantity = useMemo(() => {
@@ -1738,17 +1840,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     return Math.max(0, Math.min(sourceRemainingQuantity, targetBucket?.remainingQuantity ?? 0));
   }, [closingSourceTrade, entryForm.targetPrice, isClosingEntry, ladderOpeningClosingAllocations, selectedFilledTrades]);
   const priceRows = useMemo<LadderPriceRow[]>(() => {
-    const activePositionPrices = buckets
+    const activePositionPrices = integratedDisplayBuckets
       .filter((bucket) => bucket.remainingQuantity > 0.0000001)
       .map((bucket) => bucket.price);
-    return buildAdaptiveLadderLevels(markLadderPrice, activePositionPrices).map((price) => ({
+    return buildAdaptiveLadderLevels(integratedMarkLadderPrice, activePositionPrices, integratedArchiveStep).map((price) => ({
       key: `integrated-${priceKey(price)}`,
       price,
-      long: buckets.find((bucket) => bucket.side === "long" && priceKey(bucket.price) === priceKey(price)),
-      short: buckets.find((bucket) => bucket.side === "short" && priceKey(bucket.price) === priceKey(price)),
-      isMark: markLadderPrice === price,
+      long: integratedDisplayBuckets.find((bucket) => bucket.side === "long" && priceKey(bucket.price) === priceKey(price)),
+      short: integratedDisplayBuckets.find((bucket) => bucket.side === "short" && priceKey(bucket.price) === priceKey(price)),
+      isMark: integratedMarkLadderPrice === price,
     }));
-  }, [buckets, markLadderPrice]);
+  }, [integratedDisplayBuckets, integratedMarkLadderPrice, integratedArchiveStep]);
   const individualPriceRows = useMemo<LadderPriceRow[]>(() => {
     const individualBuckets: Array<{ trade: PreviewTrade; bucket: PositionBucket }> = [];
     for (const trade of selectedTrades) {
@@ -1827,7 +1929,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     sourceLadderDisplayMode?: AdminLadderDisplayMode,
   ) => {
     // 从报价单元格直接进入时显式携带来源模式，避免 React 状态批处理期间误回退到整合报价。
-    entrySheetLadderDisplayModeRef.current = sourceLadderDisplayMode ?? adminLadderDisplayMode;
+    const sourceMode = sourceLadderDisplayMode ?? adminLadderDisplayMode;
+    entrySheetLadderDisplayModeRef.current = sourceMode;
+    entrySheetArchiveStepRef.current = sourceMode === "integrated"
+      ? integratedArchiveStep
+      : POSITION_ARCHIVE_STEP;
     setEntrySide(ACTIONS[action].side);
     setCloseConfirmationStep("input");
     setClosingSourceTrade(null);
@@ -3039,7 +3145,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           </div>
           {canManage && <div
             className="flex h-9 items-center justify-center gap-1.5 border-b border-[#aeb8c1]/50 px-3"
-            role="tablist"
             aria-label="T形交割表报价模式"
             style={{
               background: "linear-gradient(180deg, rgba(255,255,255,0.82), rgba(218,224,229,0.60))",
@@ -3048,22 +3153,27 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           >
             <button
               type="button"
-              role="tab"
-              aria-selected={adminLadderDisplayMode === "individual"}
-              onClick={() => setAdminLadderDisplayMode("individual")}
-              className={`h-6 rounded border px-3 text-[11px] font-semibold transition active:scale-[0.98] ${adminLadderDisplayMode === "individual" ? "border-rose-600 bg-rose-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]" : "border-slate-300 bg-white/70 text-slate-600"}`}
+              aria-pressed={adminLadderDisplayMode === "individual"}
+              aria-label={`当前${adminLadderDisplayMode === "individual" ? "逐笔报价" : "整合报价"}，点击切换至${adminLadderDisplayMode === "individual" ? "整合报价" : "逐笔报价"}`}
+              title={`切换至${adminLadderDisplayMode === "individual" ? "整合报价" : "逐笔报价"}`}
+              onClick={() => setAdminLadderDisplayMode((current) => current === "individual" ? "integrated" : "individual")}
+              className="h-6 rounded border border-rose-600 bg-rose-600 px-3 text-[11px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] transition active:scale-[0.98]"
             >
-              逐笔报价
+              {adminLadderDisplayMode === "individual" ? "逐笔报价" : "整合报价"}
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={adminLadderDisplayMode === "integrated"}
-              onClick={() => setAdminLadderDisplayMode("integrated")}
-              className={`h-6 rounded border px-3 text-[11px] font-semibold transition active:scale-[0.98] ${adminLadderDisplayMode === "integrated" ? "border-rose-600 bg-rose-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]" : "border-slate-300 bg-white/70 text-slate-600"}`}
-            >
-              整合报价
-            </button>
+            {adminLadderDisplayMode === "integrated" && (
+              <select
+                value={integratedArchiveStep}
+                onChange={(event) => setIntegratedArchiveStep(Number(event.target.value) as IntegratedArchiveStep)}
+                aria-label="整合报价归档宽度"
+                title="仅合并整合报价的显示档位；真实成交、FIFO 与可平数量仍按十美元档核算"
+                className="h-6 rounded border border-slate-300 bg-white/80 px-1.5 text-[11px] font-semibold text-slate-700 outline-none focus:border-rose-500"
+              >
+                {INTEGRATED_ARCHIVE_STEPS.map((step) => (
+                  <option key={step} value={step}>归档 {step}U</option>
+                ))}
+              </select>
+            )}
           </div>}
           <div
             className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-b border-[#aeb8c1]/50 px-3 py-2.5"
