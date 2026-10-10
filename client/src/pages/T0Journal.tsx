@@ -2312,9 +2312,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     entrySheetArchiveStepRef.current = sourceMode === "integrated"
       ? integratedArchiveStep
       : POSITION_ARCHIVE_STEP;
-    // 现货/合约保留左多右空；期权不继承点击侧，而由四种期权方向决定最终展示侧。
+    // 现货/合约保留左多右空；期权虽可选四个组合，但空档入口仍必须继承所点左右侧。
+    // 左侧默认买入看涨，右侧默认买入看跌，确保同价位另一侧的订单绝不被带入详情。
     const initialInstrumentType = ACTIONS[action].opening ? lastOpeningInstrumentType : undefined;
-    const initialOptionDirection: T0OptionDirection = "long_call";
+    const initialOptionDirection: T0OptionDirection = action === "openShort" ? "long_put" : "long_call";
     const initialAction = initialInstrumentType === "option"
       ? getOptionOpeningAction(initialOptionDirection)
       : action;

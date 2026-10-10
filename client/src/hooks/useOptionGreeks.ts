@@ -25,6 +25,7 @@ interface UseOptionGreeksParams {
 export type OptionMarkPriceDirection = 'up' | 'down' | 'same';
 
 const OPTION_MARK_PRICE_STORAGE_KEY = 'haoyouji_option_mark_price_v1';
+const OPTION_GREEKS_REFRESH_MS = 3 * 1000;
 
 type MarkPriceCache = Record<string, number>;
 
@@ -54,7 +55,7 @@ function persistMarkPrice(instrumentKey: string, markPrice: number) {
 
 /**
  * 统一读取期权 Greeks 与合约标记价。
- * 标记价沿用项目的 Gate.io 主源 / Deribit 备用接口，每 30 秒刷新。
+ * 标记价沿用项目的 Gate.io 主源 / Deribit 备用接口，每 3 秒刷新。
  * 涨跌比较的是同一份期权合约标记价，而非 BTC / ETH 现货价格。
  */
 export function useOptionGreeks({
@@ -68,8 +69,8 @@ export function useOptionGreeks({
     { currency, exerciseDate, strikePrice, direction },
     {
       enabled: enabled && !!exerciseDate && !!strikePrice,
-      staleTime: 30 * 1000,
-      refetchInterval: 30 * 1000,
+      staleTime: OPTION_GREEKS_REFRESH_MS,
+      refetchInterval: OPTION_GREEKS_REFRESH_MS,
       retry: 1,
     }
   );

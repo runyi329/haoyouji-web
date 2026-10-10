@@ -1489,6 +1489,126 @@ async function deribitDbSet(cacheKey: string, data: any): Promise<void> {
   }
 }
 
+type OptionGreeksQuoteInput = {
+  currency: 'BTC' | 'ETH';
+  instrumentName: string;
+  gateSymbol: string;
+  cacheKey: string;
+  cached: { data: any; fetchedAt: number } | null;
+};
+
+function hasUsableOptionMarkPrice(value: unknown): boolean {
+  const markPrice = Number(value);
+  return Number.isFinite(markPrice) && markPrice >= 0;
+}
+
+// 期权格每 3 秒可刷新一次；同币种的所有合约共用一次 Gate 全量 ticker 请求，
+// 避免订单越多，向同一个公开行情端点重复发起越多请求。
+const OPTION_QUOTE_REFRESH_MS = 3 * 1000;
+const gateOptionTickerCache = new Map<'BTC' | 'ETH', { data: any[]; fetchedAt: number }>();
+const gateOptionTickerRefreshes = new Map<'BTC' | 'ETH', Promise<any[]>>();
+
+async function getGateOptionTickers(currency: 'BTC' | 'ETH'): Promise<any[]> {
+  const now = Date.now();
+  const cached = gateOptionTickerCache.get(currency);
+  if (cached && now - cached.fetchedAt < OPTION_QUOTE_REFRESH_MS) return cached.data;
+
+  const inFlight = gateOptionTickerRefreshes.get(currency);
+  if (inFlight) return inFlight;
+
+  const refresh = (async () => {
+    const response = await fetch(
+      `https://api.gateio.ws/api/v4/options/tickers?underlying=${currency}_USDT`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!response.ok) throw new Error(`Gate.io HTTP ${response.status}`);
+    const data = await response.json() as any;
+    if (!Array.isArray(data)) throw new Error('Gate.io 期权报价格式异常');
+    gateOptionTickerCache.set(currency, { data, fetchedAt: Date.now() });
+    return data;
+  })();
+  gateOptionTickerRefreshes.set(currency, refresh);
+  try {
+    return await refresh;
+  } finally {
+    gateOptionTickerRefreshes.delete(currency);
+  }
+}
+
+/**
+ * 拉取同一份期权合约的行情。有效旧缓存始终作为最后回退，
+ * 外部行情短暂失败或缺少标记价时绝不覆盖掉已保存的有效报价。
+ */
+async function refreshOptionGreeksQuote({
+  currency,
+  instrumentName,
+  gateSymbol,
+  cacheKey,
+  cached,
+}: OptionGreeksQuoteInput): Promise<any> {
+  try {
+    const gateData = await getGateOptionTickers(currency);
+    const ticker = gateData.find((t: any) => t.name === gateSymbol);
+    if (!ticker) throw new Error(`Gate.io 未找到合约: ${gateSymbol}`);
+    if (!hasUsableOptionMarkPrice(ticker.mark_price)) throw new Error(`Gate.io 合约没有有效标记价: ${gateSymbol}`);
+    const result = {
+      instrumentName,
+      delta: ticker.delta != null ? parseFloat(ticker.delta) : null,
+      gamma: ticker.gamma != null ? parseFloat(ticker.gamma) : null,
+      theta: ticker.theta != null ? parseFloat(ticker.theta) : null,
+      vega: ticker.vega != null ? parseFloat(ticker.vega) : null,
+      iv: ticker.mark_iv != null ? parseFloat(ticker.mark_iv) : null,
+      markPrice: parseFloat(ticker.mark_price),
+      indexPrice: ticker.index_price != null ? parseFloat(ticker.index_price) : null,
+      source: 'gateio',
+    };
+    await deribitDbSet(cacheKey, result);
+    return { ...result, fromCache: false };
+  } catch (gateErr: any) {
+    try {
+      const res = await fetch(`https://www.deribit.com/api/v2/public/get_order_book?instrument_name=${instrumentName}&depth=1`, { signal: AbortSignal.timeout(8000) });
+      const data = await res.json() as any;
+      if (data.error) throw new Error(data.error.message || '合约不存在');
+      const r = data.result;
+      // Deribit mark_price 单位是标的资产（ETH/BTC），需乘以 index_price 换算成 USDT。
+      const deribitMarkRaw = r.mark_price != null ? parseFloat(r.mark_price) : null;
+      const deribitIndexPrice = r.index_price != null ? parseFloat(r.index_price) : null;
+      const deribitMarkUsdt = (deribitMarkRaw != null && deribitIndexPrice != null && deribitIndexPrice > 0)
+        ? parseFloat((deribitMarkRaw * deribitIndexPrice).toFixed(4))
+        : deribitMarkRaw;
+      if (!hasUsableOptionMarkPrice(deribitMarkUsdt)) throw new Error(`Deribit 合约没有有效标记价: ${instrumentName}`);
+      const result = {
+        instrumentName,
+        delta: r.greeks?.delta ?? null,
+        gamma: r.greeks?.gamma ?? null,
+        theta: r.greeks?.theta ?? null,
+        vega: r.greeks?.vega ?? null,
+        iv: r.mark_iv ?? null,
+        markPrice: deribitMarkUsdt,
+        indexPrice: deribitIndexPrice,
+        source: 'deribit',
+      };
+      await deribitDbSet(cacheKey, result);
+      return { ...result, fromCache: false };
+    } catch (deribitErr: any) {
+      if (cached && hasUsableOptionMarkPrice(cached.data?.markPrice)) {
+        return { ...cached.data, fromCache: true, cacheStale: true };
+      }
+      return {
+        instrumentName,
+        delta: null,
+        gamma: null,
+        theta: null,
+        vega: null,
+        iv: null,
+        markPrice: null,
+        error: `Gate.io: ${gateErr.message}; Deribit: ${deribitErr.message}`,
+        fromCache: false,
+      };
+    }
+  }
+}
+
 async function fetchAndCacheDeribitExpiries(currency: 'BTC' | 'ETH'): Promise<void> {
   try {
     const res = await fetch(`https://www.deribit.com/api/v2/public/get_instruments?currency=${currency}&kind=option&expired=false`);
@@ -23811,64 +23931,32 @@ ${klinesSummary}
         const ddStr = String(dt.getUTCDate()).padStart(2, '0');
         const gateSymbol = `${input.currency}_USDT-${yyyy}${mm}${ddStr}-${input.strikePrice}-${optionType}`;
         const cacheKey = `greeks:${instrumentName}`;
-        const ONE_HOUR_MS = 30 * 1000; // 30 秒缓存
-        // 先读数据库缓存
         const cached = await deribitDbGet(cacheKey);
         const now = Date.now();
-        const cacheValid = cached && (now - cached.fetchedAt) < ONE_HOUR_MS;
-        if (cacheValid) {
+        const cacheHasQuote = cached && hasUsableOptionMarkPrice(cached.data?.markPrice);
+        const cacheFresh = cacheHasQuote && (now - cached.fetchedAt) < OPTION_QUOTE_REFRESH_MS;
+        if (cacheFresh) {
           return { ...cached.data, fromCache: true };
         }
-        // 优先尝试 Gate.io（国内可访）
-        try {
-          const gateRes = await fetch(`https://api.gateio.ws/api/v4/options/tickers?underlying=${input.currency}_USDT`, { signal: AbortSignal.timeout(8000) });
-          const gateData = await gateRes.json() as any[];
-          const ticker = gateData.find((t: any) => t.name === gateSymbol);
-          if (!ticker) throw new Error(`Gate.io 未找到合约: ${gateSymbol}`);
-          const result = {
+        // 缓存过期时采用 stale-while-revalidate：先返回上次有效价格，
+        // 同时后台刷新，避免外部行情慢/失败导致整张价格表没有盈亏数字。
+        if (cacheHasQuote) {
+          void refreshOptionGreeksQuote({
+            currency: input.currency,
             instrumentName,
-            delta: ticker.delta != null ? parseFloat(ticker.delta) : null,
-            gamma: ticker.gamma != null ? parseFloat(ticker.gamma) : null,
-            theta: ticker.theta != null ? parseFloat(ticker.theta) : null,
-            vega: ticker.vega != null ? parseFloat(ticker.vega) : null,
-            iv: ticker.mark_iv != null ? parseFloat(ticker.mark_iv) : null,
-            markPrice: ticker.mark_price != null ? parseFloat(ticker.mark_price) : null,
-            indexPrice: ticker.index_price != null ? parseFloat(ticker.index_price) : null,
-            source: 'gateio',
-          };
-          await deribitDbSet(cacheKey, result);
-          return { ...result, fromCache: false };
-        } catch (gateErr: any) {
-          // Gate.io 失败，备用 Deribit
-          try {
-            const res = await fetch(`https://www.deribit.com/api/v2/public/get_order_book?instrument_name=${instrumentName}&depth=1`, { signal: AbortSignal.timeout(8000) });
-            const data = await res.json() as any;
-            if (data.error) throw new Error(data.error.message || '合约不存在');
-            const r = data.result;
-            // Deribit mark_price 单位是标的资产（ETH/BTC），需乘以 index_price 换算成 USDT
-            const deribitMarkRaw = r.mark_price != null ? parseFloat(r.mark_price) : null;
-            const deribitIndexPrice = r.index_price != null ? parseFloat(r.index_price) : null;
-            const deribitMarkUsdt = (deribitMarkRaw != null && deribitIndexPrice != null && deribitIndexPrice > 0)
-              ? parseFloat((deribitMarkRaw * deribitIndexPrice).toFixed(4))
-              : deribitMarkRaw;
-            const result = {
-              instrumentName,
-              delta: r.greeks?.delta ?? null,
-              gamma: r.greeks?.gamma ?? null,
-              theta: r.greeks?.theta ?? null,
-              vega: r.greeks?.vega ?? null,
-              iv: r.mark_iv ?? null,
-              markPrice: deribitMarkUsdt,
-              indexPrice: deribitIndexPrice,
-              source: 'deribit',
-            };
-            await deribitDbSet(cacheKey, result);
-            return { ...result, fromCache: false };
-          } catch (e: any) {
-            if (cached) return { ...cached.data, fromCache: true, cacheStale: true };
-            return { instrumentName, delta: null, gamma: null, theta: null, vega: null, iv: null, markPrice: null, error: `Gate.io: ${gateErr.message}; Deribit: ${e.message}`, fromCache: false };
-          }
+            gateSymbol,
+            cacheKey,
+            cached,
+          }).catch((error) => console.error(`[Deribit] 后台刷新期权报价失败: ${instrumentName}`, error));
+          return { ...cached.data, fromCache: true, cacheStale: true };
         }
+        return refreshOptionGreeksQuote({
+          currency: input.currency,
+          instrumentName,
+          gateSymbol,
+          cacheKey,
+          cached,
+        });
       }),
 
     // ========== 多视角订单参与方接口 ==========
