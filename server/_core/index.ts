@@ -14,7 +14,7 @@ import { startTierScanner } from "../af-tier-scanner";
 import { startPriceScanner } from "../price-scanner";
 import { startManualStockCloseScheduler } from "../manual-stock-close-scheduler";
 import { ensureLedgerStockPortfolioTables } from "../ledger-stock-portfolio";
-import { startLedger52T0PendingOrderScanner } from "../ledger52-t0-journal";
+import { startLedger52T0ExpiredOptionScanner, startLedger52T0PendingOrderScanner } from "../ledger52-t0-journal";
 import { startFunderScanner } from "../funder-price-scanner";
 import { startEnergyPriceScanner } from "../energy-price-scanner";
 import { smsService } from "../sms-service";
@@ -783,6 +783,9 @@ async function startServer() {
 
     // 管理员T+0逐笔挂单以统一 ETH 永续标记价自动确认成交；挂单未成交前不计入真实仓位和收益。
     startLedger52T0PendingOrderScanner();
+
+    // T+0 ETH期权在到期日北京时间16:00后，仅以Deribit官方交割记录自动结算并归档。
+    startLedger52T0ExpiredOptionScanner();
 
     // 52号手工股票、37号股票标签与其股票保证金在开盘时段每5分钟更新；15:05统一固化盘尾价。
     startManualStockCloseScheduler();

@@ -17,6 +17,9 @@ const T0_JOURNAL_OPTION_DIRECTIONS = new Set<T0JournalOptionDirection>(["long_ca
 const T0_JOURNAL_OPTION_PREMIUM_CURRENCIES = new Set<T0JournalOptionPremiumCurrency>(["USDT", "ETH"]);
 const ETH_QUANTITY_RESTORE_PATTERN = /^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/;
 const T0_DECIMAL_INPUT_PATTERN = /^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/;
+const T0_OPTION_EXPIRY_FEE_RATE = Number(OKX_VIP2_TAKER_FEE_RATE);
+const DERIBIT_OPTION_DELIVERY_URL = "https://www.deribit.com/api/v2/public/get_last_settlements_by_currency";
+const DERIBIT_MONTH_CODES = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 export type T0JournalActor = {
   id: number;
@@ -129,6 +132,8 @@ function resolveOptionParameters(input: {
   optionExpiryDate?: unknown;
   optionPremium?: unknown;
   optionPremiumCurrency?: unknown;
+  /** 期权开仓的 price 固化为行权价；直接调用服务层时也必须单独校验。 */
+  price?: unknown;
 }, fallback?: any): {
   direction: T0JournalOptionDirection;
   expiryDate: string;
@@ -140,6 +145,10 @@ function resolveOptionParameters(input: {
     throw new TRPCError({ code: "BAD_REQUEST", message: "请选择期权方向" });
   }
   const expiryDate = normalizeOptionDate(input.optionExpiryDate ?? fallback?.option_expiry_date ?? fallback?.optionExpiryDate);
+  const strikePrice = String(input.price ?? fallback?.price ?? "").trim();
+  if (!T0_DECIMAL_INPUT_PATTERN.test(strikePrice) || Number(strikePrice) <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的期权行权价" });
+  }
   const premium = String(input.optionPremium ?? fallback?.option_premium ?? fallback?.optionPremium ?? "").trim();
   if (!T0_DECIMAL_INPUT_PATTERN.test(premium) || Number(premium) <= 0) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "请输入大于 0 的权利金" });
@@ -173,6 +182,15 @@ function toNumber(value: unknown): number {
 function normalizeEthQuantity(value: string): string {
   const [integerPart, fractionalPart = ""] = String(value).trim().split(".");
   return `${integerPart}.${fractionalPart.padEnd(2, "0")}`;
+}
+
+/** 新建、编辑均须由服务端再次确认数量有效，避免绕过路由校验写入不完整期权订单。 */
+function requireValidEthQuantity(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!ETH_QUANTITY_RESTORE_PATTERN.test(raw) || Number(raw) <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请输入大于 0 的 ETH 数量（整数最多4位，小数最多2位）" });
+  }
+  return normalizeEthQuantity(raw);
 }
 
 /**
@@ -364,6 +382,16 @@ function mapEntry(row: any) {
     optionPremiumCurrency: T0_JOURNAL_OPTION_PREMIUM_CURRENCIES.has(String(row.option_premium_currency ?? row.optionPremiumCurrency ?? "") as T0JournalOptionPremiumCurrency)
       ? String(row.option_premium_currency ?? row.optionPremiumCurrency) as T0JournalOptionPremiumCurrency
       : undefined,
+    /** 自动到期结算后保存的每 ETH 期权最终结算值（USDT）。 */
+    optionSettlementPrice: row.option_settlement_price === null || row.option_settlement_price === undefined
+      ? undefined
+      : toNumber(row.option_settlement_price),
+    /** Deribit 官方 delivery 使用的 ETH 指数交割价（USDT）。 */
+    optionDeliveryPrice: row.option_delivery_price === null || row.option_delivery_price === undefined
+      ? undefined
+      : toNumber(row.option_delivery_price),
+    optionSettledAt: row.option_settled_at ?? row.optionSettledAt ? isoTime(row.option_settled_at ?? row.optionSettledAt) : undefined,
+    optionSettlementSource: row.option_settlement_source ? String(row.option_settlement_source) : undefined,
     isLocked: Boolean(toNumber(row.is_locked ?? row.isLocked)),
     isPending: String(row.execution_status ?? row.executionStatus ?? "filled") === "pending",
     filledAt: row.filled_at ?? row.filledAt ? isoTime(row.filled_at ?? row.filledAt) : undefined,
@@ -487,6 +515,10 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         option_expiry_date DATE DEFAULT NULL,
         option_premium DECIMAL(36,18) DEFAULT NULL,
         option_premium_currency ENUM('USDT','ETH') DEFAULT NULL,
+        option_settlement_price DECIMAL(36,18) DEFAULT NULL COMMENT '自动到期时每ETH期权的最终结算值（USDT）',
+        option_delivery_price DECIMAL(36,18) DEFAULT NULL COMMENT 'Deribit官方交割使用的ETH指数价（USDT）',
+        option_settled_at DATETIME(3) DEFAULT NULL COMMENT '系统确认自动到期结算的时间',
+        option_settlement_source VARCHAR(40) DEFAULT NULL COMMENT '最终结算价格来源',
         is_locked TINYINT(1) NOT NULL DEFAULT 0 COMMENT '仅T+0开仓主单的管理员锁定展示标记',
         execution_status ENUM('filled','pending') NOT NULL DEFAULT 'filled' COMMENT 'filled为实际成交，pending为管理员逐笔报价挂单',
         filled_at DATETIME(3) DEFAULT NULL COMMENT '挂单触发成交的系统确认时间',
@@ -639,10 +671,10 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
       `);
     }
 
-    // 兼容已经创建过旧版审计表的生产库，使其可记录速记回撤与恢复动作。
+    // 兼容已经创建过旧版审计表的生产库，使其可记录速记回撤、恢复与期权自动到期结算动作。
     await db.execute(`
       ALTER TABLE ledger52_t0_journal_entry_audits
-        MODIFY COLUMN operation ENUM('update','delete','revert','restore','fill') NOT NULL
+        MODIFY COLUMN operation ENUM('update','delete','revert','restore','fill','expiry_settlement') NOT NULL
     `);
 
     // 兼容已创建的T+0流水表：关联用户为新增维度，旧流水保留为空，以免篡改历史记录。
@@ -684,6 +716,19 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
           ADD COLUMN option_expiry_date DATE DEFAULT NULL AFTER option_direction,
           ADD COLUMN option_premium DECIMAL(36,18) DEFAULT NULL AFTER option_expiry_date,
           ADD COLUMN option_premium_currency ENUM('USDT','ETH') DEFAULT NULL AFTER option_premium
+      `);
+    }
+
+    // 到期结算只在确认到 Deribit 官方 delivery 后写入；旧流水保留 NULL，绝不回填或改写历史期权。
+    const [optionSettlementColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_entries LIKE 'option_settlement_price'`);
+    if (asRows(optionSettlementColumns).length === 0) {
+      await db.execute(`
+        ALTER TABLE ledger52_t0_journal_entries
+          ADD COLUMN option_settlement_price DECIMAL(36,18) DEFAULT NULL COMMENT '自动到期时每ETH期权的最终结算值（USDT）' AFTER option_premium_currency,
+          ADD COLUMN option_delivery_price DECIMAL(36,18) DEFAULT NULL COMMENT 'Deribit官方交割使用的ETH指数价（USDT）' AFTER option_settlement_price,
+          ADD COLUMN option_settled_at DATETIME(3) DEFAULT NULL COMMENT '系统确认自动到期结算的时间' AFTER option_delivery_price,
+          ADD COLUMN option_settlement_source VARCHAR(40) DEFAULT NULL COMMENT '最终结算价格来源' AFTER option_settled_at,
+          ADD KEY idx_t0_journal_entry_option_expiry (ledger_id, instrument_type, option_expiry_date, action)
       `);
     }
 
@@ -889,7 +934,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
         `SELECT a.id, a.name, MAX(e.trade_time) AS last_used_at, MIN(a.created_at) AS created_at
            FROM ledger52_t0_journal_entries e
            INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id AND a.is_active = 1
-          WHERE e.ledger_id = ? AND e.execution_status = 'filled' AND ${memberVisibilitySql}
+          WHERE e.ledger_id = ? AND ${memberVisibilitySql}
           GROUP BY a.id, a.name
           ORDER BY last_used_at DESC, a.id DESC`,
         [LEDGER_52_T0_JOURNAL_ID, relatedUserId, relatedUserId],
@@ -898,7 +943,9 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
       `SELECT e.id, e.account_id,
               CASE WHEN a.is_active = 1 THEN a.name ELSE NULL END AS account_name,
               CASE WHEN a.is_active = 1 THEN 0 ELSE 1 END AS account_hidden,
-              e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency, e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.related_user_id, e.related_fund_id,
+              e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
+              e.option_settlement_price, e.option_delivery_price, e.option_settled_at, e.option_settlement_source,
+              e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.related_user_id, e.related_fund_id,
               CASE WHEN f.is_active = 1 THEN f.name ELSE NULL END AS related_fund_name,
               CASE WHEN f.is_active = 1 THEN 0 ELSE 1 END AS related_fund_hidden,
               CASE WHEN deleted_user.id IS NULL THEN COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) ELSE NULL END AS related_user_name,
@@ -913,7 +960,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
          LEFT JOIN ledger52_t0_journal_deleted_dimensions deleted_user
            ON deleted_user.ledger_id = e.ledger_id AND deleted_user.user_id = e.user_id
           AND deleted_user.dimension = 'related_user' AND deleted_user.dimension_id = e.related_user_id
-        WHERE e.ledger_id = ? AND ${isAdminScope ? "e.user_id = ?" : `e.execution_status = 'filled' AND ${memberVisibilitySql}`}
+        WHERE e.ledger_id = ? AND ${isAdminScope ? "e.user_id = ?" : memberVisibilitySql}
         ORDER BY e.trade_time ASC, e.id ASC
         LIMIT 2000`,
       isAdminScope
@@ -969,7 +1016,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_related_funds f
            ON f.id = e.related_fund_id AND f.ledger_id = e.ledger_id AND f.user_id = e.user_id AND f.is_active = 1
-        WHERE e.ledger_id = ? AND e.execution_status = 'filled' AND ${memberVisibilitySql}
+        WHERE e.ledger_id = ? AND ${memberVisibilitySql}
         GROUP BY f.id, f.related_user_id, f.name
         ORDER BY last_used_at DESC, f.id DESC
         LIMIT 200`,
@@ -1017,13 +1064,8 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
     viewerMode: scope.mode,
     viewerRelatedUserId: isAdminScope ? undefined : relatedUserId,
     accounts: asRows(accountResult).map(mapAccount),
-    // 成员端无锁定功能，且始终使用整合报价：响应中完全不下发锁定展示字段。
-    entries: entryRows.map((row) => {
-      const entry = mapEntry(row);
-      if (isAdminScope) return entry;
-      const { isLocked: _isLocked, isPending: _isPending, filledAt: _filledAt, filledPrice: _filledPrice, ...memberEntry } = entry;
-      return memberEntry;
-    }),
+    // 成员端只读，但需完整知悉自己订单的锁定与挂单状态；写权限仍由路由层管理员鉴权严格限制。
+    entries: entryRows.map(mapEntry),
     recentUsers: asRows(recentUserResult).map(mapRelatedUser),
     relatedFunds: asRows(relatedFundResult).map(mapRelatedFund),
     profitShareSnapshots: asRows(profitShareSnapshotResult).map(mapProfitShareSnapshot),
@@ -1786,7 +1828,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
   const connection = await getDbTransactionConnection();
   if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
   const tx: any = connection;
-  const normalizedQuantity = normalizeEthQuantity(input.quantity);
+  const normalizedQuantity = requireValidEthQuantity(input.quantity);
   const instrumentType = isOpeningAction(input.action)
     ? normalizeInstrumentType(input.instrumentType, true)
     : undefined;
@@ -2048,7 +2090,7 @@ async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: n
 async function writeEntryAudit(tx: any, input: {
   actorUserId: number;
   entryId: number;
-  operation: "update" | "delete" | "revert" | "restore" | "fill";
+  operation: "update" | "delete" | "revert" | "restore" | "fill" | "expiry_settlement";
   before: unknown;
   after?: unknown;
 }) {
@@ -2076,6 +2118,129 @@ async function buildEntryAuditSnapshot(tx: any, actorUserId: number, entry: any)
     lock: true,
   });
   return { ...entry, profitShareSnapshots };
+}
+
+type DeribitOptionDelivery = {
+  instrumentName: string;
+  deliveryPrice: number;
+  deliveredAt: Date;
+  source: "deribit_delivery";
+};
+
+/** Deribit ETH 期权合约名，例如 ETH-25DEC26-2500-C。 */
+export function buildDeribitEthOptionInstrumentName(input: {
+  expiryDate: string;
+  strikePrice: number;
+  direction: T0JournalOptionDirection;
+}): string | null {
+  const date = new Date(`${input.expiryDate}T08:00:00.000Z`);
+  const strikePrice = Number(input.strikePrice);
+  if (Number.isNaN(date.getTime()) || !Number.isFinite(strikePrice) || strikePrice <= 0) return null;
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = DERIBIT_MONTH_CODES[date.getUTCMonth()];
+  const year = String(date.getUTCFullYear()).slice(-2);
+  const optionType = input.direction.endsWith("call") ? "C" : "P";
+  return `ETH-${day}${month}${year}-${String(strikePrice)}-${optionType}`;
+}
+
+/** Deribit/OKX 的到期交割时刻均为 08:00 UTC，即北京时间同日 16:00。 */
+export function getT0OptionExpiryAt(expiryDate: string): Date | null {
+  const result = new Date(`${expiryDate}T08:00:00.000Z`);
+  return Number.isNaN(result.getTime()) ? null : result;
+}
+
+/**
+ * T+0 期权以 USDT 统一展示收益：权利金若以 ETH 计价，则按官方 delivery 的 ETH 指数价换算。
+ * 费用沿用 T+0 已确认的 0.0360% 交易成本口径，并在自动平仓记录上一次性固化双边费用。
+ */
+export function calculateT0OptionExpirySettlement(input: {
+  quantity: number;
+  strikePrice: number;
+  premium: number;
+  premiumCurrency: T0JournalOptionPremiumCurrency;
+  direction: T0JournalOptionDirection;
+  deliveryPrice: number;
+  feeRate?: number;
+}) {
+  const quantity = Number(input.quantity);
+  const strikePrice = Number(input.strikePrice);
+  const premium = Number(input.premium);
+  const deliveryPrice = Number(input.deliveryPrice);
+  const feeRate = Number.isFinite(input.feeRate) ? Number(input.feeRate) : T0_OPTION_EXPIRY_FEE_RATE;
+  if (![quantity, strikePrice, premium, deliveryPrice, feeRate].every(Number.isFinite)
+    || quantity <= 0 || strikePrice <= 0 || premium <= 0 || deliveryPrice <= 0 || feeRate < 0) {
+    return null;
+  }
+  const premiumUsdtPerEth = input.premiumCurrency === "ETH" ? premium * deliveryPrice : premium;
+  const settlementPrice = input.direction.endsWith("call")
+    ? Math.max(deliveryPrice - strikePrice, 0)
+    : Math.max(strikePrice - deliveryPrice, 0);
+  const grossPnl = (input.direction.startsWith("short")
+    ? premiumUsdtPerEth - settlementPrice
+    : settlementPrice - premiumUsdtPerEth) * quantity;
+  const totalFee = (premiumUsdtPerEth + settlementPrice) * quantity * feeRate;
+  return {
+    premiumUsdtPerEth,
+    settlementPrice,
+    grossPnl,
+    totalFee,
+    netPnl: grossPnl - totalFee,
+  };
+}
+
+async function fetchDeribitOptionDelivery(instrumentName: string, expiryAt: Date): Promise<DeribitOptionDelivery | null> {
+  try {
+    const endpoint = new URL(DERIBIT_OPTION_DELIVERY_URL);
+    endpoint.searchParams.set("currency", "ETH");
+    endpoint.searchParams.set("type", "delivery");
+    endpoint.searchParams.set("count", "1000");
+    endpoint.searchParams.set("start_timestamp", String(expiryAt.getTime() - 12 * 60 * 60 * 1000));
+    endpoint.searchParams.set("end_timestamp", String(expiryAt.getTime() + 12 * 60 * 60 * 1000));
+    const response = await fetch(endpoint, { signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) return null;
+    const payload = await response.json() as { result?: { settlements?: any[] } };
+    const matched = payload.result?.settlements?.find((item) => String(item?.instrument_name || "") === instrumentName);
+    const deliveryPrice = Number(matched?.index_price);
+    const deliveredAt = new Date(Number(matched?.timestamp));
+    if (!Number.isFinite(deliveryPrice) || deliveryPrice <= 0 || Number.isNaN(deliveredAt.getTime())) return null;
+    return { instrumentName, deliveryPrice, deliveredAt, source: "deribit_delivery" };
+  } catch {
+    // 交割记录暂未就绪或网络瞬断时保持原仓，下一分钟再查，绝不以临时期货/现货价格替代。
+    return null;
+  }
+}
+
+/** 仅在同一账户、关联用户、专项款、方向与行权价档位内 FIFO；期权与现货/合约严格隔离。 */
+function remainingOptionOpeningCents(rows: any[], openingEntryId: number): number {
+  const opening = rows.find((row) => toNumber(row.id) === openingEntryId);
+  if (!opening || String(opening.instrument_type) !== "option") return 0;
+  const openingAction = String(opening.action) as T0JournalAction;
+  if (!isOpeningAction(openingAction)) return 0;
+  const closingAction: T0JournalAction = actionSide(openingAction) === "long" ? "closeLong" : "closeShort";
+  const archiveKey = priceKey(archivePriceForAction(openingAction, opening.price));
+  const expectedUserKey = relatedUserKey(opening.related_user_id);
+  const expectedFundKey = relatedFundKey(opening.related_fund_id);
+  const queue: Array<{ entryId: number; remainingCents: number }> = [];
+  for (const row of rows) {
+    if (String(row.instrument_type) !== "option" || String(row.execution_status ?? "filled") !== "filled") continue;
+    if (toNumber(row.account_id) !== toNumber(opening.account_id)
+      || relatedUserKey(row.related_user_id) !== expectedUserKey
+      || relatedFundKey(row.related_fund_id) !== expectedFundKey) continue;
+    const rowAction = String(row.action) as T0JournalAction;
+    if (rowAction === openingAction && priceKey(archivePriceForAction(rowAction, row.price)) === archiveKey) {
+      queue.push({ entryId: toNumber(row.id), remainingCents: quantityToCents(row.quantity) });
+      continue;
+    }
+    if (rowAction !== closingAction || priceKey(archivedTargetPrice(rowAction, row.target_price, row.price)) !== archiveKey) continue;
+    let remainingCloseCents = quantityToCents(row.quantity);
+    for (const queuedOpening of queue) {
+      if (remainingCloseCents <= 0) break;
+      const matchedCents = Math.min(queuedOpening.remainingCents, remainingCloseCents);
+      queuedOpening.remainingCents -= matchedCents;
+      remainingCloseCents -= matchedCents;
+    }
+  }
+  return queue.find((item) => item.entryId === openingEntryId)?.remainingCents ?? 0;
 }
 
 let pendingOrderScanTimer: ReturnType<typeof setInterval> | null = null;
@@ -2149,6 +2314,205 @@ export async function scanLedger52T0PendingOrders() {
   }
 }
 
+let optionExpirySettlementScanTimer: ReturnType<typeof setInterval> | null = null;
+let optionExpirySettlementScanInFlight = false;
+
+/**
+ * 只在到期日 08:00 UTC（北京时间 16:00）之后执行：先读取 Deribit 官方 delivery，
+ * 再生成不可变的自动平仓流水。交割记录缺失时不做任何写入并在下一轮重试。
+ */
+export async function scanLedger52T0ExpiredOptions(input: {
+  now?: Date;
+  fetchDelivery?: (instrumentName: string, expiryAt: Date) => Promise<DeribitOptionDelivery | null>;
+} = {}) {
+  if (optionExpirySettlementScanInFlight) return { settled: 0, awaitingDelivery: 0 };
+  const now = input.now ?? new Date();
+  const connection = await getDbConnection();
+  if (!connection) return { settled: 0, awaitingDelivery: 0 };
+  await ensureLedger52T0JournalTables(connection);
+
+  const [candidateRows] = await connection.execute(
+    `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency,
+            action, quantity, price, execution_status, client_request_id, trade_time
+       FROM ledger52_t0_journal_entries
+      WHERE ledger_id = ? AND instrument_type = 'option' AND execution_status = 'filled'
+        AND action IN ('openLong', 'openShort') AND option_expiry_date IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+            FROM ledger52_t0_journal_entries settled
+           WHERE settled.ledger_id = ledger52_t0_journal_entries.ledger_id
+             AND settled.user_id = ledger52_t0_journal_entries.user_id
+             AND settled.client_request_id = CONCAT('option-expiry-', ledger52_t0_journal_entries.id)
+        )
+      ORDER BY trade_time ASC, id ASC`,
+    [LEDGER_52_T0_JOURNAL_ID],
+  );
+  const candidates = asRows(candidateRows).flatMap((row) => {
+    const expiryDate = mapOptionDate(row.option_expiry_date);
+    const direction = String(row.option_direction || "") as T0JournalOptionDirection;
+    const expiryAt = expiryDate ? getT0OptionExpiryAt(expiryDate) : null;
+    const instrumentName = expiryDate && T0_JOURNAL_OPTION_DIRECTIONS.has(direction)
+      ? buildDeribitEthOptionInstrumentName({ expiryDate, strikePrice: toNumber(row.price), direction })
+      : null;
+    return expiryAt && expiryAt.getTime() <= now.getTime() && instrumentName
+      ? [{ row, expiryDate, direction, expiryAt, instrumentName }]
+      : [];
+  });
+  if (candidates.length === 0) return { settled: 0, awaitingDelivery: 0 };
+
+  const fetchDelivery = input.fetchDelivery ?? fetchDeribitOptionDelivery;
+  const deliveries = new Map<string, DeribitOptionDelivery>();
+  for (const candidate of candidates) {
+    if (deliveries.has(candidate.instrumentName)) continue;
+    const delivery = await fetchDelivery(candidate.instrumentName, candidate.expiryAt);
+    if (delivery) deliveries.set(candidate.instrumentName, delivery);
+  }
+  const candidatesWithDelivery = candidates.filter((candidate) => deliveries.has(candidate.instrumentName));
+  if (candidatesWithDelivery.length === 0) return { settled: 0, awaitingDelivery: candidates.length };
+
+  optionExpirySettlementScanInFlight = true;
+  const txConnection = await getDbTransactionConnection();
+  if (!txConnection) {
+    optionExpirySettlementScanInFlight = false;
+    return { settled: 0, awaitingDelivery: candidates.length - candidatesWithDelivery.length };
+  }
+  const tx: any = txConnection;
+  try {
+    await tx.beginTransaction();
+    const [lockedRowsResult] = await tx.execute(
+      `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency,
+              option_settlement_price, option_delivery_price, option_settled_at, option_settlement_source,
+              is_locked, execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note,
+              client_request_id, created_by_user_id, trade_time, created_at, updated_at
+         FROM ledger52_t0_journal_entries
+        WHERE ledger_id = ? AND instrument_type = 'option'
+        ORDER BY trade_time ASC, id ASC
+        FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID],
+    );
+    const lockedRows = asRows(lockedRowsResult);
+    let settled = 0;
+    for (const candidate of candidatesWithDelivery) {
+      const opening = lockedRows.find((row) => toNumber(row.id) === toNumber(candidate.row.id));
+      const delivery = deliveries.get(candidate.instrumentName);
+      if (!opening || !delivery || String(opening.execution_status) !== "filled") continue;
+      const actorUserId = toNumber(opening.user_id);
+      const openingEntryId = toNumber(opening.id);
+      const closeRequestId = `option-expiry-${openingEntryId}`;
+      if (actorUserId <= 0 || openingEntryId <= 0 || lockedRows.some((row) => String(row.client_request_id || "") === closeRequestId)) continue;
+      const remainingCents = remainingOptionOpeningCents(lockedRows, openingEntryId);
+      if (remainingCents <= 0) continue;
+      const premiumCurrency = String(opening.option_premium_currency || "") as T0JournalOptionPremiumCurrency;
+      const settlement = T0_JOURNAL_OPTION_PREMIUM_CURRENCIES.has(premiumCurrency)
+        ? calculateT0OptionExpirySettlement({
+          quantity: remainingCents / 100,
+          strikePrice: toNumber(opening.price),
+          premium: toNumber(opening.option_premium),
+          premiumCurrency,
+          direction: candidate.direction,
+          deliveryPrice: delivery.deliveryPrice,
+        })
+        : null;
+      if (!settlement) continue;
+      const closingAction: T0JournalAction = actionSide(String(opening.action) as T0JournalAction) === "long" ? "closeLong" : "closeShort";
+      const targetPrice = archivePriceForAction(closingAction, opening.price);
+      const quantity = (remainingCents / 100).toFixed(2);
+      const note = `[Deribit自动到期结算] ${delivery.instrumentName}｜官方交割价 ${delivery.deliveryPrice.toFixed(2)} U｜期权结算价 ${settlement.settlementPrice.toFixed(8)} U｜双边交易成本 ${settlement.totalFee.toFixed(8)} U`;
+      const [entryResult] = await tx.execute(
+        `INSERT INTO ledger52_t0_journal_entries
+          (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency,
+           option_settlement_price, option_delivery_price, option_settled_at, option_settlement_source,
+           is_locked, execution_status, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time)
+         VALUES (?, ?, ?, ?, ?, 'ETH', 'option', ?, ?, ?, ?, ?, ?, ?, ?, 0, 'filled', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          LEDGER_52_T0_JOURNAL_ID,
+          actorUserId,
+          toNumber(opening.account_id),
+          toNumber(opening.related_user_id) || null,
+          toNumber(opening.related_fund_id) || null,
+          candidate.direction,
+          candidate.expiryDate,
+          String(opening.option_premium),
+          premiumCurrency,
+          settlement.settlementPrice.toFixed(18),
+          delivery.deliveryPrice.toFixed(18),
+          mysqlDateTime(now),
+          delivery.source,
+          closingAction,
+          quantity,
+          String(opening.price),
+          settlement.totalFee.toFixed(18),
+          String(targetPrice),
+          note,
+          closeRequestId,
+          actorUserId,
+          mysqlDateTime(candidate.expiryAt),
+        ],
+      );
+      const entryId = Number((entryResult as any).insertId || 0);
+      if (!entryId) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "期权到期结算流水写入失败" });
+      await writeClosingProfitShareSnapshots(tx, {
+        actorUserId,
+        entryId,
+        sourceUserId: toNumber(opening.related_user_id),
+        positionRows: lockedRows,
+        action: closingAction,
+        targetPrice: String(targetPrice),
+        relatedFundId: toNumber(opening.related_fund_id),
+        quantity,
+      });
+      const [afterRows] = await tx.execute(
+        `SELECT * FROM ledger52_t0_journal_entries WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1`,
+        [entryId, LEDGER_52_T0_JOURNAL_ID, actorUserId],
+      );
+      const after = asRows(afterRows)[0];
+      if (!after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "期权到期结算流水读取失败" });
+      await writeEntryAudit(tx, {
+        actorUserId,
+        entryId,
+        operation: "expiry_settlement",
+        before: {
+          automatic: true,
+          trigger: "option_expiry",
+          openingEntryId,
+          instrumentName: delivery.instrumentName,
+          deliveryPrice: delivery.deliveryPrice,
+          optionSettlementPrice: settlement.settlementPrice,
+          grossPnl: settlement.grossPnl,
+          totalFee: settlement.totalFee,
+          netPnl: settlement.netPnl,
+        },
+        after: await buildEntryAuditSnapshot(tx, actorUserId, after),
+      });
+      lockedRows.push(after);
+      settled += 1;
+    }
+    await tx.commit();
+    return { settled, awaitingDelivery: candidates.length - candidatesWithDelivery.length };
+  } catch (error) {
+    try { await tx.rollback(); } catch {}
+    throw error;
+  } finally {
+    optionExpirySettlementScanInFlight = false;
+    tx.release?.();
+  }
+}
+
+/** 生产服务每分钟确认一次到期交割；本地 DEV_BYPASS 绝不启动，避免热预览写入真实订单。 */
+export function startLedger52T0ExpiredOptionScanner() {
+  if (optionExpirySettlementScanTimer || process.env.DEV_BYPASS_AUTH === "true") return;
+  const run = () => {
+    void scanLedger52T0ExpiredOptions()
+      .then((result) => {
+        if (result.settled > 0) console.log(`[T0期权] Deribit 官方交割，自动结算 ${result.settled} 笔`);
+      })
+      .catch((error) => console.error("[T0期权] 自动到期结算扫描失败:", error instanceof Error ? error.message : error));
+  };
+  run();
+  optionExpirySettlementScanTimer = setInterval(run, 60_000);
+  console.log("[T0期权] 自动到期结算扫描已启动（每60秒，仅官方Deribit delivery后写入）");
+}
+
 /** 启动生产挂单扫描：行情缓存约每秒更新，三秒状态扫描避免高频数据库轮询。 */
 export function startLedger52T0PendingOrderScanner() {
   if (pendingOrderScanTimer) return;
@@ -2191,7 +2555,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   const connection = await getDbTransactionConnection();
   if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
   const tx: any = connection;
-  const normalizedQuantity = normalizeEthQuantity(input.quantity);
+  const normalizedQuantity = requireValidEthQuantity(input.quantity);
   const instrumentType = normalizeInstrumentType(input.instrumentType);
   const isLocked = input.isLocked === undefined ? null : input.isLocked ? 1 : 0;
   const isPending = input.isPending === undefined ? null : input.isPending ? 1 : 0;
@@ -2561,8 +2925,8 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
 
     await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, is_locked, execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
+        (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, option_settlement_price, option_delivery_price, option_settled_at, option_settlement_source, is_locked, execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
       [
         entryId,
         LEDGER_52_T0_JOURNAL_ID,
@@ -2576,6 +2940,10 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
         mapOptionDate(snapshot.option_expiry_date ?? snapshot.optionExpiryDate) ?? null,
         snapshot.option_premium ?? snapshot.optionPremium ?? null,
         snapshot.option_premium_currency ?? snapshot.optionPremiumCurrency ?? null,
+        snapshot.option_settlement_price ?? snapshot.optionSettlementPrice ?? null,
+        snapshot.option_delivery_price ?? snapshot.optionDeliveryPrice ?? null,
+        (snapshot.option_settled_at ?? snapshot.optionSettledAt) ? mysqlDateTime(snapshot.option_settled_at ?? snapshot.optionSettledAt) : null,
+        snapshot.option_settlement_source ?? snapshot.optionSettlementSource ?? null,
         isLocked ? 1 : 0,
         executionStatus,
         snapshot.filled_at ?? snapshot.filledAt ?? null,
@@ -2601,7 +2969,9 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
       `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
               u.username AS related_username, u.avatar AS related_user_avatar,
-              e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency, e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+              e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
+              e.option_settlement_price, e.option_delivery_price, e.option_settled_at, e.option_settlement_source,
+              e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id

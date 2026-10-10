@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 
 type TradeAction = "openLong" | "closeLong" | "openShort" | "closeShort";
 type PositionSide = "long" | "short";
@@ -30,9 +31,46 @@ const T0_INSTRUMENT_TYPES: Array<{ value: T0InstrumentType; label: string; short
   { value: "contract", label: "合约", shortLabel: "合" },
   { value: "option", label: "期权", shortLabel: "期" },
 ];
-function getInstrumentShortLabel(value?: T0InstrumentType) {
-  return T0_INSTRUMENT_TYPES.find((item) => item.value === value)?.shortLabel;
+function getOptionDaysToExpiry(expiryDate?: string) {
+  const matched = expiryDate?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!matched) return undefined;
+  const [, year, month, day] = matched;
+  const expiryDay = Date.UTC(Number(year), Number(month) - 1, Number(day));
+  // 订单页面统一按北京时间的自然日表达“距到期日还有几天”，避免 UTC 跨日造成提前少一天。
+  const beijingNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  const today = Date.UTC(beijingNow.getUTCFullYear(), beijingNow.getUTCMonth(), beijingNow.getUTCDate());
+  return Math.max(0, Math.round((expiryDay - today) / (24 * 60 * 60 * 1000)));
 }
+
+function getInstrumentShortLabel(value?: T0InstrumentType, optionExpiryDate?: string) {
+  const shortLabel = T0_INSTRUMENT_TYPES.find((item) => item.value === value)?.shortLabel;
+  if (value !== "option" || !shortLabel) return shortLabel;
+  const daysToExpiry = getOptionDaysToExpiry(optionExpiryDate);
+  return daysToExpiry === undefined ? shortLabel : `${daysToExpiry}天·${shortLabel}`;
+}
+
+// 与52号账本“融资复息”期权卡片逐项复用紫色磨砂金属参数：四层光影、紫色边框、
+// 外部投影和四向内凹倒角。boxSizing 固定为 border-box，保证手机端报价格不因边框变宽。
+const T0_OPTION_METAL_SURFACE_STYLE = {
+  background: [
+    "linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.18) 22%, rgba(255,255,255,0.0) 45%, rgba(0,0,0,0.0) 60%, rgba(0,0,0,0.22) 100%)",
+    "linear-gradient(90deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.05) 38%, rgba(0,0,0,0.0) 58%, rgba(0,0,0,0.14) 100%)",
+    "linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(255,255,255,0.16) 35%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0.08) 70%, rgba(0,0,0,0.10) 100%)",
+    "linear-gradient(160deg, #5b21b6 0%, #7c3aed 18%, #8b5cf6 40%, #6d28d9 62%, #7c3aed 80%, #5b21b6 100%)",
+  ].join(", "),
+  border: "1.5px solid rgba(109,40,217,0.90)",
+  boxShadow: [
+    "0 6px 20px rgba(91,33,182,0.35)",
+    "0 1px 3px rgba(0,0,0,0.25)",
+    "inset 0 1.5px 0 rgba(216,180,254,0.88)",
+    "inset 0 -1.5px 0 rgba(46,16,101,0.62)",
+    "inset 1.5px 0 rgba(167,139,250,0.28)",
+    "inset -1.5px 0 rgba(0,0,0,0.16)",
+  ].join(", "),
+  boxSizing: "border-box" as const,
+  color: "rgba(255,255,255,0.95)",
+  textShadow: "0 1px 2.5px rgba(0,0,0,0.60), 0 -0.5px 1px rgba(255,255,255,0.22)",
+};
 
 const T0_OPTION_DIRECTIONS: Array<{ value: T0OptionDirection; label: string }> = [
   { value: "long_call", label: "买入看涨（Long Call）" },
@@ -86,6 +124,12 @@ type PreviewTrade = {
   optionExpiryDate?: string;
   optionPremium?: number;
   optionPremiumCurrency?: T0OptionPremiumCurrency;
+  /** 到期自动结算时每 ETH 期权获得或支付的最终价值（USDT）。 */
+  optionSettlementPrice?: number;
+  /** Deribit 最终 delivery 使用的 ETH 指数交割价（USDT）。 */
+  optionDeliveryPrice?: number;
+  optionSettledAt?: string;
+  optionSettlementSource?: string;
   /** 管理员开仓主单的展示锁定标记；成员端不下发、不渲染。 */
   isLocked?: boolean;
   /** 管理员报价专用：挂单在触发前不进入真实仓位、盈亏或费用计算。 */
@@ -103,6 +147,22 @@ type PreviewTrade = {
   isSyncing?: boolean;
   /** 仅成员收益投影视图使用：ETH 数量保持完整，利润与交易成本按此比例结算。 */
   profitShareRate?: number;
+};
+
+type LadderOptionMetadata = {
+  direction?: T0OptionDirection;
+  expiryDate?: string;
+  strikePrice?: number;
+  premium?: number;
+  premiumCurrency?: T0OptionPremiumCurrency;
+};
+
+type LadderCellMetadata = {
+  accountName: string;
+  relatedUserName: string;
+  relatedFundName: string;
+  instrumentShortLabel?: string;
+  option?: LadderOptionMetadata;
 };
 
 type ProfitShareSnapshot = {
@@ -175,6 +235,14 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     optionPremiumCurrency: entry.optionPremiumCurrency === "USDT" || entry.optionPremiumCurrency === "ETH"
       ? entry.optionPremiumCurrency
       : undefined,
+    optionSettlementPrice: entry.optionSettlementPrice === undefined || entry.optionSettlementPrice === null
+      ? undefined
+      : Number(entry.optionSettlementPrice),
+    optionDeliveryPrice: entry.optionDeliveryPrice === undefined || entry.optionDeliveryPrice === null
+      ? undefined
+      : Number(entry.optionDeliveryPrice),
+    optionSettledAt: entry.optionSettledAt ? String(entry.optionSettledAt) : undefined,
+    optionSettlementSource: entry.optionSettlementSource ? String(entry.optionSettlementSource) : undefined,
     isLocked: Boolean(entry.isLocked),
     isPending: Boolean(entry.isPending),
     filledAt: entry.filledAt ? String(entry.filledAt) : undefined,
@@ -360,6 +428,109 @@ function calculateEstimatedUnrealizedNetPnl(
 }
 
 /**
+ * T+0 期权浮盈严格使用同一份期权合约标记价与开仓权利金：
+ * 多头 = （期权标记价 − 权利金单价）× 未平数量；空头方向相反。此处明确不计手续费。
+ * Greeks 接口已将期权标记价统一为 USDT/张；ETH 计价权利金则按 T+0 的内部 ETH 参考价换算。
+ */
+function calculateOptionUnrealizedPnl({
+  quantity,
+  optionMarkPrice,
+  premium,
+  premiumCurrency,
+  ethMarkPrice,
+  direction,
+}: {
+  quantity: number;
+  optionMarkPrice: number | null;
+  premium?: number;
+  premiumCurrency?: T0OptionPremiumCurrency;
+  ethMarkPrice: number | null;
+  direction?: T0OptionDirection;
+}) {
+  const safeQuantity = Number(quantity);
+  const safeOptionMarkPrice = Number(optionMarkPrice);
+  const safePremium = Number(premium);
+  if (!Number.isFinite(safeQuantity) || safeQuantity <= 0
+    || !Number.isFinite(safeOptionMarkPrice) || safeOptionMarkPrice < 0
+    || !Number.isFinite(safePremium) || safePremium <= 0) return null;
+  const premiumUsdtPerContract = premiumCurrency === "ETH"
+    ? (ethMarkPrice !== null && Number.isFinite(ethMarkPrice) && ethMarkPrice > 0 ? safePremium * ethMarkPrice : null)
+    : safePremium;
+  if (premiumUsdtPerContract === null || !Number.isFinite(premiumUsdtPerContract) || premiumUsdtPerContract <= 0) return null;
+  const isShortOption = direction === "short_call" || direction === "short_put";
+  const pnlPerContract = isShortOption
+    ? premiumUsdtPerContract - safeOptionMarkPrice
+    : safeOptionMarkPrice - premiumUsdtPerContract;
+  return {
+    pnl: pnlPerContract * safeQuantity,
+    premiumTotal: premiumUsdtPerContract * safeQuantity,
+  };
+}
+
+function formatOptionQuote(value: number, currency: T0OptionPremiumCurrency) {
+  if (!Number.isFinite(value)) return "--";
+  const precision = Math.abs(value) < 1 ? 6 : 2;
+  const formatted = Number(value).toLocaleString("zh-CN", {
+    minimumFractionDigits: precision === 6 ? 2 : 2,
+    maximumFractionDigits: precision,
+  });
+  return `${formatted} ${currency === "ETH" ? "ETH" : "U"}`;
+}
+
+/** 自动到期结算以开仓权利金和Deribit官方交割价计算；普通开平仓继续沿用既有成交价口径。 */
+function calculateOptionExpiryCloseDetail(
+  opening: PreviewTrade,
+  closing: PreviewTrade,
+  quantity: number,
+): RecentJournalTradeDetail | null {
+  if (opening.instrumentType !== "option" || closing.instrumentType !== "option"
+    || closing.optionSettlementPrice === undefined || closing.optionDeliveryPrice === undefined
+    || opening.optionPremium === undefined || !opening.optionPremiumCurrency || !opening.optionDirection) return null;
+  const matchedQuantity = Number(quantity);
+  const deliveryPrice = Number(closing.optionDeliveryPrice);
+  const settlementPrice = Number(closing.optionSettlementPrice);
+  const premium = Number(opening.optionPremium);
+  if (![matchedQuantity, deliveryPrice, settlementPrice, premium].every(Number.isFinite)
+    || matchedQuantity <= 0 || deliveryPrice <= 0 || settlementPrice < 0 || premium <= 0) return null;
+  const premiumUsdtPerEth = opening.optionPremiumCurrency === "ETH" ? premium * deliveryPrice : premium;
+  const financialQuantity = getTradeFinancialQuantity(closing, matchedQuantity);
+  const isShortOption = opening.optionDirection.startsWith("short");
+  const grossPnl = (isShortOption
+    ? premiumUsdtPerEth - settlementPrice
+    : settlementPrice - premiumUsdtPerEth) * financialQuantity;
+  const allocatedOpeningFee = opening.quantity > 0 ? opening.fee * (matchedQuantity / opening.quantity) : 0;
+  // 自动到期流水的 fee 已同时固化开仓与到期结算两边的交易成本。
+  const closingFee = closing.quantity > 0 ? closing.fee * (matchedQuantity / closing.quantity) : 0;
+  const premiumQuote = formatOptionQuote(premium, opening.optionPremiumCurrency);
+  const settlementQuote = formatOptionQuote(settlementPrice, "USDT");
+  return isShortOption
+    ? {
+      buyPrice: settlementPrice,
+      sellPrice: premiumUsdtPerEth,
+      buyQuote: settlementQuote,
+      sellQuote: premiumQuote,
+      grossPnl,
+      netPnl: grossPnl - allocatedOpeningFee - closingFee,
+      allocatedOpeningFee,
+      closingFee,
+      isOptionQuote: true,
+      isOptionExpirySettlement: true,
+    }
+    : {
+      buyPrice: premiumUsdtPerEth,
+      sellPrice: settlementPrice,
+      buyQuote: premiumQuote,
+      sellQuote: settlementQuote,
+      grossPnl,
+      netPnl: grossPnl - allocatedOpeningFee - closingFee,
+      allocatedOpeningFee,
+      closingFee,
+      isOptionQuote: true,
+      isOptionExpirySettlement: true,
+    };
+}
+
+/**
  * 会员收益分配仅影响利润与交易成本，不得缩减订单本身的 ETH 数量。
  * 非收益投影视图没有该字段，按完整订单（100%）核算。
  */
@@ -532,6 +703,11 @@ function formatAmount(value: number) {
 type RecentJournalTradeDetail = {
   buyPrice?: number;
   sellPrice?: number;
+  /** 期权保留原计价币种的开仓权利金与到期结算报价。 */
+  buyQuote?: string;
+  sellQuote?: string;
+  isOptionQuote?: boolean;
+  isOptionExpirySettlement?: boolean;
   grossPnl?: number;
   netPnl?: number;
   allocatedOpeningFee?: number;
@@ -584,7 +760,12 @@ function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
       current.financialCostBasis += financialQuantity * trade.price;
       current.openingFeeBasis += trade.fee;
       positions.set(key, current);
-      details.set(trade.id, side === "long" ? { buyPrice: trade.price } : { sellPrice: trade.price });
+      const optionQuote = trade.instrumentType === "option" && trade.optionPremium !== undefined && trade.optionPremiumCurrency
+        ? formatOptionQuote(trade.optionPremium, trade.optionPremiumCurrency)
+        : undefined;
+      details.set(trade.id, side === "long"
+        ? { buyPrice: trade.price, buyQuote: optionQuote, isOptionQuote: Boolean(optionQuote) }
+        : { sellPrice: trade.price, sellQuote: optionQuote, isOptionQuote: Boolean(optionQuote) });
       continue;
     }
 
@@ -635,12 +816,24 @@ function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
     }
   }
 
+  // 自动到期平仓保存的是行权价与最终期权结算价，不能套用普通现货/合约的 price 差额公式。
+  // 以 FIFO 已分配的原开仓单覆盖该类明细，保证历史单条、关联视图与净利润一致。
+  const allocations = buildOpeningClosingAllocations(trades);
+  for (const opening of trades) {
+    if (!ACTIONS[opening.action].opening || opening.instrumentType !== "option") continue;
+    for (const allocation of allocations.get(opening.id) ?? []) {
+      const optionExpiryDetail = calculateOptionExpiryCloseDetail(opening, allocation.trade, allocation.quantity);
+      if (optionExpiryDetail) details.set(allocation.trade.id, optionExpiryDetail);
+    }
+  }
   return details;
 }
 
 /** 按单张开仓主单的实际分配数量计算关联平仓的净利润，避免跨主单平仓时重复展示总利润。 */
 function buildLinkedClosingDetail(opening: PreviewTrade, allocation: LinkedClosingAllocation): RecentJournalTradeDetail {
   const { trade: closing, quantity } = allocation;
+  const optionExpiryDetail = calculateOptionExpiryCloseDetail(opening, closing, quantity);
+  if (optionExpiryDetail) return optionExpiryDetail;
   const side = ACTIONS[opening.action].side;
   const allocatedOpeningFee = opening.quantity > 0 ? opening.fee * (quantity / opening.quantity) : 0;
   const closingFee = closing.quantity > 0 ? closing.fee * (quantity / closing.quantity) : 0;
@@ -681,6 +874,8 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
       const existing = buckets.get(key);
       const financialQuantity = trade.instrumentType === "option" ? 0 : getTradeFinancialQuantity(trade);
       if (existing) {
+        // 同档混有不同类型时，不能把整档误标成期权；仅纯期权档使用专属视觉与无伪浮盈口径。
+        if (existing.instrumentType !== trade.instrumentType) existing.instrumentType = undefined;
         existing.originalQuantity += trade.quantity;
         existing.remainingQuantity += trade.quantity;
         existing.costBasis += trade.quantity * trade.price;
@@ -815,7 +1010,15 @@ function buildRealizedGrossProfitDetails(trades: PreviewTrade[]) {
     });
   }
 
-  return details.sort((a, b) => b.trade.createdAt.localeCompare(a.trade.createdAt) || b.trade.id.localeCompare(a.trade.id));
+  const journalDetails = buildRecentJournalTradeDetails(trades);
+  return details
+    .map((detail) => {
+      const optionDetail = journalDetails.get(detail.trade.id);
+      return optionDetail?.isOptionExpirySettlement && optionDetail.grossPnl !== undefined
+        ? { ...detail, grossPnl: optionDetail.grossPnl }
+        : detail;
+    })
+    .sort((a, b) => b.trade.createdAt.localeCompare(a.trade.createdAt) || b.trade.id.localeCompare(a.trade.id));
 }
 
 /**
@@ -890,6 +1093,8 @@ function buildIntegratedDisplayBuckets(
     const existing = displayBuckets.get(key);
 
     if (existing) {
+      // 整合报价只在整档全部为期权时显示紫色金属底；混合档仍按普通仓位展示，避免错误归类。
+      if (existing.instrumentType !== trade.instrumentType) existing.instrumentType = undefined;
       existing.originalQuantity += remainingQuantity;
       existing.remainingQuantity += remainingQuantity;
       existing.costBasis += remainingQuantity * trade.price;
@@ -903,6 +1108,7 @@ function buildIntegratedDisplayBuckets(
     displayBuckets.set(key, {
       key,
       side,
+      instrumentType: trade.instrumentType,
       price: displayPrice,
       originalQuantity: remainingQuantity,
       remainingQuantity,
@@ -1015,6 +1221,8 @@ function buildLinkedJournalGroups(trades: PreviewTrade[]): LinkedJournalGroup[] 
 }
 
 function calculateSummary(buckets: PositionBucket[], markPrice: number | null, trades: PreviewTrade[]) {
+  // 期权自动到期时 price 仍保留行权价供 FIFO 匹配，故累计收益必须复用历史明细中的权利金/结算价公式。
+  const realizedDetails = buildRecentJournalTradeDetails(trades);
   const calculateSide = (side: PositionSide) => {
     const active = buckets.filter((bucket) => bucket.side === side && bucket.remainingQuantity > 0.0000001);
     const all = buckets.filter((bucket) => bucket.side === side);
@@ -1025,10 +1233,11 @@ function calculateSummary(buckets: PositionBucket[], markPrice: number | null, t
     const financialQuantity = active.reduce((total, bucket) => total + bucket.financialQuantity, 0);
     const financialCostBasis = active.reduce((total, bucket) => total + bucket.financialCostBasis, 0);
     const unrealized = calculateEstimatedUnrealizedNetPnl(side, markPrice, financialQuantity, financialCostBasis);
-    const realized = all.reduce((total, bucket) => total + bucket.realizedPnl, 0);
-    const realizedGross = all.reduce((total, bucket) => total + bucket.realizedGrossPnl, 0);
-    const realizedOpeningFee = all.reduce((total, bucket) => total + bucket.realizedOpeningFee, 0);
-    const realizedClosingFee = all.reduce((total, bucket) => total + bucket.realizedClosingFee, 0);
+    const realizedClosingTrades = sideTrades.filter((trade) => !ACTIONS[trade.action].opening);
+    const realized = realizedClosingTrades.reduce((total, trade) => total + (realizedDetails.get(trade.id)?.netPnl ?? 0), 0);
+    const realizedGross = realizedClosingTrades.reduce((total, trade) => total + (realizedDetails.get(trade.id)?.grossPnl ?? 0), 0);
+    const realizedOpeningFee = realizedClosingTrades.reduce((total, trade) => total + (realizedDetails.get(trade.id)?.allocatedOpeningFee ?? 0), 0);
+    const realizedClosingFee = realizedClosingTrades.reduce((total, trade) => total + (realizedDetails.get(trade.id)?.closingFee ?? 0), 0);
     const closedQuantity = all.reduce((total, bucket) => total + bucket.closedQuantity, 0);
     const closedCostBasis = all.reduce((total, bucket) => total + bucket.closedCostBasis, 0);
     const closedNotional = all.reduce((total, bucket) => total + bucket.closedNotional, 0);
@@ -1605,8 +1814,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const historyExecutionFilterSummary = historyExecutionFilter === "all"
     ? "状态全部"
     : historyExecutionFilter === "filled"
-      ? "已成交"
-      : "挂单";
+      ? "未挂单"
+      : "已挂单";
   const historyTypeStatusGridTemplateColumns = useMemo(
     () => buildT0FilterGridTemplateColumns([
       { summary: historyInstrumentFilterSummary, selectedCount: historyInstrumentTypeFilter === "all" ? 0 : 1 },
@@ -1784,9 +1993,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       entryForm.targetPrice === undefined || priceKey(bucket.price) === priceKey(entryForm.targetPrice)
     ));
   }, [buckets, integratedDisplayBuckets, entryArchiveStep, entrySide, entryForm.targetPrice]);
+  const entryScopedFilledTrades = useMemo(
+    () => entryScopedTrades.filter((trade) => !trade.isPending),
+    [entryScopedTrades],
+  );
   const entryScopedSummary = useMemo(
-    () => calculateSummary(entryScopedBuckets, markPrice, entryScopedTrades),
-    [entryScopedBuckets, markPrice, entryScopedTrades],
+    () => calculateSummary(entryScopedBuckets, markPrice, entryScopedFilledTrades),
+    [entryScopedBuckets, markPrice, entryScopedFilledTrades],
   );
   const entrySideSummary = entrySide === "long" ? entryScopedSummary.long : entryScopedSummary.short;
   // 档位详情已由用户刚点击的价格格定位，无需在标题重复显示档位，避免移动端换行。
@@ -1874,6 +2087,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const t0OptionStrikes = t0OptionStrikeRows
     .map((strike) => Number(strike))
     .filter((strike: number) => Number.isFinite(strike) && strike > 0);
+  // 期权不是只有数量和行权价：方向、Deribit 到期日、行权价、权利金及计价币任缺其一，都不能提交。
+  // 与服务端 resolveOptionParameters 双重校验，避免移动端在字段未完整时误触保存。
+  const optionFormValidationMessage = useMemo(() => {
+    if (!isOptionOpeningEntry) return null;
+    const quantity = Number(normalizeEthQuantity(entryForm.quantity));
+    const strikePrice = Number(entryForm.price);
+    const premium = Number(entryForm.optionPremium);
+    if (quantityFormatError || !Number.isFinite(quantity) || quantity <= 0) return "请填写大于 0 的期权数量";
+    if (!T0_OPTION_DIRECTIONS.some((option) => option.value === entryForm.optionDirection)) return "请选择期权方向";
+    if (!entryForm.optionExpiryDate) return "请选择期权到期日";
+    if (!entryForm.editingEntryId && !t0OptionDeribitLabel) return "请从 Deribit 可用到期日中选择期权到期日";
+    if (!Number.isFinite(strikePrice) || strikePrice <= 0) return "请选择期权行权价";
+    if (t0OptionDeribitLabel && t0OptionStrikesQuery.isLoading) return "行权价列表加载中，请稍候";
+    if (t0OptionDeribitLabel && !t0OptionStrikes.some((strike) => Math.abs(strike - strikePrice) < 0.0000001)) return "请选择所选到期日对应的 Deribit 行权价";
+    if (!entryForm.optionPremium.trim() || !Number.isFinite(premium) || premium <= 0) return "请输入大于 0 的权利金";
+    if (!(["USDT", "ETH"] as T0OptionPremiumCurrency[]).includes(entryForm.optionPremiumCurrency)) return "请选择权利金计价币种";
+    return null;
+  }, [entryForm.editingEntryId, entryForm.optionDirection, entryForm.optionExpiryDate, entryForm.optionPremium, entryForm.optionPremiumCurrency, entryForm.price, entryForm.quantity, isOptionOpeningEntry, quantityFormatError, t0OptionDeribitLabel, t0OptionStrikes, t0OptionStrikesQuery.isLoading]);
   const isCloseReview = isClosingEntry && closeConfirmationStep === "review";
   // 平仓必须继承所选开仓单的账户、用户与项目归属，首次输入和二次确认均不可改。
   // 开仓编辑受后端 FIFO 依赖校验保护；未发生后续平仓时，管理员必须能改到既有账户。
@@ -1907,18 +2138,34 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const targetBucket = scopeBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(targetPrice));
     return Math.max(0, Math.min(sourceRemainingQuantity, targetBucket?.remainingQuantity ?? 0));
   }, [closingSourceTrade, entryForm.targetPrice, isClosingEntry, ladderOpeningClosingAllocations, selectedFilledTrades]);
+  // 成员端的期权、锁定单与未成交挂单必须逐笔可见并保留状态标识；
+  // 这些单不再混入普通整合报价，避免视觉重复，但统计仍只使用 selectedFilledTrades。
+  const memberSpecialOpeningIds = useMemo(() => new Set(
+    selectedTrades
+      .filter((trade) => ACTIONS[trade.action].opening
+        && (trade.isPending || trade.isLocked || trade.instrumentType === "option"))
+      .map((trade) => trade.id),
+  ), [selectedTrades]);
+  const ladderIntegratedDisplayBuckets = useMemo(() => {
+    if (!isMemberView) return integratedDisplayBuckets;
+    return buildIntegratedDisplayBuckets(
+      selectedFilledTrades.filter((trade) => !memberSpecialOpeningIds.has(trade.id)),
+      ladderOpeningClosingAllocations,
+      integratedArchiveStep,
+    );
+  }, [integratedDisplayBuckets, integratedArchiveStep, isMemberView, ladderOpeningClosingAllocations, memberSpecialOpeningIds, selectedFilledTrades]);
   const priceRows = useMemo<LadderPriceRow[]>(() => {
-    const activePositionPrices = integratedDisplayBuckets
+    const activePositionPrices = ladderIntegratedDisplayBuckets
       .filter((bucket) => bucket.remainingQuantity > 0.0000001)
       .map((bucket) => bucket.price);
     return buildAdaptiveLadderLevels(integratedMarkLadderPrice, activePositionPrices, integratedArchiveStep).map((price) => ({
       key: `integrated-${priceKey(price)}`,
       price,
-      long: integratedDisplayBuckets.find((bucket) => bucket.side === "long" && priceKey(bucket.price) === priceKey(price)),
-      short: integratedDisplayBuckets.find((bucket) => bucket.side === "short" && priceKey(bucket.price) === priceKey(price)),
+      long: ladderIntegratedDisplayBuckets.find((bucket) => bucket.side === "long" && priceKey(bucket.price) === priceKey(price)),
+      short: ladderIntegratedDisplayBuckets.find((bucket) => bucket.side === "short" && priceKey(bucket.price) === priceKey(price)),
       isMark: integratedMarkLadderPrice === price,
     }));
-  }, [integratedDisplayBuckets, integratedMarkLadderPrice, integratedArchiveStep]);
+  }, [ladderIntegratedDisplayBuckets, integratedMarkLadderPrice, integratedArchiveStep]);
   const individualPriceRows = useMemo<LadderPriceRow[]>(() => {
     const individualBuckets: Array<{ trade: PreviewTrade; bucket: PositionBucket }> = [];
     for (const trade of selectedTrades) {
@@ -1938,6 +2185,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         bucket: {
           key: `entry:${trade.id}`,
           side,
+          instrumentType: trade.instrumentType,
           price,
           originalQuantity: trade.quantity,
           remainingQuantity,
@@ -1988,8 +2236,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }));
     });
   }, [selectedTrades, ladderOpeningClosingAllocations, markLadderPrice]);
+  const memberSpecialIndividualPriceRows = useMemo(
+    () => isMemberView
+      ? individualPriceRows
+        .filter((row) => Boolean(row.openingTrade && memberSpecialOpeningIds.has(row.openingTrade.id)))
+        // 同价的普通整合行保留实时价高亮；特殊订单行仅展示订单状态，避免重复强调中轴价格。
+        .map((row) => ({ ...row, isMark: false }))
+      : [],
+    [individualPriceRows, isMemberView, memberSpecialOpeningIds],
+  );
   const isIndividualLadderView = canManage && adminLadderDisplayMode === "individual";
-  const displayedPriceRows = isIndividualLadderView ? individualPriceRows : priceRows;
+  const displayedPriceRows = isIndividualLadderView
+    ? individualPriceRows
+    : isMemberView
+      ? [...priceRows, ...memberSpecialIndividualPriceRows].sort((a, b) => b.price - a.price || a.key.localeCompare(b.key))
+      : priceRows;
 
   const openEntrySheet = (
     action: TradeAction = "openLong",
@@ -2667,35 +2928,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       toast.error("请输入大于 0 的 ETH 数量");
       return;
     }
-    if (!Number.isFinite(price) || price <= 0) {
-      toast.error(isOptionOpening ? "请输入行权价" : "请输入成交价格");
-      return;
-    }
     if (selectedAction.opening && !entryForm.editingEntryId && !entryForm.instrumentType) {
       toast.error("请选择现货、合约或期权");
       return;
     }
     if (isOptionOpening) {
-      if (!entryForm.optionExpiryDate) {
-        toast.error("请选择期权到期日");
+      if (optionFormValidationMessage) {
+        toast.error(optionFormValidationMessage);
         return;
       }
-      if (!t0OptionDeribitLabel && !entryForm.editingEntryId) {
-        toast.error("请从 Deribit 可用到期日中选择期权到期日");
-        return;
-      }
-      if (t0OptionStrikesQuery.isLoading) {
-        toast.error("行权价列表加载中，请稍候再保存");
-        return;
-      }
-      if (t0OptionDeribitLabel && !t0OptionStrikes.some((strike) => Math.abs(strike - price) < 0.0000001)) {
-        toast.error("请从所选到期日的 Deribit 行权价列表中选择行权价");
-        return;
-      }
-      if (!entryForm.optionPremium.trim() || !Number.isFinite(Number(entryForm.optionPremium)) || Number(entryForm.optionPremium) <= 0) {
-        toast.error("请输入大于0的权利金");
-        return;
-      }
+    }
+    if (!Number.isFinite(price) || price <= 0) {
+      toast.error(isOptionOpening ? "请输入行权价" : "请输入成交价格");
+      return;
     }
     const archiveTargetPrice = selectedAction.opening
       ? archivePriceForSide(selectedAction.side, price)
@@ -2947,8 +3192,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <span className="shrink-0 text-[10px] font-medium text-amber-700">未匹配开仓</span>
             <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closing.action].label}</span>
             <span className="shrink-0 font-medium text-slate-800">{formatQuantity(closing.quantity)}E</span>
-            {detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{formatPrice(detail.buyPrice)}</span>}
-            {detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{formatPrice(detail.sellPrice)}</span>}
+            {detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
+            {detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>}
+            {detail?.isOptionQuote && <span className="shrink-0 text-violet-700">行权{formatPrice(closing.price)}</span>}
             {!detail && <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
           </div>
           <div className="mt-1 flex min-w-0 items-center gap-x-1.5 whitespace-nowrap text-[11px] text-slate-500">
@@ -2983,7 +3229,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
               <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[opening.action].label}</span>
               <span className="shrink-0 font-medium text-slate-800">{formatQuantity(opening.quantity)}E</span>
-              <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{formatPrice(opening.price)}</span>
+              {opening.isPending && <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700"><Clock3 className="h-3 w-3" />挂单</span>}
+              <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{opening.instrumentType === "option" && opening.optionPremium !== undefined && opening.optionPremiumCurrency ? formatOptionQuote(opening.optionPremium, opening.optionPremiumCurrency) : formatPrice(opening.price)}</span>
+              {opening.instrumentType === "option" && <span className="shrink-0 text-violet-700">行权{formatPrice(opening.price)}</span>}
             </div>
             <span className="ml-auto shrink-0 text-[10px] font-medium text-slate-500">
               {closedQuantity > 0 ? `已平 ${formatQuantity(closedQuantity)} · 剩 ${formatQuantity(remainingQuantity)}` : "未平"}
@@ -3018,7 +3266,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
                   <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closing.action].label}</span>
                   <span className="shrink-0 font-medium text-slate-800">{formatQuantity(allocation.quantity)}E</span>
-                  <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>
+                  {detail.isOptionQuote ? <>
+                    <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>
+                    <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>
+                    <span className="shrink-0 text-violet-700">行权{formatPrice(closing.price)}</span>
+                  </> : <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
                 </div>
                 <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
                 <button
@@ -3245,7 +3497,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 />
               )}
             </div>
-            {canManage && <div className="mt-2 grid grid-cols-2 gap-2">
+            {(canManage || isMemberView) && <div className="mt-2 grid grid-cols-2 gap-2">
               <label className="flex min-w-0 items-center gap-1.5">
                 <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>类型</span>
                 <select
@@ -3273,9 +3525,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-sky-600"
                   aria-label="按成交状态筛选"
                 >
-                  <option value="all">全部</option>
-                  <option value="filled">已成交</option>
-                  <option value="pending">挂单</option>
+                  <option value="all">全部状态</option>
+                  <option value="filled">未挂单（已成交）</option>
+                  <option value="pending">已挂单</option>
                 </select>
               </label>
             </div>}
@@ -3341,12 +3593,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             }}
           >
             {displayedPriceRows.map((row) => {
-              const individualMetadata = isIndividualLadderView && row.openingTrade
+              const individualMetadata = (isIndividualLadderView || isMemberView) && row.openingTrade
                 ? {
                   accountName: getTradeAccountName(row.openingTrade),
                   relatedUserName: getTradeRelatedUserName(row.openingTrade),
                   relatedFundName: getTradeRelatedFundName(row.openingTrade),
-                  instrumentShortLabel: getInstrumentShortLabel(row.openingTrade.instrumentType),
+                  instrumentShortLabel: getInstrumentShortLabel(row.openingTrade.instrumentType, row.openingTrade.optionExpiryDate),
+                  option: row.openingTrade.instrumentType === "option"
+                    ? {
+                      direction: row.openingTrade.optionDirection,
+                      expiryDate: row.openingTrade.optionExpiryDate,
+                      strikePrice: row.openingTrade.price,
+                      premium: row.openingTrade.optionPremium,
+                      premiumCurrency: row.openingTrade.optionPremiumCurrency,
+                    }
+                    : undefined,
                 }
                 : undefined;
               return (
@@ -3360,8 +3621,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   side="long"
                   markPrice={markPrice}
                   metadata={individualMetadata}
-                  isLocked={Boolean(isIndividualLadderView && row.long && row.openingTrade?.isLocked)}
-                  isPending={Boolean(isIndividualLadderView && row.long && row.openingTrade?.isPending)}
+                  isLocked={Boolean(row.long && row.openingTrade?.isLocked)}
+                  isPending={Boolean(row.long && row.openingTrade?.isPending)}
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.long) return;
@@ -3420,8 +3681,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   side="short"
                   markPrice={markPrice}
                   metadata={individualMetadata}
-                  isLocked={Boolean(isIndividualLadderView && row.short && row.openingTrade?.isLocked)}
-                  isPending={Boolean(isIndividualLadderView && row.short && row.openingTrade?.isPending)}
+                  isLocked={Boolean(row.short && row.openingTrade?.isLocked)}
+                  isPending={Boolean(row.short && row.openingTrade?.isPending)}
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.short) return;
@@ -3610,9 +3871,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-sky-600"
                       aria-label="按历史成交状态筛选"
                     >
-                      <option value="all">全部</option>
-                      <option value="filled">已成交</option>
-                      <option value="pending">挂单</option>
+                      <option value="all">全部状态</option>
+                      <option value="filled">未挂单（已成交）</option>
+                      <option value="pending">已挂单</option>
                     </select>
                   </label>
                 </div>
@@ -3631,8 +3892,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
                         <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].label}</span>
                         <span className="shrink-0 font-medium text-slate-800">{formatQuantity(trade.quantity)}E</span>
-                        {detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{formatPrice(detail.buyPrice)}</span>}
-                        {detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{formatPrice(detail.sellPrice)}</span>}
+                        {trade.isPending && <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700"><Clock3 className="h-3 w-3" />挂单</span>}
+                        {detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
+                        {detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>}
+                        {detail?.isOptionQuote && <span className="shrink-0 text-violet-700">行权{formatPrice(trade.price)}</span>}
                         {!detail && <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{formatPrice(trade.price)}</span>}
                         {trade.isSyncing && <span className="shrink-0 text-amber-600">保存中</span>}
                       </div>
@@ -4034,7 +4297,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3 items-start">
-                  <Field label={<span className="inline-flex items-center gap-1 text-sm font-semibold text-slate-800">数量（ETH）{ACTIONS[entryForm.action].opening && entryForm.isPending && <span className="text-[10px] font-bold text-sky-600">挂单</span>}</span>}>
+                  <Field label={<span className="inline-flex items-center gap-1 text-sm font-semibold text-slate-800">数量（ETH）{isOptionOpeningEntry && <span className="text-rose-500">*</span>}{ACTIONS[entryForm.action].opening && entryForm.isPending && <span className="text-[10px] font-bold text-sky-600">挂单</span>}</span>}>
                     <div className="relative">
                       <input
                         inputMode="decimal"
@@ -4077,7 +4340,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
                   <Field label={
                     <span className="inline-flex max-w-full items-baseline gap-1 text-sm font-semibold text-slate-800">
-                      <span>{ACTIONS[entryForm.action].opening ? isOptionOpeningEntry ? "行权价" : "成交价" : "平仓价"}</span>
+                      <span>{ACTIONS[entryForm.action].opening ? isOptionOpeningEntry ? "行权价" : "成交价" : "平仓价"}{isOptionOpeningEntry && <span className="text-rose-500">*</span>}</span>
                       <span className="truncate text-[9px] font-normal tabular-nums text-slate-400">{isOptionOpeningEntry ? "期权不计合约手续费" : `手续费 ${OKX_VIP2_TAKER_FEE_LABEL} · ${estimatedFeeUsdt === null ? "--" : `${formatFee(estimatedFeeUsdt)} U`}`}</span>
                     </span>
                   }>
@@ -4191,7 +4454,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     <span className="text-[10px] font-medium text-violet-600">标的固定 ETH · Deribit</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="方向">
+                    <Field label={<span>方向 <span className="text-rose-500">*</span></span>}>
                       <select
                         disabled={isCloseReview}
                         value={entryForm.optionDirection}
@@ -4201,7 +4464,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         {T0_OPTION_DIRECTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                       </select>
                     </Field>
-                    <Field label="到期日">
+                    <Field label={<span>到期日 <span className="text-rose-500">*</span></span>}>
                       <select
                         disabled={isCloseReview || t0OptionExpiriesQuery.isLoading}
                         value={t0OptionDeribitLabel}
@@ -4230,7 +4493,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         ))}
                       </select>
                     </Field>
-                    <Field label="权利金">
+                    <Field label={<span>权利金 <span className="text-rose-500">*</span></span>}>
                       <input
                         inputMode="decimal"
                         disabled={isCloseReview}
@@ -4240,7 +4503,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         className="h-11 w-full rounded border border-violet-200 bg-white px-3 text-base font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-50"
                       />
                     </Field>
-                    <Field label="权利金计价">
+                    <Field label={<span>权利金计价 <span className="text-rose-500">*</span></span>}>
                       <div className="grid h-11 grid-cols-2 overflow-hidden rounded border border-violet-200 bg-white">
                         {(["USDT", "ETH"] as T0OptionPremiumCurrency[]).map((currency) => {
                           const active = entryForm.optionPremiumCurrency === currency;
@@ -4254,6 +4517,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         })}
                       </div>
                     </Field>
+                  </div>
+                  <div className={`mt-2 text-[10px] font-medium leading-4 ${optionFormValidationMessage ? "text-rose-600" : "text-violet-700"}`}>
+                    {optionFormValidationMessage ?? "期权参数已完整，可保存。"}
                   </div>
                 </div>}
 
@@ -4472,7 +4738,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             }>
               {!isCloseReview && (
                 <button
-                  disabled={isEditingEntry ? updateOpeningEntryMutation.isPending : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)}
+                  disabled={(isEditingEntry ? updateOpeningEntryMutation.isPending : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)) || Boolean(optionFormValidationMessage)}
                   onClick={handleSaveEntry}
                   className="w-full h-12 rounded bg-indigo-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99]"
                 >
@@ -5404,25 +5670,43 @@ function AccountOverview({
 }
 
 function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, isPending = false }: {
-  bucket?: PositionBucket;
+  bucket: PositionBucket;
   side: PositionSide;
   markPrice: number | null;
   onClick: () => void;
   readOnly?: boolean;
-  metadata?: { accountName: string; relatedUserName: string; relatedFundName: string; instrumentShortLabel?: string };
+  metadata?: LadderCellMetadata;
   /** 仅管理员逐笔报价使用的黑金锁定外观。 */
   isLocked?: boolean;
   /** 仅管理员逐笔报价使用：挂单未成交，采用浅蓝状态底并不展示盈亏。 */
   isPending?: boolean;
 }) {
   const isLong = side === "long";
-  if (!bucket || bucket.remainingQuantity <= 0.0000001) {
-    return <div className="px-3 flex items-center text-xs text-slate-300">—</div>;
-  }
+  const isOption = bucket.instrumentType === "option";
+  const optionMetadata = metadata?.option;
+  const optionGreeks = useOptionGreeks({
+    currency: "ETH",
+    exerciseDate: optionMetadata?.expiryDate ?? "",
+    strikePrice: Number(optionMetadata?.strikePrice) || 0,
+    direction: optionMetadata?.direction ?? "long_call",
+    enabled: isOption && !isPending && Boolean(optionMetadata?.expiryDate) && Number(optionMetadata?.strikePrice) > 0,
+  });
+  const optionPnlResult = isOption && !isPending
+    ? calculateOptionUnrealizedPnl({
+      quantity: bucket.remainingQuantity,
+      optionMarkPrice: optionGreeks.data?.markPrice ?? null,
+      premium: optionMetadata?.premium,
+      premiumCurrency: optionMetadata?.premiumCurrency,
+      ethMarkPrice: markPrice,
+      direction: optionMetadata?.direction,
+    })
+    : null;
   const tone = isPending
     ? `text-slate-700${readOnly ? "" : " hover:brightness-[0.98]"}`
     : isLocked
     ? `text-[#f5d78e]${readOnly ? "" : " hover:brightness-110"}`
+    : isOption
+    ? `text-[#f5e9ff]${readOnly ? "" : " hover:brightness-110"}`
     : isLong
     ? `text-rose-600${readOnly ? "" : " hover:brightness-105"}`
     : `text-emerald-800${readOnly ? "" : " hover:brightness-105"}`;
@@ -5447,7 +5731,13 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
     background: "linear-gradient(90deg, rgba(239,246,255,0.96), rgba(219,234,254,0.78) 58%, rgba(224,242,254,0.64))",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.92), inset 0 -1px 0 rgba(2,132,199,0.14), inset 1px 0 0 rgba(56,189,248,0.10)",
   };
-  const surfaceStyle = isPending ? pendingSurfaceStyle : isLocked ? lockedSurfaceStyle : sideSurfaceStyle;
+  const surfaceStyle = isPending
+    ? pendingSurfaceStyle
+    : isLocked
+    ? lockedSurfaceStyle
+    : isOption
+    ? T0_OPTION_METAL_SURFACE_STYLE
+    : sideSurfaceStyle;
   const quantityTextStyle = isPending
     ? { textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.92), 0.75px 0.75px 0 rgba(2,132,199,0.18)" }
     : isLocked
@@ -5458,13 +5748,26 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
       backgroundClip: "text",
       filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.92))",
     }
+    : isOption
+    ? { textShadow: "0 1px 1.5px rgba(46,16,101,0.88), 0 -0.5px 1px rgba(255,255,255,0.30)" }
     : { textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.88), 0.75px 0.75px 0 rgba(71,85,105,0.20)" };
-  const floatingPnl = isPending || bucket.instrumentType === "option" ? null : calculateEstimatedUnrealizedNetPnl(side, markPrice, bucket.financialQuantity, bucket.financialCostBasis);
-  // 与金额盈亏保持同一口径：逐档预估净盈亏 ÷ 本档剩余持仓成本；不计资金费。
-  const floatingReturnRate = floatingPnl === null || bucket.financialCostBasis <= 0
+  const floatingPnl = isPending
     ? null
-    : floatingPnl / bucket.financialCostBasis;
-  const pnlTone = floatingPnl !== null && floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600";
+    : isOption
+    ? optionPnlResult?.pnl ?? null
+    : calculateEstimatedUnrealizedNetPnl(side, markPrice, bucket.financialQuantity, bucket.financialCostBasis);
+  // 期权收益率以开仓权利金总成本为基数，普通仓位继续使用剩余成交成本；两者均不计资金费。
+  const floatingReturnBase = isOption ? optionPnlResult?.premiumTotal ?? null : bucket.financialCostBasis;
+  const floatingReturnRate = floatingPnl === null || floatingReturnBase === null || floatingReturnBase <= 0
+    ? null
+    : floatingPnl / floatingReturnBase;
+  const pnlTone = floatingPnl !== null && floatingPnl >= 0
+    ? (isOption ? "text-rose-200" : "text-rose-600")
+    : (isOption ? "text-emerald-200" : "text-emerald-600");
+  // 全局盈亏颜色口径：盈利红、亏损绿。紫色金属底采用高饱和亮红/亮绿，避免浅粉在手机屏上显成金色。
+  const optionPnlColor = floatingPnl !== null && floatingPnl >= 0 ? "#ff4d4f" : "#4ade80";
+  // 精确沿用黑金锁定格金额的细白高光与单侧灰影；不再使用厚重的四向描边。
+  const pnlTextStyle = { textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.84), 0.55px 0.55px 0 rgba(71,85,105,0.18)" };
   const content = (
     <div className="w-full min-w-0">
       <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
@@ -5472,15 +5775,15 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           <span className={`shrink-0 font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"} ${isPending ? "text-sky-700" : ""}`} style={quantityTextStyle}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
         </div>
         {floatingPnl !== null && (
-          <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`}>
-            <span className={`whitespace-nowrap font-semibold leading-none ${metadata ? "text-[10px]" : "text-[11px]"}`} style={{ textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.84), 0.55px 0.55px 0 rgba(71,85,105,0.18)" }}>{formatSigned(floatingPnl)}</span>
+          <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`} style={isOption ? { color: optionPnlColor, textShadow: "none" } : undefined}>
+            <span className={`whitespace-nowrap font-semibold leading-none ${metadata ? "text-[10px]" : "text-[11px]"}`} style={pnlTextStyle}>{formatSigned(floatingPnl)}</span>
             {floatingReturnRate !== null && (
               <span className={`${metadata ? "mt-0.5 text-[9px]" : "mt-1 text-[10px]"} font-medium leading-none opacity-85`}>{formatSignedPercent(floatingReturnRate)}</span>
             )}
           </span>
         )}
       </div>
-      {metadata && <div className={`mt-1 flex min-w-0 items-center text-left text-[9px] font-medium leading-none ${isLocked && !isPending ? "text-[#c9a84c]/85" : "text-slate-500"}`} aria-label={`账户 ${metadata.accountName}，用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}${isPending ? "，挂单待成交" : ""}`}>
+      {metadata && <div className={`mt-1 flex min-w-0 items-center text-left text-[9px] font-medium leading-none ${isLocked && !isPending ? "text-[#c9a84c]/85" : isOption ? "text-violet-100/90" : "text-slate-500"}`} aria-label={`账户 ${metadata.accountName}，用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}${isPending ? "，挂单待成交" : ""}`}>
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <span className="min-w-0 shrink truncate" title={`账户：${metadata.accountName}`}>{metadata.accountName}</span>
           <span className="shrink-0">·</span>
@@ -5491,7 +5794,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
         {(isLocked || isPending || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
           {isLocked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#f5d78e]/85" strokeWidth={2.5} aria-label="已锁定" />}
           {isPending && <Clock3 className="h-2.5 w-2.5 shrink-0 text-sky-600" strokeWidth={2.5} aria-label="挂单待成交" />}
-          {metadata.instrumentShortLabel && <span className={isLocked && !isPending ? "text-[#f5d78e]/85" : "text-slate-500"} title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
+          {metadata.instrumentShortLabel && <span className={isLocked && !isPending ? "text-[#f5d78e]/85" : isOption ? "text-violet-100" : "text-slate-500"} title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
         </div>}
       </div>}
     </div>
@@ -5531,7 +5834,7 @@ function LadderCell({
   onClose: () => void;
   onOpen: () => void;
   readOnly?: boolean;
-  metadata?: { accountName: string; relatedUserName: string; relatedFundName: string; instrumentShortLabel?: string };
+  metadata?: LadderCellMetadata;
   isLocked?: boolean;
   isPending?: boolean;
 }) {
