@@ -11,6 +11,7 @@ import {
   MoreHorizontal,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   UserRound,
   X,
 } from "lucide-react";
@@ -992,6 +993,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [relatedFundFilterIds, setRelatedFundFilterIds] = useState<string[]>([]);
   const [instrumentTypeFilter, setInstrumentTypeFilter] = useState<T0InstrumentFilter>("all");
   const [executionFilter, setExecutionFilter] = useState<T0ExecutionFilter>("all");
+  // 历史记录拥有独立筛选范围：不影响上方持仓汇总与T形交割表。
+  const [showHistoryFilters, setShowHistoryFilters] = useState(false);
+  const [historyAccountFilterIds, setHistoryAccountFilterIds] = useState<string[]>([]);
+  const [historyRelatedUserFilterIds, setHistoryRelatedUserFilterIds] = useState<string[]>([]);
+  const [historyRelatedFundFilterIds, setHistoryRelatedFundFilterIds] = useState<string[]>([]);
+  const [historyInstrumentTypeFilter, setHistoryInstrumentTypeFilter] = useState<T0InstrumentFilter>("all");
+  const [historyExecutionFilter, setHistoryExecutionFilter] = useState<T0ExecutionFilter>("all");
   const [journalActionFilters, setJournalActionFilters] = useState<Set<TradeAction>>(
     () => new Set(RECENT_JOURNAL_ACTIONS),
   );
@@ -1338,16 +1346,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => selectedTrades.filter((trade) => !trade.isPending),
     [selectedTrades],
   );
+  const historyExecutionScopedTrades = useMemo(
+    () => historyExecutionFilter === "all"
+      ? trades
+      : trades.filter((trade) => historyExecutionFilter === "pending" ? Boolean(trade.isPending) : !trade.isPending),
+    [trades, historyExecutionFilter],
+  );
+  const historyInstrumentScopedTrades = useMemo(
+    () => filterTradesByInstrumentType(historyExecutionScopedTrades, historyInstrumentTypeFilter),
+    [historyExecutionScopedTrades, historyInstrumentTypeFilter],
+  );
   const journalScopeTrades = useMemo(
-    () => instrumentScopedTrades.filter((trade) => (
+    () => historyInstrumentScopedTrades.filter((trade) => (
       trade.symbol === "ETH"
-      && (selectedAccountIds.length === 0 || selectedAccountIds.includes(trade.accountId))
-      && (relatedUserFilterIds.length === 0
-        || relatedUserFilterIds.some((id) => id === "unlinked" ? (!trade.relatedUserId || trade.relatedUserHidden) : trade.relatedUserId === id))
-      && (relatedFundFilterIds.length === 0
-        || relatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
+      && (historyAccountFilterIds.length === 0 || historyAccountFilterIds.includes(trade.accountId))
+      && (historyRelatedUserFilterIds.length === 0
+        || historyRelatedUserFilterIds.some((id) => id === "unlinked" ? (!trade.relatedUserId || trade.relatedUserHidden) : trade.relatedUserId === id))
+      && (historyRelatedFundFilterIds.length === 0
+        || historyRelatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
-    [instrumentScopedTrades, selectedAccountIds, relatedUserFilterIds, relatedFundFilterIds],
+    [historyInstrumentScopedTrades, historyAccountFilterIds, historyRelatedUserFilterIds, historyRelatedFundFilterIds],
   );
   const availableJournalActions = useMemo(
     () => RECENT_JOURNAL_ACTIONS.filter((action) => journalScopeTrades.some((trade) => trade.action === action)),
@@ -1441,12 +1459,76 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const accountFilterOptions = accounts.map((account) => ({ id: account.id, label: account.name }));
   const relatedUserFilterOptions = [
     ...(trades.some((trade) => !trade.relatedUserId) ? [{ id: "unlinked", label: "未关联用户（历史）" }] : []),
-    ...recentRelatedUsers.map((user) => ({ id: user.id, label: `${user.name}${user.username ? ` · @${user.username}` : ""}` })),
+    // 下拉内保留昵称和用户名便于辨认；顶部筛选框选中后只展示昵称，节省移动端空间。
+    ...recentRelatedUsers.map((user) => ({ id: user.id, label: `${user.name}${user.username ? ` · @${user.username}` : ""}`, summaryLabel: user.name })),
   ];
   const relatedFundFilterOptions = [
     ...(trades.some((trade) => !trade.relatedFundId) ? [{ id: "unclassified", label: "未区分项目（历史）" }] : []),
     ...availableRelatedFunds.map((fund) => ({ id: fund.id, label: fund.name })),
   ];
+  const historyAvailableRelatedFunds = useMemo(
+    () => historyRelatedUserFilterIds.length === 0
+      ? relatedFunds
+      : relatedFunds.filter((fund) => Boolean(fund.relatedUserId) && historyRelatedUserFilterIds.includes(fund.relatedUserId!)),
+    [relatedFunds, historyRelatedUserFilterIds],
+  );
+  const historyRelatedFundFilterOptions = [
+    ...(trades.some((trade) => !trade.relatedFundId) ? [{ id: "unclassified", label: "未区分项目（历史）" }] : []),
+    ...historyAvailableRelatedFunds.map((fund) => ({ id: fund.id, label: fund.name })),
+  ];
+  const historyFilterGridTemplateColumns = useMemo(() => {
+    const summaryFor = (label: string, options: T0MultiSelectOption[], selectedIds: string[]) => {
+      const selected = options.filter((option) => selectedIds.includes(option.id));
+      if (selected.length === 0) return `${label}全部`;
+      if (selected.length === 1) return selected[0].summaryLabel ?? selected[0].label;
+      return `已选 ${selected.length} 项`;
+    };
+    return buildT0FilterGridTemplateColumns([
+      { summary: summaryFor("账户", accountFilterOptions, historyAccountFilterIds), selectedCount: historyAccountFilterIds.length },
+      { summary: summaryFor("用户", relatedUserFilterOptions, historyRelatedUserFilterIds), selectedCount: historyRelatedUserFilterIds.length },
+      { summary: summaryFor("项目", historyRelatedFundFilterOptions, historyRelatedFundFilterIds), selectedCount: historyRelatedFundFilterIds.length },
+    ]);
+  }, [accountFilterOptions, relatedUserFilterOptions, historyRelatedFundFilterOptions, historyAccountFilterIds, historyRelatedUserFilterIds, historyRelatedFundFilterIds]);
+  const hasActiveHistoryDetailFilters = historyAccountFilterIds.length > 0
+    || historyRelatedUserFilterIds.length > 0
+    || historyRelatedFundFilterIds.length > 0
+    || historyInstrumentTypeFilter !== "all"
+    || historyExecutionFilter !== "all";
+  const historyInstrumentFilterSummary = historyInstrumentTypeFilter === "all"
+    ? "类型全部"
+    : historyInstrumentTypeFilter === "unlabeled"
+      ? "未标注"
+      : T0_INSTRUMENT_TYPES.find((item) => item.value === historyInstrumentTypeFilter)?.label ?? "类型";
+  const historyExecutionFilterSummary = historyExecutionFilter === "all"
+    ? "状态全部"
+    : historyExecutionFilter === "filled"
+      ? "已成交"
+      : "挂单";
+  const historyTypeStatusGridTemplateColumns = useMemo(
+    () => buildT0FilterGridTemplateColumns([
+      { summary: historyInstrumentFilterSummary, selectedCount: historyInstrumentTypeFilter === "all" ? 0 : 1 },
+      { summary: historyExecutionFilterSummary, selectedCount: historyExecutionFilter === "all" ? 0 : 1 },
+    ]),
+    [historyInstrumentFilterSummary, historyExecutionFilterSummary, historyInstrumentTypeFilter, historyExecutionFilter],
+  );
+  useEffect(() => {
+    setHistoryAccountFilterIds((current) => current.filter((id) => accounts.some((account) => account.id === id)));
+    setHistoryRelatedUserFilterIds((current) => current.filter((id) => id === "unlinked" || recentRelatedUsers.some((user) => user.id === id)));
+    setHistoryRelatedFundFilterIds((current) => current.filter((id) => id === "unclassified" || relatedFunds.some((fund) => fund.id === id)));
+  }, [accounts, recentRelatedUsers, relatedFunds]);
+  const topFilterGridTemplateColumns = useMemo(() => {
+    const summaryFor = (label: string, options: T0MultiSelectOption[], selectedIds: string[]) => {
+      const selected = options.filter((option) => selectedIds.includes(option.id));
+      if (selected.length === 0) return `${label}全部`;
+      if (selected.length === 1) return selected[0].summaryLabel ?? selected[0].label;
+      return `已选 ${selected.length} 项`;
+    };
+    return buildT0FilterGridTemplateColumns([
+      { summary: summaryFor("账户", accountFilterOptions, selectedAccountIds), selectedCount: selectedAccountIds.length },
+      { summary: summaryFor("用户", relatedUserFilterOptions, relatedUserFilterIds), selectedCount: relatedUserFilterIds.length },
+      { summary: summaryFor("项目", relatedFundFilterOptions, relatedFundFilterIds), selectedCount: relatedFundFilterIds.length },
+    ]);
+  }, [accountFilterOptions, relatedUserFilterOptions, relatedFundFilterOptions, selectedAccountIds, relatedUserFilterIds, relatedFundFilterIds]);
   const allJournalActionsSelected = availableJournalActions.length > 0
     && availableJournalActions.every((action) => journalActionFilters.has(action));
   const toggleJournalActionFilter = (action: TradeAction) => {
@@ -2092,10 +2174,29 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         setRelatedFunds((current) => [fund, ...current.filter((item) => item.id !== fund.id)]);
         setLastFundIdByRelatedUser((current) => ({ ...current, [entry.relatedUserId!]: fund.id }));
       }
-      setShowEntrySheet(false);
       setCloseConfirmationStep("input");
-      if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
       if (entry.instrumentType) setLastOpeningInstrumentType(entry.instrumentType);
+      // 编辑完成后保留当前“速记一笔”上下文及报价展示模式，便于继续查看或处理同档订单。
+      setEntrySide(ACTIONS[entry.action].side);
+      setClosingSourceTrade(null);
+      setEntryForm({
+        action: entry.action,
+        accountId: entry.accountId,
+        accountName: entry.accountName ?? "",
+        relatedUserId: entry.relatedUserId ?? "",
+        relatedUserName: entry.relatedUserName ?? entry.relatedUsername ?? "",
+        relatedUsername: entry.relatedUsername ?? "",
+        relatedFundId: entry.relatedFundId ?? "",
+        relatedFundName: entry.relatedFundName ?? "",
+        instrumentType: entry.instrumentType ?? lastOpeningInstrumentType,
+        isLocked: false,
+        isPending: false,
+        quantity: "",
+        price: "",
+        note: "",
+        targetPrice: undefined,
+      });
+      setShowEntrySheet(true);
       toast.success(entry.isPending ? "挂单已保存，等待统一参考价触发成交" : entry.isLocked ? "开仓已锁定，逐笔报价将显示黑金锁标" : "开仓记录已修改");
     },
     onError: (error) => toast.error(error.message || "开仓记录修改失败"),
@@ -2776,91 +2877,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             }}
           />
           <div
-            className="relative z-30 border-b px-3 py-2.5"
-            style={{
-              background: "rgba(255,255,255,0.34)",
-              borderColor: "rgba(109,121,137,0.22)",
-              boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.62)",
-            }}
-          >
-            <div className="grid grid-cols-[minmax(78px,0.85fr)_minmax(84px,0.95fr)_minmax(110px,1.35fr)] gap-1.5 min-[375px]:grid-cols-[minmax(96px,0.85fr)_minmax(96px,0.95fr)_minmax(124px,1.35fr)]">
-              {shouldLockMemberAccountFilter ? <LockedFilterValue label="账户" value={lockedAccountName} /> : (
-                <T0MultiSelect
-                  label="账户"
-                  options={accountFilterOptions}
-                  selectedIds={selectedAccountIds}
-                  emptyLabel="暂无账户"
-                  onChange={(ids) => {
-                    setSelectedAccountIds(ids);
-                    setRecentJournalPage(1);
-                  }}
-                />
-              )}
-              {isMemberView ? <LockedFilterValue label="用户" value={memberRelatedUserName} /> : (
-                <T0MultiSelect
-                  label="用户"
-                  options={relatedUserFilterOptions}
-                  selectedIds={relatedUserFilterIds}
-                  emptyLabel="暂无用户"
-                  onChange={(ids) => {
-                    setRelatedUserFilterIds(ids);
-                    // 项目只属于用户；改动用户范围后重置项目，避免保留不可见的跨用户项目条件。
-                    setRelatedFundFilterIds([]);
-                    setRecentJournalPage(1);
-                  }}
-                />
-              )}
-              {shouldLockMemberFundFilter ? <LockedFilterValue label="项目" value={lockedRelatedFundName} /> : (
-                <T0MultiSelect
-                  label="项目"
-                  options={relatedFundFilterOptions}
-                  selectedIds={relatedFundFilterIds}
-                  emptyLabel="暂无项目"
-                  align="right"
-                  onChange={(ids) => {
-                    setRelatedFundFilterIds(ids);
-                    setRecentJournalPage(1);
-                  }}
-                />
-              )}
-            </div>
-            {canManage && <div className="mt-2 grid grid-cols-2 gap-2">
-              <label className="flex min-w-0 items-center gap-1.5">
-                <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>类型</span>
-                <select
-                  value={instrumentTypeFilter}
-                  onChange={(event) => {
-                    setInstrumentTypeFilter(event.target.value as T0InstrumentFilter);
-                    setRecentJournalPage(1);
-                  }}
-                  className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
-                  aria-label="按订单类型筛选"
-                >
-                  <option value="all">全部类型</option>
-                  {T0_INSTRUMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                  <option value="unlabeled">未标注（历史）</option>
-                </select>
-              </label>
-              <label className="flex min-w-0 items-center gap-1.5">
-                <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>状态</span>
-                <select
-                  value={executionFilter}
-                  onChange={(event) => {
-                    setExecutionFilter(event.target.value as T0ExecutionFilter);
-                    setRecentJournalPage(1);
-                  }}
-                  className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-sky-600"
-                  aria-label="按成交状态筛选"
-                >
-                  <option value="all">全部</option>
-                  <option value="filled">已成交</option>
-                  <option value="pending">挂单</option>
-                </select>
-              </label>
-            </div>}
-          </div>
-
-          <div
             className="relative z-[1] grid grid-cols-[minmax(0,1.45fr)_minmax(max-content,0.9fr)] p-2"
             style={{
               background: "linear-gradient(180deg, rgba(255,255,255,0.14), rgba(203,213,225,0.14))",
@@ -2924,12 +2940,103 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         </section>
 
         <section
-          className="overflow-hidden rounded border border-[#b9c2ca] bg-[#eef1f3]"
+          className="relative overflow-visible rounded border border-[#b9c2ca] bg-[#eef1f3]"
           style={{
             background: "linear-gradient(145deg, rgba(249,250,251,0.96), rgba(218,224,229,0.88))",
             boxShadow: "0 5px 12px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.94), inset 0 -1px 0 rgba(71,85,105,0.20)",
           }}
         >
+          <div
+            className="relative z-40 border-b px-3 py-2.5"
+            style={{
+              background: "linear-gradient(180deg, rgba(255,255,255,0.84), rgba(218,224,229,0.66))",
+              borderColor: "rgba(109,121,137,0.24)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.94), inset 0 -1px 0 rgba(71,85,105,0.10)",
+            }}
+          >
+            <div
+              data-t0-filter-row
+              className="grid grid-cols-3 gap-1.5 transition-[grid-template-columns] duration-200"
+              style={{
+                gridTemplateColumns: topFilterGridTemplateColumns,
+              }}
+            >
+              {shouldLockMemberAccountFilter ? <LockedFilterValue label="账户" value={lockedAccountName} /> : (
+                <T0MultiSelect
+                  label="账户"
+                  options={accountFilterOptions}
+                  selectedIds={selectedAccountIds}
+                  emptyLabel="暂无账户"
+                  onChange={(ids) => {
+                    setSelectedAccountIds(ids);
+                    setRecentJournalPage(1);
+                  }}
+                />
+              )}
+              {isMemberView ? <LockedFilterValue label="用户" value={memberRelatedUserName} /> : (
+                <T0MultiSelect
+                  label="用户"
+                  options={relatedUserFilterOptions}
+                  selectedIds={relatedUserFilterIds}
+                  emptyLabel="暂无用户"
+                  constrainRightToFilterRow
+                  onChange={(ids) => {
+                    setRelatedUserFilterIds(ids);
+                    // 项目只属于用户；改动用户范围后重置项目，避免保留不可见的跨用户项目条件。
+                    setRelatedFundFilterIds([]);
+                    setRecentJournalPage(1);
+                  }}
+                />
+              )}
+              {shouldLockMemberFundFilter ? <LockedFilterValue label="项目" value={lockedRelatedFundName} /> : (
+                <T0MultiSelect
+                  label="项目"
+                  options={relatedFundFilterOptions}
+                  selectedIds={relatedFundFilterIds}
+                  emptyLabel="暂无项目"
+                  align="right"
+                  onChange={(ids) => {
+                    setRelatedFundFilterIds(ids);
+                    setRecentJournalPage(1);
+                  }}
+                />
+              )}
+            </div>
+            {canManage && <div className="mt-2 grid grid-cols-2 gap-2">
+              <label className="flex min-w-0 items-center gap-1.5">
+                <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>类型</span>
+                <select
+                  value={instrumentTypeFilter}
+                  onChange={(event) => {
+                    setInstrumentTypeFilter(event.target.value as T0InstrumentFilter);
+                    setRecentJournalPage(1);
+                  }}
+                  className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
+                  aria-label="按订单类型筛选"
+                >
+                  <option value="all">全部类型</option>
+                  {T0_INSTRUMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  <option value="unlabeled">未标注（历史）</option>
+                </select>
+              </label>
+              <label className="flex min-w-0 items-center gap-1.5">
+                <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>状态</span>
+                <select
+                  value={executionFilter}
+                  onChange={(event) => {
+                    setExecutionFilter(event.target.value as T0ExecutionFilter);
+                    setRecentJournalPage(1);
+                  }}
+                  className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-sky-600"
+                  aria-label="按成交状态筛选"
+                >
+                  <option value="all">全部</option>
+                  <option value="filled">已成交</option>
+                  <option value="pending">挂单</option>
+                </select>
+              </label>
+            </div>}
+          </div>
           {canManage && <div
             className="flex h-9 items-center justify-center gap-1.5 border-b border-[#aeb8c1]/50 px-3"
             role="tablist"
@@ -3156,8 +3263,113 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   >
                     关联
                   </button>}
+                  {canManage && <button
+                    type="button"
+                    aria-label={showHistoryFilters ? "收起并清空历史筛选" : "筛选历史记录"}
+                    aria-expanded={showHistoryFilters}
+                    title={showHistoryFilters ? "收起并恢复全部" : "筛选历史记录"}
+                    onClick={() => {
+                      if (showHistoryFilters) {
+                        // 第二次点击在收起面板的同时清空五项条件，快速回到全部历史记录。
+                        setHistoryAccountFilterIds([]);
+                        setHistoryRelatedUserFilterIds([]);
+                        setHistoryRelatedFundFilterIds([]);
+                        setHistoryInstrumentTypeFilter("all");
+                        setHistoryExecutionFilter("all");
+                        setRecentJournalPage(1);
+                        setShowHistoryFilters(false);
+                        return;
+                      }
+                      setShowHistoryFilters(true);
+                    }}
+                    className={`ml-0.5 flex h-6 w-7 shrink-0 items-center justify-center rounded-[3px] border transition-colors active:scale-95 ${showHistoryFilters || hasActiveHistoryDetailFilters ? "border-[#1a56db] bg-[#1a56db] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2.25} />
+                  </button>}
                 </div>
               </div>
+              {canManage && showHistoryFilters && <div
+                className="relative z-20 border-b border-[#c7d0d7]/70 px-4 py-2.5"
+                style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.52), rgba(208,215,221,0.28))" }}
+              >
+                <div
+                  data-t0-filter-row
+                  className="grid grid-cols-3 gap-1.5 transition-[grid-template-columns] duration-200"
+                  style={{ gridTemplateColumns: historyFilterGridTemplateColumns }}
+                >
+                  <T0MultiSelect
+                    label="账户"
+                    options={accountFilterOptions}
+                    selectedIds={historyAccountFilterIds}
+                    emptyLabel="暂无账户"
+                    onChange={(ids) => {
+                      setHistoryAccountFilterIds(ids);
+                      setRecentJournalPage(1);
+                    }}
+                  />
+                  <T0MultiSelect
+                    label="用户"
+                    options={relatedUserFilterOptions}
+                    selectedIds={historyRelatedUserFilterIds}
+                    emptyLabel="暂无用户"
+                    constrainRightToFilterRow
+                    onChange={(ids) => {
+                      setHistoryRelatedUserFilterIds(ids);
+                      // 项目只属于用户，切换用户范围时同步清空旧项目条件。
+                      setHistoryRelatedFundFilterIds([]);
+                      setRecentJournalPage(1);
+                    }}
+                  />
+                  <T0MultiSelect
+                    label="项目"
+                    options={historyRelatedFundFilterOptions}
+                    selectedIds={historyRelatedFundFilterIds}
+                    emptyLabel="暂无项目"
+                    align="right"
+                    onChange={(ids) => {
+                      setHistoryRelatedFundFilterIds(ids);
+                      setRecentJournalPage(1);
+                    }}
+                  />
+                </div>
+                <div
+                  className="mt-2 grid grid-cols-2 gap-2 transition-[grid-template-columns] duration-200"
+                  style={{ gridTemplateColumns: historyTypeStatusGridTemplateColumns }}
+                >
+                  <label className="flex min-w-0 items-center gap-1.5">
+                    <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500">类型</span>
+                    <select
+                      value={historyInstrumentTypeFilter}
+                      onChange={(event) => {
+                        setHistoryInstrumentTypeFilter(event.target.value as T0InstrumentFilter);
+                        setRecentJournalPage(1);
+                      }}
+                      className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
+                      aria-label="按历史订单类型筛选"
+                    >
+                      <option value="all">全部类型</option>
+                      {T0_INSTRUMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                      <option value="unlabeled">未标注（历史）</option>
+                    </select>
+                  </label>
+                  <label className="flex min-w-0 items-center gap-1.5">
+                    <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500">状态</span>
+                    <select
+                      value={historyExecutionFilter}
+                      onChange={(event) => {
+                        setHistoryExecutionFilter(event.target.value as T0ExecutionFilter);
+                        setRecentJournalPage(1);
+                      }}
+                      className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-sky-600"
+                      aria-label="按历史成交状态筛选"
+                    >
+                      <option value="all">全部</option>
+                      <option value="filled">已成交</option>
+                      <option value="pending">挂单</option>
+                    </select>
+                  </label>
+                </div>
+              </div>}
               {recentJournalTrades.length === 0 ? (
                 <div className="px-4 py-5 text-center text-xs text-slate-500">当前筛选范围还没有历史记录</div>
               ) : showLinkedJournalGroups ? (
@@ -4523,7 +4735,36 @@ function LockedFilterValue({ label, value }: { label?: string; value: string }) 
 type T0MultiSelectOption = {
   id: string;
   label: string;
+  /** 下拉选项可展示完整识别信息；顶部已选摘要可使用更短文案。 */
+  summaryLabel?: string;
 };
+
+/** 三项多选框按内容保留统一左右留白，初始状态则均分整行宽度。 */
+function buildT0FilterGridTemplateColumns(filterSpecs: Array<{ summary: string; selectedCount: number }>) {
+  if (filterSpecs.every((spec) => spec.selectedCount === 0)) return undefined;
+  const visualUnits = (text: string) => Array.from(text).reduce(
+    (total, character) => total + (/^[\x00-\xff]$/.test(character) ? 1 : 2),
+    0,
+  );
+  const widestIndex = filterSpecs.reduce(
+    (widest, spec, index) => visualUnits(spec.summary) >= visualUnits(filterSpecs[widest].summary) ? index : widest,
+    0,
+  );
+  if (filterSpecs.every((spec) => spec.selectedCount > 0)) {
+    return filterSpecs
+      .map((spec) => `minmax(44px, ${Math.max(7, Math.min(24, visualUnits(spec.summary) + 8))}fr)`)
+      .join(" ");
+  }
+  return filterSpecs
+    .map((spec, index) => {
+      const units = visualUnits(spec.summary);
+      if (spec.selectedCount > 0 && index !== widestIndex) {
+        return `${Math.max(44, Math.min(148, 20 + units * 7))}px`;
+      }
+      return `minmax(${spec.selectedCount > 0 ? 52 : 78}px, ${Math.max(5, Math.min(16, units))}fr)`;
+    })
+    .join(" ");
+}
 
 /**
  * T+0 顶部筛选专用：不选任一项即代表全部；勾选多项时在同一维度按并集筛选。
@@ -4536,6 +4777,7 @@ function T0MultiSelect({
   onChange,
   emptyLabel,
   align = "left",
+  constrainRightToFilterRow = false,
 }: {
   label: string;
   options: T0MultiSelectOption[];
@@ -4543,15 +4785,18 @@ function T0MultiSelect({
   onChange: (ids: string[]) => void;
   emptyLabel: string;
   align?: "left" | "right";
+  /** 左缘固定在本筛选框，右缘不超过同一筛选行最右侧的项目框。 */
+  constrainRightToFilterRow?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [constrainedMenuWidth, setConstrainedMenuWidth] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const selectedSet = new Set(selectedIds);
   const selectedOptions = options.filter((option) => selectedSet.has(option.id));
   const summary = selectedOptions.length === 0
     ? "全部"
     : selectedOptions.length === 1
-      ? selectedOptions[0].label
+      ? selectedOptions[0].summaryLabel ?? selectedOptions[0].label
       : `已选 ${selectedOptions.length} 项`;
   const selectedTitle = selectedOptions.length === 0
     ? `${label}：全部`
@@ -4601,7 +4846,22 @@ function T0MultiSelect({
     <div ref={rootRef} className="relative min-w-0">
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          const nextOpen = !open;
+          if (nextOpen && constrainRightToFilterRow && rootRef.current) {
+            const filterRow = rootRef.current.closest("[data-t0-filter-row]");
+            if (filterRow instanceof HTMLElement) {
+              const triggerBounds = rootRef.current.getBoundingClientRect();
+              const rowBounds = filterRow.getBoundingClientRect();
+              // 用户框左缘不动；菜单宽度只使用其至项目框右缘之间的可用空间。
+              const availableWidth = Math.max(triggerBounds.width, rowBounds.right - triggerBounds.left);
+              setConstrainedMenuWidth(Math.min(260, Math.floor(availableWidth)));
+            }
+          } else if (!nextOpen) {
+            setConstrainedMenuWidth(null);
+          }
+          setOpen(nextOpen);
+        }}
         aria-haspopup="listbox"
         aria-expanded={open}
         title={selectedTitle}
@@ -4612,8 +4872,8 @@ function T0MultiSelect({
         }}
       >
         {selectedOptions.length === 0 && <span className="shrink-0 text-[12px] font-semibold tracking-wide text-slate-500">{label}</span>}
-        <span className="min-w-0 flex-1 truncate text-left">{summary}</span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        <span className={`min-w-0 flex-1 truncate ${selectedOptions.length === 0 ? "text-left" : "text-center"}`}>{summary}</span>
+        {selectedOptions.length === 0 && <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />}
       </button>
       {open && (
         <div
@@ -4621,6 +4881,7 @@ function T0MultiSelect({
           aria-label={`${label}多选`}
           className={`absolute top-[calc(100%+4px)] z-40 max-h-80 w-[min(260px,calc(100vw-32px))] overflow-y-auto rounded border py-1.5 shadow-xl ${align === "right" ? "right-0" : "left-0"}`}
           style={{
+            width: constrainedMenuWidth ? `${constrainedMenuWidth}px` : undefined,
             background: [
               "linear-gradient(135deg, rgba(255,255,255,0.86) 0%, rgba(255,255,255,0.32) 25%, rgba(255,255,255,0) 50%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.19) 100%)",
               "linear-gradient(90deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.06) 40%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.12) 100%)",
