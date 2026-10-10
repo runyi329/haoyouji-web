@@ -130,11 +130,11 @@ type PreviewTrade = {
   optionDeliveryPrice?: number;
   optionSettledAt?: string;
   optionSettlementSource?: string;
-  /** 管理员开仓主单的展示锁定标记；成员端不下发、不渲染。 */
+  /** 开仓主单的展示锁定标记；成员端只读展示。 */
   isLocked?: boolean;
   /** 管理员报价专用：挂单在触发前不进入真实仓位、盈亏或费用计算。 */
   isPending?: boolean;
-  /** 挂单实际触发成交的系统时间与统一行情价格；仅管理员可见。 */
+  /** 挂单实际触发成交的系统时间与统一行情价格；关联成员可只读查看。 */
   filledAt?: string;
   filledPrice?: number;
   quantity: number;
@@ -663,6 +663,14 @@ function formatBeijingMonthDayTime(value: string) {
   }).formatToParts(date);
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${Number(values.month)}/${Number(values.day)} ${values.hour}:${values.minute}`;
+}
+
+/** 已触发的挂单同时保留原始挂单时间与实际成交时间；普通成交单仅展示原始下单时间。 */
+function formatT0TradeTimeline(trade: Pick<PreviewTrade, "createdAt" | "filledAt">) {
+  const createdAt = formatBeijingMonthDayTime(trade.createdAt);
+  return trade.filledAt
+    ? `挂单 ${createdAt} · 成交 ${formatBeijingMonthDayTime(trade.filledAt)}`
+    : createdAt;
 }
 
 function formatBeijingLiveTime(value: Date) {
@@ -1835,12 +1843,45 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       if (selected.length === 1) return selected[0].summaryLabel ?? selected[0].label;
       return `已选 ${selected.length} 项`;
     };
+    // 成员端的账户与本人虽不可切换，但仍是明确的当前条件；
+    // 将其纳入选中态，才能与管理员选择条件后的三栏宽度算法完全一致。
+    const accountSummary = shouldLockMemberAccountFilter
+      ? `账户${lockedAccountName}`
+      : summaryFor("账户", accountFilterOptions, selectedAccountIds);
+    const userSummary = isMemberView
+      ? `用户${memberRelatedUserName}`
+      : summaryFor("用户", relatedUserFilterOptions, relatedUserFilterIds);
+    const fundSummary = shouldLockMemberFundFilter
+      ? `项目${lockedRelatedFundName}`
+      : summaryFor("项目", relatedFundFilterOptions, relatedFundFilterIds);
+    // 成员视图的三项都已经代表当前可见范围（即使项目暂为“全部”），
+    // 因此始终按三项均已选中来共同分配空间，让每项文字拥有相近的左右留白。
+    const accountSpec = { summary: accountSummary, selectedCount: isMemberView ? 1 : selectedAccountIds.length };
+    const userSpec = { summary: userSummary, selectedCount: isMemberView ? 1 : relatedUserFilterIds.length };
+    const fundSpec = { summary: fundSummary, selectedCount: isMemberView ? 1 : relatedFundFilterIds.length };
     return buildT0FilterGridTemplateColumns([
-      { summary: summaryFor("账户", accountFilterOptions, selectedAccountIds), selectedCount: selectedAccountIds.length },
-      { summary: summaryFor("用户", relatedUserFilterOptions, relatedUserFilterIds), selectedCount: relatedUserFilterIds.length },
-      { summary: summaryFor("项目", relatedFundFilterOptions, relatedFundFilterIds), selectedCount: relatedFundFilterIds.length },
+      accountSpec,
+      userSpec,
+      fundSpec,
     ]);
-  }, [accountFilterOptions, relatedUserFilterOptions, relatedFundFilterOptions, selectedAccountIds, relatedUserFilterIds, relatedFundFilterIds]);
+  }, [accountFilterOptions, isMemberView, lockedAccountName, lockedRelatedFundName, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberAccountFilter, shouldLockMemberFundFilter]);
+  const topInstrumentFilterSummary = instrumentTypeFilter === "all"
+    ? "类型全部"
+    : instrumentTypeFilter === "unlabeled"
+      ? "未标注"
+      : T0_INSTRUMENT_TYPES.find((item) => item.value === instrumentTypeFilter)?.label ?? "类型";
+  const topExecutionFilterSummary = executionFilter === "all"
+    ? "状态全部"
+    : executionFilter === "filled"
+      ? "未挂单"
+      : "已挂单";
+  const topTypeStatusGridTemplateColumns = useMemo(
+    () => buildT0FilterGridTemplateColumns([
+      { summary: topInstrumentFilterSummary, selectedCount: instrumentTypeFilter === "all" ? 0 : 1 },
+      { summary: topExecutionFilterSummary, selectedCount: executionFilter === "all" ? 0 : 1 },
+    ]),
+    [executionFilter, instrumentTypeFilter, topExecutionFilterSummary, topInstrumentFilterSummary],
+  );
   const allJournalActionsSelected = availableJournalActions.length > 0
     && availableJournalActions.every((action) => journalActionFilters.has(action));
   const toggleJournalActionFilter = (action: TradeAction) => {
@@ -1907,7 +1948,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (!ACTIONS[entryForm.action].opening || !Number.isFinite(price) || price <= 0) return null;
     return archivePriceForSide(ACTIONS[entryForm.action].side, price);
   }, [entryForm.action, entryForm.price]);
+  // 资金、盈亏、手续费和 FIFO 仍仅使用实际成交单；挂单在成交前绝不参与这些财务口径。
   const buckets = useMemo(() => buildPositionBuckets(selectedFilledTrades), [selectedFilledTrades]);
+  // “总仓位”则忠实反映顶部状态筛选：状态为全部时同时展示挂单与已成交数量，
+  // 切换至“未挂单”或“已挂单”后只统计对应状态的数量。
+  const totalPositionBuckets = useMemo(() => buildPositionBuckets(selectedTrades), [selectedTrades]);
   const ladderOpeningClosingAllocations = useMemo(
     () => buildOpeningClosingAllocations(selectedFilledTrades),
     [selectedFilledTrades],
@@ -1938,16 +1983,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   useEffect(() => {
     setTotalRevenueDetailPage((current) => Math.min(current, totalRevenueDetailTotalPages));
   }, [totalRevenueDetailTotalPages]);
-  const netPositionQuantity = summary.long.quantity - summary.short.quantity;
+  const totalPositionQuantity = useMemo(() => {
+    const longQuantity = totalPositionBuckets
+      .filter((bucket) => bucket.side === "long" && bucket.remainingQuantity > 0.0000001)
+      .reduce((total, bucket) => total + bucket.remainingQuantity, 0);
+    const shortQuantity = totalPositionBuckets
+      .filter((bucket) => bucket.side === "short" && bucket.remainingQuantity > 0.0000001)
+      .reduce((total, bucket) => total + bucket.remainingQuantity, 0);
+    return longQuantity - shortQuantity;
+  }, [totalPositionBuckets]);
   const totalGrossProfitClass = totalGrossProfit > 0 ? "text-rose-600" : totalGrossProfit < 0 ? "text-emerald-600" : "text-slate-700";
   const netPositionClass = "text-slate-800";
   const roundedNetPositionText = (() => {
-    const rounded = Math.round(netPositionQuantity);
+    const rounded = Math.round(totalPositionQuantity);
     return `${rounded < 0 ? "−" : ""}${Math.abs(rounded).toLocaleString("en-US")}`;
   })();
   const netPositionBreakdown = useMemo(() => {
     const buildSide = (side: PositionSide) => {
-      const levels = buckets
+      const levels = totalPositionBuckets
         .filter((bucket) => bucket.side === side && bucket.remainingQuantity > 0.0000001)
         .sort((a, b) => b.price - a.price);
       return {
@@ -1956,8 +2009,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       };
     };
     return { long: buildSide("long"), short: buildSide("short") };
-  }, [buckets]);
-  const netPositionDetailText = `${netPositionQuantity < 0 ? "−" : ""}${formatQuantity(Math.abs(netPositionQuantity))}`;
+  }, [totalPositionBuckets]);
+  const netPositionDetailText = `${totalPositionQuantity < 0 ? "−" : ""}${formatQuantity(Math.abs(totalPositionQuantity))}`;
   // 从某个T型档位进入时，详情仅展示该方向、该归属档位的订单和汇总；
   // 从底部通用开平按钮进入时没有指定档位，才保留方向总览。
   const entryScopedTrades = useMemo(() => {
@@ -2138,22 +2191,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const targetBucket = scopeBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(targetPrice));
     return Math.max(0, Math.min(sourceRemainingQuantity, targetBucket?.remainingQuantity ?? 0));
   }, [closingSourceTrade, entryForm.targetPrice, isClosingEntry, ladderOpeningClosingAllocations, selectedFilledTrades]);
-  // 成员端的期权、锁定单与未成交挂单必须逐笔可见并保留状态标识；
-  // 这些单不再混入普通整合报价，避免视觉重复，但统计仍只使用 selectedFilledTrades。
-  const memberSpecialOpeningIds = useMemo(() => new Set(
-    selectedTrades
-      .filter((trade) => ACTIONS[trade.action].opening
-        && (trade.isPending || trade.isLocked || trade.instrumentType === "option"))
-      .map((trade) => trade.id),
-  ), [selectedTrades]);
-  const ladderIntegratedDisplayBuckets = useMemo(() => {
-    if (!isMemberView) return integratedDisplayBuckets;
-    return buildIntegratedDisplayBuckets(
-      selectedFilledTrades.filter((trade) => !memberSpecialOpeningIds.has(trade.id)),
-      ladderOpeningClosingAllocations,
-      integratedArchiveStep,
-    );
-  }, [integratedDisplayBuckets, integratedArchiveStep, isMemberView, ladderOpeningClosingAllocations, memberSpecialOpeningIds, selectedFilledTrades]);
+  // 管理员整合报价保留按价位汇总；成员端则按开仓主单逐笔显示，
+  // 这样每格都能准确标明账户、本人、专项款与现货/合约/期权类型，且不混淆多笔来源。
+  const ladderIntegratedDisplayBuckets = integratedDisplayBuckets;
   const priceRows = useMemo<LadderPriceRow[]>(() => {
     const activePositionPrices = ladderIntegratedDisplayBuckets
       .filter((bucket) => bucket.remainingQuantity > 0.0000001)
@@ -2236,20 +2276,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }));
     });
   }, [selectedTrades, ladderOpeningClosingAllocations, markLadderPrice]);
-  const memberSpecialIndividualPriceRows = useMemo(
-    () => isMemberView
-      ? individualPriceRows
-        .filter((row) => Boolean(row.openingTrade && memberSpecialOpeningIds.has(row.openingTrade.id)))
-        // 同价的普通整合行保留实时价高亮；特殊订单行仅展示订单状态，避免重复强调中轴价格。
-        .map((row) => ({ ...row, isMark: false }))
-      : [],
-    [individualPriceRows, isMemberView, memberSpecialOpeningIds],
-  );
   const isIndividualLadderView = canManage && adminLadderDisplayMode === "individual";
   const displayedPriceRows = isIndividualLadderView
     ? individualPriceRows
     : isMemberView
-      ? [...priceRows, ...memberSpecialIndividualPriceRows].sort((a, b) => b.price - a.price || a.key.localeCompare(b.key))
+      ? individualPriceRows
       : priceRows;
 
   const openEntrySheet = (
@@ -3244,7 +3275,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <span className="text-slate-300">·</span>
             <span className="min-w-0 truncate" title={getTradeRelatedFundName(opening)}>{getTradeRelatedFundName(opening)}</span>
             <span className="text-slate-300">·</span>
-            <span className="shrink-0">{formatBeijingMonthDayTime(opening.createdAt)}</span>
+            <span className="shrink-0">{formatT0TradeTimeline(opening)}</span>
             {renderHistoryActionMenuButton(opening)}
           </div>
           {renderHistoryActionMenu(opening)}
@@ -3497,39 +3528,35 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 />
               )}
             </div>
-            {(canManage || isMemberView) && <div className="mt-2 grid grid-cols-2 gap-2">
-              <label className="flex min-w-0 items-center gap-1.5">
-                <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>类型</span>
-                <select
-                  value={instrumentTypeFilter}
-                  onChange={(event) => {
-                    setInstrumentTypeFilter(event.target.value as T0InstrumentFilter);
-                    setRecentJournalPage(1);
-                  }}
-                  className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
-                  aria-label="按订单类型筛选"
-                >
-                  <option value="all">全部类型</option>
-                  {T0_INSTRUMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                  <option value="unlabeled">未标注（历史）</option>
-                </select>
-              </label>
-              <label className="flex min-w-0 items-center gap-1.5">
-                <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>状态</span>
-                <select
-                  value={executionFilter}
-                  onChange={(event) => {
-                    setExecutionFilter(event.target.value as T0ExecutionFilter);
-                    setRecentJournalPage(1);
-                  }}
-                  className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-sky-600"
-                  aria-label="按成交状态筛选"
-                >
-                  <option value="all">全部状态</option>
-                  <option value="filled">未挂单（已成交）</option>
-                  <option value="pending">已挂单</option>
-                </select>
-              </label>
+            {(canManage || isMemberView) && <div className="mt-2 grid grid-cols-2 gap-1.5 transition-[grid-template-columns] duration-200" style={{ gridTemplateColumns: topTypeStatusGridTemplateColumns }}>
+              <T0SelectFilter
+                label="类型"
+                value={instrumentTypeFilter}
+                ariaLabel="按订单类型筛选"
+                focusClassName="focus-within:border-[#1a56db]"
+                onChange={(value) => {
+                  setInstrumentTypeFilter(value as T0InstrumentFilter);
+                  setRecentJournalPage(1);
+                }}
+              >
+                <option value="all">全部类型</option>
+                {T0_INSTRUMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                <option value="unlabeled">未标注（历史）</option>
+              </T0SelectFilter>
+              <T0SelectFilter
+                label="状态"
+                value={executionFilter}
+                ariaLabel="按成交状态筛选"
+                focusClassName="focus-within:border-sky-600"
+                onChange={(value) => {
+                  setExecutionFilter(value as T0ExecutionFilter);
+                  setRecentJournalPage(1);
+                }}
+              >
+                <option value="all">全部状态</option>
+                <option value="filled">未挂单（已成交）</option>
+                <option value="pending">已挂单</option>
+              </T0SelectFilter>
             </div>}
           </div>
           {canManage && <div
@@ -3918,7 +3945,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       <span className="text-slate-300">·</span>
                       <span className="min-w-0 truncate" title={getTradeRelatedFundName(trade)}>{getTradeRelatedFundName(trade)}</span>
                       <span className="text-slate-300">·</span>
-                      <span className="shrink-0">{formatBeijingMonthDayTime(trade.createdAt)}</span>
+                      <span className="shrink-0">{formatT0TradeTimeline(trade)}</span>
                       {canManage ? renderHistoryActionMenuButton(trade) : !isOpening && detail?.netPnl !== undefined && <>
                         <span className="text-slate-300">·</span>
                         <span className="ml-auto shrink-0 text-[10px] text-slate-500">净利润</span>
@@ -4213,7 +4240,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                                 </div>
                               </div>
                               <div className="min-w-0 text-right">
-                                <div className="text-[10px] text-slate-400">开仓时间</div>
+                                <div className="text-[10px] text-slate-400">{trade.filledAt ? "挂单时间" : "开仓时间"}</div>
                                 <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.isSyncing ? "后台保存中" : formatBeijingMonthDayTime(trade.createdAt)}</div>
                               </div>
                               <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2">
@@ -4253,7 +4280,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                             </div>
                             {trade.filledAt && <div className="mt-2 flex items-center gap-1.5 border-t border-slate-200 pt-2 text-[10px] font-medium text-slate-500">
                               <Clock3 className="h-3 w-3 shrink-0 text-sky-600" />
-                              自动成交：{formatBeijingMonthDayTime(trade.filledAt)} · 参考价触发 {formatPrice(trade.filledPrice ?? trade.price)} U
+                              成交时间：{formatBeijingMonthDayTime(trade.filledAt)} · 参考价触发 {formatPrice(trade.filledPrice ?? trade.price)} U
                             </div>}
                             {linkedClosings.length > 0 && (
                               <div className="mt-2 border-t border-slate-200 pt-2">
@@ -5348,7 +5375,7 @@ function LockedFilterValue({ label, value }: { label?: string; value: string }) 
   return (
     <div
       title={value}
-      className="flex h-9 w-full items-center gap-2 truncate rounded border border-slate-300 bg-white/60 px-2 text-[12px] font-medium text-slate-700"
+      className="flex h-10 w-full items-center gap-1.5 truncate rounded border border-slate-300 bg-white/60 px-2.5 text-[13px] font-medium text-slate-700"
       style={{
         textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
         boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
@@ -5356,6 +5383,44 @@ function LockedFilterValue({ label, value }: { label?: string; value: string }) 
     >
       {label && <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>{label}</span>}
       <span className="truncate">{value}</span>
+    </div>
+  );
+}
+
+/** 与多选筛选框同高的单选容器；用于类型、状态等有限枚举条件。 */
+function T0SelectFilter({
+  label,
+  value,
+  onChange,
+  ariaLabel,
+  focusClassName,
+  children,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  ariaLabel: string;
+  focusClassName: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`relative flex h-10 min-w-0 items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2.5 text-[13px] font-medium text-slate-700 transition-colors ${focusClassName}`}
+      style={{
+        textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
+        boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
+      }}
+    >
+      <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-full min-w-0 flex-1 appearance-none bg-transparent py-0 pr-4 text-[13px] font-medium text-slate-700 outline-none"
+        aria-label={ariaLabel}
+      >
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-slate-500" strokeWidth={2.25} />
     </div>
   );
 }

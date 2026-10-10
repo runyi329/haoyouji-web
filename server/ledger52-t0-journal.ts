@@ -173,6 +173,33 @@ function mysqlDateTime(value: unknown): string {
   return resolved.toISOString().slice(0, 23).replace("T", " ");
 }
 
+/** 系统自动动作在备注中以北京时间保留到秒的可读审计时点。 */
+function formatBeijingSystemTime(value: unknown): string {
+  const date = value instanceof Date ? value : new Date(String(value || ""));
+  const resolved = Number.isNaN(date.getTime()) ? new Date() : date;
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(resolved);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}/${values.month}/${values.day} ${values.hour}:${values.minute}:${values.second}`;
+}
+
+/** 备注字段上限 500 字符；保留用户原备注的同时，绝不截断末尾系统审计事件。 */
+function appendSystemSettlementNote(existingNote: unknown, systemNote: string): string {
+  const existing = String(existingNote ?? "").trim();
+  if (!existing) return systemNote.slice(0, 500);
+  const availableExistingLength = Math.max(0, 500 - systemNote.length - 2);
+  if (existing.length <= availableExistingLength) return `${existing}\n${systemNote}`;
+  return `${existing.slice(0, Math.max(0, availableExistingLength - 1)).trimEnd()}…\n${systemNote}`;
+}
+
 function toNumber(value: unknown): number {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
@@ -2284,11 +2311,17 @@ export async function scanLedger52T0PendingOrders() {
       const actorUserId = toNumber(row.user_id);
       if (entryId <= 0 || actorUserId <= 0) continue;
       const before = await buildEntryAuditSnapshot(tx, actorUserId, row);
+      const filledAt = new Date();
+      const action = String(row.action) as T0JournalAction;
+      const isOpenLong = action === "openLong";
+      const pendingPrice = toNumber(row.price);
+      const systemNote = `[系统自动成交] ${formatBeijingSystemTime(filledAt)}｜ETH永续价 ${markPrice.toFixed(2)} U，达到挂单价 ${pendingPrice.toFixed(2)} U`;
+      const note = appendSystemSettlementNote(row.note, systemNote);
       await tx.execute(
         `UPDATE ledger52_t0_journal_entries
-            SET execution_status = 'filled', filled_at = NOW(3), filled_price = ?, updated_at = NOW(3)
+            SET execution_status = 'filled', filled_at = ?, filled_price = ?, note = ?, updated_at = NOW(3)
           WHERE id = ? AND ledger_id = ? AND user_id = ? AND execution_status = 'pending'`,
-        [String(markPrice), entryId, LEDGER_52_T0_JOURNAL_ID, actorUserId],
+        [mysqlDateTime(filledAt), String(markPrice), note, entryId, LEDGER_52_T0_JOURNAL_ID, actorUserId],
       );
       const [afterRows] = await tx.execute(
         `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, is_locked,
@@ -2417,7 +2450,8 @@ export async function scanLedger52T0ExpiredOptions(input: {
       const closingAction: T0JournalAction = actionSide(String(opening.action) as T0JournalAction) === "long" ? "closeLong" : "closeShort";
       const targetPrice = archivePriceForAction(closingAction, opening.price);
       const quantity = (remainingCents / 100).toFixed(2);
-      const note = `[Deribit自动到期结算] ${delivery.instrumentName}｜官方交割价 ${delivery.deliveryPrice.toFixed(2)} U｜期权结算价 ${settlement.settlementPrice.toFixed(8)} U｜双边交易成本 ${settlement.totalFee.toFixed(8)} U`;
+      // 备注用于移动端阅读，所有 U 金额统一保留两位；数据库内仍以 18 位精度保存并参与结算计算。
+      const note = `[系统自动结算] ${formatBeijingSystemTime(candidate.expiryAt).slice(0, 16)} 到期｜行权价 ${toNumber(opening.price).toFixed(2)} U｜最终价 ${delivery.deliveryPrice.toFixed(2)} U｜结算价 ${settlement.settlementPrice.toFixed(2)} U｜费用 ${settlement.totalFee.toFixed(2)} U`;
       const [entryResult] = await tx.execute(
         `INSERT INTO ledger52_t0_journal_entries
           (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency,
