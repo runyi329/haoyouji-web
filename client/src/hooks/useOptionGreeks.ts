@@ -79,8 +79,23 @@ export function useOptionGreeks({
   const hasCurrentMarkPrice = Number.isFinite(Number(rawData?.markPrice)) && Number(rawData?.markPrice) >= 0;
   const lastValidDataRef = useRef<{ contractKey: string; data: OptionGreeksData } | null>(null);
   const fallbackData = lastValidDataRef.current?.contractKey === contractKey ? lastValidDataRef.current.data : null;
-  // 行情源短暂没有报价时，保留本会话上一笔有效标记价；绝不把期权价值直接归零。
-  const data = hasCurrentMarkPrice ? rawData : (fallbackData ?? rawData);
+  const persistedMarkPrice = readPersistedMarkPrices()[contractKey];
+  const persistedFallbackData: OptionGreeksData | null = Number.isFinite(Number(persistedMarkPrice)) && Number(persistedMarkPrice) >= 0
+    ? {
+      instrumentName: rawData?.instrumentName ?? contractKey,
+      delta: rawData?.delta ?? null,
+      gamma: rawData?.gamma ?? null,
+      theta: rawData?.theta ?? null,
+      vega: rawData?.vega ?? null,
+      iv: rawData?.iv ?? null,
+      markPrice: Number(persistedMarkPrice),
+      indexPrice: rawData?.indexPrice ?? null,
+      error: rawData?.error,
+      fetchedAt: rawData?.fetchedAt,
+    }
+    : null;
+  // 行情源短暂没有报价时，先用本会话、再用上次页面保存的有效标记价；绝不把期权价值直接归零。
+  const data = hasCurrentMarkPrice ? rawData : (fallbackData ?? persistedFallbackData ?? rawData);
   const currentMarkPrice = Number(data?.markPrice);
   const [markPriceDirection, setMarkPriceDirection] = useState<OptionMarkPriceDirection>('same');
   const previousMarkPriceRef = useRef<{ contractKey: string; markPrice: number | null }>({ contractKey: '', markPrice: null });

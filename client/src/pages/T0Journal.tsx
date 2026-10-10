@@ -467,6 +467,9 @@ function calculateOptionUnrealizedPnl({
   ethMarkPrice: number | null;
   direction?: T0OptionDirection;
 }) {
+  // 行情尚在请求、合约临时无报价时，null 经 Number(null) 会变成 0，
+  // 从而把“尚未取得价格”误算成权利金全损。此时应等待真实期权价格，不能展示盈亏。
+  if (optionMarkPrice === null || optionMarkPrice === undefined) return null;
   const safeQuantity = Number(quantity);
   const safeOptionMarkPrice = Number(optionMarkPrice);
   const safePremium = Number(premium);
