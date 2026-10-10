@@ -242,6 +242,14 @@ function isOpeningAction(action: T0JournalAction): boolean {
 }
 
 /**
+ * 期权的左右报价侧表示到期收益的涨跌方向，而非买入/卖出：
+ * 左侧 = 买入看涨、卖出看跌；右侧 = 买入看跌、卖出看涨。
+ */
+function optionOpeningActionForDirection(direction: T0JournalOptionDirection): Extract<T0JournalAction, "openLong" | "openShort"> {
+  return direction === "long_call" || direction === "short_put" ? "openLong" : "openShort";
+}
+
+/**
  * 不受前端点击价格格影响，始终按实际成交价归入十美元档：
  * 多仓向上归档（2701 → 2710），空仓向下归档（2701 → 2700）。
  */
@@ -1868,6 +1876,9 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     throw new TRPCError({ code: "BAD_REQUEST", message: "期权请直接成交；行权价不能作为挂单触发价" });
   }
   const optionParameters = instrumentType === "option" ? resolveOptionParameters(input) : null;
+  if (optionParameters && input.action !== optionOpeningActionForDirection(optionParameters.direction)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "期权方向与报价侧不一致；看涨归左侧、看跌归右侧" });
+  }
 
   try {
     await ensureLedger52T0JournalTables(tx);
@@ -2604,6 +2615,9 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       throw new TRPCError({ code: "BAD_REQUEST", message: "期权请直接成交；行权价不能作为挂单触发价" });
     }
     const optionParameters = effectiveInstrumentType === "option" ? resolveOptionParameters(input, before) : null;
+    if (optionParameters && String(before.action) !== optionOpeningActionForDirection(optionParameters.direction)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "修改后的期权方向会改变报价侧；请新建该期权订单" });
+    }
     let accountId = input.accountId === undefined ? toNumber(before.account_id) : Number(input.accountId);
     const requestedAccountName = input.accountName === undefined
       ? ""

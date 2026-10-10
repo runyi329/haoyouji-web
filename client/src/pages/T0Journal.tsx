@@ -65,16 +65,24 @@ const T0_OPTION_METAL_SURFACE_STYLE = {
 };
 
 const T0_OPTION_DIRECTIONS: Array<{ value: T0OptionDirection; label: string }> = [
-  { value: "long_call", label: "买入看涨（Long Call）" },
-  { value: "long_put", label: "买入看跌（Long Put）" },
-  { value: "short_call", label: "卖出看涨（Short Call）" },
-  { value: "short_put", label: "卖出看跌（Short Put）" },
+  { value: "long_call", label: "买入看涨" },
+  { value: "short_call", label: "卖出看涨" },
+  { value: "long_put", label: "买入看跌" },
+  { value: "short_put", label: "卖出看跌" },
 ];
-
 function getOptionDirectionLabel(value?: T0OptionDirection) {
   return T0_OPTION_DIRECTIONS.find((item) => item.value === value)?.label;
 }
-
+/**
+ * 期权的左右报价侧按到期收益的涨跌方向归类，而不是按买入/卖出归类：
+ * 左侧（看涨）= 买入看涨、卖出看跌；右侧（看跌）= 买入看跌、卖出看涨。
+ */
+function getOptionLadderSide(direction: T0OptionDirection): PositionSide {
+  return direction === "long_call" || direction === "short_put" ? "long" : "short";
+}
+function getOptionOpeningAction(direction: T0OptionDirection): Extract<TradeAction, "openLong" | "openShort"> {
+  return getOptionLadderSide(direction) === "long" ? "openLong" : "openShort";
+}
 type PreviewAccount = {
   id: string;
   name: string;
@@ -2049,9 +2057,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     [entryScopedBuckets, markPrice, entryScopedFilledTrades],
   );
   const entrySideSummary = entrySide === "long" ? entryScopedSummary.long : entryScopedSummary.short;
+  const isOptionEntryContext = ACTIONS[entryForm.action].opening && entryForm.instrumentType === "option";
   // 档位详情已由用户刚点击的价格格定位，无需在标题重复显示档位，避免移动端换行。
   // 顶部始终明确为当前档位或当前方向范围的汇总，逐笔订单在下方直接展示。
-  const entryScopeTitle = `${entrySide === "long" ? "多仓" : "空仓"}汇总`;
+  const entryScopeTitle = isOptionEntryContext ? "期权汇总" : `${entrySide === "long" ? "多仓" : "空仓"}汇总`;
   const openingClosingAllocations = useMemo(
     () => buildOpeningClosingAllocations(entryScopedTrades.filter((trade) => !trade.isPending)),
     [entryScopedTrades],
@@ -2103,7 +2112,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   ], [activeOpenedTradeList, settledOpenedTradeList, showSettledOpeningHistory]);
   const isEditingEntry = Boolean(entryForm.editingEntryId);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
-  const isOptionOpeningEntry = ACTIONS[entryForm.action].opening && entryForm.instrumentType === "option";
+  const isOptionOpeningEntry = isOptionEntryContext;
   // T+0 期权固定为 ETH 标的：复用融资付息订单已接入的 Deribit 缓存。
   // 到期日与行权价均从市场合约列表选择，避免手填出不存在的合约组合。
   const t0OptionExpiriesQuery = (trpc.ledger as any).deribitGetExpiries.useQuery(
@@ -2288,13 +2297,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     entrySheetArchiveStepRef.current = sourceMode === "integrated"
       ? integratedArchiveStep
       : POSITION_ARCHIVE_STEP;
-    setEntrySide(ACTIONS[action].side);
+    // 现货/合约保留左多右空；期权不继承点击侧，而由四种期权方向决定最终展示侧。
+    const initialInstrumentType = ACTIONS[action].opening ? lastOpeningInstrumentType : undefined;
+    const initialOptionDirection: T0OptionDirection = "long_call";
+    const initialAction = initialInstrumentType === "option"
+      ? getOptionOpeningAction(initialOptionDirection)
+      : action;
+    setEntrySide(ACTIONS[initialAction].side);
     setCloseConfirmationStep("input");
     setClosingSourceTrade(null);
     const rememberedAccount = getRememberedAccountForRelatedUser(lastRelatedUser?.id);
     const defaultRelatedFund = getRememberedFundForRelatedUser(lastRelatedUser?.id);
     setEntryForm({
-      action,
+      action: initialAction,
       accountId: rememberedAccount?.id ?? "",
       accountName: rememberedAccount?.name ?? "",
       relatedUserId: lastRelatedUser?.id ?? "",
@@ -2302,8 +2317,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedUsername: lastRelatedUser?.username ?? "",
       relatedFundId: defaultRelatedFund?.id ?? "",
       relatedFundName: defaultRelatedFund?.name ?? "",
-      instrumentType: ACTIONS[action].opening ? lastOpeningInstrumentType : undefined,
-      optionDirection: "long_call",
+      instrumentType: initialInstrumentType,
+      optionDirection: initialOptionDirection,
       optionExpiryDate: "",
       optionPremium: "",
       optionPremiumCurrency: "USDT",
@@ -4066,17 +4081,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             )}
 
             <div className={`p-4 space-y-4 ${canManage && !isMemberView ? "pb-24" : ""}`}>
-              <div className={`overflow-hidden rounded border ${entrySide === "long" ? "border-rose-200 bg-rose-50/70" : "border-emerald-200 bg-emerald-50/70"}`}>
+              <div className={`overflow-hidden rounded border ${isOptionEntryContext ? "border-violet-200 bg-violet-50/70" : entrySide === "long" ? "border-rose-200 bg-rose-50/70" : "border-emerald-200 bg-emerald-50/70"}`}>
                 <div className="px-3 py-2.5">
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 text-left">
                   <div className="flex min-w-0 items-baseline gap-2">
-                    <span className={`text-base font-semibold ${entrySide === "long" ? "text-rose-600" : "text-emerald-600"}`}>{entryScopeTitle}</span>
+                    <span className={`text-base font-semibold ${isOptionEntryContext ? "text-violet-700" : entrySide === "long" ? "text-rose-600" : "text-emerald-600"}`}>{entryScopeTitle}</span>
                     <span className="text-base font-semibold tabular-nums text-slate-900">{formatQuantity(entrySideSummary.quantity)} ETH</span>
                   </div>
-                  <span className="shrink-0 text-base font-medium tabular-nums text-slate-500">均价 {entrySideSummary.quantity > 0 ? formatPrice(entrySideSummary.average) : "--"}</span>
+                  <span className="shrink-0 text-base font-medium tabular-nums text-slate-500">{isOptionEntryContext ? "行权价" : "均价"} {entrySideSummary.quantity > 0 ? formatPrice(entrySideSummary.average) : "--"}</span>
                 </div>
                 </div>
-                <div className={`mx-3 flex items-center justify-between border-t pt-2 pb-2.5 text-[10px] tabular-nums ${entrySide === "long" ? "border-rose-200/80" : "border-emerald-200/80"}`}>
+                <div className={`mx-3 flex items-center justify-between border-t pt-2 pb-2.5 text-[10px] tabular-nums ${isOptionEntryContext ? "border-violet-200/80" : entrySide === "long" ? "border-rose-200/80" : "border-emerald-200/80"}`}>
                   <span className={entrySideSummary.unrealized === null ? "text-slate-400" : entrySideSummary.unrealized >= 0 ? "text-rose-600" : "text-emerald-600"}>
                     当前盈亏 {entrySideSummary.unrealized === null ? "--" : `${formatSigned(entrySideSummary.unrealized)} U`}
                   </span>
@@ -4447,19 +4462,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         key={instrument.value}
                         type="button"
                         disabled={isCloseReview}
-                        onClick={() => setEntryForm((current) => {
-                          if (instrument.value !== "option" || current.instrumentType === "option") {
-                            return { ...current, instrumentType: instrument.value };
+                        onClick={() => {
+                          if (instrument.value === "option" && !entryForm.editingEntryId) {
+                            setEntrySide(getOptionLadderSide(entryForm.optionDirection));
                           }
-                          return {
-                            ...current,
-                            instrumentType: "option",
-                            isPending: false,
-                            optionExpiryDate: "",
-                            optionPremium: "",
-                            price: "",
-                          };
-                        })}
+                          setEntryForm((current) => {
+                            if (instrument.value !== "option") return { ...current, instrumentType: instrument.value };
+                            const isNewOption = current.instrumentType !== "option";
+                            return {
+                              ...current,
+                              action: current.editingEntryId ? current.action : getOptionOpeningAction(current.optionDirection),
+                              instrumentType: "option",
+                              isPending: false,
+                              optionExpiryDate: isNewOption ? "" : current.optionExpiryDate,
+                              optionPremium: isNewOption ? "" : current.optionPremium,
+                              price: isNewOption ? "" : current.price,
+                            };
+                          });
+                        }}
                         className={`h-7 rounded border px-3 text-[11px] font-medium transition active:scale-95 ${isActive ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
                         aria-pressed={isActive}
                       >
@@ -4476,14 +4496,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label={<span>方向 <span className="text-rose-500">*</span></span>}>
-                      <select
-                        disabled={isCloseReview}
-                        value={entryForm.optionDirection}
-                        onChange={(event) => setEntryForm((current) => ({ ...current, optionDirection: event.target.value as T0OptionDirection }))}
-                        className="h-11 w-full rounded border border-violet-200 bg-white px-2 text-xs font-medium text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-50"
-                      >
-                        {T0_OPTION_DIRECTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </select>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {T0_OPTION_DIRECTIONS.map((option) => {
+                          const active = entryForm.optionDirection === option.value;
+                          return <button
+                            key={option.value}
+                            type="button"
+                            disabled={isCloseReview}
+                            onClick={() => {
+                              if (!entryForm.editingEntryId) setEntrySide(getOptionLadderSide(option.value));
+                              setEntryForm((current) => ({
+                                ...current,
+                                action: current.editingEntryId ? current.action : getOptionOpeningAction(option.value),
+                                optionDirection: option.value,
+                              }));
+                            }}
+                            className={`h-11 rounded border px-1 text-[11px] font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${active ? "border-violet-600 bg-violet-600 text-white" : "border-violet-200 bg-white text-slate-600"}`}
+                            aria-pressed={active}
+                          >{option.label}</button>;
+                        })}
+                      </div>
                     </Field>
                     <Field label={<span>到期日 <span className="text-rose-500">*</span></span>}>
                       <select
