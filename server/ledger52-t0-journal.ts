@@ -11,7 +11,12 @@ export type T0JournalAction = "openLong" | "closeLong" | "openShort" | "closeSho
 const T0_JOURNAL_ACTIONS = new Set<T0JournalAction>(["openLong", "closeLong", "openShort", "closeShort"]);
 export type T0JournalInstrumentType = "spot" | "contract" | "option";
 const T0_JOURNAL_INSTRUMENT_TYPES = new Set<T0JournalInstrumentType>(["spot", "contract", "option"]);
+export type T0JournalOptionDirection = "long_call" | "long_put" | "short_call" | "short_put";
+export type T0JournalOptionPremiumCurrency = "USDT" | "ETH";
+const T0_JOURNAL_OPTION_DIRECTIONS = new Set<T0JournalOptionDirection>(["long_call", "long_put", "short_call", "short_put"]);
+const T0_JOURNAL_OPTION_PREMIUM_CURRENCIES = new Set<T0JournalOptionPremiumCurrency>(["USDT", "ETH"]);
 const ETH_QUANTITY_RESTORE_PATTERN = /^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/;
+const T0_DECIMAL_INPUT_PATTERN = /^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/;
 
 export type T0JournalActor = {
   id: number;
@@ -39,6 +44,11 @@ export type SaveT0JournalEntryInput = {
   isLocked?: boolean;
   /** 仅管理员开仓可设为挂单；挂单不参与实际仓位、FIFO、手续费及收益核算。 */
   isPending?: boolean;
+  /** 期权开仓参数：标的强制为 ETH，price 存行权价。 */
+  optionDirection?: T0JournalOptionDirection;
+  optionExpiryDate?: string;
+  optionPremium?: string;
+  optionPremiumCurrency?: T0JournalOptionPremiumCurrency;
   quantity: string;
   price: string;
   targetPrice?: string;
@@ -93,6 +103,52 @@ function normalizeInstrumentType(value: unknown, required = false): T0JournalIns
     throw new TRPCError({ code: "BAD_REQUEST", message: "订单类型无效，请重新选择" });
   }
   return normalized;
+}
+
+function normalizeOptionDate(value: unknown): string {
+  const normalized = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请填写有效的期权到期日" });
+  }
+  const parsed = new Date(`${normalized}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== normalized) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请填写有效的期权到期日" });
+  }
+  return normalized;
+}
+
+function mapOptionDate(value: unknown): string | undefined {
+  if (!value) return undefined;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const normalized = String(value).trim();
+  return /^\d{4}-\d{2}-\d{2}/.test(normalized) ? normalized.slice(0, 10) : undefined;
+}
+
+function resolveOptionParameters(input: {
+  optionDirection?: unknown;
+  optionExpiryDate?: unknown;
+  optionPremium?: unknown;
+  optionPremiumCurrency?: unknown;
+}, fallback?: any): {
+  direction: T0JournalOptionDirection;
+  expiryDate: string;
+  premium: string;
+  premiumCurrency: T0JournalOptionPremiumCurrency;
+} {
+  const direction = String(input.optionDirection ?? fallback?.option_direction ?? fallback?.optionDirection ?? "").trim() as T0JournalOptionDirection;
+  if (!T0_JOURNAL_OPTION_DIRECTIONS.has(direction)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请选择期权方向" });
+  }
+  const expiryDate = normalizeOptionDate(input.optionExpiryDate ?? fallback?.option_expiry_date ?? fallback?.optionExpiryDate);
+  const premium = String(input.optionPremium ?? fallback?.option_premium ?? fallback?.optionPremium ?? "").trim();
+  if (!T0_DECIMAL_INPUT_PATTERN.test(premium) || Number(premium) <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请输入大于 0 的权利金" });
+  }
+  const premiumCurrency = String(input.optionPremiumCurrency ?? fallback?.option_premium_currency ?? fallback?.optionPremiumCurrency ?? "").trim() as T0JournalOptionPremiumCurrency;
+  if (!T0_JOURNAL_OPTION_PREMIUM_CURRENCIES.has(premiumCurrency)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请选择权利金计价币种" });
+  }
+  return { direction, expiryDate, premium, premiumCurrency };
 }
 
 function isoTime(value: unknown): string {
@@ -298,6 +354,16 @@ function mapEntry(row: any) {
     instrumentType: T0_JOURNAL_INSTRUMENT_TYPES.has(String(row.instrument_type ?? row.instrumentType ?? "") as T0JournalInstrumentType)
       ? String(row.instrument_type ?? row.instrumentType) as T0JournalInstrumentType
       : undefined,
+    optionDirection: T0_JOURNAL_OPTION_DIRECTIONS.has(String(row.option_direction ?? row.optionDirection ?? "") as T0JournalOptionDirection)
+      ? String(row.option_direction ?? row.optionDirection) as T0JournalOptionDirection
+      : undefined,
+    optionExpiryDate: mapOptionDate(row.option_expiry_date ?? row.optionExpiryDate),
+    optionPremium: row.option_premium === null || row.option_premium === undefined
+      ? undefined
+      : toNumber(row.option_premium).toString(),
+    optionPremiumCurrency: T0_JOURNAL_OPTION_PREMIUM_CURRENCIES.has(String(row.option_premium_currency ?? row.optionPremiumCurrency ?? "") as T0JournalOptionPremiumCurrency)
+      ? String(row.option_premium_currency ?? row.optionPremiumCurrency) as T0JournalOptionPremiumCurrency
+      : undefined,
     isLocked: Boolean(toNumber(row.is_locked ?? row.isLocked)),
     isPending: String(row.execution_status ?? row.executionStatus ?? "filled") === "pending",
     filledAt: row.filled_at ?? row.filledAt ? isoTime(row.filled_at ?? row.filledAt) : undefined,
@@ -417,6 +483,10 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         related_fund_id BIGINT UNSIGNED DEFAULT NULL,
         symbol VARCHAR(16) NOT NULL DEFAULT 'ETH',
         instrument_type ENUM('spot','contract','option') DEFAULT NULL,
+        option_direction ENUM('long_call','long_put','short_call','short_put') DEFAULT NULL,
+        option_expiry_date DATE DEFAULT NULL,
+        option_premium DECIMAL(36,18) DEFAULT NULL,
+        option_premium_currency ENUM('USDT','ETH') DEFAULT NULL,
         is_locked TINYINT(1) NOT NULL DEFAULT 0 COMMENT '仅T+0开仓主单的管理员锁定展示标记',
         execution_status ENUM('filled','pending') NOT NULL DEFAULT 'filled' COMMENT 'filled为实际成交，pending为管理员逐笔报价挂单',
         filled_at DATETIME(3) DEFAULT NULL COMMENT '挂单触发成交的系统确认时间',
@@ -602,6 +672,18 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         ALTER TABLE ledger52_t0_journal_entries
           ADD COLUMN instrument_type ENUM('spot','contract','option') DEFAULT NULL AFTER symbol,
           ADD KEY idx_t0_journal_entry_instrument_time (ledger_id, user_id, instrument_type, trade_time)
+      `);
+    }
+
+    // 期权参数与行权价分开固化，避免把权利金、到期日或方向塞入备注导致无法审计和回填。
+    const [optionDirectionColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_entries LIKE 'option_direction'`);
+    if (asRows(optionDirectionColumns).length === 0) {
+      await db.execute(`
+        ALTER TABLE ledger52_t0_journal_entries
+          ADD COLUMN option_direction ENUM('long_call','long_put','short_call','short_put') DEFAULT NULL AFTER instrument_type,
+          ADD COLUMN option_expiry_date DATE DEFAULT NULL AFTER option_direction,
+          ADD COLUMN option_premium DECIMAL(36,18) DEFAULT NULL AFTER option_expiry_date,
+          ADD COLUMN option_premium_currency ENUM('USDT','ETH') DEFAULT NULL AFTER option_premium
       `);
     }
 
@@ -816,7 +898,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
       `SELECT e.id, e.account_id,
               CASE WHEN a.is_active = 1 THEN a.name ELSE NULL END AS account_name,
               CASE WHEN a.is_active = 1 THEN 0 ELSE 1 END AS account_hidden,
-              e.symbol, e.instrument_type, e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.related_user_id, e.related_fund_id,
+              e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency, e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.related_user_id, e.related_fund_id,
               CASE WHEN f.is_active = 1 THEN f.name ELSE NULL END AS related_fund_name,
               CASE WHEN f.is_active = 1 THEN 0 ELSE 1 END AS related_fund_hidden,
               CASE WHEN deleted_user.id IS NULL THEN COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) ELSE NULL END AS related_user_name,
@@ -1713,6 +1795,10 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     throw new TRPCError({ code: "BAD_REQUEST", message: "仅开仓订单可以设为挂单" });
   }
   const isPending = isOpeningAction(input.action) && input.isPending === true ? 1 : 0;
+  if (isPending && instrumentType === "option") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "期权请直接成交；行权价不能作为挂单触发价" });
+  }
+  const optionParameters = instrumentType === "option" ? resolveOptionParameters(input) : null;
 
   try {
     await ensureLedger52T0JournalTables(tx);
@@ -1830,8 +1916,8 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 
     const [entryResult] = await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, is_locked, execution_status, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18), ?, ?, ?, ?)
+        (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, is_locked, execution_status, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'option' THEN 0 ELSE ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18) END, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
       [
         LEDGER_52_T0_JOURNAL_ID,
@@ -1841,11 +1927,16 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         relatedFund?.id ?? null,
         input.symbol,
         instrumentType ?? null,
+        optionParameters?.direction ?? null,
+        optionParameters?.expiryDate ?? null,
+        optionParameters?.premium ?? null,
+        optionParameters?.premiumCurrency ?? null,
         isLocked,
         isPending ? "pending" : "filled",
         input.action,
         normalizedQuantity,
         input.price,
+        instrumentType ?? null,
         normalizedQuantity,
         input.price,
         storedTargetPrice || null,
@@ -1891,7 +1982,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
                 COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
                 u.username AS related_username, u.avatar AS related_user_avatar,
-                e.symbol, e.instrument_type, e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+                e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency, e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
            FROM ledger52_t0_journal_entries e
            INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
            LEFT JOIN users u ON u.id = e.related_user_id
@@ -1916,7 +2007,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 
 async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: number) {
   const [rows] = await tx.execute(
-    `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.instrument_type, e.action,
+    `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency, e.action,
             e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
             e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
        FROM ledger52_t0_journal_entries e
@@ -2011,7 +2102,7 @@ export async function scanLedger52T0PendingOrders() {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     const [rows] = await tx.execute(
-      `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, is_locked,
+      `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, is_locked,
               execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note,
               client_request_id, created_by_user_id, trade_time, created_at, updated_at
          FROM ledger52_t0_journal_entries
@@ -2089,6 +2180,10 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   isLocked?: boolean;
   /** 未传时保持原成交状态；传入 true 为挂单，传入 false 将挂单人工确认成交。 */
   isPending?: boolean;
+  optionDirection?: T0JournalOptionDirection;
+  optionExpiryDate?: string;
+  optionPremium?: string;
+  optionPremiumCurrency?: T0JournalOptionPremiumCurrency;
   quantity: string;
   price: string;
   note?: string;
@@ -2106,6 +2201,11 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     await tx.beginTransaction();
     const before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
     const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
+    const effectiveInstrumentType = instrumentType ?? normalizeInstrumentType(before.instrument_type);
+    if (isPending === 1 && effectiveInstrumentType === "option") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "期权请直接成交；行权价不能作为挂单触发价" });
+    }
+    const optionParameters = effectiveInstrumentType === "option" ? resolveOptionParameters(input, before) : null;
     let accountId = input.accountId === undefined ? toNumber(before.account_id) : Number(input.accountId);
     const requestedAccountName = input.accountName === undefined
       ? ""
@@ -2202,12 +2302,12 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     await tx.execute(
       `UPDATE ledger52_t0_journal_entries
           SET account_id = ?, quantity = ?, price = ?, target_price = ?, related_user_id = ?, related_fund_id = ?,
-              instrument_type = COALESCE(?, instrument_type),
+              instrument_type = COALESCE(?, instrument_type), option_direction = ?, option_expiry_date = ?, option_premium = ?, option_premium_currency = ?,
               is_locked = COALESCE(?, is_locked),
               execution_status = COALESCE(CASE WHEN ? = 1 THEN 'pending' WHEN ? = 0 THEN 'filled' END, execution_status),
               filled_at = CASE WHEN ? IS NULL THEN filled_at WHEN ? = 1 THEN NULL WHEN ? = 0 THEN NOW(3) ELSE filled_at END,
               filled_price = CASE WHEN ? IS NULL THEN filled_price WHEN ? = 1 THEN NULL WHEN ? = 0 THEN CAST(? AS DECIMAL(36,18)) ELSE filled_price END,
-              fee_usdt = ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18),
+              fee_usdt = CASE WHEN ? = 'option' THEN 0 ELSE ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18) END,
               note = ?, updated_at = NOW(3)
         WHERE id = ? AND ledger_id = ? AND user_id = ?`,
       [
@@ -2218,6 +2318,10 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         relatedUserId > 0 ? relatedUserId : null,
         relatedFund?.id ?? null,
         instrumentType ?? null,
+        optionParameters?.direction ?? null,
+        optionParameters?.expiryDate ?? null,
+        optionParameters?.premium ?? null,
+        optionParameters?.premiumCurrency ?? null,
         isLocked,
         isPending,
         isPending,
@@ -2228,6 +2332,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         isPending,
         isPending,
         input.price,
+        effectiveInstrumentType ?? null,
         normalizedQuantity,
         input.price,
         input.note || null,
@@ -2255,7 +2360,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
               u.username AS related_username, u.avatar AS related_user_avatar,
-              e.symbol, e.instrument_type, e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+              e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency, e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id
@@ -2456,8 +2561,8 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
 
     await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, is_locked, execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
+        (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, is_locked, execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
       [
         entryId,
         LEDGER_52_T0_JOURNAL_ID,
@@ -2467,6 +2572,10 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
         relatedFundId > 0 ? relatedFundId : null,
         String(snapshot.symbol || "ETH"),
         normalizeInstrumentType(snapshot.instrument_type ?? snapshot.instrumentType),
+        snapshot.option_direction ?? snapshot.optionDirection ?? null,
+        mapOptionDate(snapshot.option_expiry_date ?? snapshot.optionExpiryDate) ?? null,
+        snapshot.option_premium ?? snapshot.optionPremium ?? null,
+        snapshot.option_premium_currency ?? snapshot.optionPremiumCurrency ?? null,
         isLocked ? 1 : 0,
         executionStatus,
         snapshot.filled_at ?? snapshot.filledAt ?? null,
@@ -2492,7 +2601,7 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
       `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
               u.username AS related_username, u.avatar AS related_user_avatar,
-              e.symbol, e.instrument_type, e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+              e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency, e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id

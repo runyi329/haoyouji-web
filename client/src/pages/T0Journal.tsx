@@ -21,6 +21,8 @@ import { trpc } from "@/lib/trpc";
 type TradeAction = "openLong" | "closeLong" | "openShort" | "closeShort";
 type PositionSide = "long" | "short";
 type T0InstrumentType = "spot" | "contract" | "option";
+type T0OptionDirection = "long_call" | "long_put" | "short_call" | "short_put";
+type T0OptionPremiumCurrency = "USDT" | "ETH";
 type T0InstrumentFilter = "all" | T0InstrumentType | "unlabeled";
 type T0ExecutionFilter = "all" | "filled" | "pending";
 const T0_INSTRUMENT_TYPES: Array<{ value: T0InstrumentType; label: string; shortLabel: string }> = [
@@ -30,6 +32,17 @@ const T0_INSTRUMENT_TYPES: Array<{ value: T0InstrumentType; label: string; short
 ];
 function getInstrumentShortLabel(value?: T0InstrumentType) {
   return T0_INSTRUMENT_TYPES.find((item) => item.value === value)?.shortLabel;
+}
+
+const T0_OPTION_DIRECTIONS: Array<{ value: T0OptionDirection; label: string }> = [
+  { value: "long_call", label: "买入看涨（Long Call）" },
+  { value: "long_put", label: "买入看跌（Long Put）" },
+  { value: "short_call", label: "卖出看涨（Short Call）" },
+  { value: "short_put", label: "卖出看跌（Short Put）" },
+];
+
+function getOptionDirectionLabel(value?: T0OptionDirection) {
+  return T0_OPTION_DIRECTIONS.find((item) => item.value === value)?.label;
 }
 
 type PreviewAccount = {
@@ -69,6 +82,10 @@ type PreviewTrade = {
   symbol: string;
   action: TradeAction;
   instrumentType?: T0InstrumentType;
+  optionDirection?: T0OptionDirection;
+  optionExpiryDate?: string;
+  optionPremium?: number;
+  optionPremiumCurrency?: T0OptionPremiumCurrency;
   /** 管理员开仓主单的展示锁定标记；成员端不下发、不渲染。 */
   isLocked?: boolean;
   /** 管理员报价专用：挂单在触发前不进入真实仓位、盈亏或费用计算。 */
@@ -150,6 +167,14 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     instrumentType: entry.instrumentType === "spot" || entry.instrumentType === "contract" || entry.instrumentType === "option"
       ? entry.instrumentType
       : undefined,
+    optionDirection: entry.optionDirection === "long_call" || entry.optionDirection === "long_put" || entry.optionDirection === "short_call" || entry.optionDirection === "short_put"
+      ? entry.optionDirection
+      : undefined,
+    optionExpiryDate: entry.optionExpiryDate ? String(entry.optionExpiryDate) : undefined,
+    optionPremium: entry.optionPremium === undefined || entry.optionPremium === null ? undefined : Number(entry.optionPremium),
+    optionPremiumCurrency: entry.optionPremiumCurrency === "USDT" || entry.optionPremiumCurrency === "ETH"
+      ? entry.optionPremiumCurrency
+      : undefined,
     isLocked: Boolean(entry.isLocked),
     isPending: Boolean(entry.isPending),
     filledAt: entry.filledAt ? String(entry.filledAt) : undefined,
@@ -166,6 +191,8 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
 type PositionBucket = {
   key: string;
   side: PositionSide;
+  /** 期权行权价不参与现货/合约的标记价盈亏计算。 */
+  instrumentType?: T0InstrumentType;
   /** T 型报价展示和开平匹配使用的归属档位（非实际成交价）。 */
   price: number;
   originalQuantity: number;
@@ -228,6 +255,10 @@ type EntryForm = {
   relatedFundId: string;
   relatedFundName: string;
   instrumentType?: T0InstrumentType;
+  optionDirection: T0OptionDirection;
+  optionExpiryDate: string;
+  optionPremium: string;
+  optionPremiumCurrency: T0OptionPremiumCurrency;
   /** 开仓订单默认为未锁；锁定后仅管理员逐笔报价使用黑金标识。 */
   isLocked: boolean;
   /** 仅开仓：默认直接成交；设为挂单后等待统一标记价自动触发。 */
@@ -648,7 +679,7 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
       const archivePrice = archivePriceForTrade(trade);
       const key = `${side}:${priceKey(archivePrice)}`;
       const existing = buckets.get(key);
-      const financialQuantity = getTradeFinancialQuantity(trade);
+      const financialQuantity = trade.instrumentType === "option" ? 0 : getTradeFinancialQuantity(trade);
       if (existing) {
         existing.originalQuantity += trade.quantity;
         existing.remainingQuantity += trade.quantity;
@@ -660,6 +691,7 @@ function buildPositionBuckets(trades: PreviewTrade[]) {
         buckets.set(key, {
           key,
           side,
+          instrumentType: trade.instrumentType,
           price: archivePrice,
           originalQuantity: trade.quantity,
           remainingQuantity: trade.quantity,
@@ -1131,6 +1163,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     relatedFundId: "",
     relatedFundName: "",
     instrumentType: "contract",
+    optionDirection: "long_call",
+    optionExpiryDate: "",
+    optionPremium: "",
+    optionPremiumCurrency: "USDT",
     isLocked: false,
     isPending: false,
     quantity: "",
@@ -1651,11 +1687,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     return null;
   }, [entryForm.quantity]);
   const estimatedFeeUsdt = useMemo(() => {
+    if (entryForm.instrumentType === "option") return 0;
     const quantity = Number(normalizeEthQuantity(entryForm.quantity));
     const price = Number(entryForm.price);
     if (quantityFormatError || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(price) || price <= 0) return null;
     return Number((quantity * price * OKX_VIP2_TAKER_FEE_RATE).toFixed(8));
-  }, [entryForm.quantity, entryForm.price, quantityFormatError]);
+  }, [entryForm.instrumentType, entryForm.quantity, entryForm.price, quantityFormatError]);
   const openingArchivePrice = useMemo(() => {
     const price = Number(entryForm.price);
     if (!ACTIONS[entryForm.action].opening || !Number.isFinite(price) || price <= 0) return null;
@@ -1806,6 +1843,37 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   ], [activeOpenedTradeList, settledOpenedTradeList, showSettledOpeningHistory]);
   const isEditingEntry = Boolean(entryForm.editingEntryId);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
+  const isOptionOpeningEntry = ACTIONS[entryForm.action].opening && entryForm.instrumentType === "option";
+  // T+0 期权固定为 ETH 标的：复用融资付息订单已接入的 Deribit 缓存。
+  // 到期日与行权价均从市场合约列表选择，避免手填出不存在的合约组合。
+  const t0OptionExpiriesQuery = (trpc.ledger as any).deribitGetExpiries.useQuery(
+    { currency: "ETH" as const },
+    {
+      enabled: canManage && showEntrySheet && isOptionOpeningEntry,
+      staleTime: 5 * 60 * 1000,
+    },
+  );
+  const t0OptionExpiries = ((t0OptionExpiriesQuery.data as any)?.expiries ?? []) as Array<{
+    deribitLabel: string;
+    ts: number;
+    diffDays: number;
+    dateStr?: string;
+  }>;
+  const t0SelectedOptionExpiry = t0OptionExpiries.find(
+    (expiry) => new Date(expiry.ts).toISOString().slice(0, 10) === entryForm.optionExpiryDate,
+  );
+  const t0OptionDeribitLabel = t0SelectedOptionExpiry?.deribitLabel ?? "";
+  const t0OptionStrikesQuery = (trpc.ledger as any).deribitGetStrikes.useQuery(
+    { currency: "ETH" as const, deribitLabel: t0OptionDeribitLabel },
+    {
+      enabled: canManage && showEntrySheet && isOptionOpeningEntry && Boolean(t0OptionDeribitLabel),
+      staleTime: 5 * 60 * 1000,
+    },
+  );
+  const t0OptionStrikeRows = (((t0OptionStrikesQuery.data as any)?.strikes ?? []) as unknown[]);
+  const t0OptionStrikes = t0OptionStrikeRows
+    .map((strike) => Number(strike))
+    .filter((strike: number) => Number.isFinite(strike) && strike > 0);
   const isCloseReview = isClosingEntry && closeConfirmationStep === "review";
   // 平仓必须继承所选开仓单的账户、用户与项目归属，首次输入和二次确认均不可改。
   // 开仓编辑受后端 FIFO 依赖校验保护；未发生后续平仓时，管理员必须能改到既有账户。
@@ -1949,6 +2017,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundId: defaultRelatedFund?.id ?? "",
       relatedFundName: defaultRelatedFund?.name ?? "",
       instrumentType: ACTIONS[action].opening ? lastOpeningInstrumentType : undefined,
+      optionDirection: "long_call",
+      optionExpiryDate: "",
+      optionPremium: "",
+      optionPremiumCurrency: "USDT",
       isLocked: false,
       isPending: false,
       quantity: "",
@@ -2005,6 +2077,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundId: trade.relatedFundId ?? "legacy",
       relatedFundName: trade.relatedFundName ?? "",
       instrumentType: trade.instrumentType,
+      optionDirection: trade.optionDirection ?? "long_call",
+      optionExpiryDate: trade.optionExpiryDate ?? "",
+      optionPremium: trade.optionPremium === undefined ? "" : String(trade.optionPremium),
+      optionPremiumCurrency: trade.optionPremiumCurrency ?? "USDT",
       isLocked: false,
       isPending: false,
       // 表单值不能带千分位逗号，否则超过千位的数量会无法通过数值校验。
@@ -2036,6 +2112,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundId: trade.relatedFundId ?? "legacy",
       relatedFundName: trade.relatedFundName ?? "",
       instrumentType: trade.instrumentType,
+      optionDirection: trade.optionDirection ?? "long_call",
+      optionExpiryDate: trade.optionExpiryDate ?? "",
+      optionPremium: trade.optionPremium === undefined ? "" : String(trade.optionPremium),
+      optionPremiumCurrency: trade.optionPremiumCurrency ?? "USDT",
       isLocked: Boolean(trade.isLocked),
       isPending: Boolean(trade.isPending),
       // 编辑输入使用机器可解析的原始数值；展示层才使用千分位格式。
@@ -2173,6 +2253,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         instrumentType: data.entry.instrumentType === "spot" || data.entry.instrumentType === "contract" || data.entry.instrumentType === "option"
           ? data.entry.instrumentType
           : undefined,
+        optionDirection: data.entry.optionDirection === "long_call" || data.entry.optionDirection === "long_put" || data.entry.optionDirection === "short_call" || data.entry.optionDirection === "short_put"
+          ? data.entry.optionDirection
+          : undefined,
+        optionExpiryDate: data.entry.optionExpiryDate ? String(data.entry.optionExpiryDate) : undefined,
+        optionPremium: data.entry.optionPremium === undefined || data.entry.optionPremium === null ? undefined : Number(data.entry.optionPremium),
+        optionPremiumCurrency: data.entry.optionPremiumCurrency === "USDT" || data.entry.optionPremiumCurrency === "ETH"
+          ? data.entry.optionPremiumCurrency
+          : undefined,
         isLocked: Boolean(data.entry.isLocked),
         isPending: Boolean(data.entry.isPending),
         filledAt: data.entry.filledAt ? String(data.entry.filledAt) : undefined,
@@ -2248,6 +2336,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         instrumentType: data.entry.instrumentType === "spot" || data.entry.instrumentType === "contract" || data.entry.instrumentType === "option"
           ? data.entry.instrumentType
           : undefined,
+        optionDirection: data.entry.optionDirection === "long_call" || data.entry.optionDirection === "long_put" || data.entry.optionDirection === "short_call" || data.entry.optionDirection === "short_put"
+          ? data.entry.optionDirection
+          : undefined,
+        optionExpiryDate: data.entry.optionExpiryDate ? String(data.entry.optionExpiryDate) : undefined,
+        optionPremium: data.entry.optionPremium === undefined || data.entry.optionPremium === null ? undefined : Number(data.entry.optionPremium),
+        optionPremiumCurrency: data.entry.optionPremiumCurrency === "USDT" || data.entry.optionPremiumCurrency === "ETH"
+          ? data.entry.optionPremiumCurrency
+          : undefined,
         isLocked: Boolean(data.entry.isLocked),
         isPending: Boolean(data.entry.isPending),
         filledAt: data.entry.filledAt ? String(data.entry.filledAt) : undefined,
@@ -2295,6 +2391,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         relatedFundId: entry.relatedFundId ?? "",
         relatedFundName: entry.relatedFundName ?? "",
         instrumentType: entry.instrumentType ?? lastOpeningInstrumentType,
+        optionDirection: entry.optionDirection ?? "long_call",
+        optionExpiryDate: entry.optionExpiryDate ?? "",
+        optionPremium: entry.optionPremium === undefined ? "" : String(entry.optionPremium),
+        optionPremiumCurrency: entry.optionPremiumCurrency ?? "USDT",
         isLocked: false,
         isPending: false,
         quantity: "",
@@ -2490,8 +2590,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const defaultFund = getRememberedFundForRelatedUser(user.id);
     setEntryForm((current) => ({
       ...current,
-      accountId: rememberedAccount?.id ?? "",
-      accountName: rememberedAccount?.name ?? "",
+      // 已有记忆账户时优先带入；新用户没有记忆时保留管理员刚填写的新账户。
+      accountId: rememberedAccount?.id ?? current.accountId,
+      accountName: rememberedAccount?.name ?? current.accountName,
       relatedUserId: user.id,
       relatedUserName: user.name,
       relatedUsername: user.username ?? "",
@@ -2525,8 +2626,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const rememberedAccount = getRememberedAccountForRelatedUser();
     setEntryForm((current) => ({
       ...current,
-      accountId: rememberedAccount?.id ?? "",
-      accountName: rememberedAccount?.name ?? "",
+      // 取消关联同样不能意外清空尚未保存的新账户。
+      accountId: rememberedAccount?.id ?? current.accountId,
+      accountName: rememberedAccount?.name ?? current.accountName,
       relatedUserId: "",
       relatedUserName: "",
       relatedUsername: "",
@@ -2544,6 +2646,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const price = Number(entryForm.price);
     const fee = estimatedFeeUsdt ?? 0;
     const selectedAction = ACTIONS[entryForm.action];
+    const isOptionOpening = selectedAction.opening && entryForm.instrumentType === "option";
     const normalizedAccountName = entryForm.accountName.trim();
     const hasPersistedAccountId = /^\d+$/.test(entryForm.accountId);
     const relatedUserId = Number(entryForm.relatedUserId);
@@ -2565,12 +2668,34 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       return;
     }
     if (!Number.isFinite(price) || price <= 0) {
-      toast.error("请输入成交价格");
+      toast.error(isOptionOpening ? "请输入行权价" : "请输入成交价格");
       return;
     }
     if (selectedAction.opening && !entryForm.editingEntryId && !entryForm.instrumentType) {
       toast.error("请选择现货、合约或期权");
       return;
+    }
+    if (isOptionOpening) {
+      if (!entryForm.optionExpiryDate) {
+        toast.error("请选择期权到期日");
+        return;
+      }
+      if (!t0OptionDeribitLabel && !entryForm.editingEntryId) {
+        toast.error("请从 Deribit 可用到期日中选择期权到期日");
+        return;
+      }
+      if (t0OptionStrikesQuery.isLoading) {
+        toast.error("行权价列表加载中，请稍候再保存");
+        return;
+      }
+      if (t0OptionDeribitLabel && !t0OptionStrikes.some((strike) => Math.abs(strike - price) < 0.0000001)) {
+        toast.error("请从所选到期日的 Deribit 行权价列表中选择行权价");
+        return;
+      }
+      if (!entryForm.optionPremium.trim() || !Number.isFinite(Number(entryForm.optionPremium)) || Number(entryForm.optionPremium) <= 0) {
+        toast.error("请输入大于0的权利金");
+        return;
+      }
     }
     const archiveTargetPrice = selectedAction.opening
       ? archivePriceForSide(selectedAction.side, price)
@@ -2621,6 +2746,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         instrumentType: entryForm.instrumentType,
         isLocked: entryForm.isLocked,
         isPending: entryForm.isPending,
+        optionDirection: isOptionOpening ? entryForm.optionDirection : undefined,
+        optionExpiryDate: isOptionOpening ? entryForm.optionExpiryDate : undefined,
+        optionPremium: isOptionOpening ? entryForm.optionPremium.trim() : undefined,
+        optionPremiumCurrency: isOptionOpening ? entryForm.optionPremiumCurrency : undefined,
         quantity: normalizedQuantity,
         price: entryForm.price.trim(),
         note: entryForm.note.trim() || undefined,
@@ -2676,6 +2805,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       symbol: "ETH",
       action: entryForm.action,
       instrumentType: selectedAction.opening ? entryForm.instrumentType : undefined,
+      optionDirection: isOptionOpening ? entryForm.optionDirection : undefined,
+      optionExpiryDate: isOptionOpening ? entryForm.optionExpiryDate : undefined,
+      optionPremium: isOptionOpening ? Number(entryForm.optionPremium) : undefined,
+      optionPremiumCurrency: isOptionOpening ? entryForm.optionPremiumCurrency : undefined,
       isLocked: selectedAction.opening ? entryForm.isLocked : false,
       isPending: selectedAction.opening ? entryForm.isPending : false,
       quantity,
@@ -2704,6 +2837,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       instrumentType: selectedAction.opening ? entryForm.instrumentType : undefined,
       isLocked: selectedAction.opening ? entryForm.isLocked : undefined,
       isPending: selectedAction.opening ? entryForm.isPending : undefined,
+      optionDirection: isOptionOpening ? entryForm.optionDirection : undefined,
+      optionExpiryDate: isOptionOpening ? entryForm.optionExpiryDate : undefined,
+      optionPremium: isOptionOpening ? entryForm.optionPremium.trim() : undefined,
+      optionPremiumCurrency: isOptionOpening ? entryForm.optionPremiumCurrency : undefined,
       quantity: normalizedQuantity,
       price: entryForm.price.trim(),
       targetPrice: archiveTargetPrice === undefined ? undefined : String(archiveTargetPrice),
@@ -3712,7 +3849,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     const linkedClosedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
                     const remainingQuantity = Math.max(0, trade.quantity - linkedClosedQuantity);
                     const financialRemainingQuantity = getTradeFinancialQuantity(trade, remainingQuantity);
-                    const floatingPnl = trade.isPending ? null : calculateEstimatedUnrealizedNetPnl(
+                    const floatingPnl = trade.isPending || trade.instrumentType === "option" ? null : calculateEstimatedUnrealizedNetPnl(
                       ACTIONS[trade.action].side,
                       markPrice,
                       financialRemainingQuantity,
@@ -3789,7 +3926,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                             >
                               删除
                             </button>
-                            {row.kind === "active" && !trade.isPending && <button
+                            {row.kind === "active" && !trade.isPending && trade.instrumentType !== "option" && <button
                               type="button"
                               disabled={!canQuickClose || Boolean(trade.isSyncing) || isCloseReview}
                               onClick={() => openQuickCloseSheet(trade)}
@@ -3803,13 +3940,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           <>
                             <div className="mt-2 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2 tabular-nums">
                               <div className="min-w-0">
-                                <div className="text-[10px] text-slate-400">{trade.isPending ? "挂单状态" : "开仓价值"}</div>
-                                <div className={`mt-0.5 whitespace-nowrap text-[11px] font-medium ${trade.isPending ? "text-sky-700" : "text-slate-700"}`}>{trade.isPending ? "等待触发" : `${formatPrice(openingValue)} U`}</div>
+                                <div className="text-[10px] text-slate-400">{trade.isPending ? "挂单状态" : trade.instrumentType === "option" ? "行权价" : "开仓价值"}</div>
+                                <div className={`mt-0.5 whitespace-nowrap text-[11px] font-medium ${trade.isPending ? "text-sky-700" : "text-slate-700"}`}>{trade.isPending ? "等待触发" : trade.instrumentType === "option" ? `${formatPrice(trade.price)} U` : `${formatPrice(openingValue)} U`}</div>
                               </div>
                               <div className="min-w-0 text-center">
-                                <div className="text-[10px] text-slate-400">{trade.isPending ? "盈亏" : "当前盈亏"}</div>
+                                <div className="text-[10px] text-slate-400">{trade.isPending ? "盈亏" : trade.instrumentType === "option" ? "实时盈亏" : "当前盈亏"}</div>
                                 <div className={`mt-0.5 whitespace-nowrap text-[11px] font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                                  {floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}
+                                  {floatingPnl === null ? trade.instrumentType === "option" ? "待接入期权标记价" : "--" : `${formatSigned(floatingPnl)} U`}
                                 </div>
                               </div>
                               <div className="min-w-0 text-right">
@@ -3830,6 +3967,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                                   <div title={getTradeRelatedFundName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeRelatedFundName(trade)}</div>
                                 </div>
                               </div>
+                              {trade.instrumentType === "option" && <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2">
+                                <div className="min-w-0">
+                                  <div className="text-[10px] text-slate-400">期权方向</div>
+                                  <div className="mt-0.5 truncate text-[11px] font-medium text-violet-700">{getOptionDirectionLabel(trade.optionDirection) ?? "未标注"}</div>
+                                </div>
+                                <div className="min-w-0 text-center">
+                                  <div className="text-[10px] text-slate-400">到期日</div>
+                                  <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.optionExpiryDate || "未设置"}</div>
+                                </div>
+                                <div className="min-w-0 text-right">
+                                  <div className="text-[10px] text-slate-400">权利金</div>
+                                  <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.optionPremium === undefined ? "未设置" : `${formatPrice(trade.optionPremium)} ${trade.optionPremiumCurrency ?? "USDT"}`}</div>
+                                </div>
+                              </div>}
                               {trade.note?.trim() && (
                                 <div className="col-span-3 border-t border-slate-200 pt-2">
                                   <div className="text-[10px] text-slate-400">备注</div>
@@ -3910,10 +4061,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         </button>
                         <button
                           type="button"
-                          disabled={isCloseReview}
+                          disabled={isCloseReview || entryForm.instrumentType === "option"}
                           aria-pressed={entryForm.isPending}
-                          aria-label={entryForm.isPending ? "取消本笔开仓挂单，改为直接成交" : "设为本笔开仓挂单"}
-                          title={entryForm.isPending ? "挂单中，点击改为直接成交" : "直接成交，点击改为挂单"}
+                          aria-label={entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? "取消本笔开仓挂单，改为直接成交" : "设为本笔开仓挂单"}
+                          title={entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? "挂单中，点击改为直接成交" : "直接成交，点击改为挂单"}
                           onClick={() => setEntryForm((current) => ({ ...current, isPending: !current.isPending }))}
                           className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isPending ? "border-sky-500/75 bg-sky-50 text-sky-600" : "border-slate-300 bg-slate-50 text-slate-500"}`}
                         >
@@ -3926,19 +4077,36 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
                   <Field label={
                     <span className="inline-flex max-w-full items-baseline gap-1 text-sm font-semibold text-slate-800">
-                      <span>{ACTIONS[entryForm.action].opening ? "成交价" : "平仓价"}</span>
-                      <span className="truncate text-[9px] font-normal tabular-nums text-slate-400">手续费 {OKX_VIP2_TAKER_FEE_LABEL} · {estimatedFeeUsdt === null ? "--" : `${formatFee(estimatedFeeUsdt)} U`}</span>
+                      <span>{ACTIONS[entryForm.action].opening ? isOptionOpeningEntry ? "行权价" : "成交价" : "平仓价"}</span>
+                      <span className="truncate text-[9px] font-normal tabular-nums text-slate-400">{isOptionOpeningEntry ? "期权不计合约手续费" : `手续费 ${OKX_VIP2_TAKER_FEE_LABEL} · ${estimatedFeeUsdt === null ? "--" : `${formatFee(estimatedFeeUsdt)} U`}`}</span>
                     </span>
                   }>
-                    <input
+                    {isOptionOpeningEntry ? (
+                      <select
+                        disabled={isCloseReview || !t0OptionDeribitLabel || t0OptionStrikesQuery.isLoading}
+                        value={entryForm.price}
+                        onChange={(event) => setEntryForm((current) => ({ ...current, price: event.target.value }))}
+                        className="h-14 w-full rounded border border-violet-200 bg-white px-3 text-base font-semibold tabular-nums text-slate-900 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      >
+                        <option value="">
+                          {!t0OptionDeribitLabel
+                            ? "请先选择到期日"
+                            : t0OptionStrikesQuery.isLoading
+                              ? "Deribit 行权价加载中…"
+                              : "请选择行权价"}
+                        </option>
+                        {!t0OptionDeribitLabel && entryForm.price && <option value={entryForm.price}>当前：{formatPrice(Number(entryForm.price))}</option>}
+                        {t0OptionStrikes.map((strike) => <option key={strike} value={String(strike)}>{strike.toLocaleString()}</option>)}
+                      </select>
+                    ) : <input
                       inputMode="decimal"
                       disabled={isCloseReview}
                       value={entryForm.price}
                       onChange={(event) => setEntryForm((current) => ({ ...current, price: event.target.value }))}
                       placeholder="0.00"
                       className="w-full h-14 rounded border border-slate-200 px-3 text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-indigo-500"
-                    />
-                    {openingArchivePrice !== null && (
+                    />}
+                    {!isOptionOpeningEntry && openingArchivePrice !== null && (
                       <div className={`mt-1.5 text-[10px] tabular-nums ${ACTIONS[entryForm.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>
                         {ACTIONS[entryForm.action].side === "long" ? "向上归档" : "向下归档"}至 {formatPrice(openingArchivePrice)} 档
                       </div>
@@ -3995,7 +4163,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         key={instrument.value}
                         type="button"
                         disabled={isCloseReview}
-                        onClick={() => setEntryForm((current) => ({ ...current, instrumentType: instrument.value }))}
+                        onClick={() => setEntryForm((current) => {
+                          if (instrument.value !== "option" || current.instrumentType === "option") {
+                            return { ...current, instrumentType: instrument.value };
+                          }
+                          return {
+                            ...current,
+                            instrumentType: "option",
+                            isPending: false,
+                            optionExpiryDate: "",
+                            optionPremium: "",
+                            price: "",
+                          };
+                        })}
                         className={`h-7 rounded border px-3 text-[11px] font-medium transition active:scale-95 ${isActive ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
                         aria-pressed={isActive}
                       >
@@ -4003,6 +4183,78 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </button>
                     );
                   })}
+                </div>}
+
+                {isOptionOpeningEntry && <div className="-mt-0.5 rounded border border-violet-200 bg-violet-50/60 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-violet-800">期权参数</span>
+                    <span className="text-[10px] font-medium text-violet-600">标的固定 ETH · Deribit</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="方向">
+                      <select
+                        disabled={isCloseReview}
+                        value={entryForm.optionDirection}
+                        onChange={(event) => setEntryForm((current) => ({ ...current, optionDirection: event.target.value as T0OptionDirection }))}
+                        className="h-11 w-full rounded border border-violet-200 bg-white px-2 text-xs font-medium text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      >
+                        {T0_OPTION_DIRECTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="到期日">
+                      <select
+                        disabled={isCloseReview || t0OptionExpiriesQuery.isLoading}
+                        value={t0OptionDeribitLabel}
+                        onChange={(event) => {
+                          const nextExpiry = t0OptionExpiries.find((expiry) => expiry.deribitLabel === event.target.value);
+                          if (!nextExpiry) return;
+                          setEntryForm((current) => ({
+                            ...current,
+                            optionExpiryDate: new Date(nextExpiry.ts).toISOString().slice(0, 10),
+                            price: "",
+                          }));
+                        }}
+                        className="h-11 w-full rounded border border-violet-200 bg-white px-2 text-xs font-medium tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      >
+                        <option value="">
+                          {t0OptionExpiriesQuery.isLoading
+                            ? "Deribit 到期日加载中…"
+                            : entryForm.optionExpiryDate
+                              ? `当前：${entryForm.optionExpiryDate}`
+                              : "请选择到期日"}
+                        </option>
+                        {t0OptionExpiries.map((expiry) => (
+                          <option key={expiry.deribitLabel} value={expiry.deribitLabel}>
+                            {expiry.dateStr || expiry.deribitLabel}（{expiry.diffDays > 0 ? `余${expiry.diffDays}天` : "即将到期"}）
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="权利金">
+                      <input
+                        inputMode="decimal"
+                        disabled={isCloseReview}
+                        value={entryForm.optionPremium}
+                        onChange={(event) => setEntryForm((current) => ({ ...current, optionPremium: event.target.value }))}
+                        placeholder="0.00"
+                        className="h-11 w-full rounded border border-violet-200 bg-white px-3 text-base font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      />
+                    </Field>
+                    <Field label="权利金计价">
+                      <div className="grid h-11 grid-cols-2 overflow-hidden rounded border border-violet-200 bg-white">
+                        {(["USDT", "ETH"] as T0OptionPremiumCurrency[]).map((currency) => {
+                          const active = entryForm.optionPremiumCurrency === currency;
+                          return <button
+                            key={currency}
+                            type="button"
+                            disabled={isCloseReview}
+                            onClick={() => setEntryForm((current) => ({ ...current, optionPremiumCurrency: currency }))}
+                            className={`text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${active ? "bg-violet-600 text-white" : "text-slate-600"}`}
+                          >{currency}</button>;
+                        })}
+                      </div>
+                    </Field>
+                  </div>
                 </div>}
 
                 {isClosingEntry ? (
@@ -4164,7 +4416,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	                )}
 
                 <div className="-mt-1 grid grid-cols-2 gap-3 text-[10px] leading-4 text-slate-400">
-                  <span>{isEditingEntry ? "可选择、新建或管理账户；保存前校验后续平仓并保留审计。" : "首次可新建；后续按关联用户记忆账户。"}</span>
+                  <span>{isEditingEntry ? "可选择、新建或管理账户；保存前校验后续平仓并保留审计。" : "优先按关联用户记忆账户；无记录则保留当前账户。"}</span>
                   <span>仅搜索并引用全局已有用户；关联后按项目区分资金。</span>
                 </div>
 
@@ -5207,7 +5459,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
       filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.92))",
     }
     : { textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.88), 0.75px 0.75px 0 rgba(71,85,105,0.20)" };
-  const floatingPnl = isPending ? null : calculateEstimatedUnrealizedNetPnl(side, markPrice, bucket.financialQuantity, bucket.financialCostBasis);
+  const floatingPnl = isPending || bucket.instrumentType === "option" ? null : calculateEstimatedUnrealizedNetPnl(side, markPrice, bucket.financialQuantity, bucket.financialCostBasis);
   // 与金额盈亏保持同一口径：逐档预估净盈亏 ÷ 本档剩余持仓成本；不计资金费。
   const floatingReturnRate = floatingPnl === null || bucket.financialCostBasis <= 0
     ? null
