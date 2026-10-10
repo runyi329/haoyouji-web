@@ -10923,6 +10923,10 @@ ${klinesSummary}
         targetPrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).optional(),
         note: z.string().trim().max(500).optional(),
         clientRequestId: z.string().trim().min(12).max(64),
+      }).superRefine((input, issue) => {
+        if ((input.action === 'openLong' || input.action === 'openShort') && !input.instrumentType) {
+          issue.addIssue({ code: z.ZodIssueCode.custom, path: ['instrumentType'], message: '请选择现货、合约或期权' });
+        }
       }))
       .mutation(async ({ ctx, input }) => {
         const journal = await import('./ledger52-t0-journal');
@@ -10964,7 +10968,7 @@ ${klinesSummary}
         relatedUserId: z.number().int().positive().optional(),
         relatedFundId: z.number().int().positive().optional(),
         relatedFundName: z.string().trim().min(1).max(80).optional(),
-        instrumentType: z.enum(['spot', 'contract', 'option']).optional(),
+        instrumentType: z.enum(['spot', 'contract', 'option']),
         isLocked: z.boolean().optional(),
         isPending: z.boolean().optional(),
         optionDirection: z.enum(['long_call', 'long_put', 'short_call', 'short_put']).optional(),

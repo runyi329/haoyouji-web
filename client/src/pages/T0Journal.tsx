@@ -24,13 +24,33 @@ type PositionSide = "long" | "short";
 type T0InstrumentType = "spot" | "contract" | "option";
 type T0OptionDirection = "long_call" | "long_put" | "short_call" | "short_put";
 type T0OptionPremiumCurrency = "USDT" | "ETH";
-type T0InstrumentFilter = "all" | T0InstrumentType | "unlabeled";
 type T0ExecutionFilter = "all" | "filled" | "pending";
 const T0_INSTRUMENT_TYPES: Array<{ value: T0InstrumentType; label: string; shortLabel: string }> = [
   { value: "spot", label: "现货", shortLabel: "现" },
   { value: "contract", label: "合约", shortLabel: "合" },
   { value: "option", label: "期权", shortLabel: "期" },
 ];
+const T0_INSTRUMENT_FILTER_OPTIONS: T0MultiSelectOption[] = T0_INSTRUMENT_TYPES.map((item) => ({
+  id: item.value,
+  label: item.label,
+}));
+
+/** 空数组代表全部；勾满三个类型同样回归“全部类型”，避免出现重复的全选状态。 */
+function normalizeT0InstrumentTypeFilterIds(ids: string[]): T0InstrumentType[] {
+  const selected = T0_INSTRUMENT_TYPES
+    .map((item) => item.value)
+    .filter((type) => ids.includes(type));
+  return selected.length === T0_INSTRUMENT_TYPES.length ? [] : selected;
+}
+
+function getT0InstrumentFilterSummary(selectedTypes: T0InstrumentType[]): string {
+  if (selectedTypes.length === 0) return "类型全部";
+  if (selectedTypes.length === 1) {
+    return T0_INSTRUMENT_TYPES.find((item) => item.value === selectedTypes[0])?.label ?? "类型";
+  }
+  return `已选 ${selectedTypes.length} 项`;
+}
+
 function getOptionDaysToExpiry(expiryDate?: string) {
   const matched = expiryDate?.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!matched) return undefined;
@@ -1143,16 +1163,16 @@ function buildIntegratedDisplayBuckets(
  * 类型是开仓研究维度。筛选时不能直接过滤平仓流水，否则已平数量会被错误地回补为未平仓；
  * 因此先按完整 FIFO 找到每张开仓对应的平仓，再仅投影该类型开仓所分摊的平仓数量。
  */
-function filterTradesByInstrumentType(trades: PreviewTrade[], filter: T0InstrumentFilter) {
-  if (filter === "all") return trades;
-  const matches = (trade: PreviewTrade) => filter === "unlabeled"
-    ? !trade.instrumentType
-    : trade.instrumentType === filter;
+function filterTradesByInstrumentTypes(trades: PreviewTrade[], selectedTypes: T0InstrumentType[]) {
+  if (selectedTypes.length === 0) return trades;
+  const selectedTypeSet = new Set(selectedTypes);
+  const matches = (trade: PreviewTrade) => Boolean(trade.instrumentType && selectedTypeSet.has(trade.instrumentType));
   const openings = trades.filter((trade) => ACTIONS[trade.action].opening && matches(trade));
   const allocations = buildOpeningClosingAllocations(trades);
+  const filterKey = selectedTypes.join("-");
   const closings = openings.flatMap((opening) => (allocations.get(opening.id) ?? []).map(({ trade, quantity }) => ({
     ...trade,
-    id: `instrument-${filter}-${trade.id}-${opening.id}`,
+    id: `instrument-${filterKey}-${trade.id}-${opening.id}`,
     quantity,
     fee: trade.quantity > 0 ? trade.fee * (quantity / trade.quantity) : 0,
     instrumentType: opening.instrumentType,
@@ -1303,14 +1323,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [relatedUserFilterIds, setRelatedUserFilterIds] = useState<string[]>([]);
   const [relatedFundFilterIds, setRelatedFundFilterIds] = useState<string[]>([]);
-  const [instrumentTypeFilter, setInstrumentTypeFilter] = useState<T0InstrumentFilter>("all");
+  const [instrumentTypeFilterIds, setInstrumentTypeFilterIds] = useState<T0InstrumentType[]>([]);
   const [executionFilter, setExecutionFilter] = useState<T0ExecutionFilter>("all");
   // 历史记录拥有独立筛选范围：不影响上方持仓汇总与T形交割表。
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
   const [historyAccountFilterIds, setHistoryAccountFilterIds] = useState<string[]>([]);
   const [historyRelatedUserFilterIds, setHistoryRelatedUserFilterIds] = useState<string[]>([]);
   const [historyRelatedFundFilterIds, setHistoryRelatedFundFilterIds] = useState<string[]>([]);
-  const [historyInstrumentTypeFilter, setHistoryInstrumentTypeFilter] = useState<T0InstrumentFilter>("all");
+  const [historyInstrumentTypeFilterIds, setHistoryInstrumentTypeFilterIds] = useState<T0InstrumentType[]>([]);
   const [historyExecutionFilter, setHistoryExecutionFilter] = useState<T0ExecutionFilter>("all");
   const [journalActionFilters, setJournalActionFilters] = useState<Set<TradeAction>>(
     () => new Set(RECENT_JOURNAL_ACTIONS),
@@ -1647,8 +1667,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     [trades, executionFilter],
   );
   const instrumentScopedTrades = useMemo(
-    () => filterTradesByInstrumentType(executionScopedTrades, instrumentTypeFilter),
-    [executionScopedTrades, instrumentTypeFilter],
+    () => filterTradesByInstrumentTypes(executionScopedTrades, instrumentTypeFilterIds),
+    [executionScopedTrades, instrumentTypeFilterIds],
   );
   const selectedTrades = useMemo(
     () => instrumentScopedTrades.filter((trade) => (
@@ -1673,8 +1693,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     [trades, historyExecutionFilter],
   );
   const historyInstrumentScopedTrades = useMemo(
-    () => filterTradesByInstrumentType(historyExecutionScopedTrades, historyInstrumentTypeFilter),
-    [historyExecutionScopedTrades, historyInstrumentTypeFilter],
+    () => filterTradesByInstrumentTypes(historyExecutionScopedTrades, historyInstrumentTypeFilterIds),
+    [historyExecutionScopedTrades, historyInstrumentTypeFilterIds],
   );
   const journalScopeTrades = useMemo(
     () => historyInstrumentScopedTrades.filter((trade) => (
@@ -1812,13 +1832,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const hasActiveHistoryDetailFilters = historyAccountFilterIds.length > 0
     || historyRelatedUserFilterIds.length > 0
     || historyRelatedFundFilterIds.length > 0
-    || historyInstrumentTypeFilter !== "all"
+    || historyInstrumentTypeFilterIds.length > 0
     || historyExecutionFilter !== "all";
-  const historyInstrumentFilterSummary = historyInstrumentTypeFilter === "all"
-    ? "类型全部"
-    : historyInstrumentTypeFilter === "unlabeled"
-      ? "未标注"
-      : T0_INSTRUMENT_TYPES.find((item) => item.value === historyInstrumentTypeFilter)?.label ?? "类型";
+  const historyInstrumentFilterSummary = getT0InstrumentFilterSummary(historyInstrumentTypeFilterIds);
   const historyExecutionFilterSummary = historyExecutionFilter === "all"
     ? "状态全部"
     : historyExecutionFilter === "filled"
@@ -1866,11 +1882,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       fundSpec,
     ]);
   }, [accountFilterOptions, isMemberView, lockedAccountName, lockedRelatedFundName, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberAccountFilter, shouldLockMemberFundFilter]);
-  const topInstrumentFilterSummary = instrumentTypeFilter === "all"
-    ? "类型全部"
-    : instrumentTypeFilter === "unlabeled"
-      ? "未标注"
-      : T0_INSTRUMENT_TYPES.find((item) => item.value === instrumentTypeFilter)?.label ?? "类型";
+  const topInstrumentFilterSummary = getT0InstrumentFilterSummary(instrumentTypeFilterIds);
   const topExecutionFilterSummary = executionFilter === "all"
     ? "状态全部"
     : executionFilter === "filled"
@@ -2968,7 +2980,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       toast.error("请输入大于 0 的 ETH 数量");
       return;
     }
-    if (selectedAction.opening && !entryForm.editingEntryId && !entryForm.instrumentType) {
+    if (selectedAction.opening && !entryForm.instrumentType) {
       toast.error("请选择现货、合约或期权");
       return;
     }
@@ -3020,6 +3032,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         toast.error("仅可编辑有效的开仓记录");
         return;
       }
+      const editingInstrumentType = entryForm.instrumentType;
+      if (!editingInstrumentType) {
+        toast.error("请选择现货、合约或期权");
+        return;
+      }
       updateOpeningEntryMutation.mutate({
         ledgerId: 52,
         entryId,
@@ -3028,7 +3045,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         relatedUserId: normalizedRelatedUserId,
         relatedFundId: normalizedRelatedFundId,
         relatedFundName: normalizedRelatedFundName || undefined,
-        instrumentType: entryForm.instrumentType,
+        instrumentType: editingInstrumentType,
         isLocked: entryForm.isLocked,
         isPending: entryForm.isPending,
         optionDirection: isOptionOpening ? entryForm.optionDirection : undefined,
@@ -3538,20 +3555,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               )}
             </div>
             {(canManage || isMemberView) && <div className="mt-2 grid grid-cols-2 gap-1.5 transition-[grid-template-columns] duration-200" style={{ gridTemplateColumns: topTypeStatusGridTemplateColumns }}>
-              <T0SelectFilter
+              <T0MultiSelect
                 label="类型"
-                value={instrumentTypeFilter}
-                ariaLabel="按订单类型筛选"
-                focusClassName="focus-within:border-[#1a56db]"
-                onChange={(value) => {
-                  setInstrumentTypeFilter(value as T0InstrumentFilter);
+                options={T0_INSTRUMENT_FILTER_OPTIONS}
+                selectedIds={instrumentTypeFilterIds}
+                emptyLabel="暂无类型"
+                onChange={(ids) => {
+                  setInstrumentTypeFilterIds(normalizeT0InstrumentTypeFilterIds(ids));
                   setRecentJournalPage(1);
                 }}
-              >
-                <option value="all">全部类型</option>
-                {T0_INSTRUMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                <option value="unlabeled">未标注（历史）</option>
-              </T0SelectFilter>
+              />
               <T0SelectFilter
                 label="状态"
                 value={executionFilter}
@@ -3818,7 +3831,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         setHistoryAccountFilterIds([]);
                         setHistoryRelatedUserFilterIds([]);
                         setHistoryRelatedFundFilterIds([]);
-                        setHistoryInstrumentTypeFilter("all");
+                        setHistoryInstrumentTypeFilterIds([]);
                         setHistoryExecutionFilter("all");
                         setRecentJournalPage(1);
                         setShowHistoryFilters(false);
@@ -3880,22 +3893,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   className="mt-2 grid grid-cols-2 gap-2 transition-[grid-template-columns] duration-200"
                   style={{ gridTemplateColumns: historyTypeStatusGridTemplateColumns }}
                 >
-                  <label className="flex min-w-0 items-center gap-1.5">
-                    <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500">类型</span>
-                    <select
-                      value={historyInstrumentTypeFilter}
-                      onChange={(event) => {
-                        setHistoryInstrumentTypeFilter(event.target.value as T0InstrumentFilter);
+                  <T0MultiSelect
+                    label="类型"
+                    options={T0_INSTRUMENT_FILTER_OPTIONS}
+                    selectedIds={historyInstrumentTypeFilterIds}
+                    emptyLabel="暂无类型"
+                    compact
+                    onChange={(ids) => {
+                        setHistoryInstrumentTypeFilterIds(normalizeT0InstrumentTypeFilterIds(ids));
                         setRecentJournalPage(1);
-                      }}
-                      className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-[#1a56db]"
-                      aria-label="按历史订单类型筛选"
-                    >
-                      <option value="all">全部类型</option>
-                      {T0_INSTRUMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                      <option value="unlabeled">未标注（历史）</option>
-                    </select>
-                  </label>
+                    }}
+                  />
                   <label className="flex min-w-0 items-center gap-1.5">
                     <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500">状态</span>
                     <select
@@ -5497,6 +5505,7 @@ function T0MultiSelect({
   emptyLabel,
   align = "left",
   constrainRightToFilterRow = false,
+  compact = false,
 }: {
   label: string;
   options: T0MultiSelectOption[];
@@ -5506,6 +5515,8 @@ function T0MultiSelect({
   align?: "left" | "right";
   /** 左缘固定在本筛选框，右缘不超过同一筛选行最右侧的项目框。 */
   constrainRightToFilterRow?: boolean;
+  /** 历史筛选栏使用与同行状态控件一致的紧凑高度。 */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [constrainedMenuWidth, setConstrainedMenuWidth] = useState<number | null>(null);
@@ -5584,13 +5595,13 @@ function T0MultiSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         title={selectedTitle}
-        className="flex h-10 w-full min-w-0 items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2.5 text-[13px] font-medium text-slate-700 outline-none transition-colors focus:border-[#1a56db] active:bg-white"
+        className={`flex w-full min-w-0 items-center gap-1.5 rounded border border-slate-300 bg-white/70 font-medium text-slate-700 outline-none transition-colors focus:border-[#1a56db] active:bg-white ${compact ? "h-8 px-2 text-[12px]" : "h-10 px-2.5 text-[13px]"}`}
         style={{
           textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
           boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
         }}
       >
-        {selectedOptions.length === 0 && <span className="shrink-0 text-[12px] font-semibold tracking-wide text-slate-500">{label}</span>}
+        {selectedOptions.length === 0 && <span className={`${compact ? "text-[11px]" : "text-[12px]"} shrink-0 font-semibold tracking-wide text-slate-500`}>{label}</span>}
         <span className={`min-w-0 flex-1 truncate ${selectedOptions.length === 0 ? "text-left" : "text-center"}`}>{summary}</span>
         {selectedOptions.length === 0 && <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />}
       </button>

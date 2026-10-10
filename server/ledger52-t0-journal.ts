@@ -2583,8 +2583,8 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   relatedUserId?: number;
   relatedFundId?: number;
   relatedFundName?: string;
-  /** 旧开仓未标注时可留空；管理员选择后即固化该类型。 */
-  instrumentType?: T0JournalInstrumentType;
+  /** 开仓记录必须明确标注为现货、合约或期权。 */
+  instrumentType: T0JournalInstrumentType;
   /** 未传时保持历史锁定状态，传入时可锁定或解除。 */
   isLocked?: boolean;
   /** 未传时保持原成交状态；传入 true 为挂单，传入 false 将挂单人工确认成交。 */
@@ -2601,7 +2601,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
   const tx: any = connection;
   const normalizedQuantity = requireValidEthQuantity(input.quantity);
-  const instrumentType = normalizeInstrumentType(input.instrumentType);
+  const instrumentType = normalizeInstrumentType(input.instrumentType, true);
   const isLocked = input.isLocked === undefined ? null : input.isLocked ? 1 : 0;
   const isPending = input.isPending === undefined ? null : input.isPending ? 1 : 0;
 
@@ -2610,7 +2610,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     await tx.beginTransaction();
     const before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
     const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
-    const effectiveInstrumentType = instrumentType ?? normalizeInstrumentType(before.instrument_type);
+    const effectiveInstrumentType = instrumentType;
     if (isPending === 1 && effectiveInstrumentType === "option") {
       throw new TRPCError({ code: "BAD_REQUEST", message: "期权请直接成交；行权价不能作为挂单触发价" });
     }

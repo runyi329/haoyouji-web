@@ -50,11 +50,10 @@ const SOFT_BLUE_INDICATOR_STYLE = {
 export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'BNB', 'USDT', 'CNY', 'HYPE', 'TRUMP', 'PENGU', 'XPL', 'WLFI', 'AVAX', 'DOGE', 'XLM', 'TIA', 'EIGEN', 'FET', 'ADA', 'ZRO', 'WLD', 'LINK', 'POL', 'CRV', 'PLUME', 'PEPE', 'B2', 'MSTR', 'COIN', 'AAOI', 'HOOD', 'SLV', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM', 'UNI', 'BZ'] as const;
 export type CoinType = typeof COIN_OPTIONS[number];
 
-// 期权权利金按实际计价币种展示：BTC、ETH、SOL 的币本位金额需保留四位，
-// 法币与 U 本位继续保持两位。仅影响前端显示，不改变保存值与任何计算。
-export function getOptionPremiumDisplayDecimals(denomination: unknown): 2 | 4 {
-  const unit = String(denomination || '').trim().toUpperCase();
-  return unit === 'BTC' || unit === 'ETH' || unit === 'SOL' ? 4 : 2;
+// 期权权利金统一保留四位小数：无论 U 本位还是币本位，都与期权精度一致。
+// 仅影响前端显示，不改变保存值与任何计算。
+export function getOptionPremiumDisplayDecimals(_denomination: unknown): 4 {
+  return 4;
 }
 
 export function formatOptionPremium(value: unknown, denomination: unknown): string {
