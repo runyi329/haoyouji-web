@@ -49,24 +49,16 @@ function getInstrumentShortLabel(value?: T0InstrumentType, optionExpiryDate?: st
   return daysToExpiry === undefined ? shortLabel : `${daysToExpiry}天·${shortLabel}`;
 }
 
-// 与52号账本“融资复息”期权卡片逐项复用紫色磨砂金属参数：四层光影、紫色边框、
-// 外部投影和四向内凹倒角。boxSizing 固定为 border-box，保证手机端报价格不因边框变宽。
+// 期权格只保留紫色拉丝底；边界完全交给梯形行的统一分隔线，
+// 避免期权格自身边框/暗边造成与中间价格列视觉高度不一致。
 const T0_OPTION_METAL_SURFACE_STYLE = {
   background: [
-    "linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.18) 22%, rgba(255,255,255,0.0) 45%, rgba(0,0,0,0.0) 60%, rgba(0,0,0,0.22) 100%)",
-    "linear-gradient(90deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.05) 38%, rgba(0,0,0,0.0) 58%, rgba(0,0,0,0.14) 100%)",
-    "linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(255,255,255,0.16) 35%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0.08) 70%, rgba(0,0,0,0.10) 100%)",
-    "linear-gradient(160deg, #5b21b6 0%, #7c3aed 18%, #8b5cf6 40%, #6d28d9 62%, #7c3aed 80%, #5b21b6 100%)",
+    "repeating-linear-gradient(168deg, rgba(255,255,255,0.055) 0px, rgba(255,255,255,0.055) 1px, transparent 1px, transparent 4px)",
+    "linear-gradient(90deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.03) 38%, rgba(0,0,0,0.05) 100%)",
+    "linear-gradient(90deg, #6d28d9 0%, #7c3aed 48%, #6d28d9 100%)",
   ].join(", "),
-  border: "1.5px solid rgba(109,40,217,0.90)",
-  boxShadow: [
-    "0 6px 20px rgba(91,33,182,0.35)",
-    "0 1px 3px rgba(0,0,0,0.25)",
-    "inset 0 1.5px 0 rgba(216,180,254,0.88)",
-    "inset 0 -1.5px 0 rgba(46,16,101,0.62)",
-    "inset 1.5px 0 rgba(167,139,250,0.28)",
-    "inset -1.5px 0 rgba(0,0,0,0.16)",
-  ].join(", "),
+  border: "none",
+  boxShadow: "none",
   boxSizing: "border-box" as const,
   color: "rgba(255,255,255,0.95)",
   textShadow: "0 1px 2.5px rgba(0,0,0,0.60), 0 -0.5px 1px rgba(255,255,255,0.22)",
@@ -1826,10 +1818,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : "已挂单";
   const historyTypeStatusGridTemplateColumns = useMemo(
     () => buildT0FilterGridTemplateColumns([
-      { summary: historyInstrumentFilterSummary, selectedCount: historyInstrumentTypeFilter === "all" ? 0 : 1 },
-      { summary: historyExecutionFilterSummary, selectedCount: historyExecutionFilter === "all" ? 0 : 1 },
+      // 两项都按当前文字共同分配空间；不能因另一项仍为“全部”而把已选类型压成极窄固定宽度。
+      { summary: historyInstrumentFilterSummary, selectedCount: 1 },
+      { summary: historyExecutionFilterSummary, selectedCount: 1 },
     ]),
-    [historyInstrumentFilterSummary, historyExecutionFilterSummary, historyInstrumentTypeFilter, historyExecutionFilter],
+    [historyInstrumentFilterSummary, historyExecutionFilterSummary],
   );
   useEffect(() => {
     setHistoryAccountFilterIds((current) => current.filter((id) => accounts.some((account) => account.id === id)));
@@ -1877,10 +1870,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : "已挂单";
   const topTypeStatusGridTemplateColumns = useMemo(
     () => buildT0FilterGridTemplateColumns([
-      { summary: topInstrumentFilterSummary, selectedCount: instrumentTypeFilter === "all" ? 0 : 1 },
-      { summary: topExecutionFilterSummary, selectedCount: executionFilter === "all" ? 0 : 1 },
+      // 管理端与用户端均以当前两项文字作为整体智能分配，保证“期权 + 全部状态”等组合不挤压类型。
+      { summary: topInstrumentFilterSummary, selectedCount: 1 },
+      { summary: topExecutionFilterSummary, selectedCount: 1 },
     ]),
-    [executionFilter, instrumentTypeFilter, topExecutionFilterSummary, topInstrumentFilterSummary],
+    [topExecutionFilterSummary, topInstrumentFilterSummary],
   );
   const allJournalActionsSelected = availableJournalActions.length > 0
     && availableJournalActions.every((action) => journalActionFilters.has(action));
@@ -3239,7 +3233,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             {renderHistoryActionMenuButton(closing)}
           </div>
           {renderHistoryActionMenu(closing)}
-          {closing.note && <div className="mt-1 truncate text-[11px] text-slate-500">{closing.note}</div>}
+          {closing.note?.trim() && <div className="mt-1 truncate text-[11px] text-slate-500"><span>备注：</span>{closing.note.trim()}</div>}
         </div>
       );
     }
@@ -3279,7 +3273,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             {renderHistoryActionMenuButton(opening)}
           </div>
           {renderHistoryActionMenu(opening)}
-          {opening.note && <div className="mt-1 truncate text-[11px] text-slate-500">{opening.note}</div>}
+          {opening.note?.trim() && <div className="mt-1 truncate text-[11px] text-slate-500"><span>备注：</span>{opening.note.trim()}</div>}
         </div>
         {group.closings.map((allocation, index) => {
           const closing = allocation.trade;
@@ -3320,7 +3314,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 {canManage ? renderHistoryActionMenuButton(closing) : <span className="ml-auto shrink-0 text-[10px] text-slate-500">净利润</span>}
               </div>
               {renderHistoryActionMenu(closing)}
-              {closing.note && <div className="mt-1 truncate text-[11px] text-slate-500">{closing.note}</div>}
+              {closing.note?.trim() && <div className="mt-1 truncate text-[11px] text-slate-500"><span>备注：</span>{closing.note.trim()}</div>}
             </div>
           );
         })}
@@ -3952,7 +3946,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </>}
                     </div>
                     {renderHistoryActionMenu(trade)}
-                    {trade.note && <div className="mt-1 truncate text-[11px] text-slate-500">{trade.note}</div>}
+                    {trade.note?.trim() && <div className="mt-1 truncate text-[11px] text-slate-500"><span>备注：</span>{trade.note.trim()}</div>}
                   </div>
                 );
               })}
