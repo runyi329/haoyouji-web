@@ -8,6 +8,7 @@ import {
   Clock3,
   Lock,
   LockOpen,
+  MoreHorizontal,
   Search,
   ShieldCheck,
   UserRound,
@@ -374,6 +375,15 @@ function formatPrice(value: number | null | undefined) {
 
 function formatLadderPrice(value: number) {
   return String(Math.round(value));
+}
+
+/**
+ * 实时标记价保留两位小数：整数部分维持报价档主视觉，小数作为紧凑的精度提示。
+ * 其他非实时档继续显示整数，避免梯形报价表产生视觉噪音。
+ */
+function splitLadderMarkPrice(value: number) {
+  const [integerPart, fractionalPart = "00"] = value.toFixed(2).split(".");
+  return { integerPart, fractionalPart };
 }
 
 /**
@@ -990,6 +1000,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [lastRelatedUserId, setLastRelatedUserId] = useState("");
   const [lastAccountIdByRelatedUser, setLastAccountIdByRelatedUser] = useState<Record<string, string>>({});
   const [lastFundIdByRelatedUser, setLastFundIdByRelatedUser] = useState<Record<string, string>>({});
+  const [, setRelatedUserQuickPickerOpen] = useState(false);
   const [relatedUserPickerOpen, setRelatedUserPickerOpen] = useState(false);
   const [relatedUserSearch, setRelatedUserSearch] = useState("");
   const [profitShareSource, setProfitShareSource] = useState<PreviewRelatedFund | null>(null);
@@ -1005,6 +1016,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [showSettledOpeningHistory, setShowSettledOpeningHistory] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<PreviewTrade | null>(null);
   const [revertCandidate, setRevertCandidate] = useState<PreviewTrade | null>(null);
+  const [historyActionMenuTradeId, setHistoryActionMenuTradeId] = useState<string | null>(null);
   const [netProfitDetail, setNetProfitDetail] = useState<{ trade: PreviewTrade; detail: RecentJournalTradeDetail } | null>(null);
   const [showTotalGrossProfitDetail, setShowTotalGrossProfitDetail] = useState(false);
   const [showTotalRevenueCostHint, setShowTotalRevenueCostHint] = useState(false);
@@ -1021,17 +1033,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [recoverableEntries, setRecoverableEntries] = useState<RecoverableTrade[]>([]);
   const [showRecoverableRecords, setShowRecoverableRecords] = useState(false);
   const [entrySide, setEntrySide] = useState<PositionSide>("long");
+  /** 当前由哪张开仓主单发起平仓；仅用于详情页精确提示与重选，不改变后端 FIFO 核算。 */
+  const [closingSourceTrade, setClosingSourceTrade] = useState<PreviewTrade | null>(null);
   const [lastSavedQuantity, setLastSavedQuantity] = useState("");
   const [lastOpeningInstrumentType, setLastOpeningInstrumentType] = useState<T0InstrumentType>("contract");
   const [showCumulativeData, setShowCumulativeData] = useState(false);
-  const [adminLadderDisplayMode, setAdminLadderDisplayMode] = useState<AdminLadderDisplayMode>("integrated");
+  const [adminLadderDisplayMode, setAdminLadderDisplayMode] = useState<AdminLadderDisplayMode>("individual");
   const [lastMarkPrice, setLastMarkPrice] = useState<number | null>(null);
   const [previousMarkPrice, setPreviousMarkPrice] = useState<number | null>(null);
   const [liveClock, setLiveClock] = useState(() => new Date());
   const previousFetchedMarkPriceRef = useRef<number | null>(null);
   const hasInitializedJournalFiltersRef = useRef(false);
   // 从报价表进入表单后，返回与保存必须回到原先的整合/逐笔模式。
-  const entrySheetLadderDisplayModeRef = useRef<AdminLadderDisplayMode>("integrated");
+  const entrySheetLadderDisplayModeRef = useRef<AdminLadderDisplayMode>("individual");
   const [entryForm, setEntryForm] = useState<EntryForm>({
     action: "openLong",
     accountId: "",
@@ -1611,9 +1625,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 逐笔报价每一格只对应一笔开仓主单；详情内直接给出平仓入口，
   // 不要求管理员再先展开该主单，避免误以为逐笔模式只能新增、不能平仓。
   const isIndividualQuoteDetail = entrySheetLadderDisplayModeRef.current === "individual";
-  // 仅平仓的第二次确认需要冻结账户，不能让该状态误伤“编辑开仓”。
+  // 平仓必须继承所选开仓单的账户、用户与项目归属，首次输入和二次确认均不可改。
   // 开仓编辑受后端 FIFO 依赖校验保护；未发生后续平仓时，管理员必须能改到既有账户。
-  const isAccountSelectionLocked = isCloseReview && !isEditingEntry;
+  const isAccountSelectionLocked = isClosingEntry || (isCloseReview && !isEditingEntry);
+  const isCloseAssociationLocked = isClosingEntry || isCloseReview;
   const markLadderPrice = markPrice
     ? Math.min(LADDER_MAX_PRICE, Math.max(LADDER_MIN_PRICE, Math.round(markPrice / LADDER_STEP) * LADDER_STEP))
     : null;
@@ -1621,6 +1636,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => buildOpeningClosingAllocations(selectedFilledTrades),
     [selectedFilledTrades],
   );
+  // 平仓百分比快捷键以“本张开仓主单尚未平掉的数量”和当前价档可平数量两者较小者为基数。
+  // 因此同价位存在多张订单或已有部分平仓时，快捷键也不会超过本次实际可平上限。
+  const closingAvailableQuantity = useMemo(() => {
+    if (!isClosingEntry || !closingSourceTrade) return 0;
+    const side = ACTIONS[closingSourceTrade.action].side;
+    const relatedUserKey = closingSourceTrade.relatedUserId ?? "";
+    const relatedFundKey = closingSourceTrade.relatedFundId ?? "";
+    const sourceClosingAllocations = ladderOpeningClosingAllocations.get(closingSourceTrade.id) ?? [];
+    const sourceClosedQuantity = sourceClosingAllocations.reduce((total, allocation) => total + allocation.quantity, 0);
+    const sourceRemainingQuantity = Math.max(0, closingSourceTrade.quantity - sourceClosedQuantity);
+    const targetPrice = entryForm.targetPrice ?? archivePriceForTrade(closingSourceTrade);
+    const scopeBuckets = buildPositionBuckets(selectedFilledTrades.filter((trade) => (
+      trade.accountId === closingSourceTrade.accountId
+      && (trade.relatedUserId ?? "") === relatedUserKey
+      && (trade.relatedFundId ?? "") === relatedFundKey
+    )));
+    const targetBucket = scopeBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(targetPrice));
+    return Math.max(0, Math.min(sourceRemainingQuantity, targetBucket?.remainingQuantity ?? 0));
+  }, [closingSourceTrade, entryForm.targetPrice, isClosingEntry, ladderOpeningClosingAllocations, selectedFilledTrades]);
   const priceRows = useMemo<LadderPriceRow[]>(() => {
     const activePositionPrices = buckets
       .filter((bucket) => bucket.remainingQuantity > 0.0000001)
@@ -1714,6 +1748,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     entrySheetLadderDisplayModeRef.current = sourceLadderDisplayMode ?? adminLadderDisplayMode;
     setEntrySide(ACTIONS[action].side);
     setCloseConfirmationStep("input");
+    setClosingSourceTrade(null);
     const rememberedAccount = getRememberedAccountForRelatedUser(lastRelatedUser?.id);
     const defaultRelatedFund = getRememberedFundForRelatedUser(lastRelatedUser?.id);
     setEntryForm({
@@ -1741,6 +1776,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     // 在报价详情内切换至平仓表单时，沿用最初进入详情页的报价模式；
     // 从历史记录直接打开时才以当前管理员模式为来源。
     if (!showEntrySheet) entrySheetLadderDisplayModeRef.current = adminLadderDisplayMode;
+    setRelatedUserQuickPickerOpen(false);
+    setRelatedUserPickerOpen(false);
+    setRelatedUserSearch("");
     const side = ACTIONS[trade.action].side;
     // 未关联用户的订单也可独立平仓；空关联值会稳定归到同一“未关联”仓位池，
     // 不会和任何已关联用户的订单互相抵扣。
@@ -1756,9 +1794,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       toast.error("该笔仓位已无可平数量");
       return;
     }
+    // 数量预填必须取这张主单本身尚未关联平仓的剩余量，不能误用同价位汇总仓量。
+    const sourceClosingAllocations = buildOpeningClosingAllocations(selectedFilledTrades).get(trade.id) ?? [];
+    const sourceClosedQuantity = sourceClosingAllocations.reduce((total, allocation) => total + allocation.quantity, 0);
+    const sourceRemainingQuantity = Math.max(0, trade.quantity - sourceClosedQuantity);
+    const closableQuantity = Math.min(target.remainingQuantity, sourceRemainingQuantity);
+    if (closableQuantity <= 0.0000001) {
+      toast.error("该笔订单已无可平数量");
+      return;
+    }
     const action: TradeAction = side === "long" ? "closeLong" : "closeShort";
     setEntrySide(side);
     setCloseConfirmationStep("input");
+    setClosingSourceTrade(trade);
     setEntryForm({
       action,
       accountId: trade.accountId,
@@ -1772,7 +1820,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       isLocked: false,
       isPending: false,
       // 表单值不能带千分位逗号，否则超过千位的数量会无法通过数值校验。
-      quantity: normalizeEthQuantity(String(Math.min(target.remainingQuantity, trade.quantity))),
+      quantity: normalizeEthQuantity(String(closableQuantity)),
       price: markPrice ? markPrice.toFixed(2) : "",
       note: "",
       targetPrice: target.price,
@@ -1789,6 +1837,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (!showEntrySheet) entrySheetLadderDisplayModeRef.current = adminLadderDisplayMode;
     setEntrySide(ACTIONS[trade.action].side);
     setCloseConfirmationStep("input");
+    setClosingSourceTrade(null);
     setEntryForm({
       action: trade.action,
       accountId: trade.accountId,
@@ -2112,6 +2161,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const openProfitShareManager = (source: PreviewRelatedFund) => {
     const currentRules = profitShareRules.filter((rule) => rule.relatedFundId === Number(source.id));
     setRelatedUserPickerOpen(false);
+    setRelatedUserQuickPickerOpen(false);
     setDirectoryManagerKind(null);
     setDirectoryRenameTarget(null);
     setDirectoryDeleteTarget(null);
@@ -2168,6 +2218,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       return;
     }
     setRelatedUserPickerOpen(false);
+    setRelatedUserQuickPickerOpen(false);
     setRelatedUserSearch("");
     setDirectoryRenameTarget(null);
     setDirectoryDeleteTarget(null);
@@ -2244,6 +2295,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setRecentRelatedUsers((current) => [{ ...user, lastUsedAt: new Date().toISOString() }, ...current.filter((item) => item.id !== user.id)]);
     setRelatedUserSearch("");
     setRelatedUserPickerOpen(false);
+    setRelatedUserQuickPickerOpen(false);
   };
 
   const selectRelatedFund = (fundId: string) => {
@@ -2276,6 +2328,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }));
     setRelatedUserSearch("");
     setRelatedUserPickerOpen(false);
+    setRelatedUserQuickPickerOpen(false);
   };
 
   const handleSaveEntry = () => {
@@ -2457,8 +2510,84 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   };
   const backToLadder = () => {
     setCloseConfirmationStep("input");
+    setClosingSourceTrade(null);
     setShowEntrySheet(false);
     if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
+  };
+  const backToOrderList = () => {
+    if (!isClosingEntry) return;
+    setCloseConfirmationStep("input");
+    setClosingSourceTrade(null);
+    setEntryForm((current) => ({
+      ...current,
+      action: entrySide === "long" ? "openLong" : "openShort",
+      instrumentType: lastOpeningInstrumentType,
+      isLocked: false,
+      isPending: false,
+      quantity: "",
+      price: "",
+      note: "",
+      editingEntryId: undefined,
+    }));
+  };
+
+  const renderHistoryActionMenuButton = (trade: PreviewTrade) => {
+    if (!canManage) return null;
+    const isOpen = historyActionMenuTradeId === trade.id;
+    return (
+      <button
+        type="button"
+        disabled={Boolean(trade.isSyncing)}
+        onClick={() => setHistoryActionMenuTradeId((current) => current === trade.id ? null : trade.id)}
+        aria-label="打开历史记录管理操作"
+        aria-expanded={isOpen}
+        className="ml-auto flex h-5 w-6 shrink-0 items-center justify-center rounded text-slate-500 transition active:scale-90 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <MoreHorizontal className="h-4 w-4" strokeWidth={2.25} />
+      </button>
+    );
+  };
+
+  const renderHistoryActionMenu = (trade: PreviewTrade) => {
+    if (!canManage || historyActionMenuTradeId !== trade.id) return null;
+    const isOpening = ACTIONS[trade.action].opening;
+    return (
+      <div className="mt-1 flex justify-end gap-1.5" aria-label="历史记录管理操作">
+        {isOpening && <button
+          type="button"
+          disabled={Boolean(trade.isSyncing)}
+          onClick={() => {
+            setHistoryActionMenuTradeId(null);
+            openEditOpeningTrade(trade);
+          }}
+          className="h-6 rounded border border-slate-200 bg-white px-2 text-[10px] font-semibold text-slate-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          编辑
+        </button>}
+        <button
+          type="button"
+          disabled={Boolean(trade.isSyncing) || revertEntryMutation.isPending}
+          onClick={() => {
+            setHistoryActionMenuTradeId(null);
+            setRevertCandidate(trade);
+          }}
+          className="h-6 rounded border border-amber-200 bg-amber-50 px-2 text-[10px] font-semibold text-amber-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          回撤
+        </button>
+        {isOpening && <button
+          type="button"
+          disabled={Boolean(trade.isSyncing) || deleteOpeningEntryMutation.isPending}
+          onClick={() => {
+            setHistoryActionMenuTradeId(null);
+            setDeleteCandidate(trade);
+          }}
+          className="h-6 rounded border border-rose-200 bg-rose-50 px-2 text-[10px] font-semibold text-rose-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          删除
+        </button>}
+      </div>
+    );
   };
 
   const renderLinkedJournalGroup = (group: LinkedJournalGroup) => {
@@ -2473,7 +2602,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
             <span className="shrink-0 text-[10px] font-medium text-amber-700">未匹配开仓</span>
             <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closing.action].label}</span>
-            <span className="shrink-0 font-medium text-slate-800">{formatQuantity(closing.quantity)} ETH</span>
+            <span className="shrink-0 font-medium text-slate-800">{formatQuantity(closing.quantity)}E</span>
             {detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{formatPrice(detail.buyPrice)}</span>}
             {detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{formatPrice(detail.sellPrice)}</span>}
             {!detail && <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
@@ -2486,18 +2615,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <span className="min-w-0 truncate" title={getTradeRelatedFundName(closing)}>{getTradeRelatedFundName(closing)}</span>
             <span className="text-slate-300">·</span>
             <span className="shrink-0">{formatBeijingMonthDayTime(closing.createdAt)}</span>
+            {renderHistoryActionMenuButton(closing)}
           </div>
-          {canManage && <div className="mt-1 flex min-h-5 items-center justify-between gap-3">
-            {closing.note ? <span className="min-w-0 truncate text-[11px] text-slate-500">{closing.note}</span> : <span />}
-            <button
-              type="button"
-              disabled={Boolean(closing.isSyncing) || revertEntryMutation.isPending}
-              onClick={() => setRevertCandidate(closing)}
-              className="h-5 shrink-0 rounded border border-amber-200 bg-white px-1.5 text-[10px] font-semibold text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              回撤
-            </button>
-          </div>}
+          {renderHistoryActionMenu(closing)}
+          {closing.note && <div className="mt-1 truncate text-[11px] text-slate-500">{closing.note}</div>}
         </div>
       );
     }
@@ -2517,7 +2638,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
             <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
               <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[opening.action].label}</span>
-              <span className="shrink-0 font-medium text-slate-800">{formatQuantity(opening.quantity)} ETH</span>
+              <span className="shrink-0 font-medium text-slate-800">{formatQuantity(opening.quantity)}E</span>
               <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{formatPrice(opening.price)}</span>
             </div>
             <span className="ml-auto shrink-0 text-[10px] font-medium text-slate-500">
@@ -2532,37 +2653,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <span className="min-w-0 truncate" title={getTradeRelatedFundName(opening)}>{getTradeRelatedFundName(opening)}</span>
             <span className="text-slate-300">·</span>
             <span className="shrink-0">{formatBeijingMonthDayTime(opening.createdAt)}</span>
+            {renderHistoryActionMenuButton(opening)}
           </div>
-          {canManage && <div className="mt-1 flex min-h-5 items-center justify-between gap-3">
-            {opening.note ? <span className="min-w-0 truncate text-[11px] text-slate-500">{opening.note}</span> : <span />}
-            <div className="flex shrink-0 items-center gap-1.5">
-              <button
-                type="button"
-                disabled={Boolean(opening.isSyncing)}
-                onClick={() => openEditOpeningTrade(opening)}
-                className="h-5 rounded border border-slate-200 bg-white px-1.5 text-[10px] font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                编辑
-              </button>
-              <button
-                type="button"
-                disabled={Boolean(opening.isSyncing) || revertEntryMutation.isPending}
-                onClick={() => setRevertCandidate(opening)}
-                className="h-5 rounded border border-amber-200 bg-white px-1.5 text-[10px] font-semibold text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                回撤
-              </button>
-              <button
-                type="button"
-                disabled={Boolean(opening.isSyncing) || deleteOpeningEntryMutation.isPending}
-                onClick={() => setDeleteCandidate(opening)}
-                className="h-5 rounded border border-rose-200 bg-white px-1.5 text-[10px] font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                删除
-              </button>
-            </div>
-          </div>}
-          {!canManage && opening.note && <div className="mt-1 truncate text-[11px] text-slate-500">{opening.note}</div>}
+          {renderHistoryActionMenu(opening)}
+          {opening.note && <div className="mt-1 truncate text-[11px] text-slate-500">{opening.note}</div>}
         </div>
         {group.closings.map((allocation, index) => {
           const closing = allocation.trade;
@@ -2579,7 +2673,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
                 <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
                   <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closing.action].label}</span>
-                  <span className="shrink-0 font-medium text-slate-800">{formatQuantity(allocation.quantity)} ETH</span>
+                  <span className="shrink-0 font-medium text-slate-800">{formatQuantity(allocation.quantity)}E</span>
                   <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>
                 </div>
                 <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
@@ -2596,20 +2690,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <span className="text-[10px] text-slate-400">关联平仓</span>
                 <span className="text-slate-300">·</span>
                 <span className="text-slate-400">{formatBeijingMonthDayTime(closing.createdAt)}</span>
-                <span className="ml-auto shrink-0 text-[10px] text-slate-500">净利润</span>
+                {canManage ? renderHistoryActionMenuButton(closing) : <span className="ml-auto shrink-0 text-[10px] text-slate-500">净利润</span>}
               </div>
-              {canManage && <div className="mt-1 flex min-h-5 items-center justify-between gap-3">
-                {closing.note ? <span className="min-w-0 truncate text-[11px] text-slate-500">{closing.note}</span> : <span />}
-                <button
-                  type="button"
-                  disabled={Boolean(closing.isSyncing) || revertEntryMutation.isPending}
-                  onClick={() => setRevertCandidate(closing)}
-                  className="h-5 shrink-0 rounded border border-amber-200 bg-white px-1.5 text-[10px] font-semibold text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  回撤
-                </button>
-              </div>}
-              {!canManage && closing.note && <div className="mt-1 truncate text-[11px] text-slate-500">{closing.note}</div>}
+              {renderHistoryActionMenu(closing)}
+              {closing.note && <div className="mt-1 truncate text-[11px] text-slate-500">{closing.note}</div>}
             </div>
           );
         })}
@@ -2858,20 +2942,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <button
               type="button"
               role="tab"
-              aria-selected={adminLadderDisplayMode === "integrated"}
-              onClick={() => setAdminLadderDisplayMode("integrated")}
-              className={`h-6 rounded border px-3 text-[11px] font-semibold transition active:scale-[0.98] ${adminLadderDisplayMode === "integrated" ? "border-rose-600 bg-rose-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]" : "border-slate-300 bg-white/70 text-slate-600"}`}
-            >
-              整合报价
-            </button>
-            <button
-              type="button"
-              role="tab"
               aria-selected={adminLadderDisplayMode === "individual"}
               onClick={() => setAdminLadderDisplayMode("individual")}
               className={`h-6 rounded border px-3 text-[11px] font-semibold transition active:scale-[0.98] ${adminLadderDisplayMode === "individual" ? "border-rose-600 bg-rose-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]" : "border-slate-300 bg-white/70 text-slate-600"}`}
             >
               逐笔报价
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={adminLadderDisplayMode === "integrated"}
+              onClick={() => setAdminLadderDisplayMode("integrated")}
+              className={`h-6 rounded border px-3 text-[11px] font-semibold transition active:scale-[0.98] ${adminLadderDisplayMode === "integrated" ? "border-rose-600 bg-rose-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]" : "border-slate-300 bg-white/70 text-slate-600"}`}
+            >
+              整合报价
             </button>
           </div>}
           <div
@@ -2966,7 +3050,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   }}
                 >
                   <span className={`text-[13px] tabular-nums font-bold ${row.isMark ? (priceTrend === "down" ? "text-emerald-50" : "text-rose-50") : "text-slate-800"}`} style={{ textShadow: row.isMark ? "0 1px 2px rgba(0,0,0,0.60), 0 -0.5px 1px rgba(255,255,255,0.22)" : "-0.55px -0.55px 0 rgba(255,255,255,0.92), 0.75px 0.75px 0 rgba(71,85,105,0.28)" }}>
-                    {formatLadderPrice(row.isMark && markPrice ? markPrice : row.price)}
+                    {row.isMark && markPrice ? (() => {
+                      const { integerPart, fractionalPart } = splitLadderMarkPrice(markPrice);
+                      return (
+                        <span className="inline-flex items-baseline whitespace-nowrap" aria-label={`${integerPart}.${fractionalPart}`}>
+                          <span>{integerPart}</span>
+                          <span className="-ml-px text-[8px] font-semibold leading-none tracking-tight opacity-95">.{fractionalPart}</span>
+                        </span>
+                      );
+                    })() : formatLadderPrice(row.price)}
                   </span>
                 </div>
                 <LadderCell
@@ -3079,7 +3171,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
                       <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
                         <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].label}</span>
-                        <span className="shrink-0 font-medium text-slate-800">{formatQuantity(trade.quantity)} ETH</span>
+                        <span className="shrink-0 font-medium text-slate-800">{formatQuantity(trade.quantity)}E</span>
                         {detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{formatPrice(detail.buyPrice)}</span>}
                         {detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{formatPrice(detail.sellPrice)}</span>}
                         {!detail && <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{formatPrice(trade.price)}</span>}
@@ -3105,41 +3197,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       <span className="min-w-0 truncate" title={getTradeRelatedFundName(trade)}>{getTradeRelatedFundName(trade)}</span>
                       <span className="text-slate-300">·</span>
                       <span className="shrink-0">{formatBeijingMonthDayTime(trade.createdAt)}</span>
-                      {!isOpening && detail?.netPnl !== undefined && <>
+                      {canManage ? renderHistoryActionMenuButton(trade) : !isOpening && detail?.netPnl !== undefined && <>
                         <span className="text-slate-300">·</span>
                         <span className="ml-auto shrink-0 text-[10px] text-slate-500">净利润</span>
                       </>}
                     </div>
-                    {canManage && <div className="mt-1 flex min-h-5 items-center justify-between gap-3">
-                      {trade.note ? <span className="min-w-0 truncate text-[11px] text-slate-500">{trade.note}</span> : <span />}
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        {isOpening && <button
-                          type="button"
-                          disabled={Boolean(trade.isSyncing)}
-                          onClick={() => openEditOpeningTrade(trade)}
-                          className="h-5 rounded border border-slate-200 bg-white px-1.5 text-[10px] font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          编辑
-                        </button>}
-                        <button
-                          type="button"
-                          disabled={Boolean(trade.isSyncing) || revertEntryMutation.isPending}
-                          onClick={() => setRevertCandidate(trade)}
-                          className="h-5 rounded border border-amber-200 bg-amber-50 px-1.5 text-[10px] font-semibold text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          回撤
-                        </button>
-                        {isOpening && <button
-                          type="button"
-                          disabled={Boolean(trade.isSyncing) || deleteOpeningEntryMutation.isPending}
-                          onClick={() => setDeleteCandidate(trade)}
-                          className="h-5 rounded border border-rose-200 bg-rose-50 px-1.5 text-[10px] font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          删除
-                        </button>}
-                      </div>
-                    </div>}
-                    {!canManage && trade.note && <div className="mt-1 truncate text-[11px] text-slate-500">{trade.note}</div>}
+                    {renderHistoryActionMenu(trade)}
+                    {trade.note && <div className="mt-1 truncate text-[11px] text-slate-500">{trade.note}</div>}
                   </div>
                 );
               })}
@@ -3212,12 +3276,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
       {showEntrySheet && (
         <div
-          className={isMemberView ? "fixed inset-0 z-40 overflow-y-auto bg-slate-50" : "fixed inset-0 z-40 flex items-end bg-slate-950/35"}
+          className={isMemberView ? "fixed inset-0 z-40 overflow-y-auto bg-slate-50" : "fixed inset-0 z-40 bg-white"}
           role="dialog"
           aria-modal="true"
           aria-label={isMemberView ? "仓位明细" : "速记一笔"}
         >
-          <div className={isMemberView ? "min-h-full w-full bg-slate-50" : "w-full max-w-md mx-auto rounded-t bg-white shadow-2xl max-h-[92vh] overflow-y-auto"}>
+          <div className={isMemberView ? "min-h-full w-full bg-slate-50" : "h-full w-full overflow-y-auto bg-white"}>
             {isMemberView ? (
               <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur">
                 <button
@@ -3228,29 +3292,37 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 >
                   <ArrowLeft className="h-5 w-5" />
                 </button>
-                <h1 className="text-base font-semibold text-slate-900">仓位明细</h1>
+                <h1 className="min-w-0 flex-1 text-base font-semibold text-slate-900">仓位明细</h1>
+                <button
+                  type="button"
+                  onClick={backToLadder}
+                  aria-label="关闭并返回T加零价格簿"
+                  title="关闭"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition active:scale-95"
+                >
+                  <X className="h-6 w-6" strokeWidth={2.25} />
+                </button>
               </header>
             ) : (
               <div className="sticky top-0 z-10 border-b border-slate-100 bg-white px-4 pb-2 pt-3">
-                <div className="min-w-0">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
                   <div className="text-base font-semibold text-slate-900">{isEditingEntry ? "编辑开仓记录" : isClosingEntry ? `${ACTIONS[entryForm.action].label}设置` : "速记一笔"}</div>
-                  <div className="mt-0.5 text-[11px] text-slate-500">{isEditingEntry ? "可修改数量、成交价、关联用户、专项款与备注；修改会保留审计快照" : isClosingEntry ? "填写平仓数量与成交价后，需两次确认才会记账" : "本地先显示，后台立即保存；不会触发交易所下单"}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={backToLadder}
+                    aria-label="关闭并返回T型报价"
+                    title="关闭"
+                    className="-mr-1 -mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition active:scale-95"
+                  >
+                    <X className="h-6 w-6" strokeWidth={2.25} />
+                  </button>
                 </div>
               </div>
             )}
 
-            <div className="p-4 space-y-4">
-              {!isMemberView && <div className="flex h-7 items-center">
-                <button
-                  type="button"
-                  onClick={backToLadder}
-                  aria-label="返回T型报价"
-                  className="-ml-1 inline-flex h-7 items-center gap-1 rounded px-1 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 active:scale-95"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  <span>返回报价</span>
-                </button>
-              </div>}
+            <div className={`p-4 space-y-4 ${canManage && !isMemberView ? "pb-24" : ""}`}>
               <div className={`overflow-hidden rounded border ${entrySide === "long" ? "border-rose-200 bg-rose-50/70" : "border-emerald-200 bg-emerald-50/70"}`}>
                 <div className="px-3 py-2.5">
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 text-left">
@@ -3269,21 +3341,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
               </div>
 
-              {isCloseReview && (
-                <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2.5">
-                  <div className="text-xs font-semibold text-amber-800">第 2 次确认</div>
-                  <div className="mt-1 text-sm font-semibold tabular-nums text-slate-900">
-                    {ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH @ {formatPrice(Number(entryForm.price))}
+              {isClosingEntry && closingSourceTrade && (
+                <div className="flex items-center justify-between gap-3 rounded border border-indigo-200 bg-indigo-50/70 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-medium text-indigo-600">当前选择的开仓订单</div>
+                    <div className="mt-0.5 truncate text-sm font-semibold tabular-nums text-slate-800">
+                      {ACTIONS[closingSourceTrade.action].label} {formatQuantity(closingSourceTrade.quantity)} ETH @ {formatPrice(closingSourceTrade.price)}
+                    </div>
                   </div>
-                  <div className="mt-1 text-[11px] text-amber-800/80">对应开仓价 {entryForm.targetPrice === undefined ? "--" : formatPrice(entryForm.targetPrice)}；确认后立即写入速记流水。</div>
+                  <button
+                    type="button"
+                    disabled={isCloseReview}
+                    onClick={backToOrderList}
+                    className="h-8 shrink-0 rounded border border-indigo-200 bg-white px-2.5 text-[11px] font-semibold text-indigo-700 active:scale-[0.98] disabled:opacity-40"
+                  >
+                    重选订单
+                  </button>
                 </div>
               )}
 
               {!isEditingEntry && <div className="space-y-1.5">
-                  <div className="flex items-center justify-between px-0.5 text-[11px] text-slate-500">
-                    <span>当前未平仓主单</span>
-                    <span className="tabular-nums">{activeOpenedTradeList.length} 笔 · {formatQuantity(entrySideSummary.quantity)} ETH</span>
-                  </div>
                   {activeOpenedTradeList.length === 0 && (
                     <div className="rounded border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">当前档位没有未平仓主单</div>
                   )}
@@ -3325,53 +3402,80 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     const isExpanded = expandedOpenedTradeIds.has(trade.id);
                     return (
                       <div key={trade.id} className="rounded border border-slate-200 bg-slate-50/80 px-3 py-2.5">
-                        <button
-                          type="button"
-                          aria-expanded={isExpanded}
-                          onClick={() => setExpandedOpenedTradeIds((current) => {
-                            const next = new Set(current);
-                            if (next.has(trade.id)) next.delete(trade.id);
-                            else next.add(trade.id);
-                            return next;
-                          })}
-                          className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 text-left"
-                        >
-                          <div className="min-w-0">
-                            <span className="flex min-w-0 items-baseline gap-2 whitespace-nowrap">
-                              <span className="text-sm font-medium text-slate-700">{ACTIONS[trade.action].label}</span>
-                              <span className="text-sm font-medium tabular-nums text-slate-700">{formatQuantity(trade.quantity)} ETH</span>
-                              <span className="text-sm font-medium tabular-nums text-slate-700">@ {formatPrice(trade.price)}</span>
-                              {trade.isPending ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span> : <span className="shrink-0 text-sm font-medium tabular-nums text-slate-700">{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>}
+                        <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
+                          <button
+                            type="button"
+                            aria-expanded={isExpanded}
+                            onClick={() => setExpandedOpenedTradeIds((current) => {
+                              const next = new Set(current);
+                              if (next.has(trade.id)) next.delete(trade.id);
+                              else next.add(trade.id);
+                              return next;
+                            })}
+                            className="min-w-0 text-left"
+                          >
+                            <span className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
+                              <span className={`shrink-0 text-sm font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>持仓{ACTIONS[trade.action].side === "long" ? "多单" : "空单"}</span>
+                              <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatQuantity(trade.quantity)}</span>
+                              <span className="shrink-0 text-sm font-medium tabular-nums text-slate-700">@ {formatPrice(trade.price)}</span>
+                              {trade.isPending ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span> : <span className={`shrink-0 text-sm font-semibold tabular-nums ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>}
                             </span>
-                            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-medium">
-                              {linkedClosedQuantity > 0.0000001 && <>
-                                <span className="shrink-0 tabular-nums text-slate-600">已平 {formatQuantity(linkedClosedQuantity)} · 剩 {formatQuantity(remainingQuantity)} ETH</span>
-                                <span className="text-slate-300">·</span>
-                              </>}
-                              {!isMemberView && <>
-                                <span title={getTradeAccountName(trade)} className="max-w-[32%] truncate text-slate-500">{getTradeAccountName(trade)}</span>
-                                <span className="text-slate-300">·</span>
-                              </>}
-                              <span title={getTradeRelatedUserName(trade)} className="max-w-[34%] truncate text-slate-500">{getTradeRelatedUserName(trade)}</span>
-                              <span className="text-slate-300">·</span>
-                              <span title={getTradeRelatedFundName(trade)} className="max-w-[38%] truncate text-slate-500">{getTradeRelatedFundName(trade)}</span>
-                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={isExpanded ? "收起本笔开仓详情" : "展开本笔开仓详情"}
+                            onClick={() => setExpandedOpenedTradeIds((current) => {
+                              const next = new Set(current);
+                              if (next.has(trade.id)) next.delete(trade.id);
+                              else next.add(trade.id);
+                              return next;
+                            })}
+                            className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-400 active:scale-95"
+                          >
+                            <ChevronRight className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                          </button>
+                        </div>
+                        <div className="mt-1 flex min-w-0 items-center justify-between gap-2 text-[10px] font-medium">
+                          <div className="flex min-w-0 items-center gap-x-1.5 overflow-hidden whitespace-nowrap">
+                            {linkedClosedQuantity > 0.0000001 && <>
+                              <span className="shrink-0 tabular-nums text-slate-600">已平 {formatQuantity(linkedClosedQuantity)} · 剩 {formatQuantity(remainingQuantity)} ETH</span>
+                              <span className="shrink-0 text-slate-300">·</span>
+                            </>}
+                            {!isMemberView && <>
+                              <span title={getTradeAccountName(trade)} className="min-w-0 max-w-[30%] truncate text-slate-500">{getTradeAccountName(trade)}</span>
+                              <span className="shrink-0 text-slate-300">·</span>
+                            </>}
+                            <span title={getTradeRelatedUserName(trade)} className="min-w-0 max-w-[34%] truncate text-slate-500">{getTradeRelatedUserName(trade)}</span>
+                            <span className="shrink-0 text-slate-300">·</span>
+                            <span title={getTradeRelatedFundName(trade)} className="min-w-0 truncate text-slate-500">{getTradeRelatedFundName(trade)}</span>
                           </div>
-                          <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
-                        </button>
-                        {isIndividualQuoteDetail && row.kind === "active" && canManage && !isClosingEntry && !trade.isPending && (
-                          <div className="mt-2 flex items-center justify-between gap-3 border-t border-slate-200 pt-2">
-                            <span className="text-[11px] font-medium text-slate-500">逐笔订单直达操作</span>
+                          {canManage && <div className="flex shrink-0 items-center gap-1">
                             <button
                               type="button"
-                              disabled={!canQuickClose || Boolean(trade.isSyncing)}
-                              onClick={() => openQuickCloseSheet(trade)}
-                              className={`h-8 shrink-0 rounded border px-3 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${ACTIONS[closeAction].idleClass}`}
+                              disabled={isCloseReview || Boolean(trade.isSyncing)}
+                              onClick={() => openEditOpeningTrade(trade)}
+                              className="h-6 rounded border border-slate-200 bg-white px-2 text-[10px] font-semibold text-slate-600 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              {ACTIONS[closeAction].label} {formatQuantity(remainingQuantity)} ETH
+                              编辑
                             </button>
-                          </div>
-                        )}
+                            <button
+                              type="button"
+                              disabled={isCloseReview || Boolean(trade.isSyncing)}
+                              onClick={() => setDeleteCandidate(trade)}
+                              className="h-6 rounded border border-rose-200 bg-white px-2 text-[10px] font-semibold text-rose-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              删除
+                            </button>
+                            {row.kind === "active" && !trade.isPending && <button
+                              type="button"
+                              disabled={!canQuickClose || Boolean(trade.isSyncing) || isCloseReview}
+                              onClick={() => openQuickCloseSheet(trade)}
+                              className={`h-6 rounded border px-2 text-[10px] font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${ACTIONS[closeAction].idleClass}`}
+                            >
+                              {ACTIONS[closeAction].label}
+                            </button>}
+                          </div>}
+                        </div>
                         {isExpanded && (
                           <>
                             <div className="mt-2 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2 tabular-nums">
@@ -3431,34 +3535,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                                 </div>
                               </div>
                             )}
-                            {canManage && <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
-                              <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    disabled={isCloseReview || Boolean(trade.isSyncing)}
-                                    onClick={() => openEditOpeningTrade(trade)}
-                                    className="h-8 rounded border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-                                  >
-                                    编辑
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={isCloseReview || Boolean(trade.isSyncing)}
-                                    onClick={() => setDeleteCandidate(trade)}
-                                    className="h-8 rounded border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-                                  >
-                                    删除
-                                  </button>
-                                </div>
-                                {!isIndividualQuoteDetail && !trade.isPending && <button
-                                  type="button"
-                                  disabled={isCloseReview || !canQuickClose}
-                                  onClick={() => openQuickCloseSheet(trade)}
-                                  className={`h-8 rounded border px-3 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${ACTIONS[closeAction].idleClass}`}
-                                >
-                                  {ACTIONS[closeAction].label}
-                                </button>}
-                              </div>}
                           </>
                         )}
                       </div>
@@ -3541,7 +3617,28 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </Field>
                 </div>
 
-                <div className="-mt-1 flex flex-wrap items-center gap-1.5">
+                {isClosingEntry && <div className="-mt-1 grid grid-cols-8 gap-1" aria-label="按可平数量选择百分比">
+                  {[10, 20, 25, 30, 33, 50, 75, 100].map((percentage) => {
+                    const amount = percentage === 100
+                      ? closingAvailableQuantity
+                      : Number((closingAvailableQuantity * percentage / 100).toFixed(2));
+                    const isActive = amount > 0 && Math.abs(Number(entryForm.quantity) - amount) < 0.0000001;
+                    return (
+                      <button
+                        key={percentage}
+                        type="button"
+                        disabled={isCloseReview || amount <= 0}
+                        onClick={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(String(amount)) }))}
+                        className={`h-7 min-w-0 rounded border px-0.5 text-[10px] font-semibold tabular-nums transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${isActive ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
+                        aria-label={`平仓可用数量的 ${percentage}%`}
+                      >
+                        {percentage}%
+                      </button>
+                    );
+                  })}
+                </div>}
+
+                {!isClosingEntry && <div className="-mt-1 flex flex-wrap items-center gap-1.5">
                   <span className="mr-0.5 text-[11px] text-slate-400">数量快选</span>
                   {quantityQuickOptions.map((value, index) => {
                     const isActive = entryForm.quantity === value;
@@ -3558,7 +3655,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </button>
                     );
                   })}
-                </div>
+                </div>}
 
                 {ACTIONS[entryForm.action].opening && <div className="-mt-0.5 flex flex-wrap items-center gap-1.5">
                   <span className="mr-0.5 text-[11px] text-slate-400">类型</span>
@@ -3579,8 +3676,32 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   })}
                 </div>}
 
+                {isClosingEntry ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-2" aria-label="继承自开仓单的账户用户和项目">
+                      <div title={entryForm.accountName || "未关联账户"} className="flex h-10 min-w-0 items-center truncate rounded border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-600">
+                        {entryForm.accountName || "未关联账户"}
+                      </div>
+                      <div title={entryForm.relatedUserName || entryForm.relatedUsername || "未关联用户"} className="flex h-10 min-w-0 items-center truncate rounded border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-600">
+                        {entryForm.relatedUserName || entryForm.relatedUsername || "未关联用户"}
+                      </div>
+                      <div title={entryForm.relatedFundName || (entryForm.relatedFundId === "legacy" ? "未区分项目" : "未关联项目")} className="flex h-10 min-w-0 items-center truncate rounded border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-600">
+                        {entryForm.relatedFundName || (entryForm.relatedFundId === "legacy" ? "未区分项目" : "未关联项目")}
+                      </div>
+                    </div>
+                    <Field label="备注（可选）">
+                      <input
+                        disabled={isCloseReview}
+                        value={entryForm.note}
+                        onChange={(event) => setEntryForm((current) => ({ ...current, note: event.target.value }))}
+                        placeholder="不填则不生成默认备注"
+                        className="w-full h-11 rounded border border-slate-200 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500"
+                      />
+                    </Field>
+                  </>
+                ) : <>
                 <div className="grid grid-cols-2 items-start gap-3">
-                  <Field label={<span className="flex items-center justify-between gap-1"><span>下单账户 <span className="text-rose-500">*</span></span>{accounts.length > 0 && <button type="button" onClick={() => openDirectoryManager("account")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
+                  <Field label={<span className="flex items-center justify-between gap-1"><span>下单账户 <span className="text-rose-500">*</span></span>{accounts.length > 0 && !isClosingEntry && <button type="button" onClick={() => openDirectoryManager("account")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
                     {accounts.length > 0 ? (
                       <select
                         disabled={isAccountSelectionLocked}
@@ -3592,7 +3713,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           }
                           selectOrderAccount(event.target.value);
                         }}
-                        className="h-11 w-full rounded border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-indigo-500"
+                        className="h-11 w-full rounded border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                       >
                         <option value="">新建账户</option>
                         <option value="__manage_accounts__">编辑 / 删除账户…</option>
@@ -3610,22 +3731,108 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     )}
                   </Field>
 
-                  <Field label={<span className="flex items-center justify-between gap-1"><span>关联用户</span><span className="flex shrink-0 items-center gap-2">{recentRelatedUsers.length > 0 && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
-                    <button
-                      type="button"
-                      disabled={isCloseReview}
-                      onClick={() => {
-                        setRelatedUserPickerOpen((current) => !current);
-                        setRelatedUserSearch("");
-                      }}
-                      className={`flex h-11 w-full items-center gap-2 rounded border px-3 text-left text-sm outline-none transition disabled:opacity-40 ${entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}
-                    >
-                      <UserRound className="h-4 w-4 shrink-0 text-indigo-500" />
-                      <span className="min-w-0 flex-1 truncate font-medium">{entryForm.relatedUserName || entryForm.relatedUsername || "暂不关联"}</span>
-                      <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                    </button>
+                  <Field label={<span className="flex items-center justify-between gap-1"><span>关联用户</span><span className="flex shrink-0 items-center gap-2">{recentRelatedUsers.length > 0 && !isClosingEntry && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
+                    <div className={`flex h-11 w-full overflow-hidden rounded border text-sm outline-none transition ${isCloseAssociationLocked ? "border-slate-200 bg-slate-50 text-slate-500" : entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}>
+                      <select
+                        disabled={isCloseAssociationLocked}
+                        value={entryForm.relatedUserId}
+                        onChange={(event) => {
+                          const userId = event.target.value;
+                          if (userId === "__manage_related_users__") {
+                            openDirectoryManager("relatedUser");
+                            return;
+                          }
+                          setRelatedUserPickerOpen(false);
+                          setRelatedUserSearch("");
+                          if (!userId) {
+                            clearRelatedUser();
+                            return;
+                          }
+                          const user = recentRelatedUsers.find((item) => item.id === userId);
+                          if (user) selectRelatedUser(user);
+                        }}
+                        aria-label="选择已有订单关联用户"
+                        className="h-full min-w-0 flex-1 appearance-auto bg-transparent px-3 text-sm font-medium outline-none disabled:cursor-not-allowed"
+                      >
+                        <option value="">暂不关联</option>
+                        {recentRelatedUsers.length > 0 && <option value="__manage_related_users__">编辑 / 删除关联用户…</option>}
+                        {recentRelatedUsers.map((user) => <option key={user.id} value={user.id}>{user.name}{user.username ? ` · @${user.username}` : ""}</option>)}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={isCloseAssociationLocked}
+	                        aria-label="搜索并添加未在订单中出现过的关联用户"
+	                        title="搜索全局用户并添加"
+	                        onClick={() => {
+	                          setRelatedUserQuickPickerOpen(false);
+	                          setRelatedUserSearch("");
+	                          setRelatedUserPickerOpen(true);
+	                        }}
+	                        className="flex w-10 shrink-0 items-center justify-center border-l border-slate-200/80 text-slate-400 transition active:bg-indigo-100/60 active:text-indigo-600 disabled:opacity-40"
+                      >
+                        <Search className="h-4 w-4" />
+                      </button>
+                    </div>
                   </Field>
                 </div>
+
+	                {relatedUserPickerOpen && (
+	                  <div className="overflow-hidden rounded border border-indigo-100 bg-white shadow-sm">
+	                    <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
+	                      <Search className="h-4 w-4 shrink-0 text-indigo-500" />
+	                      <input
+	                        autoFocus
+	                        value={relatedUserSearch}
+	                        onChange={(event) => setRelatedUserSearch(event.target.value)}
+	                        placeholder="搜索全局用户并添加"
+	                        className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+	                      />
+	                      <button
+	                        type="button"
+	                        onClick={() => {
+	                          setRelatedUserPickerOpen(false);
+	                          setRelatedUserSearch("");
+	                        }}
+	                        aria-label="关闭关联用户搜索"
+	                        className="rounded p-0.5 text-slate-400 active:scale-90"
+	                      >
+	                        <X className="h-4 w-4" />
+	                      </button>
+	                    </div>
+	                    {relatedUserSearch.trim().length === 0 ? (
+	                      <div className="px-3 py-4 text-center text-xs text-slate-400">输入用户名或昵称，添加此前未在本账本订单出现过的用户</div>
+	                    ) : relatedUserSearchQuery.isFetching ? (
+	                      <div className="px-3 py-4 text-center text-xs text-slate-400">正在搜索全局用户…</div>
+	                    ) : Array.isArray(relatedUserSearchQuery.data) && relatedUserSearchQuery.data.length > 0 ? (
+	                      <div className="max-h-56 overflow-y-auto py-1">
+	                        {(relatedUserSearchQuery.data as any[]).map((candidate) => {
+	                          const user: PreviewRelatedUser = {
+	                            id: String(candidate.id),
+	                            name: String(candidate.name || candidate.username || `用户#${candidate.id}`),
+	                            username: candidate.username ? String(candidate.username) : undefined,
+	                            avatar: candidate.avatar ? String(candidate.avatar) : undefined,
+	                          };
+	                          const isNewToJournal = !recentRelatedUsers.some((existing) => existing.id === user.id);
+	                          return (
+	                            <button
+	                              key={user.id}
+	                              type="button"
+	                              onClick={() => selectRelatedUser(user)}
+	                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left active:bg-indigo-50"
+	                            >
+	                              <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
+	                              <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{user.name}</span>
+	                              {isNewToJournal && <span className="shrink-0 text-[10px] font-semibold text-indigo-600">新增</span>}
+	                              {user.username && <span className="max-w-[32%] truncate text-xs text-slate-400">@{user.username}</span>}
+	                            </button>
+	                          );
+	                        })}
+	                      </div>
+	                    ) : (
+	                      <div className="px-3 py-4 text-center text-xs text-slate-400">未找到匹配的全局用户</div>
+	                    )}
+	                  </div>
+	                )}
 
                 <div className="-mt-1 grid grid-cols-2 gap-3 text-[10px] leading-4 text-slate-400">
                   <span>{isEditingEntry ? "可选择、新建或管理账户；保存前校验后续平仓并保留审计。" : "首次可新建；后续按关联用户记忆账户。"}</span>
@@ -3673,121 +3880,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     className="w-full h-11 rounded border border-slate-200 px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-500"
                   />
                 </Field>
-
-                {relatedUserPickerOpen && (
-                  <div className="overflow-hidden rounded border border-indigo-100 bg-white shadow-sm">
-                    <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
-                      <Search className="h-4 w-4 shrink-0 text-slate-400" />
-                      <input
-                        autoFocus
-                        value={relatedUserSearch}
-                        onChange={(event) => setRelatedUserSearch(event.target.value)}
-                        placeholder="用户名或昵称模糊搜索"
-                        className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRelatedUserPickerOpen(false);
-                          setRelatedUserSearch("");
-                        }}
-                        aria-label="关闭关联用户搜索"
-                        className="rounded p-0.5 text-slate-400 active:scale-90"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={clearRelatedUser}
-                      className="flex w-full items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-xs font-medium text-slate-600 active:bg-slate-50"
-                    >
-                      <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
-                      <span>暂不关联，稍后补充</span>
-                    </button>
-                    {recentRelatedUsers.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => openDirectoryManager("relatedUser")}
-                        className="flex w-full items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-xs font-semibold text-indigo-700 active:bg-indigo-50"
-                      >
-                        <UserRound className="h-4 w-4 shrink-0 text-indigo-500" />
-                        <span>管理已关联用户…</span>
-                      </button>
-                    )}
-                    {relatedUserSearch.trim().length === 0 ? (
-                      recentRelatedUsers.length > 0 ? (
-                        <div className="max-h-48 overflow-y-auto py-1">
-                          <div className="px-3 py-1.5 text-[10px] font-medium text-slate-400">最近选择</div>
-                          {recentRelatedUsers.map((user) => (
-                            <button
-                              key={user.id}
-                              type="button"
-                              onClick={() => selectRelatedUser(user)}
-                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left active:bg-indigo-50"
-                            >
-                              <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
-                              <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{user.name}</span>
-                              {user.username && <span className="max-w-[42%] truncate text-xs text-slate-400">@{user.username}</span>}
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="px-3 py-4 text-center text-xs text-slate-400">输入用户名或昵称，搜索全局用户</div>
-                      )
-                    ) : relatedUserSearchQuery.isFetching ? (
-                      <div className="px-3 py-4 text-center text-xs text-slate-400">正在搜索用户…</div>
-                    ) : Array.isArray(relatedUserSearchQuery.data) && relatedUserSearchQuery.data.length > 0 ? (
-                      <div className="max-h-56 overflow-y-auto py-1">
-                        {(relatedUserSearchQuery.data as any[]).map((candidate) => {
-                          const user: PreviewRelatedUser = {
-                            id: String(candidate.id),
-                            name: String(candidate.name || candidate.username || `用户#${candidate.id}`),
-                            username: candidate.username ? String(candidate.username) : undefined,
-                            avatar: candidate.avatar ? String(candidate.avatar) : undefined,
-                          };
-                          return (
-                            <button
-                              key={user.id}
-                              type="button"
-                              onClick={() => selectRelatedUser(user)}
-                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left active:bg-indigo-50"
-                            >
-                              <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
-                              <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{user.name}</span>
-                              {user.username && <span className="max-w-[42%] truncate text-xs text-slate-400">@{user.username}</span>}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="px-3 py-4 text-center text-xs text-slate-400">未找到匹配用户</div>
-                    )}
-                  </div>
-                )}
+                </>}
               </div>
               </>}
 
             </div>
-            {canManage && <div className="sticky bottom-0 border-t border-slate-100 bg-white/95 px-4 py-3 backdrop-blur">
-              {isCloseReview ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setCloseConfirmationStep("input")}
-                    className="h-12 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700 active:scale-[0.99]"
-                  >
-                    返回修改
-                  </button>
-                  <button
-                    disabled={saveEntryMutation.isPending}
-                    onClick={handleSaveEntry}
-                    className="h-12 rounded bg-amber-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99]"
-                  >
-                    再次确认并记账
-                  </button>
-                </div>
-              ) : (
+            {canManage && <div className={isMemberView
+              ? "sticky bottom-0 border-t border-slate-100 bg-white/95 px-4 py-3 backdrop-blur"
+              : "fixed inset-x-0 bottom-0 z-20 border-t border-slate-100 bg-white/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur"
+            }>
+              {!isCloseReview && (
                 <button
                   disabled={isEditingEntry ? updateOpeningEntryMutation.isPending : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)}
                   onClick={handleSaveEntry}
@@ -3797,6 +3899,37 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </button>
               )}
             </div>}
+          </div>
+        </div>
+      )}
+
+      {canManage && showEntrySheet && isClosingEntry && isCloseReview && (
+        <div className="fixed inset-0 z-[60] flex items-end bg-slate-950/40 sm:items-center sm:justify-center sm:px-5" role="dialog" aria-modal="true" aria-label={`确认${ACTIONS[entryForm.action].label}`}>
+          <div className="w-full rounded-t border border-amber-200 bg-white p-4 shadow-2xl sm:max-w-sm sm:rounded">
+            <div className="text-sm font-semibold text-amber-800">再次确认</div>
+            <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2.5">
+              <div className="text-base font-semibold tabular-nums text-slate-900">
+                {ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH @ {formatPrice(Number(entryForm.price))}
+              </div>
+              <div className="mt-1 text-[11px] leading-4 text-amber-800/85">对应开仓价 {entryForm.targetPrice === undefined ? "--" : formatPrice(entryForm.targetPrice)}；确认后立即写入速记流水并返回报价页。</div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={saveEntryMutation.isPending}
+                onClick={() => setCloseConfirmationStep("input")}
+                className="h-11 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700 active:scale-[0.99] disabled:opacity-40"
+              >
+                返回修改
+              </button>
+              <button
+                disabled={saveEntryMutation.isPending}
+                onClick={handleSaveEntry}
+                className="h-11 rounded bg-amber-600 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40"
+              >
+                确认平仓
+              </button>
+            </div>
           </div>
         </div>
       )}
