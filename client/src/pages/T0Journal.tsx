@@ -3436,19 +3436,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           </button>
                         </div>
                         <div className="mt-1 flex min-w-0 items-center justify-between gap-2 text-[10px] font-medium">
-                          <div className="flex min-w-0 items-center gap-x-1.5 overflow-hidden whitespace-nowrap">
+                          {!isExpanded && <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-0.5">
                             {linkedClosedQuantity > 0.0000001 && <>
                               <span className="shrink-0 tabular-nums text-slate-600">已平 {formatQuantity(linkedClosedQuantity)} · 剩 {formatQuantity(remainingQuantity)} ETH</span>
                               <span className="shrink-0 text-slate-300">·</span>
                             </>}
                             {!isMemberView && <>
-                              <span title={getTradeAccountName(trade)} className="min-w-0 max-w-[30%] truncate text-slate-500">{getTradeAccountName(trade)}</span>
+                              <span title={getTradeAccountName(trade)} className="shrink-0 whitespace-nowrap text-slate-500">{getTradeAccountName(trade)}</span>
                               <span className="shrink-0 text-slate-300">·</span>
                             </>}
-                            <span title={getTradeRelatedUserName(trade)} className="min-w-0 max-w-[34%] truncate text-slate-500">{getTradeRelatedUserName(trade)}</span>
+                            <span title={getTradeRelatedUserName(trade)} className="shrink-0 whitespace-nowrap text-slate-500">{getTradeRelatedUserName(trade)}</span>
                             <span className="shrink-0 text-slate-300">·</span>
-                            <span title={getTradeRelatedFundName(trade)} className="min-w-0 truncate text-slate-500">{getTradeRelatedFundName(trade)}</span>
+                            <span title={getTradeRelatedFundName(trade)} className="shrink-0 whitespace-nowrap text-slate-500">{getTradeRelatedFundName(trade)}</span>
                           </div>
+                          }
                           {canManage && <div className="flex shrink-0 items-center gap-1">
                             <button
                               type="button"
@@ -3507,6 +3508,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                                   <div title={getTradeRelatedFundName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeRelatedFundName(trade)}</div>
                                 </div>
                               </div>
+                              {trade.note?.trim() && (
+                                <div className="col-span-3 border-t border-slate-200 pt-2">
+                                  <div className="text-[10px] text-slate-400">备注</div>
+                                  <div className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-4 text-slate-600">{trade.note}</div>
+                                </div>
+                              )}
                             </div>
                             {trade.filledAt && <div className="mt-2 flex items-center gap-1.5 border-t border-slate-200 pt-2 text-[10px] font-medium text-slate-500">
                               <Clock3 className="h-3 w-3 shrink-0 text-sky-600" />
