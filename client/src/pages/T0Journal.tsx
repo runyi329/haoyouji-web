@@ -92,10 +92,10 @@ function persistT0TopFilters(storageKey: string | null, filters: T0PersistedTopF
 
 function getT0InstrumentFilterSummary(selectedTypes: T0InstrumentType[]): string {
   if (selectedTypes.length === 0) return "类型全部";
-  if (selectedTypes.length === 1) {
-    return T0_INSTRUMENT_TYPES.find((item) => item.value === selectedTypes[0])?.label ?? "类型";
-  }
-  return `已选 ${selectedTypes.length} 项`;
+  return T0_INSTRUMENT_TYPES
+    .filter((item) => selectedTypes.includes(item.value))
+    .map((item) => item.label)
+    .join("、") || "类型";
 }
 
 function getOptionDaysToExpiry(expiryDate?: string) {
@@ -3705,6 +3705,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 options={T0_INSTRUMENT_FILTER_OPTIONS}
                 selectedIds={instrumentTypeFilterIds}
                 emptyLabel="暂无类型"
+                showSelectedLabels
                 onChange={(ids) => {
                   setInstrumentTypeFilterIds(normalizeT0InstrumentTypeFilterIds(ids));
                   setRecentJournalPage(1);
@@ -4045,6 +4046,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     selectedIds={historyInstrumentTypeFilterIds}
                     emptyLabel="暂无类型"
                     compact
+                    showSelectedLabels
                     onChange={(ids) => {
                         setHistoryInstrumentTypeFilterIds(normalizeT0InstrumentTypeFilterIds(ids));
                         setRecentJournalPage(1);
@@ -5657,6 +5659,7 @@ function T0MultiSelect({
   align = "left",
   constrainRightToFilterRow = false,
   compact = false,
+  showSelectedLabels = false,
 }: {
   label: string;
   options: T0MultiSelectOption[];
@@ -5668,6 +5671,8 @@ function T0MultiSelect({
   constrainRightToFilterRow?: boolean;
   /** 历史筛选栏使用与同行状态控件一致的紧凑高度。 */
   compact?: boolean;
+  /** 对类型等短枚举项，直接展示已选名称，而非“已选 N 项”。 */
+  showSelectedLabels?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [constrainedMenuWidth, setConstrainedMenuWidth] = useState<number | null>(null);
@@ -5678,7 +5683,9 @@ function T0MultiSelect({
     ? "全部"
     : selectedOptions.length === 1
       ? selectedOptions[0].summaryLabel ?? selectedOptions[0].label
-      : `已选 ${selectedOptions.length} 项`;
+      : showSelectedLabels
+        ? selectedOptions.map((option) => option.summaryLabel ?? option.label).join("、")
+        : `已选 ${selectedOptions.length} 项`;
   const selectedTitle = selectedOptions.length === 0
     ? `${label}：全部`
     : `${label}：${selectedOptions.map((option) => option.label).join("、")}`;
