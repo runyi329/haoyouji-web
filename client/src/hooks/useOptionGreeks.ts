@@ -29,6 +29,22 @@ const OPTION_GREEKS_REFRESH_MS = 3 * 1000;
 
 type MarkPriceCache = Record<string, number>;
 
+/** MySQL 日期可能以 UTC ISO 字符串下发；行情合约键始终使用北京时间的 YYYY-MM-DD。 */
+function normalizeOptionExerciseDate(value: unknown): string {
+  const raw = String(value ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(parsed);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 /** 未到期的期权报价必须是正数；0/空值属于行情源暂缺，不能覆盖最近一次有效报价。 */
 function hasUsableOptionMarkPrice(value: unknown): boolean {
   const markPrice = Number(value);
@@ -71,10 +87,11 @@ export function useOptionGreeks({
   direction,
   enabled = true,
 }: UseOptionGreeksParams) {
+  const normalizedExerciseDate = normalizeOptionExerciseDate(exerciseDate);
   const query = trpc.ledger.deribitGetGreeks.useQuery(
-    { currency, exerciseDate, strikePrice, direction },
+    { currency, exerciseDate: normalizedExerciseDate, strikePrice, direction },
     {
-      enabled: enabled && !!exerciseDate && !!strikePrice,
+      enabled: enabled && !!normalizedExerciseDate && !!strikePrice,
       staleTime: OPTION_GREEKS_REFRESH_MS,
       refetchInterval: OPTION_GREEKS_REFRESH_MS,
       retry: 1,
@@ -82,7 +99,7 @@ export function useOptionGreeks({
   );
 
   const rawData = query.data as OptionGreeksData | null | undefined;
-  const contractKey = `${currency}-${exerciseDate}-${strikePrice}-${direction}`;
+  const contractKey = `${currency}-${normalizedExerciseDate}-${strikePrice}-${direction}`;
   const hasCurrentMarkPrice = hasUsableOptionMarkPrice(rawData?.markPrice);
   const lastValidDataRef = useRef<{ contractKey: string; data: OptionGreeksData } | null>(null);
   const fallbackData = lastValidDataRef.current?.contractKey === contractKey ? lastValidDataRef.current.data : null;

@@ -1457,6 +1457,22 @@ function areFunderSettledNotesAppendOnly(existingValue: unknown, nextValue: unkn
 // 使用数据库存储缓存，解决 Autoscale 无状态环境下内存缓存失效的问题
 const DERIBIT_MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
+/** 兼容 MySQL 驱动下发的 UTC ISO 日期，合约日期一律取北京时间自然日。 */
+function normalizeOptionExerciseDateInBeijing(value: unknown): string | null {
+  const raw = String(value ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(parsed);
+  const fields = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${fields.year}-${fields.month}-${fields.day}`;
+}
+
 async function deribitDbGet(cacheKey: string): Promise<any | null> {
   try {
     const conn = await getDbConnection();
@@ -23917,10 +23933,19 @@ ${klinesSummary}
         direction: z.enum(['long_call', 'long_put', 'short_call', 'short_put']),
       }))
       .query(async ({ input }) => {
+        // 期权流水经 MySQL 驱动可能下发为 2026-12-25T00:00:00.000Z；
+        // 合约代码与缓存键必须只使用自然日，否则会拼出 NaN 日期并失去所有报价。
+        const exerciseDate = normalizeOptionExerciseDateInBeijing(input.exerciseDate);
+        if (!exerciseDate) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '期权到期日格式无效' });
+        }
+        const dt = new Date(`${exerciseDate}T08:00:00Z`);
+        if (Number.isNaN(dt.getTime()) || dt.toISOString().slice(0, 10) !== exerciseDate) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '期权到期日格式无效' });
+        }
         const isCall = input.direction === 'long_call' || input.direction === 'short_call';
         const optionType = isCall ? 'C' : 'P';
         // Deribit 格式：ETH-25DEC26-1800-C
-        const dt = new Date(input.exerciseDate + 'T08:00:00Z');
         const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
         const dd = dt.getUTCDate();
         const mon = months[dt.getUTCMonth()];
