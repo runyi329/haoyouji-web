@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useParams, useSearch } from "wouter";
 import {
   ArrowLeft,
@@ -21,21 +21,31 @@ import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 
 type TradeAction = "openLong" | "closeLong" | "openShort" | "closeShort";
 type PositionSide = "long" | "short";
-type T0InstrumentType = "spot" | "contract" | "option";
+type T0InstrumentType = "spot" | "contract" | "option" | "grid";
 type T0OptionDirection = "long_call" | "long_put" | "short_call" | "short_put";
 type T0OptionPremiumCurrency = "USDT" | "ETH";
+type T0GridDirection = "long" | "short";
 type T0ExecutionFilter = "all" | "filled" | "pending";
 const T0_INSTRUMENT_TYPES: Array<{ value: T0InstrumentType; label: string; shortLabel: string }> = [
   { value: "spot", label: "现货", shortLabel: "现" },
   { value: "contract", label: "合约", shortLabel: "合" },
   { value: "option", label: "期权", shortLabel: "期" },
+  { value: "grid", label: "网格", shortLabel: "网" },
+];
+const T0_GRID_DIRECTIONS: Array<{ value: T0GridDirection; label: string }> = [
+  { value: "long", label: "做多网格" },
+  { value: "short", label: "做空网格" },
 ];
 const T0_INSTRUMENT_FILTER_OPTIONS: T0MultiSelectOption[] = T0_INSTRUMENT_TYPES.map((item) => ({
   id: item.value,
   label: item.label,
 }));
+const T0_EXECUTION_FILTER_OPTIONS: T0MultiSelectOption[] = [
+  { id: "filled", label: "已成交" },
+  { id: "pending", label: "已挂单" },
+];
 
-/** 空数组代表全部；勾满三个类型同样回归“全部类型”，避免出现重复的全选状态。 */
+/** 空数组代表全部；勾满全部类型同样回归“全部类型”，避免出现重复的全选状态。 */
 function normalizeT0InstrumentTypeFilterIds(ids: string[]): T0InstrumentType[] {
   const selected = T0_INSTRUMENT_TYPES
     .map((item) => item.value)
@@ -46,6 +56,8 @@ function normalizeT0InstrumentTypeFilterIds(ids: string[]): T0InstrumentType[] {
 type T0PersistedTopFilters = {
   accountIds: string[];
   relatedUserIds: string[];
+  /** 成员端用于区分“首次默认本人”与用户明确点选的“全部”（空数组）。 */
+  memberRelatedUserFilterTouched: boolean;
   relatedFundIds: string[];
   instrumentTypeIds: T0InstrumentType[];
   executionFilter: T0ExecutionFilter;
@@ -70,7 +82,7 @@ function getT0ReferralDescendantsRootUserId(value: string): string | null {
   return /^\d+$/.test(rootUserId) ? rootUserId : null;
 }
 
-/** 将“全部推荐”筛选令牌展开为真实关联用户 ID；推荐集合本身绝不代表根用户。 */
+/** 将“推荐”筛选令牌展开为真实关联用户 ID；推荐集合本身绝不代表根用户。 */
 function resolveT0RelatedUserFilter(
   selectedIds: string[],
   descendantsByRootUserId: Map<string, string[]>,
@@ -130,6 +142,7 @@ function readPersistedT0TopFilters(storageKey: string | null): T0PersistedTopFil
     return {
       accountIds: sanitizeT0FilterIds(parsed.accountIds),
       relatedUserIds: sanitizeT0FilterIds(parsed.relatedUserIds),
+      memberRelatedUserFilterTouched: parsed.memberRelatedUserFilterTouched === true,
       relatedFundIds: sanitizeT0FilterIds(parsed.relatedFundIds),
       instrumentTypeIds: normalizeT0InstrumentTypeFilterIds(sanitizeT0FilterIds(parsed.instrumentTypeIds)),
       executionFilter: executionFilter === "filled" || executionFilter === "pending" ? executionFilter : "all",
@@ -249,6 +262,11 @@ type PreviewTrade = {
   optionExpiryDate?: string;
   optionPremium?: number;
   optionPremiumCurrency?: T0OptionPremiumCurrency;
+  gridDirection?: T0GridDirection;
+  gridRangeMin?: number;
+  gridRangeMax?: number;
+  gridLeverage?: number;
+  gridCount?: number;
   /** 账本接口下发的最近有效期权标记价，用于刷新首屏与轮询间隙的可靠兜底。 */
   optionMarkPrice?: number;
   /** 到期自动结算时每 ETH 期权获得或支付的最终价值（USDT）。 */
@@ -352,7 +370,7 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     relatedFundHidden: Boolean(entry.relatedFundHidden),
     symbol: String(entry.symbol || "ETH"),
     action: entry.action as TradeAction,
-    instrumentType: entry.instrumentType === "spot" || entry.instrumentType === "contract" || entry.instrumentType === "option"
+    instrumentType: entry.instrumentType === "spot" || entry.instrumentType === "contract" || entry.instrumentType === "option" || entry.instrumentType === "grid"
       ? entry.instrumentType
       : undefined,
     optionDirection: entry.optionDirection === "long_call" || entry.optionDirection === "long_put" || entry.optionDirection === "short_call" || entry.optionDirection === "short_put"
@@ -363,6 +381,13 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     optionPremiumCurrency: entry.optionPremiumCurrency === "USDT" || entry.optionPremiumCurrency === "ETH"
       ? entry.optionPremiumCurrency
       : undefined,
+    gridDirection: entry.gridDirection === "long" || entry.gridDirection === "short"
+      ? entry.gridDirection
+      : undefined,
+    gridRangeMin: entry.gridRangeMin === undefined || entry.gridRangeMin === null ? undefined : Number(entry.gridRangeMin),
+    gridRangeMax: entry.gridRangeMax === undefined || entry.gridRangeMax === null ? undefined : Number(entry.gridRangeMax),
+    gridLeverage: entry.gridLeverage === undefined || entry.gridLeverage === null ? undefined : Number(entry.gridLeverage),
+    gridCount: entry.gridCount === undefined || entry.gridCount === null ? undefined : Number(entry.gridCount),
     optionMarkPrice: Number.isFinite(Number(entry.optionMarkPrice)) && Number(entry.optionMarkPrice) > 0
       ? Number(entry.optionMarkPrice)
       : undefined,
@@ -458,6 +483,11 @@ type EntryForm = {
   optionExpiryDate: string;
   optionPremium: string;
   optionPremiumCurrency: T0OptionPremiumCurrency;
+  gridDirection: T0GridDirection;
+  gridRangeMin: string;
+  gridRangeMax: string;
+  gridLeverage: string;
+  gridCount: string;
   /** 开仓订单默认为未锁；锁定后仅管理员逐笔报价使用黑金标识。 */
   isLocked: boolean;
   /** 仅开仓：默认直接成交；设为挂单后等待统一标记价自动触发。 */
@@ -1342,7 +1372,7 @@ function projectMemberProfitShareTrades(
   }
   const projected: PreviewTrade[] = [];
   for (const trade of rawTrades) {
-    // 成员主动开启“全部推荐”后，下线订单按原始完整流水展示；本人订单仍沿用既有收益分配投影。
+    // 成员主动开启“推荐”后，下线订单按原始完整流水展示；本人订单仍沿用既有收益分配投影。
     if (trade.relatedUserId && visibleReferralDescendantUserIds.has(trade.relatedUserId)) {
       projected.push(trade);
       continue;
@@ -1476,6 +1506,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [relatedFundFilterIds, setRelatedFundFilterIds] = useState<string[]>([]);
   const [instrumentTypeFilterIds, setInstrumentTypeFilterIds] = useState<T0InstrumentType[]>([]);
   const [executionFilter, setExecutionFilter] = useState<T0ExecutionFilter>("all");
+  // 成员首次进入默认筛本人；只有主动点过用户下拉后，空数组才代表其明确选择的“全部”。
+  const [memberRelatedUserFilterTouched, setMemberRelatedUserFilterTouched] = useState(false);
   // 成员存在有订单的推荐用户时自动读取本人完整分支；前端用户下拉再决定展示“全部/推荐/本人/单个推荐用户”。
   const [includeMemberReferralDescendants, setIncludeMemberReferralDescendants] = useState(false);
   // 历史记录拥有独立筛选范围：不影响上方持仓汇总与T形交割表。
@@ -1559,6 +1591,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     optionExpiryDate: "",
     optionPremium: "",
     optionPremiumCurrency: "USDT",
+    gridDirection: "long",
+    gridRangeMin: "",
+    gridRangeMax: "",
+    gridLeverage: "",
+    gridCount: "",
     isLocked: false,
     isPending: false,
     quantity: "",
@@ -1598,7 +1635,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const isMemberView = (t0JournalQuery.data as any)?.viewerMode === "member";
   const canManage = canAccess && (t0JournalQuery.data as any)?.viewerMode === "admin";
   // 推荐树单独低频读取，避免52号账本的两秒流水轮询反复遍历 users 邀请关系。
-  // 管理员与成员均只会获得本人对应的一条递归“全部推荐”分支。
+  // 管理员与成员均只会获得本人对应的一条递归“推荐”分支。
   const t0ReferralFilterQuery = trpc.ledger.t0GetReferralFilterOptions.useQuery(
     { ledgerId: 52 },
     {
@@ -1624,9 +1661,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const currentReferralRootUserId = useMemo(() => {
     const apiRootUserId = String((t0ReferralFilterQuery.data as any)?.rootUserId || "");
     if (/^\d+$/.test(apiRootUserId)) return apiRootUserId;
+    const memberRelatedUserId = String((t0JournalQuery.data as any)?.viewerRelatedUserId || "");
+    if (isMemberView && /^\d+$/.test(memberRelatedUserId)) return memberRelatedUserId;
     const signedInUserId = String((me as any)?.id || "");
     return canManage && /^\d+$/.test(signedInUserId) ? signedInUserId : "";
-  }, [canManage, me, t0ReferralFilterQuery.data]);
+  }, [canManage, isMemberView, me, t0JournalQuery.data, t0ReferralFilterQuery.data]);
   const referralDataLoaded = (!canManage && !isMemberView) || t0ReferralFilterQuery.isSuccess;
   const referralDescendantsForCurrentRoot = currentReferralRootUserId
     ? referralDescendantsByRootUserId.get(currentReferralRootUserId)
@@ -1838,10 +1877,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const hasTopFilterScopeChanged = activeTopFilterStorageKeyRef.current !== topFilterStorageKey;
     const shouldRestoreTopFilters = !hasInitializedJournalFiltersRef.current || hasTopFilterScopeChanged;
     const persistedTopFilters = shouldRestoreTopFilters ? readPersistedT0TopFilters(topFilterStorageKey) : null;
+    const restoredMemberRelatedUserFilterTouched = Boolean(persistedTopFilters?.memberRelatedUserFilterTouched);
     if (hasTopFilterScopeChanged) {
       activeTopFilterStorageKeyRef.current = topFilterStorageKey;
       setHydratedTopFilterStorageKey(null);
     }
+    if (shouldRestoreTopFilters) setMemberRelatedUserFilterTouched(restoredMemberRelatedUserFilterTouched);
     if (journal.viewerMode === "admin") {
       setSelectedAccountIds((current) => {
         const preferred = shouldRestoreTopFilters ? (persistedTopFilters?.accountIds ?? []) : current;
@@ -1877,17 +1918,31 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       ));
       setRelatedUserFilterIds((current) => {
         const preferred = shouldRestoreTopFilters ? (persistedTopFilters?.relatedUserIds ?? []) : current;
-        if (!referralDataLoaded) return preferred;
+        const hasExplicitMemberSelection = shouldRestoreTopFilters
+          ? restoredMemberRelatedUserFilterTouched
+          : memberRelatedUserFilterTouched;
+        // 推荐树尚未返回时也立即展示本人，避免首屏短暂显示“全部”；
+        // 已保存的推荐令牌则先原样保留，待树数据到位后统一校验。
+        if (!referralDataLoaded) {
+          return preferred.length === 0 && !hasExplicitMemberSelection && currentReferralRootUserId
+            ? [currentReferralRootUserId]
+            : preferred;
+        }
         const selectableMemberUserIds = new Set([
           currentReferralRootUserId,
           ...(currentReferralDescendants ?? []),
         ]);
-        return preferred.filter((id) => {
+        const normalized = preferred.filter((id) => {
           const rootUserId = getT0ReferralDescendantsRootUserId(id);
           return rootUserId
             ? rootUserId === currentReferralRootUserId && selectableMemberUserIds.size > 1
             : selectableMemberUserIds.has(id);
         });
+        // 首次打开（含旧版仅保存空数组的记录）始终落在本人；用户主动选择“全部”后，
+        // memberRelatedUserFilterTouched 会把空数组按明确意图保留，刷新/重开也不重置。
+        return normalized.length === 0 && !hasExplicitMemberSelection && currentReferralRootUserId
+          ? [currentReferralRootUserId]
+          : normalized;
       });
       setRelatedFundFilterIds((current) => normalizeMemberFilter(
         shouldRestoreTopFilters ? (persistedTopFilters?.relatedFundIds ?? []) : current,
@@ -1903,18 +1958,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : (nextRecentRelatedUsers[0]?.id || ""));
     hasInitializedJournalFiltersRef.current = true;
     setHydratedTopFilterStorageKey(topFilterStorageKey);
-  }, [referralDataLoaded, referralDescendantsByRootUserId, t0JournalQuery.data, topFilterStorageKey]);
+  }, [memberRelatedUserFilterTouched, referralDataLoaded, referralDescendantsByRootUserId, t0JournalQuery.data, topFilterStorageKey]);
 
   useEffect(() => {
     if (!topFilterStorageKey || hydratedTopFilterStorageKey !== topFilterStorageKey) return;
     persistT0TopFilters(topFilterStorageKey, {
       accountIds: selectedAccountIds,
       relatedUserIds: relatedUserFilterIds,
+      memberRelatedUserFilterTouched,
       relatedFundIds: relatedFundFilterIds,
       instrumentTypeIds: instrumentTypeFilterIds,
       executionFilter,
     });
-  }, [executionFilter, hydratedTopFilterStorageKey, instrumentTypeFilterIds, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, topFilterStorageKey]);
+  }, [executionFilter, hydratedTopFilterStorageKey, instrumentTypeFilterIds, memberRelatedUserFilterTouched, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, topFilterStorageKey]);
 
   const priceTrend = previousMarkPrice === null || markPrice === null
     ? "flat"
@@ -2122,41 +2178,45 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     && selectedReferralFilterIds.has(currentReferralToken)
     && !referralDataLoaded,
   );
-  const toRelatedUserFilterOption = (user: PreviewRelatedUser): T0MultiSelectOption => ({
+  const toRelatedUserFilterOption = (
+    user: PreviewRelatedUser,
+    kind?: T0MultiSelectOption["kind"],
+  ): T0MultiSelectOption => ({
     // 下拉内保留昵称和用户名便于辨认；顶部筛选框选中后只展示昵称，节省移动端空间。
     id: user.id,
     label: `${user.name}${user.username ? ` · @${user.username}` : ""}`,
     summaryLabel: user.name,
+    kind,
   });
   const relatedUserFilterOptions: T0MultiSelectOption[] = isMemberView
     ? (memberHasReferralFilterOptions ? [
-      // “全部”由空选项表达；成员下拉的第二项固定为本人所有递归推荐用户，不含本人。
-      {
-        id: currentReferralToken,
-        label: `全部推荐（${currentReferralDescendants!.length}）`,
-        summaryLabel: `全部推荐（${currentReferralDescendants!.length}）`,
-        kind: "referral-descendants" as const,
-      },
+      // “全部”由空选项表达；成员下拉依次显示本人、本人全部递归推荐与各推荐用户。
       {
         id: currentReferralRootUserId,
         label: `${memberRelatedUserName}${(me as any)?.username ? ` · @${String((me as any).username)}` : ""}`,
         summaryLabel: memberRelatedUserName,
       },
-      ...memberReferralDescendantUsers.map(toRelatedUserFilterOption),
+      {
+        id: currentReferralToken,
+        label: `推荐（${currentReferralDescendants!.length}）`,
+        summaryLabel: `推荐（${currentReferralDescendants!.length}）`,
+        kind: "referral-descendants" as const,
+      },
+      ...memberReferralDescendantUsers.map((user) => toRelatedUserFilterOption(user, "referral-member")),
     ] : [])
     : [
-      // 管理员只在本人下方显示一条递归“全部推荐”，不再为每位关联用户重复展示其推荐分支。
+      // 管理员只在本人下方显示一条递归“推荐”，不再为每位关联用户重复展示其推荐分支。
       ...(currentReferralRootUser ? [toRelatedUserFilterOption(currentReferralRootUser)] : []),
       ...(currentReferralDescendants || shouldKeepCurrentReferralLoadingOption ? [{
         id: currentReferralToken,
         // 数字只统计当前 T+0 中实际有订单、可被筛选命中的递归推荐用户。
-        label: `全部推荐（${currentReferralDescendants ? currentReferralDescendants.length : "读取中"}）`,
-        summaryLabel: `全部推荐${currentReferralDescendants ? `（${currentReferralDescendants.length}）` : ""}`,
+        label: `推荐（${currentReferralDescendants ? currentReferralDescendants.length : "读取中"}）`,
+        summaryLabel: `推荐${currentReferralDescendants ? `（${currentReferralDescendants.length}）` : ""}`,
         kind: "referral-descendants" as const,
       }] : []),
       ...recentRelatedUsers
         .filter((user) => user.id !== currentReferralRootUserId)
-        .map(toRelatedUserFilterOption),
+        .map((user) => toRelatedUserFilterOption(user)),
       ...(hasUnlinkedTrades ? [{ id: "unlinked", label: "未关联用户（历史）" }] : []),
     ];
   const relatedFundFilterOptions = [
@@ -2211,7 +2271,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const historyExecutionFilterSummary = historyExecutionFilter === "all"
     ? "状态全部"
     : historyExecutionFilter === "filled"
-      ? "未挂单"
+      ? "已成交"
       : "已挂单";
   const historyTypeStatusGridTemplateColumns = useMemo(
     () => buildT0FilterGridTemplateColumns([
@@ -2231,7 +2291,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setHistoryRelatedFundFilterIds((current) => current.filter((id) => id === "unclassified" || relatedFunds.some((fund) => fund.id === id)));
   }, [accounts, recentRelatedUsers, referralDataLoaded, referralDescendantsByRootUserId, relatedFunds]);
   // 成员端没有独立的历史用户筛选面板；其历史记录必须严格跟随顶部受限用户下拉，
-  // 从而保证选“全部推荐”时不会混入本人订单，选“全部”时才展示本人加全部推荐。
+  // 从而保证选“推荐”时不会混入本人订单，选“全部”时才展示本人加推荐。
   useEffect(() => {
     if (!isMemberView) return;
     setHistoryRelatedUserFilterIds((current) => current.join("|") === relatedUserFilterIds.join("|")
@@ -2247,8 +2307,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       if (selected.length === 1) return selected[0].summaryLabel ?? selected[0].label;
       return `已选 ${selected.length} 项`;
     };
-    // 成员端的账户与本人虽不可切换，但仍是明确的当前条件；
-    // 将其纳入选中态，才能与管理员选择条件后的三栏宽度算法完全一致。
+    // 锁定项才是实际固定条件；其余显示“全部”时应视作未筛选，恢复三等分，
+    // 避免账户/用户/项目都为“全部”时，账户文字被错误压缩。
     const accountSummary = shouldLockMemberAccountFilter
       ? `账户${lockedAccountName}`
       : summaryFor("账户", accountFilterOptions, selectedAccountIds);
@@ -2258,14 +2318,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const fundSummary = shouldLockMemberFundFilter
       ? `项目${lockedRelatedFundName}`
       : summaryFor("项目", relatedFundFilterOptions, relatedFundFilterIds);
-    // 成员视图的三项都已经代表当前可见范围（即使项目暂为“全部”），
-    // 因此始终按三项均已选中来共同分配空间，让每项文字拥有相近的左右留白。
-    const accountSpec = { summary: accountSummary, selectedCount: isMemberView ? 1 : selectedAccountIds.length };
+    const accountSpec = {
+      summary: accountSummary,
+      selectedCount: shouldLockMemberAccountFilter ? 1 : selectedAccountIds.length,
+    };
     const userSpec = {
       summary: userSummary,
-      selectedCount: isMemberView && !memberHasReferralFilterOptions ? 1 : relatedUserFilterIds.length,
+      selectedCount: isMemberView && !memberHasReferralFilterOptions
+        ? 1
+        : topRelatedUserSelectionIsAll ? 0 : relatedUserFilterIds.length,
     };
-    const fundSpec = { summary: fundSummary, selectedCount: isMemberView ? 1 : relatedFundFilterIds.length };
+    const fundSpec = {
+      summary: fundSummary,
+      selectedCount: shouldLockMemberFundFilter ? 1 : relatedFundFilterIds.length,
+    };
     return buildT0FilterGridTemplateColumns([
       accountSpec,
       userSpec,
@@ -2276,7 +2342,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const topExecutionFilterSummary = executionFilter === "all"
     ? "状态全部"
     : executionFilter === "filled"
-      ? "未挂单"
+      ? "已成交"
       : "已挂单";
   const topTypeStatusGridTemplateColumns = useMemo(
     () => buildT0FilterGridTemplateColumns([
@@ -2340,22 +2406,29 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (Number(value) <= 0) return "数量必须大于 0";
     return null;
   }, [entryForm.quantity]);
+  const isGridOpeningEntry = ACTIONS[entryForm.action].opening && entryForm.instrumentType === "grid";
+  const gridReferencePrice = useMemo(() => {
+    if (!isGridOpeningEntry) return null;
+    const reference = entryForm.gridDirection === "long" ? entryForm.gridRangeMin : entryForm.gridRangeMax;
+    const price = Number(reference);
+    return Number.isFinite(price) && price > 0 ? price : null;
+  }, [entryForm.gridDirection, entryForm.gridRangeMax, entryForm.gridRangeMin, isGridOpeningEntry]);
   const estimatedFeeUsdt = useMemo(() => {
     if (entryForm.instrumentType === "option") return 0;
     const quantity = Number(normalizeEthQuantity(entryForm.quantity));
-    const price = Number(entryForm.price);
+    const price = gridReferencePrice ?? Number(entryForm.price);
     if (quantityFormatError || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(price) || price <= 0) return null;
     return Number((quantity * price * OKX_VIP2_TAKER_FEE_RATE).toFixed(8));
-  }, [entryForm.instrumentType, entryForm.quantity, entryForm.price, quantityFormatError]);
+  }, [entryForm.instrumentType, entryForm.quantity, entryForm.price, gridReferencePrice, quantityFormatError]);
   const openingArchivePrice = useMemo(() => {
-    const price = Number(entryForm.price);
+    const price = gridReferencePrice ?? Number(entryForm.price);
     if (!ACTIONS[entryForm.action].opening || !Number.isFinite(price) || price <= 0) return null;
     return archivePriceForSide(ACTIONS[entryForm.action].side, price);
-  }, [entryForm.action, entryForm.price]);
+  }, [entryForm.action, entryForm.price, gridReferencePrice]);
   // 资金、盈亏、手续费和 FIFO 仍仅使用实际成交单；挂单在成交前绝不参与这些财务口径。
   const buckets = useMemo(() => buildPositionBuckets(selectedFilledTrades), [selectedFilledTrades]);
   // “总仓位”则忠实反映顶部状态筛选：状态为全部时同时展示挂单与已成交数量，
-  // 切换至“未挂单”或“已挂单”后只统计对应状态的数量。
+  // 切换至“已成交”或“已挂单”后只统计对应状态的数量。
   const totalPositionBuckets = useMemo(() => buildPositionBuckets(selectedTrades), [selectedTrades]);
   const ladderOpeningClosingAllocations = useMemo(
     () => buildOpeningClosingAllocations(selectedFilledTrades),
@@ -2462,7 +2535,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const isOptionEntryContext = ACTIONS[entryForm.action].opening && entryForm.instrumentType === "option";
   // 档位详情已由用户刚点击的价格格定位，无需在标题重复显示档位，避免移动端换行。
   // 顶部始终明确为当前档位或当前方向范围的汇总，逐笔订单在下方直接展示。
-  const entryScopeTitle = isOptionEntryContext ? "期权汇总" : `${entrySide === "long" ? "多仓" : "空仓"}汇总`;
+  const entryScopeTitle = isOptionEntryContext ? "期权汇总" : isGridOpeningEntry ? "网格汇总" : `${entrySide === "long" ? "多仓" : "空仓"}汇总`;
   const openingClosingAllocations = useMemo(
     () => buildOpeningClosingAllocations(entryScopedTrades.filter((trade) => !trade.isPending)),
     [entryScopedTrades],
@@ -2563,6 +2636,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (!(["USDT", "ETH"] as T0OptionPremiumCurrency[]).includes(entryForm.optionPremiumCurrency)) return "请选择权利金计价币种";
     return null;
   }, [entryForm.editingEntryId, entryForm.optionDirection, entryForm.optionExpiryDate, entryForm.optionPremium, entryForm.optionPremiumCurrency, entryForm.price, entryForm.quantity, isOptionOpeningEntry, quantityFormatError, t0OptionDeribitLabel, t0OptionStrikes, t0OptionStrikesQuery.isLoading]);
+  const gridFormValidationMessage = useMemo(() => {
+    if (!isGridOpeningEntry) return null;
+    const lower = Number(entryForm.gridRangeMin);
+    const upper = Number(entryForm.gridRangeMax);
+    const leverage = Number(entryForm.gridLeverage);
+    const count = Number(entryForm.gridCount);
+    if (!(entryForm.gridDirection === "long" || entryForm.gridDirection === "short")) return "请选择做多或做空网格";
+    if (entryForm.gridDirection === "long") {
+      if (!Number.isFinite(lower) || lower <= 0) return "请输入大于 0 的网格下限";
+      if (!Number.isFinite(upper) || upper <= 0) return "请输入大于 0 的网格上限";
+    } else {
+      if (!Number.isFinite(upper) || upper <= 0) return "请输入大于 0 的网格上限";
+      if (!Number.isFinite(lower) || lower <= 0) return "请输入大于 0 的网格下限";
+    }
+    if (upper <= lower) return "网格上限必须大于下限";
+    if (!Number.isFinite(leverage) || leverage <= 0) return "请输入大于 0 的网格杠杆倍数";
+    if (!Number.isSafeInteger(count) || count < 1 || count > 10000) return "网格数量须为 1 至 10000 的整数";
+    return null;
+  }, [entryForm.gridCount, entryForm.gridDirection, entryForm.gridLeverage, entryForm.gridRangeMax, entryForm.gridRangeMin, isGridOpeningEntry]);
   const isCloseReview = isClosingEntry && closeConfirmationStep === "review";
   // 平仓必须继承所选开仓单的账户、用户与项目归属，首次输入和二次确认均不可改。
   // 开仓编辑受后端 FIFO 依赖校验保护；未发生后续平仓时，管理员必须能改到既有账户。
@@ -2596,8 +2688,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const targetBucket = scopeBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(targetPrice));
     return Math.max(0, Math.min(sourceRemainingQuantity, targetBucket?.remainingQuantity ?? 0));
   }, [closingSourceTrade, entryForm.targetPrice, isClosingEntry, ladderOpeningClosingAllocations, selectedFilledTrades]);
-  // 管理员整合报价保留按价位汇总；成员端则按开仓主单逐笔显示，
-  // 这样每格都能准确标明账户、本人、专项款与现货/合约/期权类型，且不混淆多笔来源。
+  // 整合报价按价位汇总；逐笔报价则按开仓主单逐笔显示，
+  // 两种展示都只使用当前身份本来可见的流水，不改变成员只读权限。
   const ladderIntegratedDisplayBuckets = integratedDisplayBuckets;
   const priceRows = useMemo<LadderPriceRow[]>(() => {
     const activePositionPrices = ladderIntegratedDisplayBuckets
@@ -2681,12 +2773,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }));
     });
   }, [selectedTrades, ladderOpeningClosingAllocations, markLadderPrice]);
-  const isIndividualLadderView = canManage && adminLadderDisplayMode === "individual";
-  const displayedPriceRows = isIndividualLadderView
-    ? individualPriceRows
-    : isMemberView
-      ? individualPriceRows
-      : priceRows;
+  const isIndividualLadderView = adminLadderDisplayMode === "individual";
+  const displayedPriceRows = isIndividualLadderView ? individualPriceRows : priceRows;
 
   const openEntrySheet = (
     action: TradeAction = "openLong",
@@ -2703,6 +2791,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     // 左侧默认买入看涨，右侧默认买入看跌，确保同价位另一侧的订单绝不被带入详情。
     const initialInstrumentType = ACTIONS[action].opening ? lastOpeningInstrumentType : undefined;
     const initialOptionDirection: T0OptionDirection = action === "openShort" ? "long_put" : "long_call";
+    const initialGridDirection: T0GridDirection = action === "openShort" ? "short" : "long";
     const initialAction = initialInstrumentType === "option"
       ? getOptionOpeningAction(initialOptionDirection)
       : action;
@@ -2725,6 +2814,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       optionExpiryDate: "",
       optionPremium: "",
       optionPremiumCurrency: "USDT",
+      gridDirection: initialGridDirection,
+      gridRangeMin: "",
+      gridRangeMax: "",
+      gridLeverage: "",
+      gridCount: "",
       isLocked: false,
       isPending: false,
       quantity: "",
@@ -2785,6 +2879,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       optionExpiryDate: trade.optionExpiryDate ?? "",
       optionPremium: trade.optionPremium === undefined ? "" : String(trade.optionPremium),
       optionPremiumCurrency: trade.optionPremiumCurrency ?? "USDT",
+      gridDirection: trade.gridDirection ?? (side === "long" ? "long" : "short"),
+      gridRangeMin: trade.gridRangeMin === undefined ? "" : String(trade.gridRangeMin),
+      gridRangeMax: trade.gridRangeMax === undefined ? "" : String(trade.gridRangeMax),
+      gridLeverage: trade.gridLeverage === undefined ? "" : String(trade.gridLeverage),
+      gridCount: trade.gridCount === undefined ? "" : String(trade.gridCount),
       isLocked: false,
       isPending: false,
       // 表单值不能带千分位逗号，否则超过千位的数量会无法通过数值校验。
@@ -2820,6 +2919,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       optionExpiryDate: trade.optionExpiryDate ?? "",
       optionPremium: trade.optionPremium === undefined ? "" : String(trade.optionPremium),
       optionPremiumCurrency: trade.optionPremiumCurrency ?? "USDT",
+      gridDirection: trade.gridDirection ?? (ACTIONS[trade.action].side === "long" ? "long" : "short"),
+      gridRangeMin: trade.gridRangeMin === undefined ? "" : String(trade.gridRangeMin),
+      gridRangeMax: trade.gridRangeMax === undefined ? "" : String(trade.gridRangeMax),
+      gridLeverage: trade.gridLeverage === undefined ? "" : String(trade.gridLeverage),
+      gridCount: trade.gridCount === undefined ? "" : String(trade.gridCount),
       isLocked: Boolean(trade.isLocked),
       isPending: Boolean(trade.isPending),
       // 编辑输入使用机器可解析的原始数值；展示层才使用千分位格式。
@@ -2954,7 +3058,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         relatedFundName: data.entry.relatedFundName ? String(data.entry.relatedFundName) : undefined,
         symbol: String(data.entry.symbol || "ETH"),
         action: data.entry.action as TradeAction,
-        instrumentType: data.entry.instrumentType === "spot" || data.entry.instrumentType === "contract" || data.entry.instrumentType === "option"
+        instrumentType: data.entry.instrumentType === "spot" || data.entry.instrumentType === "contract" || data.entry.instrumentType === "option" || data.entry.instrumentType === "grid"
           ? data.entry.instrumentType
           : undefined,
         optionDirection: data.entry.optionDirection === "long_call" || data.entry.optionDirection === "long_put" || data.entry.optionDirection === "short_call" || data.entry.optionDirection === "short_put"
@@ -2965,6 +3069,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         optionPremiumCurrency: data.entry.optionPremiumCurrency === "USDT" || data.entry.optionPremiumCurrency === "ETH"
           ? data.entry.optionPremiumCurrency
           : undefined,
+        gridDirection: data.entry.gridDirection === "long" || data.entry.gridDirection === "short" ? data.entry.gridDirection : undefined,
+        gridRangeMin: data.entry.gridRangeMin === undefined || data.entry.gridRangeMin === null ? undefined : Number(data.entry.gridRangeMin),
+        gridRangeMax: data.entry.gridRangeMax === undefined || data.entry.gridRangeMax === null ? undefined : Number(data.entry.gridRangeMax),
+        gridLeverage: data.entry.gridLeverage === undefined || data.entry.gridLeverage === null ? undefined : Number(data.entry.gridLeverage),
+        gridCount: data.entry.gridCount === undefined || data.entry.gridCount === null ? undefined : Number(data.entry.gridCount),
         isLocked: Boolean(data.entry.isLocked),
         isPending: Boolean(data.entry.isPending),
         filledAt: data.entry.filledAt ? String(data.entry.filledAt) : undefined,
@@ -3037,7 +3146,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         relatedFundName: data.entry.relatedFundName ? String(data.entry.relatedFundName) : undefined,
         symbol: String(data.entry.symbol || "ETH"),
         action: data.entry.action as TradeAction,
-        instrumentType: data.entry.instrumentType === "spot" || data.entry.instrumentType === "contract" || data.entry.instrumentType === "option"
+        instrumentType: data.entry.instrumentType === "spot" || data.entry.instrumentType === "contract" || data.entry.instrumentType === "option" || data.entry.instrumentType === "grid"
           ? data.entry.instrumentType
           : undefined,
         optionDirection: data.entry.optionDirection === "long_call" || data.entry.optionDirection === "long_put" || data.entry.optionDirection === "short_call" || data.entry.optionDirection === "short_put"
@@ -3048,6 +3157,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         optionPremiumCurrency: data.entry.optionPremiumCurrency === "USDT" || data.entry.optionPremiumCurrency === "ETH"
           ? data.entry.optionPremiumCurrency
           : undefined,
+        gridDirection: data.entry.gridDirection === "long" || data.entry.gridDirection === "short" ? data.entry.gridDirection : undefined,
+        gridRangeMin: data.entry.gridRangeMin === undefined || data.entry.gridRangeMin === null ? undefined : Number(data.entry.gridRangeMin),
+        gridRangeMax: data.entry.gridRangeMax === undefined || data.entry.gridRangeMax === null ? undefined : Number(data.entry.gridRangeMax),
+        gridLeverage: data.entry.gridLeverage === undefined || data.entry.gridLeverage === null ? undefined : Number(data.entry.gridLeverage),
+        gridCount: data.entry.gridCount === undefined || data.entry.gridCount === null ? undefined : Number(data.entry.gridCount),
         isLocked: Boolean(data.entry.isLocked),
         isPending: Boolean(data.entry.isPending),
         filledAt: data.entry.filledAt ? String(data.entry.filledAt) : undefined,
@@ -3099,6 +3213,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         optionExpiryDate: entry.optionExpiryDate ?? "",
         optionPremium: entry.optionPremium === undefined ? "" : String(entry.optionPremium),
         optionPremiumCurrency: entry.optionPremiumCurrency ?? "USDT",
+        gridDirection: entry.gridDirection ?? (ACTIONS[entry.action].side === "long" ? "long" : "short"),
+        gridRangeMin: entry.gridRangeMin === undefined ? "" : String(entry.gridRangeMin),
+        gridRangeMax: entry.gridRangeMax === undefined ? "" : String(entry.gridRangeMax),
+        gridLeverage: entry.gridLeverage === undefined ? "" : String(entry.gridLeverage),
+        gridCount: entry.gridCount === undefined ? "" : String(entry.gridCount),
         isLocked: false,
         isPending: false,
         quantity: "",
@@ -3347,10 +3466,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const handleSaveEntry = () => {
     const normalizedQuantity = normalizeEthQuantity(entryForm.quantity);
     const quantity = Number(normalizedQuantity);
-    const price = Number(entryForm.price);
-    const fee = estimatedFeeUsdt ?? 0;
     const selectedAction = ACTIONS[entryForm.action];
     const isOptionOpening = selectedAction.opening && entryForm.instrumentType === "option";
+    const isGridOpening = selectedAction.opening && entryForm.instrumentType === "grid";
+    const effectivePriceInput = isGridOpening && gridReferencePrice !== null
+      ? String(gridReferencePrice)
+      : entryForm.price.trim();
+    const price = Number(effectivePriceInput);
+    const fee = estimatedFeeUsdt ?? 0;
     const normalizedAccountName = entryForm.accountName.trim();
     const hasPersistedAccountId = /^\d+$/.test(entryForm.accountId);
     const relatedUserId = Number(entryForm.relatedUserId);
@@ -3372,7 +3495,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       return;
     }
     if (selectedAction.opening && !entryForm.instrumentType) {
-      toast.error("请选择现货、合约或期权");
+      toast.error("请选择现货、合约、期权或网格");
       return;
     }
     if (isOptionOpening) {
@@ -3381,8 +3504,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         return;
       }
     }
+    if (isGridOpening && gridFormValidationMessage) {
+      toast.error(gridFormValidationMessage);
+      return;
+    }
     if (!Number.isFinite(price) || price <= 0) {
-      toast.error(isOptionOpening ? "请输入行权价" : "请输入成交价格");
+      toast.error(isOptionOpening ? "请输入行权价" : isGridOpening ? "请先填写网格区间" : "请输入成交价格");
       return;
     }
     const archiveTargetPrice = selectedAction.opening
@@ -3425,7 +3552,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }
       const editingInstrumentType = entryForm.instrumentType;
       if (!editingInstrumentType) {
-        toast.error("请选择现货、合约或期权");
+        toast.error("请选择现货、合约、期权或网格");
         return;
       }
       updateOpeningEntryMutation.mutate({
@@ -3443,8 +3570,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         optionExpiryDate: isOptionOpening ? entryForm.optionExpiryDate : undefined,
         optionPremium: isOptionOpening ? entryForm.optionPremium.trim() : undefined,
         optionPremiumCurrency: isOptionOpening ? entryForm.optionPremiumCurrency : undefined,
+        gridDirection: isGridOpening ? entryForm.gridDirection : undefined,
+        gridRangeMin: isGridOpening ? entryForm.gridRangeMin.trim() : undefined,
+        gridRangeMax: isGridOpening ? entryForm.gridRangeMax.trim() : undefined,
+        gridLeverage: isGridOpening ? entryForm.gridLeverage.trim() : undefined,
+        gridCount: isGridOpening ? Number(entryForm.gridCount) : undefined,
         quantity: normalizedQuantity,
-        price: entryForm.price.trim(),
+        price: effectivePriceInput,
         note: entryForm.note.trim() || undefined,
       });
       return;
@@ -3502,6 +3634,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       optionExpiryDate: isOptionOpening ? entryForm.optionExpiryDate : undefined,
       optionPremium: isOptionOpening ? Number(entryForm.optionPremium) : undefined,
       optionPremiumCurrency: isOptionOpening ? entryForm.optionPremiumCurrency : undefined,
+      gridDirection: isGridOpening ? entryForm.gridDirection : undefined,
+      gridRangeMin: isGridOpening ? Number(entryForm.gridRangeMin) : undefined,
+      gridRangeMax: isGridOpening ? Number(entryForm.gridRangeMax) : undefined,
+      gridLeverage: isGridOpening ? Number(entryForm.gridLeverage) : undefined,
+      gridCount: isGridOpening ? Number(entryForm.gridCount) : undefined,
       isLocked: selectedAction.opening ? entryForm.isLocked : false,
       isPending: selectedAction.opening ? entryForm.isPending : false,
       quantity,
@@ -3534,8 +3671,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       optionExpiryDate: isOptionOpening ? entryForm.optionExpiryDate : undefined,
       optionPremium: isOptionOpening ? entryForm.optionPremium.trim() : undefined,
       optionPremiumCurrency: isOptionOpening ? entryForm.optionPremiumCurrency : undefined,
+      gridDirection: isGridOpening ? entryForm.gridDirection : undefined,
+      gridRangeMin: isGridOpening ? entryForm.gridRangeMin.trim() : undefined,
+      gridRangeMax: isGridOpening ? entryForm.gridRangeMax.trim() : undefined,
+      gridLeverage: isGridOpening ? entryForm.gridLeverage.trim() : undefined,
+      gridCount: isGridOpening ? Number(entryForm.gridCount) : undefined,
       quantity: normalizedQuantity,
-      price: entryForm.price.trim(),
+      price: effectivePriceInput,
       targetPrice: archiveTargetPrice === undefined ? undefined : String(archiveTargetPrice),
       note: entryForm.note.trim() || undefined,
       clientRequestId,
@@ -3547,6 +3689,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     persistT0TopFilters(topFilterStorageKey, {
       accountIds: selectedAccountIds,
       relatedUserIds: relatedUserFilterIds,
+      memberRelatedUserFilterTouched,
       relatedFundIds: relatedFundFilterIds,
       instrumentTypeIds: instrumentTypeFilterIds,
       executionFilter,
@@ -3881,6 +4024,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           <div className="relative z-[1]">
             <AccountOverview
               summary={summary}
+              positionStats={{
+                long: {
+                  quantity: netPositionBreakdown.long.quantity,
+                  activeLevels: netPositionBreakdown.long.levels.length,
+                },
+                short: {
+                  quantity: netPositionBreakdown.short.quantity,
+                  activeLevels: netPositionBreakdown.short.levels.length,
+                },
+              }}
               showCumulativeData={showCumulativeData}
               onToggleCumulativeData={() => setShowCumulativeData((current) => !current)}
               showCommission={!isMemberView}
@@ -3940,7 +4093,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   treatSelectionAsAll={topRelatedUserSelectionIsAll}
                   onChange={(ids) => {
                     setRelatedUserFilterIds(ids);
-                    if (isMemberView) setHistoryRelatedUserFilterIds(ids);
+                    if (isMemberView) {
+                      setMemberRelatedUserFilterTouched(true);
+                      setHistoryRelatedUserFilterIds(ids);
+                    }
                     // 项目只属于用户；改动用户范围后重置项目，避免保留不可见的跨用户项目条件。
                     setRelatedFundFilterIds([]);
                     setRecentJournalPage(1);
@@ -3973,23 +4129,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   setRecentJournalPage(1);
                 }}
               />
-              <T0SelectFilter
+              <T0MultiSelect
                 label="状态"
-                value={executionFilter}
-                ariaLabel="按成交状态筛选"
-                focusClassName="focus-within:border-sky-600"
-                onChange={(value) => {
-                  setExecutionFilter(value as T0ExecutionFilter);
+                options={T0_EXECUTION_FILTER_OPTIONS}
+                selectedIds={executionFilter === "all" ? [] : [executionFilter]}
+                emptyLabel="暂无状态"
+                align="right"
+                singleSelect
+                onChange={(ids) => {
+                  const value = ids[0];
+                  setExecutionFilter(value === "filled" || value === "pending" ? value : "all");
                   setRecentJournalPage(1);
                 }}
-              >
-                <option value="all">全部状态</option>
-                <option value="filled">未挂单（已成交）</option>
-                <option value="pending">已挂单</option>
-              </T0SelectFilter>
+              />
             </div>}
           </div>
-          {canManage && <div
+          {(canManage || isMemberView) && <div
             className="flex h-9 items-center justify-center gap-1.5 border-b border-[#aeb8c1]/50 px-3"
             aria-label="T形交割表报价模式"
             style={{
@@ -4050,7 +4205,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             }}
           >
             {displayedPriceRows.map((row) => {
-              const individualMetadata = (isIndividualLadderView || isMemberView) && row.openingTrade
+              const individualMetadata = isIndividualLadderView && row.openingTrade
                 ? {
                   accountName: getTradeAccountName(row.openingTrade),
                   relatedUserName: getTradeRelatedUserName(row.openingTrade),
@@ -4315,22 +4470,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         setRecentJournalPage(1);
                     }}
                   />
-                  <label className="flex min-w-0 items-center gap-1.5">
-                    <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500">状态</span>
-                    <select
-                      value={historyExecutionFilter}
-                      onChange={(event) => {
-                        setHistoryExecutionFilter(event.target.value as T0ExecutionFilter);
+                  <T0MultiSelect
+                    label="状态"
+                    options={T0_EXECUTION_FILTER_OPTIONS}
+                    selectedIds={historyExecutionFilter === "all" ? [] : [historyExecutionFilter]}
+                    emptyLabel="暂无状态"
+                    compact
+                    align="right"
+                    singleSelect
+                    onChange={(ids) => {
+                      const value = ids[0];
+                      setHistoryExecutionFilter(value === "filled" || value === "pending" ? value : "all");
                         setRecentJournalPage(1);
-                      }}
-                      className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white/70 px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-sky-600"
-                      aria-label="按历史成交状态筛选"
-                    >
-                      <option value="all">全部状态</option>
-                      <option value="filled">未挂单（已成交）</option>
-                      <option value="pending">已挂单</option>
-                    </select>
-                  </label>
+                    }}
+                  />
                 </div>
               </div>}
               {recentJournalTrades.length === 0 ? (
@@ -4501,17 +4654,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             )}
 
             <div className={`p-4 space-y-4 ${canManage && !isMemberView ? "pb-24" : ""}`}>
-              <div className={`overflow-hidden rounded border ${isOptionEntryContext ? "border-violet-200 bg-violet-50/70" : entrySide === "long" ? "border-rose-200 bg-rose-50/70" : "border-emerald-200 bg-emerald-50/70"}`}>
+              <div className={`overflow-hidden rounded border ${isOptionEntryContext ? "border-violet-200 bg-violet-50/70" : isGridOpeningEntry ? "border-cyan-200 bg-cyan-50/70" : entrySide === "long" ? "border-rose-200 bg-rose-50/70" : "border-emerald-200 bg-emerald-50/70"}`}>
                 <div className="px-3 py-2.5">
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 text-left">
                   <div className="flex min-w-0 items-baseline gap-2">
-                    <span className={`text-base font-semibold ${isOptionEntryContext ? "text-violet-700" : entrySide === "long" ? "text-rose-600" : "text-emerald-600"}`}>{entryScopeTitle}</span>
+                    <span className={`text-base font-semibold ${isOptionEntryContext ? "text-violet-700" : isGridOpeningEntry ? "text-cyan-800" : entrySide === "long" ? "text-rose-600" : "text-emerald-600"}`}>{entryScopeTitle}</span>
                     <span className="text-base font-semibold tabular-nums text-slate-900">{formatQuantity(entrySideSummary.quantity)} ETH</span>
                   </div>
-                  <span className="shrink-0 text-base font-medium tabular-nums text-slate-500">{isOptionEntryContext ? "行权价" : "均价"} {entrySideSummary.quantity > 0 ? formatPrice(entrySideSummary.average) : "--"}</span>
+                  <span className="shrink-0 text-base font-medium tabular-nums text-slate-500">{isOptionEntryContext ? "行权价" : isGridOpeningEntry ? "参考价" : "均价"} {entrySideSummary.quantity > 0 ? formatPrice(entrySideSummary.average) : "--"}</span>
                 </div>
                 </div>
-                <div className={`mx-3 flex items-center justify-between border-t pt-2 pb-2.5 text-[10px] tabular-nums ${isOptionEntryContext ? "border-violet-200/80" : entrySide === "long" ? "border-rose-200/80" : "border-emerald-200/80"}`}>
+                <div className={`mx-3 flex items-center justify-between border-t pt-2 pb-2.5 text-[10px] tabular-nums ${isOptionEntryContext ? "border-violet-200/80" : isGridOpeningEntry ? "border-cyan-200/80" : entrySide === "long" ? "border-rose-200/80" : "border-emerald-200/80"}`}>
                   <span className={entrySideSummary.unrealized === null ? "text-slate-400" : entrySideSummary.unrealized >= 0 ? "text-rose-600" : "text-emerald-600"}>
                     当前盈亏 {entrySideSummary.unrealized === null ? "--" : `${formatSigned(entrySideSummary.unrealized)} U`}
                   </span>
@@ -4704,6 +4857,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                                   <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.optionPremium === undefined ? "未设置" : `${formatPrice(trade.optionPremium)} ${trade.optionPremiumCurrency ?? "USDT"}`}</div>
                                 </div>
                               </div>}
+                              {canManage && trade.instrumentType === "grid" && <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-cyan-200 pt-2">
+                                <div className="min-w-0">
+                                  <div className="text-[10px] text-slate-400">网格方向</div>
+                                  <div className="mt-0.5 truncate text-[11px] font-medium text-cyan-800">{trade.gridDirection === "long" ? "做多网格" : trade.gridDirection === "short" ? "做空网格" : "未设置"}</div>
+                                </div>
+                                <div className="min-w-0 text-center">
+                                  <div className="text-[10px] text-slate-400">网格范围</div>
+                                  <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium tabular-nums text-slate-700">{trade.gridRangeMin === undefined || trade.gridRangeMax === undefined ? "未设置" : trade.gridDirection === "short" ? `${formatPrice(trade.gridRangeMax)}–${formatPrice(trade.gridRangeMin)}` : `${formatPrice(trade.gridRangeMin)}–${formatPrice(trade.gridRangeMax)}`}</div>
+                                </div>
+                                <div className="min-w-0 text-right">
+                                  <div className="text-[10px] text-slate-400">杠杆 · 格数</div>
+                                  <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium tabular-nums text-slate-700">{trade.gridLeverage === undefined || trade.gridCount === undefined ? "未设置" : `${formatPrice(trade.gridLeverage)}× · ${trade.gridCount}格`}</div>
+                                </div>
+                              </div>}
                               {trade.note?.trim() && (
                                 <div className="col-span-3 border-t border-slate-200 pt-2">
                                   <div className="text-[10px] text-slate-400">备注</div>
@@ -4784,10 +4951,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         </button>
                         <button
                           type="button"
-                          disabled={isCloseReview || entryForm.instrumentType === "option"}
+                          disabled={isCloseReview || entryForm.instrumentType === "option" || entryForm.instrumentType === "grid"}
                           aria-pressed={entryForm.isPending}
-                          aria-label={entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? "取消本笔开仓挂单，改为直接成交" : "设为本笔开仓挂单"}
-                          title={entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? "挂单中，点击改为直接成交" : "直接成交，点击改为挂单"}
+                          aria-label={entryForm.instrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? "取消本笔开仓挂单，改为直接成交" : "设为本笔开仓挂单"}
+                          title={entryForm.instrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? "挂单中，点击改为直接成交" : "直接成交，点击改为挂单"}
                           onClick={() => setEntryForm((current) => ({ ...current, isPending: !current.isPending }))}
                           className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isPending ? "border-sky-500/75 bg-sky-50 text-sky-600" : "border-slate-300 bg-slate-50 text-slate-500"}`}
                         >
@@ -4800,7 +4967,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
                   <Field label={
                     <span className="inline-flex max-w-full items-baseline gap-1 text-sm font-semibold text-slate-800">
-                      <span>{ACTIONS[entryForm.action].opening ? isOptionOpeningEntry ? "行权价" : "成交价" : "平仓价"}{isOptionOpeningEntry && <span className="text-rose-500">*</span>}</span>
+                      <span>{ACTIONS[entryForm.action].opening ? isOptionOpeningEntry ? "行权价" : isGridOpeningEntry ? "网格参考价" : "成交价" : "平仓价"}{(isOptionOpeningEntry || isGridOpeningEntry) && <span className="text-rose-500">*</span>}</span>
                       <span className="truncate text-[9px] font-normal tabular-nums text-slate-400">{isOptionOpeningEntry ? "期权不计合约手续费" : `手续费 ${OKX_VIP2_TAKER_FEE_LABEL} · ${estimatedFeeUsdt === null ? "--" : `${formatFee(estimatedFeeUsdt)} U`}`}</span>
                     </span>
                   }>
@@ -4821,7 +4988,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         {!t0OptionDeribitLabel && entryForm.price && <option value={entryForm.price}>当前：{formatPrice(Number(entryForm.price))}</option>}
                         {t0OptionStrikes.map((strike) => <option key={strike} value={String(strike)}>{strike.toLocaleString()}</option>)}
                       </select>
-                    ) : <input
+                    ) : isGridOpeningEntry ? <input
+                      readOnly
+                      value={gridReferencePrice === null ? "" : formatPrice(gridReferencePrice)}
+                      placeholder={entryForm.gridDirection === "long" ? "填写网格下限后生成" : "填写网格上限后生成"}
+                      className="h-14 w-full rounded border border-cyan-200 bg-cyan-50/70 px-3 text-xl font-semibold tabular-nums text-cyan-950 outline-none placeholder:text-cyan-500/65"
+                    /> : <input
                       inputMode="decimal"
                       disabled={isCloseReview}
                       value={entryForm.price}
@@ -4831,7 +5003,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     />}
                     {!isOptionOpeningEntry && openingArchivePrice !== null && (
                       <div className={`mt-1.5 text-[10px] tabular-nums ${ACTIONS[entryForm.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>
-                        {ACTIONS[entryForm.action].side === "long" ? "向上归档" : "向下归档"}至 {formatPrice(openingArchivePrice)} 档
+                        {isGridOpeningEntry
+                          ? `${entryForm.gridDirection === "long" ? "做多下限" : "做空上限"}自动归档至 ${formatPrice(openingArchivePrice)} 档`
+                          : `${ACTIONS[entryForm.action].side === "long" ? "向上归档" : "向下归档"}至 ${formatPrice(openingArchivePrice)} 档`}
                       </div>
                     )}
                   </Field>
@@ -4890,18 +5064,32 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           if (instrument.value === "option" && !entryForm.editingEntryId) {
                             setEntrySide(getOptionLadderSide(entryForm.optionDirection));
                           }
+                          if (instrument.value === "grid" && !entryForm.editingEntryId) {
+                            setEntrySide(entryForm.gridDirection === "long" ? "long" : "short");
+                          }
                           setEntryForm((current) => {
-                            if (instrument.value !== "option") return { ...current, instrumentType: instrument.value };
-                            const isNewOption = current.instrumentType !== "option";
-                            return {
-                              ...current,
-                              action: current.editingEntryId ? current.action : getOptionOpeningAction(current.optionDirection),
-                              instrumentType: "option",
-                              isPending: false,
-                              optionExpiryDate: isNewOption ? "" : current.optionExpiryDate,
-                              optionPremium: isNewOption ? "" : current.optionPremium,
-                              price: isNewOption ? "" : current.price,
-                            };
+                            if (instrument.value === "option") {
+                              const isNewOption = current.instrumentType !== "option";
+                              return {
+                                ...current,
+                                action: current.editingEntryId ? current.action : getOptionOpeningAction(current.optionDirection),
+                                instrumentType: "option",
+                                isPending: false,
+                                optionExpiryDate: isNewOption ? "" : current.optionExpiryDate,
+                                optionPremium: isNewOption ? "" : current.optionPremium,
+                                price: isNewOption ? "" : current.price,
+                              };
+                            }
+                            if (instrument.value === "grid") {
+                              return {
+                                ...current,
+                                action: current.editingEntryId ? current.action : current.gridDirection === "long" ? "openLong" : "openShort",
+                                instrumentType: "grid",
+                                isPending: false,
+                                price: "",
+                              };
+                            }
+                            return { ...current, instrumentType: instrument.value };
                           });
                         }}
                         className={`h-7 rounded border px-3 text-[11px] font-medium transition active:scale-95 ${isActive ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
@@ -4997,6 +5185,87 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </div>
                   <div className={`mt-2 text-[10px] font-medium leading-4 ${optionFormValidationMessage ? "text-rose-600" : "text-violet-700"}`}>
                     {optionFormValidationMessage ?? "期权参数已完整，可保存。"}
+                  </div>
+                </div>}
+
+                {isGridOpeningEntry && <div className="-mt-0.5 rounded border border-cyan-200 bg-cyan-50/70 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-cyan-900">网格参数</span>
+                    <span className="text-[10px] font-medium text-cyan-700">做多取下限归左 · 做空取上限归右</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label={<span>方向 <span className="text-rose-500">*</span></span>}>
+                      <div className="grid h-11 grid-cols-2 overflow-hidden rounded border border-cyan-200 bg-white">
+                        {T0_GRID_DIRECTIONS.map((direction) => {
+                          const active = entryForm.gridDirection === direction.value;
+                          const wouldChangeSide = entryForm.editingEntryId && entryForm.action !== (direction.value === "long" ? "openLong" : "openShort");
+                          return <button
+                            key={direction.value}
+                            type="button"
+                            disabled={Boolean(isCloseReview || wouldChangeSide)}
+                            title={wouldChangeSide ? "编辑时不能跨越报价侧，请新建该方向网格" : undefined}
+                            onClick={() => {
+                              if (!entryForm.editingEntryId) setEntrySide(direction.value === "long" ? "long" : "short");
+                              setEntryForm((current) => ({
+                                ...current,
+                                action: current.editingEntryId ? current.action : direction.value === "long" ? "openLong" : "openShort",
+                                gridDirection: direction.value,
+                                isPending: false,
+                              }));
+                            }}
+                            className={`text-[11px] font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${active ? "bg-cyan-700 text-white" : "text-slate-600"}`}
+                            aria-pressed={active}
+                          >{direction.label}</button>;
+                        })}
+                      </div>
+                    </Field>
+                    <Field label={<span>杠杆倍数 <span className="text-rose-500">*</span></span>}>
+                      <input
+                        inputMode="decimal"
+                        disabled={isCloseReview}
+                        value={entryForm.gridLeverage}
+                        onChange={(event) => setEntryForm((current) => ({ ...current, gridLeverage: event.target.value }))}
+                        placeholder="例如 3"
+                        className="h-11 w-full rounded border border-cyan-200 bg-white px-3 text-base font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-600 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      />
+                    </Field>
+                    <Field label={<span>{entryForm.gridDirection === "long" ? "区间下限" : "区间上限"} <span className="text-rose-500">*</span></span>}>
+                      <input
+                        inputMode="decimal"
+                        disabled={isCloseReview}
+                        value={entryForm.gridDirection === "long" ? entryForm.gridRangeMin : entryForm.gridRangeMax}
+                        onChange={(event) => setEntryForm((current) => entryForm.gridDirection === "long"
+                          ? { ...current, gridRangeMin: event.target.value }
+                          : { ...current, gridRangeMax: event.target.value })}
+                        placeholder={entryForm.gridDirection === "long" ? "例如 2200" : "例如 2900"}
+                        className="h-11 w-full rounded border border-cyan-200 bg-white px-3 text-base font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-600 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      />
+                    </Field>
+                    <Field label={<span>{entryForm.gridDirection === "long" ? "区间上限" : "区间下限"} <span className="text-rose-500">*</span></span>}>
+                      <input
+                        inputMode="decimal"
+                        disabled={isCloseReview}
+                        value={entryForm.gridDirection === "long" ? entryForm.gridRangeMax : entryForm.gridRangeMin}
+                        onChange={(event) => setEntryForm((current) => entryForm.gridDirection === "long"
+                          ? { ...current, gridRangeMax: event.target.value }
+                          : { ...current, gridRangeMin: event.target.value })}
+                        placeholder={entryForm.gridDirection === "long" ? "例如 2700" : "例如 2400"}
+                        className="h-11 w-full rounded border border-cyan-200 bg-white px-3 text-base font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-600 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      />
+                    </Field>
+                    <Field label={<span>网格数量 <span className="text-rose-500">*</span></span>}>
+                      <input
+                        inputMode="numeric"
+                        disabled={isCloseReview}
+                        value={entryForm.gridCount}
+                        onChange={(event) => setEntryForm((current) => ({ ...current, gridCount: event.target.value.replace(/[^0-9]/g, "") }))}
+                        placeholder="例如 20"
+                        className="h-11 w-full rounded border border-cyan-200 bg-white px-3 text-base font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-600 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      />
+                    </Field>
+                  </div>
+                  <div className={`mt-2 text-[10px] font-medium leading-4 ${gridFormValidationMessage ? "text-rose-600" : "text-cyan-800"}`}>
+                    {gridFormValidationMessage ?? (entryForm.gridDirection === "long" ? "做多网格将按区间下限放入左侧报价。" : "做空网格将按区间上限放入右侧报价。")}
                   </div>
                 </div>}
 
@@ -5837,51 +6106,13 @@ function LockedFilterValue({ label, value }: { label?: string; value: string }) 
   );
 }
 
-/** 与多选筛选框同高的单选容器；用于类型、状态等有限枚举条件。 */
-function T0SelectFilter({
-  label,
-  value,
-  onChange,
-  ariaLabel,
-  focusClassName,
-  children,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  ariaLabel: string;
-  focusClassName: string;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      className={`relative flex h-10 min-w-0 items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2.5 text-[13px] font-medium text-slate-700 transition-colors ${focusClassName}`}
-      style={{
-        textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.86), 0.6px 0.6px 0 rgba(71,85,105,0.20)",
-        boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
-      }}
-    >
-      <span className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-full min-w-0 flex-1 appearance-none bg-transparent py-0 pr-4 text-[13px] font-medium text-slate-700 outline-none"
-        aria-label={ariaLabel}
-      >
-        {children}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-slate-500" strokeWidth={2.25} />
-    </div>
-  );
-}
-
 type T0MultiSelectOption = {
   id: string;
   label: string;
   /** 下拉选项可展示完整识别信息；顶部已选摘要可使用更短文案。 */
   summaryLabel?: string;
-  /** 推荐项以靛蓝色轻微区分，单人项维持默认中性色。 */
-  kind?: "referral-descendants";
+  /** 推荐总项用靛蓝色区分；推荐子用户与总项同级缩进，明确其为子分类。 */
+  kind?: "referral-descendants" | "referral-member";
 };
 
 /** 三项多选框按内容保留统一左右留白，初始状态则均分整行宽度。 */
@@ -5925,6 +6156,7 @@ function T0MultiSelect({
   constrainRightToFilterRow = false,
   compact = false,
   showSelectedLabels = false,
+  singleSelect = false,
   treatSelectionAsAll = false,
 }: {
   label: string;
@@ -5933,18 +6165,22 @@ function T0MultiSelect({
   onChange: (ids: string[]) => void;
   emptyLabel: string;
   align?: "left" | "right";
-  /** 左缘固定在本筛选框，右缘不超过同一筛选行最右侧的项目框。 */
+  /** 菜单右缘固定对齐同一筛选行最右侧的项目框。 */
   constrainRightToFilterRow?: boolean;
   /** 历史筛选栏使用与同行状态控件一致的紧凑高度。 */
   compact?: boolean;
   /** 对类型等短枚举项，直接展示已选名称，而非“已选 N 项”。 */
   showSelectedLabels?: boolean;
-  /** 组合的本人和全部推荐已覆盖全部可筛选用户时，按“全部”展示但保留可恢复的选择令牌。 */
+  /** 状态等枚举条件只允许选择一个值；“全部”仍通过清空选择表达。 */
+  singleSelect?: boolean;
+  /** 组合的本人和推荐已覆盖全部可筛选用户时，按“全部”展示但保留可恢复的选择令牌。 */
   treatSelectionAsAll?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [constrainedMenuWidth, setConstrainedMenuWidth] = useState<number | null>(null);
+  const [constrainedMenuRightOffset, setConstrainedMenuRightOffset] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const scrollHapticTimerRef = useRef<number | null>(null);
   const selectedSet = new Set(selectedIds);
   const selectedOptions = options.filter((option) => selectedSet.has(option.id));
   const selectionRepresentsAll = selectedIds.length === 0 || treatSelectionAsAll;
@@ -5958,6 +6194,32 @@ function T0MultiSelect({
   const selectedTitle = selectionRepresentsAll
     ? `${label}：全部`
     : `${label}：${selectedOptions.map((option) => option.label).join("、")}`;
+
+  useLayoutEffect(() => {
+    if (!open || !constrainRightToFilterRow || !rootRef.current) return;
+    const filterRow = rootRef.current.closest("[data-t0-filter-row]");
+    if (!(filterRow instanceof HTMLElement)) return;
+    const syncMenuRightEdge = () => {
+      const triggerBounds = rootRef.current?.getBoundingClientRect();
+      const rowBounds = filterRow.getBoundingClientRect();
+      if (!triggerBounds) return;
+      setConstrainedMenuWidth(Math.min(260, Math.floor(rowBounds.width)));
+      setConstrainedMenuRightOffset(Math.floor(triggerBounds.right - rowBounds.right));
+    };
+    syncMenuRightEdge();
+    // 选中单个用户会触发三栏宽度动画；跟随用户框尺寸变化持续重算，
+    // 使菜单在动画过程中和结束后都严格对齐项目框右缘。
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(syncMenuRightEdge);
+    resizeObserver?.observe(rootRef.current);
+    resizeObserver?.observe(filterRow);
+    window.addEventListener("resize", syncMenuRightEdge);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", syncMenuRightEdge);
+    };
+  }, [constrainRightToFilterRow, open, selectedIds.join("|")]);
 
   useEffect(() => {
     const closeWhenOutside = (event: PointerEvent) => {
@@ -5976,7 +6238,15 @@ function T0MultiSelect({
     };
   }, []);
 
+  useEffect(() => () => {
+    if (scrollHapticTimerRef.current !== null) window.clearTimeout(scrollHapticTimerRef.current);
+  }, []);
+
   const toggleOption = (id: string) => {
+    if (singleSelect) {
+      onChange([id]);
+      return;
+    }
     const next = new Set(selectedIds);
     if (next.has(id)) {
       next.delete(id);
@@ -5984,6 +6254,16 @@ function T0MultiSelect({
       next.add(id);
     }
     onChange(options.filter((option) => next.has(option.id)).map((option) => option.id));
+  };
+
+  const handleMenuScroll = () => {
+    // 卡点由 scroll-snap 提供；支持 Vibration API 的手机在滚动停下时补一记极短触感。
+    if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+    if (scrollHapticTimerRef.current !== null) window.clearTimeout(scrollHapticTimerRef.current);
+    scrollHapticTimerRef.current = window.setTimeout(() => {
+      navigator.vibrate(7);
+      scrollHapticTimerRef.current = null;
+    }, 90);
   };
 
   const renderCheck = (checked: boolean) => (
@@ -6010,12 +6290,14 @@ function T0MultiSelect({
             if (filterRow instanceof HTMLElement) {
               const triggerBounds = rootRef.current.getBoundingClientRect();
               const rowBounds = filterRow.getBoundingClientRect();
-              // 用户框左缘不动；菜单宽度只使用其至项目框右缘之间的可用空间。
-              const availableWidth = Math.max(triggerBounds.width, rowBounds.right - triggerBounds.left);
-              setConstrainedMenuWidth(Math.min(260, Math.floor(availableWidth)));
+              // 无论用户框在智能栅格中被压缩到多窄，菜单右缘都要与项目框右缘重合；
+              // 宽度同时不得超过整行，避免窄屏向任一侧越界。
+              setConstrainedMenuWidth(Math.min(260, Math.floor(rowBounds.width)));
+              setConstrainedMenuRightOffset(Math.floor(triggerBounds.right - rowBounds.right));
             }
           } else if (!nextOpen) {
             setConstrainedMenuWidth(null);
+            setConstrainedMenuRightOffset(null);
           }
           setOpen(nextOpen);
         }}
@@ -6036,9 +6318,11 @@ function T0MultiSelect({
         <div
           role="listbox"
           aria-label={`${label}多选`}
-          className={`absolute top-[calc(100%+4px)] z-40 max-h-80 w-[min(260px,calc(100vw-32px))] overflow-y-auto rounded border py-1.5 shadow-xl ${align === "right" ? "right-0" : "left-0"}`}
+          onScroll={handleMenuScroll}
+          className={`absolute top-[calc(100%+4px)] z-40 max-h-80 w-[min(260px,calc(100vw-32px))] snap-y snap-proximity overscroll-contain overflow-y-auto rounded border py-0 shadow-xl ${constrainedMenuRightOffset !== null ? "" : align === "right" ? "right-0" : "left-0"}`}
           style={{
             width: constrainedMenuWidth ? `${constrainedMenuWidth}px` : undefined,
+            right: constrainedMenuRightOffset === null ? undefined : `${constrainedMenuRightOffset}px`,
             background: [
               "linear-gradient(135deg, rgba(255,255,255,0.86) 0%, rgba(255,255,255,0.32) 25%, rgba(255,255,255,0) 50%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.19) 100%)",
               "linear-gradient(90deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.06) 40%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.12) 100%)",
@@ -6049,19 +6333,35 @@ function T0MultiSelect({
             boxShadow: "0 12px 22px rgba(15,23,42,0.20), 0 3px 7px rgba(15,23,42,0.12), inset 0 1.5px 0 rgba(255,255,255,0.92), inset 0 -1.5px 0 rgba(71,85,105,0.28)",
           }}
         >
-          <button
-            type="button"
+          <div
             role="option"
             aria-selected={selectionRepresentsAll}
-            onClick={() => onChange([])}
-            className={`flex min-h-12 w-full items-center gap-3 px-3.5 py-3 text-left text-[15px] font-bold ${selectionRepresentsAll ? "bg-white/60 text-[#1a56db]" : "text-slate-700 active:bg-white/55"}`}
+            className={`flex min-h-12 w-full snap-start items-center gap-2 border-b border-slate-500/25 px-3.5 py-2 text-[15px] font-bold shadow-[inset_0_-1px_0_rgba(255,255,255,0.58)] ${selectionRepresentsAll ? "bg-white/68 text-[#1a56db]" : "bg-white/30 text-slate-700"}`}
           >
-            {renderCheck(selectionRepresentsAll)}
-            <span>全部</span>
-          </button>
-          <div className="my-1 border-t border-slate-500/20" />
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="flex min-h-8 min-w-0 flex-1 items-center gap-3 text-left active:opacity-70"
+            >
+              {renderCheck(selectionRepresentsAll)}
+              <span>全部</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setConstrainedMenuWidth(null);
+                setConstrainedMenuRightOffset(null);
+              }}
+              aria-label={`确认${label}筛选`}
+              className="h-8 shrink-0 rounded border border-slate-400/70 bg-white/78 px-3 text-[12px] font-bold text-[#1a56db] shadow-[inset_0_1px_0_rgba(255,255,255,0.96),inset_0_-1px_0_rgba(71,85,105,0.24),0_1px_1px_rgba(15,23,42,0.12)] transition active:scale-95 active:bg-white"
+            >
+              确定
+            </button>
+          </div>
           {options.map((option) => {
             const checked = selectedSet.has(option.id);
+            const isReferralChild = option.kind === "referral-descendants" || option.kind === "referral-member";
             return (
               <button
                 key={option.id}
@@ -6069,7 +6369,7 @@ function T0MultiSelect({
                 role="option"
                 aria-selected={checked}
                 onClick={() => toggleOption(option.id)}
-                className={`flex min-h-12 w-full items-center gap-3 py-3 text-left text-[15px] font-bold ${option.kind === "referral-descendants" ? "pl-8 pr-3.5" : "px-3.5"} ${checked ? "bg-white/55 text-[#1a56db]" : option.kind === "referral-descendants" ? "text-indigo-700 active:bg-indigo-50/60" : "text-slate-700 active:bg-white/55"}`}
+                className={`flex min-h-12 w-full snap-start items-center gap-3 border-b border-slate-500/20 py-3 text-left text-[15px] font-bold shadow-[inset_0_-1px_0_rgba(255,255,255,0.5)] last:border-b-0 last:shadow-none ${isReferralChild ? "pl-8 pr-3.5" : "px-3.5"} ${checked ? "bg-white/55 text-[#1a56db]" : option.kind === "referral-descendants" ? "text-indigo-700 active:bg-indigo-50/60" : "text-slate-700 active:bg-white/55"}`}
               >
                 {renderCheck(checked)}
                 <span className="min-w-0 flex-1 truncate" title={option.label}>{option.label}</span>
@@ -6084,6 +6384,7 @@ function T0MultiSelect({
 
 function AccountOverview({
   summary,
+  positionStats,
   showCumulativeData,
   onToggleCumulativeData,
   showCommission = true,
@@ -6094,6 +6395,8 @@ function AccountOverview({
     long: { quantity: number; average: number; unrealized: number | null; realizedGross: number; realizedOpeningFee: number; realizedClosingFee: number; realized: number; turnover: number; commission: number; closedQuantity: number; closedAverageCost: number; closedAveragePrice: number; activeLevels: number };
     short: { quantity: number; average: number; unrealized: number | null; realizedGross: number; realizedOpeningFee: number; realizedClosingFee: number; realized: number; turnover: number; commission: number; closedQuantity: number; closedAverageCost: number; closedAveragePrice: number; activeLevels: number };
   };
+  /** 顶行仓位严格按状态筛选范围统计；下方财务数据仍仅来自实际成交单。 */
+  positionStats?: Record<PositionSide, { quantity: number; activeLevels: number }>;
   showCumulativeData: boolean;
   onToggleCumulativeData: () => void;
   showCommission?: boolean;
@@ -6114,6 +6417,7 @@ function AccountOverview({
         <div className="grid grid-cols-2">
           {sides.map(({ side, data }) => {
             const isLong = side === "long";
+            const positionData = positionStats?.[side] ?? data;
             return (
               <div
                 key={side}
@@ -6122,10 +6426,10 @@ function AccountOverview({
                 <div className="flex items-baseline justify-between gap-2">
                   <div className="flex min-w-0 items-baseline gap-1.5">
                     <span className={`shrink-0 text-xs font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{isLong ? "多" : "空"}</span>
-                    <span className="shrink-0 text-[11px] tabular-nums text-slate-400">{data.activeLevels}档</span>
+                    <span className="shrink-0 text-[11px] tabular-nums text-slate-400">{positionData.activeLevels}档</span>
                   </div>
                   <div className="flex shrink-0 items-baseline gap-1">
-                    <span className="text-sm tabular-nums font-semibold text-slate-900">{formatQuantity(data.quantity)}</span>
+                    <span className="text-sm tabular-nums font-semibold text-slate-900">{formatQuantity(positionData.quantity)}</span>
                     <span className="text-[11px] text-slate-500">ETH</span>
                   </div>
                 </div>
@@ -6252,6 +6556,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
 }) {
   const isLong = side === "long";
   const isOption = bucket.instrumentType === "option";
+  const isGrid = bucket.instrumentType === "grid";
   const optionMetadata = metadata?.option;
   const optionGreeks = useOptionGreeks({
     currency: "ETH",
@@ -6277,6 +6582,8 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
     ? `text-[#f5d78e]${readOnly ? "" : " hover:brightness-110"}`
     : isOption
     ? `text-[#f5e9ff]${readOnly ? "" : " hover:brightness-110"}`
+    : isGrid
+    ? `text-cyan-950${readOnly ? "" : " hover:brightness-105"}`
     : isLong
     ? `text-rose-600${readOnly ? "" : " hover:brightness-105"}`
     : `text-emerald-800${readOnly ? "" : " hover:brightness-105"}`;
@@ -6301,12 +6608,18 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
     background: "linear-gradient(90deg, rgba(239,246,255,0.96), rgba(219,234,254,0.78) 58%, rgba(224,242,254,0.64))",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.92), inset 0 -1px 0 rgba(2,132,199,0.14), inset 1px 0 0 rgba(56,189,248,0.10)",
   };
+  const gridSurfaceStyle = {
+    background: "linear-gradient(112deg, rgba(236,254,255,0.96), rgba(207,250,254,0.78) 52%, rgba(165,243,252,0.60))",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.94), inset 0 -1px 0 rgba(8,145,178,0.18), inset 1px 0 0 rgba(34,211,238,0.16)",
+  };
   const surfaceStyle = isPending
     ? pendingSurfaceStyle
     : isLocked
     ? lockedSurfaceStyle
     : isOption
     ? T0_OPTION_METAL_SURFACE_STYLE
+    : isGrid
+    ? gridSurfaceStyle
     : sideSurfaceStyle;
   const quantityTextStyle = isPending
     ? { textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.92), 0.75px 0.75px 0 rgba(2,132,199,0.18)" }
@@ -6320,6 +6633,8 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
     }
     : isOption
     ? { textShadow: "0 1px 1.5px rgba(46,16,101,0.88), 0 -0.5px 1px rgba(255,255,255,0.30)" }
+    : isGrid
+    ? { textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.94), 0.75px 0.75px 0 rgba(8,145,178,0.22)" }
     : { textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.88), 0.75px 0.75px 0 rgba(71,85,105,0.20)" };
   const floatingPnl = isPending
     ? null
@@ -6353,7 +6668,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           </span>
         )}
       </div>
-      {metadata && <div className={`mt-1 flex min-w-0 items-center text-left text-[9px] font-medium leading-none ${isLocked && !isPending ? "text-[#c9a84c]/85" : isOption ? "text-violet-100/90" : "text-slate-500"}`} aria-label={`账户 ${metadata.accountName}，用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}${isPending ? "，挂单待成交" : ""}`}>
+      {metadata && <div className={`mt-1 flex min-w-0 items-center text-left text-[9px] font-medium leading-none ${isLocked && !isPending ? "text-[#c9a84c]/85" : isOption ? "text-violet-100/90" : isGrid ? "text-cyan-800/90" : "text-slate-500"}`} aria-label={`账户 ${metadata.accountName}，用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}${isPending ? "，挂单待成交" : ""}`}>
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <span className="min-w-0 shrink truncate" title={`账户：${metadata.accountName}`}>{metadata.accountName}</span>
           <span className="shrink-0">·</span>
@@ -6364,7 +6679,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
         {(isLocked || isPending || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
           {isLocked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#f5d78e]/85" strokeWidth={2.5} aria-label="已锁定" />}
           {isPending && <Clock3 className="h-2.5 w-2.5 shrink-0 text-sky-600" strokeWidth={2.5} aria-label="挂单待成交" />}
-          {metadata.instrumentShortLabel && <span className={isLocked && !isPending ? "text-[#f5d78e]/85" : isOption ? "text-violet-100" : "text-slate-500"} title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
+          {metadata.instrumentShortLabel && <span className={isLocked && !isPending ? "text-[#f5d78e]/85" : isOption ? "text-violet-100" : isGrid ? "text-cyan-800" : "text-slate-500"} title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
         </div>}
       </div>}
     </div>
