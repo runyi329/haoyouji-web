@@ -122,9 +122,20 @@ function normalizeOptionDate(value: unknown): string {
 
 function mapOptionDate(value: unknown): string | undefined {
   if (!value) return undefined;
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
   const normalized = String(value).trim();
-  return /^\d{4}-\d{2}-\d{2}/.test(normalized) ? normalized.slice(0, 10) : undefined;
+  // DATE 列在生产 MySQL 驱动中可能先转换为 UTC Date（北京时间零点会成为前一日 16:00Z）。
+  // 期权合约到期日是北京时间的日历日：只有原始日期字符串可直接保留，其他 Date/ISO 值必须按北京时间取日。
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
+  const parsed = value instanceof Date ? value : new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(parsed);
+  const dateParts = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
 }
 
 function resolveOptionParameters(input: {
