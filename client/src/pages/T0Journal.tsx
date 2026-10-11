@@ -475,7 +475,8 @@ const INTEGRATED_ARCHIVE_STEPS = [10, 25, 50, 100, 250, 500] as const;
 type IntegratedArchiveStep = (typeof INTEGRATED_ARCHIVE_STEPS)[number];
 // T+0 只读取服务端的 ETH 永续专用内存缓存；500ms 的页面节拍可呈现实时流，同时不直连外部交易所。
 const T0_PRICE_REFRESH_INTERVAL_MS = 500;
-const T0_JOURNAL_REFRESH_INTERVAL_MS = 5_000;
+// 账本数据由 App 的52号账本前台统一两秒调度刷新，避免该页产生第二个重叠轮询。
+const T0_JOURNAL_STALE_TIME_MS = 2_000;
 const DEFAULT_QUANTITY_QUICK_OPTIONS = ["10.00", "20.00", "30.00", "40.00", "50.00"];
 const OKX_VIP2_TAKER_FEE_RATE = 0.00036;
 const OKX_VIP2_TAKER_FEE_LABEL = "0.0360%";
@@ -1519,10 +1520,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     { ledgerId: 52 },
     {
       enabled: canAccess,
-      staleTime: T0_JOURNAL_REFRESH_INTERVAL_MS,
-      // 仅在用户停留于当前T+0页面时静默同步；回到页面时立即补拉一次。
-      refetchInterval: T0_JOURNAL_REFRESH_INTERVAL_MS,
-      refetchIntervalInBackground: false,
+      staleTime: T0_JOURNAL_STALE_TIME_MS,
+      // 统一由52号账本活动页面的两秒调度失效并重拉，后台页面不会请求。
       refetchOnWindowFocus: true,
     },
   );

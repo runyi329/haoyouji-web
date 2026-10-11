@@ -78,6 +78,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [, setLocation] = useLocation();
   const ledgerId = ledgerIdProp || (params?.id ? parseInt(params.id) : (routeParams2?.id ? parseInt(routeParams2.id) : 0));
   const trpcUtils = trpc.useUtils();
+  const usesActivePagePolling = ledgerId === 37 || ledgerId === 52;
 
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -699,11 +700,23 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
   const standardOrderQuery = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId, ...(selectedUserId ? { userId: selectedUserId } : {}), ...(adminOnly ? { roleFilter: "admin" as const } : {}), ...(financeOnly ? { financeOnly: true } : {}) },
-    { enabled: ledgerId > 0 && !adminOnly, staleTime: 3000, refetchInterval: 3000, placeholderData: (prev: any) => prev }
+    {
+      enabled: ledgerId > 0 && !adminOnly,
+      staleTime: usesActivePagePolling ? 2_000 : 3_000,
+      // 37号与52号账本统一由活动页面两秒调度刷新，避免与旧三秒订单轮询重叠。
+      refetchInterval: usesActivePagePolling ? false : 3_000,
+      placeholderData: (prev: any) => prev,
+    }
   );
   const adminOrderQuery = trpc.ledger.funderAdminGetOrderViews.useQuery(
     { ledgerId },
-    { enabled: ledgerId > 0 && !!adminOnly && isAdminUser, staleTime: 3000, refetchInterval: 3000, placeholderData: (prev: any) => prev }
+    {
+      enabled: ledgerId > 0 && !!adminOnly && isAdminUser,
+      staleTime: usesActivePagePolling ? 2_000 : 3_000,
+      // 37号与52号账本统一由活动页面两秒调度刷新，避免与旧三秒订单轮询重叠。
+      refetchInterval: usesActivePagePolling ? false : 3_000,
+      placeholderData: (prev: any) => prev,
+    }
   );
   const assetOrdersData = adminOnly ? adminOrderQuery.data : standardOrderQuery.data;
   const ordersLoading = adminOnly ? adminOrderQuery.isLoading : standardOrderQuery.isLoading;

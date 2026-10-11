@@ -24,7 +24,7 @@ import YabanShopAdmin from "./pages/yaban/YabanShopAdmin";
 import { Toaster } from "@/components/ui/sonner";
 import { CenterToastProvider } from "@/components/ui/center-toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Route, Switch, Redirect } from "wouter";
+import { Route, Switch, Redirect, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import ErrorBoundary from "./components/ErrorBoundary";
 import VersionGuard from "./components/VersionGuard";
@@ -403,6 +403,42 @@ function LoadingFallback() {
   );
 }
 
+// 37号与52号账本仅在用户当前停留于对应页面、且页面处于前台时进行两秒同步。
+// 统一失效当前活动的 ledger 查询后，由各页面既有的权限接口重新读取可见范围；
+// 不广播订单内容，也不会为未打开页面的用户产生请求。
+const ACTIVE_LEDGER_PAGE_REFRESH_INTERVAL_MS = 2_000;
+
+function ActiveLedgerPagePolling() {
+  const [location] = useLocation();
+  const trpcUtils = trpc.useUtils();
+  const pathname = location.split("?")[0];
+  const isRealtimeLedgerPage = /^\/ledger\/(?:37|52)(?:\/|$)/.test(pathname);
+
+  useEffect(() => {
+    if (!isRealtimeLedgerPage || typeof document === "undefined") return;
+
+    const refreshActiveLedgerPage = () => {
+      if (document.visibilityState !== "visible") return;
+      void trpcUtils.ledger.invalidate().catch(() => undefined);
+    };
+
+    // 进入37号或52号账本页面、以及从后台回到前台时均立即补拉，轮询仅覆盖前台页面。
+    refreshActiveLedgerPage();
+    const timer = window.setInterval(refreshActiveLedgerPage, ACTIVE_LEDGER_PAGE_REFRESH_INTERVAL_MS);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshActiveLedgerPage();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [isRealtimeLedgerPage, trpcUtils]);
+
+  return null;
+}
+
 function Router() {
   const { isLoading } = trpc.auth.me.useQuery();
   // 规则003：全局记录页面访问轨迹，供返回按钮精确「从哪来回哪去」
@@ -414,8 +450,10 @@ function Router() {
   }
 
   return (
-    <Suspense fallback={<LoadingFallback />}>
-      <Switch>
+    <>
+      <ActiveLedgerPagePolling />
+      <Suspense fallback={<LoadingFallback />}>
+        <Switch>
         {/* 首页 - / 路由永远是人脉页面 */}
         <Route path="/" component={lazy(() => import("./pages/HomeEntry"))} />
         {/* 脉动Dashboard */}        <Route path="/login" component={Login} />
@@ -872,8 +910,9 @@ function Router() {
         {/* 404 */}
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
-      </Switch>
-    </Suspense>
+        </Switch>
+      </Suspense>
+    </>
   );
 }
 
