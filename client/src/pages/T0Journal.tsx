@@ -43,6 +43,53 @@ function normalizeT0InstrumentTypeFilterIds(ids: string[]): T0InstrumentType[] {
   return selected.length === T0_INSTRUMENT_TYPES.length ? [] : selected;
 }
 
+type T0PersistedTopFilters = {
+  accountIds: string[];
+  relatedUserIds: string[];
+  relatedFundIds: string[];
+  instrumentTypeIds: T0InstrumentType[];
+  executionFilter: T0ExecutionFilter;
+};
+
+const T0_TOP_FILTER_STORAGE_PREFIX = "haoyouji:t0-top-filters:v1";
+
+function sanitizeT0FilterIds(value: unknown): string[] {
+  return Array.isArray(value)
+    ? Array.from(new Set(value.filter((item): item is string => typeof item === "string" && item.length > 0)))
+    : [];
+}
+
+function getT0TopFilterStorageKey(ledgerId: number, viewerMode: "admin" | "member", viewerId: string) {
+  return `${T0_TOP_FILTER_STORAGE_PREFIX}:${ledgerId}:${viewerMode}:${viewerId}`;
+}
+
+function readPersistedT0TopFilters(storageKey: string | null): T0PersistedTopFilters | null {
+  if (!storageKey || typeof window === "undefined") return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(storageKey) || "null") as Record<string, unknown> | null;
+    if (!parsed || typeof parsed !== "object") return null;
+    const executionFilter = parsed.executionFilter;
+    return {
+      accountIds: sanitizeT0FilterIds(parsed.accountIds),
+      relatedUserIds: sanitizeT0FilterIds(parsed.relatedUserIds),
+      relatedFundIds: sanitizeT0FilterIds(parsed.relatedFundIds),
+      instrumentTypeIds: normalizeT0InstrumentTypeFilterIds(sanitizeT0FilterIds(parsed.instrumentTypeIds)),
+      executionFilter: executionFilter === "filled" || executionFilter === "pending" ? executionFilter : "all",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistT0TopFilters(storageKey: string | null, filters: T0PersistedTopFilters) {
+  if (!storageKey || typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(filters));
+  } catch {
+    // 私密模式或浏览器存储不可用时，筛选仍可在当前页面正常使用。
+  }
+}
+
 function getT0InstrumentFilterSummary(selectedTypes: T0InstrumentType[]): string {
   if (selectedTypes.length === 0) return "类型全部";
   if (selectedTypes.length === 1) {
@@ -1421,6 +1468,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [liveClock, setLiveClock] = useState(() => new Date());
   const previousFetchedMarkPriceRef = useRef<number | null>(null);
   const hasInitializedJournalFiltersRef = useRef(false);
+  const activeTopFilterStorageKeyRef = useRef<string | null>(null);
+  const [hydratedTopFilterStorageKey, setHydratedTopFilterStorageKey] = useState<string | null>(null);
   // 从报价表进入表单后，返回与保存必须回到原先的整合/逐笔模式。
   const entrySheetLadderDisplayModeRef = useRef<AdminLadderDisplayMode>("individual");
   // 整合报价详情必须沿用进入时的展示归档宽度，避免详情范围在交互中漂移。
@@ -1479,6 +1528,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   const isMemberView = (t0JournalQuery.data as any)?.viewerMode === "member";
   const canManage = canAccess && (t0JournalQuery.data as any)?.viewerMode === "admin";
+  const topFilterStorageKey = useMemo(() => {
+    const journal = t0JournalQuery.data as any;
+    const viewerMode = journal?.viewerMode;
+    const memberViewerId = journal?.viewerRelatedUserId;
+    const signedInUserId = (me as any)?.id;
+    if ((viewerMode !== "admin" && viewerMode !== "member") || !signedInUserId) return null;
+    const viewerId = viewerMode === "member" ? String(memberViewerId || signedInUserId) : String(signedInUserId);
+    return getT0TopFilterStorageKey(ledgerId, viewerMode, viewerId);
+  }, [ledgerId, me, t0JournalQuery.data]);
   const directoryImpactTarget = directoryRenameTarget || directoryDeleteTarget;
   const directoryImpactDimension = directoryImpactTarget?.kind === "account"
     ? "account"
@@ -1654,13 +1712,28 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       .filter((entry) => entry.symbol === "ETH")
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     setLastSavedQuantity(latestSavedEntry ? normalizeEthQuantity(String(latestSavedEntry.quantity)) : "");
-    // 首次进入时，管理员默认“全部账户 + 全部用户 + 全部项目”；
-    // 后续静默同步只剔除已失效的多选项，不能每五秒覆盖正在查看的筛选。
-    const isFirstJournalHydration = !hasInitializedJournalFiltersRef.current;
+    // 顶部五项筛选按“账本 + 当前身份”单独保存：强制刷新、关闭浏览器后再次进入均恢复；
+    // 静默同步只剔除已失效的选项，不能覆盖仍有效的已选条件。
+    const hasTopFilterScopeChanged = activeTopFilterStorageKeyRef.current !== topFilterStorageKey;
+    const shouldRestoreTopFilters = !hasInitializedJournalFiltersRef.current || hasTopFilterScopeChanged;
+    const persistedTopFilters = shouldRestoreTopFilters ? readPersistedT0TopFilters(topFilterStorageKey) : null;
+    if (hasTopFilterScopeChanged) {
+      activeTopFilterStorageKeyRef.current = topFilterStorageKey;
+      setHydratedTopFilterStorageKey(null);
+    }
     if (journal.viewerMode === "admin") {
-      setSelectedAccountIds((current) => isFirstJournalHydration ? [] : current.filter((id) => nextAccounts.some((account) => account.id === id)));
-      setRelatedUserFilterIds((current) => isFirstJournalHydration ? [] : current.filter((id) => id === "unlinked" || nextRecentRelatedUsers.some((user) => user.id === id)));
-      setRelatedFundFilterIds((current) => isFirstJournalHydration ? [] : current.filter((id) => id === "unclassified" || nextRelatedFunds.some((fund) => fund.id === id)));
+      setSelectedAccountIds((current) => {
+        const preferred = shouldRestoreTopFilters ? (persistedTopFilters?.accountIds ?? []) : current;
+        return preferred.filter((id) => nextAccounts.some((account) => account.id === id));
+      });
+      setRelatedUserFilterIds((current) => {
+        const preferred = shouldRestoreTopFilters ? (persistedTopFilters?.relatedUserIds ?? []) : current;
+        return preferred.filter((id) => id === "unlinked" || nextRecentRelatedUsers.some((user) => user.id === id));
+      });
+      setRelatedFundFilterIds((current) => {
+        const preferred = shouldRestoreTopFilters ? (persistedTopFilters?.relatedFundIds ?? []) : current;
+        return preferred.filter((id) => id === "unclassified" || nextRelatedFunds.some((fund) => fund.id === id));
+      });
     } else {
       // 成员端：一个选项直接锁定；两个及以上选项才保留“全部 + 分项”的筛选。
       // 后续五秒静默同步只修正已失效的选项，不会覆盖成员主动选择的单项筛选。
@@ -1670,17 +1743,39 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       ];
       const normalizeMemberFilter = (current: string[], optionIds: string[]) => {
         if (optionIds.length === 1) return optionIds;
-        return isFirstJournalHydration ? [] : current.filter((id) => optionIds.includes(id));
+        return current.filter((id) => optionIds.includes(id));
       };
-      setSelectedAccountIds((current) => normalizeMemberFilter(current, nextAccounts.map((account) => account.id)));
+      setSelectedAccountIds((current) => normalizeMemberFilter(
+        shouldRestoreTopFilters ? (persistedTopFilters?.accountIds ?? []) : current,
+        nextAccounts.map((account) => account.id),
+      ));
       setRelatedUserFilterIds([]);
-      setRelatedFundFilterIds((current) => normalizeMemberFilter(current, memberFundFilterIds));
+      setRelatedFundFilterIds((current) => normalizeMemberFilter(
+        shouldRestoreTopFilters ? (persistedTopFilters?.relatedFundIds ?? []) : current,
+        memberFundFilterIds,
+      ));
     }
+    setInstrumentTypeFilterIds((current) => shouldRestoreTopFilters
+      ? (persistedTopFilters?.instrumentTypeIds ?? [])
+      : normalizeT0InstrumentTypeFilterIds(current));
+    setExecutionFilter((current) => shouldRestoreTopFilters ? (persistedTopFilters?.executionFilter ?? "all") : current);
     setLastRelatedUserId((current) => nextRecentRelatedUsers.some((user) => user.id === current)
       ? current
       : (nextRecentRelatedUsers[0]?.id || ""));
     hasInitializedJournalFiltersRef.current = true;
-  }, [t0JournalQuery.data]);
+    setHydratedTopFilterStorageKey(topFilterStorageKey);
+  }, [t0JournalQuery.data, topFilterStorageKey]);
+
+  useEffect(() => {
+    if (!topFilterStorageKey || hydratedTopFilterStorageKey !== topFilterStorageKey) return;
+    persistT0TopFilters(topFilterStorageKey, {
+      accountIds: selectedAccountIds,
+      relatedUserIds: relatedUserFilterIds,
+      relatedFundIds: relatedFundFilterIds,
+      instrumentTypeIds: instrumentTypeFilterIds,
+      executionFilter,
+    });
+  }, [executionFilter, hydratedTopFilterStorageKey, instrumentTypeFilterIds, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, topFilterStorageKey]);
 
   const priceTrend = previousMarkPrice === null || markPrice === null
     ? "flat"
@@ -3187,6 +3282,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     });
   };
 
+  const forceRefreshJournal = () => {
+    // 立即落盘，保证用户刚选完筛选条件便点击“刷新”时也不会丢失。
+    persistT0TopFilters(topFilterStorageKey, {
+      accountIds: selectedAccountIds,
+      relatedUserIds: relatedUserFilterIds,
+      relatedFundIds: relatedFundFilterIds,
+      instrumentTypeIds: instrumentTypeFilterIds,
+      executionFilter,
+    });
+    window.location.reload();
+  };
+
   const backToLedger = () => {
     if (!embedded) setLocation(`/ledger/${ledgerId}`);
   };
@@ -3431,7 +3538,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <h1 className="font-semibold tracking-[0.01em] text-slate-900">T+0 速记账本</h1>
             </div>
             <button
-              onClick={() => window.location.reload()}
+              onClick={forceRefreshJournal}
               aria-label="强制刷新整个页面"
               title="强制刷新整个页面"
               className="h-8 rounded border border-slate-200 bg-slate-900 px-3 text-xs font-semibold text-white active:scale-95"
