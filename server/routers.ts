@@ -109,6 +109,151 @@ function asRows(result: any): any[] {
   return Array.isArray(result) ? result : [];
 }
 
+type Ledger37PauseHistoryItem = {
+  pauseDate?: string;
+  resumeDate?: string;
+  pauseSource?: 'tag_global';
+  pausedBy?: number;
+};
+
+function parseLedger37InitialBalances(raw: unknown): Record<string, unknown> {
+  if (!raw) return {};
+  if (typeof raw === 'object') return { ...(raw as Record<string, unknown>) };
+  try {
+    const parsed = JSON.parse(String(raw));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...parsed } : {};
+  } catch {
+    return {};
+  }
+}
+
+function parseLedger37PauseHistory(raw: unknown): Ledger37PauseHistoryItem[] {
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is Ledger37PauseHistoryItem => Boolean(item && typeof item === 'object' && item.pauseDate))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function getBeijingCalendarDate(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+/**
+ * 37号账本的标签级暂停是一次全体操作：利息、标签保证金和所有成员的初始保证金
+ * 在同一日期暂停。个人初始保证金暂停仍是独立覆盖层，绝不反向改变标签级配置。
+ *
+ * 用 pauseSource 标记系统写入的记录；恢复标签时只关闭该来源，避免误恢复成员原有的个人暂停。
+ */
+export async function setLedger37TagGlobalPause(params: {
+  ledgerId: number;
+  tagName: string;
+  pauseDate: string | null;
+  actorUserId: number;
+  transaction?: any;
+}) {
+  const ownsTransaction = !params.transaction;
+  const connection = params.transaction ?? await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+  const transaction = connection as any;
+  try {
+    if (ownsTransaction) await transaction.beginTransaction();
+    const [configRows] = await transaction.execute(
+      `SELECT id FROM ledger_tag_config WHERE ledger_id = ? AND tag_name = ? LIMIT 1 FOR UPDATE`,
+      [params.ledgerId, params.tagName],
+    );
+    const config = asRows(configRows)[0];
+    if (config) {
+      await transaction.execute(
+        `UPDATE ledger_tag_config
+         SET pause_date = ?, margin_pause_date = ?
+         WHERE ledger_id = ? AND tag_name = ?`,
+        [params.pauseDate, params.pauseDate, params.ledgerId, params.tagName],
+      );
+    } else {
+      await transaction.execute(
+        `INSERT INTO ledger_tag_config (ledger_id, tag_name, pause_date, margin_pause_date, created_by)
+         VALUES (?, ?, ?, ?, ?)`,
+        [params.ledgerId, params.tagName, params.pauseDate, params.pauseDate, params.actorUserId],
+      );
+    }
+
+    const [memberRows] = await transaction.execute(
+      `SELECT userId, initial_balances FROM ledger_members WHERE ledgerId = ? FOR UPDATE`,
+      [params.ledgerId],
+    );
+    let updatedMemberCount = 0;
+    const historyKey = `${params.tagName}__pauseHistory`;
+    const legacyKey = `${params.tagName}__pauseDate`;
+    for (const member of asRows(memberRows)) {
+      const balances = parseLedger37InitialBalances(member.initial_balances);
+      const history = parseLedger37PauseHistory(balances[historyKey]);
+      const latest = history[history.length - 1];
+      let changed = false;
+
+      if (params.pauseDate) {
+        // 已被个人暂停的成员保持其个人暂停；其他成员追加可追溯的全体暂停记录。
+        const alreadyIndividuallyPaused = Boolean(
+          (latest?.pauseDate && !latest.resumeDate)
+          || (!latest && balances[legacyKey]),
+        );
+        if (!alreadyIndividuallyPaused) {
+          history.push({
+            pauseDate: params.pauseDate,
+            pauseSource: 'tag_global',
+            pausedBy: params.actorUserId,
+          });
+          balances[historyKey] = JSON.stringify(history);
+          balances[legacyKey] = params.pauseDate;
+          changed = true;
+        }
+      } else {
+        // 只恢复系统发起的全体暂停；成员原有的个人暂停绝不能被标签恢复覆盖。
+        const globalPauseIndex = [...history]
+          .map((item, index) => ({ item, index }))
+          .reverse()
+          .find(({ item }) => item.pauseSource === 'tag_global' && item.pauseDate && !item.resumeDate)?.index;
+        if (globalPauseIndex !== undefined) {
+          history[globalPauseIndex] = { ...history[globalPauseIndex], resumeDate: getBeijingCalendarDate() };
+          balances[historyKey] = JSON.stringify(history);
+          const activePause = [...history].reverse().find((item) => item.pauseDate && !item.resumeDate);
+          if (activePause?.pauseDate) balances[legacyKey] = activePause.pauseDate;
+          else delete balances[legacyKey];
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        await transaction.execute(
+          `UPDATE ledger_members SET initial_balances = ?, updatedAt = NOW() WHERE ledgerId = ? AND userId = ?`,
+          [JSON.stringify(balances), params.ledgerId, Number(member.userId)],
+        );
+        updatedMemberCount += 1;
+      }
+    }
+    if (ownsTransaction) await transaction.commit();
+    return { updatedMemberCount };
+  } catch (error) {
+    if (ownsTransaction) {
+      try { await transaction.rollback(); } catch { /* rollback failure must not mask the original error */ }
+    }
+    throw error;
+  } finally {
+    if (ownsTransaction) transaction.release?.();
+  }
+}
+
 const funderManualStockPositionSchema = z.object({
   name: z.string().trim().max(48).optional(),
   symbol: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/),
@@ -15351,7 +15496,7 @@ ${klinesSummary}
         }
       }),
 
-    // 专用：只更新 pause_date，不影响其他字段
+    // 标签利息暂停。37号账本中，标签级暂停必须同时联动标签保证金与全体成员初始保证金。
     setTagPauseDate: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
@@ -15363,6 +15508,24 @@ ${klinesSummary}
         const myMembership = await dbLedgerMod.getUserMembership(input.ledgerId, ctx.user.id);
         if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
+        }
+        if (input.ledgerId === LEDGER_37_ID) {
+          const result = await setLedger37TagGlobalPause({
+            ledgerId: input.ledgerId,
+            tagName: input.tagName,
+            pauseDate: input.pauseDate,
+            actorUserId: ctx.user.id,
+          });
+          const db = await getLedgerDb();
+          await writeInterestOperationLog(db, {
+            ledgerId: input.ledgerId,
+            tagName: input.tagName,
+            actionType: input.pauseDate ? 'interest_paused' : 'interest_resumed',
+            summary: input.pauseDate ? `标签全体暂停，自 ${input.pauseDate} 起生效` : '恢复标签全体暂停',
+            createdBy: ctx.user.id,
+            afterData: { pauseDate: input.pauseDate, marginPauseDate: input.pauseDate, updatedMemberCount: result.updatedMemberCount },
+          });
+          return { success: true, ...result, linkedGlobalPause: true };
         }
         const db = await getLedgerDb();
         const existing = await db.execute(
@@ -15389,7 +15552,7 @@ ${klinesSummary}
         return { success: true };
       }),
 
-    // 保证金管理专用：只更新 margin_pause_date（与利息管理的 pause_date 完全独立）
+    // 标签保证金暂停。37号账本中，标签级暂停必须同时联动利息与全体成员初始保证金。
     setTagMarginPauseDate: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
@@ -15401,6 +15564,24 @@ ${klinesSummary}
         const myMembership = await dbLedgerMod.getUserMembership(input.ledgerId, ctx.user.id);
         if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
+        }
+        if (input.ledgerId === LEDGER_37_ID) {
+          const result = await setLedger37TagGlobalPause({
+            ledgerId: input.ledgerId,
+            tagName: input.tagName,
+            pauseDate: input.marginPauseDate,
+            actorUserId: ctx.user.id,
+          });
+          const db = await getLedgerDb();
+          await writeInterestOperationLog(db, {
+            ledgerId: input.ledgerId,
+            tagName: input.tagName,
+            actionType: input.marginPauseDate ? 'interest_paused' : 'interest_resumed',
+            summary: input.marginPauseDate ? `标签全体暂停，自 ${input.marginPauseDate} 起生效` : '恢复标签全体暂停',
+            createdBy: ctx.user.id,
+            afterData: { pauseDate: input.marginPauseDate, marginPauseDate: input.marginPauseDate, updatedMemberCount: result.updatedMemberCount },
+          });
+          return { success: true, ...result, linkedGlobalPause: true };
         }
         const db = await getLedgerDb();
         const existing = await db.execute(
@@ -15467,6 +15648,14 @@ ${klinesSummary}
         if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可设置标签配置' });
         }
+        const linkedGlobalPauseResult = input.ledgerId === LEDGER_37_ID && input.pauseDate !== undefined
+          ? await setLedger37TagGlobalPause({
+            ledgerId: input.ledgerId,
+            tagName: input.tagName,
+            pauseDate: input.pauseDate,
+            actorUserId: ctx.user.id,
+          })
+          : null;
         const db = await getLedgerDb();
         // 确保新字段列存在（幂等 DDL）
         try {
@@ -15533,7 +15722,11 @@ ${klinesSummary}
             sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, settlement_amount, interest_mode, interest_rate, interest_base_amount, interest_start_date, pause_date, end_date, note, margin_by_coin, pnl_manual, pnl_note, original_amount, account_balance, balance_date, initial_amount, account_multiplier, margin_base, fund_flow, target_total, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.settlementAmount ?? null}, ${input.interestMode ?? 'fixed'}, ${input.interestRate ?? null}, ${input.interestBaseAmount ?? null}, ${input.interestStartDate ?? null}, ${input.pauseDate ?? null}, ${input.endDate ?? null}, ${input.note ?? null}, ${input.marginByCoin ?? null}, ${input.pnlManual ?? null}, ${input.pnlNote ?? null}, ${input.originalAmount ?? null}, ${input.accountBalance ?? null}, ${input.balanceDate ?? null}, ${input.initialAmount ?? null}, ${input.accountMultiplier ?? null}, ${input.marginBase ?? null}, ${input.fundFlow ?? null}, ${input.targetTotal ?? null}, ${ctx.user.id})`
           );
         }
-        return { success: true };
+        return {
+          success: true,
+          linkedGlobalPause: Boolean(linkedGlobalPauseResult),
+          updatedMemberCount: linkedGlobalPauseResult?.updatedMemberCount ?? 0,
+        };
       }),
 
     // ── 保证金操作日志 ──

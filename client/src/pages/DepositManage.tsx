@@ -390,11 +390,11 @@ export default function DepositManage() {
   };
 
   const [confirmDialog, setConfirmDialog] = useState<{
-    open: boolean; title: string; desc: string; onConfirm: () => void;
-  }>({ open: false, title: "", desc: "", onConfirm: () => {} });
+    open: boolean; title: string; desc: string; onConfirm: () => void; confirmText: string;
+  }>({ open: false, title: "", desc: "", onConfirm: () => {}, confirmText: "确认" });
 
-  const showConfirm = (title: string, desc: string, onConfirm: () => void) => {
-    setConfirmDialog({ open: true, title, desc, onConfirm });
+  const showConfirm = (title: string, desc: string, onConfirm: () => void, confirmText?: string) => {
+    setConfirmDialog({ open: true, title, desc, onConfirm, confirmText: confirmText ?? (title.includes('删除') ? '确认删除' : '确认') });
   };
 
   const clearCell = (userId: number, tagName: string, memberName?: string) => {
@@ -1804,34 +1804,56 @@ export default function DepositManage() {
                         {/* ── 暂停/恢复按鈕（查看模式）── */}
                         {!rightEditMode && selectedTagForRight && (() => {
                           const isPaused = !!(rightTagConfig as any)?.margin_pause_date;
+                          const commitPauseToggle = async () => {
+                            setPauseSaving(true);
+                            try {
+                              const isLedger37 = ledgerId === 37;
+                              const newMarginPauseDate = isPaused ? null : new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+                              await setTagMarginPauseMutation.mutateAsync({
+                                ledgerId,
+                                tagName: selectedTagForRight,
+                                marginPauseDate: newMarginPauseDate,
+                              });
+                              await addMarginLogMutation.mutateAsync({
+                                ledgerId,
+                                tagName: selectedTagForRight,
+                                action: isPaused ? (isLedger37 ? '恢复标签' : '恢复查询') : (isLedger37 ? '暂停标签' : '暂停查询'),
+                                detail: isPaused
+                                  ? (isLedger37 ? '恢复利息、标签保证金与全体成员初始保证金' : '恢复账户余额查询')
+                                  : (isLedger37 ? `暂停利息、标签保证金与全体成员初始保证金（${newMarginPauseDate}）` : `暂停账户余额查询（${newMarginPauseDate}）`),
+                              });
+                              refetchRightTagConfig();
+                              refetchAllTagsMarginSummary();
+                              refetchMarginLogs();
+                              toast.success(isPaused
+                                ? (isLedger37 ? '已恢复标签及全体成员初始保证金' : '已恢复查询')
+                                : (isLedger37 ? '已暂停标签及全体成员初始保证金' : '已暂停查询'));
+                            } finally {
+                              setPauseSaving(false);
+                            }
+                          };
+                          const requestPauseToggle = () => {
+                            if (ledgerId === 37 && !isPaused) {
+                              showConfirm(
+                                '标签全体暂停影响说明',
+                                '将从今天起同步暂停：该标签的利息计算、该标签的保证金状态，以及全体成员在该标签下的初始保证金。成员原有的个人暂停会保留。是否继续？',
+                                () => showConfirm(
+                                  '再次确认标签全体暂停',
+                                  '确认后立即同步暂停以上三项模块；恢复标签时只恢复系统同步的暂停，不会恢复成员原有的个人暂停。',
+                                  () => { void commitPauseToggle(); },
+                                  '确认暂停',
+                                ),
+                                '继续确认',
+                              );
+                              return;
+                            }
+                            void commitPauseToggle();
+                          };
                           return (
                             <div className="mt-3 flex justify-end">
                               <button
                                 disabled={pauseSaving}
-                                onClick={async () => {
-                                  setPauseSaving(true);
-                                  try {
-                                    const newMarginPauseDate = isPaused ? null : new Date().toISOString().slice(0, 10);
-                                    await                                     setTagMarginPauseMutation.mutateAsync({
-                                      ledgerId,
-                                      tagName: selectedTagForRight,
-                                      marginPauseDate: newMarginPauseDate,
-                                    });
-                                    // 写入日志
-                                    await addMarginLogMutation.mutateAsync({
-                                      ledgerId,
-                                      tagName: selectedTagForRight,
-                                      action: isPaused ? '恢复查询' : '暂停查询',
-                                      detail: isPaused ? '恢复账户余额查询' : `暂停账户余额查询（${new Date().toISOString().slice(0, 10)}）`,
-                                    });
-                                    refetchRightTagConfig();
-                                    refetchAllTagsMarginSummary();
-                                    refetchMarginLogs();
-                                    toast.success(isPaused ? '已恢复查询' : '已暂停查询');
-                                  } finally {
-                                    setPauseSaving(false);
-                                  }
-                                }}
+                                onClick={requestPauseToggle}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium"
                                 style={{
                                   backgroundColor: isPaused ? '#DCFCE7' : '#FFF7ED',
@@ -1840,7 +1862,7 @@ export default function DepositManage() {
                                 }}
                               >
                                 {isPaused ? <PlayCircle className="w-3.5 h-3.5" /> : <PauseCircle className="w-3.5 h-3.5" />}
-                                {pauseSaving ? '...' : (isPaused ? '恢复查询' : '暂停查询')}
+                                {pauseSaving ? '...' : (isPaused ? (ledgerId === 37 ? '恢复标签' : '恢复查询') : (ledgerId === 37 ? '暂停标签' : '暂停查询'))}
                               </button>
                             </div>
                           );
@@ -2056,12 +2078,12 @@ export default function DepositManage() {
               </button>
               <button
                 onClick={() => {
-                  confirmDialog.onConfirm();
                   setConfirmDialog((d) => ({ ...d, open: false }));
+                  confirmDialog.onConfirm();
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold"
               >
-                确认删除
+                {confirmDialog.confirmText}
               </button>
             </div>
           </div>

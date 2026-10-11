@@ -86,6 +86,7 @@ export default function InterestManagePage() {
   const [showLogs, setShowLogs] = useState<string | null>(null);
   // 暂停确认弹窗
   const [confirmPauseTag, setConfirmPauseTag] = useState<string | null>(null);
+  const [confirmGlobalPauseTag, setConfirmGlobalPauseTag] = useState<string | null>(null);
 
   // 账本分类（标签）
   const { data: rawCategories = [] } = trpc.ledger.getCategories.useQuery(
@@ -129,13 +130,14 @@ export default function InterestManagePage() {
   });
 
   const handlePause = useCallback((tagName: string) => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
     setTagPauseDateMutation.mutate({
       ledgerId: lid,
       tagName,
       pauseDate: today,
     });
     setConfirmPauseTag(null);
+    setConfirmGlobalPauseTag(null);
   }, [lid, setTagPauseDateMutation]);
 
   const handleResume = useCallback((tagName: string) => {
@@ -329,7 +331,7 @@ export default function InterestManagePage() {
                   <span className="text-xs tabular-nums text-gray-400">{tag.segmentCount} 段</span>
                   {tag.pauseDate && (
                     <span className="rounded px-1.5 py-0.5 text-xs font-medium text-blue-600 bg-blue-50">
-                      利息已暂停 {tag.pauseDate.slice(5)}
+                      {lid === 37 ? '标签全体暂停' : '利息已暂停'} {tag.pauseDate.slice(5)}
                     </span>
                   )}
                 </div>
@@ -376,7 +378,7 @@ export default function InterestManagePage() {
                     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
                       <div className="flex items-center justify-between bg-gray-50 px-3 py-1.5 text-[11px]">
                         <span className="font-semibold tracking-wide text-gray-700">当前结算</span>
-                        <span className="text-gray-400">{tag.pauseDate ? `截至 ${tag.pauseDate.slice(5)}（利息已暂停）` : '截至今日'}</span>
+                        <span className="text-gray-400">{tag.pauseDate ? `截至 ${tag.pauseDate.slice(5)}（${lid === 37 ? '标签全体暂停' : '利息已暂停'}）` : '截至今日'}</span>
                       </div>
                       <div className="flex items-center justify-between border-t border-gray-200 px-3 py-2.5">
                         {tag.totalInterest > 0 ? (
@@ -638,14 +640,14 @@ export default function InterestManagePage() {
                             onClick={() => handleResume(tag.tagName)}
                             className="min-w-0 py-2.5 text-center text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-100"
                           >
-                            恢复
+                            {lid === 37 ? '恢复标签' : '恢复'}
                           </button>
                         ) : (
                           <button
                             onClick={() => setConfirmPauseTag(tag.tagName)}
                             className="min-w-0 py-2.5 text-center text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-100"
                           >
-                            暂停
+                            {lid === 37 ? '暂停标签' : '暂停'}
                           </button>
                         )}
                         <button
@@ -755,7 +757,19 @@ export default function InterestManagePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl p-6 mx-4 max-w-sm w-full">
             <div className="text-base font-bold mb-2">确认暂停？</div>
-            <div className="text-sm text-gray-500 mb-4">暂停后利息将从今天起冻结，不再滚动计算。</div>
+            {lid === 37 ? (
+              <div className="text-sm text-gray-600 mb-4 space-y-2">
+                <p>此次是标签全体暂停，将从今天起同步影响：</p>
+                <ul className="list-disc pl-5 space-y-1 text-gray-500">
+                  <li>该标签的利息计算</li>
+                  <li>该标签的保证金状态</li>
+                  <li>全体成员在该标签下的初始保证金</li>
+                </ul>
+                <p className="text-xs text-gray-400">成员原有的个人初始保证金暂停会保留，不会被覆盖或恢复。</p>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500 mb-4">暂停后利息将从今天起冻结，不再滚动计算。</div>
+            )}
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmPauseTag(null)}
@@ -764,8 +778,37 @@ export default function InterestManagePage() {
                 取消
               </button>
               <button
-                onClick={() => handlePause(confirmPauseTag)}
+                onClick={() => {
+                  if (lid === 37) {
+                    setConfirmGlobalPauseTag(confirmPauseTag);
+                    setConfirmPauseTag(null);
+                  } else {
+                    handlePause(confirmPauseTag);
+                  }
+                }}
                 className="flex-1 py-2 rounded-xl bg-gray-500 text-white text-sm font-semibold"
+              >
+                {lid === 37 ? '继续确认' : '确认暂停'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmGlobalPauseTag && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl p-6 mx-4 max-w-sm w-full">
+            <div className="text-base font-bold mb-2">再次确认标签全体暂停？</div>
+            <div className="text-sm text-gray-500 mb-4">确认后将暂停该标签的利息、保证金以及全体成员初始保证金。</div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmGlobalPauseTag(null)}
+                className="flex-1 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => handlePause(confirmGlobalPauseTag)}
+                className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-semibold"
               >
                 确认暂停
               </button>

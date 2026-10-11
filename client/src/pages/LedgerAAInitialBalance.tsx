@@ -175,6 +175,9 @@ const CNY_RATE_FALLBACK = 6.8; // 居底备用，实际汇率从接口实时获�
 interface PauseHistoryItem {
   pauseDate: string;   // 暂停日期 YYYY-MM-DD
   resumeDate?: string; // 重启日期 YYYY-MM-DD（空表示尚未重启）
+  // 标签级利息/保证金暂停同步写入的系统记录；个人初始保证金暂停不带该标记。
+  pauseSource?: 'tag_global';
+  pausedBy?: number;
 }
 type PauseWalletHandling = {
   userId: number;
@@ -3491,12 +3494,15 @@ export default function LedgerAAInitialBalance() {
                         const history = entry.pauseHistory ?? [];
                         const latestIndex = history.length - 1;
                         const latest = latestIndex >= 0 ? history[latestIndex] : null;
+                        const latestIsGlobalPause = latest?.pauseSource === 'tag_global';
                         return (
                           <div className="flex items-center gap-1">
                             <input
                               type="date"
                               value={latest?.pauseDate ?? entry.pauseDate ?? ''}
+                              disabled={latestIsGlobalPause}
                               onChange={e => {
+                                if (latestIsGlobalPause) return;
                                 if (latest) {
                                   const nextHistory = history.map((item, index) => index === latestIndex ? { ...item, pauseDate: e.target.value } : item);
                                   updateEntry(userId, tagName, { pauseHistory: nextHistory });
@@ -3513,7 +3519,7 @@ export default function LedgerAAInitialBalance() {
                               className="min-w-0 flex-1 text-xs border rounded-lg px-1.5 py-1 outline-none"
                               style={{ borderColor: '#FDE68A', backgroundColor: '#FFFBEB', color: '#92400E' }}
                             />
-                            {(latest?.pauseDate || entry.pauseDate) && (
+                            {(latest?.pauseDate || entry.pauseDate) && !latestIsGlobalPause && (
                               <button type="button" onClick={() => {
                                 if (latest) {
                                   const nextHistory = history.map((item, index) => index === latestIndex ? { ...item, pauseDate: '' } : item);
@@ -3544,6 +3550,13 @@ export default function LedgerAAInitialBalance() {
                       const lastItem = history[history.length - 1];
                       const isCurrentlyPaused = lastItem && !lastItem.resumeDate;
                       const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+                      if (isCurrentlyPaused && lastItem?.pauseSource === 'tag_global') {
+                        return (
+                          <span className="text-xs px-2 py-1 rounded-lg" style={{ backgroundColor: '#EAF3FF', color: '#1565C0', border: '1px solid #B8D7F3' }}>
+                            标签全体暂停
+                          </span>
+                        );
+                      }
                       if (isCurrentlyPaused) {
                         // 当前已暂停：显示“添加重启”按钮
                         return (
@@ -3627,10 +3640,13 @@ export default function LedgerAAInitialBalance() {
                         <div key={idx} className="flex items-center gap-1.5 rounded-lg px-2 py-1.5" style={{ backgroundColor: item.resumeDate ? '#F1F8E9' : '#FFFBEB', border: `1px solid ${item.resumeDate ? '#C5E1A5' : '#FDE68A'}` }}>
                           {/* 暂停日期 */}
                           <span className="text-xs font-medium" style={{ color: '#92400E', minWidth: 16 }}>暂</span>
+                          {item.pauseSource === 'tag_global' && <span className="text-[10px]" style={{ color: '#1565C0' }}>全体</span>}
                           <input
                             type="date"
                             value={item.pauseDate}
+                            disabled={item.pauseSource === 'tag_global'}
                             onChange={e => {
+                              if (item.pauseSource === 'tag_global') return;
                               const newHistory = (entry.pauseHistory ?? []).map((h, i) => i === idx ? { ...h, pauseDate: e.target.value } : h);
                               updateEntry(userId, tagName, { pauseHistory: newHistory });
                             }}
@@ -3644,7 +3660,9 @@ export default function LedgerAAInitialBalance() {
                               <input
                                 type="date"
                                 value={item.resumeDate}
+                                disabled={item.pauseSource === 'tag_global'}
                                 onChange={e => {
+                                  if (item.pauseSource === 'tag_global') return;
                                   const newHistory = (entry.pauseHistory ?? []).map((h, i) => i === idx ? { ...h, resumeDate: e.target.value } : h);
                                   updateEntry(userId, tagName, { pauseHistory: newHistory });
                                 }}
@@ -3658,9 +3676,11 @@ export default function LedgerAAInitialBalance() {
                           {/* 删除按钮 */}
                           <button
                             type="button"
+                            disabled={item.pauseSource === 'tag_global'}
                             className="ml-auto w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0"
-                            style={{ color: '#9E9E9E', fontSize: 12 }}
+                            style={{ color: item.pauseSource === 'tag_global' ? '#D1D5DB' : '#9E9E9E', fontSize: 12 }}
                             onClick={() => {
+                              if (item.pauseSource === 'tag_global') return;
                               const newHistory = (entry.pauseHistory ?? []).filter((_, i) => i !== idx);
                               updateEntry(userId, tagName, { pauseHistory: newHistory });
                               if (idx === (entry.pauseHistory ?? []).length - 1 && !item.resumeDate) {

@@ -559,6 +559,25 @@ export default function LedgerDetailAA({
     { ledgerId, viewAsUserId: viewAsUserId ?? undefined },
     { enabled: !!ledgerId }
   );
+  // 三类暂停严格分层：利息与标签保证金为标签级状态；初始保证金暂停只属于当前用户。
+  // 首页标签序号的红/蓝与分组只使用当前用户的初始保证金暂停，不受标签级状态影响。
+  const getMemberInitialPauseState = (tagName: string) => {
+    const balances = (initialBalancesData?.balances ?? {}) as Record<string, unknown>;
+    const rawHistory = balances[`${tagName}__pauseHistory`];
+    if (rawHistory) {
+      try {
+        const history = JSON.parse(String(rawHistory)) as Array<{ pauseDate?: string; resumeDate?: string }>;
+        const last = history[history.length - 1];
+        if (last?.pauseDate && !last.resumeDate) {
+          return { isPaused: true, pauseDate: String(last.pauseDate) };
+        }
+      } catch { /* 保留旧 pauseDate 兼容路径 */ }
+    }
+    const legacyPauseDate = balances[`${tagName}__pauseDate`];
+    return legacyPauseDate
+      ? { isPaused: true, pauseDate: String(legacyPauseDate) }
+      : { isPaused: false, pauseDate: null };
+  };
   // 股票标签没有“初始金额”。普通成员（以及创建者切换到成员观察视角）
   // 仅在至少获得一笔股票份额且到达该份额开始日期后，才会在首页和标签下拉中看到它。
   // 股票总盘只属于37号账本的胡大叔本人。其他任何身份（包括账本管理员）进入时，
@@ -1370,21 +1389,12 @@ export default function LedgerDetailAA({
     };
   }, [overviewTab, selectedTagId, allTagsChartData.length, showPausedTagDetails]);
 
-  // 下拉菜单的顺序以概览表默认顺序为基准：运行中的标签在前，暂停标签在后。
-  // 没有任何概览数据的标签保留可选，但放在所有概览标签之后，避免打乱概览序号。
+  // 下拉菜单首先按状态分组：运行中的红色标签在前，暂停中的蓝色标签连续置后。
+  // 同一状态内再沿用概览顺序；没有任何概览数据的标签继续保留可选，并按原始顺序收尾。
   const dropdownOrderedCategories = useMemo(() => {
     if (!categories || categories.length === 0) return [];
-    const balances = initialBalancesData?.balances ?? {};
     const getIsPaused = (name: string) => {
-      const raw = (balances as any)[`${name}__pauseHistory`];
-      if (raw) {
-        try {
-          const history = JSON.parse(String(raw));
-          const last = history[history.length - 1];
-          return !!last && !last.resumeDate;
-        } catch { /* ignore invalid pause history */ }
-      }
-      return !!(balances as any)[`${name}__pauseDate`];
+      return getMemberInitialPauseState(name).isPaused;
     };
     const overviewNames = [...allTagsChartData]
       .filter((tag: any) => tag.points.length > 0)
@@ -1403,16 +1413,16 @@ export default function LedgerDetailAA({
     return [...categories].sort((left: any, right: any) => {
       if (isR1Tag(left.name) && !isR1Tag(right.name)) return -1;
       if (!isR1Tag(left.name) && isR1Tag(right.name)) return 1;
+      const leftPaused = getIsPaused(left.name);
+      const rightPaused = getIsPaused(right.name);
+      if (leftPaused && !rightPaused) return 1;
+      if (!leftPaused && rightPaused) return -1;
       const leftOrder = overviewOrder.get(left.name);
       const rightOrder = overviewOrder.get(right.name);
       if (leftOrder !== undefined && rightOrder !== undefined) return leftOrder - rightOrder;
       if (leftOrder !== undefined) return -1;
       if (rightOrder !== undefined) return 1;
-      const leftPaused = getIsPaused(left.name);
-      const rightPaused = getIsPaused(right.name);
-      if (leftPaused && !rightPaused) return 1;
-      if (!leftPaused && rightPaused) return -1;
-      return 0;
+      return Number(left.sortOrder ?? left.id ?? 0) - Number(right.sortOrder ?? right.id ?? 0);
     });
   }, [categories, initialBalancesData, allTagsChartData]);
 
@@ -2429,6 +2439,7 @@ export default function LedgerDetailAA({
                     if (catPauseHistory.length === 0 && catPauseDate) catPauseHistory = [{ pauseDate: String(catPauseDate) }];
                     const lastCatItem = catPauseHistory[catPauseHistory.length - 1];
                     const isCatPaused = !!lastCatItem && !lastCatItem.resumeDate;
+                    const isDisplayPaused = isCatPaused;
                     let pauseInfo = '';
                     if (isCatPaused && lastCatItem) {
                       const [, m, d] = lastCatItem.pauseDate.split('-');
@@ -2443,13 +2454,13 @@ export default function LedgerDetailAA({
                       <div key={cat.id} style={{ borderBottom: '1px solid #F5F5F5' }}>
                         <div className="flex items-stretch">
                           <button type="button" onClick={() => { setSelectedTagId(cat.id); setShowTagDropdown(false); setTagNoteEditTag(null); }} className="flex-1 min-w-0 px-4 py-2.5 text-left text-sm hover:bg-[#FFEBEE] flex items-center gap-2" style={{ fontWeight: selectedTagId === cat.id ? 600 : 400 }}>
-                            <span aria-label={`序号 ${dropdownIndex + 1}`} style={{ minWidth: 14, height: 14, padding: '0 2px', borderRadius: 3, backgroundColor: isCatPaused ? '#1565C0' : '#D32F2F', color: '#FFFFFF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, lineHeight: 1, flexShrink: 0 }}>
+                            <span aria-label={`序号 ${dropdownIndex + 1}`} style={{ minWidth: 14, height: 14, padding: '0 2px', borderRadius: 3, backgroundColor: isDisplayPaused ? '#1565C0' : '#D32F2F', color: '#FFFFFF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, lineHeight: 1, flexShrink: 0 }}>
                               <span style={{ display: 'inline-block', transform: 'translateY(1px)' }}>{dropdownIndex + 1}</span>
                             </span>
                             <span style={{ color: selectedTagId === cat.id ? '#D32F2F' : '#222222', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {tagAlias}{tagNote && <span style={{ marginLeft: 4, fontSize: 12, fontWeight: 400, color: '#9E9E9E' }}>· {tagNote}</span>}
                             </span>
-                            {isCatPaused && <span style={{ marginLeft: 4, fontSize: 11, color: '#1565C0' }}>{pauseInfo}</span>}
+                            {isDisplayPaused && <span style={{ marginLeft: 4, fontSize: 11, color: '#1565C0' }}>{pauseInfo}</span>}
                           </button>
                           {!viewAsUserId && (
                             <button
