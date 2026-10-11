@@ -417,6 +417,8 @@ function mapEntry(row: any) {
     optionPremiumCurrency: T0_JOURNAL_OPTION_PREMIUM_CURRENCIES.has(String(row.option_premium_currency ?? row.optionPremiumCurrency ?? "") as T0JournalOptionPremiumCurrency)
       ? String(row.option_premium_currency ?? row.optionPremiumCurrency) as T0JournalOptionPremiumCurrency
       : undefined,
+    /** 账本首屏直接复用共享缓存的有效期权标记价；前端仍会每三秒刷新为最新报价。 */
+    optionMarkPrice: toNumber(row.option_mark_price) > 0 ? toNumber(row.option_mark_price) : undefined,
     /** 自动到期结算后保存的每 ETH 期权最终结算值（USDT）。 */
     optionSettlementPrice: row.option_settlement_price === null || row.option_settlement_price === undefined
       ? undefined
@@ -438,6 +440,61 @@ function mapEntry(row: any) {
     note: row.note ? String(row.note) : undefined,
     createdAt: isoTime(row.trade_time || row.created_at),
   };
+}
+
+/**
+ * T+0 首屏不等待每个报价格各自完成行情请求：直接读取已经由统一期权行情接口维护的正数缓存。
+ * 只读、不触发外部请求；缓存缺失时返回空值，前端原有三秒轮询仍会补齐报价。
+ */
+function getT0OptionQuoteCacheKey(row: any): string | null {
+  if (String(row.instrument_type ?? row.instrumentType ?? "") !== "option") return null;
+  if (String(row.execution_status ?? row.executionStatus ?? "filled") !== "filled") return null;
+  const expiryDate = mapOptionDate(row.option_expiry_date ?? row.optionExpiryDate);
+  const strikePrice = toNumber(row.price);
+  const direction = String(row.option_direction ?? row.optionDirection ?? "");
+  if (!expiryDate || strikePrice <= 0 || !T0_JOURNAL_OPTION_DIRECTIONS.has(direction as T0JournalOptionDirection)) return null;
+  const [year, month, day] = expiryDate.split("-").map(Number);
+  const monthCode = DERIBIT_MONTH_CODES[month - 1];
+  if (!Number.isInteger(year) || !Number.isInteger(day) || !monthCode) return null;
+  const contractType = direction.endsWith("put") ? "P" : "C";
+  return `greeks:ETH-${day}${monthCode}${String(year).slice(-2)}-${strikePrice}-${contractType}`;
+}
+
+async function getT0CachedOptionMarkPrices(conn: any, entryRows: any[]): Promise<Map<number, number>> {
+  const cacheKeyByEntryId = new Map<number, string>();
+  for (const row of entryRows) {
+    const entryId = toNumber(row.id);
+    const cacheKey = getT0OptionQuoteCacheKey(row);
+    if (entryId > 0 && cacheKey) cacheKeyByEntryId.set(entryId, cacheKey);
+  }
+  if (cacheKeyByEntryId.size === 0) return new Map();
+
+  const cacheKeys = Array.from(new Set(cacheKeyByEntryId.values()));
+  try {
+    const [cacheResult] = await conn.execute(
+      `SELECT cache_key, cache_value FROM deribit_cache WHERE cache_key IN (${cacheKeys.map(() => "?").join(", ")})`,
+      cacheKeys,
+    );
+    const markPriceByKey = new Map<string, number>();
+    for (const row of asRows(cacheResult)) {
+      try {
+        const markPrice = Number(JSON.parse(String(row.cache_value || "{}")).markPrice);
+        // 缓存中零价代表当次行情暂缺；绝不能覆盖已经存在的有效报价。
+        if (Number.isFinite(markPrice) && markPrice > 0) markPriceByKey.set(String(row.cache_key), markPrice);
+      } catch {
+        // 个别缓存条目异常时仅忽略该条，不影响账本主体数据。
+      }
+    }
+    const result = new Map<number, number>();
+    for (const [entryId, cacheKey] of Array.from(cacheKeyByEntryId.entries())) {
+      const markPrice = markPriceByKey.get(cacheKey);
+      if (markPrice !== undefined) result.set(entryId, markPrice);
+    }
+    return result;
+  } catch (error) {
+    console.warn("[T0期权] 读取首屏报价缓存失败，改由前端轮询补齐:", error instanceof Error ? error.message : error);
+    return new Map();
+  }
 }
 
 function mapProfitShareRule(row: any): T0JournalProfitShareRule {
@@ -1061,7 +1118,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
 
   const entryRows = asRows(entryResult);
   const entryIds = entryRows.map((row) => toNumber(row.id)).filter((id) => id > 0);
-  const [profitShareSnapshotResult, profitShareRuleResult] = await Promise.all([
+  const [profitShareSnapshotResult, profitShareRuleResult, optionMarkPriceByEntryId] = await Promise.all([
     entryIds.length > 0
       ? conn.execute(
         `SELECT shared_entry.entry_id, shared_entry.opening_entry_id, shared_entry.source_user_id, shared_entry.related_fund_id,
@@ -1093,6 +1150,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
         [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
       )
       : Promise.resolve([[]]),
+    getT0CachedOptionMarkPrices(conn, entryRows),
   ]);
 
   return {
@@ -1100,7 +1158,10 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
     viewerRelatedUserId: isAdminScope ? undefined : relatedUserId,
     accounts: asRows(accountResult).map(mapAccount),
     // 成员端只读，但需完整知悉自己订单的锁定与挂单状态；写权限仍由路由层管理员鉴权严格限制。
-    entries: entryRows.map(mapEntry),
+    entries: entryRows.map((entry) => mapEntry({
+      ...entry,
+      option_mark_price: optionMarkPriceByEntryId.get(toNumber(entry.id)),
+    })),
     recentUsers: asRows(recentUserResult).map(mapRelatedUser),
     relatedFunds: asRows(relatedFundResult).map(mapRelatedFund),
     profitShareSnapshots: asRows(profitShareSnapshotResult).map(mapProfitShareSnapshot),

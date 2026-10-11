@@ -144,6 +144,8 @@ type PreviewTrade = {
   optionExpiryDate?: string;
   optionPremium?: number;
   optionPremiumCurrency?: T0OptionPremiumCurrency;
+  /** 账本接口下发的最近有效期权标记价，用于刷新首屏与轮询间隙的可靠兜底。 */
+  optionMarkPrice?: number;
   /** 到期自动结算时每 ETH 期权获得或支付的最终价值（USDT）。 */
   optionSettlementPrice?: number;
   /** Deribit 最终 delivery 使用的 ETH 指数交割价（USDT）。 */
@@ -175,6 +177,7 @@ type LadderOptionMetadata = {
   strikePrice?: number;
   premium?: number;
   premiumCurrency?: T0OptionPremiumCurrency;
+  cachedMarkPrice?: number;
 };
 
 type LadderCellMetadata = {
@@ -254,6 +257,9 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     optionPremium: entry.optionPremium === undefined || entry.optionPremium === null ? undefined : Number(entry.optionPremium),
     optionPremiumCurrency: entry.optionPremiumCurrency === "USDT" || entry.optionPremiumCurrency === "ETH"
       ? entry.optionPremiumCurrency
+      : undefined,
+    optionMarkPrice: Number.isFinite(Number(entry.optionMarkPrice)) && Number(entry.optionMarkPrice) > 0
+      ? Number(entry.optionMarkPrice)
       : undefined,
     optionSettlementPrice: entry.optionSettlementPrice === undefined || entry.optionSettlementPrice === null
       ? undefined
@@ -488,6 +494,14 @@ function calculateOptionUnrealizedPnl({
     pnl: pnlPerContract * safeQuantity,
     premiumTotal: premiumUsdtPerContract * safeQuantity,
   };
+}
+
+/** 实时请求偶发零值、空值或尚未返回时，始终保留账本首屏下发的最近正数报价。 */
+function resolveUsableOptionMarkPrice(liveMarkPrice: unknown, cachedMarkPrice?: number): number | null {
+  const live = Number(liveMarkPrice);
+  if (Number.isFinite(live) && live > 0) return live;
+  const cached = Number(cachedMarkPrice);
+  return Number.isFinite(cached) && cached > 0 ? cached : null;
 }
 
 function formatOptionQuote(value: number, currency: T0OptionPremiumCurrency) {
@@ -3679,6 +3693,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       strikePrice: row.openingTrade.price,
                       premium: row.openingTrade.optionPremium,
                       premiumCurrency: row.openingTrade.optionPremiumCurrency,
+                      cachedMarkPrice: row.openingTrade.optionMarkPrice,
                     }
                     : undefined,
                 }
@@ -5826,7 +5841,7 @@ function OptionUnrealizedPnlText({
   });
   const optionPnl = calculateOptionUnrealizedPnl({
     quantity: getTradeFinancialQuantity(trade, remainingQuantity),
-    optionMarkPrice: optionGreeks.data?.markPrice ?? null,
+    optionMarkPrice: resolveUsableOptionMarkPrice(optionGreeks.data?.markPrice, trade.optionMarkPrice),
     premium: trade.optionPremium,
     premiumCurrency: trade.optionPremiumCurrency,
     ethMarkPrice,
@@ -5866,7 +5881,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
     ? calculateOptionUnrealizedPnl({
       // 成员收益投影视图保留原始 ETH 数量展示，但收益必须按其分配比例折算。
       quantity: bucket.financialQuantity,
-      optionMarkPrice: optionGreeks.data?.markPrice ?? null,
+      optionMarkPrice: resolveUsableOptionMarkPrice(optionGreeks.data?.markPrice, optionMetadata?.cachedMarkPrice),
       premium: optionMetadata?.premium,
       premiumCurrency: optionMetadata?.premiumCurrency,
       ethMarkPrice: markPrice,
