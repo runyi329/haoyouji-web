@@ -11007,11 +11007,12 @@ ${klinesSummary}
         return await dbLedger.getLedgerById(input.id, ctx.user.id);
       }),
 
-    // 52号账本 T+0 速记账本：管理员读取其完整管理视图；普通成员只读取关联到本人用户ID的流水。
-    // 管理员代入成员时，保持与成员本人相同的只读个人范围，不返回管理员全量流水。
+    // 52号账本 T+0 速记账本：管理员读取其完整管理视图；普通成员默认只读取本人。
+    // 成员主动启用“全部推荐”时，服务端仅按该成员自身的递归推荐树扩大至已授权的后代订单。
+    // 管理员代入成员时，保持与成员本人相同的只读范围，不返回管理员全量流水。
     t0GetJournal: protectedProcedure
-      .input(z.object({ ledgerId: z.literal(52) }))
-      .query(async ({ ctx }) => {
+      .input(z.object({ ledgerId: z.literal(52), includeReferralDescendants: z.boolean().optional() }))
+      .query(async ({ ctx, input }) => {
         const journal = await import('./ledger52-t0-journal');
         if (ctx.isViewingAs) {
           const realUser = ctx.realUser;
@@ -11031,17 +11032,23 @@ ${klinesSummary}
           if (!targetMembership) {
             throw new TRPCError({ code: 'FORBIDDEN', message: '目标用户不是52号账本成员' });
           }
-          return await journal.getLedger52T0Journal({ mode: 'member', relatedUserId: ctx.user.id });
+          return await journal.getLedger52T0Journal({
+            mode: 'member',
+            relatedUserId: ctx.user.id,
+            includeReferralDescendants: input.includeReferralDescendants,
+          });
         }
         const scope = await journal.resolveLedger52T0JournalReadScope({
           id: ctx.user.id,
           role: ctx.user.role,
           isViewingAs: ctx.isViewingAs,
         });
-        return await journal.getLedger52T0Journal(scope);
+        return await journal.getLedger52T0Journal(scope.mode === 'member'
+          ? { ...scope, includeReferralDescendants: input.includeReferralDescendants }
+          : scope);
       }),
 
-    // 推荐下线仅服务于管理员的用户筛选；始终沿用T+0账本的同一阅读权限边界。
+    // 推荐集合始终沿用T+0账本的同一阅读权限边界：管理员取本人管理分支，成员仅取自己的分支。
     t0GetReferralFilterOptions: protectedProcedure
       .input(z.object({ ledgerId: z.literal(52) }))
       .query(async ({ ctx }) => {

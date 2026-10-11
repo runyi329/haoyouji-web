@@ -1322,7 +1322,12 @@ function filterTradesByInstrumentTypes(trades: PreviewTrade[], selectedTypes: T0
 }
 
 /** 开平仓保持完整 ETH 数量，收益与交易成本按同一开仓的多人快照分配；所有受益人比例严格合计100%。 */
-function projectMemberProfitShareTrades(rawTrades: PreviewTrade[], snapshots: ProfitShareSnapshot[], viewerUserId: string) {
+function projectMemberProfitShareTrades(
+  rawTrades: PreviewTrade[],
+  snapshots: ProfitShareSnapshot[],
+  viewerUserId: string,
+  visibleReferralDescendantUserIds = new Set<string>(),
+) {
   const viewerId = Number(viewerUserId);
   if (!Number.isInteger(viewerId) || viewerId <= 0) return rawTrades;
   const beneficiarySnapshotsByEntry = new Map<string, ProfitShareSnapshot[]>();
@@ -1337,6 +1342,11 @@ function projectMemberProfitShareTrades(rawTrades: PreviewTrade[], snapshots: Pr
   }
   const projected: PreviewTrade[] = [];
   for (const trade of rawTrades) {
+    // 成员主动开启“全部推荐”后，下线订单按原始完整流水展示；本人订单仍沿用既有收益分配投影。
+    if (trade.relatedUserId && visibleReferralDescendantUserIds.has(trade.relatedUserId)) {
+      projected.push(trade);
+      continue;
+    }
     const beneficiarySnapshots = beneficiarySnapshotsByEntry.get(trade.id) ?? [];
     if (beneficiarySnapshots.length === 0) {
       // 规则上线前的历史订单没有快照，订单本人继续按完整原单查看，保证历史可追溯。
@@ -1466,6 +1476,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [relatedFundFilterIds, setRelatedFundFilterIds] = useState<string[]>([]);
   const [instrumentTypeFilterIds, setInstrumentTypeFilterIds] = useState<T0InstrumentType[]>([]);
   const [executionFilter, setExecutionFilter] = useState<T0ExecutionFilter>("all");
+  // 成员存在有订单的推荐用户时自动读取本人完整分支；前端用户下拉再决定展示“全部/推荐/本人/单个推荐用户”。
+  const [includeMemberReferralDescendants, setIncludeMemberReferralDescendants] = useState(false);
   // 历史记录拥有独立筛选范围：不影响上方持仓汇总与T形交割表。
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
   const [historyAccountFilterIds, setHistoryAccountFilterIds] = useState<string[]>([]);
@@ -1575,7 +1587,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     staleTime: 250,
   });
   const t0JournalQuery = trpc.ledger.t0GetJournal.useQuery(
-    { ledgerId: 52 },
+    { ledgerId: 52, includeReferralDescendants: includeMemberReferralDescendants },
     {
       enabled: canAccess,
       staleTime: T0_JOURNAL_STALE_TIME_MS,
@@ -1586,11 +1598,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const isMemberView = (t0JournalQuery.data as any)?.viewerMode === "member";
   const canManage = canAccess && (t0JournalQuery.data as any)?.viewerMode === "admin";
   // 推荐树单独低频读取，避免52号账本的两秒流水轮询反复遍历 users 邀请关系。
-  // 服务端仅返回当前管理员本人对应的一条递归“全部推荐”分支。
+  // 管理员与成员均只会获得本人对应的一条递归“全部推荐”分支。
   const t0ReferralFilterQuery = trpc.ledger.t0GetReferralFilterOptions.useQuery(
     { ledgerId: 52 },
     {
-      enabled: canManage,
+      enabled: canAccess && (canManage || isMemberView),
       staleTime: 60_000,
       refetchInterval: 60_000,
       refetchOnWindowFocus: true,
@@ -1615,7 +1627,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const signedInUserId = String((me as any)?.id || "");
     return canManage && /^\d+$/.test(signedInUserId) ? signedInUserId : "";
   }, [canManage, me, t0ReferralFilterQuery.data]);
-  const referralDataLoaded = !canManage || t0ReferralFilterQuery.isSuccess;
+  const referralDataLoaded = (!canManage && !isMemberView) || t0ReferralFilterQuery.isSuccess;
+  const referralDescendantsForCurrentRoot = currentReferralRootUserId
+    ? referralDescendantsByRootUserId.get(currentReferralRootUserId)
+    : undefined;
+  // 没有任何带订单的递归推荐用户时，成员端保持原先的本人锁定；有订单时才读取完整分支并开放受限下拉。
+  useEffect(() => {
+    if (!isMemberView || !t0ReferralFilterQuery.isSuccess) return;
+    const shouldIncludeReferralDescendants = Boolean(referralDescendantsForCurrentRoot?.length);
+    setIncludeMemberReferralDescendants((current) => current === shouldIncludeReferralDescendants
+      ? current
+      : shouldIncludeReferralDescendants);
+  }, [isMemberView, referralDescendantsForCurrentRoot, t0ReferralFilterQuery.isSuccess]);
   const topFilterStorageKey = useMemo(() => {
     const journal = t0JournalQuery.data as any;
     const viewerMode = journal?.viewerMode;
@@ -1774,8 +1797,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         beneficiaryUserName: snapshot.beneficiaryUserName ? String(snapshot.beneficiaryUserName) : undefined,
       }))
       : [];
+    const visibleReferralDescendantUserIds = new Set<string>(
+      (Array.isArray(journal.viewerReferralDescendantUserIds) ? journal.viewerReferralDescendantUserIds as unknown[] : [])
+        .map((userId: unknown) => String(userId))
+        .filter((userId): userId is string => /^\d+$/.test(userId)),
+    );
     const nextTrades = journal.viewerMode === "member"
-      ? projectMemberProfitShareTrades(rawTrades, profitShareSnapshots, String(journal.viewerRelatedUserId || ""))
+      ? projectMemberProfitShareTrades(
+        rawTrades,
+        profitShareSnapshots,
+        String(journal.viewerRelatedUserId || ""),
+        visibleReferralDescendantUserIds,
+      )
       : rawTrades;
     const nextRecoverableEntries: RecoverableTrade[] = Array.isArray(journal.recoverableEntries)
       ? journal.recoverableEntries.map((item: any) => ({
@@ -1842,7 +1875,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         shouldRestoreTopFilters ? (persistedTopFilters?.accountIds ?? []) : current,
         nextAccounts.map((account) => account.id),
       ));
-      setRelatedUserFilterIds([]);
+      setRelatedUserFilterIds((current) => {
+        const preferred = shouldRestoreTopFilters ? (persistedTopFilters?.relatedUserIds ?? []) : current;
+        if (!referralDataLoaded) return preferred;
+        const selectableMemberUserIds = new Set([
+          currentReferralRootUserId,
+          ...(currentReferralDescendants ?? []),
+        ]);
+        return preferred.filter((id) => {
+          const rootUserId = getT0ReferralDescendantsRootUserId(id);
+          return rootUserId
+            ? rootUserId === currentReferralRootUserId && selectableMemberUserIds.size > 1
+            : selectableMemberUserIds.has(id);
+        });
+      });
       setRelatedFundFilterIds((current) => normalizeMemberFilter(
         shouldRestoreTopFilters ? (persistedTopFilters?.relatedFundIds ?? []) : current,
         memberFundFilterIds,
@@ -2052,6 +2098,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const currentReferralToken = currentReferralRootUserId
     ? createT0ReferralDescendantsToken(currentReferralRootUserId)
     : "";
+  const memberReferralDescendantUsers = useMemo<PreviewRelatedUser[]>(() => {
+    const allowedUserIds = new Set(currentReferralDescendants ?? []);
+    const rawUsers = (t0ReferralFilterQuery.data as any)?.descendantUsers;
+    if (!Array.isArray(rawUsers)) return [] as PreviewRelatedUser[];
+    const seen = new Set<string>();
+    return rawUsers.flatMap((rawUser: any) => {
+      const id = String(rawUser?.id || "");
+      if (!allowedUserIds.has(id) || seen.has(id)) return [];
+      seen.add(id);
+      const username = rawUser?.username ? String(rawUser.username) : "";
+      return [{
+        id,
+        name: String(rawUser?.name || username || `用户#${id}`),
+        username,
+        avatar: rawUser?.avatar ? String(rawUser.avatar) : undefined,
+      } satisfies PreviewRelatedUser];
+    });
+  }, [currentReferralDescendants, t0ReferralFilterQuery.data]);
+  const memberHasReferralFilterOptions = isMemberView && Boolean(currentReferralDescendants?.length);
   const shouldKeepCurrentReferralLoadingOption = Boolean(
     currentReferralToken
     && selectedReferralFilterIds.has(currentReferralToken)
@@ -2063,21 +2128,37 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     label: `${user.name}${user.username ? ` · @${user.username}` : ""}`,
     summaryLabel: user.name,
   });
-  const relatedUserFilterOptions: T0MultiSelectOption[] = [
-    // 管理员只在本人下方显示一条递归“全部推荐”，不再为每位关联用户重复展示其推荐分支。
-    ...(currentReferralRootUser ? [toRelatedUserFilterOption(currentReferralRootUser)] : []),
-    ...(currentReferralDescendants || shouldKeepCurrentReferralLoadingOption ? [{
-      id: currentReferralToken,
-      // 数字只统计当前 T+0 中实际有订单、可被筛选命中的递归推荐用户。
-      label: `全部推荐（${currentReferralDescendants ? currentReferralDescendants.length : "读取中"}）`,
-      summaryLabel: `全部推荐${currentReferralDescendants ? `（${currentReferralDescendants.length}）` : ""}`,
-      kind: "referral-descendants" as const,
-    }] : []),
-    ...recentRelatedUsers
-      .filter((user) => user.id !== currentReferralRootUserId)
-      .map(toRelatedUserFilterOption),
-    ...(hasUnlinkedTrades ? [{ id: "unlinked", label: "未关联用户（历史）" }] : []),
-  ];
+  const relatedUserFilterOptions: T0MultiSelectOption[] = isMemberView
+    ? (memberHasReferralFilterOptions ? [
+      // “全部”由空选项表达；成员下拉的第二项固定为本人所有递归推荐用户，不含本人。
+      {
+        id: currentReferralToken,
+        label: `全部推荐（${currentReferralDescendants!.length}）`,
+        summaryLabel: `全部推荐（${currentReferralDescendants!.length}）`,
+        kind: "referral-descendants" as const,
+      },
+      {
+        id: currentReferralRootUserId,
+        label: `${memberRelatedUserName}${(me as any)?.username ? ` · @${String((me as any).username)}` : ""}`,
+        summaryLabel: memberRelatedUserName,
+      },
+      ...memberReferralDescendantUsers.map(toRelatedUserFilterOption),
+    ] : [])
+    : [
+      // 管理员只在本人下方显示一条递归“全部推荐”，不再为每位关联用户重复展示其推荐分支。
+      ...(currentReferralRootUser ? [toRelatedUserFilterOption(currentReferralRootUser)] : []),
+      ...(currentReferralDescendants || shouldKeepCurrentReferralLoadingOption ? [{
+        id: currentReferralToken,
+        // 数字只统计当前 T+0 中实际有订单、可被筛选命中的递归推荐用户。
+        label: `全部推荐（${currentReferralDescendants ? currentReferralDescendants.length : "读取中"}）`,
+        summaryLabel: `全部推荐${currentReferralDescendants ? `（${currentReferralDescendants.length}）` : ""}`,
+        kind: "referral-descendants" as const,
+      }] : []),
+      ...recentRelatedUsers
+        .filter((user) => user.id !== currentReferralRootUserId)
+        .map(toRelatedUserFilterOption),
+      ...(hasUnlinkedTrades ? [{ id: "unlinked", label: "未关联用户（历史）" }] : []),
+    ];
   const relatedFundFilterOptions = [
     ...(trades.some((trade) => !trade.relatedFundId) ? [{ id: "unclassified", label: "未区分项目（历史）" }] : []),
     ...availableRelatedFunds.map((fund) => ({ id: fund.id, label: fund.name })),
@@ -2092,11 +2173,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ...(trades.some((trade) => !trade.relatedFundId) ? [{ id: "unclassified", label: "未区分项目（历史）" }] : []),
     ...historyAvailableRelatedFunds.map((fund) => ({ id: fund.id, label: fund.name })),
   ];
+  const topSelectableRelatedUserIds = isMemberView
+    ? [currentReferralRootUserId, ...(currentReferralDescendants ?? [])].filter(Boolean)
+    : recentRelatedUsers.map((user) => user.id);
   const topRelatedUserSelectionIsAll = isT0RelatedUserSelectionEquivalentToAll(
     relatedUserFilterIds,
     topRelatedUserFilter,
-    recentRelatedUsers.map((user) => user.id),
-    hasUnlinkedTrades,
+    topSelectableRelatedUserIds,
+    isMemberView ? false : hasUnlinkedTrades,
   );
   const historyRelatedUserSelectionIsAll = isT0RelatedUserSelectionEquivalentToAll(
     historyRelatedUserFilterIds,
@@ -2146,6 +2230,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }));
     setHistoryRelatedFundFilterIds((current) => current.filter((id) => id === "unclassified" || relatedFunds.some((fund) => fund.id === id)));
   }, [accounts, recentRelatedUsers, referralDataLoaded, referralDescendantsByRootUserId, relatedFunds]);
+  // 成员端没有独立的历史用户筛选面板；其历史记录必须严格跟随顶部受限用户下拉，
+  // 从而保证选“全部推荐”时不会混入本人订单，选“全部”时才展示本人加全部推荐。
+  useEffect(() => {
+    if (!isMemberView) return;
+    setHistoryRelatedUserFilterIds((current) => current.join("|") === relatedUserFilterIds.join("|")
+      ? current
+      : relatedUserFilterIds);
+    setHistoryRelatedFundFilterIds([]);
+  }, [isMemberView, relatedUserFilterIds]);
   const topFilterGridTemplateColumns = useMemo(() => {
     const summaryFor = (label: string, options: T0MultiSelectOption[], selectedIds: string[]) => {
       if (label === "用户" && topRelatedUserSelectionIsAll) return "用户全部";
@@ -2159,7 +2252,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const accountSummary = shouldLockMemberAccountFilter
       ? `账户${lockedAccountName}`
       : summaryFor("账户", accountFilterOptions, selectedAccountIds);
-    const userSummary = isMemberView
+    const userSummary = isMemberView && !memberHasReferralFilterOptions
       ? `用户${memberRelatedUserName}`
       : summaryFor("用户", relatedUserFilterOptions, relatedUserFilterIds);
     const fundSummary = shouldLockMemberFundFilter
@@ -2168,14 +2261,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     // 成员视图的三项都已经代表当前可见范围（即使项目暂为“全部”），
     // 因此始终按三项均已选中来共同分配空间，让每项文字拥有相近的左右留白。
     const accountSpec = { summary: accountSummary, selectedCount: isMemberView ? 1 : selectedAccountIds.length };
-    const userSpec = { summary: userSummary, selectedCount: isMemberView ? 1 : relatedUserFilterIds.length };
+    const userSpec = {
+      summary: userSummary,
+      selectedCount: isMemberView && !memberHasReferralFilterOptions ? 1 : relatedUserFilterIds.length,
+    };
     const fundSpec = { summary: fundSummary, selectedCount: isMemberView ? 1 : relatedFundFilterIds.length };
     return buildT0FilterGridTemplateColumns([
       accountSpec,
       userSpec,
       fundSpec,
     ]);
-  }, [accountFilterOptions, isMemberView, lockedAccountName, lockedRelatedFundName, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberAccountFilter, shouldLockMemberFundFilter, topRelatedUserSelectionIsAll]);
+  }, [accountFilterOptions, isMemberView, lockedAccountName, lockedRelatedFundName, memberHasReferralFilterOptions, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberAccountFilter, shouldLockMemberFundFilter, topRelatedUserSelectionIsAll]);
   const topInstrumentFilterSummary = getT0InstrumentFilterSummary(instrumentTypeFilterIds);
   const topExecutionFilterSummary = executionFilter === "all"
     ? "状态全部"
@@ -3834,7 +3930,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   }}
                 />
               )}
-              {isMemberView ? <LockedFilterValue label="用户" value={memberRelatedUserName} /> : (
+              {isMemberView && !memberHasReferralFilterOptions ? <LockedFilterValue label="用户" value={memberRelatedUserName} /> : (
                 <T0MultiSelect
                   label="用户"
                   options={relatedUserFilterOptions}
@@ -3844,6 +3940,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   treatSelectionAsAll={topRelatedUserSelectionIsAll}
                   onChange={(ids) => {
                     setRelatedUserFilterIds(ids);
+                    if (isMemberView) setHistoryRelatedUserFilterIds(ids);
                     // 项目只属于用户；改动用户范围后重置项目，避免保留不可见的跨用户项目条件。
                     setRelatedFundFilterIds([]);
                     setRecentJournalPage(1);

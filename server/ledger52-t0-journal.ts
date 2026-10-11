@@ -29,7 +29,7 @@ export type T0JournalActor = {
 
 export type T0JournalReadScope =
   | { mode: "admin"; journalOwnerUserId: number }
-  | { mode: "member"; relatedUserId: number };
+  | { mode: "member"; relatedUserId: number; includeReferralDescendants?: boolean };
 
 export type SaveT0JournalEntryInput = {
   actorUserId: number;
@@ -1013,8 +1013,18 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
   const isAdminScope = scope.mode === "admin";
   const journalOwnerUserId = isAdminScope ? scope.journalOwnerUserId : 0;
   const relatedUserId = scope.mode === "member" ? scope.relatedUserId : 0;
+  // 普通成员默认仍仅读取本人；仅在其主动开启“全部推荐”后，才按本人递归推荐树扩展订单范围。
+  // 根用户由当前会话强制确定，客户端无法提交任意他人的 ID。
+  const memberReferralDescendantUserIds = !isAdminScope && scope.includeReferralDescendants
+    ? await getLedger52T0MemberReferralDescendantUserIds(conn, relatedUserId)
+    : [];
+  const memberVisibleRelatedUserIds = !isAdminScope
+    ? Array.from(new Set([relatedUserId, ...memberReferralDescendantUserIds].filter((userId) => userId > 0)))
+    : [];
+  const memberRelatedUserPlaceholders = memberVisibleRelatedUserIds.map(() => "?").join(", ");
+  const memberVisibilityParams = [...memberVisibleRelatedUserIds, relatedUserId];
   const memberVisibilitySql = `(
-    e.related_user_id = ?
+    e.related_user_id IN (${memberRelatedUserPlaceholders})
     OR EXISTS (
       SELECT 1
         FROM ledger52_t0_journal_entry_profit_shares shared_entry
@@ -1040,7 +1050,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
           WHERE e.ledger_id = ? AND ${memberVisibilitySql}
           GROUP BY a.id, a.name
           ORDER BY last_used_at DESC, a.id DESC`,
-        [LEDGER_52_T0_JOURNAL_ID, relatedUserId, relatedUserId],
+        [LEDGER_52_T0_JOURNAL_ID, ...memberVisibilityParams],
       ),
     conn.execute(
       `SELECT e.id, e.account_id,
@@ -1068,7 +1078,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
         LIMIT 2000`,
       isAdminScope
         ? [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId]
-        : [LEDGER_52_T0_JOURNAL_ID, relatedUserId, relatedUserId],
+        : [LEDGER_52_T0_JOURNAL_ID, ...memberVisibilityParams],
     ),
     isAdminScope ? conn.execute(
       `SELECT a.id AS audit_id, a.entry_id, a.operation, a.before_snapshot, a.created_at
@@ -1123,7 +1133,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
         GROUP BY f.id, f.related_user_id, f.name
         ORDER BY last_used_at DESC, f.id DESC
         LIMIT 200`,
-      [LEDGER_52_T0_JOURNAL_ID, relatedUserId, relatedUserId],
+      [LEDGER_52_T0_JOURNAL_ID, ...memberVisibilityParams],
     ),
   ]);
 
@@ -1167,6 +1177,8 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
   return {
     viewerMode: scope.mode,
     viewerRelatedUserId: isAdminScope ? undefined : relatedUserId,
+    // 仅在成员主动开启“全部推荐”时下发已授权的下线 ID，供前端保留本人收益投影并完整展示下线订单。
+    viewerReferralDescendantUserIds: isAdminScope ? [] : memberReferralDescendantUserIds,
     accounts: asRows(accountResult).map(mapAccount),
     // 成员端只读，但需完整知悉自己订单的锁定与挂单状态；写权限仍由路由层管理员鉴权严格限制。
     entries: entryRows.map((entry) => mapEntry({
@@ -1183,22 +1195,8 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
   };
 }
 
-/**
- * 管理员用户筛选仅返回当前登录管理员本人的一条递归“全部推荐”集合。
- * 下线关系读取全站 users.invited_by_user_id，但只回传当前 T+0 目录中实际有订单的后代 ID；
- * 不返回任意其他用户的分支，避免管理员下拉出现多条同名“全部推荐”。
- * 成员没有用户维度筛选能力，因此返回空集合，避免借接口枚举任何他人关系。
- */
-export async function getLedger52T0JournalReferralFilterOptions(scope: T0JournalReadScope): Promise<{
-  rootUserId: number | null;
-  descendantsByUserId: Record<string, number[]>;
-}> {
-  if (scope.mode !== "admin") return { rootUserId: null, descendantsByUserId: {} };
-
-  const conn = await getDbConnection();
-  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
-  await ensureLedger52T0JournalTables(conn);
-
+/** 仅保留当前 T+0 范围中真实存在订单的关联用户，避免将无订单的推荐关系带入筛选或可见范围。 */
+async function getLedger52T0AdminSelectableRelatedUserIds(conn: any, journalOwnerUserId: number) {
   const [candidateRows] = await conn.execute(
     `SELECT DISTINCT e.related_user_id AS user_id
        FROM ledger52_t0_journal_entries e
@@ -1213,81 +1211,133 @@ export async function getLedger52T0JournalReferralFilterOptions(scope: T0Journal
         )
       ORDER BY e.related_user_id ASC
       LIMIT 2000`,
-    [LEDGER_52_T0_JOURNAL_ID, scope.journalOwnerUserId],
+    [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
   );
-  const selectableUserIds = Array.from(new Set(
+  return Array.from(new Set(
     asRows(candidateRows)
       .map((row) => toNumber(row.user_id))
       .filter((userId) => userId > 0),
   ));
-  const rootUserId = scope.journalOwnerUserId;
-  if (selectableUserIds.length === 0) return { rootUserId, descendantsByUserId: {} };
+}
 
+/**
+ * 以 users.invited_by_user_id 为唯一权威来源，逐批 BFS 展开全部层级；
+ * 返回值不含根用户，并且只保留当前 T+0 查询范围中实际可命中的用户。
+ */
+async function getLedger52T0ReferralDescendantUserIds(conn: any, rootUserId: number, selectableUserIds: number[]) {
+  if (rootUserId <= 0 || selectableUserIds.length === 0) return [];
   const selectableUserIdSet = new Set(selectableUserIds);
-  const childrenByParent = new Map<number, number[]>();
-  const expandedParentIds = new Set<number>();
-  const queuedIds = new Set<number>([rootUserId]);
+  const visitedUserIds = new Set<number>([rootUserId]);
+  const descendants: number[] = [];
   let frontier = [rootUserId];
   let depth = 0;
-  let traversedUserCount = 1;
   const MAX_REFERRAL_DEPTH = 100;
   const MAX_TRAVERSED_USERS = 10_000;
 
   while (frontier.length > 0) {
-    if (depth >= MAX_REFERRAL_DEPTH || traversedUserCount >= MAX_TRAVERSED_USERS) {
+    if (depth >= MAX_REFERRAL_DEPTH || visitedUserIds.size >= MAX_TRAVERSED_USERS) {
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
         message: "推荐关系层级过深或人数过多，暂不能安全生成全部推荐筛选",
       });
     }
-    const currentLevel = frontier.splice(0, frontier.length)
-      .filter((userId) => !expandedParentIds.has(userId));
-    if (currentLevel.length === 0) break;
+    const currentLevel = frontier;
+    frontier = [];
     depth += 1;
 
     for (let start = 0; start < currentLevel.length; start += 100) {
       const batch = currentLevel.slice(start, start + 100);
-      for (const userId of batch) expandedParentIds.add(userId);
       const placeholders = batch.map(() => "?").join(", ");
       const [childRows] = await conn.execute(
-        `SELECT id, invited_by_user_id
+        `SELECT id
            FROM users
           WHERE invited_by_user_id IN (${placeholders})`,
         batch,
       );
       for (const row of asRows(childRows)) {
         const childUserId = toNumber(row.id);
-        const parentUserId = toNumber(row.invited_by_user_id);
-        if (childUserId <= 0 || parentUserId <= 0) continue;
-        const siblings = childrenByParent.get(parentUserId) ?? [];
-        if (!siblings.includes(childUserId)) siblings.push(childUserId);
-        childrenByParent.set(parentUserId, siblings);
-        if (!queuedIds.has(childUserId)) {
-          queuedIds.add(childUserId);
-          frontier.push(childUserId);
-          traversedUserCount += 1;
-        }
+        if (childUserId <= 0 || visitedUserIds.has(childUserId)) continue;
+        visitedUserIds.add(childUserId);
+        frontier.push(childUserId);
+        if (selectableUserIdSet.has(childUserId)) descendants.push(childUserId);
       }
     }
   }
+  return descendants.sort((left, right) => left - right);
+}
 
-  const visited = new Set<number>([rootUserId]);
-  const descendants: number[] = [];
-  const queue = [...(childrenByParent.get(rootUserId) ?? [])];
-  while (queue.length > 0) {
-    const currentUserId = queue.shift()!;
-    if (visited.has(currentUserId)) continue;
-    visited.add(currentUserId);
-    if (selectableUserIdSet.has(currentUserId) && currentUserId !== rootUserId) {
-      descendants.push(currentUserId);
-    }
-    queue.push(...(childrenByParent.get(currentUserId) ?? []));
-  }
+/**
+ * 成员只能沿自己的推荐树展开：先锚定本人已有 T+0 订单的管理账本，再从同一批账本订单中筛选后代。
+ * 本人无订单时 52 号账本不显示 T 页签，下级订单不能单独触发入口；根用户始终由服务端会话确定。
+ */
+async function getLedger52T0MemberReferralDescendantUserIds(conn: any, relatedUserId: number) {
+  if (relatedUserId <= 0) return [];
+  const [candidateRows] = await conn.execute(
+    `SELECT DISTINCT e.related_user_id AS user_id
+       FROM ledger52_t0_journal_entries e
+      WHERE e.ledger_id = ? AND e.related_user_id IS NOT NULL
+        AND e.user_id IN (
+          SELECT DISTINCT own_entry.user_id
+            FROM ledger52_t0_journal_entries own_entry
+           WHERE own_entry.ledger_id = ? AND own_entry.related_user_id = ?
+        )
+      ORDER BY e.related_user_id ASC
+      LIMIT 2000`,
+    [LEDGER_52_T0_JOURNAL_ID, LEDGER_52_T0_JOURNAL_ID, relatedUserId],
+  );
+  const selectableUserIds = Array.from(new Set(
+    asRows(candidateRows)
+      .map((row) => toNumber(row.user_id))
+      .filter((userId) => userId > 0),
+  ));
+  return getLedger52T0ReferralDescendantUserIds(conn, relatedUserId, selectableUserIds);
+}
+
+/**
+ * 管理员只取本人一条递归“全部推荐”；成员也只取本人一条递归集合，供锁定用户栏旁的“全部推荐”开关使用。
+ * 两种身份均不会取得其他根节点、其他分支名称或全站用户目录。
+ */
+export async function getLedger52T0JournalReferralFilterOptions(scope: T0JournalReadScope): Promise<{
+  rootUserId: number | null;
+  descendantsByUserId: Record<string, number[]>;
+  descendantUsers: Array<{ id: number; name: string; username: string; avatar: string | null }>;
+}> {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  await ensureLedger52T0JournalTables(conn);
+
+  const rootUserId = scope.mode === "admin" ? scope.journalOwnerUserId : scope.relatedUserId;
+  const descendants = scope.mode === "admin"
+    ? await getLedger52T0ReferralDescendantUserIds(
+      conn,
+      rootUserId,
+      await getLedger52T0AdminSelectableRelatedUserIds(conn, scope.journalOwnerUserId),
+    )
+    : await getLedger52T0MemberReferralDescendantUserIds(conn, rootUserId);
+  const descendantUsers = descendants.length > 0
+    ? (() => conn.execute(
+      `SELECT id, name, username, avatar
+         FROM users
+        WHERE id IN (${descendants.map(() => "?").join(", ")})
+        ORDER BY id ASC`,
+      descendants,
+    ).then(([rows]: any) => asRows(rows).map((row) => {
+      const userId = toNumber(row.id);
+      const username = row.username ? String(row.username) : "";
+      return {
+        id: userId,
+        name: String(row.name || username || `用户#${userId}`),
+        username,
+        avatar: row.avatar ? String(row.avatar) : null,
+      };
+    })))()
+    : [];
   return {
     rootUserId,
     descendantsByUserId: descendants.length > 0
-      ? { [String(rootUserId)]: descendants.sort((left, right) => left - right) }
+      ? { [String(rootUserId)]: descendants }
       : {},
+    descendantUsers: await descendantUsers,
   };
 }
 
