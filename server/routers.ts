@@ -1499,39 +1499,42 @@ type OptionGreeksQuoteInput = {
 
 function hasUsableOptionMarkPrice(value: unknown): boolean {
   const markPrice = Number(value);
-  return Number.isFinite(markPrice) && markPrice >= 0;
+  // 未到期合约返回 0 通常代表报价暂缺，不能覆盖旧的正数报价并让前端盈亏消失。
+  return Number.isFinite(markPrice) && markPrice > 0;
 }
 
-// 期权格每 3 秒可刷新一次；同币种的所有合约共用一次 Gate 全量 ticker 请求，
-// 避免订单越多，向同一个公开行情端点重复发起越多请求。
+// 期权格每 3 秒可刷新一次。只查询账本实际持有的单一合约，
+// 而不是下载同一标的下完整的期权链；相同合约在同一周期内共用一次请求。
 const OPTION_QUOTE_REFRESH_MS = 3 * 1000;
-const gateOptionTickerCache = new Map<'BTC' | 'ETH', { data: any[]; fetchedAt: number }>();
-const gateOptionTickerRefreshes = new Map<'BTC' | 'ETH', Promise<any[]>>();
+const gateOptionTickerCache = new Map<string, { data: any; fetchedAt: number }>();
+const gateOptionTickerRefreshes = new Map<string, Promise<any>>();
 
-async function getGateOptionTickers(currency: 'BTC' | 'ETH'): Promise<any[]> {
+async function getGateOptionTicker(currency: 'BTC' | 'ETH', gateSymbol: string): Promise<any> {
   const now = Date.now();
-  const cached = gateOptionTickerCache.get(currency);
+  const cached = gateOptionTickerCache.get(gateSymbol);
   if (cached && now - cached.fetchedAt < OPTION_QUOTE_REFRESH_MS) return cached.data;
 
-  const inFlight = gateOptionTickerRefreshes.get(currency);
+  const inFlight = gateOptionTickerRefreshes.get(gateSymbol);
   if (inFlight) return inFlight;
 
   const refresh = (async () => {
     const response = await fetch(
-      `https://api.gateio.ws/api/v4/options/tickers?underlying=${currency}_USDT`,
+      `https://api.gateio.ws/api/v4/options/tickers?underlying=${currency}_USDT&contract=${encodeURIComponent(gateSymbol)}`,
       { signal: AbortSignal.timeout(8000) }
     );
     if (!response.ok) throw new Error(`Gate.io HTTP ${response.status}`);
     const data = await response.json() as any;
     if (!Array.isArray(data)) throw new Error('Gate.io 期权报价格式异常');
-    gateOptionTickerCache.set(currency, { data, fetchedAt: Date.now() });
-    return data;
+    const ticker = data.find((item: any) => item?.name === gateSymbol);
+    if (!ticker) throw new Error(`Gate.io 未找到合约: ${gateSymbol}`);
+    gateOptionTickerCache.set(gateSymbol, { data: ticker, fetchedAt: Date.now() });
+    return ticker;
   })();
-  gateOptionTickerRefreshes.set(currency, refresh);
+  gateOptionTickerRefreshes.set(gateSymbol, refresh);
   try {
     return await refresh;
   } finally {
-    gateOptionTickerRefreshes.delete(currency);
+    gateOptionTickerRefreshes.delete(gateSymbol);
   }
 }
 
@@ -1547,9 +1550,7 @@ async function refreshOptionGreeksQuote({
   cached,
 }: OptionGreeksQuoteInput): Promise<any> {
   try {
-    const gateData = await getGateOptionTickers(currency);
-    const ticker = gateData.find((t: any) => t.name === gateSymbol);
-    if (!ticker) throw new Error(`Gate.io 未找到合约: ${gateSymbol}`);
+    const ticker = await getGateOptionTicker(currency, gateSymbol);
     if (!hasUsableOptionMarkPrice(ticker.mark_price)) throw new Error(`Gate.io 合约没有有效标记价: ${gateSymbol}`);
     const result = {
       instrumentName,

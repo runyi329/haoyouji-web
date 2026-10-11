@@ -696,6 +696,24 @@ function formatT0TradeTimeline(trade: Pick<PreviewTrade, "createdAt" | "filledAt
     : createdAt;
 }
 
+/** 系统自动成交／结算需要保留完整上下文，避免账户、用户或专项资金被省略号截断。 */
+function hasSystemGeneratedSettlementNote(note?: string | null) {
+  const normalizedNote = note?.trim() ?? "";
+  return normalizedNote.includes("[系统自动成交]") || normalizedNote.includes("[系统自动结算]");
+}
+
+function getHistoryContextLayoutClass(showFullContext: boolean) {
+  return showFullContext
+    ? "mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-4 text-slate-500"
+    : "mt-1 flex min-w-0 items-center gap-x-1.5 whitespace-nowrap text-[11px] text-slate-500";
+}
+
+function getHistoryContextValueClass(showFullContext: boolean) {
+  return showFullContext
+    ? "max-w-full whitespace-normal break-words"
+    : "min-w-0 truncate";
+}
+
 function formatBeijingLiveTime(value: Date) {
   const parts = new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
@@ -3247,6 +3265,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const closing = allocation.trade;
       const detail = recentJournalTradeDetails.get(closing.id);
       const isLong = ACTIONS[closing.action].side === "long";
+      const showFullClosingContext = hasSystemGeneratedSettlementNote(closing.note);
       return (
         <div key={group.id} className="mx-3 my-2 rounded border border-dashed border-amber-200 bg-amber-50/35 px-3 py-2.5">
           <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
@@ -3258,12 +3277,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             {detail?.isOptionQuote && <span className="shrink-0 text-violet-700">行权{formatPrice(closing.price)}</span>}
             {!detail && <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
           </div>
-          <div className="mt-1 flex min-w-0 items-center gap-x-1.5 whitespace-nowrap text-[11px] text-slate-500">
-            <span className="min-w-0 truncate" title={getTradeAccountName(closing)}>{getTradeAccountName(closing)}</span>
+          <div className={getHistoryContextLayoutClass(showFullClosingContext)}>
+            <span className={getHistoryContextValueClass(showFullClosingContext)} title={getTradeAccountName(closing)}>{getTradeAccountName(closing)}</span>
             <span className="text-slate-300">·</span>
-            <span className="min-w-0 truncate" title={getTradeRelatedUserName(closing)}>{getTradeRelatedUserName(closing)}</span>
+            <span className={getHistoryContextValueClass(showFullClosingContext)} title={getTradeRelatedUserName(closing)}>{getTradeRelatedUserName(closing)}</span>
             <span className="text-slate-300">·</span>
-            <span className="min-w-0 truncate" title={getTradeRelatedFundName(closing)}>{getTradeRelatedFundName(closing)}</span>
+            <span className={getHistoryContextValueClass(showFullClosingContext)} title={getTradeRelatedFundName(closing)}>{getTradeRelatedFundName(closing)}</span>
             <span className="text-slate-300">·</span>
             <span className="shrink-0">{formatBeijingMonthDayTime(closing.createdAt)}</span>
             {renderHistoryActionMenuButton(closing)}
@@ -3276,6 +3295,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
     const opening = group.opening;
     const isLong = ACTIONS[opening.action].side === "long";
+    const showFullOpeningContext = hasSystemGeneratedSettlementNote(opening.note);
     const closedQuantity = group.closings.reduce((total, allocation) => total + allocation.quantity, 0);
     const remainingQuantity = Math.max(0, opening.quantity - closedQuantity);
     const groupTone = isLong
@@ -3298,12 +3318,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               {closedQuantity > 0 ? `已平 ${formatQuantity(closedQuantity)} · 剩 ${formatQuantity(remainingQuantity)}` : "未平"}
             </span>
           </div>
-          <div className="mt-1 flex min-w-0 items-center gap-x-1.5 whitespace-nowrap text-[11px] text-slate-500">
-            <span className="min-w-0 truncate" title={getTradeAccountName(opening)}>{getTradeAccountName(opening)}</span>
+          <div className={getHistoryContextLayoutClass(showFullOpeningContext)}>
+            <span className={getHistoryContextValueClass(showFullOpeningContext)} title={getTradeAccountName(opening)}>{getTradeAccountName(opening)}</span>
             <span className="text-slate-300">·</span>
-            <span className="min-w-0 truncate" title={getTradeRelatedUserName(opening)}>{getTradeRelatedUserName(opening)}</span>
+            <span className={getHistoryContextValueClass(showFullOpeningContext)} title={getTradeRelatedUserName(opening)}>{getTradeRelatedUserName(opening)}</span>
             <span className="text-slate-300">·</span>
-            <span className="min-w-0 truncate" title={getTradeRelatedFundName(opening)}>{getTradeRelatedFundName(opening)}</span>
+            <span className={getHistoryContextValueClass(showFullOpeningContext)} title={getTradeRelatedFundName(opening)}>{getTradeRelatedFundName(opening)}</span>
             <span className="text-slate-300">·</span>
             <span className="shrink-0">{formatT0TradeTimeline(opening)}</span>
             {renderHistoryActionMenuButton(opening)}
@@ -3934,6 +3954,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 const detail = recentJournalTradeDetails.get(trade.id);
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
+                const showFullHistoryContext = hasSystemGeneratedSettlementNote(trade.note);
                 return (
                 <div key={trade.id} className="border-b border-[#c7d0d7]/60 px-4 py-2.5 last:border-b-0">
                     <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
@@ -3959,12 +3980,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         </button>
                       </>}
                     </div>
-                    <div className="mt-1 flex min-w-0 items-center gap-x-1.5 whitespace-nowrap text-[11px] text-slate-500">
-                      <span className="min-w-0 truncate" title={getTradeAccountName(trade)}>{getTradeAccountName(trade)}</span>
+                    <div className={getHistoryContextLayoutClass(showFullHistoryContext)}>
+                      <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeAccountName(trade)}>{getTradeAccountName(trade)}</span>
                       <span className="text-slate-300">·</span>
-                      <span className="min-w-0 truncate" title={getTradeRelatedUserName(trade)}>{getTradeRelatedUserName(trade)}</span>
+                      <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedUserName(trade)}>{getTradeRelatedUserName(trade)}</span>
                       <span className="text-slate-300">·</span>
-                      <span className="min-w-0 truncate" title={getTradeRelatedFundName(trade)}>{getTradeRelatedFundName(trade)}</span>
+                      <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedFundName(trade)}>{getTradeRelatedFundName(trade)}</span>
                       <span className="text-slate-300">·</span>
                       <span className="shrink-0">{formatT0TradeTimeline(trade)}</span>
                       {canManage ? renderHistoryActionMenuButton(trade) : !isOpening && detail?.netPnl !== undefined && <>
@@ -4188,7 +4209,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                               <span className={`shrink-0 text-sm font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>持仓{ACTIONS[trade.action].side === "long" ? "多单" : "空单"}</span>
                               <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatQuantity(trade.quantity)}</span>
                               <span className="shrink-0 text-sm font-medium tabular-nums text-slate-700">@ {formatPrice(trade.price)}</span>
-                              {trade.isPending ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span> : <span className={`shrink-0 text-sm font-semibold tabular-nums ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>}
+                              {trade.isPending ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span> : trade.instrumentType === "option" ? <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="shrink-0 text-sm font-semibold tabular-nums" /> : <span className={`shrink-0 text-sm font-semibold tabular-nums ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>}
                             </span>
                           </button>
                           <button
@@ -4256,9 +4277,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                               </div>
                               <div className="min-w-0 text-center">
                                 <div className="text-[10px] text-slate-400">{trade.isPending ? "盈亏" : trade.instrumentType === "option" ? "实时盈亏" : "当前盈亏"}</div>
-                                <div className={`mt-0.5 whitespace-nowrap text-[11px] font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                                  {floatingPnl === null ? trade.instrumentType === "option" ? "待接入期权标记价" : "--" : `${formatSigned(floatingPnl)} U`}
-                                </div>
+                                {trade.instrumentType === "option" && !trade.isPending ? (
+                                  <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} emptyLabel="期权报价加载中" className="mt-0.5 whitespace-nowrap text-[11px] font-semibold tabular-nums" />
+                                ) : (
+                                  <div className={`mt-0.5 whitespace-nowrap text-[11px] font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                                    {floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}
+                                  </div>
+                                )}
                               </div>
                               <div className="min-w-0 text-right">
                                 <div className="text-[10px] text-slate-400">{trade.filledAt ? "挂单时间" : "开仓时间"}</div>
@@ -5775,6 +5800,46 @@ function AccountOverview({
   );
 }
 
+/**
+ * 期权在仓位详情中也必须显示与报价格相同的实时收益。
+ * 成员端仅将收益按分配比例折算，订单数量仍展示完整的原始数量。
+ */
+function OptionUnrealizedPnlText({
+  trade,
+  remainingQuantity,
+  ethMarkPrice,
+  emptyLabel = "--",
+  className = "",
+}: {
+  trade: PreviewTrade;
+  remainingQuantity: number;
+  ethMarkPrice: number | null;
+  emptyLabel?: string;
+  className?: string;
+}) {
+  const optionGreeks = useOptionGreeks({
+    currency: "ETH",
+    exerciseDate: trade.optionExpiryDate ?? "",
+    strikePrice: Number(trade.price) || 0,
+    direction: trade.optionDirection ?? "long_call",
+    enabled: trade.instrumentType === "option" && !trade.isPending && Boolean(trade.optionExpiryDate) && Number(trade.price) > 0,
+  });
+  const optionPnl = calculateOptionUnrealizedPnl({
+    quantity: getTradeFinancialQuantity(trade, remainingQuantity),
+    optionMarkPrice: optionGreeks.data?.markPrice ?? null,
+    premium: trade.optionPremium,
+    premiumCurrency: trade.optionPremiumCurrency,
+    ethMarkPrice,
+    direction: trade.optionDirection,
+  })?.pnl ?? null;
+  const tone = optionPnl === null
+    ? "text-slate-400"
+    : optionPnl >= 0
+      ? "text-rose-600"
+      : "text-emerald-600";
+  return <span className={`${className} ${tone}`}>{optionPnl === null ? emptyLabel : `${formatSigned(optionPnl)} U`}</span>;
+}
+
 function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, isPending = false }: {
   bucket: PositionBucket;
   side: PositionSide;
@@ -5799,7 +5864,8 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   });
   const optionPnlResult = isOption && !isPending
     ? calculateOptionUnrealizedPnl({
-      quantity: bucket.remainingQuantity,
+      // 成员收益投影视图保留原始 ETH 数量展示，但收益必须按其分配比例折算。
+      quantity: bucket.financialQuantity,
       optionMarkPrice: optionGreeks.data?.markPrice ?? null,
       premium: optionMetadata?.premium,
       premiumCurrency: optionMetadata?.premiumCurrency,

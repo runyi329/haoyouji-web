@@ -29,13 +29,19 @@ const OPTION_GREEKS_REFRESH_MS = 3 * 1000;
 
 type MarkPriceCache = Record<string, number>;
 
+/** 未到期的期权报价必须是正数；0/空值属于行情源暂缺，不能覆盖最近一次有效报价。 */
+function hasUsableOptionMarkPrice(value: unknown): boolean {
+  const markPrice = Number(value);
+  return Number.isFinite(markPrice) && markPrice > 0;
+}
+
 function readPersistedMarkPrices(): MarkPriceCache {
   if (typeof window === 'undefined') return {};
   try {
     const raw = JSON.parse(window.localStorage.getItem(OPTION_MARK_PRICE_STORAGE_KEY) || '{}');
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
     return Object.fromEntries(
-      Object.entries(raw).filter(([, value]) => Number.isFinite(Number(value)) && Number(value) >= 0)
+      Object.entries(raw).filter(([, value]) => hasUsableOptionMarkPrice(value))
     ) as MarkPriceCache;
   } catch {
     return {};
@@ -43,7 +49,7 @@ function readPersistedMarkPrices(): MarkPriceCache {
 }
 
 function persistMarkPrice(instrumentKey: string, markPrice: number) {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || !hasUsableOptionMarkPrice(markPrice)) return;
   try {
     const cache = readPersistedMarkPrices();
     cache[instrumentKey] = markPrice;
@@ -77,11 +83,11 @@ export function useOptionGreeks({
 
   const rawData = query.data as OptionGreeksData | null | undefined;
   const contractKey = `${currency}-${exerciseDate}-${strikePrice}-${direction}`;
-  const hasCurrentMarkPrice = Number.isFinite(Number(rawData?.markPrice)) && Number(rawData?.markPrice) >= 0;
+  const hasCurrentMarkPrice = hasUsableOptionMarkPrice(rawData?.markPrice);
   const lastValidDataRef = useRef<{ contractKey: string; data: OptionGreeksData } | null>(null);
   const fallbackData = lastValidDataRef.current?.contractKey === contractKey ? lastValidDataRef.current.data : null;
   const persistedMarkPrice = readPersistedMarkPrices()[contractKey];
-  const persistedFallbackData: OptionGreeksData | null = Number.isFinite(Number(persistedMarkPrice)) && Number(persistedMarkPrice) >= 0
+  const persistedFallbackData: OptionGreeksData | null = hasUsableOptionMarkPrice(persistedMarkPrice)
     ? {
       instrumentName: rawData?.instrumentName ?? contractKey,
       delta: rawData?.delta ?? null,
@@ -117,7 +123,7 @@ export function useOptionGreeks({
       const cachedMarkPrice = readPersistedMarkPrices()[contractKey];
       previousMarkPriceRef.current = {
         contractKey,
-        markPrice: Number.isFinite(cachedMarkPrice) ? cachedMarkPrice : null,
+        markPrice: hasUsableOptionMarkPrice(cachedMarkPrice) ? cachedMarkPrice : null,
       };
     }
 
