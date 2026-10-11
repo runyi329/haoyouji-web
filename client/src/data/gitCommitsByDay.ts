@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-10-11
+// 生成时间：2026-10-12
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9566,5 +9566,19 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-10-10T12:15:25Z", type: "feat", cleanMessage: "support multi-select type filters" },
     { date: "2026-10-10T13:08:04Z", type: "fix", cleanMessage: "prevent missing option quotes from zeroing pnl" },
     { date: "2026-10-10T13:50:47Z", type: "fix", cleanMessage: "stabilize option quotes and side detail" },
+  ],
+  "2026-10-11": [
+    { date: "2026-10-10T20:44:47Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-10-11T01:24:07Z", type: "fix", cleanMessage: "preserve option pnl across refresh" },
+    { date: "2026-10-11T02:34:52Z", type: "fix", cleanMessage: "normalize option quote dates to Beijing" },
+    { date: "2026-10-11T03:08:41Z", type: "fix", cleanMessage: "preserve option quotes on first paint" },
+    { date: "2026-10-11T03:28:58Z", type: "fix", cleanMessage: "use Beijing date for option quotes" },
+    { date: "2026-10-11T03:40:02Z", type: "fix", cleanMessage: "persist dashboard filters" },
+    { date: "2026-10-11T03:44:37Z", type: "fix", cleanMessage: "show selected filter labels" },
+    { date: "2026-10-11T05:44:54Z", type: "feat", cleanMessage: "refresh active 37 and 52 pages every two seconds" },
+    { date: "2026-10-11T09:18:26Z", type: "feat", cleanMessage: "link global tag pause controls" },
+    { date: "2026-10-11T13:01:46Z", type: "feat", cleanMessage: "add recursive referral filter" },
+    { date: "2026-10-11T14:01:17Z", type: "feat", cleanMessage: "allow member referral T0 filtering" },
+    { date: "2026-10-11T15:56:47Z", type: "feat", cleanMessage: "add T0 grid orders and filter refinements" },
   ],
 };
