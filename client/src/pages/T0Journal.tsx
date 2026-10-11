@@ -52,6 +52,64 @@ type T0PersistedTopFilters = {
 };
 
 const T0_TOP_FILTER_STORAGE_PREFIX = "haoyouji:t0-top-filters:v1";
+const T0_REFERRAL_DESCENDANTS_TOKEN_PREFIX = "referral-descendants:";
+
+type T0ResolvedRelatedUserFilter = {
+  userIds: Set<string>;
+  includesUnlinked: boolean;
+  waitingForReferralData: boolean;
+};
+
+function createT0ReferralDescendantsToken(rootUserId: string) {
+  return `${T0_REFERRAL_DESCENDANTS_TOKEN_PREFIX}${rootUserId}`;
+}
+
+function getT0ReferralDescendantsRootUserId(value: string): string | null {
+  if (!value.startsWith(T0_REFERRAL_DESCENDANTS_TOKEN_PREFIX)) return null;
+  const rootUserId = value.slice(T0_REFERRAL_DESCENDANTS_TOKEN_PREFIX.length);
+  return /^\d+$/.test(rootUserId) ? rootUserId : null;
+}
+
+/** 将“全部推荐”筛选令牌展开为真实关联用户 ID；推荐集合本身绝不代表根用户。 */
+function resolveT0RelatedUserFilter(
+  selectedIds: string[],
+  descendantsByRootUserId: Map<string, string[]>,
+  referralDataLoaded: boolean,
+): T0ResolvedRelatedUserFilter {
+  const userIds = new Set<string>();
+  let includesUnlinked = false;
+  let waitingForReferralData = false;
+  for (const id of selectedIds) {
+    if (id === "unlinked") {
+      includesUnlinked = true;
+      continue;
+    }
+    const rootUserId = getT0ReferralDescendantsRootUserId(id);
+    if (rootUserId) {
+      const descendants = descendantsByRootUserId.get(rootUserId);
+      if (descendants) {
+        descendants.forEach((descendantUserId) => userIds.add(descendantUserId));
+      } else if (!referralDataLoaded) {
+        // 本地存储恢复后，先等待服务端树数据；此时不以不完整条件误筛流水。
+        waitingForReferralData = true;
+      }
+      continue;
+    }
+    userIds.add(id);
+  }
+  return { userIds, includesUnlinked, waitingForReferralData };
+}
+
+function isT0RelatedUserSelectionEquivalentToAll(
+  selectedIds: string[],
+  resolvedFilter: T0ResolvedRelatedUserFilter,
+  selectableUserIds: string[],
+  hasUnlinkedTrades: boolean,
+) {
+  if (selectedIds.length === 0 || resolvedFilter.waitingForReferralData) return false;
+  return selectableUserIds.every((userId) => resolvedFilter.userIds.has(userId))
+    && (!hasUnlinkedTrades || resolvedFilter.includesUnlinked);
+}
 
 function sanitizeT0FilterIds(value: unknown): string[] {
   return Array.isArray(value)
@@ -1527,6 +1585,37 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   const isMemberView = (t0JournalQuery.data as any)?.viewerMode === "member";
   const canManage = canAccess && (t0JournalQuery.data as any)?.viewerMode === "admin";
+  // 推荐树单独低频读取，避免52号账本的两秒流水轮询反复遍历 users 邀请关系。
+  // 服务端仅返回当前管理员本人对应的一条递归“全部推荐”分支。
+  const t0ReferralFilterQuery = trpc.ledger.t0GetReferralFilterOptions.useQuery(
+    { ledgerId: 52 },
+    {
+      enabled: canManage,
+      staleTime: 60_000,
+      refetchInterval: 60_000,
+      refetchOnWindowFocus: true,
+    },
+  );
+  const referralDescendantsByRootUserId = useMemo(() => {
+    const raw = (t0ReferralFilterQuery.data as any)?.descendantsByUserId;
+    const map = new Map<string, string[]>();
+    if (!raw || typeof raw !== "object") return map;
+    for (const [rootUserId, descendantUserIds] of Object.entries(raw as Record<string, unknown>)) {
+      if (!/^\d+$/.test(rootUserId) || !Array.isArray(descendantUserIds)) continue;
+      const descendants = Array.from(new Set(descendantUserIds
+        .map((userId) => String(userId))
+        .filter((userId) => /^\d+$/.test(userId) && userId !== rootUserId)));
+      if (descendants.length > 0) map.set(rootUserId, descendants);
+    }
+    return map;
+  }, [t0ReferralFilterQuery.data]);
+  const currentReferralRootUserId = useMemo(() => {
+    const apiRootUserId = String((t0ReferralFilterQuery.data as any)?.rootUserId || "");
+    if (/^\d+$/.test(apiRootUserId)) return apiRootUserId;
+    const signedInUserId = String((me as any)?.id || "");
+    return canManage && /^\d+$/.test(signedInUserId) ? signedInUserId : "";
+  }, [canManage, me, t0ReferralFilterQuery.data]);
+  const referralDataLoaded = !canManage || t0ReferralFilterQuery.isSuccess;
   const topFilterStorageKey = useMemo(() => {
     const journal = t0JournalQuery.data as any;
     const viewerMode = journal?.viewerMode;
@@ -1727,7 +1816,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       });
       setRelatedUserFilterIds((current) => {
         const preferred = shouldRestoreTopFilters ? (persistedTopFilters?.relatedUserIds ?? []) : current;
-        return preferred.filter((id) => id === "unlinked" || nextRecentRelatedUsers.some((user) => user.id === id));
+        return preferred.filter((id) => {
+          if (id === "unlinked" || nextRecentRelatedUsers.some((user) => user.id === id)) return true;
+          const rootUserId = getT0ReferralDescendantsRootUserId(id);
+          // 下线树异步返回前不能清掉 localStorage 中的选择；树到位后再剔除失效根用户。
+          return Boolean(rootUserId && (!referralDataLoaded || referralDescendantsByRootUserId.has(rootUserId)));
+        });
       });
       setRelatedFundFilterIds((current) => {
         const preferred = shouldRestoreTopFilters ? (persistedTopFilters?.relatedFundIds ?? []) : current;
@@ -1763,7 +1857,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : (nextRecentRelatedUsers[0]?.id || ""));
     hasInitializedJournalFiltersRef.current = true;
     setHydratedTopFilterStorageKey(topFilterStorageKey);
-  }, [t0JournalQuery.data, topFilterStorageKey]);
+  }, [referralDataLoaded, referralDescendantsByRootUserId, t0JournalQuery.data, topFilterStorageKey]);
 
   useEffect(() => {
     if (!topFilterStorageKey || hydratedTopFilterStorageKey !== topFilterStorageKey) return;
@@ -1799,16 +1893,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => filterTradesByInstrumentTypes(executionScopedTrades, instrumentTypeFilterIds),
     [executionScopedTrades, instrumentTypeFilterIds],
   );
+  const topRelatedUserFilter = useMemo(
+    () => resolveT0RelatedUserFilter(
+      relatedUserFilterIds,
+      referralDescendantsByRootUserId,
+      referralDataLoaded,
+    ),
+    [referralDataLoaded, referralDescendantsByRootUserId, relatedUserFilterIds],
+  );
   const selectedTrades = useMemo(
     () => instrumentScopedTrades.filter((trade) => (
       (selectedAccountIds.length === 0 || selectedAccountIds.includes(trade.accountId))
       && trade.symbol === "ETH"
       && (relatedUserFilterIds.length === 0
-        || relatedUserFilterIds.some((id) => id === "unlinked" ? (!trade.relatedUserId || trade.relatedUserHidden) : trade.relatedUserId === id))
+        || topRelatedUserFilter.waitingForReferralData
+        || (topRelatedUserFilter.includesUnlinked && (!trade.relatedUserId || trade.relatedUserHidden))
+        || Boolean(trade.relatedUserId && topRelatedUserFilter.userIds.has(trade.relatedUserId)))
       && (relatedFundFilterIds.length === 0
         || relatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
-    [instrumentScopedTrades, selectedAccountIds, relatedUserFilterIds, relatedFundFilterIds],
+    [instrumentScopedTrades, selectedAccountIds, relatedUserFilterIds, relatedFundFilterIds, topRelatedUserFilter],
   );
   // 挂单仅作管理员报价与状态统计展示；成交前绝不进入真实仓位、FIFO、手续费、浮盈或收益汇总。
   const selectedFilledTrades = useMemo(
@@ -1825,16 +1929,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => filterTradesByInstrumentTypes(historyExecutionScopedTrades, historyInstrumentTypeFilterIds),
     [historyExecutionScopedTrades, historyInstrumentTypeFilterIds],
   );
+  const historyRelatedUserFilter = useMemo(
+    () => resolveT0RelatedUserFilter(
+      historyRelatedUserFilterIds,
+      referralDescendantsByRootUserId,
+      referralDataLoaded,
+    ),
+    [historyRelatedUserFilterIds, referralDataLoaded, referralDescendantsByRootUserId],
+  );
   const journalScopeTrades = useMemo(
     () => historyInstrumentScopedTrades.filter((trade) => (
       trade.symbol === "ETH"
       && (historyAccountFilterIds.length === 0 || historyAccountFilterIds.includes(trade.accountId))
       && (historyRelatedUserFilterIds.length === 0
-        || historyRelatedUserFilterIds.some((id) => id === "unlinked" ? (!trade.relatedUserId || trade.relatedUserHidden) : trade.relatedUserId === id))
+        || historyRelatedUserFilter.waitingForReferralData
+        || (historyRelatedUserFilter.includesUnlinked && (!trade.relatedUserId || trade.relatedUserHidden))
+        || Boolean(trade.relatedUserId && historyRelatedUserFilter.userIds.has(trade.relatedUserId)))
       && (historyRelatedFundFilterIds.length === 0
         || historyRelatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
-    [historyInstrumentScopedTrades, historyAccountFilterIds, historyRelatedUserFilterIds, historyRelatedFundFilterIds],
+    [historyInstrumentScopedTrades, historyAccountFilterIds, historyRelatedUserFilter, historyRelatedUserFilterIds, historyRelatedFundFilterIds],
   );
   const availableJournalActions = useMemo(
     () => RECENT_JOURNAL_ACTIONS.filter((action) => journalScopeTrades.some((trade) => trade.action === action)),
@@ -1908,10 +2022,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     return ownTrade ? getTradeRelatedUserName(ownTrade) : "本人";
   }, [me, trades]);
   const availableRelatedFunds = useMemo(
-    () => relatedUserFilterIds.length === 0
+    () => relatedUserFilterIds.length === 0 || topRelatedUserFilter.waitingForReferralData
       ? relatedFunds
-      : relatedFunds.filter((fund) => Boolean(fund.relatedUserId) && relatedUserFilterIds.includes(fund.relatedUserId!)),
-    [relatedFunds, relatedUserFilterIds],
+      : relatedFunds.filter((fund) => Boolean(fund.relatedUserId) && topRelatedUserFilter.userIds.has(fund.relatedUserId!)),
+    [relatedFunds, relatedUserFilterIds.length, topRelatedUserFilter],
   );
   const memberFundFilterOptionIds = useMemo(() => [
     ...relatedFunds.map((fund) => fund.id),
@@ -1926,27 +2040,73 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     || availableRelatedFunds[0]?.name
     || (trades.some((trade) => !trade.relatedFundId) ? "未区分项目（历史）" : "暂无项目");
   const accountFilterOptions = accounts.map((account) => ({ id: account.id, label: account.name }));
-  const relatedUserFilterOptions = [
-    ...(trades.some((trade) => !trade.relatedUserId) ? [{ id: "unlinked", label: "未关联用户（历史）" }] : []),
+  const hasUnlinkedTrades = trades.some((trade) => !trade.relatedUserId || trade.relatedUserHidden);
+  const selectedReferralFilterIds = new Set([
+    ...relatedUserFilterIds,
+    ...historyRelatedUserFilterIds,
+  ]);
+  const currentReferralRootUser = recentRelatedUsers.find((user) => user.id === currentReferralRootUserId);
+  const currentReferralDescendants = currentReferralRootUserId
+    ? referralDescendantsByRootUserId.get(currentReferralRootUserId)
+    : undefined;
+  const currentReferralToken = currentReferralRootUserId
+    ? createT0ReferralDescendantsToken(currentReferralRootUserId)
+    : "";
+  const shouldKeepCurrentReferralLoadingOption = Boolean(
+    currentReferralToken
+    && selectedReferralFilterIds.has(currentReferralToken)
+    && !referralDataLoaded,
+  );
+  const toRelatedUserFilterOption = (user: PreviewRelatedUser): T0MultiSelectOption => ({
     // 下拉内保留昵称和用户名便于辨认；顶部筛选框选中后只展示昵称，节省移动端空间。
-    ...recentRelatedUsers.map((user) => ({ id: user.id, label: `${user.name}${user.username ? ` · @${user.username}` : ""}`, summaryLabel: user.name })),
+    id: user.id,
+    label: `${user.name}${user.username ? ` · @${user.username}` : ""}`,
+    summaryLabel: user.name,
+  });
+  const relatedUserFilterOptions: T0MultiSelectOption[] = [
+    // 管理员只在本人下方显示一条递归“全部推荐”，不再为每位关联用户重复展示其推荐分支。
+    ...(currentReferralRootUser ? [toRelatedUserFilterOption(currentReferralRootUser)] : []),
+    ...(currentReferralDescendants || shouldKeepCurrentReferralLoadingOption ? [{
+      id: currentReferralToken,
+      // 数字只统计当前 T+0 中实际有订单、可被筛选命中的递归推荐用户。
+      label: `全部推荐（${currentReferralDescendants ? currentReferralDescendants.length : "读取中"}）`,
+      summaryLabel: `全部推荐${currentReferralDescendants ? `（${currentReferralDescendants.length}）` : ""}`,
+      kind: "referral-descendants" as const,
+    }] : []),
+    ...recentRelatedUsers
+      .filter((user) => user.id !== currentReferralRootUserId)
+      .map(toRelatedUserFilterOption),
+    ...(hasUnlinkedTrades ? [{ id: "unlinked", label: "未关联用户（历史）" }] : []),
   ];
   const relatedFundFilterOptions = [
     ...(trades.some((trade) => !trade.relatedFundId) ? [{ id: "unclassified", label: "未区分项目（历史）" }] : []),
     ...availableRelatedFunds.map((fund) => ({ id: fund.id, label: fund.name })),
   ];
   const historyAvailableRelatedFunds = useMemo(
-    () => historyRelatedUserFilterIds.length === 0
+    () => historyRelatedUserFilterIds.length === 0 || historyRelatedUserFilter.waitingForReferralData
       ? relatedFunds
-      : relatedFunds.filter((fund) => Boolean(fund.relatedUserId) && historyRelatedUserFilterIds.includes(fund.relatedUserId!)),
-    [relatedFunds, historyRelatedUserFilterIds],
+      : relatedFunds.filter((fund) => Boolean(fund.relatedUserId) && historyRelatedUserFilter.userIds.has(fund.relatedUserId!)),
+    [historyRelatedUserFilter, historyRelatedUserFilterIds.length, relatedFunds],
   );
   const historyRelatedFundFilterOptions = [
     ...(trades.some((trade) => !trade.relatedFundId) ? [{ id: "unclassified", label: "未区分项目（历史）" }] : []),
     ...historyAvailableRelatedFunds.map((fund) => ({ id: fund.id, label: fund.name })),
   ];
+  const topRelatedUserSelectionIsAll = isT0RelatedUserSelectionEquivalentToAll(
+    relatedUserFilterIds,
+    topRelatedUserFilter,
+    recentRelatedUsers.map((user) => user.id),
+    hasUnlinkedTrades,
+  );
+  const historyRelatedUserSelectionIsAll = isT0RelatedUserSelectionEquivalentToAll(
+    historyRelatedUserFilterIds,
+    historyRelatedUserFilter,
+    recentRelatedUsers.map((user) => user.id),
+    hasUnlinkedTrades,
+  );
   const historyFilterGridTemplateColumns = useMemo(() => {
     const summaryFor = (label: string, options: T0MultiSelectOption[], selectedIds: string[]) => {
+      if (label === "用户" && historyRelatedUserSelectionIsAll) return "用户全部";
       const selected = options.filter((option) => selectedIds.includes(option.id));
       if (selected.length === 0) return `${label}全部`;
       if (selected.length === 1) return selected[0].summaryLabel ?? selected[0].label;
@@ -1957,7 +2117,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       { summary: summaryFor("用户", relatedUserFilterOptions, historyRelatedUserFilterIds), selectedCount: historyRelatedUserFilterIds.length },
       { summary: summaryFor("项目", historyRelatedFundFilterOptions, historyRelatedFundFilterIds), selectedCount: historyRelatedFundFilterIds.length },
     ]);
-  }, [accountFilterOptions, relatedUserFilterOptions, historyRelatedFundFilterOptions, historyAccountFilterIds, historyRelatedUserFilterIds, historyRelatedFundFilterIds]);
+  }, [accountFilterOptions, relatedUserFilterOptions, historyRelatedFundFilterOptions, historyAccountFilterIds, historyRelatedUserFilterIds, historyRelatedFundFilterIds, historyRelatedUserSelectionIsAll]);
   const hasActiveHistoryDetailFilters = historyAccountFilterIds.length > 0
     || historyRelatedUserFilterIds.length > 0
     || historyRelatedFundFilterIds.length > 0
@@ -1979,11 +2139,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   useEffect(() => {
     setHistoryAccountFilterIds((current) => current.filter((id) => accounts.some((account) => account.id === id)));
-    setHistoryRelatedUserFilterIds((current) => current.filter((id) => id === "unlinked" || recentRelatedUsers.some((user) => user.id === id)));
+    setHistoryRelatedUserFilterIds((current) => current.filter((id) => {
+      if (id === "unlinked" || recentRelatedUsers.some((user) => user.id === id)) return true;
+      const rootUserId = getT0ReferralDescendantsRootUserId(id);
+      return Boolean(rootUserId && (!referralDataLoaded || referralDescendantsByRootUserId.has(rootUserId)));
+    }));
     setHistoryRelatedFundFilterIds((current) => current.filter((id) => id === "unclassified" || relatedFunds.some((fund) => fund.id === id)));
-  }, [accounts, recentRelatedUsers, relatedFunds]);
+  }, [accounts, recentRelatedUsers, referralDataLoaded, referralDescendantsByRootUserId, relatedFunds]);
   const topFilterGridTemplateColumns = useMemo(() => {
     const summaryFor = (label: string, options: T0MultiSelectOption[], selectedIds: string[]) => {
+      if (label === "用户" && topRelatedUserSelectionIsAll) return "用户全部";
       const selected = options.filter((option) => selectedIds.includes(option.id));
       if (selected.length === 0) return `${label}全部`;
       if (selected.length === 1) return selected[0].summaryLabel ?? selected[0].label;
@@ -2010,7 +2175,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       userSpec,
       fundSpec,
     ]);
-  }, [accountFilterOptions, isMemberView, lockedAccountName, lockedRelatedFundName, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberAccountFilter, shouldLockMemberFundFilter]);
+  }, [accountFilterOptions, isMemberView, lockedAccountName, lockedRelatedFundName, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberAccountFilter, shouldLockMemberFundFilter, topRelatedUserSelectionIsAll]);
   const topInstrumentFilterSummary = getT0InstrumentFilterSummary(instrumentTypeFilterIds);
   const topExecutionFilterSummary = executionFilter === "all"
     ? "状态全部"
@@ -3676,6 +3841,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   selectedIds={relatedUserFilterIds}
                   emptyLabel="暂无用户"
                   constrainRightToFilterRow
+                  treatSelectionAsAll={topRelatedUserSelectionIsAll}
                   onChange={(ids) => {
                     setRelatedUserFilterIds(ids);
                     // 项目只属于用户；改动用户范围后重置项目，避免保留不可见的跨用户项目条件。
@@ -4016,6 +4182,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     selectedIds={historyRelatedUserFilterIds}
                     emptyLabel="暂无用户"
                     constrainRightToFilterRow
+                    treatSelectionAsAll={historyRelatedUserSelectionIsAll}
                     onChange={(ids) => {
                       setHistoryRelatedUserFilterIds(ids);
                       // 项目只属于用户，切换用户范围时同步清空旧项目条件。
@@ -5616,6 +5783,8 @@ type T0MultiSelectOption = {
   label: string;
   /** 下拉选项可展示完整识别信息；顶部已选摘要可使用更短文案。 */
   summaryLabel?: string;
+  /** 推荐项以靛蓝色轻微区分，单人项维持默认中性色。 */
+  kind?: "referral-descendants";
 };
 
 /** 三项多选框按内容保留统一左右留白，初始状态则均分整行宽度。 */
@@ -5659,6 +5828,7 @@ function T0MultiSelect({
   constrainRightToFilterRow = false,
   compact = false,
   showSelectedLabels = false,
+  treatSelectionAsAll = false,
 }: {
   label: string;
   options: T0MultiSelectOption[];
@@ -5672,20 +5842,23 @@ function T0MultiSelect({
   compact?: boolean;
   /** 对类型等短枚举项，直接展示已选名称，而非“已选 N 项”。 */
   showSelectedLabels?: boolean;
+  /** 组合的本人和全部推荐已覆盖全部可筛选用户时，按“全部”展示但保留可恢复的选择令牌。 */
+  treatSelectionAsAll?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [constrainedMenuWidth, setConstrainedMenuWidth] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const selectedSet = new Set(selectedIds);
   const selectedOptions = options.filter((option) => selectedSet.has(option.id));
-  const summary = selectedOptions.length === 0
+  const selectionRepresentsAll = selectedIds.length === 0 || treatSelectionAsAll;
+  const summary = selectionRepresentsAll
     ? "全部"
     : selectedOptions.length === 1
       ? selectedOptions[0].summaryLabel ?? selectedOptions[0].label
       : showSelectedLabels
         ? selectedOptions.map((option) => option.summaryLabel ?? option.label).join("、")
         : `已选 ${selectedOptions.length} 项`;
-  const selectedTitle = selectedOptions.length === 0
+  const selectedTitle = selectionRepresentsAll
     ? `${label}：全部`
     : `${label}：${selectedOptions.map((option) => option.label).join("、")}`;
 
@@ -5758,9 +5931,9 @@ function T0MultiSelect({
           boxShadow: "inset 0 1px 1px rgba(255,255,255,0.96), inset 0 -1px 0 rgba(100,116,139,0.20)",
         }}
       >
-        {selectedOptions.length === 0 && <span className={`${compact ? "text-[11px]" : "text-[12px]"} shrink-0 font-semibold tracking-wide text-slate-500`}>{label}</span>}
-        <span className={`min-w-0 flex-1 truncate ${selectedOptions.length === 0 ? "text-left" : "text-center"}`}>{summary}</span>
-        {selectedOptions.length === 0 && <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />}
+        {selectedIds.length === 0 && <span className={`${compact ? "text-[11px]" : "text-[12px]"} shrink-0 font-semibold tracking-wide text-slate-500`}>{label}</span>}
+        <span className={`min-w-0 flex-1 truncate ${selectedIds.length === 0 ? "text-left" : "text-center"}`}>{summary}</span>
+        {selectedIds.length === 0 && <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />}
       </button>
       {open && (
         <div
@@ -5782,11 +5955,11 @@ function T0MultiSelect({
           <button
             type="button"
             role="option"
-            aria-selected={selectedIds.length === 0}
+            aria-selected={selectionRepresentsAll}
             onClick={() => onChange([])}
-            className={`flex min-h-12 w-full items-center gap-3 px-3.5 py-3 text-left text-[15px] font-bold ${selectedIds.length === 0 ? "bg-white/60 text-[#1a56db]" : "text-slate-700 active:bg-white/55"}`}
+            className={`flex min-h-12 w-full items-center gap-3 px-3.5 py-3 text-left text-[15px] font-bold ${selectionRepresentsAll ? "bg-white/60 text-[#1a56db]" : "text-slate-700 active:bg-white/55"}`}
           >
-            {renderCheck(selectedIds.length === 0)}
+            {renderCheck(selectionRepresentsAll)}
             <span>全部</span>
           </button>
           <div className="my-1 border-t border-slate-500/20" />
@@ -5799,7 +5972,7 @@ function T0MultiSelect({
                 role="option"
                 aria-selected={checked}
                 onClick={() => toggleOption(option.id)}
-                className={`flex min-h-12 w-full items-center gap-3 px-3.5 py-3 text-left text-[15px] font-bold ${checked ? "bg-white/55 text-[#1a56db]" : "text-slate-700 active:bg-white/55"}`}
+                className={`flex min-h-12 w-full items-center gap-3 py-3 text-left text-[15px] font-bold ${option.kind === "referral-descendants" ? "pl-8 pr-3.5" : "px-3.5"} ${checked ? "bg-white/55 text-[#1a56db]" : option.kind === "referral-descendants" ? "text-indigo-700 active:bg-indigo-50/60" : "text-slate-700 active:bg-white/55"}`}
               >
                 {renderCheck(checked)}
                 <span className="min-w-0 flex-1 truncate" title={option.label}>{option.label}</span>

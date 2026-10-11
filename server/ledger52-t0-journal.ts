@@ -1183,6 +1183,114 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
   };
 }
 
+/**
+ * 管理员用户筛选仅返回当前登录管理员本人的一条递归“全部推荐”集合。
+ * 下线关系读取全站 users.invited_by_user_id，但只回传当前 T+0 目录中实际有订单的后代 ID；
+ * 不返回任意其他用户的分支，避免管理员下拉出现多条同名“全部推荐”。
+ * 成员没有用户维度筛选能力，因此返回空集合，避免借接口枚举任何他人关系。
+ */
+export async function getLedger52T0JournalReferralFilterOptions(scope: T0JournalReadScope): Promise<{
+  rootUserId: number | null;
+  descendantsByUserId: Record<string, number[]>;
+}> {
+  if (scope.mode !== "admin") return { rootUserId: null, descendantsByUserId: {} };
+
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  await ensureLedger52T0JournalTables(conn);
+
+  const [candidateRows] = await conn.execute(
+    `SELECT DISTINCT e.related_user_id AS user_id
+       FROM ledger52_t0_journal_entries e
+      WHERE e.ledger_id = ? AND e.user_id = ? AND e.related_user_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+            FROM ledger52_t0_journal_deleted_dimensions deleted_user
+           WHERE deleted_user.ledger_id = e.ledger_id
+             AND deleted_user.user_id = e.user_id
+             AND deleted_user.dimension = 'related_user'
+             AND deleted_user.dimension_id = e.related_user_id
+        )
+      ORDER BY e.related_user_id ASC
+      LIMIT 2000`,
+    [LEDGER_52_T0_JOURNAL_ID, scope.journalOwnerUserId],
+  );
+  const selectableUserIds = Array.from(new Set(
+    asRows(candidateRows)
+      .map((row) => toNumber(row.user_id))
+      .filter((userId) => userId > 0),
+  ));
+  const rootUserId = scope.journalOwnerUserId;
+  if (selectableUserIds.length === 0) return { rootUserId, descendantsByUserId: {} };
+
+  const selectableUserIdSet = new Set(selectableUserIds);
+  const childrenByParent = new Map<number, number[]>();
+  const expandedParentIds = new Set<number>();
+  const queuedIds = new Set<number>([rootUserId]);
+  let frontier = [rootUserId];
+  let depth = 0;
+  let traversedUserCount = 1;
+  const MAX_REFERRAL_DEPTH = 100;
+  const MAX_TRAVERSED_USERS = 10_000;
+
+  while (frontier.length > 0) {
+    if (depth >= MAX_REFERRAL_DEPTH || traversedUserCount >= MAX_TRAVERSED_USERS) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "推荐关系层级过深或人数过多，暂不能安全生成全部推荐筛选",
+      });
+    }
+    const currentLevel = frontier.splice(0, frontier.length)
+      .filter((userId) => !expandedParentIds.has(userId));
+    if (currentLevel.length === 0) break;
+    depth += 1;
+
+    for (let start = 0; start < currentLevel.length; start += 100) {
+      const batch = currentLevel.slice(start, start + 100);
+      for (const userId of batch) expandedParentIds.add(userId);
+      const placeholders = batch.map(() => "?").join(", ");
+      const [childRows] = await conn.execute(
+        `SELECT id, invited_by_user_id
+           FROM users
+          WHERE invited_by_user_id IN (${placeholders})`,
+        batch,
+      );
+      for (const row of asRows(childRows)) {
+        const childUserId = toNumber(row.id);
+        const parentUserId = toNumber(row.invited_by_user_id);
+        if (childUserId <= 0 || parentUserId <= 0) continue;
+        const siblings = childrenByParent.get(parentUserId) ?? [];
+        if (!siblings.includes(childUserId)) siblings.push(childUserId);
+        childrenByParent.set(parentUserId, siblings);
+        if (!queuedIds.has(childUserId)) {
+          queuedIds.add(childUserId);
+          frontier.push(childUserId);
+          traversedUserCount += 1;
+        }
+      }
+    }
+  }
+
+  const visited = new Set<number>([rootUserId]);
+  const descendants: number[] = [];
+  const queue = [...(childrenByParent.get(rootUserId) ?? [])];
+  while (queue.length > 0) {
+    const currentUserId = queue.shift()!;
+    if (visited.has(currentUserId)) continue;
+    visited.add(currentUserId);
+    if (selectableUserIdSet.has(currentUserId) && currentUserId !== rootUserId) {
+      descendants.push(currentUserId);
+    }
+    queue.push(...(childrenByParent.get(currentUserId) ?? []));
+  }
+  return {
+    rootUserId,
+    descendantsByUserId: descendants.length > 0
+      ? { [String(rootUserId)]: descendants.sort((left, right) => left - right) }
+      : {},
+  };
+}
+
 /** 仅由已通过T+0管理员鉴权的路由调用，供关联用户的用户名/昵称模糊搜索使用。 */
 export async function searchLedger52T0JournalUsers(query: string) {
   const conn = await getDbConnection();

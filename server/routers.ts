@@ -11041,6 +11041,39 @@ ${klinesSummary}
         return await journal.getLedger52T0Journal(scope);
       }),
 
+    // 推荐下线仅服务于管理员的用户筛选；始终沿用T+0账本的同一阅读权限边界。
+    t0GetReferralFilterOptions: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52) }))
+      .query(async ({ ctx }) => {
+        const journal = await import('./ledger52-t0-journal');
+        if (ctx.isViewingAs) {
+          const realUser = ctx.realUser;
+          if (!realUser) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '无法确认代入管理员身份' });
+          }
+          const realMembership = await dbLedger.getUserMembership(52, realUser.id);
+          const realSystemRole = String((realUser as any).role || '');
+          const realUserIsManager = realSystemRole === 'super_admin'
+            || realSystemRole === 'admin'
+            || realMembership?.role === 'owner'
+            || realMembership?.role === 'admin';
+          if (!realUserIsManager) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可代入查看T+0速记账本' });
+          }
+          const targetMembership = await dbLedger.getUserMembership(52, ctx.user.id);
+          if (!targetMembership) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '目标用户不是52号账本成员' });
+          }
+          return await journal.getLedger52T0JournalReferralFilterOptions({ mode: 'member', relatedUserId: ctx.user.id });
+        }
+        const scope = await journal.resolveLedger52T0JournalReadScope({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.getLedger52T0JournalReferralFilterOptions(scope);
+      }),
+
     t0SelectAccount: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),
