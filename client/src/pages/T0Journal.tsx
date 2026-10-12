@@ -299,6 +299,8 @@ type PreviewTrade = {
   isCounterpartyView?: boolean;
   /** 管理端反向投影保留的真实流水键与原始字段，供编辑、回撤及写库使用。 */
   sourceEntryId?: string;
+  /** 仅用于前端收益展示：筛选投影前可计算净收益的流水键，不参与任何写库操作。 */
+  detailEntryId?: string;
   sourceAction?: TradeAction;
   sourceOptionDirection?: T0OptionDirection;
   sourceGridDirection?: T0GridDirection;
@@ -1433,7 +1435,9 @@ function invertGridDirection(direction?: T0GridDirection): T0GridDirection | und
 function getStoredEntryId(trade: PreviewTrade) {
   return trade.sourceEntryId ?? trade.id;
 }
-
+function getDetailEntryId(trade: PreviewTrade) {
+  return trade.detailEntryId ?? trade.id;
+}
 function getStoredAction(trade: PreviewTrade): TradeAction {
   return trade.sourceAction ?? trade.action;
 }
@@ -1650,6 +1654,7 @@ function filterTradesByInstrumentTypes(trades: PreviewTrade[], selectedTypes: T0
     ...trade,
     id: `instrument-${filterKey}-${trade.id}-${opening.id}`,
     sourceEntryId: getStoredEntryId(trade),
+    detailEntryId: getDetailEntryId(trade),
     quantity,
     fee: trade.quantity > 0 ? trade.fee * (quantity / trade.quantity) : 0,
     instrumentType: opening.instrumentType,
@@ -4287,7 +4292,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const allocation = group.closings[0];
       if (!allocation) return null;
         const closing = allocation.trade;
-        const detail = recentJournalTradeDetails.get(getStoredEntryId(closing));
+        const detail = recentJournalTradeDetails.get(getDetailEntryId(closing));
         const isLong = ACTIONS[closing.action].side === "long";
         const showFullClosingContext = hasSystemGeneratedSettlementNote(closing.note);
         const viewerPayout = resolveViewerPayout(closing, detail);
@@ -5220,7 +5225,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               ) : showLinkedJournalGroups ? (
                 pagedLinkedJournalGroups.map((group) => renderLinkedJournalGroup(group))
               ) : pagedRecentJournalTrades.map((trade) => {
-                const detail = recentJournalTradeDetails.get(getStoredEntryId(trade));
+                const detail = recentJournalTradeDetails.get(getDetailEntryId(trade));
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
                 const showFullHistoryContext = hasSystemGeneratedSettlementNote(trade.note);
