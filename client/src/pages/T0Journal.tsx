@@ -2812,6 +2812,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     });
   }, [isMemberView, profitShareSnapshots, selectedFilledTrades, trades, viewerProfitShareBeneficiaryUserId]);
   const totalNetProfit = totalNetProfitDetails.reduce((total, detail) => total + detail.netPnl, 0);
+  // 总览展开后的多/空累计收益必须与顶部“总收益”使用相同的当前用户实际可得口径。
+  // 原 summary 的 realized 是订单原始净额；筛选某位用户时会混入其他受益人的分成。
+  const overviewSummary = useMemo(() => {
+    const realizedBySide = totalNetProfitDetails.reduce<Record<PositionSide, number>>((totals, detail) => {
+      totals[ACTIONS[detail.trade.action].side] += detail.netPnl;
+      return totals;
+    }, { long: 0, short: 0 });
+    return {
+      ...summary,
+      long: { ...summary.long, realized: realizedBySide.long },
+      short: { ...summary.short, realized: realizedBySide.short },
+      realized: realizedBySide.long + realizedBySide.short,
+    };
+  }, [summary, totalNetProfitDetails]);
   const totalRevenueDetailTotalPages = Math.max(1, Math.ceil(
     totalNetProfitDetails.length / TOTAL_REVENUE_DETAIL_PAGE_SIZE,
   ));
@@ -2941,13 +2955,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }, 0);
     return { count: settledOpenedTradeList.length, realizedNet };
   }, [settledOpenedTradeList, openingClosingAllocations]);
-  const visibleOpenedTradeRows = useMemo(() => [
-    ...activeOpenedTradeList.map((trade) => ({ kind: "active" as const, trade })),
-    ...(settledOpenedTradeList.length > 0 ? [{ kind: "history-toggle" as const }] : []),
-    ...(showSettledOpeningHistory
+  const activeOpenedTradeRows = useMemo(
+    () => activeOpenedTradeList.map((trade) => ({ kind: "active" as const, trade })),
+    [activeOpenedTradeList],
+  );
+  const settledOpenedTradeRows = useMemo(
+    () => showSettledOpeningHistory
       ? settledOpenedTradeList.map((trade) => ({ kind: "history" as const, trade }))
-      : []),
-  ], [activeOpenedTradeList, settledOpenedTradeList, showSettledOpeningHistory]);
+      : [],
+    [settledOpenedTradeList, showSettledOpeningHistory],
+  );
   const isEditingEntry = Boolean(entryForm.editingEntryId);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
   // 编辑一张已部分平仓的主单时，锁定只标识尚未平掉的余额；已实现的平仓记录仍保持独立审计。
@@ -4373,6 +4390,204 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     );
   };
 
+  const renderOpenedTradeRow = (row: { kind: "active" | "history"; trade: PreviewTrade }) => {
+  const trade = row.trade;
+  const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
+  const linkedClosedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
+  const remainingQuantity = Math.max(0, trade.quantity - linkedClosedQuantity);
+  const financialRemainingQuantity = getTradeFinancialQuantity(trade, remainingQuantity);
+  const floatingPnl = trade.isPending || trade.instrumentType === "option" ? null : calculateEstimatedUnrealizedNetPnl(
+    ACTIONS[trade.action].side,
+    markPrice,
+    financialRemainingQuantity,
+    trade.price * financialRemainingQuantity,
+  );
+  const openingValue = trade.quantity * trade.price;
+  const closeAction: TradeAction = ACTIONS[trade.action].side === "long" ? "closeLong" : "closeShort";
+  // 锁定不改变已成交/已平仓流水，只保护尚余可平数量；解锁后立即恢复平仓能力。
+  const canQuickClose = remainingQuantity > 0.0000001 && !trade.isLocked;
+  const isExpanded = expandedOpenedTradeIds.has(trade.id);
+  return (
+    <div key={trade.id} className="rounded border border-slate-200 bg-slate-50/80 px-3 py-2.5">
+      <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
+        <button
+          type="button"
+          aria-expanded={isExpanded}
+          onClick={() => setExpandedOpenedTradeIds((current) => {
+            const next = new Set(current);
+            if (next.has(trade.id)) next.delete(trade.id);
+            else next.add(trade.id);
+            return next;
+          })}
+          className="min-w-0 text-left"
+        >
+          <span className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
+                              <span className={`shrink-0 text-sm font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>持仓{ACTIONS[trade.action].side === "long" ? "多单" : "空单"}</span>
+                              <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatQuantity(trade.quantity)}</span>
+                              <span className="shrink-0 text-sm font-medium tabular-nums text-slate-700">@ {formatPrice(trade.price)}</span>
+                              {trade.isPending ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span> : trade.isLocked ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-amber-700"><Lock className="h-3.5 w-3.5" />已锁定</span> : trade.instrumentType === "option" ? <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="shrink-0 text-sm font-semibold tabular-nums" /> : <span className={`shrink-0 text-sm font-semibold tabular-nums ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>}
+          </span>
+        </button>
+        <button
+          type="button"
+          aria-label={isExpanded ? "收起本笔开仓详情" : "展开本笔开仓详情"}
+          onClick={() => setExpandedOpenedTradeIds((current) => {
+            const next = new Set(current);
+            if (next.has(trade.id)) next.delete(trade.id);
+            else next.add(trade.id);
+            return next;
+          })}
+          className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-400 active:scale-95"
+        >
+          <ChevronRight className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+        </button>
+      </div>
+      <div className="mt-1 flex min-w-0 items-center justify-between gap-2 text-[10px] font-medium">
+        {!isExpanded && <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          {linkedClosedQuantity > 0.0000001 && <>
+            <span className="shrink-0 tabular-nums text-slate-600">已平 {formatQuantity(linkedClosedQuantity)} · 剩 {formatQuantity(remainingQuantity)} ETH</span>
+            <span className="shrink-0 text-slate-300">·</span>
+          </>}
+          {!isMemberView && <>
+            <span title={getTradeAccountName(trade)} className="shrink-0 whitespace-nowrap text-slate-500">{getTradeAccountName(trade)}</span>
+            <span className="shrink-0 text-slate-300">·</span>
+          </>}
+          <span title={getTradeRelatedUserName(trade)} className="shrink-0 whitespace-nowrap text-slate-500">{getTradeRelatedUserName(trade)}</span>
+          <span className="shrink-0 text-slate-300">·</span>
+          <span title={getTradeRelatedFundName(trade)} className="shrink-0 whitespace-nowrap text-slate-500">{getTradeRelatedFundName(trade)}</span>
+        </div>
+        }
+        {canManage && <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            disabled={isCloseReview || Boolean(trade.isSyncing)}
+            onClick={() => setDeleteCandidate(trade)}
+            className="h-9 rounded border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            删除
+          </button>
+          <button
+            type="button"
+            disabled={isCloseReview || Boolean(trade.isSyncing)}
+            onClick={() => openEditOpeningTrade(trade)}
+            className="h-9 rounded border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            编辑
+          </button>
+          {row.kind === "active" && !trade.isPending && trade.instrumentType !== "option" && <button
+            type="button"
+            disabled={!canQuickClose || Boolean(trade.isSyncing) || isCloseReview}
+            onClick={() => openQuickCloseSheet(trade)}
+            title={trade.isLocked ? "本笔剩余仓位已锁定，请先点击“编辑”解除锁定后再平仓" : undefined}
+            className={`h-9 rounded border px-3 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${ACTIONS[closeAction].idleClass}`}
+          >
+            {ACTIONS[closeAction].label}
+          </button>}
+        </div>}
+      </div>
+      {isExpanded && (
+        <>
+          <div className="mt-2 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2 tabular-nums">
+            <div className="min-w-0">
+              <div className="text-[10px] text-slate-400">{trade.isPending ? "挂单状态" : trade.instrumentType === "option" ? "行权价" : "开仓价值"}</div>
+              <div className={`mt-0.5 whitespace-nowrap text-[11px] font-medium ${trade.isPending ? "text-sky-700" : "text-slate-700"}`}>{trade.isPending ? "等待触发" : trade.instrumentType === "option" ? `${formatPrice(trade.price)} U` : `${formatPrice(openingValue)} U`}</div>
+            </div>
+            <div className="min-w-0 text-center">
+              <div className="text-[10px] text-slate-400">{trade.isPending ? "盈亏" : trade.instrumentType === "option" ? "实时盈亏" : "当前盈亏"}</div>
+              {trade.instrumentType === "option" && !trade.isPending ? (
+                <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} emptyLabel="期权报价加载中" className="mt-0.5 whitespace-nowrap text-[11px] font-semibold tabular-nums" />
+              ) : (
+                <div className={`mt-0.5 whitespace-nowrap text-[11px] font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                  {floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 text-right">
+              <div className="text-[10px] text-slate-400">{trade.filledAt ? "挂单时间" : "开仓时间"}</div>
+              <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.isSyncing ? "后台保存中" : formatBeijingMonthDayTime(trade.createdAt)}</div>
+            </div>
+            <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2">
+              <div className="min-w-0">
+                <div className="text-[10px] text-slate-400">账户</div>
+                <div title={getTradeAccountName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeAccountName(trade)}</div>
+              </div>
+              <div className="min-w-0 text-center">
+                <div className="text-[10px] text-slate-400">用户</div>
+                <div title={getTradeRelatedUserName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeRelatedUserName(trade)}</div>
+              </div>
+              <div className="min-w-0 text-right">
+                <div className="text-[10px] text-slate-400">专项款</div>
+                <div title={getTradeRelatedFundName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeRelatedFundName(trade)}</div>
+              </div>
+            </div>
+            {trade.instrumentType === "option" && <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2">
+              <div className="min-w-0">
+                <div className="text-[10px] text-slate-400">期权方向</div>
+                <div className="mt-0.5 truncate text-[11px] font-medium text-violet-700">{getOptionDirectionLabel(trade.optionDirection) ?? "未标注"}</div>
+              </div>
+              <div className="min-w-0 text-center">
+                <div className="text-[10px] text-slate-400">到期日</div>
+                <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.optionExpiryDate || "未设置"}</div>
+              </div>
+              <div className="min-w-0 text-right">
+                <div className="text-[10px] text-slate-400">权利金</div>
+                <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.optionPremium === undefined ? "未设置" : `${formatPrice(trade.optionPremium)} ${trade.optionPremiumCurrency ?? "USDT"}`}</div>
+              </div>
+            </div>}
+            {canManage && trade.instrumentType === "grid" && <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-cyan-200 pt-2">
+              <div className="min-w-0">
+                <div className="text-[10px] text-slate-400">网格方向</div>
+                <div className="mt-0.5 truncate text-[11px] font-medium text-cyan-800">{trade.gridDirection === "long" ? "做多网格" : trade.gridDirection === "short" ? "做空网格" : "未设置"}</div>
+              </div>
+              <div className="min-w-0 text-center">
+                <div className="text-[10px] text-slate-400">网格范围</div>
+                <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium tabular-nums text-slate-700">{trade.gridRangeMin === undefined || trade.gridRangeMax === undefined ? "未设置" : trade.gridDirection === "short" ? `${formatPrice(trade.gridRangeMax)}–${formatPrice(trade.gridRangeMin)}` : `${formatPrice(trade.gridRangeMin)}–${formatPrice(trade.gridRangeMax)}`}</div>
+              </div>
+              <div className="min-w-0 text-right">
+                <div className="text-[10px] text-slate-400">杠杆 · 格数</div>
+                <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium tabular-nums text-slate-700">{trade.gridLeverage === undefined || trade.gridCount === undefined ? "未设置" : `${formatPrice(trade.gridLeverage)}× · ${trade.gridCount}格`}</div>
+              </div>
+            </div>}
+            {trade.note?.trim() && (
+              <div className="col-span-3 border-t border-slate-200 pt-2">
+                <div className="text-[10px] text-slate-400">备注</div>
+                <div className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-4 text-slate-600">{trade.note}</div>
+              </div>
+            )}
+          </div>
+          {trade.filledAt && <div className="mt-2 flex items-center gap-1.5 border-t border-slate-200 pt-2 text-[10px] font-medium text-slate-500">
+            <Clock3 className="h-3 w-3 shrink-0 text-sky-600" />
+            成交时间：{formatBeijingMonthDayTime(trade.filledAt)} · 参考价触发 {formatPrice(trade.filledPrice ?? trade.price)} U
+          </div>}
+          {linkedClosings.length > 0 && (
+            <div className="mt-2 border-t border-slate-200 pt-2">
+              <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
+                <span className="font-medium text-slate-600">关联平仓记录</span>
+                <span className="whitespace-nowrap tabular-nums">已平 {formatQuantity(linkedClosedQuantity)} · 剩 {formatQuantity(remainingQuantity)} ETH</span>
+              </div>
+              <div className="mt-1.5 space-y-1">
+                {linkedClosings.map(({ trade: closingTrade, quantity }, index) => {
+                  const isLongPosition = ACTIONS[trade.action].side === "long";
+                  return (
+                    <div key={`${closingTrade.id}-${index}`} className="flex items-center justify-between gap-2 border-l-2 border-slate-200 bg-white/70 px-2 py-1.5 text-[11px] tabular-nums">
+                      <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+                        <span className={`font-semibold ${isLongPosition ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closingTrade.action].label}</span>
+                        <span className="font-medium text-slate-700">{formatQuantity(quantity)} ETH</span>
+                        <span className="text-slate-500">{isLongPosition ? "卖" : "买"} {formatPrice(closingTrade.price)}</span>
+                      </div>
+                      <span className="shrink-0 whitespace-nowrap text-slate-400">{formatBeijingMonthDayTime(closingTrade.createdAt)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+  };
+
   if (meLoading || ledgerLoading) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-slate-500">正在核验访问权限…</div>;
   }
@@ -4493,7 +4708,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
           <div className="relative z-[1]">
             <AccountOverview
-              summary={summary}
+              summary={overviewSummary}
               positionStats={{
                 long: {
                   quantity: netPositionBreakdown.long.quantity,
@@ -5153,7 +5368,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             )}
 
             <div className={`p-4 space-y-4 ${canManage && !isMemberView ? "pb-24" : ""}`}>
-              <div className={`overflow-hidden rounded border ${isOptionEntryContext ? "border-violet-200 bg-violet-50/70" : isGridOpeningEntry ? "border-cyan-200 bg-cyan-50/70" : entrySide === "long" ? "border-rose-200 bg-rose-50/70" : "border-emerald-200 bg-emerald-50/70"}`}>
+              <div className={`overflow-hidden rounded border ${isOptionEntryContext ? "border-violet-200" : isGridOpeningEntry ? "border-cyan-200" : entrySide === "long" ? "border-rose-200" : "border-emerald-200"}`}>
+                <div className={isOptionEntryContext ? "bg-violet-50/70" : isGridOpeningEntry ? "bg-cyan-50/70" : entrySide === "long" ? "bg-rose-50/70" : "bg-emerald-50/70"}>
                 <div className="px-3 py-2.5">
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 text-left">
                   <div className="flex min-w-0 items-baseline gap-2">
@@ -5163,13 +5379,32 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <span className="shrink-0 text-base font-medium tabular-nums text-slate-500">{isOptionEntryContext ? "行权价" : isGridOpeningEntry ? "参考价" : "均价"} {entrySideSummary.quantity > 0 ? formatPrice(entrySideSummary.average) : "--"}</span>
                 </div>
                 </div>
-                <div className={`mx-3 flex items-center justify-between border-t pt-2 pb-2.5 text-[10px] tabular-nums ${isOptionEntryContext ? "border-violet-200/80" : isGridOpeningEntry ? "border-cyan-200/80" : entrySide === "long" ? "border-rose-200/80" : "border-emerald-200/80"}`}>
-                  <span className={entrySideSummary.unrealized === null ? "text-slate-400" : entrySideSummary.unrealized >= 0 ? "text-rose-600" : "text-emerald-600"}>
-                    当前盈亏 {entrySideSummary.unrealized === null ? "--" : `${formatSigned(entrySideSummary.unrealized)} U`}
-                  </span>
-                  <span className="text-slate-500">当前 {activeOpenedTradeList.length} 笔</span>
+                <div className={`mx-3 flex min-w-0 items-center justify-between gap-2 border-t pt-2 pb-2.5 text-[10px] tabular-nums ${isOptionEntryContext ? "border-violet-200/80" : isGridOpeningEntry ? "border-cyan-200/80" : entrySide === "long" ? "border-rose-200/80" : "border-emerald-200/80"}`}>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className={`shrink-0 ${entrySideSummary.unrealized === null ? "text-slate-400" : entrySideSummary.unrealized >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                      当前盈亏 {entrySideSummary.unrealized === null ? "--" : `${formatSigned(entrySideSummary.unrealized)} U`}
+                    </span>
+                    <span className="shrink-0 text-slate-500">当前 {activeOpenedTradeList.length} 笔</span>
+                  </div>
+                  {settledOpenedTradeSummary.count > 0 && <button
+                    type="button"
+                    onClick={() => setShowSettledOpeningHistory((current) => !current)}
+                    aria-expanded={showSettledOpeningHistory}
+                    className="flex shrink-0 items-center gap-1 whitespace-nowrap text-slate-500 transition active:opacity-60"
+                  >
+                    <span>历史平仓 {settledOpenedTradeSummary.count} 笔</span>
+                    <span className={`font-semibold ${settledOpenedTradeSummary.realizedNet > 0 ? "text-rose-600" : settledOpenedTradeSummary.realizedNet < 0 ? "text-emerald-600" : "text-slate-600"}`}>
+                      {formatSigned(settledOpenedTradeSummary.realizedNet)} U
+                    </span>
+                    <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showSettledOpeningHistory ? "rotate-90" : ""}`} />
+                  </button>}
                 </div>
-              </div>
+                </div>
+                {!isEditingEntry && settledOpenedTradeRows.length > 0 && (
+                  <div className="space-y-1.5 border-t border-slate-200 bg-white/70 px-3 py-3">
+                    {settledOpenedTradeRows.map(renderOpenedTradeRow)}
+                  </div>
+                )}
 
               {isClosingEntry && closingSourceTrade && (
                 <div className="flex items-center justify-between gap-3 rounded border border-indigo-200 bg-indigo-50/70 px-3 py-2.5">
@@ -5189,229 +5424,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </button>
                 </div>
               )}
+              </div>
 
               {!isEditingEntry && <div className="space-y-1.5">
-                  {activeOpenedTradeList.length === 0 && (
+                  {activeOpenedTradeRows.length === 0 && (
                     <div className="rounded border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">当前档位没有未平仓主单</div>
                   )}
-                  {visibleOpenedTradeRows.map((row) => {
-                    if (row.kind === "history-toggle") {
-                      return (
-                        <button
-                          key="settled-opening-history-toggle"
-                          type="button"
-                          onClick={() => setShowSettledOpeningHistory((current) => !current)}
-                          aria-expanded={showSettledOpeningHistory}
-                          className="mt-3 flex w-full items-center justify-between rounded border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] text-slate-600 transition active:bg-slate-100"
-                        >
-                          <span className="min-w-0 shrink-0 font-medium">已平仓历史主单</span>
-                          <span className="ml-2 flex min-w-0 items-center gap-1 tabular-nums">
-                            <span className="whitespace-nowrap text-[10px] text-slate-500">已归档 {settledOpenedTradeSummary.count} 笔 / 已实现利润</span>
-                            <span className={`whitespace-nowrap text-[10px] font-semibold ${settledOpenedTradeSummary.realizedNet > 0 ? "text-rose-600" : settledOpenedTradeSummary.realizedNet < 0 ? "text-emerald-600" : "text-slate-600"}`}>
-                              {formatSigned(settledOpenedTradeSummary.realizedNet)} U
-                            </span>
-                            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showSettledOpeningHistory ? "rotate-90" : ""}`} />
-                          </span>
-                        </button>
-                      );
-                    }
-                    const trade = row.trade;
-                    const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
-                    const linkedClosedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
-                    const remainingQuantity = Math.max(0, trade.quantity - linkedClosedQuantity);
-                    const financialRemainingQuantity = getTradeFinancialQuantity(trade, remainingQuantity);
-                    const floatingPnl = trade.isPending || trade.instrumentType === "option" ? null : calculateEstimatedUnrealizedNetPnl(
-                      ACTIONS[trade.action].side,
-                      markPrice,
-                      financialRemainingQuantity,
-                      trade.price * financialRemainingQuantity,
-                    );
-                    const openingValue = trade.quantity * trade.price;
-                    const closeAction: TradeAction = ACTIONS[trade.action].side === "long" ? "closeLong" : "closeShort";
-                    // 锁定不改变已成交/已平仓流水，只保护尚余可平数量；解锁后立即恢复平仓能力。
-                    const canQuickClose = remainingQuantity > 0.0000001 && !trade.isLocked;
-                    const isExpanded = expandedOpenedTradeIds.has(trade.id);
-                    return (
-                      <div key={trade.id} className="rounded border border-slate-200 bg-slate-50/80 px-3 py-2.5">
-                        <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
-                          <button
-                            type="button"
-                            aria-expanded={isExpanded}
-                            onClick={() => setExpandedOpenedTradeIds((current) => {
-                              const next = new Set(current);
-                              if (next.has(trade.id)) next.delete(trade.id);
-                              else next.add(trade.id);
-                              return next;
-                            })}
-                            className="min-w-0 text-left"
-                          >
-                            <span className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
-                              <span className={`shrink-0 text-sm font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>持仓{ACTIONS[trade.action].side === "long" ? "多单" : "空单"}</span>
-                              <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatQuantity(trade.quantity)}</span>
-                              <span className="shrink-0 text-sm font-medium tabular-nums text-slate-700">@ {formatPrice(trade.price)}</span>
-                              <span className="shrink-0 rounded border border-slate-200 bg-white px-1 py-px text-[9px] font-semibold tabular-nums text-slate-400">#{getStoredEntryId(trade)}</span>
-                              {trade.isPending ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span> : trade.isLocked ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-amber-700"><Lock className="h-3.5 w-3.5" />已锁定</span> : trade.instrumentType === "option" ? <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="shrink-0 text-sm font-semibold tabular-nums" /> : <span className={`shrink-0 text-sm font-semibold tabular-nums ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>}
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={isExpanded ? "收起本笔开仓详情" : "展开本笔开仓详情"}
-                            onClick={() => setExpandedOpenedTradeIds((current) => {
-                              const next = new Set(current);
-                              if (next.has(trade.id)) next.delete(trade.id);
-                              else next.add(trade.id);
-                              return next;
-                            })}
-                            className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-400 active:scale-95"
-                          >
-                            <ChevronRight className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
-                          </button>
-                        </div>
-                        <div className="mt-1 flex min-w-0 items-center justify-between gap-2 text-[10px] font-medium">
-                          {!isExpanded && <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                            {linkedClosedQuantity > 0.0000001 && <>
-                              <span className="shrink-0 tabular-nums text-slate-600">已平 {formatQuantity(linkedClosedQuantity)} · 剩 {formatQuantity(remainingQuantity)} ETH</span>
-                              <span className="shrink-0 text-slate-300">·</span>
-                            </>}
-                            {!isMemberView && <>
-                              <span title={getTradeAccountName(trade)} className="shrink-0 whitespace-nowrap text-slate-500">{getTradeAccountName(trade)}</span>
-                              <span className="shrink-0 text-slate-300">·</span>
-                            </>}
-                            <span title={getTradeRelatedUserName(trade)} className="shrink-0 whitespace-nowrap text-slate-500">{getTradeRelatedUserName(trade)}</span>
-                            <span className="shrink-0 text-slate-300">·</span>
-                            <span title={getTradeRelatedFundName(trade)} className="shrink-0 whitespace-nowrap text-slate-500">{getTradeRelatedFundName(trade)}</span>
-                          </div>
-                          }
-                          {canManage && <div className="flex shrink-0 items-center gap-1">
-                            <button
-                              type="button"
-                              disabled={isCloseReview || Boolean(trade.isSyncing)}
-                              onClick={() => openEditOpeningTrade(trade)}
-                              className="h-6 rounded border border-slate-200 bg-white px-2 text-[10px] font-semibold text-slate-600 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              编辑
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isCloseReview || Boolean(trade.isSyncing)}
-                              onClick={() => setDeleteCandidate(trade)}
-                              className="h-6 rounded border border-rose-200 bg-white px-2 text-[10px] font-semibold text-rose-700 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              删除
-                            </button>
-                            {row.kind === "active" && !trade.isPending && trade.instrumentType !== "option" && <button
-                              type="button"
-                              disabled={!canQuickClose || Boolean(trade.isSyncing) || isCloseReview}
-                              onClick={() => openQuickCloseSheet(trade)}
-                              title={trade.isLocked ? "本笔剩余仓位已锁定，请先点击“编辑”解除锁定后再平仓" : undefined}
-                              className={`h-6 rounded border px-2 text-[10px] font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${ACTIONS[closeAction].idleClass}`}
-                            >
-                              {ACTIONS[closeAction].label}
-                            </button>}
-                          </div>}
-                        </div>
-                        {isExpanded && (
-                          <>
-                            <div className="mt-2 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2 tabular-nums">
-                              <div className="min-w-0">
-                                <div className="text-[10px] text-slate-400">{trade.isPending ? "挂单状态" : trade.instrumentType === "option" ? "行权价" : "开仓价值"}</div>
-                                <div className={`mt-0.5 whitespace-nowrap text-[11px] font-medium ${trade.isPending ? "text-sky-700" : "text-slate-700"}`}>{trade.isPending ? "等待触发" : trade.instrumentType === "option" ? `${formatPrice(trade.price)} U` : `${formatPrice(openingValue)} U`}</div>
-                              </div>
-                              <div className="min-w-0 text-center">
-                                <div className="text-[10px] text-slate-400">{trade.isPending ? "盈亏" : trade.instrumentType === "option" ? "实时盈亏" : "当前盈亏"}</div>
-                                {trade.instrumentType === "option" && !trade.isPending ? (
-                                  <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} emptyLabel="期权报价加载中" className="mt-0.5 whitespace-nowrap text-[11px] font-semibold tabular-nums" />
-                                ) : (
-                                  <div className={`mt-0.5 whitespace-nowrap text-[11px] font-semibold ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                                    {floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="min-w-0 text-right">
-                                <div className="text-[10px] text-slate-400">{trade.filledAt ? "挂单时间" : "开仓时间"}</div>
-                                <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.isSyncing ? "后台保存中" : formatBeijingMonthDayTime(trade.createdAt)}</div>
-                              </div>
-                              <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2">
-                                <div className="min-w-0">
-                                  <div className="text-[10px] text-slate-400">账户</div>
-                                  <div title={getTradeAccountName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeAccountName(trade)}</div>
-                                </div>
-                                <div className="min-w-0 text-center">
-                                  <div className="text-[10px] text-slate-400">用户</div>
-                                  <div title={getTradeRelatedUserName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeRelatedUserName(trade)}</div>
-                                </div>
-                                <div className="min-w-0 text-right">
-                                  <div className="text-[10px] text-slate-400">专项款</div>
-                                  <div title={getTradeRelatedFundName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeRelatedFundName(trade)}</div>
-                                </div>
-                              </div>
-                              {trade.instrumentType === "option" && <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2">
-                                <div className="min-w-0">
-                                  <div className="text-[10px] text-slate-400">期权方向</div>
-                                  <div className="mt-0.5 truncate text-[11px] font-medium text-violet-700">{getOptionDirectionLabel(trade.optionDirection) ?? "未标注"}</div>
-                                </div>
-                                <div className="min-w-0 text-center">
-                                  <div className="text-[10px] text-slate-400">到期日</div>
-                                  <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.optionExpiryDate || "未设置"}</div>
-                                </div>
-                                <div className="min-w-0 text-right">
-                                  <div className="text-[10px] text-slate-400">权利金</div>
-                                  <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.optionPremium === undefined ? "未设置" : `${formatPrice(trade.optionPremium)} ${trade.optionPremiumCurrency ?? "USDT"}`}</div>
-                                </div>
-                              </div>}
-                              {canManage && trade.instrumentType === "grid" && <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-cyan-200 pt-2">
-                                <div className="min-w-0">
-                                  <div className="text-[10px] text-slate-400">网格方向</div>
-                                  <div className="mt-0.5 truncate text-[11px] font-medium text-cyan-800">{trade.gridDirection === "long" ? "做多网格" : trade.gridDirection === "short" ? "做空网格" : "未设置"}</div>
-                                </div>
-                                <div className="min-w-0 text-center">
-                                  <div className="text-[10px] text-slate-400">网格范围</div>
-                                  <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium tabular-nums text-slate-700">{trade.gridRangeMin === undefined || trade.gridRangeMax === undefined ? "未设置" : trade.gridDirection === "short" ? `${formatPrice(trade.gridRangeMax)}–${formatPrice(trade.gridRangeMin)}` : `${formatPrice(trade.gridRangeMin)}–${formatPrice(trade.gridRangeMax)}`}</div>
-                                </div>
-                                <div className="min-w-0 text-right">
-                                  <div className="text-[10px] text-slate-400">杠杆 · 格数</div>
-                                  <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium tabular-nums text-slate-700">{trade.gridLeverage === undefined || trade.gridCount === undefined ? "未设置" : `${formatPrice(trade.gridLeverage)}× · ${trade.gridCount}格`}</div>
-                                </div>
-                              </div>}
-                              {trade.note?.trim() && (
-                                <div className="col-span-3 border-t border-slate-200 pt-2">
-                                  <div className="text-[10px] text-slate-400">备注</div>
-                                  <div className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-4 text-slate-600">{trade.note}</div>
-                                </div>
-                              )}
-                            </div>
-                            {trade.filledAt && <div className="mt-2 flex items-center gap-1.5 border-t border-slate-200 pt-2 text-[10px] font-medium text-slate-500">
-                              <Clock3 className="h-3 w-3 shrink-0 text-sky-600" />
-                              成交时间：{formatBeijingMonthDayTime(trade.filledAt)} · 参考价触发 {formatPrice(trade.filledPrice ?? trade.price)} U
-                            </div>}
-                            {linkedClosings.length > 0 && (
-                              <div className="mt-2 border-t border-slate-200 pt-2">
-                                <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
-                                  <span className="font-medium text-slate-600">关联平仓记录</span>
-                                  <span className="whitespace-nowrap tabular-nums">已平 {formatQuantity(linkedClosedQuantity)} · 剩 {formatQuantity(remainingQuantity)} ETH</span>
-                                </div>
-                                <div className="mt-1.5 space-y-1">
-                                  {linkedClosings.map(({ trade: closingTrade, quantity }, index) => {
-                                    const isLongPosition = ACTIONS[trade.action].side === "long";
-                                    return (
-                                      <div key={`${closingTrade.id}-${index}`} className="flex items-center justify-between gap-2 border-l-2 border-slate-200 bg-white/70 px-2 py-1.5 text-[11px] tabular-nums">
-                                        <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
-                                          <span className={`font-semibold ${isLongPosition ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closingTrade.action].label}</span>
-                                          <span className="font-medium text-slate-700">{formatQuantity(quantity)} ETH</span>
-                                          <span className="text-slate-500">{isLongPosition ? "卖" : "买"} {formatPrice(closingTrade.price)}</span>
-                                        </div>
-                                        <span className="shrink-0 whitespace-nowrap text-slate-400">{formatBeijingMonthDayTime(closingTrade.createdAt)}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {activeOpenedTradeRows.map(renderOpenedTradeRow)}
               </div>}
 
               {canManage && <>
@@ -5431,7 +5450,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     </div>
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-3 items-start">
+                <div className="grid grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)] gap-3 items-start">
                   <Field label={<span className="inline-flex items-center gap-1 text-sm font-semibold text-slate-800">{isFullyClosedOpeningEdit ? "已全部平仓（ETH）" : isPartiallyClosedOpeningEdit ? "剩余可操作（ETH）" : "数量（ETH）"}{isOptionOpeningEntry && <span className="text-rose-500">*</span>}{ACTIONS[entryForm.action].opening && entryForm.isPending && <span className="text-[10px] font-bold text-sky-600">挂单</span>}</span>}>
                     <div className="relative">
                       <input
@@ -5530,7 +5549,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       value={entryForm.price}
                       onChange={(event) => setEntryForm((current) => ({ ...current, price: event.target.value }))}
                       placeholder="0.00"
-                      className="w-full h-14 rounded border border-slate-200 px-3 text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-indigo-500"
+                      className="min-w-0 w-full h-14 rounded border border-slate-200 px-2.5 text-[19px] font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 focus:border-indigo-500"
                     />}
                     {!isOptionOpeningEntry && openingArchivePrice !== null && (
                       <div className={`mt-1.5 text-[10px] tabular-nums ${ACTIONS[entryForm.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>
@@ -5565,7 +5584,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
                 {!isClosingEntry && <div className="-mt-1 flex flex-wrap items-center gap-1.5">
                   <span className="mr-0.5 text-[11px] text-slate-400">数量快选</span>
-                  {quantityQuickOptions.map((value, index) => {
+                  {quantityQuickOptions.map((value) => {
                     const isActive = entryForm.quantity === value;
                     const displayValue = isActive ? value : formatQuantityQuickOption(value);
                     return (
@@ -5576,7 +5595,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         onClick={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(value) }))}
                         className={`h-7 rounded border px-2 text-[11px] font-medium tabular-nums transition active:scale-95 ${isActive ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
                       >
-                        {index === 0 && lastSavedQuantity ? `最近 ${displayValue}` : displayValue}
+                        {displayValue}
                       </button>
                     );
                   })}
