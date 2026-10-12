@@ -2444,6 +2444,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     if (!account || !entry) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "速记流水读取失败" });
 
     await tx.commit();
+    if (isPending) activateLedger52T0PendingOrderScan();
     return { account: mapAccount(account), entry: mapEntry(entry) };
   } catch (error) {
     try { await tx.rollback(); } catch {}
@@ -2651,16 +2652,46 @@ function remainingOptionOpeningCents(rows: any[], openingEntryId: number): numbe
   return queue.find((item) => item.entryId === openingEntryId)?.remainingCents ?? 0;
 }
 
-let pendingOrderScanTimer: ReturnType<typeof setInterval> | null = null;
+let pendingOrderScannerStarted = false;
+let pendingOrderScanActive = false;
 let pendingOrderScanInFlight = false;
+
+/** 行情流仅在存在未成交挂单时才触发数据库成交判定。 */
+export function hasLedger52T0PendingOrders() {
+  return pendingOrderScanActive;
+}
+
+function activateLedger52T0PendingOrderScan() {
+  pendingOrderScanActive = true;
+}
+
+async function refreshLedger52T0PendingOrderScanState() {
+  const connection = await getDbConnection();
+  if (!connection) return pendingOrderScanActive;
+  await ensureLedger52T0JournalTables(connection as any);
+  const [rows] = await connection.execute(
+    `SELECT 1
+       FROM ledger52_t0_journal_entries
+      WHERE ledger_id = ? AND execution_status = 'pending'
+        AND action IN ('openLong', 'openShort')
+      LIMIT 1`,
+    [LEDGER_52_T0_JOURNAL_ID],
+  );
+  pendingOrderScanActive = Boolean(asRows(rows)[0]);
+  return pendingOrderScanActive;
+}
 
 /**
  * 管理员逐笔挂单只引用T+0统一 ETH 永续标记价：多单在标记价低于或等于挂单价时成交，
  * 空单在标记价高于或等于挂单价时成交。扫描只切换成交状态，不改写原始下单价、数量、费用或收益分配快照。
  */
-export async function scanLedger52T0PendingOrders() {
-  if (pendingOrderScanInFlight) return { filled: 0, markPrice: null as number | null };
-  const { getT0EthPerpetualMark } = await import("./price-scanner");
+export async function scanLedger52T0PendingOrders(input: { markPrice?: number; filledAt?: Date } = {}) {
+  if (process.env.DEV_BYPASS_AUTH === "true" || pendingOrderScanInFlight || !pendingOrderScanActive) {
+    return { filled: 0, markPrice: null as number | null };
+  }
+  const { getT0EthPerpetualMark } = input.markPrice === undefined
+    ? await import("./price-scanner")
+    : { getT0EthPerpetualMark: () => ({ price: input.markPrice }) };
   const markPrice = Number(getT0EthPerpetualMark().price);
   if (!Number.isFinite(markPrice) || markPrice <= 0) return { filled: 0, markPrice: null as number | null };
 
@@ -2692,7 +2723,7 @@ export async function scanLedger52T0PendingOrders() {
       const actorUserId = toNumber(row.user_id);
       if (entryId <= 0 || actorUserId <= 0) continue;
       const before = await buildEntryAuditSnapshot(tx, actorUserId, row);
-      const filledAt = new Date();
+      const filledAt = input.filledAt ?? new Date();
       const action = String(row.action) as T0JournalAction;
       const isOpenLong = action === "openLong";
       const pendingPrice = toNumber(row.price);
@@ -2717,6 +2748,15 @@ export async function scanLedger52T0PendingOrders() {
       await writeEntryAudit(tx, { actorUserId, entryId, operation: "fill", before, after: await buildEntryAuditSnapshot(tx, actorUserId, after) });
       filled += 1;
     }
+    const [remainingPendingRows] = await tx.execute(
+      `SELECT 1
+         FROM ledger52_t0_journal_entries
+        WHERE ledger_id = ? AND execution_status = 'pending'
+          AND action IN ('openLong', 'openShort')
+        LIMIT 1`,
+      [LEDGER_52_T0_JOURNAL_ID],
+    );
+    pendingOrderScanActive = Boolean(asRows(remainingPendingRows)[0]);
     await tx.commit();
     return { filled, markPrice };
   } catch (error) {
@@ -2928,19 +2968,16 @@ export function startLedger52T0ExpiredOptionScanner() {
   console.log("[T0期权] 自动到期结算扫描已启动（每60秒，仅官方Deribit delivery后写入）");
 }
 
-/** 启动生产挂单扫描：行情缓存约每秒更新，三秒状态扫描避免高频数据库轮询。 */
+/**
+ * 启动生产挂单扫描开关：启动时只检查一次是否存在挂单；随后由实时 ETH 永续标记价逐笔触发。
+ * DEV_BYPASS 热预览绝不启动，避免将预览行情写入真实订单。
+ */
 export function startLedger52T0PendingOrderScanner() {
-  if (pendingOrderScanTimer) return;
-  const run = () => {
-    void scanLedger52T0PendingOrders()
-      .then((result) => {
-        if (result.filled > 0) console.log(`[T0挂单] 标记价 ${result.markPrice}，自动成交 ${result.filled} 笔`);
-      })
-      .catch((error) => console.error("[T0挂单] 自动成交扫描失败:", error instanceof Error ? error.message : error));
-  };
-  run();
-  pendingOrderScanTimer = setInterval(run, 3_000);
-  console.log("[T0挂单] 自动成交扫描已启动（每3秒）");
+  if (pendingOrderScannerStarted || process.env.DEV_BYPASS_AUTH === "true") return;
+  pendingOrderScannerStarted = true;
+  void refreshLedger52T0PendingOrderScanState()
+    .then((hasPending) => console.log(`[T0挂单] 实时标记价触发已启动（${hasPending ? "当前有挂单" : "当前无挂单"}）`))
+    .catch((error) => console.error("[T0挂单] 初始化挂单状态失败:", error instanceof Error ? error.message : error));
 }
 
 export async function updateLedger52T0JournalOpeningEntry(input: {
@@ -3229,6 +3266,8 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     const afterForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, after);
     await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "update", before: beforeForAudit, after: afterForAudit });
     await tx.commit();
+    if (isPending === 1) activateLedger52T0PendingOrderScan();
+    if (isPending === 0) void refreshLedger52T0PendingOrderScanState();
     return { account: mapAccount(account), entry: mapEntry(after) };
   } catch (error) {
     try { await tx.rollback(); } catch {}
@@ -3263,6 +3302,7 @@ export async function deleteLedger52T0JournalOpeningEntry(input: { actorUserId: 
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "开仓记录删除失败" });
     }
     await tx.commit();
+    void refreshLedger52T0PendingOrderScanState();
     return { entryId: String(input.entryId), auditId: String(auditId), entry: mapEntry(before) };
   } catch (error) {
     try { await tx.rollback(); } catch {}
@@ -3321,6 +3361,7 @@ export async function revertLedger52T0JournalEntry(input: { actorUserId: number;
     }
 
     await tx.commit();
+    void refreshLedger52T0PendingOrderScanState();
     return { entryId: String(input.entryId), auditId: String(auditId), entry: mapEntry(before) };
   } catch (error) {
     try { await tx.rollback(); } catch {}
@@ -3489,6 +3530,7 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
       after: restoredForAudit,
     });
     await tx.commit();
+    if (executionStatus === "pending") activateLedger52T0PendingOrderScan();
     return { entry: mapEntry(restored) };
   } catch (error) {
     try { await tx.rollback(); } catch {}

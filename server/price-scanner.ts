@@ -6,7 +6,7 @@
  */
 import fs from 'fs';
 import path from 'path';
-
+import { hasLedger52T0PendingOrders, scanLedger52T0PendingOrders } from './ledger52-t0-journal';
 const CACHE_FILE = path.join(process.cwd(), 'price-cache.json');
 const CRYPTO_SCAN_INTERVAL_MS = 3_000;
 const SLOW_MARKET_SCAN_INTERVAL_MS = 15_000;
@@ -57,6 +57,9 @@ let perpetualMarkStreamReconnectDelayMs = PERPETUAL_MARK_RECONNECT_MIN_MS;
 let perpetualMarkStreamReconnectTimer: NodeJS.Timeout | null = null;
 let perpetualMarkStreamPingTimer: NodeJS.Timeout | null = null;
 let perpetualMarkCacheSaveTimer: NodeJS.Timeout | null = null;
+type PendingOrderMarkTick = { price: number; observedAt: Date };
+const pendingOrderMarkTicks: PendingOrderMarkTick[] = [];
+let pendingOrderMarkTriggerRunning = false;
 
 // 已覆盖原有行情需求，并包含52号账本当前的全部加密资产。
 // 数字币按 Gate.io → HTX → OKX 的顺序查询 USDT 现货报价；B2 为 Binance Alpha 的 B² Network 代币。
@@ -131,6 +134,38 @@ function entryFromPrice(coin: string, price: number, source: string, patch: Part
     updatedAt: nowIso(),
   };
   setPrice(coin, entry, source);
+}
+
+/**
+ * Gate 每个 ETH 永续标记价更新均可触发待成交判断；没有挂单时完全跳过。
+ * 有挂单时保留顺序队列，避免短暂跨价后回落被后续报价覆盖而漏成交。
+ */
+function triggerLedger52T0PendingOrders(price: number, observedAt = new Date()) {
+  if (process.env.DEV_BYPASS_AUTH === 'true' || !hasLedger52T0PendingOrders() || !isValidPrice(price)) return;
+  pendingOrderMarkTicks.push({ price, observedAt });
+  if (pendingOrderMarkTicks.length > 120) pendingOrderMarkTicks.splice(0, pendingOrderMarkTicks.length - 120);
+  if (pendingOrderMarkTriggerRunning) return;
+
+  pendingOrderMarkTriggerRunning = true;
+  void (async () => {
+    try {
+      while (pendingOrderMarkTicks.length > 0 && hasLedger52T0PendingOrders()) {
+        const tick = pendingOrderMarkTicks.shift();
+        if (!tick) continue;
+        const result = await scanLedger52T0PendingOrders({ markPrice: tick.price, filledAt: tick.observedAt });
+        if (result.filled > 0) console.log(`[T0挂单] 实时标记价 ${result.markPrice}，自动成交 ${result.filled} 笔`);
+      }
+    } catch (error) {
+      console.error('[T0挂单] 实时标记价成交判断失败:', error instanceof Error ? error.message : error);
+    } finally {
+      pendingOrderMarkTriggerRunning = false;
+      if (!hasLedger52T0PendingOrders()) pendingOrderMarkTicks.length = 0;
+      else {
+        const next = pendingOrderMarkTicks.shift();
+        if (next) triggerLedger52T0PendingOrders(next.price, next.observedAt);
+      }
+    }
+  })();
 }
 
 function loadCacheFromFile() {
@@ -620,6 +655,7 @@ async function updateEthPerpetualMarkFast() {
     return;
   }
   entryFromPrice(ETH_PERP_MARK_CACHE_KEY, quote.price, quote.source, quote.patch);
+  triggerLedger52T0PendingOrders(quote.price);
 }
 
 /** 常规数字币以小请求并发方式统一每三秒写入同一份内存缓存。 */
@@ -716,6 +752,8 @@ function connectEthPerpetualMarkStream() {
         quoteVolume24h: Number(row?.volume_24h_quote) || 0,
         changePercent: Number.isFinite(changePercent) ? changePercent : undefined,
       });
+      const observedAt = Number.isFinite(Number(row?.t)) ? new Date(Number(row.t)) : new Date();
+      triggerLedger52T0PendingOrders(price, observedAt);
       perpetualMarkStreamLastMessageAt = Date.now();
       schedulePerpetualMarkCacheSave();
     } catch (error) {
