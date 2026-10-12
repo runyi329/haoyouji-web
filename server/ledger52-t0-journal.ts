@@ -2222,6 +2222,9 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     throw new TRPCError({ code: "BAD_REQUEST", message: "仅开仓订单可以设为挂单" });
   }
   const isPending = isOpeningAction(input.action) && input.isPending === true ? 1 : 0;
+  if (isPending && isLocked) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "挂单成交前不可设为锁定；请在成交后再锁定" });
+  }
   if (isPending && (instrumentType === "option" || instrumentType === "grid")) {
     throw new TRPCError({ code: "BAD_REQUEST", message: instrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : "期权请直接成交；行权价不能作为挂单触发价" });
   }
@@ -2988,6 +2991,14 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     const lockedEntry = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId, { allowDependentClose: input.counterpartyOnly === true });
     const before = lockedEntry.entry;
     const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
+    const nextIsPending = isPending === null
+      ? String(before.execution_status ?? "filled") === "pending"
+      : isPending === 1;
+    if (nextIsPending && isLocked === 1) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "挂单成交前不可设为锁定；请在成交后再锁定" });
+    }
+    // 将已成交订单改回挂单时强制解除锁定；历史异常组合也会在下一次编辑中自动修正。
+    const isLockedForUpdate = nextIsPending ? 0 : isLocked;
     if (lockedEntry.hasDependentClose) {
       if (input.counterpartyOnly !== true || isCounterparty === null) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已被后续平仓使用，请先处理关联平仓流水" });
@@ -3025,7 +3036,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       return { account: mapAccount(account), entry: mapEntry(after) };
     }
     const effectiveInstrumentType = instrumentType;
-    if (isPending === 1 && (effectiveInstrumentType === "option" || effectiveInstrumentType === "grid")) {
+    if (nextIsPending && (effectiveInstrumentType === "option" || effectiveInstrumentType === "grid")) {
       throw new TRPCError({ code: "BAD_REQUEST", message: effectiveInstrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : "期权请直接成交；行权价不能作为挂单触发价" });
     }
     const optionParameters = effectiveInstrumentType === "option" ? resolveOptionParameters(input, before) : null;
@@ -3162,7 +3173,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         gridParameters?.rangeMax ?? null,
         gridParameters?.leverage ?? null,
         gridParameters?.count ?? null,
-        isLocked,
+        isLockedForUpdate,
         isCounterparty,
         isPending,
         isPending,
@@ -3357,10 +3368,11 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
     const entryId = Number(snapshot?.id || 0);
     const accountId = Number(snapshot?.account_id || 0);
     const action = String(snapshot?.action || "") as T0JournalAction;
-    const isLocked = isOpeningAction(action) && Boolean(toNumber(snapshot?.is_locked ?? snapshot?.isLocked));
     const executionStatus = String(snapshot?.execution_status ?? snapshot?.executionStatus ?? "filled") === "pending" && isOpeningAction(action)
       ? "pending"
       : "filled";
+    // 旧审计快照即使意外同时带有锁定和挂单，恢复时也遵循“挂单不可锁定”的当前规则。
+    const isLocked = isOpeningAction(action) && executionStatus === "filled" && Boolean(toNumber(snapshot?.is_locked ?? snapshot?.isLocked));
     const quantity = normalizeStoredEthQuantity(snapshot?.quantity);
     const price = String(snapshot?.price ?? "");
     const relatedUserId = toNumber(snapshot?.related_user_id ?? snapshot?.relatedUserId);

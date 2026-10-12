@@ -26,7 +26,7 @@ type T0InstrumentType = "spot" | "contract" | "option" | "grid";
 type T0OptionDirection = "long_call" | "long_put" | "short_call" | "short_put";
 type T0OptionPremiumCurrency = "USDT" | "ETH";
 type T0GridDirection = "long" | "short";
-type T0ExecutionFilter = "all" | "filled" | "pending";
+type T0ExecutionFilter = "all" | "filled" | "pending" | "locked";
 const T0_INSTRUMENT_TYPES: Array<{ value: T0InstrumentType; label: string; shortLabel: string }> = [
   { value: "spot", label: "现货", shortLabel: "现" },
   { value: "contract", label: "合约", shortLabel: "合" },
@@ -44,6 +44,7 @@ const T0_INSTRUMENT_FILTER_OPTIONS: T0MultiSelectOption[] = T0_INSTRUMENT_TYPES.
 const T0_EXECUTION_FILTER_OPTIONS: T0MultiSelectOption[] = [
   { id: "filled", label: "已成交" },
   { id: "pending", label: "已挂单" },
+  { id: "locked", label: "已锁定" },
 ];
 
 /** 空数组代表全部；勾满全部类型同样回归“全部类型”，避免出现重复的全选状态。 */
@@ -52,6 +53,20 @@ function normalizeT0InstrumentTypeFilterIds(ids: string[]): T0InstrumentType[] {
     .map((item) => item.value)
     .filter((type) => ids.includes(type));
   return selected.length === T0_INSTRUMENT_TYPES.length ? [] : selected;
+}
+
+function matchesT0ExecutionFilter(trade: Pick<PreviewTrade, "isPending" | "isLocked">, filter: T0ExecutionFilter) {
+  if (filter === "all") return true;
+  if (filter === "pending") return Boolean(trade.isPending);
+  if (filter === "locked") return !trade.isPending && Boolean(trade.isLocked);
+  return !trade.isPending;
+}
+
+function getT0ExecutionFilterSummary(filter: T0ExecutionFilter) {
+  if (filter === "filled") return "已成交";
+  if (filter === "pending") return "已挂单";
+  if (filter === "locked") return "已锁定";
+  return "状态全部";
 }
 
 type T0PersistedTopFilters = {
@@ -146,7 +161,7 @@ function readPersistedT0TopFilters(storageKey: string | null): T0PersistedTopFil
       memberRelatedUserFilterTouched: parsed.memberRelatedUserFilterTouched === true,
       relatedFundIds: sanitizeT0FilterIds(parsed.relatedFundIds),
       instrumentTypeIds: normalizeT0InstrumentTypeFilterIds(sanitizeT0FilterIds(parsed.instrumentTypeIds)),
-      executionFilter: executionFilter === "filled" || executionFilter === "pending" ? executionFilter : "all",
+      executionFilter: executionFilter === "filled" || executionFilter === "pending" || executionFilter === "locked" ? executionFilter : "all",
     };
   } catch {
     return null;
@@ -2275,7 +2290,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const executionScopedTrades = useMemo(
     () => executionFilter === "all"
       ? trades
-      : trades.filter((trade) => executionFilter === "pending" ? Boolean(trade.isPending) : !trade.isPending),
+      : trades.filter((trade) => matchesT0ExecutionFilter(trade, executionFilter)),
     [trades, executionFilter],
   );
   const instrumentScopedTrades = useMemo(
@@ -2312,7 +2327,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const historyExecutionScopedTrades = useMemo(
     () => historyExecutionFilter === "all"
       ? trades
-      : trades.filter((trade) => historyExecutionFilter === "pending" ? Boolean(trade.isPending) : !trade.isPending),
+      : trades.filter((trade) => matchesT0ExecutionFilter(trade, historyExecutionFilter)),
     [trades, historyExecutionFilter],
   );
   const historyInstrumentScopedTrades = useMemo(
@@ -2590,11 +2605,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     || historyInstrumentTypeFilterIds.length > 0
     || historyExecutionFilter !== "all";
   const historyInstrumentFilterSummary = getT0InstrumentFilterSummary(historyInstrumentTypeFilterIds);
-  const historyExecutionFilterSummary = historyExecutionFilter === "all"
-    ? "状态全部"
-    : historyExecutionFilter === "filled"
-      ? "已成交"
-      : "已挂单";
+  const historyExecutionFilterSummary = getT0ExecutionFilterSummary(historyExecutionFilter);
   const historyTypeStatusGridTemplateColumns = useMemo(
     () => buildT0FilterGridTemplateColumns([
       // 两项都按当前文字共同分配空间；不能因另一项仍为“全部”而把已选类型压成极窄固定宽度。
@@ -2661,11 +2672,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ]);
   }, [accountFilterOptions, isMemberView, lockedAccountName, lockedRelatedFundName, memberHasReferralFilterOptions, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberAccountFilter, shouldLockMemberFundFilter, topRelatedUserSelectionIsAll]);
   const topInstrumentFilterSummary = getT0InstrumentFilterSummary(instrumentTypeFilterIds);
-  const topExecutionFilterSummary = executionFilter === "all"
-    ? "状态全部"
-    : executionFilter === "filled"
-      ? "已成交"
-      : "已挂单";
+  const topExecutionFilterSummary = getT0ExecutionFilterSummary(executionFilter);
   const topTypeStatusGridTemplateColumns = useMemo(
     () => buildT0FilterGridTemplateColumns([
       // 管理端与用户端均以当前两项文字作为整体智能分配，保证“期权 + 全部状态”等组合不挤压类型。
@@ -4544,7 +4551,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 singleSelect
                 onChange={(ids) => {
                   const value = ids[0];
-                  setExecutionFilter(value === "filled" || value === "pending" ? value : "all");
+                  setExecutionFilter(value === "filled" || value === "pending" || value === "locked" ? value : "all");
                   setRecentJournalPage(1);
                 }}
               />
@@ -4898,7 +4905,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     singleSelect
                     onChange={(ids) => {
                       const value = ids[0];
-                      setHistoryExecutionFilter(value === "filled" || value === "pending" ? value : "all");
+                      setHistoryExecutionFilter(value === "filled" || value === "pending" || value === "locked" ? value : "all");
                         setRecentJournalPage(1);
                     }}
                   />
@@ -5362,10 +5369,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       {ACTIONS[entryForm.action].opening && <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
                         <button
                           type="button"
-                          disabled={isCloseReview}
+                          disabled={isCloseReview || entryForm.isPending}
                           aria-pressed={entryForm.isLocked}
-                          aria-label={entryForm.isLocked ? "解除本笔开仓锁定" : "锁定本笔开仓"}
-                          title={entryForm.isLocked ? "已锁定，点击解除" : "未锁定，点击锁定"}
+                          aria-label={entryForm.isPending ? "挂单不可锁定" : entryForm.isLocked ? "解除本笔开仓锁定" : "锁定本笔开仓"}
+                          title={entryForm.isPending ? "挂单不可锁定；成交后才可设为锁定" : entryForm.isLocked ? "已锁定，点击解除" : "未锁定，点击锁定"}
                           onClick={() => setEntryForm((current) => ({ ...current, isLocked: !current.isLocked }))}
                           className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isLocked ? "border-[#c9a84c]/75 bg-[#141414] text-[#f5d78e] shadow-[inset_0_1px_0_rgba(245,215,142,0.16),inset_0_-1px_0_rgba(0,0,0,0.7)]" : "border-slate-300 bg-slate-50 text-slate-500"}`}
                         >
@@ -5377,7 +5384,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           aria-pressed={entryForm.isPending}
                           aria-label={entryForm.instrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? "取消本笔开仓挂单，改为直接成交" : "设为本笔开仓挂单"}
                           title={entryForm.instrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? "挂单中，点击改为直接成交" : "直接成交，点击改为挂单"}
-                          onClick={() => setEntryForm((current) => ({ ...current, isPending: !current.isPending }))}
+                          onClick={() => setEntryForm((current) => ({
+                            ...current,
+                            isPending: !current.isPending,
+                            // 挂单成交前不允许锁定；改为挂单时立即解除已有锁定标记。
+                            isLocked: current.isPending ? current.isLocked : false,
+                          }))}
                           className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isPending ? "border-sky-500/75 bg-sky-50 text-sky-600" : "border-slate-300 bg-slate-50 text-slate-500"}`}
                         >
                           <Clock3 className="h-4 w-4" strokeWidth={2.3} />
