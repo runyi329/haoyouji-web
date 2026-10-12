@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-10-12
+// 生成时间：2026-10-13
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9580,5 +9580,20 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-10-11T13:01:46Z", type: "feat", cleanMessage: "add recursive referral filter" },
     { date: "2026-10-11T14:01:17Z", type: "feat", cleanMessage: "allow member referral T0 filtering" },
     { date: "2026-10-11T15:56:47Z", type: "feat", cleanMessage: "add T0 grid orders and filter refinements" },
+  ],
+  "2026-10-12": [
+    { date: "2026-10-11T21:05:56Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-10-12T03:09:35Z", type: "feat", cleanMessage: "refine T0 settlements and display" },
+    { date: "2026-10-12T03:27:48Z", type: "fix", cleanMessage: "show personal profit-share payout in T0 views" },
+    { date: "2026-10-12T06:00:00Z", type: "feat", cleanMessage: "add locked order status filter" },
+    { date: "2026-10-12T08:10:30Z", type: "feat", cleanMessage: "show fiat available and frozen separately" },
+    { date: "2026-10-12T09:20:34Z", type: "feat", cleanMessage: "trigger pending fills from live marks" },
+    { date: "2026-10-12T12:33:42Z", type: "fix", cleanMessage: "restrict partially closed T0 edits" },
+    { date: "2026-10-12T13:04:52Z", type: "fix", cleanMessage: "align T0 filtered history and summary" },
+    { date: "2026-10-12T14:00:14Z", type: "fix", cleanMessage: "refine T0 entry sheet layout" },
+    { date: "2026-10-12T15:24:23Z", type: "fix", cleanMessage: "preserve T0 history pnl across type filters" },
+  ],
+  "2026-10-13": [
+    { date: "2026-10-12T23:17:23Z", type: "fix", cleanMessage: "retain T0 pnl detail through projections" },
   ],
 };
