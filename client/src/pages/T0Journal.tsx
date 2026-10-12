@@ -2336,11 +2336,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => selectedTrades.filter((trade) => !trade.isPending),
     [selectedTrades],
   );
+  // 历史记录先严格继承页面顶部的账户、用户、项目、类型与状态五项筛选，
+  // 再按历史面板内的条件作进一步细分，避免顶部筛到某位用户时历史仍显示全部流水。
   const historyExecutionScopedTrades = useMemo(
     () => historyExecutionFilter === "all"
-      ? trades
-      : trades.filter((trade) => matchesT0ExecutionFilter(trade, historyExecutionFilter)),
-    [trades, historyExecutionFilter],
+      ? selectedTrades
+      : selectedTrades.filter((trade) => matchesT0ExecutionFilter(trade, historyExecutionFilter)),
+    [selectedTrades, historyExecutionFilter],
   );
   const historyInstrumentScopedTrades = useMemo(
     () => filterTradesByInstrumentTypes(historyExecutionScopedTrades, historyInstrumentTypeFilterIds),
@@ -2440,14 +2442,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       || 0,
   );
   /**
-   * 有分成快照时，成员和管理员历史列表均展示自己最终可得的本单净额：
-   * - 受益人投影视图的 detail 已按本人比例计算；
-   * - 订单所属人的原始流水及管理员全量流水则从平仓快照取当前查看者的本人份额；
-   * - 管理员点入金额后仍保留整单净利润和全体分佣明细，便于核对。
+   * 成员端始终展示本人本单可得；管理员端则跟随顶部“用户”筛选，
+   * 将每张订单显示为该订单所属用户的实际可得，而非管理员在该订单中的分成。
+   * 管理员查看自身从某位用户分得多少，后续以独立功能承载，不能混入当前用户视图。
    */
-  const resolveViewerPayout = (trade: PreviewTrade, detail?: RecentJournalTradeDetail) => {
-    const displayedNetPnl = Number(detail?.netPnl);
-    if (!Number.isFinite(displayedNetPnl) || !Number.isInteger(viewerProfitShareBeneficiaryUserId) || viewerProfitShareBeneficiaryUserId <= 0) return null;
+  const resolveDisplayedPayout = (trade: PreviewTrade, displayedNetPnlInput: number | undefined) => {
+    const displayedNetPnl = Number(displayedNetPnlInput);
+    const beneficiaryUserId = isMemberView
+      ? viewerProfitShareBeneficiaryUserId
+      : Number(trade.relatedUserId || 0);
+    if (!Number.isFinite(displayedNetPnl) || !Number.isInteger(beneficiaryUserId) || beneficiaryUserId <= 0) return null;
     if (isMemberView && trade.profitShareBeneficiaryUserId) {
       return { netPnl: displayedNetPnl, isProfitShared: true };
     }
@@ -2458,10 +2462,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       displayedNetPnl,
     });
     if (allocations.length === 0) return null;
-    const ownAllocation = allocations.find((allocation) => allocation.beneficiaryUserId === viewerProfitShareBeneficiaryUserId);
-    // 分成订单绝不向任何列表视角暴露整单净利润：未分到该单的查看者显示为0；
-    // 管理员仍可点击金额，在独立明细弹窗中查看整单净收益和全部分配。
-    return { netPnl: ownAllocation?.netPnl ?? 0, isProfitShared: true };
+    const allocation = allocations.find((item) => item.beneficiaryUserId === beneficiaryUserId);
+    // 已有分成快照的订单只显示当前用户视图对应的本单可得；完整订单净收益和全体分配仍仅在管理员明细弹窗内显示。
+    return { netPnl: allocation?.netPnl ?? 0, isProfitShared: true };
+  };
+  const resolveViewerPayout = (trade: PreviewTrade, detail?: RecentJournalTradeDetail) => {
+    return resolveDisplayedPayout(trade, detail?.netPnl);
   };
   const memberProfitShareDetail = netProfitDetail
     ? resolveViewerPayout(netProfitDetail.trade, netProfitDetail.detail)
@@ -2786,7 +2792,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     : entrySheetArchiveStepRef.current;
   const summary = useMemo(() => calculateSummary(buckets, markPrice, selectedFilledTrades), [buckets, markPrice, selectedFilledTrades]);
   // 首屏、分方向累计与历史逐笔明细统一使用已扣开仓、平仓手续费的净收益口径。
-  const rawTotalNetProfit = summary.long.realized + summary.short.realized;
   const totalNetProfitDetails = useMemo(() => {
     const detailsByEntryId = buildRecentJournalTradeDetails(selectedFilledTrades);
     const rawDetails = selectedFilledTrades
@@ -2801,24 +2806,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       })
       .filter((detail): detail is { trade: PreviewTrade; quantity: number; netPnl: number } => detail !== null)
       .sort((left, right) => right.trade.createdAt.localeCompare(left.trade.createdAt) || right.trade.id.localeCompare(left.trade.id));
-    if (!Number.isInteger(viewerProfitShareBeneficiaryUserId) || viewerProfitShareBeneficiaryUserId <= 0) return rawDetails;
     return rawDetails.map((item) => {
-      // 成员受益人投影已经是本人份额；其余原始流水按当前查看者在历史快照中的本单份额呈现。
-      if (isMemberView && item.trade.profitShareBeneficiaryUserId) return item;
-      const allocations = buildClosingProfitShareDistribution({
-        trades,
-        snapshots: profitShareSnapshots,
-        closing: item.trade,
-        displayedNetPnl: item.netPnl,
-      });
-      if (allocations.length === 0) return item;
-      const ownAllocation = allocations.find((allocation) => allocation.beneficiaryUserId === viewerProfitShareBeneficiaryUserId);
-      return { ...item, netPnl: ownAllocation?.netPnl ?? 0 };
+      const payout = resolveDisplayedPayout(item.trade, item.netPnl);
+      return payout ? { ...item, netPnl: payout.netPnl } : item;
     });
   }, [isMemberView, profitShareSnapshots, selectedFilledTrades, trades, viewerProfitShareBeneficiaryUserId]);
-  const totalNetProfit = Number.isInteger(viewerProfitShareBeneficiaryUserId) && viewerProfitShareBeneficiaryUserId > 0
-    ? totalNetProfitDetails.reduce((total, detail) => total + detail.netPnl, 0)
-    : rawTotalNetProfit;
+  const totalNetProfit = totalNetProfitDetails.reduce((total, detail) => total + detail.netPnl, 0);
   const totalRevenueDetailTotalPages = Math.max(1, Math.ceil(
     totalNetProfitDetails.length / TOTAL_REVENUE_DETAIL_PAGE_SIZE,
   ));
@@ -2844,6 +2837,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const rounded = Math.round(totalPositionQuantity);
     return `${rounded < 0 ? "−" : ""}${Math.abs(rounded).toLocaleString("en-US")}`;
   })();
+  const totalNetProfitText = formatSigned(totalNetProfit);
   const netPositionBreakdown = useMemo(() => {
     const buildSide = (side: PositionSide) => {
       const levels = totalPositionBuckets
@@ -4454,7 +4448,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             }}
           />
           <div
-            className="relative z-[1] grid grid-cols-[minmax(0,1.45fr)_minmax(max-content,0.9fr)] p-2"
+            className="relative z-[1] flex min-w-0 items-center p-2"
             style={{
               background: "linear-gradient(180deg, rgba(255,255,255,0.14), rgba(203,213,225,0.14))",
               borderTop: "1px solid rgba(100,116,139,0.20)",
@@ -4469,16 +4463,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 setShowTotalNetProfitDetail(true);
               }}
               aria-haspopup="dialog"
-              aria-label="查看总净收益明细"
-              className="flex min-w-0 items-center justify-between gap-2 border-r px-3 py-3 text-left transition-opacity active:opacity-60"
+              aria-label="查看总收益明细"
+              className="flex min-w-0 flex-1 items-center gap-1.5 border-r px-2.5 py-3 text-left transition-opacity active:opacity-60"
               style={{
                 borderColor: "rgba(100,116,139,0.26)",
                 boxShadow: "inset -1px 0 0 rgba(255,255,255,0.70)",
               }}
             >
-              <div className="shrink-0 text-[11px] font-semibold text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>总净收益</div>
-              <div className={`ml-auto flex items-baseline gap-0.5 whitespace-nowrap text-[clamp(18px,5vw,22px)] font-bold leading-none tabular-nums ${totalNetProfitClass}`} style={{ textShadow: "-0.9px -0.9px 0 rgba(255,255,255,0.88), 1.15px 1.15px 1px rgba(15,23,42,0.22)" }}>
-                <span>{formatSigned(totalNetProfit)}</span>
+              <div className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>总收益</div>
+              <div className={`flex shrink-0 items-baseline gap-0.5 whitespace-nowrap text-[clamp(18px,5vw,22px)] font-bold leading-none tabular-nums ${totalNetProfitClass}`} style={{ textShadow: "-0.9px -0.9px 0 rgba(255,255,255,0.88), 1.15px 1.15px 1px rgba(15,23,42,0.22)" }}>
+                <span>{totalNetProfitText}</span>
                 <span className="text-[12px] font-semibold opacity-65">U</span>
               </div>
             </button>
@@ -4487,10 +4481,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               onClick={() => setShowNetPositionDetail(true)}
               aria-haspopup="dialog"
               aria-label="查看总仓位对冲明细"
-              className="flex min-w-0 items-center justify-between gap-2 px-3 py-3 text-left transition-opacity active:opacity-60"
+              className="flex shrink-0 items-center gap-1.5 px-2.5 py-3 text-left transition-opacity active:opacity-60"
             >
-              <div className="shrink-0 text-[11px] font-semibold text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>总仓位</div>
-              <div className={`ml-auto flex items-baseline gap-0.5 whitespace-nowrap text-[clamp(18px,5vw,22px)] font-bold leading-none tabular-nums ${netPositionClass}`} style={{ textShadow: "-0.9px -0.9px 0 rgba(255,255,255,0.88), 1.15px 1.15px 1px rgba(15,23,42,0.22)" }}>
+              <div className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>总仓位</div>
+              <div className={`flex shrink-0 items-baseline gap-0.5 whitespace-nowrap text-[clamp(18px,5vw,22px)] font-bold leading-none tabular-nums ${netPositionClass}`} style={{ textShadow: "-0.9px -0.9px 0 rgba(255,255,255,0.88), 1.15px 1.15px 1px rgba(15,23,42,0.22)" }}>
                 <span>{roundedNetPositionText}</span>
                 <span className="text-[12px] font-semibold opacity-65">ETH</span>
               </div>
@@ -6310,23 +6304,23 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       )}
 
       {showTotalNetProfitDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="总净收益明细">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="总收益明细">
           <div className="max-h-[88vh] w-full max-w-sm overflow-y-auto rounded bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-base font-semibold text-slate-900">总净收益明细</div>
+                <div className="text-base font-semibold text-slate-900">总收益明细</div>
                 <div className="mt-1 text-xs text-slate-500">当前筛选范围内的已平仓订单，已扣开仓与平仓手续费</div>
               </div>
               <button type="button" onClick={() => {
                 setShowTotalNetProfitDetail(false);
-              }} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭总净收益明细">
+              }} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭总收益明细">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <div className="mt-4 rounded border border-slate-200 bg-slate-50 px-3 py-3">
               <div className="flex items-baseline justify-between gap-4">
-                <span className="text-sm font-semibold text-slate-700">总净收益</span>
+                <span className="text-sm font-semibold text-slate-700">总收益</span>
                 <span className={`whitespace-nowrap text-lg font-bold ${totalNetProfitClass}`}>{formatSigned(totalNetProfit)} <span className="text-xs font-semibold text-slate-500">U</span></span>
               </div>
             </div>
