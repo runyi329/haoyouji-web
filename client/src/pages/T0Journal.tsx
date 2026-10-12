@@ -2407,27 +2407,37 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     : trade.relatedFundName
       || (trade.relatedFundId ? `专项款#${trade.relatedFundId}` : "未区分专项款（历史） ");
   const memberViewerRelatedUserId = Number((t0JournalQuery.data as any)?.viewerRelatedUserId || 0);
+  const viewerProfitShareBeneficiaryUserId = Number(
+    (t0JournalQuery.data as any)?.viewerProfitShareBeneficiaryUserId
+      || memberViewerRelatedUserId
+      || 0,
+  );
   /**
-   * 成员端只展示自己最终可得的本单净额：
+   * 有分成快照时，成员和管理员历史列表均展示自己最终可得的本单净额：
    * - 受益人投影视图的 detail 已按本人比例计算；
-   * - 订单所属人原单则从平仓快照取本人份额，不能误把分配前的整单净收益展示给本人。
+   * - 订单所属人的原始流水及管理员全量流水则从平仓快照取当前查看者的本人份额；
+   * - 管理员点入金额后仍保留整单净利润和全体分佣明细，便于核对。
    */
-  const resolveMemberPayout = (trade: PreviewTrade, detail?: RecentJournalTradeDetail) => {
+  const resolveViewerPayout = (trade: PreviewTrade, detail?: RecentJournalTradeDetail) => {
     const displayedNetPnl = Number(detail?.netPnl);
-    if (!isMemberView || !Number.isFinite(displayedNetPnl) || !Number.isInteger(memberViewerRelatedUserId) || memberViewerRelatedUserId <= 0) return null;
-    if (trade.profitShareBeneficiaryUserId) {
+    if (!Number.isFinite(displayedNetPnl) || !Number.isInteger(viewerProfitShareBeneficiaryUserId) || viewerProfitShareBeneficiaryUserId <= 0) return null;
+    if (isMemberView && trade.profitShareBeneficiaryUserId) {
       return { netPnl: displayedNetPnl, isProfitShared: true };
     }
-    const ownAllocation = buildClosingProfitShareDistribution({
+    const allocations = buildClosingProfitShareDistribution({
       trades,
       snapshots: profitShareSnapshots,
       closing: trade,
       displayedNetPnl,
-    }).find((allocation) => allocation.beneficiaryUserId === memberViewerRelatedUserId);
-    return ownAllocation ? { netPnl: ownAllocation.netPnl, isProfitShared: true } : null;
+    });
+    if (allocations.length === 0) return null;
+    const ownAllocation = allocations.find((allocation) => allocation.beneficiaryUserId === viewerProfitShareBeneficiaryUserId);
+    // 分成订单绝不向任何列表视角暴露整单净利润：未分到该单的查看者显示为0；
+    // 管理员仍可点击金额，在独立明细弹窗中查看整单净收益和全部分配。
+    return { netPnl: ownAllocation?.netPnl ?? 0, isProfitShared: true };
   };
   const memberProfitShareDetail = netProfitDetail
-    ? resolveMemberPayout(netProfitDetail.trade, netProfitDetail.detail)
+    ? resolveViewerPayout(netProfitDetail.trade, netProfitDetail.detail)
     : null;
   const memberRelatedUserName = useMemo(() => {
     const selfName = String((me as any)?.name || (me as any)?.username || "").trim();
@@ -2772,20 +2782,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       })
       .filter((detail): detail is { trade: PreviewTrade; quantity: number; netPnl: number } => detail !== null)
       .sort((left, right) => right.trade.createdAt.localeCompare(left.trade.createdAt) || right.trade.id.localeCompare(left.trade.id));
-    if (!isMemberView || !Number.isInteger(memberViewerRelatedUserId) || memberViewerRelatedUserId <= 0) return rawDetails;
+    if (!Number.isInteger(viewerProfitShareBeneficiaryUserId) || viewerProfitShareBeneficiaryUserId <= 0) return rawDetails;
     return rawDetails.map((item) => {
-      // 分成受益人投影的流水已按本人比例计算；订单所属成员的原始流水则换成快照中自己的最终份额。
-      if (item.trade.profitShareBeneficiaryUserId) return item;
-      const ownAllocation = buildClosingProfitShareDistribution({
+      // 成员受益人投影已经是本人份额；其余原始流水按当前查看者在历史快照中的本单份额呈现。
+      if (isMemberView && item.trade.profitShareBeneficiaryUserId) return item;
+      const allocations = buildClosingProfitShareDistribution({
         trades,
         snapshots: profitShareSnapshots,
         closing: item.trade,
         displayedNetPnl: item.netPnl,
-      }).find((allocation) => allocation.beneficiaryUserId === memberViewerRelatedUserId);
-      return ownAllocation ? { ...item, netPnl: ownAllocation.netPnl } : item;
+      });
+      if (allocations.length === 0) return item;
+      const ownAllocation = allocations.find((allocation) => allocation.beneficiaryUserId === viewerProfitShareBeneficiaryUserId);
+      return { ...item, netPnl: ownAllocation?.netPnl ?? 0 };
     });
-  }, [isMemberView, memberViewerRelatedUserId, profitShareSnapshots, selectedFilledTrades, trades]);
-  const totalNetProfit = isMemberView
+  }, [isMemberView, profitShareSnapshots, selectedFilledTrades, trades, viewerProfitShareBeneficiaryUserId]);
+  const totalNetProfit = Number.isInteger(viewerProfitShareBeneficiaryUserId) && viewerProfitShareBeneficiaryUserId > 0
     ? totalNetProfitDetails.reduce((total, detail) => total + detail.netPnl, 0)
     : rawTotalNetProfit;
   const totalRevenueDetailTotalPages = Math.max(1, Math.ceil(
@@ -4179,8 +4191,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         const detail = recentJournalTradeDetails.get(closing.id);
         const isLong = ACTIONS[closing.action].side === "long";
         const showFullClosingContext = hasSystemGeneratedSettlementNote(closing.note);
-        const memberPayout = resolveMemberPayout(closing, detail);
-        const hideRepeatedSettlementPrices = isMemberView && Boolean(memberPayout);
+        const viewerPayout = resolveViewerPayout(closing, detail);
+        const hideRepeatedSettlementPrices = isMemberView && Boolean(viewerPayout);
         return (
           <div key={group.id} className="mx-3 my-2 rounded border border-dashed border-amber-200 bg-amber-50/35 px-3 py-2.5">
           <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
@@ -4252,9 +4264,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           const detail = buildLinkedClosingDetail(opening, allocation);
           const allocatedClosing = { ...closing, quantity: allocation.quantity, fee: detail.closingFee ?? closing.fee };
           const isLastClosing = index === group.closings.length - 1;
-          const memberPayout = resolveMemberPayout(allocatedClosing, detail);
-          const displayedNetPnl = memberPayout?.netPnl ?? detail.netPnl;
-          const hideRepeatedSettlementPrices = isMemberView && Boolean(memberPayout);
+          const viewerPayout = resolveViewerPayout(allocatedClosing, detail);
+          const displayedNetPnl = viewerPayout?.netPnl ?? detail.netPnl;
+          const hideRepeatedSettlementPrices = isMemberView && Boolean(viewerPayout);
           return (
             <div key={`${closing.id}-${index}`} className="relative border-t border-[#c7d0d7]/60 bg-white/28 px-3 py-2.5 pl-8">
               <span
@@ -4277,7 +4289,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   type="button"
                   onClick={() => setNetProfitDetail({ trade: allocatedClosing, detail })}
                   className={`shrink-0 border-b border-dotted pb-0.5 font-semibold outline-none ${displayedNetPnl! >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}
-                  aria-label={memberPayout ? "查看关联平仓本单可得明细" : "查看关联平仓净利润计算明细"}
+                  aria-label={viewerPayout ? (canManage ? "查看关联平仓本单分成与全体分佣明细" : "查看关联平仓本单可得明细") : "查看关联平仓净利润计算明细"}
                 >
                   {formatSigned(displayedNetPnl!)}<span className="ml-0.5 text-slate-500">u</span>
                 </button>
@@ -4286,7 +4298,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <span className="text-[10px] text-slate-400">关联平仓</span>
                 <span className="text-slate-300">·</span>
                 <span className="text-slate-400">{formatBeijingMonthDayTime(closing.createdAt)}</span>
-                {canManage ? renderHistoryActionMenuButton(closing) : <span className="ml-auto shrink-0 text-[10px] text-slate-500">{memberPayout ? "本单可得" : "净利润"}</span>}
+                {canManage ? renderHistoryActionMenuButton(closing) : <span className="ml-auto shrink-0 text-[10px] text-slate-500">{viewerPayout ? "本单可得" : "净利润"}</span>}
               </div>
               {renderHistoryActionMenu(closing)}
               {closing.note?.trim() && <div className="mt-1 truncate text-[11px] text-slate-500"><span>备注：</span>{closing.note.trim()}</div>}
@@ -4901,9 +4913,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
                 const showFullHistoryContext = hasSystemGeneratedSettlementNote(trade.note);
-                const memberPayout = resolveMemberPayout(trade, detail);
-                const displayedNetPnl = memberPayout?.netPnl ?? detail?.netPnl;
-                const hideRepeatedSettlementPrices = isMemberView && Boolean(memberPayout);
+                const viewerPayout = resolveViewerPayout(trade, detail);
+                const displayedNetPnl = viewerPayout?.netPnl ?? detail?.netPnl;
+                const hideRepeatedSettlementPrices = isMemberView && Boolean(viewerPayout);
                 return (
                 <div key={trade.id} className="border-b border-[#c7d0d7]/60 px-4 py-2.5 last:border-b-0">
                     <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
@@ -4923,7 +4935,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           type="button"
                           onClick={() => setNetProfitDetail({ trade, detail })}
                           className={`shrink-0 border-b border-dotted pb-0.5 font-semibold outline-none ${displayedNetPnl >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}
-                          aria-label={memberPayout ? "查看本单可得明细" : "查看净利润计算明细"}
+                          aria-label={viewerPayout ? (canManage ? "查看本单分成与全体分佣明细" : "查看本单可得明细") : "查看净利润计算明细"}
                         >
                           {formatSigned(displayedNetPnl)}<span className="ml-0.5 text-slate-500">u</span>
                         </button>
@@ -4939,7 +4951,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       <span className="shrink-0">{formatT0TradeTimeline(trade)}</span>
                       {canManage ? renderHistoryActionMenuButton(trade) : !isOpening && detail && displayedNetPnl !== undefined && <>
                         <span className="text-slate-300">·</span>
-                        <span className="ml-auto shrink-0 text-[10px] text-slate-500">{memberPayout ? "本单可得" : "净利润"}</span>
+                        <span className="ml-auto shrink-0 text-[10px] text-slate-500">{viewerPayout ? "本单可得" : "净利润"}</span>
                       </>}
                     </div>
                     {renderHistoryActionMenu(trade)}
@@ -6365,7 +6377,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-base font-semibold text-slate-900">{memberProfitShareDetail ? "本单收益" : isMemberView ? "净利润说明" : "净利润计算明细"}</div>
+                <div className="text-base font-semibold text-slate-900">{isMemberView && memberProfitShareDetail ? "本单收益" : isMemberView ? "净利润说明" : "净利润计算明细"}</div>
                 {!isMemberView && <div className="mt-1 text-xs text-slate-500">已扣除开仓与平仓两次实际手续费</div>}
               </div>
               <button type="button" onClick={() => setNetProfitDetail(null)} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭净利润说明">

@@ -1292,6 +1292,8 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
   return {
     viewerMode: scope.mode,
     viewerRelatedUserId: isAdminScope ? undefined : relatedUserId,
+    // 管理员以账本实际所有者作为收益分成受益人；成员始终以本人关联用户身份计算本单可得。
+    viewerProfitShareBeneficiaryUserId: isAdminScope ? journalOwnerUserId : relatedUserId,
     // 仅在成员主动开启“全部推荐”时下发已授权的下线 ID，供前端保留本人收益投影并完整展示下线订单。
     viewerReferralDescendantUserIds: isAdminScope ? [] : memberReferralDescendantUserIds,
     accounts: asRows(accountResult).map(mapAccount),
