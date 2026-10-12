@@ -702,7 +702,36 @@ async function getAllUsers() {
       console.warn('[miban] getAllUsers: CNY balance query failed:', (e as any)?.message);
     }
 
-    // 步骤5：第二阶段独立数字资产余额。只返回实际非零余额，避免在管理和用户端
+    // 步骤5：法币冻结不改变总余额，只占用可用额。这里按当前用户批量汇总，
+    // 避免管理员调账页在选择用户后再产生逐人查询。
+    const fundingFrozenMap = new Map<number, { usdtFrozen: number; cnyFrozen: number }>();
+    try {
+      const [frozenRows] = await (conn as any).execute(
+        `SELECT h.user_id AS userId,
+                h.asset_code AS assetCode,
+                COALESCE(SUM(GREATEST(0, h.amount - COALESCE(h.released_amount, 0))), 0) AS frozen
+           FROM ai_wallet_project_holds h
+          WHERE h.user_id IN (${placeholders})
+            AND h.asset_code IN ('USDT', 'CNY')
+            AND h.status = 'active'
+          GROUP BY h.user_id, h.asset_code`,
+        ids,
+      ) as any[];
+      for (const row of (Array.isArray(frozenRows) ? frozenRows : [])) {
+        const userId = Number(row.userId);
+        if (!Number.isInteger(userId) || userId <= 0) continue;
+        const current = fundingFrozenMap.get(userId) ?? { usdtFrozen: 0, cnyFrozen: 0 };
+        const frozen = Math.max(0, parseFloat(row.frozen?.toString() || '0'));
+        if (String(row.assetCode).toUpperCase() === 'USDT') current.usdtFrozen = frozen;
+        if (String(row.assetCode).toUpperCase() === 'CNY') current.cnyFrozen = frozen;
+        fundingFrozenMap.set(userId, current);
+      }
+    } catch (e) {
+      // 钱包冻结台账尚未初始化或临时不可用时，不影响既有调账与余额读取。
+      console.warn('[miban] getAllUsers: funding freeze query failed:', (e as any)?.message);
+    }
+
+    // 步骤6：第二阶段独立数字资产余额。只返回实际非零余额，避免在管理和用户端
     // 制造一排 0.0000 的空资产；失败不影响既有 CNY / USDT 管理能力。
     let multiAssetMap = new Map<number, any[]>();
     try {
@@ -729,6 +758,8 @@ async function getAllUsers() {
       orderCount: orderCountMap.get(u.id) ?? 0,
       usdtBalance: usdtMap.get(u.id) ?? parseFloat(String(u.balance ?? '0')),
       cnyBalance: cnyMap.get(u.id) ?? 0,
+      usdtFrozen: fundingFrozenMap.get(Number(u.id))?.usdtFrozen ?? 0,
+      cnyFrozen: fundingFrozenMap.get(Number(u.id))?.cnyFrozen ?? 0,
       multiAssetBalances: multiAssetMap.get(Number(u.id)) ?? [],
     }));
   } catch (e) {

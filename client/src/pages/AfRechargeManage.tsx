@@ -688,6 +688,14 @@ export default function AfRechargeManage() {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
+  // USDT 与人民币和数字资产一样，冻结只限制可用金额，不从总持有与总资产估值中扣除。
+  const getFundingBalanceBreakdown = (user: any, assetCode: "USDT" | "CNY") => {
+    const total = Number(assetCode === "USDT" ? user?.usdtBalance ?? 0 : user?.cnyBalance ?? 0);
+    const rawFrozen = Number(assetCode === "USDT" ? user?.usdtFrozen ?? 0 : user?.cnyFrozen ?? 0);
+    const frozen = Number.isFinite(rawFrozen) ? Math.max(0, rawFrozen) : 0;
+    const safeTotal = Number.isFinite(total) ? total : 0;
+    return { total: safeTotal, frozen, available: safeTotal - frozen };
+  };
   // 数字资产总持有 = 可用 + 担保冻结；冻结只限制操作，不应从钱包持有额中消失。
   const getMultiAssetBreakdown = (asset: any) => {
     const available = Number(asset?.availableBalance ?? 0);
@@ -701,15 +709,15 @@ export default function AfRechargeManage() {
   };
   // 总资产按“总持有”估值，冻结仅限制操作，不从资产总价值中扣除。
   // 对暂时没有行情的币种不按 0 静默计入，明确提示管理员该总额尚未覆盖的资产。
+  const adjSelectedUsdtBalance = getFundingBalanceBreakdown(adjSelectedUser, "USDT");
+  const adjSelectedCnyBalance = getFundingBalanceBreakdown(adjSelectedUser, "CNY");
   const adjSelectedWalletValuation = (() => {
-    const usdtBalance = Number(adjSelectedUser?.usdtBalance ?? 0);
-    const cnyBalance = Number(adjSelectedUser?.cnyBalance ?? 0);
     const usdtCnyRate = Number((adjWalletPricesQuery.data as any)?.usdtCnyRate ?? 0);
     const livePrices = ((adjWalletPricesQuery.data as any)?.prices ?? {}) as Record<string, number>;
     const hasRate = Number.isFinite(usdtCnyRate) && usdtCnyRate > 0;
-    let totalU = usdtBalance + (hasRate ? cnyBalance / usdtCnyRate : 0);
-    let availableU = totalU;
-    let frozenU = 0;
+    let totalU = adjSelectedUsdtBalance.total + (hasRate ? adjSelectedCnyBalance.total / usdtCnyRate : 0);
+    let availableU = adjSelectedUsdtBalance.available + (hasRate ? adjSelectedCnyBalance.available / usdtCnyRate : 0);
+    let frozenU = adjSelectedUsdtBalance.frozen + (hasRate ? adjSelectedCnyBalance.frozen / usdtCnyRate : 0);
     const unpricedAssets: string[] = [];
 
     for (const asset of (adjSelectedUser?.multiAssetBalances ?? [])) {
@@ -824,8 +832,8 @@ export default function AfRechargeManage() {
       .filter((assetCode) => !knownDigitalCodes.includes(assetCode))
       .sort((left, right) => left.localeCompare(right));
     return [
-      { assetCode: "USDT", total: Number(user?.usdtBalance ?? 0), frozen: 0, isFunding: true },
-      { assetCode: "CNY", total: Number(user?.cnyBalance ?? 0), frozen: 0, isFunding: true },
+      { assetCode: "USDT", ...getFundingBalanceBreakdown(user, "USDT"), isFunding: true },
+      { assetCode: "CNY", ...getFundingBalanceBreakdown(user, "CNY"), isFunding: true },
       ...[...knownDigitalCodes, ...extraDigitalCodes].map((assetCode) => ({
         assetCode,
         total: multiAssetByCode.get(assetCode)?.total ?? 0,
@@ -1886,11 +1894,19 @@ export default function AfRechargeManage() {
                 <div className="flex gap-2 mt-2.5">
                   <div className="flex-1 bg-white rounded-lg px-2.5 py-1.5 border border-orange-100">
                     <p className="text-[10px] text-gray-400 mb-0.5">USDT 余额</p>
-                    <p className="text-[15px] font-bold text-orange-500">{Number(adjSelectedUser.usdtBalance ?? 0).toFixed(2)}</p>
+                    <p className="text-[15px] font-bold text-orange-500">{formatWalletAmount(adjSelectedUsdtBalance.total, 2)}</p>
+                    <div className="mt-0.5 space-y-0.5 text-[9px] leading-3 tabular-nums">
+                      <p className="text-gray-400">可用 {formatWalletAmount(adjSelectedUsdtBalance.available, 2)}</p>
+                      <p className="text-amber-600">冻结 {formatWalletAmount(adjSelectedUsdtBalance.frozen, 2)}</p>
+                    </div>
                   </div>
                   <div className="flex-1 bg-white rounded-lg px-2.5 py-1.5 border border-orange-100">
                     <p className="text-[10px] text-gray-400 mb-0.5">CNY 余额</p>
-                    <p className="text-[15px] font-bold text-green-600">¥{Number(adjSelectedUser.cnyBalance ?? 0).toFixed(2)}</p>
+                    <p className="text-[15px] font-bold text-green-600">¥{formatWalletAmount(adjSelectedCnyBalance.total, 2)}</p>
+                    <div className="mt-0.5 space-y-0.5 text-[9px] leading-3 tabular-nums">
+                      <p className="text-gray-400">可用 ¥{formatWalletAmount(adjSelectedCnyBalance.available, 2)}</p>
+                      <p className="text-amber-600">冻结 ¥{formatWalletAmount(adjSelectedCnyBalance.frozen, 2)}</p>
+                    </div>
                   </div>
                 </div>
                 {(adjSelectedUser.multiAssetBalances ?? []).length > 0 && (
