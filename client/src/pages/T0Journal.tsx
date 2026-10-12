@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock3,
   Lock,
+  Repeat2,
   LockOpen,
   MoreHorizontal,
   Search,
@@ -277,6 +278,16 @@ type PreviewTrade = {
   optionSettlementSource?: string;
   /** 开仓主单的展示锁定标记；成员端只读展示。 */
   isLocked?: boolean;
+  /** 开仓主单：管理员展示相反多空与损益，成员始终保留原始订单视图。 */
+  isCounterparty?: boolean;
+  /** 管理端反向投影标识；平仓由其 FIFO 对应的开仓标记自动派生。 */
+  isCounterpartyView?: boolean;
+  /** 管理端反向投影保留的真实流水键与原始字段，供编辑、回撤及写库使用。 */
+  sourceEntryId?: string;
+  sourceAction?: TradeAction;
+  sourceOptionDirection?: T0OptionDirection;
+  sourceGridDirection?: T0GridDirection;
+  sourceFee?: number;
   /** 管理员报价专用：挂单在触发前不进入真实仓位、盈亏或费用计算。 */
   isPending?: boolean;
   /** 挂单实际触发成交的系统时间与统一行情价格；关联成员可只读查看。 */
@@ -292,6 +303,8 @@ type PreviewTrade = {
   isSyncing?: boolean;
   /** 仅成员收益投影视图使用：ETH 数量保持完整，利润与交易成本按此比例结算。 */
   profitShareRate?: number;
+  /** 仅成员收益投影视图使用：用于让“本人”筛选保留其作为受益人的订单，同时仍显示原始关联用户。 */
+  profitShareBeneficiaryUserId?: string;
 };
 
 type LadderOptionMetadata = {
@@ -400,6 +413,7 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     optionSettledAt: entry.optionSettledAt ? String(entry.optionSettledAt) : undefined,
     optionSettlementSource: entry.optionSettlementSource ? String(entry.optionSettlementSource) : undefined,
     isLocked: Boolean(entry.isLocked),
+    isCounterparty: Boolean(entry.isCounterparty),
     isPending: Boolean(entry.isPending),
     filledAt: entry.filledAt ? String(entry.filledAt) : undefined,
     filledPrice: entry.filledPrice === undefined || entry.filledPrice === null ? undefined : Number(entry.filledPrice),
@@ -452,8 +466,9 @@ type LadderPriceRow = {
   long?: PositionBucket;
   short?: PositionBucket;
   isMark: boolean;
-  /** 管理员“逐笔报价”模式中对应的单条未平仓主单。 */
-  openingTrade?: PreviewTrade;
+  /** 管理员“逐笔报价”模式中，左右两侧各自对应的独立未平仓主单。 */
+  longOpeningTrade?: PreviewTrade;
+  shortOpeningTrade?: PreviewTrade;
 };
 
 /** 某一开仓主单被分批平掉时，对应的平仓流水及本次分配数量。 */
@@ -490,6 +505,8 @@ type EntryForm = {
   gridCount: string;
   /** 开仓订单默认为未锁；锁定后仅管理员逐笔报价使用黑金标识。 */
   isLocked: boolean;
+  /** 仅开仓：管理员按相反多空与盈亏展示，成员仍按原始订单展示。 */
+  isCounterparty: boolean;
   /** 仅开仓：默认直接成交；设为挂单后等待统一标记价自动触发。 */
   isPending: boolean;
   quantity: string;
@@ -1059,6 +1076,95 @@ function buildLinkedClosingDetail(opening: PreviewTrade, allocation: LinkedClosi
     };
 }
 
+type ProfitShareDistributionItem = {
+  beneficiaryUserId: number;
+  beneficiaryUserName: string;
+  percentageLabel: string;
+  netPnl: number;
+};
+
+/**
+ * 管理员历史记录的逐人分配明细：严格以平仓时继承的开仓快照为准。
+ * 一笔平仓若 FIFO 关联多张开仓，逐张先扣对应手续费、再按该张开仓快照拆分，最后汇总到受益人。
+ */
+function buildClosingProfitShareDistribution(input: {
+  trades: PreviewTrade[];
+  snapshots: ProfitShareSnapshot[];
+  closing: PreviewTrade;
+  displayedNetPnl: number;
+}): ProfitShareDistributionItem[] {
+  const { trades, snapshots, closing, displayedNetPnl } = input;
+  const closingEntryId = getStoredEntryId(closing);
+  const closingSnapshots = snapshots.filter((snapshot) => snapshot.entryId === closingEntryId);
+  if (closingSnapshots.length === 0 || !Number.isFinite(displayedNetPnl)) return [];
+
+  const snapshotsByOpeningId = new Map<string, ProfitShareSnapshot[]>();
+  for (const snapshot of closingSnapshots) {
+    const rows = snapshotsByOpeningId.get(snapshot.openingEntryId) ?? [];
+    rows.push(snapshot);
+    snapshotsByOpeningId.set(snapshot.openingEntryId, rows);
+  }
+
+  const allocationsByOpening = buildOpeningClosingAllocations(trades);
+  const totals = new Map<number, { name: string; netPnl: number; percentages: Set<number> }>();
+  const handledOpeningIds = new Set<string>();
+  for (const opening of trades) {
+    if (!ACTIONS[opening.action].opening) continue;
+    const openingEntryId = getStoredEntryId(opening);
+    if (handledOpeningIds.has(openingEntryId)) continue;
+    const openingSnapshots = snapshotsByOpeningId.get(openingEntryId);
+    if (!openingSnapshots?.length) continue;
+    handledOpeningIds.add(openingEntryId);
+    const matchingClosings = (allocationsByOpening.get(opening.id) ?? [])
+      .filter((allocation) => getStoredEntryId(allocation.trade) === closingEntryId);
+    for (const allocation of matchingClosings) {
+      const segmentNetPnl = buildLinkedClosingDetail(opening, allocation).netPnl;
+      if (segmentNetPnl === undefined || !Number.isFinite(segmentNetPnl)) continue;
+      for (const snapshot of openingSnapshots) {
+        const current = totals.get(snapshot.beneficiaryUserId) ?? {
+          name: snapshot.beneficiaryUserName || `用户#${snapshot.beneficiaryUserId}`,
+          netPnl: 0,
+          percentages: new Set<number>(),
+        };
+        current.netPnl += segmentNetPnl * (snapshot.percentage / 100);
+        current.percentages.add(snapshot.percentage);
+        totals.set(snapshot.beneficiaryUserId, current);
+      }
+    }
+  }
+
+  // 罕见的旧流水或投影视图无法回溯 FIFO 时，仍只使用已固化快照按实际匹配数量归一化拆分，绝不读取当前规则。
+  if (totals.size === 0) {
+    const weightedRows = closingSnapshots.map((snapshot) => ({
+      snapshot,
+      weight: Math.max(0, snapshot.matchedQuantity) * Math.max(0, snapshot.percentage),
+    }));
+    const totalWeight = weightedRows.reduce((total, item) => total + item.weight, 0);
+    for (const { snapshot, weight } of weightedRows) {
+      const current = totals.get(snapshot.beneficiaryUserId) ?? {
+        name: snapshot.beneficiaryUserName || `用户#${snapshot.beneficiaryUserId}`,
+        netPnl: 0,
+        percentages: new Set<number>(),
+      };
+      current.netPnl += displayedNetPnl * (totalWeight > 0 ? weight / totalWeight : snapshot.percentage / 100);
+      current.percentages.add(snapshot.percentage);
+      totals.set(snapshot.beneficiaryUserId, current);
+    }
+  }
+
+  const calculatedTotal = Array.from(totals.values()).reduce((total, item) => total + item.netPnl, 0);
+  // 统一以历史列表中显示的净利润为总额，消除浮点尾差及反向展示视图带来的展示口径差异。
+  const scale = Math.abs(calculatedTotal) > 1e-9 ? displayedNetPnl / calculatedTotal : 1;
+  return Array.from(totals.entries())
+    .map(([beneficiaryUserId, item]) => ({
+      beneficiaryUserId,
+      beneficiaryUserName: item.name,
+      percentageLabel: Array.from(item.percentages).sort((left, right) => left - right).map((percentage) => `${formatPrice(percentage)}%`).join(" / "),
+      netPnl: item.netPnl * scale,
+    }))
+    .sort((left, right) => right.netPnl - left.netPnl || left.beneficiaryUserName.localeCompare(right.beneficiaryUserName, "zh-CN"));
+}
+
 function buildPositionBuckets(trades: PreviewTrade[]) {
   const buckets = new Map<string, PositionBucket>();
   const orderedTrades = [...trades].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -1266,6 +1372,161 @@ function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
   return allocations;
 }
 
+function invertTradeAction(action: TradeAction): TradeAction {
+  switch (action) {
+    case "openLong": return "openShort";
+    case "closeLong": return "closeShort";
+    case "openShort": return "openLong";
+    case "closeShort": return "closeLong";
+  }
+}
+
+function invertOptionDirection(direction?: T0OptionDirection): T0OptionDirection | undefined {
+  if (!direction) return undefined;
+  const opposite: Record<T0OptionDirection, T0OptionDirection> = {
+    long_call: "short_call",
+    short_call: "long_call",
+    long_put: "short_put",
+    short_put: "long_put",
+  };
+  return opposite[direction];
+}
+
+function invertGridDirection(direction?: T0GridDirection): T0GridDirection | undefined {
+  return direction === "long" ? "short" : direction === "short" ? "long" : undefined;
+}
+
+function getStoredEntryId(trade: PreviewTrade) {
+  return trade.sourceEntryId ?? trade.id;
+}
+
+function getStoredAction(trade: PreviewTrade): TradeAction {
+  return trade.sourceAction ?? trade.action;
+}
+
+function getStoredOptionDirection(trade: PreviewTrade) {
+  return trade.sourceOptionDirection ?? trade.optionDirection;
+}
+
+function getStoredGridDirection(trade: PreviewTrade) {
+  return trade.sourceGridDirection ?? trade.gridDirection;
+}
+
+/**
+ * 管理端镜像仅改变可见投影：开平方向反转，手续费同号反转后令净收益严格等于用户端净收益的相反数。
+ * 数据库仍保存用户原始方向；关闭标记后重新拉取即可完整回到普通展示。
+ */
+function asAdminCounterpartyTrade(trade: PreviewTrade): PreviewTrade {
+  const sourceAction = getStoredAction(trade);
+  const sourceFee = trade.sourceFee ?? trade.fee;
+  return {
+    ...trade,
+    action: invertTradeAction(sourceAction),
+    optionDirection: invertOptionDirection(getStoredOptionDirection(trade)),
+    gridDirection: invertGridDirection(getStoredGridDirection(trade)),
+    fee: -sourceFee,
+    sourceEntryId: getStoredEntryId(trade),
+    sourceAction,
+    sourceOptionDirection: getStoredOptionDirection(trade),
+    sourceGridDirection: getStoredGridDirection(trade),
+    sourceFee,
+    isCounterpartyView: true,
+  };
+}
+
+/**
+ * 平仓标记并不落库：按原始 FIFO 找到其归属开仓后，在管理员侧拆分为可独立展示的片段。
+ * 这样同一笔平仓跨越普通与反向开仓时，数量、手续费及盈亏仍可逐段精确对应。
+ */
+function projectAdminCounterpartyTrades(rawTrades: PreviewTrade[]): PreviewTrade[] {
+  const allocations = buildOpeningClosingAllocations(rawTrades);
+  const slicesByClosingId = new Map<string, Array<{ trade: PreviewTrade; quantity: number; isCounterparty: boolean }>>();
+  for (const opening of rawTrades) {
+    if (!ACTIONS[opening.action].opening) continue;
+    for (const allocation of allocations.get(opening.id) ?? []) {
+      const slices = slicesByClosingId.get(allocation.trade.id) ?? [];
+      slices.push({ trade: allocation.trade, quantity: allocation.quantity, isCounterparty: Boolean(opening.isCounterparty) });
+      slicesByClosingId.set(allocation.trade.id, slices);
+    }
+  }
+
+  return rawTrades.flatMap((trade) => {
+    if (ACTIONS[trade.action].opening) {
+      return trade.isCounterparty ? [asAdminCounterpartyTrade(trade)] : [trade];
+    }
+    const slices = slicesByClosingId.get(trade.id);
+    if (!slices || slices.length === 0) return [trade];
+    const allocatedQuantity = slices.reduce((total, slice) => total + slice.quantity, 0);
+    const projected = slices.map((slice, index) => {
+      const ratio = trade.quantity > 0 ? slice.quantity / trade.quantity : 0;
+      const sliceTrade: PreviewTrade = {
+        ...trade,
+        id: `fifo-${trade.id}-${index + 1}`,
+        sourceEntryId: trade.id,
+        quantity: slice.quantity,
+        fee: trade.fee * ratio,
+      };
+      return slice.isCounterparty ? asAdminCounterpartyTrade(sliceTrade) : sliceTrade;
+    });
+    const unmatchedQuantity = Math.max(0, trade.quantity - allocatedQuantity);
+    if (unmatchedQuantity > 0.0000001) {
+      projected.push({
+        ...trade,
+        id: `fifo-${trade.id}-unmatched`,
+        sourceEntryId: trade.id,
+        quantity: unmatchedQuantity,
+        fee: trade.quantity > 0 ? trade.fee * (unmatchedQuantity / trade.quantity) : 0,
+      });
+    }
+    return projected;
+  });
+}
+
+/**
+ * 已有平仓的开仓不能再改动会影响 FIFO 的字段；但仅切换管理员反向展示不会改变任何真实成交、
+ * 数量或配对关系。前端据此走受限更新分支，服务端仍只写 is_counterparty 一列作为最终保护。
+ */
+function isCounterpartyOnlyOpeningEdit(input: {
+  form: EntryForm;
+  original: PreviewTrade | null;
+  normalizedQuantity: string;
+  effectivePrice: string;
+}) {
+  const { form, original, normalizedQuantity, effectivePrice } = input;
+  if (!original || !form.editingEntryId) return false;
+  const sameNumber = (left: string | number, right: number | undefined) => Math.abs(Number(left) - Number(right ?? 0)) <= 0.0000001;
+  const originalRelatedUserId = original.relatedUserId ?? "";
+  const originalRelatedFundId = original.relatedFundId ?? "legacy";
+  const originalInstrumentType = original.instrumentType ?? "contract";
+  const sameOption = originalInstrumentType !== "option" || (
+    form.optionDirection === getStoredOptionDirection(original)
+    && form.optionExpiryDate === (original.optionExpiryDate ?? "")
+    && sameNumber(form.optionPremium || "0", original.optionPremium)
+    && form.optionPremiumCurrency === (original.optionPremiumCurrency ?? "USDT")
+  );
+  const sameGrid = originalInstrumentType !== "grid" || (
+    form.gridDirection === getStoredGridDirection(original)
+    && sameNumber(form.gridRangeMin || "0", original.gridRangeMin)
+    && sameNumber(form.gridRangeMax || "0", original.gridRangeMax)
+    && sameNumber(form.gridLeverage || "0", original.gridLeverage)
+    && Number(form.gridCount || 0) === Number(original.gridCount ?? 0)
+  );
+
+  return Boolean(form.isCounterparty) !== Boolean(original.isCounterparty)
+    && form.action === getStoredAction(original)
+    && form.accountId === original.accountId
+    && form.relatedUserId === originalRelatedUserId
+    && form.relatedFundId === originalRelatedFundId
+    && form.instrumentType === originalInstrumentType
+    && sameNumber(normalizedQuantity, original.quantity)
+    && sameNumber(effectivePrice, original.price)
+    && form.isLocked === Boolean(original.isLocked)
+    && form.isPending === Boolean(original.isPending)
+    && form.note.trim() === (original.note ?? "").trim()
+    && sameOption
+    && sameGrid;
+}
+
 /**
  * 整合报价的宽档仅聚合展示：先沿用十美元真实 FIFO 得出每张主单的剩余数量，
  * 再按所选宽度归档。因此切换 25/50/100U 等宽度不会让已平仓位回补，也不会改变真实可平数量。
@@ -1357,6 +1618,7 @@ function projectMemberProfitShareTrades(
   snapshots: ProfitShareSnapshot[],
   viewerUserId: string,
   visibleReferralDescendantUserIds = new Set<string>(),
+  showRawReferralTrades = false,
 ) {
   const viewerId = Number(viewerUserId);
   if (!Number.isInteger(viewerId) || viewerId <= 0) return rawTrades;
@@ -1372,8 +1634,15 @@ function projectMemberProfitShareTrades(
   }
   const projected: PreviewTrade[] = [];
   for (const trade of rawTrades) {
-    // 成员主动开启“推荐”后，下线订单按原始完整流水展示；本人订单仍沿用既有收益分配投影。
-    if (trade.relatedUserId && visibleReferralDescendantUserIds.has(trade.relatedUserId)) {
+    // 关联用户本人始终查看完整原始订单；收益分配只影响其他受益人的投影，不能把本人的开仓隐藏。
+    // 这也保证反向展示订单在成员端始终保留原方向、完整数量及原始损益口径。
+    if (Number(trade.relatedUserId || 0) === viewerId) {
+      projected.push(trade);
+      continue;
+    }
+    // 只有主动选择“推荐”、具体下线或“全部”时，才按原始完整流水展示下线订单；
+    // 默认“本人”必须优先显示本人作为受益人的分佣投影，不能被预读取的下线原单覆盖。
+    if (showRawReferralTrades && trade.relatedUserId && visibleReferralDescendantUserIds.has(trade.relatedUserId)) {
       projected.push(trade);
       continue;
     }
@@ -1397,6 +1666,7 @@ function projectMemberProfitShareTrades(
         quantity: matchedQuantity,
         fee: allocatedFee,
         profitShareRate: rate,
+        profitShareBeneficiaryUserId: String(viewerId),
       });
     }
   }
@@ -1531,6 +1801,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [profitShareSource, setProfitShareSource] = useState<PreviewRelatedFund | null>(null);
   const [profitShareRecipientSearch, setProfitShareRecipientSearch] = useState("");
   const [profitShareAllocations, setProfitShareAllocations] = useState<ProfitShareAllocationDraft[]>([]);
+  const [profitShareSnapshots, setProfitShareSnapshots] = useState<ProfitShareSnapshot[]>([]);
   const [directoryManagerKind, setDirectoryManagerKind] = useState<JournalDirectoryKind | null>(null);
   const [directoryRenameTarget, setDirectoryRenameTarget] = useState<JournalDirectoryRenameTarget | null>(null);
   const [directoryDeleteTarget, setDirectoryDeleteTarget] = useState<JournalDirectoryTarget | null>(null);
@@ -1543,8 +1814,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [revertCandidate, setRevertCandidate] = useState<PreviewTrade | null>(null);
   const [historyActionMenuTradeId, setHistoryActionMenuTradeId] = useState<string | null>(null);
   const [netProfitDetail, setNetProfitDetail] = useState<{ trade: PreviewTrade; detail: RecentJournalTradeDetail } | null>(null);
-  const [showTotalGrossProfitDetail, setShowTotalGrossProfitDetail] = useState(false);
-  const [showTotalRevenueCostHint, setShowTotalRevenueCostHint] = useState(false);
+  const [showTotalNetProfitDetail, setShowTotalNetProfitDetail] = useState(false);
   const [totalRevenueDetailPage, setTotalRevenueDetailPage] = useState(1);
   const [showNetPositionDetail, setShowNetPositionDetail] = useState(false);
   const [grossProfitDetail, setGrossProfitDetail] = useState<{
@@ -1560,6 +1830,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [entrySide, setEntrySide] = useState<PositionSide>("long");
   /** 当前由哪张开仓主单发起平仓；仅用于详情页精确提示与重选，不改变后端 FIFO 核算。 */
   const [closingSourceTrade, setClosingSourceTrade] = useState<PreviewTrade | null>(null);
+  /** 编辑已有开仓时保留原始快照，用于识别不影响 FIFO 的“仅反向展示切换”。 */
+  const [editingOriginalTrade, setEditingOriginalTrade] = useState<PreviewTrade | null>(null);
   const [lastSavedQuantity, setLastSavedQuantity] = useState("");
   const [lastOpeningInstrumentType, setLastOpeningInstrumentType] = useState<T0InstrumentType>("contract");
   const [showCumulativeData, setShowCumulativeData] = useState(false);
@@ -1597,6 +1869,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     gridLeverage: "",
     gridCount: "",
     isLocked: false,
+    isCounterparty: false,
     isPending: false,
     quantity: "",
     price: "",
@@ -1737,6 +2010,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ? profitShareRules.filter((rule) => rule.relatedFundId === Number(profitShareSource.id))
     : [];
   const profitShareDraftTotal = profitShareAllocations.reduce((total, allocation) => total + (Number.isInteger(Number(allocation.percentage)) ? Number(allocation.percentage) : 0), 0);
+  const netProfitShareDistribution = useMemo(() => {
+    if (!canManage || !netProfitDetail || netProfitDetail.detail.netPnl === undefined) return [];
+    return buildClosingProfitShareDistribution({
+      trades,
+      snapshots: profitShareSnapshots,
+      closing: netProfitDetail.trade,
+      displayedNetPnl: netProfitDetail.detail.netPnl,
+    });
+  }, [canManage, netProfitDetail, profitShareSnapshots, trades]);
 
   const lastRelatedUser = recentRelatedUsers.find((user) => user.id === lastRelatedUserId)
     ?? recentRelatedUsers[0]
@@ -1822,7 +2104,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const rawTrades: PreviewTrade[] = Array.isArray(journal.entries)
       ? journal.entries.map(previewTradeFromEntry)
       : [];
-    const profitShareSnapshots: ProfitShareSnapshot[] = Array.isArray(journal.profitShareSnapshots)
+    const nextProfitShareSnapshots: ProfitShareSnapshot[] = Array.isArray(journal.profitShareSnapshots)
       ? journal.profitShareSnapshots.map((snapshot: any) => ({
         entryId: String(snapshot.entryId),
         openingEntryId: String(snapshot.openingEntryId),
@@ -1841,14 +2123,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         .map((userId: unknown) => String(userId))
         .filter((userId): userId is string => /^\d+$/.test(userId)),
     );
+    const showRawReferralTrades = relatedUserFilterIds.length === 0
+      || relatedUserFilterIds.some((userId) => Boolean(getT0ReferralDescendantsRootUserId(userId))
+        || visibleReferralDescendantUserIds.has(userId));
     const nextTrades = journal.viewerMode === "member"
       ? projectMemberProfitShareTrades(
         rawTrades,
-        profitShareSnapshots,
+        nextProfitShareSnapshots,
         String(journal.viewerRelatedUserId || ""),
         visibleReferralDescendantUserIds,
+        showRawReferralTrades,
       )
-      : rawTrades;
+      : projectAdminCounterpartyTrades(rawTrades);
     const nextRecoverableEntries: RecoverableTrade[] = Array.isArray(journal.recoverableEntries)
       ? journal.recoverableEntries.map((item: any) => ({
         auditId: String(item.auditId),
@@ -1861,6 +2147,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setRecentRelatedUsers(nextRecentRelatedUsers);
     setRelatedFunds(nextRelatedFunds);
     setTrades(nextTrades);
+    setProfitShareSnapshots(nextProfitShareSnapshots);
     setRecoverableEntries(nextRecoverableEntries);
     const latestTypedOpening = nextTrades
       .filter((entry) => ACTIONS[entry.action].opening && entry.instrumentType)
@@ -1958,7 +2245,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : (nextRecentRelatedUsers[0]?.id || ""));
     hasInitializedJournalFiltersRef.current = true;
     setHydratedTopFilterStorageKey(topFilterStorageKey);
-  }, [memberRelatedUserFilterTouched, referralDataLoaded, referralDescendantsByRootUserId, t0JournalQuery.data, topFilterStorageKey]);
+  }, [memberRelatedUserFilterTouched, referralDataLoaded, referralDescendantsByRootUserId, relatedUserFilterIds, t0JournalQuery.data, topFilterStorageKey]);
 
   useEffect(() => {
     if (!topFilterStorageKey || hydratedTopFilterStorageKey !== topFilterStorageKey) return;
@@ -2010,7 +2297,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && (relatedUserFilterIds.length === 0
         || topRelatedUserFilter.waitingForReferralData
         || (topRelatedUserFilter.includesUnlinked && (!trade.relatedUserId || trade.relatedUserHidden))
-        || Boolean(trade.relatedUserId && topRelatedUserFilter.userIds.has(trade.relatedUserId)))
+        || Boolean(trade.relatedUserId && topRelatedUserFilter.userIds.has(trade.relatedUserId))
+        || Boolean(trade.profitShareBeneficiaryUserId && topRelatedUserFilter.userIds.has(trade.profitShareBeneficiaryUserId)))
       && (relatedFundFilterIds.length === 0
         || relatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
@@ -2046,7 +2334,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && (historyRelatedUserFilterIds.length === 0
         || historyRelatedUserFilter.waitingForReferralData
         || (historyRelatedUserFilter.includesUnlinked && (!trade.relatedUserId || trade.relatedUserHidden))
-        || Boolean(trade.relatedUserId && historyRelatedUserFilter.userIds.has(trade.relatedUserId)))
+        || Boolean(trade.relatedUserId && historyRelatedUserFilter.userIds.has(trade.relatedUserId))
+        || Boolean(trade.profitShareBeneficiaryUserId && historyRelatedUserFilter.userIds.has(trade.profitShareBeneficiaryUserId)))
       && (historyRelatedFundFilterIds.length === 0
         || historyRelatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
@@ -2117,6 +2406,29 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ? "未关联项目"
     : trade.relatedFundName
       || (trade.relatedFundId ? `专项款#${trade.relatedFundId}` : "未区分专项款（历史） ");
+  const memberViewerRelatedUserId = Number((t0JournalQuery.data as any)?.viewerRelatedUserId || 0);
+  /**
+   * 成员端只展示自己最终可得的本单净额：
+   * - 受益人投影视图的 detail 已按本人比例计算；
+   * - 订单所属人原单则从平仓快照取本人份额，不能误把分配前的整单净收益展示给本人。
+   */
+  const resolveMemberPayout = (trade: PreviewTrade, detail?: RecentJournalTradeDetail) => {
+    const displayedNetPnl = Number(detail?.netPnl);
+    if (!isMemberView || !Number.isFinite(displayedNetPnl) || !Number.isInteger(memberViewerRelatedUserId) || memberViewerRelatedUserId <= 0) return null;
+    if (trade.profitShareBeneficiaryUserId) {
+      return { netPnl: displayedNetPnl, isProfitShared: true };
+    }
+    const ownAllocation = buildClosingProfitShareDistribution({
+      trades,
+      snapshots: profitShareSnapshots,
+      closing: trade,
+      displayedNetPnl,
+    }).find((allocation) => allocation.beneficiaryUserId === memberViewerRelatedUserId);
+    return ownAllocation ? { netPnl: ownAllocation.netPnl, isProfitShared: true } : null;
+  };
+  const memberProfitShareDetail = netProfitDetail
+    ? resolveMemberPayout(netProfitDetail.trade, netProfitDetail.detail)
+    : null;
   const memberRelatedUserName = useMemo(() => {
     const selfName = String((me as any)?.name || (me as any)?.username || "").trim();
     if (selfName) return selfName;
@@ -2250,11 +2562,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   const historyFilterGridTemplateColumns = useMemo(() => {
     const summaryFor = (label: string, options: T0MultiSelectOption[], selectedIds: string[]) => {
-      if (label === "用户" && historyRelatedUserSelectionIsAll) return "用户全部";
-      const selected = options.filter((option) => selectedIds.includes(option.id));
-      if (selected.length === 0) return `${label}全部`;
-      if (selected.length === 1) return selected[0].summaryLabel ?? selected[0].label;
-      return `已选 ${selected.length} 项`;
+    if (label === "用户" && historyRelatedUserSelectionIsAll) return "用户全部";
+    const selected = options.filter((option) => selectedIds.includes(option.id));
+    if (selected.length === 0) return `${label}全部`;
+    if (selected.length === 1) return `${label}${selected[0].summaryLabel ?? selected[0].label}`;
+    return `${label}已选 ${selected.length} 项`;
     };
     return buildT0FilterGridTemplateColumns([
       { summary: summaryFor("账户", accountFilterOptions, historyAccountFilterIds), selectedCount: historyAccountFilterIds.length },
@@ -2304,8 +2616,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       if (label === "用户" && topRelatedUserSelectionIsAll) return "用户全部";
       const selected = options.filter((option) => selectedIds.includes(option.id));
       if (selected.length === 0) return `${label}全部`;
-      if (selected.length === 1) return selected[0].summaryLabel ?? selected[0].label;
-      return `已选 ${selected.length} 项`;
+      if (selected.length === 1) return `${label}${selected[0].summaryLabel ?? selected[0].label}`;
+      return `${label}已选 ${selected.length} 项`;
     };
     // 锁定项才是实际固定条件；其余显示“全部”时应视作未筛选，恢复三等分，
     // 避免账户/用户/项目都为“全部”时，账户文字被错误压缩。
@@ -2444,19 +2756,45 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ? POSITION_ARCHIVE_STEP
     : entrySheetArchiveStepRef.current;
   const summary = useMemo(() => calculateSummary(buckets, markPrice, selectedFilledTrades), [buckets, markPrice, selectedFilledTrades]);
-  // 首屏总览：累计利润保持与多/空“累计利润”一致的未扣手续费口径；总仓位为多仓减空仓后的净额。
-  const totalGrossProfit = summary.long.realizedGross + summary.short.realizedGross;
-  const totalGrossProfitDetails = useMemo(
-    () => buildRealizedGrossProfitDetails(selectedFilledTrades),
-    [selectedFilledTrades],
-  );
+  // 首屏、分方向累计与历史逐笔明细统一使用已扣开仓、平仓手续费的净收益口径。
+  const rawTotalNetProfit = summary.long.realized + summary.short.realized;
+  const totalNetProfitDetails = useMemo(() => {
+    const detailsByEntryId = buildRecentJournalTradeDetails(selectedFilledTrades);
+    const rawDetails = selectedFilledTrades
+      .filter((trade) => trade.symbol === "ETH" && !ACTIONS[trade.action].opening)
+      .map((trade) => {
+        const detail = detailsByEntryId.get(trade.id);
+        return detail?.netPnl === undefined ? null : {
+          trade,
+          quantity: trade.quantity,
+          netPnl: detail.netPnl,
+        };
+      })
+      .filter((detail): detail is { trade: PreviewTrade; quantity: number; netPnl: number } => detail !== null)
+      .sort((left, right) => right.trade.createdAt.localeCompare(left.trade.createdAt) || right.trade.id.localeCompare(left.trade.id));
+    if (!isMemberView || !Number.isInteger(memberViewerRelatedUserId) || memberViewerRelatedUserId <= 0) return rawDetails;
+    return rawDetails.map((item) => {
+      // 分成受益人投影的流水已按本人比例计算；订单所属成员的原始流水则换成快照中自己的最终份额。
+      if (item.trade.profitShareBeneficiaryUserId) return item;
+      const ownAllocation = buildClosingProfitShareDistribution({
+        trades,
+        snapshots: profitShareSnapshots,
+        closing: item.trade,
+        displayedNetPnl: item.netPnl,
+      }).find((allocation) => allocation.beneficiaryUserId === memberViewerRelatedUserId);
+      return ownAllocation ? { ...item, netPnl: ownAllocation.netPnl } : item;
+    });
+  }, [isMemberView, memberViewerRelatedUserId, profitShareSnapshots, selectedFilledTrades, trades]);
+  const totalNetProfit = isMemberView
+    ? totalNetProfitDetails.reduce((total, detail) => total + detail.netPnl, 0)
+    : rawTotalNetProfit;
   const totalRevenueDetailTotalPages = Math.max(1, Math.ceil(
-    totalGrossProfitDetails.length / TOTAL_REVENUE_DETAIL_PAGE_SIZE,
+    totalNetProfitDetails.length / TOTAL_REVENUE_DETAIL_PAGE_SIZE,
   ));
-  const pagedTotalGrossProfitDetails = useMemo(() => {
+  const pagedTotalNetProfitDetails = useMemo(() => {
     const start = (totalRevenueDetailPage - 1) * TOTAL_REVENUE_DETAIL_PAGE_SIZE;
-    return totalGrossProfitDetails.slice(start, start + TOTAL_REVENUE_DETAIL_PAGE_SIZE);
-  }, [totalGrossProfitDetails, totalRevenueDetailPage]);
+    return totalNetProfitDetails.slice(start, start + TOTAL_REVENUE_DETAIL_PAGE_SIZE);
+  }, [totalNetProfitDetails, totalRevenueDetailPage]);
   useEffect(() => {
     setTotalRevenueDetailPage((current) => Math.min(current, totalRevenueDetailTotalPages));
   }, [totalRevenueDetailTotalPages]);
@@ -2469,7 +2807,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       .reduce((total, bucket) => total + bucket.remainingQuantity, 0);
     return longQuantity - shortQuantity;
   }, [totalPositionBuckets]);
-  const totalGrossProfitClass = totalGrossProfit > 0 ? "text-rose-600" : totalGrossProfit < 0 ? "text-emerald-600" : "text-slate-700";
+  const totalNetProfitClass = totalNetProfit > 0 ? "text-rose-600" : totalNetProfit < 0 ? "text-emerald-600" : "text-slate-700";
   const netPositionClass = "text-slate-800";
   const roundedNetPositionText = (() => {
     const rounded = Math.round(totalPositionQuantity);
@@ -2660,8 +2998,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 开仓编辑受后端 FIFO 依赖校验保护；未发生后续平仓时，管理员必须能改到既有账户。
   const isAccountSelectionLocked = isClosingEntry || (isCloseReview && !isEditingEntry);
   const isCloseAssociationLocked = isClosingEntry || isCloseReview;
-  const markLadderPrice = markPrice
-    ? Math.min(LADDER_MAX_PRICE, Math.max(LADDER_MIN_PRICE, Math.round(markPrice / LADDER_STEP) * LADDER_STEP))
+  // 逐笔报价的订单按分位精确排布，实时价也必须作为独立精确参考行插入；
+  // 不能再先归入十美元档，否则例如 2546.03 会视觉上覆盖 2550.00 的真实订单行。
+  const individualMarkLadderPrice = markPrice
+    ? Math.min(LADDER_MAX_PRICE, Math.max(LADDER_MIN_PRICE, Number(markPrice.toFixed(2))))
     : null;
   const integratedMarkLadderPrice = markPrice
     ? Math.min(
@@ -2713,9 +3053,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       if (remainingQuantity <= 0.0000001) continue;
       const side = ACTIONS[trade.action].side;
       const isPending = Boolean(trade.isPending);
-      // 管理员逐笔模式一张主单只对应一行，价位取本笔真实成交价的四舍五入整数；
+      // 逐笔报价以成交价精确到 0.01 U 作为配对键：只有分位完全相同的左右订单才同一行。
       // 原始成交价仍用于成本、盈亏和 FIFO，十美元归档价仅服务于整合报价和可用量校验。
-      const price = Math.round(trade.price);
+      const price = Number(trade.price.toFixed(2));
       const remainingRatio = trade.quantity > 0 ? remainingQuantity / trade.quantity : 0;
       individualBuckets.push({
         trade,
@@ -2751,7 +3091,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     // 逐笔报价只展示每笔未平仓订单的实际成交价位；不沿用整合报价的实时价邻近空档。
     // 为确认当前市场位置，若实时价档尚无订单，只额外保留这一条可为空的参考价档。
     const individualLevels = new Set<number>(individualBuckets.map((item) => item.bucket.price));
-    if (markLadderPrice !== null) individualLevels.add(markLadderPrice);
+    if (individualMarkLadderPrice !== null) individualLevels.add(individualMarkLadderPrice);
     return Array.from(individualLevels).sort((a, b) => b - a).flatMap((price) => {
       const rowsAtPrice = [...(rowsByPrice.get(priceKey(price)) ?? [])]
         .sort((a, b) => b.trade.createdAt.localeCompare(a.trade.createdAt) || b.trade.id.localeCompare(a.trade.id));
@@ -2759,20 +3099,30 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         return [{
           key: `individual-empty-${priceKey(price)}`,
           price,
-          isMark: markLadderPrice === price,
+          isMark: individualMarkLadderPrice === price,
         }];
       }
-      return rowsAtPrice.map(({ trade, bucket }, index) => ({
-        key: `individual-entry-${trade.id}`,
-        price,
-        long: bucket.side === "long" ? bucket : undefined,
-        short: bucket.side === "short" ? bucket : undefined,
-        // 同一报价档可以连续出现多条主单；实时价只强调其中第一条，避免连续高亮干扰阅读。
-        isMark: markLadderPrice === price && index === 0,
-        openingTrade: trade,
-      }));
+      // 同一显示价格的左右订单应在同一行视觉配对；每一笔仍独立保留自己的 bucket、标记及操作入口。
+      // 若同侧有多笔，按开仓时间逐笔向下延展，而不是合并数量或改写 FIFO。
+      const longRows = rowsAtPrice.filter(({ bucket }) => bucket.side === "long");
+      const shortRows = rowsAtPrice.filter(({ bucket }) => bucket.side === "short");
+      const pairedRowCount = Math.max(longRows.length, shortRows.length);
+      return Array.from({ length: pairedRowCount }, (_, index) => {
+        const longRow = longRows[index];
+        const shortRow = shortRows[index];
+        return {
+          key: `individual-pair-${priceKey(price)}-${longRow?.trade.id ?? "empty"}-${shortRow?.trade.id ?? "empty"}`,
+          price,
+          long: longRow?.bucket,
+          short: shortRow?.bucket,
+          // 同一报价档可能向下延展多行；实时价只强调第一对，避免连续高亮干扰阅读。
+          isMark: individualMarkLadderPrice === price && index === 0,
+          longOpeningTrade: longRow?.trade,
+          shortOpeningTrade: shortRow?.trade,
+        };
+      });
     });
-  }, [selectedTrades, ladderOpeningClosingAllocations, markLadderPrice]);
+  }, [selectedTrades, ladderOpeningClosingAllocations, individualMarkLadderPrice]);
   const isIndividualLadderView = adminLadderDisplayMode === "individual";
   const displayedPriceRows = isIndividualLadderView ? individualPriceRows : priceRows;
 
@@ -2798,6 +3148,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setEntrySide(ACTIONS[initialAction].side);
     setCloseConfirmationStep("input");
     setClosingSourceTrade(null);
+    setEditingOriginalTrade(null);
     const rememberedAccount = getRememberedAccountForRelatedUser(lastRelatedUser?.id);
     const defaultRelatedFund = getRememberedFundForRelatedUser(lastRelatedUser?.id);
     setEntryForm({
@@ -2820,6 +3171,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       gridLeverage: "",
       gridCount: "",
       isLocked: false,
+      isCounterparty: false,
       isPending: false,
       quantity: "",
       // 开仓成交价由管理员实际录入；保留浅色 0.00 占位，避免误把参考价写入流水。
@@ -2865,6 +3217,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setEntrySide(side);
     setCloseConfirmationStep("input");
     setClosingSourceTrade(trade);
+    setEditingOriginalTrade(null);
     setEntryForm({
       action,
       accountId: trade.accountId,
@@ -2885,6 +3238,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       gridLeverage: trade.gridLeverage === undefined ? "" : String(trade.gridLeverage),
       gridCount: trade.gridCount === undefined ? "" : String(trade.gridCount),
       isLocked: false,
+      isCounterparty: false,
       isPending: false,
       // 表单值不能带千分位逗号，否则超过千位的数量会无法通过数值校验。
       quantity: normalizeEthQuantity(String(closableQuantity)),
@@ -2902,11 +3256,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
     // 同上：详情页中的“编辑”不得覆盖其原始逐笔/整合报价来源。
     if (!showEntrySheet) entrySheetLadderDisplayModeRef.current = adminLadderDisplayMode;
-    setEntrySide(ACTIONS[trade.action].side);
+    // 反向订单在管理员端显示为相反方向，但编辑表单必须回到真实流水方向，
+    // 否则保存后会错误改变下一笔开仓的默认方向。
+    setEntrySide(ACTIONS[getStoredAction(trade)].side);
     setCloseConfirmationStep("input");
     setClosingSourceTrade(null);
+    setEditingOriginalTrade(trade);
     setEntryForm({
-      action: trade.action,
+      action: getStoredAction(trade),
       accountId: trade.accountId,
       accountName: accounts.find((account) => account.id === trade.accountId)?.name ?? "",
       relatedUserId: trade.relatedUserId ?? "",
@@ -2915,22 +3272,23 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundId: trade.relatedFundId ?? "legacy",
       relatedFundName: trade.relatedFundName ?? "",
       instrumentType: trade.instrumentType,
-      optionDirection: trade.optionDirection ?? "long_call",
+      optionDirection: getStoredOptionDirection(trade) ?? "long_call",
       optionExpiryDate: trade.optionExpiryDate ?? "",
       optionPremium: trade.optionPremium === undefined ? "" : String(trade.optionPremium),
       optionPremiumCurrency: trade.optionPremiumCurrency ?? "USDT",
-      gridDirection: trade.gridDirection ?? (ACTIONS[trade.action].side === "long" ? "long" : "short"),
+      gridDirection: getStoredGridDirection(trade) ?? (ACTIONS[getStoredAction(trade)].side === "long" ? "long" : "short"),
       gridRangeMin: trade.gridRangeMin === undefined ? "" : String(trade.gridRangeMin),
       gridRangeMax: trade.gridRangeMax === undefined ? "" : String(trade.gridRangeMax),
       gridLeverage: trade.gridLeverage === undefined ? "" : String(trade.gridLeverage),
       gridCount: trade.gridCount === undefined ? "" : String(trade.gridCount),
       isLocked: Boolean(trade.isLocked),
+      isCounterparty: Boolean(trade.isCounterparty),
       isPending: Boolean(trade.isPending),
       // 编辑输入使用机器可解析的原始数值；展示层才使用千分位格式。
       quantity: normalizeEthQuantity(String(trade.quantity)),
       price: trade.price.toFixed(2),
       note: trade.note ?? "",
-      editingEntryId: trade.id,
+      editingEntryId: getStoredEntryId(trade),
     });
     setShowEntrySheet(true);
   };
@@ -3075,6 +3433,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         gridLeverage: data.entry.gridLeverage === undefined || data.entry.gridLeverage === null ? undefined : Number(data.entry.gridLeverage),
         gridCount: data.entry.gridCount === undefined || data.entry.gridCount === null ? undefined : Number(data.entry.gridCount),
         isLocked: Boolean(data.entry.isLocked),
+        isCounterparty: Boolean(data.entry.isCounterparty),
         isPending: Boolean(data.entry.isPending),
         filledAt: data.entry.filledAt ? String(data.entry.filledAt) : undefined,
         filledPrice: data.entry.filledPrice === undefined || data.entry.filledPrice === null ? undefined : Number(data.entry.filledPrice),
@@ -3112,7 +3471,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         setRelatedFunds((current) => [fund, ...current.filter((item) => item.id !== fund.id)]);
         setLastFundIdByRelatedUser((current) => ({ ...current, [entry.relatedUserId!]: fund.id }));
       }
-      setTrades((current) => current.map((trade) => trade.clientRequestId === variables.clientRequestId ? entry : trade));
+      setTrades((current) => current.map((trade) => {
+        if (trade.clientRequestId !== variables.clientRequestId) return trade;
+        return canManage && (entry.isCounterparty || trade.isCounterpartyView)
+          ? asAdminCounterpartyTrade(entry)
+          : entry;
+      }));
       setSelectedAccountIds((current) => current.length === 0 ? current : Array.from(new Set([...current, account.id])));
       const savedQuantity = String(variables.quantity || "").trim();
       if (savedQuantity) {
@@ -3163,6 +3527,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         gridLeverage: data.entry.gridLeverage === undefined || data.entry.gridLeverage === null ? undefined : Number(data.entry.gridLeverage),
         gridCount: data.entry.gridCount === undefined || data.entry.gridCount === null ? undefined : Number(data.entry.gridCount),
         isLocked: Boolean(data.entry.isLocked),
+        isCounterparty: Boolean(data.entry.isCounterparty),
         isPending: Boolean(data.entry.isPending),
         filledAt: data.entry.filledAt ? String(data.entry.filledAt) : undefined,
         filledPrice: data.entry.filledPrice === undefined || data.entry.filledPrice === null ? undefined : Number(data.entry.filledPrice),
@@ -3183,7 +3548,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ...current,
         [relatedUserAccountMemoryKey(entry.relatedUserId)]: account.id,
       }));
-      setTrades((current) => current.map((trade) => trade.id === entry.id ? entry : trade));
+      setTrades((current) => current.map((trade) => getStoredEntryId(trade) === entry.id
+        ? (canManage && entry.isCounterparty ? asAdminCounterpartyTrade(entry) : entry)
+        : trade));
       if (entry.relatedFundId && entry.relatedFundName && entry.relatedUserId) {
         const fund: PreviewRelatedFund = {
           id: entry.relatedFundId,
@@ -3199,6 +3566,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       // 编辑完成后保留当前“速记一笔”上下文及报价展示模式，便于继续查看或处理同档订单。
       setEntrySide(ACTIONS[entry.action].side);
       setClosingSourceTrade(null);
+      setEditingOriginalTrade(null);
       setEntryForm({
         action: entry.action,
         accountId: entry.accountId,
@@ -3219,6 +3587,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         gridLeverage: entry.gridLeverage === undefined ? "" : String(entry.gridLeverage),
         gridCount: entry.gridCount === undefined ? "" : String(entry.gridCount),
         isLocked: false,
+        isCounterparty: false,
         isPending: false,
         quantity: "",
         price: "",
@@ -3234,7 +3603,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const deleteOpeningEntryMutation = trpc.ledger.t0DeleteOpeningEntry.useMutation({
     onSuccess: (data: any) => {
       const entryId = String(data.entryId);
-      setTrades((current) => current.filter((trade) => trade.id !== entryId));
+      setTrades((current) => current.filter((trade) => getStoredEntryId(trade) !== entryId));
       setExpandedOpenedTradeIds((current) => {
         const next = new Set(current);
         next.delete(entryId);
@@ -3257,7 +3626,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const revertEntryMutation = trpc.ledger.t0RevertEntry.useMutation({
     onSuccess: (data: any) => {
       const entryId = String(data.entryId);
-      setTrades((current) => current.filter((trade) => trade.id !== entryId));
+      setTrades((current) => current.filter((trade) => getStoredEntryId(trade) !== entryId));
       setExpandedOpenedTradeIds((current) => {
         const next = new Set(current);
         next.delete(entryId);
@@ -3280,7 +3649,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const restoreEntryMutation = trpc.ledger.t0RestoreEntry.useMutation({
     onSuccess: (data: any, variables: any) => {
       const entry = previewTradeFromEntry(data.entry);
-      setTrades((current) => [...current.filter((trade) => trade.id !== entry.id), entry]);
+      const visibleEntry = canManage && entry.isCounterparty ? asAdminCounterpartyTrade(entry) : entry;
+      setTrades((current) => [...current.filter((trade) => getStoredEntryId(trade) !== entry.id), visibleEntry]);
       setRecoverableEntries((current) => current.filter((item) => item.auditId !== String(variables.auditId)));
       setRestoreCandidate(null);
       toast.success("速记已恢复");
@@ -3467,6 +3837,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const normalizedQuantity = normalizeEthQuantity(entryForm.quantity);
     const quantity = Number(normalizedQuantity);
     const selectedAction = ACTIONS[entryForm.action];
+    const isCounterpartyClosing = !selectedAction.opening && Boolean(closingSourceTrade?.isCounterpartyView);
+    // 管理员反向投影下的“平空/平多”仅是展示方向；写库仍沿用用户端原始方向，确保 FIFO 永远以真实流水核算。
+    const storedAction = isCounterpartyClosing ? invertTradeAction(entryForm.action) : entryForm.action;
     const isOptionOpening = selectedAction.opening && entryForm.instrumentType === "option";
     const isGridOpening = selectedAction.opening && entryForm.instrumentType === "grid";
     const effectivePriceInput = isGridOpening && gridReferencePrice !== null
@@ -3555,6 +3928,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         toast.error("请选择现货、合约、期权或网格");
         return;
       }
+      const counterpartyOnly = isCounterpartyOnlyOpeningEdit({
+        form: entryForm,
+        original: editingOriginalTrade,
+        normalizedQuantity,
+        effectivePrice: effectivePriceInput,
+      });
       updateOpeningEntryMutation.mutate({
         ledgerId: 52,
         entryId,
@@ -3565,6 +3944,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         relatedFundName: normalizedRelatedFundName || undefined,
         instrumentType: editingInstrumentType,
         isLocked: entryForm.isLocked,
+        isCounterparty: entryForm.isCounterparty,
+        counterpartyOnly,
         isPending: entryForm.isPending,
         optionDirection: isOptionOpening ? entryForm.optionDirection : undefined,
         optionExpiryDate: isOptionOpening ? entryForm.optionExpiryDate : undefined,
@@ -3640,6 +4021,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       gridLeverage: isGridOpening ? Number(entryForm.gridLeverage) : undefined,
       gridCount: isGridOpening ? Number(entryForm.gridCount) : undefined,
       isLocked: selectedAction.opening ? entryForm.isLocked : false,
+      isCounterparty: selectedAction.opening ? entryForm.isCounterparty : false,
       isPending: selectedAction.opening ? entryForm.isPending : false,
       quantity,
       price,
@@ -3650,7 +4032,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       clientRequestId,
       isSyncing: true,
     };
-    setTrades((current) => [...current, trade]);
+    const visibleTrade = canManage && (Boolean(trade.isCounterparty) || isCounterpartyClosing)
+      ? asAdminCounterpartyTrade(trade)
+      : trade;
+    setTrades((current) => [...current, visibleTrade]);
     setShowEntrySheet(false);
     setCloseConfirmationStep("input");
     if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
@@ -3663,9 +4048,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundId: normalizedRelatedFundId,
       relatedFundName: normalizedRelatedFundName || undefined,
       symbol: "ETH",
-      action: entryForm.action,
+      action: storedAction,
       instrumentType: selectedAction.opening ? entryForm.instrumentType : undefined,
       isLocked: selectedAction.opening ? entryForm.isLocked : undefined,
+      isCounterparty: selectedAction.opening ? entryForm.isCounterparty : undefined,
       isPending: selectedAction.opening ? entryForm.isPending : undefined,
       optionDirection: isOptionOpening ? entryForm.optionDirection : undefined,
       optionExpiryDate: isOptionOpening ? entryForm.optionExpiryDate : undefined,
@@ -3703,6 +4089,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const backToLadder = () => {
     setCloseConfirmationStep("input");
     setClosingSourceTrade(null);
+    setEditingOriginalTrade(null);
     setShowEntrySheet(false);
     if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
   };
@@ -3710,11 +4097,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (!isClosingEntry) return;
     setCloseConfirmationStep("input");
     setClosingSourceTrade(null);
+    setEditingOriginalTrade(null);
     setEntryForm((current) => ({
       ...current,
       action: entrySide === "long" ? "openLong" : "openShort",
       instrumentType: lastOpeningInstrumentType,
       isLocked: false,
+      isCounterparty: false,
       isPending: false,
       quantity: "",
       price: "",
@@ -3786,19 +4175,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (!group.opening) {
       const allocation = group.closings[0];
       if (!allocation) return null;
-      const closing = allocation.trade;
-      const detail = recentJournalTradeDetails.get(closing.id);
-      const isLong = ACTIONS[closing.action].side === "long";
-      const showFullClosingContext = hasSystemGeneratedSettlementNote(closing.note);
-      return (
-        <div key={group.id} className="mx-3 my-2 rounded border border-dashed border-amber-200 bg-amber-50/35 px-3 py-2.5">
+        const closing = allocation.trade;
+        const detail = recentJournalTradeDetails.get(closing.id);
+        const isLong = ACTIONS[closing.action].side === "long";
+        const showFullClosingContext = hasSystemGeneratedSettlementNote(closing.note);
+        const memberPayout = resolveMemberPayout(closing, detail);
+        const hideRepeatedSettlementPrices = isMemberView && Boolean(memberPayout);
+        return (
+          <div key={group.id} className="mx-3 my-2 rounded border border-dashed border-amber-200 bg-amber-50/35 px-3 py-2.5">
           <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
-            <span className="shrink-0 text-[10px] font-medium text-amber-700">未匹配开仓</span>
-            <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closing.action].label}</span>
-            <span className="shrink-0 font-medium text-slate-800">{formatQuantity(closing.quantity)}E</span>
-            {detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
-            {detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>}
-            {detail?.isOptionQuote && <span className="shrink-0 text-violet-700">行权{formatPrice(closing.price)}</span>}
+              <span className="shrink-0 text-[10px] font-medium text-amber-700">未匹配开仓</span>
+              <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closing.action].label}</span>
+              <span className="shrink-0 font-medium text-slate-800">{formatQuantity(closing.quantity)}E</span>
+              {!hideRepeatedSettlementPrices && detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
+              {!hideRepeatedSettlementPrices && detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>}
+              {!hideRepeatedSettlementPrices && detail?.isOptionQuote && <span className="shrink-0 text-violet-700">行权{formatPrice(closing.price)}</span>}
             {!detail && <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
           </div>
           <div className={getHistoryContextLayoutClass(showFullClosingContext)}>
@@ -3835,6 +4226,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[opening.action].label}</span>
               <span className="shrink-0 font-medium text-slate-800">{formatQuantity(opening.quantity)}E</span>
               {opening.isPending && <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700"><Clock3 className="h-3 w-3" />挂单</span>}
+              {opening.isCounterpartyView && <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-violet-700"><Repeat2 className="h-3 w-3" strokeWidth={2.4} />反向</span>}
               <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{opening.instrumentType === "option" && opening.optionPremium !== undefined && opening.optionPremiumCurrency ? formatOptionQuote(opening.optionPremium, opening.optionPremiumCurrency) : formatPrice(opening.price)}</span>
               {opening.instrumentType === "option" && <span className="shrink-0 text-violet-700">行权{formatPrice(opening.price)}</span>}
             </div>
@@ -3860,6 +4252,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           const detail = buildLinkedClosingDetail(opening, allocation);
           const allocatedClosing = { ...closing, quantity: allocation.quantity, fee: detail.closingFee ?? closing.fee };
           const isLastClosing = index === group.closings.length - 1;
+          const memberPayout = resolveMemberPayout(allocatedClosing, detail);
+          const displayedNetPnl = memberPayout?.netPnl ?? detail.netPnl;
+          const hideRepeatedSettlementPrices = isMemberView && Boolean(memberPayout);
           return (
             <div key={`${closing.id}-${index}`} className="relative border-t border-[#c7d0d7]/60 bg-white/28 px-3 py-2.5 pl-8">
               <span
@@ -3871,27 +4266,27 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
                   <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closing.action].label}</span>
                   <span className="shrink-0 font-medium text-slate-800">{formatQuantity(allocation.quantity)}E</span>
-                  {detail.isOptionQuote ? <>
+                  {!hideRepeatedSettlementPrices && detail.isOptionQuote ? <>
                     <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>
                     <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>
                     <span className="shrink-0 text-violet-700">行权{formatPrice(closing.price)}</span>
-                  </> : <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
+                  </> : !hideRepeatedSettlementPrices && <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
                 </div>
                 <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
                 <button
                   type="button"
                   onClick={() => setNetProfitDetail({ trade: allocatedClosing, detail })}
-                  className={`shrink-0 border-b border-dotted pb-0.5 font-semibold outline-none ${detail.netPnl! >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}
-                  aria-label="查看关联平仓净利润计算明细"
+                  className={`shrink-0 border-b border-dotted pb-0.5 font-semibold outline-none ${displayedNetPnl! >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}
+                  aria-label={memberPayout ? "查看关联平仓本单可得明细" : "查看关联平仓净利润计算明细"}
                 >
-                  {formatSigned(detail.netPnl!)}<span className="ml-0.5 text-slate-500">u</span>
+                  {formatSigned(displayedNetPnl!)}<span className="ml-0.5 text-slate-500">u</span>
                 </button>
               </div>
               <div className="mt-1 flex min-w-0 items-center gap-x-1.5 whitespace-nowrap text-[11px] text-slate-500">
                 <span className="text-[10px] text-slate-400">关联平仓</span>
                 <span className="text-slate-300">·</span>
                 <span className="text-slate-400">{formatBeijingMonthDayTime(closing.createdAt)}</span>
-                {canManage ? renderHistoryActionMenuButton(closing) : <span className="ml-auto shrink-0 text-[10px] text-slate-500">净利润</span>}
+                {canManage ? renderHistoryActionMenuButton(closing) : <span className="ml-auto shrink-0 text-[10px] text-slate-500">{memberPayout ? "本单可得" : "净利润"}</span>}
               </div>
               {renderHistoryActionMenu(closing)}
               {closing.note?.trim() && <div className="mt-1 truncate text-[11px] text-slate-500"><span>备注：</span>{closing.note.trim()}</div>}
@@ -3988,21 +4383,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <button
               type="button"
               onClick={() => {
-                setShowTotalRevenueCostHint(false);
                 setTotalRevenueDetailPage(1);
-                setShowTotalGrossProfitDetail(true);
+                setShowTotalNetProfitDetail(true);
               }}
               aria-haspopup="dialog"
-              aria-label="查看总收益明细"
+              aria-label="查看总净收益明细"
               className="flex min-w-0 items-center justify-between gap-2 border-r px-3 py-3 text-left transition-opacity active:opacity-60"
               style={{
                 borderColor: "rgba(100,116,139,0.26)",
                 boxShadow: "inset -1px 0 0 rgba(255,255,255,0.70)",
               }}
             >
-              <div className="shrink-0 text-[11px] font-semibold text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>总利润</div>
-              <div className={`ml-auto flex items-baseline gap-0.5 whitespace-nowrap text-[clamp(18px,5vw,22px)] font-bold leading-none tabular-nums ${totalGrossProfitClass}`} style={{ textShadow: "-0.9px -0.9px 0 rgba(255,255,255,0.88), 1.15px 1.15px 1px rgba(15,23,42,0.22)" }}>
-                <span>{formatSigned(totalGrossProfit)}</span>
+              <div className="shrink-0 text-[11px] font-semibold text-slate-500" style={{ textShadow: "-0.6px -0.6px 0 rgba(255,255,255,0.94), 0.8px 0.8px 0 rgba(71,85,105,0.28)" }}>总净收益</div>
+              <div className={`ml-auto flex items-baseline gap-0.5 whitespace-nowrap text-[clamp(18px,5vw,22px)] font-bold leading-none tabular-nums ${totalNetProfitClass}`} style={{ textShadow: "-0.9px -0.9px 0 rgba(255,255,255,0.88), 1.15px 1.15px 1px rgba(15,23,42,0.22)" }}>
+                <span>{formatSigned(totalNetProfit)}</span>
                 <span className="text-[12px] font-semibold opacity-65">U</span>
               </div>
             </button>
@@ -4205,24 +4599,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             }}
           >
             {displayedPriceRows.map((row) => {
-              const individualMetadata = isIndividualLadderView && row.openingTrade
+              const getIndividualMetadata = (openingTrade?: PreviewTrade) => isIndividualLadderView && openingTrade
                 ? {
-                  accountName: getTradeAccountName(row.openingTrade),
-                  relatedUserName: getTradeRelatedUserName(row.openingTrade),
-                  relatedFundName: getTradeRelatedFundName(row.openingTrade),
-                  instrumentShortLabel: getInstrumentShortLabel(row.openingTrade.instrumentType, row.openingTrade.optionExpiryDate),
-                  option: row.openingTrade.instrumentType === "option"
+                  accountName: getTradeAccountName(openingTrade),
+                  relatedUserName: getTradeRelatedUserName(openingTrade),
+                  relatedFundName: getTradeRelatedFundName(openingTrade),
+                  instrumentShortLabel: getInstrumentShortLabel(openingTrade.instrumentType, openingTrade.optionExpiryDate),
+                  option: openingTrade.instrumentType === "option"
                     ? {
-                      direction: row.openingTrade.optionDirection,
-                      expiryDate: row.openingTrade.optionExpiryDate,
-                      strikePrice: row.openingTrade.price,
-                      premium: row.openingTrade.optionPremium,
-                      premiumCurrency: row.openingTrade.optionPremiumCurrency,
-                      cachedMarkPrice: row.openingTrade.optionMarkPrice,
+                      direction: openingTrade.optionDirection,
+                      expiryDate: openingTrade.optionExpiryDate,
+                      strikePrice: openingTrade.price,
+                      premium: openingTrade.optionPremium,
+                      premiumCurrency: openingTrade.optionPremiumCurrency,
+                      cachedMarkPrice: openingTrade.optionMarkPrice,
                     }
                     : undefined,
                 }
                 : undefined;
+              const individualLongMetadata = getIndividualMetadata(row.longOpeningTrade);
+              const individualShortMetadata = getIndividualMetadata(row.shortOpeningTrade);
               return (
                 <div
                   key={row.key}
@@ -4233,9 +4629,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   bucket={row.long}
                   side="long"
                   markPrice={markPrice}
-                  metadata={individualMetadata}
-                  isLocked={Boolean(row.long && row.openingTrade?.isLocked)}
-                  isPending={Boolean(row.long && row.openingTrade?.isPending)}
+                  metadata={individualLongMetadata}
+                  isLocked={Boolean(row.long && row.longOpeningTrade?.isLocked)}
+                  isCounterparty={Boolean(row.long && row.longOpeningTrade?.isCounterpartyView)}
+                  isPending={Boolean(row.long && row.longOpeningTrade?.isPending)}
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.long) return;
@@ -4244,7 +4641,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     // 逐笔行展示真实成交价的四舍五入整数，详情页/FIFO 则仍按十美元归档价定位。
                     openEntrySheet(
                       "openLong",
-                      row.openingTrade ? archivePriceForTrade(row.openingTrade) : row.long.price,
+                      row.longOpeningTrade ? archivePriceForTrade(row.longOpeningTrade) : row.long.price,
                       isIndividualLadderView ? "individual" : "integrated",
                     );
                   }}
@@ -4286,6 +4683,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           <span className="-ml-px text-[8px] font-semibold leading-none tracking-tight opacity-95">.{fractionalPart}</span>
                         </span>
                       );
+                    })() : isIndividualLadderView ? (() => {
+                      const { integerPart, fractionalPart } = splitLadderMarkPrice(row.price);
+                      return (
+                        <span className="inline-flex items-baseline whitespace-nowrap" aria-label={`${integerPart}.${fractionalPart}`}>
+                          <span>{integerPart}</span>
+                          <span className="-ml-px text-[8px] font-semibold leading-none tracking-tight opacity-80">.{fractionalPart}</span>
+                        </span>
+                      );
                     })() : formatLadderPrice(row.price)}
                   </span>
                 </div>
@@ -4293,9 +4698,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   bucket={row.short}
                   side="short"
                   markPrice={markPrice}
-                  metadata={individualMetadata}
-                  isLocked={Boolean(row.short && row.openingTrade?.isLocked)}
-                  isPending={Boolean(row.short && row.openingTrade?.isPending)}
+                  metadata={individualShortMetadata}
+                  isLocked={Boolean(row.short && row.shortOpeningTrade?.isLocked)}
+                  isCounterparty={Boolean(row.short && row.shortOpeningTrade?.isCounterpartyView)}
+                  isPending={Boolean(row.short && row.shortOpeningTrade?.isPending)}
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.short) return;
@@ -4304,7 +4710,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     // 逐笔行展示真实成交价的四舍五入整数，详情页/FIFO 则仍按十美元归档价定位。
                     openEntrySheet(
                       "openShort",
-                      row.openingTrade ? archivePriceForTrade(row.openingTrade) : row.short.price,
+                      row.shortOpeningTrade ? archivePriceForTrade(row.shortOpeningTrade) : row.short.price,
                       isIndividualLadderView ? "individual" : "integrated",
                     );
                   }}
@@ -4495,6 +4901,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
                 const showFullHistoryContext = hasSystemGeneratedSettlementNote(trade.note);
+                const memberPayout = resolveMemberPayout(trade, detail);
+                const displayedNetPnl = memberPayout?.netPnl ?? detail?.netPnl;
+                const hideRepeatedSettlementPrices = isMemberView && Boolean(memberPayout);
                 return (
                 <div key={trade.id} className="border-b border-[#c7d0d7]/60 px-4 py-2.5 last:border-b-0">
                     <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
@@ -4502,21 +4911,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].label}</span>
                         <span className="shrink-0 font-medium text-slate-800">{formatQuantity(trade.quantity)}E</span>
                         {trade.isPending && <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700"><Clock3 className="h-3 w-3" />挂单</span>}
-                        {detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
-                        {detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>}
-                        {detail?.isOptionQuote && <span className="shrink-0 text-violet-700">行权{formatPrice(trade.price)}</span>}
+                        {!hideRepeatedSettlementPrices && detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
+                        {!hideRepeatedSettlementPrices && detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>}
+                        {!hideRepeatedSettlementPrices && detail?.isOptionQuote && <span className="shrink-0 text-violet-700">行权{formatPrice(trade.price)}</span>}
                         {!detail && <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{formatPrice(trade.price)}</span>}
                         {trade.isSyncing && <span className="shrink-0 text-amber-600">保存中</span>}
                       </div>
-                      {!isOpening && detail?.netPnl !== undefined && <>
+                      {!isOpening && detail && displayedNetPnl !== undefined && <>
                         <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
                         <button
                           type="button"
                           onClick={() => setNetProfitDetail({ trade, detail })}
-                          className={`shrink-0 border-b border-dotted pb-0.5 font-semibold outline-none ${detail.netPnl >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}
-                          aria-label="查看净利润计算明细"
+                          className={`shrink-0 border-b border-dotted pb-0.5 font-semibold outline-none ${displayedNetPnl >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}
+                          aria-label={memberPayout ? "查看本单可得明细" : "查看净利润计算明细"}
                         >
-                          {formatSigned(detail.netPnl)}<span className="ml-0.5 text-slate-500">u</span>
+                          {formatSigned(displayedNetPnl)}<span className="ml-0.5 text-slate-500">u</span>
                         </button>
                       </>}
                     </div>
@@ -4528,9 +4937,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedFundName(trade)}>{getTradeRelatedFundName(trade)}</span>
                       <span className="text-slate-300">·</span>
                       <span className="shrink-0">{formatT0TradeTimeline(trade)}</span>
-                      {canManage ? renderHistoryActionMenuButton(trade) : !isOpening && detail?.netPnl !== undefined && <>
+                      {canManage ? renderHistoryActionMenuButton(trade) : !isOpening && detail && displayedNetPnl !== undefined && <>
                         <span className="text-slate-300">·</span>
-                        <span className="ml-auto shrink-0 text-[10px] text-slate-500">净利润</span>
+                        <span className="ml-auto shrink-0 text-[10px] text-slate-500">{memberPayout ? "本单可得" : "净利润"}</span>
                       </>}
                     </div>
                     {renderHistoryActionMenu(trade)}
@@ -4749,6 +5158,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                               <span className={`shrink-0 text-sm font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>持仓{ACTIONS[trade.action].side === "long" ? "多单" : "空单"}</span>
                               <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatQuantity(trade.quantity)}</span>
                               <span className="shrink-0 text-sm font-medium tabular-nums text-slate-700">@ {formatPrice(trade.price)}</span>
+                              <span className="shrink-0 rounded border border-slate-200 bg-white px-1 py-px text-[9px] font-semibold tabular-nums text-slate-400">#{getStoredEntryId(trade)}</span>
                               {trade.isPending ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span> : trade.instrumentType === "option" ? <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="shrink-0 text-sm font-semibold tabular-nums" /> : <span className={`shrink-0 text-sm font-semibold tabular-nums ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>}
                             </span>
                           </button>
@@ -4935,7 +5345,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         onChange={(event) => setEntryForm((current) => ({ ...current, quantity: event.target.value }))}
                         onBlur={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(current.quantity) }))}
                         placeholder="0.00"
-                        className={`h-14 w-full rounded border px-3 pr-[4.75rem] text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
+                        className={`h-14 w-full rounded border px-3 pr-[7rem] text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                       />
                       {ACTIONS[entryForm.action].opening && <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
                         <button
@@ -4960,8 +5370,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         >
                           <Clock3 className="h-4 w-4" strokeWidth={2.3} />
                         </button>
+                        <button
+                          type="button"
+                          disabled={isCloseReview}
+                          aria-pressed={entryForm.isCounterparty}
+                          aria-label={entryForm.isCounterparty ? "关闭管理员反向展示" : "开启管理员反向展示"}
+                          title={entryForm.isCounterparty ? "管理员反向展示已开启，点击关闭" : "用户与管理员使用相反多空和损益展示"}
+                          onClick={() => setEntryForm((current) => ({ ...current, isCounterparty: !current.isCounterparty }))}
+                          className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isCounterparty ? "border-violet-500/80 bg-violet-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]" : "border-slate-300 bg-slate-50 text-slate-500"}`}
+                        >
+                          <Repeat2 className="h-4 w-4" strokeWidth={2.35} />
+                        </button>
                       </div>}
                     </div>
+                    {ACTIONS[entryForm.action].opening && entryForm.isCounterparty && <div className="mt-1.5 flex items-start gap-1.5 text-[10px] font-medium leading-4 text-violet-700"><Repeat2 className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2.4} /><span>反向展示已开启：用户保持本单原始多空与损益；管理员按相反数字展示。关闭后订单保留并立即恢复普通展示。</span></div>}
                     {quantityFormatError && <div className="mt-1.5 text-[10px] font-medium leading-4 text-rose-600">{quantityFormatError}</div>}
                   </Field>
 
@@ -5768,65 +6190,49 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         </div>
       )}
 
-      {showTotalGrossProfitDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="总收益明细">
+      {showTotalNetProfitDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="总净收益明细">
           <div className="max-h-[88vh] w-full max-w-sm overflow-y-auto rounded bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-base font-semibold text-slate-900">总收益明细</div>
-                <div className="mt-1 text-xs text-slate-500">当前筛选范围内的已平仓订单</div>
+                <div className="text-base font-semibold text-slate-900">总净收益明细</div>
+                <div className="mt-1 text-xs text-slate-500">当前筛选范围内的已平仓订单，已扣开仓与平仓手续费</div>
               </div>
               <button type="button" onClick={() => {
-                setShowTotalRevenueCostHint(false);
-                setShowTotalGrossProfitDetail(false);
-              }} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭总收益明细">
+                setShowTotalNetProfitDetail(false);
+              }} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭总净收益明细">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <div className="mt-4 rounded border border-slate-200 bg-slate-50 px-3 py-3">
               <div className="flex items-baseline justify-between gap-4">
-                <span className="text-sm font-semibold text-slate-700">总收益</span>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowTotalRevenueCostHint((current) => !current)}
-                    aria-expanded={showTotalRevenueCostHint}
-                    aria-label="查看总收益交易成本提示"
-                    className={`whitespace-nowrap border-b border-dashed pb-0.5 text-lg font-bold ${totalGrossProfitClass}`}
-                  >
-                    {formatSigned(totalGrossProfit)} <span className="text-xs font-semibold text-slate-500">U</span>
-                  </button>
-                  {showTotalRevenueCostHint && (
-                    <div role="status" className="absolute right-0 top-full z-10 mt-2 whitespace-nowrap rounded border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-600 shadow-md">
-                      未扣除交易成本
-                    </div>
-                  )}
-                </div>
+                <span className="text-sm font-semibold text-slate-700">总净收益</span>
+                <span className={`whitespace-nowrap text-lg font-bold ${totalNetProfitClass}`}>{formatSigned(totalNetProfit)} <span className="text-xs font-semibold text-slate-500">U</span></span>
               </div>
             </div>
 
             <div className="mt-3 overflow-hidden rounded border border-slate-200">
               <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-                <span>订单</span>
-                <span>{totalGrossProfitDetails.length} 笔</span>
+                <span>订单净收益</span>
+                <span>{totalNetProfitDetails.length} 笔</span>
               </div>
-              {totalGrossProfitDetails.length > 0 ? (
+              {totalNetProfitDetails.length > 0 ? (
                 <div className="divide-y divide-slate-100">
-                  {pagedTotalGrossProfitDetails.map((detail) => {
+                  {pagedTotalNetProfitDetails.map((detail) => {
                     const isLong = ACTIONS[detail.trade.action].side === "long";
                     return (
                       <div key={detail.trade.id} className="flex min-w-0 items-center gap-2 px-3 py-2 text-[11px] tabular-nums whitespace-nowrap">
                         <span className="shrink-0 text-slate-400">{formatBeijingMonthDayTime(detail.trade.createdAt)}</span>
                         <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[detail.trade.action].label}</span>
                         <span className="shrink-0 font-medium text-slate-700">{formatQuantity(detail.quantity)} ETH</span>
-                        <span className={`ml-auto shrink-0 font-semibold ${detail.grossPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(detail.grossPnl)} U</span>
+                        <span className={`ml-auto shrink-0 font-semibold ${detail.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(detail.netPnl)} U</span>
                       </div>
                     );
                   })}
                 </div>
               ) : <div className="px-3 py-5 text-center text-xs text-slate-400">当前筛选范围暂无已平仓记录</div>}
-              {totalGrossProfitDetails.length > 0 && totalRevenueDetailTotalPages > 1 && (
+              {totalNetProfitDetails.length > 0 && totalRevenueDetailTotalPages > 1 && (
                 <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-3 py-2 text-[11px] tabular-nums">
                   <button
                   type="button"
@@ -5849,10 +6255,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               )}
             </div>
 
-            <button type="button" onClick={() => {
-              setShowTotalRevenueCostHint(false);
-              setShowTotalGrossProfitDetail(false);
-            }} className="mt-5 h-11 w-full rounded bg-[#1a56db] text-sm font-semibold text-white active:scale-[0.99]">知道了</button>
+            <button type="button" onClick={() => setShowTotalNetProfitDetail(false)} className="mt-5 h-11 w-full rounded bg-[#1a56db] text-sm font-semibold text-white active:scale-[0.99]">知道了</button>
           </div>
         </div>
       )}
@@ -5930,27 +6333,27 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       )}
 
       {grossProfitDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="累计利润说明">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="累计净收益说明">
           <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-base font-semibold text-slate-900">{isMemberView ? "累计利润说明" : `${grossProfitDetail.side === "long" ? "多仓" : "空仓"}累计利润明细`}</div>
+                <div className="text-base font-semibold text-slate-900">{isMemberView ? "累计净收益说明" : `${grossProfitDetail.side === "long" ? "多仓" : "空仓"}累计净收益明细`}</div>
                 {!isMemberView && <div className="mt-1 text-xs text-slate-500">已平仓部分按实际成交价汇总</div>}
               </div>
-              <button type="button" onClick={() => setGrossProfitDetail(null)} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭累计利润说明">
+              <button type="button" onClick={() => setGrossProfitDetail(null)} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭累计净收益说明">
                 <X className="h-5 w-5" />
               </button>
             </div>
             {isMemberView ? (
-              <div className="mt-5 rounded bg-slate-50 px-4 py-4 text-center text-sm leading-6 text-slate-600">未扣除交易手续费、未扣除交易成本的毛利润。</div>
+              <div className="mt-5 rounded bg-slate-50 px-4 py-4 text-center text-sm leading-6 text-slate-600">累计净收益已扣除开仓与平仓交易手续费。</div>
             ) : <>
               <div className="mt-4 space-y-2 text-sm tabular-nums">
                 <div className="flex items-center justify-between gap-4"><span className="text-slate-500">毛收益</span><span className={`font-medium ${grossProfitDetail.gross >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(grossProfitDetail.gross)} U</span></div>
                 <div className="flex items-center justify-between gap-4"><span className="text-slate-500">开仓手续费分摊</span><span className="font-medium text-slate-700">−{formatFee(grossProfitDetail.openingFee)} U</span></div>
                 <div className="flex items-center justify-between gap-4"><span className="text-slate-500">平仓手续费</span><span className="font-medium text-slate-700">−{formatFee(grossProfitDetail.closingFee)} U</span></div>
-                <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-2"><span className="font-semibold text-slate-800">净利润</span><span className={`font-semibold ${grossProfitDetail.net >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(grossProfitDetail.net)} U</span></div>
+                <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-2"><span className="font-semibold text-slate-800">累计净收益</span><span className={`font-semibold ${grossProfitDetail.net >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(grossProfitDetail.net)} U</span></div>
               </div>
-              <div className="mt-3 rounded bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-500">累计利润为未扣手续费的毛收益；净利润已扣除已平部分的开仓手续费分摊及平仓手续费。</div>
+              <div className="mt-3 rounded bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-500">累计净收益已扣除已平部分的开仓手续费分摊及平仓手续费。</div>
             </>}
             <button type="button" onClick={() => setGrossProfitDetail(null)} className="mt-5 h-11 w-full rounded bg-slate-800 text-sm font-semibold text-white active:scale-[0.99]">知道了</button>
           </div>
@@ -5962,7 +6365,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-base font-semibold text-slate-900">{isMemberView ? "净利润说明" : "净利润计算明细"}</div>
+                <div className="text-base font-semibold text-slate-900">{memberProfitShareDetail ? "本单收益" : isMemberView ? "净利润说明" : "净利润计算明细"}</div>
                 {!isMemberView && <div className="mt-1 text-xs text-slate-500">已扣除开仓与平仓两次实际手续费</div>}
               </div>
               <button type="button" onClick={() => setNetProfitDetail(null)} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭净利润说明">
@@ -5970,7 +6373,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </button>
             </div>
             {isMemberView ? (
-              <div className="mt-5 rounded bg-slate-50 px-4 py-4 text-center text-sm text-slate-600">已扣除交易成本后的净利润。</div>
+              memberProfitShareDetail ? <>
+                <div className="mt-4 overflow-hidden rounded border border-indigo-100 bg-indigo-50/45 text-sm tabular-nums">
+                  <div className="flex items-center justify-between gap-4 px-3 py-3.5">
+                    <span className="font-semibold text-slate-800">本单可得</span>
+                    <span className={`text-lg font-semibold ${memberProfitShareDetail.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(memberProfitShareDetail.netPnl)} U</span>
+                  </div>
+                </div>
+                <div className="mt-3 px-1 text-[11px] leading-5 text-slate-400">已按本单实际归属计算，扣除交易费、手续费及分成后的净利润。</div>
+              </> : <>
+                <div className="mt-5 rounded bg-slate-50 px-4 py-4 text-center text-sm text-slate-600">已扣除交易成本后的净利润。</div>
+                {(netProfitDetail.detail.buyPrice !== undefined || netProfitDetail.detail.sellPrice !== undefined) && <div className="mt-3 px-1 text-[11px] tabular-nums text-slate-400">
+                  成交参考：{netProfitDetail.detail.buyPrice !== undefined && <>买 {netProfitDetail.detail.buyQuote ?? formatPrice(netProfitDetail.detail.buyPrice)}</>}{netProfitDetail.detail.buyPrice !== undefined && netProfitDetail.detail.sellPrice !== undefined && <span className="px-1.5 text-slate-300">·</span>}{netProfitDetail.detail.sellPrice !== undefined && <>卖 {netProfitDetail.detail.sellQuote ?? formatPrice(netProfitDetail.detail.sellPrice)}</>}
+                </div>}
+              </>
             ) : <>
               <div className="mt-4 rounded bg-slate-50 px-3 py-2.5 text-xs tabular-nums text-slate-700">
                 {ACTIONS[netProfitDetail.trade.action].label} {formatQuantity(netProfitDetail.trade.quantity)} ETH
@@ -5981,6 +6397,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div className="flex items-center justify-between gap-4"><span className="text-slate-500">本笔平仓手续费</span><span className="font-medium text-slate-700">−{formatFee(netProfitDetail.detail.closingFee ?? 0)} U</span></div>
                 <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-2"><span className="font-semibold text-slate-800">净利润</span><span className={`font-semibold ${(netProfitDetail.detail.netPnl ?? 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(netProfitDetail.detail.netPnl ?? 0)} U</span></div>
               </div>
+              {netProfitShareDistribution.length > 0 && <div className="mt-4 overflow-hidden rounded border border-indigo-100 bg-indigo-50/45">
+                <div className="border-b border-indigo-100 bg-white/60 px-3 py-2">
+                  <div className="text-xs font-semibold text-indigo-900">分佣明细（开仓快照）</div>
+                  <div className="mt-0.5 text-[10px] leading-4 text-indigo-700/80">当前没有额外管理费；已先扣除上方开仓与平仓交易手续费，再按开仓时固化的比例拆分。</div>
+                </div>
+                <div className="divide-y divide-indigo-100/90 bg-white/55">
+                  {netProfitShareDistribution.map((allocation) => <div key={allocation.beneficiaryUserId} className="flex items-center justify-between gap-3 px-3 py-2 text-xs tabular-nums">
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-slate-800">{allocation.beneficiaryUserName}</div>
+                      <div className="mt-0.5 text-[10px] text-slate-500">分成 {allocation.percentageLabel}</div>
+                    </div>
+                    <div className={`shrink-0 text-sm font-semibold ${allocation.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(allocation.netPnl)} U</div>
+                  </div>)}
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-indigo-100 bg-white/70 px-3 py-2 text-xs tabular-nums">
+                  <span className="font-semibold text-slate-700">分配合计</span>
+                  <span className={`font-semibold ${(netProfitDetail.detail.netPnl ?? 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(netProfitShareDistribution.reduce((total, allocation) => total + allocation.netPnl, 0))} U</span>
+                </div>
+              </div>}
             </>}
             <button type="button" onClick={() => setNetProfitDetail(null)} className="mt-5 h-11 w-full rounded bg-slate-800 text-sm font-semibold text-white active:scale-[0.99]">知道了</button>
           </div>
@@ -6006,7 +6441,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </button>
               <button
                 disabled={deleteOpeningEntryMutation.isPending}
-                onClick={() => deleteOpeningEntryMutation.mutate({ ledgerId: 52, entryId: Number(deleteCandidate.id) })}
+                onClick={() => deleteOpeningEntryMutation.mutate({ ledgerId: 52, entryId: Number(getStoredEntryId(deleteCandidate)) })}
                 className="h-11 rounded bg-rose-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
               >
                 确认删除
@@ -6037,7 +6472,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </button>
               <button
                 disabled={revertEntryMutation.isPending}
-                onClick={() => revertEntryMutation.mutate({ ledgerId: 52, entryId: Number(revertCandidate.id) })}
+                onClick={() => revertEntryMutation.mutate({ ledgerId: 52, entryId: Number(getStoredEntryId(revertCandidate)) })}
                 className="h-11 rounded bg-amber-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
               >
                 确认回撤
@@ -6442,19 +6877,19 @@ function AccountOverview({
           <div className="grid grid-cols-2 border-t border-slate-100 text-[11px] tabular-nums">
             {sides.map(({ side, data }) => {
               const isLong = side === "long";
-              const profitTone = data.realizedGross >= 0 ? "text-rose-600 border-rose-500" : "text-emerald-600 border-emerald-500";
+              const profitTone = data.realized >= 0 ? "text-rose-600 border-rose-500" : "text-emerald-600 border-emerald-500";
               return (
                 <section key={side} className={`min-w-0 ${isLong ? "border-r border-slate-100" : ""}`}>
                   <div className="space-y-0">
                     <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
-                      <span className="whitespace-nowrap text-slate-500">累计利润</span>
+                      <span className="whitespace-nowrap text-slate-500">累计净收益</span>
                       <button
                         type="button"
                         onClick={() => onExplainGrossProfit(side, data)}
                         className={`whitespace-nowrap border-b border-dotted pb-0.5 text-[11px] font-semibold outline-none ${profitTone}`}
-                        aria-label={`查看${isLong ? "多仓" : "空仓"}累计利润说明`}
+                        aria-label={`查看${isLong ? "多仓" : "空仓"}累计净收益说明`}
                       >
-                        {formatSigned(data.realizedGross)} U
+                        {formatSigned(data.realized)} U
                       </button>
                     </div>
                     <div className="flex h-9 items-center justify-between gap-1 border-t border-slate-100 px-3">
@@ -6542,7 +6977,7 @@ function OptionUnrealizedPnlText({
   return <span className={`${className} ${tone}`}>{optionPnl === null ? emptyLabel : `${formatSigned(optionPnl)} U`}</span>;
 }
 
-function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, isPending = false }: {
+function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, isCounterparty = false, isPending = false }: {
   bucket: PositionBucket;
   side: PositionSide;
   markPrice: number | null;
@@ -6551,6 +6986,8 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   metadata?: LadderCellMetadata;
   /** 仅管理员逐笔报价使用的黑金锁定外观。 */
   isLocked?: boolean;
+  /** 管理端反向展示订单，使用紫色双向图标与普通多空区分。 */
+  isCounterparty?: boolean;
   /** 仅管理员逐笔报价使用：挂单未成交，采用浅蓝状态底并不展示盈亏。 */
   isPending?: boolean;
 }) {
@@ -6676,8 +7113,9 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           <span className="shrink-0">·</span>
           <span className="min-w-0 shrink truncate" title={`项目：${metadata.relatedFundName}`}>{metadata.relatedFundName}</span>
         </div>
-        {(isLocked || isPending || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
+        {(isLocked || isCounterparty || isPending || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
           {isLocked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#f5d78e]/85" strokeWidth={2.5} aria-label="已锁定" />}
+          {isCounterparty && <Repeat2 className="h-2.5 w-2.5 shrink-0 text-violet-700" strokeWidth={2.7} aria-label="管理员反向展示" />}
           {isPending && <Clock3 className="h-2.5 w-2.5 shrink-0 text-sky-600" strokeWidth={2.5} aria-label="挂单待成交" />}
           {metadata.instrumentShortLabel && <span className={isLocked && !isPending ? "text-[#f5d78e]/85" : isOption ? "text-violet-100" : isGrid ? "text-cyan-800" : "text-slate-500"} title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
         </div>}
@@ -6711,6 +7149,7 @@ function LadderCell({
   readOnly = false,
   metadata,
   isLocked = false,
+  isCounterparty = false,
   isPending = false,
 }: {
   bucket?: PositionBucket;
@@ -6721,6 +7160,7 @@ function LadderCell({
   readOnly?: boolean;
   metadata?: LadderCellMetadata;
   isLocked?: boolean;
+  isCounterparty?: boolean;
   isPending?: boolean;
 }) {
   // 统一由报价格本身处理：移动端与桌面端都必须在同一格 700ms 内连续点击两次，
@@ -6736,7 +7176,7 @@ function LadderCell({
     action();
   };
   if (bucket && bucket.remainingQuantity > 0.0000001) {
-    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} isLocked={isLocked} isPending={isPending} />;
+    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} isLocked={isLocked} isCounterparty={isCounterparty} isPending={isPending} />;
   }
 
   const isLong = side === "long";

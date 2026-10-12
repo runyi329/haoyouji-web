@@ -47,6 +47,8 @@ export type SaveT0JournalEntryInput = {
   /** 仅开仓主单可锁定，供管理员逐笔报价黑金标识使用。 */
   instrumentType?: T0JournalInstrumentType;
   isLocked?: boolean;
+  /** 仅开仓主单：管理员按反向多空与相反损益展示，成员仍保持原始订单视图。 */
+  isCounterparty?: boolean;
   /** 仅管理员开仓可设为挂单；挂单不参与实际仓位、FIFO、手续费及收益核算。 */
   isPending?: boolean;
   /** 期权开仓参数：标的强制为 ETH，price 存行权价。 */
@@ -501,6 +503,7 @@ function mapEntry(row: any) {
     optionSettledAt: row.option_settled_at ?? row.optionSettledAt ? isoTime(row.option_settled_at ?? row.optionSettledAt) : undefined,
     optionSettlementSource: row.option_settlement_source ? String(row.option_settlement_source) : undefined,
     isLocked: Boolean(toNumber(row.is_locked ?? row.isLocked)),
+    isCounterparty: Boolean(toNumber(row.is_counterparty ?? row.isCounterparty)),
     isPending: String(row.execution_status ?? row.executionStatus ?? "filled") === "pending",
     filledAt: row.filled_at ?? row.filledAt ? isoTime(row.filled_at ?? row.filledAt) : undefined,
     filledPrice: row.filled_price === null || row.filled_price === undefined ? undefined : toNumber(row.filled_price),
@@ -688,6 +691,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         grid_leverage DECIMAL(36,18) DEFAULT NULL COMMENT '网格杠杆倍数',
         grid_count INT UNSIGNED DEFAULT NULL COMMENT '网格数量',
         is_locked TINYINT(1) NOT NULL DEFAULT 0 COMMENT '仅T+0开仓主单的管理员锁定展示标记',
+        is_counterparty TINYINT(1) NOT NULL DEFAULT 0 COMMENT '仅开仓主单：管理员反向展示，成员保留原始多空与损益',
         execution_status ENUM('filled','pending') NOT NULL DEFAULT 'filled' COMMENT 'filled为实际成交，pending为管理员逐笔报价挂单',
         filled_at DATETIME(3) DEFAULT NULL COMMENT '挂单触发成交的系统确认时间',
         filled_price DECIMAL(36,18) DEFAULT NULL COMMENT '挂单触发成交时的统一行情价格',
@@ -928,6 +932,16 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
       `);
     }
 
+    // 管理员反向展示标记仅落在开仓主单；历史订单默认关闭，绝不改写原始方向、数量、FIFO 或收益。
+    const [counterpartyColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_entries LIKE 'is_counterparty'`);
+    if (asRows(counterpartyColumns).length === 0) {
+      await db.execute(`
+        ALTER TABLE ledger52_t0_journal_entries
+          ADD COLUMN is_counterparty TINYINT(1) NOT NULL DEFAULT 0
+            COMMENT '仅开仓主单：管理员反向展示，成员保留原始多空与损益' AFTER is_locked
+      `);
+    }
+
     // 管理员逐笔报价挂单：历史订单默认已成交，绝不回写或改变既有仓位、FIFO 与收益。
     const [executionStatusColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_entries LIKE 'execution_status'`);
     if (asRows(executionStatusColumns).length === 0) {
@@ -978,15 +992,31 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
   return tablesReady;
 }
 
+/** 解析52号账本的实际所有者，用于系统超级管理员读取该账本已有的管理流水。 */
+async function getLedger52T0JournalOwnerUserId() {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const [rows] = await conn.execute(
+    `SELECT userId FROM ledger_members WHERE ledgerId = ? AND role = 'owner' ORDER BY id ASC LIMIT 1`,
+    [LEDGER_52_T0_JOURNAL_ID],
+  );
+  const ownerUserId = toNumber(asRows(rows)[0]?.userId);
+  if (ownerUserId <= 0) throw new TRPCError({ code: "NOT_FOUND", message: "未找到52号账本所有者" });
+  return ownerUserId;
+}
+
 /**
  * T+0阅读权限：管理员读取其管理流水的全量关联用户数据；52号账本成员只读取自身关联用户ID的数据。
- * 身份代入不是实际成员会话，不能借此浏览个人仓位。
+ * 系统超级管理员读取账本实际所有者的管理流水；身份代入不是实际成员会话，不能借此浏览个人仓位。
  */
 export async function resolveLedger52T0JournalReadScope(actor: T0JournalActor): Promise<T0JournalReadScope> {
   if (actor.isViewingAs) {
     throw new TRPCError({ code: "FORBIDDEN", message: "代入成员视角不可访问T+0速记账本" });
   }
-  if (actor.role === "super_admin" || actor.role === "admin") {
+  if (actor.role === "super_admin") {
+    return { mode: "admin", journalOwnerUserId: await getLedger52T0JournalOwnerUserId() };
+  }
+  if (actor.role === "admin") {
     return { mode: "admin", journalOwnerUserId: actor.id };
   }
 
@@ -1143,7 +1173,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
               e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
               e.option_settlement_price, e.option_delivery_price, e.option_settled_at, e.option_settlement_source,
               e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count,
-              e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.related_user_id, e.related_fund_id,
+              e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price, e.action, e.related_user_id, e.related_fund_id,
               CASE WHEN f.is_active = 1 THEN f.name ELSE NULL END AS related_fund_name,
               CASE WHEN f.is_active = 1 THEN 0 ELSE 1 END AS related_fund_hidden,
               CASE WHEN deleted_user.id IS NULL THEN COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) ELSE NULL END AS related_user_name,
@@ -2183,6 +2213,9 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     ? normalizeInstrumentType(input.instrumentType, true)
     : undefined;
   const isLocked = isOpeningAction(input.action) && input.isLocked === true ? 1 : 0;
+  // 反向展示只标记开仓：所有平仓记录在管理员视图中按 FIFO 自动跟随对应开仓投影，
+  // 因而关闭标记会让整笔订单（含历史平仓）即时回到普通方向，不改写任何原始流水。
+  const isCounterparty = isOpeningAction(input.action) && input.isCounterparty === true ? 1 : 0;
   if (!isOpeningAction(input.action) && input.isPending) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "仅开仓订单可以设为挂单" });
   }
@@ -2318,8 +2351,8 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 
     const [entryResult] = await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, grid_direction, grid_range_min, grid_range_max, grid_leverage, grid_count, is_locked, execution_status, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'option' THEN 0 ELSE ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18) END, ?, ?, ?, ?)
+        (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, grid_direction, grid_range_min, grid_range_max, grid_leverage, grid_count, is_locked, is_counterparty, execution_status, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'option' THEN 0 ELSE ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18) END, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
       [
         LEDGER_52_T0_JOURNAL_ID,
@@ -2339,6 +2372,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         gridParameters?.leverage ?? null,
         gridParameters?.count ?? null,
         isLocked,
+        isCounterparty,
         isPending ? "pending" : "filled",
         input.action,
         normalizedQuantity,
@@ -2391,7 +2425,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
                 u.username AS related_username, u.avatar AS related_user_avatar,
                 e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
                 e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count,
-                e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+                e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
            FROM ledger52_t0_journal_entries e
            INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
            LEFT JOIN users u ON u.id = e.related_user_id
@@ -2414,11 +2448,11 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
   }
 }
 
-async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: number) {
+async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: number, options: { allowDependentClose?: boolean } = {}) {
   const [rows] = await tx.execute(
     `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
             e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count, e.action,
-            e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
+            e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
             e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
        FROM ledger52_t0_journal_entries e
        INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
@@ -2449,10 +2483,11 @@ async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: n
       toNumber(entry.related_fund_id),
     ],
   );
-  if (openingHasDependentClose(asRows(scopeRows), Number(entry.id))) {
+  const hasDependentClose = openingHasDependentClose(asRows(scopeRows), Number(entry.id));
+  if (hasDependentClose && !options.allowDependentClose) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已被后续平仓使用，请先处理关联平仓流水" });
   }
-  return entry;
+  return { entry, hasDependentClose };
 }
 
 async function writeEntryAudit(tx: any, input: {
@@ -2635,7 +2670,7 @@ export async function scanLedger52T0PendingOrders() {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     const [rows] = await tx.execute(
-      `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, is_locked,
+      `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, is_locked, is_counterparty,
               execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note,
               client_request_id, created_by_user_id, trade_time, created_at, updated_at
          FROM ledger52_t0_journal_entries
@@ -2665,7 +2700,7 @@ export async function scanLedger52T0PendingOrders() {
         [mysqlDateTime(filledAt), String(markPrice), note, entryId, LEDGER_52_T0_JOURNAL_ID, actorUserId],
       );
       const [afterRows] = await tx.execute(
-        `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, is_locked,
+        `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, is_locked, is_counterparty,
                 execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note,
                 client_request_id, created_by_user_id, trade_time, created_at, updated_at
            FROM ledger52_t0_journal_entries
@@ -2756,7 +2791,7 @@ export async function scanLedger52T0ExpiredOptions(input: {
     const [lockedRowsResult] = await tx.execute(
       `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency,
               option_settlement_price, option_delivery_price, option_settled_at, option_settlement_source,
-              is_locked, execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note,
+              is_locked, is_counterparty, execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note,
               client_request_id, created_by_user_id, trade_time, created_at, updated_at
          FROM ledger52_t0_journal_entries
         WHERE ledger_id = ? AND instrument_type = 'option'
@@ -2917,6 +2952,10 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   instrumentType: T0JournalInstrumentType;
   /** 未传时保持历史锁定状态，传入时可锁定或解除。 */
   isLocked?: boolean;
+  /** 未传时保持原反向展示状态；传入 true/false 仅修改开仓主单的管理员投影。 */
+  isCounterparty?: boolean;
+  /** 仅反向展示标记切换：可安全绕过后续平仓保护，服务端只更新该标记本身。 */
+  counterpartyOnly?: boolean;
   /** 未传时保持原成交状态；传入 true 为挂单，传入 false 将挂单人工确认成交。 */
   isPending?: boolean;
   optionDirection?: T0JournalOptionDirection;
@@ -2938,13 +2977,51 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   const normalizedQuantity = requireValidEthQuantity(input.quantity);
   const instrumentType = normalizeInstrumentType(input.instrumentType, true);
   const isLocked = input.isLocked === undefined ? null : input.isLocked ? 1 : 0;
+  const isCounterparty = input.isCounterparty === undefined ? null : input.isCounterparty ? 1 : 0;
   const isPending = input.isPending === undefined ? null : input.isPending ? 1 : 0;
 
   try {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
-    const before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
+    const lockedEntry = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId, { allowDependentClose: input.counterpartyOnly === true });
+    const before = lockedEntry.entry;
     const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
+    if (lockedEntry.hasDependentClose) {
+      if (input.counterpartyOnly !== true || isCounterparty === null) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已被后续平仓使用，请先处理关联平仓流水" });
+      }
+      // 反向展示只影响管理端读取投影，不触碰真实多空、数量、价格、账户或 FIFO 分配。
+      await tx.execute(
+        `UPDATE ledger52_t0_journal_entries SET is_counterparty = ?, updated_at = NOW(3)
+          WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+        [isCounterparty, input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+      );
+      const [accountRows] = await tx.execute(
+        `SELECT id, name, last_used_at, created_at FROM ledger52_t0_journal_accounts
+          WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1`,
+        [before.account_id, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+      );
+      const [updatedRows] = await tx.execute(
+        `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, f.name AS related_fund_name,
+                COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) AS related_user_name,
+                u.username AS related_username, u.avatar AS related_user_avatar,
+                e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
+                e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count,
+                e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+           FROM ledger52_t0_journal_entries e
+           INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
+           LEFT JOIN users u ON u.id = e.related_user_id
+           LEFT JOIN ledger52_t0_journal_related_funds f ON f.id = e.related_fund_id AND f.ledger_id = e.ledger_id AND f.user_id = e.user_id
+          WHERE e.id = ? AND e.ledger_id = ? AND e.user_id = ? LIMIT 1`,
+        [input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+      );
+      const account = asRows(accountRows)[0];
+      const after = asRows(updatedRows)[0];
+      if (!account || !after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "反向展示标记更新后读取失败" });
+      await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "update", before: beforeForAudit, after: await buildEntryAuditSnapshot(tx, input.actorUserId, after) });
+      await tx.commit();
+      return { account: mapAccount(account), entry: mapEntry(after) };
+    }
     const effectiveInstrumentType = instrumentType;
     if (isPending === 1 && (effectiveInstrumentType === "option" || effectiveInstrumentType === "grid")) {
       throw new TRPCError({ code: "BAD_REQUEST", message: effectiveInstrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : "期权请直接成交；行权价不能作为挂单触发价" });
@@ -3059,6 +3136,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
               instrument_type = COALESCE(?, instrument_type), option_direction = ?, option_expiry_date = ?, option_premium = ?, option_premium_currency = ?,
               grid_direction = ?, grid_range_min = ?, grid_range_max = ?, grid_leverage = ?, grid_count = ?,
               is_locked = COALESCE(?, is_locked),
+              is_counterparty = COALESCE(?, is_counterparty),
               execution_status = COALESCE(CASE WHEN ? = 1 THEN 'pending' WHEN ? = 0 THEN 'filled' END, execution_status),
               filled_at = CASE WHEN ? IS NULL THEN filled_at WHEN ? = 1 THEN NULL WHEN ? = 0 THEN NOW(3) ELSE filled_at END,
               filled_price = CASE WHEN ? IS NULL THEN filled_price WHEN ? = 1 THEN NULL WHEN ? = 0 THEN CAST(? AS DECIMAL(36,18)) ELSE filled_price END,
@@ -3083,6 +3161,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         gridParameters?.leverage ?? null,
         gridParameters?.count ?? null,
         isLocked,
+        isCounterparty,
         isPending,
         isPending,
         isPending,
@@ -3122,7 +3201,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
               u.username AS related_username, u.avatar AS related_user_avatar,
               e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
               e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count,
-              e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+              e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id
@@ -3154,7 +3233,7 @@ export async function deleteLedger52T0JournalOpeningEntry(input: { actorUserId: 
   try {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
-    const before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
+    const { entry: before } = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
     const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
     const auditId = await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "delete", before: beforeForAudit });
     await tx.execute(
@@ -3195,7 +3274,7 @@ export async function revertLedger52T0JournalEntry(input: { actorUserId: number;
     const [rows] = await tx.execute(
       `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.instrument_type,
               e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count, e.action,
-              e.is_locked, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
+              e.is_locked, e.is_counterparty, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
               e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
@@ -3209,7 +3288,7 @@ export async function revertLedger52T0JournalEntry(input: { actorUserId: number;
     const action = String(before.action) as T0JournalAction;
     if (isOpeningAction(action)) {
       // 复用开仓依赖校验，防止回撤开仓后遗留无法匹配的平仓流水。
-      before = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId);
+      before = (await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId)).entry;
     }
 
     const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
@@ -3324,8 +3403,8 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
 
     await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, option_settlement_price, option_delivery_price, option_settled_at, option_settlement_source, grid_direction, grid_range_min, grid_range_max, grid_leverage, grid_count, is_locked, execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
+        (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, option_settlement_price, option_delivery_price, option_settled_at, option_settlement_source, grid_direction, grid_range_min, grid_range_max, grid_leverage, grid_count, is_locked, is_counterparty, execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
       [
         entryId,
         LEDGER_52_T0_JOURNAL_ID,
@@ -3349,6 +3428,7 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
         snapshot.grid_leverage ?? snapshot.gridLeverage ?? null,
         snapshot.grid_count ?? snapshot.gridCount ?? null,
         isLocked ? 1 : 0,
+        isOpeningAction(action) && Boolean(toNumber(snapshot?.is_counterparty ?? snapshot?.isCounterparty)) ? 1 : 0,
         executionStatus,
         snapshot.filled_at ?? snapshot.filledAt ?? null,
         snapshot.filled_price ?? snapshot.filledPrice ?? null,
@@ -3376,7 +3456,7 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
               e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
               e.option_settlement_price, e.option_delivery_price, e.option_settled_at, e.option_settlement_source,
               e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count,
-              e.is_locked, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+              e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id
