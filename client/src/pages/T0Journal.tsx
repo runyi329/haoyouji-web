@@ -954,7 +954,12 @@ type RealizedGrossProfitDetail = {
   grossPnl: number;
 };
 
-function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
+/**
+ * 速记历史的开平成本匹配：默认严格按报价归属档位；旧流水若因 targetPrice 与原开仓档位不一致
+ * 无法匹配时，退回至同账户、用户、项目和方向内的时间 FIFO，仅用于补全历史收益展示。
+ * 仓位、可平数量和关联组单仍沿用严格档位规则，绝不因展示兜底改变现有持仓或审计归属。
+ */
+function buildRecentJournalTradeDetailsByScope(trades: PreviewTrade[], strictArchiveMatch: boolean) {
   const positions = new Map<string, {
     quantity: number;
     costBasis: number;
@@ -972,7 +977,7 @@ function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
     const side = config.side;
     const key = [
       side,
-      priceKey(archivePriceForTrade(trade)),
+      ...(strictArchiveMatch ? [priceKey(archivePriceForTrade(trade))] : []),
       trade.accountId,
       trade.relatedUserId ?? "legacy-user",
       trade.relatedFundId ?? "legacy-fund",
@@ -1060,6 +1065,18 @@ function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
     }
   }
   return details;
+}
+
+function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
+  const strictDetails = buildRecentJournalTradeDetailsByScope(trades, true);
+  const fallbackDetails = buildRecentJournalTradeDetailsByScope(trades, false);
+  fallbackDetails.forEach((fallbackDetail, entryId) => {
+    const strictDetail = strictDetails.get(entryId);
+    if (strictDetail?.netPnl === undefined && fallbackDetail.netPnl !== undefined) {
+      strictDetails.set(entryId, fallbackDetail);
+    }
+  });
+  return strictDetails;
 }
 
 /** 按单张开仓主单的实际分配数量计算关联平仓的净利润，避免跨主单平仓时重复展示总利润。 */
@@ -1632,6 +1649,7 @@ function filterTradesByInstrumentTypes(trades: PreviewTrade[], selectedTypes: T0
   const closings = openings.flatMap((opening) => (allocations.get(opening.id) ?? []).map(({ trade, quantity }) => ({
     ...trade,
     id: `instrument-${filterKey}-${trade.id}-${opening.id}`,
+    sourceEntryId: getStoredEntryId(trade),
     quantity,
     fee: trade.quantity > 0 ? trade.fee * (quantity / trade.quantity) : 0,
     instrumentType: opening.instrumentType,
@@ -4269,7 +4287,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const allocation = group.closings[0];
       if (!allocation) return null;
         const closing = allocation.trade;
-        const detail = recentJournalTradeDetails.get(closing.id);
+        const detail = recentJournalTradeDetails.get(getStoredEntryId(closing));
         const isLong = ACTIONS[closing.action].side === "long";
         const showFullClosingContext = hasSystemGeneratedSettlementNote(closing.note);
         const viewerPayout = resolveViewerPayout(closing, detail);
@@ -5202,7 +5220,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               ) : showLinkedJournalGroups ? (
                 pagedLinkedJournalGroups.map((group) => renderLinkedJournalGroup(group))
               ) : pagedRecentJournalTrades.map((trade) => {
-                const detail = recentJournalTradeDetails.get(trade.id);
+                const detail = recentJournalTradeDetails.get(getStoredEntryId(trade));
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
                 const showFullHistoryContext = hasSystemGeneratedSettlementNote(trade.note);
@@ -5516,9 +5534,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </Field>
 
                   <Field label={
-                    <span className="inline-flex max-w-full items-baseline gap-1 text-sm font-semibold text-slate-800">
-                      <span>{ACTIONS[entryForm.action].opening ? isOptionOpeningEntry ? "行权价" : isGridOpeningEntry ? "网格参考价" : "成交价" : "平仓价"}{(isOptionOpeningEntry || isGridOpeningEntry) && <span className="text-rose-500">*</span>}</span>
-                      <span className="truncate text-[9px] font-normal tabular-nums text-slate-400">{isOptionOpeningEntry ? "期权不计合约手续费" : `手续费 ${OKX_VIP2_TAKER_FEE_LABEL} · ${estimatedFeeUsdt === null ? "--" : `${formatFee(estimatedFeeUsdt)} U`}`}</span>
+                    <span className="inline-flex whitespace-nowrap text-sm font-semibold text-slate-800">
+                      {ACTIONS[entryForm.action].opening ? isOptionOpeningEntry ? "行权价" : isGridOpeningEntry ? "网格参考价" : "成交价" : "平仓价"}{(isOptionOpeningEntry || isGridOpeningEntry) && <span className="text-rose-500">*</span>}
                     </span>
                   }>
                     {isOptionOpeningEntry ? (
