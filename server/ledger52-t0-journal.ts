@@ -377,17 +377,18 @@ function calculateAvailableCloseCents(rows: any[], action: T0JournalAction, targ
  * 删除或编辑开仓前，按与平仓可用量一致的 FIFO 口径判断该主单是否真的被后续平仓消耗。
  * 不能仅因同一十美元档存在历史平仓就拒绝：平仓可能早于该开仓，或已由更早的主单承接。
  */
-function openingHasDependentClose(rows: any[], openingEntryId: number): boolean {
+function openingDependentCloseQuantityCents(rows: any[], openingEntryId: number): number {
   const opening = rows.find((row) => Number(row.id) === openingEntryId);
-  if (!opening) return false;
+  if (!opening) return 0;
 
   const openingAction = String(opening.action) as T0JournalAction;
-  if (!isOpeningAction(openingAction)) return false;
+  if (!isOpeningAction(openingAction)) return 0;
 
   const closingAction: T0JournalAction = actionSide(openingAction) === "long" ? "closeLong" : "closeShort";
   const archivePrice = archivePriceForAction(openingAction, opening.price);
   const archiveKey = priceKey(archivePrice);
   const openingQueue: Array<{ entryId: number; remainingCents: number }> = [];
+  let dependentCloseCents = 0;
 
   for (const row of rows) {
     const rowAction = String(row.action) as T0JournalAction;
@@ -406,11 +407,11 @@ function openingHasDependentClose(rows: any[], openingEntryId: number): boolean 
       const allocatedCents = Math.min(queuedOpening.remainingCents, remainingCloseCents);
       queuedOpening.remainingCents -= allocatedCents;
       remainingCloseCents -= allocatedCents;
-      if (queuedOpening.entryId === openingEntryId && allocatedCents > 0) return true;
+      if (queuedOpening.entryId === openingEntryId && allocatedCents > 0) dependentCloseCents += allocatedCents;
     }
   }
 
-  return false;
+  return dependentCloseCents;
 }
 
 function mapAccount(row: any) {
@@ -2335,7 +2336,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         throw new TRPCError({ code: "BAD_REQUEST", message: "平仓记录必须指定对应的开仓价格档位" });
       }
       const [positionRows] = await tx.execute(
-        `SELECT id, action, execution_status, quantity, price, target_price, related_user_id, related_fund_id
+        `SELECT id, action, execution_status, is_locked, quantity, price, target_price, related_user_id, related_fund_id
            FROM ledger52_t0_journal_entries
           WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
           ORDER BY trade_time ASC, id ASC FOR UPDATE`,
@@ -2349,9 +2350,30 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
           message: availableCents > 0
             ? `该价格档位最多可平 ${(availableCents / 100).toFixed(2)} ETH`
             : "该价格档位已无可平数量",
-        });
+          });
       }
       positionRowsForProfitShare = asRows(positionRows);
+      // 平仓必须按 FIFO 匹配真实开仓主单。只要本次需要消耗到任一锁定主单的剩余量，
+      // 就必须先解除该主单的锁定；这样预先打开的平仓表单或直接调用接口也不能绕过保护。
+      const matchedOpenings = buildProfitShareOpeningMatches(
+        positionRowsForProfitShare,
+        input.action,
+        String(storedTargetPrice),
+        relatedUserId,
+        relatedFund?.id ?? 0,
+        requestedCents,
+      );
+      const lockedOpeningIds = new Set(
+        positionRowsForProfitShare
+          .filter((row) => Number(row.is_locked) === 1)
+          .map((row) => toNumber(row.id)),
+      );
+      if (matchedOpenings.some((match) => lockedOpeningIds.has(match.openingEntryId))) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "该笔剩余仓位已锁定，请先解除锁定后再平仓",
+        });
+      }
     }
 
     const [entryResult] = await tx.execute(
@@ -2489,11 +2511,13 @@ async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: n
       toNumber(entry.related_fund_id),
     ],
   );
-  const hasDependentClose = openingHasDependentClose(asRows(scopeRows), Number(entry.id));
+  const dependentCloseCents = openingDependentCloseQuantityCents(asRows(scopeRows), Number(entry.id));
+  const hasDependentClose = dependentCloseCents > 0;
+  const remainingCents = Math.max(0, quantityToCents(entry.quantity) - dependentCloseCents);
   if (hasDependentClose && !options.allowDependentClose) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已被后续平仓使用，请先处理关联平仓流水" });
   }
-  return { entry, hasDependentClose };
+  return { entry, hasDependentClose, remainingCents };
 }
 
 async function writeEntryAudit(tx: any, input: {
@@ -2998,6 +3022,8 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   isCounterparty?: boolean;
   /** 仅反向展示标记切换：可安全绕过后续平仓保护，服务端只更新该标记本身。 */
   counterpartyOnly?: boolean;
+  /** 仅锁定标记切换：可安全标识已部分平仓主单的剩余仓位，服务端只更新该标记本身。 */
+  lockOnly?: boolean;
   /** 未传时保持原成交状态；传入 true 为挂单，传入 false 将挂单人工确认成交。 */
   isPending?: boolean;
   optionDirection?: T0JournalOptionDirection;
@@ -3025,26 +3051,40 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   try {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
-    const lockedEntry = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId, { allowDependentClose: input.counterpartyOnly === true });
+    const lockedEntry = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId, {
+      allowDependentClose: input.lockOnly === true,
+    });
     const before = lockedEntry.entry;
     const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
     const nextIsPending = isPending === null
       ? String(before.execution_status ?? "filled") === "pending"
       : isPending === 1;
+    const wasPending = String(before.execution_status ?? "filled") === "pending";
+    // 挂单只能在新开仓或新平仓时设置。已有开仓的编辑不得把已成交单改回挂单，
+    // 也不得将一张真实挂单伪装为已成交；实际成交由行情扫描器处理。
+    if (isPending !== null && nextIsPending !== wasPending) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "已有开仓订单不可在编辑中切换挂单状态；挂单仅能在新开仓或平仓时设置" });
+    }
     if (nextIsPending && isLocked === 1) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "挂单成交前不可设为锁定；请在成交后再锁定" });
     }
     // 将已成交订单改回挂单时强制解除锁定；历史异常组合也会在下一次编辑中自动修正。
     const isLockedForUpdate = nextIsPending ? 0 : isLocked;
     if (lockedEntry.hasDependentClose) {
-      if (input.counterpartyOnly !== true || isCounterparty === null) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已被后续平仓使用，请先处理关联平仓流水" });
+      if (lockedEntry.remainingCents <= 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已全部平仓，没有剩余仓位可锁定或编辑" });
       }
-      // 反向展示只影响管理端读取投影，不触碰真实多空、数量、价格、账户或 FIFO 分配。
+      const dependentSafeUpdate = input.lockOnly === true && input.counterpartyOnly !== true
+        ? { column: "is_locked", value: isLocked, label: "锁定" }
+        : null;
+      if (!dependentSafeUpdate || dependentSafeUpdate.value === null) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已被后续平仓使用；仅可对剩余仓位单独切换锁定，其他字段不可编辑" });
+      }
+      // 锁定仅标识尚未平掉的余额，不触碰原始数量、价格、账户、归属或 FIFO 分配。
       await tx.execute(
-        `UPDATE ledger52_t0_journal_entries SET is_counterparty = ?, updated_at = NOW(3)
+        `UPDATE ledger52_t0_journal_entries SET ${dependentSafeUpdate.column} = ?, updated_at = NOW(3)
           WHERE id = ? AND ledger_id = ? AND user_id = ?`,
-        [isCounterparty, input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+        [dependentSafeUpdate.value, input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
       );
       const [accountRows] = await tx.execute(
         `SELECT id, name, last_used_at, created_at FROM ledger52_t0_journal_accounts
@@ -3067,7 +3107,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       );
       const account = asRows(accountRows)[0];
       const after = asRows(updatedRows)[0];
-      if (!account || !after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "反向展示标记更新后读取失败" });
+      if (!account || !after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `${dependentSafeUpdate.label}标记更新后读取失败` });
       await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "update", before: beforeForAudit, after: await buildEntryAuditSnapshot(tx, input.actorUserId, after) });
       await tx.commit();
       return { account: mapAccount(account), entry: mapEntry(after) };

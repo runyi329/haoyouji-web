@@ -450,6 +450,8 @@ type PositionBucket = {
   price: number;
   originalQuantity: number;
   remainingQuantity: number;
+  /** 整合报价中已锁定的剩余数量；逐笔报价继续由对应主单决定黑金外观。 */
+  lockedRemainingQuantity?: number;
   /** 剩余仓位按实际成交价累计的成本，用于均价与盈亏。 */
   costBasis: number;
   /** 收益分配后参与净利润计算的等效数量，不改变展示、开平仓与 FIFO 的实际 ETH 数量。 */
@@ -1498,17 +1500,19 @@ function projectAdminCounterpartyTrades(rawTrades: PreviewTrade[]): PreviewTrade
 }
 
 /**
- * 已有平仓的开仓不能再改动会影响 FIFO 的字段；但仅切换管理员反向展示不会改变任何真实成交、
- * 数量或配对关系。前端据此走受限更新分支，服务端仍只写 is_counterparty 一列作为最终保护。
+ * 已有平仓的开仓不能再改动会影响 FIFO 的字段；但单独切换管理员反向展示或锁定标记，
+ * 都不会改变任何真实成交、数量或配对关系。前端据此走受限更新分支，服务端只更新对应单列作为最终保护。
  */
-function isCounterpartyOnlyOpeningEdit(input: {
+function getSafeDependentOpeningEdit(input: {
   form: EntryForm;
   original: PreviewTrade | null;
   normalizedQuantity: string;
   effectivePrice: string;
-}) {
-  const { form, original, normalizedQuantity, effectivePrice } = input;
-  if (!original || !form.editingEntryId) return false;
+  /** 部分平仓时，表单展示的是剩余可操作数量，而不是原始开仓总量。 */
+  editableQuantity?: number;
+}): "counterparty" | "lock" | null {
+  const { form, original, normalizedQuantity, effectivePrice, editableQuantity } = input;
+  if (!original || !form.editingEntryId) return null;
   const sameNumber = (left: string | number, right: number | undefined) => Math.abs(Number(left) - Number(right ?? 0)) <= 0.0000001;
   const originalRelatedUserId = original.relatedUserId ?? "";
   const originalRelatedFundId = original.relatedFundId ?? "legacy";
@@ -1527,19 +1531,25 @@ function isCounterpartyOnlyOpeningEdit(input: {
     && Number(form.gridCount || 0) === Number(original.gridCount ?? 0)
   );
 
-  return Boolean(form.isCounterparty) !== Boolean(original.isCounterparty)
-    && form.action === getStoredAction(original)
+  const isOtherwiseUnchanged = form.action === getStoredAction(original)
     && form.accountId === original.accountId
     && form.relatedUserId === originalRelatedUserId
     && form.relatedFundId === originalRelatedFundId
     && form.instrumentType === originalInstrumentType
-    && sameNumber(normalizedQuantity, original.quantity)
+    && sameNumber(normalizedQuantity, editableQuantity ?? original.quantity)
     && sameNumber(effectivePrice, original.price)
     && form.isLocked === Boolean(original.isLocked)
     && form.isPending === Boolean(original.isPending)
     && form.note.trim() === (original.note ?? "").trim()
     && sameOption
     && sameGrid;
+  if (!isOtherwiseUnchanged) return null;
+
+  const isCounterpartyChanged = Boolean(form.isCounterparty) !== Boolean(original.isCounterparty);
+  const isLockChanged = Boolean(form.isLocked) !== Boolean(original.isLocked);
+  if (isCounterpartyChanged && !isLockChanged) return "counterparty";
+  if (isLockChanged && !isCounterpartyChanged) return "lock";
+  return null;
 }
 
 /**
@@ -1572,6 +1582,7 @@ function buildIntegratedDisplayBuckets(
       if (existing.instrumentType !== trade.instrumentType) existing.instrumentType = undefined;
       existing.originalQuantity += remainingQuantity;
       existing.remainingQuantity += remainingQuantity;
+      existing.lockedRemainingQuantity = (existing.lockedRemainingQuantity ?? 0) + (trade.isLocked ? remainingQuantity : 0);
       existing.costBasis += remainingQuantity * trade.price;
       existing.financialQuantity += remainingFinancialQuantity;
       existing.financialCostBasis += remainingFinancialQuantity * trade.price;
@@ -1587,6 +1598,7 @@ function buildIntegratedDisplayBuckets(
       price: displayPrice,
       originalQuantity: remainingQuantity,
       remainingQuantity,
+      lockedRemainingQuantity: trade.isLocked ? remainingQuantity : 0,
       costBasis: remainingQuantity * trade.price,
       financialQuantity: remainingFinancialQuantity,
       financialCostBasis: remainingFinancialQuantity * trade.price,
@@ -2944,6 +2956,35 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   ], [activeOpenedTradeList, settledOpenedTradeList, showSettledOpeningHistory]);
   const isEditingEntry = Boolean(entryForm.editingEntryId);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
+  // 编辑一张已部分平仓的主单时，锁定只标识尚未平掉的余额；已实现的平仓记录仍保持独立审计。
+  const editingRemainingQuantity = useMemo(() => {
+    if (!isEditingEntry || !editingOriginalTrade) return null;
+    const linkedClosings = openingClosingAllocations.get(editingOriginalTrade.id) ?? [];
+    const closedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
+    return Math.max(0, editingOriginalTrade.quantity - closedQuantity);
+  }, [editingOriginalTrade, isEditingEntry, openingClosingAllocations]);
+  // 一旦发生关联平仓，原始开仓字段都要保留审计；仅有剩余仓位时才允许切换锁定状态。
+  const hasDependentCloseOpeningEdit = Boolean(
+    isEditingEntry
+    && editingOriginalTrade
+    && editingRemainingQuantity !== null
+    && editingRemainingQuantity < editingOriginalTrade.quantity - 0.0000001,
+  );
+  const isPartiallyClosedOpeningEdit = Boolean(
+    hasDependentCloseOpeningEdit
+    && editingRemainingQuantity !== null
+    && editingRemainingQuantity > 0.0000001,
+  );
+  const isFullyClosedOpeningEdit = Boolean(
+    hasDependentCloseOpeningEdit
+    && editingRemainingQuantity !== null
+    && editingRemainingQuantity <= 0.0000001,
+  );
+  const hasPartialOpeningMarkerChange = Boolean(
+    isPartiallyClosedOpeningEdit
+    && editingOriginalTrade
+    && entryForm.isLocked !== Boolean(editingOriginalTrade.isLocked),
+  );
   const isOptionOpeningEntry = isOptionEntryContext;
   // T+0 期权固定为 ETH 标的：复用融资付息订单已接入的 Deribit 缓存。
   // 到期日与行权价均从市场合约列表选择，避免手填出不存在的合约组合。
@@ -3202,6 +3243,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   };
 
   const openQuickCloseSheet = (trade: PreviewTrade) => {
+    // 锁定是剩余仓位的操作保护：必须先通过“编辑”解除锁定，才允许创建新的平仓流水。
+    // 服务端也会按 FIFO 实际匹配结果复核，避免已打开的表单绕过此处的前端提示。
+    if (trade.isLocked) {
+      toast.error("该笔剩余仓位已锁定，请先点击“编辑”解除锁定后再平仓");
+      return;
+    }
     // 在报价详情内切换至平仓表单时，沿用最初进入详情页的报价模式；
     // 从历史记录直接打开时才以当前管理员模式为来源。
     if (!showEntrySheet) entrySheetLadderDisplayModeRef.current = adminLadderDisplayMode;
@@ -3281,6 +3328,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setCloseConfirmationStep("input");
     setClosingSourceTrade(null);
     setEditingOriginalTrade(trade);
+    // 已关联平仓的主单保留原始数量供 FIFO 与审计使用；编辑视图仅展示剩余余额。
+    const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
+    const closedQuantity = linkedClosings.reduce((total, allocation) => total + allocation.quantity, 0);
+    const remainingQuantity = Math.max(0, trade.quantity - closedQuantity);
+    const editableQuantity = closedQuantity > 0.0000001 && remainingQuantity > 0.0000001
+      ? remainingQuantity
+      : trade.quantity;
     setEntryForm({
       action: getStoredAction(trade),
       accountId: trade.accountId,
@@ -3303,8 +3357,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       isLocked: Boolean(trade.isLocked),
       isCounterparty: Boolean(trade.isCounterparty),
       isPending: Boolean(trade.isPending),
-      // 编辑输入使用机器可解析的原始数值；展示层才使用千分位格式。
-      quantity: normalizeEthQuantity(String(trade.quantity)),
+      // 部分平仓时表单只展示剩余可操作量；服务端 lockOnly 分支只更新标记，不改写原始订单数量。
+      quantity: normalizeEthQuantity(String(editableQuantity)),
       price: trade.price.toFixed(2),
       note: trade.note ?? "",
       editingEntryId: getStoredEntryId(trade),
@@ -3947,12 +4001,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         toast.error("请选择现货、合约、期权或网格");
         return;
       }
-      const counterpartyOnly = isCounterpartyOnlyOpeningEdit({
+      const safeDependentEdit = getSafeDependentOpeningEdit({
         form: entryForm,
         original: editingOriginalTrade,
         normalizedQuantity,
         effectivePrice: effectivePriceInput,
+        editableQuantity: isPartiallyClosedOpeningEdit ? editingRemainingQuantity ?? undefined : undefined,
       });
+      // 部分平仓表单已冻结所有业务字段，唯一可操作项就是锁定/解锁。
+      // 直接按该界面状态发送 lockOnly，避免格式化后的历史字段（如项目/备注）影响受限更新判定。
+      const partialLockOnlyUpdate = Boolean(
+        isPartiallyClosedOpeningEdit
+        && editingOriginalTrade
+        && entryForm.isLocked !== Boolean(editingOriginalTrade.isLocked),
+      );
       updateOpeningEntryMutation.mutate({
         ledgerId: 52,
         entryId,
@@ -3964,7 +4026,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         instrumentType: editingInstrumentType,
         isLocked: entryForm.isLocked,
         isCounterparty: entryForm.isCounterparty,
-        counterpartyOnly,
+        counterpartyOnly: !partialLockOnlyUpdate && safeDependentEdit === "counterparty",
+        lockOnly: partialLockOnlyUpdate || safeDependentEdit === "lock",
         isPending: entryForm.isPending,
         optionDirection: isOptionOpening ? entryForm.optionDirection : undefined,
         optionExpiryDate: isOptionOpening ? entryForm.optionExpiryDate : undefined,
@@ -4638,6 +4701,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 : undefined;
               const individualLongMetadata = getIndividualMetadata(row.longOpeningTrade);
               const individualShortMetadata = getIndividualMetadata(row.shortOpeningTrade);
+              const resolveLockedDisplay = (bucket?: PositionBucket, openingTrade?: PreviewTrade) => {
+                const lockedQuantity = openingTrade?.isLocked
+                  ? bucket?.remainingQuantity ?? 0
+                  : bucket?.lockedRemainingQuantity ?? 0;
+                const hasLockedPosition = lockedQuantity > 0.0000001;
+                return {
+                  hasLockedPosition,
+                  isFullyLocked: hasLockedPosition && Boolean(bucket) && lockedQuantity >= (bucket?.remainingQuantity ?? 0) - 0.0000001,
+                };
+              };
+              const longLockDisplay = resolveLockedDisplay(row.long, row.longOpeningTrade);
+              const shortLockDisplay = resolveLockedDisplay(row.short, row.shortOpeningTrade);
               return (
                 <div
                   key={row.key}
@@ -4649,7 +4724,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   side="long"
                   markPrice={markPrice}
                   metadata={individualLongMetadata}
-                  isLocked={Boolean(row.long && row.longOpeningTrade?.isLocked)}
+                  isLocked={longLockDisplay.isFullyLocked}
+                  hasLockedPosition={longLockDisplay.hasLockedPosition}
                   isCounterparty={Boolean(row.long && row.longOpeningTrade?.isCounterpartyView)}
                   isPending={Boolean(row.long && row.longOpeningTrade?.isPending)}
                   readOnly={isMemberView}
@@ -4718,7 +4794,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   side="short"
                   markPrice={markPrice}
                   metadata={individualShortMetadata}
-                  isLocked={Boolean(row.short && row.shortOpeningTrade?.isLocked)}
+                  isLocked={shortLockDisplay.isFullyLocked}
+                  hasLockedPosition={shortLockDisplay.hasLockedPosition}
                   isCounterparty={Boolean(row.short && row.shortOpeningTrade?.isCounterpartyView)}
                   isPending={Boolean(row.short && row.shortOpeningTrade?.isPending)}
                   readOnly={isMemberView}
@@ -5157,7 +5234,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     );
                     const openingValue = trade.quantity * trade.price;
                     const closeAction: TradeAction = ACTIONS[trade.action].side === "long" ? "closeLong" : "closeShort";
-                    const canQuickClose = remainingQuantity > 0.0000001;
+                    // 锁定不改变已成交/已平仓流水，只保护尚余可平数量；解锁后立即恢复平仓能力。
+                    const canQuickClose = remainingQuantity > 0.0000001 && !trade.isLocked;
                     const isExpanded = expandedOpenedTradeIds.has(trade.id);
                     return (
                       <div key={trade.id} className="rounded border border-slate-200 bg-slate-50/80 px-3 py-2.5">
@@ -5178,7 +5256,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                               <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatQuantity(trade.quantity)}</span>
                               <span className="shrink-0 text-sm font-medium tabular-nums text-slate-700">@ {formatPrice(trade.price)}</span>
                               <span className="shrink-0 rounded border border-slate-200 bg-white px-1 py-px text-[9px] font-semibold tabular-nums text-slate-400">#{getStoredEntryId(trade)}</span>
-                              {trade.isPending ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span> : trade.instrumentType === "option" ? <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="shrink-0 text-sm font-semibold tabular-nums" /> : <span className={`shrink-0 text-sm font-semibold tabular-nums ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>}
+                              {trade.isPending ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span> : trade.isLocked ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-amber-700"><Lock className="h-3.5 w-3.5" />已锁定</span> : trade.instrumentType === "option" ? <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="shrink-0 text-sm font-semibold tabular-nums" /> : <span className={`shrink-0 text-sm font-semibold tabular-nums ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>}
                             </span>
                           </button>
                           <button
@@ -5231,6 +5309,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                               type="button"
                               disabled={!canQuickClose || Boolean(trade.isSyncing) || isCloseReview}
                               onClick={() => openQuickCloseSheet(trade)}
+                              title={trade.isLocked ? "本笔剩余仓位已锁定，请先点击“编辑”解除锁定后再平仓" : undefined}
                               className={`h-6 rounded border px-2 text-[10px] font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${ACTIONS[closeAction].idleClass}`}
                             >
                               {ACTIONS[closeAction].label}
@@ -5345,31 +5424,37 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <div className="grid grid-cols-1 gap-3">
                 {isEditingEntry && (
                   <div className="rounded border border-indigo-200 bg-indigo-50/70 px-3 py-2.5">
-                    <div className="text-xs font-semibold text-indigo-800">正在编辑本笔开仓</div>
+                    <div className="text-xs font-semibold text-indigo-800">{isFullyClosedOpeningEdit ? "本笔开仓已全部平仓" : isPartiallyClosedOpeningEdit ? "正在编辑本笔剩余仓位" : "正在编辑本笔开仓"}</div>
                     <div className="mt-1 text-sm font-semibold tabular-nums text-slate-800">
                       {ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH @ {formatPrice(Number(entryForm.price))}
                     </div>
-                    <div className="mt-1 text-[11px] leading-4 text-indigo-700/80">请直接修改下方字段，完成后点击底部“保存修改”。</div>
+                    <div className="mt-1 text-[11px] leading-4 text-indigo-700/80">
+                      {isFullyClosedOpeningEdit && editingOriginalTrade
+                        ? `原始 ${formatQuantity(editingOriginalTrade.quantity)} ETH 已全部平仓；关联历史不可编辑。`
+                        : isPartiallyClosedOpeningEdit && editingOriginalTrade && editingRemainingQuantity !== null
+                        ? `原始 ${formatQuantity(editingOriginalTrade.quantity)} ETH，已平 ${formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；当前仅可管理剩余 ${formatQuantity(editingRemainingQuantity)} ETH 的锁定/解锁。`
+                        : "请直接修改下方字段，完成后点击底部“保存修改”。"}
+                    </div>
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3 items-start">
-                  <Field label={<span className="inline-flex items-center gap-1 text-sm font-semibold text-slate-800">数量（ETH）{isOptionOpeningEntry && <span className="text-rose-500">*</span>}{ACTIONS[entryForm.action].opening && entryForm.isPending && <span className="text-[10px] font-bold text-sky-600">挂单</span>}</span>}>
+                  <Field label={<span className="inline-flex items-center gap-1 text-sm font-semibold text-slate-800">{isFullyClosedOpeningEdit ? "已全部平仓（ETH）" : isPartiallyClosedOpeningEdit ? "剩余可操作（ETH）" : "数量（ETH）"}{isOptionOpeningEntry && <span className="text-rose-500">*</span>}{ACTIONS[entryForm.action].opening && entryForm.isPending && <span className="text-[10px] font-bold text-sky-600">挂单</span>}</span>}>
                     <div className="relative">
                       <input
                         inputMode="decimal"
                         maxLength={7}
-                        disabled={isCloseReview}
+                        disabled={isCloseReview || hasDependentCloseOpeningEdit}
                         aria-invalid={Boolean(quantityFormatError)}
                         value={entryForm.quantity}
                         onChange={(event) => setEntryForm((current) => ({ ...current, quantity: event.target.value }))}
                         onBlur={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(current.quantity) }))}
                         placeholder="0.00"
-                        className={`h-14 w-full rounded border px-3 pr-[7rem] text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
+                        className={`h-14 w-full rounded border px-3 pr-[7rem] text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-50 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                       />
                       {ACTIONS[entryForm.action].opening && <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
                         <button
                           type="button"
-                          disabled={isCloseReview || entryForm.isPending}
+                          disabled={isCloseReview || entryForm.isPending || isFullyClosedOpeningEdit}
                           aria-pressed={entryForm.isLocked}
                           aria-label={entryForm.isPending ? "挂单不可锁定" : entryForm.isLocked ? "解除本笔开仓锁定" : "锁定本笔开仓"}
                           title={entryForm.isPending ? "挂单不可锁定；成交后才可设为锁定" : entryForm.isLocked ? "已锁定，点击解除" : "未锁定，点击锁定"}
@@ -5378,7 +5463,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         >
                           {entryForm.isLocked ? <Lock className="h-4 w-4" strokeWidth={2.3} /> : <LockOpen className="h-4 w-4" strokeWidth={2.3} />}
                         </button>
-                        <button
+                        {!isEditingEntry && <button
                           type="button"
                           disabled={isCloseReview || entryForm.instrumentType === "option" || entryForm.instrumentType === "grid"}
                           aria-pressed={entryForm.isPending}
@@ -5393,10 +5478,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isPending ? "border-sky-500/75 bg-sky-50 text-sky-600" : "border-slate-300 bg-slate-50 text-slate-500"}`}
                         >
                           <Clock3 className="h-4 w-4" strokeWidth={2.3} />
-                        </button>
+                        </button>}
                         <button
                           type="button"
-                          disabled={isCloseReview}
+                          disabled={isCloseReview || hasDependentCloseOpeningEdit}
                           aria-pressed={entryForm.isCounterparty}
                           aria-label={entryForm.isCounterparty ? "关闭管理员反向展示" : "开启管理员反向展示"}
                           title={entryForm.isCounterparty ? "管理员反向展示已开启，点击关闭" : "用户与管理员使用相反多空和损益展示"}
@@ -5408,6 +5493,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </div>}
                     </div>
                     {ACTIONS[entryForm.action].opening && entryForm.isCounterparty && <div className="mt-1.5 flex items-start gap-1.5 text-[10px] font-medium leading-4 text-violet-700"><Repeat2 className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2.4} /><span>反向展示已开启：用户保持本单原始多空与损益；管理员按相反数字展示。关闭后订单保留并立即恢复普通展示。</span></div>}
+                    {isPartiallyClosedOpeningEdit && editingOriginalTrade && editingRemainingQuantity !== null && !entryForm.isPending && (
+                      <div className="mt-1.5 flex items-start gap-1.5 text-[10px] font-medium leading-4 text-amber-700">
+                        <Lock className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2.4} />
+                        <span>本单已平 {formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；数量由剩余仓位决定。锁定仅标识剩余 {formatQuantity(editingRemainingQuantity)} ETH，不影响已平部分；解锁后仍可继续平仓。</span>
+                      </div>
+                    )}
                     {quantityFormatError && <div className="mt-1.5 text-[10px] font-medium leading-4 text-rose-600">{quantityFormatError}</div>}
                   </Field>
 
@@ -5419,7 +5510,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   }>
                     {isOptionOpeningEntry ? (
                       <select
-                        disabled={isCloseReview || !t0OptionDeribitLabel || t0OptionStrikesQuery.isLoading}
+                        disabled={isCloseReview || hasDependentCloseOpeningEdit || !t0OptionDeribitLabel || t0OptionStrikesQuery.isLoading}
                         value={entryForm.price}
                         onChange={(event) => setEntryForm((current) => ({ ...current, price: event.target.value }))}
                         className="h-14 w-full rounded border border-violet-200 bg-white px-3 text-base font-semibold tabular-nums text-slate-900 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-50"
@@ -5441,7 +5532,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       className="h-14 w-full rounded border border-cyan-200 bg-cyan-50/70 px-3 text-xl font-semibold tabular-nums text-cyan-950 outline-none placeholder:text-cyan-500/65"
                     /> : <input
                       inputMode="decimal"
-                      disabled={isCloseReview}
+                      disabled={isCloseReview || hasDependentCloseOpeningEdit}
                       value={entryForm.price}
                       onChange={(event) => setEntryForm((current) => ({ ...current, price: event.target.value }))}
                       placeholder="0.00"
@@ -5487,7 +5578,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       <button
                         key={value}
                         type="button"
-                        disabled={isCloseReview}
+                        disabled={isCloseReview || hasDependentCloseOpeningEdit}
                         onClick={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(value) }))}
                         className={`h-7 rounded border px-2 text-[11px] font-medium tabular-nums transition active:scale-95 ${isActive ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}
                       >
@@ -5505,7 +5596,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       <button
                         key={instrument.value}
                         type="button"
-                        disabled={isCloseReview}
+                        disabled={isCloseReview || hasDependentCloseOpeningEdit}
                         onClick={() => {
                           if (instrument.value === "option" && !entryForm.editingEntryId) {
                             setEntrySide(getOptionLadderSide(entryForm.optionDirection));
@@ -5547,7 +5638,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   })}
                 </div>}
 
-                {isOptionOpeningEntry && <div className="-mt-0.5 rounded border border-violet-200 bg-violet-50/60 p-3">
+                {isOptionOpeningEntry && <fieldset disabled={isCloseReview || hasDependentCloseOpeningEdit} className="contents">
+                  <div className="-mt-0.5 rounded border border-violet-200 bg-violet-50/60 p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-violet-800">期权参数</span>
                     <span className="text-[10px] font-medium text-violet-600">标的固定 ETH · Deribit</span>
@@ -5632,9 +5724,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <div className={`mt-2 text-[10px] font-medium leading-4 ${optionFormValidationMessage ? "text-rose-600" : "text-violet-700"}`}>
                     {optionFormValidationMessage ?? "期权参数已完整，可保存。"}
                   </div>
-                </div>}
+                  </div>
+                </fieldset>}
 
-                {isGridOpeningEntry && <div className="-mt-0.5 rounded border border-cyan-200 bg-cyan-50/70 p-3">
+                {isGridOpeningEntry && <fieldset disabled={isCloseReview || hasDependentCloseOpeningEdit} className="contents">
+                  <div className="-mt-0.5 rounded border border-cyan-200 bg-cyan-50/70 p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-cyan-900">网格参数</span>
                     <span className="text-[10px] font-medium text-cyan-700">做多取下限归左 · 做空取上限归右</span>
@@ -5713,7 +5807,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <div className={`mt-2 text-[10px] font-medium leading-4 ${gridFormValidationMessage ? "text-rose-600" : "text-cyan-800"}`}>
                     {gridFormValidationMessage ?? (entryForm.gridDirection === "long" ? "做多网格将按区间下限放入左侧报价。" : "做空网格将按区间上限放入右侧报价。")}
                   </div>
-                </div>}
+                  </div>
+                </fieldset>}
 
                 {isClosingEntry ? (
                   <>
@@ -5740,10 +5835,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </>
                 ) : <>
                 <div className="grid grid-cols-2 items-start gap-3">
-                  <Field label={<span className="flex items-center justify-between gap-1"><span>下单账户 <span className="text-rose-500">*</span></span>{accounts.length > 0 && !isClosingEntry && <button type="button" onClick={() => openDirectoryManager("account")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
+                  <Field label={<span className="flex items-center justify-between gap-1"><span>下单账户 <span className="text-rose-500">*</span></span>{accounts.length > 0 && !isClosingEntry && !hasDependentCloseOpeningEdit && <button type="button" onClick={() => openDirectoryManager("account")} className="shrink-0 text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span>}>
                     {accounts.length > 0 ? (
                       <select
-                        disabled={isAccountSelectionLocked}
+                        disabled={isAccountSelectionLocked || hasDependentCloseOpeningEdit}
                         value={entryForm.accountId}
                         onChange={(event) => {
                           if (event.target.value === "__manage_accounts__") {
@@ -5761,7 +5856,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     ) : null}
                     {!entryForm.accountId && (
                       <input
-                        disabled={isAccountSelectionLocked}
+                        disabled={isAccountSelectionLocked || hasDependentCloseOpeningEdit}
                         value={entryForm.accountName}
                         onChange={(event) => setEntryForm((current) => ({ ...current, accountName: event.target.value }))}
                         placeholder="新账户名称"
@@ -5770,10 +5865,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     )}
                   </Field>
 
-                  <Field label={<span className="flex items-center justify-between gap-1"><span>关联用户</span><span className="flex shrink-0 items-center gap-2">{recentRelatedUsers.length > 0 && !isClosingEntry && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
-                    <div className={`flex h-11 w-full overflow-hidden rounded border text-sm outline-none transition ${isCloseAssociationLocked ? "border-slate-200 bg-slate-50 text-slate-500" : entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}>
+                  <Field label={<span className="flex items-center justify-between gap-1"><span>关联用户</span><span className="flex shrink-0 items-center gap-2">{recentRelatedUsers.length > 0 && !isClosingEntry && !hasDependentCloseOpeningEdit && <button type="button" onClick={() => openDirectoryManager("relatedUser")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
+                    <div className={`flex h-11 w-full overflow-hidden rounded border text-sm outline-none transition ${isCloseAssociationLocked || hasDependentCloseOpeningEdit ? "border-slate-200 bg-slate-50 text-slate-500" : entryForm.relatedUserId ? "border-indigo-200 bg-indigo-50/60 text-slate-800" : "border-slate-200 bg-white text-slate-400"}`}>
                       <select
-                        disabled={isCloseAssociationLocked}
+                        disabled={isCloseAssociationLocked || hasDependentCloseOpeningEdit}
                         value={entryForm.relatedUserId}
                         onChange={(event) => {
                           const userId = event.target.value;
@@ -5799,7 +5894,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </select>
                       <button
                         type="button"
-                        disabled={isCloseAssociationLocked}
+                        disabled={isCloseAssociationLocked || hasDependentCloseOpeningEdit}
 	                        aria-label="搜索并添加未在订单中出现过的关联用户"
 	                        title="搜索全局用户并添加"
 	                        onClick={() => {
@@ -5874,13 +5969,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 	                )}
 
                 <div className="-mt-1 grid grid-cols-2 gap-3 text-[10px] leading-4 text-slate-400">
-                  <span>{isEditingEntry ? "可选择、新建或管理账户；保存前校验后续平仓并保留审计。" : "优先按关联用户记忆账户；无记录则保留当前账户。"}</span>
+                  <span>{hasDependentCloseOpeningEdit ? "已有平仓流水；账户、用户、项目、数量、价格、类型、备注与反向展示均保留审计，不可修改。" : isEditingEntry ? "可选择、新建或管理账户；保存前校验后续平仓并保留审计。" : "优先按关联用户记忆账户；无记录则保留当前账户。"}</span>
                   <span>仅搜索并引用全局已有用户；关联后按项目区分资金。</span>
                 </div>
 
-                <Field label={<span className="flex items-center justify-between gap-1"><span>项目 {entryForm.relatedUserId && <span className="text-rose-500">*</span>} {!entryForm.relatedUserId && <span className="text-slate-400">（请先选关联用户）</span>}</span><span className="flex shrink-0 items-center gap-2">{(entryForm.relatedFundId || entryForm.relatedFundName.trim()) && entryForm.relatedFundId !== "legacy" && !isClosingEntry && !isEditingEntry && <button type="button" onClick={() => { const fund = entryRelatedFunds.find((item) => item.id === entryForm.relatedFundId) ?? { id: "", name: entryForm.relatedFundName.trim(), relatedUserId: entryForm.relatedUserId || undefined }; if (fund.name) openProfitShareManager(fund); }} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">收益分配</button>}{entryRelatedFunds.length > 0 && !isClosingEntry && <button type="button" onClick={() => openDirectoryManager("relatedFund")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
+                <Field label={<span className="flex items-center justify-between gap-1"><span>项目 {entryForm.relatedUserId && <span className="text-rose-500">*</span>} {!entryForm.relatedUserId && <span className="text-slate-400">（请先选关联用户）</span>}</span><span className="flex shrink-0 items-center gap-2">{(entryForm.relatedFundId || entryForm.relatedFundName.trim()) && entryForm.relatedFundId !== "legacy" && !isClosingEntry && !isEditingEntry && <button type="button" onClick={() => { const fund = entryRelatedFunds.find((item) => item.id === entryForm.relatedFundId) ?? { id: "", name: entryForm.relatedFundName.trim(), relatedUserId: entryForm.relatedUserId || undefined }; if (fund.name) openProfitShareManager(fund); }} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">收益分配</button>}{entryRelatedFunds.length > 0 && !isClosingEntry && !hasDependentCloseOpeningEdit && <button type="button" onClick={() => openDirectoryManager("relatedFund")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
                   <select
-                    disabled={!entryForm.relatedUserId || isCloseReview || isClosingEntry}
+                    disabled={!entryForm.relatedUserId || isCloseReview || isClosingEntry || hasDependentCloseOpeningEdit}
                     value={entryForm.relatedFundId}
                     onChange={(event) => {
                       if (event.target.value === "__manage_related_funds__") {
@@ -5898,7 +5993,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </select>
                   {entryForm.relatedUserId && entryForm.relatedFundId === "" && (
                     <input
-                      disabled={isCloseReview || isClosingEntry}
+                      disabled={isCloseReview || isClosingEntry || hasDependentCloseOpeningEdit}
                       value={entryForm.relatedFundName}
                       onChange={(event) => setEntryForm((current) => ({ ...current, relatedFundName: event.target.value }))}
                       placeholder="新专项款名称，例如：10月拼单"
@@ -5912,7 +6007,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
                 <Field label="备注（可选）">
                   <input
-                    disabled={isCloseReview}
+                    disabled={isCloseReview || hasDependentCloseOpeningEdit}
                     value={entryForm.note}
                     onChange={(event) => setEntryForm((current) => ({ ...current, note: event.target.value }))}
                     placeholder="不填则不生成默认备注"
@@ -5930,7 +6025,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             }>
               {!isCloseReview && (
                 <button
-                  disabled={(isEditingEntry ? updateOpeningEntryMutation.isPending : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)) || Boolean(optionFormValidationMessage)}
+                  disabled={(isEditingEntry ? updateOpeningEntryMutation.isPending || (hasDependentCloseOpeningEdit && (!isPartiallyClosedOpeningEdit || !hasPartialOpeningMarkerChange)) : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)) || Boolean(optionFormValidationMessage)}
                   onClick={handleSaveEntry}
                   className="w-full h-12 rounded bg-indigo-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99]"
                 >
@@ -7001,7 +7096,7 @@ function OptionUnrealizedPnlText({
   return <span className={`${className} ${tone}`}>{optionPnl === null ? emptyLabel : `${formatSigned(optionPnl)} U`}</span>;
 }
 
-function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, isCounterparty = false, isPending = false }: {
+function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, hasLockedPosition = false, isCounterparty = false, isPending = false }: {
   bucket: PositionBucket;
   side: PositionSide;
   markPrice: number | null;
@@ -7010,6 +7105,8 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   metadata?: LadderCellMetadata;
   /** 仅管理员逐笔报价使用的黑金锁定外观。 */
   isLocked?: boolean;
+  /** 整合报价档位中含有锁定仓位时展示黑金锁标；仅全部锁定时整格切换黑金底。 */
+  hasLockedPosition?: boolean;
   /** 管理端反向展示订单，使用紫色双向图标与普通多空区分。 */
   isCounterparty?: boolean;
   /** 仅管理员逐笔报价使用：挂单未成交，采用浅蓝状态底并不展示盈亏。 */
@@ -7119,6 +7216,9 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
       <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className={`shrink-0 font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"} ${isPending ? "text-sky-700" : ""}`} style={quantityTextStyle}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
+          {hasLockedPosition && !isPending && !metadata && <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-[#c9a84c]/75 bg-[#141414] text-[#f5d78e] shadow-[inset_0_1px_0_rgba(245,215,142,0.16),inset_0_-1px_0_rgba(0,0,0,0.70)]" title={isLocked ? "本档仓位已锁定" : "本档含有锁定仓位"} aria-label={isLocked ? "本档仓位已锁定" : "本档含有锁定仓位"}>
+            <Lock className="h-2.5 w-2.5" strokeWidth={2.5} />
+          </span>}
         </div>
         {floatingPnl !== null && (
           <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`} style={isOption ? { color: optionPnlColor, textShadow: "none" } : undefined}>
@@ -7173,6 +7273,7 @@ function LadderCell({
   readOnly = false,
   metadata,
   isLocked = false,
+  hasLockedPosition = false,
   isCounterparty = false,
   isPending = false,
 }: {
@@ -7184,6 +7285,7 @@ function LadderCell({
   readOnly?: boolean;
   metadata?: LadderCellMetadata;
   isLocked?: boolean;
+  hasLockedPosition?: boolean;
   isCounterparty?: boolean;
   isPending?: boolean;
 }) {
@@ -7200,7 +7302,7 @@ function LadderCell({
     action();
   };
   if (bucket && bucket.remainingQuantity > 0.0000001) {
-    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} isLocked={isLocked} isCounterparty={isCounterparty} isPending={isPending} />;
+    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} isLocked={isLocked} hasLockedPosition={hasLockedPosition} isCounterparty={isCounterparty} isPending={isPending} />;
   }
 
   const isLong = side === "long";
