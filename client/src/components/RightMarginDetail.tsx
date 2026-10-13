@@ -200,7 +200,7 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
               if (entry.assetType === 'stock') {
                 const quote = resolveTagMarginStockQuote(entry, rightMarginStockQuotes);
                 const marketValue = getTagMarginStockMarketValue(entry, rightMarginStockQuotes);
-                const quoteUpdatedAt = formatTagMarginStockQuoteUpdatedAt(quote.updatedAt, quote.isCloseSnapshot);
+                const quoteUpdatedAt = formatTagMarginStockQuoteUpdatedAt(quote.updatedAt);
                 const isStockReduction = entry.quantity < 0;
                 return (
                   <div key={_i} className="flex items-start justify-between py-2" style={{ borderBottom: "1px solid #E5E7EB" }}>

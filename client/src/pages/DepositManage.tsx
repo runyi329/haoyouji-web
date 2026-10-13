@@ -1414,7 +1414,7 @@ export default function DepositManage() {
                                     if (entry.assetType === 'stock') {
                                       const quote = resolveTagMarginStockQuote(entry, allMarginStockQuotes);
                                       const marketValue = getTagMarginStockMarketValue(entry, allMarginStockQuotes);
-                                      const quoteUpdatedAt = formatTagMarginStockQuoteUpdatedAt(quote.updatedAt, quote.isCloseSnapshot);
+                                      const quoteUpdatedAt = formatTagMarginStockQuoteUpdatedAt(quote.updatedAt);
                                       const cnyRate = cryptoPrices.USDT ?? CNY_RATE_FALLBACK;
                                       const isStockReduction = entry.quantity < 0;
                                       return (

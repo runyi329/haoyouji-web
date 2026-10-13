@@ -21,16 +21,21 @@ function beijingDate(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-/** MySQL DATETIME 存的是北京时间；mysql2 会将其读成 UTC Date，需补回 +08:00 语义。 */
+/** MySQL DATETIME 存的是北京时间；优先保留 SQL 格式化后的原始墙上时间，避免客户端时区二次偏移。 */
 function databaseBeijingTimestamp(value: unknown): string {
-  const date = value instanceof Date ? value : new Date(String(value ?? ''));
+  const raw = String(value ?? '').trim();
+  const mysqlTimestamp = raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})$/);
+  if (mysqlTimestamp) return `${mysqlTimestamp[1]}T${mysqlTimestamp[2]}+08:00`;
+  const date = value instanceof Date ? value : new Date(raw);
   if (Number.isNaN(date.getTime())) return '';
-  const pad = (number: number) => String(number).padStart(2, '0');
-  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}T${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}+08:00`;
+  return date.toISOString();
 }
 
 function databaseBeijingDate(value: unknown): string {
-  const date = value instanceof Date ? value : new Date(String(value ?? ''));
+  const raw = String(value ?? '').trim();
+  const mysqlDate = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (mysqlDate) return mysqlDate[1];
+  const date = value instanceof Date ? value : new Date(raw);
   if (Number.isNaN(date.getTime())) return '';
   const pad = (number: number) => String(number).padStart(2, '0');
   return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
@@ -212,7 +217,10 @@ export async function getManualStockCloseSnapshots(symbols: string[]): Promise<R
   if (!conn) throw new Error("数据库连接不可用，无法读取股票盘尾快照");
   const placeholders = normalized.map(() => "?").join(",");
   const [rows] = await (conn as any).execute(
-    `SELECT symbol, price, currency, price_date, source, updated_at
+    `SELECT symbol, price, currency,
+            DATE_FORMAT(price_date, '%Y-%m-%d') AS price_date_text,
+            source,
+            DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updated_at_text
      FROM funder_manual_stock_close_snapshots
      WHERE symbol IN (${placeholders})`,
     normalized
@@ -227,9 +235,9 @@ export async function getManualStockCloseSnapshots(symbols: string[]): Promise<R
       symbol,
       price,
       currency,
-      priceDate: databaseBeijingDate(row.price_date),
+      priceDate: databaseBeijingDate(row.price_date_text ?? row.price_date),
       source: String(row.source || ""),
-      updatedAt: databaseBeijingTimestamp(row.updated_at),
+      updatedAt: databaseBeijingTimestamp(row.updated_at_text ?? row.updated_at),
     };
   }
   return result;

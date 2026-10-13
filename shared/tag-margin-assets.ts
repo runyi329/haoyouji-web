@@ -39,7 +39,7 @@ function numeric(value: unknown): number | null {
 }
 
 /** 将服务端快照的 ISO 时间统一显示为北京时间中文月日与时分。 */
-export function formatTagMarginStockQuoteUpdatedAt(value: unknown, snapshotStoredAsBeijing = false): string {
+export function formatTagMarginStockQuoteUpdatedAt(value: unknown): string {
   const raw = text(value);
   if (!raw) return '';
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
@@ -48,11 +48,7 @@ export function formatTagMarginStockQuoteUpdatedAt(value: unknown, snapshotStore
   }
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return '';
-  // 兼容尚未重启的旧服务：MySQL 北京时间 DATETIME 曾被序列化成带 Z 的 ISO 字符串。
-  // 新服务会返回 +08:00；两种格式都必须在界面显示同一个北京时间。
-  if (snapshotStoredAsBeijing && /Z$/i.test(raw)) {
-    return `${date.getUTCMonth() + 1}月${date.getUTCDate()}日 ${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`;
-  }
+  // 兼容旧服务的 Z 结尾时间与新服务明确的 +08:00 时间，均统一转为北京时间显示。
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Shanghai',
     month: '2-digit',
