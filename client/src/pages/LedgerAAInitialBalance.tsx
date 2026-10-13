@@ -3495,11 +3495,17 @@ export default function LedgerAAInitialBalance() {
                         const latestIndex = history.length - 1;
                         const latest = latestIndex >= 0 ? history[latestIndex] : null;
                         const latestIsGlobalPause = latest?.pauseSource === 'tag_global';
+                        const pauseHandlingDraft = ledgerId === 37
+                          && pauseWalletHandlingDraft?.userId === userId
+                          && pauseWalletHandlingDraft.tagName === tagName
+                          ? pauseWalletHandlingDraft
+                          : null;
+                        const displayedPauseDate = latest?.pauseDate || entry.pauseDate || pauseHandlingDraft?.pauseDate || '';
                         return (
                           <div className="flex items-center gap-1">
                             <input
                               type="date"
-                              value={latest?.pauseDate ?? entry.pauseDate ?? ''}
+                              value={displayedPauseDate}
                               disabled={latestIsGlobalPause}
                               onChange={e => {
                                 if (latestIsGlobalPause) return;
@@ -3511,7 +3517,9 @@ export default function LedgerAAInitialBalance() {
                                     return previous[key] ? { ...previous, [key]: { ...previous[key], pauseDate: e.target.value } } : previous;
                                   });
                                 } else if (ledgerId === 37 && e.target.value) {
-                                  setPauseWalletHandlingDraft({ userId, tagName, pauseDate: e.target.value, action: 'retain' });
+                                  setPauseWalletHandlingDraft((previous) => previous?.userId === userId && previous.tagName === tagName
+                                    ? { ...previous, pauseDate: e.target.value }
+                                    : { userId, tagName, pauseDate: e.target.value, action: 'retain' });
                                 } else {
                                   updateEntry(userId, tagName, { pauseDate: e.target.value });
                                 }
@@ -3519,7 +3527,7 @@ export default function LedgerAAInitialBalance() {
                               className="min-w-0 flex-1 text-xs border rounded-lg px-1.5 py-1 outline-none"
                               style={{ borderColor: '#FDE68A', backgroundColor: '#FFFBEB', color: '#92400E' }}
                             />
-                            {(latest?.pauseDate || entry.pauseDate) && !latestIsGlobalPause && (
+                            {displayedPauseDate && !latestIsGlobalPause && (
                               <button type="button" onClick={() => {
                                 if (latest) {
                                   const nextHistory = history.map((item, index) => index === latestIndex ? { ...item, pauseDate: '' } : item);
@@ -3531,6 +3539,8 @@ export default function LedgerAAInitialBalance() {
                                     delete next[key];
                                     return next;
                                   });
+                                } else if (pauseHandlingDraft) {
+                                  setPauseWalletHandlingDraft(null);
                                 } else {
                                   updateEntry(userId, tagName, { pauseDate: '' });
                                 }
