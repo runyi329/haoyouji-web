@@ -334,7 +334,7 @@ type LadderOptionMetadata = {
 };
 
 type LadderCellMetadata = {
-  accountName: string;
+  accountName?: string;
   relatedUserName: string;
   relatedFundName: string;
   instrumentShortLabel?: string;
@@ -452,6 +452,8 @@ type PositionBucket = {
   price: number;
   originalQuantity: number;
   remainingQuantity: number;
+  /** 整合报价中的未成交挂单数量：只参与展示数量，不参与仓位、盈亏、手续费或可平数量。 */
+  pendingQuantity?: number;
   /** 整合报价中已锁定的剩余数量；逐笔报价继续由对应主单决定黑金外观。 */
   lockedRemainingQuantity?: number;
   /** 剩余仓位按实际成交价累计的成本，用于均价与盈亏。 */
@@ -839,6 +841,12 @@ function formatLadderQuantity(value: number) {
     return value.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   return Math.round(value).toLocaleString("zh-CN", { maximumFractionDigits: 0 });
+}
+
+/** 整合报价的挂单/锁定摘要统一保留一位小数，区别于大数量的紧凑展示精度。 */
+function formatIntegratedStatusQuantity(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "0.0";
+  return value.toLocaleString("zh-CN", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 function formatQuantityQuickOption(value: string) {
@@ -1574,8 +1582,9 @@ function getSafeDependentOpeningEdit(input: {
 }
 
 /**
- * 整合报价的宽档仅聚合展示：先沿用十美元真实 FIFO 得出每张主单的剩余数量，
- * 再按所选宽度归档。因此切换 25/50/100U 等宽度不会让已平仓位回补，也不会改变真实可平数量。
+ * 整合报价的宽档仅聚合展示：先沿用十美元真实 FIFO 得出每张已成交主单的剩余数量，
+ * 再按所选宽度归档；挂单也显示在对应档位，但绝不进入仓位、盈亏、手续费或可平数量。
+ * 因此切换 25/50/100U 等宽度不会让已平仓位回补，也不会改变真实可平数量。
  */
 function buildIntegratedDisplayBuckets(
   trades: PreviewTrade[],
@@ -1585,17 +1594,18 @@ function buildIntegratedDisplayBuckets(
   const displayBuckets = new Map<string, PositionBucket>();
 
   for (const trade of trades) {
-    if (!ACTIONS[trade.action].opening || trade.isPending || trade.symbol !== "ETH") continue;
-    const linkedClosings = allocations.get(trade.id) ?? [];
+    if (!ACTIONS[trade.action].opening || trade.symbol !== "ETH") continue;
+    const isPending = Boolean(trade.isPending);
+    const linkedClosings = isPending ? [] : (allocations.get(trade.id) ?? []);
     const closedQuantity = linkedClosings.reduce((total, item) => total + item.quantity, 0);
-    const remainingQuantity = Math.max(0, trade.quantity - closedQuantity);
+    const remainingQuantity = isPending ? trade.quantity : Math.max(0, trade.quantity - closedQuantity);
     if (remainingQuantity <= 0.0000001) continue;
 
     const side = ACTIONS[trade.action].side;
     const displayPrice = archivePriceForTrade(trade, archiveStep);
     const key = `${side}:${priceKey(displayPrice)}`;
-    const remainingFinancialQuantity = getTradeFinancialQuantity(trade, remainingQuantity);
-    const remainingOpeningFee = trade.quantity > 0 ? trade.fee * (remainingQuantity / trade.quantity) : 0;
+    const remainingFinancialQuantity = isPending ? 0 : getTradeFinancialQuantity(trade, remainingQuantity);
+    const remainingOpeningFee = isPending ? 0 : (trade.quantity > 0 ? trade.fee * (remainingQuantity / trade.quantity) : 0);
     const existing = displayBuckets.get(key);
 
     if (existing) {
@@ -1603,10 +1613,11 @@ function buildIntegratedDisplayBuckets(
       if (existing.instrumentType !== trade.instrumentType) existing.instrumentType = undefined;
       existing.originalQuantity += remainingQuantity;
       existing.remainingQuantity += remainingQuantity;
-      existing.lockedRemainingQuantity = (existing.lockedRemainingQuantity ?? 0) + (trade.isLocked ? remainingQuantity : 0);
-      existing.costBasis += remainingQuantity * trade.price;
+      existing.pendingQuantity = (existing.pendingQuantity ?? 0) + (isPending ? remainingQuantity : 0);
+      existing.lockedRemainingQuantity = (existing.lockedRemainingQuantity ?? 0) + (!isPending && trade.isLocked ? remainingQuantity : 0);
+      existing.costBasis += isPending ? 0 : remainingQuantity * trade.price;
       existing.financialQuantity += remainingFinancialQuantity;
-      existing.financialCostBasis += remainingFinancialQuantity * trade.price;
+      existing.financialCostBasis += isPending ? 0 : remainingFinancialQuantity * trade.price;
       existing.openingFeeBasis += remainingOpeningFee;
       if (trade.createdAt < existing.openedAt) existing.openedAt = trade.createdAt;
       continue;
@@ -1619,10 +1630,11 @@ function buildIntegratedDisplayBuckets(
       price: displayPrice,
       originalQuantity: remainingQuantity,
       remainingQuantity,
-      lockedRemainingQuantity: trade.isLocked ? remainingQuantity : 0,
-      costBasis: remainingQuantity * trade.price,
+      pendingQuantity: isPending ? remainingQuantity : 0,
+      lockedRemainingQuantity: !isPending && trade.isLocked ? remainingQuantity : 0,
+      costBasis: isPending ? 0 : remainingQuantity * trade.price,
       financialQuantity: remainingFinancialQuantity,
-      financialCostBasis: remainingFinancialQuantity * trade.price,
+      financialCostBasis: isPending ? 0 : remainingFinancialQuantity * trade.price,
       openingFeeBasis: remainingOpeningFee,
       // 宽档只承担未平仓展示，已平仓明细仍按真实十美元档与主单 FIFO 展示。
       realizedGrossPnl: 0,
@@ -2239,7 +2251,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         return preferred.filter((id) => id === "unclassified" || nextRelatedFunds.some((fund) => fund.id === id));
       });
     } else {
-      // 成员端：一个选项直接锁定；两个及以上选项才保留“全部 + 分项”的筛选。
+      // 成员端不展示、也不保留账户筛选；账户仅用于管理员识别订单落在哪个下单账户。
+      // 用户与项目一个选项直接锁定；两个及以上选项才保留“全部 + 分项”的筛选。
       // 后续五秒静默同步只修正已失效的选项，不会覆盖成员主动选择的单项筛选。
       const memberFundFilterIds = [
         ...nextRelatedFunds.map((fund) => fund.id),
@@ -2249,10 +2262,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         if (optionIds.length === 1) return optionIds;
         return current.filter((id) => optionIds.includes(id));
       };
-      setSelectedAccountIds((current) => normalizeMemberFilter(
-        shouldRestoreTopFilters ? (persistedTopFilters?.accountIds ?? []) : current,
-        nextAccounts.map((account) => account.id),
-      ));
+      setSelectedAccountIds((current) => current.length === 0 ? current : []);
       setRelatedUserFilterIds((current) => {
         const preferred = shouldRestoreTopFilters ? (persistedTopFilters?.relatedUserIds ?? []) : current;
         const hasExplicitMemberSelection = shouldRestoreTopFilters
@@ -2340,26 +2350,40 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ),
     [referralDataLoaded, referralDescendantsByRootUserId, relatedUserFilterIds],
   );
+  // 管理员筛选某位用户时，除该用户原始下单外，还必须看到该用户作为分佣受益人的
+  // 完整开平仓链路。快照只在成交时落库，因此同时收集开仓主单与对应平仓流水键。
+  const topProfitShareBeneficiaryEntryIds = useMemo(() => {
+    const entryIds = new Set<string>();
+    if (isMemberView || relatedUserFilterIds.length === 0 || topRelatedUserFilter.waitingForReferralData) return entryIds;
+    for (const snapshot of profitShareSnapshots) {
+      if (snapshot.percentage <= 0 || !topRelatedUserFilter.userIds.has(String(snapshot.beneficiaryUserId))) continue;
+      entryIds.add(snapshot.openingEntryId);
+      entryIds.add(snapshot.entryId);
+    }
+    return entryIds;
+  }, [isMemberView, profitShareSnapshots, relatedUserFilterIds.length, topRelatedUserFilter]);
   const selectedTrades = useMemo(
     () => instrumentScopedTrades.filter((trade) => (
-      (selectedAccountIds.length === 0 || selectedAccountIds.includes(trade.accountId))
+      // 成员端账户不属于筛选维度，必须忽略旧版 localStorage 中可能残留的账户条件。
+      (isMemberView || selectedAccountIds.length === 0 || selectedAccountIds.includes(trade.accountId))
       && trade.symbol === "ETH"
       && (relatedUserFilterIds.length === 0
         || topRelatedUserFilter.waitingForReferralData
         || (topRelatedUserFilter.includesUnlinked && (!trade.relatedUserId || trade.relatedUserHidden))
         || Boolean(trade.relatedUserId && topRelatedUserFilter.userIds.has(trade.relatedUserId))
-        || Boolean(trade.profitShareBeneficiaryUserId && topRelatedUserFilter.userIds.has(trade.profitShareBeneficiaryUserId)))
+        || Boolean(trade.profitShareBeneficiaryUserId && topRelatedUserFilter.userIds.has(trade.profitShareBeneficiaryUserId))
+        || (!isMemberView && topProfitShareBeneficiaryEntryIds.has(getStoredEntryId(trade))))
       && (relatedFundFilterIds.length === 0
         || relatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
-    [instrumentScopedTrades, selectedAccountIds, relatedUserFilterIds, relatedFundFilterIds, topRelatedUserFilter],
+    [instrumentScopedTrades, isMemberView, selectedAccountIds, relatedUserFilterIds, relatedFundFilterIds, topProfitShareBeneficiaryEntryIds, topRelatedUserFilter],
   );
   // 挂单仅作管理员报价与状态统计展示；成交前绝不进入真实仓位、FIFO、手续费、浮盈或收益汇总。
   const selectedFilledTrades = useMemo(
     () => selectedTrades.filter((trade) => !trade.isPending),
     [selectedTrades],
   );
-  // 历史记录先严格继承页面顶部的账户、用户、项目、类型与状态五项筛选，
+  // 历史记录先严格继承管理员端的账户、用户、项目、类型与状态筛选；成员端不含账户维度，
   // 再按历史面板内的条件作进一步细分，避免顶部筛到某位用户时历史仍显示全部流水。
   const historyExecutionScopedTrades = useMemo(
     () => historyExecutionFilter === "all"
@@ -2379,19 +2403,30 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ),
     [historyRelatedUserFilterIds, referralDataLoaded, referralDescendantsByRootUserId],
   );
+  const historyProfitShareBeneficiaryEntryIds = useMemo(() => {
+    const entryIds = new Set<string>();
+    if (isMemberView || historyRelatedUserFilterIds.length === 0 || historyRelatedUserFilter.waitingForReferralData) return entryIds;
+    for (const snapshot of profitShareSnapshots) {
+      if (snapshot.percentage <= 0 || !historyRelatedUserFilter.userIds.has(String(snapshot.beneficiaryUserId))) continue;
+      entryIds.add(snapshot.openingEntryId);
+      entryIds.add(snapshot.entryId);
+    }
+    return entryIds;
+  }, [historyRelatedUserFilter, historyRelatedUserFilterIds.length, isMemberView, profitShareSnapshots]);
   const journalScopeTrades = useMemo(
     () => historyInstrumentScopedTrades.filter((trade) => (
       trade.symbol === "ETH"
-      && (historyAccountFilterIds.length === 0 || historyAccountFilterIds.includes(trade.accountId))
+      && (isMemberView || historyAccountFilterIds.length === 0 || historyAccountFilterIds.includes(trade.accountId))
       && (historyRelatedUserFilterIds.length === 0
         || historyRelatedUserFilter.waitingForReferralData
         || (historyRelatedUserFilter.includesUnlinked && (!trade.relatedUserId || trade.relatedUserHidden))
         || Boolean(trade.relatedUserId && historyRelatedUserFilter.userIds.has(trade.relatedUserId))
-        || Boolean(trade.profitShareBeneficiaryUserId && historyRelatedUserFilter.userIds.has(trade.profitShareBeneficiaryUserId)))
+        || Boolean(trade.profitShareBeneficiaryUserId && historyRelatedUserFilter.userIds.has(trade.profitShareBeneficiaryUserId))
+        || (!isMemberView && historyProfitShareBeneficiaryEntryIds.has(getStoredEntryId(trade))))
       && (historyRelatedFundFilterIds.length === 0
         || historyRelatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
-    [historyInstrumentScopedTrades, historyAccountFilterIds, historyRelatedUserFilter, historyRelatedUserFilterIds, historyRelatedFundFilterIds],
+    [historyInstrumentScopedTrades, isMemberView, historyAccountFilterIds, historyProfitShareBeneficiaryEntryIds, historyRelatedUserFilter, historyRelatedUserFilterIds, historyRelatedFundFilterIds],
   );
   const availableJournalActions = useMemo(
     () => RECENT_JOURNAL_ACTIONS.filter((action) => journalScopeTrades.some((trade) => trade.action === action)),
@@ -2444,6 +2479,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
   }, [hasLinkedJournalPairs, showLinkedJournalGroups]);
   const recentJournalTradeDetails = useMemo(() => buildRecentJournalTradeDetails(trades), [trades]);
+  // 顶部类型筛选会将平仓投影为“对应开仓类型的数量切片”。先在当前历史范围内重建一次
+  // 明细，可保证合约/现货/期权的开平仓在任意组合筛选下都用同一条切片收益展示；
+  // 原始流水映射保留为历史异常记录的兜底。
+  const scopedRecentJournalTradeDetails = useMemo(
+    () => buildRecentJournalTradeDetails(journalScopeTrades),
+    [journalScopeTrades],
+  );
+  const getHistoricalTradeDetail = (trade: PreviewTrade) => (
+    scopedRecentJournalTradeDetails.get(trade.id)
+    ?? scopedRecentJournalTradeDetails.get(getDetailEntryId(trade))
+    ?? recentJournalTradeDetails.get(getDetailEntryId(trade))
+  );
   const getTradeAccountName = (trade: PreviewTrade) => trade.accountHidden
     ? "未关联账户"
     : trade.accountName
@@ -2465,15 +2512,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       || 0,
   );
   /**
-   * 成员端始终展示本人本单可得；管理员端则跟随顶部“用户”筛选，
-   * 将每张订单显示为该订单所属用户的实际可得，而非管理员在该订单中的分成。
-   * 管理员查看自身从某位用户分得多少，后续以独立功能承载，不能混入当前用户视图。
-   */
+   * 成员端始终展示本人本单可得；管理员默认“全部”视图也展示管理员本人的实际分佣。
+   * 只有管理员明确筛选单一用户时，才切换为该用户的实际可得；不能把订单关联用户
+   * 自动误当作受益人。完整订单净收益与全部分佣仅在管理员弹窗中展示。
+  */
   const resolveDisplayedPayout = (trade: PreviewTrade, displayedNetPnlInput: number | undefined) => {
     const displayedNetPnl = Number(displayedNetPnlInput);
+    const selectedAdminBeneficiaryUserId = !isMemberView
+      && relatedUserFilterIds.length === 1
+      && /^\d+$/.test(relatedUserFilterIds[0])
+      ? Number(relatedUserFilterIds[0])
+      : viewerProfitShareBeneficiaryUserId;
     const beneficiaryUserId = isMemberView
       ? viewerProfitShareBeneficiaryUserId
-      : Number(trade.relatedUserId || 0);
+      : selectedAdminBeneficiaryUserId;
     if (!Number.isFinite(displayedNetPnl) || !Number.isInteger(beneficiaryUserId) || beneficiaryUserId <= 0) return null;
     if (isMemberView && trade.profitShareBeneficiaryUserId) {
       return { netPnl: displayedNetPnl, isProfitShared: true };
@@ -2511,11 +2563,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ...relatedFunds.map((fund) => fund.id),
     ...(trades.some((trade) => !trade.relatedFundId) ? ["unclassified"] : []),
   ], [relatedFunds, trades]);
-  const shouldLockMemberAccountFilter = isMemberView && accounts.length === 1;
   const shouldLockMemberFundFilter = isMemberView && memberFundFilterOptionIds.length === 1;
-  const lockedAccountName = accounts.find((account) => selectedAccountIds.includes(account.id))?.name
-    || accounts[0]?.name
-    || "暂无账户";
   const lockedRelatedFundName = availableRelatedFunds.find((fund) => relatedFundFilterIds.includes(fund.id))?.name
     || availableRelatedFunds[0]?.name
     || (trades.some((trade) => !trade.relatedFundId) ? "未区分项目（历史）" : "暂无项目");
@@ -2634,13 +2682,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (selected.length === 1) return `${label}${selected[0].summaryLabel ?? selected[0].label}`;
     return `${label}已选 ${selected.length} 项`;
     };
-    return buildT0FilterGridTemplateColumns([
-      { summary: summaryFor("账户", accountFilterOptions, historyAccountFilterIds), selectedCount: historyAccountFilterIds.length },
+    const filters = [
       { summary: summaryFor("用户", relatedUserFilterOptions, historyRelatedUserFilterIds), selectedCount: historyRelatedUserFilterIds.length },
       { summary: summaryFor("项目", historyRelatedFundFilterOptions, historyRelatedFundFilterIds), selectedCount: historyRelatedFundFilterIds.length },
-    ]);
-  }, [accountFilterOptions, relatedUserFilterOptions, historyRelatedFundFilterOptions, historyAccountFilterIds, historyRelatedUserFilterIds, historyRelatedFundFilterIds, historyRelatedUserSelectionIsAll]);
-  const hasActiveHistoryDetailFilters = historyAccountFilterIds.length > 0
+    ];
+    if (!isMemberView) {
+      filters.unshift({ summary: summaryFor("账户", accountFilterOptions, historyAccountFilterIds), selectedCount: historyAccountFilterIds.length });
+    }
+    return buildT0FilterGridTemplateColumns(filters);
+  }, [accountFilterOptions, isMemberView, relatedUserFilterOptions, historyRelatedFundFilterOptions, historyAccountFilterIds, historyRelatedUserFilterIds, historyRelatedFundFilterIds, historyRelatedUserSelectionIsAll]);
+  const hasActiveHistoryDetailFilters = (!isMemberView && historyAccountFilterIds.length > 0)
     || historyRelatedUserFilterIds.length > 0
     || historyRelatedFundFilterIds.length > 0
     || historyInstrumentTypeFilterIds.length > 0
@@ -2668,6 +2719,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 从而保证选“推荐”时不会混入本人订单，选“全部”时才展示本人加推荐。
   useEffect(() => {
     if (!isMemberView) return;
+    setHistoryAccountFilterIds((current) => current.length === 0 ? current : []);
     setHistoryRelatedUserFilterIds((current) => current.join("|") === relatedUserFilterIds.join("|")
       ? current
       : relatedUserFilterIds);
@@ -2681,11 +2733,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       if (selected.length === 1) return `${label}${selected[0].summaryLabel ?? selected[0].label}`;
       return `${label}已选 ${selected.length} 项`;
     };
-    // 锁定项才是实际固定条件；其余显示“全部”时应视作未筛选，恢复三等分，
-    // 避免账户/用户/项目都为“全部”时，账户文字被错误压缩。
-    const accountSummary = shouldLockMemberAccountFilter
-      ? `账户${lockedAccountName}`
-      : summaryFor("账户", accountFilterOptions, selectedAccountIds);
+    // 管理员保留账户、用户、项目三项；成员端仅展示用户与项目，均按内容智能分配宽度。
+    const accountSummary = summaryFor("账户", accountFilterOptions, selectedAccountIds);
     const userSummary = isMemberView && !memberHasReferralFilterOptions
       ? `用户${memberRelatedUserName}`
       : summaryFor("用户", relatedUserFilterOptions, relatedUserFilterIds);
@@ -2694,24 +2743,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : summaryFor("项目", relatedFundFilterOptions, relatedFundFilterIds);
     const accountSpec = {
       summary: accountSummary,
-      selectedCount: shouldLockMemberAccountFilter ? 1 : selectedAccountIds.length,
+      selectedCount: selectedAccountIds.length,
     };
     const userSpec = {
       summary: userSummary,
-      selectedCount: isMemberView && !memberHasReferralFilterOptions
-        ? 1
-        : topRelatedUserSelectionIsAll ? 0 : relatedUserFilterIds.length,
+      // 成员首屏的“本人”是默认身份，不作为主动筛选：用户 / 项目初始保持等宽。
+      // 只有成员实际展开并选择过用户后，才按已选文字进入智能宽度分配。
+      selectedCount: isMemberView
+        ? (memberRelatedUserFilterTouched && !topRelatedUserSelectionIsAll ? relatedUserFilterIds.length : 0)
+        : (topRelatedUserSelectionIsAll ? 0 : relatedUserFilterIds.length),
     };
     const fundSpec = {
       summary: fundSummary,
-      selectedCount: shouldLockMemberFundFilter ? 1 : relatedFundFilterIds.length,
+      // 只有一个项目时显示为固定默认值，但不应挤占成员端两栏的初始等宽布局。
+      selectedCount: isMemberView && shouldLockMemberFundFilter ? 0 : relatedFundFilterIds.length,
     };
-    return buildT0FilterGridTemplateColumns([
-      accountSpec,
-      userSpec,
-      fundSpec,
-    ]);
-  }, [accountFilterOptions, isMemberView, lockedAccountName, lockedRelatedFundName, memberHasReferralFilterOptions, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberAccountFilter, shouldLockMemberFundFilter, topRelatedUserSelectionIsAll]);
+    return buildT0FilterGridTemplateColumns(isMemberView
+      ? [userSpec, fundSpec]
+      : [accountSpec, userSpec, fundSpec]);
+  }, [accountFilterOptions, isMemberView, lockedRelatedFundName, memberHasReferralFilterOptions, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberFundFilter, topRelatedUserSelectionIsAll]);
   const topInstrumentFilterSummary = getT0InstrumentFilterSummary(instrumentTypeFilterIds);
   const topExecutionFilterSummary = getT0ExecutionFilterSummary(executionFilter);
   const topTypeStatusGridTemplateColumns = useMemo(
@@ -2805,8 +2855,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     [selectedFilledTrades],
   );
   const integratedDisplayBuckets = useMemo(
-    () => buildIntegratedDisplayBuckets(selectedFilledTrades, ladderOpeningClosingAllocations, integratedArchiveStep),
-    [selectedFilledTrades, ladderOpeningClosingAllocations, integratedArchiveStep],
+    () => buildIntegratedDisplayBuckets(selectedTrades, ladderOpeningClosingAllocations, integratedArchiveStep),
+    [selectedTrades, ladderOpeningClosingAllocations, integratedArchiveStep],
   );
   // 逐笔详情恒定按真实十美元档展开；整合详情沿用进入时选定的宽档。
   const isIndividualQuoteDetail = entrySheetLadderDisplayModeRef.current === "individual";
@@ -4292,7 +4342,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const allocation = group.closings[0];
       if (!allocation) return null;
         const closing = allocation.trade;
-        const detail = recentJournalTradeDetails.get(getDetailEntryId(closing));
+        const detail = getHistoricalTradeDetail(closing);
         const isLong = ACTIONS[closing.action].side === "long";
         const showFullClosingContext = hasSystemGeneratedSettlementNote(closing.note);
         const viewerPayout = resolveViewerPayout(closing, detail);
@@ -4309,8 +4359,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             {!detail && <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
           </div>
           <div className={getHistoryContextLayoutClass(showFullClosingContext)}>
-            <span className={getHistoryContextValueClass(showFullClosingContext)} title={getTradeAccountName(closing)}>{getTradeAccountName(closing)}</span>
-            <span className="text-slate-300">·</span>
+            {!isMemberView && <>
+              <span className={getHistoryContextValueClass(showFullClosingContext)} title={getTradeAccountName(closing)}>{getTradeAccountName(closing)}</span>
+              <span className="text-slate-300">·</span>
+            </>}
             <span className={getHistoryContextValueClass(showFullClosingContext)} title={getTradeRelatedUserName(closing)}>{getTradeRelatedUserName(closing)}</span>
             <span className="text-slate-300">·</span>
             <span className={getHistoryContextValueClass(showFullClosingContext)} title={getTradeRelatedFundName(closing)}>{getTradeRelatedFundName(closing)}</span>
@@ -4351,8 +4403,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             </span>
           </div>
           <div className={getHistoryContextLayoutClass(showFullOpeningContext)}>
-            <span className={getHistoryContextValueClass(showFullOpeningContext)} title={getTradeAccountName(opening)}>{getTradeAccountName(opening)}</span>
-            <span className="text-slate-300">·</span>
+            {!isMemberView && <>
+              <span className={getHistoryContextValueClass(showFullOpeningContext)} title={getTradeAccountName(opening)}>{getTradeAccountName(opening)}</span>
+              <span className="text-slate-300">·</span>
+            </>}
             <span className={getHistoryContextValueClass(showFullOpeningContext)} title={getTradeRelatedUserName(opening)}>{getTradeRelatedUserName(opening)}</span>
             <span className="text-slate-300">·</span>
             <span className={getHistoryContextValueClass(showFullOpeningContext)} title={getTradeRelatedFundName(opening)}>{getTradeRelatedFundName(opening)}</span>
@@ -4529,12 +4583,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <div className="text-[10px] text-slate-400">{trade.filledAt ? "挂单时间" : "开仓时间"}</div>
               <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium text-slate-700">{trade.isSyncing ? "后台保存中" : formatBeijingMonthDayTime(trade.createdAt)}</div>
             </div>
-            <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2">
-              <div className="min-w-0">
+            <div className={`col-span-3 grid gap-x-2 border-t border-slate-200 pt-2 ${isMemberView ? "grid-cols-2" : "grid-cols-3"}`}>
+              {!isMemberView && <div className="min-w-0">
                 <div className="text-[10px] text-slate-400">账户</div>
                 <div title={getTradeAccountName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeAccountName(trade)}</div>
-              </div>
-              <div className="min-w-0 text-center">
+              </div>}
+              <div className={`min-w-0 ${isMemberView ? "text-left" : "text-center"}`}>
                 <div className="text-[10px] text-slate-400">用户</div>
                 <div title={getTradeRelatedUserName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeRelatedUserName(trade)}</div>
               </div>
@@ -4774,12 +4828,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           >
             <div
               data-t0-filter-row
-              className="grid grid-cols-3 gap-1.5 transition-[grid-template-columns] duration-200"
+              className={`grid gap-1.5 transition-[grid-template-columns] duration-200 ${isMemberView ? "grid-cols-2" : "grid-cols-3"}`}
               style={{
                 gridTemplateColumns: topFilterGridTemplateColumns,
               }}
             >
-              {shouldLockMemberAccountFilter ? <LockedFilterValue label="账户" value={lockedAccountName} /> : (
+              {!isMemberView && (
                 <T0MultiSelect
                   label="账户"
                   options={accountFilterOptions}
@@ -4915,7 +4969,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             {displayedPriceRows.map((row) => {
               const getIndividualMetadata = (openingTrade?: PreviewTrade) => isIndividualLadderView && openingTrade
                 ? {
-                  accountName: getTradeAccountName(openingTrade),
+                  accountName: isMemberView ? undefined : getTradeAccountName(openingTrade),
                   relatedUserName: getTradeRelatedUserName(openingTrade),
                   relatedFundName: getTradeRelatedFundName(openingTrade),
                   instrumentShortLabel: getInstrumentShortLabel(openingTrade.instrumentType, openingTrade.optionExpiryDate),
@@ -5149,10 +5203,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               >
                 <div
                   data-t0-filter-row
-                  className="grid grid-cols-3 gap-1.5 transition-[grid-template-columns] duration-200"
+                  className={`grid gap-1.5 transition-[grid-template-columns] duration-200 ${isMemberView ? "grid-cols-2" : "grid-cols-3"}`}
                   style={{ gridTemplateColumns: historyFilterGridTemplateColumns }}
                 >
-                  <T0MultiSelect
+                  {!isMemberView && <T0MultiSelect
                     label="账户"
                     options={accountFilterOptions}
                     selectedIds={historyAccountFilterIds}
@@ -5161,7 +5215,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       setHistoryAccountFilterIds(ids);
                       setRecentJournalPage(1);
                     }}
-                  />
+                  />}
                   <T0MultiSelect
                     label="用户"
                     options={relatedUserFilterOptions}
@@ -5225,7 +5279,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               ) : showLinkedJournalGroups ? (
                 pagedLinkedJournalGroups.map((group) => renderLinkedJournalGroup(group))
               ) : pagedRecentJournalTrades.map((trade) => {
-                const detail = recentJournalTradeDetails.get(getDetailEntryId(trade));
+                const detail = getHistoricalTradeDetail(trade);
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
                 const showFullHistoryContext = hasSystemGeneratedSettlementNote(trade.note);
@@ -5258,8 +5312,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </>}
                     </div>
                     <div className={getHistoryContextLayoutClass(showFullHistoryContext)}>
-                      <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeAccountName(trade)}>{getTradeAccountName(trade)}</span>
-                      <span className="text-slate-300">·</span>
+                      {!isMemberView && <>
+                        <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeAccountName(trade)}>{getTradeAccountName(trade)}</span>
+                        <span className="text-slate-300">·</span>
+                      </>}
                       <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedUserName(trade)}>{getTradeRelatedUserName(trade)}</span>
                       <span className="text-slate-300">·</span>
                       <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedFundName(trade)}>{getTradeRelatedFundName(trade)}</span>
@@ -7150,15 +7206,35 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   const isLong = side === "long";
   const isOption = bucket.instrumentType === "option";
   const isGrid = bucket.instrumentType === "grid";
+  // 有订单元数据即逐笔报价；整合报价只用灰字摘要表达挂/锁，始终保留基础多红空绿底色。
+  const isIndividualQuote = Boolean(metadata);
+  const pendingQuantity = Math.min(bucket.remainingQuantity, Math.max(0, bucket.pendingQuantity ?? 0));
+  const hasPendingQuantity = pendingQuantity > 0.0000001;
+  const isPendingOnly = isPending || (hasPendingQuantity && pendingQuantity >= bucket.remainingQuantity - 0.0000001);
+  const hasMixedPending = hasPendingQuantity && !isPendingOnly;
+  const lockedQuantity = Math.min(
+    bucket.remainingQuantity,
+    Math.max(0, bucket.lockedRemainingQuantity ?? (isLocked ? bucket.remainingQuantity : 0)),
+  );
+  const hasLockedQuantity = lockedQuantity > 0.0000001;
+  // 整合报价用第二行摘要呈现挂单/锁定数量，避免与第一行的数量和盈亏金额抢占横向空间。
+  const integratedStatusSummary = !isIndividualQuote
+    ? [
+      hasPendingQuantity ? `挂 ${formatIntegratedStatusQuantity(pendingQuantity)}` : null,
+      hasLockedQuantity ? `锁 ${formatIntegratedStatusQuantity(lockedQuantity)}` : null,
+    ].filter((item): item is string => Boolean(item)).join(" · ")
+    : "";
+  const usePendingStatusSkin = isIndividualQuote && isPendingOnly;
+  const useLockedStatusSkin = isIndividualQuote && isLocked;
   const optionMetadata = metadata?.option;
   const optionGreeks = useOptionGreeks({
     currency: "ETH",
     exerciseDate: optionMetadata?.expiryDate ?? "",
     strikePrice: Number(optionMetadata?.strikePrice) || 0,
     direction: optionMetadata?.direction ?? "long_call",
-    enabled: isOption && !isPending && Boolean(optionMetadata?.expiryDate) && Number(optionMetadata?.strikePrice) > 0,
+    enabled: isOption && !isPendingOnly && Boolean(optionMetadata?.expiryDate) && Number(optionMetadata?.strikePrice) > 0,
   });
-  const optionPnlResult = isOption && !isPending
+  const optionPnlResult = isOption && !isPendingOnly
     ? calculateOptionUnrealizedPnl({
       // 成员收益投影视图保留原始 ETH 数量展示，但收益必须按其分配比例折算。
       quantity: bucket.financialQuantity,
@@ -7169,9 +7245,9 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
       direction: optionMetadata?.direction,
     })
     : null;
-  const tone = isPending
+  const tone = usePendingStatusSkin
     ? `text-slate-700${readOnly ? "" : " hover:brightness-[0.98]"}`
-    : isLocked
+    : useLockedStatusSkin
     ? `text-[#f5d78e]${readOnly ? "" : " hover:brightness-110"}`
     : isOption
     ? `text-[#f5e9ff]${readOnly ? "" : " hover:brightness-110"}`
@@ -7205,18 +7281,18 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
     background: "linear-gradient(112deg, rgba(236,254,255,0.96), rgba(207,250,254,0.78) 52%, rgba(165,243,252,0.60))",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.94), inset 0 -1px 0 rgba(8,145,178,0.18), inset 1px 0 0 rgba(34,211,238,0.16)",
   };
-  const surfaceStyle = isPending
+  const surfaceStyle = usePendingStatusSkin
     ? pendingSurfaceStyle
-    : isLocked
+    : useLockedStatusSkin
     ? lockedSurfaceStyle
     : isOption
     ? T0_OPTION_METAL_SURFACE_STYLE
     : isGrid
     ? gridSurfaceStyle
     : sideSurfaceStyle;
-  const quantityTextStyle = isPending
+  const quantityTextStyle = usePendingStatusSkin
     ? { textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.92), 0.75px 0.75px 0 rgba(2,132,199,0.18)" }
-    : isLocked
+    : useLockedStatusSkin
     ? {
       background: "linear-gradient(180deg, #fff1bd 0%, #f5d78e 38%, #c9a84c 72%, #f5d78e 100%)",
       WebkitBackgroundClip: "text",
@@ -7229,7 +7305,7 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
     : isGrid
     ? { textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.94), 0.75px 0.75px 0 rgba(8,145,178,0.22)" }
     : { textShadow: "-0.55px -0.55px 0 rgba(255,255,255,0.88), 0.75px 0.75px 0 rgba(71,85,105,0.20)" };
-  const floatingPnl = isPending
+  const floatingPnl = isPendingOnly
     ? null
     : isOption
     ? optionPnlResult?.pnl ?? null
@@ -7248,35 +7324,36 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   const pnlTextStyle = { textShadow: "-0.35px -0.35px 0 rgba(255,255,255,0.84), 0.55px 0.55px 0 rgba(71,85,105,0.18)" };
   const content = (
     <div className="w-full min-w-0">
-      <div className="flex w-full min-w-0 items-center justify-between gap-2 tabular-nums">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className={`shrink-0 font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"} ${isPending ? "text-sky-700" : ""}`} style={quantityTextStyle}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
-          {hasLockedPosition && !isPending && !metadata && <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-[#c9a84c]/75 bg-[#141414] text-[#f5d78e] shadow-[inset_0_1px_0_rgba(245,215,142,0.16),inset_0_-1px_0_rgba(0,0,0,0.70)]" title={isLocked ? "本档仓位已锁定" : "本档含有锁定仓位"} aria-label={isLocked ? "本档仓位已锁定" : "本档含有锁定仓位"}>
-            <Lock className="h-2.5 w-2.5" strokeWidth={2.5} />
-          </span>}
+      <div className={`flex w-full min-w-0 justify-between gap-2 tabular-nums ${metadata ? "items-center" : "items-start"}`}>
+        <div className={metadata ? "flex min-w-0 items-center gap-1.5" : "flex min-h-[30px] min-w-0 flex-col justify-between"}>
+          <span className={`shrink-0 font-bold leading-none tracking-tight ${metadata ? "text-xl" : "text-lg"} ${usePendingStatusSkin ? "text-sky-700" : ""}`} style={quantityTextStyle}>{formatLadderQuantity(bucket.remainingQuantity)}</span>
+          {!metadata && integratedStatusSummary && <span className="shrink-0 whitespace-nowrap text-[9px] font-medium leading-none text-slate-400" title={`本档${integratedStatusSummary}`} aria-label={`本档${integratedStatusSummary}`}>{integratedStatusSummary}</span>}
+          {hasMixedPending && metadata && <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold leading-none text-sky-700" title={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`} aria-label={`含挂单 ${formatLadderQuantity(pendingQuantity)} ETH`}><Clock3 className="h-3 w-3" strokeWidth={2.35} /><span>挂{formatLadderQuantity(pendingQuantity)}</span></span>}
         </div>
         {floatingPnl !== null && (
-          <span className={`flex shrink-0 flex-col items-end text-right ${pnlTone}`} style={isOption ? { color: optionPnlColor, textShadow: "none" } : undefined}>
+          <span className={`flex min-h-[30px] shrink-0 flex-col items-end justify-between text-right ${pnlTone}`} style={isOption ? { color: optionPnlColor, textShadow: "none" } : undefined}>
             <span className={`whitespace-nowrap font-semibold leading-none ${metadata ? "text-[10px]" : "text-[11px]"}`} style={pnlTextStyle}>{formatSigned(floatingPnl)}</span>
             {floatingReturnRate !== null && (
-              <span className={`${metadata ? "mt-0.5 text-[9px]" : "mt-1 text-[10px]"} font-medium leading-none opacity-85`}>{formatSignedPercent(floatingReturnRate)}</span>
+              <span className={`${metadata ? "mt-0.5 text-[9px]" : "text-[10px]"} font-medium leading-none opacity-85`}>{formatSignedPercent(floatingReturnRate)}</span>
             )}
           </span>
         )}
       </div>
-      {metadata && <div className={`mt-1 flex min-w-0 items-center text-left text-[9px] font-medium leading-none ${isLocked && !isPending ? "text-[#c9a84c]/85" : isOption ? "text-violet-100/90" : isGrid ? "text-cyan-800/90" : "text-slate-500"}`} aria-label={`账户 ${metadata.accountName}，用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}${isPending ? "，挂单待成交" : ""}`}>
+      {metadata && <div className={`mt-1 flex min-w-0 items-center text-left text-[9px] font-medium leading-none ${isLocked && !isPendingOnly ? "text-[#c9a84c]/85" : isOption ? "text-violet-100/90" : isGrid ? "text-cyan-800/90" : "text-slate-500"}`} aria-label={`${metadata.accountName ? `账户 ${metadata.accountName}，` : ""}用户 ${metadata.relatedUserName}，项目 ${metadata.relatedFundName}${metadata.instrumentShortLabel ? `，类型 ${metadata.instrumentShortLabel}` : ""}${isPendingOnly ? "，挂单待成交" : ""}`}>
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
-          <span className="min-w-0 shrink truncate" title={`账户：${metadata.accountName}`}>{metadata.accountName}</span>
-          <span className="shrink-0">·</span>
+          {metadata.accountName && <>
+            <span className="min-w-0 shrink truncate" title={`账户：${metadata.accountName}`}>{metadata.accountName}</span>
+            <span className="shrink-0">·</span>
+          </>}
           <span className="min-w-0 shrink truncate" title={`用户：${metadata.relatedUserName}`}>{metadata.relatedUserName}</span>
           <span className="shrink-0">·</span>
           <span className="min-w-0 shrink truncate" title={`项目：${metadata.relatedFundName}`}>{metadata.relatedFundName}</span>
         </div>
-        {(isLocked || isCounterparty || isPending || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
-          {isLocked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#f5d78e]/85" strokeWidth={2.5} aria-label="已锁定" />}
+        {(isLocked || isCounterparty || isPendingOnly || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
+          {isLocked && <Lock className="h-2 w-2 shrink-0 -translate-y-px text-[#f5d78e]/85" strokeWidth={2.5} aria-label="已锁定" />}
           {isCounterparty && <Repeat2 className="h-2.5 w-2.5 shrink-0 text-violet-700" strokeWidth={2.7} aria-label="管理员反向展示" />}
-          {isPending && <Clock3 className="h-2.5 w-2.5 shrink-0 text-sky-600" strokeWidth={2.5} aria-label="挂单待成交" />}
-          {metadata.instrumentShortLabel && <span className={isLocked && !isPending ? "text-[#f5d78e]/85" : isOption ? "text-violet-100" : isGrid ? "text-cyan-800" : "text-slate-500"} title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
+          {isPendingOnly && <Clock3 className="h-2.5 w-2.5 shrink-0 text-sky-600" strokeWidth={2.5} aria-label="挂单待成交" />}
+          {metadata.instrumentShortLabel && <span className={isLocked && !isPendingOnly ? "text-[#f5d78e]/85" : isOption ? "text-violet-100" : isGrid ? "text-cyan-800" : "text-slate-500"} title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
         </div>}
       </div>}
     </div>

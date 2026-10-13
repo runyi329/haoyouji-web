@@ -24,6 +24,14 @@ interface OrderCardImageDownloadProps {
   variant?: "default" | "bare";
   /** 默认同时显示保存者和时间；可改为只显示截图时间。 */
   watermarkMode?: "user-and-time" | "time-only";
+  /** 导出文件名前缀，默认沿用订单图片。 */
+  filenamePrefix?: string;
+  /** 图片预览窗口标题。 */
+  previewTitle?: string;
+  /** 图片预览窗口说明。 */
+  previewHint?: string;
+  /** 显示为带文字的下载按钮。 */
+  buttonLabel?: string;
 }
 
 type ImagePreview = {
@@ -264,7 +272,7 @@ type SaveResult = "shared" | "downloaded" | "cancelled";
 
 async function shareOrDownloadImage(blob: Blob, filename: string): Promise<SaveResult> {
   const file = new File([blob], filename, { type: "image/png" });
-  const shareData: ShareData = { files: [file], title: "订单快照" };
+  const shareData: ShareData = { files: [file], title: filename.replace(/\.png$/i, "") };
 
   if (navigator.share) {
     try {
@@ -305,6 +313,10 @@ export function OrderCardImageDownload({
   exportBackground,
   variant = "default",
   watermarkMode = "user-and-time",
+  filenamePrefix = "订单",
+  previewTitle = "订单图片预览",
+  previewHint = "预览与当前页面卡片使用同一张图片",
+  buttonLabel,
 }: OrderCardImageDownloadProps) {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -359,7 +371,7 @@ export function OrderCardImageDownload({
 
       const blob = await canvasToBlob(canvas);
       const compactTime = timestamp.replace(/[-:]/g, "").replace(" ", "-");
-      const filename = `订单-${sanitizeFilename(String(orderNo || "快照"))}-${compactTime}.png`;
+      const filename = `${sanitizeFilename(filenamePrefix || "快照")}-${sanitizeFilename(String(orderNo || "快照"))}-${compactTime}.png`;
       const url = URL.createObjectURL(blob);
       setPreview(current => {
         if (current?.url) URL.revokeObjectURL(current.url);
@@ -401,8 +413,8 @@ export function OrderCardImageDownload({
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <div>
-            <div className="text-base font-semibold text-slate-800">订单图片预览</div>
-            <div className="mt-0.5 text-xs text-slate-400">预览与当前页面卡片使用同一张图片</div>
+            <div className="text-base font-semibold text-slate-800">{previewTitle}</div>
+            <div className="mt-0.5 text-xs text-slate-400">{previewHint}</div>
           </div>
           <button
             type="button"
@@ -455,20 +467,23 @@ export function OrderCardImageDownload({
         onClick={handleGeneratePreview}
         disabled={generating}
         data-card-export-hide="true"
-        className={variant === "bare"
-          ? "inline-flex h-5 w-5 shrink-0 items-center justify-center transition active:scale-95 disabled:opacity-60"
-          : "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition active:scale-95 disabled:opacity-60"}
-        style={variant === "bare"
-          ? { color }
-          : {
+        className={buttonLabel
+          ? "inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-lg px-2 text-xs font-medium transition active:scale-95 disabled:opacity-60"
+          : variant === "bare"
+            ? "inline-flex h-5 w-5 shrink-0 items-center justify-center transition active:scale-95 disabled:opacity-60"
+            : "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition active:scale-95 disabled:opacity-60"}
+        style={buttonLabel || variant !== "bare"
+          ? {
               color,
-              background: "rgba(255,255,255,0.35)",
+              background: "rgba(255,255,255,0.72)",
               border: "1px solid rgba(148,163,184,0.28)",
-            }}
-        title="预览并保存图片"
-        aria-label="预览订单图片"
+            }
+          : { color }}
+        title={buttonLabel || "预览并保存图片"}
+        aria-label={buttonLabel || previewTitle}
       >
         {generating ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+        {buttonLabel ? <span>{generating ? "生成中" : buttonLabel}</span> : null}
       </button>
       {previewModal}
     </>

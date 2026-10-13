@@ -38,12 +38,49 @@ function numeric(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/** 将服务端快照的 ISO 时间统一显示为北京时间中文月日与时分。 */
+export function formatTagMarginStockQuoteUpdatedAt(value: unknown, snapshotStoredAsBeijing = false): string {
+  const raw = text(value);
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [, , month, day] = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/) ?? [];
+    return month && day ? `${Number(month)}月${Number(day)}日` : '';
+  }
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return '';
+  // 兼容尚未重启的旧服务：MySQL 北京时间 DATETIME 曾被序列化成带 Z 的 ISO 字符串。
+  // 新服务会返回 +08:00；两种格式都必须在界面显示同一个北京时间。
+  if (snapshotStoredAsBeijing && /Z$/i.test(raw)) {
+    return `${date.getUTCMonth() + 1}月${date.getUTCDate()}日 ${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`;
+  }
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
+  const month = part('month');
+  const day = part('day');
+  const hour = part('hour');
+  const minute = part('minute');
+  return month && day && hour && minute ? `${Number(month)}月${Number(day)}日 ${hour}:${minute}` : '';
+}
+
 function normalizeSymbol(value: unknown): string {
   return text(value).toUpperCase();
 }
 
 function normalizeCoin(value: unknown): string {
   return text(value).toUpperCase() || 'CNY';
+}
+
+/** 保证金展示将 USDT 简写为小写 u；底层币种代码与计算口径保持不变。 */
+export function formatTagMarginCoinLabel(value: unknown): string {
+  const raw = text(value);
+  return raw.toUpperCase() === 'USDT' ? 'u' : raw;
 }
 
 function normalizeStockRecord(value: unknown): TagMarginStockRecord | null {

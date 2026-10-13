@@ -7,7 +7,7 @@
  *   左侧保证金：按成员×标签管理（原有逻辑）
  *   右侧保证金：按标签管理，多币种，存储在 tag_config.margin_by_coin
  */
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import React from "react";
 import { useParams, useLocation } from "wouter";
 import {
@@ -29,11 +29,14 @@ import {
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
+import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import {
   getTagMarginCurrencyRecords,
   getTagMarginStockMarketValue,
   getTagMarginStockRecords,
+  formatTagMarginCoinLabel,
   getTagMarginStockSymbols,
+  formatTagMarginStockQuoteUpdatedAt,
   parseTagMarginRecords,
   resolveTagMarginStockQuote,
   type TagMarginRecord,
@@ -42,6 +45,7 @@ import {
 const CRYPTO_COINS = ["BTC", "ETH", "SOL", "LDO", "USDT", "元"];
 const normalizeCoin = (coin: string) => (!coin || coin === "人民币") ? "元" : coin;
 const CNY_RATE_FALLBACK = 6.8; // 居底备用，实际汇率从接口实时获取
+const isCnyMarginCoin = (coin: string) => ["元", "人民币", "CNY", "RMB"].includes(String(coin || '').trim().toUpperCase());
 
 interface DepositEntry {
   margin: string;
@@ -91,7 +95,7 @@ function toRightMarginEdit(record: TagMarginRecord, date: string): RightMarginEd
 function toCNY(margin: string | number, coin: string, prices: Record<string, number>): number {
   const num = typeof margin === 'number' ? margin : parseFloat(margin);
   if (isNaN(num) || num === 0) return 0;
-  if (!coin || coin === "人民币" || coin === "元") return num;
+  if (!coin || isCnyMarginCoin(coin)) return num;
   // USDT 和其他币种都通过 prices 映射表计算（prices["USDT"] 已是实时汇率）
   const price = prices[coin];
   if (!price) return 0;
@@ -510,6 +514,8 @@ export default function DepositManage() {
   const [rightMultiplierEdit, setRightMultiplierEdit] = useState("1");
   const [rightMarginBaseEdit, setRightMarginBaseEdit] = useState("");
   const [rightBalanceEditMode, setRightBalanceEditMode] = useState(false);
+  const rightMarginExportRef = useRef<HTMLDivElement>(null);
+  const rightBalanceExportRef = useRef<HTMLDivElement>(null);
   // ── 日志 & 暂停状态 ──
   const [marginLogExpanded, setMarginLogExpanded] = useState(false);
   const [pauseSaving, setPauseSaving] = useState(false);
@@ -837,6 +843,21 @@ export default function DepositManage() {
       return sum + toCNY(String(entry.amount), entry.coin, cryptoPrices);
     }, 0);
   }, [rightMarginData, cryptoPrices, allMarginStockQuotes]);
+  const rightMarginValueSummary = useMemo(() => {
+    const currencyTotals = getTagMarginCurrencyRecords(rightMarginData).reduce((acc, { coin, amount }) => {
+      acc[coin] = (acc[coin] || 0) + amount;
+      return acc;
+    }, {} as Record<string, number>);
+    const stockValues = getTagMarginStockRecords(rightMarginData)
+      .map((stock) => getTagMarginStockMarketValue(stock, allMarginStockQuotes));
+    return {
+      currencyTotals,
+      stockCount: stockValues.length,
+      stockValueCNY: stockValues.reduce<number>((sum, value) => sum + (value ?? 0), 0),
+      stockValueReady: stockValues.every((value) => value !== null),
+      cnyValueCNY: Object.entries(currencyTotals).reduce((sum, [coin, amount]) => isCnyMarginCoin(coin) ? sum + amount : sum, 0),
+    };
+  }, [rightMarginData, allMarginStockQuotes]);
   const canonicalRightTotalCNY = Number((canonicalMarginValuation as any)?.totalCny);
   const rightTotalCNY = Number.isFinite(canonicalRightTotalCNY) ? canonicalRightTotalCNY : locallyComputedRightTotalCNY;
 
@@ -1039,7 +1060,7 @@ export default function DepositManage() {
                         className="flex-shrink-0 rounded-2xl px-4 py-3 min-w-[110px]"
                         style={{ background: "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)" }}
                       >
-                        <div className="text-xs text-blue-200 mb-1">{coin}</div>
+                        <div className="text-xs text-blue-200 mb-1">{formatTagMarginCoinLabel(coin)}</div>
                         <div className="text-base font-bold text-white">
                           {data.total.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
                         </div>
@@ -1201,7 +1222,7 @@ export default function DepositManage() {
                                       <span className="text-sm font-semibold text-gray-800">
                                         {parseFloat(entry.margin).toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
                                       </span>
-                                      <span className="text-xs text-gray-500">{normalizeCoin(entry.marginCoin)}</span>
+                                      <span className="text-xs text-gray-500">{formatTagMarginCoinLabel(normalizeCoin(entry.marginCoin))}</span>
                                       {entry.marginCoin && entry.marginCoin !== "元" && (
                                         <span className="text-xs text-gray-400">
                                           {calcCNYStr(entry.margin, entry.marginCoin)}
@@ -1364,9 +1385,20 @@ export default function DepositManage() {
                         {!rightEditMode && (
                           <>
                             {/* 保证金内置容器 */}
-                            <div className="rounded-xl p-3 mb-3 space-y-2" style={{ backgroundColor: '#F8FBFF', border: '1px solid #DBEAFE' }}>
-                              {/* 标题行：右侧放编辑按钮 */}
-                              <div className="flex justify-end items-center">
+                            <div ref={rightMarginExportRef} className="rounded-xl p-3 mb-3 space-y-2" style={{ backgroundColor: '#F8FBFF', border: '1px solid #DBEAFE' }}>
+                              {/* 标题行：导出与编辑按钮均不纳入图片 */}
+                              <div className="flex justify-end items-center gap-2" data-card-export-hide="true">
+                                <OrderCardImageDownload
+                                  targetRef={rightMarginExportRef}
+                                  orderNo={`37号账本-${cat.name}-保证金`}
+                                  filenamePrefix="保证金"
+                                  previewTitle="保证金图片预览"
+                                  previewHint="仅包含当前标签的保证金明细与合计"
+                                  color="#2563EB"
+                                  outerPadding={12}
+                                  captureFullContent
+                                  exportBackground="#F8FBFF"
+                                />
                                 <button
                                   onClick={handleStartRightEditing}
                                   className="text-xs text-blue-500 flex items-center gap-0.5"
@@ -1382,23 +1414,29 @@ export default function DepositManage() {
                                     if (entry.assetType === 'stock') {
                                       const quote = resolveTagMarginStockQuote(entry, allMarginStockQuotes);
                                       const marketValue = getTagMarginStockMarketValue(entry, allMarginStockQuotes);
-                                      const quoteDate = quote.priceDate ? quote.priceDate.slice(0, 10) : '';
+                                      const quoteUpdatedAt = formatTagMarginStockQuoteUpdatedAt(quote.updatedAt, quote.isCloseSnapshot);
                                       const cnyRate = cryptoPrices.USDT ?? CNY_RATE_FALLBACK;
+                                      const isStockReduction = entry.quantity < 0;
                                       return (
                                         <div key={_i} className="flex items-start justify-between py-2" style={{ borderBottom: '1px solid #E5E7EB' }}>
                                           <div className="flex flex-col min-w-0 flex-1 mr-2">
-                                            <div className="flex items-center gap-1.5 min-w-0">
-                                            <span className="text-xs font-medium text-gray-700">股票</span>
-                                            <span className="text-xs truncate" style={{ color: '#2563EB' }}>{entry.name || entry.code}</span>
-                                            <span className="text-[10px] font-mono" style={{ color: '#64748B' }}>{entry.code}</span>
-                                          </div>
-                                            <span className="text-[10px] text-gray-400 mt-0.5">{quote.isCloseSnapshot ? '参考价' : '暂用参考价'}{quoteDate ? ` · ${quoteDate}` : ''} · ¥{quote.price?.toLocaleString('zh-CN', { maximumFractionDigits: 3 }) ?? '--'}</span>
-                                            {entry.label ? <span className="text-[10px] text-gray-400 mt-0.5 break-all" style={{ maxWidth: '160px' }}>{entry.label}</span> : null}
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-xs font-medium text-gray-700">保证金</span>
+                                              <span className="text-xs" style={{ color: '#2563EB' }}>{entry.date ? entry.date.slice(5) : '--'}</span>
+                                              <span className="text-[10px] font-medium px-1 py-0.5 rounded" style={{ backgroundColor: isStockReduction ? '#DCFCE7' : '#EFF6FF', color: isStockReduction ? '#16A34A' : '#2563EB' }}>{isStockReduction ? '减少' : '增加'}</span>
+                                              <span className="text-[10px] font-medium px-1 py-0.5 rounded" style={{ backgroundColor: '#EEF2FF', color: '#4F46E5' }}>股票</span>
+                                            </div>
+                                            <div className="mt-0.5 flex items-center gap-1.5 min-w-0">
+                                              <span className="text-xs truncate" style={{ color: '#2563EB' }}>{entry.name || '未命名股票'}</span>
+                                              <span className="text-[10px] font-mono" style={{ color: '#64748B' }}>{entry.code}</span>
+                                            </div>
+                                            <span className="text-[10px] text-gray-400 mt-0.5">{quote.isCloseSnapshot ? '参考价' : '暂用参考价'} ¥{quote.price?.toLocaleString('zh-CN', { maximumFractionDigits: 3 }) ?? '--'}{quoteUpdatedAt ? ` · 更新于 ${quoteUpdatedAt}` : ''}</span>
+                                            {entry.label ? <span className="text-[10px] text-gray-400 mt-0.5 break-all" style={{ maxWidth: '160px' }}>备注：{entry.label}</span> : null}
                                           </div>
                                           <div className="flex flex-col items-end">
                                             <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{entry.quantity.toLocaleString('zh-CN', { maximumFractionDigits: 4 })}<span className="text-xs text-gray-500 ml-1">股</span></span>
                                             <span className="text-xs" style={{ color: marketValue === null ? '#9CA3AF' : '#2563EB' }}>{marketValue === null ? '市值待获取' : `约 ¥${marketValue.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`}</span>
-                                            {marketValue !== null && cnyRate > 0 && <span className="text-[10px] text-gray-400">≈ {(marketValue / cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} U</span>}
+                                            {marketValue !== null && cnyRate > 0 && <span className="text-[10px] text-gray-400">≈ {(marketValue / cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span>}
                                           </div>
                                         </div>
                                       );
@@ -1428,18 +1466,18 @@ export default function DepositManage() {
                                               {amount < 0 ? '减少' : '增加'}
                                             </span>
                                           </div>
-                                          {label ? <span className="text-[10px] text-gray-400 mt-0.5 break-all" style={{ maxWidth: '160px' }}>{label}</span> : null}
+                                          {label ? <span className="text-[10px] text-gray-400 mt-0.5 break-all" style={{ maxWidth: '160px' }}>备注：{label}</span> : null}
                                         </div>
-                                        {/* 右：上行原币金额，下行折合人民币（元）或折合 U（其他币种） */}
+                                        {/* 右：上行原币金额，下行折合人民币（元）或折合 u（其他币种） */}
                                         <div className="flex flex-col items-end">
                                           <span className="text-sm font-semibold" style={{ color: amount < 0 ? '#388E3C' : '#1A2340' }}>
                                             {amount >= 0 ? '+' : ''}{amount.toLocaleString('zh-CN', { maximumFractionDigits: 4 })}
-                                            <span className="text-xs text-gray-500 ml-1">{coin}</span>
+                                            <span className="text-xs text-gray-500 ml-1">{formatTagMarginCoinLabel(coin)}</span>
                                           </span>
-                                          {/* 元/人民币：显示折合 U */}
+                                          {/* 元/人民币：显示折合 u */}
                                           {(coin === '元' || coin === '人民币') && cryptoPrices['USDT'] > 0 && (
                                             <span className="text-xs text-gray-400">
-                                              ≈{(Math.abs(amount) / cryptoPrices['USDT'] >= 0 ? (amount < 0 ? '-' : '') : '')}{(Math.abs(amount) / cryptoPrices['USDT']).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} U
+                                              ≈{(Math.abs(amount) / cryptoPrices['USDT'] >= 0 ? (amount < 0 ? '-' : '') : '')}{(Math.abs(amount) / cryptoPrices['USDT']).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} u
                                             </span>
                                           )}
                                           {/* 其他币种：显示折合人民币 */}
@@ -1453,27 +1491,34 @@ export default function DepositManage() {
                                     );
                                   })}
                                   {/* 合计行 */}
-                                  <div className="flex items-end justify-between pt-1" style={{ borderTop: '1px solid #DBEAFE' }}>
-                                    <span className="text-xs text-gray-500">合计</span>
-                                    <div className="flex flex-col items-end">
-                                      {Object.entries(
-                                        getTagMarginCurrencyRecords(rightMarginData).reduce((acc, { coin, amount }) => {
-                                          acc[coin] = (acc[coin] || 0) + amount;
-                                          return acc;
-                                        }, {} as Record<string, number>)
-                                      ).map(([coin, total]) => (
-                                        <span key={coin} className="text-xs font-semibold" style={{ color: total < 0 ? '#388E3C' : '#1A2340' }}>
-                                          {total >= 0 ? '+' : ''}{total.toLocaleString('zh-CN', { maximumFractionDigits: 4 })} {coin}
-                                        </span>
+                                  <div className="pt-2" style={{ borderTop: '1px solid #DBEAFE' }}>
+                                    <div className="mb-1.5 text-xs font-semibold" style={{ color: '#111827' }}>合计</div>
+                                    <div className="space-y-1">
+                                      {Object.entries(rightMarginValueSummary.currencyTotals).filter(([coin]) => !isCnyMarginCoin(coin)).map(([coin, total]) => (
+                                        <div key={coin} className="flex items-baseline justify-between gap-3">
+                                          <span className="text-xs font-medium" style={{ color: '#111827' }}>{formatTagMarginCoinLabel(coin)} 价值</span>
+                                          <span className="shrink-0 whitespace-nowrap text-right text-xs font-semibold tabular-nums" style={{ color: total < 0 ? '#388E3C' : '#1A2340' }}>{total >= 0 ? '+' : ''}{total.toLocaleString('zh-CN', { maximumFractionDigits: 4 })} {formatTagMarginCoinLabel(coin)}</span>
+                                        </div>
                                       ))}
-                                      {getTagMarginStockRecords(rightMarginData).length > 0 && (
-                                        <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>
-                                          {getTagMarginStockRecords(rightMarginData).reduce((sum, stock) => sum + stock.quantity, 0).toLocaleString('zh-CN', { maximumFractionDigits: 4 })} 股（股票）
-                                        </span>
+                                      {rightMarginValueSummary.stockCount > 0 && (
+                                        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2">
+                                          <span className="text-xs font-medium" style={{ color: '#111827' }}>股票价值</span>
+                                          {rightMarginValueSummary.stockValueReady ? <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-normal tabular-nums text-gray-500">≈ {(rightMarginValueSummary.stockValueCNY / (cryptoPrices.USDT > 0 ? cryptoPrices.USDT : CNY_RATE_FALLBACK)).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span> : <span className="justify-self-end text-[10px] text-gray-400">待获取</span>}
+                                          <span className="whitespace-nowrap text-right text-xs font-semibold tabular-nums" style={{ color: '#1A2340' }}>{rightMarginValueSummary.stockValueReady ? `¥${rightMarginValueSummary.stockValueCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}</span>
+                                        </div>
                                       )}
-                                      <span className="text-[10px] text-gray-500">总担保市值</span>
-                                      <span className="text-sm font-bold text-blue-700">约 ¥{rightTotalCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
-                                      {(cryptoPrices.USDT ?? CNY_RATE_FALLBACK) > 0 && <span className="text-xs text-gray-500">≈ {(rightTotalCNY / (cryptoPrices.USDT ?? CNY_RATE_FALLBACK)).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} U</span>}
+                                      {rightMarginValueSummary.cnyValueCNY !== 0 && (
+                                        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2">
+                                          <span className="text-xs font-medium" style={{ color: '#111827' }}>人民币价值</span>
+                                          <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-normal tabular-nums text-gray-500">≈ {(rightMarginValueSummary.cnyValueCNY / (cryptoPrices.USDT > 0 ? cryptoPrices.USDT : CNY_RATE_FALLBACK)).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span>
+                                          <span className="whitespace-nowrap text-right text-xs font-semibold tabular-nums" style={{ color: rightMarginValueSummary.cnyValueCNY < 0 ? '#388E3C' : '#1A2340' }}>¥{rightMarginValueSummary.cnyValueCNY.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                      )}
+                                      <div className="mt-1 grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2 pt-1.5" style={{ borderTop: '1px solid #E5E7EB' }}>
+                                        <span className="text-sm font-bold" style={{ color: '#111827' }}>总担保价值</span>
+                                        <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-gray-500">≈ {(rightTotalCNY / (cryptoPrices.USDT > 0 ? cryptoPrices.USDT : CNY_RATE_FALLBACK)).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span>
+                                        <span className="whitespace-nowrap text-right text-sm font-bold tabular-nums text-blue-700">¥{rightTotalCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
@@ -1502,7 +1547,7 @@ export default function DepositManage() {
                               const multiplierNum = parseFloat(savedMultiplier || "1") || 1;
                               const marginBaseNum = parseFloat(savedMarginBase || "0") || 0;
                               // 盈亏净値 = (余额 - 初始金额) × 倍数
-                              // 实时 USDT/CNY 汇率（用于盈亏净值折算为 U）
+                              // 实时 USDT/CNY 汇率（用于盈亏净值折算为 u）
                               const _cnyRate = cryptoPrices["USDT"] ?? CNY_RATE_FALLBACK;
                               const pnl = autoBalanceNum !== null ? (autoBalanceNum - initialNum) * multiplierNum : null;
                               // 剩余保证金 = 盈亏净値 + 已付保证金（盈亏为负表示输给公司，加上保证金得剩余；盈亏为正表示赢了，加上保证金得总资产）
@@ -1512,9 +1557,22 @@ export default function DepositManage() {
                               // 保证金占余额比（降级备用）
                               const marginPct = autoBalanceNum !== null && autoBalanceNum > 0 ? (rightTotalCNY / autoBalanceNum * 100) : null;
                               return (
-                                <div className="mt-3 rounded-xl p-3 space-y-2" style={{ backgroundColor: "#F8FBFF", border: "1px solid #DBEAFE" }}>
-                                  {/* 设置按鈕单独一行，靠右 */}
-                                  <div className="flex justify-end">
+                                <div ref={rightBalanceExportRef} className="mt-3 rounded-xl p-3 space-y-2" style={{ backgroundColor: "#F8FBFF", border: "1px solid #DBEAFE" }}>
+                                  {/* 设置与下载不纳入账户余额图片 */}
+                                  <div className="flex justify-end gap-2" data-card-export-hide="true">
+                                    {!rightBalanceEditMode && (
+                                      <OrderCardImageDownload
+                                        targetRef={rightBalanceExportRef}
+                                        orderNo={`37号账本-${cat.name}-账户余额`}
+                                        filenamePrefix="账户余额"
+                                        previewTitle="账户余额图片预览"
+                                        previewHint="仅包含账户余额、初始金额、倍数与保证金测算"
+                                        color="#2563EB"
+                                        outerPadding={12}
+                                        captureFullContent
+                                        exportBackground="#F8FBFF"
+                                      />
+                                    )}
                                     {!rightBalanceEditMode ? (
                                       <button
                                         onClick={() => {
@@ -1578,7 +1636,7 @@ export default function DepositManage() {
                                                 </div>
                                                  {pnl !== null && _cnyRate > 0 && (
                                                    <div className="text-xs text-gray-400">
-                                                     ≈{(pnl / _cnyRate >= 0 ? "+" : "")}{(pnl / _cnyRate).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} U
+                                                     ≈{(pnl / _cnyRate >= 0 ? "+" : "")}{(pnl / _cnyRate).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} u
                                                    </div>
                                                  )}
                                               </div>
@@ -1591,7 +1649,7 @@ export default function DepositManage() {
                                                 </div>
                                                  {remainingMargin !== null && _cnyRate > 0 && (
                                                    <div className="text-xs text-gray-400">
-                                                     ≈{(remainingMargin / _cnyRate >= 0 ? "+" : "")}{(remainingMargin / _cnyRate).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} U
+                                                     ≈{(remainingMargin / _cnyRate >= 0 ? "+" : "")}{(remainingMargin / _cnyRate).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} u
                                                    </div>
                                                  )}
                                               </div>
@@ -1931,7 +1989,7 @@ export default function DepositManage() {
                                         <input type="date" value={entry.date || new Date().toISOString().slice(0, 10)} onChange={(event) => updateRightMarginEntry(idx, { date: event.target.value })} className="min-w-0 text-xs border rounded-lg px-2 py-1.5 outline-none" style={{ borderColor: '#BFDBFE', backgroundColor: '#FFFFFF', WebkitAppearance: 'none' }} />
                                       </div>
                                       <div className="mt-1.5 rounded-lg px-2 py-1.5 text-[11px]" style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8' }}>
-                                        当前参考价：{entry.referencePrice ? `¥${Number(entry.referencePrice).toLocaleString('zh-CN', { maximumFractionDigits: 3 })}` : '选择股票后自动带入'}{entry.priceDate ? ` · ${entry.priceDate}` : ''}；担保市值按每日 15:05 保存的参考价计算。
+                                        当前参考价：{entry.referencePrice ? `¥${Number(entry.referencePrice).toLocaleString('zh-CN', { maximumFractionDigits: 3 })}` : '选择股票后自动带入'}{formatTagMarginStockQuoteUpdatedAt(entry.priceUpdatedAt) ? ` · 更新于 ${formatTagMarginStockQuoteUpdatedAt(entry.priceUpdatedAt)}` : ''}；保存后将自动同步最新参考价。
                                       </div>
                                     </>
                                   )}

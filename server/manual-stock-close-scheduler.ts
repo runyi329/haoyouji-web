@@ -21,6 +21,21 @@ function beijingDate(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+/** MySQL DATETIME 存的是北京时间；mysql2 会将其读成 UTC Date，需补回 +08:00 语义。 */
+function databaseBeijingTimestamp(value: unknown): string {
+  const date = value instanceof Date ? value : new Date(String(value ?? ''));
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (number: number) => String(number).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}T${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}+08:00`;
+}
+
+function databaseBeijingDate(value: unknown): string {
+  const date = value instanceof Date ? value : new Date(String(value ?? ''));
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (number: number) => String(number).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+}
+
 function normalizeSymbol(value: unknown): string | null {
   const symbol = String(value || "").trim().toUpperCase();
   if (/^[A-Z][A-Z0-9.\-]{0,14}$/.test(symbol)) return symbol;
@@ -139,37 +154,47 @@ export async function refreshManualStockCloseSnapshots(): Promise<{ symbols: num
  * 盘中每五分钟刷新52号手工股票与37号股票保证金引用的参考价。
  * 只更新当前可见价格与浮动盈亏，不创建日结记录；15:05 的独立盘尾任务仍负责固化收盘价。
  */
+export async function refreshManualStockIntradaySnapshotsForSymbols(rawSymbols: string[]): Promise<{ symbols: number; updated: number }> {
+  const symbols = Array.from(new Set(rawSymbols
+    .map(normalizeSymbol)
+    .filter((symbol): symbol is string => !!symbol)))
+    .slice(0, 200);
+  if (!symbols.length) return { symbols: 0, updated: 0 };
+
+  await ensureTable();
+  const quotes = await fetchIntradayStockQuotes(symbols);
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用，无法保存股票盘中参考价");
+  let updated = 0;
+  for (const symbol of symbols) {
+    const quote = quotes[symbol];
+    if (!quote) continue;
+    const priceDate = quote.priceDate || beijingDate();
+    await (conn as any).execute(
+      `INSERT INTO funder_manual_stock_close_snapshots
+        (symbol, price, currency, price_date, source, updated_at)
+       VALUES (?, ?, ?, ?, ?, NOW())
+       ON DUPLICATE KEY UPDATE
+         price = VALUES(price),
+         currency = VALUES(currency),
+         price_date = VALUES(price_date),
+         source = VALUES(source),
+         updated_at = NOW()`,
+      [symbol, quote.price, quote.currency, priceDate, `盘中·${quote.source}`]
+    );
+    updated += 1;
+  }
+  return { symbols: symbols.length, updated };
+}
+
 export async function refreshManualStockIntradaySnapshots(): Promise<{ symbols: number; updated: number }> {
   if (refreshInProgress) return { symbols: 0, updated: 0 };
   refreshInProgress = true;
   try {
-    await ensureTable();
     const symbols = await getTrackedSymbols({ includeLedger37MarginStocks: true });
-    if (!symbols.length) return { symbols: 0, updated: 0 };
-    const quotes = await fetchIntradayStockQuotes(symbols);
-    const conn = await getDbConnection();
-    if (!conn) throw new Error("数据库连接不可用，无法保存股票盘中参考价");
-    let updated = 0;
-    for (const symbol of symbols) {
-      const quote = quotes[symbol];
-      if (!quote) continue;
-      const priceDate = quote.priceDate || beijingDate();
-      await (conn as any).execute(
-        `INSERT INTO funder_manual_stock_close_snapshots
-          (symbol, price, currency, price_date, source, updated_at)
-         VALUES (?, ?, ?, ?, ?, NOW())
-         ON DUPLICATE KEY UPDATE
-           price = VALUES(price),
-           currency = VALUES(currency),
-           price_date = VALUES(price_date),
-           source = VALUES(source),
-           updated_at = NOW()`,
-        [symbol, quote.price, quote.currency, priceDate, `盘中·${quote.source}`]
-      );
-      updated += 1;
-    }
-    console.log(`[股票盘中] ${beijingDate()}：跟踪 ${symbols.length} 只，更新 ${updated} 只`);
-    return { symbols: symbols.length, updated };
+    const result = await refreshManualStockIntradaySnapshotsForSymbols(symbols);
+    console.log(`[股票盘中] ${beijingDate()}：跟踪 ${result.symbols} 只，更新 ${result.updated} 只`);
+    return result;
   } finally {
     refreshInProgress = false;
   }
@@ -202,9 +227,9 @@ export async function getManualStockCloseSnapshots(symbols: string[]): Promise<R
       symbol,
       price,
       currency,
-      priceDate: String(row.price_date || "").slice(0, 10),
+      priceDate: databaseBeijingDate(row.price_date),
       source: String(row.source || ""),
-      updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : "",
+      updatedAt: databaseBeijingTimestamp(row.updated_at),
     };
   }
   return result;

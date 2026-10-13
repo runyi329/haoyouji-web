@@ -10,18 +10,21 @@ import {
   getTagMarginCurrencyRecords,
   getTagMarginStockMarketValue,
   getTagMarginStockRecords,
+  formatTagMarginCoinLabel,
   getTagMarginStockSymbols,
+  formatTagMarginStockQuoteUpdatedAt,
   parseTagMarginRecords,
   resolveTagMarginStockQuote,
 } from "@shared/tag-margin-assets";
 
 const CNY_RATE_FALLBACK = 6.8;
+const isCnyMarginCoin = (coin: string) => ["元", "人民币", "CNY", "RMB"].includes(String(coin || '').trim().toUpperCase());
 
 function toCNY(margin: string | number, coin: string, prices: Record<string, number>): number {
   const num = typeof margin === "number" ? margin : parseFloat(margin);
   if (isNaN(num) || num === 0) return 0;
+  if (!coin || isCnyMarginCoin(coin)) return num;
   const normalizedCoin = String(coin || "").trim().toUpperCase();
-  if (!normalizedCoin || ["人民币", "元", "CNY", "RMB"].includes(normalizedCoin)) return num;
   const price = prices[normalizedCoin] ?? prices[coin];
   if (!price) return 0;
   return num * price;
@@ -143,6 +146,21 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
       ? sum + (getTagMarginStockMarketValue(entry, rightMarginStockQuotes) ?? 0)
       : sum + toCNY(String(entry.amount), entry.coin, cryptoPrices), 0);
   }, [rightMarginData, cryptoPrices, rightMarginStockQuotes]);
+  const rightMarginValueSummary = useMemo(() => {
+    const currencyTotals = getTagMarginCurrencyRecords(rightMarginData).reduce((acc, { coin, amount }) => {
+      acc[coin] = (acc[coin] || 0) + amount;
+      return acc;
+    }, {} as Record<string, number>);
+    const stockValues = getTagMarginStockRecords(rightMarginData)
+      .map((stock) => getTagMarginStockMarketValue(stock, rightMarginStockQuotes));
+    return {
+      currencyTotals,
+      stockCount: stockValues.length,
+      stockValueCNY: stockValues.reduce<number>((sum, value) => sum + (value ?? 0), 0),
+      stockValueReady: stockValues.every((value) => value !== null),
+      cnyValueCNY: Object.entries(currencyTotals).reduce((sum, [coin, amount]) => isCnyMarginCoin(coin) ? sum + amount : sum, 0),
+    };
+  }, [rightMarginData, rightMarginStockQuotes]);
   const canonicalTotalCNY = Number((canonicalMarginValuation as any)?.totalCny);
   const rightTotalCNY = Number.isFinite(canonicalTotalCNY) ? canonicalTotalCNY : locallyComputedTotalCNY;
 
@@ -164,7 +182,7 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
   const initialNum = parseFloat(savedInitial || "0") || 0;
   const multiplierNum = parseFloat(savedMultiplier || "1") || 1;
   const marginBaseNum = parseFloat(savedMarginBase || "0") || 0;
-  const _cnyRate = cryptoPrices["USDT"] ?? CNY_RATE_FALLBACK;
+  const _cnyRate = Number(cryptoPrices["USDT"]) > 0 ? Number(cryptoPrices["USDT"]) : CNY_RATE_FALLBACK;
   const pnl = autoBalanceNum !== null ? (autoBalanceNum - initialNum) * multiplierNum : null;
   const remainingMargin = pnl !== null ? pnl + rightTotalCNY : null;
   const marginBasePct = marginBaseNum > 0 && remainingMargin !== null ? (remainingMargin / marginBaseNum * 100) : null;
@@ -182,22 +200,28 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
               if (entry.assetType === 'stock') {
                 const quote = resolveTagMarginStockQuote(entry, rightMarginStockQuotes);
                 const marketValue = getTagMarginStockMarketValue(entry, rightMarginStockQuotes);
-                const quoteDate = quote.priceDate ? quote.priceDate.slice(0, 10) : '';
+                const quoteUpdatedAt = formatTagMarginStockQuoteUpdatedAt(quote.updatedAt, quote.isCloseSnapshot);
+                const isStockReduction = entry.quantity < 0;
                 return (
                   <div key={_i} className="flex items-start justify-between py-2" style={{ borderBottom: "1px solid #E5E7EB" }}>
                     <div className="flex flex-col min-w-0 flex-1 mr-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-xs font-medium text-gray-700">股票</span>
-                        <span className="truncate text-xs" style={{ color: '#2563EB' }}>{entry.name || entry.code}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-medium text-gray-700">保证金</span>
+                        <span className="text-xs" style={{ color: '#2563EB' }}>{entry.date ? entry.date.slice(5) : '--'}</span>
+                        <span className="text-[10px] font-medium px-1 py-0.5 rounded" style={{ backgroundColor: isStockReduction ? '#DCFCE7' : '#EFF6FF', color: isStockReduction ? '#16A34A' : '#2563EB' }}>{isStockReduction ? '减少' : '增加'}</span>
+                        <span className="text-[10px] font-medium px-1 py-0.5 rounded" style={{ backgroundColor: '#EEF2FF', color: '#4F46E5' }}>股票</span>
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-1.5 min-w-0">
+                        <span className="truncate text-xs" style={{ color: '#2563EB' }}>{entry.name || '未命名股票'}</span>
                         <span className="text-[10px] font-mono" style={{ color: '#64748B' }}>{entry.code}</span>
                       </div>
-                      <span className="text-[10px] text-gray-400 mt-0.5">{quote.isCloseSnapshot ? '参考价' : '暂用参考价'}{quoteDate ? ` · ${quoteDate}` : ''} · ¥{quote.price?.toLocaleString('zh-CN', { maximumFractionDigits: 3 }) ?? '--'}</span>
-                      {entry.label ? <span className="text-[10px] text-gray-400 mt-0.5 break-all" style={{ maxWidth: "160px" }}>{entry.label}</span> : null}
+                      <span className="text-[10px] text-gray-400 mt-0.5">{quote.isCloseSnapshot ? '参考价' : '暂用参考价'} ¥{quote.price?.toLocaleString('zh-CN', { maximumFractionDigits: 3 }) ?? '--'}{quoteUpdatedAt ? ` · 更新于 ${quoteUpdatedAt}` : ''}</span>
+                      {entry.label ? <span className="text-[10px] text-gray-400 mt-0.5 break-all" style={{ maxWidth: "160px" }}>备注：{entry.label}</span> : null}
                     </div>
                     <div className="flex flex-col items-end">
                       <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{entry.quantity.toLocaleString('zh-CN', { maximumFractionDigits: 4 })}<span className="text-xs text-gray-500 ml-1">股</span></span>
                       <span className="text-xs" style={{ color: marketValue === null ? '#9CA3AF' : '#2563EB' }}>{marketValue === null ? '市值待获取' : `约 ¥${marketValue.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`}</span>
-                      {marketValue !== null && _cnyRate > 0 && <span className="text-[10px] text-gray-400">≈ {(marketValue / _cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} U</span>}
+                      {marketValue !== null && _cnyRate > 0 && <span className="text-[10px] text-gray-400">≈ {(marketValue / _cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span>}
                     </div>
                   </div>
                 );
@@ -217,16 +241,16 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
                         {amount < 0 ? "减少" : "增加"}
                       </span>
                     </div>
-                    {label ? <span className="text-[10px] text-gray-400 mt-0.5 break-all" style={{ maxWidth: "160px" }}>{label}</span> : null}
+                    {label ? <span className="text-[10px] text-gray-400 mt-0.5 break-all" style={{ maxWidth: "160px" }}>备注：{label}</span> : null}
                   </div>
                   <div className="flex flex-col items-end">
                     <span className="text-sm font-semibold" style={{ color: amount < 0 ? "#388E3C" : "#1A2340" }}>
                       {amount >= 0 ? "+" : ""}{amount.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
-                      <span className="text-xs text-gray-500 ml-1">{coin}</span>
+                      <span className="text-xs text-gray-500 ml-1">{formatTagMarginCoinLabel(coin)}</span>
                     </span>
                     {(coin === "元" || coin === "人民币") && cryptoPrices["USDT"] > 0 && (
                       <span className="text-xs text-gray-400">
-                        ≈{(Math.abs(amount) / cryptoPrices["USDT"] >= 0 ? (amount < 0 ? "-" : "") : "")}{(Math.abs(amount) / cryptoPrices["USDT"]).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} U
+                        ≈{(Math.abs(amount) / cryptoPrices["USDT"] >= 0 ? (amount < 0 ? "-" : "") : "")}{(Math.abs(amount) / cryptoPrices["USDT"]).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} u
                       </span>
                     )}
                     {coin !== "元" && coin !== "人民币" && (
@@ -239,27 +263,34 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
               );
             })}
             {/* 合计行 */}
-            <div className="flex items-end justify-between pt-1" style={{ borderTop: "1px solid #DBEAFE" }}>
-              <span className="text-xs text-gray-500">合计</span>
-              <div className="flex flex-col items-end">
-                {Object.entries(
-                  getTagMarginCurrencyRecords(rightMarginData).reduce((acc, { coin, amount }) => {
-                    acc[coin] = (acc[coin] || 0) + amount;
-                    return acc;
-                  }, {} as Record<string, number>)
-                ).map(([coin, total]) => (
-                  <span key={coin} className="text-xs font-semibold" style={{ color: (total as number) < 0 ? "#388E3C" : "#1A2340" }}>
-                    {(total as number) >= 0 ? "+" : ""}{(total as number).toLocaleString("zh-CN", { maximumFractionDigits: 4 })} {coin}
-                  </span>
+            <div className="pt-2" style={{ borderTop: "1px solid #DBEAFE" }}>
+              <div className="mb-1.5 text-xs font-semibold" style={{ color: '#111827' }}>合计</div>
+              <div className="space-y-1">
+                {Object.entries(rightMarginValueSummary.currencyTotals).filter(([coin]) => !isCnyMarginCoin(coin)).map(([coin, total]) => (
+                  <div key={coin} className="flex items-baseline justify-between gap-3">
+                    <span className="text-xs font-medium" style={{ color: '#111827' }}>{formatTagMarginCoinLabel(coin)} 价值</span>
+                    <span className="shrink-0 whitespace-nowrap text-right text-xs font-semibold tabular-nums" style={{ color: (total as number) < 0 ? "#388E3C" : "#1A2340" }}>{(total as number) >= 0 ? "+" : ""}{(total as number).toLocaleString("zh-CN", { maximumFractionDigits: 4 })} {formatTagMarginCoinLabel(coin)}</span>
+                  </div>
                 ))}
-                {getTagMarginStockRecords(rightMarginData).length > 0 && (
-                  <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>
-                    {getTagMarginStockRecords(rightMarginData).reduce((sum, stock) => sum + stock.quantity, 0).toLocaleString('zh-CN', { maximumFractionDigits: 4 })} 股（股票）
-                  </span>
+                {rightMarginValueSummary.stockCount > 0 && (
+                  <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2">
+                    <span className="text-xs font-medium" style={{ color: '#111827' }}>股票价值</span>
+                    {rightMarginValueSummary.stockValueReady ? <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-normal tabular-nums text-gray-500">≈ {(rightMarginValueSummary.stockValueCNY / _cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span> : <span className="justify-self-end text-[10px] text-gray-400">待获取</span>}
+                    <span className="whitespace-nowrap text-right text-xs font-semibold tabular-nums" style={{ color: '#1A2340' }}>{rightMarginValueSummary.stockValueReady ? `¥${rightMarginValueSummary.stockValueCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}</span>
+                  </div>
                 )}
-                <span className="text-[10px] text-gray-500">总担保市值</span>
-                <span className="text-sm font-bold text-blue-700">约 ¥{rightTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}</span>
-                {_cnyRate > 0 && <span className="text-xs text-gray-500">≈ {(rightTotalCNY / _cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} U</span>}
+                {rightMarginValueSummary.cnyValueCNY !== 0 && (
+                  <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2">
+                    <span className="text-xs font-medium" style={{ color: '#111827' }}>人民币价值</span>
+                    <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-normal tabular-nums text-gray-500">≈ {(rightMarginValueSummary.cnyValueCNY / _cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span>
+                    <span className="whitespace-nowrap text-right text-xs font-semibold tabular-nums" style={{ color: rightMarginValueSummary.cnyValueCNY < 0 ? '#388E3C' : '#1A2340' }}>¥{rightMarginValueSummary.cnyValueCNY.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                <div className="mt-1 grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2 pt-1.5" style={{ borderTop: '1px solid #E5E7EB' }}>
+                  <span className="text-sm font-bold" style={{ color: '#111827' }}>总担保价值</span>
+                  <span className="justify-self-end whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-gray-500">≈ {(rightTotalCNY / _cnyRate).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} u</span>
+                  <span className="whitespace-nowrap text-right text-sm font-bold tabular-nums text-blue-700">¥{rightTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -371,7 +402,7 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
                   </div>
                   {pnl !== null && _cnyRate > 0 && (
                     <div className="text-xs text-gray-400">
-                      ≈{(pnl / _cnyRate >= 0 ? "+" : "")}{(pnl / _cnyRate).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} U
+                      ≈{(pnl / _cnyRate >= 0 ? "+" : "")}{(pnl / _cnyRate).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} u
                     </div>
                   )}
                 </div>
@@ -384,7 +415,7 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
                   </div>
                   {remainingMargin !== null && _cnyRate > 0 && (
                     <div className="text-xs text-gray-400">
-                      ≈{(remainingMargin / _cnyRate >= 0 ? "+" : "")}{(remainingMargin / _cnyRate).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} U
+                      ≈{(remainingMargin / _cnyRate >= 0 ? "+" : "")}{(remainingMargin / _cnyRate).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} u
                     </div>
                   )}
                 </div>

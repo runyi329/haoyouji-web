@@ -373,13 +373,18 @@ async function fetchSinaOnDemandStockQuote(symbol: string): Promise<OnDemandStoc
     if (!match?.[1]) return null;
     const parts = match[1].split(',');
     // 美股 gb_ 的第 2 项、A 股 sh/sz/bj 的第 4 项均为最近成交价。
-    const price = Number(aShare ? parts[3] : parts[1]);
+    // A股开盘前/休市时最近成交价会返回 0；此时用昨收作为最后有效参考价，
+    // 以便新加入的股票保证金能立即完成估值，且用来源明确标识并不伪称盘中成交。
+    const latestPrice = Number(aShare ? parts[3] : parts[1]);
+    const previousClose = aShare ? Number(parts[2]) : NaN;
+    const usePreviousClose = aShare !== null && !isValidPrice(latestPrice) && isValidPrice(previousClose);
+    const price = usePreviousClose ? previousClose : latestPrice;
     if (!isValidPrice(price)) return null;
     const dateIndex = parts.findIndex((part) => /^\d{4}-\d{2}-\d{2}$/.test(String(part).trim()));
     return {
       price,
       currency: aShare ? 'CNY' : 'USD',
-      source: '新浪财经',
+      source: usePreviousClose ? '新浪财经·昨收参考' : '新浪财经',
       updatedAt: nowIso(),
       priceDate: dateIndex >= 0 ? String(parts[dateIndex]).trim() : undefined,
     };

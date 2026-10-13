@@ -15748,9 +15748,18 @@ ${klinesSummary}
           await db.execute(sql`ALTER TABLE ledger_tag_config ADD COLUMN target_total VARCHAR(64) NULL`);
         } catch {}
         const existing = await db.execute(
-          sql`SELECT id FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
+          sql`SELECT id, margin_by_coin FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
         );
         const existingList = (existing as any)[0] as any[];
+        // 37号标签新增股票保证金后立即取一次参考价；只针对新增代码，
+        // 不会在普通备注、余额或设置保存时触发任何外部行情请求。
+        const previousMarginStockSymbols = input.ledgerId === LEDGER_37_ID && input.marginByCoin !== undefined
+          ? new Set(getTagMarginStockSymbols(parseTagMarginRecords(existingList[0]?.margin_by_coin)))
+          : new Set<string>();
+        const addedMarginStockSymbols = input.ledgerId === LEDGER_37_ID && input.marginByCoin !== undefined
+          ? getTagMarginStockSymbols(parseTagMarginRecords(input.marginByCoin))
+            .filter((symbol) => !previousMarginStockSymbols.has(symbol))
+          : [];
         if (existingList.length > 0) {
           // ── 字段级 PATCH：只更新调用方明确传入（非 undefined）的字段，避免覆盖其他字段 ──
           const setParts: string[] = [];
@@ -15790,10 +15799,22 @@ ${klinesSummary}
             sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, settlement_amount, interest_mode, interest_rate, interest_base_amount, interest_start_date, pause_date, end_date, note, margin_by_coin, pnl_manual, pnl_note, original_amount, account_balance, balance_date, initial_amount, account_multiplier, margin_base, fund_flow, target_total, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.settlementAmount ?? null}, ${input.interestMode ?? 'fixed'}, ${input.interestRate ?? null}, ${input.interestBaseAmount ?? null}, ${input.interestStartDate ?? null}, ${input.pauseDate ?? null}, ${input.endDate ?? null}, ${input.note ?? null}, ${input.marginByCoin ?? null}, ${input.pnlManual ?? null}, ${input.pnlNote ?? null}, ${input.originalAmount ?? null}, ${input.accountBalance ?? null}, ${input.balanceDate ?? null}, ${input.initialAmount ?? null}, ${input.accountMultiplier ?? null}, ${input.marginBase ?? null}, ${input.fundFlow ?? null}, ${input.targetTotal ?? null}, ${ctx.user.id})`
           );
         }
+        let stockQuoteRefresh: { symbols: number; updated: number } | null = null;
+        if (addedMarginStockSymbols.length > 0) {
+          try {
+            const { refreshManualStockIntradaySnapshotsForSymbols } = await import('./manual-stock-close-scheduler');
+            stockQuoteRefresh = await refreshManualStockIntradaySnapshotsForSymbols(addedMarginStockSymbols);
+          } catch (error) {
+            // 保证金配置已成功保存；行情源暂时不可用时不回滚用户已确认的配置。
+            // 后台五分钟扫描仍会继续补齐参考价。
+            console.warn('[saveTagConfig] 新增股票保证金即时行情刷新失败:', error);
+          }
+        }
         return {
           success: true,
           linkedGlobalPause: Boolean(linkedGlobalPauseResult),
           updatedMemberCount: linkedGlobalPauseResult?.updatedMemberCount ?? 0,
+          stockQuoteRefresh,
         };
       }),
 
