@@ -42,24 +42,17 @@ interface Props {
 export function RightInterestDetail({ ledgerId, tagName }: Props) {
   // 所有分段
   const { data: allPeriods = [] } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
-    { ledgerId },
+    { ledgerId, tagName },
     { enabled: !!ledgerId && !!tagName }
   );
 
-  // 手工调息日志（addTagInterestManualLog 写入的独立日志）
-  const { data: allLogs = [] } = (trpc.ledger as any).getTagInterestManualLogs.useQuery(
-    { ledgerId },
-    { enabled: !!ledgerId && !!tagName }
-  );
-
-  // 标签配置（含暂停日期）
-  const { data: allTagsConfig = {} } = (trpc.ledger as any).getAllTagsConfigByLedger.useQuery(
-    { ledgerId },
+  // 当前标签配置（含暂停日期）
+  const { data: tagConfig } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId, tagName },
     { enabled: !!ledgerId && !!tagName }
   );
 
   const tagData = useMemo(() => {
-    const tagConfig = (allTagsConfig as any)[tagName];
     const pauseDate: string | null = tagConfig?.pause_date ?? null;
     const periods = (allPeriods as any[]).filter((p: any) => p.tag_name === tagName);
 
@@ -80,7 +73,7 @@ export function RightInterestDetail({ ledgerId, tagName }: Props) {
     const totalInterest = autoInterest + manualTotal;
 
     return { periodDetails, autoInterest, manualTotal, totalInterest, pauseDate };
-  }, [allPeriods, allLogs, allTagsConfig, tagName]);
+  }, [allPeriods, tagConfig, tagName]);
 
   const { periodDetails, autoInterest, manualTotal, totalInterest, pauseDate } = tagData;
 

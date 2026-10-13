@@ -15706,6 +15706,7 @@ ${klinesSummary}
         initialAmount: z.string().nullable().optional(),
         accountMultiplier: z.string().nullable().optional(),
         marginBase: z.string().nullable().optional(),
+        includePendingInterest: z.boolean().optional(),
         fundFlow: z.string().nullable().optional(),
         targetTotal: z.string().nullable().optional(),
       }))
@@ -15740,6 +15741,9 @@ ${klinesSummary}
         } catch {}
         try {
           await db.execute(sql`ALTER TABLE ledger_tag_config ADD COLUMN margin_base VARCHAR(64) NULL`);
+        } catch {}
+        try {
+          await db.execute(sql`ALTER TABLE ledger_tag_config ADD COLUMN include_pending_interest TINYINT(1) NOT NULL DEFAULT 1`);
         } catch {}
         try {
           await db.execute(sql`ALTER TABLE ledger_tag_config ADD COLUMN fund_flow TEXT NULL`);
@@ -15781,6 +15785,7 @@ ${klinesSummary}
           if (input.initialAmount !== undefined) { setParts.push('initial_amount = ?'); setValues.push(input.initialAmount); }
           if (input.accountMultiplier !== undefined) { setParts.push('account_multiplier = ?'); setValues.push(input.accountMultiplier); }
           if (input.marginBase !== undefined) { setParts.push('margin_base = ?'); setValues.push(input.marginBase); }
+          if (input.includePendingInterest !== undefined) { setParts.push('include_pending_interest = ?'); setValues.push(input.includePendingInterest ? 1 : 0); }
           if (input.fundFlow !== undefined) { setParts.push('fund_flow = ?'); setValues.push(input.fundFlow); }
           if (input.targetTotal !== undefined) { setParts.push('target_total = ?'); setValues.push(input.targetTotal); }
           if (setParts.length > 0) {
@@ -15796,7 +15801,7 @@ ${klinesSummary}
           }
         } else {
           await db.execute(
-            sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, settlement_amount, interest_mode, interest_rate, interest_base_amount, interest_start_date, pause_date, end_date, note, margin_by_coin, pnl_manual, pnl_note, original_amount, account_balance, balance_date, initial_amount, account_multiplier, margin_base, fund_flow, target_total, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.settlementAmount ?? null}, ${input.interestMode ?? 'fixed'}, ${input.interestRate ?? null}, ${input.interestBaseAmount ?? null}, ${input.interestStartDate ?? null}, ${input.pauseDate ?? null}, ${input.endDate ?? null}, ${input.note ?? null}, ${input.marginByCoin ?? null}, ${input.pnlManual ?? null}, ${input.pnlNote ?? null}, ${input.originalAmount ?? null}, ${input.accountBalance ?? null}, ${input.balanceDate ?? null}, ${input.initialAmount ?? null}, ${input.accountMultiplier ?? null}, ${input.marginBase ?? null}, ${input.fundFlow ?? null}, ${input.targetTotal ?? null}, ${ctx.user.id})`
+            sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, settlement_amount, interest_mode, interest_rate, interest_base_amount, interest_start_date, pause_date, end_date, note, margin_by_coin, pnl_manual, pnl_note, original_amount, account_balance, balance_date, initial_amount, account_multiplier, margin_base, include_pending_interest, fund_flow, target_total, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.settlementAmount ?? null}, ${input.interestMode ?? 'fixed'}, ${input.interestRate ?? null}, ${input.interestBaseAmount ?? null}, ${input.interestStartDate ?? null}, ${input.pauseDate ?? null}, ${input.endDate ?? null}, ${input.note ?? null}, ${input.marginByCoin ?? null}, ${input.pnlManual ?? null}, ${input.pnlNote ?? null}, ${input.originalAmount ?? null}, ${input.accountBalance ?? null}, ${input.balanceDate ?? null}, ${input.initialAmount ?? null}, ${input.accountMultiplier ?? null}, ${input.marginBase ?? null}, ${input.includePendingInterest === false ? 0 : 1}, ${input.fundFlow ?? null}, ${input.targetTotal ?? null}, ${ctx.user.id})`
           );
         }
         let stockQuoteRefresh: { symbols: number; updated: number } | null = null;

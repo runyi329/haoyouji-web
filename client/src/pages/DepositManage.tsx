@@ -25,11 +25,13 @@ import {
   PauseCircle,
   PlayCircle,
   ScrollText,
+  CircleHelp,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
+import { RightInterestDetail } from "@/components/RightInterestDetail";
 import {
   getTagMarginCurrencyRecords,
   getTagMarginStockMarketValue,
@@ -100,6 +102,59 @@ function toCNY(margin: string | number, coin: string, prices: Record<string, num
   const price = prices[coin];
   if (!price) return 0;
   return num * price;
+}
+
+function getBeijingDateText(): string {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function calculateInclusiveDays(startDate: unknown, endDate: unknown): number {
+  const startText = String(startDate || '').slice(0, 10);
+  const endText = String(endDate || '').slice(0, 10);
+  const [startYear, startMonth, startDay] = startText.split('-').map(Number);
+  const [endYear, endMonth, endDay] = endText.split('-').map(Number);
+  const start = Date.UTC(startYear, startMonth - 1, startDay);
+  const end = Date.UTC(endYear, endMonth - 1, endDay);
+  return Number.isFinite(start) && Number.isFinite(end) && end >= start
+    ? Math.floor((end - start) / 86_400_000) + 1
+    : 0;
+}
+
+// 保证金口径：利息页净额为正时代表待支付利息，在保证金中作为绿色负项扣除；
+// 利息页净额为零或负数时不形成待结负债，也不把预支利息作为保证金加项。
+function summarizeTagInterestDifference(periods: any[], pauseDate?: string | null) {
+  let pendingInterestCny = 0;
+  let paidInterestCny = 0;
+  let hasInterestRecord = false;
+  for (const period of periods) {
+    const principal = Number(period?.principal || 0);
+    const isManual = period?.is_manual === 1 || period?.is_manual === '1' || period?.is_manual === true;
+    if (isManual) {
+      if (principal > 0) {
+        pendingInterestCny += principal;
+        hasInterestRecord = true;
+      } else if (principal < 0) {
+        paidInterestCny += Math.abs(principal);
+        hasInterestRecord = true;
+      }
+      continue;
+    }
+    const annualRate = Number(period?.annual_rate || 0);
+    const days = calculateInclusiveDays(period?.start_date, period?.end_date || pauseDate || getBeijingDateText());
+    if (principal > 0 && annualRate > 0 && days > 0) {
+      pendingInterestCny += principal * (annualRate / 100 / 365) * days;
+      hasInterestRecord = true;
+    }
+  }
+  const unsettledInterestCny = Math.max(0, pendingInterestCny - paidInterestCny);
+  return {
+    pendingInterestCny,
+    paidInterestCny,
+    // 合并保证金时只扣减真实待结的正利息，不将利息页负数反向加回保证金。
+    differenceCny: -unsettledInterestCny,
+    unsettledInterestCny,
+    hasInterestRecord,
+  };
 }
 
 type SortMode = "amount" | "name";
@@ -513,7 +568,9 @@ export default function DepositManage() {
   const [rightInitialEdit, setRightInitialEdit] = useState("");
   const [rightMultiplierEdit, setRightMultiplierEdit] = useState("1");
   const [rightMarginBaseEdit, setRightMarginBaseEdit] = useState("");
+  const [rightIncludePendingInterestEdit, setRightIncludePendingInterestEdit] = useState(true);
   const [rightBalanceEditMode, setRightBalanceEditMode] = useState(false);
+  const [showRightInterestDetail, setShowRightInterestDetail] = useState(false);
   const rightMarginExportRef = useRef<HTMLDivElement>(null);
   const rightBalanceExportRef = useRef<HTMLDivElement>(null);
   // ── 日志 & 暂停状态 ──
@@ -530,6 +587,16 @@ export default function DepositManage() {
   const { data: rightTagConfig, refetch: refetchRightTagConfig } = trpc.ledger.getTagConfig.useQuery(
     { ledgerId, tagName: selectedTagForRight ?? "" },
     { enabled: !!ledgerId && !!selectedTagForRight }
+  );
+
+  const { data: rightTagInterestPeriods = [] } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
+    { ledgerId, tagName: selectedTagForRight ?? "" },
+    {
+      enabled: !!ledgerId && !!selectedTagForRight,
+      staleTime: 25_000,
+      refetchInterval: 30_000,
+      refetchIntervalInBackground: true,
+    },
   );
 
   // 自动读取该标签在日历图（P117）里最新一条记录的余额和日期
@@ -656,6 +723,7 @@ export default function DepositManage() {
     setRightBalanceEditMode(false);
     setFundFlowEditMode(false);
     setFundFlowEdits([]);
+    setShowRightInterestDetail(false);
   }, [selectedTagForRight]);
 
   const handleStartRightEditing = () => {
@@ -785,6 +853,7 @@ export default function DepositManage() {
         initialAmount: rightInitialEdit || undefined,
         accountMultiplier: rightMultiplierEdit || "1",
         marginBase: rightMarginBaseEdit || undefined,
+        includePendingInterest: rightIncludePendingInterestEdit,
       });
       setRightBalanceEditMode(false);
       // 写入操作日志
@@ -792,6 +861,7 @@ export default function DepositManage() {
       if (rightInitialEdit) parts.push(`初始金额: ${rightInitialEdit}`);
       if (rightMultiplierEdit) parts.push(`倍数: ${rightMultiplierEdit}x`);
       if (rightMarginBaseEdit) parts.push(`保证金基数: ${rightMarginBaseEdit}`);
+      parts.push(rightIncludePendingInterestEdit ? '引用待结利息' : '不引用待结利息');
       await addMarginLogMutation.mutateAsync({
         ledgerId,
         tagName: selectedTagForRight,
@@ -860,6 +930,23 @@ export default function DepositManage() {
   }, [rightMarginData, allMarginStockQuotes]);
   const canonicalRightTotalCNY = Number((canonicalMarginValuation as any)?.totalCny);
   const rightTotalCNY = Number.isFinite(canonicalRightTotalCNY) ? canonicalRightTotalCNY : locallyComputedRightTotalCNY;
+  const rightTagInterestSummary = useMemo(
+    () => summarizeTagInterestDifference(
+      Array.isArray(rightTagInterestPeriods)
+        ? rightTagInterestPeriods.filter((period: any) => period?.tag_name === selectedTagForRight)
+        : [],
+      (rightTagConfig as any)?.pause_date ?? null,
+    ),
+    [rightTagInterestPeriods, rightTagConfig, selectedTagForRight],
+  );
+  // 旧标签没有开关字段时保持既有行为：默认引用待结利息。
+  const includePendingInterest = useMemo(() => {
+    const stored = (rightTagConfig as any)?.include_pending_interest;
+    return stored === undefined || stored === null || Number(stored) !== 0;
+  }, [rightTagConfig]);
+  const includedInterestDifferenceCny = includePendingInterest ? rightTagInterestSummary.differenceCny : 0;
+  // 合并口径 = 手工/股票等保证金资产 − 待结利息；利息页零或负数不增加保证金。
+  const combinedRightMarginCNY = rightTotalCNY + includedInterestDifferenceCny;
 
   // 解析提现/入金数据（当前选中标签）
   const fundFlowData = useMemo(() => {
@@ -1406,7 +1493,7 @@ export default function DepositManage() {
                                   <Pencil className="w-3 h-3" />编辑保证金
                                 </button>
                               </div>
-                              {rightMarginData.length === 0 ? (
+                              {rightMarginData.length === 0 && !(includePendingInterest && rightTagInterestSummary.hasInterestRecord) ? (
                                 <div className="text-xs text-gray-400 py-2 text-center">暂未设置右侧保证金</div>
                               ) : (
                                 <div className="space-y-2">
@@ -1550,12 +1637,12 @@ export default function DepositManage() {
                               // 实时 USDT/CNY 汇率（用于盈亏净值折算为 u）
                               const _cnyRate = cryptoPrices["USDT"] ?? CNY_RATE_FALLBACK;
                               const pnl = autoBalanceNum !== null ? (autoBalanceNum - initialNum) * multiplierNum : null;
-                              // 剩余保证金 = 盈亏净値 + 已付保证金（盈亏为负表示输给公司，加上保证金得剩余；盈亏为正表示赢了，加上保证金得总资产）
-                              const remainingMargin = pnl !== null ? pnl + rightTotalCNY : null;
+                              // 剩余保证金 = 盈亏净值 + 保证金资产 + 利息差额（已结 − 待结）。
+                              const remainingMargin = pnl !== null ? pnl + combinedRightMarginCNY : null;
                               // 保证金占基数比 = 剩余保证金 / 保证金基数
                               const marginBasePct = marginBaseNum > 0 && remainingMargin !== null ? (remainingMargin / marginBaseNum * 100) : null;
                               // 保证金占余额比（降级备用）
-                              const marginPct = autoBalanceNum !== null && autoBalanceNum > 0 ? (rightTotalCNY / autoBalanceNum * 100) : null;
+                              const marginPct = autoBalanceNum !== null && autoBalanceNum > 0 ? (combinedRightMarginCNY / autoBalanceNum * 100) : null;
                               return (
                                 <div ref={rightBalanceExportRef} className="mt-3 rounded-xl p-3 space-y-2" style={{ backgroundColor: "#F8FBFF", border: "1px solid #DBEAFE" }}>
                                   {/* 设置与下载不纳入账户余额图片 */}
@@ -1579,6 +1666,7 @@ export default function DepositManage() {
                                           setRightInitialEdit(savedInitial || "");
                                           setRightMultiplierEdit(savedMultiplier || "1");
                                           setRightMarginBaseEdit(savedMarginBase || "");
+                                          setRightIncludePendingInterestEdit(includePendingInterest);
                                           setRightBalanceEditMode(true);
                                         }}
                                         className="text-xs text-blue-500 flex items-center gap-0.5"
@@ -1641,8 +1729,34 @@ export default function DepositManage() {
                                                  )}
                                               </div>
                                             </div>
+                                            {includePendingInterest && (
+                                              <div className="flex items-center justify-between mt-1">
+                                                <span className="flex items-center gap-1 text-xs text-gray-500">
+                                                  待结利息
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setShowRightInterestDetail(true)}
+                                                    className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-blue-600 hover:bg-blue-50"
+                                                    title="查看本标签利息明细"
+                                                    aria-label="查看本标签利息明细"
+                                                  >
+                                                    <CircleHelp className="h-3.5 w-3.5" />
+                                                  </button>
+                                                </span>
+                                                <div className="text-right">
+                                                  <div className="text-sm font-bold" style={{ color: includedInterestDifferenceCny < 0 ? '#388E3C' : '#1A2340' }}>
+                                                    {includedInterestDifferenceCny < 0 ? '-' : ''}{Math.abs(includedInterestDifferenceCny).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                  </div>
+                                                  {_cnyRate > 0 && (
+                                                    <div className="text-xs text-gray-400">
+                                                      ≈ {includedInterestDifferenceCny < 0 ? '-' : ''}{Math.abs(includedInterestDifferenceCny / _cnyRate).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} u
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            )}
                                             <div className="flex items-center justify-between mt-1">
-                                              <span className="text-xs text-gray-500">剩余保证金 (净値+已付保证金)</span>
+                                              <span className="text-xs text-gray-500">{includePendingInterest ? '剩余保证金 (净值+担保价值+待结利息)' : '剩余保证金 (净值+担保价值)'}</span>
                                               <div className="text-right">
                                                 <div className="text-sm font-bold" style={{ color: remainingMargin !== null && remainingMargin >= 0 ? "#D32F2F" : "#388E3C" }}>
                                                   {remainingMargin !== null ? `${remainingMargin >= 0 ? "+" : ""}${remainingMargin.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
@@ -1699,6 +1813,26 @@ export default function DepositManage() {
                                           className="w-full text-sm border rounded-lg px-3 py-2 outline-none"
                                           style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF" }}
                                         />
+                                      </div>
+                                      <div className="flex items-center justify-between rounded-lg border px-3 py-2" style={{ borderColor: '#BFDBFE', backgroundColor: '#FFFFFF' }}>
+                                        <div>
+                                          <div className="text-sm font-medium text-gray-700">引用利息</div>
+                                          <div className="mt-0.5 text-[10px] text-gray-400">开启后，待结利息计入剩余保证金</div>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          role="switch"
+                                          aria-checked={rightIncludePendingInterestEdit}
+                                          aria-label="引用利息"
+                                          onClick={() => setRightIncludePendingInterestEdit((value) => !value)}
+                                          className="relative h-6 w-11 shrink-0 rounded-full transition-colors"
+                                          style={{ backgroundColor: rightIncludePendingInterestEdit ? '#2563EB' : '#CBD5E1' }}
+                                        >
+                                          <span
+                                            className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform"
+                                            style={{ left: rightIncludePendingInterestEdit ? '22px' : '2px' }}
+                                          />
+                                        </button>
                                       </div>
                                     </div>
                                   )}
@@ -2117,6 +2251,35 @@ export default function DepositManage() {
                 {setMutation.isPending ? "保存中..." : "确认保存"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 标签利息引用明细 */}
+      {showRightInterestDetail && selectedTagForRight && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4"
+          onClick={() => setShowRightInterestDetail(false)}
+        >
+          <div
+            className="max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-4 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <div className="text-base font-bold text-gray-900">利息明细</div>
+                <div className="mt-0.5 text-xs text-gray-400">引用标签：{selectedTagForRight}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRightInterestDetail(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100"
+                aria-label="关闭利息明细"
+              >
+                <X className="h-4 w-4 text-gray-500" />
+              </button>
+            </div>
+            <RightInterestDetail ledgerId={ledgerId} tagName={selectedTagForRight} />
           </div>
         </div>
       )}
