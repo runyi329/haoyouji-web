@@ -660,6 +660,7 @@ export function FunderOrderCard({
   allOrders,
 }: FunderOrderCardProps) {
   const cardExportRef = useRef<HTMLDivElement>(null);
+  const manualStockPnlDetailExportRef = useRef<HTMLDivElement>(null);
   // 共享担保弹窗：点击订单号弹出第二层订单详情
   const [clickedOrderNo, setClickedOrderNo] = useState<string | null>(null);
   const [collateralDetail, setCollateralDetail] = useState<{
@@ -1579,10 +1580,6 @@ export function FunderOrderCard({
     : manualStockPnlCalculationMode === 'total_capital'
       ? manualStockRawFloatPnlCny * manualStockPnlCoefficient
       : manualStockRawFloatPnlCny * manualStockPnlCoefficient;
-  // 账户总额度模式沿用股票列表的视觉语义：市值低于初始额度为绿色，高于为红色。
-  const manualStockMarketValueColor = manualStockMarketValueCny !== null && manualStockTotalCapitalCny !== null
-    ? (manualStockMarketValueCny < manualStockTotalCapitalCny ? '#16A34A' : manualStockMarketValueCny > manualStockTotalCapitalCny ? '#DC2626' : '#374151')
-    : '#1A2340';
   const manualStockDifferenceColor = manualStockRawFloatPnlCny === null
     ? '#6B7280'
     : manualStockRawFloatPnlCny < 0 ? '#16A34A' : manualStockRawFloatPnlCny > 0 ? '#DC2626' : '#374151';
@@ -2660,25 +2657,65 @@ export function FunderOrderCard({
             )}
             {showManualStockPnlDetail && isManualStockPnlSource && (
               <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowManualStockPnlDetail(false)}>
-                <div className="mx-4 w-full max-w-sm overflow-y-auto rounded-2xl bg-white" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '85vh' }} onClick={event => event.stopPropagation()}>
-                  <div className="flex items-center justify-between px-5 pb-2 pt-4">
-                    <span className="text-sm font-bold" style={{ color: '#1A2340' }}>股票浮动盈亏明细</span>
-                    <button onClick={() => setShowManualStockPnlDetail(false)} className="text-lg leading-none text-gray-400">×</button>
+                <div ref={manualStockPnlDetailExportRef} className="mx-3 w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white" style={{ boxShadow: '0 16px 42px rgba(15,23,42,0.24)', maxHeight: '85vh' }} onClick={event => event.stopPropagation()}>
+                  <div className="flex items-center justify-between border-b border-slate-100 px-3.5 py-2.5">
+                    <div className="text-sm font-bold" style={{ color: '#1A2340' }}>股票浮动盈亏明细</div>
+                    <div className="flex items-center gap-1">
+                      <OrderCardImageDownload
+                        targetRef={manualStockPnlDetailExportRef}
+                        currentUser={currentUser}
+                        orderNo={order.order_no || order.id}
+                        color="#64748B"
+                        outerPadding={12}
+                        captureFullContent
+                        exportBackground="#FFFFFF"
+                        filenamePrefix="股票浮盈明细"
+                        previewTitle="股票浮盈明细图片预览"
+                        previewHint="预览与当前股票浮盈明细使用同一张图片"
+                      />
+                      <button type="button" onClick={() => setShowManualStockPnlDetail(false)} aria-label="关闭股票浮动盈亏明细" className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"><X size={18} strokeWidth={2.25} /></button>
+                    </div>
                   </div>
-                  <div className="px-4 pb-4">
+                  <div className="px-3.5 pb-3">
+                    {manualStockPnlCalculationMode === 'total_capital' && (
+                      <div className="mt-2 flex items-baseline justify-between gap-3 border-b border-slate-200 pb-2">
+                        <span className="text-xs font-medium text-slate-600">账户初始本金</span>
+                        <span className="shrink-0 text-sm font-bold tabular-nums text-slate-900">
+                          {manualStockCapitalCurrency === 'CNY' ? `¥ ${manualStockTotalCapital.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : `${manualStockTotalCapital.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD`}
+                          {manualStockCapitalCurrency === 'USD' && manualStockTotalCapitalCny !== null ? <span className="ml-1 text-[10px] font-normal text-slate-400">（¥ {manualStockTotalCapitalCny.toLocaleString(undefined, { maximumFractionDigits: 2 })}）</span> : null}
+                        </span>
+                      </div>
+                    )}
+                    {manualStockPnlCalculationMode === 'total_capital' && (
+                      <>
+                        <div className="mt-2 grid grid-cols-[minmax(0,1.05fr)_minmax(0,0.9fr)_minmax(0,1fr)] items-end gap-0 text-[10px] text-slate-400">
+                          <span className="pr-2 font-semibold text-slate-600">当前持仓 · {manualStockPnlDetail.length} 只</span>
+                          <span className="border-l border-slate-200 px-2 text-center">参考价 / 股数</span>
+                          <span className="border-l border-slate-200 pl-2 text-right">最新市值</span>
+                        </div>
+                        <div className="grid grid-cols-[minmax(0,1.05fr)_minmax(0,0.9fr)_minmax(0,1fr)] gap-0 text-[9px] leading-4 text-slate-400">
+                          <span />
+                          <span className="border-l border-slate-100 px-2 text-center whitespace-nowrap">参考价更新 {manualStockLastUpdatedAt ? formatChineseStockQuoteTimestamp(manualStockLastUpdatedAt).replace(/^\d+月\d+日\s*/, '') : '待报价'}</span>
+                          <span className="border-l border-slate-100" />
+                        </div>
+                      </>
+                    )}
                     {manualStockPnlDetail.map((position) => (
-                      <div key={position.symbol} className="border-b border-gray-100 py-3 last:border-0">
+                      <div key={position.symbol} className={manualStockPnlCalculationMode === 'total_capital' ? 'border-b border-slate-100 py-1.5 last:border-0' : 'border-b border-gray-100 py-3 last:border-0'}>
                         {manualStockPnlCalculationMode === 'total_capital' ? (
-                          <>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="font-semibold text-sm" style={{ color: '#1A2340' }}>{position.name ? `${position.name} · ` : ''}{position.symbol}</span>
-                              <span className="text-sm font-semibold tabular-nums" style={{ color: '#1A2340' }}>{position.marketValueCny === null ? '暂未取得最新价' : `市值 ${position.marketValueCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`}</span>
+                          <div className="grid grid-cols-[minmax(0,1.05fr)_minmax(0,0.9fr)_minmax(0,1fr)] items-center gap-0">
+                            <div className="min-w-0 pr-2 leading-tight">
+                              <div className="truncate text-xs font-semibold" style={{ color: '#1A2340' }}>{position.name || '未命名股票'}</div>
+                              <div className="mt-0.5 text-[9px] font-medium tracking-wide text-slate-400">{position.symbol}</div>
                             </div>
-                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
-                              <span>最新价：{position.currentPrice === null ? '暂未取得' : `${position.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${position.currency === 'CNY' ? '元' : 'USD'}`}{`（${position.updatedAt ? new Date(position.updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : formatChineseStockPriceDate(position.priceDate)} · ${manualStockMarketStatus}）`}</span>
-                              <span>股数：{position.quantity.toLocaleString()}</span>
+                            <div className="border-l border-slate-100 px-2 text-center leading-tight">
+                              <div className="text-xs font-semibold tabular-nums text-slate-700">{position.currentPrice === null ? '--' : `¥ ${position.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</div>
+                              <div className="mt-0.5 text-[10px] tabular-nums text-slate-400">{position.quantity.toLocaleString()} 股</div>
                             </div>
-                          </>
+                            <div className="border-l border-slate-100 pl-2 text-right leading-tight">
+                              <div className="text-xs font-bold tabular-nums" style={{ color: '#1A2340' }}>{position.marketValueCny === null ? '--' : `¥ ${position.marketValueCny.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</div>
+                            </div>
+                          </div>
                         ) : (
                           <>
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-semibold" style={{ color: '#1A2340' }}>
@@ -2699,34 +2736,33 @@ export function FunderOrderCard({
                       </div>
                     ))}
                     {manualStockPnlCalculationMode === 'total_capital' ? (
-                      <div className="mt-3 space-y-2.5 border-t border-gray-100 pt-3 text-xs">
-                        <div className="rounded-xl border border-gray-100 bg-slate-50 px-3 py-2.5">
-                          <div className="flex items-baseline justify-between gap-3">
-                            <span className="font-semibold text-gray-700">最新持仓市值合计 · {manualStockPnlDetail.length} 只股票</span>
-                            <span className="text-base font-bold tabular-nums" style={{ color: manualStockMarketValueColor }}>
-                              {manualStockMarketValueCny === null ? '暂未取得最新价' : `${manualStockMarketValueCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`}
-                            </span>
-                          </div>
-                          <div className="mt-1 text-[10px] text-gray-400">{manualStockPnlDetail.find((position) => position.priceDate)?.priceDate ? `价格日期：${formatChineseStockPriceDate(manualStockPnlDetail.find((position) => position.priceDate)?.priceDate)}` : '价格日期：选股后自动带入'}</div>
+                      <div className="mt-2 border-t border-slate-200 pt-2 text-xs">
+                        <div className="mb-1 flex items-center justify-between">
+                          <span className="font-semibold text-slate-700">计算口径 <span className="font-medium text-indigo-600">（系数 × {manualStockPnlCoefficient}）</span></span>
+                          <span className="text-[9px] text-slate-400">人民币</span>
                         </div>
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3">
-                          <span className="text-gray-500">账户初始总额度</span>
-                          <span className="font-semibold tabular-nums text-gray-800">− {manualStockTotalCapital.toLocaleString(undefined, { maximumFractionDigits: 2 })} {manualStockCapitalCurrency === 'CNY' ? '元' : 'USD'}{manualStockCapitalCurrency === 'USD' && manualStockTotalCapitalCny !== null ? `（约 ${manualStockTotalCapitalCny.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元）` : ''}</span>
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-slate-500">当前持仓价值</span>
+                          <span className="font-semibold tabular-nums text-slate-800">{manualStockMarketValueCny === null ? '暂未取得最新价' : `¥ ${manualStockMarketValueCny.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}</span>
                         </div>
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 rounded-lg bg-gray-50 px-2.5 py-2">
-                          <span className="text-[10px] leading-4 text-gray-500">差值 = 最新持仓市值合计 − 账户初始总额度</span>
-                          <span className="text-sm font-bold tabular-nums" style={{ color: manualStockDifferenceColor }}>
-                            {manualStockRawFloatPnlCny === null ? '暂未取得' : `${manualStockRawFloatPnlCny >= 0 ? '+' : ''}${manualStockRawFloatPnlCny.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元`}
+                        <div className="flex items-center justify-between py-1">
+                          <span className="shrink-0 text-slate-500">差额 <span className="text-[9px] text-slate-400">（市值 − 本金）</span></span>
+                          <span className="ml-2 whitespace-nowrap text-[10px] font-semibold tabular-nums">
+                            {manualStockRawFloatPnlCny === null || manualStockMarketValueCny === null || manualStockTotalCapitalCny === null
+                              ? '暂未取得'
+                              : <>
+                                  <span className="text-slate-800">¥ {manualStockMarketValueCny.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                  <span className="px-1 text-slate-400">−</span>
+                                  <span className="text-slate-800">¥ {manualStockTotalCapitalCny.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                  <span className="px-1 text-slate-400">=</span>
+                                  <span style={{ color: manualStockDifferenceColor }}>{manualStockRawFloatPnlCny >= 0 ? '+' : '−'}¥ {Math.abs(manualStockRawFloatPnlCny).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </>}
                           </span>
                         </div>
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 text-violet-600">
-                          <span>计算系数</span>
-                          <span className="font-semibold tabular-nums">× {manualStockPnlCoefficient}</span>
-                        </div>
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 border-t border-dashed border-gray-200 pt-2">
-                          <span className="text-[10px] leading-4 text-gray-600">账户盈亏 = 差值 × 计算系数</span>
+                        <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2">
+                          <span className="font-bold text-slate-800">账户浮动盈亏</span>
                           <span className="text-base font-bold tabular-nums" style={{ color: manualStockAccountPnlColor }}>
-                            {manualStockFloatPnlCny === null ? '暂未取得最新价' : `${manualStockFloatPnlCny >= 0 ? '+' : ''}${manualStockFloatPnlCny.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元`}
+                            {manualStockFloatPnlCny === null ? '暂未取得' : `${manualStockFloatPnlCny >= 0 ? '+' : '−'}¥ ${Math.abs(manualStockFloatPnlCny).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                           </span>
                         </div>
                       </div>
@@ -2751,9 +2787,9 @@ export function FunderOrderCard({
                       </div>
                     )}
                   </div>
-                  <div className="mx-4 mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] leading-4 text-blue-700">
+                  <div className="mx-3.5 mb-3 border-t border-slate-100 pt-1.5 text-[9px] leading-3.5 text-slate-400">
                     {manualStockPnlCalculationMode === 'total_capital'
-                      ? `${manualStockMarketStatus}；开盘交易时段（09:30–11:30、13:00–15:00）每 5 分钟更新；每日 15:05 固化盘尾价。上次更新：${manualStockLastUpdatedAt ? new Date(manualStockLastUpdatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '待获取'}。差值 = 最新持仓市值合计 − 账户初始总额度；账户盈亏 = 差值 × 计算系数 ${manualStockPnlCoefficient}。美元股票按当日系统汇率折算为人民币。`
+                      ? `参考价最近更新 ${formatChineseStockQuoteTimestamp(manualStockLastUpdatedAt)} · 交易时段每 5 分钟更新，15:05 固化盘尾价。`
                       : `${manualStockMarketStatus}；开盘交易时段（09:30–11:30、13:00–15:00）每 5 分钟更新；每日 15:05 固化盘尾价。上次更新：${manualStockLastUpdatedAt ? new Date(manualStockLastUpdatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '待获取'}。未填卖出价：原始盈亏 =（盘中参考价／盘尾价 − 买入价）× 股数；填写卖出价后按卖出价锁定计算。所有股票原始盈亏先合计，再乘计算系数 ${manualStockPnlCoefficient}。美元股票按当日系统汇率折算为人民币。`}
                   </div>
                 </div>

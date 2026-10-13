@@ -698,16 +698,12 @@ export async function copyLedger(sourceLedgerId: number, userId: number) {
  * 获取单个账本详情
  */
 export async function getLedgerById(ledgerId: number, userId: number) {
-  console.log('[getLedgerById] 调用，参数:', { ledgerId, userId });
-  
   try {
     const db = await getLedgerDb();
     if (!db) {
       console.error('[getLedgerById] 数据库连接失败');
       throw new Error("Ledger database connection failed");
     }
-    console.log('[getLedgerById] 数据库连接成功');
-    
     // 先查用户角色
     const userRows = await db
       .select({ role: users.role })
@@ -715,7 +711,6 @@ export async function getLedgerById(ledgerId: number, userId: number) {
       .where(eq(users.id, userId))
       .limit(1);
     const userRole = userRows[0]?.role;
-    console.log('[getLedgerById] 用户角色:', userRole);
     
     // 无论是否系统管理员，都先查该用户在该账本中的实际成员角色
     // super_admin/admin 只是跳过「必须是成员」的限制，但仍使用实际成员角色（含权限设置）
@@ -731,35 +726,28 @@ export async function getLedgerById(ledgerId: number, userId: number) {
       )
       .limit(1);
 
-    console.log('[getLedgerById] 成员检查结果:', member);
     if (member.length > 0) {
       // 用户是账本成员，使用实际角色
       memberRole = member[0].role;
-      console.log('[getLedgerById] 用户是账本成员，角色:', memberRole);
     } else if (userRole === 'super_admin' || userRole === 'admin') {
       // 系统管理员但不是账本成员，给予 admin 角色（可查看但无 owner 豁免）
-      console.log('[getLedgerById] 系统管理员但非账本成员，赋予 admin 角色');
       memberRole = 'admin';
     } else {
-      console.log('[getLedgerById] 用户不是账本成员');
       throw new Error("您不是该账本的成员");
     }
 
     // 获取账本信息
-    console.log('[getLedgerById] 开始查询账本信息...');
     const ledger = await db
       .select()
       .from(ledgers)
       .where(eq(ledgers.id, ledgerId))
       .limit(1);
 
-    console.log('[getLedgerById] 账本查询结果:', ledger);
     if (ledger.length === 0) {
       throw new Error("账本不存在");
     }
 
     // 获取所有成员，关联users表获取username和avatar
-    console.log('[getLedgerById] 开始查询成员列表...');
     const members = await db
       .select({
         userId: ledgerMembers.userId,
@@ -773,13 +761,11 @@ export async function getLedgerById(ledgerId: number, userId: number) {
       .leftJoin(users, eq(ledgerMembers.userId, users.id))
       .where(eq(ledgerMembers.ledgerId, ledgerId));
 
-    console.log('[getLedgerById] 成员列表:', members);
     const result = {
       ...ledger[0],
       members,
       userRole: memberRole,
     };
-    console.log('[getLedgerById] 返回结果:', result);
     return result;
   } catch (error) {
     console.error('[getLedgerById] 错误:', error);

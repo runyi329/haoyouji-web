@@ -20822,22 +20822,23 @@ ${klinesSummary}
           import('./db')
         ]);
         const conn = await getDbConnection();
-        console.log(`[funderGetAssetOrders] t1_dbconn: ${Date.now()-_t0}ms`);
         const memberRoleFilter = input.financeOnly ? "'member'" : "'funder','owner','admin'";
-        // 管理员可显式切换成员视角；其余调用者一律只能查询本人参与关系。
-        const [roleRows, pRowsEarly] = await Promise.all([
-          db.execute(
-            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
-          ) as Promise<any>,
-          conn ? conn.execute(
-            'SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND role <> \'inactive\'',
-            [input.ledgerId, ctx.user.id]
-          ).catch(() => null) as Promise<any> : Promise.resolve(null)
-        ]);
+        // 先判断角色：管理员默认查看全量订单时不需要参与方列表，避免无意义地等待参与方历史查询。
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
         const isManager = role === 'owner' || role === 'admin';
         const isFunder = role === 'funder';
+        // 只有成员/资金方，或管理员明确代入某位成员时，才需要读取参与方关联。
+        const requiresParticipantLookup = !isManager || Boolean(input.viewAsUserId || input.userId);
+        const pRowsEarly = requiresParticipantLookup && conn
+          ? await conn.execute(
+              'SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND role <> \'inactive\'',
+              [input.ledgerId, ctx.user.id]
+            ).catch(() => null) as any
+          : null;
         // 非管理员忽略所有 userId/viewAsUserId，阻止直接请求冒用其他参与者身份。
         const targetUserId: number | null = isManager
           ? (input.viewAsUserId || input.userId || null)
@@ -20860,7 +20861,6 @@ ${klinesSummary}
           } catch {}
         }
         const isParticipant = participantOrderIds.length > 0;
-        console.log(`[funderGetAssetOrders] t2_role_participant: ${Date.now()-_t0}ms`);
         // 无权限：既不是管理员/资金方，也不是任何订单的参与方
         if (!isManager && !isFunder && !isParticipant) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         let rows: any;
@@ -20953,7 +20953,6 @@ ${klinesSummary}
             );
           }
         }
-        console.log(`[funderGetAssetOrders] t3_main_query: ${Date.now()-_t0}ms`);
         const rawOrdersRaw = ((rows[0] || rows) as any[]) || [];
         // 按 id 去重，防止同一订单因 OR 条件或数据异常出现多次
         const seenIds = new Set<number>();
@@ -21227,7 +21226,6 @@ ${klinesSummary}
             }
           }
         }
-        console.log(`[funderGetAssetOrders] t5_paid_participant: ${Date.now()-_t0}ms`);
         const ordersWithPaid = ordersWithParticipantView.map((o: any) => ({
           ...o,
           paidTotal: paidTotalMap[Number(o.id)] || null,
@@ -21236,7 +21234,6 @@ ${klinesSummary}
           // 仅用于拥有者组的卡片姓名展示；不包含金额、备注、担保或任何资金数据。
           owner_display_names: ownerNamesMap[Number(o.id)] || [],
         }));
-        console.log(`[funderGetAssetOrders] t_TOTAL: ${Date.now()-_t0}ms, orders: ${ordersWithPaid.length}`);
         return { orders: ordersWithPaid, livePrices, _debug: { targetUserId, participantQueryUserIdEarly, participantOrderIds, viewAsUserId: input.viewAsUserId } };
       }),
 
@@ -21721,7 +21718,6 @@ ${klinesSummary}
             const currentValue = currentPrice !== null ? quantity * currentPrice : null;
             // 本金亏损：当前市值 < 计息基数时的差小
             const principalLoss = currentValue !== null ? Math.max(0, principal - currentValue) : null;
-            console.log('[BuyPrice Debug]', o.order_no, 'buy_price raw:', o.buy_price, 'type:', typeof o.buy_price, 'constructor:', o.buy_price?.constructor?.name, 'string:', String(o.buy_price ?? 0));
             const buyPrice = parseFloat(String(o.buy_price ?? 0)) || 0;
             const buyValue = buyPrice * quantity;
             const buyValueCurrency = coinUpper === 'CNY' ? 'CNY' : (o.amount_currency || (o.asset_type === 'stock' ? 'CNY' : 'USDT'));
