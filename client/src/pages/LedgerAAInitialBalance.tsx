@@ -761,8 +761,34 @@ export default function LedgerAAInitialBalance() {
     return null;
   };
 
+  // 37号暂停日期会先在本地选择保证金处理方案。成员保存时必须把这份草稿
+  // 一并写为 pauseHistory，避免界面提示“已保存”却仍提交旧 balances。
+  const materializeMemberPausePlans = (userId: number, sourceUserEdit: Record<string, TagEntry>) => {
+    const effectiveUserEdit: Record<string, TagEntry> = { ...sourceUserEdit };
+    const plansByTag = new Map<string, PauseWalletHandling>();
+    for (const plan of Object.values(pauseWalletPlans)) {
+      if (plan.userId === userId && plan.pauseDate) plansByTag.set(plan.tagName, plan);
+    }
+    // 即使尚未点蓝色“确认暂停方案”，底部“保存”也应保存当前所选日期和默认保留方案。
+    if (pauseWalletHandlingDraft?.userId === userId && pauseWalletHandlingDraft.pauseDate) {
+      plansByTag.set(pauseWalletHandlingDraft.tagName, pauseWalletHandlingDraft);
+    }
+    for (const plan of Array.from(plansByTag.values())) {
+      const entry = effectiveUserEdit[plan.tagName] ?? defaultEntry();
+      const history = entry.pauseHistory ?? [];
+      const lastIndex = history.length - 1;
+      const last = lastIndex >= 0 ? history[lastIndex] : null;
+      // 已暂停的最后一条只更新日期；已重启或没有记录时新增暂停记录。
+      const nextHistory = last && !last.resumeDate
+        ? history.map((item, index) => index === lastIndex ? { ...item, pauseDate: plan.pauseDate } : item)
+        : [...history, { pauseDate: plan.pauseDate }];
+      effectiveUserEdit[plan.tagName] = { ...entry, pauseDate: '', pauseHistory: nextHistory };
+    }
+    return { effectiveUserEdit, memberPausePlans: Array.from(plansByTag.values()) };
+  };
+
   const handleSaveMember = async (userId: number) => {
-    const userEdit = editState[userId] ?? {};
+    const { effectiveUserEdit: userEdit, memberPausePlans } = materializeMemberPausePlans(userId, editState[userId] ?? {});
     const allocationError = getChangedAllocationError(userId, userEdit);
     if (allocationError) {
       toast.error(allocationError);
@@ -846,12 +872,13 @@ export default function LedgerAAInitialBalance() {
         if (!isNaN(num)) balances[`${n}__targetAmount`] = num;
       }
     }
-    const memberPausePlans = Object.values(pauseWalletPlans).filter((plan) => plan.userId === userId);
     // 热预览可以读取真实金额，但暂停与解冻均不允许落库或改动真实资金。
     if (isLocalHotPreview && memberPausePlans.length > 0) {
       toast.info('热预览仅展示暂停后的保证金处理，不会暂停标签或解冻真实钱包资金');
       return;
     }
+    // 先把已物化的暂停记录同步到本地视图，成功后仍以服务端 refetch 结果为准。
+    setEditState((previous) => ({ ...previous, [userId]: userEdit }));
     setSavingUsers((prev) => new Set(prev).add(userId));
     const migratedMarginNoteIds = categories.flatMap((cat: any) => userEdit[cat.name]?.legacyMarginNoteIds ?? []);
     const memberHideAcknowledgements = categories
@@ -890,6 +917,7 @@ export default function LedgerAAInitialBalance() {
           for (const [key, plan] of Object.entries(next)) if (plan.userId === userId) delete next[key];
           return next;
         });
+        setPauseWalletHandlingDraft((previous) => previous?.userId === userId ? null : previous);
       }
     } catch {
       // 各 mutation 已给出错误提示；草稿与暂停选择均保留，方便管理员修正后重试。
