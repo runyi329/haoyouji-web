@@ -99,6 +99,20 @@ export type T0JournalProfitShareSnapshot = {
   beneficiaryUserName?: string;
 };
 
+
+/** 管理员记录、关联用户同步查看的投入/提现资金流水；不参与任何订单收益计算。 */
+export type T0JournalPayoutDirection = "withdrawal" | "deposit";
+export type T0JournalPayoutLog = {
+  id: string;
+  relatedUserId: number;
+  relatedUserName: string;
+  occurredOn: string;
+  direction: T0JournalPayoutDirection;
+  amount: number;
+  note?: string;
+  createdAt: string;
+};
+
 let tablesReady: Promise<void> | null = null;
 
 function asRows(result: unknown): any[] {
@@ -835,6 +849,35 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         COMMENT='52号账本T+0速记账本：开平仓收益分配不可变快照'
     `);
 
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_payout_logs (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        related_user_id BIGINT UNSIGNED NOT NULL,
+        occurred_on DATE NOT NULL,
+        amount DECIMAL(18,2) NOT NULL,
+        direction ENUM('withdrawal','deposit') NOT NULL DEFAULT 'withdrawal',
+        note VARCHAR(300) DEFAULT NULL,
+        created_by_user_id INT NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        KEY idx_t0_journal_payout_owner_user_date (ledger_id, user_id, related_user_id, occurred_on, id),
+        KEY idx_t0_journal_payout_related_user_date (ledger_id, related_user_id, occurred_on, id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0速记账本：管理员登记、关联用户共享的收益转出流水；不影响订单收益'
+    `);
+
+    const [payoutDirectionColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_payout_logs LIKE 'direction'`);
+    if (asRows(payoutDirectionColumns).length === 0) {
+      // 历史账本流水均是原“提现”语义，迁移后保留为 withdrawal，绝不改变历史金额。
+      await db.execute(`
+        ALTER TABLE ledger52_t0_journal_payout_logs
+          ADD COLUMN direction ENUM('withdrawal','deposit') NOT NULL DEFAULT 'withdrawal' AFTER amount
+      `);
+    }
+
     const [dimensionAuditOperationColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_dimension_audits LIKE 'operation'`);
     if (asRows(dimensionAuditOperationColumns).length === 0) {
       await db.execute(`
@@ -1311,6 +1354,249 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
       .map(mapRecoverableAudit)
       .filter((item): item is NonNullable<typeof item> => Boolean(item)),
   };
+}
+
+function mapT0JournalPayoutLog(row: any): T0JournalPayoutLog {
+  return {
+    id: String(row.id),
+    relatedUserId: toNumber(row.related_user_id),
+    relatedUserName: String(row.related_user_name || `用户#${toNumber(row.related_user_id)}`),
+    occurredOn: String(row.occurred_on || "").slice(0, 10),
+    direction: String(row.direction) === "deposit" ? "deposit" : "withdrawal",
+    amount: toNumber(row.amount),
+    note: String(row.note || "").trim() || undefined,
+    createdAt: isoTime(row.created_at),
+  };
+}
+
+/**
+ * 收益转出日志与订单收益严格分表：它只服务对账，绝不回写或扣减订单净收益。
+ * 成员端无论当前筛选如何变化，始终只能读取自己名下的共享日志。
+ */
+export async function getLedger52T0JournalPayoutLogs(input: {
+  scope: T0JournalReadScope;
+  relatedUserId?: number;
+}) {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  await ensureLedger52T0JournalTables(conn);
+  const requestedRelatedUserId = Number(input.relatedUserId || 0);
+  const adminScope = input.scope.mode === "admin" ? input.scope : null;
+  const memberScope = input.scope.mode === "member" ? input.scope : null;
+  const relatedUserId = adminScope ? requestedRelatedUserId : memberScope?.relatedUserId || 0;
+  if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请先选择一位关联用户后查看资金流水" });
+  }
+  const sql = adminScope
+    ? `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
+              payout.amount, payout.direction, payout.note, payout.created_at,
+              COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
+         FROM ledger52_t0_journal_payout_logs payout
+         LEFT JOIN users u ON u.id = payout.related_user_id
+        WHERE payout.ledger_id = ? AND payout.user_id = ? AND payout.related_user_id = ?
+        ORDER BY payout.occurred_on DESC, payout.id DESC
+        LIMIT 500`
+    : `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
+              payout.amount, payout.direction, payout.note, payout.created_at,
+              COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
+         FROM ledger52_t0_journal_payout_logs payout
+         LEFT JOIN users u ON u.id = payout.related_user_id
+        WHERE payout.ledger_id = ? AND payout.related_user_id = ?
+        ORDER BY payout.occurred_on DESC, payout.id DESC
+        LIMIT 500`;
+  const params = adminScope
+    ? [LEDGER_52_T0_JOURNAL_ID, adminScope.journalOwnerUserId, relatedUserId]
+    : [LEDGER_52_T0_JOURNAL_ID, relatedUserId];
+  const [rows] = await conn.execute(sql, params);
+  return asRows(rows).map(mapT0JournalPayoutLog);
+}
+
+/** 管理员新增投入/提现资金流水；仅提现受当前可见总收益上限约束，服务器锁定已有提现记录防止并发穿透。 */
+export async function createLedger52T0JournalPayoutLog(input: {
+  journalOwnerUserId: number;
+  operatorUserId: number;
+  relatedUserId: number;
+  occurredOn: string;
+  amount: string;
+  direction: T0JournalPayoutDirection;
+  note?: string;
+  maximumTotalAmount?: string;
+}) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  const relatedUserId = Number(input.relatedUserId);
+  const occurredOn = String(input.occurredOn || "").trim();
+  const amountText = String(input.amount || "").trim();
+  const direction: T0JournalPayoutDirection = input.direction === "deposit" ? "deposit" : "withdrawal";
+  const limitText = String(input.maximumTotalAmount || "").trim();
+  const amount = Number(amountText);
+  const maximumTotalAmount = Number(limitText);
+  if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的关联用户" });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(occurredOn) || Number.isNaN(new Date(`${occurredOn}T00:00:00Z`).getTime())) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的登记日期" });
+  }
+  if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/.test(amountText) || !Number.isFinite(amount) || amount <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "登记金额须为最多两位小数的正数" });
+  }
+  if (direction === "withdrawal" && (!Number.isFinite(maximumTotalAmount) || maximumTotalAmount < 0)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "当前总收益无效，请刷新后重试" });
+  }
+  const note = String(input.note || "").trim();
+  if (note.length > 300) throw new TRPCError({ code: "BAD_REQUEST", message: "备注最多300个字符" });
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    await assertExistingGlobalUser(tx, relatedUserId, "关联用户");
+    if (direction === "withdrawal") {
+      const [sumRows] = await tx.execute(
+        `SELECT COALESCE(SUM(amount), 0) AS total_amount
+           FROM ledger52_t0_journal_payout_logs
+          WHERE ledger_id = ? AND user_id = ? AND related_user_id = ? AND direction = 'withdrawal' FOR UPDATE`,
+        [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId],
+      );
+      const existingTotal = toNumber(asRows(sumRows)[0]?.total_amount);
+      // 提现金额上限采用保存瞬间的当前用户“总收益”口径；投入资金从不占用收益提现额度。
+      if (existingTotal + amount > maximumTotalAmount + 0.005) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `累计提现 ${(existingTotal + amount).toFixed(2)} U 将超过当前总收益 ${maximumTotalAmount.toFixed(2)} U`,
+        });
+      }
+    }
+    const [result] = await tx.execute(
+      `INSERT INTO ledger52_t0_journal_payout_logs
+        (ledger_id, user_id, related_user_id, occurred_on, amount, direction, note, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId, occurredOn, amountText, direction, note || null, input.operatorUserId],
+    );
+    const insertedId = toNumber((result as any)?.insertId);
+    const [rows] = await tx.execute(
+      `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
+              payout.amount, payout.direction, payout.note, payout.created_at,
+              COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
+         FROM ledger52_t0_journal_payout_logs payout
+         LEFT JOIN users u ON u.id = payout.related_user_id
+        WHERE payout.id = ? AND payout.ledger_id = ? AND payout.user_id = ? LIMIT 1`,
+      [insertedId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId],
+    );
+    const row = asRows(rows)[0];
+    if (!row) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "资金流水写入后读取失败" });
+    await tx.commit();
+    return mapT0JournalPayoutLog(row);
+  } catch (error) {
+    try { await tx.rollback(); } catch {}
+    throw error;
+  } finally {
+    tx.release?.();
+  }
+}
+
+/** 编辑既有资金流水；目标用户不可跨当前筛选范围移动，提现编辑后仍按最新总收益重新校验。 */
+export async function updateLedger52T0JournalPayoutLog(input: {
+  journalOwnerUserId: number;
+  relatedUserId: number;
+  payoutLogId: string;
+  occurredOn: string;
+  amount: string;
+  direction: T0JournalPayoutDirection;
+  note?: string;
+  maximumTotalAmount?: string;
+}) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  const relatedUserId = Number(input.relatedUserId);
+  const payoutLogId = Number(input.payoutLogId);
+  const occurredOn = String(input.occurredOn || "").trim();
+  const amountText = String(input.amount || "").trim();
+  const direction: T0JournalPayoutDirection = input.direction === "deposit" ? "deposit" : "withdrawal";
+  const amount = Number(amountText);
+  const maximumTotalAmount = Number(String(input.maximumTotalAmount || "").trim());
+  if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的关联用户" });
+  if (!Number.isInteger(payoutLogId) || payoutLogId <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "资金流水记录无效" });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(occurredOn) || Number.isNaN(new Date(`${occurredOn}T00:00:00Z`).getTime())) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的登记日期" });
+  }
+  if (!/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/.test(amountText) || !Number.isFinite(amount) || amount <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "登记金额须为最多两位小数的正数" });
+  }
+  if (direction === "withdrawal" && (!Number.isFinite(maximumTotalAmount) || maximumTotalAmount < 0)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "当前总收益无效，请刷新后重试" });
+  }
+  const note = String(input.note || "").trim();
+  if (note.length > 300) throw new TRPCError({ code: "BAD_REQUEST", message: "备注最多300个字符" });
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    const [existingRows] = await tx.execute(
+      `SELECT id FROM ledger52_t0_journal_payout_logs
+        WHERE id = ? AND ledger_id = ? AND user_id = ? AND related_user_id = ? FOR UPDATE`,
+      [payoutLogId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId],
+    );
+    if (!asRows(existingRows)[0]) throw new TRPCError({ code: "NOT_FOUND", message: "未找到可编辑的资金流水记录" });
+    if (direction === "withdrawal") {
+      const [sumRows] = await tx.execute(
+        `SELECT COALESCE(SUM(amount), 0) AS total_amount
+           FROM ledger52_t0_journal_payout_logs
+          WHERE ledger_id = ? AND user_id = ? AND related_user_id = ? AND direction = 'withdrawal' AND id <> ? FOR UPDATE`,
+        [LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId, payoutLogId],
+      );
+      const otherWithdrawalTotal = toNumber(asRows(sumRows)[0]?.total_amount);
+      if (otherWithdrawalTotal + amount > maximumTotalAmount + 0.005) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `累计提现 ${(otherWithdrawalTotal + amount).toFixed(2)} U 将超过当前总收益 ${maximumTotalAmount.toFixed(2)} U`,
+        });
+      }
+    }
+    await tx.execute(
+      `UPDATE ledger52_t0_journal_payout_logs
+          SET occurred_on = ?, amount = ?, direction = ?, note = ?
+        WHERE id = ? AND ledger_id = ? AND user_id = ? AND related_user_id = ?`,
+      [occurredOn, amountText, direction, note || null, payoutLogId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId],
+    );
+    const [rows] = await tx.execute(
+      `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
+              payout.amount, payout.direction, payout.note, payout.created_at,
+              COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
+         FROM ledger52_t0_journal_payout_logs payout
+         LEFT JOIN users u ON u.id = payout.related_user_id
+        WHERE payout.id = ? AND payout.ledger_id = ? AND payout.user_id = ? LIMIT 1`,
+      [payoutLogId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId],
+    );
+    const row = asRows(rows)[0];
+    if (!row) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "资金流水更新后读取失败" });
+    await tx.commit();
+    return mapT0JournalPayoutLog(row);
+  } catch (error) {
+    try { await tx.rollback(); } catch {}
+    throw error;
+  } finally {
+    tx.release?.();
+  }
+}
+
+/** 删除当前用户范围内的一笔资金流水。 */
+export async function deleteLedger52T0JournalPayoutLog(input: {
+  journalOwnerUserId: number;
+  relatedUserId: number;
+  payoutLogId: string;
+}) {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const relatedUserId = Number(input.relatedUserId);
+  const payoutLogId = Number(input.payoutLogId);
+  if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择有效的关联用户" });
+  if (!Number.isInteger(payoutLogId) || payoutLogId <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "资金流水记录无效" });
+  await ensureLedger52T0JournalTables(conn);
+  const [result] = await conn.execute(
+    `DELETE FROM ledger52_t0_journal_payout_logs
+      WHERE id = ? AND ledger_id = ? AND user_id = ? AND related_user_id = ?`,
+    [payoutLogId, LEDGER_52_T0_JOURNAL_ID, input.journalOwnerUserId, relatedUserId],
+  );
+  if (toNumber((result as any)?.affectedRows) !== 1) throw new TRPCError({ code: "NOT_FOUND", message: "未找到可删除的资金流水记录" });
+  return { id: String(payoutLogId) };
 }
 
 /** 仅保留当前 T+0 范围中真实存在订单的关联用户，避免将无订单的推荐关系带入筛选或可见范围。 */

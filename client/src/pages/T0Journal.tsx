@@ -1,7 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useParams, useSearch } from "wouter";
 import {
+  ArrowDownLeft,
   ArrowLeft,
+  ArrowUpRight,
+  NotebookTabs,
   Check,
   ChevronDown,
   ChevronRight,
@@ -10,15 +13,18 @@ import {
   Repeat2,
   LockOpen,
   MoreHorizontal,
+  Pencil,
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
+import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 
 type TradeAction = "openLong" | "closeLong" | "openShort" | "closeShort";
 type PositionSide = "long" | "short";
@@ -26,7 +32,30 @@ type T0InstrumentType = "spot" | "contract" | "option" | "grid";
 type T0OptionDirection = "long_call" | "long_put" | "short_call" | "short_put";
 type T0OptionPremiumCurrency = "USDT" | "ETH";
 type T0GridDirection = "long" | "short";
-type T0ExecutionFilter = "all" | "filled" | "pending" | "locked";
+type T0JournalPayoutDirection = "withdrawal" | "deposit";
+type T0JournalPayoutLogView = "all" | T0JournalPayoutDirection;
+type T0JournalPayoutLog = {
+  id: string;
+  relatedUserId: number;
+  relatedUserName: string;
+  occurredOn: string;
+  direction: T0JournalPayoutDirection;
+  amount: number;
+  note?: string;
+  createdAt: string;
+};
+function getBeijingDateInputValue(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+/** 已锁定是已成交仓位的附加状态，不与“已成交”互斥。 */
+type T0ExecutionFilter = "all" | "filled" | "pending";
 const T0_INSTRUMENT_TYPES: Array<{ value: T0InstrumentType; label: string; shortLabel: string }> = [
   { value: "spot", label: "现货", shortLabel: "现" },
   { value: "contract", label: "合约", shortLabel: "合" },
@@ -44,7 +73,6 @@ const T0_INSTRUMENT_FILTER_OPTIONS: T0MultiSelectOption[] = T0_INSTRUMENT_TYPES.
 const T0_EXECUTION_FILTER_OPTIONS: T0MultiSelectOption[] = [
   { id: "filled", label: "已成交" },
   { id: "pending", label: "已挂单" },
-  { id: "locked", label: "已锁定" },
 ];
 
 /** 空数组代表全部；勾满全部类型同样回归“全部类型”，避免出现重复的全选状态。 */
@@ -58,15 +86,16 @@ function normalizeT0InstrumentTypeFilterIds(ids: string[]): T0InstrumentType[] {
 function matchesT0ExecutionFilter(trade: Pick<PreviewTrade, "isPending" | "isLocked">, filter: T0ExecutionFilter) {
   if (filter === "all") return true;
   if (filter === "pending") return Boolean(trade.isPending);
-  if (filter === "locked") return !trade.isPending && Boolean(trade.isLocked);
   return !trade.isPending;
 }
 
-function getT0ExecutionFilterSummary(filter: T0ExecutionFilter) {
-  if (filter === "filled") return "已成交";
-  if (filter === "pending") return "已挂单";
-  if (filter === "locked") return "已锁定";
-  return "状态全部";
+function getT0ExecutionFilterSummary(filter: T0ExecutionFilter, hideLocked = false) {
+  const summary = filter === "filled"
+    ? "已成交"
+    : filter === "pending"
+      ? "已挂单"
+      : "状态全部";
+  return hideLocked ? `${summary}·隐藏已锁定` : summary;
 }
 
 type T0PersistedTopFilters = {
@@ -77,6 +106,8 @@ type T0PersistedTopFilters = {
   relatedFundIds: string[];
   instrumentTypeIds: T0InstrumentType[];
   executionFilter: T0ExecutionFilter;
+  /** 独立于成交/挂单状态：勾选时从展示、汇总与历史中排除已锁定订单。 */
+  hideLocked: boolean;
 };
 
 const T0_TOP_FILTER_STORAGE_PREFIX = "haoyouji:t0-top-filters:v1";
@@ -161,7 +192,9 @@ function readPersistedT0TopFilters(storageKey: string | null): T0PersistedTopFil
       memberRelatedUserFilterTouched: parsed.memberRelatedUserFilterTouched === true,
       relatedFundIds: sanitizeT0FilterIds(parsed.relatedFundIds),
       instrumentTypeIds: normalizeT0InstrumentTypeFilterIds(sanitizeT0FilterIds(parsed.instrumentTypeIds)),
-      executionFilter: executionFilter === "filled" || executionFilter === "pending" || executionFilter === "locked" ? executionFilter : "all",
+      // 旧版“已锁定”是互斥状态；迁移后锁定归入已成交，因此恢复为全部而非反向隐藏。
+      executionFilter: executionFilter === "filled" || executionFilter === "pending" ? executionFilter : "all",
+      hideLocked: parsed.hideLocked === true,
     };
   } catch {
     return null;
@@ -1838,6 +1871,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [relatedFundFilterIds, setRelatedFundFilterIds] = useState<string[]>([]);
   const [instrumentTypeFilterIds, setInstrumentTypeFilterIds] = useState<T0InstrumentType[]>([]);
   const [executionFilter, setExecutionFilter] = useState<T0ExecutionFilter>("all");
+  const [hideLocked, setHideLocked] = useState(false);
   // 成员首次进入默认筛本人；只有主动点过用户下拉后，空数组才代表其明确选择的“全部”。
   const [memberRelatedUserFilterTouched, setMemberRelatedUserFilterTouched] = useState(false);
   // 成员存在有订单的推荐用户时自动读取本人完整分支；前端用户下拉再决定展示“全部/推荐/本人/单个推荐用户”。
@@ -1849,6 +1883,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [historyRelatedFundFilterIds, setHistoryRelatedFundFilterIds] = useState<string[]>([]);
   const [historyInstrumentTypeFilterIds, setHistoryInstrumentTypeFilterIds] = useState<T0InstrumentType[]>([]);
   const [historyExecutionFilter, setHistoryExecutionFilter] = useState<T0ExecutionFilter>("all");
+  const [historyHideLocked, setHistoryHideLocked] = useState(false);
   const [journalActionFilters, setJournalActionFilters] = useState<Set<TradeAction>>(
     () => new Set(RECENT_JOURNAL_ACTIONS),
   );
@@ -1878,6 +1913,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [netProfitDetail, setNetProfitDetail] = useState<{ trade: PreviewTrade; detail: RecentJournalTradeDetail } | null>(null);
   const [showTotalNetProfitDetail, setShowTotalNetProfitDetail] = useState(false);
   const [totalRevenueDetailPage, setTotalRevenueDetailPage] = useState(1);
+  const [showPayoutLog, setShowPayoutLog] = useState(false);
+  const [showPayoutForm, setShowPayoutForm] = useState(false);
+  const [payoutDirection, setPayoutDirection] = useState<T0JournalPayoutDirection>("withdrawal");
+  const [payoutLogView, setPayoutLogView] = useState<T0JournalPayoutLogView>("all");
+  const [payoutOccurredOn, setPayoutOccurredOn] = useState(() => getBeijingDateInputValue());
+  const [payoutAmount, setPayoutAmount] = useState("");
+  const [payoutNote, setPayoutNote] = useState("");
+  const [editingPayoutLog, setEditingPayoutLog] = useState<T0JournalPayoutLog | null>(null);
+  const [isPayoutListEditing, setIsPayoutListEditing] = useState(false);
+  const [deletePayoutLogId, setDeletePayoutLogId] = useState<string | null>(null);
   const [showNetPositionDetail, setShowNetPositionDetail] = useState(false);
   const [grossProfitDetail, setGrossProfitDetail] = useState<{
     side: PositionSide;
@@ -1904,6 +1949,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [previousMarkPrice, setPreviousMarkPrice] = useState<number | null>(null);
   const [liveClock, setLiveClock] = useState(() => new Date());
   const previousFetchedMarkPriceRef = useRef<number | null>(null);
+  const payoutSharedContentRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedJournalFiltersRef = useRef(false);
   const activeTopFilterStorageKeyRef = useRef<string | null>(null);
   const [hydratedTopFilterStorageKey, setHydratedTopFilterStorageKey] = useState<string | null>(null);
@@ -1969,6 +2015,79 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   const isMemberView = (t0JournalQuery.data as any)?.viewerMode === "member";
   const canManage = canAccess && (t0JournalQuery.data as any)?.viewerMode === "admin";
+  const payoutTargetRelatedUserId = isMemberView
+    ? Number((t0JournalQuery.data as any)?.viewerRelatedUserId || 0)
+    : (canManage && relatedUserFilterIds.length === 1 && /^\d+$/.test(relatedUserFilterIds[0])
+      ? Number(relatedUserFilterIds[0])
+      : 0);
+  const t0PayoutLogsQuery = trpc.ledger.t0GetPayoutLogs.useQuery(
+    { ledgerId: 52, relatedUserId: payoutTargetRelatedUserId || undefined },
+    {
+      enabled: canAccess && payoutTargetRelatedUserId > 0,
+      staleTime: 0,
+      refetchOnWindowFocus: true,
+    },
+  );
+  const t0Utils = trpc.useUtils();
+  const resetPayoutLogForm = () => {
+    setEditingPayoutLog(null);
+    setPayoutAmount("");
+    setPayoutNote("");
+    setPayoutDirection("withdrawal");
+    setPayoutOccurredOn(getBeijingDateInputValue());
+    setShowPayoutForm(false);
+  };
+  const openPayoutLogForm = (direction: T0JournalPayoutDirection) => {
+    setEditingPayoutLog(null);
+    setPayoutDirection(direction);
+    setPayoutLogView(direction);
+    setPayoutAmount("");
+    setPayoutNote("");
+    setPayoutOccurredOn(getBeijingDateInputValue());
+    setShowPayoutForm(true);
+  };
+  const createPayoutLogMutation = trpc.ledger.t0CreatePayoutLog.useMutation({
+    onSuccess: async (createdLog) => {
+      const payoutLogQueryInput = { ledgerId: 52 as const, relatedUserId: payoutTargetRelatedUserId || undefined };
+      // 先将服务端刚写入的真实记录放入当前缓存，避免移动端请求重排时弹窗短暂显示“暂无资金记录”。
+      t0Utils.ledger.t0GetPayoutLogs.setData(payoutLogQueryInput, (current) => [
+        createdLog,
+        ...(Array.isArray(current) ? current.filter((log) => log.id !== createdLog.id) : []),
+      ]);
+      resetPayoutLogForm();
+      setPayoutLogView(createdLog.direction === "deposit" ? "deposit" : "withdrawal");
+      await t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput);
+      toast.success("资金流水已保存");
+    },
+    onError: (error) => toast.error(error.message || "资金流水保存失败"),
+  });
+  const updatePayoutLogMutation = trpc.ledger.t0UpdatePayoutLog.useMutation({
+    onSuccess: async (updatedLog) => {
+      const payoutLogQueryInput = { ledgerId: 52 as const, relatedUserId: payoutTargetRelatedUserId || undefined };
+      t0Utils.ledger.t0GetPayoutLogs.setData(payoutLogQueryInput, (current) => [
+        updatedLog,
+        ...(Array.isArray(current) ? current.filter((log) => log.id !== updatedLog.id) : []),
+      ]);
+      resetPayoutLogForm();
+      setPayoutLogView(updatedLog.direction === "deposit" ? "deposit" : "withdrawal");
+      await t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput);
+      toast.success("资金流水已更新");
+    },
+    onError: (error) => toast.error(error.message || "资金流水更新失败"),
+  });
+  const deletePayoutLogMutation = trpc.ledger.t0DeletePayoutLog.useMutation({
+    onSuccess: async (deletedLog) => {
+      const payoutLogQueryInput = { ledgerId: 52 as const, relatedUserId: payoutTargetRelatedUserId || undefined };
+      t0Utils.ledger.t0GetPayoutLogs.setData(payoutLogQueryInput, (current) =>
+        Array.isArray(current) ? current.filter((log) => log.id !== deletedLog.id) : [],
+      );
+      setDeletePayoutLogId(null);
+      if (editingPayoutLog?.id === deletedLog.id) resetPayoutLogForm();
+      await t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput);
+      toast.success("资金流水已删除");
+    },
+    onError: (error) => toast.error(error.message || "资金流水删除失败"),
+  });
   // 推荐树单独低频读取，避免52号账本的两秒流水轮询反复遍历 users 邀请关系。
   // 管理员与成员均只会获得本人对应的一条递归“推荐”分支。
   const t0ReferralFilterQuery = trpc.ledger.t0GetReferralFilterOptions.useQuery(
@@ -2300,6 +2419,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       ? (persistedTopFilters?.instrumentTypeIds ?? [])
       : normalizeT0InstrumentTypeFilterIds(current));
     setExecutionFilter((current) => shouldRestoreTopFilters ? (persistedTopFilters?.executionFilter ?? "all") : current);
+    setHideLocked((current) => shouldRestoreTopFilters ? Boolean(persistedTopFilters?.hideLocked) : current);
     setLastRelatedUserId((current) => nextRecentRelatedUsers.some((user) => user.id === current)
       ? current
       : (nextRecentRelatedUsers[0]?.id || ""));
@@ -2316,8 +2436,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundIds: relatedFundFilterIds,
       instrumentTypeIds: instrumentTypeFilterIds,
       executionFilter,
+      hideLocked,
     });
-  }, [executionFilter, hydratedTopFilterStorageKey, instrumentTypeFilterIds, memberRelatedUserFilterTouched, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, topFilterStorageKey]);
+  }, [executionFilter, hideLocked, hydratedTopFilterStorageKey, instrumentTypeFilterIds, memberRelatedUserFilterTouched, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, topFilterStorageKey]);
 
   const priceTrend = previousMarkPrice === null || markPrice === null
     ? "flat"
@@ -2338,9 +2459,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : trades.filter((trade) => matchesT0ExecutionFilter(trade, executionFilter)),
     [trades, executionFilter],
   );
+  const lockVisibilityScopedTrades = useMemo(
+    () => hideLocked
+      ? executionScopedTrades.filter((trade) => !trade.isLocked)
+      : executionScopedTrades,
+    [executionScopedTrades, hideLocked],
+  );
   const instrumentScopedTrades = useMemo(
-    () => filterTradesByInstrumentTypes(executionScopedTrades, instrumentTypeFilterIds),
-    [executionScopedTrades, instrumentTypeFilterIds],
+    () => filterTradesByInstrumentTypes(lockVisibilityScopedTrades, instrumentTypeFilterIds),
+    [lockVisibilityScopedTrades, instrumentTypeFilterIds],
   );
   const topRelatedUserFilter = useMemo(
     () => resolveT0RelatedUserFilter(
@@ -2391,9 +2518,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : selectedTrades.filter((trade) => matchesT0ExecutionFilter(trade, historyExecutionFilter)),
     [selectedTrades, historyExecutionFilter],
   );
+  const historyLockVisibilityScopedTrades = useMemo(
+    () => historyHideLocked
+      ? historyExecutionScopedTrades.filter((trade) => !trade.isLocked)
+      : historyExecutionScopedTrades,
+    [historyExecutionScopedTrades, historyHideLocked],
+  );
   const historyInstrumentScopedTrades = useMemo(
-    () => filterTradesByInstrumentTypes(historyExecutionScopedTrades, historyInstrumentTypeFilterIds),
-    [historyExecutionScopedTrades, historyInstrumentTypeFilterIds],
+    () => filterTradesByInstrumentTypes(historyLockVisibilityScopedTrades, historyInstrumentTypeFilterIds),
+    [historyLockVisibilityScopedTrades, historyInstrumentTypeFilterIds],
   );
   const historyRelatedUserFilter = useMemo(
     () => resolveT0RelatedUserFilter(
@@ -2553,6 +2686,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const ownTrade = trades.find((trade) => Boolean(trade.relatedUserId));
     return ownTrade ? getTradeRelatedUserName(ownTrade) : "本人";
   }, [me, trades]);
+  const payoutLogs = useMemo<T0JournalPayoutLog[]>(() => {
+    const rows = t0PayoutLogsQuery.data;
+    return Array.isArray(rows) ? rows.map((row: any) => ({
+      id: String(row.id),
+      relatedUserId: Number(row.relatedUserId || 0),
+      relatedUserName: String(row.relatedUserName || "当前用户"),
+      occurredOn: String(row.occurredOn || "").slice(0, 10),
+      direction: String(row.direction) === "deposit" ? "deposit" : "withdrawal",
+      amount: Number(row.amount || 0),
+      note: String(row.note || "").trim() || undefined,
+      createdAt: String(row.createdAt || ""),
+    })) : [];
+  }, [t0PayoutLogsQuery.data]);
   const availableRelatedFunds = useMemo(
     () => relatedUserFilterIds.length === 0 || topRelatedUserFilter.waitingForReferralData
       ? relatedFunds
@@ -2645,6 +2791,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         .map((user) => toRelatedUserFilterOption(user)),
       ...(hasUnlinkedTrades ? [{ id: "unlinked", label: "未关联用户（历史）" }] : []),
     ];
+  const payoutTargetUserIdentity = useMemo(() => {
+    if (payoutTargetRelatedUserId <= 0) return { name: "当前用户", username: "" };
+    if (isMemberView) {
+      return {
+        name: memberRelatedUserName || "本人",
+        username: String((me as any)?.username || "").trim(),
+      };
+    }
+    const targetId = String(payoutTargetRelatedUserId);
+    const relatedUser = recentRelatedUsers.find((user) => user.id === targetId);
+    const relatedTrade = trades.find((trade) => trade.relatedUserId === targetId);
+    const payoutUserName = payoutLogs[0]?.relatedUserName || "";
+    return {
+      name: relatedUser?.name || relatedTrade?.relatedUserName || relatedTrade?.relatedUsername || payoutUserName || "当前用户",
+      username: relatedUser?.username || relatedTrade?.relatedUsername || "",
+    };
+  }, [isMemberView, me, memberRelatedUserName, payoutLogs, payoutTargetRelatedUserId, recentRelatedUsers, trades]);
+
   const relatedFundFilterOptions = [
     ...(trades.some((trade) => !trade.relatedFundId) ? [{ id: "unclassified", label: "未区分项目（历史）" }] : []),
     ...availableRelatedFunds.map((fund) => ({ id: fund.id, label: fund.name })),
@@ -2695,9 +2859,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     || historyRelatedUserFilterIds.length > 0
     || historyRelatedFundFilterIds.length > 0
     || historyInstrumentTypeFilterIds.length > 0
-    || historyExecutionFilter !== "all";
+    || historyExecutionFilter !== "all"
+    || historyHideLocked;
   const historyInstrumentFilterSummary = getT0InstrumentFilterSummary(historyInstrumentTypeFilterIds);
-  const historyExecutionFilterSummary = getT0ExecutionFilterSummary(historyExecutionFilter);
+  const historyExecutionFilterSummary = getT0ExecutionFilterSummary(historyExecutionFilter, historyHideLocked);
   const historyTypeStatusGridTemplateColumns = useMemo(
     () => buildT0FilterGridTemplateColumns([
       // 两项都按当前文字共同分配空间；不能因另一项仍为“全部”而把已选类型压成极窄固定宽度。
@@ -2763,7 +2928,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : [accountSpec, userSpec, fundSpec]);
   }, [accountFilterOptions, isMemberView, lockedRelatedFundName, memberHasReferralFilterOptions, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberFundFilter, topRelatedUserSelectionIsAll]);
   const topInstrumentFilterSummary = getT0InstrumentFilterSummary(instrumentTypeFilterIds);
-  const topExecutionFilterSummary = getT0ExecutionFilterSummary(executionFilter);
+  const topExecutionFilterSummary = getT0ExecutionFilterSummary(executionFilter, hideLocked);
   const topTypeStatusGridTemplateColumns = useMemo(
     () => buildT0FilterGridTemplateColumns([
       // 管理端与用户端均以当前两项文字作为整体智能分配，保证“期权 + 全部状态”等组合不挤压类型。
@@ -2885,6 +3050,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     });
   }, [isMemberView, profitShareSnapshots, selectedFilledTrades, trades, viewerProfitShareBeneficiaryUserId]);
   const totalNetProfit = totalNetProfitDetails.reduce((total, detail) => total + detail.netPnl, 0);
+  // 资金账本只对账，不回写或扣减订单收益：投入、提现为两条独立方向；仅提现受当前正向总收益上限约束。
+  const withdrawalLogs = payoutLogs.filter((log) => log.direction === "withdrawal");
+  const depositLogs = payoutLogs.filter((log) => log.direction === "deposit");
+  const cumulativePayoutAmount = withdrawalLogs.reduce((total, log) => total + (Number.isFinite(log.amount) ? log.amount : 0), 0);
+  const cumulativeDepositAmount = depositLogs.reduce((total, log) => total + (Number.isFinite(log.amount) ? log.amount : 0), 0);
+  const payoutProfitCap = Math.max(0, totalNetProfit);
+  const remainingPayoutAmount = Math.max(0, payoutProfitCap - cumulativePayoutAmount);
+  const payoutFormWithdrawalLimit = Math.max(
+    0,
+    payoutProfitCap - (cumulativePayoutAmount - (editingPayoutLog?.direction === "withdrawal" ? editingPayoutLog.amount : 0)),
+  );
+  const visiblePayoutLogs = payoutLogView === "all" ? payoutLogs : payoutLogs.filter((log) => log.direction === payoutLogView);
+  const payoutLogSectionLabel = payoutLogView === "all" ? "资金流水" : payoutLogView === "deposit" ? "投入流水" : "提现流水";
   // 总览展开后的多/空累计收益必须与顶部“总收益”使用相同的当前用户实际可得口径。
   // 原 summary 的 realized 是订单原始净额；筛选某位用户时会混入其他受益人的分成。
   const overviewSummary = useMemo(() => {
@@ -4245,6 +4423,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       relatedFundIds: relatedFundFilterIds,
       instrumentTypeIds: instrumentTypeFilterIds,
       executionFilter,
+      hideLocked,
     });
     window.location.reload();
   };
@@ -4694,14 +4873,31 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
   return (
     <div className={`${embedded ? "min-h-0 w-full" : "min-h-screen max-w-md mx-auto"} bg-slate-50 pb-8`}>
-      {!(embedded && isMemberView) && (
-        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 shadow-[0_1px_3px_rgba(15,23,42,0.05)] backdrop-blur">
+      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 shadow-[0_1px_3px_rgba(15,23,42,0.05)] backdrop-blur">
           <div className="h-14 px-4 flex items-center gap-3">
             {!embedded && <button onClick={backToLedger} aria-label="返回52号账本" className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white active:scale-95">
               <ArrowLeft className="w-4 h-4 text-slate-700" />
             </button>}
-            <div className="min-w-0 flex-1">
-              <h1 className="font-semibold tracking-[0.01em] text-slate-900">T+0 速记账本</h1>
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <h1 className="shrink-0 font-semibold tracking-[0.01em] text-slate-900">T+0 速记账本</h1>
+              <button
+                type="button"
+                onClick={() => {
+                  if (payoutTargetRelatedUserId <= 0) {
+                    toast.message("请先在用户筛选中单选一位用户，再查看收益账本");
+                    return;
+                  }
+                  setShowPayoutForm(false);
+                  setShowPayoutLog(true);
+                }}
+                aria-haspopup="dialog"
+                aria-label="查看收益账本"
+                title="收益账本（记事本）"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-slate-300 bg-slate-50 text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)] transition active:scale-95 active:bg-slate-100"
+                style={{ color: "#7b8794" }}
+              >
+                <NotebookTabs className="h-[16px] w-[16px] !text-slate-500" stroke="currentColor" strokeWidth={2.15} />
+              </button>
             </div>
             <button
               onClick={forceRefreshJournal}
@@ -4713,7 +4909,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             </button>
           </div>
         </header>
-      )}
 
       <main className="space-y-4 px-4 pt-4">
         <section
@@ -4898,9 +5093,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 emptyLabel="暂无状态"
                 align="right"
                 singleSelect
+                summarySuffix={hideLocked ? "隐藏已锁定" : undefined}
+                additionalToggle={{
+                  label: "隐藏已锁定",
+                  checked: hideLocked,
+                  onCheckedChange: (checked) => {
+                    setHideLocked(checked);
+                    setRecentJournalPage(1);
+                  },
+                }}
                 onChange={(ids) => {
                   const value = ids[0];
-                  setExecutionFilter(value === "filled" || value === "pending" || value === "locked" ? value : "all");
+                  setExecutionFilter(value === "filled" || value === "pending" ? value : "all");
                   setRecentJournalPage(1);
                 }}
               />
@@ -5185,6 +5389,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         setHistoryRelatedFundFilterIds([]);
                         setHistoryInstrumentTypeFilterIds([]);
                         setHistoryExecutionFilter("all");
+                        setHistoryHideLocked(false);
                         setRecentJournalPage(1);
                         setShowHistoryFilters(false);
                         return;
@@ -5266,10 +5471,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     compact
                     align="right"
                     singleSelect
+                    summarySuffix={historyHideLocked ? "隐藏已锁定" : undefined}
+                    additionalToggle={{
+                      label: "隐藏已锁定",
+                      checked: historyHideLocked,
+                      onCheckedChange: (checked) => {
+                        setHistoryHideLocked(checked);
+                        setRecentJournalPage(1);
+                      },
+                    }}
                     onChange={(ids) => {
                       const value = ids[0];
-                      setHistoryExecutionFilter(value === "filled" || value === "pending" || value === "locked" ? value : "all");
-                        setRecentJournalPage(1);
+                      setHistoryExecutionFilter(value === "filled" || value === "pending" ? value : "all");
+                      setRecentJournalPage(1);
                     }}
                   />
                 </div>
@@ -6400,6 +6614,105 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         </div>
       )}
 
+      {showPayoutLog && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/45 p-4" role="dialog" aria-modal="true" aria-label="T+0收益账本">
+          <div className="flex max-h-[88vh] w-full max-w-sm flex-col overflow-y-auto rounded-xl bg-white p-4 shadow-2xl">
+            {canManage && (
+              <div data-html2canvas-ignore="true" className="order-1 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                <div className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500"><span>操作面板</span><span className="flex items-center gap-1"><OrderCardImageDownload targetRef={payoutSharedContentRef} currentUser={me as any} orderNo={`${payoutTargetUserIdentity.name}-${payoutLogSectionLabel}`} filenamePrefix="T+0收益账本" previewTitle="T+0收益账本图片预览" previewHint="包含昵称、用户名、收益统计与当前展示流水" color="#475569" outerPadding={12} captureFullContent exportBackground="#F8FAFC" variant="bare" buttonLabel="下载" /><button type="button" onClick={() => { setIsPayoutListEditing((current) => !current); setDeletePayoutLogId(null); }} className={`flex h-7 items-center gap-1 rounded px-1.5 font-medium ${isPayoutListEditing ? "bg-slate-700 text-white" : "text-slate-600 active:bg-slate-100"}`}><Pencil className="h-3.5 w-3.5" />{isPayoutListEditing ? "完成" : "编辑"}</button></span></div>
+                <div className="p-3">
+                {!showPayoutForm ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => openPayoutLogForm("deposit")} className="flex h-10 items-center justify-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 text-sm font-semibold text-sky-700 shadow-sm active:scale-[0.99]">
+                      <ArrowDownLeft className="h-4 w-4" /> 登记投入
+                    </button>
+                    <button type="button" onClick={() => openPayoutLogForm("withdrawal")} className="flex h-10 items-center justify-center gap-1.5 rounded-lg bg-slate-800 text-sm font-semibold text-white shadow-sm active:scale-[0.99]">
+                      <ArrowUpRight className="h-4 w-4" /> 登记提现
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    {editingPayoutLog && <div className="mb-2 text-[11px] font-medium text-slate-500">编辑资金流水</div>}
+                    <div className="grid grid-cols-2 gap-2 rounded-md border border-slate-200 bg-white p-1 text-xs font-semibold">
+                      <button type="button" onClick={() => { setPayoutDirection("deposit"); setPayoutLogView("deposit"); }} className={`h-8 rounded transition ${payoutDirection === "deposit" ? "bg-sky-600 text-white" : "text-slate-500"}`}>投入</button>
+                      <button type="button" onClick={() => { setPayoutDirection("withdrawal"); setPayoutLogView("withdrawal"); }} className={`h-8 rounded transition ${payoutDirection === "withdrawal" ? "bg-slate-800 text-white" : "text-slate-500"}`}>提现</button>
+                    </div>
+                    <div className="mt-2 grid gap-2">
+                      <label className="min-w-0 text-[11px] font-medium text-slate-600">日期
+                        <input type="date" value={payoutOccurredOn} onChange={(event) => setPayoutOccurredOn(event.target.value)} className="t0-journal-date-input mt-1 block h-9 min-h-0 w-full appearance-none rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 text-slate-800" style={{ WebkitAppearance: "none", appearance: "none" }} />
+                      </label>
+                      <label className="min-w-0 text-[11px] font-medium text-slate-600">金额（U）
+                        <input inputMode="decimal" placeholder="0.00" value={payoutAmount} onChange={(event) => setPayoutAmount(event.target.value)} className="mt-1 block h-9 min-h-0 w-full rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 tabular-nums text-slate-800" />
+                      </label>
+                    </div>
+                    <label className="mt-2 block text-[11px] font-medium text-slate-600">备注（可选）
+                      <input value={payoutNote} onChange={(event) => setPayoutNote(event.target.value)} maxLength={300} placeholder={payoutDirection === "withdrawal" ? "例如：微信提现" : "例如：追加投入"} className="mt-1 block h-9 min-h-0 w-full rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 text-slate-800" />
+                    </label>
+                    {payoutDirection === "withdrawal" && <div className="mt-2 text-[11px] text-slate-500">本次提现不超过可提现的 {formatPrice(payoutFormWithdrawalLimit)} U。</div>}
+                    <div className="mt-3 flex gap-2">
+                      <button type="button" onClick={resetPayoutLogForm} className="h-9 flex-1 rounded border border-slate-300 bg-white text-sm font-medium text-slate-600 active:scale-[0.99]">取消</button>
+                      <button
+                        type="button"
+                        disabled={createPayoutLogMutation.isPending || updatePayoutLogMutation.isPending}
+                        onClick={() => {
+                          const amount = Number(payoutAmount);
+                          if (!payoutOccurredOn) { toast.error("请选择登记日期"); return; }
+                          if (!Number.isFinite(amount) || amount <= 0) { toast.error("请输入有效的登记金额"); return; }
+                          if (payoutDirection === "withdrawal" && amount > payoutFormWithdrawalLimit + 0.005) { toast.error(`本次提现不能超过可提现的 ${formatPrice(payoutFormWithdrawalLimit)} U`); return; }
+                          const payload = {
+                            ledgerId: 52 as const,
+                            relatedUserId: payoutTargetRelatedUserId,
+                            occurredOn: payoutOccurredOn,
+                            amount: amount.toFixed(2),
+                            direction: payoutDirection,
+                            note: payoutNote.trim() || undefined,
+                            maximumTotalAmount: payoutDirection === "withdrawal" ? payoutProfitCap.toFixed(2) : undefined,
+                          };
+                          if (editingPayoutLog) updatePayoutLogMutation.mutate({ ...payload, id: editingPayoutLog.id });
+                          else createPayoutLogMutation.mutate(payload);
+                        }}
+                        className={`h-9 flex-1 rounded text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-45 ${payoutDirection === "withdrawal" ? "bg-slate-800" : "bg-sky-600"}`}
+                      >{createPayoutLogMutation.isPending || updatePayoutLogMutation.isPending ? "保存中" : editingPayoutLog ? "保存修改" : `保存${payoutDirection === "withdrawal" ? "提现" : "投入"}`}</button>
+                    </div>
+                  </div>
+                )}
+                </div>
+              </div>
+            )}
+
+            <div ref={payoutSharedContentRef} className="order-3 mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-base font-semibold text-slate-900">T+0收益账本</div>
+                  <div className="mt-0.5 truncate text-xs text-slate-500">
+                    昵称：{payoutTargetUserIdentity.name}{payoutTargetUserIdentity.username ? ` · 用户名：@${payoutTargetUserIdentity.username}` : ""}
+                  </div>
+                </div>
+                <button type="button" data-card-export-hide="true" onClick={() => setShowPayoutLog(false)} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭T+0收益账本">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="mt-3 grid grid-cols-3 divide-x divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-center tabular-nums">
+                <button type="button" aria-pressed={payoutLogView === "all"} onClick={() => setPayoutLogView("all")} className={`px-1.5 py-2 transition ${payoutLogView === "all" ? "bg-white shadow-[inset_0_-2px_0_#475569]" : "active:bg-slate-100"}`}><div className="text-[10px] text-slate-500">当前总收益</div><div className={`mt-0.5 text-sm font-bold ${payoutProfitCap > 0 ? "text-rose-600" : "text-slate-700"}`}>{formatSigned(payoutProfitCap)} <span className="text-[10px]">U</span></div></button>
+                <button type="button" aria-pressed={payoutLogView === "deposit"} onClick={() => setPayoutLogView("deposit")} className={`px-1.5 py-2 transition ${payoutLogView === "deposit" ? "bg-white shadow-[inset_0_-2px_0_#0284c7]" : "active:bg-slate-100"}`}><div className="text-[10px] text-slate-500">累计投入</div><div className="mt-0.5 text-sm font-bold text-sky-700">+{formatPrice(cumulativeDepositAmount)} <span className="text-[10px]">U</span></div></button>
+                <button type="button" aria-pressed={payoutLogView === "withdrawal"} onClick={() => setPayoutLogView("withdrawal")} className={`px-1.5 py-2 transition ${payoutLogView === "withdrawal" ? "bg-white shadow-[inset_0_-2px_0_#475569]" : "active:bg-slate-100"}`}><div className="text-[10px] text-slate-500">累计提现</div><div className="mt-0.5 text-sm font-bold text-slate-800">+{formatPrice(cumulativePayoutAmount)} <span className="text-[10px]">U</span></div></button>
+              </div>
+              <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-500"><span>{payoutLogSectionLabel}</span><span>{visiblePayoutLogs.length} 笔</span></div>
+              {t0PayoutLogsQuery.isLoading ? <div className="px-3 py-5 text-center text-xs text-slate-400">加载中…</div>
+                : visiblePayoutLogs.length > 0 ? <div className="divide-y divide-slate-100">{visiblePayoutLogs.map((log) => {
+                  const isDeposit = log.direction === "deposit";
+                  return <div key={log.id} className="px-3 py-2.5 text-xs">
+                    <div className="flex items-center justify-between gap-2"><span className="flex min-w-0 items-center gap-1.5 overflow-hidden font-medium text-slate-700"><span className="shrink-0">{log.occurredOn.replaceAll("-", "/")}</span><span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${isDeposit ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-600"}`}>{isDeposit ? "投入" : "提现"}</span>{log.note && <span className="min-w-0 truncate text-[11px] font-normal text-slate-400">· {log.note}</span>}</span><span className="flex shrink-0 items-center gap-1"><span className={`font-bold tabular-nums ${isDeposit ? "text-sky-700" : "text-slate-800"}`}>{isDeposit ? "+" : "−"}{formatPrice(log.amount)} U</span>{canManage && isPayoutListEditing && deletePayoutLogId !== log.id && <><button type="button" onClick={() => { setEditingPayoutLog(log); setIsPayoutListEditing(false); setPayoutDirection(log.direction); setPayoutLogView(log.direction); setPayoutOccurredOn(log.occurredOn); setPayoutAmount(log.amount.toFixed(2)); setPayoutNote(log.note || ""); setShowPayoutForm(true); }} className="flex h-7 w-7 items-center justify-center rounded text-slate-500 active:bg-slate-100" aria-label="编辑资金流水" title="编辑"><Pencil className="h-3.5 w-3.5" /></button><button type="button" onClick={() => setDeletePayoutLogId(log.id)} className="flex h-7 w-7 items-center justify-center rounded text-rose-500 active:bg-rose-50" aria-label="删除资金流水" title="删除"><Trash2 className="h-3.5 w-3.5" /></button></>}</span></div>
+                    {canManage && isPayoutListEditing && deletePayoutLogId === log.id && <div className="mt-2 flex items-center justify-end gap-2 text-[11px]"><span className="mr-auto text-rose-600">确认删除这笔记录？</span><button type="button" onClick={() => setDeletePayoutLogId(null)} className="h-7 rounded border border-slate-300 bg-white px-2 font-medium text-slate-600">保留</button><button type="button" disabled={deletePayoutLogMutation.isPending} onClick={() => deletePayoutLogMutation.mutate({ ledgerId: 52, relatedUserId: payoutTargetRelatedUserId, id: log.id })} className="h-7 rounded bg-rose-600 px-2 font-semibold text-white disabled:opacity-45">{deletePayoutLogMutation.isPending ? "删除中" : "确认删除"}</button></div>}
+                  </div>;
+                })}</div> : <div className="px-3 py-5 text-center text-xs text-slate-400">暂无{payoutLogSectionLabel}记录</div>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showTotalNetProfitDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="总收益明细">
           <div className="max-h-[88vh] w-full max-w-sm overflow-y-auto rounded bg-white p-5 shadow-2xl">
@@ -6803,6 +7116,8 @@ function T0MultiSelect({
   showSelectedLabels = false,
   singleSelect = false,
   treatSelectionAsAll = false,
+  summarySuffix,
+  additionalToggle,
 }: {
   label: string;
   options: T0MultiSelectOption[];
@@ -6820,6 +7135,14 @@ function T0MultiSelect({
   singleSelect?: boolean;
   /** 组合的本人和推荐已覆盖全部可筛选用户时，按“全部”展示但保留可恢复的选择令牌。 */
   treatSelectionAsAll?: boolean;
+  /** 独立附加条件的当前摘要，例如“隐藏已锁定”。 */
+  summarySuffix?: string;
+  /** 在枚举项末尾追加不与主筛选互斥的勾选条件。 */
+  additionalToggle?: {
+    label: string;
+    checked: boolean;
+    onCheckedChange: (checked: boolean) => void;
+  };
 }) {
   const [open, setOpen] = useState(false);
   const [constrainedMenuWidth, setConstrainedMenuWidth] = useState<number | null>(null);
@@ -6829,16 +7152,18 @@ function T0MultiSelect({
   const selectedSet = new Set(selectedIds);
   const selectedOptions = options.filter((option) => selectedSet.has(option.id));
   const selectionRepresentsAll = selectedIds.length === 0 || treatSelectionAsAll;
-  const summary = selectionRepresentsAll
+  const baseSummary = selectionRepresentsAll
     ? "全部"
     : selectedOptions.length === 1
       ? selectedOptions[0].summaryLabel ?? selectedOptions[0].label
       : showSelectedLabels
         ? selectedOptions.map((option) => option.summaryLabel ?? option.label).join("、")
         : `已选 ${selectedOptions.length} 项`;
-  const selectedTitle = selectionRepresentsAll
+  const summary = summarySuffix ? `${baseSummary} · ${summarySuffix}` : baseSummary;
+  const baseSelectedTitle = selectionRepresentsAll
     ? `${label}：全部`
     : `${label}：${selectedOptions.map((option) => option.label).join("、")}`;
+  const selectedTitle = summarySuffix ? `${baseSelectedTitle}；${summarySuffix}` : baseSelectedTitle;
 
   useLayoutEffect(() => {
     if (!open || !constrainRightToFilterRow || !rootRef.current) return;
@@ -7021,6 +7346,16 @@ function T0MultiSelect({
               </button>
             );
           })}
+          {additionalToggle && <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={additionalToggle.checked}
+            onClick={() => additionalToggle.onCheckedChange(!additionalToggle.checked)}
+            className={`flex min-h-12 w-full snap-start items-center gap-3 border-t border-slate-500/30 px-3.5 py-3 text-left text-[15px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.58)] ${additionalToggle.checked ? "bg-white/55 text-[#1a56db]" : "text-slate-700 active:bg-white/55"}`}
+          >
+            {renderCheck(additionalToggle.checked)}
+            <span className="min-w-0 flex-1 truncate">{additionalToggle.label}</span>
+          </button>}
         </div>
       )}
     </div>

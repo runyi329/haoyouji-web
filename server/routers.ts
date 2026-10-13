@@ -11048,6 +11048,127 @@ ${klinesSummary}
           : scope);
       }),
 
+    // 收益转出记录：管理员随当前用户筛选登记；成员始终只读取本人共享流水。
+    t0GetPayoutLogs: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        relatedUserId: z.number().int().positive().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        if (ctx.isViewingAs) {
+          const realUser = ctx.realUser;
+          if (!realUser) throw new TRPCError({ code: 'FORBIDDEN', message: '无法确认代入查看身份' });
+          const realMembership = await dbLedger.getUserMembership(52, realUser.id);
+          const realSystemRole = String((realUser as any).role || '');
+          const realUserIsManager = realSystemRole === 'super_admin'
+            || realSystemRole === 'admin'
+            || realMembership?.role === 'owner'
+            || realMembership?.role === 'admin';
+          if (!realUserIsManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅具备查看权限的账本成员可代入查看资金流水' });
+          const targetMembership = await dbLedger.getUserMembership(52, ctx.user.id);
+          if (!targetMembership) throw new TRPCError({ code: 'FORBIDDEN', message: '目标用户不是52号账本成员' });
+          return await journal.getLedger52T0JournalPayoutLogs({
+            scope: { mode: 'member', relatedUserId: ctx.user.id },
+            relatedUserId: input.relatedUserId,
+          });
+        }
+        const scope = await journal.resolveLedger52T0JournalReadScope({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.getLedger52T0JournalPayoutLogs({ scope, relatedUserId: input.relatedUserId });
+      }),
+
+    t0CreatePayoutLog: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        relatedUserId: z.number().int().positive(),
+        occurredOn: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式应为 YYYY-MM-DD'),
+        amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '金额最多两位小数'),
+        direction: z.enum(['withdrawal', 'deposit']),
+        note: z.string().trim().max(300).optional(),
+        maximumTotalAmount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '当前总收益格式无效').optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        const scope = await journal.resolveLedger52T0JournalReadScope({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        if (scope.mode !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅具备登记权限的账本成员可登记资金流水' });
+        }
+        return await journal.createLedger52T0JournalPayoutLog({
+          journalOwnerUserId: scope.journalOwnerUserId,
+          operatorUserId: ctx.user.id,
+          relatedUserId: input.relatedUserId,
+          occurredOn: input.occurredOn,
+          amount: input.amount,
+          direction: input.direction,
+          note: input.note,
+          maximumTotalAmount: input.maximumTotalAmount,
+        });
+      }),
+
+    t0UpdatePayoutLog: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        id: z.string().trim().regex(/^[1-9]\d*$/, '资金流水记录无效'),
+        relatedUserId: z.number().int().positive(),
+        occurredOn: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式应为 YYYY-MM-DD'),
+        amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '金额最多两位小数'),
+        direction: z.enum(['withdrawal', 'deposit']),
+        note: z.string().trim().max(300).optional(),
+        maximumTotalAmount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '当前总收益格式无效').optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        const scope = await journal.resolveLedger52T0JournalReadScope({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        if (scope.mode !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅具备登记权限的账本成员可编辑资金流水' });
+        }
+        return await journal.updateLedger52T0JournalPayoutLog({
+          journalOwnerUserId: scope.journalOwnerUserId,
+          relatedUserId: input.relatedUserId,
+          payoutLogId: input.id,
+          occurredOn: input.occurredOn,
+          amount: input.amount,
+          direction: input.direction,
+          note: input.note,
+          maximumTotalAmount: input.maximumTotalAmount,
+        });
+      }),
+
+    t0DeletePayoutLog: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        id: z.string().trim().regex(/^[1-9]\d*$/, '资金流水记录无效'),
+        relatedUserId: z.number().int().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        const scope = await journal.resolveLedger52T0JournalReadScope({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        if (scope.mode !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅具备登记权限的账本成员可删除资金流水' });
+        }
+        return await journal.deleteLedger52T0JournalPayoutLog({
+          journalOwnerUserId: scope.journalOwnerUserId,
+          relatedUserId: input.relatedUserId,
+          payoutLogId: input.id,
+        });
+      }),
+
     // 推荐集合始终沿用T+0账本的同一阅读权限边界：管理员取本人管理分支，成员仅取自己的分支。
     t0GetReferralFilterOptions: protectedProcedure
       .input(z.object({ ledgerId: z.literal(52) }))

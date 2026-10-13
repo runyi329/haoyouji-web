@@ -304,6 +304,23 @@ body {
 }
 
 @layer components {
+  /* iPhone Safari 会为 date 输入框创建独立的内部文本层；统一将该文本层垂直居中。 */
+  .t0-journal-date-input::-webkit-date-and-time-value,
+  .t0-journal-date-input::-webkit-datetime-edit {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  .t0-journal-date-input::-webkit-datetime-edit-fields-wrapper {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0;
+  }
+
   /**
    * Custom container utility that centers content and adds responsive padding.
    *
