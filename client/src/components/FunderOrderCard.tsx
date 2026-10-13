@@ -1988,7 +1988,10 @@ export function FunderOrderCard({
   const isShort = isOptionOrder ? isShortOption : (order as any).trade_direction === 'short';
   // 数字币现货使用资产市值与买入价值比较；期权使用独立的合约标记价差额。
   const spotBuyValueUsdt = qty > 0 && quotedPriceUsdt > 0 ? qty * quotedPriceUsdt : totalU;
-  const floatPnlBase = isOptionOrder ? optionPremiumTotal : (!isStockOrder ? spotBuyValueUsdt : interestBaseNum);
+  // 内部浮盈计算统一以 U 为单位。人民币股票的计息基数若直接相减，
+  // 会被误认成 U，再在展示层折回人民币，造成“50万元被显示为数百万元”的错误。
+  const stockFloatPnlBaseU = baseCur === 'CNY' ? interestBaseNum / cnyRate : interestBaseNum;
+  const floatPnlBase = isOptionOrder ? optionPremiumTotal : (!isStockOrder ? spotBuyValueUsdt : stockFloatPnlBaseU);
   const floatPnl = isOptionOrder
     ? (isSelfFundedOption ? optionCurrentValue : optionFloatPnl)
     : (currentValueForRisk !== null && floatPnlBase !== null && floatPnlBase > 0
