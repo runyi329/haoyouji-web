@@ -3112,8 +3112,11 @@ export default function LedgerDetailAA({
               }
               // 分段合计天数
               const today2 = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+              // 暂停状态与是否已录入首日余额无关。新标签可能尚无 points / startDate，
+              // 但一旦已暂停，概览仍必须归入蓝色“已暂停”分组。
+              const lastPauseItem2 = tagPauseHistory2[tagPauseHistory2.length - 1];
               let endDate = today2;
-              let isPaused = false;
+              let isPaused = Boolean(lastPauseItem2?.pauseDate && !lastPauseItem2.resumeDate);
               let days = 0;
               if (firstDate) {
                 if (tagPauseHistory2.length === 0) {
@@ -3130,20 +3133,19 @@ export default function LedgerDetailAA({
                     }
                     segStart = item.resumeDate ?? '';
                   }
-                  const lastItem2 = tagPauseHistory2[tagPauseHistory2.length - 1];
-                  if (lastItem2.resumeDate && lastItem2.resumeDate <= today2) {
-                    days += Math.max(1, Math.round((new Date(today2).getTime() - new Date(lastItem2.resumeDate).getTime()) / 86400000) + 1);
+                  if (lastPauseItem2?.resumeDate && lastPauseItem2.resumeDate <= today2) {
+                    days += Math.max(1, Math.round((new Date(today2).getTime() - new Date(lastPauseItem2.resumeDate).getTime()) / 86400000) + 1);
                     isPaused = false;
-                  } else if (!lastItem2.resumeDate) {
+                  } else if (lastPauseItem2?.pauseDate && !lastPauseItem2.resumeDate) {
                     isPaused = true;
                   }
                   days = Math.max(1, days);
-                  if (isPaused && lastItem2.pauseDate) {
-                    const pauseD2 = new Date(lastItem2.pauseDate);
-                    pauseD2.setDate(pauseD2.getDate() - 1);
-                    endDate = pauseD2.toISOString().slice(0, 10);
-                  }
                 }
+              }
+              if (isPaused && lastPauseItem2?.pauseDate) {
+                const pauseD2 = new Date(lastPauseItem2.pauseDate);
+                pauseD2.setDate(pauseD2.getDate() - 1);
+                endDate = pauseD2.toISOString().slice(0, 10);
               }
               // 读取 pauseHistory 用于回报冻结
               const pnlPauseHistoryRaw = initialBalancesData?.balances ? (initialBalancesData.balances as any)[`${tag.name}__pauseHistory`] : null;
