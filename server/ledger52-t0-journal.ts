@@ -485,7 +485,7 @@ function calculateAvailableCloseCents(rows: any[], action: T0JournalAction, targ
  * 删除或编辑开仓前，按与平仓可用量一致的 FIFO 口径判断该主单是否真的被后续平仓消耗。
  * 不能仅因同一十美元档存在历史平仓就拒绝：平仓可能早于该开仓，或已由更早的主单承接。
  */
-function openingDependentCloseQuantityCents(rows: any[], openingEntryId: number): number {
+function openingDependentCloseQuantityCents(rows: any[], openingEntryId: number, directlyLinkedClosingEntryIds: ReadonlySet<number> = new Set()): number {
   const opening = rows.find((row) => Number(row.id) === openingEntryId);
   if (!opening) return 0;
 
@@ -506,6 +506,8 @@ function openingDependentCloseQuantityCents(rows: any[], openingEntryId: number)
       continue;
     }
     if (rowAction !== closingAction || row.target_price === null || row.target_price === undefined) continue;
+    // 已由止盈计划外键锁定归属的平仓，不可再让通用 FIFO 二次分配。
+    if (directlyLinkedClosingEntryIds.has(toNumber(row.id))) continue;
     if (priceKey(archivedTargetPrice(rowAction, row.target_price, row.price)) !== archiveKey) continue;
 
     let remainingCloseCents = quantityToCents(row.quantity);
@@ -652,6 +654,8 @@ function mapEntry(row: any) {
     targetPrice: row.target_price === null || row.target_price === undefined ? undefined : toNumber(row.target_price),
     note: row.note ? String(row.note) : undefined,
     createdAt: isoTime(row.trade_time || row.created_at),
+    // 自动成交/止盈可能补写 trade_time；前端仅用落库时间对系统动作排序，不改变交易时间展示。
+    recordedAt: row.created_at ? isoTime(row.created_at) : undefined,
   };
 }
 
@@ -686,6 +690,27 @@ async function getTakeProfitPlansByEntryId(tx: any, entryIds: number[], lock = f
     plansByEntryId.set(entryId, list);
   }
   return plansByEntryId;
+}
+
+/** 已触发止盈有明确 closing_entry_id，先按该外键扣减可用数量，不能依赖易受旧时间影响的 FIFO。 */
+async function getTriggeredTakeProfitCloseLinks(tx: any, input: { actorUserId: number; openingEntryId: number }) {
+  const [rows] = await tx.execute(
+    `SELECT closing_entry_id, quantity, triggered_quantity
+       FROM ledger52_t0_journal_take_profit_plans
+      WHERE ledger_id = ? AND user_id = ? AND opening_entry_id = ?
+        AND status = 'triggered' AND closing_entry_id IS NOT NULL
+      FOR UPDATE`,
+    [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.openingEntryId],
+  );
+  const closingEntryIds = new Set<number>();
+  let closedCents = 0;
+  for (const row of asRows(rows)) {
+    const closingEntryId = toNumber(row.closing_entry_id);
+    if (closingEntryId <= 0 || closingEntryIds.has(closingEntryId)) continue;
+    closingEntryIds.add(closingEntryId);
+    closedCents += quantityToCents(row.triggered_quantity ?? row.quantity);
+  }
+  return { closingEntryIds, closedCents };
 }
 
 async function replacePendingTakeProfitPlans(tx: any, input: { actorUserId: number; openingEntryId: number; plans: ResolvedT0TakeProfitPlan[] }) {
@@ -2902,7 +2927,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         `SELECT id, action, execution_status, is_locked, quantity, price, target_price, related_user_id, related_fund_id
            FROM ledger52_t0_journal_entries
           WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
-          ORDER BY trade_time ASC, id ASC FOR UPDATE`,
+          ORDER BY created_at ASC, id ASC FOR UPDATE`,
         [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, accountId, input.symbol],
       );
       const availableCents = calculateAvailableCloseCents(asRows(positionRows), input.action, String(storedTargetPrice), relatedUserId, relatedFund?.id ?? 0);
@@ -3081,7 +3106,7 @@ async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: n
       WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
         AND COALESCE(related_user_id, 0) = ?
         AND COALESCE(related_fund_id, 0) = ?
-      ORDER BY trade_time ASC, id ASC FOR UPDATE`,
+      ORDER BY created_at ASC, id ASC FOR UPDATE`,
     [
       LEDGER_52_T0_JOURNAL_ID,
       actorUserId,
@@ -3091,7 +3116,12 @@ async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: n
       toNumber(entry.related_fund_id),
     ],
   );
-  const dependentCloseCents = openingDependentCloseQuantityCents(asRows(scopeRows), Number(entry.id));
+  const triggeredStopLinks = await getTriggeredTakeProfitCloseLinks(tx, { actorUserId, openingEntryId: Number(entry.id) });
+  const dependentCloseCents = triggeredStopLinks.closedCents + openingDependentCloseQuantityCents(
+    asRows(scopeRows),
+    Number(entry.id),
+    triggeredStopLinks.closingEntryIds,
+  );
   const hasDependentClose = dependentCloseCents > 0;
   const remainingCents = Math.max(0, quantityToCents(entry.quantity) - dependentCloseCents);
   if (hasDependentClose && !options.allowDependentClose) {
@@ -3410,11 +3440,11 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
       const beforeOpening = await buildEntryAuditSnapshot(tx, actorUserId, candidate);
       const [scopeResult] = await tx.execute(
         `SELECT id, action, execution_status, quantity, price, target_price, related_user_id, related_fund_id,
-                account_id, symbol, instrument_type
+                account_id, symbol, instrument_type, created_at
            FROM ledger52_t0_journal_entries
           WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
             AND COALESCE(related_user_id, 0) = ? AND COALESCE(related_fund_id, 0) = ?
-          ORDER BY trade_time ASC, id ASC FOR UPDATE`,
+          ORDER BY created_at ASC, id ASC FOR UPDATE`,
         [
           LEDGER_52_T0_JOURNAL_ID,
           actorUserId,
@@ -3427,7 +3457,13 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
       const scopeRows = asRows(scopeResult);
       const currentOpening = scopeRows.find((row) => toNumber(row.id) === openingEntryId);
       if (!currentOpening || String(currentOpening.execution_status) !== 'filled') continue;
-      const remainingCents = Math.max(0, quantityToCents(currentOpening.quantity) - openingDependentCloseQuantityCents(scopeRows, openingEntryId));
+      const triggeredStopLinks = await getTriggeredTakeProfitCloseLinks(tx, { actorUserId, openingEntryId });
+      const remainingCents = Math.max(
+        0,
+        quantityToCents(currentOpening.quantity)
+          - triggeredStopLinks.closedCents
+          - openingDependentCloseQuantityCents(scopeRows, openingEntryId, triggeredStopLinks.closingEntryIds),
+      );
       if (remainingCents <= 0) {
         await tx.execute(
           `UPDATE ledger52_t0_journal_take_profit_plans

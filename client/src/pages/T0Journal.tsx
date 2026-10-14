@@ -357,6 +357,8 @@ type PreviewTrade = {
   price: number;
   fee: number;
   createdAt: string;
+  /** 服务端落库时间，仅用于系统自动动作的历史排序；交易时间仍按 createdAt 展示。 */
+  recordedAt?: string;
   targetPrice?: number;
   note?: string;
   clientRequestId?: string;
@@ -489,11 +491,13 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
       triggeredAt: plan.triggeredAt ? String(plan.triggeredAt) : undefined,
       triggeredPrice: plan.triggeredPrice === undefined || plan.triggeredPrice === null ? undefined : Number(plan.triggeredPrice),
       triggeredQuantity: plan.triggeredQuantity === undefined || plan.triggeredQuantity === null ? undefined : Number(plan.triggeredQuantity),
+      closingEntryId: plan.closingEntryId === undefined || plan.closingEntryId === null ? undefined : String(plan.closingEntryId),
     })) : undefined,
     quantity: Number(entry.quantity),
     price: Number(entry.price),
     fee: Number(entry.fee || 0),
     createdAt: String(entry.createdAt),
+    recordedAt: entry.recordedAt ? String(entry.recordedAt) : undefined,
     targetPrice: entry.targetPrice === undefined || entry.targetPrice === null ? undefined : Number(entry.targetPrice),
     note: entry.note || undefined,
   };
@@ -569,6 +573,8 @@ type T0TakeProfitPlan = {
   triggeredAt?: string;
   triggeredPrice?: number;
   triggeredQuantity?: number;
+  /** 已触发计划明确绑定本次自动生成的平仓流水，不能再依赖时间顺序推断。 */
+  closingEntryId?: string;
 };
 
 type T0TakeProfitPlanDraft = { price: string; quantity: string };
@@ -999,6 +1005,13 @@ function formatBeijingMonthDayTime(value: string) {
   }).formatToParts(date);
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${Number(values.month)}/${Number(values.day)} ${values.hour}:${values.minute}`;
+}
+
+/** 历史列表按真正发生的成交/触发活动排序：挂单取成交时间，自动止盈兼容旧记录取实际落库时间。 */
+function getTradeActivityTime(trade: Pick<PreviewTrade, "createdAt" | "filledAt" | "recordedAt" | "note">) {
+  if (trade.filledAt) return trade.filledAt;
+  if (trade.note?.includes("[系统自动止盈]") && trade.recordedAt) return trade.recordedAt;
+  return trade.createdAt;
 }
 
 /** 已触发的挂单同时保留原始挂单时间与实际成交时间；普通成交单仅展示原始下单时间。 */
@@ -1496,9 +1509,52 @@ function buildRealizedGrossProfitDetails(trades: PreviewTrade[]) {
 function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
   const openingQueues = new Map<string, Array<{ entryId: string; remainingQuantity: number }>>();
   const allocations = new Map<string, LinkedClosingAllocation[]>();
+  const sourceOpeningById = new Map<string, PreviewTrade>();
+  const sourceClosingById = new Map<string, PreviewTrade[]>();
+
+  for (const trade of trades) {
+    if (trade.symbol !== "ETH") continue;
+    if (ACTIONS[trade.action].opening) {
+      sourceOpeningById.set(getStoredEntryId(trade), trade);
+      continue;
+    }
+    const sourceId = getStoredEntryId(trade);
+    const rows = sourceClosingById.get(sourceId) ?? [];
+    rows.push(trade);
+    sourceClosingById.set(sourceId, rows);
+  }
+
+  // 自动止盈在服务端记录了“计划 → 平仓流水”的不可变外键。先按该外键分配：即使旧记录
+  // 曾以错误时区写入 trade_time，也绝不会被 FIFO 误认为发生在开仓之前。
+  const directlyLinkedClosingIds = new Set<string>();
+  const directlyClosedByOpeningId = new Map<string, number>();
+  for (const opening of Array.from(sourceOpeningById.values())) {
+    const directRows = allocations.get(opening.id) ?? [];
+    let directlyClosed = 0;
+    for (const plan of opening.takeProfitPlans ?? []) {
+      if (plan.status !== "triggered" || !plan.closingEntryId) continue;
+      const closingRows = sourceClosingById.get(String(plan.closingEntryId)) ?? [];
+      for (const closing of closingRows) {
+        if (directlyLinkedClosingIds.has(closing.id)) continue;
+        const configuredQuantity = Number(plan.triggeredQuantity ?? plan.quantity);
+        const availableQuantity = Math.max(0, opening.quantity - directlyClosed);
+        const quantity = Math.min(closing.quantity, configuredQuantity, availableQuantity);
+        if (quantity <= 0.0000001) continue;
+        directRows.push({ trade: closing, quantity });
+        directlyClosed += quantity;
+        directlyLinkedClosingIds.add(closing.id);
+      }
+    }
+    if (directRows.length > 0) {
+      directRows.sort((a, b) => getTradeActivityTime(a.trade).localeCompare(getTradeActivityTime(b.trade)) || a.trade.id.localeCompare(b.trade.id));
+      allocations.set(opening.id, directRows);
+      directlyClosedByOpeningId.set(opening.id, directlyClosed);
+    }
+  }
+
   const orderedTrades = [...trades]
     .filter((trade) => trade.symbol === "ETH")
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    .sort((a, b) => getTradeActivityTime(a).localeCompare(getTradeActivityTime(b)) || a.id.localeCompare(b.id));
 
   const scopeKeyFor = (trade: PreviewTrade) => [
     ACTIONS[trade.action].side,
@@ -1513,11 +1569,13 @@ function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
     const scopeKey = scopeKeyFor(trade);
     if (config.opening) {
       const queue = openingQueues.get(scopeKey) ?? [];
-      queue.push({ entryId: trade.id, remainingQuantity: trade.quantity });
+      const directQuantity = directlyClosedByOpeningId.get(trade.id) ?? 0;
+      queue.push({ entryId: trade.id, remainingQuantity: Math.max(0, trade.quantity - directQuantity) });
       openingQueues.set(scopeKey, queue);
       continue;
     }
 
+    if (directlyLinkedClosingIds.has(trade.id)) continue;
     let remainingToAllocate = trade.quantity;
     const queue = openingQueues.get(scopeKey) ?? [];
     for (const opening of queue) {
@@ -1534,7 +1592,6 @@ function buildOpeningClosingAllocations(trades: PreviewTrade[]) {
 
   return allocations;
 }
-
 function invertTradeAction(action: TradeAction): TradeAction {
   switch (action) {
     case "openLong": return "openShort";
@@ -1877,7 +1934,15 @@ function buildLinkedJournalGroups(trades: PreviewTrade[]): LinkedJournalGroup[] 
       closings: [{ trade, quantity: trade.quantity }],
     }) satisfies LinkedJournalGroup);
 
-  return [...openingGroups, ...unmatchedClosingGroups];
+  return [...openingGroups, ...unmatchedClosingGroups]
+    .sort((left, right) => {
+      const activityTime = (group: LinkedJournalGroup) => [group.opening, ...group.closings.map((item) => item.trade)]
+        .filter((trade): trade is PreviewTrade => Boolean(trade))
+        .map((trade) => getTradeActivityTime(trade))
+        .sort()
+        .at(-1) ?? "";
+      return activityTime(right).localeCompare(activityTime(left)) || right.id.localeCompare(left.id);
+    });
 }
 
 function calculateSummary(buckets: PositionBucket[], markPrice: number | null, trades: PreviewTrade[]) {
@@ -2674,7 +2739,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     (showLinkedJournalGroups ? linkedJournalGroups.length : recentJournalTrades.length) / RECENT_JOURNAL_PAGE_SIZE,
   ));
   const pagedRecentJournalTrades = useMemo(() => {
-    const newestFirst = [...recentJournalTrades].reverse();
+    const newestFirst = [...recentJournalTrades]
+      .sort((a, b) => getTradeActivityTime(b).localeCompare(getTradeActivityTime(a)) || b.id.localeCompare(a.id));
     const start = (recentJournalPage - 1) * RECENT_JOURNAL_PAGE_SIZE;
     return newestFirst.slice(start, start + RECENT_JOURNAL_PAGE_SIZE);
   }, [recentJournalTrades, recentJournalPage]);
@@ -3892,11 +3958,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         takeProfitTriggeredAt: data.entry.takeProfitTriggeredAt ? String(data.entry.takeProfitTriggeredAt) : undefined,
         takeProfitTriggeredPrice: data.entry.takeProfitTriggeredPrice === undefined || data.entry.takeProfitTriggeredPrice === null ? undefined : Number(data.entry.takeProfitTriggeredPrice),
         takeProfitTriggeredQuantity: data.entry.takeProfitTriggeredQuantity === undefined || data.entry.takeProfitTriggeredQuantity === null ? undefined : Number(data.entry.takeProfitTriggeredQuantity),
-        takeProfitPlans: Array.isArray(data.entry.takeProfitPlans) ? data.entry.takeProfitPlans.map((plan: any) => ({ id: String(plan.id || ''), triggerPrice: Number(plan.triggerPrice), quantity: Number(plan.quantity), status: plan.status === 'triggered' || plan.status === 'cancelled' ? plan.status : 'pending', triggeredAt: plan.triggeredAt ? String(plan.triggeredAt) : undefined, triggeredPrice: plan.triggeredPrice === undefined || plan.triggeredPrice === null ? undefined : Number(plan.triggeredPrice), triggeredQuantity: plan.triggeredQuantity === undefined || plan.triggeredQuantity === null ? undefined : Number(plan.triggeredQuantity) })) : undefined,
+        takeProfitPlans: Array.isArray(data.entry.takeProfitPlans) ? data.entry.takeProfitPlans.map((plan: any) => ({ id: String(plan.id || ''), triggerPrice: Number(plan.triggerPrice), quantity: Number(plan.quantity), status: plan.status === 'triggered' || plan.status === 'cancelled' ? plan.status : 'pending', triggeredAt: plan.triggeredAt ? String(plan.triggeredAt) : undefined, triggeredPrice: plan.triggeredPrice === undefined || plan.triggeredPrice === null ? undefined : Number(plan.triggeredPrice), triggeredQuantity: plan.triggeredQuantity === undefined || plan.triggeredQuantity === null ? undefined : Number(plan.triggeredQuantity), closingEntryId: plan.closingEntryId === undefined || plan.closingEntryId === null ? undefined : String(plan.closingEntryId) })) : undefined,
         quantity: Number(data.entry.quantity),
         price: Number(data.entry.price),
         fee: Number(data.entry.fee || 0),
         createdAt: String(data.entry.createdAt),
+        recordedAt: data.entry.recordedAt ? String(data.entry.recordedAt) : undefined,
         targetPrice: data.entry.targetPrice === undefined || data.entry.targetPrice === null ? undefined : Number(data.entry.targetPrice),
         note: data.entry.note || undefined,
         clientRequestId: variables.clientRequestId,
@@ -3993,11 +4060,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         takeProfitTriggeredAt: data.entry.takeProfitTriggeredAt ? String(data.entry.takeProfitTriggeredAt) : undefined,
         takeProfitTriggeredPrice: data.entry.takeProfitTriggeredPrice === undefined || data.entry.takeProfitTriggeredPrice === null ? undefined : Number(data.entry.takeProfitTriggeredPrice),
         takeProfitTriggeredQuantity: data.entry.takeProfitTriggeredQuantity === undefined || data.entry.takeProfitTriggeredQuantity === null ? undefined : Number(data.entry.takeProfitTriggeredQuantity),
-        takeProfitPlans: Array.isArray(data.entry.takeProfitPlans) ? data.entry.takeProfitPlans.map((plan: any) => ({ id: String(plan.id || ''), triggerPrice: Number(plan.triggerPrice), quantity: Number(plan.quantity), status: plan.status === 'triggered' || plan.status === 'cancelled' ? plan.status : 'pending', triggeredAt: plan.triggeredAt ? String(plan.triggeredAt) : undefined, triggeredPrice: plan.triggeredPrice === undefined || plan.triggeredPrice === null ? undefined : Number(plan.triggeredPrice), triggeredQuantity: plan.triggeredQuantity === undefined || plan.triggeredQuantity === null ? undefined : Number(plan.triggeredQuantity) })) : undefined,
+        takeProfitPlans: Array.isArray(data.entry.takeProfitPlans) ? data.entry.takeProfitPlans.map((plan: any) => ({ id: String(plan.id || ''), triggerPrice: Number(plan.triggerPrice), quantity: Number(plan.quantity), status: plan.status === 'triggered' || plan.status === 'cancelled' ? plan.status : 'pending', triggeredAt: plan.triggeredAt ? String(plan.triggeredAt) : undefined, triggeredPrice: plan.triggeredPrice === undefined || plan.triggeredPrice === null ? undefined : Number(plan.triggeredPrice), triggeredQuantity: plan.triggeredQuantity === undefined || plan.triggeredQuantity === null ? undefined : Number(plan.triggeredQuantity), closingEntryId: plan.closingEntryId === undefined || plan.closingEntryId === null ? undefined : String(plan.closingEntryId) })) : undefined,
         quantity: Number(data.entry.quantity),
         price: Number(data.entry.price),
         fee: Number(data.entry.fee || 0),
         createdAt: String(data.entry.createdAt),
+        recordedAt: data.entry.recordedAt ? String(data.entry.recordedAt) : undefined,
         targetPrice: data.entry.targetPrice === undefined || data.entry.targetPrice === null ? undefined : Number(data.entry.targetPrice),
         note: data.entry.note || undefined,
       };
