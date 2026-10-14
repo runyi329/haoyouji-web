@@ -900,6 +900,14 @@ function formatIntegratedStatusQuantity(value: number) {
   return value.toLocaleString("zh-CN", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
+/** 止盈计划覆盖本笔全部剩余仓位时只标“止盈”；部分计划则明确标出计划止盈数量。 */
+function getTakeProfitMarkerLabel(enabled: boolean | undefined, plannedQuantity: number | undefined, remainingQuantity: number) {
+  if (!enabled) return null;
+  const quantity = Number(plannedQuantity);
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity >= remainingQuantity - 0.0000001) return "止盈";
+  return `止盈${formatLadderQuantity(quantity)}`;
+}
+
 function formatQuantityQuickOption(value: string) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return value;
@@ -4756,6 +4764,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const closeAction: TradeAction = ACTIONS[trade.action].side === "long" ? "closeLong" : "closeShort";
   // 锁定不改变已成交/已平仓流水，只保护尚余可平数量；解锁后立即恢复平仓能力。
   const canQuickClose = remainingQuantity > 0.0000001 && !trade.isLocked;
+  const takeProfitMarkerLabel = getTakeProfitMarkerLabel(trade.takeProfitEnabled, trade.takeProfitQuantity, remainingQuantity);
   const isExpanded = expandedOpenedTradeIds.has(trade.id);
   return (
     <div key={trade.id} className="rounded border border-slate-200 bg-slate-50/80 px-3 py-2.5">
@@ -4775,7 +4784,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                               <span className={`shrink-0 text-sm font-semibold ${ACTIONS[trade.action].side === "long" ? "text-rose-600" : "text-emerald-600"}`}>持仓{ACTIONS[trade.action].side === "long" ? "多单" : "空单"}</span>
                               <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatQuantity(trade.quantity)}</span>
                               <span className="shrink-0 text-sm font-medium tabular-nums text-slate-700">@ {formatPrice(trade.price)}</span>
-                              {trade.isPending ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span> : trade.isLocked ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-amber-700"><Lock className="h-3.5 w-3.5" />已锁定</span> : trade.instrumentType === "option" ? <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="shrink-0 text-sm font-semibold tabular-nums" /> : <span className={`shrink-0 text-sm font-semibold tabular-nums ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>}
+                              {trade.isPending && <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-700"><Clock3 className="h-3.5 w-3.5" />挂单</span>}
+                              {takeProfitMarkerLabel && <span className="inline-flex shrink-0 items-center gap-0.5 text-sm font-semibold text-amber-700"><Target className="h-3.5 w-3.5" strokeWidth={2.4} />{takeProfitMarkerLabel}</span>}
+                              {!trade.isPending && (trade.isLocked ? <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-amber-700"><Lock className="h-3.5 w-3.5" />已锁定</span> : trade.instrumentType === "option" ? <OptionUnrealizedPnlText trade={trade} remainingQuantity={remainingQuantity} ethMarkPrice={markPrice} className="shrink-0 text-sm font-semibold tabular-nums" /> : <span className={`shrink-0 text-sm font-semibold tabular-nums ${floatingPnl === null ? "text-slate-400" : floatingPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{floatingPnl === null ? "--" : `${formatSigned(floatingPnl)} U`}</span>)}
           </span>
         </button>
         <button
@@ -5327,6 +5338,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   hasLockedPosition={longLockDisplay.hasLockedPosition}
                   isCounterparty={Boolean(row.long && row.longOpeningTrade?.isCounterpartyView)}
                   isPending={Boolean(row.long && row.longOpeningTrade?.isPending)}
+                  takeProfitEnabled={Boolean(row.long && row.longOpeningTrade?.takeProfitEnabled)}
+                  takeProfitQuantity={row.longOpeningTrade?.takeProfitQuantity}
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.long) return;
@@ -5397,6 +5410,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   hasLockedPosition={shortLockDisplay.hasLockedPosition}
                   isCounterparty={Boolean(row.short && row.shortOpeningTrade?.isCounterpartyView)}
                   isPending={Boolean(row.short && row.shortOpeningTrade?.isPending)}
+                  takeProfitEnabled={Boolean(row.short && row.shortOpeningTrade?.takeProfitEnabled)}
+                  takeProfitQuantity={row.shortOpeningTrade?.takeProfitQuantity}
                   readOnly={isMemberView}
                   onClose={() => {
                     if (!row.short) return;
@@ -7687,7 +7702,7 @@ function OptionUnrealizedPnlText({
   return <span className={`${className} ${tone}`}>{optionPnl === null ? emptyLabel : `${formatSigned(optionPnl)} U`}</span>;
 }
 
-function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, hasLockedPosition = false, isCounterparty = false, isPending = false }: {
+function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, hasLockedPosition = false, isCounterparty = false, isPending = false, takeProfitEnabled = false, takeProfitQuantity }: {
   bucket: PositionBucket;
   side: PositionSide;
   markPrice: number | null;
@@ -7702,6 +7717,9 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   isCounterparty?: boolean;
   /** 仅管理员逐笔报价使用：挂单未成交，采用浅蓝状态底并不展示盈亏。 */
   isPending?: boolean;
+  /** 已设止盈在挂单成交后继续保留；部分止盈同时显示计划数量。 */
+  takeProfitEnabled?: boolean;
+  takeProfitQuantity?: number;
 }) {
   const isLong = side === "long";
   const isOption = bucket.instrumentType === "option";
@@ -7717,6 +7735,9 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
     Math.max(0, bucket.lockedRemainingQuantity ?? (isLocked ? bucket.remainingQuantity : 0)),
   );
   const hasLockedQuantity = lockedQuantity > 0.0000001;
+  const takeProfitMarkerLabel = getTakeProfitMarkerLabel(takeProfitEnabled, takeProfitQuantity, bucket.remainingQuantity);
+  // T 型报价中，全数止盈仅保留目标图标；部分止盈才紧跟计划数量，避免与“合/期”类型字抢占空间。
+  const takeProfitMarkerQuantity = takeProfitMarkerLabel?.replace(/^止盈/, "") || null;
   // 整合报价用第二行摘要呈现挂单/锁定数量，避免与第一行的数量和盈亏金额抢占横向空间。
   const integratedStatusSummary = !isIndividualQuote
     ? [
@@ -7849,10 +7870,11 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           <span className="shrink-0">·</span>
           <span className="min-w-0 shrink truncate" title={`项目：${metadata.relatedFundName}`}>{metadata.relatedFundName}</span>
         </div>
-        {(isLocked || isCounterparty || isPendingOnly || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
+        {(isLocked || isCounterparty || isPendingOnly || takeProfitMarkerLabel || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
           {isLocked && <Lock className="h-2 w-2 shrink-0 -translate-y-px text-[#f5d78e]/85" strokeWidth={2.5} aria-label="已锁定" />}
           {isCounterparty && <Repeat2 className="h-2.5 w-2.5 shrink-0 text-violet-700" strokeWidth={2.7} aria-label="管理员反向展示" />}
-          {isPendingOnly && <Clock3 className="h-2.5 w-2.5 shrink-0 text-sky-600" strokeWidth={2.5} aria-label="挂单待成交" />}
+          {isPendingOnly && <Clock3 className="h-[9px] w-[9px] shrink-0 -translate-y-px text-sky-600" strokeWidth={2.5} aria-label="挂单待成交" />}
+          {takeProfitMarkerLabel && <span className={`inline-flex shrink-0 items-center gap-px font-semibold ${isLocked && !isPendingOnly ? "text-[#f5d78e]/85" : "text-amber-600"}`} title={takeProfitMarkerLabel} aria-label={takeProfitMarkerLabel}><Target className="h-[9px] w-[9px] -translate-y-px" strokeWidth={2.5} />{takeProfitMarkerQuantity && <span>{takeProfitMarkerQuantity}</span>}</span>}
           {metadata.instrumentShortLabel && <span className={isLocked && !isPendingOnly ? "text-[#f5d78e]/85" : isOption ? "text-violet-100" : isGrid ? "text-cyan-800" : "text-slate-500"} title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
         </div>}
       </div>}
@@ -7888,6 +7910,8 @@ function LadderCell({
   hasLockedPosition = false,
   isCounterparty = false,
   isPending = false,
+  takeProfitEnabled = false,
+  takeProfitQuantity,
 }: {
   bucket?: PositionBucket;
   side: PositionSide;
@@ -7900,6 +7924,8 @@ function LadderCell({
   hasLockedPosition?: boolean;
   isCounterparty?: boolean;
   isPending?: boolean;
+  takeProfitEnabled?: boolean;
+  takeProfitQuantity?: number;
 }) {
   // 统一由报价格本身处理：移动端与桌面端都必须在同一格 700ms 内连续点击两次，
   // 才允许打开已有订单详情、编辑页或空档位的新开仓录入，杜绝单击误触。
@@ -7914,7 +7940,7 @@ function LadderCell({
     action();
   };
   if (bucket && bucket.remainingQuantity > 0.0000001) {
-    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} isLocked={isLocked} hasLockedPosition={hasLockedPosition} isCounterparty={isCounterparty} isPending={isPending} />;
+    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} isLocked={isLocked} hasLockedPosition={hasLockedPosition} isCounterparty={isCounterparty} isPending={isPending} takeProfitEnabled={takeProfitEnabled} takeProfitQuantity={takeProfitQuantity} />;
   }
 
   const isLong = side === "long";
