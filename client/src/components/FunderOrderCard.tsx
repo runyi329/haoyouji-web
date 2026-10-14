@@ -8,7 +8,7 @@ import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import { RightMarginDetail } from "@/components/RightMarginDetail";
 import { RightInterestDetail } from "@/components/RightInterestDetail";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Copy, LockKeyhole } from "lucide-react";
+import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Copy, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
@@ -4521,9 +4521,9 @@ export function FunderOrderCard({
             <span
               className="relative z-10 inline-flex h-5 w-5 items-center justify-center rounded-full border"
               style={{ backgroundColor: isParticipantVisual ? '#F0FDF4' : '#ffffff', borderColor: '#9FB0D8', color: '#526A9D' }}
-              title="各段订单需一并结清"
+              title="订单分段连接"
             >
-              <LockKeyhole size={11} strokeWidth={2.2} aria-hidden="true" />
+              <Link2 size={12} strokeWidth={2.2} aria-hidden="true" />
             </span>
           </div>
           <FunderOrderCard
