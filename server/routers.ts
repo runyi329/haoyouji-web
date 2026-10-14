@@ -22191,8 +22191,27 @@ ${klinesSummary}
             _participantUserIds: participantUserIds,
             owner_display_names: ownerDisplayNames,
           };
+          // 第一位拥有者没有独立卡片，个人结清状态需合并到主视图。
+          // 主订单一旦统一结清仍优先覆盖所有个人快照。
+          const primaryOwnerParticipant = linkedParticipants.find((participant: any) => (
+            Number(participant.user_id) === Number(baseOrder.user_id)
+            && String(participant.role || '').toLowerCase() === 'owner'
+          ));
+          const primaryOwnerSnapshot = primaryOwnerParticipant
+            ? parseFunderParticipantSnapshot(primaryOwnerParticipant.order_snapshot)
+            : null;
+          const primaryViewStatus = (baseOrder.status === 'settled' || baseOrder.status === 'completed')
+            ? { status: baseOrder.status, settled_at: baseOrder.settled_at, interest_end_date: baseOrder.interest_end_date }
+            : (primaryOwnerSnapshot?.status === 'settled'
+              ? {
+                  status: 'settled',
+                  settled_at: primaryOwnerSnapshot.settled_at || null,
+                  interest_end_date: primaryOwnerSnapshot.interest_end_date || null,
+                }
+              : {});
           orderViews.push({
             ...baseOrder,
+            ...primaryViewStatus,
             ...groupFields,
             _viewKey: `${orderId}:primary:${baseOrder.user_id}`,
             _orderViewKind: '主订单',
@@ -23467,6 +23486,15 @@ ${klinesSummary}
               if (pi.interest_start_date) (o as any).interest_start_date = pi.interest_start_date;
               if (pi.interest_rate_currency) (o as any).interest_rate_currency = pi.interest_rate_currency;
               if (pi.display_config) (o as any).display_config = pi.display_config;
+            } else if (participantRole && Number(o.user_id) === Number(targetUserId)) {
+              // 主拥有者仍以主订单为内容来源，避免覆盖他的主订单字段；
+              // 但若其个人视图已单独结清，必须优先返回该结清状态。
+              const ownSnapshot = parseFunderParticipantSnapshot((o as any)._participant_order_snapshot);
+              if (o.status !== 'settled' && o.status !== 'completed' && ownSnapshot?.status === 'settled') {
+                o.status = 'settled';
+                o.settled_at = ownSnapshot.settled_at || null;
+                o.interest_end_date = ownSnapshot.interest_end_date || null;
+              }
             }
 
             for (const key of [
@@ -23598,6 +23626,14 @@ ${klinesSummary}
                   if (pi.interest_start_date) (o as any).interest_start_date = pi.interest_start_date;
                   if (pi.interest_rate_currency) (o as any).interest_rate_currency = pi.interest_rate_currency;
                   if (pi.display_config) (o as any).display_config = pi.display_config;
+                }
+              } else if (pi && Number(o.user_id) === Number(targetUserId)) {
+                // 主拥有者订单仍显示主订单数据；仅叠加本人的独立结清状态。
+                const ownSnapshot = parseFunderParticipantSnapshot(pi.order_snapshot);
+                if (o.status !== 'settled' && o.status !== 'completed' && ownSnapshot?.status === 'settled') {
+                  o.status = 'settled';
+                  o.settled_at = ownSnapshot.settled_at || null;
+                  o.interest_end_date = ownSnapshot.interest_end_date || null;
                 }
               }
             }
@@ -24188,6 +24224,135 @@ ${klinesSummary}
           participantCollateralSynced: shouldSyncParticipantCollateral,
           participantAssetSynced: shouldSyncParticipantSharedAsset,
         };
+      }),
+    // 协作订单可只结清某一位拥有者／参与者的个人订单视图。
+    // 不改主订单状态、不释放主订单担保，因此其他人的持有状态与担保保持不变。
+    funderSettleIndividualOrder: protectedProcedure
+      .input(z.object({
+        orderId: z.number().int().positive(),
+        ledgerId: z.number().int().positive(),
+        // userId 保留给已有单人调用；多选结清使用 userIds。
+        userId: z.number().int().positive().optional(),
+        userIds: z.array(z.number().int().positive()).min(1).optional(),
+        interestEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }).refine((value) => Boolean(value.userId || value.userIds?.length), {
+        message: '请至少选择一位拥有者或参与者',
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const targetUserIds = Array.from(new Set(
+          (input.userIds?.length ? input.userIds : (input.userId ? [input.userId] : []))
+            .map(Number)
+            .filter((userId) => userId > 0),
+        ));
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权结清该订单视图' });
+        }
+
+        await ensureFunderParticipantSnapshotColumns();
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+
+        try {
+          await conn.beginTransaction();
+          const [orderRows] = await conn.execute(
+            'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL FOR UPDATE',
+            [input.orderId, input.ledgerId],
+          ) as any;
+          const parentOrder = Array.isArray(orderRows) ? orderRows[0] : null;
+          if (!parentOrder) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在或已删除' });
+          if (parentOrder.status === 'settled' || parentOrder.status === 'completed') {
+            throw new TRPCError({ code: 'CONFLICT', message: '该订单已统一结清，无需再单独结清' });
+          }
+
+          const [participantRows] = await conn.execute(
+            `SELECT id, user_id, role, interest_start_date, order_snapshot
+             FROM ledger_order_participants
+             WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive'
+             FOR UPDATE`,
+            [input.orderId, input.ledgerId],
+          ) as any;
+          const participantMap = new Map<number, any>(
+            ((Array.isArray(participantRows) ? participantRows : []) as any[])
+              .map((participant: any) => [Number(participant.user_id), participant]),
+          );
+          const settledAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+          const snapshotsToSave: Array<{ participantId: number; snapshot: Record<string, any> }> = [];
+
+          for (const targetUserId of targetUserIds) {
+            let participant = participantMap.get(targetUserId) || null;
+            // 数据库中的订单主体只是存储锚点。若该拥有者还没有个人快照，首次结清时补齐快照；
+            // 不会给这位拥有者赋予高于其他拥有者的业务层级。
+            if (!participant) {
+              if (Number(parentOrder.user_id) !== targetUserId) {
+                throw new TRPCError({ code: 'NOT_FOUND', message: '所选用户不是此订单的拥有者或参与者' });
+              }
+              const initialSnapshot = buildFunderParticipantSnapshot(parentOrder);
+              const [insertResult] = await conn.execute(
+                `INSERT INTO ledger_order_participants
+                   (order_id, ledger_id, user_id, role, order_snapshot, sort_order)
+                 VALUES (?, ?, ?, 'owner', ?, 0)`,
+                [input.orderId, input.ledgerId, targetUserId, JSON.stringify(initialSnapshot)],
+              ) as any;
+              participant = {
+                id: Number(insertResult?.insertId || 0),
+                user_id: targetUserId,
+                role: 'owner',
+                interest_start_date: parentOrder.interest_start_date,
+                order_snapshot: JSON.stringify(initialSnapshot),
+              };
+              participantMap.set(targetUserId, participant);
+            }
+
+            const snapshot = syncFunderParticipantSharedAssetSnapshot(
+              syncFunderParticipantCollateralSnapshot({
+                ...buildFunderParticipantSnapshot(parentOrder),
+                ...(parseFunderParticipantSnapshot(participant.order_snapshot) || {}),
+              }, parentOrder),
+              parentOrder,
+            );
+            const interestStartDate = String(
+              snapshot.interest_start_date || participant.interest_start_date || parentOrder.interest_start_date || '',
+            ).slice(0, 10);
+            if (interestStartDate && input.interestEndDate < interestStartDate) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: '结息截止日不能早于任一所选订单的计息开始日' });
+            }
+            snapshotsToSave.push({
+              participantId: Number(participant.id),
+              snapshot: {
+                ...snapshot,
+                status: 'settled',
+                settled_at: settledAt,
+                interest_end_date: input.interestEndDate,
+              },
+            });
+          }
+
+          for (const item of snapshotsToSave) {
+            await conn.execute(
+              'UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ?',
+              [JSON.stringify(item.snapshot), item.participantId],
+            );
+          }
+          await conn.commit();
+          return { success: true, orderId: input.orderId, userIds: targetUserIds, settledAt, interestEndDate: input.interestEndDate };
+        } catch (error: any) {
+          try { await conn.rollback(); } catch {}
+          if (error instanceof TRPCError) throw error;
+          console.error('[funderSettleIndividualOrder] failed:', error?.message || error);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '结清所选订单视图失败，请稍后重试' });
+        } finally {
+          const transactionConnection = conn as any;
+          if (typeof transactionConnection.release === 'function') {
+            transactionConnection.release();
+          } else {
+            await transactionConnection.end?.().catch(() => {});
+          }
+        }
       }),
     // 查询融资订单操作日志
     financeGetOrderLogs: protectedProcedure

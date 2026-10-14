@@ -713,9 +713,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   // 类型筛选：资产类型或已结清状态；左侧用户筛选由订单查询接口先行处理。
   const [assetTypeFilter, setAssetTypeFilter] = useState<'' | 'stock' | 'crypto' | 'crypto_option' | 'settled'>();
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
-  const [confirmSettleId, setConfirmSettleId] = useState<number | null>(null);
+  const [confirmSettleOrder, setConfirmSettleOrder] = useState<any | null>(null);
   // 仅在转结清时使用；清空后默认回到当前北京日期。
   const [settleInterestEndDate, setSettleInterestEndDate] = useState('');
+  const [selectedSettleUserIds, setSelectedSettleUserIds] = useState<number[]>([]);
   // 弹窗状态提升：存储当前打开弹窗的 orderId，null 表示关闭（防止子组件因数据刷新重渲染导致弹窗自动关闭）
   const [collateralInfoOrderId, setCollateralInfoOrderId] = useState<number | null>(null);
   const [interestTipOrderId, setInterestTipOrderId] = useState<number | null>(null);
@@ -1408,9 +1409,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       }
       const syncedCount = Number((result as any)?.participantCount || 0);
       if (vars.status === 'settled') {
-        toast.success(syncedCount > 0 ? `主订单及 ${syncedCount} 位参与者已同步结清` : '订单已结清');
+        toast.success(syncedCount > 0 ? `订单及 ${syncedCount} 位关联成员已同步结清` : '订单已结清');
       } else if (vars.status === 'active') {
-        toast.success(syncedCount > 0 ? `主订单及 ${syncedCount} 位参与者已同步恢复` : '订单已恢复为持有中');
+        toast.success(syncedCount > 0 ? `订单及 ${syncedCount} 位关联成员已同步恢复` : '订单已恢复为持有中');
       } else {
         toast.success('更新成功');
       }
@@ -1429,6 +1430,15 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       setParticipants([]);
       setJointOrderSegments([]);
       participantsLoadedRef.current = null;
+      refetchOrders();
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const settleIndividualMutation = trpc.ledger.funderSettleIndividualOrder.useMutation({
+    onSuccess: (result) => {
+      const settledCount = Array.isArray((result as any)?.userIds) ? (result as any).userIds.length : 1;
+      toast.success(settledCount > 1 ? `已结清 ${settledCount} 个订单视图` : '订单视图已结清');
       refetchOrders();
       trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
     },
@@ -2783,9 +2793,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     saveParticipantsMutation={saveParticipantsMutation}
                     participantsEditMode={participantsEditMode}
                     setParticipantsEditMode={setParticipantsEditMode}
-                    onConfirmSettle={(id) => {
+                    onConfirmSettle={(targetOrder) => {
+                      const currentViewUserId = Number(
+                        targetOrder?.participantInfo?.userId
+                        ?? targetOrder?.participantInfo?.user_id
+                        ?? targetOrder?.user_id
+                        ?? 0,
+                      );
                       setSettleInterestEndDate('');
-                      setConfirmSettleId(id);
+                      setSelectedSettleUserIds(currentViewUserId > 0 ? [currentViewUserId] : []);
+                      setConfirmSettleOrder(targetOrder);
                     }}
                     showCollateralInfo={collateralInfoOrderId === order.id}
                     setShowCollateralInfo={(v) => setCollateralInfoOrderId(v ? order.id : null)}
@@ -2851,7 +2868,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   className="flex w-full items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-left"
                 >
                   <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-blue-950">第一位拥有者的订单内容</span>
+                    <span className="block text-sm font-semibold text-blue-950">当前订单内容</span>
                     <span className="mt-0.5 block truncate text-xs text-blue-700">{formData.ownerLabel || primaryOwnerDisplayName} · 单独保存后自动收起</span>
                   </span>
                   <ChevronDown className={`h-5 w-5 shrink-0 text-blue-600 transition-transform ${primaryOwnerEditorExpanded ? 'rotate-180' : ''}`} />
@@ -5303,7 +5320,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${participantsSectionExpanded ? 'rotate-180' : ''}`} />
                     </div>
                   </div>
-                  <p className="mt-1.5 text-xs leading-5 text-slate-500">{participantsSectionExpanded ? (hasPrimaryOwnerDrawer ? '第一位拥有者已在上方单独编辑；此处仅列出其余成员，点击即可直接进入各自完整订单页。' : '同组拥有者完全平级；点击任一成员即可直接打开该成员的完整订单编辑页，保存后自动收起。') : participants.length > 0 ? '已收起，点击查看或调整已关联的拥有者／参与者。' : '不需要多人协作时无需操作；点击后才会添加拥有者或参与者。'}</p>
+                  <p className="mt-1.5 text-xs leading-5 text-slate-500">{participantsSectionExpanded ? (hasPrimaryOwnerDrawer ? '当前订单内容在上方；此处列出已关联成员，点击即可直接进入各自完整订单页。' : '同组拥有者完全平级；点击任一成员即可直接打开该成员的完整订单编辑页，保存后自动收起。') : participants.length > 0 ? '已收起，点击查看或调整已关联的拥有者／参与者。' : '不需要多人协作时无需操作；点击后才会添加拥有者或参与者。'}</p>
                 </button>
 
                 {participantsSectionExpanded && (<>
@@ -5654,21 +5671,83 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         );
       })()}
 
-      {/* 结清确认：有关联参与者时必须随主订单统一结清 */}
-      {confirmSettleId !== null && (() => {
-        const targetOrder = (assetOrders as any[]).find((o: any) => Number(o.id) === Number(confirmSettleId));
-        const participantCount = Number(targetOrder?.participantCount ?? targetOrder?._participantCount ?? targetOrder?._participantUserIds?.length ?? 0);
+      {/* 结清确认：关联订单可选择一起结清或仅结清当前用户视图 */}
+      {confirmSettleOrder !== null && (() => {
+        const targetOrder = confirmSettleOrder;
+        const targetUserId = Number(
+          targetOrder?.participantInfo?.userId
+          ?? targetOrder?.participantInfo?.user_id
+          ?? targetOrder?.user_id
+          ?? 0,
+        );
+        const relatedUserIds = Array.from(new Set([
+          Number(targetOrder?.user_id || 0),
+          ...(Array.isArray(targetOrder?._participantUserIds) ? targetOrder._participantUserIds.map(Number) : []),
+        ].filter((userId) => userId > 0)));
+        const otherUserCount = relatedUserIds.filter((userId) => userId !== targetUserId).length;
+        const hasOtherCollaborators = otherUserCount > 0;
+        const targetName = String(
+          targetOrder?.participant_display_name
+          || targetOrder?.participant_name
+          || targetOrder?.owner_label
+          || targetOrder?.owner_display_name
+          || '当前用户',
+        );
+        const settleCandidates = relatedUserIds.map((userId) => {
+          const member = ((ledgerData as any)?.members || funderUsers || []).find(
+            (item: any) => Number(item?.userId ?? item?.id) === userId,
+          );
+          return {
+            userId,
+            name: userId === targetUserId
+              ? targetName
+              : getMemberDisplayName(member, `用户${userId}`),
+          };
+        });
+        const selectedIds = selectedSettleUserIds.filter((userId) => relatedUserIds.includes(userId));
+        const allSelected = settleCandidates.length > 0 && selectedIds.length === settleCandidates.length;
+        const isSubmitting = settleIndividualMutation.isPending;
         return (
-          <div className="fixed inset-0 z-[500] flex items-center justify-center px-4" onClick={() => setConfirmSettleId(null)}>
+          <div className="fixed inset-0 z-[500] flex items-center justify-center px-4" onClick={() => { setConfirmSettleOrder(null); setSettleInterestEndDate(''); setSelectedSettleUserIds([]); }}>
             <div className="absolute inset-0 bg-black/50" />
             <div className="relative bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
-              <h3 className="text-base font-semibold text-gray-900 mb-2">确认统一结清</h3>
-              {participantCount > 0 ? (
-                <p className="text-sm text-indigo-600 mb-2">该主订单关联 <span className="font-semibold">{participantCount}</span> 位参与者。确认后，订单拥有者与全部参与者子订单将使用同一时间一起结清。</p>
+              <h3 className="text-base font-semibold text-gray-900 mb-2">{hasOtherCollaborators ? '选择需要结清的订单视图' : '确认结清'}</h3>
+              {hasOtherCollaborators ? (
+                <p className="text-sm text-indigo-600 mb-2">勾选谁，就只结清谁自己的订单视图；选择全部时，每位拥有者或参与者会分别结清。</p>
               ) : (
                 <p className="text-sm text-gray-600 mb-2">结清后该订单利息将停止计算，状态变为「已结清」。</p>
               )}
               <p className="text-sm text-gray-600 mb-3">本功能只改变融资付息的记账状态和页面显示，<span className="font-semibold text-gray-800">不会产生任何钱包流水</span>。</p>
+              {hasOtherCollaborators && (
+                <div className="mb-3 overflow-hidden rounded-xl border border-indigo-100 bg-indigo-50/50">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSettleUserIds(allSelected ? [] : settleCandidates.map(candidate => candidate.userId))}
+                    className="flex w-full items-center justify-between border-b border-indigo-100 bg-white px-3 py-2.5 text-left"
+                  >
+                    <span className="text-sm font-semibold text-indigo-950">全部结清</span>
+                    <span className={`flex h-5 w-5 items-center justify-center rounded-md border text-xs font-bold ${allSelected ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-indigo-200 bg-white text-transparent'}`}>✓</span>
+                  </button>
+                  <div className="divide-y divide-indigo-100">
+                    {settleCandidates.map((candidate) => {
+                      const checked = selectedIds.includes(candidate.userId);
+                      return (
+                        <button
+                          key={candidate.userId}
+                          type="button"
+                          onClick={() => setSelectedSettleUserIds(current => checked
+                            ? current.filter(id => id !== candidate.userId)
+                            : [...current, candidate.userId])}
+                          className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+                        >
+                          <span className="min-w-0 truncate text-sm text-slate-700">{candidate.name}{candidate.userId === targetUserId ? '（当前）' : ''}</span>
+                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs font-bold ${checked ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-indigo-200 bg-white text-transparent'}`}>✓</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 mb-3">
                 <div className="text-sm font-semibold text-amber-900">利息结算截止日</div>
                 <p className="text-xs text-amber-800 mt-1">利息按北京时间自然日累计至该日。默认当天；若实际结清后才补录，可改为约定结息日期。</p>
@@ -5681,18 +5760,24 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   className="mt-2 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-amber-500"
                 />
               </div>
-              <p className="text-sm font-medium text-red-600 mb-5">统一结清后不能单独保留某位参与者为持有中，确定继续？</p>
-              <div className="flex gap-3">
-                <button onClick={() => { setConfirmSettleId(null); setSettleInterestEndDate(''); }} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
+              {hasOtherCollaborators && <p className="text-xs leading-5 text-gray-500 mb-4">已选 <span className="font-semibold text-indigo-700">{selectedIds.length}</span> 位。未勾选的拥有者或参与者继续保持持有中。</p>}
+              <div className="flex gap-2.5">
+                <button onClick={() => { setConfirmSettleOrder(null); setSettleInterestEndDate(''); setSelectedSettleUserIds([]); }} disabled={isSubmitting} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600 disabled:opacity-50">取消</button>
                 <button
                   onClick={() => {
-                    updateMutation.mutate({ id: confirmSettleId, ledgerId, status: 'settled', interestEndDate: settleInterestEndDate || getBeijingToday() });
-                    setConfirmSettleId(null);
+                    settleIndividualMutation.mutate({
+                      orderId: Number(targetOrder.id),
+                      ledgerId,
+                      userIds: selectedIds,
+                      interestEndDate: settleInterestEndDate || getBeijingToday(),
+                    });
+                    setConfirmSettleOrder(null);
                     setSettleInterestEndDate('');
+                    setSelectedSettleUserIds([]);
                   }}
-                  disabled={updateMutation.isPending}
+                  disabled={isSubmitting || selectedIds.length === 0}
                   className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white disabled:opacity-50"
-                >{updateMutation.isPending ? '结清中...' : participantCount > 0 ? '全部结清' : '确认结清'}</button>
+                >{settleIndividualMutation.isPending ? '结清中...' : hasOtherCollaborators ? `结清已选 ${selectedIds.length} 位` : '确认结清'}</button>
               </div>
             </div>
           </div>

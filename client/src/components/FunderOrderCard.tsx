@@ -584,7 +584,7 @@ export interface FunderOrderCardProps {
   saveParticipantsMutation?: any;
   participantsEditMode?: boolean;
   setParticipantsEditMode?: (v: boolean) => void;
-  onConfirmSettle?: (id: number) => void;
+  onConfirmSettle?: (order: any) => void;
   viewMode?: 'default' | 'large' | 'small';
   onExposureGapChange?: (orderId: number, gap: number) => void;
   sharedGapMap?: Record<number, number>;
@@ -752,9 +752,9 @@ export function FunderOrderCard({
     onSuccess: (result, vars) => {
       const syncedCount = Number((result as any)?.participantCount || 0);
       if (vars.status === 'settled') {
-        toast.success(syncedCount > 0 ? `主订单及 ${syncedCount} 位参与者已同步结清` : '订单已结清');
+        toast.success(syncedCount > 0 ? `订单及 ${syncedCount} 位关联成员已同步结清` : '订单已结清');
       } else if (vars.status === 'active') {
-        toast.success(syncedCount > 0 ? `主订单及 ${syncedCount} 位参与者已同步恢复` : '订单已恢复为持有中');
+        toast.success(syncedCount > 0 ? `订单及 ${syncedCount} 位关联成员已同步恢复` : '订单已恢复为持有中');
       } else {
         toast.success('更新成功');
       }
@@ -863,7 +863,13 @@ export function FunderOrderCard({
   const $handleSaveParticipants = handleSaveParticipants !== undefined ? handleSaveParticipants : _intHandleSaveParticipants;
   const $handleDelete = handleDelete !== undefined ? handleDelete : (orderId: number) => _intDeleteMutation.mutate({ id: orderId, ledgerId });
   const $handleOpenEdit = handleOpenEdit !== undefined ? handleOpenEdit : (_order: any) => {};
-  const $onConfirmSettle = onConfirmSettle !== undefined ? onConfirmSettle : _intSetConfirmSettleId;
+  const requestSettleConfirmation = () => {
+    if (onConfirmSettle !== undefined) {
+      onConfirmSettle(order);
+      return;
+    }
+    _intSetConfirmSettleId(Number(order.id));
+  };
   const $getPaymentLabel = getPaymentLabel !== undefined ? getPaymentLabel : (val: string) => INTEREST_PAYMENT_OPTIONS.find(o => o.value === val)?.label || val;
   const $roleOptions = roleOptions !== undefined ? roleOptions : [
     { value: 'funder', label: '资方', color: '#3B82F6', defaultRateLabel: '利率' },
@@ -4588,9 +4594,9 @@ export function FunderOrderCard({
           >
             编辑
           </button>
-          {!isInvited && !isSettled && (
+          {!isSettled && (
             <button
-              onClick={() => $onConfirmSettle?.(order.id)}
+              onClick={requestSettleConfirmation}
               className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
               style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}
             >
@@ -5295,7 +5301,7 @@ export function FunderOrderCard({
               </button>
               <button
                 onClick={() => {
-                  $onConfirmSettle?.(order.id);
+                  requestSettleConfirmation();
                   setShowStatusSheet(false);
                 }}
                 className="w-full py-3 rounded-xl text-sm font-medium transition-colors"
@@ -5334,7 +5340,7 @@ export function FunderOrderCard({
           <div className="relative bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-gray-900 mb-2">确认统一结清</h3>
             {participantCount > 0 ? (
-              <p className="text-sm text-indigo-600 mb-2">该主订单关联 <span className="font-semibold">{participantCount}</span> 位共同拥有者或参与者。确认后，主订单与全部独立订单视图将使用同一时间一起结清，并影响其各自的利息结算。</p>
+              <p className="text-sm text-indigo-600 mb-2">该订单关联 <span className="font-semibold">{participantCount}</span> 位共同拥有者或参与者。确认后，所有关联订单视图将使用同一时间结清，并影响其各自的利息结算。</p>
             ) : (
               <p className="text-sm text-gray-600 mb-2">结清后该订单利息将停止计算，状态变为「已结清」。</p>
             )}
