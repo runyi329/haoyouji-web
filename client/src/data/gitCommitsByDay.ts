@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-10-14
+// 生成时间：2026-10-15
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -9605,5 +9605,21 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-10-13T08:30:43Z", type: "fix", cleanMessage: "sync pending pause date display" },
     { date: "2026-10-13T09:02:17Z", type: "fix", cleanMessage: "persist pending pause plans on save" },
     { date: "2026-10-13T12:31:02Z", type: "feat", cleanMessage: "add bidirectional profit journal" },
+  ],
+  "2026-10-14": [
+    { date: "2026-10-13T21:59:50Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-10-14T03:35:13Z", type: "feat", cleanMessage: "add dual-view access collection dashboard" },
+    { date: "2026-10-14T04:19:47Z", type: "feat", cleanMessage: "add automated take profit orders" },
+    { date: "2026-10-14T05:02:34Z", type: "fix", cleanMessage: "show take profit markers in quotes" },
+    { date: "2026-10-14T07:49:55Z", type: "feat", cleanMessage: "support isolated second order sections" },
+    { date: "2026-10-14T08:12:02Z", type: "fix", cleanMessage: "unify joint order action controls" },
+    { date: "2026-10-14T08:26:41Z", type: "fix", cleanMessage: "prioritize newest user orders" },
+    { date: "2026-10-14T08:32:17Z", type: "fix", cleanMessage: "use connection icon between order sections" },
+    { date: "2026-10-14T08:56:42Z", type: "feat", cleanMessage: "support selective collaborator settlement" },
+    { date: "2026-10-14T09:39:24Z", type: "feat", cleanMessage: "support multi-stage take profit triggers" },
+    { date: "2026-10-14T10:17:03Z", type: "fix", cleanMessage: "settle triggered take-profit positions correctly" },
+    { date: "2026-10-14T10:32:46Z", type: "fix", cleanMessage: "show triggered take-profit history details" },
+    { date: "2026-10-14T11:11:08Z", type: "feat", cleanMessage: "allow manual confirmation of pending fills" },
+    { date: "2026-10-14T12:14:55Z", type: "fix", cleanMessage: "save active position profit shares directly" },
   ],
 };
