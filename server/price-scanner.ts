@@ -137,8 +137,8 @@ function entryFromPrice(coin: string, price: number, source: string, patch: Part
 }
 
 /**
- * Gate 每个 ETH 永续标记价更新均可触发待成交判断；没有挂单时完全跳过。
- * 有挂单时保留顺序队列，避免短暂跨价后回落被后续报价覆盖而漏成交。
+ * Gate 每个 ETH 永续标记价更新均可触发挂单成交和止盈判断；没有自动订单时完全跳过。
+ * 有自动订单时保留顺序队列，避免短暂跨价后回落被后续报价覆盖而漏触发。
  */
 function triggerLedger52T0PendingOrders(price: number, observedAt = new Date()) {
   if (process.env.DEV_BYPASS_AUTH === 'true' || !hasLedger52T0PendingOrders() || !isValidPrice(price)) return;
@@ -153,10 +153,12 @@ function triggerLedger52T0PendingOrders(price: number, observedAt = new Date()) 
         const tick = pendingOrderMarkTicks.shift();
         if (!tick) continue;
         const result = await scanLedger52T0PendingOrders({ markPrice: tick.price, filledAt: tick.observedAt });
-        if (result.filled > 0) console.log(`[T0挂单] 实时标记价 ${result.markPrice}，自动成交 ${result.filled} 笔`);
+        if (result.filled > 0 || result.takeProfit > 0) {
+          console.log(`[T0自动订单] 实时标记价 ${result.markPrice}，挂单成交 ${result.filled} 笔，自动止盈 ${result.takeProfit} 笔`);
+        }
       }
     } catch (error) {
-      console.error('[T0挂单] 实时标记价成交判断失败:', error instanceof Error ? error.message : error);
+      console.error('[T0自动订单] 实时标记价判断失败:', error instanceof Error ? error.message : error);
     } finally {
       pendingOrderMarkTriggerRunning = false;
       if (!hasLedger52T0PendingOrders()) pendingOrderMarkTicks.length = 0;

@@ -51,6 +51,10 @@ export type SaveT0JournalEntryInput = {
   isCounterparty?: boolean;
   /** 仅管理员开仓可设为挂单；挂单不参与实际仓位、FIFO、手续费及收益核算。 */
   isPending?: boolean;
+  /** 仅现货/合约开仓可设止盈；挂单可先预设，必须实际成交后才会触发。 */
+  takeProfitEnabled?: boolean;
+  takeProfitPrice?: string;
+  takeProfitQuantity?: string;
   /** 期权开仓参数：标的强制为 ETH，price 存行权价。 */
   optionDirection?: T0JournalOptionDirection;
   optionExpiryDate?: string;
@@ -130,6 +134,60 @@ function normalizeInstrumentType(value: unknown, required = false): T0JournalIns
     throw new TRPCError({ code: "BAD_REQUEST", message: "订单类型无效，请重新选择" });
   }
   return normalized;
+}
+
+function resolveTakeProfitParameters(input: {
+  action: T0JournalAction;
+  instrumentType?: T0JournalInstrumentType;
+  quantity: string;
+  price: string;
+  takeProfitEnabled?: boolean;
+  takeProfitPrice?: string;
+  takeProfitQuantity?: string;
+}, fallback?: any, maximumQuantity?: string) {
+  const enabled = input.takeProfitEnabled === undefined
+    ? Boolean(toNumber(fallback?.take_profit_enabled ?? fallback?.takeProfitEnabled))
+    : input.takeProfitEnabled === true;
+  if (!enabled) return { enabled: false, price: null as string | null, quantity: null as string | null };
+  if (!isOpeningAction(input.action) || (input.instrumentType !== "spot" && input.instrumentType !== "contract")) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "止盈仅支持现货和合约开仓" });
+  }
+  const takeProfitPrice = String(input.takeProfitPrice ?? fallback?.take_profit_price ?? fallback?.takeProfitPrice ?? "").trim();
+  const takeProfitQuantity = String(input.takeProfitQuantity ?? fallback?.take_profit_quantity ?? fallback?.takeProfitQuantity ?? "").trim();
+  if (!T0_DECIMAL_INPUT_PATTERN.test(takeProfitPrice) || Number(takeProfitPrice) <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请输入有效的止盈价格" });
+  }
+  const normalizedTakeProfitQuantity = requireValidEthQuantity(takeProfitQuantity);
+  const normalizedMaximumQuantity = requireValidEthQuantity(maximumQuantity ?? input.quantity);
+  if (quantityToCents(normalizedTakeProfitQuantity) > quantityToCents(normalizedMaximumQuantity)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "止盈数量不能超过本笔可用数量" });
+  }
+  const entryPrice = Number(input.price);
+  const targetPrice = Number(takeProfitPrice);
+  if (!Number.isFinite(entryPrice) || entryPrice <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请输入有效的开仓价格后再设置止盈" });
+  }
+  if (input.action === "openLong" && targetPrice <= entryPrice) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "多单止盈价须高于开仓价" });
+  }
+  if (input.action === "openShort" && targetPrice >= entryPrice) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "空单止盈价须低于开仓价" });
+  }
+  return { enabled: true, price: takeProfitPrice, quantity: normalizedTakeProfitQuantity };
+}
+
+/** 统一ETH永续标记价达到预设方向时触发：多单向上、空单向下。 */
+export function shouldTriggerLedger52T0TakeProfit(input: {
+  action: T0JournalAction;
+  markPrice: number;
+  takeProfitPrice: number;
+}) {
+  if (!Number.isFinite(input.markPrice) || input.markPrice <= 0 || !Number.isFinite(input.takeProfitPrice) || input.takeProfitPrice <= 0) return false;
+  return input.action === "openLong"
+    ? input.markPrice >= input.takeProfitPrice
+    : input.action === "openShort"
+      ? input.markPrice <= input.takeProfitPrice
+      : false;
 }
 
 function normalizeOptionDate(value: unknown): string {
@@ -522,6 +580,12 @@ function mapEntry(row: any) {
     isPending: String(row.execution_status ?? row.executionStatus ?? "filled") === "pending",
     filledAt: row.filled_at ?? row.filledAt ? isoTime(row.filled_at ?? row.filledAt) : undefined,
     filledPrice: row.filled_price === null || row.filled_price === undefined ? undefined : toNumber(row.filled_price),
+    takeProfitEnabled: Boolean(toNumber(row.take_profit_enabled ?? row.takeProfitEnabled)),
+    takeProfitPrice: row.take_profit_price === null || row.take_profit_price === undefined ? undefined : toNumber(row.take_profit_price),
+    takeProfitQuantity: row.take_profit_quantity === null || row.take_profit_quantity === undefined ? undefined : toNumber(row.take_profit_quantity),
+    takeProfitTriggeredAt: row.take_profit_triggered_at ?? row.takeProfitTriggeredAt ? isoTime(row.take_profit_triggered_at ?? row.takeProfitTriggeredAt) : undefined,
+    takeProfitTriggeredPrice: row.take_profit_triggered_price === null || row.take_profit_triggered_price === undefined ? undefined : toNumber(row.take_profit_triggered_price),
+    takeProfitTriggeredQuantity: row.take_profit_triggered_quantity === null || row.take_profit_triggered_quantity === undefined ? undefined : toNumber(row.take_profit_triggered_quantity),
     quantity: toNumber(row.quantity),
     price: toNumber(row.price),
     fee: toNumber(row.fee_usdt),
@@ -710,6 +774,12 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         execution_status ENUM('filled','pending') NOT NULL DEFAULT 'filled' COMMENT 'filled为实际成交，pending为管理员逐笔报价挂单',
         filled_at DATETIME(3) DEFAULT NULL COMMENT '挂单触发成交的系统确认时间',
         filled_price DECIMAL(36,18) DEFAULT NULL COMMENT '挂单触发成交时的统一行情价格',
+        take_profit_enabled TINYINT(1) NOT NULL DEFAULT 0 COMMENT '仅现货和合约开仓可用；挂单成交后才允许触发',
+        take_profit_price DECIMAL(36,18) DEFAULT NULL COMMENT '止盈触发价：多单向上、空单向下',
+        take_profit_quantity DECIMAL(36,18) DEFAULT NULL COMMENT '止盈平仓数量，可小于原开仓数量',
+        take_profit_triggered_at DATETIME(3) DEFAULT NULL COMMENT '系统自动止盈的确认时间',
+        take_profit_triggered_price DECIMAL(36,18) DEFAULT NULL COMMENT '系统自动止盈时的统一行情价格',
+        take_profit_triggered_quantity DECIMAL(36,18) DEFAULT NULL COMMENT '系统自动止盈的实际平仓数量',
         action ENUM('openLong','closeLong','openShort','closeShort') NOT NULL,
         quantity DECIMAL(36,18) NOT NULL,
         price DECIMAL(36,18) NOT NULL,
@@ -727,6 +797,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         KEY idx_t0_journal_entry_related_user_time (ledger_id, user_id, related_user_id, trade_time),
         KEY idx_t0_journal_entry_related_fund_time (ledger_id, user_id, related_fund_id, trade_time),
         KEY idx_t0_journal_entry_instrument_time (ledger_id, user_id, instrument_type, trade_time),
+        KEY idx_t0_journal_entry_auto_take_profit (ledger_id, take_profit_enabled, execution_status, action, take_profit_price),
         KEY idx_t0_journal_entry_owner_time (ledger_id, user_id, trade_time)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         COMMENT='52号账本T+0速记账本：管理员手工下单流水与创建审计'
@@ -890,7 +961,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
     // 兼容已经创建过旧版审计表的生产库，使其可记录速记回撤、恢复与期权自动到期结算动作。
     await db.execute(`
       ALTER TABLE ledger52_t0_journal_entry_audits
-        MODIFY COLUMN operation ENUM('update','delete','revert','restore','fill','expiry_settlement') NOT NULL
+        MODIFY COLUMN operation ENUM('update','delete','revert','restore','fill','expiry_settlement','take_profit') NOT NULL
     `);
 
     // 兼容已创建的T+0流水表：关联用户为新增维度，旧流水保留为空，以免篡改历史记录。
@@ -995,6 +1066,21 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
           ADD COLUMN filled_at DATETIME(3) DEFAULT NULL AFTER execution_status,
           ADD COLUMN filled_price DECIMAL(36,18) DEFAULT NULL AFTER filled_at,
           ADD KEY idx_t0_journal_entry_pending_scan (ledger_id, execution_status, action, price)
+      `);
+    }
+
+    // 兼容已创建的流水表：止盈为现货/合约开仓的可选自动平仓计划；旧订单默认关闭。
+    const [takeProfitColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_entries LIKE 'take_profit_enabled'`);
+    if (asRows(takeProfitColumns).length === 0) {
+      await db.execute(`
+        ALTER TABLE ledger52_t0_journal_entries
+          ADD COLUMN take_profit_enabled TINYINT(1) NOT NULL DEFAULT 0 COMMENT '仅现货和合约开仓可用；挂单成交后才允许触发' AFTER filled_price,
+          ADD COLUMN take_profit_price DECIMAL(36,18) DEFAULT NULL COMMENT '止盈触发价：多单向上、空单向下' AFTER take_profit_enabled,
+          ADD COLUMN take_profit_quantity DECIMAL(36,18) DEFAULT NULL COMMENT '止盈平仓数量，可小于原开仓数量' AFTER take_profit_price,
+          ADD COLUMN take_profit_triggered_at DATETIME(3) DEFAULT NULL COMMENT '系统自动止盈的确认时间' AFTER take_profit_quantity,
+          ADD COLUMN take_profit_triggered_price DECIMAL(36,18) DEFAULT NULL COMMENT '系统自动止盈时的统一行情价格' AFTER take_profit_triggered_at,
+          ADD COLUMN take_profit_triggered_quantity DECIMAL(36,18) DEFAULT NULL COMMENT '系统自动止盈的实际平仓数量' AFTER take_profit_triggered_price,
+          ADD KEY idx_t0_journal_entry_auto_take_profit (ledger_id, take_profit_enabled, execution_status, action, take_profit_price)
       `);
     }
 
@@ -1217,7 +1303,9 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
               e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
               e.option_settlement_price, e.option_delivery_price, e.option_settled_at, e.option_settlement_source,
               e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count,
-              e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price, e.action, e.related_user_id, e.related_fund_id,
+              e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price,
+              e.take_profit_enabled, e.take_profit_price, e.take_profit_quantity, e.take_profit_triggered_at, e.take_profit_triggered_price, e.take_profit_triggered_quantity,
+              e.action, e.related_user_id, e.related_fund_id,
               CASE WHEN f.is_active = 1 THEN f.name ELSE NULL END AS related_fund_name,
               CASE WHEN f.is_active = 1 THEN 0 ELSE 1 END AS related_fund_hidden,
               CASE WHEN deleted_user.id IS NULL THEN COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', e.related_user_id)) ELSE NULL END AS related_user_name,
@@ -2526,6 +2614,15 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
   const effectivePrice = gridParameters
     ? gridParameters.direction === "long" ? gridParameters.rangeMin : gridParameters.rangeMax
     : input.price;
+  const takeProfit = resolveTakeProfitParameters({
+    action: input.action,
+    instrumentType,
+    quantity: normalizedQuantity,
+    price: String(effectivePrice),
+    takeProfitEnabled: input.takeProfitEnabled,
+    takeProfitPrice: input.takeProfitPrice,
+    takeProfitQuantity: input.takeProfitQuantity,
+  });
 
   try {
     await ensureLedger52T0JournalTables(tx);
@@ -2664,8 +2761,8 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
 
     const [entryResult] = await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, grid_direction, grid_range_min, grid_range_max, grid_leverage, grid_count, is_locked, is_counterparty, execution_status, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'option' THEN 0 ELSE ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18) END, ?, ?, ?, ?)
+        (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, grid_direction, grid_range_min, grid_range_max, grid_leverage, grid_count, is_locked, is_counterparty, execution_status, take_profit_enabled, take_profit_price, take_profit_quantity, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'option' THEN 0 ELSE ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18) END, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
       [
         LEDGER_52_T0_JOURNAL_ID,
@@ -2687,6 +2784,9 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         isLocked,
         isCounterparty,
         isPending ? "pending" : "filled",
+        takeProfit.enabled ? 1 : 0,
+        takeProfit.price,
+        takeProfit.quantity,
         input.action,
         normalizedQuantity,
         effectivePrice,
@@ -2738,7 +2838,9 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
                 u.username AS related_username, u.avatar AS related_user_avatar,
                 e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
                 e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count,
-                e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+                e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price,
+                e.take_profit_enabled, e.take_profit_price, e.take_profit_quantity, e.take_profit_triggered_at, e.take_profit_triggered_price, e.take_profit_triggered_quantity,
+                e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
            FROM ledger52_t0_journal_entries e
            INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
            LEFT JOIN users u ON u.id = e.related_user_id
@@ -2752,7 +2854,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     if (!account || !entry) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "速记流水读取失败" });
 
     await tx.commit();
-    if (isPending) activateLedger52T0PendingOrderScan();
+    if (isPending || takeProfit.enabled) activateLedger52T0PendingOrderScan();
     return { account: mapAccount(account), entry: mapEntry(entry) };
   } catch (error) {
     try { await tx.rollback(); } catch {}
@@ -2766,7 +2868,9 @@ async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: n
   const [rows] = await tx.execute(
     `SELECT e.id, e.account_id, a.name AS account_name, e.related_user_id, e.related_fund_id, e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
             e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count, e.action,
-            e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
+            e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price,
+            e.take_profit_enabled, e.take_profit_price, e.take_profit_quantity, e.take_profit_triggered_at, e.take_profit_triggered_price, e.take_profit_triggered_quantity,
+            e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.client_request_id,
             e.created_by_user_id, e.trade_time, e.created_at, e.updated_at
        FROM ledger52_t0_journal_entries e
        INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
@@ -2809,7 +2913,7 @@ async function lockEditableOpeningEntry(tx: any, actorUserId: number, entryId: n
 async function writeEntryAudit(tx: any, input: {
   actorUserId: number;
   entryId: number;
-  operation: "update" | "delete" | "revert" | "restore" | "fill" | "expiry_settlement";
+  operation: "update" | "delete" | "revert" | "restore" | "fill" | "expiry_settlement" | "take_profit";
   before: unknown;
   after?: unknown;
 }) {
@@ -2966,7 +3070,7 @@ let pendingOrderScannerStarted = false;
 let pendingOrderScanActive = false;
 let pendingOrderScanInFlight = false;
 
-/** 行情流仅在存在未成交挂单时才触发数据库成交判定。 */
+/** 行情流仅在存在未成交挂单或已成交的止盈计划时才触发数据库写入判定。 */
 export function hasLedger52T0PendingOrders() {
   return pendingOrderScanActive;
 }
@@ -2982,8 +3086,11 @@ async function refreshLedger52T0PendingOrderScanState() {
   const [rows] = await connection.execute(
     `SELECT 1
        FROM ledger52_t0_journal_entries
-      WHERE ledger_id = ? AND execution_status = 'pending'
-        AND action IN ('openLong', 'openShort')
+      WHERE ledger_id = ? AND (
+        (execution_status = 'pending' AND action IN ('openLong', 'openShort'))
+        OR (execution_status = 'filled' AND take_profit_enabled = 1
+          AND instrument_type IN ('spot', 'contract') AND action IN ('openLong', 'openShort'))
+      )
       LIMIT 1`,
     [LEDGER_52_T0_JOURNAL_ID],
   );
@@ -2992,24 +3099,24 @@ async function refreshLedger52T0PendingOrderScanState() {
 }
 
 /**
- * 管理员逐笔挂单只引用T+0统一 ETH 永续标记价：多单在标记价低于或等于挂单价时成交，
- * 空单在标记价高于或等于挂单价时成交。扫描只切换成交状态，不改写原始下单价、数量、费用或收益分配快照。
+ * 自动订单仅引用T+0统一 ETH 永续标记价：先处理开仓挂单，再处理已成交现货/合约的止盈。
+ * 多单挂单向下成交、止盈向上平仓；空单挂单向上成交、止盈向下平仓。止盈从不跳过未成交挂单。
  */
 export async function scanLedger52T0PendingOrders(input: { markPrice?: number; filledAt?: Date } = {}) {
   if (process.env.DEV_BYPASS_AUTH === "true" || pendingOrderScanInFlight || !pendingOrderScanActive) {
-    return { filled: 0, markPrice: null as number | null };
+    return { filled: 0, takeProfit: 0, markPrice: null as number | null };
   }
   const { getT0EthPerpetualMark } = input.markPrice === undefined
     ? await import("./price-scanner")
     : { getT0EthPerpetualMark: () => ({ price: input.markPrice }) };
   const markPrice = Number(getT0EthPerpetualMark().price);
-  if (!Number.isFinite(markPrice) || markPrice <= 0) return { filled: 0, markPrice: null as number | null };
+  if (!Number.isFinite(markPrice) || markPrice <= 0) return { filled: 0, takeProfit: 0, markPrice: null as number | null };
 
   pendingOrderScanInFlight = true;
   const connection = await getDbTransactionConnection();
   if (!connection) {
     pendingOrderScanInFlight = false;
-    return { filled: 0, markPrice };
+    return { filled: 0, takeProfit: 0, markPrice };
   }
   const tx: any = connection;
   try {
@@ -3017,7 +3124,7 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
     await tx.beginTransaction();
     const [rows] = await tx.execute(
       `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, is_locked, is_counterparty,
-              execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note,
+              execution_status, filled_at, filled_price, take_profit_enabled, take_profit_price, take_profit_quantity, take_profit_triggered_at, take_profit_triggered_price, take_profit_triggered_quantity, action, quantity, price, fee_usdt, target_price, note,
               client_request_id, created_by_user_id, trade_time, created_at, updated_at
          FROM ledger52_t0_journal_entries
         WHERE ledger_id = ? AND execution_status = 'pending' AND action IN ('openLong', 'openShort')
@@ -3047,7 +3154,7 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
       );
       const [afterRows] = await tx.execute(
         `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, is_locked, is_counterparty,
-                execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note,
+                execution_status, filled_at, filled_price, take_profit_enabled, take_profit_price, take_profit_quantity, take_profit_triggered_at, take_profit_triggered_price, take_profit_triggered_quantity, action, quantity, price, fee_usdt, target_price, note,
                 client_request_id, created_by_user_id, trade_time, created_at, updated_at
            FROM ledger52_t0_journal_entries
           WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1`,
@@ -3058,17 +3165,151 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
       await writeEntryAudit(tx, { actorUserId, entryId, operation: "fill", before, after: await buildEntryAuditSnapshot(tx, actorUserId, after) });
       filled += 1;
     }
+
+    const [takeProfitRows] = await tx.execute(
+      `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type,
+              is_locked, is_counterparty, execution_status, action, quantity, price, fee_usdt, target_price, note,
+              take_profit_enabled, take_profit_price, take_profit_quantity, take_profit_triggered_at, take_profit_triggered_price, take_profit_triggered_quantity,
+              client_request_id, created_by_user_id, trade_time, created_at, updated_at
+         FROM ledger52_t0_journal_entries
+        WHERE ledger_id = ? AND execution_status = 'filled' AND take_profit_enabled = 1 AND is_locked = 0
+          AND instrument_type IN ('spot', 'contract') AND action IN ('openLong', 'openShort')
+          AND ((action = 'openLong' AND CAST(take_profit_price AS DECIMAL(36,18)) <= CAST(? AS DECIMAL(36,18)))
+            OR (action = 'openShort' AND CAST(take_profit_price AS DECIMAL(36,18)) >= CAST(? AS DECIMAL(36,18))))
+        ORDER BY trade_time ASC, id ASC
+        FOR UPDATE`,
+      [LEDGER_52_T0_JOURNAL_ID, String(markPrice), String(markPrice)],
+    );
+    let takeProfit = 0;
+    for (const candidate of asRows(takeProfitRows)) {
+      const openingEntryId = toNumber(candidate.id);
+      const actorUserId = toNumber(candidate.user_id);
+      const openingAction = String(candidate.action) as T0JournalAction;
+      if (openingEntryId <= 0 || actorUserId <= 0 || !shouldTriggerLedger52T0TakeProfit({
+        action: openingAction,
+        markPrice,
+        takeProfitPrice: toNumber(candidate.take_profit_price),
+      })) continue;
+      const beforeOpening = await buildEntryAuditSnapshot(tx, actorUserId, candidate);
+      const [scopeResult] = await tx.execute(
+        `SELECT id, action, execution_status, quantity, price, target_price, related_user_id, related_fund_id,
+                account_id, symbol, instrument_type
+           FROM ledger52_t0_journal_entries
+          WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
+            AND COALESCE(related_user_id, 0) = ? AND COALESCE(related_fund_id, 0) = ?
+          ORDER BY trade_time ASC, id ASC FOR UPDATE`,
+        [
+          LEDGER_52_T0_JOURNAL_ID,
+          actorUserId,
+          toNumber(candidate.account_id),
+          String(candidate.symbol || 'ETH'),
+          toNumber(candidate.related_user_id),
+          toNumber(candidate.related_fund_id),
+        ],
+      );
+      const scopeRows = asRows(scopeResult);
+      const currentOpening = scopeRows.find((row) => toNumber(row.id) === openingEntryId);
+      if (!currentOpening || String(currentOpening.execution_status) !== 'filled') continue;
+      const remainingCents = Math.max(0, quantityToCents(currentOpening.quantity) - openingDependentCloseQuantityCents(scopeRows, openingEntryId));
+      if (remainingCents <= 0) {
+        await tx.execute(
+          `UPDATE ledger52_t0_journal_entries
+              SET take_profit_enabled = 0, updated_at = NOW(3)
+            WHERE id = ? AND ledger_id = ? AND user_id = ? AND take_profit_enabled = 1`,
+          [openingEntryId, LEDGER_52_T0_JOURNAL_ID, actorUserId],
+        );
+        continue;
+      }
+      const configuredCents = quantityToCents(candidate.take_profit_quantity);
+      const actualCents = Math.min(remainingCents, configuredCents);
+      if (actualCents <= 0) continue;
+      const closeAction: T0JournalAction = openingAction === 'openLong' ? 'closeLong' : 'closeShort';
+      const targetPrice = archivePriceForAction(closeAction, currentOpening.price);
+      const occurredAt = input.filledAt ?? new Date();
+      const quantity = (actualCents / 100).toFixed(2);
+      const note = `[系统自动止盈] ${formatBeijingSystemTime(occurredAt)}｜ETH永续价 ${markPrice.toFixed(2)} U，达到止盈价 ${toNumber(candidate.take_profit_price).toFixed(2)} U｜自动平 ${quantity} ETH`;
+      const closeRequestId = `take-profit-${openingEntryId}-${occurredAt.getTime().toString(36)}`;
+      const [closeResult] = await tx.execute(
+        `INSERT INTO ledger52_t0_journal_entries
+          (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type,
+           is_locked, is_counterparty, execution_status, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 'filled', ?, ?, ?,
+           ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18), ?, ?, ?, ?, ?)`,
+        [
+          LEDGER_52_T0_JOURNAL_ID,
+          actorUserId,
+          toNumber(candidate.account_id),
+          toNumber(candidate.related_user_id) || null,
+          toNumber(candidate.related_fund_id) || null,
+          String(candidate.symbol || 'ETH'),
+          String(candidate.instrument_type),
+          closeAction,
+          quantity,
+          String(markPrice),
+          quantity,
+          String(markPrice),
+          String(targetPrice),
+          note,
+          closeRequestId,
+          actorUserId,
+          mysqlDateTime(occurredAt),
+        ],
+      );
+      const closeEntryId = Number((closeResult as any).insertId || 0);
+      if (!closeEntryId) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '系统自动止盈流水写入失败' });
+      await writeClosingProfitShareSnapshots(tx, {
+        actorUserId,
+        entryId: closeEntryId,
+        sourceUserId: toNumber(candidate.related_user_id),
+        positionRows: scopeRows,
+        action: closeAction,
+        targetPrice: String(targetPrice),
+        relatedFundId: toNumber(candidate.related_fund_id),
+        quantity,
+      });
+      await tx.execute(
+        `UPDATE ledger52_t0_journal_entries
+            SET take_profit_enabled = 0, take_profit_triggered_at = ?, take_profit_triggered_price = ?, take_profit_triggered_quantity = ?, updated_at = NOW(3)
+          WHERE id = ? AND ledger_id = ? AND user_id = ? AND take_profit_enabled = 1`,
+        [mysqlDateTime(occurredAt), String(markPrice), quantity, openingEntryId, LEDGER_52_T0_JOURNAL_ID, actorUserId],
+      );
+      const [afterOpeningRows, closeRows] = await Promise.all([
+        tx.execute(`SELECT * FROM ledger52_t0_journal_entries WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1`, [openingEntryId, LEDGER_52_T0_JOURNAL_ID, actorUserId]),
+        tx.execute(`SELECT * FROM ledger52_t0_journal_entries WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1`, [closeEntryId, LEDGER_52_T0_JOURNAL_ID, actorUserId]),
+      ]);
+      const afterOpening = asRows(afterOpeningRows)[0];
+      const closeEntry = asRows(closeRows)[0];
+      if (!afterOpening || !closeEntry) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '系统自动止盈后读取流水失败' });
+      await writeEntryAudit(tx, {
+        actorUserId,
+        entryId: openingEntryId,
+        operation: 'take_profit',
+        before: beforeOpening,
+        after: await buildEntryAuditSnapshot(tx, actorUserId, afterOpening),
+      });
+      await writeEntryAudit(tx, {
+        actorUserId,
+        entryId: closeEntryId,
+        operation: 'take_profit',
+        before: { automatic: true, trigger: 'take_profit', openingEntryId, markPrice, takeProfitPrice: toNumber(candidate.take_profit_price), configuredQuantity: toNumber(candidate.take_profit_quantity), actualQuantity: actualCents / 100 },
+        after: await buildEntryAuditSnapshot(tx, actorUserId, closeEntry),
+      });
+      takeProfit += 1;
+    }
     const [remainingPendingRows] = await tx.execute(
       `SELECT 1
          FROM ledger52_t0_journal_entries
-        WHERE ledger_id = ? AND execution_status = 'pending'
-          AND action IN ('openLong', 'openShort')
+        WHERE ledger_id = ? AND (
+          (execution_status = 'pending' AND action IN ('openLong', 'openShort'))
+          OR (execution_status = 'filled' AND take_profit_enabled = 1
+            AND instrument_type IN ('spot', 'contract') AND action IN ('openLong', 'openShort'))
+        )
         LIMIT 1`,
       [LEDGER_52_T0_JOURNAL_ID],
     );
     pendingOrderScanActive = Boolean(asRows(remainingPendingRows)[0]);
     await tx.commit();
-    return { filled, markPrice };
+    return { filled, takeProfit, markPrice };
   } catch (error) {
     try { await tx.rollback(); } catch {}
     throw error;
@@ -3279,15 +3520,15 @@ export function startLedger52T0ExpiredOptionScanner() {
 }
 
 /**
- * 启动生产挂单扫描开关：启动时只检查一次是否存在挂单；随后由实时 ETH 永续标记价逐笔触发。
+ * 启动生产自动订单扫描开关：启动时检查挂单与止盈计划；随后由实时 ETH 永续标记价逐笔触发。
  * DEV_BYPASS 热预览绝不启动，避免将预览行情写入真实订单。
  */
 export function startLedger52T0PendingOrderScanner() {
   if (pendingOrderScannerStarted || process.env.DEV_BYPASS_AUTH === "true") return;
   pendingOrderScannerStarted = true;
   void refreshLedger52T0PendingOrderScanState()
-    .then((hasPending) => console.log(`[T0挂单] 实时标记价触发已启动（${hasPending ? "当前有挂单" : "当前无挂单"}）`))
-    .catch((error) => console.error("[T0挂单] 初始化挂单状态失败:", error instanceof Error ? error.message : error));
+    .then((hasPending) => console.log(`[T0自动订单] 实时标记价触发已启动（${hasPending ? "当前有挂单或止盈" : "当前无自动订单"}）`))
+    .catch((error) => console.error("[T0自动订单] 初始化状态失败:", error instanceof Error ? error.message : error));
 }
 
 export async function updateLedger52T0JournalOpeningEntry(input: {
@@ -3312,6 +3553,12 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   lockOnly?: boolean;
   /** 未传时保持原成交状态；传入 true 为挂单，传入 false 将挂单人工确认成交。 */
   isPending?: boolean;
+  /** 止盈仅用于现货/合约；可在挂单创建时预设，必须成交后触发。 */
+  takeProfitEnabled?: boolean;
+  takeProfitPrice?: string;
+  takeProfitQuantity?: string;
+  /** 已部分平仓的开仓单只允许单独更新剩余仓位的止盈计划。 */
+  takeProfitOnly?: boolean;
   optionDirection?: T0JournalOptionDirection;
   optionExpiryDate?: string;
   optionPremium?: string;
@@ -3338,7 +3585,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     const lockedEntry = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId, {
-      allowDependentClose: input.lockOnly === true,
+      allowDependentClose: input.lockOnly === true || input.takeProfitOnly === true,
     });
     const before = lockedEntry.entry;
     const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
@@ -3357,21 +3604,45 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     // 将已成交订单改回挂单时强制解除锁定；历史异常组合也会在下一次编辑中自动修正。
     const isLockedForUpdate = nextIsPending ? 0 : isLocked;
     if (lockedEntry.hasDependentClose) {
+      const takeProfit = resolveTakeProfitParameters({
+        action: String(before.action) as T0JournalAction,
+        instrumentType,
+        quantity: normalizedQuantity,
+        price: input.price,
+        takeProfitEnabled: input.takeProfitEnabled,
+        takeProfitPrice: input.takeProfitPrice,
+        takeProfitQuantity: input.takeProfitQuantity,
+      }, before, (lockedEntry.remainingCents / 100).toFixed(2));
       if (lockedEntry.remainingCents <= 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已全部平仓，没有剩余仓位可锁定或编辑" });
       }
       const dependentSafeUpdate = input.lockOnly === true && input.counterpartyOnly !== true
         ? { column: "is_locked", value: isLocked, label: "锁定" }
         : null;
-      if (!dependentSafeUpdate || dependentSafeUpdate.value === null) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已被后续平仓使用；仅可对剩余仓位单独切换锁定，其他字段不可编辑" });
+      const takeProfitOnlyUpdate = input.takeProfitOnly === true && input.counterpartyOnly !== true;
+      if ((!dependentSafeUpdate || dependentSafeUpdate.value === null) && !takeProfitOnlyUpdate) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已被后续平仓使用；仅可对剩余仓位单独切换锁定或止盈，其他字段不可编辑" });
       }
-      // 锁定仅标识尚未平掉的余额，不触碰原始数量、价格、账户、归属或 FIFO 分配。
-      await tx.execute(
-        `UPDATE ledger52_t0_journal_entries SET ${dependentSafeUpdate.column} = ?, updated_at = NOW(3)
-          WHERE id = ? AND ledger_id = ? AND user_id = ?`,
-        [dependentSafeUpdate.value, input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
-      );
+      // 锁定与止盈都只作用于尚未平掉的余额，不触碰原始数量、价格、账户、归属或 FIFO 分配。
+      if (takeProfitOnlyUpdate) {
+        await tx.execute(
+          `UPDATE ledger52_t0_journal_entries
+              SET is_locked = COALESCE(?, is_locked),
+                  take_profit_enabled = ?, take_profit_price = ?, take_profit_quantity = ?,
+                  take_profit_triggered_at = CASE WHEN ? = 1 THEN NULL ELSE take_profit_triggered_at END,
+                  take_profit_triggered_price = CASE WHEN ? = 1 THEN NULL ELSE take_profit_triggered_price END,
+                  take_profit_triggered_quantity = CASE WHEN ? = 1 THEN NULL ELSE take_profit_triggered_quantity END,
+                  updated_at = NOW(3)
+            WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+          [input.lockOnly === true ? isLocked : null, takeProfit.enabled ? 1 : 0, takeProfit.price, takeProfit.quantity, takeProfit.enabled ? 1 : 0, takeProfit.enabled ? 1 : 0, takeProfit.enabled ? 1 : 0, input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+        );
+      } else {
+        await tx.execute(
+          `UPDATE ledger52_t0_journal_entries SET ${dependentSafeUpdate!.column} = ?, updated_at = NOW(3)
+            WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+          [dependentSafeUpdate!.value, input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+        );
+      }
       const [accountRows] = await tx.execute(
         `SELECT id, name, last_used_at, created_at FROM ledger52_t0_journal_accounts
           WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1`,
@@ -3383,7 +3654,9 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
                 u.username AS related_username, u.avatar AS related_user_avatar,
                 e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
                 e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count,
-                e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+                e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price,
+                e.take_profit_enabled, e.take_profit_price, e.take_profit_quantity, e.take_profit_triggered_at, e.take_profit_triggered_price, e.take_profit_triggered_quantity,
+                e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
            FROM ledger52_t0_journal_entries e
            INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
            LEFT JOIN users u ON u.id = e.related_user_id
@@ -3393,9 +3666,11 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       );
       const account = asRows(accountRows)[0];
       const after = asRows(updatedRows)[0];
-      if (!account || !after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `${dependentSafeUpdate.label}标记更新后读取失败` });
+      if (!account || !after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `${takeProfitOnlyUpdate ? "止盈" : dependentSafeUpdate!.label}设置后读取失败` });
       await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "update", before: beforeForAudit, after: await buildEntryAuditSnapshot(tx, input.actorUserId, after) });
       await tx.commit();
+      if (takeProfit.enabled) activateLedger52T0PendingOrderScan();
+      else void refreshLedger52T0PendingOrderScanState();
       return { account: mapAccount(account), entry: mapEntry(after) };
     }
     const effectiveInstrumentType = instrumentType;
@@ -3413,6 +3688,15 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     const effectivePrice = gridParameters
       ? gridParameters.direction === "long" ? gridParameters.rangeMin : gridParameters.rangeMax
       : input.price;
+    const takeProfit = resolveTakeProfitParameters({
+      action: String(before.action) as T0JournalAction,
+      instrumentType: effectiveInstrumentType,
+      quantity: normalizedQuantity,
+      price: String(effectivePrice),
+      takeProfitEnabled: input.takeProfitEnabled,
+      takeProfitPrice: input.takeProfitPrice,
+      takeProfitQuantity: input.takeProfitQuantity,
+    }, before, lockedEntry.hasDependentClose ? (lockedEntry.remainingCents / 100).toFixed(2) : undefined);
     let accountId = input.accountId === undefined ? toNumber(before.account_id) : Number(input.accountId);
     const requestedAccountName = input.accountName === undefined
       ? ""
@@ -3513,6 +3797,10 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
               grid_direction = ?, grid_range_min = ?, grid_range_max = ?, grid_leverage = ?, grid_count = ?,
               is_locked = COALESCE(?, is_locked),
               is_counterparty = COALESCE(?, is_counterparty),
+              take_profit_enabled = ?, take_profit_price = ?, take_profit_quantity = ?,
+              take_profit_triggered_at = CASE WHEN ? = 1 THEN NULL ELSE take_profit_triggered_at END,
+              take_profit_triggered_price = CASE WHEN ? = 1 THEN NULL ELSE take_profit_triggered_price END,
+              take_profit_triggered_quantity = CASE WHEN ? = 1 THEN NULL ELSE take_profit_triggered_quantity END,
               execution_status = COALESCE(CASE WHEN ? = 1 THEN 'pending' WHEN ? = 0 THEN 'filled' END, execution_status),
               filled_at = CASE WHEN ? IS NULL THEN filled_at WHEN ? = 1 THEN NULL WHEN ? = 0 THEN NOW(3) ELSE filled_at END,
               filled_price = CASE WHEN ? IS NULL THEN filled_price WHEN ? = 1 THEN NULL WHEN ? = 0 THEN CAST(? AS DECIMAL(36,18)) ELSE filled_price END,
@@ -3538,6 +3826,12 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         gridParameters?.count ?? null,
         isLockedForUpdate,
         isCounterparty,
+        takeProfit.enabled ? 1 : 0,
+        takeProfit.price,
+        takeProfit.quantity,
+        takeProfit.enabled ? 1 : 0,
+        takeProfit.enabled ? 1 : 0,
+        takeProfit.enabled ? 1 : 0,
         isPending,
         isPending,
         isPending,
@@ -3577,7 +3871,9 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
               u.username AS related_username, u.avatar AS related_user_avatar,
               e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
               e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count,
-              e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+              e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price,
+              e.take_profit_enabled, e.take_profit_price, e.take_profit_quantity, e.take_profit_triggered_at, e.take_profit_triggered_price, e.take_profit_triggered_quantity,
+              e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id
@@ -3592,8 +3888,8 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     const afterForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, after);
     await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "update", before: beforeForAudit, after: afterForAudit });
     await tx.commit();
-    if (isPending === 1) activateLedger52T0PendingOrderScan();
-    if (isPending === 0) void refreshLedger52T0PendingOrderScanState();
+    if (nextIsPending || takeProfit.enabled) activateLedger52T0PendingOrderScan();
+    else void refreshLedger52T0PendingOrderScanState();
     return { account: mapAccount(account), entry: mapEntry(after) };
   } catch (error) {
     try { await tx.rollback(); } catch {}
@@ -3784,8 +4080,8 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
 
     await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
-        (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, option_settlement_price, option_delivery_price, option_settled_at, option_settlement_source, grid_direction, grid_range_min, grid_range_max, grid_leverage, grid_count, is_locked, is_counterparty, execution_status, filled_at, filled_price, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
+        (id, ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, option_settlement_price, option_delivery_price, option_settled_at, option_settlement_source, grid_direction, grid_range_min, grid_range_max, grid_leverage, grid_count, is_locked, is_counterparty, execution_status, filled_at, filled_price, take_profit_enabled, take_profit_price, take_profit_quantity, take_profit_triggered_at, take_profit_triggered_price, take_profit_triggered_quantity, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id, trade_time, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
       [
         entryId,
         LEDGER_52_T0_JOURNAL_ID,
@@ -3813,6 +4109,12 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
         executionStatus,
         snapshot.filled_at ?? snapshot.filledAt ?? null,
         snapshot.filled_price ?? snapshot.filledPrice ?? null,
+        snapshot.take_profit_enabled ?? snapshot.takeProfitEnabled ?? 0,
+        snapshot.take_profit_price ?? snapshot.takeProfitPrice ?? null,
+        snapshot.take_profit_quantity ?? snapshot.takeProfitQuantity ?? null,
+        snapshot.take_profit_triggered_at ?? snapshot.takeProfitTriggeredAt ?? null,
+        snapshot.take_profit_triggered_price ?? snapshot.takeProfitTriggeredPrice ?? null,
+        snapshot.take_profit_triggered_quantity ?? snapshot.takeProfitTriggeredQuantity ?? null,
         action,
         quantity,
         price,
@@ -3837,7 +4139,9 @@ export async function restoreLedger52T0JournalEntry(input: { actorUserId: number
               e.symbol, e.instrument_type, e.option_direction, e.option_expiry_date, e.option_premium, e.option_premium_currency,
               e.option_settlement_price, e.option_delivery_price, e.option_settled_at, e.option_settlement_source,
               e.grid_direction, e.grid_range_min, e.grid_range_max, e.grid_leverage, e.grid_count,
-              e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
+              e.is_locked, e.is_counterparty, e.execution_status, e.filled_at, e.filled_price,
+              e.take_profit_enabled, e.take_profit_price, e.take_profit_quantity, e.take_profit_triggered_at, e.take_profit_triggered_price, e.take_profit_triggered_quantity,
+              e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note, e.trade_time, e.created_at
          FROM ledger52_t0_journal_entries e
          INNER JOIN ledger52_t0_journal_accounts a ON a.id = e.account_id
          LEFT JOIN users u ON u.id = e.related_user_id

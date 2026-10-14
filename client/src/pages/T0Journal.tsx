@@ -17,6 +17,7 @@ import {
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  Target,
   Trash2,
   UserRound,
   X,
@@ -343,6 +344,13 @@ type PreviewTrade = {
   /** 挂单实际触发成交的系统时间与统一行情价格；关联成员可只读查看。 */
   filledAt?: string;
   filledPrice?: number;
+  /** 仅现货/合约开仓支持的自动止盈计划与实际触发信息。 */
+  takeProfitEnabled?: boolean;
+  takeProfitPrice?: number;
+  takeProfitQuantity?: number;
+  takeProfitTriggeredAt?: string;
+  takeProfitTriggeredPrice?: number;
+  takeProfitTriggeredQuantity?: number;
   quantity: number;
   price: number;
   fee: number;
@@ -467,6 +475,12 @@ function previewTradeFromEntry(entry: any): PreviewTrade {
     isPending: Boolean(entry.isPending),
     filledAt: entry.filledAt ? String(entry.filledAt) : undefined,
     filledPrice: entry.filledPrice === undefined || entry.filledPrice === null ? undefined : Number(entry.filledPrice),
+    takeProfitEnabled: Boolean(entry.takeProfitEnabled),
+    takeProfitPrice: entry.takeProfitPrice === undefined || entry.takeProfitPrice === null ? undefined : Number(entry.takeProfitPrice),
+    takeProfitQuantity: entry.takeProfitQuantity === undefined || entry.takeProfitQuantity === null ? undefined : Number(entry.takeProfitQuantity),
+    takeProfitTriggeredAt: entry.takeProfitTriggeredAt ? String(entry.takeProfitTriggeredAt) : undefined,
+    takeProfitTriggeredPrice: entry.takeProfitTriggeredPrice === undefined || entry.takeProfitTriggeredPrice === null ? undefined : Number(entry.takeProfitTriggeredPrice),
+    takeProfitTriggeredQuantity: entry.takeProfitTriggeredQuantity === undefined || entry.takeProfitTriggeredQuantity === null ? undefined : Number(entry.takeProfitTriggeredQuantity),
     quantity: Number(entry.quantity),
     price: Number(entry.price),
     fee: Number(entry.fee || 0),
@@ -563,6 +577,10 @@ type EntryForm = {
   isCounterparty: boolean;
   /** 仅开仓：默认直接成交；设为挂单后等待统一标记价自动触发。 */
   isPending: boolean;
+  /** 仅现货/合约开仓：止盈可预设在挂单上，成交后才由统一标记价自动触发。 */
+  isTakeProfit: boolean;
+  takeProfitPrice: string;
+  takeProfitQuantity: string;
   quantity: string;
   price: string;
   note: string;
@@ -1979,6 +1997,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     isLocked: false,
     isCounterparty: false,
     isPending: false,
+    isTakeProfit: false,
+    takeProfitPrice: "",
+    takeProfitQuantity: "",
     quantity: "",
     price: "",
     note: "",
@@ -3247,7 +3268,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     && editingOriginalTrade
     && entryForm.isLocked !== Boolean(editingOriginalTrade.isLocked),
   );
+  const hasPartialTakeProfitChange = Boolean(
+    isPartiallyClosedOpeningEdit
+    && editingOriginalTrade
+    && (
+      entryForm.isTakeProfit !== Boolean(editingOriginalTrade.takeProfitEnabled)
+      || (entryForm.isTakeProfit && (
+        Number(entryForm.takeProfitPrice) !== Number(editingOriginalTrade.takeProfitPrice)
+        || normalizeEthQuantity(entryForm.takeProfitQuantity) !== normalizeEthQuantity(String(editingOriginalTrade.takeProfitQuantity ?? ""))
+      ))
+    ),
+  );
   const isOptionOpeningEntry = isOptionEntryContext;
+  const isTakeProfitAvailable = ACTIONS[entryForm.action].opening
+    && (entryForm.instrumentType === "spot" || entryForm.instrumentType === "contract");
   // T+0 期权固定为 ETH 标的：复用融资付息订单已接入的 Deribit 缓存。
   // 到期日与行权价均从市场合约列表选择，避免手填出不存在的合约组合。
   const t0OptionExpiriesQuery = (trpc.ledger as any).deribitGetExpiries.useQuery(
@@ -3495,6 +3529,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       isLocked: false,
       isCounterparty: false,
       isPending: false,
+      isTakeProfit: false,
+      takeProfitPrice: "",
+      takeProfitQuantity: "",
       quantity: "",
       // 开仓成交价由管理员实际录入；保留浅色 0.00 占位，避免误把参考价写入流水。
       price: "",
@@ -3568,6 +3605,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       isLocked: false,
       isCounterparty: false,
       isPending: false,
+      isTakeProfit: false,
+      takeProfitPrice: "",
+      takeProfitQuantity: "",
       // 表单值不能带千分位逗号，否则超过千位的数量会无法通过数值校验。
       quantity: normalizeEthQuantity(String(closableQuantity)),
       price: markPrice ? markPrice.toFixed(2) : "",
@@ -3619,6 +3659,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       isLocked: Boolean(trade.isLocked),
       isCounterparty: Boolean(trade.isCounterparty),
       isPending: Boolean(trade.isPending),
+      isTakeProfit: Boolean(trade.takeProfitEnabled),
+      takeProfitPrice: trade.takeProfitPrice === undefined ? "" : String(trade.takeProfitPrice),
+      takeProfitQuantity: trade.takeProfitQuantity === undefined ? "" : normalizeEthQuantity(String(trade.takeProfitQuantity)),
       // 部分平仓时表单只展示剩余可操作量；服务端 lockOnly 分支只更新标记，不改写原始订单数量。
       quantity: normalizeEthQuantity(String(editableQuantity)),
       price: trade.price.toFixed(2),
@@ -3772,6 +3815,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         isPending: Boolean(data.entry.isPending),
         filledAt: data.entry.filledAt ? String(data.entry.filledAt) : undefined,
         filledPrice: data.entry.filledPrice === undefined || data.entry.filledPrice === null ? undefined : Number(data.entry.filledPrice),
+        takeProfitEnabled: Boolean(data.entry.takeProfitEnabled),
+        takeProfitPrice: data.entry.takeProfitPrice === undefined || data.entry.takeProfitPrice === null ? undefined : Number(data.entry.takeProfitPrice),
+        takeProfitQuantity: data.entry.takeProfitQuantity === undefined || data.entry.takeProfitQuantity === null ? undefined : Number(data.entry.takeProfitQuantity),
+        takeProfitTriggeredAt: data.entry.takeProfitTriggeredAt ? String(data.entry.takeProfitTriggeredAt) : undefined,
+        takeProfitTriggeredPrice: data.entry.takeProfitTriggeredPrice === undefined || data.entry.takeProfitTriggeredPrice === null ? undefined : Number(data.entry.takeProfitTriggeredPrice),
+        takeProfitTriggeredQuantity: data.entry.takeProfitTriggeredQuantity === undefined || data.entry.takeProfitTriggeredQuantity === null ? undefined : Number(data.entry.takeProfitTriggeredQuantity),
         quantity: Number(data.entry.quantity),
         price: Number(data.entry.price),
         fee: Number(data.entry.fee || 0),
@@ -3866,6 +3915,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         isPending: Boolean(data.entry.isPending),
         filledAt: data.entry.filledAt ? String(data.entry.filledAt) : undefined,
         filledPrice: data.entry.filledPrice === undefined || data.entry.filledPrice === null ? undefined : Number(data.entry.filledPrice),
+        takeProfitEnabled: Boolean(data.entry.takeProfitEnabled),
+        takeProfitPrice: data.entry.takeProfitPrice === undefined || data.entry.takeProfitPrice === null ? undefined : Number(data.entry.takeProfitPrice),
+        takeProfitQuantity: data.entry.takeProfitQuantity === undefined || data.entry.takeProfitQuantity === null ? undefined : Number(data.entry.takeProfitQuantity),
+        takeProfitTriggeredAt: data.entry.takeProfitTriggeredAt ? String(data.entry.takeProfitTriggeredAt) : undefined,
+        takeProfitTriggeredPrice: data.entry.takeProfitTriggeredPrice === undefined || data.entry.takeProfitTriggeredPrice === null ? undefined : Number(data.entry.takeProfitTriggeredPrice),
+        takeProfitTriggeredQuantity: data.entry.takeProfitTriggeredQuantity === undefined || data.entry.takeProfitTriggeredQuantity === null ? undefined : Number(data.entry.takeProfitTriggeredQuantity),
         quantity: Number(data.entry.quantity),
         price: Number(data.entry.price),
         fee: Number(data.entry.fee || 0),
@@ -3924,6 +3979,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         isLocked: false,
         isCounterparty: false,
         isPending: false,
+        isTakeProfit: false,
+        takeProfitPrice: "",
+        takeProfitQuantity: "",
         quantity: "",
         price: "",
         note: "",
@@ -4220,6 +4278,32 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       toast.error(isOptionOpening ? "请输入行权价" : isGridOpening ? "请先填写网格区间" : "请输入成交价格");
       return;
     }
+    const takeProfitQuantity = Number(normalizeEthQuantity(entryForm.takeProfitQuantity));
+    const takeProfitPrice = Number(entryForm.takeProfitPrice);
+    const isTakeProfitEligible = selectedAction.opening
+      && (entryForm.instrumentType === "spot" || entryForm.instrumentType === "contract");
+    if (entryForm.isTakeProfit) {
+      if (!isTakeProfitEligible) {
+        toast.error("止盈仅支持现货和合约开仓");
+        return;
+      }
+      if (!Number.isFinite(takeProfitPrice) || takeProfitPrice <= 0) {
+        toast.error("请输入有效的止盈价格");
+        return;
+      }
+      if (!Number.isFinite(takeProfitQuantity) || takeProfitQuantity <= 0 || takeProfitQuantity > quantity + 0.0000001) {
+        toast.error("止盈数量须大于0且不超过本笔可用数量");
+        return;
+      }
+      if (selectedAction.side === "long" && takeProfitPrice <= price) {
+        toast.error("多单止盈价须高于开仓价");
+        return;
+      }
+      if (selectedAction.side === "short" && takeProfitPrice >= price) {
+        toast.error("空单止盈价须低于开仓价");
+        return;
+      }
+    }
     const archiveTargetPrice = selectedAction.opening
       ? archivePriceForSide(selectedAction.side, price)
       : entryForm.targetPrice === undefined
@@ -4291,6 +4375,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         counterpartyOnly: !partialLockOnlyUpdate && safeDependentEdit === "counterparty",
         lockOnly: partialLockOnlyUpdate || safeDependentEdit === "lock",
         isPending: entryForm.isPending,
+        takeProfitEnabled: isTakeProfitEligible ? entryForm.isTakeProfit : false,
+        takeProfitPrice: isTakeProfitEligible && entryForm.isTakeProfit ? entryForm.takeProfitPrice.trim() : undefined,
+        takeProfitQuantity: isTakeProfitEligible && entryForm.isTakeProfit ? normalizeEthQuantity(entryForm.takeProfitQuantity) : undefined,
+        takeProfitOnly: isPartiallyClosedOpeningEdit && hasPartialTakeProfitChange,
         optionDirection: isOptionOpening ? entryForm.optionDirection : undefined,
         optionExpiryDate: isOptionOpening ? entryForm.optionExpiryDate : undefined,
         optionPremium: isOptionOpening ? entryForm.optionPremium.trim() : undefined,
@@ -4367,6 +4455,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       isLocked: selectedAction.opening ? entryForm.isLocked : false,
       isCounterparty: selectedAction.opening ? entryForm.isCounterparty : false,
       isPending: selectedAction.opening ? entryForm.isPending : false,
+      takeProfitEnabled: selectedAction.opening && isTakeProfitAvailable ? entryForm.isTakeProfit : false,
+      takeProfitPrice: selectedAction.opening && isTakeProfitAvailable && entryForm.isTakeProfit ? Number(entryForm.takeProfitPrice) : undefined,
+      takeProfitQuantity: selectedAction.opening && isTakeProfitAvailable && entryForm.isTakeProfit ? Number(entryForm.takeProfitQuantity) : undefined,
       quantity,
       price,
       fee,
@@ -4397,6 +4488,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       isLocked: selectedAction.opening ? entryForm.isLocked : undefined,
       isCounterparty: selectedAction.opening ? entryForm.isCounterparty : undefined,
       isPending: selectedAction.opening ? entryForm.isPending : undefined,
+      takeProfitEnabled: selectedAction.opening && isTakeProfitAvailable ? entryForm.isTakeProfit : undefined,
+      takeProfitPrice: selectedAction.opening && isTakeProfitAvailable && entryForm.isTakeProfit ? entryForm.takeProfitPrice.trim() : undefined,
+      takeProfitQuantity: selectedAction.opening && isTakeProfitAvailable && entryForm.isTakeProfit ? normalizeEthQuantity(entryForm.takeProfitQuantity) : undefined,
       optionDirection: isOptionOpening ? entryForm.optionDirection : undefined,
       optionExpiryDate: isOptionOpening ? entryForm.optionExpiryDate : undefined,
       optionPremium: isOptionOpening ? entryForm.optionPremium.trim() : undefined,
@@ -4803,6 +4897,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div className="text-[10px] text-slate-400">杠杆 · 格数</div>
                 <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium tabular-nums text-slate-700">{trade.gridLeverage === undefined || trade.gridCount === undefined ? "未设置" : `${formatPrice(trade.gridLeverage)}× · ${trade.gridCount}格`}</div>
               </div>
+            </div>}
+            {ACTIONS[trade.action].opening && (trade.instrumentType === "spot" || trade.instrumentType === "contract") && (trade.takeProfitEnabled || trade.takeProfitTriggeredAt) && <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-amber-200 pt-2">
+              <div className="min-w-0">
+                <div className="inline-flex items-center gap-1 text-[10px] text-slate-400"><Target className="h-3 w-3 text-amber-600" />止盈</div>
+                <div className={`mt-0.5 truncate text-[11px] font-semibold ${trade.takeProfitEnabled ? "text-amber-700" : "text-slate-600"}`}>{trade.takeProfitEnabled ? "已开启" : "已触发"}</div>
+              </div>
+              <div className="min-w-0 text-center">
+                <div className="text-[10px] text-slate-400">止盈价 · 数量</div>
+                <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium tabular-nums text-slate-700">{trade.takeProfitPrice === undefined || trade.takeProfitQuantity === undefined ? "—" : `${formatPrice(trade.takeProfitPrice)} · ${formatQuantity(trade.takeProfitQuantity)}`}</div>
+              </div>
+              <div className="min-w-0 text-right">
+                <div className="text-[10px] text-slate-400">{trade.takeProfitTriggeredAt ? "触发行情价" : "触发条件"}</div>
+                <div className="mt-0.5 whitespace-nowrap text-[11px] font-medium tabular-nums text-slate-700">{trade.takeProfitTriggeredAt ? `${formatPrice(trade.takeProfitTriggeredPrice ?? 0)} U` : ACTIONS[trade.action].side === "long" ? "向上触发" : "向下触发"}</div>
+              </div>
+              {trade.takeProfitTriggeredAt && <div className="col-span-3 mt-1 text-[10px] text-slate-500">自动平 {formatQuantity(trade.takeProfitTriggeredQuantity ?? 0)} ETH · {formatBeijingMonthDayTime(trade.takeProfitTriggeredAt)}</div>}
             </div>}
             {trade.note?.trim() && (
               <div className="col-span-3 border-t border-slate-200 pt-2">
@@ -5738,12 +5847,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       {isFullyClosedOpeningEdit && editingOriginalTrade
                         ? `原始 ${formatQuantity(editingOriginalTrade.quantity)} ETH 已全部平仓；关联历史不可编辑。`
                         : isPartiallyClosedOpeningEdit && editingOriginalTrade && editingRemainingQuantity !== null
-                        ? `原始 ${formatQuantity(editingOriginalTrade.quantity)} ETH，已平 ${formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；当前仅可管理剩余 ${formatQuantity(editingRemainingQuantity)} ETH 的锁定/解锁。`
+                        ? `原始 ${formatQuantity(editingOriginalTrade.quantity)} ETH，已平 ${formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；当前可管理剩余 ${formatQuantity(editingRemainingQuantity)} ETH 的锁定或止盈。`
                         : "请直接修改下方字段，完成后点击底部“保存修改”。"}
                     </div>
                   </div>
                 )}
-                <div className="grid grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)] gap-3 items-start">
+                <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)] gap-3 items-start">
                   <Field label={<span className="inline-flex items-center gap-1 text-sm font-semibold text-slate-800">{isFullyClosedOpeningEdit ? "已全部平仓（ETH）" : isPartiallyClosedOpeningEdit ? "剩余可操作（ETH）" : "数量（ETH）"}{isOptionOpeningEntry && <span className="text-rose-500">*</span>}{ACTIONS[entryForm.action].opening && entryForm.isPending && <span className="text-[10px] font-bold text-sky-600">挂单</span>}</span>}>
                     <div className="relative">
                       <input
@@ -5755,7 +5864,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         onChange={(event) => setEntryForm((current) => ({ ...current, quantity: event.target.value }))}
                         onBlur={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(current.quantity) }))}
                         placeholder="0.00"
-                        className={`h-14 w-full rounded border px-3 pr-[7rem] text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-50 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
+                        className={`h-14 w-full rounded border px-3 pr-[8.9rem] text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-50 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                       />
                       {ACTIONS[entryForm.action].opening && <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
                         <button
@@ -5785,6 +5894,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         >
                           <Clock3 className="h-4 w-4" strokeWidth={2.3} />
                         </button>}
+                        {isTakeProfitAvailable && <button
+                          type="button"
+                          disabled={isCloseReview || isFullyClosedOpeningEdit}
+                          aria-pressed={entryForm.isTakeProfit}
+                          aria-label={entryForm.isTakeProfit ? "关闭本笔开仓止盈" : "设置本笔开仓止盈"}
+                          title={entryForm.isTakeProfit ? "止盈已开启，点击关闭" : "设置止盈价与止盈数量"}
+                          onClick={() => setEntryForm((current) => ({
+                            ...current,
+                            isTakeProfit: !current.isTakeProfit,
+                            takeProfitPrice: current.isTakeProfit ? "" : current.takeProfitPrice,
+                            takeProfitQuantity: current.isTakeProfit ? "" : (current.takeProfitQuantity || normalizeEthQuantity(current.quantity)),
+                          }))}
+                          className={`flex h-8 w-8 items-center justify-center rounded border transition active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${entryForm.isTakeProfit ? "border-amber-500/80 bg-amber-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]" : "border-slate-300 bg-slate-50 text-slate-500"}`}
+                        >
+                          <Target className="h-4 w-4" strokeWidth={2.3} />
+                        </button>}
                         <button
                           type="button"
                           disabled={isCloseReview || hasDependentCloseOpeningEdit}
@@ -5802,7 +5927,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     {isPartiallyClosedOpeningEdit && editingOriginalTrade && editingRemainingQuantity !== null && !entryForm.isPending && (
                       <div className="mt-1.5 flex items-start gap-1.5 text-[10px] font-medium leading-4 text-amber-700">
                         <Lock className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2.4} />
-                        <span>本单已平 {formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；数量由剩余仓位决定。锁定仅标识剩余 {formatQuantity(editingRemainingQuantity)} ETH，不影响已平部分；解锁后仍可继续平仓。</span>
+                        <span>本单已平 {formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；数量由剩余仓位决定。锁定与止盈都只作用于剩余 {formatQuantity(editingRemainingQuantity)} ETH，不影响已平部分。</span>
                       </div>
                     )}
                     {quantityFormatError && <div className="mt-1.5 text-[10px] font-medium leading-4 text-rose-600">{quantityFormatError}</div>}
@@ -5917,6 +6042,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                                 action: current.editingEntryId ? current.action : getOptionOpeningAction(current.optionDirection),
                                 instrumentType: "option",
                                 isPending: false,
+                                isTakeProfit: false,
+                                takeProfitPrice: "",
+                                takeProfitQuantity: "",
                                 optionExpiryDate: isNewOption ? "" : current.optionExpiryDate,
                                 optionPremium: isNewOption ? "" : current.optionPremium,
                                 price: isNewOption ? "" : current.price,
@@ -5928,6 +6056,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                                 action: current.editingEntryId ? current.action : current.gridDirection === "long" ? "openLong" : "openShort",
                                 instrumentType: "grid",
                                 isPending: false,
+                                isTakeProfit: false,
+                                takeProfitPrice: "",
+                                takeProfitQuantity: "",
                                 price: "",
                               };
                             }
@@ -5941,6 +6072,40 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       </button>
                     );
                   })}
+                </div>}
+
+                {isTakeProfitAvailable && entryForm.isTakeProfit && <div className="-mt-0.5 rounded border border-amber-200 bg-amber-50/65 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-900"><Target className="h-3.5 w-3.5" strokeWidth={2.4} />止盈设置</span>
+                    <span className="text-[10px] font-medium text-amber-700">{entryForm.isPending ? "先成交后触发" : "统一标记价触发"}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label={<span>止盈价 <span className="text-rose-500">*</span></span>}>
+                      <input
+                        inputMode="decimal"
+                        disabled={isCloseReview || isFullyClosedOpeningEdit}
+                        value={entryForm.takeProfitPrice}
+                        onChange={(event) => setEntryForm((current) => ({ ...current, takeProfitPrice: event.target.value }))}
+                        placeholder={ACTIONS[entryForm.action].side === "long" ? "高于成交价" : "低于成交价"}
+                        className="h-11 w-full rounded border border-amber-200 bg-white px-3 text-base font-semibold tabular-nums text-slate-900 outline-none placeholder:text-amber-600/50 focus:border-amber-500 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      />
+                    </Field>
+                    <Field label={<span>止盈数量（ETH） <span className="text-rose-500">*</span></span>}>
+                      <input
+                        inputMode="decimal"
+                        maxLength={7}
+                        disabled={isCloseReview || isFullyClosedOpeningEdit}
+                        value={entryForm.takeProfitQuantity}
+                        onChange={(event) => setEntryForm((current) => ({ ...current, takeProfitQuantity: event.target.value }))}
+                        onBlur={() => setEntryForm((current) => ({ ...current, takeProfitQuantity: normalizeEthQuantity(current.takeProfitQuantity) }))}
+                        placeholder="可设部分数量"
+                        className="h-11 w-full rounded border border-amber-200 bg-white px-3 text-base font-semibold tabular-nums text-slate-900 outline-none placeholder:text-amber-600/50 focus:border-amber-500 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      />
+                    </Field>
+                  </div>
+                  <div className="mt-2 text-[10px] leading-4 text-amber-800">
+                    {ACTIONS[entryForm.action].side === "long" ? "多单在标记价达到或高于止盈价时自动平仓。" : "空单在标记价达到或低于止盈价时自动平仓。"} 止盈数量可小于本笔数量；锁定状态下会等待解锁后触发。
+                  </div>
                 </div>}
 
                 {isOptionOpeningEntry && <fieldset disabled={isCloseReview || hasDependentCloseOpeningEdit} className="contents">
@@ -6330,7 +6495,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             }>
               {!isCloseReview && (
                 <button
-                  disabled={(isEditingEntry ? updateOpeningEntryMutation.isPending || (hasDependentCloseOpeningEdit && (!isPartiallyClosedOpeningEdit || !hasPartialOpeningMarkerChange)) : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)) || Boolean(optionFormValidationMessage)}
+                  disabled={(isEditingEntry ? updateOpeningEntryMutation.isPending || (hasDependentCloseOpeningEdit && (!isPartiallyClosedOpeningEdit || (!hasPartialOpeningMarkerChange && !hasPartialTakeProfitChange))) : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)) || Boolean(optionFormValidationMessage)}
                   onClick={handleSaveEntry}
                   className="w-full h-12 rounded bg-indigo-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99]"
                 >
