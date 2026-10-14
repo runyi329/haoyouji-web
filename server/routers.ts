@@ -24125,6 +24125,28 @@ ${klinesSummary}
             }
           }
         };
+        // 前端分栏由编辑订单接口直接写入，不能依赖上方被静默吞掉错误的旧式迁移。
+        // 生产旧库不支持 ALTER ... ADD COLUMN IF NOT EXISTS 时，按信息架构结果显式补列。
+        const ensureFrontendPlacementColumn = async () => {
+          const [columns] = await conn.query(`
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+              AND table_name = 'ledger_orders'
+              AND column_name = 'frontend_placement'
+            LIMIT 1
+          `) as any;
+          if (!Array.isArray(columns) || columns.length === 0) {
+            try {
+              await conn.query(
+                "ALTER TABLE ledger_orders ADD COLUMN frontend_placement VARCHAR(16) DEFAULT NULL COMMENT '用户前端强制分栏：self/participant；NULL为自动'",
+              );
+            } catch (error: any) {
+              // 并发保存时其他请求已补列可继续，其余错误必须返回给管理员，不能再变成未知列失败。
+              if (error?.code !== 'ER_DUP_FIELDNAME') throw error;
+            }
+          }
+        };
         // 确保 collateral_assets 等新字段存在（兼容旧表结构）
         try {
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_assets TEXT DEFAULT NULL`);
@@ -24145,6 +24167,7 @@ ${klinesSummary}
         } catch(e) {}
         // 不依赖上方可能被旧版 MySQL 拒绝的 IF NOT EXISTS 语法；缺失时必须实际补齐。
         await ensureInterestEndDateColumn();
+        await ensureFrontendPlacementColumn();
         let participantCount = 0;
         const shouldSyncParticipantStatus = input.status === 'settled' || input.status === 'active';
         // 默认参与者跟随主订单的担保物；只有已明确设置独立担保物的参与者才保留自己的覆盖。
