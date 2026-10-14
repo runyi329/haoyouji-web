@@ -8,7 +8,7 @@ import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import { RightMarginDetail } from "@/components/RightMarginDetail";
 import { RightInterestDetail } from "@/components/RightInterestDetail";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Copy } from "lucide-react";
+import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Copy, LockKeyhole } from "lucide-react";
 import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
@@ -3143,7 +3143,7 @@ export function FunderOrderCard({
             {previewMode && periodInterestTotal && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 whitespace-nowrap">{periodInterestTotal.label}</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>
+                <span className="font-medium" style={{ color: '#3B82F6' }}>
                   {periodInterestTotal.value >= 0 ? '+' : ''}{periodInterestTotal.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
                 </span>
               </div>
@@ -4516,7 +4516,16 @@ export function FunderOrderCard({
           className="w-full"
           style={{ background: isParticipantVisual ? '#F0FDF4' : '#ffffff' }}
         >
-          <div className="mx-4 border-t border-dashed" style={{ borderColor: '#C7D2E6' }} />
+          <div className="relative mx-4 flex h-6 items-center justify-center">
+            <div className="absolute inset-x-0 border-t border-dashed" style={{ borderColor: '#C7D2E6' }} />
+            <span
+              className="relative z-10 inline-flex h-5 w-5 items-center justify-center rounded-full border"
+              style={{ backgroundColor: isParticipantVisual ? '#F0FDF4' : '#ffffff', borderColor: '#9FB0D8', color: '#526A9D' }}
+              title="各段订单需一并结清"
+            >
+              <LockKeyhole size={11} strokeWidth={2.2} aria-hidden="true" />
+            </span>
+          </div>
           <FunderOrderCard
             order={segmentOrder}
             livePrices={livePrices}

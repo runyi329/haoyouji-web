@@ -3025,37 +3025,6 @@ export default function LedgerDetail() {
   // 用户端卡片以独立结息汇总为最终来源回填 paidTotal，避免订单列表接口漏带汇总时显示 0.00。
   // 金额先折算到订单计息基数货币，组件再按既有逻辑转换为展示利息货币。
   const funderDisplayOrders = useMemo(() => {
-    const getCollateralSortValue = (order: any) => {
-      try {
-        const rawAssets = order?.collateral_assets;
-        const assets = Array.isArray(rawAssets)
-          ? rawAssets
-          : typeof rawAssets === 'string'
-            ? JSON.parse(rawAssets || '[]')
-            : [];
-        if (!Array.isArray(assets)) return 0;
-        return assets.reduce((total: number, asset: any) => {
-          const qty = Number(asset?.qty ?? asset?.amount ?? 0);
-          const coin = String(asset?.coin ?? '').trim().toUpperCase();
-          if (!Number.isFinite(qty) || qty <= 0 || !coin) return total;
-          const isCny = ['CNY', 'RMB', '人民币', '元'].includes(coin);
-          const isStablecoin = ['USDT', 'U', 'USDC', 'USDE', 'USD', 'BUSD', 'DAI'].includes(coin);
-          const isStockCollateral = asset?.assetType === 'stock' || asset?.asset_type === 'stock';
-          const explicitCnyPrice = Number(asset?.price);
-          const priceU = isCny
-            ? 1 / cnyRate
-            : isStablecoin
-              ? 1
-              : isStockCollateral && Number.isFinite(explicitCnyPrice) && explicitCnyPrice > 0
-                ? explicitCnyPrice / cnyRate
-                : Number(funderLivePrices[coin] ?? 0);
-          return Number.isFinite(priceU) && priceU > 0 ? total + qty * priceU : total;
-        }, 0);
-      } catch {
-        return 0;
-      }
-    };
-
     const ordersWithPayments = (funderAssetOrders as any[]).map((order: any) => {
       const payments = interestSummaryMap[Number(order.id)] || [];
       if (!payments.length) return order;
@@ -3073,12 +3042,16 @@ export default function LedgerDetail() {
       return { ...order, paidTotal: { amount: paidInBase, currency: baseCurrency } };
     });
 
-    // 卡片、持有时长与共享担保弹窗都使用同一排序；担保物价值较高的订单优先。
+    // 用户端的卡片、持有时长与共享担保弹窗统一按创建时间倒序：最新订单始终在最上方。
     return ordersWithPayments.slice().sort((left: any, right: any) => {
-      const difference = getCollateralSortValue(right) - getCollateralSortValue(left);
-      return difference !== 0 ? difference : Number(right.id ?? 0) - Number(left.id ?? 0);
+      const rightCreatedAt = new Date(right?.created_at ?? right?.createdAt ?? 0).getTime();
+      const leftCreatedAt = new Date(left?.created_at ?? left?.createdAt ?? 0).getTime();
+      const timeDifference = (Number.isFinite(rightCreatedAt) ? rightCreatedAt : 0)
+        - (Number.isFinite(leftCreatedAt) ? leftCreatedAt : 0);
+      // 同一秒内创建时，用递增订单编号稳定地保持后建订单在前。
+      return timeDifference !== 0 ? timeDifference : Number(right.id ?? 0) - Number(left.id ?? 0);
     });
-  }, [funderAssetOrders, interestSummaryMap, cnyRate, funderLivePrices]);
+  }, [funderAssetOrders, interestSummaryMap, cnyRate]);
   // 资方前端的全部/股票/数字币/已结算筛选。保留原“全部”仅展示未结清订单的口径；期权并入数字币。
   const funderVisibleOrders = useMemo(() => funderDisplayOrders.filter((order: any) => {
     const isParticipantOrder = isFunderParticipantOrder(order);
