@@ -57,7 +57,7 @@ let perpetualMarkStreamReconnectDelayMs = PERPETUAL_MARK_RECONNECT_MIN_MS;
 let perpetualMarkStreamReconnectTimer: NodeJS.Timeout | null = null;
 let perpetualMarkStreamPingTimer: NodeJS.Timeout | null = null;
 let perpetualMarkCacheSaveTimer: NodeJS.Timeout | null = null;
-type PendingOrderMarkTick = { price: number; observedAt: Date };
+type PendingOrderMarkTick = { price: number; observedAt: Date; rangeHigh: number; rangeLow: number };
 const pendingOrderMarkTicks: PendingOrderMarkTick[] = [];
 let pendingOrderMarkTriggerRunning = false;
 
@@ -137,13 +137,32 @@ function entryFromPrice(coin: string, price: number, source: string, patch: Part
 }
 
 /**
- * Gate 每个 ETH 永续标记价更新均可触发挂单成交和止盈判断；没有自动订单时完全跳过。
- * 有自动订单时保留顺序队列，避免短暂跨价后回落被后续报价覆盖而漏触发。
+ * 每个 ETH 永续标记价更新均可触发挂单成交和止盈判断；没有自动订单时完全跳过。
+ * 实时流逐笔排队；若突发积压，则合并为高低价区间，确保短暂跨价后回落也不会漏掉。
  */
-function triggerLedger52T0PendingOrders(price: number, observedAt = new Date()) {
+function triggerLedger52T0PendingOrders(
+  price: number,
+  observedAt = new Date(),
+  range: { high?: number; low?: number } = {},
+) {
   if (process.env.DEV_BYPASS_AUTH === 'true' || !hasLedger52T0PendingOrders() || !isValidPrice(price)) return;
-  pendingOrderMarkTicks.push({ price, observedAt });
-  if (pendingOrderMarkTicks.length > 120) pendingOrderMarkTicks.splice(0, pendingOrderMarkTicks.length - 120);
+  const requestedHigh = Number(range.high);
+  const requestedLow = Number(range.low);
+  const rangeHigh = isValidPrice(requestedHigh) ? Math.max(price, requestedHigh) : price;
+  const rangeLow = isValidPrice(requestedLow) ? Math.min(price, requestedLow) : price;
+  pendingOrderMarkTicks.push({ price, observedAt, rangeHigh, rangeLow });
+  if (pendingOrderMarkTicks.length > 120) {
+    const overflow = pendingOrderMarkTicks.splice(0, pendingOrderMarkTicks.length - 120);
+    const latestOverflow = overflow[overflow.length - 1];
+    if (latestOverflow) {
+      pendingOrderMarkTicks.unshift({
+        price: latestOverflow.price,
+        observedAt: latestOverflow.observedAt,
+        rangeHigh: Math.max(...overflow.map((tick) => tick.rangeHigh)),
+        rangeLow: Math.min(...overflow.map((tick) => tick.rangeLow)),
+      });
+    }
+  }
   if (pendingOrderMarkTriggerRunning) return;
 
   pendingOrderMarkTriggerRunning = true;
@@ -152,19 +171,24 @@ function triggerLedger52T0PendingOrders(price: number, observedAt = new Date()) 
       while (pendingOrderMarkTicks.length > 0 && hasLedger52T0PendingOrders()) {
         const tick = pendingOrderMarkTicks.shift();
         if (!tick) continue;
-        const result = await scanLedger52T0PendingOrders({ markPrice: tick.price, filledAt: tick.observedAt });
+        const result = await scanLedger52T0PendingOrders({
+          markPrice: tick.price,
+          filledAt: tick.observedAt,
+          rangeHigh: tick.rangeHigh,
+          rangeLow: tick.rangeLow,
+        });
         if (result.filled > 0 || result.takeProfit > 0) {
-          console.log(`[T0自动订单] 实时标记价 ${result.markPrice}，挂单成交 ${result.filled} 笔，自动止盈 ${result.takeProfit} 笔`);
+          console.log(`[T0自动订单] 永续扫描区间 ${tick.rangeLow}–${tick.rangeHigh}，挂单成交 ${result.filled} 笔，自动止盈 ${result.takeProfit} 笔`);
         }
       }
     } catch (error) {
-      console.error('[T0自动订单] 实时标记价判断失败:', error instanceof Error ? error.message : error);
+      console.error('[T0自动订单] 永续区间判断失败:', error instanceof Error ? error.message : error);
     } finally {
       pendingOrderMarkTriggerRunning = false;
       if (!hasLedger52T0PendingOrders()) pendingOrderMarkTicks.length = 0;
       else {
         const next = pendingOrderMarkTicks.shift();
-        if (next) triggerLedger52T0PendingOrders(next.price, next.observedAt);
+        if (next) triggerLedger52T0PendingOrders(next.price, next.observedAt, { high: next.rangeHigh, low: next.rangeLow });
       }
     }
   })();
@@ -273,6 +297,24 @@ async function fetchEthPerpetualMarkQuote(): Promise<{ price: number; source: st
     const row = data?.status === 'ok' ? data.data?.[0] : null;
     const price = Number(row?.close);
     if (isValidPrice(price)) return { price, source: 'HTX ETH/USDT 永续标记价', patch: {} };
+  } catch {}
+  return null;
+}
+
+
+type EthPerpetualMarkRange = { high: number; low: number };
+
+/**
+ * 实时流暂不可用时，读取 HTX 最新一分钟的 ETH 永续标记价高低值。
+ * 该区间只在存在自动订单时使用，用于补齐 REST 轮询之间已越过又回落的触发价。
+ */
+async function fetchEthPerpetualMarkRange(): Promise<EthPerpetualMarkRange | null> {
+  try {
+    const data = await fetchPerpetualMarkJson('https://api.hbdm.com/index/market/history/linear_swap_mark_price_kline?contract_code=ETH-USDT&period=1min&size=1');
+    const row = data?.status === 'ok' ? data.data?.[0] : null;
+    const high = Number(row?.high);
+    const low = Number(row?.low);
+    if (isValidPrice(high) && isValidPrice(low)) return { high: Math.max(high, low), low: Math.min(high, low) };
   } catch {}
   return null;
 }
@@ -654,7 +696,10 @@ async function updateCryptoFast(coin: string) {
   entryFromPrice(coin, quote.price, quote.source, quote.patch);
 }
 
-/** 以同一缓存与三秒节拍维护 ETH 永续标记价；失败时保留最近成功值。 */
+/**
+ * 以同一缓存与三秒节拍维护 ETH 永续标记价；失败时保留最近成功值。
+ * WebSocket 健康时逐笔处理；流暂不可用时追加一分钟标记价高低区间，避免轮询空档漏触发。
+ */
 async function updateEthPerpetualMarkFast() {
   const quote = await fetchEthPerpetualMarkQuote();
   if (!quote) {
@@ -662,7 +707,11 @@ async function updateEthPerpetualMarkFast() {
     return;
   }
   entryFromPrice(ETH_PERP_MARK_CACHE_KEY, quote.price, quote.source, quote.patch);
-  triggerLedger52T0PendingOrders(quote.price);
+  let range: EthPerpetualMarkRange | null = null;
+  if (hasLedger52T0PendingOrders() && !isEthPerpetualMarkStreamFresh()) {
+    range = await fetchEthPerpetualMarkRange();
+  }
+  triggerLedger52T0PendingOrders(quote.price, new Date(), range ? { high: range.high, low: range.low } : {});
 }
 
 /** 常规数字币以小请求并发方式统一每三秒写入同一份内存缓存。 */

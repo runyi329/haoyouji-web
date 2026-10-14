@@ -53,8 +53,11 @@ export type SaveT0JournalEntryInput = {
   isPending?: boolean;
   /** 仅现货/合约开仓可设止盈；挂单可先预设，必须实际成交后才会触发。 */
   takeProfitEnabled?: boolean;
+  /** 兼容旧客户端的单段止盈参数；新客户端统一传多段计划。 */
   takeProfitPrice?: string;
   takeProfitQuantity?: string;
+  /** 同一开仓可拆成多段止盈；所有未触发计划之和不得超过剩余仓位。 */
+  takeProfitPlans?: Array<{ price: string; quantity: string }>;
   /** 期权开仓参数：标的强制为 ETH，price 存行权价。 */
   optionDirection?: T0JournalOptionDirection;
   optionExpiryDate?: string;
@@ -136,6 +139,13 @@ function normalizeInstrumentType(value: unknown, required = false): T0JournalIns
   return normalized;
 }
 
+type T0TakeProfitPlanInput = { price: string; quantity: string };
+type ResolvedT0TakeProfitPlan = { price: string; quantity: string };
+
+/**
+ * 同一开仓可配置多个止盈档位。旧客户端仍可提交单段字段，服务端将其转换为一条计划。
+ * 数量使用厘化的 ETH 精度相加，避免浮点误差突破本笔或剩余仓位上限。
+ */
 function resolveTakeProfitParameters(input: {
   action: T0JournalAction;
   instrumentType?: T0JournalInstrumentType;
@@ -144,49 +154,75 @@ function resolveTakeProfitParameters(input: {
   takeProfitEnabled?: boolean;
   takeProfitPrice?: string;
   takeProfitQuantity?: string;
+  takeProfitPlans?: T0TakeProfitPlanInput[];
 }, fallback?: any, maximumQuantity?: string) {
-  const enabled = input.takeProfitEnabled === undefined
+  const legacyEnabled = input.takeProfitEnabled === undefined
     ? Boolean(toNumber(fallback?.take_profit_enabled ?? fallback?.takeProfitEnabled))
     : input.takeProfitEnabled === true;
-  if (!enabled) return { enabled: false, price: null as string | null, quantity: null as string | null };
+  const rawPlans = input.takeProfitPlans !== undefined
+    ? input.takeProfitPlans
+    : legacyEnabled
+      ? [{
+        price: String(input.takeProfitPrice ?? fallback?.take_profit_price ?? fallback?.takeProfitPrice ?? "").trim(),
+        quantity: String(input.takeProfitQuantity ?? fallback?.take_profit_quantity ?? fallback?.takeProfitQuantity ?? "").trim(),
+      }]
+      : [];
+  if (rawPlans.length === 0) return { enabled: false, price: null as string | null, quantity: null as string | null, plans: [] as ResolvedT0TakeProfitPlan[] };
+  if (rawPlans.length > 20) throw new TRPCError({ code: "BAD_REQUEST", message: "单笔订单最多可设置20段止盈" });
   if (!isOpeningAction(input.action) || (input.instrumentType !== "spot" && input.instrumentType !== "contract")) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "止盈仅支持现货和合约开仓" });
   }
-  const takeProfitPrice = String(input.takeProfitPrice ?? fallback?.take_profit_price ?? fallback?.takeProfitPrice ?? "").trim();
-  const takeProfitQuantity = String(input.takeProfitQuantity ?? fallback?.take_profit_quantity ?? fallback?.takeProfitQuantity ?? "").trim();
-  if (!T0_DECIMAL_INPUT_PATTERN.test(takeProfitPrice) || Number(takeProfitPrice) <= 0) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "请输入有效的止盈价格" });
-  }
-  const normalizedTakeProfitQuantity = requireValidEthQuantity(takeProfitQuantity);
-  const normalizedMaximumQuantity = requireValidEthQuantity(maximumQuantity ?? input.quantity);
-  if (quantityToCents(normalizedTakeProfitQuantity) > quantityToCents(normalizedMaximumQuantity)) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "止盈数量不能超过本笔可用数量" });
-  }
   const entryPrice = Number(input.price);
-  const targetPrice = Number(takeProfitPrice);
   if (!Number.isFinite(entryPrice) || entryPrice <= 0) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "请输入有效的开仓价格后再设置止盈" });
   }
-  if (input.action === "openLong" && targetPrice <= entryPrice) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "多单止盈价须高于开仓价" });
+  const normalizedMaximumQuantity = requireValidEthQuantity(maximumQuantity ?? input.quantity);
+  const maximumCents = quantityToCents(normalizedMaximumQuantity);
+  let plannedCents = 0;
+  const plans: ResolvedT0TakeProfitPlan[] = rawPlans.map((plan, index) => {
+    const takeProfitPrice = String(plan?.price ?? "").trim();
+    if (!T0_DECIMAL_INPUT_PATTERN.test(takeProfitPrice) || Number(takeProfitPrice) <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: `第${index + 1}段止盈价格无效` });
+    }
+    const quantity = requireValidEthQuantity(String(plan?.quantity ?? "").trim());
+    const targetPrice = Number(takeProfitPrice);
+    if (input.action === "openLong" && targetPrice <= entryPrice) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: `第${index + 1}段多单止盈价须高于开仓价` });
+    }
+    if (input.action === "openShort" && targetPrice >= entryPrice) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: `第${index + 1}段空单止盈价须低于开仓价` });
+    }
+    plannedCents += quantityToCents(quantity);
+    return { price: takeProfitPrice, quantity };
+  });
+  if (plannedCents > maximumCents) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `各段止盈数量合计不得超过本笔可用数量 ${normalizedMaximumQuantity} ETH` });
   }
-  if (input.action === "openShort" && targetPrice >= entryPrice) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "空单止盈价须低于开仓价" });
-  }
-  return { enabled: true, price: takeProfitPrice, quantity: normalizedTakeProfitQuantity };
+  return { enabled: true, price: plans[0].price, quantity: plans[0].quantity, plans };
 }
 
-/** 统一ETH永续标记价达到预设方向时触发：多单向上、空单向下。 */
+/**
+ * 统一 ETH 永续价达到预设方向时触发：多单向上、空单向下。
+ * rangeHigh / rangeLow 用于 REST 兜底期间的永续标记价区间，避免两次轮询之间跨价后回落而漏单。
+ */
 export function shouldTriggerLedger52T0TakeProfit(input: {
   action: T0JournalAction;
   markPrice: number;
   takeProfitPrice: number;
+  rangeHigh?: number;
+  rangeLow?: number;
 }) {
   if (!Number.isFinite(input.markPrice) || input.markPrice <= 0 || !Number.isFinite(input.takeProfitPrice) || input.takeProfitPrice <= 0) return false;
+  const rangeHigh = Number.isFinite(input.rangeHigh) && Number(input.rangeHigh) > 0
+    ? Math.max(input.markPrice, Number(input.rangeHigh))
+    : input.markPrice;
+  const rangeLow = Number.isFinite(input.rangeLow) && Number(input.rangeLow) > 0
+    ? Math.min(input.markPrice, Number(input.rangeLow))
+    : input.markPrice;
   return input.action === "openLong"
-    ? input.markPrice >= input.takeProfitPrice
+    ? rangeHigh >= input.takeProfitPrice
     : input.action === "openShort"
-      ? input.markPrice <= input.takeProfitPrice
+      ? rangeLow <= input.takeProfitPrice
       : false;
 }
 
@@ -580,9 +616,33 @@ function mapEntry(row: any) {
     isPending: String(row.execution_status ?? row.executionStatus ?? "filled") === "pending",
     filledAt: row.filled_at ?? row.filledAt ? isoTime(row.filled_at ?? row.filledAt) : undefined,
     filledPrice: row.filled_price === null || row.filled_price === undefined ? undefined : toNumber(row.filled_price),
-    takeProfitEnabled: Boolean(toNumber(row.take_profit_enabled ?? row.takeProfitEnabled)),
-    takeProfitPrice: row.take_profit_price === null || row.take_profit_price === undefined ? undefined : toNumber(row.take_profit_price),
-    takeProfitQuantity: row.take_profit_quantity === null || row.take_profit_quantity === undefined ? undefined : toNumber(row.take_profit_quantity),
+    takeProfitEnabled: Array.isArray(row.take_profit_plans ?? row.takeProfitPlans)
+      ? (row.take_profit_plans ?? row.takeProfitPlans).some((plan: any) => String(plan.status) === 'pending')
+      : Boolean(toNumber(row.take_profit_enabled ?? row.takeProfitEnabled)),
+    takeProfitPrice: Array.isArray(row.take_profit_plans ?? row.takeProfitPlans)
+      ? (() => {
+        const plan = (row.take_profit_plans ?? row.takeProfitPlans).find((item: any) => String(item.status) === 'pending');
+        return plan ? toNumber(plan.trigger_price ?? plan.triggerPrice) : undefined;
+      })()
+      : row.take_profit_price === null || row.take_profit_price === undefined ? undefined : toNumber(row.take_profit_price),
+    takeProfitQuantity: Array.isArray(row.take_profit_plans ?? row.takeProfitPlans)
+      ? (() => {
+        const plan = (row.take_profit_plans ?? row.takeProfitPlans).find((item: any) => String(item.status) === 'pending');
+        return plan ? toNumber(plan.quantity) : undefined;
+      })()
+      : row.take_profit_quantity === null || row.take_profit_quantity === undefined ? undefined : toNumber(row.take_profit_quantity),
+    takeProfitPlans: Array.isArray(row.take_profit_plans ?? row.takeProfitPlans)
+      ? (row.take_profit_plans ?? row.takeProfitPlans).map((plan: any) => ({
+        id: String(plan.id),
+        triggerPrice: toNumber(plan.trigger_price ?? plan.triggerPrice),
+        quantity: toNumber(plan.quantity),
+        status: String(plan.status) === 'triggered' ? 'triggered' : String(plan.status) === 'cancelled' ? 'cancelled' : 'pending',
+        triggeredAt: plan.triggered_at ?? plan.triggeredAt ? isoTime(plan.triggered_at ?? plan.triggeredAt) : undefined,
+        triggeredPrice: plan.triggered_price === null || plan.triggered_price === undefined ? undefined : toNumber(plan.triggered_price),
+        triggeredQuantity: plan.triggered_quantity === null || plan.triggered_quantity === undefined ? undefined : toNumber(plan.triggered_quantity),
+        closingEntryId: plan.closing_entry_id === null || plan.closing_entry_id === undefined ? undefined : String(plan.closing_entry_id),
+      }))
+      : [],
     takeProfitTriggeredAt: row.take_profit_triggered_at ?? row.takeProfitTriggeredAt ? isoTime(row.take_profit_triggered_at ?? row.takeProfitTriggeredAt) : undefined,
     takeProfitTriggeredPrice: row.take_profit_triggered_price === null || row.take_profit_triggered_price === undefined ? undefined : toNumber(row.take_profit_triggered_price),
     takeProfitTriggeredQuantity: row.take_profit_triggered_quantity === null || row.take_profit_triggered_quantity === undefined ? undefined : toNumber(row.take_profit_triggered_quantity),
@@ -593,6 +653,82 @@ function mapEntry(row: any) {
     note: row.note ? String(row.note) : undefined,
     createdAt: isoTime(row.trade_time || row.created_at),
   };
+}
+
+
+type T0TakeProfitPlanRow = {
+  id: number;
+  trigger_price: string | number;
+  quantity: string | number;
+  status: 'pending' | 'triggered' | 'cancelled';
+  triggered_at?: string | Date | null;
+  triggered_price?: string | number | null;
+  triggered_quantity?: string | number | null;
+  closing_entry_id?: number | null;
+};
+
+async function getTakeProfitPlansByEntryId(tx: any, entryIds: number[], lock = false): Promise<Map<number, T0TakeProfitPlanRow[]>> {
+  const ids = Array.from(new Set(entryIds.filter((id) => Number.isInteger(id) && id > 0)));
+  const plansByEntryId = new Map<number, T0TakeProfitPlanRow[]>();
+  if (ids.length === 0) return plansByEntryId;
+  const [result] = await tx.execute(
+    `SELECT id, opening_entry_id, trigger_price, quantity, status, triggered_at, triggered_price, triggered_quantity, closing_entry_id
+       FROM ledger52_t0_journal_take_profit_plans
+      WHERE ledger_id = ? AND opening_entry_id IN (${ids.map(() => '?').join(', ')})
+      ORDER BY opening_entry_id ASC, id ASC${lock ? ' FOR UPDATE' : ''}`,
+    [LEDGER_52_T0_JOURNAL_ID, ...ids],
+  );
+  for (const row of asRows(result)) {
+    const entryId = toNumber(row.opening_entry_id);
+    if (entryId <= 0) continue;
+    const list = plansByEntryId.get(entryId) ?? [];
+    list.push(row as T0TakeProfitPlanRow);
+    plansByEntryId.set(entryId, list);
+  }
+  return plansByEntryId;
+}
+
+async function replacePendingTakeProfitPlans(tx: any, input: { actorUserId: number; openingEntryId: number; plans: ResolvedT0TakeProfitPlan[] }) {
+  await tx.execute(
+    `DELETE FROM ledger52_t0_journal_take_profit_plans
+      WHERE ledger_id = ? AND user_id = ? AND opening_entry_id = ? AND status = 'pending'`,
+    [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.openingEntryId],
+  );
+  for (const plan of input.plans) {
+    await tx.execute(
+      `INSERT INTO ledger52_t0_journal_take_profit_plans
+        (ledger_id, user_id, opening_entry_id, trigger_price, quantity, status)
+       VALUES (?, ?, ?, ?, ?, 'pending')`,
+      [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.openingEntryId, plan.price, plan.quantity],
+    );
+  }
+}
+
+async function syncEntryTakeProfitSummary(tx: any, input: { actorUserId: number; openingEntryId: number }) {
+  const plansByEntryId = await getTakeProfitPlansByEntryId(tx, [input.openingEntryId], true);
+  const plans = plansByEntryId.get(input.openingEntryId) ?? [];
+  const nextPending = plans.find((plan) => String(plan.status) === 'pending');
+  const latestTriggered = [...plans].reverse().find((plan) => String(plan.status) === 'triggered');
+  await tx.execute(
+    `UPDATE ledger52_t0_journal_entries
+        SET take_profit_enabled = ?, take_profit_price = ?, take_profit_quantity = ?,
+            take_profit_triggered_at = COALESCE(?, take_profit_triggered_at),
+            take_profit_triggered_price = COALESCE(?, take_profit_triggered_price),
+            take_profit_triggered_quantity = COALESCE(?, take_profit_triggered_quantity),
+            updated_at = NOW(3)
+      WHERE id = ? AND ledger_id = ? AND user_id = ?`,
+    [
+      nextPending ? 1 : 0,
+      nextPending ? String(nextPending.trigger_price) : null,
+      nextPending ? String(nextPending.quantity) : null,
+      latestTriggered?.triggered_at ?? null,
+      latestTriggered?.triggered_price ?? null,
+      latestTriggered?.triggered_quantity ?? null,
+      input.openingEntryId,
+      LEDGER_52_T0_JOURNAL_ID,
+      input.actorUserId,
+    ],
+  );
 }
 
 /**
@@ -801,6 +937,28 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         KEY idx_t0_journal_entry_owner_time (ledger_id, user_id, trade_time)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         COMMENT='52号账本T+0速记账本：管理员手工下单流水与创建审计'
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_take_profit_plans (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        opening_entry_id BIGINT UNSIGNED NOT NULL,
+        trigger_price DECIMAL(36,18) NOT NULL,
+        quantity DECIMAL(36,18) NOT NULL,
+        status ENUM('pending','triggered','cancelled') NOT NULL DEFAULT 'pending',
+        triggered_at DATETIME(3) DEFAULT NULL,
+        triggered_price DECIMAL(36,18) DEFAULT NULL,
+        triggered_quantity DECIMAL(36,18) DEFAULT NULL,
+        closing_entry_id BIGINT UNSIGNED DEFAULT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        KEY idx_t0_take_profit_scan (ledger_id, status, trigger_price, opening_entry_id),
+        KEY idx_t0_take_profit_entry (ledger_id, user_id, opening_entry_id, status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0速记账本：开仓多段止盈计划与触发记录'
     `);
 
     await db.execute(`
@@ -1083,6 +1241,25 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
           ADD KEY idx_t0_journal_entry_auto_take_profit (ledger_id, take_profit_enabled, execution_status, action, take_profit_price)
       `);
     }
+
+    // 将旧版单段止盈兼容为一条多段计划；已触发记录保留为历史，未触发记录保持 pending。
+    await db.execute(`
+      INSERT INTO ledger52_t0_journal_take_profit_plans
+        (ledger_id, user_id, opening_entry_id, trigger_price, quantity, status, triggered_at, triggered_price, triggered_quantity)
+      SELECT e.ledger_id, e.user_id, e.id, e.take_profit_price, e.take_profit_quantity,
+             CASE WHEN e.take_profit_enabled = 1 THEN 'pending' ELSE 'triggered' END,
+             e.take_profit_triggered_at, e.take_profit_triggered_price, e.take_profit_triggered_quantity
+        FROM ledger52_t0_journal_entries e
+       WHERE e.ledger_id = ?
+         AND e.action IN ('openLong','openShort')
+         AND e.instrument_type IN ('spot','contract')
+         AND e.take_profit_price IS NOT NULL
+         AND e.take_profit_quantity IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM ledger52_t0_journal_take_profit_plans p
+            WHERE p.ledger_id = e.ledger_id AND p.user_id = e.user_id AND p.opening_entry_id = e.id
+         )
+    `, [LEDGER_52_T0_JOURNAL_ID]);
 
     // 项目名称在同一账本管理员范围内全局唯一，不能被不同关联用户重复使用。
     // 如历史数据已有重名，保留其可读性并由服务层阻止新的重复创建，避免初始化失败影响账本访问。
@@ -1386,7 +1563,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
 
   const entryRows = asRows(entryResult);
   const entryIds = entryRows.map((row) => toNumber(row.id)).filter((id) => id > 0);
-  const [profitShareSnapshotResult, profitShareRuleResult, optionMarkPriceByEntryId] = await Promise.all([
+  const [profitShareSnapshotResult, profitShareRuleResult, optionMarkPriceByEntryId, takeProfitPlansByEntryId] = await Promise.all([
     entryIds.length > 0
       ? conn.execute(
         `SELECT shared_entry.entry_id, shared_entry.opening_entry_id, shared_entry.source_user_id, shared_entry.related_fund_id,
@@ -1419,6 +1596,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
       )
       : Promise.resolve([[]]),
     getT0CachedOptionMarkPrices(conn, entryRows),
+    getTakeProfitPlansByEntryId(conn, entryIds),
   ]);
 
   return {
@@ -1433,6 +1611,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
     entries: entryRows.map((entry) => mapEntry({
       ...entry,
       option_mark_price: optionMarkPriceByEntryId.get(toNumber(entry.id)),
+      take_profit_plans: takeProfitPlansByEntryId.get(toNumber(entry.id)) ?? [],
     })),
     recentUsers: asRows(recentUserResult).map(mapRelatedUser),
     relatedFunds: asRows(relatedFundResult).map(mapRelatedFund),
@@ -2622,6 +2801,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     takeProfitEnabled: input.takeProfitEnabled,
     takeProfitPrice: input.takeProfitPrice,
     takeProfitQuantity: input.takeProfitQuantity,
+    takeProfitPlans: input.takeProfitPlans,
   });
 
   try {
@@ -2801,6 +2981,14 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     );
     const entryId = Number((entryResult as any).insertId || 0);
     if (!entryId) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "速记流水保存失败" });
+    if (!isRetryOfExistingEntry && isOpeningAction(input.action)) {
+      await replacePendingTakeProfitPlans(tx, {
+        actorUserId: input.actorUserId,
+        openingEntryId: entryId,
+        plans: takeProfit.plans,
+      });
+      await syncEntryTakeProfitSummary(tx, { actorUserId: input.actorUserId, openingEntryId: entryId });
+    }
 
     if (!isRetryOfExistingEntry) {
       if (isOpeningAction(input.action)) {
@@ -2852,6 +3040,8 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     const account = asRows(accountRows)[0];
     const entry = asRows(entryRows)[0];
     if (!account || !entry) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "速记流水读取失败" });
+    const plansByEntryId = await getTakeProfitPlansByEntryId(tx, [entryId]);
+    entry.take_profit_plans = plansByEntryId.get(entryId) ?? [];
 
     await tx.commit();
     if (isPending || takeProfit.enabled) activateLedger52T0PendingOrderScan();
@@ -2935,12 +3125,12 @@ async function writeEntryAudit(tx: any, input: {
 }
 
 async function buildEntryAuditSnapshot(tx: any, actorUserId: number, entry: any) {
-  const profitShareSnapshots = await getEntryProfitShareSnapshotRows(tx, {
-    actorUserId,
-    entryIds: [toNumber(entry.id)],
-    lock: true,
-  });
-  return { ...entry, profitShareSnapshots };
+  const entryId = toNumber(entry.id);
+  const [profitShareSnapshots, plansByEntryId] = await Promise.all([
+    getEntryProfitShareSnapshotRows(tx, { actorUserId, entryIds: [entryId], lock: true }),
+    getTakeProfitPlansByEntryId(tx, [entryId], true),
+  ]);
+  return { ...entry, take_profit_plans: plansByEntryId.get(entryId) ?? [], profitShareSnapshots };
 }
 
 type DeribitOptionDelivery = {
@@ -3088,8 +3278,13 @@ async function refreshLedger52T0PendingOrderScanState() {
        FROM ledger52_t0_journal_entries
       WHERE ledger_id = ? AND (
         (execution_status = 'pending' AND action IN ('openLong', 'openShort'))
-        OR (execution_status = 'filled' AND take_profit_enabled = 1
-          AND instrument_type IN ('spot', 'contract') AND action IN ('openLong', 'openShort'))
+        OR (execution_status = 'filled' AND instrument_type IN ('spot', 'contract') AND action IN ('openLong', 'openShort')
+          AND EXISTS (
+            SELECT 1 FROM ledger52_t0_journal_take_profit_plans plan
+             WHERE plan.ledger_id = ledger52_t0_journal_entries.ledger_id
+               AND plan.opening_entry_id = ledger52_t0_journal_entries.id
+               AND plan.status = 'pending'
+          ))
       )
       LIMIT 1`,
     [LEDGER_52_T0_JOURNAL_ID],
@@ -3102,7 +3297,7 @@ async function refreshLedger52T0PendingOrderScanState() {
  * 自动订单仅引用T+0统一 ETH 永续标记价：先处理开仓挂单，再处理已成交现货/合约的止盈。
  * 多单挂单向下成交、止盈向上平仓；空单挂单向上成交、止盈向下平仓。止盈从不跳过未成交挂单。
  */
-export async function scanLedger52T0PendingOrders(input: { markPrice?: number; filledAt?: Date } = {}) {
+export async function scanLedger52T0PendingOrders(input: { markPrice?: number; filledAt?: Date; rangeHigh?: number; rangeLow?: number } = {}) {
   if (process.env.DEV_BYPASS_AUTH === "true" || pendingOrderScanInFlight || !pendingOrderScanActive) {
     return { filled: 0, takeProfit: 0, markPrice: null as number | null };
   }
@@ -3111,6 +3306,17 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
     : { getT0EthPerpetualMark: () => ({ price: input.markPrice }) };
   const markPrice = Number(getT0EthPerpetualMark().price);
   if (!Number.isFinite(markPrice) || markPrice <= 0) return { filled: 0, takeProfit: 0, markPrice: null as number | null };
+  const requestedRangeHigh = Number(input.rangeHigh);
+  const requestedRangeLow = Number(input.rangeLow);
+  const rangeHigh = Number.isFinite(requestedRangeHigh) && requestedRangeHigh > 0
+    ? Math.max(markPrice, requestedRangeHigh)
+    : markPrice;
+  const rangeLow = Number.isFinite(requestedRangeLow) && requestedRangeLow > 0
+    ? Math.min(markPrice, requestedRangeLow)
+    : markPrice;
+  const rangeLabel = rangeHigh > rangeLow
+    ? `ETH永续扫描区间 ${rangeLow.toFixed(2)}–${rangeHigh.toFixed(2)} U`
+    : `ETH永续价 ${markPrice.toFixed(2)} U`;
 
   pendingOrderScanInFlight = true;
   const connection = await getDbTransactionConnection();
@@ -3132,9 +3338,10 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
             OR (action = 'openShort' AND CAST(price AS DECIMAL(36,18)) <= CAST(? AS DECIMAL(36,18))))
         ORDER BY trade_time ASC, id ASC
         FOR UPDATE`,
-      [LEDGER_52_T0_JOURNAL_ID, String(markPrice), String(markPrice)],
+      [LEDGER_52_T0_JOURNAL_ID, String(rangeLow), String(rangeHigh)],
     );
     let filled = 0;
+    const filledOpeningEntryIds = new Set<number>();
     for (const row of asRows(rows)) {
       const entryId = toNumber(row.id);
       const actorUserId = toNumber(row.user_id);
@@ -3144,13 +3351,15 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
       const action = String(row.action) as T0JournalAction;
       const isOpenLong = action === "openLong";
       const pendingPrice = toNumber(row.price);
-      const systemNote = `[系统自动成交] ${formatBeijingSystemTime(filledAt)}｜ETH永续价 ${markPrice.toFixed(2)} U，达到挂单价 ${pendingPrice.toFixed(2)} U`;
+      // 区间回补命中时按挂单价成交；实时价直接越价时仍按更优的实时标记价成交。
+      const executionPrice = isOpenLong ? Math.min(markPrice, pendingPrice) : Math.max(markPrice, pendingPrice);
+      const systemNote = `[系统自动成交] ${formatBeijingSystemTime(filledAt)}｜${rangeLabel}，达到挂单价 ${pendingPrice.toFixed(2)} U`;
       const note = appendSystemSettlementNote(row.note, systemNote);
       await tx.execute(
         `UPDATE ledger52_t0_journal_entries
             SET execution_status = 'filled', filled_at = ?, filled_price = ?, note = ?, updated_at = NOW(3)
           WHERE id = ? AND ledger_id = ? AND user_id = ? AND execution_status = 'pending'`,
-        [mysqlDateTime(filledAt), String(markPrice), note, entryId, LEDGER_52_T0_JOURNAL_ID, actorUserId],
+        [mysqlDateTime(filledAt), String(executionPrice), note, entryId, LEDGER_52_T0_JOURNAL_ID, actorUserId],
       );
       const [afterRows] = await tx.execute(
         `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, is_locked, is_counterparty,
@@ -3163,32 +3372,40 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
       const after = asRows(afterRows)[0];
       if (!after || String(after.execution_status) !== "filled") continue;
       await writeEntryAudit(tx, { actorUserId, entryId, operation: "fill", before, after: await buildEntryAuditSnapshot(tx, actorUserId, after) });
+      filledOpeningEntryIds.add(entryId);
       filled += 1;
     }
 
     const [takeProfitRows] = await tx.execute(
-      `SELECT id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type,
-              is_locked, is_counterparty, execution_status, action, quantity, price, fee_usdt, target_price, note,
-              take_profit_enabled, take_profit_price, take_profit_quantity, take_profit_triggered_at, take_profit_triggered_price, take_profit_triggered_quantity,
-              client_request_id, created_by_user_id, trade_time, created_at, updated_at
-         FROM ledger52_t0_journal_entries
-        WHERE ledger_id = ? AND execution_status = 'filled' AND take_profit_enabled = 1 AND is_locked = 0
-          AND instrument_type IN ('spot', 'contract') AND action IN ('openLong', 'openShort')
-          AND ((action = 'openLong' AND CAST(take_profit_price AS DECIMAL(36,18)) <= CAST(? AS DECIMAL(36,18)))
-            OR (action = 'openShort' AND CAST(take_profit_price AS DECIMAL(36,18)) >= CAST(? AS DECIMAL(36,18))))
-        ORDER BY trade_time ASC, id ASC
+      `SELECT e.id, e.user_id, e.account_id, e.related_user_id, e.related_fund_id, e.symbol, e.instrument_type,
+              e.is_locked, e.is_counterparty, e.execution_status, e.action, e.quantity, e.price, e.fee_usdt, e.target_price, e.note,
+              e.take_profit_enabled, e.take_profit_price, e.take_profit_quantity, e.take_profit_triggered_at, e.take_profit_triggered_price, e.take_profit_triggered_quantity,
+              e.client_request_id, e.created_by_user_id, e.trade_time, e.created_at, e.updated_at,
+              plan.id AS take_profit_plan_id, plan.trigger_price AS plan_trigger_price, plan.quantity AS plan_quantity
+         FROM ledger52_t0_journal_take_profit_plans plan
+         INNER JOIN ledger52_t0_journal_entries e
+           ON e.id = plan.opening_entry_id AND e.ledger_id = plan.ledger_id AND e.user_id = plan.user_id
+        WHERE e.ledger_id = ? AND e.execution_status = 'filled' AND e.is_locked = 0
+          AND e.instrument_type IN ('spot', 'contract') AND e.action IN ('openLong', 'openShort')
+          AND plan.status = 'pending'
+          AND ((e.action = 'openLong' AND CAST(plan.trigger_price AS DECIMAL(36,18)) <= CAST(? AS DECIMAL(36,18)))
+            OR (e.action = 'openShort' AND CAST(plan.trigger_price AS DECIMAL(36,18)) >= CAST(? AS DECIMAL(36,18))))
+        ORDER BY e.trade_time ASC, e.id ASC, plan.id ASC
         FOR UPDATE`,
-      [LEDGER_52_T0_JOURNAL_ID, String(markPrice), String(markPrice)],
+      [LEDGER_52_T0_JOURNAL_ID, String(rangeHigh), String(rangeLow)],
     );
     let takeProfit = 0;
     for (const candidate of asRows(takeProfitRows)) {
       const openingEntryId = toNumber(candidate.id);
       const actorUserId = toNumber(candidate.user_id);
       const openingAction = String(candidate.action) as T0JournalAction;
-      if (openingEntryId <= 0 || actorUserId <= 0 || !shouldTriggerLedger52T0TakeProfit({
+      // 同一个扫描区间内刚成交的挂单不立即止盈；必须在后续行情区间再次满足条件，确保先成交、后止盈。
+      if (openingEntryId <= 0 || actorUserId <= 0 || filledOpeningEntryIds.has(openingEntryId) || !shouldTriggerLedger52T0TakeProfit({
         action: openingAction,
         markPrice,
-        takeProfitPrice: toNumber(candidate.take_profit_price),
+        takeProfitPrice: toNumber(candidate.plan_trigger_price),
+        rangeHigh,
+        rangeLow,
       })) continue;
       const beforeOpening = await buildEntryAuditSnapshot(tx, actorUserId, candidate);
       const [scopeResult] = await tx.execute(
@@ -3213,21 +3430,27 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
       const remainingCents = Math.max(0, quantityToCents(currentOpening.quantity) - openingDependentCloseQuantityCents(scopeRows, openingEntryId));
       if (remainingCents <= 0) {
         await tx.execute(
-          `UPDATE ledger52_t0_journal_entries
-              SET take_profit_enabled = 0, updated_at = NOW(3)
-            WHERE id = ? AND ledger_id = ? AND user_id = ? AND take_profit_enabled = 1`,
-          [openingEntryId, LEDGER_52_T0_JOURNAL_ID, actorUserId],
+          `UPDATE ledger52_t0_journal_take_profit_plans
+              SET status = 'cancelled', updated_at = NOW(3)
+            WHERE ledger_id = ? AND user_id = ? AND opening_entry_id = ? AND status = 'pending'`,
+          [LEDGER_52_T0_JOURNAL_ID, actorUserId, openingEntryId],
         );
+        await syncEntryTakeProfitSummary(tx, { actorUserId, openingEntryId });
         continue;
       }
-      const configuredCents = quantityToCents(candidate.take_profit_quantity);
+      const configuredCents = quantityToCents(candidate.plan_quantity);
       const actualCents = Math.min(remainingCents, configuredCents);
       if (actualCents <= 0) continue;
       const closeAction: T0JournalAction = openingAction === 'openLong' ? 'closeLong' : 'closeShort';
       const targetPrice = archivePriceForAction(closeAction, currentOpening.price);
       const occurredAt = input.filledAt ?? new Date();
       const quantity = (actualCents / 100).toFixed(2);
-      const note = `[系统自动止盈] ${formatBeijingSystemTime(occurredAt)}｜ETH永续价 ${markPrice.toFixed(2)} U，达到止盈价 ${toNumber(candidate.take_profit_price).toFixed(2)} U｜自动平 ${quantity} ETH`;
+      const planTriggerPrice = toNumber(candidate.plan_trigger_price);
+      // 区间回补命中时按止盈价平仓；实时价直接越价时仍按更优的实时标记价平仓。
+      const executionPrice = openingAction === 'openLong'
+        ? Math.max(markPrice, planTriggerPrice)
+        : Math.min(markPrice, planTriggerPrice);
+      const note = `[系统自动止盈] ${formatBeijingSystemTime(occurredAt)}｜${rangeLabel}，达到止盈价 ${planTriggerPrice.toFixed(2)} U｜自动平 ${quantity} ETH`;
       const closeRequestId = `take-profit-${openingEntryId}-${occurredAt.getTime().toString(36)}`;
       const [closeResult] = await tx.execute(
         `INSERT INTO ledger52_t0_journal_entries
@@ -3245,9 +3468,9 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
           String(candidate.instrument_type),
           closeAction,
           quantity,
-          String(markPrice),
+          String(executionPrice),
           quantity,
-          String(markPrice),
+          String(executionPrice),
           String(targetPrice),
           note,
           closeRequestId,
@@ -3267,12 +3490,17 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
         relatedFundId: toNumber(candidate.related_fund_id),
         quantity,
       });
-      await tx.execute(
-        `UPDATE ledger52_t0_journal_entries
-            SET take_profit_enabled = 0, take_profit_triggered_at = ?, take_profit_triggered_price = ?, take_profit_triggered_quantity = ?, updated_at = NOW(3)
-          WHERE id = ? AND ledger_id = ? AND user_id = ? AND take_profit_enabled = 1`,
-        [mysqlDateTime(occurredAt), String(markPrice), quantity, openingEntryId, LEDGER_52_T0_JOURNAL_ID, actorUserId],
+      const takeProfitPlanId = toNumber(candidate.take_profit_plan_id);
+      const [triggerResult] = await tx.execute(
+        `UPDATE ledger52_t0_journal_take_profit_plans
+            SET status = 'triggered', triggered_at = ?, triggered_price = ?, triggered_quantity = ?, closing_entry_id = ?, updated_at = NOW(3)
+          WHERE id = ? AND ledger_id = ? AND user_id = ? AND opening_entry_id = ? AND status = 'pending'`,
+        [mysqlDateTime(occurredAt), String(executionPrice), quantity, closeEntryId, takeProfitPlanId, LEDGER_52_T0_JOURNAL_ID, actorUserId, openingEntryId],
       );
+      if (Number((triggerResult as any).affectedRows || 0) !== 1) {
+        throw new TRPCError({ code: 'CONFLICT', message: '止盈计划已被其他扫描处理，请重试' });
+      }
+      await syncEntryTakeProfitSummary(tx, { actorUserId, openingEntryId });
       const [afterOpeningRows, closeRows] = await Promise.all([
         tx.execute(`SELECT * FROM ledger52_t0_journal_entries WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1`, [openingEntryId, LEDGER_52_T0_JOURNAL_ID, actorUserId]),
         tx.execute(`SELECT * FROM ledger52_t0_journal_entries WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1`, [closeEntryId, LEDGER_52_T0_JOURNAL_ID, actorUserId]),
@@ -3291,7 +3519,7 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
         actorUserId,
         entryId: closeEntryId,
         operation: 'take_profit',
-        before: { automatic: true, trigger: 'take_profit', openingEntryId, markPrice, takeProfitPrice: toNumber(candidate.take_profit_price), configuredQuantity: toNumber(candidate.take_profit_quantity), actualQuantity: actualCents / 100 },
+        before: { automatic: true, trigger: 'take_profit', openingEntryId, markPrice, rangeHigh, rangeLow, executionPrice, takeProfitPrice: planTriggerPrice, configuredQuantity: toNumber(candidate.plan_quantity), actualQuantity: actualCents / 100 },
         after: await buildEntryAuditSnapshot(tx, actorUserId, closeEntry),
       });
       takeProfit += 1;
@@ -3301,8 +3529,13 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
          FROM ledger52_t0_journal_entries
         WHERE ledger_id = ? AND (
           (execution_status = 'pending' AND action IN ('openLong', 'openShort'))
-          OR (execution_status = 'filled' AND take_profit_enabled = 1
-            AND instrument_type IN ('spot', 'contract') AND action IN ('openLong', 'openShort'))
+          OR (execution_status = 'filled' AND instrument_type IN ('spot', 'contract') AND action IN ('openLong', 'openShort')
+            AND EXISTS (
+              SELECT 1 FROM ledger52_t0_journal_take_profit_plans plan
+               WHERE plan.ledger_id = ledger52_t0_journal_entries.ledger_id
+                 AND plan.opening_entry_id = ledger52_t0_journal_entries.id
+                 AND plan.status = 'pending'
+            ))
         )
         LIMIT 1`,
       [LEDGER_52_T0_JOURNAL_ID],
@@ -3557,6 +3790,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   takeProfitEnabled?: boolean;
   takeProfitPrice?: string;
   takeProfitQuantity?: string;
+  takeProfitPlans?: T0TakeProfitPlanInput[];
   /** 已部分平仓的开仓单只允许单独更新剩余仓位的止盈计划。 */
   takeProfitOnly?: boolean;
   optionDirection?: T0JournalOptionDirection;
@@ -3612,6 +3846,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         takeProfitEnabled: input.takeProfitEnabled,
         takeProfitPrice: input.takeProfitPrice,
         takeProfitQuantity: input.takeProfitQuantity,
+        takeProfitPlans: input.takeProfitPlans,
       }, before, (lockedEntry.remainingCents / 100).toFixed(2));
       if (lockedEntry.remainingCents <= 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已全部平仓，没有剩余仓位可锁定或编辑" });
@@ -3643,6 +3878,10 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
           [dependentSafeUpdate!.value, input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
         );
       }
+      if (takeProfitOnlyUpdate) {
+        await replacePendingTakeProfitPlans(tx, { actorUserId: input.actorUserId, openingEntryId: input.entryId, plans: takeProfit.plans });
+        await syncEntryTakeProfitSummary(tx, { actorUserId: input.actorUserId, openingEntryId: input.entryId });
+      }
       const [accountRows] = await tx.execute(
         `SELECT id, name, last_used_at, created_at FROM ledger52_t0_journal_accounts
           WHERE id = ? AND ledger_id = ? AND user_id = ? LIMIT 1`,
@@ -3667,6 +3906,8 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       const account = asRows(accountRows)[0];
       const after = asRows(updatedRows)[0];
       if (!account || !after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `${takeProfitOnlyUpdate ? "止盈" : dependentSafeUpdate!.label}设置后读取失败` });
+      const partialPlansByEntryId = await getTakeProfitPlansByEntryId(tx, [input.entryId]);
+      after.take_profit_plans = partialPlansByEntryId.get(input.entryId) ?? [];
       await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "update", before: beforeForAudit, after: await buildEntryAuditSnapshot(tx, input.actorUserId, after) });
       await tx.commit();
       if (takeProfit.enabled) activateLedger52T0PendingOrderScan();
@@ -3696,6 +3937,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       takeProfitEnabled: input.takeProfitEnabled,
       takeProfitPrice: input.takeProfitPrice,
       takeProfitQuantity: input.takeProfitQuantity,
+      takeProfitPlans: input.takeProfitPlans,
     }, before, lockedEntry.hasDependentClose ? (lockedEntry.remainingCents / 100).toFixed(2) : undefined);
     let accountId = input.accountId === undefined ? toNumber(before.account_id) : Number(input.accountId);
     const requestedAccountName = input.accountName === undefined
@@ -3850,6 +4092,8 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         input.actorUserId,
       ],
     );
+    await replacePendingTakeProfitPlans(tx, { actorUserId: input.actorUserId, openingEntryId: input.entryId, plans: takeProfit.plans });
+    await syncEntryTakeProfitSummary(tx, { actorUserId: input.actorUserId, openingEntryId: input.entryId });
     if (beforeForAudit.profitShareSnapshots.length > 0) {
       await tx.execute(
         `UPDATE ledger52_t0_journal_entry_profit_shares
@@ -3885,6 +4129,8 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     const account = asRows(accountRows)[0];
     const after = asRows(updatedRows)[0];
     if (!account || !after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "编辑后的开仓记录读取失败" });
+    const updatedPlansByEntryId = await getTakeProfitPlansByEntryId(tx, [input.entryId]);
+    after.take_profit_plans = updatedPlansByEntryId.get(input.entryId) ?? [];
     const afterForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, after);
     await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "update", before: beforeForAudit, after: afterForAudit });
     await tx.commit();
