@@ -599,6 +599,8 @@ export interface FunderOrderCardProps {
   previewMode?: boolean;
   /** 共享担保弹窗点击订单号时，用于查找完整订单数据 */
   allOrders?: any[];
+  /** 联合订单的子段卡片：只展示本段，禁止再递归读取下一层子段。 */
+  jointSegmentMode?: boolean;
 }
 
 // `Number(null) === 0` 会把尚未到齐的订单缺口错误伪装成 +0.00 U。
@@ -658,6 +660,7 @@ export function FunderOrderCard({
   setShowMarginInfo: _propSetShowMarginInfo,
   previewMode = false,
   allOrders,
+  jointSegmentMode = false,
 }: FunderOrderCardProps) {
   const cardExportRef = useRef<HTMLDivElement>(null);
   const manualStockPnlDetailExportRef = useRef<HTMLDivElement>(null);
@@ -689,6 +692,8 @@ export function FunderOrderCard({
   const [_intShowPaymentDatePicker, _intSetShowPaymentDatePicker] = useState(false);
   const [showPeriodStartPicker, setShowPeriodStartPicker] = useState(false);
   const [showPeriodEndPicker, setShowPeriodEndPicker] = useState(false);
+  // 联合订单的结息可明确归属第一段或某一个第二段；默认仍为第一段，兼容历史结息记录。
+  const [selectedJointPaymentSegmentId, setSelectedJointPaymentSegmentId] = useState<string>('');
   // 参与方面板
   const [_intShowParticipants, _intSetShowParticipants] = useState<number | null>(null);
   const [_intParticipantsList, _intSetParticipantsList] = useState<{ userId: number; displayName: string; role: string; sortOrder: number; rate: string }[]>([]);
@@ -723,6 +728,16 @@ export function FunderOrderCard({
     && _collaboratorUserId > 0
     && (_collaboratorUserId !== _parentOwnerUserId || _collaboratorRole !== 'owner');
   const _participantUserId = _isParticipantOrder ? _collaboratorUserId : undefined;
+  // 联合订单的主拥有者也有自己的个人快照，因此不能只以“非主拥有者”作为筛选条件。
+  // 以当前卡片的协作身份优先；普通主单则回落到订单拥有者，保证第二段会进入实时预览。
+  const _jointSegmentScopeUserId = _collaboratorUserId > 0 ? _collaboratorUserId : _parentOwnerUserId;
+  const jointOrderSegments = useMemo(() => {
+    if (jointSegmentMode || !_jointSegmentScopeUserId) return [] as Array<Record<string, any>>;
+    let raw: unknown = (order as any).joint_order_segments;
+    try { if (typeof raw === 'string') raw = JSON.parse(raw); } catch { return []; }
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((segment: any) => segment && typeof segment === 'object' && Number(segment.owner_user_id) === Number(_jointSegmentScopeUserId)).slice(0, 8);
+  }, [jointSegmentMode, _jointSegmentScopeUserId, (order as any).joint_order_segments]);
   // 「他人」只是一张可查看的订单，不属于当前订单拥有者的任何担保池。
   // 即使历史数据仍保存了“本人订单共享”，也不能从该卡片打开本人共享担保弹窗。
   const _isOtherPerspective = String((order as any).order_perspective || 'self') === 'other';
@@ -757,18 +772,24 @@ export function FunderOrderCard({
   const _activeShowPaymentPanelForQuery = showPaymentPanel !== undefined ? showPaymentPanel : _intShowPayment;
   const { data: _intInterestPayments, refetch: _intRefetchPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId, orderId: _activeShowPaymentPanelForQuery!, participantUserId: _participantUserId },
-    { enabled: _activeShowPaymentPanelForQuery === order.id && (_participantUserId !== undefined || interestPayments === undefined) }
+    { enabled: _activeShowPaymentPanelForQuery === order.id && (_participantUserId !== undefined || interestPayments === undefined) && !selectedJointPaymentSegmentId }
+  );
+  const selectedJointPaymentSegment = jointOrderSegments.find(segment => String(segment.id || '') === selectedJointPaymentSegmentId) || null;
+  const selectedJointPaymentUserId = selectedJointPaymentSegment ? Number(selectedJointPaymentSegment.owner_user_id || _jointSegmentScopeUserId || 0) : _participantUserId;
+  const { data: _jointSegmentInterestPayments, refetch: refetchJointSegmentInterestPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
+    { ledgerId, orderId: _activeShowPaymentPanelForQuery!, participantUserId: selectedJointPaymentUserId, jointSegmentId: selectedJointPaymentSegmentId || undefined },
+    { enabled: _activeShowPaymentPanelForQuery === order.id && Boolean(selectedJointPaymentSegmentId && selectedJointPaymentUserId) }
   );
   const _intAddPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
-    onSuccess: () => { toast.success('结息记录已添加'); _intSetPaymentForm({ amount: '', currency: 'U', exchangeRate: String(cnyRate || 6.75), payDate: new Date().toISOString().slice(0, 10), note: '' }); _intRefetchPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onSuccess: () => { toast.success('结息记录已添加'); _intSetPaymentForm({ amount: '', currency: 'U', exchangeRate: String(cnyRate || 6.75), payDate: new Date().toISOString().slice(0, 10), note: '' }); _intRefetchPayments(); refetchJointSegmentInterestPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
     onError: (err) => toast.error(err.message),
   });
   const _intDeletePaymentMutation = trpc.ledger.funderDeleteInterestPayment.useMutation({
-    onSuccess: () => { toast.success('结息记录已删除'); _intRefetchPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onSuccess: () => { toast.success('结息记录已删除'); _intRefetchPayments(); refetchJointSegmentInterestPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
     onError: (err) => toast.error(err.message),
   });
   const _intUpdatePaymentMutation = trpc.ledger.funderUpdateInterestPayment.useMutation({
-    onSuccess: () => { toast.success('结息记录已更新'); setEditPaymentId(null); _intRefetchPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onSuccess: () => { toast.success('结息记录已更新'); setEditPaymentId(null); _intRefetchPayments(); refetchJointSegmentInterestPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
     onError: (err) => toast.error(err.message),
   });
   // 编辑结息记录的内联表单状态
@@ -823,7 +844,9 @@ export function FunderOrderCard({
   const $setShowPaymentDatePicker = setShowPaymentDatePicker !== undefined ? setShowPaymentDatePicker : _intSetShowPaymentDatePicker;
   const $addPaymentMutation = addPaymentMutation !== undefined ? addPaymentMutation : _intAddPaymentMutation;
   const $deletePaymentMutation = deletePaymentMutation !== undefined ? deletePaymentMutation : _intDeletePaymentMutation;
-  const $interestPayments = interestPayments !== undefined ? interestPayments : (_intInterestPayments as any[] | undefined);
+  const $interestPayments = selectedJointPaymentSegmentId
+    ? (_jointSegmentInterestPayments as any[] | undefined)
+    : (interestPayments !== undefined ? interestPayments : (_intInterestPayments as any[] | undefined));
   const $updateMutation = updateMutation !== undefined ? updateMutation : _intUpdateMutation;
   const $showParticipantsPanel = showParticipantsPanel !== undefined ? showParticipantsPanel : _intShowParticipants;
   const $participantsList = participantsList !== undefined ? participantsList : _intParticipantsList;
@@ -1735,6 +1758,27 @@ export function FunderOrderCard({
   const displayedPaidAltValue = hasExternalPaidInterest && linked37PaidInterestCny !== null
     ? linked37PaidInterestCny / cnyRate
     : altPaid;
+  // 周期总息是订单约定利率的展示预测，不参与待结、已结或担保缺口计算。
+  // 默认关闭，必须在“右栏·利息担保”中明确启用才显示。
+  const periodInterestTotal = (() => {
+    if (financingDisplayConfig?.periodInterestTotal !== true) return null;
+    const base = Number(order.interest_base);
+    const annualRate = Number(order.interest_rate_annual);
+    if (!(base > 0) || !Number.isFinite(annualRate)) return null;
+    const period = String(financingDisplayConfig?.periodInterestTotalPeriod || 'month');
+    const definitions: Record<string, { label: string; fractionOfYear: number }> = {
+      week: { label: '一周总息', fractionOfYear: 7 / 365 },
+      month: { label: '整月总息', fractionOfYear: 1 / 12 },
+      quarter: { label: '整季总息', fractionOfYear: 1 / 4 },
+      halfYear: { label: '半年总息', fractionOfYear: 1 / 2 },
+      year: { label: '整年总息', fractionOfYear: 1 },
+    };
+    const selected = definitions[period] || definitions.month;
+    return {
+      label: selected.label,
+      value: convertAccrued(base * (annualRate / 100) * selected.fractionOfYear),
+    };
+  })();
 
   // 持有时长——已结清订单冻结在 settled_at 时刻；无数据或未到开仓日均显示 0小时
   const holdDurationLabel = (() => {
@@ -2317,15 +2361,17 @@ export function FunderOrderCard({
   return (
     <>
     <div
-      ref={cardExportRef}
-      className="rounded-lg overflow-hidden relative"
-      style={{
-        background: isParticipantVisual ? '#F0FDF4' : '#ffffff',
-        border: isParticipantVisual ? '1px solid #86EFAC' : '1px solid #E8EDFF',
-        boxShadow: isParticipantVisual ? '0 1px 5px rgba(5,150,105,0.12)' : '0 1px 4px rgba(26,35,64,0.05)',
-      }}
+      ref={jointSegmentMode ? undefined : cardExportRef}
+      className={jointSegmentMode ? 'w-full' : 'rounded-lg overflow-hidden relative'}
+      style={jointSegmentMode
+        ? { background: isParticipantVisual ? '#F0FDF4' : '#ffffff' }
+        : {
+            background: isParticipantVisual ? '#F0FDF4' : '#ffffff',
+            border: isParticipantVisual ? '1px solid #86EFAC' : '1px solid #E8EDFF',
+            boxShadow: isParticipantVisual ? '0 1px 5px rgba(5,150,105,0.12)' : '0 1px 4px rgba(26,35,64,0.05)',
+          }}
     >
-      {isSettled && (
+      {!jointSegmentMode && isSettled && (
         <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center" style={{ backgroundColor: 'rgba(220,38,38,0.06)', zIndex: 10 }}>
           <div style={{ border: '3px solid rgba(220,38,38,0.35)', color: 'rgba(220,38,38,0.35)', borderRadius: '8px', padding: '8px 24px', fontSize: '28px', fontWeight: 800, letterSpacing: '6px', lineHeight: '1.4', whiteSpace: 'nowrap', transform: 'rotate(-15deg)', textAlign: 'center' }}>
             <div>已结清</div>
@@ -2334,6 +2380,7 @@ export function FunderOrderCard({
         </div>
       )}
 
+      {!jointSegmentMode && <>
       {/* 帽子：标签行 + 操作按钮 */}
       <div
         className="flex items-start gap-2 px-4 py-2"
@@ -2434,6 +2481,7 @@ export function FunderOrderCard({
           />
         )}
       </div>
+      </>}
 
       {/* 主体：左右两栏布局 */}
       <div className="flex">
@@ -3057,6 +3105,15 @@ export function FunderOrderCard({
               );
             })()}
             </>
+            )}
+            {/* 正式展示仍以卡片模式为准；订单模式只在编辑实时预览中同步显示，便于核对。 */}
+            {previewMode && periodInterestTotal && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 whitespace-nowrap">{periodInterestTotal.label}</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>
+                  {periodInterestTotal.value >= 0 ? '+' : ''}{periodInterestTotal.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
+                </span>
+              </div>
             )}
             {showTradingFee && (
               <div className="flex items-center justify-between gap-2">
@@ -4776,14 +4833,79 @@ export function FunderOrderCard({
         </div>
       )}
 
-      {/* 结息面板 + 备注区 */}
-      <div
+        {/* 第二段嵌入同一张订单卡片：共用页眉、结清状态与页尾备注，仅主体数据分段展示。 */}
+    {jointOrderSegments.map((segment, index) => {
+      let parentDisplayConfig: Record<string, any> = {};
+      let segmentDisplayConfig: Record<string, any> = {};
+      try { parentDisplayConfig = typeof (order as any).display_config === 'string' ? JSON.parse((order as any).display_config) : ((order as any).display_config || {}); } catch {}
+      try { segmentDisplayConfig = typeof segment.display_config === 'string' ? JSON.parse(segment.display_config) : (segment.display_config || {}); } catch {}
+      const segmentOrder = {
+        ...order,
+        ...segment,
+        // 每一段是同一张个人订单的一部分，继承主单状态，不能独自结清或单独记录已结利息。
+        id: order.id,
+        status: order.status,
+        settled_at: order.settled_at,
+        interest_end_date: order.interest_end_date,
+        order_no: order.order_no,
+        paidTotal: null,
+        joint_order_segments: [],
+        // 每段保留自己的手工担保与资金属性；不继承主单的37号引用或共享担保模式。
+        collateral_assets: Array.isArray(segment.collateral_assets) ? JSON.stringify(segment.collateral_assets) : null,
+        collateral_source: null,
+        collateral_share_mode: 'none',
+        principal_lent_out: segment.principal_lent_out ? 1 : 0,
+        joint_segment_id: String(segment.id || `segment-${index + 2}`),
+        joint_segment_owner_user_id: Number(segment.owner_user_id || _jointSegmentScopeUserId || 0),
+        public_note: null,
+        admin_note: null,
+        personal_header_label: `${String((order as any).participant_name || (order as any).owner_label || '个人订单')} · 联合第${index + 2}段`,
+        display_config: JSON.stringify({
+          ...parentDisplayConfig,
+          ...segmentDisplayConfig,
+          // 子段不重复引用主订单的37号数据或共享担保模式；仅展示本段自身手工担保。
+          marginRate: false,
+        }),
+      };
+      return (
+        <div
+          key={`joint-segment-${order.id}-${String(segment.id || index)}`}
+          className="w-full"
+          style={{ background: isParticipantVisual ? '#F0FDF4' : '#ffffff' }}
+        >
+          <div className="mx-4 border-t border-dashed" style={{ borderColor: '#C7D2E6' }} />
+          <FunderOrderCard
+            order={segmentOrder}
+            livePrices={livePrices}
+            priceDirection={priceDirection}
+            currentUser={currentUser}
+            isAdmin={isAdmin}
+            membersData={membersData}
+            ledgerId={ledgerId}
+            previewMode={previewMode}
+            jointSegmentMode={true}
+          />
+        </div>
+      );
+    })}
+
+      {/* 结息面板与备注是整张订单共用的页尾；第二段不重复渲染。 */}
+      {!jointSegmentMode && <div
         className={`px-4 pt-3 pb-3 border-t ${isParticipantVisual ? 'border-green-200' : 'border-blue-100'}`}
         style={{ backgroundColor: isParticipantVisual ? '#DCFCE7' : '#D0D6EE' }}
       >
 
         {$showPaymentPanel === order.id && !hasExternalPaidInterest && (
           <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
+            {jointOrderSegments.length > 0 && (
+              <div>
+                <div className="mb-1 text-xs text-gray-500">结息归属</div>
+                <div className="flex flex-wrap gap-1.5">
+                  <button type="button" onClick={() => setSelectedJointPaymentSegmentId('')} className={`rounded-full border px-2.5 py-1 text-xs font-medium ${!selectedJointPaymentSegmentId ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}>第一段</button>
+                  {jointOrderSegments.map((segment, index) => <button key={String(segment.id)} type="button" onClick={() => setSelectedJointPaymentSegmentId(String(segment.id))} className={`rounded-full border px-2.5 py-1 text-xs font-medium ${selectedJointPaymentSegmentId === String(segment.id) ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}>第 {index + 2} 段</button>)}
+                </div>
+              </div>
+            )}
             <div className="flex gap-2 mb-1">
               <span className="text-xs text-gray-500 self-center">结息币种：</span>
               <button
@@ -4888,7 +5010,7 @@ export function FunderOrderCard({
             <button
               onClick={() => {
                 if (!$paymentForm.amount || parseFloat($paymentForm.amount) <= 0) { toast.error('请填写结息金额'); return; }
-                $addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat($paymentForm.amount), currency: $paymentForm.currency || 'U', exchangeRate: parseFloat($paymentForm.exchangeRate || String(cnyRate || 6.75)), payDate: $paymentForm.payDate || new Date().toISOString().slice(0, 10), note: $paymentForm.note || undefined, periodStart: ($paymentForm as any).periodStart || undefined, periodEnd: ($paymentForm as any).periodEnd || undefined, participantUserId: _participantUserId });
+                $addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat($paymentForm.amount), currency: $paymentForm.currency || 'U', exchangeRate: parseFloat($paymentForm.exchangeRate || String(cnyRate || 6.75)), payDate: $paymentForm.payDate || new Date().toISOString().slice(0, 10), note: $paymentForm.note || undefined, periodStart: ($paymentForm as any).periodStart || undefined, periodEnd: ($paymentForm as any).periodEnd || undefined, participantUserId: selectedJointPaymentSegmentId ? selectedJointPaymentUserId : _participantUserId, jointSegmentId: selectedJointPaymentSegmentId || undefined });
               }}
               disabled={$addPaymentMutation.isPending}
               className="w-full py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50"
@@ -5086,8 +5208,9 @@ export function FunderOrderCard({
           </div>
         )}
 
+
         {/* 公开备注区域 */}
-        {!previewMode && <FunderNoteRow
+        {!previewMode && !jointSegmentMode && <FunderNoteRow
           orderId={order.id}
           ledgerId={ledgerId}
           initialNote={order.public_note || ''}
@@ -5098,10 +5221,10 @@ export function FunderOrderCard({
           participantUserId={_participantUserId}
           isSettled={isSettled}
         />}
-      </div>
+      </div>}
 
       {/* 状态操作底部弹窗 */}
-      {!previewMode && showStatusSheet && (
+      {!previewMode && !jointSegmentMode && showStatusSheet && (
         <div className="fixed inset-0 z-[300] flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setShowStatusSheet(false)}>
           <div className="bg-white rounded-t-2xl w-full max-w-md px-5 pt-5 pb-8" onClick={e => e.stopPropagation()}>
             <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />

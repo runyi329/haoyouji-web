@@ -518,6 +518,44 @@ function normalizeFunderCurrency(value: unknown): 'CNY' | 'USDT' {
   return ['CNY', 'RMB', '人民币'].includes(currency) ? 'CNY' : 'USDT';
 }
 
+type PeriodInterestTotalPeriod = 'week' | 'month' | 'quarter' | 'halfYear' | 'year';
+
+// 周期总息只做展示预测：以订单约定的年化利率、计息基数和计息币种换算，
+// 不参与待结、已结、担保缺口或任何订单金额的计算。
+function getPeriodInterestTotal(
+  config: Record<string, unknown> | null | undefined,
+  interestBase: unknown,
+  annualRate: unknown,
+  baseCurrency: 'CNY' | 'USDT',
+  rateCurrency: 'CNY' | 'USDT',
+  cnyRate: number,
+): { label: string; value: number } | null {
+  if (config?.periodInterestTotal !== true) return null;
+
+  const period = ['week', 'month', 'quarter', 'halfYear', 'year'].includes(String(config?.periodInterestTotalPeriod))
+    ? String(config?.periodInterestTotalPeriod) as PeriodInterestTotalPeriod
+    : 'month';
+  const definition: Record<PeriodInterestTotalPeriod, { label: string; fractionOfYear: number }> = {
+    week: { label: '一周总息', fractionOfYear: 7 / 365 },
+    month: { label: '整月总息', fractionOfYear: 1 / 12 },
+    quarter: { label: '整季总息', fractionOfYear: 1 / 4 },
+    halfYear: { label: '半年总息', fractionOfYear: 1 / 2 },
+    year: { label: '整年总息', fractionOfYear: 1 },
+  };
+  const base = Number(interestBase);
+  const rate = Number(annualRate);
+  if (!(base > 0) || !Number.isFinite(rate)) return null;
+
+  const rawValue = base * (rate / 100) * definition[period].fractionOfYear;
+  const safeCnyRate = Number.isFinite(cnyRate) && cnyRate > 0 ? cnyRate : DEFAULT_CNY_RATE;
+  const value = baseCurrency === rateCurrency
+    ? rawValue
+    : baseCurrency === 'CNY'
+      ? rawValue / safeCnyRate
+      : rawValue * safeCnyRate;
+  return { label: definition[period].label, value };
+}
+
 // 实时行情中的 CNY=1 是“1 元”，不是“1 U”。融资订单内部风控统一以 U 计，
 // 因而数字币标的为 CNY 时必须先把数量折算为 U，再与买入价值相减。
 function getSpotCurrentValueUsdt(
@@ -1465,6 +1503,14 @@ export function FunderOrderCardV2Silver({
     ? (interestUnit === 'U' ? displayPaid : displayPaid / cnyRate)
     : (interestUnit === 'U' ? displayPaid * cnyRate : displayPaid);
   const approxPaidUnit = approxPaidMode === 'U' ? 'U' : '元';
+  const periodInterestTotal = getPeriodInterestTotal(
+    cardDisplayConfig,
+    order.interest_base,
+    rateStr,
+    baseCur,
+    rateCur,
+    cnyRate,
+  );
 
   // 风险敞口内部统一使用 U。资产类型可能为“币”，但利息仍可按人民币约定，
   // 因此必须按实际利息币种折算，不能将人民币待结利息直接当作 U 扣除。
@@ -2500,6 +2546,14 @@ export function FunderOrderCardV2Silver({
                 )}
               </span>
             </div>
+            {periodInterestTotal && (
+              <div className="flex justify-between items-center">
+                <span style={{ color: TXT_SEC }}>{periodInterestTotal.label}</span>
+                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                  {periodInterestTotal.value >= 0 ? '+' : ''}{fmt(periodInterestTotal.value, 2)} {interestUnit}
+                </span>
+              </div>
+            )}
             {/* 合计待付 = 待付利息 + 手续费 - 已结利息 */}
             {(() => {
               // 已付50%或100%的手续费不再计入本次待付合计。
@@ -3434,6 +3488,14 @@ export function FunderLenderCardSilver({
   // 约等于换算
   const approxAccrued = interestUnit === '元' ? displayAccrued / cnyRate : displayAccrued * cnyRate;
   const approxUnit = interestUnit === '元' ? 'u' : '元';
+  const periodInterestTotal = getPeriodInterestTotal(
+    lenderDisplayConfig,
+    _effectiveInterestBase,
+    _effectiveInterestRate,
+    baseCur,
+    rateCur,
+    cnyRate,
+  );
 
   let collateralAssets: { coin: string; qty: string }[] = [];
   try {
@@ -3790,36 +3852,6 @@ export function FunderLenderCardSilver({
         </div>
       </div>
 
-      {/* ── 行2.5：今日/本月/全年利息折算 ── */}
-      {rateAbs && parseFloat(order.interest_base || '0') > 0 && (() => {
-        // 计息基数单位是baseCur，先算出baseCur单位的利息，再用convertAccrued换算成显示单位
-        const base = parseFloat(order.interest_base!);
-        const rate = parseFloat(rateAbs) / 100;
-        const dailyRaw = base * rate / 365;
-        const monthlyRaw = base * rate / 12;
-        const yearlyRaw = base * rate;
-        const daily = convertAccrued(dailyRaw);
-        const monthly = convertAccrued(monthlyRaw);
-        const yearly = convertAccrued(yearlyRaw);
-        const fmtSmall = (n: number) => n >= 0.01 ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : n.toFixed(4);
-        return (
-          <div className="grid grid-cols-3 gap-0 px-4 py-2" style={{ fontFamily: SL_NUM_FONT, borderBottom: `1px solid ${DIVIDER}` }}>
-            <div>
-              <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>今日利息 ({interestUnit})</div>
-              <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>{fmtSmall(daily)}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>整月利息 ({interestUnit})</div>
-              <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>{fmtSmall(monthly)}</div>
-            </div>
-            <div className="text-right">
-              <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>全年利息 ({interestUnit})</div>
-              <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>{fmtSmall(yearly)}</div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* ── 行3：计息基数 / 计息天数 / 担保缺口 ── */}
       <div className="grid grid-cols-3 gap-0 px-4 py-2" style={{ fontFamily: SL_NUM_FONT }}>
         <div>
@@ -3854,6 +3886,15 @@ export function FunderLenderCardSilver({
           ) : null}
         </div>
       </div>
+
+      {periodInterestTotal && (
+        <div className="flex items-center justify-between px-4 py-2" style={{ fontFamily: SL_NUM_FONT, borderTop: `1px solid ${DIVIDER}` }}>
+          <span className="text-[10px]" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>{periodInterestTotal.label} ({interestUnit})</span>
+          <span className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
+            {periodInterestTotal.value >= 0 ? '+' : ''}{fmt(periodInterestTotal.value, 2)}
+          </span>
+        </div>
+      )}
 
       {/* ── Tab 栏：详情 | 备注 ── */}
       <div className="flex" style={{ borderTop: `1px solid ${DIVIDER}` }}>

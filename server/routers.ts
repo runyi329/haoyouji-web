@@ -1456,7 +1456,9 @@ const FUNDER_PARTICIPANT_SNAPSHOT_FIELDS = [
   'finance_type', 'collateral_assets', 'lent_out_assets', 'show_profit_share', 'commission_share', 'display_config',
   'asset_type', 'tags', 'collateral_share_mode', 'principal_lent_out', 'broker_name', 'broker_account',
   'option_info', 'trade_direction', 'order_fill_status', 'order_perspective', 'trading_fee_rate_per_mille',
-  'trading_fee_status', 'collateral_source', 'personal_header_label', 'settled_at', 'interest_end_date'
+  'trading_fee_status', 'collateral_source', 'personal_header_label', 'settled_at', 'interest_end_date',
+  // 联合订单子段仅保存于参与者自己的 order_snapshot；绝不写入主订单。
+  'joint_order_segments'
 ] as const;
 
 function buildFunderParticipantSnapshot(source: any): Record<string, any> {
@@ -22889,6 +22891,7 @@ ${klinesSummary}
         periodStart: z.string().optional(), // YYYY-MM-DD 结算起始日
         periodEnd: z.string().optional(),   // YYYY-MM-DD 结算截止日
         participantUserId: z.number().optional(), // 参与者userId，NULL表示拥有者付款
+        jointSegmentId: z.string().min(1).max(48).optional(), // 联合订单第二段归属
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -22897,6 +22900,7 @@ ${klinesSummary}
           id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
           order_id int NOT NULL,
           participant_user_id int NULL,
+          joint_segment_id varchar(48) NULL,
           ledger_id int NOT NULL,
           amount decimal(20, 4) NOT NULL,
           currency varchar(10) NOT NULL DEFAULT 'U',
@@ -22911,11 +22915,14 @@ ${klinesSummary}
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
         // 检查并补充新字段（先查字段存在再决定是否ALTER）
         const addColCheck = await db.execute(
-          sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('participant_user_id','currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`
+          sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('participant_user_id','joint_segment_id','currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`
         ) as any;
         const addExistingCols = ((addColCheck[0] || addColCheck) as any[]).map((r: any) => (r.COLUMN_NAME || r.column_name || '').toLowerCase());
         if (!addExistingCols.includes('participant_user_id')) {
           await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN participant_user_id int NULL AFTER order_id`);
+        }
+        if (!addExistingCols.includes('joint_segment_id')) {
+          await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN joint_segment_id varchar(48) NULL AFTER participant_user_id`);
         }
         if (!addExistingCols.includes('currency')) {
           await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN currency varchar(10) NOT NULL DEFAULT 'U'`);
@@ -22942,16 +22949,27 @@ ${klinesSummary}
           const participant = participantRows[0]?.[0] ?? participantRows[0];
           if (!participant?.id) throw new TRPCError({ code: 'NOT_FOUND', message: '参与关系不存在' });
         }
+        const jointSegmentId = input.jointSegmentId ? input.jointSegmentId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) : '';
+        if (input.jointSegmentId && !jointSegmentId) throw new TRPCError({ code: 'BAD_REQUEST', message: '联合订单段落无效' });
+        if (jointSegmentId) {
+          if (!input.participantUserId) throw new TRPCError({ code: 'BAD_REQUEST', message: '请选择联合订单所属用户' });
+          const snapshotRows = await db.execute(sql`SELECT order_snapshot FROM ledger_order_participants WHERE order_id=${input.orderId} AND ledger_id=${input.ledgerId} AND user_id=${input.participantUserId} AND role <> 'inactive' LIMIT 1`) as any;
+          const snapshotRow = snapshotRows[0]?.[0] ?? snapshotRows[0];
+          let segments: any[] = [];
+          try { const parsed = snapshotRow?.order_snapshot ? (typeof snapshotRow.order_snapshot === 'string' ? JSON.parse(snapshotRow.order_snapshot) : snapshotRow.order_snapshot) : {}; segments = Array.isArray(parsed?.joint_order_segments) ? parsed.joint_order_segments : []; } catch {}
+          const belongsToUser = segments.some((segment: any) => String(segment?.id || '') === jointSegmentId && Number(segment?.owner_user_id) === Number(input.participantUserId));
+          if (!belongsToUser) throw new TRPCError({ code: 'NOT_FOUND', message: '联合订单段落不存在或不属于当前用户' });
+        }
         await db.execute(
-          sql`INSERT INTO ledger_order_payments (order_id, ledger_id, amount, currency, exchange_rate, pay_date, note, period_start, period_end, created_by, participant_user_id)
-              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.currency || 'U'}, ${input.exchangeRate || 6.75}, ${input.payDate}, ${input.note || ''}, ${input.periodStart || null}, ${input.periodEnd || null}, ${ctx.user.id}, ${input.participantUserId || null})`
+          sql`INSERT INTO ledger_order_payments (order_id, ledger_id, amount, currency, exchange_rate, pay_date, note, period_start, period_end, created_by, participant_user_id, joint_segment_id)
+              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.currency || 'U'}, ${input.exchangeRate || 6.75}, ${input.payDate}, ${input.note || ''}, ${input.periodStart || null}, ${input.periodEnd || null}, ${ctx.user.id}, ${input.participantUserId || null}, ${jointSegmentId || null})`
         );
         return { success: true };
       }),
 
     // 查询某订单的结息记录列表
     funderGetInterestPayments: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), orderId: z.number(), participantUserId: z.number().optional() }))
+      .input(z.object({ ledgerId: z.number(), orderId: z.number(), participantUserId: z.number().optional(), jointSegmentId: z.string().min(1).max(48).optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         // 自动建表（幂等）
@@ -22971,9 +22989,10 @@ ${klinesSummary}
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
         // 补充新字段（幂等）
         try {
-          const colCheck = await db.execute(sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('participant_user_id','currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`) as any;
+          const colCheck = await db.execute(sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('participant_user_id','joint_segment_id','currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`) as any;
           const existingCols = ((colCheck[0] || colCheck) as any[]).map((r: any) => (r.COLUMN_NAME || r.column_name || '').toLowerCase());
           if (!existingCols.includes('participant_user_id')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN participant_user_id int NULL AFTER order_id`);
+          if (!existingCols.includes('joint_segment_id')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN joint_segment_id varchar(48) NULL AFTER participant_user_id`);
           if (!existingCols.includes('currency')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN currency varchar(10) NOT NULL DEFAULT 'U'`);
           if (!existingCols.includes('exchange_rate')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN exchange_rate decimal(10,4) NOT NULL DEFAULT 7.0`);
           if (!existingCols.includes('period_start')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN period_start date NULL`);
@@ -23003,20 +23022,24 @@ ${klinesSummary}
             throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看该订单拥有者的结息记录' });
           }
         }
-        // 参与者视角：只查该参与者付款记录；拥有者视角：只查 participant_user_id IS NULL 的记录
+        // 结息记录同时按用户视角和联合订单段落隔离；未选择段落时仅返回第一段/历史记录。
+        const jointSegmentId = input.jointSegmentId ? input.jointSegmentId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) : '';
+        if (input.jointSegmentId && !jointSegmentId) throw new TRPCError({ code: 'BAD_REQUEST', message: '联合订单段落无效' });
+        if (jointSegmentId && !input.participantUserId) throw new TRPCError({ code: 'BAD_REQUEST', message: '请选择联合订单所属用户' });
+        const segmentFilter = jointSegmentId ? sql`AND p.joint_segment_id = ${jointSegmentId}` : sql`AND p.joint_segment_id IS NULL`;
         const rawRows = input.participantUserId
           ? await db.execute(
               sql`SELECT p.*, u.username, u.name as operatorName
                   FROM ledger_order_payments p
                   LEFT JOIN users u ON u.id = p.created_by
-                  WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId} AND p.participant_user_id = ${input.participantUserId}
+                  WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId} AND p.participant_user_id = ${input.participantUserId} ${segmentFilter}
                   ORDER BY p.pay_date DESC, p.id DESC`
             ) as any
           : await db.execute(
               sql`SELECT p.*, u.username, u.name as operatorName
                   FROM ledger_order_payments p
                   LEFT JOIN users u ON u.id = p.created_by
-                  WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId} AND p.participant_user_id IS NULL
+                  WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId} AND p.participant_user_id IS NULL ${segmentFilter}
                   ORDER BY p.pay_date DESC, p.id DESC`
             ) as any;
         const rawPayments = ((rawRows[0] || rawRows) as any[]) || [];
@@ -23039,6 +23062,12 @@ ${klinesSummary}
       .input(z.object({ ledgerId: z.number(), orderIds: z.array(z.number()), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
+        // 旧库可能尚未被结息读取路径触发迁移；汇总在任何卡片首次打开时也必须安全可用。
+        try {
+          const colRows = await db.execute(sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME='joint_segment_id' AND TABLE_SCHEMA=DATABASE()`) as any;
+          const columns = ((colRows[0] || colRows) as any[]).map((row: any) => String(row.COLUMN_NAME || row.column_name || '').toLowerCase());
+          if (!columns.includes('joint_segment_id')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN joint_segment_id varchar(48) NULL AFTER participant_user_id`);
+        } catch {}
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
@@ -23069,6 +23098,7 @@ ${klinesSummary}
                WHERE p2.ledger_id = ${input.ledgerId}
                  AND p2.order_id = t.order_id
                  AND p2.participant_user_id <=> t.participant_user_id
+                 AND p2.joint_segment_id IS NULL
                  AND IFNULL(p2.currency, 'U') = t.currency
                ORDER BY p2.pay_date DESC, p2.id DESC LIMIT 1) as latest_rate
               FROM (
@@ -23077,6 +23107,7 @@ ${klinesSummary}
                 JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
                 WHERE p.ledger_id = ${input.ledgerId}
                   AND p.order_id IN (${sql.raw(input.orderIds.join(','))})
+                  AND p.joint_segment_id IS NULL
                   ${paymentScope}
                 GROUP BY p.order_id, p.participant_user_id, IFNULL(p.currency, 'U')
               ) t`
@@ -23107,7 +23138,7 @@ ${klinesSummary}
         const db = await getLedgerDb();
         // 检查并补充新字段
         const colCheck = await db.execute(
-          sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('participant_user_id','currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`
+          sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('participant_user_id','joint_segment_id','currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`
         ) as any;
         const existingCols = ((colCheck[0] || colCheck) as any[]).map((r: any) => r.COLUMN_NAME || r.column_name);
         if (!existingCols.includes('currency')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN currency varchar(10) NOT NULL DEFAULT 'U'`);
@@ -24944,13 +24975,103 @@ ${klinesSummary}
            WHERE p.order_id = ? AND p.ledger_id = ? AND p.user_id = ? AND p.role <> 'inactive' LIMIT 1`,
           [input.orderId, input.ledgerId, input.userId]
         ) as any;
-        const row = Array.isArray(rows) ? rows[0] : null;
-        if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: '参与者子订单不存在或已停用' });
+        let row = Array.isArray(rows) ? rows[0] : null;
+        // 第一位拥有者也必须拥有独立快照，才能在统一的联合订单折叠区保存第二段；
+        // 仅允许为真实主订单拥有者补建 owner 快照，其他任意用户仍不可越权创建或读取。
+        if (!row) {
+          const [parentRows] = await conn.execute(
+            'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? LIMIT 1',
+            [input.orderId, input.ledgerId],
+          ) as any;
+          const parentOrder = Array.isArray(parentRows) ? parentRows[0] : null;
+          if (!parentOrder || Number(parentOrder.user_id) !== Number(input.userId)) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: '参与者子订单不存在或已停用' });
+          }
+          const initialSnapshot = buildFunderParticipantSnapshot(parentOrder);
+          await conn.execute(
+            `INSERT INTO ledger_order_participants (order_id, ledger_id, user_id, role, order_snapshot, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE role = 'owner', previous_role = NULL, order_snapshot = VALUES(order_snapshot), sort_order = VALUES(sort_order), updated_at = NOW()`,
+            [input.orderId, input.ledgerId, input.userId, 'owner', JSON.stringify(initialSnapshot), 0],
+          );
+          row = { ...parentOrder, participant_role: 'owner', order_snapshot: JSON.stringify(initialSnapshot) };
+        }
         let mergedSnapshot = {
           ...buildFunderParticipantSnapshot(row),
           ...(parseFunderParticipantSnapshot(row.order_snapshot) || {}),
           ...buildFunderParticipantSnapshot(input.snapshot),
         };
+        // 联合订单子段属于当前参与者的个人订单视图。无论客户端提交什么 owner_user_id，
+        // 服务端都会重写为本次快照所属用户，且严格限制字段，杜绝不同参与者相互读取或串改。
+        if (Object.prototype.hasOwnProperty.call(input.snapshot, 'joint_order_segments')) {
+          const rawSegments = (input.snapshot as any).joint_order_segments;
+          if (!Array.isArray(rawSegments)) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '联合订单子段格式无效' });
+          }
+          const safeDate = (value: unknown) => {
+            const text = String(value ?? '').trim();
+            return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+          };
+          const safeAmount = (value: unknown) => {
+            const number = Number(value);
+            return Number.isFinite(number) && number > 0 && number <= 1_000_000_000_000
+              ? String(number)
+              : '';
+          };
+          const safeCurrency = (value: unknown) => {
+            const currency = String(value ?? 'USDT').trim().toUpperCase();
+            return ['CNY', 'RMB', '人民币'].includes(currency) ? 'CNY' : 'USDT';
+          };
+          const safeDisplayConfig = (value: unknown) => {
+            if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+            const result: Record<string, boolean | string> = {};
+            for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+              if ((typeof entry === 'boolean' || typeof entry === 'string') && key.length <= 48) result[key] = entry;
+            }
+            return result;
+          };
+          const safeText = (value: unknown, maxLength = 120) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
+          const safeBoolean = (value: unknown) => value === true || value === 1 || value === '1';
+          const safeAssets = (value: unknown) => {
+            if (!Array.isArray(value)) return [] as Array<{ coin: string; qty: string; note?: string; source: 'manual' }>;
+            return value.slice(0, 16).flatMap((asset: any) => {
+              const coin = String(asset?.coin || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+              const qty = safeAmount(asset?.qty);
+              if (!coin || !qty) return [];
+              const note = safeText(asset?.note, 120);
+              return [{ coin, qty, ...(note ? { note } : {}), source: 'manual' as const }];
+            });
+          };
+          mergedSnapshot.joint_order_segments = rawSegments.slice(0, 8).map((raw: any, index: number) => ({
+            id: String(raw?.id || `segment-${index + 2}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) || `segment-${index + 2}`,
+            // 强制以当前参与者为唯一归属，不接受客户端指定他人。
+            owner_user_id: Number(input.userId),
+            amount: safeAmount(raw?.amount),
+            amount_currency: safeCurrency(raw?.amount_currency),
+            buy_price: safeAmount(raw?.buy_price),
+            buy_quantity: safeAmount(raw?.buy_quantity),
+            buy_date: safeDate(raw?.buy_date),
+            storage_account: safeText(raw?.storage_account),
+            broker_name: safeText(raw?.broker_name),
+            broker_account: safeText(raw?.broker_account),
+            interest_rate_annual: safeText(raw?.interest_rate_annual, 32),
+            interest_base: safeAmount(raw?.interest_base),
+            interest_base_currency: safeCurrency(raw?.interest_base_currency),
+            interest_rate_currency: safeCurrency(raw?.interest_rate_currency),
+            interest_payment_type: safeText(raw?.interest_payment_type, 32),
+            interest_start_date: safeDate(raw?.interest_start_date),
+            principal_lent_out: safeBoolean(raw?.principal_lent_out),
+            show_profit_share: safeBoolean(raw?.show_profit_share),
+            profit_share_ratio: safeAmount(raw?.profit_share_ratio),
+            profit_share_type: raw?.profit_share_type === 'coin' ? 'coin' : 'interest',
+            commission_share: safeAmount(raw?.commission_share),
+            trading_fee_rate_per_mille: safeAmount(raw?.trading_fee_rate_per_mille),
+            trading_fee_status: ['unpaid', 'half_paid', 'paid'].includes(String(raw?.trading_fee_status)) ? String(raw?.trading_fee_status) : 'unpaid',
+            // 第二段担保只写进当前参与者的个人快照；不触发钱包冻结或37号引用，避免跨段混算。
+            collateral_assets: safeAssets(raw?.collateral_assets),
+            display_config: safeDisplayConfig(raw?.display_config),
+          }));
+        }
         // 只有从参与者编辑页明确提交担保字段时，才记录为该参与者的独立担保物。
         // 普通金额、利率、备注等保存不能让历史担保快照重新覆盖主订单。
         if ((input.snapshot as any).participant_collateral_override === false) {

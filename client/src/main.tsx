@@ -148,8 +148,12 @@ const trpcClient = trpc.createClient({
  * 解决微信安卓 WebView 上滑关闭后 localStorage 被清空的问题
  */
 async function bootstrap() {
-  // 尝试从三层存储中恢复 token
-  const recovered = await restoreToken();
+  // 尝试从三层存储中恢复 token。个别移动 WebView 的 IndexedDB 可能长期不回调，
+  // 不能因此阻塞整站 React 挂载；本地与 Cookie 恢复本身是同步路径，超时后直接继续。
+  const recovered = await Promise.race<string | null>([
+    restoreToken().catch(() => null),
+    new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 800)),
+  ]);
   if (recovered) {
     console.log('[Auth] Token 恢复成功，无需重新登录');
   } else {
