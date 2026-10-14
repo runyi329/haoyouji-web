@@ -3820,8 +3820,10 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   counterpartyOnly?: boolean;
   /** 仅锁定标记切换：可安全标识已部分平仓主单的剩余仓位，服务端只更新该标记本身。 */
   lockOnly?: boolean;
-  /** 未传时保持原成交状态；传入 true 为挂单，传入 false 将挂单人工确认成交。 */
+  /** 未传时保持原成交状态；新建时 true 为挂单，编辑时不可直接切换。 */
   isPending?: boolean;
+  /** 仅允许管理员把仍未成交的开仓挂单单向确认成交；必须同时传 isPending=false。 */
+  manualConfirmPendingFill?: boolean;
   /** 止盈仅用于现货/合约；可在挂单创建时预设，必须成交后触发。 */
   takeProfitEnabled?: boolean;
   takeProfitPrice?: string;
@@ -3850,6 +3852,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   const isLocked = input.isLocked === undefined ? null : input.isLocked ? 1 : 0;
   const isCounterparty = input.isCounterparty === undefined ? null : input.isCounterparty ? 1 : 0;
   const isPending = input.isPending === undefined ? null : input.isPending ? 1 : 0;
+  const manualConfirmPendingFill = input.manualConfirmPendingFill === true;
 
   try {
     await ensureLedger52T0JournalTables(tx);
@@ -3863,9 +3866,12 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       ? String(before.execution_status ?? "filled") === "pending"
       : isPending === 1;
     const wasPending = String(before.execution_status ?? "filled") === "pending";
-    // 挂单只能在新开仓或新平仓时设置。已有开仓的编辑不得把已成交单改回挂单，
-    // 也不得将一张真实挂单伪装为已成交；实际成交由行情扫描器处理。
-    if (isPending !== null && nextIsPending !== wasPending) {
+    // 已成交单不能回退为挂单。唯一例外是管理员明确确认一笔仍处于 pending 的开仓挂单，
+    // 以当前表单成交价和当前确认时间落为 filled；普通编辑绝不可绕过该确认动作。
+    if (manualConfirmPendingFill && (!wasPending || nextIsPending)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "仅未成交挂单可以手动确认成交" });
+    }
+    if (isPending !== null && nextIsPending !== wasPending && !(manualConfirmPendingFill && wasPending && !nextIsPending)) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "已有开仓订单不可在编辑中切换挂单状态；挂单仅能在新开仓或平仓时设置" });
     }
     if (nextIsPending && isLocked === 1) {
@@ -4168,7 +4174,13 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     const updatedPlansByEntryId = await getTakeProfitPlansByEntryId(tx, [input.entryId]);
     after.take_profit_plans = updatedPlansByEntryId.get(input.entryId) ?? [];
     const afterForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, after);
-    await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "update", before: beforeForAudit, after: afterForAudit });
+    await writeEntryAudit(tx, {
+      actorUserId: input.actorUserId,
+      entryId: input.entryId,
+      operation: manualConfirmPendingFill ? "fill" : "update",
+      before: beforeForAudit,
+      after: afterForAudit,
+    });
     await tx.commit();
     if (nextIsPending || takeProfit.enabled) activateLedger52T0PendingOrderScan();
     else void refreshLedger52T0PendingOrderScanState();

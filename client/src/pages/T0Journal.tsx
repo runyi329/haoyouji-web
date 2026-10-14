@@ -3414,6 +3414,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     [settledOpenedTradeList, showSettledOpeningHistory],
   );
   const isEditingEntry = Boolean(entryForm.editingEntryId);
+  const isEditingPendingOpening = Boolean(isEditingEntry && editingOriginalTrade?.isPending && entryForm.isPending);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
   // 编辑一张已部分平仓的主单时，锁定只标识尚未平掉的余额；已实现的平仓记录仍保持独立审计。
   const editingRemainingQuantity = useMemo(() => {
@@ -4059,7 +4060,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   });
 
   const updateOpeningEntryMutation = trpc.ledger.t0UpdateOpeningEntry.useMutation({
-    onSuccess: (data: any) => {
+    onSuccess: (data: any, variables: any) => {
       const entry: PreviewTrade = {
         id: String(data.entry.id),
         accountId: String(data.entry.accountId),
@@ -4170,7 +4171,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         targetPrice: undefined,
       });
       setShowEntrySheet(true);
-      toast.success(entry.isPending ? "挂单已保存，等待统一参考价触发成交" : entry.isLocked ? "开仓已锁定，逐笔报价将显示黑金锁标" : "开仓记录已修改");
+      toast.success(variables?.manualConfirmPendingFill
+        ? `挂单已手动确认成交，成交价 ${formatPrice(entry.price)}`
+        : entry.isPending
+          ? "挂单已保存，等待统一参考价触发成交"
+          : entry.isLocked
+            ? "开仓已锁定，逐笔报价将显示黑金锁标"
+            : "开仓记录已修改");
     },
     onError: (error) => toast.error(error.message || "开仓记录修改失败"),
   });
@@ -4408,7 +4415,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setRelatedUserQuickPickerOpen(false);
   };
 
-  const handleSaveEntry = () => {
+  const handleSaveEntry = (manualConfirmPendingFill = false) => {
     const normalizedQuantity = normalizeEthQuantity(entryForm.quantity);
     const quantity = Number(normalizedQuantity);
     const selectedAction = ACTIONS[entryForm.action];
@@ -4570,7 +4577,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         isCounterparty: entryForm.isCounterparty,
         counterpartyOnly: !partialLockOnlyUpdate && safeDependentEdit === "counterparty",
         lockOnly: partialLockOnlyUpdate || safeDependentEdit === "lock",
-        isPending: entryForm.isPending,
+        // 编辑挂单时只有底部“手动确认成交”明确传 false；普通保存仍保持 pending。
+        isPending: manualConfirmPendingFill ? false : entryForm.isPending,
+        manualConfirmPendingFill: manualConfirmPendingFill || undefined,
         takeProfitEnabled: isTakeProfitEligible ? entryForm.isTakeProfit : false,
         takeProfitPrice: isTakeProfitEligible && entryForm.isTakeProfit ? takeProfitPlans[0]?.price : undefined,
         takeProfitQuantity: isTakeProfitEligible && entryForm.isTakeProfit ? takeProfitPlans[0]?.quantity : undefined,
@@ -6058,7 +6067,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         ? `原始 ${formatQuantity(editingOriginalTrade.quantity)} ETH 已全部平仓；关联历史不可编辑。`
                         : isPartiallyClosedOpeningEdit && editingOriginalTrade && editingRemainingQuantity !== null
                         ? `原始 ${formatQuantity(editingOriginalTrade.quantity)} ETH，已平 ${formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；当前可管理剩余 ${formatQuantity(editingRemainingQuantity)} ETH 的锁定或止盈。`
-                        : "请直接修改下方字段，完成后点击底部“保存修改”。"}
+                        : isEditingPendingOpening
+                          ? "当前为挂单待成交状态；核对数量和成交价后，点击底部“手动确认成交”即按当前价格计入仓位。"
+                          : "请直接修改下方字段，完成后点击底部“保存修改”。"}
                     </div>
                   </div>
                 )}
@@ -6736,10 +6747,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               {!isCloseReview && (
                 <button
                   disabled={(isEditingEntry ? updateOpeningEntryMutation.isPending || (hasDependentCloseOpeningEdit && (!isPartiallyClosedOpeningEdit || (!hasPartialOpeningMarkerChange && !hasPartialTakeProfitChange))) : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)) || Boolean(optionFormValidationMessage)}
-                  onClick={handleSaveEntry}
-                  className="w-full h-12 rounded bg-indigo-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99]"
+                  onClick={() => handleSaveEntry(isEditingPendingOpening)}
+                  className={`w-full h-12 rounded text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99] ${isEditingPendingOpening ? "bg-emerald-600" : "bg-indigo-600"}`}
                 >
-                  {isEditingEntry ? "保存修改" : isClosingEntry ? `确认${ACTIONS[entryForm.action].label}参数` : "快速保存并记账"}
+                  {isEditingPendingOpening ? "手动确认成交" : isEditingEntry ? "保存修改" : isClosingEntry ? `确认${ACTIONS[entryForm.action].label}参数` : "快速保存并记账"}
                 </button>
               )}
             </div>}
@@ -6768,7 +6779,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </button>
               <button
                 disabled={saveEntryMutation.isPending}
-                onClick={handleSaveEntry}
+                onClick={() => handleSaveEntry()}
                 className="h-11 rounded bg-amber-600 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40"
               >
                 确认平仓
