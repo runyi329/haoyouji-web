@@ -11491,6 +11491,11 @@ ${klinesSummary}
         takeProfitQuantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, '止盈数量整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '止盈数量必须大于0').optional(),
         takeProfitPlans: z.array(z.object({ price: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '止盈价格格式无效').refine((value) => Number(value) > 0, '止盈价格必须大于0'), quantity: z.string().trim().regex(/^(?:0|[1-9]\d{0,3})(?:\.\d{1,2})?$/, '止盈数量整数最多4位，小数最多2位').refine((value) => Number(value) > 0, '止盈数量必须大于0') })).max(20).optional(),
         takeProfitOnly: z.boolean().optional(),
+        profitShareAllocations: z.array(z.object({
+          beneficiaryUserId: z.number().int().positive(),
+          percentage: z.number().finite().gt(0).lte(100),
+        })).min(1).max(20).optional(),
+        profitShareOnly: z.boolean().optional(),
         optionDirection: z.enum(['long_call', 'long_put', 'short_call', 'short_put']).optional(),
         optionExpiryDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, '到期日格式应为 YYYY-MM-DD').optional(),
         optionPremium: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '权利金格式无效').refine((value) => Number(value) > 0, '权利金必须大于0').optional(),
@@ -11531,6 +11536,8 @@ ${klinesSummary}
           takeProfitQuantity: input.takeProfitQuantity,
           takeProfitPlans: input.takeProfitPlans,
           takeProfitOnly: input.takeProfitOnly,
+          profitShareAllocations: input.profitShareAllocations,
+          profitShareOnly: input.profitShareOnly,
           optionDirection: input.optionDirection,
           optionExpiryDate: input.optionExpiryDate,
           optionPremium: input.optionPremium,
@@ -11543,6 +11550,29 @@ ${klinesSummary}
           quantity: input.quantity,
           price: input.price,
           note: input.note,
+        });
+      }),
+
+    t0UpdateOpeningProfitShare: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(52),
+        entryId: z.number().int().positive(),
+        allocations: z.array(z.object({
+          beneficiaryUserId: z.number().int().positive(),
+          percentage: z.number().finite().gt(0).lte(100),
+        })).min(1).max(20),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const journal = await import('./ledger52-t0-journal');
+        await journal.assertLedger52T0JournalAccess({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        return await journal.updateLedger52T0JournalOpeningProfitShare({
+          actorUserId: ctx.user.id,
+          entryId: input.entryId,
+          allocations: input.allocations,
         });
       }),
 

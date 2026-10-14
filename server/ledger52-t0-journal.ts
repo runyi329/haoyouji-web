@@ -2202,6 +2202,170 @@ export async function setLedger52T0JournalProfitShareRules(input: {
   }
 }
 
+function normalizeOpeningProfitShareAllocations(allocations: Array<{ beneficiaryUserId: number; percentage: number }>) {
+  const normalized = allocations.map((allocation) => ({
+    beneficiaryUserId: Number(allocation.beneficiaryUserId),
+    percentage: normalizeProfitSharePercentage(allocation.percentage),
+  }));
+  if (normalized.length === 0 || normalized.length > 20) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "请设置1至20位收益分配人" });
+  }
+  const beneficiaryIds = new Set<number>();
+  for (const allocation of normalized) {
+    if (!Number.isInteger(allocation.beneficiaryUserId) || allocation.beneficiaryUserId <= 0 || beneficiaryIds.has(allocation.beneficiaryUserId)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "收益分配人不能重复，且必须来自全局用户库" });
+    }
+    beneficiaryIds.add(allocation.beneficiaryUserId);
+  }
+  const totalPercentage = normalized.reduce((total, allocation) => total + allocation.percentage, 0);
+  if (Math.abs(totalPercentage - 100) > 0.00001) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `收益分配合计必须为100%，当前为${totalPercentage.toFixed(4).replace(/\.0+$/, "")}%` });
+  }
+  return [...normalized].sort((left, right) => left.beneficiaryUserId - right.beneficiaryUserId);
+}
+
+/**
+ * 编辑一张尚有余额的开仓单：只重写该开仓主单自身的快照，并同步项目的未来开仓规则。
+ * 已生成的平仓流水拥有独立 entry_id 快照，绝不可删除或更新，因此历史分配永久固定。
+ */
+async function updateOpeningProfitShareSnapshotsAndFutureRules(tx: any, input: {
+  actorUserId: number;
+  entryId: number;
+  before: any;
+  remainingQuantity: string;
+  allocations: Array<{ beneficiaryUserId: number; percentage: number }>;
+}) {
+  const sourceUserId = toNumber(input.before.related_user_id);
+  const relatedFundId = toNumber(input.before.related_fund_id);
+  if (sourceUserId <= 0 || relatedFundId <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "仅已关联用户和项目的持仓单可以编辑收益分配" });
+  }
+  const normalizedAllocations = normalizeOpeningProfitShareAllocations(input.allocations);
+  const [fundRows] = await tx.execute(
+    `SELECT related_user_id FROM ledger52_t0_journal_related_funds
+      WHERE id = ? AND ledger_id = ? AND user_id = ? AND is_active = 1 LIMIT 1 FOR UPDATE`,
+    [relatedFundId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+  );
+  if (toNumber(asRows(fundRows)[0]?.related_user_id) !== sourceUserId) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "本单关联项目不存在、已停用或归属已变化" });
+  }
+  for (const allocation of normalizedAllocations) {
+    await assertExistingGlobalUser(tx, allocation.beneficiaryUserId, "收益分配人");
+  }
+
+  const activeRules = await getActiveLedger52T0JournalProfitShareRules(tx, {
+    actorUserId: input.actorUserId,
+    relatedFundId,
+    lock: true,
+  });
+  const unchanged = activeRules.length === normalizedAllocations.length && activeRules.every((rule, index) => (
+    toNumber(rule.beneficiary_user_id) === normalizedAllocations[index].beneficiaryUserId
+    && Math.abs(toNumber(rule.share_percentage) - normalizedAllocations[index].percentage) < 0.00001
+  ));
+  let rulesForSnapshot = activeRules;
+  if (!unchanged) {
+    if (activeRules.length > 0) {
+      await tx.execute(
+        `UPDATE ledger52_t0_journal_profit_share_rules
+            SET is_active = 0, ended_at = NOW(3), updated_at = NOW(3)
+          WHERE ledger_id = ? AND user_id = ? AND related_fund_id = ? AND is_active = 1`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, relatedFundId],
+      );
+    }
+    for (const allocation of normalizedAllocations) {
+      await tx.execute(
+        `INSERT INTO ledger52_t0_journal_profit_share_rules
+          (ledger_id, user_id, source_user_id, related_fund_id, beneficiary_user_id, share_percentage, is_active, created_by_user_id)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
+        [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, sourceUserId, relatedFundId, allocation.beneficiaryUserId, allocation.percentage, input.actorUserId],
+      );
+    }
+    rulesForSnapshot = await getActiveLedger52T0JournalProfitShareRules(tx, {
+      actorUserId: input.actorUserId,
+      relatedFundId,
+      lock: true,
+    });
+  }
+  const ruleIdByBeneficiary = new Map<number, number>(
+    rulesForSnapshot.map((rule) => [toNumber(rule.beneficiary_user_id), toNumber(rule.id)]),
+  );
+
+  // 只替换开仓本身的快照；entry_id 为平仓流水的记录保持不动，确保历史已平不被回改。
+  await tx.execute(
+    `DELETE FROM ledger52_t0_journal_entry_profit_shares
+      WHERE ledger_id = ? AND user_id = ? AND entry_id = ? AND opening_entry_id = ?`,
+    [LEDGER_52_T0_JOURNAL_ID, input.actorUserId, input.entryId, input.entryId],
+  );
+  for (const allocation of normalizedAllocations) {
+    await tx.execute(
+      `INSERT INTO ledger52_t0_journal_entry_profit_shares
+        (ledger_id, user_id, entry_id, opening_entry_id, source_user_id, related_fund_id, beneficiary_user_id, profit_share_rule_id, share_percentage, matched_quantity)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        LEDGER_52_T0_JOURNAL_ID,
+        input.actorUserId,
+        input.entryId,
+        input.entryId,
+        sourceUserId,
+        relatedFundId,
+        allocation.beneficiaryUserId,
+        ruleIdByBeneficiary.get(allocation.beneficiaryUserId) || null,
+        allocation.percentage,
+        input.remainingQuantity,
+      ],
+    );
+  }
+}
+
+/**
+ * 持仓编辑页专用的单次分配保存：本单剩余仓位快照与项目未来新开仓规则在同一事务中生效。
+ * 已平仓流水的 entry_id 与开仓主单不同，不会触及其分配快照。
+ */
+export async function updateLedger52T0JournalOpeningProfitShare(input: {
+  actorUserId: number;
+  entryId: number;
+  allocations: Array<{ beneficiaryUserId: number; percentage: number }>;
+}) {
+  const connection = await getDbTransactionConnection();
+  if (!connection) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
+  const tx: any = connection;
+  try {
+    await ensureLedger52T0JournalTables(tx);
+    await tx.beginTransaction();
+    const lockedEntry = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId, { allowDependentClose: true });
+    const before = lockedEntry.entry;
+    if (String(before.execution_status ?? "filled") === "pending") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "挂单尚未成交，成交后才可编辑本单收益分配" });
+    }
+    if (lockedEntry.remainingCents <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓单已全部平仓，历史收益分配不可修改" });
+    }
+    const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
+    await updateOpeningProfitShareSnapshotsAndFutureRules(tx, {
+      actorUserId: input.actorUserId,
+      entryId: input.entryId,
+      before,
+      remainingQuantity: (lockedEntry.remainingCents / 100).toFixed(2),
+      allocations: input.allocations,
+    });
+    const afterForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
+    await writeEntryAudit(tx, {
+      actorUserId: input.actorUserId,
+      entryId: input.entryId,
+      operation: "update",
+      before: beforeForAudit,
+      after: afterForAudit,
+    });
+    await tx.commit();
+    return { entryId: String(input.entryId) };
+  } catch (error) {
+    try { await tx.rollback(); } catch {}
+    throw error;
+  } finally {
+    tx.release?.();
+  }
+}
+
 type ProfitShareOpeningMatch = { openingEntryId: number; matchedQuantityCents: number };
 
 /**
@@ -3831,6 +3995,10 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   takeProfitPlans?: T0TakeProfitPlanInput[];
   /** 已部分平仓的开仓单只允许单独更新剩余仓位的止盈计划。 */
   takeProfitOnly?: boolean;
+  /** 持仓单的收益分配清单：更新本单尚未平掉的快照，并同步后续新开订单默认规则。 */
+  profitShareAllocations?: Array<{ beneficiaryUserId: number; percentage: number }>;
+  /** 已部分平仓时，仅允许单独更新尚余仓位的收益分配。 */
+  profitShareOnly?: boolean;
   optionDirection?: T0JournalOptionDirection;
   optionExpiryDate?: string;
   optionPremium?: string;
@@ -3853,12 +4021,14 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
   const isCounterparty = input.isCounterparty === undefined ? null : input.isCounterparty ? 1 : 0;
   const isPending = input.isPending === undefined ? null : input.isPending ? 1 : 0;
   const manualConfirmPendingFill = input.manualConfirmPendingFill === true;
+  const hasProfitShareUpdate = input.profitShareAllocations !== undefined;
+  const profitShareOnlyUpdate = input.profitShareOnly === true;
 
   try {
     await ensureLedger52T0JournalTables(tx);
     await tx.beginTransaction();
     const lockedEntry = await lockEditableOpeningEntry(tx, input.actorUserId, input.entryId, {
-      allowDependentClose: input.lockOnly === true || input.takeProfitOnly === true,
+      allowDependentClose: input.lockOnly === true || input.takeProfitOnly === true || profitShareOnlyUpdate,
     });
     const before = lockedEntry.entry;
     const beforeForAudit = await buildEntryAuditSnapshot(tx, input.actorUserId, before);
@@ -3876,6 +4046,9 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     }
     if (nextIsPending && isLocked === 1) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "挂单成交前不可设为锁定；请在成交后再锁定" });
+    }
+    if (profitShareOnlyUpdate && !hasProfitShareUpdate) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "请提交完整的本单收益分配清单" });
     }
     // 将已成交订单改回挂单时强制解除锁定；历史异常组合也会在下一次编辑中自动修正。
     const isLockedForUpdate = nextIsPending ? 0 : isLocked;
@@ -3897,10 +4070,10 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
         ? { column: "is_locked", value: isLocked, label: "锁定" }
         : null;
       const takeProfitOnlyUpdate = input.takeProfitOnly === true && input.counterpartyOnly !== true;
-      if ((!dependentSafeUpdate || dependentSafeUpdate.value === null) && !takeProfitOnlyUpdate) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已被后续平仓使用；仅可对剩余仓位单独切换锁定或止盈，其他字段不可编辑" });
+      if ((!dependentSafeUpdate || dependentSafeUpdate.value === null) && !takeProfitOnlyUpdate && !profitShareOnlyUpdate) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "该开仓主单已被后续平仓使用；仅可对剩余仓位单独切换锁定、止盈或收益分配，其他字段不可编辑" });
       }
-      // 锁定与止盈都只作用于尚未平掉的余额，不触碰原始数量、价格、账户、归属或 FIFO 分配。
+      // 锁定、止盈和本单分配都只作用于尚未平掉的余额，不触碰原始数量、价格、账户、归属或 FIFO 历史。
       if (takeProfitOnlyUpdate) {
         await tx.execute(
           `UPDATE ledger52_t0_journal_entries
@@ -3913,7 +4086,7 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
             WHERE id = ? AND ledger_id = ? AND user_id = ?`,
           [input.lockOnly === true ? isLocked : null, takeProfit.enabled ? 1 : 0, takeProfit.price, takeProfit.quantity, takeProfit.enabled ? 1 : 0, takeProfit.enabled ? 1 : 0, takeProfit.enabled ? 1 : 0, input.entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
         );
-      } else {
+      } else if (dependentSafeUpdate) {
         await tx.execute(
           `UPDATE ledger52_t0_journal_entries SET ${dependentSafeUpdate!.column} = ?, updated_at = NOW(3)
             WHERE id = ? AND ledger_id = ? AND user_id = ?`,
@@ -3923,6 +4096,15 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       if (takeProfitOnlyUpdate) {
         await replacePendingTakeProfitPlans(tx, { actorUserId: input.actorUserId, openingEntryId: input.entryId, plans: takeProfit.plans });
         await syncEntryTakeProfitSummary(tx, { actorUserId: input.actorUserId, openingEntryId: input.entryId });
+      }
+      if (profitShareOnlyUpdate) {
+        await updateOpeningProfitShareSnapshotsAndFutureRules(tx, {
+          actorUserId: input.actorUserId,
+          entryId: input.entryId,
+          before,
+          remainingQuantity: (lockedEntry.remainingCents / 100).toFixed(2),
+          allocations: input.profitShareAllocations!,
+        });
       }
       const [accountRows] = await tx.execute(
         `SELECT id, name, last_used_at, created_at FROM ledger52_t0_journal_accounts
@@ -3947,7 +4129,8 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       );
       const account = asRows(accountRows)[0];
       const after = asRows(updatedRows)[0];
-      if (!account || !after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `${takeProfitOnlyUpdate ? "止盈" : dependentSafeUpdate!.label}设置后读取失败` });
+      const partialUpdateLabel = profitShareOnlyUpdate ? "收益分配" : takeProfitOnlyUpdate ? "止盈" : dependentSafeUpdate?.label ?? "持仓";
+      if (!account || !after) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `${partialUpdateLabel}设置后读取失败` });
       const partialPlansByEntryId = await getTakeProfitPlansByEntryId(tx, [input.entryId]);
       after.take_profit_plans = partialPlansByEntryId.get(input.entryId) ?? [];
       await writeEntryAudit(tx, { actorUserId: input.actorUserId, entryId: input.entryId, operation: "update", before: beforeForAudit, after: await buildEntryAuditSnapshot(tx, input.actorUserId, after) });
@@ -4047,6 +4230,12 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
       // 旧开仓可能在专项款功能上线前已关联用户，编辑时允许暂时保留“未区分专项款（历史）”。
       required: false,
     });
+    if (hasProfitShareUpdate && (
+      relatedUserId !== toNumber(before.related_user_id)
+      || (relatedFund?.id ?? 0) !== toNumber(before.related_fund_id)
+    )) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "编辑本单收益分配时不可同时修改关联用户或项目" });
+    }
     if (accountId !== toNumber(before.account_id)) {
       // 目标账户若已有本单之后的平仓，移入该开仓会改写目标账户既有 FIFO 配对，必须先处理平仓流水。
       const [targetCloseRows] = await tx.execute(
@@ -4136,7 +4325,15 @@ export async function updateLedger52T0JournalOpeningEntry(input: {
     );
     await replacePendingTakeProfitPlans(tx, { actorUserId: input.actorUserId, openingEntryId: input.entryId, plans: takeProfit.plans });
     await syncEntryTakeProfitSummary(tx, { actorUserId: input.actorUserId, openingEntryId: input.entryId });
-    if (beforeForAudit.profitShareSnapshots.length > 0) {
+    if (hasProfitShareUpdate) {
+      await updateOpeningProfitShareSnapshotsAndFutureRules(tx, {
+        actorUserId: input.actorUserId,
+        entryId: input.entryId,
+        before,
+        remainingQuantity: normalizedQuantity,
+        allocations: input.profitShareAllocations!,
+      });
+    } else if (beforeForAudit.profitShareSnapshots.length > 0) {
       await tx.execute(
         `UPDATE ledger52_t0_journal_entry_profit_shares
             SET matched_quantity = ?

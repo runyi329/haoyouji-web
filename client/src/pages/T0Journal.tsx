@@ -1381,6 +1381,33 @@ function buildClosingProfitShareDistribution(input: {
     .sort((left, right) => right.netPnl - left.netPnl || left.beneficiaryUserName.localeCompare(right.beneficiaryUserName, "zh-CN"));
 }
 
+/**
+ * 持仓详情只读取开仓当时固化的收益分配快照，不读取当前项目规则。
+ * 正常情况下 entryId 与 openingEntryId 相同；旧数据缺少原始开仓快照时，才以同一开仓
+ * 后续平仓继承的快照回填展示，且每位受益人只保留一条比例。
+ */
+function getOpeningProfitShareSnapshotAllocations(snapshots: ProfitShareSnapshot[], openingEntryId: string) {
+  const inheritedSnapshots = snapshots.filter((snapshot) => snapshot.openingEntryId === openingEntryId && snapshot.percentage > 0);
+  const directSnapshots = inheritedSnapshots.filter((snapshot) => snapshot.entryId === openingEntryId);
+  const candidates = directSnapshots.length > 0 ? directSnapshots : inheritedSnapshots;
+  const byBeneficiary = new Map<number, ProfitShareSnapshot>();
+  for (const snapshot of candidates) {
+    if (!byBeneficiary.has(snapshot.beneficiaryUserId)) byBeneficiary.set(snapshot.beneficiaryUserId, snapshot);
+  }
+  return Array.from(byBeneficiary.values())
+    .map((snapshot) => ({
+      beneficiaryUserId: snapshot.beneficiaryUserId,
+      beneficiaryUserName: snapshot.beneficiaryUserName || `用户#${snapshot.beneficiaryUserId}`,
+      percentage: snapshot.percentage,
+    }))
+    .sort((left, right) => right.percentage - left.percentage || left.beneficiaryUserName.localeCompare(right.beneficiaryUserName, "zh-CN"));
+}
+
+function formatProfitSharePercentage(percentage: number) {
+  if (!Number.isFinite(percentage)) return "0%";
+  return `${Number(percentage.toFixed(4)).toString()}%`;
+}
+
 function buildPositionBuckets(trades: PreviewTrade[]) {
   const buckets = new Map<string, PositionBucket>();
   const orderedTrades = [...trades]
@@ -2090,6 +2117,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [profitShareSource, setProfitShareSource] = useState<PreviewRelatedFund | null>(null);
   const [profitShareRecipientSearch, setProfitShareRecipientSearch] = useState("");
   const [profitShareAllocations, setProfitShareAllocations] = useState<ProfitShareAllocationDraft[]>([]);
+  const [entryProfitShareEditTarget, setEntryProfitShareEditTarget] = useState<PreviewTrade | null>(null);
   const [profitShareSnapshots, setProfitShareSnapshots] = useState<ProfitShareSnapshot[]>([]);
   const [directoryManagerKind, setDirectoryManagerKind] = useState<JournalDirectoryKind | null>(null);
   const [directoryRenameTarget, setDirectoryRenameTarget] = useState<JournalDirectoryRenameTarget | null>(null);
@@ -3414,7 +3442,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     [settledOpenedTradeList, showSettledOpeningHistory],
   );
   const isEditingEntry = Boolean(entryForm.editingEntryId);
-  const isEditingPendingOpening = Boolean(isEditingEntry && editingOriginalTrade?.isPending && entryForm.isPending);
+  /** 既有挂单在编辑时保留时钟按钮；取消选中后，点击保存才确认成交。 */
+  const isEditingOriginalPendingOpening = Boolean(isEditingEntry && editingOriginalTrade?.isPending);
+  const isEditingPendingOpening = Boolean(isEditingOriginalPendingOpening && entryForm.isPending);
+  const isPendingFillConfirmationQueued = Boolean(isEditingOriginalPendingOpening && !entryForm.isPending);
   const isClosingEntry = !ACTIONS[entryForm.action].opening;
   // 编辑一张已部分平仓的主单时，锁定只标识尚未平掉的余额；已实现的平仓记录仍保持独立审计。
   const editingRemainingQuantity = useMemo(() => {
@@ -3808,6 +3839,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setCloseConfirmationStep("input");
     setClosingSourceTrade(null);
     setEditingOriginalTrade(trade);
+    setEntryProfitShareEditTarget(null);
     // 已关联平仓的主单保留原始数量供 FIFO 与审计使用；编辑视图仅展示剩余余额。
     const linkedClosings = openingClosingAllocations.get(trade.id) ?? [];
     const closedQuantity = linkedClosings.reduce((total, allocation) => total + allocation.quantity, 0);
@@ -3952,6 +3984,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       toast.success("收益分配已保存，仅影响此后新开的订单");
     },
     onError: (error) => toast.error(error.message || "收益分配保存失败"),
+  });
+
+  const updateOpeningProfitShareMutation = trpc.ledger.t0UpdateOpeningProfitShare.useMutation({
+    onSuccess: () => {
+      setProfitShareSource(null);
+      setEntryProfitShareEditTarget(null);
+      setProfitShareAllocations([]);
+      setProfitShareRecipientSearch("");
+      void t0JournalQuery.refetch();
+      toast.success("本单剩余仓位与后续新订单的收益分配已保存；已平历史保持不变");
+    },
+    onError: (error) => toast.error(error.message || "本单收益分配保存失败"),
   });
 
   const saveEntryMutation = trpc.ledger.t0CreateEntry.useMutation({
@@ -4140,6 +4184,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setEntrySide(ACTIONS[entry.action].side);
       setClosingSourceTrade(null);
       setEditingOriginalTrade(null);
+      setEntryProfitShareEditTarget(null);
       setEntryForm({
         action: entry.action,
         accountId: entry.accountId,
@@ -4171,6 +4216,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         targetPrice: undefined,
       });
       setShowEntrySheet(true);
+      if (variables?.profitShareAllocations) void t0JournalQuery.refetch();
       toast.success(variables?.manualConfirmPendingFill
         ? `挂单已手动确认成交，成交价 ${formatPrice(entry.price)}`
         : entry.isPending
@@ -4247,6 +4293,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setDirectoryManagerKind(null);
     setDirectoryRenameTarget(null);
     setDirectoryDeleteTarget(null);
+    setEntryProfitShareEditTarget(null);
     setProfitShareSource(source);
     setProfitShareAllocations(currentRules.length > 0
       ? currentRules.map((rule) => ({
@@ -4260,9 +4307,41 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setProfitShareRecipientSearch("");
   };
 
+  const openEntryProfitShareManager = () => {
+    const opening = editingOriginalTrade;
+    if (!opening || opening.isPending || !opening.relatedFundId || !opening.relatedUserId) {
+      toast.error("仅已成交且已关联项目的持仓单可以编辑收益分配");
+      return;
+    }
+    const source = relatedFunds.find((fund) => fund.id === opening.relatedFundId) ?? {
+      id: opening.relatedFundId,
+      name: opening.relatedFundName || "当前项目",
+      relatedUserId: opening.relatedUserId,
+    };
+    const openingAllocations = getOpeningProfitShareSnapshotAllocations(profitShareSnapshots, getStoredEntryId(opening));
+    const draft = openingAllocations.map((allocation) => ({
+      user: { id: String(allocation.beneficiaryUserId), name: allocation.beneficiaryUserName },
+      percentage: String(allocation.percentage),
+    }));
+    if (draft.length === 0) {
+      toast.error("该持仓单尚未固化收益分配，无法直接编辑");
+      return;
+    }
+    setRelatedUserPickerOpen(false);
+    setRelatedUserQuickPickerOpen(false);
+    setDirectoryManagerKind(null);
+    setDirectoryRenameTarget(null);
+    setDirectoryDeleteTarget(null);
+    setEntryProfitShareEditTarget(opening);
+    setProfitShareSource(source);
+    setProfitShareAllocations(draft);
+    setProfitShareRecipientSearch("");
+  };
+
   const closeProfitShareManager = () => {
-    if (setProfitShareRuleMutation.isPending) return;
+    if (setProfitShareRuleMutation.isPending || updateOpeningProfitShareMutation.isPending) return;
     setProfitShareSource(null);
+    setEntryProfitShareEditTarget(null);
     setProfitShareAllocations([]);
     setProfitShareRecipientSearch("");
   };
@@ -4283,6 +4362,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const totalPercentage = allocations.reduce((total, allocation) => total + allocation.percentage, 0);
     if (Math.abs(totalPercentage - 100) > 0.00001) {
       toast.error(`分配合计必须为100%，当前为${totalPercentage.toFixed(2)}%`);
+      return;
+    }
+    if (entryProfitShareEditTarget) {
+      const entryId = Number(getStoredEntryId(entryProfitShareEditTarget));
+      if (!Number.isInteger(entryId) || entryId <= 0) {
+        toast.error("未能识别当前持仓单，请关闭后重新打开编辑");
+        return;
+      }
+      updateOpeningProfitShareMutation.mutate({ ledgerId: 52, entryId, allocations });
       return;
     }
     setProfitShareRuleMutation.mutate({
@@ -4577,7 +4665,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         isCounterparty: entryForm.isCounterparty,
         counterpartyOnly: !partialLockOnlyUpdate && safeDependentEdit === "counterparty",
         lockOnly: partialLockOnlyUpdate || safeDependentEdit === "lock",
-        // 编辑挂单时只有底部“手动确认成交”明确传 false；普通保存仍保持 pending。
+        // 编辑挂单时，先取消时钟“挂单”选中状态，再点击“保存修改”才确认成交。
         isPending: manualConfirmPendingFill ? false : entryForm.isPending,
         manualConfirmPendingFill: manualConfirmPendingFill || undefined,
         takeProfitEnabled: isTakeProfitEligible ? entryForm.isTakeProfit : false,
@@ -4967,6 +5055,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const takeProfitPlans = getTradeTakeProfitPlans(trade);
   const pendingTakeProfitQuantity = getPendingTakeProfitQuantity(trade);
   const takeProfitMarkerLabel = getTakeProfitMarkerLabel(trade.takeProfitEnabled, pendingTakeProfitQuantity, remainingQuantity);
+  const openingProfitShareAllocations = getOpeningProfitShareSnapshotAllocations(profitShareSnapshots, getStoredEntryId(trade));
+  const visibleProfitShareAllocations = isMemberView
+    ? openingProfitShareAllocations.filter((allocation) => allocation.beneficiaryUserId === viewerProfitShareBeneficiaryUserId)
+    : openingProfitShareAllocations;
+  const profitShareSummary = visibleProfitShareAllocations
+    .map((allocation) => `${allocation.beneficiaryUserName}${formatProfitSharePercentage(allocation.percentage)}`)
+    .join(" · ");
   const isExpanded = expandedOpenedTradeIds.has(trade.id);
   return (
     <div key={trade.id} className="rounded border border-slate-200 bg-slate-50/80 px-3 py-2.5">
@@ -5018,6 +5113,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           <span title={getTradeRelatedUserName(trade)} className="shrink-0 whitespace-nowrap text-slate-500">{getTradeRelatedUserName(trade)}</span>
           <span className="shrink-0 text-slate-300">·</span>
           <span title={getTradeRelatedFundName(trade)} className="shrink-0 whitespace-nowrap text-slate-500">{getTradeRelatedFundName(trade)}</span>
+          {visibleProfitShareAllocations.length > 0 && <>
+            <span className="shrink-0 text-slate-300">·</span>
+            <span title={profitShareSummary} className="min-w-0 truncate text-indigo-700">{isMemberView ? `本单分配 ${formatProfitSharePercentage(visibleProfitShareAllocations[0].percentage)}` : `分配 ${profitShareSummary}`}</span>
+          </>}
         </div>
         }
         {canManage && <div className="flex shrink-0 items-center gap-1.5">
@@ -5083,6 +5182,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div title={getTradeRelatedFundName(trade)} className="mt-0.5 truncate text-[11px] font-medium text-slate-700">{getTradeRelatedFundName(trade)}</div>
               </div>
             </div>
+            {visibleProfitShareAllocations.length > 0 && <div className="col-span-3 border-t border-indigo-100 pt-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-800"><UserRound className="h-3 w-3 text-indigo-600" />{isMemberView ? "本单分配" : "收益分配"}</span>
+                <span className="shrink-0 text-[10px] text-indigo-600">开仓快照 · {visibleProfitShareAllocations.length} 人</span>
+              </div>
+              <div className="mt-1.5 overflow-hidden rounded border border-indigo-100 bg-indigo-50/40">
+                {visibleProfitShareAllocations.map((allocation, allocationIndex) => <div key={allocation.beneficiaryUserId} className={`flex items-center justify-between gap-3 px-2.5 py-1.5 text-[11px] tabular-nums ${allocationIndex > 0 ? "border-t border-indigo-100/80" : ""}`}>
+                  <span className="min-w-0 truncate font-medium text-slate-700">{allocation.beneficiaryUserName}</span>
+                  <span className="shrink-0 font-semibold text-indigo-700">{formatProfitSharePercentage(allocation.percentage)}</span>
+                </div>)}
+              </div>
+              <div className="mt-1.5 text-[10px] leading-4 text-slate-500">已平流水按当时比例永久固定；管理员可在“编辑”中调整本单剩余仓位，并同步此项目之后新开的订单。</div>
+            </div>}
             {trade.instrumentType === "option" && <div className="col-span-3 grid grid-cols-3 gap-x-2 border-t border-slate-200 pt-2">
               <div className="min-w-0">
                 <div className="text-[10px] text-slate-400">期权方向</div>
@@ -6066,9 +6178,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       {isFullyClosedOpeningEdit && editingOriginalTrade
                         ? `原始 ${formatQuantity(editingOriginalTrade.quantity)} ETH 已全部平仓；关联历史不可编辑。`
                         : isPartiallyClosedOpeningEdit && editingOriginalTrade && editingRemainingQuantity !== null
-                        ? `原始 ${formatQuantity(editingOriginalTrade.quantity)} ETH，已平 ${formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；当前可管理剩余 ${formatQuantity(editingRemainingQuantity)} ETH 的锁定或止盈。`
+                        ? `原始 ${formatQuantity(editingOriginalTrade.quantity)} ETH，已平 ${formatQuantity(editingOriginalTrade.quantity - editingRemainingQuantity)} ETH；当前可管理剩余 ${formatQuantity(editingRemainingQuantity)} ETH 的锁定、止盈或收益分配。`
                         : isEditingPendingOpening
-                          ? "当前为挂单待成交状态；核对数量和成交价后，点击底部“手动确认成交”即按当前价格计入仓位。"
+                          ? "挂单按钮已选中；取消选中后，点击底部“保存修改”才会按当前成交价确认成交。"
+                          : isPendingFillConfirmationQueued
+                            ? "已取消挂单选择；点击底部“保存修改”后，将按当前成交价确认成交并计入仓位。"
                           : "请直接修改下方字段，完成后点击底部“保存修改”。"}
                     </div>
                   </div>
@@ -6099,12 +6213,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         >
                           {entryForm.isLocked ? <Lock className="h-4 w-4" strokeWidth={2.3} /> : <LockOpen className="h-4 w-4" strokeWidth={2.3} />}
                         </button>
-                        {!isEditingEntry && <button
+                        {(!isEditingEntry || isEditingOriginalPendingOpening) && <button
                           type="button"
                           disabled={isCloseReview || entryForm.instrumentType === "option" || entryForm.instrumentType === "grid"}
                           aria-pressed={entryForm.isPending}
-                          aria-label={entryForm.instrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? "取消本笔开仓挂单，改为直接成交" : "设为本笔开仓挂单"}
-                          title={entryForm.instrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? "挂单中，点击改为直接成交" : "直接成交，点击改为挂单"}
+                          aria-label={entryForm.instrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? isEditingOriginalPendingOpening ? "取消挂单选择，保存时确认成交" : "取消本笔开仓挂单，改为直接成交" : isEditingOriginalPendingOpening ? "恢复挂单选择" : "设为本笔开仓挂单"}
+                          title={entryForm.instrumentType === "grid" ? "网格参数仅作策略记录，不支持挂单自动成交" : entryForm.instrumentType === "option" ? "期权订单仅支持直接成交" : entryForm.isPending ? isEditingOriginalPendingOpening ? "挂单已选中；取消后需点击保存修改才确认成交" : "挂单中，点击改为直接成交" : isEditingOriginalPendingOpening ? "已取消挂单选择；点击可恢复挂单" : "直接成交，点击改为挂单"}
                           onClick={() => setEntryForm((current) => ({
                             ...current,
                             isPending: !current.isPending,
@@ -6694,7 +6808,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <span>仅搜索并引用全局已有用户；关联后按项目区分资金。</span>
                 </div>
 
-                <Field label={<span className="flex items-center justify-between gap-1"><span>项目 {entryForm.relatedUserId && <span className="text-rose-500">*</span>} {!entryForm.relatedUserId && <span className="text-slate-400">（请先选关联用户）</span>}</span><span className="flex shrink-0 items-center gap-2">{(entryForm.relatedFundId || entryForm.relatedFundName.trim()) && entryForm.relatedFundId !== "legacy" && !isClosingEntry && !isEditingEntry && <button type="button" onClick={() => { const fund = entryRelatedFunds.find((item) => item.id === entryForm.relatedFundId) ?? { id: "", name: entryForm.relatedFundName.trim(), relatedUserId: entryForm.relatedUserId || undefined }; if (fund.name) openProfitShareManager(fund); }} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">收益分配</button>}{entryRelatedFunds.length > 0 && !isClosingEntry && !hasDependentCloseOpeningEdit && <button type="button" onClick={() => openDirectoryManager("relatedFund")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
+                <Field label={<span className="flex items-center justify-between gap-1"><span>项目 {entryForm.relatedUserId && <span className="text-rose-500">*</span>} {!entryForm.relatedUserId && <span className="text-slate-400">（请先选关联用户）</span>}</span><span className="flex shrink-0 items-center gap-2">{(entryForm.relatedFundId || entryForm.relatedFundName.trim()) && entryForm.relatedFundId !== "legacy" && !isClosingEntry && !isEditingEntry && <button type="button" onClick={() => { const fund = entryRelatedFunds.find((item) => item.id === entryForm.relatedFundId) ?? { id: "", name: entryForm.relatedFundName.trim(), relatedUserId: entryForm.relatedUserId || undefined }; if (fund.name) openProfitShareManager(fund); }} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">收益分配</button>}{isEditingEntry && !isClosingEntry && !entryForm.isPending && entryForm.relatedFundId && entryForm.relatedFundId !== "legacy" && <button type="button" onClick={openEntryProfitShareManager} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">本单分配</button>}{entryRelatedFunds.length > 0 && !isClosingEntry && !hasDependentCloseOpeningEdit && <button type="button" onClick={() => openDirectoryManager("relatedFund")} className="text-[11px] font-semibold text-indigo-600 active:opacity-70">管理</button>}</span></span>}>
                   <select
                     disabled={!entryForm.relatedUserId || isCloseReview || isClosingEntry || hasDependentCloseOpeningEdit}
                     value={entryForm.relatedFundId}
@@ -6747,10 +6861,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               {!isCloseReview && (
                 <button
                   disabled={(isEditingEntry ? updateOpeningEntryMutation.isPending || (hasDependentCloseOpeningEdit && (!isPartiallyClosedOpeningEdit || (!hasPartialOpeningMarkerChange && !hasPartialTakeProfitChange))) : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)) || Boolean(optionFormValidationMessage)}
-                  onClick={() => handleSaveEntry(isEditingPendingOpening)}
-                  className={`w-full h-12 rounded text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99] ${isEditingPendingOpening ? "bg-emerald-600" : "bg-indigo-600"}`}
+                  onClick={() => handleSaveEntry(isPendingFillConfirmationQueued)}
+                  className="w-full h-12 rounded bg-indigo-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99]"
                 >
-                  {isEditingPendingOpening ? "手动确认成交" : isEditingEntry ? "保存修改" : isClosingEntry ? `确认${ACTIONS[entryForm.action].label}参数` : "快速保存并记账"}
+                  {isEditingEntry ? "保存修改" : isClosingEntry ? `确认${ACTIONS[entryForm.action].label}参数` : "快速保存并记账"}
                 </button>
               )}
             </div>}
@@ -6790,12 +6904,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       )}
 
       {canManage && profitShareSource && (
-        <div className="fixed inset-0 z-[60] flex items-end bg-slate-950/40 sm:items-center sm:justify-center sm:px-5" role="dialog" aria-modal="true" aria-label="管理收益分配">
+        <div className="fixed inset-0 z-[60] flex items-end bg-slate-950/40 sm:items-center sm:justify-center sm:px-5" role="dialog" aria-modal="true" aria-label={entryProfitShareEditTarget ? "编辑本单收益分配" : "管理收益分配"}>
           <div className="max-h-[88vh] w-full max-w-sm overflow-y-auto rounded-t bg-white p-5 shadow-2xl sm:rounded">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-base font-semibold text-slate-900">收益分配</div>
-                <p className="mt-1 text-xs leading-5 text-slate-500">为项目 {profitShareSource.name} 设置用户收益分配清单</p>
+                <div className="text-base font-semibold text-slate-900">{entryProfitShareEditTarget ? "编辑本单收益分配" : "收益分配"}</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{entryProfitShareEditTarget ? `调整持仓单的剩余仓位，并同步项目 ${profitShareSource.name} 之后新开的订单` : `为项目 ${profitShareSource.name} 设置用户收益分配清单`}</p>
               </div>
               <button type="button" onClick={closeProfitShareManager} aria-label="关闭收益分配" className="rounded p-1 text-slate-400 active:scale-90">
                 <X className="h-5 w-5" />
@@ -6803,7 +6917,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             </div>
 
             <div className="mt-4 rounded border border-slate-200 bg-slate-50 px-3 py-2.5 text-[11px] leading-5 text-slate-600">
-              项目是下单归属，受益人只能选择全局用户。每位比例为1–100的整数，所有用户合计必须恰好100%。仅之后新开的订单会固化本清单；平仓沿用对应开仓当时比例，并按同一比例承担开、平交易成本。
+              {entryProfitShareEditTarget
+                ? "保存到本单后，已平仓流水与其收益分配永久不变；本单尚未平掉的数量，以及本项目之后新开的订单，均采用此清单。"
+                : "项目是下单归属，受益人只能选择全局用户。每位比例为1–100的整数，所有用户合计必须恰好100%。仅之后新开的订单会固化本清单；平仓沿用对应开仓当时比例，并按同一比例承担开、平交易成本。"}
             </div>
 
             <div className="mt-4">
@@ -6847,10 +6963,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </div> : <div className="px-3 py-2.5 text-xs text-slate-400">未找到匹配用户</div>}
             </div>
 
-            {activeProfitShareRules.length > 0 && <div className="mt-3 text-[11px] leading-5 text-slate-500">当前规则已生效；保存修改后仅后续新开订单使用新清单，历史订单保持原快照。</div>}
+            {entryProfitShareEditTarget ? <div className="mt-3 text-[11px] leading-5 text-indigo-700">点击下方“保存本单与后续新单”即刻生效，无需再点击持仓编辑页底部“保存修改”。</div> : activeProfitShareRules.length > 0 && <div className="mt-3 text-[11px] leading-5 text-slate-500">当前规则已生效；保存修改后仅后续新开订单使用新清单，历史订单保持原快照。</div>}
             <div className="mt-5 grid grid-cols-2 gap-3">
               <button type="button" onClick={closeProfitShareManager} className="h-11 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700">取消</button>
-              <button type="button" disabled={setProfitShareRuleMutation.isPending || profitShareDraftTotal !== 100} onClick={submitProfitShareRule} className="h-11 rounded bg-indigo-600 text-sm font-semibold text-white disabled:opacity-40">保存清单</button>
+              <button type="button" disabled={setProfitShareRuleMutation.isPending || updateOpeningProfitShareMutation.isPending || profitShareDraftTotal !== 100} onClick={submitProfitShareRule} className="h-11 rounded bg-indigo-600 text-sm font-semibold text-white disabled:opacity-40">{entryProfitShareEditTarget ? "保存本单与后续新单" : "保存清单"}</button>
             </div>
           </div>
         </div>
