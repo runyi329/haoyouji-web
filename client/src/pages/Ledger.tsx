@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Notebook, Gem, MessageSquare, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X, Hourglass, BookOpen, FolderPlus, Folder, FolderOpen, Pencil, Trash2, FolderInput, Calculator, Pin } from "lucide-react";
+import { Crown, Notebook, Gem, MessageSquare, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X, Hourglass, BookOpen, FolderPlus, Folder, FolderOpen, Pencil, Trash2, FolderInput, Calculator, Pin, BarChart3 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -11,6 +11,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { pinyin } from "pinyin-pro";
 import BottomNav from "@/components/BottomNav";
+import { isInformationCollectionOwner } from "@shared/informationCollection";
 
 
 export default function Ledger() {
@@ -121,6 +122,7 @@ export default function Ledger() {
 
   // 获取当前用户信息
   const { data: user } = trpc.auth.me.useQuery();
+  const canViewInformationCollection = isInformationCollectionOwner(user?.id);
 
   // 获取账本分组数据
   const { data: groupData, refetch: refetchGroups } = trpc.ledgerGroup.list.useQuery();
@@ -472,6 +474,17 @@ export default function Ledger() {
                 <Calculator className="w-5 h-5 text-[#222222]" strokeWidth={2} />
               </button>
             </Link>
+            {canViewInformationCollection && (
+              <button
+                type="button"
+                onClick={() => setLocation("/admin/information-collection")}
+                className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors"
+                title="信息采集"
+                aria-label="信息采集"
+              >
+                <BarChart3 className="w-5 h-5 text-[#1E88D6]" strokeWidth={2} />
+              </button>
+            )}
             {/* 说明书按钮 */}
             <Link href="/ledger/guide">
               <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="功能说明书">

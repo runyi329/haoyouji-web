@@ -36,6 +36,7 @@ import { useTokenPersistence } from "@/hooks/useTokenPersistence";
 import { useNavSourceTracker } from "@/hooks/useSmartBack";
 import { SuperViewBanner } from "@/components/SuperViewBanner";
 import AutoPageTag from "@/components/AutoPageTag";
+import { InformationCollectionTracker } from "@/hooks/useInformationCollection";
 
 
 // HMR 热更新提示音模块
@@ -440,7 +441,7 @@ function ActiveLedgerPagePolling() {
 }
 
 function Router() {
-  const { isLoading } = trpc.auth.me.useQuery();
+  const { isLoading, data: currentUser } = trpc.auth.me.useQuery();
   // 规则003：全局记录页面访问轨迹，供返回按钮精确「从哪来回哪去」
   useNavSourceTracker();
 
@@ -452,6 +453,7 @@ function Router() {
   return (
     <>
       <ActiveLedgerPagePolling />
+      <InformationCollectionTracker user={currentUser} />
       <Suspense fallback={<LoadingFallback />}>
         <Switch>
         {/* 首页 - / 路由永远是人脉页面 */}
@@ -461,6 +463,7 @@ function Router() {
         <Route path="/user-agreement" component={UserAgreement} />
         
         {/* 后台管理 */}
+        <Route path="/admin/information-collection" component={lazy(() => import("./pages/admin/InformationCollection"))} />
         <Route path="/admin" component={Admin} />
         <Route path="/admin/banner" component={BannerConfig} />
         <Route path="/admin/points" component={PointsManagement} />

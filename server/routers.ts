@@ -20,6 +20,8 @@ import * as dbContacts from "./db-contacts";
 import * as dbReminderTypes from "./db-reminder-types";
 import * as dbReferrerStats from "./db-referrer-stats";
 import * as dbAnalytics from "./db-analytics";
+import { getInformationCollectionDashboard, recordInformationCollectionVisit } from "./information-collection";
+import { isInformationCollectionOwner } from "@shared/informationCollection";
 import * as dbPoints from "./db-points";
 import * as dbTagAnalytics from "./db-tag-analytics";
 import { addPointsForAction } from "./db-point-system";
@@ -10627,6 +10629,50 @@ ${klinesSummary}
       }))
       .query(async ({ ctx, input }) => {
         return await dbContacts.getHealthStats(ctx.user.id, input.type);
+      }),
+  }),
+
+  // 信息采集：统一记录全站会话，并优先展开账本中心、37号和52号的页面级明细。
+  informationCollection: router({
+    recordVisit: protectedProcedure
+      .input(z.object({
+        sessionToken: z.string().min(12).max(96),
+        sectionKey: z.enum(["site", "ledger", "other"]),
+        ledgerId: z.number().int().positive().nullable(),
+        pageKey: z.string().min(1).max(96).nullable(),
+        pageLabel: z.string().min(1).max(100).nullable(),
+        pagePath: z.string().min(1).max(180).nullable(),
+        detailed: z.boolean(),
+        eventType: z.enum(["page_view", "heartbeat"]),
+        visibleSeconds: z.number().int().min(0).max(3600),
+        deviceType: z.enum(["mobile", "tablet", "desktop", "unknown"]),
+        osName: z.string().min(1).max(40),
+        browserName: z.string().min(1).max(48),
+        language: z.string().min(1).max(24).nullable(),
+        timezone: z.string().min(1).max(64).nullable(),
+        viewport: z.string().min(1).max(32).nullable(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const actorUserId = ctx.realUser?.id ?? ctx.user.id;
+        return recordInformationCollectionVisit({
+          ...input,
+          userId: actorUserId,
+          viewedAsUserId: ctx.isViewingAs ? ctx.user.id : null,
+          req: ctx.req,
+        });
+      }),
+    dashboard: protectedProcedure
+      .input(z.object({
+        rangeDays: z.number().int().min(1).max(90).default(7),
+        scope: z.enum(["all", "ledger", "ledger37", "ledger52"]).default("all"),
+        selectedUserId: z.number().int().positive().nullable().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const actorUserId = ctx.realUser?.id ?? ctx.user.id;
+        if (!isInformationCollectionOwner(actorUserId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权查看信息采集" });
+        }
+        return getInformationCollectionDashboard(input);
       }),
   }),
   

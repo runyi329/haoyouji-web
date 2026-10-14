@@ -2567,7 +2567,6 @@ export default function Home() {
           {/* 全球市场跑马灯卡片（独立组件，避免Home重渲染导致闪烁） */}
           <GlobalMarketStrip />
 
-
           {/* 三个功能入口 - flex-1撑满剩余空间 */}
           <div className="px-3 pt-1.5 pb-2 flex flex-col flex-1 min-h-0 gap-1.5">
             {/* 第一行：智能财务 + 智能会计 */}
