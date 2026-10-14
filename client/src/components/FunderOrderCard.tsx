@@ -694,6 +694,8 @@ export function FunderOrderCard({
   const [showPeriodEndPicker, setShowPeriodEndPicker] = useState(false);
   // 联合订单的结息可明确归属第一段或某一个第二段；默认仍为第一段，兼容历史结息记录。
   const [selectedJointPaymentSegmentId, setSelectedJointPaymentSegmentId] = useState<string>('');
+  // 担保快捷编辑同样由一套共用操作栏控制，可明确作用于第一段或任一后续段。
+  const [selectedJointCollateralSegmentId, setSelectedJointCollateralSegmentId] = useState<string>('');
   // 参与方面板
   const [_intShowParticipants, _intSetShowParticipants] = useState<number | null>(null);
   const [_intParticipantsList, _intSetParticipantsList] = useState<{ userId: number; displayName: string; role: string; sortOrder: number; rate: string }[]>([]);
@@ -1333,12 +1335,12 @@ export function FunderOrderCard({
       note: asset.note || '',
       ...(asset.source === 'wallet' ? { source: 'wallet' as const } : {}),
     }));
-  const handleOpenCollateralPanel = () => {
-    if (showCollateralPanel) { setShowCollateralPanel(false); return; }
-    // 初始化：手工担保与钱包冻结担保必须分开加载，两个区域各自只操作自己的条目。
+  const selectedJointCollateralSegment = jointOrderSegments.find(segment => String(segment.id || '') === selectedJointCollateralSegmentId) || null;
+  const loadQuickCollateralEditor = (source: Record<string, any>) => {
+    // 手工担保与钱包冻结担保必须分开加载，两个区域各自只操作自己的条目。
     let allItems: QuickCollateralItem[] = [];
     try {
-      const raw = order.collateral_assets;
+      const raw = source.collateral_assets;
       if (raw) {
         const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
         if (Array.isArray(parsed)) {
@@ -1357,16 +1359,13 @@ export function FunderOrderCard({
     setCollateralEditItems(initialManualItems);
     setWalletCollateralEditItems(initialWalletItems);
     setInitialCollateralSignature(JSON.stringify(normalizeQuickCollateralAssets(initialManualItems)));
-    // 初始化担保物约等于配置（从 display_config 加载）
     try {
-      const rawDC = order.display_config;
+      const rawDC = source.display_config;
       const parsedDC = rawDC ? (typeof rawDC === 'string' ? JSON.parse(rawDC) : rawDC) : {};
-      // approxCollateralItem 支持对象格式（每条独立）和字符串格式（全局）
       const aci = parsedDC.approxCollateralItem;
       if (aci && typeof aci === 'object' && !Array.isArray(aci)) {
         setCollateralItemApprox(aci);
       } else if (typeof aci === 'string') {
-        // 将旧的全局字符串格式转换为每条独立
         const initMap: Record<string, string> = {};
         initialManualItems.forEach((_, i) => { initMap[String(i)] = aci; });
         setCollateralItemApprox(initMap);
@@ -1406,6 +1405,16 @@ export function FunderOrderCard({
       setQuickCollateralGapApprox('hidden');
       setCollateralMarginAlertThreshold('');
     }
+  };
+  const selectJointCollateralSegment = (segmentId: string) => {
+    setSelectedJointCollateralSegmentId(segmentId);
+    const segment = jointOrderSegments.find(item => String(item.id || '') === segmentId);
+    loadQuickCollateralEditor(segment || order);
+  };
+  const handleOpenCollateralPanel = () => {
+    if (showCollateralPanel) { setShowCollateralPanel(false); return; }
+    setSelectedJointCollateralSegmentId('');
+    loadQuickCollateralEditor(order);
     setShowCollateralPanel(true);
   };
   const handleSaveCollateral = () => {
@@ -1418,7 +1427,8 @@ export function FunderOrderCard({
     // 构建新的 display_config：在现有基础上只更新担保相关字段
     let newDC: Record<string, any> = {};
     try {
-      const rawDC = order.display_config;
+      // 选择第二段时，展示配置只从该段读取并回写，不能覆盖第一段的担保显示设置。
+      const rawDC = selectedJointCollateralSegment?.display_config ?? order.display_config;
       newDC = rawDC ? (typeof rawDC === 'string' ? JSON.parse(rawDC) : { ...rawDC }) : {};
     } catch {}
     newDC.approxCollateralItem = collateralItemApprox;
@@ -1441,6 +1451,29 @@ export function FunderOrderCard({
       delete newDC.marginAlertThreshold;
     }
     const collateralAssetsChanged = JSON.stringify(validManual) !== initialCollateralSignature;
+    if (selectedJointCollateralSegment) {
+      const selectedSegmentId = String(selectedJointCollateralSegment.id || '');
+      const nextSegments = jointOrderSegments.map((segment) => {
+        if (String(segment.id || '') !== selectedSegmentId) return segment;
+        return {
+          ...segment,
+          display_config: newDC,
+          ...(collateralAssetsChanged ? { collateral_assets: valid } : {}),
+        };
+      });
+      const targetUserId = Number(selectedJointCollateralSegment.owner_user_id || quickViewParticipantUserId || _jointSegmentScopeUserId || 0);
+      if (targetUserId <= 0) {
+        toast.error('未识别该段所属用户，暂不能保存担保');
+        return;
+      }
+      _intSaveParticipantDisplayMutation.mutate({
+        orderId: Number(order.id),
+        ledgerId,
+        userId: targetUserId,
+        snapshot: { joint_order_segments: nextSegments },
+      });
+      return;
+    }
     if (quickViewParticipantUserId) {
       // 显示控制永远属于当前个人视图；只有实际改动担保物时才将其标记为个人担保覆盖。
       const snapshot: Record<string, any> = { display_config: newDC };
@@ -4286,8 +4319,221 @@ export function FunderOrderCard({
         </div>
       )}
 
+      {/* 参与方面板 */}
+      {$showParticipantsPanel === order.id && (
+        <div className="px-4 pt-3 pb-3 border-t border-green-100">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs font-semibold text-green-700 flex items-center gap-1">
+              <Users2 className="w-3.5 h-3.5" />
+              多视角订单参与方
+            </div>
+            {$participantsEditMode ? (
+              <div className="flex gap-1">
+                {$roleOptions.map(r => (
+                  <button
+                    key={r.value}
+                    onClick={() => $handleAddParticipant(r.value)}
+                    className="px-2 py-0.5 text-xs rounded-full font-medium border"
+                    style={{ borderColor: r.color, color: r.color, backgroundColor: `${r.color}10` }}
+                  >
+                    +{r.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <button
+                onClick={() => $setParticipantsEditMode(true)}
+                className="px-2.5 py-0.5 text-xs rounded-full font-medium border flex items-center gap-1"
+                style={{ borderColor: '#059669', color: '#059669', backgroundColor: '#ECFDF5' }}
+              >
+                <Pencil className="w-3 h-3" />编辑
+              </button>
+            )}
+          </div>
+          {$participantsLoading ? (
+            <div className="text-center py-3 text-xs text-gray-400">加载中...</div>
+          ) : !$participantsEditMode ? (
+            /* 只读态：展示已保存的参与方（成员、角色、利率%、收/付） */
+            $participantsList.length === 0 ? (
+              <div className="text-center py-3 text-xs text-gray-400 bg-gray-50 rounded-xl">暂无参与方配置</div>
+            ) : (
+              <div className="space-y-2">
+                {$participantsList.map((p, idx) => {
+                  const roleOpt = $roleOptions.find(r => r.value === p.role);
+                  const rateNum = parseFloat(p.rate || '');
+                  const hasRate = isFinite(rateNum);
+                  const isNeg = hasRate && rateNum < 0;
+                  const absVal = hasRate ? Math.abs(rateNum) : null;
+                  return (
+                    <div key={idx} className="bg-white border border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: roleOpt?.color || '#6B7280' }} />
+                        <span className="text-xs font-medium text-gray-700 truncate">{p.displayName || `用户${p.userId}`}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: `${roleOpt?.color}18`, color: roleOpt?.color }}>{roleOpt?.label || p.role}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {hasRate ? (
+                          <>
+                            <span className="text-xs font-semibold tabular-nums" style={{ color: isNeg ? '#059669' : '#DC2626' }}>{absVal}%</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold" style={isNeg ? { backgroundColor: '#ECFDF5', color: '#059669' } : { backgroundColor: '#FEF2F2', color: '#DC2626' }}>{isNeg ? '付' : '收'}</span>
+                          </>
+                        ) : (
+                          <span className="text-[10px] text-gray-400">未设利率</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : $participantsList.length === 0 ? (
+            <div className="text-center py-3 text-xs text-gray-400 bg-gray-50 rounded-xl">
+              暂无参与方配置，点击上方按钮添加
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {$participantsList.map((p, idx) => {
+                const roleOpt = $roleOptions.find(r => r.value === p.role)!;
+                const rateNum = parseFloat(p.rate || '');
+                const isNeg = isFinite(rateNum) && rateNum < 0;
+                const absVal = isFinite(rateNum) ? Math.abs(rateNum) : '';
+                const setRate = (nextAbs: string, neg: boolean) => {
+                  const v = nextAbs.toString().trim();
+                  if (v === '') {
+                    $setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rate: '' } : item));
+                    return;
+                  }
+                  const num = Math.abs(parseFloat(v) || 0);
+                  const signed = neg ? -num : num;
+                  $setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rate: String(signed) } : item));
+                };
+                return (
+                  <div key={idx} className="bg-gray-50 rounded-xl px-2 py-1.5 flex items-center gap-1.5">
+                    {/* 角色小点 */}
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: roleOpt?.color || '#6B7280' }} title={roleOpt?.label || p.role} />
+                    {/* 成员选择 */}
+                    <select
+                      value={p.userId}
+                      onChange={e => {
+                        const uid = Number(e.target.value);
+                        const member = $ledgerMembers.find(m => m.userId === uid);
+                        $setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, userId: uid, displayName: member?.displayName || '' } : item));
+                      }}
+                      className="min-w-0 flex-1 px-1.5 py-1 text-xs border border-gray-200 rounded-md bg-white"
+                    >
+                      <option value={0}>选成员</option>
+                      {$ledgerMembers.map(m => (
+                        <option key={m.userId} value={m.userId}>{m.displayName}</option>
+                      ))}
+                    </select>
+                    {/* 利率输入 */}
+                    <div className="flex items-center w-16 shrink-0 px-1.5 py-1 border border-gray-200 rounded-md bg-white">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={absVal}
+                        onChange={e => setRate(e.target.value, isNeg)}
+                        placeholder="利率"
+                        className="w-full min-w-0 text-xs outline-none bg-transparent"
+                      />
+                      <span className="text-[10px] text-gray-400 shrink-0">%</span>
+                    </div>
+                    {/* 收/付息切换 */}
+                    <button
+                      type="button"
+                      onClick={() => setRate(String(absVal || ''), false)}
+                      className="px-1.5 py-1 rounded-md text-[11px] font-semibold border shrink-0"
+                      style={!isNeg ? { backgroundColor: '#FEF2F2', color: '#DC2626', borderColor: '#FCA5A5' } : { backgroundColor: '#fff', color: '#9CA3AF', borderColor: '#E5E7EB' }}
+                    >收</button>
+                    <button
+                      type="button"
+                      onClick={() => setRate(String(absVal || ''), true)}
+                      className="px-1.5 py-1 rounded-md text-[11px] font-semibold border shrink-0"
+                      style={isNeg ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#6EE7B7' } : { backgroundColor: '#fff', color: '#9CA3AF', borderColor: '#E5E7EB' }}
+                    >付</button>
+                    {/* 删除 */}
+                    <button
+                      onClick={() => $setParticipantsList(list => list.filter((_, i) => i !== idx))}
+                      className="p-0.5 text-gray-300 hover:text-red-400 shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {$participantsEditMode && (
+            <button
+              onClick={() => $handleSaveParticipants(order.id)}
+              disabled={$saveParticipantsMutation.isPending}
+              className="mt-3 w-full py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #059669, #10B981)' }}
+            >
+              {$saveParticipantsMutation.isPending ? '保存中...' : '保存参与方配置'}
+            </button>
+          )}
+        </div>
+      )}
+
+        {/* 第二段嵌入同一张订单卡片：共用页眉、结清状态与页尾备注，仅主体数据分段展示。 */}
+    {jointOrderSegments.map((segment, index) => {
+      let parentDisplayConfig: Record<string, any> = {};
+      let segmentDisplayConfig: Record<string, any> = {};
+      try { parentDisplayConfig = typeof (order as any).display_config === 'string' ? JSON.parse((order as any).display_config) : ((order as any).display_config || {}); } catch {}
+      try { segmentDisplayConfig = typeof segment.display_config === 'string' ? JSON.parse(segment.display_config) : (segment.display_config || {}); } catch {}
+      const segmentOrder = {
+        ...order,
+        ...segment,
+        // 每一段是同一张个人订单的一部分，继承主单状态，不能独自结清或单独记录已结利息。
+        id: order.id,
+        status: order.status,
+        settled_at: order.settled_at,
+        interest_end_date: order.interest_end_date,
+        order_no: order.order_no,
+        paidTotal: null,
+        joint_order_segments: [],
+        // 每段保留自己的手工担保与资金属性；不继承主单的37号引用或共享担保模式。
+        collateral_assets: Array.isArray(segment.collateral_assets) ? JSON.stringify(segment.collateral_assets) : null,
+        collateral_source: null,
+        collateral_share_mode: 'none',
+        principal_lent_out: segment.principal_lent_out ? 1 : 0,
+        joint_segment_id: String(segment.id || `segment-${index + 2}`),
+        joint_segment_owner_user_id: Number(segment.owner_user_id || _jointSegmentScopeUserId || 0),
+        public_note: null,
+        admin_note: null,
+        personal_header_label: `${String((order as any).participant_name || (order as any).owner_label || '个人订单')} · 联合第${index + 2}段`,
+        display_config: JSON.stringify({
+          ...parentDisplayConfig,
+          ...segmentDisplayConfig,
+          // 子段不重复引用主订单的37号数据或共享担保模式；仅展示本段自身手工担保。
+          marginRate: false,
+        }),
+      };
+      return (
+        <div
+          key={`joint-segment-${order.id}-${String(segment.id || index)}`}
+          className="w-full"
+          style={{ background: isParticipantVisual ? '#F0FDF4' : '#ffffff' }}
+        >
+          <div className="mx-4 border-t border-dashed" style={{ borderColor: '#C7D2E6' }} />
+          <FunderOrderCard
+            order={segmentOrder}
+            livePrices={livePrices}
+            priceDirection={priceDirection}
+            currentUser={currentUser}
+            isAdmin={isAdmin}
+            membersData={membersData}
+            ledgerId={ledgerId}
+            previewMode={previewMode}
+            jointSegmentMode={true}
+          />
+        </div>
+      );
+    })}
+
       {/* 底部操作栏：仅管理员可见 */}
-      {!previewMode && isAdmin && (
+      {!previewMode && !jointSegmentMode && isAdmin && (
         <div className="flex items-center gap-1.5 px-4 py-2.5 border-t overflow-x-auto" style={{ borderColor: '#F3F4F6', backgroundColor: '#FAFBFF', flexWrap: 'nowrap' }}>
           {!isInvited && <button
             onClick={() => handleOpenEdit && handleOpenEdit(order, 'participants')}
@@ -4360,13 +4606,23 @@ export function FunderOrderCard({
         </div>
       )}
 
+
       {/* 担保物快捷编辑面板 */}
-      {!previewMode && !isInvited && isAdmin && showCollateralPanel && (
+      {!previewMode && !jointSegmentMode && !isInvited && isAdmin && showCollateralPanel && (
         <div className="px-4 pt-3 pb-4 border-t space-y-2" style={{ borderColor: '#E5E7EB', backgroundColor: '#FAFBFF' }}>
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="text-xs font-medium" style={{ color: '#1A2340' }}>担保编辑</div>
             <div className="text-[10px] text-gray-400">保存后与完整订单编辑同步</div>
           </div>
+          {jointOrderSegments.length > 0 && (
+            <div className="mb-2 rounded-lg border border-blue-100 bg-white px-2.5 py-2">
+              <div className="mb-1.5 text-[11px] text-gray-500">担保归属</div>
+              <div className="flex flex-wrap gap-1.5">
+                <button type="button" onClick={() => selectJointCollateralSegment('')} className={`rounded-full border px-2.5 py-1 text-xs font-medium ${!selectedJointCollateralSegmentId ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}>第一段</button>
+                {jointOrderSegments.map((segment, index) => <button key={String(segment.id)} type="button" onClick={() => selectJointCollateralSegment(String(segment.id || ''))} className={`rounded-full border px-2.5 py-1 text-xs font-medium ${selectedJointCollateralSegmentId === String(segment.id || '') ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-gray-200 bg-white text-gray-600'}`}>第 {index + 2} 段</button>)}
+              </div>
+            </div>
+          )}
           {/* 与完整订单编辑相同的担保字段可见性。历史订单未配置时默认显示，避免快捷保存误隐藏。 */}
           <div className="rounded-xl border border-blue-100 bg-white px-3 py-2.5 space-y-2">
             <div className="text-xs font-medium text-blue-600">担保项目显示</div>
@@ -4676,218 +4932,6 @@ export function FunderOrderCard({
         </div>
       )}
 
-      {/* 参与方面板 */}
-      {$showParticipantsPanel === order.id && (
-        <div className="px-4 pt-3 pb-3 border-t border-green-100">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs font-semibold text-green-700 flex items-center gap-1">
-              <Users2 className="w-3.5 h-3.5" />
-              多视角订单参与方
-            </div>
-            {$participantsEditMode ? (
-              <div className="flex gap-1">
-                {$roleOptions.map(r => (
-                  <button
-                    key={r.value}
-                    onClick={() => $handleAddParticipant(r.value)}
-                    className="px-2 py-0.5 text-xs rounded-full font-medium border"
-                    style={{ borderColor: r.color, color: r.color, backgroundColor: `${r.color}10` }}
-                  >
-                    +{r.label}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <button
-                onClick={() => $setParticipantsEditMode(true)}
-                className="px-2.5 py-0.5 text-xs rounded-full font-medium border flex items-center gap-1"
-                style={{ borderColor: '#059669', color: '#059669', backgroundColor: '#ECFDF5' }}
-              >
-                <Pencil className="w-3 h-3" />编辑
-              </button>
-            )}
-          </div>
-          {$participantsLoading ? (
-            <div className="text-center py-3 text-xs text-gray-400">加载中...</div>
-          ) : !$participantsEditMode ? (
-            /* 只读态：展示已保存的参与方（成员、角色、利率%、收/付） */
-            $participantsList.length === 0 ? (
-              <div className="text-center py-3 text-xs text-gray-400 bg-gray-50 rounded-xl">暂无参与方配置</div>
-            ) : (
-              <div className="space-y-2">
-                {$participantsList.map((p, idx) => {
-                  const roleOpt = $roleOptions.find(r => r.value === p.role);
-                  const rateNum = parseFloat(p.rate || '');
-                  const hasRate = isFinite(rateNum);
-                  const isNeg = hasRate && rateNum < 0;
-                  const absVal = hasRate ? Math.abs(rateNum) : null;
-                  return (
-                    <div key={idx} className="bg-white border border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: roleOpt?.color || '#6B7280' }} />
-                        <span className="text-xs font-medium text-gray-700 truncate">{p.displayName || `用户${p.userId}`}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: `${roleOpt?.color}18`, color: roleOpt?.color }}>{roleOpt?.label || p.role}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {hasRate ? (
-                          <>
-                            <span className="text-xs font-semibold tabular-nums" style={{ color: isNeg ? '#059669' : '#DC2626' }}>{absVal}%</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold" style={isNeg ? { backgroundColor: '#ECFDF5', color: '#059669' } : { backgroundColor: '#FEF2F2', color: '#DC2626' }}>{isNeg ? '付' : '收'}</span>
-                          </>
-                        ) : (
-                          <span className="text-[10px] text-gray-400">未设利率</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )
-          ) : $participantsList.length === 0 ? (
-            <div className="text-center py-3 text-xs text-gray-400 bg-gray-50 rounded-xl">
-              暂无参与方配置，点击上方按钮添加
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {$participantsList.map((p, idx) => {
-                const roleOpt = $roleOptions.find(r => r.value === p.role)!;
-                const rateNum = parseFloat(p.rate || '');
-                const isNeg = isFinite(rateNum) && rateNum < 0;
-                const absVal = isFinite(rateNum) ? Math.abs(rateNum) : '';
-                const setRate = (nextAbs: string, neg: boolean) => {
-                  const v = nextAbs.toString().trim();
-                  if (v === '') {
-                    $setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rate: '' } : item));
-                    return;
-                  }
-                  const num = Math.abs(parseFloat(v) || 0);
-                  const signed = neg ? -num : num;
-                  $setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rate: String(signed) } : item));
-                };
-                return (
-                  <div key={idx} className="bg-gray-50 rounded-xl px-2 py-1.5 flex items-center gap-1.5">
-                    {/* 角色小点 */}
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: roleOpt?.color || '#6B7280' }} title={roleOpt?.label || p.role} />
-                    {/* 成员选择 */}
-                    <select
-                      value={p.userId}
-                      onChange={e => {
-                        const uid = Number(e.target.value);
-                        const member = $ledgerMembers.find(m => m.userId === uid);
-                        $setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, userId: uid, displayName: member?.displayName || '' } : item));
-                      }}
-                      className="min-w-0 flex-1 px-1.5 py-1 text-xs border border-gray-200 rounded-md bg-white"
-                    >
-                      <option value={0}>选成员</option>
-                      {$ledgerMembers.map(m => (
-                        <option key={m.userId} value={m.userId}>{m.displayName}</option>
-                      ))}
-                    </select>
-                    {/* 利率输入 */}
-                    <div className="flex items-center w-16 shrink-0 px-1.5 py-1 border border-gray-200 rounded-md bg-white">
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={absVal}
-                        onChange={e => setRate(e.target.value, isNeg)}
-                        placeholder="利率"
-                        className="w-full min-w-0 text-xs outline-none bg-transparent"
-                      />
-                      <span className="text-[10px] text-gray-400 shrink-0">%</span>
-                    </div>
-                    {/* 收/付息切换 */}
-                    <button
-                      type="button"
-                      onClick={() => setRate(String(absVal || ''), false)}
-                      className="px-1.5 py-1 rounded-md text-[11px] font-semibold border shrink-0"
-                      style={!isNeg ? { backgroundColor: '#FEF2F2', color: '#DC2626', borderColor: '#FCA5A5' } : { backgroundColor: '#fff', color: '#9CA3AF', borderColor: '#E5E7EB' }}
-                    >收</button>
-                    <button
-                      type="button"
-                      onClick={() => setRate(String(absVal || ''), true)}
-                      className="px-1.5 py-1 rounded-md text-[11px] font-semibold border shrink-0"
-                      style={isNeg ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#6EE7B7' } : { backgroundColor: '#fff', color: '#9CA3AF', borderColor: '#E5E7EB' }}
-                    >付</button>
-                    {/* 删除 */}
-                    <button
-                      onClick={() => $setParticipantsList(list => list.filter((_, i) => i !== idx))}
-                      className="p-0.5 text-gray-300 hover:text-red-400 shrink-0"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {$participantsEditMode && (
-            <button
-              onClick={() => $handleSaveParticipants(order.id)}
-              disabled={$saveParticipantsMutation.isPending}
-              className="mt-3 w-full py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-50"
-              style={{ background: 'linear-gradient(135deg, #059669, #10B981)' }}
-            >
-              {$saveParticipantsMutation.isPending ? '保存中...' : '保存参与方配置'}
-            </button>
-          )}
-        </div>
-      )}
-
-        {/* 第二段嵌入同一张订单卡片：共用页眉、结清状态与页尾备注，仅主体数据分段展示。 */}
-    {jointOrderSegments.map((segment, index) => {
-      let parentDisplayConfig: Record<string, any> = {};
-      let segmentDisplayConfig: Record<string, any> = {};
-      try { parentDisplayConfig = typeof (order as any).display_config === 'string' ? JSON.parse((order as any).display_config) : ((order as any).display_config || {}); } catch {}
-      try { segmentDisplayConfig = typeof segment.display_config === 'string' ? JSON.parse(segment.display_config) : (segment.display_config || {}); } catch {}
-      const segmentOrder = {
-        ...order,
-        ...segment,
-        // 每一段是同一张个人订单的一部分，继承主单状态，不能独自结清或单独记录已结利息。
-        id: order.id,
-        status: order.status,
-        settled_at: order.settled_at,
-        interest_end_date: order.interest_end_date,
-        order_no: order.order_no,
-        paidTotal: null,
-        joint_order_segments: [],
-        // 每段保留自己的手工担保与资金属性；不继承主单的37号引用或共享担保模式。
-        collateral_assets: Array.isArray(segment.collateral_assets) ? JSON.stringify(segment.collateral_assets) : null,
-        collateral_source: null,
-        collateral_share_mode: 'none',
-        principal_lent_out: segment.principal_lent_out ? 1 : 0,
-        joint_segment_id: String(segment.id || `segment-${index + 2}`),
-        joint_segment_owner_user_id: Number(segment.owner_user_id || _jointSegmentScopeUserId || 0),
-        public_note: null,
-        admin_note: null,
-        personal_header_label: `${String((order as any).participant_name || (order as any).owner_label || '个人订单')} · 联合第${index + 2}段`,
-        display_config: JSON.stringify({
-          ...parentDisplayConfig,
-          ...segmentDisplayConfig,
-          // 子段不重复引用主订单的37号数据或共享担保模式；仅展示本段自身手工担保。
-          marginRate: false,
-        }),
-      };
-      return (
-        <div
-          key={`joint-segment-${order.id}-${String(segment.id || index)}`}
-          className="w-full"
-          style={{ background: isParticipantVisual ? '#F0FDF4' : '#ffffff' }}
-        >
-          <div className="mx-4 border-t border-dashed" style={{ borderColor: '#C7D2E6' }} />
-          <FunderOrderCard
-            order={segmentOrder}
-            livePrices={livePrices}
-            priceDirection={priceDirection}
-            currentUser={currentUser}
-            isAdmin={isAdmin}
-            membersData={membersData}
-            ledgerId={ledgerId}
-            previewMode={previewMode}
-            jointSegmentMode={true}
-          />
-        </div>
-      );
-    })}
 
       {/* 结息面板与备注是整张订单共用的页尾；第二段不重复渲染。 */}
       {!jointSegmentMode && <div

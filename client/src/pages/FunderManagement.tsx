@@ -4983,6 +4983,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           active: 'bg-indigo-600 text-white border-indigo-600',
                         };
                         const isNegativeRate = String(segment.interest_rate_annual || '').startsWith('-');
+                        const segmentPeriodInterestTotalEnabled = segmentDisplay.periodInterestTotal === true;
                         return (
                           <div key={segment.id} className="space-y-5 border-t border-dashed border-indigo-200 pt-4 first:border-t-0 first:pt-0">
                             <div className="flex items-center justify-between gap-3">
@@ -5085,7 +5086,30 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               <div className="grid grid-cols-3 gap-x-2 gap-y-1">{([{ key: 'buyPrice', label: '买入币价' }, { key: 'buyValue', label: '买入价值' }, { key: 'buyDate', label: '开仓时间' }, { key: 'holdDuration', label: '持有时长' }, { key: 'orderNo', label: '订单编号' }, { key: 'assetType', label: '资产标签' }] as const).map(({ key, label }) => <CompactDisplayToggle key={key} label={label} checked={segmentDisplay[key] !== false} onToggle={() => updateSegment({ display_config: { ...segmentDisplay, [key]: segmentDisplay[key] === false } })} tone="indigo" />)}</div>
                               <div className="my-2 h-px bg-indigo-100" />
                               <div className="mb-1.5 text-xs font-medium text-indigo-600">右栏 · 利息担保</div>
-                              <div className="grid grid-cols-3 gap-x-2 gap-y-1">{([{ key: 'accruedInterest', label: '待结利息' }, { key: 'paidInterest', label: '已结利息' }, { key: 'periodInterestTotal', label: '周期总息' }, { key: 'interestBase', label: '计息基数' }, { key: 'interestStartDate', label: '计息日期' }, { key: 'interestDuration', label: '计息时长' }, { key: 'interestPaymentType', label: '付息方式' }, { key: 'collateralCoin', label: '担保货币' }, { key: 'collateralValue', label: '担保价值' }, { key: 'collateral', label: '担保缺口' }, { key: 'marginRate', label: '保证金率' }] as const).map(({ key, label }) => <CompactDisplayToggle key={key} label={label} checked={segmentDisplay[key] !== false} onToggle={() => updateSegment({ display_config: { ...segmentDisplay, [key]: segmentDisplay[key] === false } })} tone="indigo" />)}</div>
+                              <div className="grid grid-cols-3 gap-x-2 gap-y-1">
+                                {([{ key: 'accruedInterest', label: '待结利息' }, { key: 'paidInterest', label: '已结利息' }, { key: 'periodInterestTotal', label: '周期总息' }, { key: 'interestBase', label: '计息基数' }, { key: 'interestStartDate', label: '计息日期' }, { key: 'interestDuration', label: '计息时长' }, { key: 'interestPaymentType', label: '付息方式' }, { key: 'collateralCoin', label: '担保货币' }, { key: 'collateralValue', label: '担保价值' }, { key: 'collateral', label: '担保缺口' }, { key: 'marginRate', label: '保证金率' }] as const).map(({ key, label }) => {
+                                  const checked = key === 'periodInterestTotal' ? segmentPeriodInterestTotalEnabled : segmentDisplay[key] !== false;
+                                  return <CompactDisplayToggle key={key} label={label} checked={checked} onToggle={() => updateSegment({ display_config: { ...segmentDisplay, [key]: key === 'periodInterestTotal' ? !segmentPeriodInterestTotalEnabled : segmentDisplay[key] === false } })} tone="indigo" />;
+                                })}
+                              </div>
+                              {segmentPeriodInterestTotalEnabled && (
+                                <div className="mt-2 rounded-lg border border-indigo-100 bg-white p-2">
+                                  <div className="mb-1.5 text-[11px] font-medium text-indigo-600">本段显示周期</div>
+                                  <div className="grid grid-cols-3 gap-1.5">
+                                    {([
+                                      { value: 'week', label: '一周' },
+                                      { value: 'month', label: '整月' },
+                                      { value: 'quarter', label: '整季' },
+                                      { value: 'halfYear', label: '半年' },
+                                      { value: 'year', label: '整年' },
+                                    ] as const).map(option => (
+                                      <button key={option.value} type="button" onClick={() => updateSegment({ display_config: { ...segmentDisplay, periodInterestTotal: true, periodInterestTotalPeriod: option.value } })} className={`rounded-md border px-1.5 py-1.5 text-xs font-medium transition-colors ${String(segmentDisplay.periodInterestTotalPeriod || 'month') === option.value ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-indigo-100 bg-indigo-50 text-indigo-600'}`}>
+                                        {option.label}总息
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-3"><div className={`h-px flex-1 ${secondTone.divider}`} /><span className="shrink-0 text-xs text-indigo-400">功能开关</span><div className={`h-px flex-1 ${secondTone.divider}`} /></div>
@@ -5197,8 +5221,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   joint_order_segments: previewJointOrderSegments,
                 };
                 const rateValPreview = parseFloat(String(previewOrder.interest_rate_annual || '0'));
-                // 字段展示开关改变时强制重建预览卡片，避免卡片内部状态保留旧配置。
-                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${String(displayConfig.floatPnl)}-${String(displayConfig.periodInterestTotal)}-${String(displayConfig.periodInterestTotalPeriod)}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}`;
+                const previewHasJointOrderSegments = previewJointOrderSegments.length > 0;
+                // 第二段的草稿也纳入 key，确保每次输入都会立即重建预览中的同卡分段内容。
+                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${String(displayConfig.floatPnl)}-${String(displayConfig.periodInterestTotal)}-${String(displayConfig.periodInterestTotalPeriod)}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}-${JSON.stringify(previewJointOrderSegments)}`;
                 return (
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -5214,7 +5239,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         ))}
                       </div>
                     </div>
-                    {previewViewMode === 'order' || (formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions') ? (
+                    {previewViewMode === 'order' || previewHasJointOrderSegments || (formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions') ? (
                       <FunderOrderCard
                         key={previewDisplayKey}
                         order={previewOrder}
