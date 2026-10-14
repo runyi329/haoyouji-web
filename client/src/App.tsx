@@ -167,7 +167,6 @@ const OtherCoinsPage = lazy(() => import("./pages/OtherCoinsPage"));
 const LedgerEquityManage = lazy(() => import("./pages/LedgerEquityManage"));
 const LedgerMemberManage = lazy(() => import("./pages/LedgerMemberManage"));
 const EquityWeightManage = lazy(() => import("./pages/EquityWeightManage"));
-const FunderManagement = lazy(() => import("./pages/FunderManagement"));
 const FinanceManagement = lazy(() => import("./pages/FinanceManagement"));
 const FinanceUnified = lazy(() => import("./pages/FinanceUnified"));
 const LivePriceAdmin = lazy(() => import("./pages/LivePriceAdmin"));
@@ -612,7 +611,8 @@ function Router() {
         <Route path="/ledger/:id/af-525-switch" component={Af525SwitchPage} />
         <Route path="/ledger/:id/wave-ratio-manage" component={WaveRatioManage} />
         <Route path="/ledger/:id/interest-manage" component={InterestManagePage} />
-        <Route path="/ledger/:id/funder-management" component={FunderManagement} />
+        {/* 资方直达页与融资付息统一页共用同一套移动端蓝色页头；默认进入左侧资方。 */}
+        <Route path="/ledger/:id/funder-management" component={FinanceUnified} />
         <Route path="/ledger/:id/finance-management" component={FinanceManagement} />
         <Route path="/ledger/:id/finance-unified" component={FinanceUnified} />
         <Route path="/ledger/:id/live-price-admin" component={LivePriceAdmin} />

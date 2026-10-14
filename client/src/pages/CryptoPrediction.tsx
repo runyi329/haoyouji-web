@@ -3799,9 +3799,26 @@ export default function CryptoPrediction() {
                 && (!!o.participantInfo || !!o._isParticipant || !!o._fromFunder);
               const isOtherPerspective = (o: any) => !isOwnedOrder(o)
                 && (o.order_perspective || 'self') === 'other';
+              // 管理员可为52号融资复息订单强制指定用户前端的列表位置。
+              // 强制值仅改变“本人 / 参与”分栏，优先级高于本人/他人和真实拥有者/参与者关系；
+              // 绝不改变订单实际身份、结息、担保、权限或卡片的参与者绿色视觉。
+              const forcedFrontendPlacement = (o: any): 'self' | 'participant' | null => {
+                const value = String(o?.frontend_placement || '').toLowerCase();
+                return value === 'self' || value === 'participant' ? value : null;
+              };
               const isSettledOrder = (o: any) => o.status === 'settled' || o.status === 'completed';
-              const mineOrders = financeOrders.filter((o: any) => isOwnedOrder(o) || (!isParticipantOrder(o) && !isOtherPerspective(o)));
-              const sharedOrders = financeOrders.filter((o: any) => !isOwnedOrder(o) && (isParticipantOrder(o) || isOtherPerspective(o)));
+              const mineOrders = financeOrders.filter((o: any) => {
+                const placement = forcedFrontendPlacement(o);
+                if (placement === 'self') return true;
+                if (placement === 'participant') return false;
+                return isOwnedOrder(o) || (!isParticipantOrder(o) && !isOtherPerspective(o));
+              });
+              const sharedOrders = financeOrders.filter((o: any) => {
+                const placement = forcedFrontendPlacement(o);
+                if (placement === 'participant') return true;
+                if (placement === 'self') return false;
+                return !isOwnedOrder(o) && (isParticipantOrder(o) || isOtherPerspective(o));
+              });
               // 本人和参与使用同一套第3层分类；默认分类仅展示进行中订单，已结单独收纳历史记录。
               const l2Pool = financeL2Tab === 'shared' ? sharedOrders : mineOrders;
               const activePool = l2Pool.filter((o: any) => o.status === 'active');

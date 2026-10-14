@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { useRoute, useLocation } from "wouter";
+import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { getUserDisplayName, getUserSearchLabel, matchesUserSearch } from "@/lib/userIdentity";
-import { ChevronLeft, ChevronDown, ChevronRight, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check, Search } from "lucide-react";
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER } from "@/components/FunderOrderCard";
 import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
@@ -14,7 +14,6 @@ interface FunderManagementProps {
   adminOnly?: boolean;
   financeOnly?: boolean;
   ledgerIdProp?: number;
-  hideHeader?: boolean;
   onRecycleBinRef?: (openFn: () => void) => void;
 }
 
@@ -142,11 +141,9 @@ function CompactDisplayToggle({ label, checked, onToggle, tone = 'blue', disable
   );
 }
 
-export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, financeOnly, onRecycleBinRef }: FunderManagementProps = {}) {
-  const [, params] = useRoute("/ledger/:id/funder-management");
-  const [, routeParams2] = useRoute("/ledger/:id/finance-unified");
-  const [, setLocation] = useLocation();
-  const ledgerId = ledgerIdProp || (params?.id ? parseInt(params.id) : (routeParams2?.id ? parseInt(routeParams2.id) : 0));
+export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly, onRecycleBinRef }: FunderManagementProps = {}) {
+  const [, routeParams] = useRoute("/ledger/:id/finance-unified");
+  const ledgerId = ledgerIdProp || (routeParams?.id ? parseInt(routeParams.id) : 0);
   const trpcUtils = trpc.useUtils();
   const usesActivePagePolling = ledgerId === 37 || ledgerId === 52;
 
@@ -238,6 +235,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     brokerAccount: '',
     orderFillStatus: 'filled' as 'pending' | 'filled',
     orderPerspective: 'self' as 'self' | 'other',
+    // 52号账本用户前端的列表分栏默认本人；“自动”保留原有本人/参与自动判断。
+    frontendPlacement: 'self' as 'auto' | 'self' | 'participant',
   });
   // 期权专属表单数据
   const [optionFormData, setOptionFormData] = useState({
@@ -1851,6 +1850,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       brokerAccount: '',
       orderFillStatus: 'filled' as 'pending' | 'filled',
       orderPerspective: 'self' as 'self' | 'other',
+      frontendPlacement: 'self' as 'auto' | 'self' | 'participant',
     });
     setTagInput('');
     setPersonalHeaderDraft('');
@@ -1971,6 +1971,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       brokerAccount: order.broker_account || '',
       orderFillStatus: (order.order_fill_status === 'pending' ? 'pending' : 'filled') as 'pending' | 'filled',
       orderPerspective: (order.order_perspective === 'other' ? 'other' : 'self') as 'self' | 'other',
+      frontendPlacement: (['self', 'participant'].includes(String((order as any).frontend_placement))
+        ? (order as any).frontend_placement
+        : 'self') as 'auto' | 'self' | 'participant',
     });
     setTagInput('');
     setPersonalHeaderDraft(typeof (order as any).personal_header_label === 'string' ? (order as any).personal_header_label : '');
@@ -2393,6 +2396,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       tradingFeeStatus: ledgerId === 52 ? formData.tradingFeeStatus : undefined,
       orderFillStatus: formData.orderFillStatus,
       orderPerspective: formData.orderPerspective,
+      frontendPlacement: ledgerId === 52 ? formData.frontendPlacement : undefined,
       brokerName: formData.brokerName || undefined,
       brokerAccount: formData.brokerAccount || undefined,
       optionInfo: formData.assetType === 'crypto_option' ? {
@@ -2446,6 +2450,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           trading_fee_status: payload.tradingFeeStatus || null,
           order_fill_status: payload.orderFillStatus || 'filled',
           order_perspective: payload.orderPerspective || 'self',
+          ...(ledgerId === 52 ? { frontend_placement: payload.frontendPlacement || 'auto' } : {}),
           broker_name: payload.brokerName || null,
           broker_account: payload.brokerAccount || null,
           option_info: payload.optionInfo ? JSON.stringify(payload.optionInfo) : null,
@@ -2517,78 +2522,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const getPaymentLabel = (val: string) => INTEREST_PAYMENT_OPTIONS.find(o => o.value === val)?.label || val;
 
   return (
-    <div className={hideHeader ? '' : 'min-h-screen'} style={{ backgroundColor: '#F0F4FF' }}>
-      {/* 顶部导航 */}
-      {!hideHeader && (
-      <div
-        className="sticky top-0 z-10"
-        style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
-      >
-        {/* 第一行：返回 + 标题 + 回收站 */}
-        <div className="px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setLocation(`/ledger/${ledgerId}/settings`)} className="p-1 -ml-2">
-            <ChevronLeft className="w-6 h-6 text-white" />
-          </button>
-          <h1 className="text-lg font-semibold text-white flex-1">资方管理</h1>
-          {isAdminUser && (
-            <button onClick={() => setShowRecycleBin(true)} className="p-1" title="回收站">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            </button>
-          )}
-        </div>
-        {/* 合作资金总额 */}
-        {(() => {
-          const activeOrders: any[] = (assetOrders as any[]).filter((o: any) => o.status === 'active');
-          const totalAmount = activeOrders.reduce((sum: number, o: any) => {
-            // coin=CNY 且 amount_currency=USDT 的订单：用 buy_quantity÷cnyRate 实时折算，避免存储值过期
-            if ((o.coin === 'CNY' || o.coin === 'RMB') && (o.amount_currency === 'USDT' || o.amount_currency === 'U')) {
-              const qty = parseFloat(o.buy_quantity || '0');
-              if (!isNaN(qty) && qty > 0 && cnyRate > 0) return sum + qty / cnyRate;
-            }
-            const amt = parseFloat(o.amount || '0');
-            return sum + (isNaN(amt) ? 0 : amt);
-          }, 0);
-          if (totalAmount <= 0) return null;
-          const fmt = (v: number) => v >= 10000
-            ? (v / 10000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '万'
-            : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-          return (
-            <div className="mx-4 mb-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(4px)' }}>
-              <div className="text-[11px] mb-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>目前合作资金总额</div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-bold tracking-tight" style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmt(totalAmount)}</span>
-                <span className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.7)' }}>USDT</span>
-              </div>
-            </div>
-          );
-        })()}
-        {/* 第二行：持币统计 */}
-        {(() => {
-          const activeOrders: any[] = (assetOrders as any[]).filter((o: any) => o.status === 'active');
-          const coinMap: Record<string, number> = {};
-          for (const o of activeOrders) {
-            const coin = o.coin || o.asset_coin || '';
-            const qty = parseFloat(o.buy_quantity || o.quantity || '0');
-            if (!coin || isNaN(qty) || qty <= 0) continue;
-            coinMap[coin] = (coinMap[coin] || 0) + qty;
-          }
-          const entries = Object.entries(coinMap);
-          if (entries.length === 0) return null;
-          const fmtQty = (v: number) => v % 1 === 0 ? v.toLocaleString() : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-          return (
-            <div className="px-4 pb-3 flex flex-wrap gap-x-4 gap-y-1">
-              {entries.map(([coin, qty]) => (
-                <div key={coin} className="flex items-baseline gap-1">
-                  <span className="text-[11px] font-medium" style={{ color: 'rgba(255,255,255,0.6)' }}>{coin}</span>
-                  <span className="text-sm font-bold" style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmtQty(qty)}</span>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-      </div>
-      )}
-
+    <div>
       <div className="px-4 py-4">
         {isAdminUser && adminOnly && (
           <div className="mb-3">
@@ -3027,16 +2961,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">归属分类</label>
                   <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
-                    {([{ value: 'self', label: '本人' }, { value: 'other', label: '他人' }] as const).map(opt => (
+                    {([
+                      { value: 'self', label: '本人', active: { background: '#1A56DB', color: '#fff', borderColor: 'transparent' } },
+                      { value: 'participant', label: '他人', active: { background: '#059669', color: '#fff', borderColor: 'transparent' } },
+                      { value: 'auto', label: '自动', active: { background: '#4F46E5', color: '#fff', borderColor: 'transparent' } },
+                    ] as const).map(opt => (
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => setFormData(d => ({ ...d, orderPerspective: opt.value }))}
+                        onClick={() => setFormData(d => ({ ...d, frontendPlacement: opt.value }))}
                         className="flex-1 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-colors last:border-r-0"
-                        style={formData.orderPerspective === opt.value
-                          ? opt.value === 'self'
-                            ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' }
-                            : { background: 'linear-gradient(135deg, #7C3AED, #8B5CF6)', color: '#fff', borderColor: 'transparent' }
+                        style={formData.frontendPlacement === opt.value
+                          ? opt.active
                           : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
                       >
                         {opt.label}

@@ -3,9 +3,12 @@ import { useRoute, useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import FunderManagement from "./FunderManagement";
 export default function FinanceUnified() {
-  const [, params] = useRoute("/ledger/:id/finance-unified");
+  const [, unifiedParams] = useRoute("/ledger/:id/finance-unified");
+  // 资方管理直达地址也复用本页，避免热预览与正式前端分别维护两套蓝色页头。
+  const [, funderParams] = useRoute("/ledger/:id/funder-management");
   const [, setLocation] = useLocation();
-  const ledgerId = params?.id ? parseInt(params.id) : 0;
+  const routeParams = unifiedParams ?? funderParams;
+  const ledgerId = routeParams?.id ? parseInt(routeParams.id) : 0;
   const [activeTab, setActiveTab] = useState<'funder' | 'admin' | 'finance'>('funder');
   // 观察视角：从 URL ?viewAs=xxx 读取
   const urlSearchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -84,13 +87,13 @@ export default function FinanceUnified() {
       {/* Tab 内容 */}
       <div>
         {activeTab === 'funder' && (
-          <FunderManagement ledgerIdProp={ledgerId} hideHeader onRecycleBinRef={handleRecycleBinRef} />
+          <FunderManagement ledgerIdProp={ledgerId} onRecycleBinRef={handleRecycleBinRef} />
         )}
         {activeTab === 'admin' && (
-          <FunderManagement ledgerIdProp={ledgerId} hideHeader adminOnly onRecycleBinRef={handleRecycleBinRef} />
+          <FunderManagement ledgerIdProp={ledgerId} adminOnly onRecycleBinRef={handleRecycleBinRef} />
         )}
         {activeTab === 'finance' && (
-          <FunderManagement ledgerIdProp={ledgerId} hideHeader financeOnly onRecycleBinRef={handleRecycleBinRef} />
+          <FunderManagement ledgerIdProp={ledgerId} financeOnly onRecycleBinRef={handleRecycleBinRef} />
         )}
       </div>
     </div>

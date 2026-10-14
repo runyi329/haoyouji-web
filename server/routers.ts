@@ -1456,7 +1456,7 @@ const FUNDER_PARTICIPANT_SNAPSHOT_FIELDS = [
   'finance_type', 'collateral_assets', 'lent_out_assets', 'show_profit_share', 'commission_share', 'display_config',
   'asset_type', 'tags', 'collateral_share_mode', 'principal_lent_out', 'broker_name', 'broker_account',
   'option_info', 'trade_direction', 'order_fill_status', 'order_perspective', 'trading_fee_rate_per_mille',
-  'trading_fee_status', 'collateral_source', 'personal_header_label', 'settled_at', 'interest_end_date',
+  'trading_fee_status', 'collateral_source', 'personal_header_label', 'frontend_placement', 'settled_at', 'interest_end_date',
   // 联合订单子段仅保存于参与者自己的 order_snapshot；绝不写入主订单。
   'joint_order_segments'
 ] as const;
@@ -1494,6 +1494,12 @@ function isSelfFundedFunderOrder(displayConfig: unknown): boolean {
   return config.assetFundingType === 'self'
     || config.selfFundedAsset === true
     || config.selfFundedAsset === 'true';
+}
+
+/** 用户前端列表的强制分栏只接受本人或参与；空值和 auto 均回退为原有自动判断。 */
+function normalizeFunderFrontendPlacement(value: unknown): 'self' | 'participant' | null {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return normalized === 'self' || normalized === 'participant' ? normalized : null;
 }
 
 // 自有资金不构成对外本金债权；只有融资付息订单才可明确记录本金已实际借出。
@@ -23798,6 +23804,7 @@ ${klinesSummary}
         tradeDirection: z.enum(['long', 'short']).nullable().optional(),
         orderFillStatus: z.enum(['pending', 'filled']).optional(),
         orderPerspective: z.enum(['self', 'other']).optional(),
+        frontendPlacement: z.enum(['auto', 'self', 'participant']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -23813,7 +23820,7 @@ ${klinesSummary}
           const [columnRows] = await orderSchemaConn.execute(
             `SELECT COLUMN_NAME FROM information_schema.COLUMNS
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ledger_orders'
-               AND COLUMN_NAME IN ('trading_fee_rate_per_mille', 'trading_fee_status')`
+               AND COLUMN_NAME IN ('trading_fee_rate_per_mille', 'trading_fee_status', 'frontend_placement')`
           ) as any;
           const existingColumns = new Set((columnRows || []).map((row: any) => String(row.COLUMN_NAME)));
           const addColumnIfMissing = async (columnName: string, definition: string) => {
@@ -23827,6 +23834,7 @@ ${klinesSummary}
           };
           await addColumnIfMissing('trading_fee_rate_per_mille', 'trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000');
           await addColumnIfMissing('trading_fee_status', "trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'");
+          await addColumnIfMissing('frontend_placement', "frontend_placement VARCHAR(16) DEFAULT NULL COMMENT '用户前端强制分栏：self/participant；NULL为自动'");
         } catch (e: any) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '初始化订单手续费字段失败: ' + (e?.message || '未知错误') });
         }
@@ -23860,6 +23868,7 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trade_direction VARCHAR(10) DEFAULT NULL`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS order_fill_status VARCHAR(20) DEFAULT 'filled'`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS order_perspective VARCHAR(10) DEFAULT 'self'`).catch(() => {});
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS frontend_placement VARCHAR(16) DEFAULT NULL`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`).catch(() => {});
           await conn.end();
@@ -23878,9 +23887,10 @@ ${klinesSummary}
           if (!exists) isUnique = true;
         }
         const principalLentOut = normalizeFunderPrincipalLentOut(input.principalLentOut, input.displayConfig);
+        const frontendPlacement = normalizeFunderFrontendPlacement(input.frontendPlacement);
         const insertResult = await db.execute(
-          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, collateral_source, principal_lent_out, broker_name, broker_account, option_info, trade_direction, order_fill_status, order_perspective, trading_fee_rate_per_mille, trading_fee_status, created_by)
-              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${(input.assetType === 'crypto_option' && input.optionInfo?.coin) ? input.optionInfo.coin : input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.collateralSource ? JSON.stringify(input.collateralSource) : null}, ${principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${input.orderFillStatus || 'filled'}, ${input.orderPerspective || 'self'}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, collateral_source, principal_lent_out, broker_name, broker_account, option_info, trade_direction, order_fill_status, order_perspective, frontend_placement, trading_fee_rate_per_mille, trading_fee_status, created_by)
+              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${(input.assetType === 'crypto_option' && input.optionInfo?.coin) ? input.optionInfo.coin : input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.collateralSource ? JSON.stringify(input.collateralSource) : null}, ${principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${input.orderFillStatus || 'filled'}, ${input.orderPerspective || 'self'}, ${frontendPlacement}, ${input.tradingFeeRate ?? 2}, ${input.tradingFeeStatus || 'unpaid'}, ${ctx.user.id})`
         );
         const newOrderId = (insertResult as any)?.insertId || ((insertResult as any)?.[0] as any)?.insertId;
         return { success: true, orderId: newOrderId ? Number(newOrderId) : null };
@@ -23931,6 +23941,7 @@ ${klinesSummary}
         tradeDirection: z.enum(['long', 'short']).nullable().optional(),
         orderFillStatus: z.enum(['pending', 'filled']).optional(),
         orderPerspective: z.enum(['self', 'other']).optional(),
+        frontendPlacement: z.enum(['auto', 'self', 'participant']).optional(),
         collateralSource: z.object({ ledgerId: z.number(), tagName: z.string(), floatingPnlTagName: z.string().optional(), floatingPnlCalculationMode: z.enum(['raw_net_pnl', 'leveraged_net_pnl', 'initial_minus_latest']).optional(), collateralTagName: z.string().optional(), interestTagName: z.string().optional(), pendingInterestTagName: z.string().optional(), paidInterestTagName: z.string().optional(), useFloatingPnl: z.boolean().optional(), useCollateral: z.boolean().optional(), useInterest: z.boolean().optional(), usePendingInterest: z.boolean().optional(), usePaidInterest: z.boolean().optional(), marginRateTagName: z.string().optional(), useMarginRate: z.boolean().optional(), stockManualPnl: funderManualStockPnlSchema.optional(), stockPnlSource: z.literal('manual_positions').optional(), stockPnlCalculationMode: z.enum(['position_cost', 'total_capital']).optional(), stockTotalCapital: z.string().regex(/^\d+(?:\.\d+)?$/).optional(), stockCapitalCurrency: z.enum(['CNY', 'USD']).optional(), stockPnlCoefficient: z.number().positive().max(100000).optional(), stockPositions: z.array(z.object({ name: z.string().trim().max(48).optional(), symbol: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9.\-]{0,14}$|^\d{6}\.(?:SH|SZ|BJ)$/), buyPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(), sellPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(), quantity: z.string().regex(/^\d+(?:\.\d+)?$/), initialPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(), initialPriceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), latestPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(), latestPriceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), latestPriceUpdatedAt: z.string().max(64).optional() })).max(20).optional() }).nullable().optional(),
         optionInfo: z.object({
           premium: z.string().optional(),
@@ -23958,6 +23969,7 @@ ${klinesSummary}
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS principal_lent_out TINYINT(1) DEFAULT 0`).catch(() => {});
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS order_fill_status VARCHAR(20) DEFAULT 'filled'`).catch(() => {});
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN order_perspective VARCHAR(10) DEFAULT 'self'`).catch(() => {});
+        await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS frontend_placement VARCHAR(16) DEFAULT NULL`).catch(() => {});
         const existingOrderRows = await db.execute(
           sql`SELECT display_config, principal_lent_out FROM ledger_orders WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
@@ -23999,6 +24011,7 @@ ${klinesSummary}
         if (input.tradeDirection !== undefined) { updateCols.push('trade_direction = ?'); updateVals.push(input.tradeDirection || null); }
         if (input.orderFillStatus !== undefined) { updateCols.push('order_fill_status = ?'); updateVals.push(input.orderFillStatus || 'filled'); }
         if (input.orderPerspective !== undefined) { updateCols.push('order_perspective = ?'); updateVals.push(input.orderPerspective || 'self'); }
+        if (input.frontendPlacement !== undefined) { updateCols.push('frontend_placement = ?'); updateVals.push(normalizeFunderFrontendPlacement(input.frontendPlacement)); }
         // 特殊处理 collateralSource（JSON 序列化）
         if (input.collateralSource !== undefined) {
           updateCols.push('collateral_source = ?');
@@ -24101,6 +24114,7 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS lent_out_assets TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_share_mode VARCHAR(10) DEFAULT 'none'`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trade_direction VARCHAR(10) DEFAULT NULL`).catch(() => {});
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS frontend_placement VARCHAR(16) DEFAULT NULL`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_rate_per_mille DECIMAL(10,4) NOT NULL DEFAULT 2.0000`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trading_fee_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'`).catch(() => {});
         } catch(e) {}
@@ -25202,6 +25216,13 @@ ${klinesSummary}
           ...(parseFunderParticipantSnapshot(row.order_snapshot) || {}),
           ...buildFunderParticipantSnapshot(input.snapshot),
         };
+        // 个人订单视图可独立强制指定用户前端分栏；auto/空值表示清除强制值并回到现有自动判断。
+        // 该值只影响客户端“本人 / 参与”位置，不能改变协作角色、结息、担保或权限。
+        if (Object.prototype.hasOwnProperty.call(input.snapshot, 'frontend_placement')) {
+          const frontendPlacement = normalizeFunderFrontendPlacement((input.snapshot as any).frontend_placement);
+          if (frontendPlacement) mergedSnapshot.frontend_placement = frontendPlacement;
+          else delete mergedSnapshot.frontend_placement;
+        }
         // 联合订单子段属于当前参与者的个人订单视图。无论客户端提交什么 owner_user_id，
         // 服务端都会重写为本次快照所属用户，且严格限制字段，杜绝不同参与者相互读取或串改。
         if (Object.prototype.hasOwnProperty.call(input.snapshot, 'joint_order_segments')) {
