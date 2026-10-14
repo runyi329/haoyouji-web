@@ -3145,8 +3145,8 @@ export function FunderOrderCard({
             })()}
             </>
             )}
-            {/* 正式展示仍以卡片模式为准；订单模式只在编辑实时预览中同步显示，便于核对。 */}
-            {previewMode && periodInterestTotal && (
+            {/* 周期总息是订单常态展示项：预览、进行中和已结清卡片均按同一配置显示。 */}
+            {periodInterestTotal && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 whitespace-nowrap">{periodInterestTotal.label}</span>
                 <span className="font-medium" style={{ color: '#3B82F6' }}>

@@ -1489,6 +1489,31 @@ function parseFunderDisplayConfig(value: unknown): Record<string, any> {
   }
 }
 
+const FUNDER_PERIOD_INTEREST_TOTAL_PERIODS = new Set(['week', 'month', 'quarter', 'halfYear', 'year']);
+
+// 周期总息是同一张订单的展示规则，不属于参与者独立约定的金额、利率或结算快照。
+// 因此管理员修改后要同步每个个人订单视图（包括已结清视图），但只改这两个展示字段。
+function syncFunderParticipantPeriodInterestDisplayConfig(
+  snapshot: Record<string, any>,
+  parentOrder: any,
+  participantDisplayConfig?: unknown,
+): Record<string, any> {
+  const parentDisplayConfig = parseFunderDisplayConfig(parentOrder?.display_config);
+  const currentParticipantDisplayConfig = {
+    ...parseFunderDisplayConfig(snapshot.display_config),
+    ...parseFunderDisplayConfig(participantDisplayConfig),
+  };
+  const selectedPeriod = String(parentDisplayConfig.periodInterestTotalPeriod || 'month');
+  return {
+    ...snapshot,
+    display_config: JSON.stringify({
+      ...currentParticipantDisplayConfig,
+      periodInterestTotal: parentDisplayConfig.periodInterestTotal === true,
+      periodInterestTotalPeriod: FUNDER_PERIOD_INTEREST_TOTAL_PERIODS.has(selectedPeriod) ? selectedPeriod : 'month',
+    }),
+  };
+}
+
 function isSelfFundedFunderOrder(displayConfig: unknown): boolean {
   const config = parseFunderDisplayConfig(displayConfig);
   return config.assetFundingType === 'self'
@@ -24133,9 +24158,14 @@ ${klinesSummary}
         const shouldSyncParticipantSharedAsset = input.coin !== undefined
           || input.assetType !== undefined
           || input.optionInfo !== undefined;
+        // 周期总息是订单级展示规则：主订单保存后，所有个人订单视图（含已结清）都必须一致显示。
+        const shouldSyncParticipantPeriodInterestDisplay = input.displayConfig !== undefined
+          && (Object.prototype.hasOwnProperty.call(input.displayConfig, 'periodInterestTotal')
+            || Object.prototype.hasOwnProperty.call(input.displayConfig, 'periodInterestTotalPeriod'));
         const shouldSyncParticipantSnapshot = shouldSyncParticipantStatus
           || shouldSyncParticipantCollateral
-          || shouldSyncParticipantSharedAsset;
+          || shouldSyncParticipantSharedAsset
+          || shouldSyncParticipantPeriodInterestDisplay;
         try {
           if (input.status === 'settled' && interestEndDate) {
             const [interestRows] = await conn.execute(
@@ -24187,6 +24217,7 @@ ${klinesSummary}
 
           // 融资付息仅为记账展示。主订单结清/恢复时同步状态；担保物更新时同步默认担保字段。
           // 参与者各自的金额、利率、备注和结息记录仍完整保留在独立快照中。
+          // 周期总息例外：它是整张订单的展示设置，所有个人视图（含已结清）统一跟随主订单。
           if (shouldSyncParticipantSnapshot) {
             const [orderRows] = await conn.execute(
               'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? LIMIT 1',
@@ -24196,7 +24227,7 @@ ${klinesSummary}
             if (!updatedOrder) throw new Error('订单不存在或已删除');
 
             const [participantRows] = await conn.execute(
-              "SELECT id, order_snapshot FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive' FOR UPDATE",
+              "SELECT id, display_config, order_snapshot FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ? AND role <> 'inactive' FOR UPDATE",
               [input.id, input.ledgerId]
             ) as any;
             const activeParticipants = Array.isArray(participantRows) ? participantRows : [];
@@ -24217,10 +24248,24 @@ ${klinesSummary}
                   interest_end_date: input.status === 'settled' ? interestEndDate : null,
                 };
               }
-              await conn.execute(
-                'UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ?',
-                [JSON.stringify(snapshot), participant.id]
-              );
+              if (shouldSyncParticipantPeriodInterestDisplay) {
+                snapshot = syncFunderParticipantPeriodInterestDisplayConfig(
+                  snapshot,
+                  updatedOrder,
+                  participant.display_config,
+                );
+              }
+              if (shouldSyncParticipantPeriodInterestDisplay) {
+                await conn.execute(
+                  'UPDATE ledger_order_participants SET order_snapshot = ?, display_config = ?, updated_at = NOW() WHERE id = ?',
+                  [JSON.stringify(snapshot), snapshot.display_config, participant.id],
+                );
+              } else {
+                await conn.execute(
+                  'UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ?',
+                  [JSON.stringify(snapshot), participant.id],
+                );
+              }
             }
             await conn.commit();
           }
@@ -24232,7 +24277,7 @@ ${klinesSummary}
           await conn.end();
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '保存失败: ' + (e?.message || '未知错误') });
         }
-        // display_config 不再联动同步到其他订单，每张订单独立保存自己的配置
+        // 除周期总息外，display_config 不联动同步到其他订单，每张订单独立保存自己的配置。
         // 如果有担保物变更，写入操作日志
         if (input.collateralAssets !== undefined) {
           try {
