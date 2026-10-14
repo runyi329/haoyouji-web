@@ -1112,7 +1112,7 @@ function buildRecentJournalTradeDetailsByScope(trades: PreviewTrade[], strictArc
   const details = new Map<string, RecentJournalTradeDetail>();
   const orderedTrades = [...trades]
     .filter((trade) => trade.symbol === "ETH")
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    .sort((a, b) => getTradeActivityTime(a).localeCompare(getTradeActivityTime(b)) || a.id.localeCompare(b.id));
 
   for (const trade of orderedTrades) {
     const config = ACTIONS[trade.action];
@@ -1218,6 +1218,9 @@ function buildRecentJournalTradeDetails(trades: PreviewTrade[]) {
       strictDetails.set(entryId, fallbackDetail);
     }
   });
+  // 自动止盈已持久化“计划 → 平仓流水”的精确外键。普通历史列表也必须优先使用它：
+  // 旧自动流水的 trade_time 可能因时区写入早于原开仓，不能再仅靠时间 FIFO 推断卖出价和收益。
+  applyTriggeredTakeProfitHistoryDetails(trades, strictDetails);
   return strictDetails;
 }
 
@@ -1250,6 +1253,43 @@ function buildLinkedClosingDetail(opening: PreviewTrade, allocation: LinkedClosi
       allocatedOpeningFee,
       closingFee,
     };
+}
+
+/** 用已触发止盈计划的不可变平仓外键覆盖普通历史明细，保证其卖出价和收益来自正确的开仓主单。 */
+function applyTriggeredTakeProfitHistoryDetails(trades: PreviewTrade[], details: Map<string, RecentJournalTradeDetail>) {
+  const closingsByStoredEntryId = new Map<string, PreviewTrade[]>();
+  for (const trade of trades) {
+    if (ACTIONS[trade.action].opening) continue;
+    const closingEntryId = getStoredEntryId(trade);
+    const rows = closingsByStoredEntryId.get(closingEntryId) ?? [];
+    rows.push(trade);
+    closingsByStoredEntryId.set(closingEntryId, rows);
+  }
+
+  const assignedClosingEntryIds = new Set<string>();
+  for (const opening of trades) {
+    if (!ACTIONS[opening.action].opening) continue;
+    let remainingOpeningQuantity = opening.quantity;
+    for (const plan of opening.takeProfitPlans ?? []) {
+      if (plan.status !== "triggered" || !plan.closingEntryId || remainingOpeningQuantity <= 0.0000001) continue;
+      const closingEntryId = String(plan.closingEntryId);
+      if (assignedClosingEntryIds.has(closingEntryId)) continue;
+      const closingRows = closingsByStoredEntryId.get(closingEntryId) ?? [];
+      let remainingPlanQuantity = Number(plan.triggeredQuantity ?? plan.quantity);
+      if (!Number.isFinite(remainingPlanQuantity) || remainingPlanQuantity <= 0.0000001) continue;
+      let applied = false;
+      for (const closing of closingRows) {
+        if (ACTIONS[closing.action].side !== ACTIONS[opening.action].side || remainingPlanQuantity <= 0.0000001) continue;
+        const quantity = Math.min(closing.quantity, remainingPlanQuantity, remainingOpeningQuantity);
+        if (quantity <= 0.0000001) continue;
+        details.set(closing.id, buildLinkedClosingDetail(opening, { trade: closing, quantity }));
+        remainingPlanQuantity -= quantity;
+        remainingOpeningQuantity -= quantity;
+        applied = true;
+      }
+      if (applied) assignedClosingEntryIds.add(closingEntryId);
+    }
+  }
 }
 
 type ProfitShareDistributionItem = {
@@ -1343,7 +1383,8 @@ function buildClosingProfitShareDistribution(input: {
 
 function buildPositionBuckets(trades: PreviewTrade[]) {
   const buckets = new Map<string, PositionBucket>();
-  const orderedTrades = [...trades].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const orderedTrades = [...trades]
+    .sort((a, b) => getTradeActivityTime(a).localeCompare(getTradeActivityTime(b)) || a.id.localeCompare(b.id));
 
   for (const trade of orderedTrades) {
     const config = ACTIONS[trade.action];
@@ -1438,7 +1479,7 @@ function buildRealizedGrossProfitDetails(trades: PreviewTrade[]) {
   const details: RealizedGrossProfitDetail[] = [];
   const orderedTrades = [...trades]
     .filter((trade) => trade.symbol === "ETH")
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    .sort((a, b) => getTradeActivityTime(a).localeCompare(getTradeActivityTime(b)) || a.id.localeCompare(b.id));
 
   for (const trade of orderedTrades) {
     const config = ACTIONS[trade.action];
@@ -1499,7 +1540,7 @@ function buildRealizedGrossProfitDetails(trades: PreviewTrade[]) {
         ? { ...detail, grossPnl: optionDetail.grossPnl }
         : detail;
     })
-    .sort((a, b) => b.trade.createdAt.localeCompare(a.trade.createdAt) || b.trade.id.localeCompare(a.trade.id));
+    .sort((a, b) => getTradeActivityTime(b.trade).localeCompare(getTradeActivityTime(a.trade)) || b.trade.id.localeCompare(a.trade.id));
 }
 
 /**
@@ -5773,6 +5814,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
                 const showFullHistoryContext = hasSystemGeneratedSettlementNote(trade.note);
+                const isAutomaticTakeProfit = trade.note?.includes("[系统自动止盈]") ?? false;
                 const viewerPayout = resolveViewerPayout(trade, detail);
                 const displayedNetPnl = viewerPayout?.netPnl ?? detail?.netPnl;
                 const hideRepeatedSettlementPrices = isMemberView && Boolean(viewerPayout);
@@ -5781,6 +5823,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
                       <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
                         <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].label}</span>
+                        {isAutomaticTakeProfit && <Target className="h-3.5 w-3.5 shrink-0 text-emerald-600" strokeWidth={2.5} aria-label="系统自动止盈" />}
                         <span className="shrink-0 font-medium text-slate-800">{formatQuantity(trade.quantity)}E</span>
                         {trade.isPending && <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700"><Clock3 className="h-3 w-3" />挂单</span>}
                         {!hideRepeatedSettlementPrices && detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
