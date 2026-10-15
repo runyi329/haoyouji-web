@@ -2028,7 +2028,7 @@ export function FunderOrderCard({
 function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: string; qty: string; note?: string; source?: string }>) {
   const contributors = Array.isArray(order?.wallet_collateral_contributors) ? order.wallet_collateral_contributors : [];
   if (contributors.length === 0) return assets;
-  const manualAssets = assets.filter((asset: any) => asset?.source !== 'wallet' && asset?.note !== '钱包担保冻结');
+  const manualAssets = assets.filter((asset: any) => asset?.source !== 'wallet' && !String(asset?.note || '').startsWith('钱包担保冻结'));
   const walletAssets = contributors.flatMap((contributor: any) => (Array.isArray(contributor?.assets) ? contributor.assets : []).flatMap((asset: any) => {
     const coin = String(asset?.coin || '').trim().toUpperCase();
     const qty = String(asset?.qty ?? '').trim();
@@ -2062,6 +2062,14 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       else { collateralItemValues.push(null); collateralItemPrices.push(null); collateralValueKnown = false; }
     }
   }
+
+  // 本地手工担保与所有拥有者的钱包冻结担保已在 collateralAssets 内合并；37号担保
+  // 是独立来源。三类可同时启用，任何一类尚未完成估值时均不能把总额伪装成 0。
+  const localWalletCollateralValueU = collateralValueKnown ? collateralValue : null;
+  const externalOnlyCollateralValueU = hasExternalCollateral ? extTagCollateralValueU : 0;
+  const combinedCollateralValueU = localWalletCollateralValueU === null || externalOnlyCollateralValueU === null
+    ? null
+    : localWalletCollateralValueU + externalOnlyCollateralValueU;
 
   // 风险敞口
   // 期权的行权价只服务于到期行权与 Greeks，不能作为当前担保缺口的风险基准。
@@ -2181,23 +2189,21 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       // 自有资金期权不需要扣除历史买入成本，也不叠加订单利息或外部担保物。
       ? optionCurrentValue
       : usesPrincipalCoverageFormula
-        ? collateralValue - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk
+        ? (combinedCollateralValueU === null ? null : combinedCollateralValueU - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
         : usesFloatingPnlFormula
-          ? (formulaFloatingPnlU === null ? null : collateralValue + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
+          ? (combinedCollateralValueU === null || formulaFloatingPnlU === null ? null : combinedCollateralValueU + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
           : -principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
     : null;
   const exposure = isOptionOrder
     ? optionExposure
     : usesPrincipalCoverageFormula
-      ? collateralValue - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk
+      ? (combinedCollateralValueU === null ? null : combinedCollateralValueU - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
       : usesFloatingPnlFormula
-        ? (formulaFloatingPnlU === null ? null : collateralValue + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
+        ? (combinedCollateralValueU === null || formulaFloatingPnlU === null ? null : combinedCollateralValueU + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
         : -collateralGapBaseForRisk - accruedForRisk + paidInterestForRisk;
   // 37号盈亏标签、担保标签均可独立使用；担保物也可完全手工录入。
   // 利息和借出本金属于52订单本身，始终按普通订单的风险公式处理。
-  const linkedCollateralValueU = hasExternalCollateral
-    ? extTagCollateralValueU
-    : (collateralValueKnown ? collateralValue : null);
+  const linkedCollateralValueU = combinedCollateralValueU;
   const linkedFloatingPnlU = isExternalStockPnlSource
     ? extTagFloatingPnlU
     : isManualStockPnlSource
@@ -2239,8 +2245,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   const sharedOrderCollateralValueU = (() => {
     const serverValue = Number(sharedOrderPoolDetail?.collateralValue);
     if (Number.isFinite(serverValue)) return serverValue;
-    if (hasExternalCollateral) return linkedCollateralValueU;
-    return collateralValueKnown ? collateralValue : null;
+    return combinedCollateralValueU;
   })();
   // 37号标签订单在共享池中由服务端返回浮盈、实际持仓值与已结利息；
   // 行内展示也复用这一口径，避免与池总计出现不同的股票风险数值。
@@ -2401,13 +2406,13 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   })();
   const externalCollateralValueU = isSharedMode
     // 列表卡仅展示本订单即时担保；完整共享池总额按需在说明弹窗中读取。
-    ? (sharedPoolInfo ? Number((sharedPoolInfo as any).totalCollateralValue) : sharedOrderCollateralValueU)
-    : (hasExternalCollateral ? extTagCollateralValueU : (collateralValueKnown ? collateralValue : null));
-  const externalCollateralValueCny = hasExternalCollateral && !isSharedMode
-    ? extTagCollateralValueCny
-    : (externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU)
+    ? (sharedPoolInfo && Number.isFinite(Number((sharedPoolInfo as any).totalCollateralValue))
+      ? Number((sharedPoolInfo as any).totalCollateralValue)
+      : sharedOrderCollateralValueU)
+    : combinedCollateralValueU;
+  const externalCollateralValueCny = externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU)
       ? externalCollateralValueU * cnyRate
-      : null);
+      : null;
   // 共享模式：优先显示本订单含担保物的余量/缺口；担保物价格未就绪时保持加载状态，
   // 不再退回成漏算担保物的数值。
   // 非共享的37号标签订单用含利息的外部担保公式，其他订单沿用原有 exposure 逻辑。
@@ -3286,7 +3291,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
                   ><Linked37BadgeText /></button>
                 </span>
-                {externalCollateralValueU !== null && Number.isFinite(externalCollateralValueU) ? (
+                {externalOnlyCollateralValueU !== null && Number.isFinite(externalOnlyCollateralValueU) ? (
                   <span className="min-w-0 max-w-[68%] font-medium tabular-nums text-right" style={{ color: '#1A2340' }}>
                     {externalCollateralDisplayMode === 'CRYPTO' ? (
                       externalCollateralDetailRows.length > 0 ? (
@@ -3297,14 +3302,27 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         </span>
                       ) : <span className="block whitespace-nowrap text-gray-400">暂无担保明细</span>
                     ) : externalCollateralDisplayMode === 'U' ? (
-                      <span className="block whitespace-nowrap text-gray-500">≈{externalCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
+                      <span className="block whitespace-nowrap text-gray-500">≈{externalOnlyCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
                     ) : (
-                      <span className="block whitespace-nowrap text-gray-500">≈{(externalCollateralValueCny ?? externalCollateralValueU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>
+                      <span className="block whitespace-nowrap text-gray-500">≈{(extTagCollateralValueCny ?? externalOnlyCollateralValueU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>
                     )}
                   </span>
                 ) : <span style={{ color: '#9CA3AF' }}>{isSharedMode ? '共享担保加载中...' : '加载中...'}</span>}
               </div>
             )}
+            {show('collateralCoin') && hasExternalCollateral && collateralAssets.map((asset, index) => {
+              const isWalletAsset = (asset as any).source === 'wallet' || String((asset as any).note || '').startsWith('钱包担保冻结');
+              const itemValue = collateralItemValues[index];
+              return (
+                <div key={`local-collateral-${index}`} className="flex items-start justify-between gap-2 text-xs mt-0.5">
+                  <span className="text-gray-400 whitespace-nowrap">{isWalletAsset ? '钱包冻结担保' : '手工担保'}</span>
+                  <span className="min-w-0 text-right font-medium tabular-nums" style={{ color: '#4B5563' }}>
+                    {Number(asset.qty).toLocaleString()} {asset.coin === 'CNY' ? '元' : asset.coin}
+                    {itemValue !== null && itemValue !== undefined && <span className="ml-1 text-gray-400">（≈{itemValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>}
+                  </span>
+                </div>
+              );
+            })}
             {show('collateralCoin') && !hasExternalCollateral && (
               orderShareMode === 'self'
                 ? (
@@ -3375,24 +3393,22 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     ))
                 )
             )}
-            {(isSharedMode && !hasExternalCollateral
+            {(hasExternalCollateral
+              ? show('collateralValue')
+              : (isSharedMode && !hasExternalCollateral
               // 共享池只影响担保缺口统算；本订单的担保价值始终展示本订单实际录入的担保物。
               // 即使本订单未录入担保物，也应明确显示 0，而不能把共享池合计代入此处。
               ? show('collateralValue')
               : (isStockOrder && !hasExternalCollateral
                 ? (collateralAssets.length > 0 && show('collateralValue'))
-                : (collateralAssets.length > 1 ? approxCollateralTotal !== 'hidden' : show('collateralValue')))) && (() => {
-              if (hasExternalCollateral) {
-                // 37标签订单的担保价值已紧随“担保货币”展示，避免同一保证金总值重复两次。
-                return null;
-              }
+                : (collateralAssets.length > 1 ? approxCollateralTotal !== 'hidden' : show('collateralValue'))))) && (() => {
               const approxCV = dc?.approxCollateralValue ?? 'U';
               const isManualSharedCollateral = isSharedMode && !hasExternalCollateral;
-              const orderCollateralValueU = collateralValueKnown ? collateralValue : null;
+              const orderCollateralValueU = hasExternalCollateral ? combinedCollateralValueU : (collateralValueKnown ? collateralValue : null);
               const localValueDisplay = isStockOrder
                 ? stockManualCollateralValueDisplay
                 : (approxCollateralTotal === 'CNY' ? 'CNY' : 'U');
-              const cvDisplay = isStockOrder || isManualSharedCollateral
+              const cvDisplay = hasExternalCollateral || isStockOrder || isManualSharedCollateral
                 ? (orderCollateralValueU !== null && Number.isFinite(orderCollateralValueU)
                   ? (localValueDisplay === 'CNY'
                     ? `≈ ${(orderCollateralValueU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
@@ -3409,7 +3425,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                   : `${(collateralValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`;
               return (
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400">{(isStockOrder || isManualSharedCollateral) ? '担保价值' : (collateralAssets.length > 1 ? '担保总值' : '担保价值')}</span>
+                  <span className="text-gray-400">{hasExternalCollateral ? '担保总值（合并）' : ((isStockOrder || isManualSharedCollateral) ? '担保价值' : (collateralAssets.length > 1 ? '担保总值' : '担保价值'))}</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>{cvDisplay ?? '---'}</span>
                 </div>
               );
@@ -3458,7 +3474,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           const floatingPnlCny = isExternalStockPnlSource && externalStockFloatPnlCny !== null
                             ? externalStockFloatPnlCny
                             : null;
-                          const collateralCny = hasExternalCollateral ? extTagCollateralValueCny : null;
+                          const collateralCny = collateralU === null ? null : collateralU * cnyRate;
                           const pendingInterestCny = hasExternalPendingInterest && linked37PendingInterestCny !== null
                             ? linked37PendingInterestCny
                             : pendingInterestU * cnyRate;
@@ -3523,9 +3539,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                             : null;
                           const hasManualStockBaseAdjustment = manualStockBaseAdjustmentU !== null
                             && Math.abs(manualStockBaseAdjustmentU) > 0.000001;
-                          const collateralBreakdownEntries = hasExternalCollateral
-                            ? []
-                            : collateralAssets.flatMap((item, index) => item.coin && Number.isFinite(Number(item.qty))
+                          const collateralBreakdownEntries = collateralAssets.flatMap((item, index) => item.coin && Number.isFinite(Number(item.qty))
                                 ? [{
                                     label: `${Number(item.qty).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${item.coin === 'CNY' ? '元' : item.coin}`,
                                     valueU: collateralItemValues[index] ?? null,
@@ -3606,32 +3620,24 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                 )}
                               </div>
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② {hasExternalCollateral ? '37号担保货币' : '担保货币'}</div>
-                                {hasExternalCollateral ? (
-                                  <div className="mt-1.5 font-mono">
-                                    <span className="text-slate-500">担保货币合计</span>{' '}
-                                    {collateralU !== null
-                                      ? <><span className="text-slate-400">（≈{collateralU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>{' '}<strong style={{ color: valueColor(collateralU) }}>= {(collateralCny ?? (collateralU * cnyRate)).toLocaleString(undefined, { maximumFractionDigits: 2 })} 元</strong></>
-                                      : <span className="text-gray-400">担保物实时价加载中...</span>}
-                                  </div>
-                                ) : <>
-                                  <div className="mt-1 space-y-1 font-mono">
-                                    {collateralBreakdownEntries.length > 0 ? collateralBreakdownEntries.map((entry, index) => (
-                                      <div key={`${entry.label}-${index}`} className="flex justify-between gap-3">
-                                        <span className="min-w-0 truncate">{entry.label}{entry.valueU !== null && <span className="text-slate-400">（≈{entry.valueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>}</span>
-                                        {entry.valueU === null
-                                          ? <span className="shrink-0 text-gray-400">加载中...</span>
-                                          : <span className="shrink-0" style={{ color: valueColor(entry.valueU) }}>= {(entry.valueCny ?? entry.valueU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>}
-                                      </div>
-                                    )) : <span className="text-gray-400">暂无担保货币</span>}
-                                  </div>
-                                  <div className="mt-1.5 border-t border-blue-100 pt-1.5 font-mono">
-                                    <span className="text-slate-500">担保货币合计</span>{' '}
-                                    {collateralU !== null
-                                      ? <><span className="text-slate-400">（≈{collateralU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>{' '}<strong style={{ color: valueColor(collateralU) }}>= {(collateralU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</strong></>
-                                      : <span className="text-gray-400">担保物实时价加载中...</span>}
-                                  </div>
-                                </>}
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② {hasExternalCollateral ? '担保物（手工/钱包 + 37号）' : '担保货币'}</div>
+                                <div className="mt-1 space-y-1 font-mono">
+                                  {collateralBreakdownEntries.length > 0 ? collateralBreakdownEntries.map((entry, index) => (
+                                    <div key={`${entry.label}-${index}`} className="flex justify-between gap-3">
+                                      <span className="min-w-0 truncate">{entry.label}{entry.valueU !== null && <span className="text-slate-400">（≈{entry.valueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>}</span>
+                                      {entry.valueU === null
+                                        ? <span className="shrink-0 text-gray-400">加载中...</span>
+                                        : <span className="shrink-0" style={{ color: valueColor(entry.valueU) }}>= {(entry.valueCny ?? entry.valueU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>}
+                                    </div>
+                                  )) : <span className="text-gray-400">暂无手工或钱包担保</span>}
+                                  {hasExternalCollateral && <div className="flex justify-between gap-3"><span>37号引用担保{externalOnlyCollateralValueU !== null && <span className="text-slate-400">（≈{externalOnlyCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>}</span><span className="shrink-0" style={{ color: '#DC2626' }}>{externalOnlyCollateralValueU === null ? '加载中...' : `= ${(extTagCollateralValueCny ?? externalOnlyCollateralValueU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`}</span></div>}
+                                </div>
+                                <div className="mt-1.5 border-t border-blue-100 pt-1.5 font-mono">
+                                  <span className="text-slate-500">担保货币合计</span>{' '}
+                                  {collateralU !== null
+                                    ? <><span className="text-slate-400">（≈{collateralU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>{' '}<strong style={{ color: valueColor(collateralU) }}>= {(collateralCny ?? collateralU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</strong></>
+                                    : <span className="text-gray-400">担保物实时价加载中...</span>}
+                                </div>
                               </div>
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                                 <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 订单利息</div>
@@ -3660,12 +3666,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           {/* ①② 总计风险敎口 + 保证金比例（移到最上面） */}
                           {sharedPoolInfo && (() => {
                             const orders = (sharedPoolInfo as any).orders ?? [];
-                            const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
+                            const totalColl = Number((sharedPoolInfo as any).totalCollateralValue);
                             // 第①项与第③项共用原订单卡回传的单笔最终缺口；不再用服务端
                             // 对期权按行权价/现货价简化出来的余额。
-                            const allHaveGap = sharedHoldingGapReady;
+                            const allHaveGap = sharedHoldingGapReady && Number.isFinite(totalColl);
                             const holdingBalance = sharedHoldingGapTotal;
-                            const diff = holdingBalance + totalColl;
+                            const diff = allHaveGap ? holdingBalance + totalColl : NaN;
                             // 浮盈亏口径与担保减买入价值口径均以订单真实买入价值为基准。
                             const totalGapBase = orders.reduce((sum: number, o: any) => {
                               const usesPrincipalCoverage = o.collateralRiskFormula === 'principal_coverage'

@@ -5326,6 +5326,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   profit_share_type: formData.profitShareType || 'interest',
                   principal_lent_out: effectivePrincipalLentOut ? 1 : 0,
                   collateral_assets: collateralAssets.length > 0 ? JSON.stringify(collateralAssets) : null,
+                  // 编辑任一拥有者时，预览统一读取该订单所有已冻结的钱包担保；手工草稿仍只展示当前编辑内容。
+                  wallet_collateral_contributors: (editingOrder as any)?.wallet_collateral_contributors || [],
                   option_info: formData.assetType === 'crypto_option' ? JSON.stringify({
                     coin: optionFormData.optionCurrency,
                     direction: optionFormData.direction,
@@ -5364,7 +5366,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 const rateValPreview = parseFloat(String(previewOrder.interest_rate_annual || '0'));
                 const previewHasJointOrderSegments = previewJointOrderSegments.length > 0;
                 // 第二段的草稿也纳入 key，确保每次输入都会立即重建预览中的同卡分段内容。
-                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${collateralRiskFormula}-${String(displayConfig.floatPnl)}-${String(displayConfig.periodInterestTotal)}-${String(displayConfig.periodInterestTotalPeriod)}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}-${JSON.stringify(previewJointOrderSegments)}`;
+                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${collateralRiskFormula}-${String(displayConfig.floatPnl)}-${String(displayConfig.periodInterestTotal)}-${String(displayConfig.periodInterestTotalPeriod)}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}-${JSON.stringify((editingOrder as any)?.wallet_collateral_contributors || [])}-${JSON.stringify(previewJointOrderSegments)}`;
                 return (
                   <div>
                     <div className="flex items-center justify-between mb-2">

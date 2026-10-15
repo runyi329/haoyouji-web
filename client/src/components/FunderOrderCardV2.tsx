@@ -622,7 +622,7 @@ function readConfirmedExposureGap(value: unknown): number | null {
 function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: string; qty: string; note?: string; source?: string }>) {
   const contributors = Array.isArray(order?.wallet_collateral_contributors) ? order.wallet_collateral_contributors : [];
   if (contributors.length === 0) return assets;
-  const manualAssets = assets.filter((asset: any) => asset?.source !== 'wallet' && asset?.note !== '钱包担保冻结');
+  const manualAssets = assets.filter((asset: any) => asset?.source !== 'wallet' && !String(asset?.note || '').startsWith('钱包担保冻结'));
   const walletAssets = contributors.flatMap((contributor: any) => (Array.isArray(contributor?.assets) ? contributor.assets : []).flatMap((asset: any) => {
     const coin = String(asset?.coin || '').trim().toUpperCase();
     const qty = String(asset?.qty ?? '').trim();
@@ -1572,6 +1572,10 @@ export function FunderOrderCardV2Silver({
       if (parsed && parsed.ledgerId && parsed.tagName) return parsed as {
         ledgerId: number;
         tagName: string;
+        collateralTagName?: string;
+        useCollateral?: boolean;
+        floatingPnlTagName?: string;
+        useFloatingPnl?: boolean;
         floatingPnlCalculationMode?: 'raw_net_pnl' | 'initial_minus_latest' | 'leveraged_net_pnl';
         marginRateTagName?: string;
         useMarginRate?: boolean;
@@ -1579,7 +1583,11 @@ export function FunderOrderCardV2Silver({
     } catch {}
     return null;
   }, [(order as any).collateral_source]);
-  const hasExternalCollateral = !!_parsedCollateralSource;
+  // 新订单可单独选择引用37号担保、浮盈和利息。旧订单没有开关时保持原有“引用即担保”兼容。
+  const externalCollateralTagName = Number(_parsedCollateralSource?.ledgerId) !== 37 || _parsedCollateralSource?.useCollateral === false
+    ? ''
+    : String(_parsedCollateralSource?.collateralTagName || _parsedCollateralSource?.tagName || '').trim();
+  const hasExternalCollateral = !!externalCollateralTagName;
   const marginRateReferenceTagName = _parsedCollateralSource?.useMarginRate === true
     ? String(_parsedCollateralSource?.marginRateTagName || '').trim()
     : '';
@@ -1590,11 +1598,11 @@ export function FunderOrderCardV2Silver({
   // 兼容别名，保留下游代码不变
   const isFC2977 = hasExternalCollateral;
   const { data: _fc2977TagConfig } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: _parsedCollateralSource?.tagName ?? '' },
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: externalCollateralTagName },
     { enabled: hasExternalCollateral, staleTime: 3000 }
   );
   const { data: _fc2977TagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
-    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: _parsedCollateralSource?.tagName ?? '' },
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: externalCollateralTagName },
     { enabled: hasExternalCollateral, staleTime: 3000 }
   );
   const { data: _marginRateTagConfig } = trpc.ledger.getTagConfig.useQuery(
@@ -1753,33 +1761,37 @@ export function FunderOrderCardV2Silver({
       else { collateralItemValues.push(null); collateralValueKnown = false; }
     }
   }
+  const localWalletCollateralValueU = collateralValueKnown ? collateralValue : null;
+  const combinedCollateralValueU = localWalletCollateralValueU === null || (hasExternalCollateral && fc2977CollateralValueU === null)
+    ? null
+    : localWalletCollateralValueU + (hasExternalCollateral ? (fc2977CollateralValueU ?? 0) : 0);
   // 担保差值、担保物+浮盈、买入价值全额三种口径分别计算；“融”标签不再改变公式。
   const exposure = _isOptCard
     ? (isSelfFundedOption
       ? (optCurrentValue ?? 0)
       : (cardUsesPrincipalCoverage
-        ? collateralValue - silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU
+        ? (localWalletCollateralValueU === null ? null : localWalletCollateralValueU - silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU)
         : cardUsesFloatingPnl
-          ? (floatPnl === null ? null : collateralValue + floatPnl - silverAccruedInterestU + silverPaidInterestU)
+          ? (localWalletCollateralValueU === null || floatPnl === null ? null : localWalletCollateralValueU + floatPnl - silverAccruedInterestU + silverPaidInterestU)
           : -silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU))
     : (cardUsesPrincipalCoverage
-      ? collateralValue - silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU
+      ? (localWalletCollateralValueU === null ? null : localWalletCollateralValueU - silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU)
       : cardUsesFloatingPnl
-        ? (floatPnl === null ? null : collateralValue + floatPnl - silverAccruedInterestU + silverPaidInterestU)
+        ? (localWalletCollateralValueU === null || floatPnl === null ? null : localWalletCollateralValueU + floatPnl - silverAccruedInterestU + silverPaidInterestU)
         : -silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU);
   const fc2977FinalGapU = !hasExternalCollateral
     ? null
     : cardUsesPrincipalCoverage
-      ? (fc2977CollateralValueU === null ? null : fc2977CollateralValueU - silverCoverageBaseU - fc2977AccruedInterestU + fc2977PaidInterestU)
+      ? (combinedCollateralValueU === null ? null : combinedCollateralValueU - silverCoverageBaseU - fc2977AccruedInterestU + fc2977PaidInterestU)
       : cardUsesFloatingPnl
-        ? (fc2977RemainingMarginU === null ? null : fc2977RemainingMarginU - fc2977AccruedInterestU + fc2977PaidInterestU)
+        ? (combinedCollateralValueU === null || fc2977FloatingPnlU === null ? null : combinedCollateralValueU + fc2977FloatingPnlU - fc2977AccruedInterestU + fc2977PaidInterestU)
         : -silverCoverageBaseU - fc2977AccruedInterestU + fc2977PaidInterestU;
+  const finalExposureGapU = hasExternalCollateral ? fc2977FinalGapU : exposure;
   useEffect(() => {
-    if (!onExposureGapChange || !hasExternalCollateral || !Number.isFinite(fc2977FinalGapU)) return;
-    onExposureGapChange(Number(order.id), Number(fc2977FinalGapU));
-  }, [onExposureGapChange, hasExternalCollateral, fc2977FinalGapU, order.id]);
-  const isSufficient = (hasExternalCollateral ? fc2977FinalGapU : exposure) !== null
-    && (hasExternalCollateral ? fc2977FinalGapU! : exposure!) >= 0;
+    if (!onExposureGapChange || !Number.isFinite(finalExposureGapU)) return;
+    onExposureGapChange(Number(order.id), Number(finalExposureGapU));
+  }, [onExposureGapChange, finalExposureGapU, order.id]);
+  const isSufficient = finalExposureGapU !== null && finalExposureGapU >= 0;
 
   const fmt = (v: number | null, digits = 2) =>
     v == null || isNaN(v) ? '--' : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -2895,21 +2907,19 @@ export function FunderOrderCardV2Silver({
               </>
             )}
             {/* 非共享担保：担保货币 / 担保总值 / 担保缺口 */}
-            {cardDisplayConfig.collateral !== false && !isSharedMode && !isStockCard && collateralAssets.length > 0 && (
+            {cardDisplayConfig.collateral !== false && !isSharedMode && !isStockCard && (collateralAssets.length > 0 || hasExternalCollateral) && (
               <>
+                {hasExternalCollateral && (
+                  <div className="flex justify-between" style={{ marginTop: 6 }}>
+                    <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>37号引用担保</span>
+                    <span style={{ color: TXT_PRI }}>{fc2977CollateralValueU === null ? '加载中...' : `≈ ${fc2977CollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`}</span>
+                  </div>
+                )}
                 {collateralAssets.map((a, idx) => (
                   <div key={idx}>
                     <div className="flex justify-between" style={{ marginTop: 6 }}>
                       <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
-                        {collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}
-                        {isFC2977 && (
-                          <button
-                            type="button"
-                            onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
-                            className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
-                            style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                          >!</button>
-                        )}
+                        {(a as any).source === 'wallet' ? '钱包冻结担保' : (collateralAssets.length > 1 ? `手工担保${idx + 1}` : '手工担保')}
                       </span>
                       <span style={{ color: TXT_PRI }}>{parseFloat(a.qty).toLocaleString()} {a.coin === 'CNY' ? '元' : a.coin}</span>
                     </div>
@@ -2921,13 +2931,13 @@ export function FunderOrderCardV2Silver({
                     )}
                   </div>
                 ))}
-                {collateralAssets.length > 1 && cardCollateralTotalApprox !== 'hidden' && (
+                {(hasExternalCollateral || collateralAssets.length > 1) && cardCollateralTotalApprox !== 'hidden' && (
                   <div className="flex justify-between" style={{ marginTop: 4 }}>
-                    <span style={{ color: TXT_SEC }}>担保总值</span>
-                    <span style={{ color: TXT_PRI }}>{collateralValueKnown
+                    <span style={{ color: TXT_SEC }}>{hasExternalCollateral ? '担保总值（合并）' : '担保总值'}</span>
+                    <span style={{ color: TXT_PRI }}>{combinedCollateralValueU !== null
                       ? (cardCollateralTotalApprox === 'CNY'
-                        ? `≈ ${(collateralValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
-                        : `≈ ${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`)
+                        ? `≈ ${(combinedCollateralValueU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
+                        : `≈ ${combinedCollateralValueU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`)
                       : '实时价加载中...'}</span>
                   </div>
                 )}
@@ -2939,12 +2949,12 @@ export function FunderOrderCardV2Silver({
                       style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}>!</button>
                   </span>
                   <span className="inline-block text-right leading-tight" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                    <span className="block">{isSufficient ? '+' : '-'}{Math.abs(exposure).toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
+                    {finalExposureGapU === null ? <span className="block text-[10px]" style={{ color: TXT_SEC }}>加载中...</span> : <><span className="block">{isSufficient ? '+' : '-'}{Math.abs(finalExposureGapU).toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
                     {cardCollateralGapApprox !== 'hidden' && (
                       <span className="block mt-0.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>≈ {cardCollateralGapApprox === 'CNY'
-                        ? `${(exposure * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
-                        : `${exposure.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`}</span>
-                    )}
+                        ? `${(finalExposureGapU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`
+                        : `${finalExposureGapU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`}</span>
+                    )}</>}
                   </span>
                 </div>
                 {showCollateralInfo && (
@@ -2959,19 +2969,19 @@ export function FunderOrderCardV2Silver({
                           <>
                             <div>自有资产期权：担保缺口只采用期权实时价值，不扣权利金、不叠加利息或担保物</div>
                             <div className="font-mono p-2 rounded" style={{ background: '#F9FAFB' }}>
-                              = {(optCurrentValue ?? 0).toFixed(2)}（期权标记价 × 持有张数） = <strong style={{ color: '#16A34A' }}>+{exposure.toFixed(2)} u</strong>
+                              = {(optCurrentValue ?? 0).toFixed(2)}（期权标记价 × 持有张数） = <strong style={{ color: '#16A34A' }}>+{(finalExposureGapU ?? 0).toFixed(2)} u</strong>
                             </div>
                           </>
                         ) : (
                           <>
                             <div>担保缺口 = 担保总值 + 浮动盈亏 − 待结利息 + 已结利息</div>
                             <div className="font-mono p-2 rounded" style={{ background: '#F9FAFB' }}>
-                              = {collateralValue.toFixed(2)}
-                              {floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ' + ---'}
+                              = {combinedCollateralValueU === null ? '---' : combinedCollateralValueU.toFixed(2)}
+                              {(hasExternalCollateral ? fc2977FloatingPnlU : floatPnl) !== null ? ` + (${(hasExternalCollateral ? fc2977FloatingPnlU! : floatPnl!) >= 0 ? '+' : ''}${(hasExternalCollateral ? fc2977FloatingPnlU! : floatPnl!).toFixed(2)})` : ' + ---'}
                               {` − ${displayAccrued.toFixed(2)}`}
                               {` + ${displayPaid.toFixed(2)}`}
                               {` = `}
-                              <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong>
+                              <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{finalExposureGapU === null ? '加载中...' : `${finalExposureGapU >= 0 ? '+' : ''}${finalExposureGapU.toFixed(2)} u`}</strong>
                             </div>
                           </>
                         )}
@@ -3310,6 +3320,10 @@ export function FunderLenderCardSilver({
         return parsed as {
           ledgerId: number;
           tagName: string;
+          collateralTagName?: string;
+          useCollateral?: boolean;
+          floatingPnlTagName?: string;
+          useFloatingPnl?: boolean;
           interestTagName?: string;
           floatingPnlCalculationMode?: 'raw_net_pnl' | 'initial_minus_latest' | 'leveraged_net_pnl';
         };
@@ -3317,16 +3331,19 @@ export function FunderLenderCardSilver({
     } catch {}
     return null;
   }, [(order as any).collateral_source]);
-  const hasExternalCollateral = !!_lnParsedCollateralSource;
+  const lnExternalCollateralTagName = Number(_lnParsedCollateralSource?.ledgerId) !== 37 || _lnParsedCollateralSource?.useCollateral === false
+    ? ''
+    : String(_lnParsedCollateralSource?.collateralTagName || _lnParsedCollateralSource?.tagName || '').trim();
+  const hasExternalCollateral = !!lnExternalCollateralTagName;
   const lnExternalFloatingPnlCalculationMode = _lnParsedCollateralSource?.floatingPnlCalculationMode === 'leveraged_net_pnl'
     ? 'leveraged_net_pnl'
     : 'raw_net_pnl';
   const { data: _lnExtTagConfig } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId: _lnParsedCollateralSource?.ledgerId ?? 0, tagName: _lnParsedCollateralSource?.tagName ?? '' },
+    { ledgerId: _lnParsedCollateralSource?.ledgerId ?? 0, tagName: lnExternalCollateralTagName },
     { enabled: hasExternalCollateral, staleTime: 3000 }
   );
   const { data: _lnExtTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
-    { ledgerId: _lnParsedCollateralSource?.ledgerId ?? 0, tagName: _lnParsedCollateralSource?.tagName ?? '' },
+    { ledgerId: _lnParsedCollateralSource?.ledgerId ?? 0, tagName: lnExternalCollateralTagName },
     { enabled: hasExternalCollateral, staleTime: 3000 }
   );
   const { data: _lnExtPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
@@ -3536,13 +3553,21 @@ export function FunderLenderCardSilver({
 
   // 担保价值计算
   const collateralItemValues: (number | null)[] = collateralAssets.map((a) => {
-    const p = livePrices[a.coin as CoinType] ?? null;
-    return p !== null ? p * parseFloat(a.qty || '0') : null;
+    const qty = Number(a.qty || '0');
+    const coin = String(a.coin || '').trim().toUpperCase();
+    if (!Number.isFinite(qty)) return null;
+    if (['USDT', 'U', 'USDC', 'USDE', 'DAI'].includes(coin)) return qty;
+    if (['CNY', 'RMB', '人民币', '元'].includes(coin)) return cnyRate > 0 ? qty / cnyRate : null;
+    const p = livePrices[coin as CoinType] ?? null;
+    return p !== null ? p * qty : null;
   });
   const collateralValueKnown = collateralItemValues.every((v) => v !== null);
   const collateralValue = collateralValueKnown
     ? collateralItemValues.reduce((s, v) => s + (v ?? 0), 0)
     : null;
+  const combinedCollateralValueU = collateralValue === null || (hasExternalCollateral && lnExtCollateralValueU === null)
+    ? null
+    : collateralValue + (hasExternalCollateral ? (lnExtCollateralValueU ?? 0) : 0);
   // 利息如果是元，需先除以cnyRate换算成U
   const effectiveCnyRate = cnyRate && cnyRate > 0 ? cnyRate : 6.8;
   const accruedInU = interestUnit === '元' ? displayAccrued / effectiveCnyRate : displayAccrued;
@@ -3567,21 +3592,22 @@ export function FunderLenderCardSilver({
         ? collateralValue - lenderCoverageBaseU - accruedInU + paidInU
         : lenderUsesFloatingPnl
           ? (floatPnl === null ? null : collateralValue + floatPnl - accruedInU + paidInU)
-          : -lenderCoverageBaseU - accruedInU + paidInU)
+        : -lenderCoverageBaseU - accruedInU + paidInU)
       : null);
   // 外部37号担保物与浮盈按已选口径组合，不能一律当作“浮盈+担保物”。
   const lnExternalFinalGapU = !hasExternalCollateral
     ? null
     : lenderUsesPrincipalCoverage
-      ? (lnExtCollateralValueU === null ? null : lnExtCollateralValueU - lenderCoverageBaseU - accruedInU + paidInU)
+      ? (combinedCollateralValueU === null ? null : combinedCollateralValueU - lenderCoverageBaseU - accruedInU + paidInU)
       : lenderUsesFloatingPnl
-        ? (lnExtRemainingMarginU === null ? null : lnExtRemainingMarginU - accruedInU + paidInU)
+        ? (combinedCollateralValueU === null || lnExtFloatingPnlU === null ? null : combinedCollateralValueU + lnExtFloatingPnlU - accruedInU + paidInU)
         : -lenderCoverageBaseU - accruedInU + paidInU;
+  const lenderFinalGapU = hasExternalCollateral ? lnExternalFinalGapU : collateralGap;
   useEffect(() => {
-    if (!onExposureGapChange || !hasExternalCollateral || !Number.isFinite(lnExternalFinalGapU)) return;
-    onExposureGapChange(Number(order.id), Number(lnExternalFinalGapU));
-  }, [onExposureGapChange, hasExternalCollateral, lnExternalFinalGapU, order.id]);
-  const isSufficient = collateralGap !== null && collateralGap >= 0;
+    if (!onExposureGapChange || !Number.isFinite(lenderFinalGapU)) return;
+    onExposureGapChange(Number(order.id), Number(lenderFinalGapU));
+  }, [onExposureGapChange, lenderFinalGapU, order.id]);
+  const isSufficient = lenderFinalGapU !== null && lenderFinalGapU >= 0;
 
   // 读取 display_config 开关（与订单模式一致）
   const dc = lenderDisplayConfig;
@@ -4113,10 +4139,10 @@ export function FunderLenderCardSilver({
               )}
 
               {/* 担保价値（非共享模式才显示） */}
-              {!isSharedMode && showField('collateral') && collateralValue !== null && (
+              {!isSharedMode && showField('collateral') && combinedCollateralValueU !== null && (
                 <div className="flex justify-between mb-1">
-                  <span style={{ color: TXT_SEC }}>担保价値</span>
-                  <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmt(collateralValue, 2)} U</span>
+                  <span style={{ color: TXT_SEC }}>{hasExternalCollateral ? '担保总值（手工/钱包 + 37号）' : '担保价値'}</span>
+                  <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmt(combinedCollateralValueU, 2)} U</span>
                 </div>
               )}
               {/* 担保缺口 */}
@@ -4129,10 +4155,15 @@ export function FunderLenderCardSilver({
                         {hasExternalCollateral && _lnParsedCollateralSource ? (
                           <>
                             <div className="flex items-center justify-between mb-3">
-                              <span className="text-sm font-bold" style={{ color: '#1A2340' }}>{_lnParsedCollateralSource.tagName}</span>
+                              <span className="text-sm font-bold" style={{ color: '#1A2340' }}>{lnExternalCollateralTagName}</span>
                               <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
                             </div>
-                            <RightMarginDetail ledgerId={_lnParsedCollateralSource.ledgerId} tagName={_lnParsedCollateralSource.tagName} />
+                            <div className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                              <div className="flex justify-between"><span>手工/钱包担保</span><strong>{collateralValue === null ? '加载中...' : `${collateralValue.toFixed(2)} U`}</strong></div>
+                              <div className="mt-1 flex justify-between"><span>37号引用担保</span><strong>{lnExtCollateralValueU === null ? '加载中...' : `${lnExtCollateralValueU.toFixed(2)} U`}</strong></div>
+                              <div className="mt-1 border-t border-slate-200 pt-1 flex justify-between font-semibold text-slate-800"><span>担保总值（合并）</span><span>{combinedCollateralValueU === null ? '加载中...' : `${combinedCollateralValueU.toFixed(2)} U`}</span></div>
+                            </div>
+                            <RightMarginDetail ledgerId={_lnParsedCollateralSource.ledgerId} tagName={lnExternalCollateralTagName} />
                           </>
                         ) : (
                         <>
@@ -4325,7 +4356,7 @@ export function FunderLenderCardSilver({
                     </div>
                   )}
                   {/* 担保缺口行：外部模式显示37号剩余保证金，共享模式显示共享池缺口，普通模式显示单订单缺口 */}
-                  {(hasExternalCollateral || isSharedMode || collateralGap !== null) && (
+                  {(hasExternalCollateral || isSharedMode || lenderFinalGapU !== null) && (
                     <div className="flex justify-between mb-1 items-center">
                       <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
                         担保缺口
@@ -4337,10 +4368,10 @@ export function FunderLenderCardSilver({
                         >?</button>
                       </span>
                       {hasExternalCollateral ? (
-                        lnExternalFinalGapU !== null ? (
+                        lenderFinalGapU !== null ? (
                           <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                            <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{lnExternalFinalGapU >= 0 ? '充足' : '不足'}</span>
-                            <span style={{ color: TXT_PRI }}>{lnExternalFinalGapU >= 0 ? '+' : '-'}{Math.abs(lnExternalFinalGapU).toFixed(2)} U</span>
+                            <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{lenderFinalGapU >= 0 ? '充足' : '不足'}</span>
+                            <span style={{ color: TXT_PRI }}>{lenderFinalGapU >= 0 ? '+' : '-'}{Math.abs(lenderFinalGapU).toFixed(2)} U</span>
                           </span>
                         ) : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>加载中...</span>
                       ) : isSharedMode ? (() => {
@@ -4357,7 +4388,7 @@ export function FunderLenderCardSilver({
                       })() : (
                         <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                           <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{isSufficient ? '充足' : '不足'}</span>
-                          <span style={{ color: TXT_PRI }}>{isSufficient ? '+' : ''}{fmt(collateralGap, 2)} U</span>
+                          <span style={{ color: TXT_PRI }}>{isSufficient ? '+' : ''}{fmt(lenderFinalGapU, 2)} U</span>
                         </span>
                       )}
                     </div>
