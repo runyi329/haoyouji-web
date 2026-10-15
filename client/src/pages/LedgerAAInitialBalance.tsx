@@ -225,6 +225,12 @@ export default function LedgerAAInitialBalance() {
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 0;
   const { user } = useAuth();
+  const { data: usdCnyRateData } = trpc.exchange.getRate.useQuery(
+    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
+    { enabled: ledgerId === 37, staleTime: 30_000, refetchInterval: 30_000, refetchIntervalInBackground: false },
+  );
+  const quotedUsdCnyRate = Number((usdCnyRateData as any)?.money);
+  const usdCnyRate = Number.isFinite(quotedUsdCnyRate) && quotedUsdCnyRate > 0 ? quotedUsdCnyRate : 7.2;
 
   const { data: ledgerData } = trpc.ledger.getById.useQuery(
     { ledgerId },
@@ -1335,6 +1341,24 @@ export default function LedgerAAInitialBalance() {
     }
     const matrix = stockParticipationMatrix as any;
     const formatNumber = (value: number, digits = 2) => Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: digits });
+    const formatCny = (value: number) => Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const isUsStockSymbol = (symbol: unknown) => !/^\d{6}\.(SH|SZ|BJ)$/i.test(String(symbol || ''));
+    const renderStockValue = (value: number | null | undefined, isUsStock: boolean, digits = 2) => {
+      if (value === null || value === undefined || !Number.isFinite(value)) {
+        return <span className="inline-flex flex-col leading-4"><span>待更新</span><span className="invisible text-[9px]">占位</span></span>;
+      }
+      if (!isUsStock) {
+        return <span className="inline-flex flex-col leading-4"><span>¥{formatCny(value)}</span><span className="invisible text-[9px]">≈ US$0.00</span></span>;
+      }
+      return <span className="inline-flex flex-col leading-4"><span>¥{formatCny(value * usdCnyRate)}</span><span className="text-[9px] font-normal text-gray-400">≈ US${formatNumber(value, digits)}</span></span>;
+    };
+    const renderStockPnl = (value: number | null, isUsStock: boolean) => {
+      if (value === null || !Number.isFinite(value)) return renderStockValue(null, isUsStock);
+      const sign = value >= 0 ? '+' : '−';
+      const absoluteValue = Math.abs(value);
+      const cnyValue = absoluteValue * (isUsStock ? usdCnyRate : 1);
+      return <span className="inline-flex flex-col leading-4"><span>{sign}¥{formatCny(cnyValue)}</span>{isUsStock ? <span className="text-[9px] font-normal opacity-70">≈ {sign}US${formatNumber(absoluteValue, 2)}</span> : <span className="invisible text-[9px]">≈ US$0.00</span>}</span>;
+    };
     const formatTradeTime = (value?: string | null) => {
       if (!value) return '历史批次';
       const date = new Date(value);
@@ -1368,6 +1392,8 @@ export default function LedgerAAInitialBalance() {
           const activeParticipations = lot.participations.filter((item: any) => Number(item.remainingQuantity || 0) > 0);
           const totalAllocatedQuantity = activeParticipations.reduce((total: number, item: any) => total + Number(item.remainingQuantity || 0), 0);
           const holdingTotal = Number(lot.initialQuantity || 0) * Number(lot.unitCost || 0);
+          const isUsStock = isUsStockSymbol(lot.symbol);
+          const stockInputSymbol = isUsStock ? '$' : '¥';
           const initialQuantity = Number(lot.initialQuantity || 0);
           const availablePercent = initialQuantity > 0 ? Number(lot.availableForParticipation || 0) / initialQuantity * 100 : 0;
           const allocatedPercent = initialQuantity > 0 ? totalAllocatedQuantity / initialQuantity * 100 : 0;
@@ -1378,6 +1404,7 @@ export default function LedgerAAInitialBalance() {
           const marketPnl = marketValue === null
             ? null
             : marketValue - Number(lot.currentQuantity || 0) * Number(lot.unitCost || 0);
+          const marketPnlCny = marketPnl === null ? null : marketPnl * (isUsStock ? usdCnyRate : 1);
           const tradeTimestamp = formatTradeTime(lot.actualTradedAt || lot.openedAt);
           const totalDraftPercentage = (matrix.members as any[]).reduce((total: number, member: any) => {
             const draftPercentage = stockParticipationDrafts[`${lotId}:${member.userId}`]?.percentage;
@@ -1401,7 +1428,8 @@ export default function LedgerAAInitialBalance() {
               const savedPauseDate = participation?.pauseDate || '';
               const draftKey = `${lot.id}:${member.userId}`;
               const totalLotValue = Number(lot.currentQuantity || 0) * savedEntryPrice;
-              const fallbackDraft = { percentage: share ? String(Math.round(share)) : '', amount: share ? String(Number((totalLotValue * Math.round(share) / 100).toFixed(2))) : '', entryPrice: savedEntryPrice ? String(savedEntryPrice) : '', startDate: savedStartDate, pauseDate: savedPauseDate };
+              const totalLotValueCny = totalLotValue * (isUsStock ? usdCnyRate : 1);
+              const fallbackDraft = { percentage: share ? String(Math.round(share)) : '', amount: share ? String(Number((totalLotValueCny * Math.round(share) / 100).toFixed(2))) : '', entryPrice: savedEntryPrice ? String(savedEntryPrice) : '', startDate: savedStartDate, pauseDate: savedPauseDate };
               const savedDraft = stockParticipationDrafts[draftKey];
               const draft = savedDraft ?? fallbackDraft;
               const percentage = Math.round(Math.max(0, Math.min(100, Number(draft.percentage) || 0)));
@@ -1492,12 +1520,12 @@ export default function LedgerAAInitialBalance() {
                 )}
               </div>
               <div className="grid grid-cols-3 gap-px border-y text-[10px]" style={{ borderColor: '#E8EEF1', backgroundColor: '#E8EEF1' }}>
-                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500"><span>持仓</span><b className="ml-1 font-semibold text-gray-700">{formatNumber(lot.initialQuantity, 4)} 股</b></div>
-                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500"><span>开仓均价</span><b className="ml-1 font-semibold text-gray-700">{formatNumber(lot.unitCost, 4)}</b></div>
-                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500"><span>开仓市值</span><b className="ml-1 font-semibold text-gray-700">{formatNumber(holdingTotal, 2)}</b></div>
-                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500"><span>当前价格</span><b className="ml-1 font-semibold text-gray-700">{lot.marketPrice === null || lot.marketPrice === undefined ? '待更新' : formatNumber(lot.marketPrice, 4)}</b></div>
-                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500"><span>当前市值</span><b className="ml-1 font-semibold text-gray-700">{marketValue === null ? '待更新' : formatNumber(marketValue, 2)}</b></div>
-                <div className="bg-[#F8FAFB] px-1 py-1.5 text-center text-gray-500"><span>盈亏</span><b className="ml-1 font-semibold" style={{ color: marketPnl === null ? '#6B7280' : marketPnl >= 0 ? '#D32F2F' : '#2E7D32' }}>{marketPnl === null ? '待更新' : `${marketPnl >= 0 ? '+' : ''}${formatNumber(marketPnl, 2)}`}</b></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>持仓</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{formatNumber(lot.initialQuantity, 4)} 股</b><span className="invisible text-[9px] leading-4">占位</span></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>开仓均价</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(Number(lot.unitCost || 0), isUsStock, 4)}</b></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>开仓市值</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(holdingTotal, isUsStock)}</b></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>当前价格</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(lot.marketPrice === null || lot.marketPrice === undefined ? null : Number(lot.marketPrice), isUsStock, 4)}</b></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>当前市值</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(marketValue, isUsStock)}</b></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>盈亏</span><b className="mt-0.5 text-xs font-semibold" style={{ color: marketPnlCny === null ? '#6B7280' : marketPnlCny >= 0 ? '#D32F2F' : '#2E7D32' }}>{renderStockPnl(marketPnl, isUsStock)}</b></div>
                 <div className="whitespace-nowrap bg-[#F8FAFB] px-0.5 py-1.5 text-center text-gray-500">可分配 <b className="ml-0.5 font-semibold text-gray-700">{formatNumber(lot.availableForParticipation, 4)} 股</b> <span className="text-gray-400">{formatNumber(availablePercent, 2)}%</span></div>
                 <div className="whitespace-nowrap bg-[#F8FAFB] px-0.5 py-1.5 text-center text-gray-500">已分配 <b className="ml-0.5 text-gray-700">{formatNumber(totalAllocatedQuantity, 4)} 股</b> <span className="text-gray-400">{formatNumber(allocatedPercent, 2)}%</span></div>
                 <div className="whitespace-nowrap bg-[#F8FAFB] px-0.5 py-1.5 text-center text-gray-500">成员 <b className="ml-0.5 text-gray-700">{activeParticipations.length}</b> 人</div>
@@ -1549,10 +1577,12 @@ export default function LedgerAAInitialBalance() {
                   const formatDraftNumber = (value: number) => Number.isFinite(value) ? String(Number(value.toFixed(2))) : '';
                   const totalLotValue = Number(lot.currentQuantity || 0) * savedEntryPrice;
                   const fallbackPercentage = share ? Math.round(share) : 0;
-                  const fallbackDraft = { percentage: fallbackPercentage ? String(fallbackPercentage) : '', amount: fallbackPercentage ? formatDraftNumber(totalLotValue * fallbackPercentage / 100) : '', entryPrice: savedEntryPrice ? String(savedEntryPrice) : '', startDate: savedStartDate, pauseDate: savedPauseDate };
+                  const totalLotValueCny = totalLotValue * (isUsStock ? usdCnyRate : 1);
+                  const fallbackDraft = { percentage: fallbackPercentage ? String(fallbackPercentage) : '', amount: fallbackPercentage ? formatDraftNumber(totalLotValueCny * fallbackPercentage / 100) : '', entryPrice: savedEntryPrice ? String(savedEntryPrice) : '', startDate: savedStartDate, pauseDate: savedPauseDate };
                   const draft = stockParticipationDrafts[draftKey] ?? fallbackDraft;
                   const draftEntryPrice = Number(draft.entryPrice) > 0 ? Number(draft.entryPrice) : savedEntryPrice;
-                  const allocationBaseAmount = Number(lot.currentQuantity || 0) * draftEntryPrice;
+                  // 开仓均价仍按交易所币种录入；成员分配金额统一按人民币输入并反推比例。
+                  const allocationBaseAmount = Number(lot.currentQuantity || 0) * draftEntryPrice * (isUsStock ? usdCnyRate : 1);
                   const allocationPercentage = Math.round(Math.max(0, Math.min(maxPercentage, Number(draft.percentage) || 0)));
                   const allocationQuantity = Number(lot.currentQuantity || 0) * allocationPercentage / 100;
                   const draftStartDate = draft.startDate || defaultStartDate;
@@ -1581,7 +1611,7 @@ export default function LedgerAAInitialBalance() {
                         </div>
                         <label className="flex shrink-0">
                           <div className="flex h-7 w-20 items-center overflow-hidden rounded-[3px] border bg-white" style={{ borderColor: isReadonly ? '#ECECEC' : '#D9E8EE' }}>
-                            <span className="pl-1.5 text-[10px] text-gray-400">¥</span>
+                            <span className="pl-1.5 text-[10px] text-gray-400">{stockInputSymbol}</span>
                             <input
                               type="text"
                               inputMode="decimal"
@@ -1593,7 +1623,7 @@ export default function LedgerAAInitialBalance() {
                                 if (/^(?:\d*\.?\d*)?$/.test(value)) {
                                   const nextEntryPrice = Number(value) > 0 ? Number(value) : savedEntryPrice;
                                   const nextPercentage = Math.round(Math.max(0, Math.min(maxPercentage, Number(draft.percentage) || 0)));
-                                  const nextAmount = Number(lot.currentQuantity || 0) * nextEntryPrice * nextPercentage / 100;
+                                  const nextAmount = Number(lot.currentQuantity || 0) * nextEntryPrice * (isUsStock ? usdCnyRate : 1) * nextPercentage / 100;
                                   setStockParticipationDraft(draftKey, { entryPrice: value, amount: formatDraftNumber(nextAmount) }, fallbackDraft);
                                 }
                               }}
@@ -1643,7 +1673,8 @@ export default function LedgerAAInitialBalance() {
                               inputMode="decimal"
                               value={draft.amount}
                               disabled={isReadonly}
-                              placeholder="金额"
+                              placeholder="人民币"
+                              aria-label="分配金额（人民币）"
                               onChange={(event) => {
                                 const value = event.target.value;
                                 if (/^(?:\d*(?:\.\d{0,2})?)?$/.test(value)) {

@@ -400,6 +400,8 @@ export type ManualStockSuggestion = {
   name: string;
   market: ManualStockMarket;
   currency: 'CNY' | 'USD';
+  /** 美股挂牌交易所；A股不填写。 */
+  exchange?: string | null;
   /** 选中股票时写入一笔最新价；随后由每日 15:05 的盘尾快照覆盖。 */
   latestPrice?: number;
   latestPriceDate?: string;
@@ -590,7 +592,30 @@ export async function searchManualAshareStocks(query: string): Promise<ManualAsh
   return await hydrateManualAshareStockSuggestions(baseResults);
 }
 
-type ManualUsStockBase = Pick<ManualStockSuggestion, 'symbol' | 'code' | 'name' | 'market' | 'currency'>;
+type ManualUsStockBase = Pick<ManualStockSuggestion, 'symbol' | 'code' | 'name' | 'market' | 'currency' | 'exchange'>;
+
+/** 将行情源与本地目录的缩写统一为用户可读的美股挂牌市场。 */
+export function normalizeUsStockExchange(value: unknown): string | null {
+  const raw = String(value ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
+  if (!raw) return null;
+  if (['NMS', 'NGM', 'NCM', 'NAS', 'NASDAQ', 'NASDAQGS', 'NASDAQGM', 'NASDAQCM'].includes(raw)) return 'NASDAQ';
+  if (['NYQ', 'NYSE', 'XNYS', 'NEW YORK STOCK EXCHANGE'].includes(raw)) return 'NYSE';
+  if (['ASE', 'AMEX', 'XASE', 'NYSE AMERICAN', 'NYSEAMERICAN'].includes(raw)) return 'NYSE American';
+  if (['BATS', 'CBOE', 'CBOE BZX', 'BZX'].includes(raw)) return 'Cboe BZX';
+  return raw;
+}
+
+// 新股基础目录同步可能晚于实际上市。仅收录已由发行人/交易所公开确认的补充项；
+// 未列入时保持空值，前端不会猜测其挂牌市场。
+const VERIFIED_US_STOCK_EXCHANGE_OVERRIDES: Record<string, string> = {
+  CRCL: 'NYSE',
+};
+
+export function resolveUsStockExchange(symbol: unknown, sourceExchange?: unknown): string | null {
+  return normalizeUsStockExchange(sourceExchange)
+    || VERIFIED_US_STOCK_EXCHANGE_OVERRIDES[String(symbol || '').trim().toUpperCase()]
+    || null;
+}
 
 /**
  * 美股基础目录已在生产库中维护。先在目录按代码、英文名及中文名模糊匹配，
@@ -606,7 +631,7 @@ async function searchLocalManualUsStocks(query: string): Promise<ManualUsStockBa
     const contains = `%${normalizedQuery}%`;
     const startsWith = `${normalizedQuery}%`;
     const [rows] = await (conn as any).execute(
-      `SELECT ts_code, name, enname
+      `SELECT ts_code, name, enname, exchange
        FROM us_stock_basic
        WHERE classify = 'EQ'
          AND (UPPER(ts_code) LIKE ? OR UPPER(COALESCE(name, '')) LIKE ? OR UPPER(COALESCE(enname, '')) LIKE ?)
@@ -625,7 +650,7 @@ async function searchLocalManualUsStocks(query: string): Promise<ManualUsStockBa
       const symbol = String(row?.ts_code || '').trim().toUpperCase();
       if (!/^[A-Z][A-Z0-9.\-]{0,14}$/.test(symbol)) return [];
       const name = String(row?.name || row?.enname || symbol).trim() || symbol;
-      return [{ symbol, code: symbol, name, market: 'US', currency: 'USD' }];
+      return [{ symbol, code: symbol, name, market: 'US', currency: 'USD', exchange: resolveUsStockExchange(symbol, row?.exchange) }];
     });
   } catch {
     // 目录暂不可用时，仍允许用合法 ticker 直接走行情源核验。
@@ -649,7 +674,7 @@ async function searchYahooManualUsStocks(query: string): Promise<ManualUsStockBa
       const exchange = String(row?.exchange || '').toUpperCase();
       if (quoteType !== 'EQUITY' || !usEquityExchanges.has(exchange) || !/^[A-Z][A-Z0-9.\-]{0,14}$/.test(symbol)) return [];
       const name = String(row?.longname || row?.shortname || symbol).trim() || symbol;
-      return [{ symbol, code: symbol, name, market: 'US', currency: 'USD' }];
+      return [{ symbol, code: symbol, name, market: 'US', currency: 'USD', exchange: resolveUsStockExchange(symbol, row?.fullExchangeName || exchange) }];
     });
   } catch {
     return [];
@@ -674,10 +699,18 @@ export async function searchManualUsStocks(query: string): Promise<ManualStockSu
       name: normalizedQuery,
       market: 'US',
       currency: 'USD',
+      exchange: resolveUsStockExchange(normalizedQuery),
     });
   }
   yahooMatches.forEach((item) => candidates.set(item.symbol, item));
-  directoryMatches.forEach((item) => candidates.set(item.symbol, item));
+  directoryMatches.forEach((item) => {
+    const previous = candidates.get(item.symbol);
+    candidates.set(item.symbol, {
+      ...previous,
+      ...item,
+      exchange: item.exchange || previous?.exchange || resolveUsStockExchange(item.symbol),
+    });
+  });
   const bases = Array.from(candidates.values()).slice(0, 8);
   if (bases.length === 0) return [];
   const quotes = await fetchIntradayStockQuotes(bases.map((item) => item.symbol));
@@ -687,6 +720,7 @@ export async function searchManualUsStocks(query: string): Promise<ManualStockSu
     return [{
       ...item,
       name: item.name || quote.name || item.symbol,
+      exchange: resolveUsStockExchange(item.symbol, item.exchange),
       latestPrice: quote.price,
       latestPriceDate: quote.priceDate,
       latestPriceUpdatedAt: quote.updatedAt,

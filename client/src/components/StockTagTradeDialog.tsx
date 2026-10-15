@@ -39,6 +39,12 @@ function localInputTime(now = new Date()) {
  */
 export function StockTagTradeDialog({ categoryId, categoryName, open, type, onOpenChange, onSaved, readOnlyPreview = import.meta.env.DEV }: Props) {
   const utils = trpc.useUtils();
+  const { data: usdCnyRateData } = trpc.exchange.getRate.useQuery(
+    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
+    { enabled: open, staleTime: 30_000, refetchInterval: 30_000, refetchIntervalInBackground: false },
+  );
+  const quotedUsdCnyRate = Number((usdCnyRateData as any)?.money);
+  const usdCnyRate = Number.isFinite(quotedUsdCnyRate) && quotedUsdCnyRate > 0 ? quotedUsdCnyRate : 7.2;
   const [symbolQuery, setSymbolQuery] = useState("");
   const [selectedStock, setSelectedStock] = useState<any | null>(null);
   const [stockMarket, setStockMarket] = useState<'A' | 'US'>('A');
@@ -73,6 +79,13 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, onOp
   }, [portfolioQuery.data]);
 
   const selectedSaleLot = saleLots.find((lot: any) => lot.id === selectedLotId) || null;
+  const tradeCurrency: 'CNY' | 'USD' = type === 'buy'
+    ? (stockMarket === 'US' ? 'USD' : 'CNY')
+    : (selectedSaleLot?.currency || 'CNY');
+  const tradePrice = Number(executionPrice);
+  const tradePriceCny = tradeCurrency === 'USD' && Number.isFinite(tradePrice) && tradePrice > 0
+    ? tradePrice * usdCnyRate
+    : null;
   const shouldSearchStock = open && type === "buy" && symbolQuery.trim().length >= (stockMarket === 'US' ? 1 : 2) && !selectedStock;
   const suggestionsQuery = trpc.searchManualStocks.useQuery(
     { query: symbolQuery.trim() || 'A', market: stockMarket },
@@ -179,13 +192,14 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, onOp
                   <Input value={selectedStock ? `${selectedStock.name} ${selectedStock.symbol}` : symbolQuery} onChange={(event) => { setSelectedStock(null); setSymbolQuery(event.target.value); }} placeholder={stockMarket === 'US' ? '如 CRCL、Circle、AAPL 或 BRK.B' : '如 600519、贵州茅台或 gzm'} autoCapitalize={stockMarket === 'US' ? 'characters' : 'none'} />
                   {suggestionsQuery.isFetching && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-gray-400" />}
                 </div>
-                {!selectedStock && suggestions.length > 0 && <div className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-gray-200 bg-white">{suggestions.map((stock: any) => <button key={stock.symbol} type="button" onClick={() => { setSelectedStock(stock); setSymbolQuery(""); if (stock.latestPrice) setExecutionPrice(String(stock.latestPrice)); }} className="w-full border-b px-3 py-2.5 text-left last:border-0 hover:bg-[#F4F8FF]"><span className="text-sm font-medium">{stock.name}</span><span className="ml-2 text-xs text-gray-500">{stock.symbol}</span>{stock.latestPrice ? <span className="float-right text-xs text-[#1565C0]">参考 {money(stock.latestPrice, stock.currency === 'USD' ? 'USD' : 'CNY')}</span> : null}</button>)}</div>}
-                {selectedStock && <div className="mt-1 text-[11px] text-[#1565C0]">已核验：{selectedStock.name} · {selectedStock.symbol} · {selectedStock.currency === 'USD' ? '美元计价' : '人民币计价'}；登记时参考价由服务器留档。</div>}
+                {!selectedStock && suggestions.length > 0 && <div className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-gray-200 bg-white">{suggestions.map((stock: any) => <button key={stock.symbol} type="button" onClick={() => { setSelectedStock(stock); setSymbolQuery(""); if (stock.latestPrice) setExecutionPrice(String(stock.latestPrice)); }} className="w-full border-b px-3 py-2.5 text-left last:border-0 hover:bg-[#F4F8FF]"><span className="text-sm font-medium">{stock.name}</span><span className="ml-2 text-xs text-gray-500">{stock.symbol}</span>{stock.market === 'US' && stock.exchange && <span className="ml-1.5 rounded bg-[#EAF2FF] px-1 py-0.5 text-[10px] font-medium text-[#1565C0]">{stock.exchange}</span>}{stock.latestPrice ? <span className="float-right text-xs text-[#1565C0]">参考 {money(stock.latestPrice, stock.currency === 'USD' ? 'USD' : 'CNY')}</span> : null}</button>)}</div>}
+                {selectedStock && <div className="mt-1 text-[11px] text-[#1565C0]">已核验：{selectedStock.name} · {selectedStock.symbol}{selectedStock.market === 'US' && selectedStock.exchange ? ` · ${selectedStock.exchange}` : ''} · {selectedStock.currency === 'USD' ? '美元计价' : '人民币计价'}；登记时参考价由服务器留档。</div>}
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>实际买入价格</Label><Input inputMode="decimal" value={executionPrice} onChange={(event) => setExecutionPrice(event.target.value)} placeholder="0.00" className="mt-1" /></div>
+                <div><Label>{tradeCurrency === 'USD' ? '实际买入价格（美元）' : '实际买入价格（人民币）'}</Label><Input inputMode="decimal" value={executionPrice} onChange={(event) => setExecutionPrice(event.target.value)} placeholder="0.00" className="mt-1" /></div>
                 <div><Label>实际买入数量</Label><Input inputMode="decimal" value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder="股数" className="mt-1" /></div>
               </div>
+              {tradeCurrency === 'USD' && <div className="-mt-2 text-[11px] text-[#1565C0]">美元开仓价按当前汇率折合 {tradePriceCny === null ? '—' : money(tradePriceCny, 'CNY')}（USD/CNY {usdCnyRate.toFixed(4)}）</div>}
               <div className="rounded-lg bg-[#F5F7FA] px-3 py-2 text-[11px] leading-5 text-gray-600">每次买入都会创建新的持仓编号；已有编号不能再加仓。</div>
             </>
           ) : (
@@ -199,7 +213,8 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, onOp
               </div>
               {portfolioQuery.isLoading && <div className="text-xs text-gray-400">正在载入可卖持仓编号…</div>}
               {selectedSaleLot && <div className="rounded-lg border border-[#F1D8D8] bg-[#FFF8F8] px-3 py-2.5 text-xs leading-5 text-gray-600"><div className="font-semibold text-[#333333]">#{selectedSaleLot.positionNumber} · {selectedSaleLot.stockName} {selectedSaleLot.symbol}</div><div className="mt-1 flex justify-between gap-3"><span>买入价 {money(selectedSaleLot.unitCost, selectedSaleLot.currency)}</span><span>当前价 {money(selectedSaleLot.marketPrice, selectedSaleLot.currency)}</span></div><div className="mt-1 font-medium text-[#C62828]">本次将卖出全部剩余 {formatQuantity(selectedSaleLot.quantity)} 股</div></div>}
-              <div><Label>实际卖出价格</Label><Input inputMode="decimal" value={executionPrice} onChange={(event) => setExecutionPrice(event.target.value)} placeholder="0.00" className="mt-1" /></div>
+              <div><Label>{tradeCurrency === 'USD' ? '实际卖出价格（美元）' : '实际卖出价格（人民币）'}</Label><Input inputMode="decimal" value={executionPrice} onChange={(event) => setExecutionPrice(event.target.value)} placeholder="0.00" className="mt-1" /></div>
+              {tradeCurrency === 'USD' && <div className="-mt-2 text-[11px] text-[#1565C0]">美元卖出价按当前汇率折合 {tradePriceCny === null ? '—' : money(tradePriceCny, 'CNY')}（USD/CNY {usdCnyRate.toFixed(4)}）</div>}
               <div className="rounded-lg bg-[#F5F7FA] px-3 py-2 text-[11px] leading-5 text-gray-600">卖出只能结清一个已选持仓编号的全部剩余股数，不能减仓，也不会跨编号 FIFO 扣仓。</div>
             </>
           )}

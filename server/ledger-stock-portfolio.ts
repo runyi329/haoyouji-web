@@ -1,5 +1,5 @@
 import { getDbConnection, getDbTransactionConnection } from "./db";
-import { fetchEndOfDayStockCloseSnapshots, fetchIntradayStockQuotes, searchManualStocks } from "./price-scanner";
+import { fetchEndOfDayStockCloseSnapshots, fetchIntradayStockQuotes, resolveUsStockExchange, searchManualStocks } from "./price-scanner";
 
 export type StockEventType = "buy" | "add" | "reduce" | "sell" | "note";
 export type AccountingMode = "manual_balance" | "stock_portfolio";
@@ -387,6 +387,33 @@ async function getActiveLots(categoryId: number, symbol?: string) {
   }));
 }
 
+/**
+ * 交易所归属是证券主数据，展示时按当前美股基础目录补齐；不会修改任何历史成交记录。
+ * 目录暂时没有覆盖的新股明确返回空值，前端不显示交易所标签，不臆测 NYSE/NASDAQ。
+ */
+async function getUsStockExchangeMap(symbols: string[]): Promise<Record<string, string>> {
+  const usSymbols = Array.from(new Set(symbols.filter((symbol) => stockMarket(symbol) === 'US')));
+  if (usSymbols.length === 0) return {};
+  const conn = await getDbConnection();
+  if (!conn) return {};
+  try {
+    const [rows] = await (conn as any).execute(
+      `SELECT ts_code, exchange
+       FROM us_stock_basic
+       WHERE UPPER(ts_code) IN (${usSymbols.map(() => '?').join(',')})`,
+      usSymbols,
+    );
+    return (rows as any[]).reduce((result, row) => {
+      const symbol = String(row?.ts_code || '').trim().toUpperCase();
+      const exchange = resolveUsStockExchange(symbol, row?.exchange);
+      if (symbol && exchange) result[symbol] = exchange;
+      return result;
+    }, {} as Record<string, string>);
+  } catch {
+    return {};
+  }
+}
+
 async function getLatestQuotes(categoryId: number, symbols: string[]): Promise<Record<string, StoredQuote>> {
   if (symbols.length === 0) return {};
   const conn = await getDbConnection();
@@ -605,10 +632,11 @@ function summarizePositionsByCurrency(positions: Array<{ currency?: string; cost
 async function buildPortfolio(categoryId: number) {
   const allLots = await getActiveLots(categoryId);
   const symbols = allLots.map((lot) => lot.symbol);
-  const [referenceQuotes, storedQuotes, intradayQuotes] = await Promise.all([
+  const [referenceQuotes, storedQuotes, intradayQuotes, usStockExchanges] = await Promise.all([
     getLatestReferenceQuotes(categoryId),
     getLatestQuotes(categoryId, symbols),
     getLatestIntradayQuotes(categoryId, symbols),
+    getUsStockExchangeMap(symbols),
   ]);
   const quoteMap = mergeLatestQuoteMaps(referenceQuotes, storedQuotes, intradayQuotes);
   const positionMap = new Map<string, any>();
@@ -619,6 +647,7 @@ async function buildPortfolio(categoryId: number) {
       stockName: lot.stockName,
       currency: stockCurrency(lot.symbol),
       market: stockMarket(lot.symbol),
+      exchange: stockMarket(lot.symbol) === 'US' ? (usStockExchanges[lot.symbol] || null) : null,
       quantity: 0,
       costValue: 0,
       lots: [],
@@ -836,10 +865,11 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   // 当前浮盈可读取当日盘中报价；按日历史与日历仍只使用15:05盘尾快照。
   // 买入审计已保存的参考价仅作为“没有任何已存价格”的最后回退，不能覆盖盘中或盘尾报价。
   // 这样盘后新登记的股票在下一个15:05盘尾前，个人概览仍可按可追溯的登记参考价计算。
-  const [referenceQuotes, storedQuotes, intradayQuotes] = await Promise.all([
+  const [referenceQuotes, storedQuotes, intradayQuotes, usStockExchanges] = await Promise.all([
     getLatestReferenceQuotes(categoryId),
     getLatestQuotes(categoryId, symbols),
     getLatestIntradayQuotes(categoryId, symbols),
+    getUsStockExchangeMap(symbols),
   ]);
   const quotes = mergeLatestQuoteMaps(referenceQuotes, storedQuotes, intradayQuotes);
   const grouped = new Map<string, any>();
@@ -849,6 +879,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       stockName: item.stockName,
       currency: stockCurrency(item.symbol),
       market: stockMarket(item.symbol),
+      exchange: stockMarket(item.symbol) === 'US' ? (usStockExchanges[item.symbol] || null) : null,
       quantity: 0,
       costValue: 0,
       lots: [],
