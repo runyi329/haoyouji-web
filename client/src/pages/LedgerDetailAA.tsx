@@ -314,6 +314,41 @@ function isR1Tag(name: unknown): boolean {
   return String(name ?? '').trim().toUpperCase() === 'R1';
 }
 
+type TagPausePeriod = { pauseDate: string; resumeDate?: string };
+
+// 暂停记录属于“成员 × 标签”的结算区间。暂停日当天保留为最后结算点；
+// 仅暂停日之后、重启日之前的数据不应出现在成员端。
+function readTagPauseHistory(balances: Record<string, unknown> | null | undefined, tagName: string): TagPausePeriod[] {
+  if (!balances || !tagName) return [];
+  const rawHistory = balances[`${tagName}__pauseHistory`];
+  if (rawHistory) {
+    try {
+      const parsed = typeof rawHistory === 'string' ? JSON.parse(rawHistory) : rawHistory;
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((item): item is TagPausePeriod => Boolean(item && typeof item.pauseDate === 'string' && item.pauseDate))
+          .map((item) => ({
+            pauseDate: String(item.pauseDate).slice(0, 10),
+            resumeDate: item.resumeDate ? String(item.resumeDate).slice(0, 10) : undefined,
+          }));
+      }
+    } catch {
+      // 暂停历史损坏时继续读取旧字段，确保历史标签不会意外露出暂停后数据。
+    }
+  }
+  const legacyPauseDate = balances[`${tagName}__pauseDate`];
+  return legacyPauseDate ? [{ pauseDate: String(legacyPauseDate).slice(0, 10) }] : [];
+}
+
+function isDateInTagPausePeriod(date: string, history: TagPausePeriod[]): boolean {
+  const dateKey = String(date ?? '').slice(0, 10);
+  if (!dateKey) return false;
+  return history.some((period) => (
+    dateKey > period.pauseDate
+    && (!period.resumeDate || dateKey < period.resumeDate)
+  ));
+}
+
 export default function LedgerDetailAA({
   ledgerId,
   ledgerData,
@@ -411,6 +446,9 @@ export default function LedgerDetailAA({
   // ── 视角切换（管理员/创建者可切换到其他成员视角）──
   const [viewAsUserId, setViewAsUserId] = useState<number | null>(() => viewAsUserIdFromUrl);
   const viewAsMember = viewAsUserId ? (membersData || []).find((member: any) => member.userId === viewAsUserId) : null;
+  // 管理员维护端仍需完整看到暂停后的后续录入，以便更正或重启；普通成员及管理员代看
+  // 普通成员时，只能看到暂停日（最后结算日）及以前的数据。
+  const isMemberFacingLedgerView = !canEdit || Boolean(viewAsMember && viewAsMember.role === 'member');
   // 普通成员及管理员代入普通成员时，日历不应暴露单日资金/维护快览；仅管理员自身或代入管理角色时保留它。
   const canOpenCalendarDayDetail = canEdit && (!viewAsMember || viewAsMember.role === 'owner' || viewAsMember.role === 'admin');
   // 胡大叔（JiamG）超级管理员专属：仅本人在37号账本首页可见利息与保证金快捷入口。
@@ -676,8 +714,15 @@ export default function LedgerDetailAA({
     if (!isSelectedStockPortfolio || !selectedTagId) return [] as Array<{
       date: string; totalPnl: number; dailyPnl: number; marketValue: number | null;
     }>;
+    const selectedStockPauseHistory = readTagPauseHistory(
+      initialBalancesData?.balances as Record<string, unknown> | undefined,
+      selectedTag?.name ?? '',
+    );
+    const isVisibleToMember = (date: string) => !isMemberFacingLedgerView
+      || !isDateInTagPausePeriod(date, selectedStockPauseHistory);
     if (stockParticipantView) {
       return (((stockTagOverviewById.get(Number(selectedTagId)) as any)?.points || []) as any[])
+        .filter((point) => isVisibleToMember(String(point?.date ?? '')))
         .map((point) => ({
           date: String(point.date),
           totalPnl: Number(point.pnl || 0),
@@ -687,6 +732,7 @@ export default function LedgerDetailAA({
         .sort((left, right) => left.date.localeCompare(right.date));
     }
     const chronological = [...((stockCalendarSnapshotsQuery.data || []) as any[])]
+      .filter((snapshot) => isVisibleToMember(String(snapshot?.snapshotDate ?? '')))
       .sort((left, right) => String(left.snapshotDate).localeCompare(String(right.snapshotDate)));
     return chronological.map((snapshot, index) => {
       const totalPnl = Number(snapshot.totalPnl || 0);
@@ -699,7 +745,7 @@ export default function LedgerDetailAA({
         marketValue: snapshot.marketValue === null || snapshot.marketValue === undefined ? null : Number(snapshot.marketValue),
       };
     });
-  }, [isSelectedStockPortfolio, selectedTagId, stockParticipantView, stockTagOverviewById, stockCalendarSnapshotsQuery.data]);
+  }, [isSelectedStockPortfolio, selectedTagId, stockParticipantView, stockTagOverviewById, stockCalendarSnapshotsQuery.data, initialBalancesData, selectedTag, isMemberFacingLedgerView]);
   const stockCalendarPointByDate = useMemo(
     () => new Map(stockCalendarPoints.map((point) => [point.date, point])),
     [stockCalendarPoints],
@@ -723,17 +769,10 @@ export default function LedgerDetailAA({
     return (initialBalancesData.balances as any)[`${selectedTagName}__pauseDate`] ?? null;
   }, [selectedTagName, initialBalancesData]);
   // 多次暂停/重启历史（兑容旧 pauseDate）
-  const selectedTagPauseHistory: Array<{ pauseDate: string; resumeDate?: string }> = useMemo(() => {
-    if (!selectedTagName || !initialBalancesData?.balances) return [];
-    const raw = (initialBalancesData.balances as any)[`${selectedTagName}__pauseHistory`];
-    if (raw) {
-      try { return JSON.parse(String(raw)); } catch { /* fall through */ }
-    }
-    // 兑容旧字段
-    const legacy = (initialBalancesData.balances as any)[`${selectedTagName}__pauseDate`];
-    if (legacy) return [{ pauseDate: String(legacy) }];
-    return [];
-  }, [selectedTagName, initialBalancesData]);
+  const selectedTagPauseHistory = useMemo(
+    () => readTagPauseHistory(initialBalancesData?.balances as Record<string, unknown> | undefined, selectedTagName ?? ''),
+    [selectedTagName, initialBalancesData],
+  );
   const selectedTagEndDate: string | null = useMemo(() => {
     if (!selectedTagName || !initialBalancesData?.balances) return null;
     return (initialBalancesData.balances as any)[`${selectedTagName}__endDate`] ?? null;
@@ -865,13 +904,15 @@ export default function LedgerDetailAA({
     (capitalTransferData as any[] || []).forEach((group: any) => {
       group.records?.forEach((r: any) => {
         if (r.description?.startsWith('capital_')) {
+          const recordDate = String(r.recordDate || group.date || '');
+          if (isMemberFacingLedgerView && isDateInTagPausePeriod(recordDate, selectedTagPauseHistory)) return;
           // 如果记录本身没有 recordDate，从外层分组的 date 字段补充
-          records.push({ ...r, recordDate: r.recordDate || group.date || '' });
+          records.push({ ...r, recordDate });
         }
       });
     });
     return records.sort((a: any, b: any) => (a.recordDate || '').localeCompare(b.recordDate || ''));
-  }, [capitalTransferData]);
+  }, [capitalTransferData, isMemberFacingLedgerView, selectedTagPauseHistory]);
 
   // 筛选提现记录（非 capital_ 开头的 transfer 记录）—— 带日期列表
   const withdrawRecords = useMemo(() => {
@@ -879,35 +920,43 @@ export default function LedgerDetailAA({
     (capitalTransferData as any[] || []).forEach((group: any) => {
       group.records?.forEach((r: any) => {
         if (!r.description?.startsWith('capital_') && r.type === 'transfer') {
-          records.push({ date: r.recordDate || group.date || '', amount: Number(r.amount) || 0 });
+          const date = String(r.recordDate || group.date || '');
+          if (isMemberFacingLedgerView && isDateInTagPausePeriod(date, selectedTagPauseHistory)) return;
+          records.push({ date, amount: Number(r.amount) || 0 });
         }
       });
     });
     return records.sort((a, b) => a.date.localeCompare(b.date));
-  }, [capitalTransferData]);
+  }, [capitalTransferData, isMemberFacingLedgerView, selectedTagPauseHistory]);
   // 总提现金额（兼容旧引用）
   const totalWithdraw = useMemo(() => withdrawRecords.reduce((s, r) => s + r.amount, 0), [withdrawRecords]);
 
   // 当前用户的交易数据
   const activeMemberTransactions = useMemo(() => {
-    // 过滤掉 income=0 且 expense=0 的无效记录，并排除 transfer 类型记录（提现/本金变动不显示在日历上）
+    const balances = initialBalancesData?.balances as Record<string, unknown> | undefined;
+    // 过滤掉 income=0 且 expense=0 的无效记录，并排除 transfer 类型记录（提现/本金变动不显示在日历上）。
+    // 普通成员还必须在数据源层剔除每个标签暂停区间后的记录，保证日历、走势、概览都不会露出。
     return (transactionsData || []).map((day) => {
-      const nonTransferRecords = day.records?.filter((r: any) => r.type !== 'transfer') || day.records;
-      if (nonTransferRecords !== day.records) {
-        // 重新计算 income/expense
-        let income = 0, expense = 0;
-        nonTransferRecords.forEach((r: any) => {
-          if (r.type === 'income') income += r.amount;
-          else if (r.type === 'expense') expense += r.amount;
-        });
-        return { ...day, records: nonTransferRecords, income, expense, balance: income - expense };
-      }
-      return day;
+      const visibleRecords = (day.records || []).filter((record: any) => {
+        if (record.type === 'transfer') return false;
+        if (!isMemberFacingLedgerView || !record.category) return true;
+        return !isDateInTagPausePeriod(
+          String(day.date || record.recordDate || ''),
+          readTagPauseHistory(balances, String(record.category)),
+        );
+      });
+      let income = 0;
+      let expense = 0;
+      visibleRecords.forEach((record: any) => {
+        if (record.type === 'income') income += Number(record.amount) || 0;
+        else if (record.type === 'expense') expense += Number(record.amount) || 0;
+      });
+      return { ...day, records: visibleRecords, income, expense, balance: income - expense };
     }).filter((d) => {
       const total = (d.income || 0) + (d.expense || 0);
       return total > 0;
     });
-  }, [transactionsData]);
+  }, [transactionsData, initialBalancesData, isMemberFacingLedgerView]);
 
   // ─── 按标签筛选 activeMemberTransactions ────────────────────────────────────────
   const filteredTransactions = useMemo(() => {
@@ -1128,6 +1177,10 @@ export default function LedgerDetailAA({
         const flow = map[tagName];
         if (!flow) return;
         const date = String(record.recordDate || day.date || '');
+        if (isMemberFacingLedgerView && isDateInTagPausePeriod(
+          date,
+          readTagPauseHistory(initialBalancesData?.balances as Record<string, unknown> | undefined, tagName),
+        )) return;
         const amount = Math.abs(Number(record.amount) || 0);
         if (!date || amount <= 0) return;
         if (record.description?.startsWith('capital_')) {
@@ -1145,7 +1198,7 @@ export default function LedgerDetailAA({
       flow.withdrawEvents.sort((left, right) => left.date.localeCompare(right.date));
     });
     return map;
-  }, [transactionsData, categories]);
+  }, [transactionsData, categories, initialBalancesData, isMemberFacingLedgerView]);
 
   // 当前本金/累计提现仍使用完整累计额；历史点则在下方按日期从 tagCashFlows 取值。
   const withdrawByTag = useMemo(() => Object.fromEntries(
@@ -1243,6 +1296,7 @@ export default function LedgerDetailAA({
       // 股票行只要当前有效用户对该标签有一笔已生效分层，就按“用户 × 批次”
       // 的对赌盈亏渲染。不能因为该用户恰好也是 owner/admin 而退回旧初始金额模型。
       if (cat.accountingMode === 'stock_portfolio' && stockOverview) {
+        const tagPauseHistory = readTagPauseHistory(initialBalancesData.balances, tagName);
         const stockSummary = (stockOverview as any).summary || {};
         // 表格“押金”列只展示管理员实际登记的存入/转出净额；
         // 所需押金只在点击后的明细弹窗中作为参考提示。
@@ -1258,7 +1312,9 @@ export default function LedgerDetailAA({
           initialBalance,
           marginCny,
           marginEntries,
-          points: (stockOverview.points || []).map((point: any) => {
+          points: (stockOverview.points || []).filter((point: any) => (
+            !isMemberFacingLedgerView || !isDateInTagPausePeriod(String(point?.date ?? ''), tagPauseHistory)
+          )).map((point: any) => {
             const pnl = Number(point.pnl || 0);
             return {
               date: point.date,
@@ -1341,7 +1397,7 @@ export default function LedgerDetailAA({
       });
       return { name: tagName, color, points, initialBalance, marginCny, marginEntries };
     });
-  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, tagCashFlows, stockParticipantView, stockTagOverviewById]);
+  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, tagCashFlows, stockParticipantView, stockTagOverviewById, isMemberFacingLedgerView]);
 
   // 概览默认从“今日”开始；切换焦点仅移动当前表格视口，不改变表格的完整列结构或排序。
   useEffect(() => {
