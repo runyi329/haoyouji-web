@@ -688,8 +688,9 @@ const numberFormatter = new Intl.NumberFormat("zh-CN", {
   maximumFractionDigits: 2,
 });
 
-const LADDER_MIN_PRICE = 2500;
-const LADDER_MAX_PRICE = 3000;
+// 仅作为未取得实时价时的首屏中心位。真实行情和历史订单不设人为上下限，
+// 否则 ETH 跌破 2500 时会把 2433.92 这样的实时价错误塞进 2500 档位。
+const LADDER_DEFAULT_CENTER_PRICE = 2750;
 const LADDER_STEP = 10;
 const LADDER_NEAR_VISIBLE_STEPS = 3;
 const POSITION_ARCHIVE_STEP = 10;
@@ -905,15 +906,19 @@ function splitLadderMarkPrice(value: number) {
  */
 function buildAdaptiveLadderLevels(markLadderPrice: number | null, positionPrices: number[] = [], step = LADDER_STEP) {
   const safeStep = Number.isFinite(step) && step > 0 ? step : LADDER_STEP;
-  const defaultCenter = Math.round((LADDER_MIN_PRICE + LADDER_MAX_PRICE) / 2 / safeStep) * safeStep;
-  const center = Math.min(LADDER_MAX_PRICE, Math.max(LADDER_MIN_PRICE, markLadderPrice ?? defaultCenter));
+  const defaultCenter = Math.round(LADDER_DEFAULT_CENTER_PRICE / safeStep) * safeStep;
+  // 实时价是价格簿的坐标基准，不能再限制在旧的 2500–3000 区间。
+  // 只排除非正数，既能覆盖 ETH 当前的低价区间，也保留极端行情的真实顺序。
+  const center = markLadderPrice !== null && Number.isFinite(markLadderPrice) && markLadderPrice > 0
+    ? markLadderPrice
+    : defaultCenter;
   const levels = new Set<number>();
 
   for (let offset = -LADDER_NEAR_VISIBLE_STEPS; offset <= LADDER_NEAR_VISIBLE_STEPS; offset += 1) {
     const price = center + offset * safeStep;
-    if (price >= LADDER_MIN_PRICE && price <= LADDER_MAX_PRICE) levels.add(price);
+    if (price > 0) levels.add(price);
   }
-  if (markLadderPrice !== null) levels.add(markLadderPrice);
+  if (markLadderPrice !== null && Number.isFinite(markLadderPrice) && markLadderPrice > 0) levels.add(markLadderPrice);
   // 远端空白价位可以折叠，但已有仓位的十元归档档位必须始终可见。
   // 不能复用实时价格的2500–3000展示边界：旧仓可能在区间外，
   // 仍须保留为一个独立档位，且不补齐两者之间的数百个空白档。
@@ -3564,14 +3569,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const isCloseAssociationLocked = isClosingEntry || isCloseReview;
   // 逐笔报价的订单按分位精确排布，实时价也必须作为独立精确参考行插入；
   // 不能再先归入十美元档，否则例如 2546.03 会视觉上覆盖 2550.00 的真实订单行。
-  const individualMarkLadderPrice = markPrice
-    ? Math.min(LADDER_MAX_PRICE, Math.max(LADDER_MIN_PRICE, Number(markPrice.toFixed(2))))
+  const individualMarkLadderPrice = markPrice && Number.isFinite(markPrice) && markPrice > 0
+    ? Number(markPrice.toFixed(2))
     : null;
-  const integratedMarkLadderPrice = markPrice
-    ? Math.min(
-      LADDER_MAX_PRICE,
-      Math.max(LADDER_MIN_PRICE, Math.round(markPrice / integratedArchiveStep) * integratedArchiveStep),
-    )
+  const integratedMarkLadderPrice = markPrice && Number.isFinite(markPrice) && markPrice > 0
+    ? Math.round(markPrice / integratedArchiveStep) * integratedArchiveStep
     : null;
   // 平仓百分比快捷键以“本张开仓主单尚未平掉的数量”和当前价档可平数量两者较小者为基数。
   // 因此同价位存在多张订单或已有部分平仓时，快捷键也不会超过本次实际可平上限。
