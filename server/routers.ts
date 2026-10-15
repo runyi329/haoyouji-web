@@ -21426,10 +21426,15 @@ ${klinesSummary}
         let participantCountMap: Record<number, number> = {};
         let participantUserIdsMap: Record<number, number[]> = {};
         let ownerNamesMap: Record<number, Array<{ userId: number; name: string }>> = {};
+        // 52号同一融资订单允许多位拥有者分别冻结钱包资产；列表必须合并这些真实冻结台账，
+        // 以确保每个拥有者视角看到的担保总值和缺口完全一致。
+        let walletCollateralContributorsMap: Record<number, Array<{ userId: number; name: string; assets: Array<{ coin: string; qty: string; source: 'wallet'; note: string }> }>> = {};
         if (conn && ordersWithParticipantView.length > 0) {
           const orderIds = ordersWithParticipantView.map((o: any) => Number(o.id));
           const placeholders = orderIds.map(() => '?').join(',');
-          const [ptRowsResult, pcRowsResult, ownerRowsResult] = await Promise.all([
+          const walletHoldTags = orderIds.map((id) => `52号融资订单 #${id} 钱包担保`);
+          const holdPlaceholders = walletHoldTags.map(() => '?').join(',');
+          const [ptRowsResult, pcRowsResult, ownerRowsResult, walletLockRowsResult, walletHoldRowsResult] = await Promise.all([
             conn.execute(
               `SELECT order_id, participant_user_id, amount, IFNULL(currency, 'U') as currency, IFNULL(exchange_rate, 6.75) as exchange_rate
                FROM ledger_order_payments WHERE order_id IN (${placeholders})`,
@@ -21447,7 +21452,29 @@ ${klinesSummary}
                WHERE p.ledger_id = ? AND p.role = 'owner' AND p.order_id IN (${placeholders})
                ORDER BY p.order_id ASC, p.sort_order ASC, p.id ASC`,
               [input.ledgerId, ...orderIds]
-            ).catch(() => null) as Promise<any>
+            ).catch(() => null) as Promise<any>,
+            input.ledgerId === 52 ? conn.execute(
+              `SELECT l.order_id, l.user_id, l.asset_code, l.amount,
+                      COALESCE(NULLIF(lm.nickname, ''), NULLIF(u.name, ''), u.username, CONCAT('用户', l.user_id)) AS display_name
+                 FROM ai_wallet_asset_collateral_locks l
+                 LEFT JOIN users u ON u.id = l.user_id
+                 LEFT JOIN ledger_members lm ON lm.ledgerId = l.ledger_id AND lm.userId = l.user_id
+                WHERE l.ledger_id = ? AND l.status = 'active' AND l.order_id IN (${placeholders})
+                ORDER BY l.order_id ASC, l.user_id ASC, l.asset_code ASC`,
+              [input.ledgerId, ...orderIds]
+            ).catch(() => null) as Promise<any> : Promise.resolve(null),
+            input.ledgerId === 52 ? conn.execute(
+              `SELECT h.tag_name, h.user_id, h.asset_code,
+                      GREATEST(0, h.amount - COALESCE(h.released_amount, 0)) AS amount,
+                      COALESCE(NULLIF(lm.nickname, ''), NULLIF(u.name, ''), u.username, CONCAT('用户', h.user_id)) AS display_name
+                 FROM ai_wallet_project_holds h
+                 LEFT JOIN users u ON u.id = h.user_id
+                 LEFT JOIN ledger_members lm ON lm.ledgerId = h.ledger_id AND lm.userId = h.user_id
+                WHERE h.ledger_id = ? AND h.status = 'active' AND h.amount > COALESCE(h.released_amount, 0)
+                  AND h.tag_name IN (${holdPlaceholders})
+                ORDER BY h.tag_name ASC, h.user_id ASC, h.asset_code ASC`,
+              [input.ledgerId, ...walletHoldTags]
+            ).catch(() => null) as Promise<any> : Promise.resolve(null)
           ]);
           if (ptRowsResult) {
             const ptArr = Array.isArray(ptRowsResult[0]) ? ptRowsResult[0] : (Array.isArray(ptRowsResult) ? ptRowsResult : []);
@@ -21500,6 +21527,25 @@ ${klinesSummary}
               });
             }
           }
+          const appendWalletContributorAsset = (orderId: number, userId: number, name: string, coin: string, qty: string) => {
+            if (!(orderId > 0) || !(userId > 0) || !coin || !(Number(qty) > 0)) return;
+            if (!walletCollateralContributorsMap[orderId]) walletCollateralContributorsMap[orderId] = [];
+            let contributor = walletCollateralContributorsMap[orderId].find((item) => item.userId === userId);
+            if (!contributor) {
+              contributor = { userId, name: name || `用户${userId}`, assets: [] };
+              walletCollateralContributorsMap[orderId].push(contributor);
+            }
+            contributor.assets.push({ coin: coin.toUpperCase(), qty: String(qty), source: 'wallet', note: `钱包担保冻结 · ${contributor.name}` });
+          };
+          if (walletLockRowsResult) {
+            const walletLockRows = Array.isArray(walletLockRowsResult[0]) ? walletLockRowsResult[0] : (Array.isArray(walletLockRowsResult) ? walletLockRowsResult : []);
+            for (const row of walletLockRows) appendWalletContributorAsset(Number(row.order_id), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'));
+          }
+          if (walletHoldRowsResult) {
+            const walletHoldRows = Array.isArray(walletHoldRowsResult[0]) ? walletHoldRowsResult[0] : (Array.isArray(walletHoldRowsResult) ? walletHoldRowsResult : []);
+            const orderIdByTag = new Map(walletHoldTags.map((tag, index) => [tag, orderIds[index]]));
+            for (const row of walletHoldRows) appendWalletContributorAsset(Number(orderIdByTag.get(String(row.tag_name)) || 0), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'));
+          }
         }
         const ordersWithPaid = ordersWithParticipantView.map((o: any) => ({
           ...o,
@@ -21508,6 +21554,8 @@ ${klinesSummary}
           _participantUserIds: participantUserIdsMap[Number(o.id)] || [],
           // 仅用于拥有者组的卡片姓名展示；不包含金额、备注、担保或任何资金数据。
           owner_display_names: ownerNamesMap[Number(o.id)] || [],
+          // 钱包担保只来自已冻结台账；卡片以此合并全体拥有者的钱包担保，不读取任何可用余额。
+          wallet_collateral_contributors: walletCollateralContributorsMap[Number(o.id)] || [],
         }));
         return { orders: ordersWithPaid, livePrices, _debug: { targetUserId, participantQueryUserIdEarly, participantOrderIds, viewAsUserId: input.viewAsUserId } };
       }),
@@ -22635,6 +22683,80 @@ ${klinesSummary}
         return [...fundingAssets, ...marketAssets];
       }),
 
+    // 同一融资订单可由多位拥有者分别冻结钱包资产。本接口仅返回该订单已经冻结的来源，
+    // 供管理员在任何拥有者的编辑页合并核对，绝不返回其他钱包余额。
+    funderGetOrderWalletCollateralContributors: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52), orderId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const [roleRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+          [input.ledgerId, ctx.user.id],
+        );
+        const role = asRows(roleRows)[0]?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可查看订单钱包担保来源' });
+        const [orderRows] = await (conn as any).execute(
+          `SELECT id, user_id FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1`,
+          [input.orderId, input.ledgerId],
+        );
+        const order = asRows(orderRows)[0];
+        if (!order) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在或已删除' });
+
+        const [marketLocks, fundingHolds, participantResult] = await Promise.all([
+          dbMultiAssetWallet.getActiveWalletCollateralLocks(input.ledgerId, input.orderId),
+          getLedger52FundingCollateralHoldsForOrder(input.orderId),
+          (conn as any).execute(
+            `SELECT p.user_id, p.role, p.sort_order,
+                    COALESCE(NULLIF(lm.nickname, ''), NULLIF(u.name, ''), u.username, CONCAT('用户', p.user_id)) AS display_name
+               FROM ledger_order_participants p
+               LEFT JOIN users u ON u.id = p.user_id
+               LEFT JOIN ledger_members lm ON lm.ledgerId = p.ledger_id AND lm.userId = p.user_id
+              WHERE p.order_id = ? AND p.ledger_id = ? AND p.role <> 'inactive'
+              ORDER BY p.sort_order ASC, p.id ASC`,
+            [input.orderId, input.ledgerId],
+          ),
+        ]);
+        const participantList = asRows(participantResult?.[0]);
+        const userIds = new Set<number>([Number(order.user_id)]);
+        for (const row of participantList) userIds.add(Number(row.user_id));
+        for (const lock of marketLocks) userIds.add(Number(lock.userId));
+        for (const hold of fundingHolds) userIds.add(Number(hold.userId));
+        const memberRows = userIds.size > 0
+          ? await (conn as any).execute(
+              `SELECT lm.userId,
+                      COALESCE(NULLIF(lm.nickname, ''), NULLIF(u.name, ''), u.username, CONCAT('用户', lm.userId)) AS display_name
+                 FROM ledger_members lm
+                 LEFT JOIN users u ON u.id = lm.userId
+                WHERE lm.ledgerId = ? AND lm.userId IN (${Array.from(userIds).map(() => '?').join(', ')})`,
+              [input.ledgerId, ...Array.from(userIds)],
+            )
+          : [[]];
+        const displayNameByUserId = new Map<number, string>();
+        for (const row of asRows(memberRows?.[0])) displayNameByUserId.set(Number(row.userId), String(row.display_name || `用户${row.userId}`));
+        const roleByUserId = new Map<number, string>();
+        roleByUserId.set(Number(order.user_id), 'owner');
+        for (const row of participantList) roleByUserId.set(Number(row.user_id), String(row.role || 'participant'));
+        const assetsByUserId = new Map<number, Array<{ coin: string; qty: string; source: 'wallet' }>>();
+        const appendAsset = (userId: number, coin: string, qty: string) => {
+          if (!(Number(userId) > 0) || !coin || !(Number(qty) > 0)) return;
+          const entries = assetsByUserId.get(Number(userId)) || [];
+          entries.push({ coin, qty, source: 'wallet' });
+          assetsByUserId.set(Number(userId), entries);
+        };
+        for (const lock of marketLocks) appendAsset(lock.userId, String(lock.assetCode || '').toUpperCase(), String(lock.amount || '0'));
+        for (const hold of fundingHolds) appendAsset(hold.userId, String(hold.assetCode || '').toUpperCase(), String(hold.remainingAmount || '0'));
+        return Array.from(userIds)
+          .sort((left, right) => Number(left) - Number(right))
+          .map((userId) => ({
+            userId,
+            name: displayNameByUserId.get(userId) || `用户${userId}`,
+            role: roleByUserId.get(userId) || 'participant',
+            assets: assetsByUserId.get(userId) || [],
+          }))
+          .filter((contributor) => contributor.assets.length > 0);
+      }),
+
     // 保存钱包担保：订单字段与“可用→冻结”在一个数据库事务中完成，禁止余额被重复担保或转出。
     funderSaveWalletCollateral: protectedProcedure
       .input(z.object({
@@ -22645,8 +22767,12 @@ ${klinesSummary}
           coin: z.enum(['CNY', 'USDT', ...AI_WALLET_SETTLEMENT_ASSETS]),
           qty: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/, '担保数量格式无效，最多支持18位小数'),
         })).max(AI_WALLET_FUNDING_ASSETS.length + AI_WALLET_SETTLEMENT_ASSETS.length),
+        // 管理员从某位账本成员的钱包首次添加担保时，把该成员原子登记为同级拥有者；
+        // 这只新增协作视图，不改变主订单、利息或既有结算记录。
+        autoRegisterOwner: z.boolean().optional().default(false),
       }))
       .mutation(async ({ ctx, input }) => {
+        if (input.autoRegisterOwner) await ensureFunderParticipantSnapshotColumns();
         const conn = await getDbTransactionConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         const transaction = conn as any;
@@ -22659,7 +22785,7 @@ ${klinesSummary}
           const role = asRows(roleRows)[0]?.role;
           if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可配置钱包担保' });
           const [orderRows] = await transaction.execute(
-            `SELECT id, user_id, status, deleted_at, collateral_assets
+            `SELECT *
                FROM ledger_orders
               WHERE id = ? AND ledger_id = ?
               LIMIT 1 FOR UPDATE`,
@@ -22682,6 +22808,34 @@ ${klinesSummary}
             );
             participantRow = asRows(participantRows)[0];
             isOrderHolder = Boolean(participantRow);
+            if (!isOrderHolder && input.autoRegisterOwner) {
+              const [memberRows] = await transaction.execute(
+                `SELECT 1 FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
+                [input.ledgerId, input.userId],
+              );
+              if (!asRows(memberRows)[0]) throw new TRPCError({ code: 'FORBIDDEN', message: '仅可将52号账本成员登记为订单拥有者' });
+              const [sortRows] = await transaction.execute(
+                `SELECT COALESCE(MAX(sort_order), -1) AS max_sort
+                   FROM ledger_order_participants
+                  WHERE order_id = ? AND ledger_id = ? FOR UPDATE`,
+                [input.orderId, input.ledgerId],
+              );
+              const ownerSnapshot = buildFunderParticipantSnapshot(order);
+              let ownerDisplayConfig: Record<string, any> = {};
+              try {
+                const raw = ownerSnapshot.display_config;
+                ownerDisplayConfig = raw && typeof raw === 'string' ? JSON.parse(raw) : (raw && typeof raw === 'object' ? raw : {});
+              } catch {}
+              ownerSnapshot.display_config = JSON.stringify({ ...ownerDisplayConfig, ownerNameDisplay: 'self' });
+              const nextSortOrder = Number(asRows(sortRows)[0]?.max_sort ?? -1) + 1;
+              const [insertResult] = await transaction.execute(
+                `INSERT INTO ledger_order_participants (order_id, ledger_id, user_id, role, order_snapshot, sort_order)
+                 VALUES (?, ?, ?, 'owner', ?, ?)`,
+                [input.orderId, input.ledgerId, input.userId, JSON.stringify(ownerSnapshot), nextSortOrder],
+              );
+              participantRow = { id: Number((insertResult as any)?.insertId || 0), order_snapshot: JSON.stringify(ownerSnapshot) };
+              isOrderHolder = true;
+            }
           }
           if (!isOrderHolder) throw new TRPCError({ code: 'FORBIDDEN', message: '钱包担保物必须属于本订单的拥有者或参与者' });
 

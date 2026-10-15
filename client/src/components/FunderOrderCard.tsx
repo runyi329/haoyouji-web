@@ -1539,6 +1539,7 @@ export function FunderOrderCard({
       orderId: Number(order.id),
       userId: quickWalletCollateralUserId,
       assets: assets as any,
+      autoRegisterOwner: true,
     });
   };
   // ===== END 担保物快捷编辑面板 =====
@@ -2003,7 +2004,21 @@ export function FunderOrderCard({
     : 'unpaid') as 'unpaid' | 'half_paid' | 'paid';
   const tradingFeeStatusLabel = ({ unpaid: '已付0%', half_paid: '已付50%', paid: '已付100%' } as const)[tradingFeeStatus];
 
-  // 担保物
+  // 同一融资订单允许多位拥有者分别冻结钱包资产。展示与担保计算只信任冻结台账，
+// 因此先剔除个人快照中的钱包条目，再合并订单返回的全体拥有者冻结明细，避免重复计入。
+function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: string; qty: string; note?: string; source?: string }>) {
+  const contributors = Array.isArray(order?.wallet_collateral_contributors) ? order.wallet_collateral_contributors : [];
+  if (contributors.length === 0) return assets;
+  const manualAssets = assets.filter((asset: any) => asset?.source !== 'wallet' && asset?.note !== '钱包担保冻结');
+  const walletAssets = contributors.flatMap((contributor: any) => (Array.isArray(contributor?.assets) ? contributor.assets : []).flatMap((asset: any) => {
+    const coin = String(asset?.coin || '').trim().toUpperCase();
+    const qty = String(asset?.qty ?? '').trim();
+    return coin && Number(qty) > 0 ? [{ coin, qty, source: 'wallet', note: `钱包担保冻结 · ${String(contributor?.name || '拥有者')}` }] : [];
+  }));
+  return [...manualAssets, ...walletAssets];
+}
+
+// 担保物
   let collateralAssets: { coin: string; qty: string; note?: string }[] = [];
   try {
     const rawCA = order.collateral_assets;
@@ -2012,6 +2027,7 @@ export function FunderOrderCard({
       if (Array.isArray(parsed)) collateralAssets = parsed;
     }
   } catch {}
+  collateralAssets = mergeOrderWalletCollateralAssets(order, collateralAssets);
   let collateralValue = 0;
   let collateralValueKnown = true;
   const collateralItemValues: (number | null)[] = [];

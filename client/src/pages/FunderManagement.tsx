@@ -938,6 +938,43 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       staleTime: 5_000,
     },
   );
+  // 同一订单的多位拥有者可各自冻结钱包资产；编辑页始终按订单维度读取全体来源，
+  // 避免只看当前拥有者快照而漏掉其他拥有者已经冻结的担保。
+  const walletCollateralContributorsQuery = trpc.ledger.funderGetOrderWalletCollateralContributors.useQuery(
+    { ledgerId: 52, orderId: Number(editingOrder?.id || 0) },
+    {
+      enabled: ledgerId === 52 && showForm && Number(editingOrder?.id || 0) > 0 && isAdminUser,
+      staleTime: 0,
+    },
+  );
+  const walletCollateralContributors = (walletCollateralContributorsQuery.data ?? []) as Array<{
+    userId: number;
+    name: string;
+    role: string;
+    assets: Array<{ coin: string; qty: string; source: 'wallet' }>;
+  }>;
+  const currentWalletCollateralContributor = walletCollateralContributors.find((contributor) => Number(contributor.userId) === walletCollateralUserId) || null;
+  const currentWalletCollateralOwnerName = currentWalletCollateralContributor?.name
+    || getUserDisplayName((funderUsers || []).find((user: any) => Number(user.id ?? user.userId) === walletCollateralUserId) as any)
+    || '当前拥有者';
+  const walletCollateralHydrationRef = useRef('');
+  useEffect(() => {
+    const orderId = Number(editingOrder?.id || 0);
+    if (orderId <= 0 || walletCollateralUserId <= 0 || !walletCollateralContributorsQuery.data) return;
+    const hydrationKey = `${orderId}:${walletCollateralUserId}`;
+    if (walletCollateralHydrationRef.current === hydrationKey) return;
+    const currentAssets = (currentWalletCollateralContributor?.assets ?? []).map((asset) => ({
+      coin: String(asset.coin || '').toUpperCase(),
+      qty: String(asset.qty || ''),
+      source: 'wallet' as const,
+      note: '钱包担保冻结',
+    })).filter((asset) => asset.coin && Number(asset.qty) > 0);
+    setCollateralAssets((previous) => [
+      ...previous.filter((asset) => !isWalletCollateralAsset(asset)),
+      ...currentAssets,
+    ]);
+    walletCollateralHydrationRef.current = hydrationKey;
+  }, [editingOrder?.id, walletCollateralUserId, walletCollateralContributorsQuery.data, currentWalletCollateralContributor]);
 
   const standardOrderQuery = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId, ...(selectedUserId ? { userId: selectedUserId } : {}), ...(adminOnly ? { roleFilter: "admin" as const } : {}), ...(financeOnly ? { financeOnly: true } : {}) },
@@ -1640,10 +1677,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     onSuccess: () => {
       toast.success('钱包担保已冻结并保存');
       setWalletCollateralEditMode(false);
+      walletCollateralHydrationRef.current = '';
       refetchOrders();
       trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
       trpcUtils.ledger.funderGetSharedCollateralPool.invalidate();
       void walletCollateralBalancesQuery.refetch();
+      void walletCollateralContributorsQuery.refetch();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -1685,7 +1724,14 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       .filter((asset) => isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '' && Number(asset.qty) > 0)
       .map((asset) => ({ coin: asset.coin as any, qty: asset.qty }));
     if (ledgerId !== 52 || orderId <= 0 || holderUserId <= 0) return;
-    await saveWalletCollateralMutation.mutateAsync({ ledgerId: 52, orderId, userId: holderUserId, assets: walletAssets });
+    await saveWalletCollateralMutation.mutateAsync({
+      ledgerId: 52,
+      orderId,
+      userId: holderUserId,
+      assets: walletAssets,
+      // 从该拥有者的页面首次冻结时，服务端会原子补齐同级拥有者关系；不改变原订单业务字段。
+      autoRegisterOwner: true,
+    });
   };
   const deleteMutation = trpc.ledger.funderDeleteAssetOrder.useMutation({
     onSuccess: () => {
@@ -3921,15 +3967,18 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
 
               {ledgerId === 52 && (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div className="text-xs font-semibold text-slate-600">当前担保汇总（两类担保均计入总值）</div>
+                  <div className="text-xs font-semibold text-slate-600">当前担保汇总（所有拥有者的钱包冻结均计入总值）</div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {collateralAssets.filter((asset) => !isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').map((asset, index) => (
                       <span key={`manual-${index}`} className="rounded-md bg-blue-100 px-2 py-1 text-[11px] font-medium text-blue-700">手工 · {asset.qty} {asset.coin}</span>
                     ))}
-                    {collateralAssets.filter((asset) => isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').map((asset, index) => (
-                      <span key={`wallet-${index}`} className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">钱包冻结 · {asset.qty} {asset.coin}</span>
+                    {walletCollateralContributors.map((contributor) => contributor.assets.map((asset, index) => (
+                      <span key={`wallet-${contributor.userId}-${index}`} className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">{contributor.name} · {asset.qty} {asset.coin}</span>
+                    )))}
+                    {!editingOrder?.id && collateralAssets.filter((asset) => isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').map((asset, index) => (
+                      <span key={`wallet-draft-${index}`} className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">钱包待冻结 · {asset.qty} {asset.coin}</span>
                     ))}
-                    {collateralAssets.filter((asset) => asset.coin && asset.qty !== '').length === 0 && (
+                    {collateralAssets.filter((asset) => !isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').length === 0 && walletCollateralContributors.length === 0 && (!editingOrder?.id && collateralAssets.filter((asset) => isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').length === 0) && (
                       <span className="text-[11px] text-slate-400">暂无担保物</span>
                     )}
                   </div>
@@ -4362,9 +4411,24 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
               {ledgerId === 52 && (
                 <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
                   <div>
-                    <div className="text-sm font-semibold text-amber-800">钱包担保物（可与下方手工担保并行）</div>
-                    <p className="mt-1 text-xs leading-5 text-amber-700">冻结后钱包总余额不变，但冻结部分不能提现、转账或再次担保；订单结清或移入回收站时自动恢复为可用余额。人民币、USDT与数字资产均可担保，手工担保与钱包担保分别保存、互不覆盖。</p>
+                    <div className="text-sm font-semibold text-amber-800">钱包担保物（多位拥有者可共同担保）</div>
+                    <p className="mt-1 text-xs leading-5 text-amber-700">当前编辑的是「{currentWalletCollateralOwnerName}」的钱包。每位拥有者各自冻结的资产会合并计入同一订单担保总值；冻结后不可提现、转账或再次担保，结清或移入回收站时统一自动恢复。手工担保与钱包担保分别保存、互不覆盖。</p>
                   </div>
+                  {editingOrder?.id && walletCollateralContributorsQuery.isLoading && (
+                    <div className="rounded-lg border border-amber-100 bg-white px-3 py-2 text-xs text-amber-700">正在汇总各拥有者的钱包担保…</div>
+                  )}
+                  {editingOrder?.id && walletCollateralContributors.length > 0 && (
+                    <div className="space-y-1.5 rounded-lg border border-amber-200 bg-white p-2.5">
+                      <div className="text-xs font-semibold text-amber-800">本订单已冻结的钱包担保</div>
+                      {walletCollateralContributors.map((contributor) => (
+                        <div key={contributor.userId} className="flex flex-wrap items-center gap-1.5 text-[11px] leading-5">
+                          <span className="font-semibold text-amber-900">{contributor.name}</span>
+                          <span className="text-amber-500">·</span>
+                          {contributor.assets.map((asset, index) => <span key={`${contributor.userId}-${asset.coin}-${index}`} className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">{asset.qty} {asset.coin}</span>)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {editingOrder?.id && collateralAssets.every(isWalletCollateralAsset) && recoverableManualCollateral.length > 0 && (
                     <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
                       <div className="text-xs font-semibold text-blue-800">检测到本订单历史手工担保：{recoverableManualCollateral.map((asset) => `${asset.qty} ${asset.coin}`).join('、')}</div>
@@ -4456,7 +4520,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                           onClick={() => void persistWalletCollateral(Number(editingOrder.id), walletCollateralUserId, collateralAssets)}
                           disabled={saveWalletCollateralMutation.isPending || walletCollateralUserId <= 0}
                           className="w-full rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-                        >{saveWalletCollateralMutation.isPending ? '冻结保存中…' : '保存并冻结钱包担保'}</button>
+                        >{saveWalletCollateralMutation.isPending ? '冻结保存中…' : `保存并冻结${currentWalletCollateralOwnerName}的钱包担保`}</button>
                       )}
                       {!editingOrder?.id && <div className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-amber-700">新建订单保存成功后，所选资产会立即进入冻结担保；余额不足将不会创建担保冻结。</div>}
                     </>

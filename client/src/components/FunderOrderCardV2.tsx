@@ -617,6 +617,20 @@ function readConfirmedExposureGap(value: unknown): number | null {
   return Number.isFinite(gap) ? gap : null;
 }
 
+// 同一融资订单允许多位拥有者分别冻结钱包资产。展示与担保计算只信任冻结台账，
+// 因此先剔除个人快照中的钱包条目，再合并订单返回的全体拥有者冻结明细，避免重复计入。
+function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: string; qty: string; note?: string; source?: string }>) {
+  const contributors = Array.isArray(order?.wallet_collateral_contributors) ? order.wallet_collateral_contributors : [];
+  if (contributors.length === 0) return assets;
+  const manualAssets = assets.filter((asset: any) => asset?.source !== 'wallet' && asset?.note !== '钱包担保冻结');
+  const walletAssets = contributors.flatMap((contributor: any) => (Array.isArray(contributor?.assets) ? contributor.assets : []).flatMap((asset: any) => {
+    const coin = String(asset?.coin || '').trim().toUpperCase();
+    const qty = String(asset?.qty ?? '').trim();
+    return coin && Number(qty) > 0 ? [{ coin, qty, source: 'wallet', note: `钱包担保冻结 · ${String(contributor?.name || '拥有者')}` }] : [];
+  }));
+  return [...manualAssets, ...walletAssets];
+}
+
 export function FunderOrderCardV2({
   order,
   livePrices,
@@ -692,6 +706,7 @@ export function FunderOrderCardV2({
       if (Array.isArray(parsed)) collateralAssets = parsed;
     }
   } catch {}
+  collateralAssets = mergeOrderWalletCollateralAssets(order, collateralAssets);
 
   const fmt = (v: number | null, digits = 2) =>
     v == null || isNaN(v) ? "--" : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -1024,6 +1039,7 @@ export function FunderOrderCardV2Light({
       if (Array.isArray(parsed)) collateralAssets = parsed;
     }
   } catch {}
+  collateralAssets = mergeOrderWalletCollateralAssets(order, collateralAssets);
 
   const fmt = (v: number | null, digits = 2) =>
     v == null || isNaN(v) ? "--" : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -1543,6 +1559,7 @@ export function FunderOrderCardV2Silver({
       if (Array.isArray(parsed)) collateralAssets = parsed;
     }
   } catch {}
+  collateralAssets = mergeOrderWalletCollateralAssets(order, collateralAssets);
 
   // 担保物与共享池按订单拥有者隔离；参与者或归属「他人」的订单不能建立担保桥梁。
   const isSharedMode = !_v2IsParticipantOrder && !_v2IsOtherPerspective && (order as any).collateral_share_mode === 'self';
@@ -3515,6 +3532,7 @@ export function FunderLenderCardSilver({
       if (Array.isArray(parsed)) collateralAssets = parsed;
     }
   } catch {}
+  collateralAssets = mergeOrderWalletCollateralAssets(order, collateralAssets);
 
   // 担保价值计算
   const collateralItemValues: (number | null)[] = collateralAssets.map((a) => {
