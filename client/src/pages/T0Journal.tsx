@@ -3981,7 +3981,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setProfitShareAllocations([]);
       setProfitShareRecipientSearch("");
       void t0JournalQuery.refetch();
-      toast.success("收益分配已保存，仅影响此后新开的订单");
+      const syncedActiveOpeningCount = Number(data?.syncedActiveOpeningCount || 0);
+      toast.success(syncedActiveOpeningCount > 0
+        ? `收益分配已保存，已同步${syncedActiveOpeningCount}笔进行中订单与后续新订单`
+        : "收益分配已保存；后续新订单将采用新清单，已平历史保持不变");
     },
     onError: (error) => toast.error(error.message || "收益分配保存失败"),
   });
@@ -6963,10 +6966,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </div> : <div className="px-3 py-2.5 text-xs text-slate-400">未找到匹配用户</div>}
             </div>
 
-            {entryProfitShareEditTarget ? <div className="mt-3 text-[11px] leading-5 text-indigo-700">点击下方“保存本单与后续新单”即刻生效，无需再点击持仓编辑页底部“保存修改”。</div> : activeProfitShareRules.length > 0 && <div className="mt-3 text-[11px] leading-5 text-slate-500">当前规则已生效；保存修改后仅后续新开订单使用新清单，历史订单保持原快照。</div>}
+            {entryProfitShareEditTarget ? <div className="mt-3 text-[11px] leading-5 text-indigo-700">点击下方“保存本单与后续新单”即刻生效，无需再点击持仓编辑页底部“保存修改”。</div> : activeProfitShareRules.length > 0 && <div className="mt-3 text-[11px] leading-5 text-slate-500">保存后，本项目仍有剩余仓位的订单与后续新订单都会采用新清单；已全部平仓的历史订单保持原快照。</div>}
             <div className="mt-5 grid grid-cols-2 gap-3">
               <button type="button" onClick={closeProfitShareManager} className="h-11 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700">取消</button>
-              <button type="button" disabled={setProfitShareRuleMutation.isPending || updateOpeningProfitShareMutation.isPending || profitShareDraftTotal !== 100} onClick={submitProfitShareRule} className="h-11 rounded bg-indigo-600 text-sm font-semibold text-white disabled:opacity-40">{entryProfitShareEditTarget ? "保存本单与后续新单" : "保存清单"}</button>
+              <button type="button" disabled={setProfitShareRuleMutation.isPending || updateOpeningProfitShareMutation.isPending || profitShareDraftTotal !== 100} onClick={submitProfitShareRule} className="h-11 rounded bg-indigo-600 text-sm font-semibold text-white disabled:opacity-40">{entryProfitShareEditTarget ? "保存本单与后续新单" : "保存并同步进行中订单"}</button>
             </div>
           </div>
         </div>

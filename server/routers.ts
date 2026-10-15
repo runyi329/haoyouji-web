@@ -22007,14 +22007,8 @@ ${klinesSummary}
                 return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
               } catch { return {}; }
             })();
-            const collateralGapBaseMode = displayConfig.collateralGapBaseMode === 'interest_base'
-              ? 'interest_base'
-              : 'buy_value';
-            // 共享池和单订单卡片必须使用同一份订单配置：默认真实买入价值，也可按计息基数。
-            // 缺少买入价的历史订单安全回退到保存的计息基数，避免把有效风险基准错误写成 0。
-            const collateralGapBaseU = collateralGapBaseMode === 'interest_base'
-              ? principalU
-              : (buyValueU > 0 ? buyValueU : principalU);
+            // 两种担保口径都以真实买入价值为基准；缺少买入价的历史订单才回退计息基数。
+            const collateralGapBaseU = buyValueU > 0 ? buyValueU : principalU;
             const paidInterestU = baseCurrency === 'CNY' ? paidInterest / usdtCnyRate : paidInterest;
             // 本金状态只服务订单标题；担保计算优先采用管理员明确选择的口径。
             // 没有新口径的历史订单才回退 principal_lent_out 的原有含义。
@@ -22027,22 +22021,17 @@ ${klinesSummary}
               displayConfig,
             );
             const usesPrincipalCoverage = collateralRiskFormula === 'principal_coverage';
-            // 普通订单：当前持有资产 − 所选基准 − 待结 + 已结。
-            // 本金覆盖口径：待覆盖额固定为
-            // “−约定融资本金 − 待结 + 已结”。本金固定取计息基数，不能随标的市值变动。
+            // 差值口径由担保物抵扣买入价值；全值口径视买入价值已全部借出，
+            // 仅返回买入价值与利息构成的缺口，不用担保物或标的市值相抵。
             const linkedHoldingValueU = linked37Collateral?.useFloatingPnl ? linked37Collateral.holdingValue : null;
             const linkedFloatingPnlU = linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null;
             const holdingValueU = linkedHoldingValueU !== null && Number.isFinite(linkedHoldingValueU)
               ? linkedHoldingValueU
               : currentValue;
-            const principalLentOutValueU = principalU > 0 ? principalU : collateralGapBaseU;
+            const principalLentOutValueU = collateralGapBaseU;
             const collateralRequired = usesPrincipalCoverage
               ? -principalLentOutValueU - pendingInterestU + paidInterestU
-              // 37引用单独使用“盈亏净值”。这等于（账户余额 − 初始金额）×倍数，
-              // 绝不能再由实际持仓价值减去52订单的买入/计息基数倒推。
-              : (linkedFloatingPnlU !== null && Number.isFinite(linkedFloatingPnlU)
-                ? linkedFloatingPnlU
-                : (holdingValueU ?? 0) - collateralGapBaseU) - pendingInterestU + paidInterestU;
+              : -collateralGapBaseU - pendingInterestU + paidInterestU;
             return {
               orderId: Number(o.id),
               orderNo: o.order_no,

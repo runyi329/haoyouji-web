@@ -141,6 +141,43 @@ function CompactDisplayToggle({ label, checked, onToggle, tone = 'blue', disable
   );
 }
 
+const FUNDER_MEMBER_QUERY_HISTORY_KEY_PREFIX = 'funder_member_query_history_v1';
+const FUNDER_OWNER_RECENCY_KEY_PREFIX = 'funder_order_owner_recency_v1';
+
+function readFunderMemberQueryHistory(storageKey: string): Record<string, number> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(storageKey) || '{}');
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    return Object.fromEntries(
+      Object.entries(raw).flatMap(([memberId, count]) => {
+        const normalizedId = Number(memberId);
+        const normalizedCount = Number(count);
+        return Number.isInteger(normalizedId) && normalizedId > 0 && Number.isFinite(normalizedCount) && normalizedCount > 0
+          ? [[String(normalizedId), Math.min(Math.floor(normalizedCount), 999999)]]
+          : [];
+      }),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function readFunderOwnerRecency(storageKey: string): number[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    if (!Array.isArray(raw)) return [];
+    const seen = new Set<number>();
+    return raw.flatMap((value) => {
+      const userId = Number(value);
+      if (!Number.isInteger(userId) || userId <= 0 || seen.has(userId)) return [];
+      seen.add(userId);
+      return [userId];
+    }).slice(0, 12);
+  } catch {
+    return [];
+  }
+}
+
 export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly, onRecycleBinRef }: FunderManagementProps = {}) {
   const [, routeParams] = useRoute("/ledger/:id/finance-unified");
   const ledgerId = ledgerIdProp || (routeParams?.id ? parseInt(routeParams.id) : 0);
@@ -150,6 +187,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [userSearchText, setUserSearchText] = useState('');
+  const memberQueryHistoryKey = `${FUNDER_MEMBER_QUERY_HISTORY_KEY_PREFIX}:ledger:${ledgerId}`;
+  const [memberQueryHistory, setMemberQueryHistory] = useState<Record<string, number>>({});
   // 中侧是管理员统一订单台：本地索引所有订单字段，并在命中后展开同一关联组的全部独立视图。
   const [orderSearchText, setOrderSearchText] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -184,6 +223,26 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null); // 正在编辑的结息记录id
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
   const [showRecycleBin, setShowRecycleBin] = useState(false);
+
+  useEffect(() => {
+    setMemberQueryHistory(readFunderMemberQueryHistory(memberQueryHistoryKey));
+  }, [memberQueryHistoryKey]);
+
+  const rememberMemberQuery = useCallback((memberId: number) => {
+    if (!Number.isInteger(memberId) || memberId <= 0) return;
+    setMemberQueryHistory(previous => {
+      const next = {
+        ...previous,
+        [String(memberId)]: Math.min((Number(previous[String(memberId)]) || 0) + 1, 999999),
+      };
+      try {
+        localStorage.setItem(memberQueryHistoryKey, JSON.stringify(next));
+      } catch {
+        // 无痕模式或存储已满时仅保留当前页面的排序，不影响成员筛选。
+      }
+      return next;
+    });
+  }, [memberQueryHistoryKey]);
 
   // 将打开回收站的方法暴露给父组件
   useEffect(() => {
@@ -506,9 +565,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     externalCollateralGapDisplay: 'CNY',
     // 股票手工担保始终逐笔显示实际输入的担保物；本项只控制下方“担保价值”的合计单位。
     stockManualCollateralValueDisplay: 'CNY',
-    // 担保缺口默认按真实买入价值计算；管理员可以逐单改为按计息基数。
-    // 该值随 display_config 保存到主订单或拥有者个人订单快照。
-    collateralGapBaseMode: 'buy_value',
     // 股票专属字段
     brokerName: true,
     brokerAccount: true,
@@ -548,12 +604,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     : null;
   const collateralRiskFormula = isSelfFundedAsset
     ? 'floating_pnl'
-    : (explicitCollateralRiskFormula ?? (effectivePrincipalLentOut ? 'principal_coverage' : 'floating_pnl'));
+    : (explicitCollateralRiskFormula ?? 'principal_coverage');
   const usesPrincipalCoverageFormula = collateralRiskFormula === 'principal_coverage';
   const amountDisplayLabel = effectivePrincipalLentOut
     ? '借出本金'
     : isSelfFundedAsset
-      ? '订单金额'
+      ? '自有资金'
       : '融资金额';
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
   const [showPreviewCollateralInfo, setShowPreviewCollateralInfo] = useState(false); // 预览卡片-担保缺口说明
@@ -736,6 +792,23 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const { data: currentUser } = trpc.auth.me.useQuery();
   const { data: ledgerData } = trpc.ledger.getLedger.useQuery({ id: ledgerId }, { enabled: ledgerId > 0 });
   const isAdminUser = (ledgerData as any)?.userRole === 'owner' || (ledgerData as any)?.userRole === 'admin';
+  const ownerRecencyStorageKey = `${FUNDER_OWNER_RECENCY_KEY_PREFIX}:ledger:${ledgerId}:admin:${Number((currentUser as any)?.id || 0)}`;
+  const [recentOwnerIds, setRecentOwnerIds] = useState<number[]>([]);
+  useEffect(() => {
+    setRecentOwnerIds(isAdminUser ? readFunderOwnerRecency(ownerRecencyStorageKey) : []);
+  }, [isAdminUser, ownerRecencyStorageKey]);
+  const rememberRecentOwner = useCallback((userId: number) => {
+    if (!isAdminUser || !Number.isInteger(userId) || userId <= 0) return;
+    setRecentOwnerIds(previous => {
+      const next = [userId, ...previous.filter(id => id !== userId)].slice(0, 12);
+      try {
+        localStorage.setItem(ownerRecencyStorageKey, JSON.stringify(next));
+      } catch {
+        // 本地存储不可用时仅保留当前会话内排序。
+      }
+      return next;
+    });
+  }, [isAdminUser, ownerRecencyStorageKey]);
   // 共同拥有者也会携带 participantInfo，以便加载其独立订单视图；这不能把拥有者误判成受限参与者。
   // 仅历史参与者保留“只编辑自己的独立参数”的限制。管理员仍可从任一协作视图进入整组配置。
   const editingCollaboratorRole = String((editingOrder as any)?.participantInfo?.role || '');
@@ -1137,6 +1210,32 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     .toLocaleLowerCase('zh-CN')
     .replace(/\s+/g, ' ')
     .trim();
+  const visibleMemberSelectorUsers = useMemo(() => {
+    const normalizedQuery = normalizeOrderSearchText(userSearchText);
+    const getSearchRank = (member: any) => {
+      if (!normalizedQuery) return 0;
+      const label = normalizeOrderSearchText(getUserSearchLabel(member));
+      if (label === normalizedQuery) return 0;
+      if (label.startsWith(normalizedQuery)) return 1;
+      return 2;
+    };
+    return memberSelectorUsers
+      .filter((member: any) => {
+        if (!matchesUserSearch(member, userSearchText)) return false;
+        // 中侧（管理）必须显示全部 owner/admin，即使尚无订单，方便管理员先选人再创建首张订单。
+        if (adminOnly) return true;
+        // 其他分栏继续只显示已有主订单或参与订单的用户，避免列表被空成员淹没。
+        return memberSelectorOrders.some((order: any) => isOrderRelatedToMember(order, getMemberSelectorId(member)));
+      })
+      .sort((left: any, right: any) => {
+        const relevanceDifference = getSearchRank(left) - getSearchRank(right);
+        if (relevanceDifference !== 0) return relevanceDifference;
+        const frequencyDifference = (Number(memberQueryHistory[String(getMemberSelectorId(right))]) || 0)
+          - (Number(memberQueryHistory[String(getMemberSelectorId(left))]) || 0);
+        if (frequencyDifference !== 0) return frequencyDifference;
+        return getUserSearchLabel(left).localeCompare(getUserSearchLabel(right), 'zh-CN', { numeric: true, sensitivity: 'base' });
+      });
+  }, [adminOnly, memberQueryHistory, memberSelectorOrders, memberSelectorUsers, userSearchText]);
   const smartMatchedOrders = useMemo(() => {
     const allViews = assetOrders as any[];
     if (!adminOnly) return allViews;
@@ -1252,40 +1351,23 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     return total; // 无担保物时返回 0，不返回 null
   }, [collateralAssets, formLivePrices, cnyRate]);
 
-  // 担保缺口基准默认使用买入价值；管理员可逐单改为计息基数。
+  // 两种担保公式都以买入价值为基准：第一种以担保物抵扣买入价值，
+  // 第二种是本金已借出的总缺口，不使用担保物或标的浮盈亏相抵。
   // 所有数值先统一折成 U，与担保物实时估值保持同一口径。
-  const collateralGapBaseMode = displayConfig.collateralGapBaseMode === 'interest_base'
-    ? 'interest_base'
-    : 'buy_value';
   const collateralGapBaseValue = useMemo(() => {
-    if (collateralGapBaseMode === 'buy_value') {
-      return parseFloat(financingAmountUsdt || '0');
+    if (formData.assetType === 'stock') return parseFloat(financingAmountUsdt || '0');
+    const buyPrice = parseFloat(formData.buyPrice || '0');
+    const quantity = parseFloat(formData.buyQuantity || '0');
+    const buyValue = buyPrice * quantity;
+    if (Number.isFinite(buyValue) && buyValue > 0) {
+      const currency = String(formData.amountCurrency || 'USDT').trim().toUpperCase();
+      return ['CNY', 'RMB', '人民币'].includes(currency) ? buyValue / cnyRate : buyValue;
     }
-    const base = parseFloat(formData.interestBase || '0');
-    if (!Number.isFinite(base) || base <= 0) return 0;
-    const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
-    return ['CNY', 'RMB', '人民币'].includes(currency) ? base / cnyRate : base;
-  }, [collateralGapBaseMode, financingAmountUsdt, formData.interestBase, formData.interestBaseCurrency, cnyRate]);
+    return parseFloat(financingAmountUsdt || '0');
+  }, [cnyRate, financingAmountUsdt, formData.amountCurrency, formData.assetType, formData.buyPrice, formData.buyQuantity]);
 
   // 本金状态只负责标题；此处严格依照担保缺口所选公式计算。
   const previewUsesPrincipalCoverage = usesPrincipalCoverageFormula;
-  const previewFinancingPrincipalU = useMemo(() => {
-    const principal = parseFloat(formData.interestBase || '0');
-    if (Number.isFinite(principal) && principal > 0) {
-      const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
-      return ['CNY', 'RMB', '人民币'].includes(currency) ? principal / cnyRate : principal;
-    }
-    return collateralGapBaseValue;
-  }, [collateralGapBaseValue, cnyRate, formData.interestBase, formData.interestBaseCurrency]);
-
-  const previewCurrentHoldingValue = useMemo(() => {
-    const quantity = parseFloat(formData.buyQuantity || '0');
-    const coin = String(formData.coin || '').trim().toUpperCase();
-    const price = formLivePrices[coin];
-    if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(price) || price <= 0) return null;
-    return quantity * price;
-  }, [formData.buyQuantity, formData.coin, formLivePrices]);
-
   // 预览卡片实时待结利息（每秒更新）
   const [previewAccrued, setPreviewAccrued] = useState<number>(0);
   useEffect(() => {
@@ -1304,8 +1386,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     return () => clearInterval(timer);
   }, [formData.interestBase, formData.interestRateAnnual, formData.interestStartDate]);
 
-  // 浮盈亏口径：当前持有资产 − 基准 − 待结 + 已结 + 担保物。
-  // 本金覆盖口径：担保物 − 固定融资本金 − 待结 + 已结。
+  // 担保物抵扣口径：担保物 − 买入价值 − 待结 + 已结。
+  // 借出本金口径：买入价值 + 待结 − 已结（以负数表示需补的担保缺口）。
   const previewPendingInterestU = useMemo(() => {
     const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
     return ['CNY', 'RMB', '人民币'].includes(currency) ? previewAccrued / cnyRate : previewAccrued;
@@ -1317,14 +1399,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const computedCollateralGap = useMemo(() => {
     if (collateralGapBaseValue <= 0) return null;
     if (previewUsesPrincipalCoverage) {
-      return computedCollateralValue - previewFinancingPrincipalU - previewPendingInterestU + previewPaidInterestU;
+      return computedCollateralValue - collateralGapBaseValue - previewPendingInterestU + previewPaidInterestU;
     }
-    return (previewCurrentHoldingValue ?? 0)
-      - collateralGapBaseValue
-      - previewPendingInterestU
-      + previewPaidInterestU
-      + computedCollateralValue;
-  }, [computedCollateralValue, collateralGapBaseValue, previewUsesPrincipalCoverage, previewFinancingPrincipalU, previewCurrentHoldingValue, previewPendingInterestU, previewPaidInterestU]);
+    return -collateralGapBaseValue - previewPendingInterestU + previewPaidInterestU;
+  }, [computedCollateralValue, collateralGapBaseValue, previewUsesPrincipalCoverage, previewPendingInterestU, previewPaidInterestU]);
 
   // 预览卡片实时待结佣金（受邀订单专用，每秒更新）
   const [previewCommission, setPreviewCommission] = useState<number>(0);
@@ -1344,21 +1422,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     return () => clearInterval(timer);
   }, [formData.commissionBase, formData.commissionRate, formData.commissionStartDate]);
 
-  // 预览卡片实时风险敎口
-  const previewExposure = useMemo(() => {
-    const liveP = formLivePrices[formData.coin];
-    const buyQty = parseFloat(formData.buyQuantity || '0');
-    const buyPriceNum = parseFloat(formData.buyPrice || '0');
-    const buyValue = buyPriceNum * buyQty;
-    const currentValue = liveP ? liveP * buyQty : null;
-    if (previewUsesPrincipalCoverage) {
-      return computedCollateralValue - previewFinancingPrincipalU - previewPendingInterestU + previewPaidInterestU;
-    }
-    const floatPnl = currentValue !== null ? currentValue - buyValue : null;
-    return floatPnl !== null
-      ? computedCollateralValue + floatPnl - previewAccrued
-      : computedCollateralValue - previewAccrued;
-  }, [computedCollateralValue, formLivePrices, formData.coin, formData.buyQuantity, formData.buyPrice, previewAccrued, previewFinancingPrincipalU, previewUsesPrincipalCoverage, previewPaidInterestU, previewPendingInterestU]);
+  // 预览卡片风险敞口直接复用上方的同一公式，避免编辑页两处展示出现不同结果。
+  const previewExposure = computedCollateralGap;
 
   const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
     onSuccess: async (result) => {
@@ -1923,10 +1988,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     setDerivedLinkedField(savedDerivedLinkedField);
     setFormData({
       userId: order.user_id,
-      coin: order.coin as CoinType,
-      amountCurrency: editAmountCurrency as CoinType,
-      buyPrice: order.buy_price || '',
-      buyQuantity: order.buy_quantity || '',
+      coin: order.asset_type === 'stock' ? 'CNY' : order.coin as CoinType,
+      amountCurrency: order.asset_type === 'stock' ? 'CNY' : editAmountCurrency as CoinType,
+      buyPrice: order.asset_type === 'stock' ? '' : order.buy_price || '',
+      buyQuantity: order.asset_type === 'stock' ? '' : order.buy_quantity || '',
       buyDate: order.buy_date || '',
       storageAccount: order.storage_account || '',
       status: order.status,
@@ -2351,10 +2416,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       ledgerId,
       coin: isOptionOrder ? optionFormData.optionCurrency : formData.coin,
       amount: finalAmount,
-      amountCurrency: isOptionOrder ? optionPremiumSummary?.denomination || 'USDT' : formData.amountCurrency || undefined,
-      buyPrice: isOptionOrder ? optionFormData.premium || undefined : formData.buyPrice || undefined,
+      amountCurrency: isOptionOrder ? optionPremiumSummary?.denomination || 'USDT' : formData.assetType === 'stock' ? 'CNY' : formData.amountCurrency || undefined,
+      buyPrice: isOptionOrder ? optionFormData.premium || undefined : formData.assetType === 'stock' ? undefined : formData.buyPrice || undefined,
       buyDate: formData.buyDate || undefined,
-      buyQuantity: isOptionOrder ? optionFormData.buyQty || undefined : formData.buyQuantity || undefined,
+      buyQuantity: isOptionOrder ? optionFormData.buyQty || undefined : formData.assetType === 'stock' ? undefined : formData.buyQuantity || undefined,
       storageAccount: formData.storageAccount || undefined,
       adminNote: formData.adminNote || undefined,
       publicNote: formData.publicNote || undefined,
@@ -2389,7 +2454,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         // 与本金状态分开保存：该字段优先决定担保缺口公式。
         collateralRiskFormula,
         financingInputAmount: isOptionOrder ? optionPremiumSummary?.totalInput || '' : amountInputValue || '',
-        financingInputCurrency: isOptionOrder ? optionPremiumSummary?.denomination || 'USDT' : formData.amountCurrency || 'USDT',
+        financingInputCurrency: isOptionOrder ? optionPremiumSummary?.denomination || 'USDT' : formData.assetType === 'stock' ? 'CNY' : formData.amountCurrency || 'USDT',
         linkedManualFields: isOptionOrder ? '' : manualLinkedFieldsRef.current.join(','),
         linkedDerivedField: isOptionOrder ? '' : derivedLinkedField || '',
       } as Record<string, boolean | number | string>,
@@ -2602,27 +2667,23 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors"
                     style={{ color: selectedUserId === null ? '#1A56DB' : '#374151', fontWeight: selectedUserId === null ? 600 : 400 }}
                   >全部成员</button>
-                  {memberSelectorUsers.filter((u: any) => {
-                    if (!matchesUserSearch(u, userSearchText)) return false;
-                    // 中侧（管理）必须显示全部 owner/admin，即使尚无订单，方便管理员先选人再创建首张订单。
-                    if (adminOnly) return true;
-                    // 其他分栏继续只显示已有主订单或参与订单的用户，避免列表被空成员淹没。
-                    const hasOrders = memberSelectorOrders.some((o: any) => isOrderRelatedToMember(o, getMemberSelectorId(u)));
-                    return hasOrders;
-                  }).map((u: any) => {
+                  {visibleMemberSelectorUsers.map((u: any) => {
                     const memberId = getMemberSelectorId(u);
                     const userOrders = memberSelectorOrders.filter((o: any) => isOrderRelatedToMember(o, memberId));
                     const activeCount = userOrders.filter((o: any) => o.status === 'active').length;
                     const settledCount = userOrders.filter((o: any) => o.status === 'settled' || o.status === 'cancelled').length;
+                    const queryCount = Number(memberQueryHistory[String(memberId)]) || 0;
                     return (
                     <button
                       key={memberId}
-                      onClick={() => { setSelectedUserId(memberId); setShowUserDropdown(false); }}
+                      onClick={() => { setSelectedUserId(memberId); rememberMemberQuery(memberId); setShowUserDropdown(false); }}
                       className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
                       style={{ color: Number(selectedUserId) === memberId ? '#1A56DB' : '#374151', fontWeight: Number(selectedUserId) === memberId ? 600 : 400 }}
                     >
                       <span className="whitespace-nowrap">{getUserSearchLabel(u)}</span>
                       <span className="text-xs ml-2 shrink-0" style={{ color: '#9CA3AF', fontWeight: 400 }}>
+                        {queryCount > 0 && <span style={{ color: '#3B82F6' }}>常查 {queryCount}</span>}
+                        {queryCount > 0 && <span style={{ color: '#D1D5DB' }}> / </span>}
                         {activeCount > 0 && <span style={{ color: '#22C55E' }}>进行中 {activeCount}</span>}
                         {activeCount > 0 && settledCount > 0 && <span style={{ color: '#D1D5DB' }}> / </span>}
                         {settledCount > 0 && <span style={{ color: '#9CA3AF' }}>已结束 {settledCount}</span>}
@@ -2902,7 +2963,13 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                               return;
                             }
                             const newType = formData.assetType === opt.value ? '' : opt.value;
-                            setFormData(d => ({ ...d, assetType: newType }));
+                            if (newType === 'stock') {
+                              resetLinkedAmountFields();
+                              setAmountInputValue('');
+                              setFormData(d => ({ ...d, assetType: 'stock', coin: 'CNY', amountCurrency: 'CNY', buyPrice: '', buyQuantity: '' }));
+                            } else {
+                              setFormData(d => ({ ...d, assetType: newType }));
+                            }
                             if (newType === 'crypto_option') {
                               setOptionFormData(d => ({ ...d, optionCurrency: formData.coin }));
                             }
@@ -2970,38 +3037,58 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">归属分类</label>
-                  <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
-                    {([
-                      { value: 'self', label: '本人', active: { background: '#1A56DB', color: '#fff', borderColor: 'transparent' } },
-                      { value: 'participant', label: '他人', active: { background: '#059669', color: '#fff', borderColor: 'transparent' } },
-                      { value: 'auto', label: '自动', active: { background: '#4F46E5', color: '#fff', borderColor: 'transparent' } },
-                    ] as const).map(opt => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setFormData(d => ({ ...d, frontendPlacement: opt.value }))}
-                        className="flex-1 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-colors last:border-r-0"
-                        style={formData.frontendPlacement === opt.value
-                          ? opt.active
-                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
+                  {ledgerId === 52 ? (() => {
+                    const selectedFundingType = isSelfFundedAsset ? 'self' : effectivePrincipalLentOut ? 'lent' : 'financing';
+                    const fundingOptions = [
+                      { value: 'self', label: '自有资金', active: { background: 'linear-gradient(135deg, #047857, #10B981)', color: '#fff', borderColor: 'transparent' } },
+                      { value: 'lent', label: '借出本金', active: { background: 'linear-gradient(135deg, #D97706, #F59E0B)', color: '#fff', borderColor: 'transparent' } },
+                      { value: 'financing', label: '融资金额', active: { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' } },
+                    ] as const;
+                    return <>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">资金属性</label>
+                      <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+                        {fundingOptions.map(option => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => {
+                              setDisplayConfig(config => ({ ...config, assetFundingType: option.value === 'self' ? 'self' : 'financing', selfFundedAsset: option.value === 'self' }));
+                              setFormData(data => ({ ...data, principalLentOut: option.value === 'lent' }));
+                            }}
+                            className="min-w-0 flex-1 whitespace-nowrap border-r border-gray-200 px-0.5 py-1.5 text-[11px] font-semibold leading-4 transition-colors last:border-r-0"
+                            style={selectedFundingType === option.value ? option.active : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
+                            aria-pressed={selectedFundingType === option.value}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>;
+                  })() : <>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">归属分类</label>
+                    <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+                      {([
+                        { value: 'self', label: '本人', active: { background: '#1A56DB', color: '#fff', borderColor: 'transparent' } },
+                        { value: 'participant', label: '他人', active: { background: '#059669', color: '#fff', borderColor: 'transparent' } },
+                        { value: 'auto', label: '自动', active: { background: '#4F46E5', color: '#fff', borderColor: 'transparent' } },
+                      ] as const).map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setFormData(d => ({ ...d, frontendPlacement: opt.value }))}
+                          className="flex-1 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-colors last:border-r-0"
+                          style={formData.frontendPlacement === opt.value ? opt.active : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>}
                 </div>
               </div>
 
-              {/* 52号账本：资金属性 + 左上角展示 */}
+              {/* 52号账本：归属分类 + 左上角展示 */}
               {ledgerId === 52 && (() => {
-                const selectedFundingType = displayConfig.assetFundingType === 'self' || displayConfig.assetFundingType === 'financing'
-                  ? displayConfig.assetFundingType
-                  : displayConfig.selfFundedAsset ? 'self' : 'financing';
-                const fundingOptions = [
-                  { value: 'self', label: '自', active: { background: 'linear-gradient(135deg, #047857, #10B981)', color: '#fff', borderColor: 'transparent' } },
-                  { value: 'financing', label: '融', active: { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' } },
-                ] as const;
                 const explicitPrimaryDisplay = displayConfig.primaryAssetDisplay === 'financing' || displayConfig.primaryAssetDisplay === 'quantity'
                   ? displayConfig.primaryAssetDisplay
                   : null;
@@ -3018,34 +3105,23 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   <div className="space-y-2">
                     <div className={`grid gap-3 ${showPrimaryDisplay ? 'grid-cols-2' : 'grid-cols-1'}`}>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">资金属性</label>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">归属分类</label>
                       <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
-                        {fundingOptions.map(option => {
-                          const isSelected = selectedFundingType === option.value;
-                          return (
-                            <button
-                              key={option.value}
-                              type="button"
-                              onClick={() => {
-                                setDisplayConfig(config => ({
-                                  ...config,
-                                  assetFundingType: option.value,
-                                  selfFundedAsset: option.value === 'self',
-                                }));
-                                if (option.value === 'self') {
-                                  setFormData(data => ({ ...data, principalLentOut: false }));
-                                }
-                              }}
-                              className="flex-1 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-colors last:border-r-0"
-                              style={isSelected
-                                ? option.active
-                                : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
-                              aria-pressed={isSelected}
-                            >
-                              {option.label}
-                            </button>
-                          );
-                        })}
+                        {([
+                          { value: 'self', label: '本人', active: { background: '#1A56DB', color: '#fff', borderColor: 'transparent' } },
+                          { value: 'participant', label: '他人', active: { background: '#059669', color: '#fff', borderColor: 'transparent' } },
+                          { value: 'auto', label: '自动', active: { background: '#4F46E5', color: '#fff', borderColor: 'transparent' } },
+                        ] as const).map(opt => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setFormData(d => ({ ...d, frontendPlacement: opt.value }))}
+                            className="flex-1 border-r border-gray-200 px-1 py-1.5 text-xs font-semibold transition-colors last:border-r-0"
+                            style={formData.frontendPlacement === opt.value ? opt.active : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
                     {showPrimaryDisplay && (
@@ -3075,34 +3151,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       </div>
                     )}
                     </div>
-                    {!isSelfFundedAsset && (
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">本金状态</label>
-                        <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
-                          {([
-                            { value: false, label: '本金在公司' },
-                            { value: true, label: '本金已借出' },
-                          ] as const).map(option => {
-                            const active = effectivePrincipalLentOut === option.value;
-                            return (
-                              <button
-                                key={String(option.value)}
-                                type="button"
-                                onClick={() => setFormData(data => ({ ...data, principalLentOut: option.value }))}
-                                className="flex-1 border-r border-gray-200 px-2 py-1.5 text-xs font-semibold transition-colors last:border-r-0"
-                                style={active
-                                  ? { background: 'linear-gradient(135deg, #D97706, #F59E0B)', color: '#fff', borderColor: 'transparent' }
-                                  : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
-                                aria-pressed={active}
-                              >
-                                {option.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <p className="mt-1 text-[10px] leading-4 text-gray-400">仅改变订单标题，方便客户了解本金去向；担保缺口公式请在“担保缺口”下单独选择。</p>
-                      </div>
-                    )}
+                    <p className="text-[10px] leading-4 text-gray-400">仅控制订单展示名称；担保缺口公式请在“担保缺口”下单独选择。</p>
                   </div>
                 );
               })()}
@@ -3224,17 +3273,28 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         >
                           {(() => {
                             const allMembers = ((ledgerData as any)?.members || []) as any[];
+                            const ownerRecencyRank = new Map(recentOwnerIds.map((userId, index) => [userId, index]));
                             const filtered = allMembers.filter((m: any) => {
                               if (!formUserSearch) return true;
                               return matchesUserSearch(m, formUserSearch);
+                            }).sort((left: any, right: any) => {
+                              if (isAdminUser) {
+                                const leftId = Number(left.userId ?? left.id ?? 0);
+                                const rightId = Number(right.userId ?? right.id ?? 0);
+                                const leftRank = ownerRecencyRank.get(leftId) ?? Number.MAX_SAFE_INTEGER;
+                                const rightRank = ownerRecencyRank.get(rightId) ?? Number.MAX_SAFE_INTEGER;
+                                if (leftRank !== rightRank) return leftRank - rightRank;
+                              }
+                              return getUserSearchLabel(left).localeCompare(getUserSearchLabel(right), 'zh-CN', { numeric: true, sensitivity: 'base' });
                             });
                             if (filtered.length === 0) {
                               return <div className="px-4 py-3 text-sm text-gray-400 text-center">无匹配用户</div>;
                             }
-                            return filtered.map((m: any) => (
-                              <button
-                                key={m.userId}
-                                onClick={() => { setFormData(d => ({ ...d, userId: m.userId })); setFormUserSearch(getUserDisplayName(m)); setFormUserDropdown(false); }}
+                            return filtered.map((m: any) => {
+                              const memberId = Number(m.userId ?? m.id ?? 0);
+                              return <button
+                                key={memberId}
+                                onClick={() => { setFormData(d => ({ ...d, userId: memberId })); rememberRecentOwner(memberId); setFormUserSearch(getUserDisplayName(m)); setFormUserDropdown(false); }}
                                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 text-left"
                               >
                                 <div
@@ -3250,7 +3310,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                                   <div className="text-xs text-gray-400">{m.role}</div>
                                 </div>
                               </button>
-                            ));
+                            });
                           })()}
                         </div>
                       </>
@@ -3284,28 +3344,26 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 </>
               )}
               </div>
-              {/* 购买币种已移至三联最后一行（与币数并排） */}
-
-              {/* 非期权订单：金额 / 买入价格 / 购买币种+币数三字段联动 */}
+              {/* 非期权订单：数字币使用三字段联动；股票仅录入人民币融资金额。 */}
               {formData.assetType !== 'crypto_option' && (
               <div className="space-y-3">
-                <span className="block text-xs text-gray-400">
+                {formData.assetType !== 'stock' && <span className="block text-xs text-gray-400">
                   最后手动输入的两项保持不变，第三项显示“≈ 自动推算”
-                </span>
-                {/* 融资金额 + 融资币种（同行并排） */}
+                </span>}
+                {/* 股票固定人民币且只录入金额；数字币保留融资币种与三字段联动。 */}
                 <div className="flex items-end gap-3">
                   <div className="flex-1 min-w-0">
-                    <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1.5">{amountDisplayLabel}{derivedLinkedField === 'amount' && <span className="font-normal text-orange-500">≈ 自动推算</span>}</label>
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1.5">{amountDisplayLabel}{formData.assetType === 'stock' ? '（人民币）' : null}{formData.assetType !== 'stock' && derivedLinkedField === 'amount' && <span className="font-normal text-orange-500">≈ 自动推算</span>}</label>
                     <input
                       type="number"
                       inputMode="decimal"
                       value={amountInputValue}
-                      onChange={e => { setAmountInputValue(e.target.value); handleLinkedAmountInput('amount', e.target.value); }}
-                      className={`w-full px-3 py-2.5 rounded-xl border text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 ${derivedLinkedField === 'amount' ? 'border-orange-200 bg-orange-50/50' : 'border-gray-200'}`}
+                      onChange={e => { setAmountInputValue(e.target.value); if (formData.assetType !== 'stock') handleLinkedAmountInput('amount', e.target.value); }}
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 ${formData.assetType !== 'stock' && derivedLinkedField === 'amount' ? 'border-orange-200 bg-orange-50/50' : 'border-gray-200'}`}
                       placeholder="如：100000"
                     />
                   </div>
-                  <div style={{ width: '34%' }}>
+                  {formData.assetType !== 'stock' && <div style={{ width: '34%' }}>
                     <label className="block text-xs font-medium text-gray-500 mb-1.5">融资币种</label>
                     <select
                       value={formData.amountCurrency}
@@ -3317,9 +3375,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         <option key={c} value={c}>{c === 'CNY' ? '人民币 CNY' : c}</option>
                       ))}
                     </select>
-                  </div>
+                  </div>}
                 </div>
-                {amountInputValue && parseFloat(amountInputValue) > 0 && formData.amountCurrency !== 'USDT' && (() => {
+                {formData.assetType !== 'stock' && amountInputValue && parseFloat(amountInputValue) > 0 && formData.amountCurrency !== 'USDT' && (() => {
                   const amt = parseFloat(amountInputValue);
                   const usdtEquiv = toUsdtBase(amt, formData.amountCurrency);
                   if (usdtEquiv === null) return null;
@@ -3354,8 +3412,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     </div>
                   </>
                 )}
-                {/* 买入价格 */}
-                <div>
+                {/* 数字币专属：买入价格与币种数量。 */}
+                {formData.assetType !== 'stock' && <div>
                   <label className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1.5">买入价格（{formData.amountCurrency}/{formData.coin}）{derivedLinkedField === 'price' && <span className="font-normal text-orange-500">≈ 自动推算</span>}</label>
                   <input
                     type="number"
@@ -3366,9 +3424,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     placeholder="如：95000"
                     step="any"
                   />
-                </div>
-                {/* 购买币种 + 币数（同行并排） */}
-                <div className="flex items-end gap-3">
+                </div>}
+                {/* 数字币专属：购买币种与币数。 */}
+                {formData.assetType !== 'stock' && <div className="flex items-end gap-3">
                   <div style={{ width: '40%' }}>
                     <label className="block text-xs font-medium text-gray-500 mb-1.5">购买币种</label>
                     <select
@@ -3393,7 +3451,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       placeholder="如：1.05"
                     />
                   </div>
-                </div>
+                </div>}
               </div>
               )}
 
@@ -4508,8 +4566,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     {ledgerId === 52 && (
                       <div className="mt-2 border-t border-blue-100 pt-2 text-[11px] text-slate-500">
                         {previewUsesPrincipalCoverage
-                          ? '当前为本金覆盖口径：担保物市值 − 融资本金 − 待结利息 + 已结利息。'
-                          : `当前为浮动盈亏口径：当前持有资产 − ${collateralGapBaseMode === 'interest_base' ? '计息基数' : '买入价值'} − 待结利息 + 已结利息 + 担保价值。`}
+                          ? '当前为担保差值：担保物市值 − 买入价值 − 待结利息 + 已结利息。'
+                          : '当前为买入价值全额：买入价值 + 待结利息 − 已结利息；不计担保物。'}
                       </div>
                     )}
                 </div>
@@ -4658,15 +4716,18 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       <div className="mb-1 text-[11px] font-medium text-blue-700">担保缺口计算口径</div>
                       <div className="grid grid-cols-2 gap-1.5">
                         {([
-                          { value: 'principal_coverage', label: '担保 − 本金', detail: '担保物减融资本金及利息' },
-                          { value: 'floating_pnl', label: '担保 + 浮盈亏', detail: '担保物加订单浮动盈亏' },
+                          { value: 'principal_coverage', label: '担保差值', detail: '担保物 − 买入价值 − 待结 + 已结' },
+                          { value: 'floating_pnl', label: '买入价值全额', detail: '买入价值 + 待结 − 已结，不计担保物' },
                         ] as const).map(option => {
                           const active = collateralRiskFormula === option.value;
                           return (
                             <button
                               key={option.value}
                               type="button"
-                              onClick={() => setDisplayConfig(current => ({ ...current, collateralRiskFormula: option.value }))}
+                              onClick={() => {
+                                setDisplayConfig(current => ({ ...current, collateralRiskFormula: option.value }));
+                                if (option.value === 'floating_pnl') setCollateralShareMode('none');
+                              }}
                               className={`rounded-md border px-2 py-1.5 text-left transition-colors ${active ? 'border-blue-500 bg-blue-600 text-white' : 'border-blue-100 bg-white text-slate-600'}`}
                             >
                               <span className="block text-xs font-semibold">{option.label}</span>
@@ -4675,26 +4736,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                           );
                         })}
                       </div>
-                      {collateralRiskFormula === 'floating_pnl' && (
-                        <div className="mt-2 border-t border-blue-100 pt-2">
-                          <div className="mb-1 text-[11px] font-medium text-slate-600">浮动盈亏基准</div>
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {([
-                              { value: 'buy_value', label: '买入价值' },
-                              { value: 'interest_base', label: '计息基数' },
-                            ] as const).map(option => (
-                              <button
-                                key={option.value}
-                                type="button"
-                                onClick={() => setDisplayConfig(current => ({ ...current, collateralGapBaseMode: option.value }))}
-                                className={`rounded-md border px-1.5 py-1 text-[11px] font-medium transition-colors ${collateralGapBaseMode === option.value ? 'border-blue-500 bg-blue-500 text-white' : 'border-blue-100 bg-white text-slate-600'}`}
-                              >
-                                {option.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
                   {displayConfig.periodInterestTotal === true && (
@@ -5019,18 +5060,18 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             </div>
 
                             <div className="space-y-3">
-                              <span className="block text-xs text-indigo-400">订单金额、买入价格与数量由本段独立维护</span>
+                              <span className="block text-xs text-indigo-400">{formData.assetType === 'stock' ? '股票子段仅录入人民币融资金额' : '订单金额、买入价格与数量由本段独立维护'}</span>
                               <div className="flex items-end gap-3">
                                 <div className="min-w-0 flex-1">
-                                  <label className={`mb-1.5 flex items-center gap-1.5 text-xs font-medium ${secondTone.label}`}>订单金额</label>
+                                  <label className={`mb-1.5 flex items-center gap-1.5 text-xs font-medium ${secondTone.label}`}>{formData.assetType === 'stock' ? '融资金额（人民币）' : '订单金额'}</label>
                                   <input type="number" min="0" step="0.01" inputMode="decimal" value={segment.amount} onChange={event => updateSegment({ amount: event.target.value })} placeholder="如：100000" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} />
                                 </div>
-                                <div style={{ width: '34%' }}>
+                                {formData.assetType !== 'stock' && <div style={{ width: '34%' }}>
                                   <label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>融资币种</label>
                                   <select value={segment.amount_currency} onChange={event => updateSegment({ amount_currency: event.target.value === 'CNY' ? 'CNY' : 'USDT' })} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`}>
                                     <option value="USDT">USDT</option><option value="CNY">人民币 CNY</option>
                                   </select>
-                                </div>
+                                </div>}
                               </div>
                               {formData.assetType === 'stock' && (
                                 <>
@@ -5038,11 +5079,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                                   <div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>证券账号</label><input value={segment.broker_account} onChange={event => updateSegment({ broker_account: event.target.value })} placeholder="如：6225xxxx" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>
                                 </>
                               )}
-                              <div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>买入价格（{segment.amount_currency}/{formData.coin}）</label><input type="number" min="0" step="any" inputMode="decimal" value={segment.buy_price} onChange={event => updateSegment({ buy_price: event.target.value })} placeholder="如：95000" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>
-                              <div className="flex items-end gap-3">
+                              {formData.assetType !== 'stock' && <div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>买入价格（{segment.amount_currency}/{formData.coin}）</label><input type="number" min="0" step="any" inputMode="decimal" value={segment.buy_price} onChange={event => updateSegment({ buy_price: event.target.value })} placeholder="如：95000" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>}
+                              {formData.assetType !== 'stock' && <div className="flex items-end gap-3">
                                 <div style={{ width: '40%' }}><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>购买币种</label><div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-sm font-semibold text-indigo-700">{formData.coin}</div></div>
                                 <div className="min-w-0 flex-1"><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>币数（{formData.coin}）</label><input type="number" min="0" step="any" inputMode="decimal" value={segment.buy_quantity} onChange={event => updateSegment({ buy_quantity: event.target.value })} placeholder="如：1.05" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>
-                              </div>
+                              </div>}
                               <div><label className={`mb-1.5 block text-xs font-medium ${secondTone.label}`}>存放账户</label><input value={segment.storage_account} onChange={event => updateSegment({ storage_account: event.target.value })} placeholder="账户名称或编号" className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-semibold outline-none ${secondTone.input}`} /></div>
                             </div>
 
@@ -5124,7 +5165,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                           </div>
                         );
                       })}
-                      <button type="button" onClick={() => { const participantUserId = Number(activeJointOrderTarget.userId || 0); setJointOrderSegments(current => [...current, { id: `segment-${Date.now()}`, owner_user_id: participantUserId, amount: '', amount_currency: formData.amountCurrency === 'CNY' ? 'CNY' : 'USDT', buy_date: formData.buyDate || getBeijingToday(), interest_rate_annual: normalizeFunderAnnualRate(formData.interestRateAnnual), interest_base: formData.interestBase || '', interest_base_currency: formData.interestBaseCurrency, interest_rate_currency: formData.interestRateCurrency, interest_payment_type: formData.interestPaymentType || '', interest_start_date: formData.interestStartDate || getBeijingToday(), buy_price: formData.buyPrice || '', buy_quantity: formData.buyQuantity || '', storage_account: formData.storageAccount || '', broker_name: formData.brokerName || '', broker_account: formData.brokerAccount || '', principal_lent_out: effectivePrincipalLentOut, show_profit_share: Boolean(displayConfig.profitShare), profit_share_ratio: formData.profitShareRatio || '', profit_share_type: formData.profitShareType === 'coin' ? 'coin' : 'interest', commission_share: formData.commissionShare || '', trading_fee_rate_per_mille: formData.tradingFeeRate || '2', trading_fee_status: formData.tradingFeeStatus || 'unpaid', collateral_assets: [], display_config: { ...displayConfig, buyDate: true, holdDuration: true } }]); setJointOrderSegmentsDirty(true); }} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-indigo-300 bg-white py-3 text-sm font-semibold text-indigo-600 hover:bg-indigo-50"><Plus className="h-4 w-4" />添加第二段</button>
+                      <button type="button" onClick={() => { const participantUserId = Number(activeJointOrderTarget.userId || 0); setJointOrderSegments(current => [...current, { id: `segment-${Date.now()}`, owner_user_id: participantUserId, amount: '', amount_currency: formData.assetType === 'stock' ? 'CNY' : formData.amountCurrency === 'CNY' ? 'CNY' : 'USDT', buy_date: formData.buyDate || getBeijingToday(), interest_rate_annual: normalizeFunderAnnualRate(formData.interestRateAnnual), interest_base: formData.interestBase || '', interest_base_currency: formData.interestBaseCurrency, interest_rate_currency: formData.interestRateCurrency, interest_payment_type: formData.interestPaymentType || '', interest_start_date: formData.interestStartDate || getBeijingToday(), buy_price: formData.assetType === 'stock' ? '' : formData.buyPrice || '', buy_quantity: formData.assetType === 'stock' ? '' : formData.buyQuantity || '', storage_account: formData.storageAccount || '', broker_name: formData.brokerName || '', broker_account: formData.brokerAccount || '', principal_lent_out: effectivePrincipalLentOut, show_profit_share: Boolean(displayConfig.profitShare), profit_share_ratio: formData.profitShareRatio || '', profit_share_type: formData.profitShareType === 'coin' ? 'coin' : 'interest', commission_share: formData.commissionShare || '', trading_fee_rate_per_mille: formData.tradingFeeRate || '2', trading_fee_status: formData.tradingFeeStatus || 'unpaid', collateral_assets: [], display_config: { ...displayConfig, buyDate: true, holdDuration: true } }]); setJointOrderSegmentsDirty(true); }} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-indigo-300 bg-white py-3 text-sm font-semibold text-indigo-600 hover:bg-indigo-50"><Plus className="h-4 w-4" />添加第二段</button>
                     </div>
                   )}
                 </section>
@@ -5205,6 +5246,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   trade_direction: previewIsOptionOrder ? null : formData.tradeDirection || null,
                   display_config: JSON.stringify({
                     ...displayConfig,
+                    // 预览与保存使用同一份担保口径，避免切换按钮后仍沿用编辑前的卡片状态。
+                    collateralRiskFormula,
                     ownerNameDisplay: 'self',
                     marginAlertThreshold: marginAlertThreshold || undefined,
                     rate_negative: normalizeFunderAnnualRate(formData.interestRateAnnual).startsWith('-'),
@@ -5225,7 +5268,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 const rateValPreview = parseFloat(String(previewOrder.interest_rate_annual || '0'));
                 const previewHasJointOrderSegments = previewJointOrderSegments.length > 0;
                 // 第二段的草稿也纳入 key，确保每次输入都会立即重建预览中的同卡分段内容。
-                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${String(displayConfig.floatPnl)}-${String(displayConfig.periodInterestTotal)}-${String(displayConfig.periodInterestTotalPeriod)}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}-${JSON.stringify(previewJointOrderSegments)}`;
+                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${collateralRiskFormula}-${String(displayConfig.floatPnl)}-${String(displayConfig.periodInterestTotal)}-${String(displayConfig.periodInterestTotalPeriod)}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}-${JSON.stringify(previewJointOrderSegments)}`;
                 return (
                   <div>
                     <div className="flex items-center justify-between mb-2">
