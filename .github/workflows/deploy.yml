@@ -59,7 +59,21 @@ jobs:
 
           echo "部署目标提交：$EXPECTED_SHA"
           OLD_LOCK_HASH=$(md5sum pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || echo none)
-          git fetch --quiet origin main
+          # 生产机到 GitHub 偶发 TLS 提前断连时，使用 HTTP/1.1 并短暂退避重试；
+          # 只对网络拉取重试，后续校验、构建和 PM2 失败仍会立即失败并保留日志。
+          FETCH_OK=0
+          for attempt in 1 2 3 4; do
+            if GIT_TERMINAL_PROMPT=0 git -c http.version=HTTP/1.1 fetch --quiet --no-tags origin main; then
+              FETCH_OK=1
+              break
+            fi
+            echo "第 ${attempt} 次拉取失败，${attempt}×3 秒后重试…" >&2
+            sleep $((attempt * 3))
+          done
+          if [ "$FETCH_OK" -ne 1 ]; then
+            echo "GitHub 拉取连续失败，未开始构建或重启。" >&2
+            exit 1
+          fi
           if ! git cat-file -e "${EXPECTED_SHA}^{commit}" 2>/dev/null; then
             echo "目标提交不在 origin/main 的已拉取历史中：$EXPECTED_SHA" >&2
             exit 1
