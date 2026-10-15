@@ -1805,6 +1805,16 @@ export default function LedgerAAInitialBalance() {
   const [tagEditModal, setTagEditModal] = useState<{ userId: number; tagName: string; catColor: string } | null>(null);
   const [activeStockParticipationCategoryId, setActiveStockParticipationCategoryId] = useState<number | null>(null);
   const [stockTradeDialog, setStockTradeDialog] = useState<{ categoryId: number; categoryName: string; type: "buy" | "sell" } | null>(null);
+  // 用户视图的收起卡片也需要展示股票成员权益，因此先预取首个股票标签的只读分配矩阵。
+  // 具体展开其他股票标签时，仍会按点击标签切换矩阵，不影响原有编辑流程。
+  const defaultStockParticipationCategoryId = useMemo(() => {
+    const category = categories.find((item: any) => item?.accountingMode === 'stock_portfolio' || item?.accounting_mode === 'stock_portfolio');
+    return category ? Number(category.id) : null;
+  }, [categories]);
+  useEffect(() => {
+    if (ledgerId !== 37 || activeStockParticipationCategoryId || !defaultStockParticipationCategoryId) return;
+    setActiveStockParticipationCategoryId(defaultStockParticipationCategoryId);
+  }, [ledgerId, activeStockParticipationCategoryId, defaultStockParticipationCategoryId]);
   const { data: stockParticipationMatrix, error: stockParticipationError, refetch: refetchStockParticipationMatrix } = trpc.ledger.getStockLotParticipationMatrix.useQuery(
     { ledgerId: 37, categoryId: Number(activeStockParticipationCategoryId || 0) },
     { enabled: ledgerId === 37 && !!activeStockParticipationCategoryId },
@@ -3238,6 +3248,31 @@ export default function LedgerAAInitialBalance() {
                         : marginGap > 0.005 ? '#D32F2F'
                           : marginGap < -0.005 ? '#2E7D32'
                             : '#2E7D32';
+                      // 股票标签不使用“初始金额 × 占比”。收起时按该成员尚未卖出的
+                      // 股票份额 × 最新价格直接汇总实际权益；美股统一按页面实时 USD/CNY 折算。
+                      const stockMemberSummary = (() => {
+                        if (!isStockTag || Number(activeStockParticipationCategoryId) !== Number(cat.id) || !stockParticipationMatrix) return null;
+                        let actualEquityCny = 0;
+                        let hasUnpricedLot = false;
+                        for (const lot of ((stockParticipationMatrix as any).lots ?? [])) {
+                          const participation = (lot.participations ?? []).find((item: any) => Number(item.userId) === Number(userId));
+                          const quantity = Number(participation?.remainingQuantity ?? 0);
+                          if (!(quantity > 0)) continue;
+                          const marketPrice = Number(lot.marketPrice);
+                          if (!Number.isFinite(marketPrice) || marketPrice <= 0) {
+                            hasUnpricedLot = true;
+                            continue;
+                          }
+                          const isUsStock = String(lot.currency ?? '').toUpperCase() === 'USD'
+                            || !/^\d{6}\.(SH|SZ|BJ)$/i.test(String(lot.symbol ?? ''));
+                          actualEquityCny += quantity * marketPrice * (isUsStock ? usdCnyRate : 1);
+                        }
+                        return { actualEquityCny, hasUnpricedLot };
+                      })();
+                      const stockActualEquity = stockMemberSummary?.actualEquityCny;
+                      const stockRequiredMargin = Number.isFinite(stockActualEquity) ? Math.max(0, Number(stockActualEquity) * 0.2) : NaN;
+                      const stockActualEquityText = Number.isFinite(stockActualEquity) ? formatMarginSummary(Number(stockActualEquity)) : '—';
+                      const stockRequiredMarginText = Number.isFinite(stockRequiredMargin) ? formatMarginSummary(stockRequiredMargin) : '—';
                       // 计算暂停状态
                       let catPauseStatus: 'paused' | 'running' | 'none' = 'none';
                       if (entry.pauseHistory && entry.pauseHistory.length > 0) {
@@ -3301,7 +3336,16 @@ export default function LedgerAAInitialBalance() {
                               />
                             </div>
                             {isStockTag ? (
-                              <div className="mt-1.5 flex items-center gap-1.5 text-xs"><ChartNoAxesCombined size={12} style={{ color: cat.color || '#2F6F85' }} /><span className="text-gray-500">股票持仓 · 按股票批次分配参与股数</span></div>
+                              <>
+                                <div className="mt-1.5 flex items-center gap-1.5 text-xs tabular-nums whitespace-nowrap overflow-hidden">
+                                  <ChartNoAxesCombined size={12} className="flex-shrink-0" style={{ color: cat.color || '#2F6F85' }} />
+                                  <span className="min-w-0 truncate text-gray-400">实际权益 <span className="font-medium text-gray-800" title={stockMemberSummary?.hasUnpricedLot ? '部分股票暂无可靠报价，未计入实际权益' : undefined}>{stockActualEquityText}{stockMemberSummary?.hasUnpricedLot ? '*' : ''}</span></span>
+                                </div>
+                                <div className="mt-1 flex items-center gap-x-2.5 text-[11px] tabular-nums whitespace-nowrap overflow-hidden">
+                                  <span className="text-gray-400 flex-shrink-0">应交 <span className="font-medium" style={{ color: '#1565C0' }}>{stockRequiredMarginText}</span></span>
+                                  <span className="text-gray-400 flex-shrink-0">实交 <span className="font-medium text-gray-700" title={marginSummary.unpricedCoins.length > 0 ? `${Array.from(new Set(marginSummary.unpricedCoins)).join('、')} 暂无可靠报价，未计入实交汇总` : undefined}>{actualMarginText}{marginSummary.unpricedCoins.length > 0 ? '*' : ''}</span></span>
+                                </div>
+                              </>
                             ) : (
                               <>
                                 <div className="mt-1.5 flex items-center gap-x-3 gap-y-1 text-xs tabular-nums whitespace-nowrap overflow-hidden">

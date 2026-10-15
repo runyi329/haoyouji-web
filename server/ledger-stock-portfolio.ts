@@ -1,5 +1,5 @@
 import { getDbConnection, getDbTransactionConnection } from "./db";
-import { fetchEndOfDayStockCloseSnapshots, fetchIntradayStockQuotes, resolveUsStockExchange, searchManualStocks } from "./price-scanner";
+import { fetchEndOfDayStockCloseSnapshots, fetchIntradayStockQuotes, getUsdtCnyRate, resolveUsStockExchange, searchManualStocks } from "./price-scanner";
 
 export type StockEventType = "buy" | "add" | "reduce" | "sell" | "note";
 export type AccountingMode = "manual_balance" | "stock_portfolio";
@@ -522,11 +522,11 @@ async function getLatestReferenceQuotes(categoryId: number): Promise<Record<stri
   return result;
 }
 
-async function getRealizedPnl(categoryId: number): Promise<number> {
+async function getRealizedPnl(categoryId: number, usdCnyRate: number): Promise<number | null> {
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
   const [rows] = await (conn as any).execute(
-    `SELECT e.id, e.quantity, e.execution_price,
+    `SELECT e.id, e.symbol, e.quantity, e.execution_price,
             COALESCE(SUM(a.quantity * l.unit_cost), 0) AS allocated_cost
      FROM ledger_stock_events e
      LEFT JOIN ledger_stock_event_lot_allocations a ON a.event_id = e.id
@@ -536,10 +536,15 @@ async function getRealizedPnl(categoryId: number): Promise<number> {
      GROUP BY e.id`,
     [categoryId],
   );
-  return (rows as any[]).reduce((total, row) => {
+  let total = 0;
+  for (const row of rows as any[]) {
+    const currency = stockCurrency(String(row.symbol || ''));
+    const multiplier = currency === 'USD' ? usdCnyRate : 1;
+    if (!Number.isFinite(multiplier) || multiplier <= 0) return null;
     const proceeds = numberValue(row.quantity) * numberValue(row.execution_price);
-    return total + proceeds - numberValue(row.allocated_cost);
-  }, 0);
+    total += (proceeds - numberValue(row.allocated_cost)) * multiplier;
+  }
+  return total;
 }
 
 async function getEventHistory(categoryId: number, limit = 500) {
@@ -629,6 +634,54 @@ function summarizePositionsByCurrency(positions: Array<{ currency?: string; cost
   });
 }
 
+type CnyPortfolioSummary = {
+  costValue: number | null;
+  marketValue: number | null;
+  floatingPnl: number | null;
+  unpricedPositionCount: number;
+  fxUnavailable: boolean;
+};
+
+/**
+ * 37 号账本对用户端统一按人民币展示。保留 currencySummaries 供设置端显示原币种，
+ * 但概览、押金参考额和回报必须使用同一 USD/CNY 实时换算口径，不能因混合币种直接置空。
+ */
+function summarizePositionsInCny(
+  positions: Array<{ currency?: string; costValue: number; marketValue: number | null; floatingPnl: number | null }>,
+  usdCnyRate: number,
+): CnyPortfolioSummary {
+  let costValue = 0;
+  let marketValue = 0;
+  let floatingPnl = 0;
+  let unpricedPositionCount = 0;
+  let fxUnavailable = false;
+
+  for (const position of positions) {
+    const currency = String(position.currency || 'CNY').toUpperCase();
+    const multiplier = currency === 'USD' ? usdCnyRate : 1;
+    if (!Number.isFinite(multiplier) || multiplier <= 0) {
+      fxUnavailable = true;
+      continue;
+    }
+    costValue += position.costValue * multiplier;
+    if (position.marketValue === null || position.floatingPnl === null) {
+      unpricedPositionCount += 1;
+      continue;
+    }
+    marketValue += position.marketValue * multiplier;
+    floatingPnl += position.floatingPnl * multiplier;
+  }
+
+  const cannotValue = fxUnavailable || unpricedPositionCount > 0;
+  return {
+    costValue: fxUnavailable ? null : costValue,
+    marketValue: cannotValue ? null : marketValue,
+    floatingPnl: cannotValue ? null : floatingPnl,
+    unpricedPositionCount,
+    fxUnavailable,
+  };
+}
+
 async function buildPortfolio(categoryId: number) {
   const allLots = await getActiveLots(categoryId);
   const symbols = allLots.map((lot) => lot.symbol);
@@ -694,14 +747,15 @@ async function buildPortfolio(categoryId: number) {
       unitCost: lot.unitCost,
     }));
 
-  const realizedPnl = await getRealizedPnl(categoryId);
+  const usdCnyRate = Number(getUsdtCnyRate() || 0);
+  const realizedPnl = await getRealizedPnl(categoryId, usdCnyRate);
   const currencySummaries = summarizePositionsByCurrency(positions);
   const isMixedCurrency = currencySummaries.length > 1;
-  const onlyCurrencySummary = currencySummaries[0];
-  const costValue = isMixedCurrency ? null : (onlyCurrencySummary?.costValue ?? 0);
-  const marketValue = isMixedCurrency ? null : (onlyCurrencySummary?.marketValue ?? 0);
-  const floatingPnl = isMixedCurrency ? null : (onlyCurrencySummary?.floatingPnl ?? 0);
-  const hasUnpricedPositions = currencySummaries.some((summary) => summary.unpricedPositionCount > 0);
+  const cnySummary = summarizePositionsInCny(positions, usdCnyRate);
+  const costValue = cnySummary.costValue;
+  const marketValue = cnySummary.marketValue;
+  const floatingPnl = cnySummary.floatingPnl;
+  const hasUnpricedPositions = cnySummary.unpricedPositionCount > 0 || cnySummary.fxUnavailable;
   const dailySnapshots = await getLatestDailySnapshots(categoryId);
   const latestSnapshot = dailySnapshots[0] || null;
   const priorSnapshot = dailySnapshots[1] || null;
@@ -718,13 +772,15 @@ async function buildPortfolio(categoryId: number) {
     closedLots,
     summary: {
       // Never display or persist a partial portfolio aggregate as though missing prices were zero.
-      marketValue: hasUnpricedPositions || isMixedCurrency ? null : marketValue,
+      reportingCurrency: 'CNY' as const,
+      usdCnyRate: usdCnyRate > 0 ? usdCnyRate : null,
+      marketValue: hasUnpricedPositions ? null : marketValue,
       costValue,
-      floatingPnl: hasUnpricedPositions || isMixedCurrency ? null : floatingPnl,
-      realizedPnl: isMixedCurrency ? null : realizedPnl,
-      totalPnl: hasUnpricedPositions || isMixedCurrency || floatingPnl === null ? null : floatingPnl + realizedPnl,
+      floatingPnl: hasUnpricedPositions ? null : floatingPnl,
+      realizedPnl,
+      totalPnl: hasUnpricedPositions || floatingPnl === null || realizedPnl === null ? null : floatingPnl + realizedPnl,
       positionCount: positions.length,
-      unpricedPositionCount: currencySummaries.reduce((total, summary) => total + summary.unpricedPositionCount, 0),
+      unpricedPositionCount: cnySummary.unpricedPositionCount,
       currencySummaries,
       isMixedCurrency,
       dailyChange: isMixedCurrency ? null : dailyChange,
@@ -921,7 +977,8 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   });
   const currencySummaries = summarizePositionsByCurrency(positions);
   const isMixedCurrency = currencySummaries.length > 1;
-  const onlyCurrencySummary = currencySummaries[0];
+  const usdCnyRate = Number(getUsdtCnyRate() || 0);
+  const cnySummary = summarizePositionsInCny(positions, usdCnyRate);
   const closedLots = visibleParticipations
     .filter((item) => item.remainingQuantity <= EPSILON)
     .map((item) => ({
@@ -933,14 +990,21 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       unitCost: item.entryPrice,
       realizedPnl: item.realizedPnl,
     }));
-  const costValue = isMixedCurrency ? null : (onlyCurrencySummary?.costValue ?? 0);
-  const realizedPnl = visibleParticipations.reduce((total, item) => total + item.realizedPnl, 0);
-  const allPositionsPriced = currencySummaries.every((summary) => summary.unpricedPositionCount === 0);
-  const marketValue = isMixedCurrency ? null : (onlyCurrencySummary?.marketValue ?? 0);
-  const floatingPnl = isMixedCurrency ? null : (onlyCurrencySummary?.floatingPnl ?? 0);
+  const costValue = cnySummary.costValue;
+  const realizedPnl = cnySummary.fxUnavailable
+    ? null
+    : visibleParticipations.reduce((total, item) => {
+      const multiplier = stockCurrency(item.symbol) === 'USD' ? usdCnyRate : 1;
+      return total + item.realizedPnl * multiplier;
+    }, 0);
+  const allPositionsPriced = cnySummary.unpricedPositionCount === 0 && !cnySummary.fxUnavailable;
+  const marketValue = cnySummary.marketValue;
+  const floatingPnl = cnySummary.floatingPnl;
   const quoteDates = positions.map((position) => position.quoteDate).filter((date): date is string => Boolean(date));
-  const valuationDate = allPositionsPriced && quoteDates.length === positions.length && new Set(quoteDates).size === 1
-    ? quoteDates[0]
+  // A 股和美股闭市时点不同；只要全部持仓都有有效报价，概览即可按各自最新交易日
+  // 以人民币统一估值。不能因日期不同而把用户的当前回报和参考押金清空。
+  const valuationDate = allPositionsPriced && quoteDates.length === positions.length
+    ? quoteDates.sort().at(-1) || null
     : null;
 
   const [priceRows] = symbols.length > 0
@@ -997,13 +1061,15 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     startDate: visibleParticipations.map((item) => item.startDate).sort()[0] || null,
     dailySnapshots: dailySnapshots.slice().reverse(),
     summary: {
+      reportingCurrency: 'CNY' as const,
+      usdCnyRate: usdCnyRate > 0 ? usdCnyRate : null,
       marketValue,
       costValue,
       floatingPnl,
-      realizedPnl: isMixedCurrency ? null : realizedPnl,
-      totalPnl: isMixedCurrency || floatingPnl === null ? null : floatingPnl + realizedPnl,
+      realizedPnl,
+      totalPnl: floatingPnl === null || realizedPnl === null ? null : floatingPnl + realizedPnl,
       positionCount: positions.length,
-      unpricedPositionCount: currencySummaries.reduce((total, summary) => total + summary.unpricedPositionCount, 0),
+      unpricedPositionCount: cnySummary.unpricedPositionCount,
       currencySummaries,
       isMixedCurrency,
       dailyChange: isMixedCurrency ? null : dailyChange,
@@ -1058,7 +1124,7 @@ export async function getMyStockTagOverview(input: { ledgerId: number; userId: n
     const access = await assertStockTagAccess(input.ledgerId, Number(category.id), input.userId, input.systemRole);
     const portfolio = await buildMemberStockPortfolio(Number(category.id), input.userId);
     if (!portfolio.isEligible) continue;
-    const chronological = portfolio.dailySnapshots.slice().reverse();
+    const chronological: any[] = portfolio.dailySnapshots.slice().reverse();
     const valuationDate = portfolio.summary.valuationDate;
     const valuationPnl = portfolio.summary.totalPnl;
     const valuationMarketValue = portfolio.summary.marketValue;
@@ -1076,6 +1142,9 @@ export async function getMyStockTagOverview(input: { ledgerId: number; userId: n
         realizedPnl: valuationRealizedPnl,
         totalPnl: valuationPnl,
         positionCount: portfolio.summary.positionCount,
+        // R1 新增美元仓位后，历史盘尾仍是旧的单币种口径；首次合并人民币实时估值
+        // 只能作为累计回报基准，不能把全部历史累计回报误报为“今日”回报。
+        suppressDailyPnl: portfolio.summary.isMixedCurrency && chronological.length === 0,
       };
       const sameDateIndex = chronological.findIndex((snapshot) => snapshot.snapshotDate === valuationDate);
       if (sameDateIndex >= 0 && chronological[sameDateIndex].totalPnl === null) {
@@ -1087,7 +1156,9 @@ export async function getMyStockTagOverview(input: { ledgerId: number; userId: n
     const points = chronological.map((snapshot, index) => ({
       date: snapshot.snapshotDate,
       pnl: snapshot.totalPnl ?? 0,
-      dailyPnl: index > 0 && snapshot.totalPnl !== null && chronological[index - 1].totalPnl !== null
+      dailyPnl: snapshot.suppressDailyPnl
+        ? null
+        : index > 0 && snapshot.totalPnl !== null && chronological[index - 1].totalPnl !== null
         ? snapshot.totalPnl - (chronological[index - 1].totalPnl as number)
         // 首个有效盘尾以入场时的 0 盈亏为基准；若此时已有盈亏，必须计入当天概览。
         : (snapshot.totalPnl ?? 0),
