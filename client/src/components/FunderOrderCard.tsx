@@ -65,7 +65,7 @@ export function formatOptionPremium(value: unknown, denomination: unknown): stri
  * 本金状态只影响标题；担保缺口先读取单独保存的公式。
  * 未保存该字段的历史订单，继续以原“本金已借出”状态作为回退，避免历史数据跳变。
  */
-export function getFunderCollateralRiskFormulaForDisplay(order: any): 'principal_coverage' | 'floating_pnl' {
+export function getFunderCollateralRiskFormulaForDisplay(order: any): 'principal_coverage' | 'floating_pnl' | 'full_value' {
   const rawPrincipalLentOut = order?.principal_lent_out === 1 || order?.principal_lent_out === true;
   try {
     const rawConfig = order?.display_config;
@@ -74,7 +74,9 @@ export function getFunderCollateralRiskFormulaForDisplay(order: any): 'principal
       || config?.selfFundedAsset === true
       || config?.selfFundedAsset === 'true';
     if (isSelfFunded) return 'floating_pnl';
-    return config?.collateralRiskFormula === 'principal_coverage' || config?.collateralRiskFormula === 'floating_pnl'
+    return config?.collateralRiskFormula === 'principal_coverage'
+      || config?.collateralRiskFormula === 'floating_pnl'
+      || config?.collateralRiskFormula === 'full_value'
       ? config.collateralRiskFormula
       : rawPrincipalLentOut
         ? 'principal_coverage'
@@ -1763,7 +1765,9 @@ export function FunderOrderCard({
   const financingDisplayUnit = amountCurrency === 'USDT' ? 'u' : amountCurrency === 'CNY' ? '元' : amountCurrency;
   // “融”及本金状态仅用于展示；担保缺口独立读取管理员选择的公式。
   const principalLentOut = hasExplicitPrincipalLentOut;
-  const usesPrincipalCoverageFormula = getFunderCollateralRiskFormulaForDisplay(order) === 'principal_coverage';
+  const collateralRiskFormula = getFunderCollateralRiskFormulaForDisplay(order);
+  const usesPrincipalCoverageFormula = collateralRiskFormula === 'principal_coverage';
+  const usesFloatingPnlFormula = collateralRiskFormula === 'floating_pnl';
   // 左上角主展示独立于“借出本金”风险开关：可按订单显示融资金额或标的数量。
   // 新字段优先；未设置的新旧订单则严格保留过去的默认展示，且不参与任何资金计算。
   const configuredPrimaryAssetDisplay = financingDisplayConfig?.primaryAssetDisplay === 'financing' || financingDisplayConfig?.primaryAssetDisplay === 'quantity'
@@ -2120,8 +2124,13 @@ export function FunderOrderCard({
     : (spotBuyValueUsdt > 0 ? spotBuyValueUsdt : totalU);
   const collateralGapBaseForRisk = buyValueForRisk;
   const floatPnlForRisk = isStockOrder && floatPnl !== null ? floatPnl / cnyRate : floatPnl;
-  // 第一种口径以担保物抵扣买入价值；第二种则为本金已借出的总缺口，
-  // 不把担保物、实时市值或标的浮盈亏纳入抵扣。
+  // 三种口径：担保差值、担保物+浮盈、买入价值全额。
+  // 外部37号与手工股票的浮盈优先用各自已配置的数据源，普通订单用实时标的浮盈。
+  const formulaFloatingPnlU = isExternalStockPnlSource
+    ? extTagFloatingPnlU
+    : isManualStockPnlSource
+      ? (manualStockFloatPnlCny === null ? null : manualStockFloatPnlCny / cnyRate)
+      : floatPnlForRisk;
   const currentHoldingValueForRisk = isExternalStockPnlSource
     ? extTagHoldingValueU
     : currentValueForRisk !== null
@@ -2136,16 +2145,19 @@ export function FunderOrderCard({
     ? (assetFundingType === 'self'
       // 自有资金期权不需要扣除历史买入成本，也不叠加订单利息或外部担保物。
       ? optionCurrentValue
-      // 借出本金时只展示未被抵扣的总缺口。
       : usesPrincipalCoverageFormula
         ? collateralValue - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk
-        : -principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
+        : usesFloatingPnlFormula
+          ? (formulaFloatingPnlU === null ? null : collateralValue + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
+          : -principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
     : null;
   const exposure = isOptionOrder
     ? optionExposure
     : usesPrincipalCoverageFormula
       ? collateralValue - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk
-      : -collateralGapBaseForRisk - accruedForRisk + paidInterestForRisk;
+      : usesFloatingPnlFormula
+        ? (formulaFloatingPnlU === null ? null : collateralValue + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
+        : -collateralGapBaseForRisk - accruedForRisk + paidInterestForRisk;
   // 37号盈亏标签、担保标签均可独立使用；担保物也可完全手工录入。
   // 利息和借出本金属于52订单本身，始终按普通订单的风险公式处理。
   const linkedCollateralValueU = hasExternalCollateral
@@ -2163,16 +2175,17 @@ export function FunderOrderCard({
   const linkedHoldingValueU = isExternalStockPnlSource
     ? extTagHoldingValueU
     : (linkedFloatingPnlU === null ? null : buyValueForRisk + linkedFloatingPnlU);
-  const linkedStockContributionU = -principalLentOutValueForRisk;
-  const externalNonSharedGapU = usesPrincipalCoverageFormula
-    && linkedCollateralValueU !== null
+  const linkedStockContributionU = usesFloatingPnlFormula ? linkedFloatingPnlU : -principalLentOutValueForRisk;
+  const externalNonSharedGapU = usesConfiguredStockRiskData
     && linkedPendingInterestForRisk !== null
     && linkedPaidInterestForRisk !== null
-    ? linkedCollateralValueU - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk
-    : usesConfiguredStockRiskData
-    && linkedPendingInterestForRisk !== null
-    && linkedPaidInterestForRisk !== null
-    ? linkedStockContributionU - accruedForRisk + paidInterestForRisk
+    ? usesPrincipalCoverageFormula
+      ? (linkedCollateralValueU === null ? null : linkedCollateralValueU - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
+      : usesFloatingPnlFormula
+        ? (linkedCollateralValueU === null || linkedFloatingPnlU === null
+          ? null
+          : linkedCollateralValueU + linkedFloatingPnlU - accruedForRisk + paidInterestForRisk)
+        : -principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk
     : null;
   // 共享担保模式分为两层口径：
   // 1) 卡片行内的「本订单担保缺口/余量」必须计入本订单实际选定的担保物；
@@ -2235,8 +2248,11 @@ export function FunderOrderCard({
   })();
   // 行内「担保缺口/余量」与非共享订单使用完全相同的单订单公式。
   // 共享只改变担保物可以在池内共同覆盖的总计判断，不能抹掉该订单本身的担保物。
-  const sharedOrderUsesPrincipalCoverage = sharedOrderPoolDetail?.collateralRiskFormula === 'principal_coverage'
-    || (sharedOrderPoolDetail?.collateralRiskFormula !== 'floating_pnl' && usesPrincipalCoverageFormula);
+  const sharedOrderRiskFormula = ['principal_coverage', 'floating_pnl', 'full_value'].includes(String(sharedOrderPoolDetail?.collateralRiskFormula))
+    ? String(sharedOrderPoolDetail?.collateralRiskFormula)
+    : collateralRiskFormula;
+  const sharedOrderUsesPrincipalCoverage = sharedOrderRiskFormula === 'principal_coverage';
+  const sharedOrderUsesFloatingPnl = sharedOrderRiskFormula === 'floating_pnl';
   const sharedOrderBorrowedValueU = (() => {
     // 两种口径均以真实买入价值为本金额度，不能改用标的实时市值。
     return sharedOrderGapBaseU > 0 ? sharedOrderGapBaseU : principalLentOutValueForRisk;
@@ -2248,7 +2264,11 @@ export function FunderOrderCard({
       ? (sharedOrderCollateralValueU !== null
         ? sharedOrderCollateralValueU - sharedOrderBorrowedValueU - sharedOrderPendingInterestU + sharedOrderPaidInterestU
         : null)
-      : -sharedOrderBorrowedValueU - sharedOrderPendingInterestU + sharedOrderPaidInterestU;
+      : sharedOrderUsesFloatingPnl
+        ? (sharedOrderCollateralValueU === null || sharedOrderStockContributionU === null
+          ? null
+          : sharedOrderCollateralValueU + sharedOrderStockContributionU - sharedOrderPendingInterestU + sharedOrderPaidInterestU)
+        : -sharedOrderBorrowedValueU - sharedOrderPendingInterestU + sharedOrderPaidInterestU;
   // 共享池中的37标签订单使用服务端回传的标签净值盈亏，不能再按股票行情价推算。
   // 同一标签的担保物与净值盈亏都只计一次；各订单的待结利息/借出本金仍分别计入。
   const sharedPoolRemainingU = (() => {
@@ -2333,11 +2353,14 @@ export function FunderOrderCard({
         holdingValueU = currentValue;
         stockContributionU = currentValue - (gapBaseU > 0 ? gapBaseU : buyValueU);
       }
-      const usesPrincipalCoverage = poolOrder.collateralRiskFormula === 'principal_coverage'
-        || (poolOrder.collateralRiskFormula !== 'floating_pnl' && (poolOrder.principalLentOut === true || poolOrder.principalLentOut === 1));
-      // 差值口径由共享担保物统一抵扣；全值口径则把买入价值视为已全部借出。
+      const poolFormula = ['principal_coverage', 'floating_pnl', 'full_value'].includes(String(poolOrder.collateralRiskFormula))
+        ? String(poolOrder.collateralRiskFormula)
+        : ((poolOrder.principalLentOut === true || poolOrder.principalLentOut === 1) ? 'principal_coverage' : 'floating_pnl');
+      // 共享担保物会在循环外统一加一次：差值／全额先扣买入价值，浮盈口径先计浮动盈亏。
       const borrowedValueU = gapBaseU > 0 ? gapBaseU : (holdingValueU ?? principalU);
-      remaining += -borrowedValueU - accruedInterestU + paidInterestU;
+      const holdingContributionU = poolFormula === 'floating_pnl' ? stockContributionU : -borrowedValueU;
+      if (holdingContributionU === null || !Number.isFinite(holdingContributionU)) return null;
+      remaining += holdingContributionU - accruedInterestU + paidInterestU;
     }
     return remaining;
   })();
@@ -3890,8 +3913,9 @@ export function FunderOrderCard({
                           <div className="mt-2 p-2.5 rounded-lg text-[10px] space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
                             <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
                             <div>• <strong>担保差值</strong> = 担保物市值 − 买入价值 − 待结利息 + 已结利息。</div>
+                            <div>• <strong>担保＋浮盈</strong> = 担保物市值 + 浮动盈亏 − 待结利息 + 已结利息。</div>
                             <div>• <strong>买入价值全额</strong> = −买入价值 − 待结利息 + 已结利息；不计担保物，不能加入共享担保池。</div>
-                            <div>• <strong>共享担保总计</strong>仅汇总选择“担保差值”的订单，避免把全值缺口重复抵扣。</div>
+                            <div>• <strong>共享担保总计</strong>汇总选择“担保差值”或“担保＋浮盈”的订单；全值缺口独立计算。</div>
                             <div>• <strong>保证金比例</strong> = 风险敎口 ÷ 全部订单缺口基准，负数表示担保不足需补仓</div>
                             <div>• <strong>每张订单的基准选择</strong>在订单编辑页保存后，同步用于共享池和订单卡片。</div>
                           </div>
@@ -3902,15 +3926,19 @@ export function FunderOrderCard({
                         <>
                           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                             <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>
-                              {usesPrincipalCoverageFormula ? '① 买入价值' : '① 买入价值全额'}
+                              {usesPrincipalCoverageFormula ? '① 买入价值' : usesFloatingPnlFormula ? '① 浮动盈亏' : '① 买入价值全额'}
                             </div>
                             <div>{usesPrincipalCoverageFormula
                               ? '担保差值：担保物可抵扣买入价值及利息'
-                              : '买入价值全额：本金已借出，买入价值及利息均不以担保物抵扣'}</div>
+                              : usesFloatingPnlFormula
+                                ? '担保＋浮盈：担保物与浮动盈亏共同覆盖利息'
+                                : '买入价值全额：本金已借出，买入价值及利息均不以担保物抵扣'}</div>
                             <div className="mt-1 font-mono">
                               {usesPrincipalCoverageFormula
                                 ? <span style={{ color: '#3B82F6' }}>= −{riskValueInOrderCurrency(principalLentOutValueForRisk).toFixed(2)} {riskDisplayUnit}（买入价值）</span>
-                                : <span style={{ color: '#3B82F6' }}>全额计入 −{riskValueInOrderCurrency(collateralGapBaseForRisk).toFixed(2)} {riskDisplayUnit}（买入价值）</span>
+                                : usesFloatingPnlFormula
+                                  ? <span style={{ color: '#3B82F6' }}>{formulaFloatingPnlU === null ? '浮盈加载中...' : `= ${formulaFloatingPnlU >= 0 ? '+' : ''}${riskValueInOrderCurrency(formulaFloatingPnlU).toFixed(2)} ${riskDisplayUnit}`}</span>
+                                  : <span style={{ color: '#3B82F6' }}>全额计入 −{riskValueInOrderCurrency(collateralGapBaseForRisk).toFixed(2)} {riskDisplayUnit}（买入价值）</span>
                               }
                             </div>
                           </div>

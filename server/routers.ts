@@ -1540,12 +1540,13 @@ function normalizeFunderPrincipalLentOut(requested: unknown, displayConfig: unkn
 function getFunderCollateralRiskFormula(
   principalLentOut: unknown,
   displayConfig: unknown,
-): 'principal_coverage' | 'floating_pnl' {
+): 'principal_coverage' | 'floating_pnl' | 'full_value' {
   const config = parseFunderDisplayConfig(displayConfig);
   if (!isSelfFundedFunderOrder(config)) {
     const selected = String(config.collateralRiskFormula || '').trim().toLowerCase();
-    if (selected === 'principal_coverage' || selected === 'floating_pnl') return selected;
+    if (selected === 'principal_coverage' || selected === 'floating_pnl' || selected === 'full_value') return selected;
   }
+  // 历史 floating_pnl 代表“担保物+浮动盈亏”，绝不重新解释成全额缺口。
   return normalizeFunderPrincipalLentOut(principalLentOut, config)
     ? 'principal_coverage'
     : 'floating_pnl';
@@ -22021,17 +22022,21 @@ ${klinesSummary}
               displayConfig,
             );
             const usesPrincipalCoverage = collateralRiskFormula === 'principal_coverage';
-            // 差值口径由担保物抵扣买入价值；全值口径视买入价值已全部借出，
-            // 仅返回买入价值与利息构成的缺口，不用担保物或标的市值相抵。
+            const usesFloatingPnl = collateralRiskFormula === 'floating_pnl';
+            // ①担保差值：担保物 − 买入价值；②担保＋浮盈：担保物 + 浮盈；
+            // ③全额：买入价值已完全借出，不计担保物。
             const linkedHoldingValueU = linked37Collateral?.useFloatingPnl ? linked37Collateral.holdingValue : null;
             const linkedFloatingPnlU = linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null;
             const holdingValueU = linkedHoldingValueU !== null && Number.isFinite(linkedHoldingValueU)
               ? linkedHoldingValueU
               : currentValue;
             const principalLentOutValueU = collateralGapBaseU;
-            const collateralRequired = usesPrincipalCoverage
-              ? -principalLentOutValueU - pendingInterestU + paidInterestU
-              : -collateralGapBaseU - pendingInterestU + paidInterestU;
+            const riskFloatingPnlU = linkedFloatingPnlU !== null && Number.isFinite(linkedFloatingPnlU)
+              ? linkedFloatingPnlU
+              : (holdingValueU !== null && Number.isFinite(holdingValueU) ? holdingValueU - collateralGapBaseU : null);
+            const collateralRequired = usesFloatingPnl
+              ? (riskFloatingPnlU === null ? null : riskFloatingPnlU - pendingInterestU + paidInterestU)
+              : -principalLentOutValueU - pendingInterestU + paidInterestU;
             return {
               orderId: Number(o.id),
               orderNo: o.order_no,
@@ -22060,7 +22065,7 @@ ${klinesSummary}
               paidInterest,  // 已结利息，供前端弹窗的担保余量计算加回
               collateralRequired,
               collateralValue,
-              collateralGap: collateralRequired + collateralValue,
+              collateralGap: collateralRequired === null ? null : collateralRequired + (collateralRiskFormula === 'full_value' ? 0 : collateralValue),
               collateralAssets: effectiveCollateralAssets,
               // linked37TagName专指实际引用的37号担保物，供担保池去重。
               linked37TagName: linked37Collateral?.useCollateral ? linked37Collateral.collateralTagName : null,

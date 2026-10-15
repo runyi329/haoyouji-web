@@ -600,12 +600,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   // 历史订单未保存新字段时，严格按过去的本金状态回退，避免余额跳变。
   const explicitCollateralRiskFormula = displayConfig.collateralRiskFormula === 'principal_coverage'
     || displayConfig.collateralRiskFormula === 'floating_pnl'
+    || displayConfig.collateralRiskFormula === 'full_value'
     ? displayConfig.collateralRiskFormula
     : null;
+  // 三种担保口径：担保差值、担保物+浮盈、买入价值全额。旧的 floating_pnl
+  // 保持“担保物+浮盈”的既有含义，避免37号引用订单的风险数值被改写。
   const collateralRiskFormula = isSelfFundedAsset
     ? 'floating_pnl'
     : (explicitCollateralRiskFormula ?? 'principal_coverage');
   const usesPrincipalCoverageFormula = collateralRiskFormula === 'principal_coverage';
+  const usesFloatingPnlFormula = collateralRiskFormula === 'floating_pnl';
   const amountDisplayLabel = effectivePrincipalLentOut
     ? '借出本金'
     : isSelfFundedAsset
@@ -1351,9 +1355,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     return total; // 无担保物时返回 0，不返回 null
   }, [collateralAssets, formLivePrices, cnyRate]);
 
-  // 两种担保公式都以买入价值为基准：第一种以担保物抵扣买入价值，
-  // 第二种是本金已借出的总缺口，不使用担保物或标的浮盈亏相抵。
-  // 所有数值先统一折成 U，与担保物实时估值保持同一口径。
+  // 三种担保口径均先统一折成 U：担保差值、担保物+浮盈、买入价值全额。
+  // 股票的外部／手工浮盈由下方实时订单预览卡按对应数据源异步计算。
   const collateralGapBaseValue = useMemo(() => {
     if (formData.assetType === 'stock') return parseFloat(financingAmountUsdt || '0');
     const buyPrice = parseFloat(formData.buyPrice || '0');
@@ -1368,6 +1371,18 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
 
   // 本金状态只负责标题；此处严格依照担保缺口所选公式计算。
   const previewUsesPrincipalCoverage = usesPrincipalCoverageFormula;
+  const previewUsesFloatingPnl = usesFloatingPnlFormula;
+  const previewFloatingPnlU = useMemo(() => {
+    // 股票的37号引用与手工组合需要异步行情；由下方实时订单卡计算，避免先以0误导。
+    if (formData.assetType === 'stock' || formData.assetType === 'crypto_option') return null;
+    const quantity = Number(formData.buyQuantity || 0);
+    const buyPrice = Number(formData.buyPrice || 0);
+    const currentPrice = Number(formLivePrices[formData.coin] || 0);
+    if (!(quantity > 0) || !(buyPrice > 0) || !(currentPrice > 0)) return null;
+    const buyValue = quantity * buyPrice;
+    const currentValue = quantity * currentPrice;
+    return formData.tradeDirection === 'short' ? buyValue - currentValue : currentValue - buyValue;
+  }, [formData.assetType, formData.buyQuantity, formData.buyPrice, formData.coin, formData.tradeDirection, formLivePrices]);
   // 预览卡片实时待结利息（每秒更新）
   const [previewAccrued, setPreviewAccrued] = useState<number>(0);
   useEffect(() => {
@@ -1386,8 +1401,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     return () => clearInterval(timer);
   }, [formData.interestBase, formData.interestRateAnnual, formData.interestStartDate]);
 
-  // 担保物抵扣口径：担保物 − 买入价值 − 待结 + 已结。
-  // 借出本金口径：买入价值 + 待结 − 已结（以负数表示需补的担保缺口）。
+  // 担保差值：担保物 − 买入价值 − 待结 + 已结；浮盈口径：担保物 + 浮盈 − 待结 + 已结；
+  // 全额口径：−买入价值 − 待结 + 已结（不计担保物）。
   const previewPendingInterestU = useMemo(() => {
     const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
     return ['CNY', 'RMB', '人民币'].includes(currency) ? previewAccrued / cnyRate : previewAccrued;
@@ -1401,8 +1416,13 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     if (previewUsesPrincipalCoverage) {
       return computedCollateralValue - collateralGapBaseValue - previewPendingInterestU + previewPaidInterestU;
     }
+    if (previewUsesFloatingPnl) {
+      return previewFloatingPnlU === null
+        ? null
+        : computedCollateralValue + previewFloatingPnlU - previewPendingInterestU + previewPaidInterestU;
+    }
     return -collateralGapBaseValue - previewPendingInterestU + previewPaidInterestU;
-  }, [computedCollateralValue, collateralGapBaseValue, previewUsesPrincipalCoverage, previewPendingInterestU, previewPaidInterestU]);
+  }, [computedCollateralValue, collateralGapBaseValue, previewUsesPrincipalCoverage, previewUsesFloatingPnl, previewFloatingPnlU, previewPendingInterestU, previewPaidInterestU]);
 
   // 预览卡片实时待结佣金（受邀订单专用，每秒更新）
   const [previewCommission, setPreviewCommission] = useState<number>(0);
@@ -4567,7 +4587,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       <div className="mt-2 border-t border-blue-100 pt-2 text-[11px] text-slate-500">
                         {previewUsesPrincipalCoverage
                           ? '当前为担保差值：担保物市值 − 买入价值 − 待结利息 + 已结利息。'
-                          : '当前为买入价值全额：买入价值 + 待结利息 − 已结利息；不计担保物。'}
+                          : previewUsesFloatingPnl
+                            ? '当前为担保＋浮盈：担保物市值 + 浮动盈亏 − 待结利息 + 已结利息。'
+                            : '当前为买入价值全额：买入价值 + 待结利息 − 已结利息；不计担保物。'}
                       </div>
                     )}
                 </div>
@@ -4714,10 +4736,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   {ledgerId === 52 && Boolean(displayConfig.collateral) && !isSelfFundedAsset && (
                     <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50/60 p-2">
                       <div className="mb-1 text-[11px] font-medium text-blue-700">担保缺口计算口径</div>
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-3 gap-1.5">
                         {([
-                          { value: 'principal_coverage', label: '担保差值', detail: '担保物 − 买入价值 − 待结 + 已结' },
-                          { value: 'floating_pnl', label: '买入价值全额', detail: '买入价值 + 待结 − 已结，不计担保物' },
+                          { value: 'principal_coverage', label: '担保差值', detail: '担保物 − 买入价值 ± 利息' },
+                          { value: 'floating_pnl', label: '担保＋浮盈', detail: '担保物 + 浮盈 ± 利息' },
+                          { value: 'full_value', label: '买入全额', detail: '买入价值 ± 利息，不计担保' },
                         ] as const).map(option => {
                           const active = collateralRiskFormula === option.value;
                           return (
@@ -4726,7 +4749,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                               type="button"
                               onClick={() => {
                                 setDisplayConfig(current => ({ ...current, collateralRiskFormula: option.value }));
-                                if (option.value === 'floating_pnl') setCollateralShareMode('none');
+                                if (option.value === 'full_value') setCollateralShareMode('none');
                               }}
                               className={`rounded-md border px-2 py-1.5 text-left transition-colors ${active ? 'border-blue-500 bg-blue-600 text-white' : 'border-blue-100 bg-white text-slate-600'}`}
                             >

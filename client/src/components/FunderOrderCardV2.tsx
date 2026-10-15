@@ -1380,7 +1380,9 @@ export function FunderOrderCardV2Silver({
     : 'hidden';
   // “融”只表达资金属性；担保缺口使用管理员选定的独立公式。
   const cardHasExplicitPrincipalLentOut = isPrincipalLentOutForDisplay(order);
-  const cardUsesPrincipalCoverage = getFunderCollateralRiskFormulaForDisplay(order) === 'principal_coverage';
+  const cardCollateralRiskFormula = getFunderCollateralRiskFormulaForDisplay(order);
+  const cardUsesPrincipalCoverage = cardCollateralRiskFormula === 'principal_coverage';
+  const cardUsesFloatingPnl = cardCollateralRiskFormula === 'floating_pnl';
   // 左上角主展示独立于“借出本金”开关：新字段优先，未配置订单沿用旧默认口径。
   const cardConfiguredPrimaryDisplay = cardDisplayConfig.primaryAssetDisplay === 'financing' || cardDisplayConfig.primaryAssetDisplay === 'quantity'
     ? cardDisplayConfig.primaryAssetDisplay
@@ -1592,8 +1594,8 @@ export function FunderOrderCardV2Silver({
   );
   // 规则G：数字币价格前端直连（老方案已封存：trpc.getCryptoPrices）
   const { data: _fc2977CryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { enabled: hasExternalCollateral, refetchInterval: 3000, staleTime: 2000 });
-  const { fc2977RemainingMarginU, fc2977MarginBasePct, fc2977CnyRate } = (() => {
-    if (!isFC2977 || !_fc2977TagConfig) return { fc2977RemainingMarginU: null as number | null, fc2977MarginBasePct: null as number | null, fc2977CnyRate: null as number | null };
+  const { fc2977RemainingMarginU, fc2977MarginBasePct, fc2977CnyRate, fc2977CollateralValueU, fc2977FloatingPnlU } = (() => {
+    if (!isFC2977 || !_fc2977TagConfig) return { fc2977RemainingMarginU: null as number | null, fc2977MarginBasePct: null as number | null, fc2977CnyRate: null as number | null, fc2977CollateralValueU: null as number | null, fc2977FloatingPnlU: null as number | null };
     const _cnyR = (_fc2977CryptoPricesRaw as any)?.usdtCnyRate ?? 7.0;
     const _pricesMap = (_fc2977CryptoPricesRaw as any)?.prices ?? {};
     const _prices: Record<string, number> = {};
@@ -1617,7 +1619,7 @@ export function FunderOrderCardV2Silver({
     const balanceNum = latestBalance?.balance ? parseFloat(String(latestBalance.balance)) : null;
     const initialNum = parseFloat((_fc2977TagConfig as any).initial_amount || '0') || 0;
     const multiplierNum = parseFloat((_fc2977TagConfig as any).account_multiplier || '1') || 1;
-    if (balanceNum === null) return { fc2977RemainingMarginU: null, fc2977MarginBasePct: null, fc2977CnyRate: _cnyR };
+    if (balanceNum === null) return { fc2977RemainingMarginU: null, fc2977MarginBasePct: null, fc2977CnyRate: _cnyR, fc2977CollateralValueU: _cnyR > 0 ? rightTotalCNY / _cnyR : null, fc2977FloatingPnlU: null };
     const pnl = externalFloatingPnlCalculationMode === 'leveraged_net_pnl'
       ? (balanceNum - initialNum) * multiplierNum
       : balanceNum - initialNum;
@@ -1625,7 +1627,13 @@ export function FunderOrderCardV2Silver({
     const remainingU = _cnyR > 0 ? remainingCNY / _cnyR : null;
     const marginBaseNum = parseFloat((_fc2977TagConfig as any).margin_base || '0') || 0;
     const pct = marginBaseNum > 0 ? (remainingCNY / marginBaseNum * 100) : null;
-    return { fc2977RemainingMarginU: remainingU, fc2977MarginBasePct: pct, fc2977CnyRate: _cnyR };
+    return {
+      fc2977RemainingMarginU: remainingU,
+      fc2977MarginBasePct: pct,
+      fc2977CnyRate: _cnyR,
+      fc2977CollateralValueU: _cnyR > 0 ? rightTotalCNY / _cnyR : null,
+      fc2977FloatingPnlU: _cnyR > 0 ? pnl / _cnyR : null,
+    };
   })();
   const referencedMarginRatePct = useMemo(() => {
     if (!hasExternalMarginRateReference) return null;
@@ -1640,21 +1648,10 @@ export function FunderOrderCardV2Silver({
       ? remainingMargin / marginBase * 100
       : (latestBalance > 0 ? totalCny / latestBalance * 100 : null);
   }, [hasExternalMarginRateReference, _canonicalMarginRateValuation, _marginRateTagConfig, _marginRateTagSummary]);
-  // 外部37号订单的最终担保缺口必须与订单详情卡完全一致：
-  // 37号「浮盈 + 担保物」余量 − 本订单待结利息 + 已结利息。不能只上报前两项。
+  // 外部37号的担保物与浮盈拆分保存，按本订单选择的三种口径重新组合。
   const fc2977InterestCnyRate = fc2977CnyRate && fc2977CnyRate > 0 ? fc2977CnyRate : cnyRate;
   const fc2977AccruedInterestU = interestUnit === '元' ? displayAccrued / fc2977InterestCnyRate : displayAccrued;
   const fc2977PaidInterestU = interestUnit === '元' ? displayPaid / fc2977InterestCnyRate : displayPaid;
-  const fc2977FinalGapU = fc2977RemainingMarginU !== null
-    && Number.isFinite(fc2977RemainingMarginU)
-    && Number.isFinite(fc2977AccruedInterestU)
-    && Number.isFinite(fc2977PaidInterestU)
-    ? fc2977RemainingMarginU - fc2977AccruedInterestU + fc2977PaidInterestU
-    : null;
-  useEffect(() => {
-    if (!onExposureGapChange || !hasExternalCollateral || !Number.isFinite(fc2977FinalGapU)) return;
-    onExposureGapChange(Number(order.id), Number(fc2977FinalGapU));
-  }, [onExposureGapChange, hasExternalCollateral, fc2977FinalGapU, order.id]);
   const sharedCollateralViewUserId = Number(order.user_id);
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId: (order as any).ledger_id ?? 0, userId: sharedCollateralViewUserId },
@@ -1739,18 +1736,33 @@ export function FunderOrderCardV2Silver({
       else { collateralItemValues.push(null); collateralValueKnown = false; }
     }
   }
-  // 第一种口径以担保物抵扣买入价值；第二种为本金已借出的总缺口，
-  // 不再以担保物、实时市值或标的浮盈亏相抵。
+  // 担保差值、担保物+浮盈、买入价值全额三种口径分别计算；“融”标签不再改变公式。
   const exposure = _isOptCard
     ? (isSelfFundedOption
       ? (optCurrentValue ?? 0)
       : (cardUsesPrincipalCoverage
         ? collateralValue - silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU
-        : -silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU))
+        : cardUsesFloatingPnl
+          ? (floatPnl === null ? null : collateralValue + floatPnl - silverAccruedInterestU + silverPaidInterestU)
+          : -silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU))
     : (cardUsesPrincipalCoverage
       ? collateralValue - silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU
-      : -silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU);
-  const isSufficient = exposure >= 0;
+      : cardUsesFloatingPnl
+        ? (floatPnl === null ? null : collateralValue + floatPnl - silverAccruedInterestU + silverPaidInterestU)
+        : -silverCoverageBaseU - silverAccruedInterestU + silverPaidInterestU);
+  const fc2977FinalGapU = !hasExternalCollateral
+    ? null
+    : cardUsesPrincipalCoverage
+      ? (fc2977CollateralValueU === null ? null : fc2977CollateralValueU - silverCoverageBaseU - fc2977AccruedInterestU + fc2977PaidInterestU)
+      : cardUsesFloatingPnl
+        ? (fc2977RemainingMarginU === null ? null : fc2977RemainingMarginU - fc2977AccruedInterestU + fc2977PaidInterestU)
+        : -silverCoverageBaseU - fc2977AccruedInterestU + fc2977PaidInterestU;
+  useEffect(() => {
+    if (!onExposureGapChange || !hasExternalCollateral || !Number.isFinite(fc2977FinalGapU)) return;
+    onExposureGapChange(Number(order.id), Number(fc2977FinalGapU));
+  }, [onExposureGapChange, hasExternalCollateral, fc2977FinalGapU, order.id]);
+  const isSufficient = (hasExternalCollateral ? fc2977FinalGapU : exposure) !== null
+    && (hasExternalCollateral ? fc2977FinalGapU! : exposure!) >= 0;
 
   const fmt = (v: number | null, digits = 2) =>
     v == null || isNaN(v) ? '--' : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -3305,9 +3317,9 @@ export function FunderLenderCardSilver({
     refetchInterval: 3000,
     staleTime: 2000,
   });
-  const { lnExtRemainingMarginU } = useMemo(() => {
+  const { lnExtRemainingMarginU, lnExtCollateralValueU, lnExtFloatingPnlU } = useMemo(() => {
     if (!hasExternalCollateral || !_lnExtTagConfig) {
-      return { lnExtRemainingMarginU: null as number | null, lnExtMarginBasePct: null as number | null };
+      return { lnExtRemainingMarginU: null as number | null, lnExtMarginBasePct: null as number | null, lnExtCollateralValueU: null as number | null, lnExtFloatingPnlU: null as number | null };
     }
     const extCnyRate = Number((_lnExtPricesRaw as any)?.usdtCnyRate ?? cnyRate ?? DEFAULT_CNY_RATE) || DEFAULT_CNY_RATE;
     const rawPrices = (_lnExtPricesRaw as any)?.prices ?? {};
@@ -3330,7 +3342,7 @@ export function FunderLenderCardSilver({
     const latestBalance = (_lnExtTagSummary as any)?.latestBalance?.balance;
     const balance = latestBalance === null || latestBalance === undefined ? null : Number(latestBalance);
     if (balance === null || !Number.isFinite(balance)) {
-      return { lnExtRemainingMarginU: null, lnExtMarginBasePct: null };
+      return { lnExtRemainingMarginU: null, lnExtMarginBasePct: null, lnExtCollateralValueU: extCnyRate > 0 ? externalMarginCny / extCnyRate : null, lnExtFloatingPnlU: null };
     }
     const initial = Number((_lnExtTagConfig as any).initial_amount || 0);
     const multiplier = Number((_lnExtTagConfig as any).account_multiplier || 1);
@@ -3342,6 +3354,8 @@ export function FunderLenderCardSilver({
     return {
       lnExtRemainingMarginU: extCnyRate > 0 ? remainingCny / extCnyRate : null,
       lnExtMarginBasePct: marginBase > 0 ? remainingCny / marginBase * 100 : null,
+      lnExtCollateralValueU: extCnyRate > 0 ? externalMarginCny / extCnyRate : null,
+      lnExtFloatingPnlU: extCnyRate > 0 ? floatingPnlCny / extCnyRate : null,
     };
   }, [hasExternalCollateral, lnExternalFloatingPnlCalculationMode, _lnExtTagConfig, _lnExtTagSummary, _lnExtPricesRaw, cnyRate]);
 
@@ -3516,30 +3530,35 @@ export function FunderLenderCardSilver({
   const accruedInU = interestUnit === '元' ? displayAccrued / effectiveCnyRate : displayAccrued;
   const paidInU = interestUnit === '元' ? displayPaid / effectiveCnyRate : displayPaid;
   const lenderHasExplicitPrincipalLentOut = isPrincipalLentOutForDisplay(order);
-  const lenderUsesPrincipalCoverage = getFunderCollateralRiskFormulaForDisplay(order) === 'principal_coverage';
+  const lenderCollateralRiskFormula = getFunderCollateralRiskFormulaForDisplay(order);
+  const lenderUsesPrincipalCoverage = lenderCollateralRiskFormula === 'principal_coverage';
+  const lenderUsesFloatingPnl = lenderCollateralRiskFormula === 'floating_pnl';
   // 担保减值口径扣真实买入价值；买入价缺失时才回退保存金额。
   const lenderCoverageBaseU = Number(buyValue || storedAmountUsdt || 0);
-  // 第一种口径以担保物抵扣买入价值；第二种为借出本金总缺口，
-  // 不以担保物、实时市值或标的浮盈亏相抵。
+  // 三种口径：担保差值、担保物+浮盈、买入价值全额。
   const collateralGap = _lnIsOpt
     ? (lenderIsSelfFundedOption
       ? optionCurrentValue
       : (lenderUsesPrincipalCoverage
         ? (collateralValue === null ? null : collateralValue - lenderCoverageBaseU - accruedInU + paidInU)
-        : -lenderCoverageBaseU - accruedInU + paidInU))
+        : lenderUsesFloatingPnl
+          ? (collateralValue === null || floatPnl === null ? null : collateralValue + floatPnl - accruedInU + paidInU)
+          : -lenderCoverageBaseU - accruedInU + paidInU))
     : (collateralValue !== null
       ? (lenderUsesPrincipalCoverage
         ? collateralValue - lenderCoverageBaseU - accruedInU + paidInU
-        : -lenderCoverageBaseU - accruedInU + paidInU)
+        : lenderUsesFloatingPnl
+          ? (floatPnl === null ? null : collateralValue + floatPnl - accruedInU + paidInU)
+          : -lenderCoverageBaseU - accruedInU + paidInU)
       : null);
-  // 外部37号担保的标签余量只包含「浮盈 + 担保物」。订单最终缺口还必须计入
-  // 本订单待结和已结利息，且该值是第五容器唯一允许消费的口径。
-  const lnExternalFinalGapU = lnExtRemainingMarginU !== null
-    && Number.isFinite(lnExtRemainingMarginU)
-    && Number.isFinite(accruedInU)
-    && Number.isFinite(paidInU)
-    ? lnExtRemainingMarginU - accruedInU + paidInU
-    : null;
+  // 外部37号担保物与浮盈按已选口径组合，不能一律当作“浮盈+担保物”。
+  const lnExternalFinalGapU = !hasExternalCollateral
+    ? null
+    : lenderUsesPrincipalCoverage
+      ? (lnExtCollateralValueU === null ? null : lnExtCollateralValueU - lenderCoverageBaseU - accruedInU + paidInU)
+      : lenderUsesFloatingPnl
+        ? (lnExtRemainingMarginU === null ? null : lnExtRemainingMarginU - accruedInU + paidInU)
+        : -lenderCoverageBaseU - accruedInU + paidInU;
   useEffect(() => {
     if (!onExposureGapChange || !hasExternalCollateral || !Number.isFinite(lnExternalFinalGapU)) return;
     onExposureGapChange(Number(order.id), Number(lnExternalFinalGapU));
@@ -4208,14 +4227,18 @@ export function FunderLenderCardSilver({
                             <>
                               {/* 普通担保：原有三段式 */}
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>{lenderUsesPrincipalCoverage ? '① 买入价值' : '① 买入价值全额'}</div>
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>{lenderUsesPrincipalCoverage ? '① 买入价值' : lenderUsesFloatingPnl ? '① 浮动盈亏' : '① 买入价值全额'}</div>
                                 <div>{lenderUsesPrincipalCoverage
                                   ? '担保差值：担保物可抵扣买入价值及利息'
-                                  : '买入价值全额：本金已借出，买入价值及利息不以担保物抵扣'}</div>
+                                  : lenderUsesFloatingPnl
+                                    ? '担保＋浮盈：担保物与浮动盈亏共同覆盖利息'
+                                    : '买入价值全额：本金已借出，买入价值及利息不以担保物抵扣'}</div>
                                 <div className="mt-1 font-mono">
                                   {lenderUsesPrincipalCoverage
                                     ? <span style={{ color: '#3B82F6' }}>= −{lenderCoverageBaseU.toFixed(2)} U（买入价值）</span>
-                                    : <span style={{ color: '#3B82F6' }}>全额计入 −{lenderCoverageBaseU.toFixed(2)} U（买入价值）</span>
+                                    : lenderUsesFloatingPnl
+                                      ? <span style={{ color: '#3B82F6' }}>{floatPnl === null ? '浮盈加载中...' : `= ${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)} U`}</span>
+                                      : <span style={{ color: '#3B82F6' }}>全额计入 −{lenderCoverageBaseU.toFixed(2)} U（买入价值）</span>
                                   }
                                 </div>
                               </div>
