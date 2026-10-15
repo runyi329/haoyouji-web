@@ -1,20 +1,21 @@
-name: pm2-restart
-"on":
-  push:
-    branches:
-      - main
+name: 手动 PM2 重启
+
+# 正式发布由 deploy.yml 在构建和产物同步完成后顺序重启。
+# 此工作流仅供故障排查或紧急人工重启，不能在 push 时自动执行。
+on:
   workflow_dispatch:
+
 jobs:
   restart:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: setup ssh
+      - name: 配置 SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          cat > ~/.ssh/config << 'SSHEOF'
+          cat > ~/.ssh/config <<'SSHEOF'
           Host *
             StrictHostKeyChecking no
             UserKnownHostsFile /dev/null
@@ -23,17 +24,12 @@ jobs:
           SSHEOF
           chmod 600 ~/.ssh/config
 
-      - name: restart pm2
+      - name: 重启 PM2
         run: |
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
-          echo "=== PM2 Status Before ==="
-          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1 || true
-          echo "=== Starting/Restarting haoyouji-web ==="
-          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 delete haoyouji-web' 2>&1 || true
-          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' 2>&1
-          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' 2>&1
-          echo "=== PM2 Status After ==="
-          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
-          echo "=== Recent logs ==="
-          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 logs haoyouji-web --nostream --lines 20' 2>&1 || true
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} <<'ENDSSH'
+          set -e
+          sudo -u ubuntu env HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --update-env
+          sudo -u ubuntu env HOME=/home/ubuntu pm2 save
+          sudo -u ubuntu env HOME=/home/ubuntu pm2 list
           ENDSSH

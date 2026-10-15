@@ -1,121 +1,130 @@
 name: 自动部署到生产服务器
 
 on:
-  # 自动 push 触发已关闭，统一由 bg-deploy.yml 负责自动部署，避免两个 workflow 并发 SSH 触发服务器连接限制
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "backups/**"
   workflow_dispatch:
     inputs:
       reason:
-        description: '手动触发原因'
+        description: "手动触发原因"
         required: false
-        default: '手动重启服务'
+        default: "手动部署"
+
+# 同一时间只允许一个生产部署；新提交按顺序部署，避免远端构建与 PM2 相互覆盖。
+concurrency:
+  group: haoyouji-production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   deploy:
-    name: 部署到服务器
+    name: 部署指定提交到生产服务器
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 8
+    env:
+      EXPECTED_SHA: ${{ github.sha }}
 
     steps:
-      - name: 📥 检出代码
-        uses: actions/checkout@v4
-
-      - name: 🔑 配置SSH密鑰
+      - name: 配置 SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H 124.223.54.69 >> ~/.ssh/known_hosts 2>/dev/null || true
-          echo "Host 124.223.54.69" >> ~/.ssh/config
-          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
-          echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
-          echo "  ServerAliveInterval 15" >> ~/.ssh/config
-          echo "  ServerAliveCountMax 20" >> ~/.ssh/config
+          cat > ~/.ssh/config <<'SSHEOF'
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ServerAliveInterval 15
+            ServerAliveCountMax 10
+            ConnectTimeout 20
+          SSHEOF
           chmod 600 ~/.ssh/config
 
-      - name: 🚀 执行部署脚本
+      - name: 拉取、构建、同步并重启
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
-            set -e
-            export PATH="/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "EXPECTED_SHA='$EXPECTED_SHA' bash -s" <<'ENDSSH'
+          set -euo pipefail
+          export PATH="/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
-            echo "📂 进入项目目录..."
-            cd /root/haoyouji-web
+          SOURCE_DIR=/root/haoyouji-web
+          APP_DIR=/home/ubuntu/haoyouji-web
+          cd "$SOURCE_DIR"
 
-            echo "📥 拉取最新代码..."
-            OLD_LOCK_HASH=$(md5sum pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || echo "none")
-            git fetch origin && git reset --hard origin/main && git clean -fd
-            NEW_LOCK_HASH=$(md5sum pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || echo "none")
-            echo "✅ 当前 git HEAD: $(git log --oneline -1)"
+          echo "部署目标提交：$EXPECTED_SHA"
+          OLD_LOCK_HASH=$(md5sum pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || echo none)
+          git fetch --quiet origin main
+          if ! git cat-file -e "${EXPECTED_SHA}^{commit}" 2>/dev/null; then
+            echo "目标提交不在 origin/main 的已拉取历史中：$EXPECTED_SHA" >&2
+            exit 1
+          fi
+          git reset --hard "$EXPECTED_SHA"
+          git clean -fd
+          DEPLOYED_SHA=$(git rev-parse HEAD)
+          test "$DEPLOYED_SHA" = "$EXPECTED_SHA"
+          NEW_LOCK_HASH=$(md5sum pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || echo none)
+          echo "已锁定提交：$DEPLOYED_SHA"
 
-            # 只在lockfile变化时重新安装依赖
-            if [ "$OLD_LOCK_HASH" != "$NEW_LOCK_HASH" ]; then
-              echo "📦 lockfile已变化，重新安装依赖..."
-              pnpm install --frozen-lockfile
-            else
-              echo "📦 依赖无变化，跳过安装"
+          if [ "$OLD_LOCK_HASH" != "$NEW_LOCK_HASH" ]; then
+            echo "锁文件已变化，安装依赖…"
+            pnpm install --frozen-lockfile
+          else
+            echo "锁文件未变化，跳过依赖安装。"
+          fi
+
+          echo "开始生产构建…"
+          export NODE_OPTIONS="--max-old-space-size=4096"
+          rm -rf "$SOURCE_DIR/dist"
+          pnpm run build
+          test -f "$SOURCE_DIR/dist/index.js"
+          test -f "$SOURCE_DIR/dist/public/index.html"
+
+          echo "同步构建产物…"
+          mkdir -p "$APP_DIR/dist"
+          rsync -a --delete "$SOURCE_DIR/dist/" "$APP_DIR/dist/"
+          chown -R ubuntu:ubuntu "$APP_DIR/dist"
+          cp "$SOURCE_DIR/package.json" "$APP_DIR/package.json"
+          cp "$SOURCE_DIR/pnpm-lock.yaml" "$APP_DIR/pnpm-lock.yaml"
+          cp "$SOURCE_DIR/server/git-log.json" "$APP_DIR/server/git-log.json" 2>/dev/null || true
+          chown ubuntu:ubuntu "$APP_DIR/server/git-log.json" 2>/dev/null || true
+
+          if [ "$OLD_LOCK_HASH" != "$NEW_LOCK_HASH" ]; then
+            echo "同步更新后的 node_modules…"
+            rsync -a --delete "$SOURCE_DIR/node_modules/" "$APP_DIR/node_modules/"
+            chown -R ubuntu:ubuntu "$APP_DIR/node_modules"
+          fi
+
+          cp "$SOURCE_DIR/.env" "$APP_DIR/.env" 2>/dev/null || true
+          chown ubuntu:ubuntu "$APP_DIR/.env" 2>/dev/null || true
+          sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' \
+            "$SOURCE_DIR/ecosystem.config.cjs" > "$APP_DIR/ecosystem.config.cjs"
+          chown ubuntu:ubuntu "$APP_DIR/ecosystem.config.cjs"
+
+          echo "重启 PM2…"
+          if sudo -u ubuntu env HOME=/home/ubuntu pm2 describe haoyouji-web >/dev/null 2>&1; then
+            sudo -u ubuntu env HOME=/home/ubuntu pm2 restart "$APP_DIR/ecosystem.config.cjs" --update-env
+          else
+            sudo -u ubuntu env HOME=/home/ubuntu pm2 start "$APP_DIR/ecosystem.config.cjs" --update-env
+          fi
+          sudo -u ubuntu env HOME=/home/ubuntu pm2 save
+          sleep 3
+          sudo -u ubuntu env HOME=/home/ubuntu pm2 describe haoyouji-web >/dev/null
+          sudo -u ubuntu env HOME=/home/ubuntu pm2 list
+
+          echo "校验本机服务响应…"
+          for attempt in $(seq 1 8); do
+            if curl -fsS --max-time 5 http://127.0.0.1:3000/ >/dev/null; then
+              echo "服务健康检查通过。"
+              exit 0
             fi
-
-            echo "🧹 清理旧的构建产物（避免 vite prepare-out-dir ENOTEMPTY）..."
-            rm -rf /root/haoyouji-web/dist 2>/dev/null || true
-            find /root/haoyouji-web/dist -mindepth 0 -delete 2>/dev/null || true
-
-            echo "🔨 开始构建项目..."
-            export NODE_OPTIONS="--max-old-space-size=4096"
-            set -o pipefail
-            # 后台心跳：每10秒输出一个点，防止SSH因无输出被断开
-            ( while true; do sleep 10; printf "."; done ) &
-            HEARTBEAT_PID=$!
-            pnpm run build 2>&1 | tee /tmp/build_output.log || { kill $HEARTBEAT_PID 2>/dev/null; echo ""; echo "❌ 构建失败！"; cat /tmp/build_output.log | tail -50; exit 1; }
-            kill $HEARTBEAT_PID 2>/dev/null
-            echo ""
-            echo "✅ 构建完成"
-
-            echo "📊 执行数据库迁移..."
-            bash scripts/post-deploy-migration.sh || true
-            bash scripts/db-migrations.sh || true
-
-            echo "🔄 同步构建产物到服务目录..."
-            rm -rf /home/ubuntu/haoyouji-web/dist
-            cp -rf /root/haoyouji-web/dist /home/ubuntu/haoyouji-web/dist
-            mkdir -p /home/ubuntu/haoyouji-web/server
-            cp /root/haoyouji-web/server/git-log.json /home/ubuntu/haoyouji-web/server/git-log.json 2>/dev/null || true
-            chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/dist
-            chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/server/git-log.json 2>/dev/null || true
-            cp /root/haoyouji-web/package.json /home/ubuntu/haoyouji-web/package.json
-            cp /root/haoyouji-web/pnpm-lock.yaml /home/ubuntu/haoyouji-web/pnpm-lock.yaml
-
-            # 只在lockfile变化时同步node_modules（最耗时的步骤）
-            if [ "$OLD_LOCK_HASH" != "$NEW_LOCK_HASH" ]; then
-              echo "🔄 依赖已变化，同步 node_modules..."
-              rsync -a --delete /root/haoyouji-web/node_modules/ /home/ubuntu/haoyouji-web/node_modules/
-              chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules
-            else
-              echo "🔄 依赖无变化，跳过 node_modules 同步"
-            fi
-
-            echo "🔄 同步环境配置..."
-            cp /root/haoyouji-web/.env /home/ubuntu/haoyouji-web/.env 2>/dev/null || true
-            chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/.env 2>/dev/null || true
-            sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' /root/haoyouji-web/ecosystem.config.cjs > /home/ubuntu/haoyouji-web/ecosystem.config.cjs
-            chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs
-
-            echo "🔄 重启服务..."
-            pm2 delete haoyouji-web 2>/dev/null || true
-            pm2 save 2>/dev/null || true
-            if sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 describe haoyouji-web > /dev/null 2>&1'; then
-              sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --update-env' 2>&1
-            else
-              sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' 2>&1
-            fi
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' 2>&1
-            sleep 3
-
-            echo "🔒 同步 Nginx 配置..."
-            cp /root/haoyouji-web/nginx.conf /etc/nginx/sites-available/haoyouji
-            nginx -t && (systemctl reload nginx 2>/dev/null || true)
-
-            echo "📊 服务状态检查..."
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
-
-            echo "✅ 部署完成！"
+            sleep 2
+          done
+          echo "PM2 已启动，但本机 HTTP 健康检查未通过。" >&2
+          exit 1
           ENDSSH
