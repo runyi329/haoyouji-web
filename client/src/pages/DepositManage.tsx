@@ -576,6 +576,7 @@ export default function DepositManage() {
   // ── 日志 & 暂停状态 ──
   const [marginLogExpanded, setMarginLogExpanded] = useState(false);
   const [pauseSaving, setPauseSaving] = useState(false);
+  const [tagGlobalPauseDialog, setTagGlobalPauseDialog] = useState<{ tagName: string; settlementDate: string } | null>(null);
   const { data: marginLogs, refetch: refetchMarginLogs } = (trpc.ledger as any).getMarginLogs.useQuery(
     { ledgerId, tagName: selectedTagForRight ?? "" },
     { enabled: !!ledgerId && !!selectedTagForRight }
@@ -724,6 +725,7 @@ export default function DepositManage() {
     setFundFlowEditMode(false);
     setFundFlowEdits([]);
     setShowRightInterestDetail(false);
+    setTagGlobalPauseDialog(null);
   }, [selectedTagForRight]);
 
   const handleStartRightEditing = () => {
@@ -1618,6 +1620,7 @@ export default function DepositManage() {
                               const latestBalance = (rightTagSummary as any)?.latestBalance;
                               const autoBalanceNum = latestBalance?.balance ? parseFloat(String(latestBalance.balance)) : null;
                               const autoBalanceDate = latestBalance?.recordDate as string | undefined;
+                              const settlementCutoffDate = (rightTagSummary as any)?.settlementCutoffDate as string | undefined;
 
                               // 北京时间交易日 15:00 判断
                               const _nowBJ = new Date(Date.now() + 8 * 3600 * 1000);
@@ -1688,6 +1691,9 @@ export default function DepositManage() {
                                         <span className="ml-1" style={{ color: _isStale ? '#B45309' : '#2563EB' }}>
                                           {autoBalanceDate.slice(5)}{/* MM-DD 简写 */}
                                         </span>
+                                      )}
+                                      {settlementCutoffDate && (
+                                        <span className="ml-1 text-[10px]" style={{ color: '#B45309' }}>结算至 {settlementCutoffDate.slice(5)}</span>
                                       )}
                                     </span>
                                     <span className="text-sm font-semibold text-gray-700">
@@ -1996,11 +2002,16 @@ export default function DepositManage() {
                         {/* ── 暂停/恢复按鈕（查看模式）── */}
                         {!rightEditMode && selectedTagForRight && (() => {
                           const isPaused = !!(rightTagConfig as any)?.margin_pause_date;
-                          const commitPauseToggle = async () => {
+                          const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+                          const commitPauseToggle = async (settlementDate?: string) => {
+                            const isLedger37 = ledgerId === 37;
+                            const newMarginPauseDate = isPaused ? null : (settlementDate || today);
+                            if (!isPaused && isLedger37 && !newMarginPauseDate) {
+                              toast.error('请选择最后结算日');
+                              return;
+                            }
                             setPauseSaving(true);
                             try {
-                              const isLedger37 = ledgerId === 37;
-                              const newMarginPauseDate = isPaused ? null : new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
                               await setTagMarginPauseMutation.mutateAsync({
                                 ledgerId,
                                 tagName: selectedTagForRight,
@@ -2012,51 +2023,73 @@ export default function DepositManage() {
                                 action: isPaused ? (isLedger37 ? '恢复标签' : '恢复查询') : (isLedger37 ? '暂停标签' : '暂停查询'),
                                 detail: isPaused
                                   ? (isLedger37 ? '恢复利息、标签保证金与全体成员初始保证金' : '恢复账户余额查询')
-                                  : (isLedger37 ? `暂停利息、标签保证金与全体成员初始保证金（${newMarginPauseDate}）` : `暂停账户余额查询（${newMarginPauseDate}）`),
+                                  : (isLedger37 ? `结算截至 ${newMarginPauseDate}，次日起暂停利息、标签保证金与全体成员初始保证金` : `暂停账户余额查询（${newMarginPauseDate}）`),
                               });
-                              refetchRightTagConfig();
-                              refetchAllTagsMarginSummary();
-                              refetchMarginLogs();
+                              await Promise.all([refetchRightTagConfig(), refetchRightTagSummary(), refetchAllTagsMarginSummary(), refetchMarginLogs()]);
                               toast.success(isPaused
                                 ? (isLedger37 ? '已恢复标签及全体成员初始保证金' : '已恢复查询')
-                                : (isLedger37 ? '已暂停标签及全体成员初始保证金' : '已暂停查询'));
+                                : (isLedger37 ? `已按 ${newMarginPauseDate} 结算并暂停标签` : '已暂停查询'));
                             } finally {
                               setPauseSaving(false);
                             }
                           };
                           const requestPauseToggle = () => {
                             if (ledgerId === 37 && !isPaused) {
-                              showConfirm(
-                                '标签全体暂停影响说明',
-                                '将从今天起同步暂停：该标签的利息计算、该标签的保证金状态，以及全体成员在该标签下的初始保证金。成员原有的个人暂停会保留。是否继续？',
-                                () => showConfirm(
-                                  '再次确认标签全体暂停',
-                                  '确认后立即同步暂停以上三项模块；恢复标签时只恢复系统同步的暂停，不会恢复成员原有的个人暂停。',
-                                  () => { void commitPauseToggle(); },
-                                  '确认暂停',
-                                ),
-                                '继续确认',
-                              );
+                              setTagGlobalPauseDialog({ tagName: selectedTagForRight, settlementDate: today });
                               return;
                             }
                             void commitPauseToggle();
                           };
                           return (
-                            <div className="mt-3 flex justify-end">
-                              <button
-                                disabled={pauseSaving}
-                                onClick={requestPauseToggle}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium"
-                                style={{
-                                  backgroundColor: isPaused ? '#DCFCE7' : '#FFF7ED',
-                                  color: isPaused ? '#15803D' : '#EA580C',
-                                  border: isPaused ? '1px solid #BBF7D0' : '1px solid #FED7AA',
-                                }}
-                              >
-                                {isPaused ? <PlayCircle className="w-3.5 h-3.5" /> : <PauseCircle className="w-3.5 h-3.5" />}
-                                {pauseSaving ? '...' : (isPaused ? (ledgerId === 37 ? '恢复标签' : '恢复查询') : (ledgerId === 37 ? '暂停标签' : '暂停查询'))}
-                              </button>
-                            </div>
+                            <>
+                              <div className="mt-3 flex justify-end">
+                                <button
+                                  disabled={pauseSaving}
+                                  onClick={requestPauseToggle}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium"
+                                  style={{
+                                    backgroundColor: isPaused ? '#DCFCE7' : '#FFF7ED',
+                                    color: isPaused ? '#15803D' : '#EA580C',
+                                    border: isPaused ? '1px solid #BBF7D0' : '1px solid #FED7AA',
+                                  }}
+                                >
+                                  {isPaused ? <PlayCircle className="w-3.5 h-3.5" /> : <PauseCircle className="w-3.5 h-3.5" />}
+                                  {pauseSaving ? '...' : (isPaused ? (ledgerId === 37 ? '恢复标签' : '恢复查询') : (ledgerId === 37 ? '暂停标签' : '暂停查询'))}
+                                </button>
+                              </div>
+                              {tagGlobalPauseDialog?.tagName === selectedTagForRight && (
+                                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4" onClick={() => setTagGlobalPauseDialog(null)}>
+                                  <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
+                                    <h3 className="mb-2 text-base font-bold text-gray-900">标签全体暂停</h3>
+                                    <p className="mb-3 text-sm leading-5 text-gray-600">请选择最后结算日。该日数据会纳入结算，次日起同步暂停利息、标签保证金及全体成员的初始保证金。</p>
+                                    <label className="mb-3 block">
+                                      <span className="mb-1 block text-xs font-medium text-gray-700">最后结算日</span>
+                                      <input
+                                        type="date"
+                                        value={tagGlobalPauseDialog.settlementDate}
+                                        max={today}
+                                        onChange={(event) => setTagGlobalPauseDialog((current) => current ? { ...current, settlementDate: event.target.value } : current)}
+                                        className="w-full rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 outline-none focus:border-amber-400"
+                                      />
+                                    </label>
+                                    <p className="mb-5 text-xs leading-4 text-gray-400">成员已单独暂停的日期保持不变；恢复标签时也不会恢复这些个人暂停。</p>
+                                    <div className="flex gap-3">
+                                      <button type="button" onClick={() => setTagGlobalPauseDialog(null)} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-600">取消</button>
+                                      <button
+                                        type="button"
+                                        disabled={!tagGlobalPauseDialog.settlementDate || pauseSaving}
+                                        onClick={() => {
+                                          const settlementDate = tagGlobalPauseDialog.settlementDate;
+                                          setTagGlobalPauseDialog(null);
+                                          void commitPauseToggle(settlementDate);
+                                        }}
+                                        className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-bold text-white disabled:opacity-40"
+                                      >确认暂停</button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </>
                           );
                         })()}
 

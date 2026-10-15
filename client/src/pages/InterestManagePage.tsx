@@ -84,9 +84,9 @@ export default function InterestManagePage() {
   const [manualForm, setManualForm] = useState({ amount: '', remark: '', isPlus: true });
   // 日志
   const [showLogs, setShowLogs] = useState<string | null>(null);
-  // 暂停确认弹窗
+  // 暂停确认弹窗：37号账本由管理员选择最后结算日。
   const [confirmPauseTag, setConfirmPauseTag] = useState<string | null>(null);
-  const [confirmGlobalPauseTag, setConfirmGlobalPauseTag] = useState<string | null>(null);
+  const [pauseSettlementDate, setPauseSettlementDate] = useState('');
 
   // 账本分类（标签）
   const { data: rawCategories = [] } = trpc.ledger.getCategories.useQuery(
@@ -129,15 +129,16 @@ export default function InterestManagePage() {
     onError: (e) => toast.error(e.message),
   });
 
-  const handlePause = useCallback((tagName: string) => {
+  const handlePause = useCallback((tagName: string, settlementDate?: string) => {
     const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+    const pauseDate = settlementDate || today;
     setTagPauseDateMutation.mutate({
       ledgerId: lid,
       tagName,
-      pauseDate: today,
+      pauseDate,
     });
     setConfirmPauseTag(null);
-    setConfirmGlobalPauseTag(null);
+    setPauseSettlementDate('');
   }, [lid, setTagPauseDateMutation]);
 
   const handleResume = useCallback((tagName: string) => {
@@ -644,7 +645,10 @@ export default function InterestManagePage() {
                           </button>
                         ) : (
                           <button
-                            onClick={() => setConfirmPauseTag(tag.tagName)}
+                            onClick={() => {
+                              setConfirmPauseTag(tag.tagName);
+                              setPauseSettlementDate(new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10));
+                            }}
                             className="min-w-0 py-2.5 text-center text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-100"
                           >
                             {lid === 37 ? '暂停标签' : '暂停'}
@@ -754,61 +758,43 @@ export default function InterestManagePage() {
       </Sheet>
       {/* 确认暂停弹窗 */}
       {confirmPauseTag && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl p-6 mx-4 max-w-sm w-full">
-            <div className="text-base font-bold mb-2">确认暂停？</div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-2 text-base font-bold">确认暂停？</div>
             {lid === 37 ? (
-              <div className="text-sm text-gray-600 mb-4 space-y-2">
-                <p>此次是标签全体暂停，将从今天起同步影响：</p>
-                <ul className="list-disc pl-5 space-y-1 text-gray-500">
+              <div className="mb-4 space-y-3 text-sm text-gray-600">
+                <p>请选择此标签的最后结算日。该日期的数据会纳入结算，次日起同步暂停：</p>
+                <ul className="list-disc space-y-1 pl-5 text-gray-500">
                   <li>该标签的利息计算</li>
-                  <li>该标签的保证金状态</li>
+                  <li>该标签的保证金状态与账户余额口径</li>
                   <li>全体成员在该标签下的初始保证金</li>
                 </ul>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-gray-700">最后结算日</span>
+                  <input
+                    type="date"
+                    value={pauseSettlementDate}
+                    max={new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)}
+                    onChange={(event) => setPauseSettlementDate(event.target.value)}
+                    className="w-full rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 outline-none focus:border-amber-400"
+                  />
+                </label>
                 <p className="text-xs text-gray-400">成员原有的个人初始保证金暂停会保留，不会被覆盖或恢复。</p>
               </div>
             ) : (
-              <div className="text-sm text-gray-500 mb-4">暂停后利息将从今天起冻结，不再滚动计算。</div>
+              <div className="mb-4 text-sm text-gray-500">暂停后利息将从今天起冻结，不再滚动计算。</div>
             )}
             <div className="flex gap-3">
               <button
-                onClick={() => setConfirmPauseTag(null)}
-                className="flex-1 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm"
+                onClick={() => { setConfirmPauseTag(null); setPauseSettlementDate(''); }}
+                className="flex-1 rounded-xl bg-gray-100 py-2.5 text-sm text-gray-600"
               >
                 取消
               </button>
               <button
-                onClick={() => {
-                  if (lid === 37) {
-                    setConfirmGlobalPauseTag(confirmPauseTag);
-                    setConfirmPauseTag(null);
-                  } else {
-                    handlePause(confirmPauseTag);
-                  }
-                }}
-                className="flex-1 py-2 rounded-xl bg-gray-500 text-white text-sm font-semibold"
-              >
-                {lid === 37 ? '继续确认' : '确认暂停'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {confirmGlobalPauseTag && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-2xl p-6 mx-4 max-w-sm w-full">
-            <div className="text-base font-bold mb-2">再次确认标签全体暂停？</div>
-            <div className="text-sm text-gray-500 mb-4">确认后将暂停该标签的利息、保证金以及全体成员初始保证金。</div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmGlobalPauseTag(null)}
-                className="flex-1 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm"
-              >
-                取消
-              </button>
-              <button
-                onClick={() => handlePause(confirmGlobalPauseTag)}
-                className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-semibold"
+                disabled={lid === 37 && !pauseSettlementDate}
+                onClick={() => handlePause(confirmPauseTag, lid === 37 ? pauseSettlementDate : undefined)}
+                className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
               >
                 确认暂停
               </button>

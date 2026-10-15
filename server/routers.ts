@@ -154,7 +154,7 @@ function getBeijingCalendarDate(now = new Date()): string {
 
 /**
  * 37号账本的标签级暂停是一次全体操作：利息、标签保证金和所有成员的初始保证金
- * 在同一日期暂停。个人初始保证金暂停仍是独立覆盖层，绝不反向改变标签级配置。
+ * 均以管理员选定的最后结算日冻结。个人初始保证金暂停仍是独立覆盖层，绝不反向改变标签级配置。
  *
  * 用 pauseSource 标记系统写入的记录；恢复标签时只关闭该来源，避免误恢复成员原有的个人暂停。
  */
@@ -170,6 +170,15 @@ export async function setLedger37TagGlobalPause(params: {
   if (!connection) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
   const transaction = connection as any;
   try {
+    if (params.pauseDate) {
+      const today = getBeijingCalendarDate();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(params.pauseDate)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: '结算日格式必须为 YYYY-MM-DD' });
+      }
+      if (params.pauseDate > today) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: '最后结算日不能晚于今天' });
+      }
+    }
     if (ownsTransaction) await transaction.beginTransaction();
     const [configRows] = await transaction.execute(
       `SELECT id FROM ledger_tag_config WHERE ledger_id = ? AND tag_name = ? LIMIT 1 FOR UPDATE`,
@@ -15859,9 +15868,9 @@ ${klinesSummary}
             ledgerId: input.ledgerId,
             tagName: input.tagName,
             actionType: input.pauseDate ? 'interest_paused' : 'interest_resumed',
-            summary: input.pauseDate ? `标签全体暂停，自 ${input.pauseDate} 起生效` : '恢复标签全体暂停',
+            summary: input.pauseDate ? `标签全体暂停，结算截至 ${input.pauseDate}，次日起生效` : '恢复标签全体暂停',
             createdBy: ctx.user.id,
-            afterData: { pauseDate: input.pauseDate, marginPauseDate: input.pauseDate, updatedMemberCount: result.updatedMemberCount },
+            afterData: { pauseDate: input.pauseDate, marginPauseDate: input.pauseDate, settlementCutoffDate: input.pauseDate, updatedMemberCount: result.updatedMemberCount },
           });
           return { success: true, ...result, linkedGlobalPause: true };
         }
@@ -15915,9 +15924,9 @@ ${klinesSummary}
             ledgerId: input.ledgerId,
             tagName: input.tagName,
             actionType: input.marginPauseDate ? 'interest_paused' : 'interest_resumed',
-            summary: input.marginPauseDate ? `标签全体暂停，自 ${input.marginPauseDate} 起生效` : '恢复标签全体暂停',
+            summary: input.marginPauseDate ? `标签全体暂停，结算截至 ${input.marginPauseDate}，次日起生效` : '恢复标签全体暂停',
             createdBy: ctx.user.id,
-            afterData: { pauseDate: input.marginPauseDate, marginPauseDate: input.marginPauseDate, updatedMemberCount: result.updatedMemberCount },
+            afterData: { pauseDate: input.marginPauseDate, marginPauseDate: input.marginPauseDate, settlementCutoffDate: input.marginPauseDate, updatedMemberCount: result.updatedMemberCount },
           });
           return { success: true, ...result, linkedGlobalPause: true };
         }
@@ -16189,6 +16198,18 @@ ${klinesSummary}
       }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
+        // 37号标签暂停后，手工余额只读取“最后结算日”及以前的数据；
+        // 其余账本仍仅由保证金暂停控制，保持原有利息/保证金分层语义。
+        const pauseConfigRows = await db.execute(
+          sql`SELECT pause_date, margin_pause_date
+              FROM ledger_tag_config
+              WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}
+              LIMIT 1`
+        );
+        const pauseConfig = ((pauseConfigRows as any)[0] as any[])[0] ?? null;
+        const settlementCutoffDate = input.ledgerId === LEDGER_37_ID
+          ? (pauseConfig?.margin_pause_date ?? pauseConfig?.pause_date ?? null)
+          : (pauseConfig?.margin_pause_date ?? null);
         const balancesRows = await db.execute(
           sql`SELECT userId, initial_balances FROM ledger_members WHERE ledgerId = ${input.ledgerId}`
         );
@@ -16252,6 +16273,7 @@ ${klinesSummary}
                 AND lr.categoryId = ${Number(category.id)}
                 AND lr.type != 'transfer'
                 AND lr.deleted_at IS NULL
+                AND (${settlementCutoffDate} IS NULL OR lr.recordDate <= ${settlementCutoffDate})
               ORDER BY lr.recordDate DESC, lr.createdAt DESC, lr.id DESC
               LIMIT 1`
         ) : [[]];
@@ -16287,6 +16309,8 @@ ${klinesSummary}
               ? latestBalance.recordDate.slice(0, 10)
               : new Date(latestBalance.recordDate).toISOString().slice(0, 10),
           } : null,
+          // 有暂停时明确返回选定的最后结算日，前端不可把“最后一笔记录日”误当成管理员选择。
+          settlementCutoffDate,
           // 单独返回真实当前持仓值。52可保留 raw/leveraged 浮盈展示，
           // 但绝不能以「初始金额 + 倍率后浮盈」反推实际市值。
           currentHoldingValue: Number.isFinite(currentHoldingValue) ? {
@@ -16393,9 +16417,12 @@ ${klinesSummary}
                 AND lr.id IN (
                   SELECT MAX(lr2.id) FROM ledger_records lr2
                   INNER JOIN ledger_categories lc2 ON lc2.id = lr2.categoryId
+                  LEFT JOIN ledger_tag_config cfg2
+                    ON cfg2.ledger_id = lr2.ledgerId AND BINARY cfg2.tag_name = BINARY lc2.name
                   WHERE lr2.ledgerId = ${input.ledgerId}
                     AND lr2.type != 'transfer'
                     AND lr2.deleted_at IS NULL
+                    AND lr2.recordDate <= COALESCE(cfg2.margin_pause_date, '9999-12-31')
                   GROUP BY lc2.name
                 )`
         );
@@ -16418,6 +16445,7 @@ ${klinesSummary}
             pauseDate: cfg.pause_date ?? null,
             marginPauseDate: cfg.margin_pause_date ?? null,
             targetTotal: (cfg as any).target_total ?? null,
+            settlementCutoffDate: cfg.margin_pause_date ?? null,
             latestBalance: latestMap[cfg.tag_name] ?? null,
           };
         }
