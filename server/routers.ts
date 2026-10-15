@@ -1532,6 +1532,25 @@ function normalizeFunderPrincipalLentOut(requested: unknown, displayConfig: unkn
   return !isSelfFundedFunderOrder(displayConfig) && requested === true;
 }
 
+/**
+ * 担保计算口径独立于“本金状态”。新订单由管理员在
+ * display_config.collateralRiskFormula 中明确选择；没有该字段的历史订单
+ * 继续按原 principal_lent_out 回退，避免历史订单的担保余额发生跳变。
+ */
+function getFunderCollateralRiskFormula(
+  principalLentOut: unknown,
+  displayConfig: unknown,
+): 'principal_coverage' | 'floating_pnl' {
+  const config = parseFunderDisplayConfig(displayConfig);
+  if (!isSelfFundedFunderOrder(config)) {
+    const selected = String(config.collateralRiskFormula || '').trim().toLowerCase();
+    if (selected === 'principal_coverage' || selected === 'floating_pnl') return selected;
+  }
+  return normalizeFunderPrincipalLentOut(principalLentOut, config)
+    ? 'principal_coverage'
+    : 'floating_pnl';
+}
+
 // 默认情况下，参与者与主订单共用同一组担保物。参与者的金额、利率、展示配置、备注等
 // 仍然保留在其独立快照中；只有管理员在参与者视角明确单独保存担保物时，才允许其覆盖
 // 主订单的担保字段。这样主订单日后增加或删除担保物时，历史参与者不会继续展示旧快照。
@@ -21997,15 +22016,19 @@ ${klinesSummary}
               ? principalU
               : (buyValueU > 0 ? buyValueU : principalU);
             const paidInterestU = baseCurrency === 'CNY' ? paidInterest / usdtCnyRate : paidInterest;
-            // 资金属性“融”只影响订单展示，不能隐含本金扣减。
-            // 仅 principal_lent_out 明确开启时，原始融资本金才是待覆盖负债；
-            // 否则37号引用严格按标签净值盈亏、担保物与利息计算。
+            // 本金状态只服务订单标题；担保计算优先采用管理员明确选择的口径。
+            // 没有新口径的历史订单才回退 principal_lent_out 的原有含义。
             const principalLentOut = normalizeFunderPrincipalLentOut(
               o.principal_lent_out === 1 || o.principal_lent_out === true,
               displayConfig,
             );
+            const collateralRiskFormula = getFunderCollateralRiskFormula(
+              o.principal_lent_out === 1 || o.principal_lent_out === true,
+              displayConfig,
+            );
+            const usesPrincipalCoverage = collateralRiskFormula === 'principal_coverage';
             // 普通订单：当前持有资产 − 所选基准 − 待结 + 已结。
-            // 明确借出本金：借出的资金不是可用持仓，待覆盖额必须是
+            // 本金覆盖口径：待覆盖额固定为
             // “−约定融资本金 − 待结 + 已结”。本金固定取计息基数，不能随标的市值变动。
             const linkedHoldingValueU = linked37Collateral?.useFloatingPnl ? linked37Collateral.holdingValue : null;
             const linkedFloatingPnlU = linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null;
@@ -22013,7 +22036,7 @@ ${klinesSummary}
               ? linkedHoldingValueU
               : currentValue;
             const principalLentOutValueU = principalU > 0 ? principalU : collateralGapBaseU;
-            const collateralRequired = principalLentOut
+            const collateralRequired = usesPrincipalCoverage
               ? -principalLentOutValueU - pendingInterestU + paidInterestU
               // 37引用单独使用“盈亏净值”。这等于（账户余额 − 初始金额）×倍数，
               // 绝不能再由实际持仓价值减去52订单的买入/计息基数倒推。
@@ -22033,6 +22056,7 @@ ${klinesSummary}
               principal,
               collateralGapBaseMode,
               collateralGapBaseU,
+              collateralRiskFormula,
               currentPrice,
               currentPriceUpdatedAt: quoteHealth?.lastSuccessAt || null,
               currentPriceSource: quoteHealth?.source || null,

@@ -540,6 +540,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     || displayConfig.selfFundedAsset === true
     || displayConfig.selfFundedAsset === 'true';
   const effectivePrincipalLentOut = formData.principalLentOut && !isSelfFundedAsset;
+  // “本金状态”只决定订单标题；担保缺口另由管理员保存的计算口径决定。
+  // 历史订单未保存新字段时，严格按过去的本金状态回退，避免余额跳变。
+  const explicitCollateralRiskFormula = displayConfig.collateralRiskFormula === 'principal_coverage'
+    || displayConfig.collateralRiskFormula === 'floating_pnl'
+    ? displayConfig.collateralRiskFormula
+    : null;
+  const collateralRiskFormula = isSelfFundedAsset
+    ? 'floating_pnl'
+    : (explicitCollateralRiskFormula ?? (effectivePrincipalLentOut ? 'principal_coverage' : 'floating_pnl'));
+  const usesPrincipalCoverageFormula = collateralRiskFormula === 'principal_coverage';
   const amountDisplayLabel = effectivePrincipalLentOut
     ? '借出本金'
     : isSelfFundedAsset
@@ -1257,10 +1267,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     return ['CNY', 'RMB', '人民币'].includes(currency) ? base / cnyRate : base;
   }, [collateralGapBaseMode, financingAmountUsdt, formData.interestBase, formData.interestBaseCurrency, cnyRate]);
 
-  // 资金属性“融”只用于订单展示；只有明确开启“借出本金”才把本金视为待覆盖负债。
-  // 未开启时，37号引用按净值盈亏、担保物和利息计算，不扣原始融资本金。
-  const previewIsPrincipalLoan = effectivePrincipalLentOut;
-  const previewBorrowedPrincipalU = useMemo(() => {
+  // 本金状态只负责标题；此处严格依照担保缺口所选公式计算。
+  const previewUsesPrincipalCoverage = usesPrincipalCoverageFormula;
+  const previewFinancingPrincipalU = useMemo(() => {
     const principal = parseFloat(formData.interestBase || '0');
     if (Number.isFinite(principal) && principal > 0) {
       const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
@@ -1295,8 +1304,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     return () => clearInterval(timer);
   }, [formData.interestBase, formData.interestRateAnnual, formData.interestStartDate]);
 
-  // 普通订单：当前持有资产 − 基准 − 待结 + 已结 + 担保物。
-  // 明确借出本金：担保物 − 固定融资本金 − 待结 + 已结；借出的币不可再当成持有资产。
+  // 浮盈亏口径：当前持有资产 − 基准 − 待结 + 已结 + 担保物。
+  // 本金覆盖口径：担保物 − 固定融资本金 − 待结 + 已结。
   const previewPendingInterestU = useMemo(() => {
     const currency = String(formData.interestBaseCurrency || 'USDT').trim().toUpperCase();
     return ['CNY', 'RMB', '人民币'].includes(currency) ? previewAccrued / cnyRate : previewAccrued;
@@ -1307,15 +1316,15 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   }, [previewPaidInterest, previewPaidInterestCurrency, cnyRate]);
   const computedCollateralGap = useMemo(() => {
     if (collateralGapBaseValue <= 0) return null;
-    if (previewIsPrincipalLoan) {
-      return computedCollateralValue - previewBorrowedPrincipalU - previewPendingInterestU + previewPaidInterestU;
+    if (previewUsesPrincipalCoverage) {
+      return computedCollateralValue - previewFinancingPrincipalU - previewPendingInterestU + previewPaidInterestU;
     }
     return (previewCurrentHoldingValue ?? 0)
       - collateralGapBaseValue
       - previewPendingInterestU
       + previewPaidInterestU
       + computedCollateralValue;
-  }, [computedCollateralValue, collateralGapBaseValue, previewIsPrincipalLoan, previewBorrowedPrincipalU, previewCurrentHoldingValue, previewPendingInterestU, previewPaidInterestU]);
+  }, [computedCollateralValue, collateralGapBaseValue, previewUsesPrincipalCoverage, previewFinancingPrincipalU, previewCurrentHoldingValue, previewPendingInterestU, previewPaidInterestU]);
 
   // 预览卡片实时待结佣金（受邀订单专用，每秒更新）
   const [previewCommission, setPreviewCommission] = useState<number>(0);
@@ -1342,14 +1351,14 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     const buyPriceNum = parseFloat(formData.buyPrice || '0');
     const buyValue = buyPriceNum * buyQty;
     const currentValue = liveP ? liveP * buyQty : null;
-    if (previewIsPrincipalLoan) {
-      return computedCollateralValue - previewBorrowedPrincipalU - previewPendingInterestU + previewPaidInterestU;
+    if (previewUsesPrincipalCoverage) {
+      return computedCollateralValue - previewFinancingPrincipalU - previewPendingInterestU + previewPaidInterestU;
     }
     const floatPnl = currentValue !== null ? currentValue - buyValue : null;
     return floatPnl !== null
       ? computedCollateralValue + floatPnl - previewAccrued
       : computedCollateralValue - previewAccrued;
-  }, [computedCollateralValue, formLivePrices, formData.coin, formData.buyQuantity, formData.buyPrice, previewAccrued, previewBorrowedPrincipalU, previewIsPrincipalLoan, previewPaidInterestU, previewPendingInterestU]);
+  }, [computedCollateralValue, formLivePrices, formData.coin, formData.buyQuantity, formData.buyPrice, previewAccrued, previewFinancingPrincipalU, previewUsesPrincipalCoverage, previewPaidInterestU, previewPendingInterestU]);
 
   const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
     onSuccess: async (result) => {
@@ -2377,6 +2386,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
         rate_negative: normalizeFunderAnnualRate(formData.interestRateAnnual).startsWith('-'),
         ownerNameDisplay: 'self',
+        // 与本金状态分开保存：该字段优先决定担保缺口公式。
+        collateralRiskFormula,
         financingInputAmount: isOptionOrder ? optionPremiumSummary?.totalInput || '' : amountInputValue || '',
         financingInputCurrency: isOptionOrder ? optionPremiumSummary?.denomination || 'USDT' : formData.amountCurrency || 'USDT',
         linkedManualFields: isOptionOrder ? '' : manualLinkedFieldsRef.current.join(','),
@@ -3004,7 +3015,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 const selectedPrimaryDisplay = explicitPrimaryDisplay ?? legacyPrimaryDisplay;
                 const showPrimaryDisplay = formData.assetType !== 'stock';
                 return (
-                  <div className={`grid gap-3 ${showPrimaryDisplay ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  <div className="space-y-2">
+                    <div className={`grid gap-3 ${showPrimaryDisplay ? 'grid-cols-2' : 'grid-cols-1'}`}>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">资金属性</label>
                       <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
@@ -3060,6 +3072,35 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                             );
                           })}
                         </div>
+                      </div>
+                    )}
+                    </div>
+                    {!isSelfFundedAsset && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">本金状态</label>
+                        <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+                          {([
+                            { value: false, label: '本金在公司' },
+                            { value: true, label: '本金已借出' },
+                          ] as const).map(option => {
+                            const active = effectivePrincipalLentOut === option.value;
+                            return (
+                              <button
+                                key={String(option.value)}
+                                type="button"
+                                onClick={() => setFormData(data => ({ ...data, principalLentOut: option.value }))}
+                                className="flex-1 border-r border-gray-200 px-2 py-1.5 text-xs font-semibold transition-colors last:border-r-0"
+                                style={active
+                                  ? { background: 'linear-gradient(135deg, #D97706, #F59E0B)', color: '#fff', borderColor: 'transparent' }
+                                  : { backgroundColor: '#F3F4F6', color: '#6B7280' }}
+                                aria-pressed={active}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="mt-1 text-[10px] leading-4 text-gray-400">仅改变订单标题，方便客户了解本金去向；担保缺口公式请在“担保缺口”下单独选择。</p>
                       </div>
                     )}
                   </div>
@@ -4464,40 +4505,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         </span>
                       </div>
                     )}
-                    {ledgerId === 52 && previewIsPrincipalLoan && (
+                    {ledgerId === 52 && (
                       <div className="mt-2 border-t border-blue-100 pt-2 text-[11px] text-slate-500">
-                        借出本金订单固定按：担保物市值 − 原始融资本金 − 待结利息 + 已结利息计算；不随标的实时价格重复改变本金。
-                      </div>
-                    )}
-                    {ledgerId === 52 && !previewIsPrincipalLoan && (
-                      <div className="mt-2 border-t border-blue-100 pt-2">
-                        <div className="mb-1.5 text-xs font-medium text-slate-600">担保缺口计算基准</div>
-                        <div className="grid grid-cols-2 gap-2">
-                          {([
-                            { value: 'buy_value', label: '买入价值', detail: '按实际买入总价值' },
-                            { value: 'interest_base', label: '计息基数', detail: '按约定计息基数' },
-                          ] as const).map(option => {
-                            const active = collateralGapBaseMode === option.value;
-                            return (
-                              <button
-                                key={option.value}
-                                type="button"
-                                onClick={() => setDisplayConfig(current => ({ ...current, collateralGapBaseMode: option.value }))}
-                                className={`rounded-lg border px-2.5 py-2 text-left transition-colors ${active ? 'border-blue-500 bg-blue-600 text-white' : 'border-blue-100 bg-white text-slate-600'}`}
-                              >
-                                <span className="block text-xs font-semibold">{option.label}</span>
-                                <span className={`mt-0.5 block text-[10px] ${active ? 'text-blue-100' : 'text-slate-400'}`}>{option.detail}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <div className="mt-1.5 text-[11px] text-slate-500">
-                          当前基准：<span className="font-semibold text-slate-700">{collateralGapBaseMode === 'interest_base' ? '计息基数' : '买入价值'}</span>
-                          {collateralGapBaseValue > 0 && <> · {collateralGapBaseValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</>}
-                        </div>
-                        <div className="mt-0.5 text-[11px] text-slate-500">
-                          预览缺口 = 当前持有资产{previewCurrentHoldingValue !== null ? `（${previewCurrentHoldingValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U）` : '（行情待获取）'} − 基准 + 担保价值；待结、已结利息在订单卡片中继续计算。
-                        </div>
+                        {previewUsesPrincipalCoverage
+                          ? '当前为本金覆盖口径：担保物市值 − 融资本金 − 待结利息 + 已结利息。'
+                          : `当前为浮动盈亏口径：当前持有资产 − ${collateralGapBaseMode === 'interest_base' ? '计息基数' : '买入价值'} − 待结利息 + 已结利息 + 担保价值。`}
                       </div>
                     )}
                 </div>
@@ -4641,6 +4653,50 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       />
                     ))}
                   </div>
+                  {ledgerId === 52 && Boolean(displayConfig.collateral) && !isSelfFundedAsset && (
+                    <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50/60 p-2">
+                      <div className="mb-1 text-[11px] font-medium text-blue-700">担保缺口计算口径</div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {([
+                          { value: 'principal_coverage', label: '担保 − 本金', detail: '担保物减融资本金及利息' },
+                          { value: 'floating_pnl', label: '担保 + 浮盈亏', detail: '担保物加订单浮动盈亏' },
+                        ] as const).map(option => {
+                          const active = collateralRiskFormula === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => setDisplayConfig(current => ({ ...current, collateralRiskFormula: option.value }))}
+                              className={`rounded-md border px-2 py-1.5 text-left transition-colors ${active ? 'border-blue-500 bg-blue-600 text-white' : 'border-blue-100 bg-white text-slate-600'}`}
+                            >
+                              <span className="block text-xs font-semibold">{option.label}</span>
+                              <span className={`mt-0.5 block text-[10px] leading-3 ${active ? 'text-blue-100' : 'text-slate-400'}`}>{option.detail}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {collateralRiskFormula === 'floating_pnl' && (
+                        <div className="mt-2 border-t border-blue-100 pt-2">
+                          <div className="mb-1 text-[11px] font-medium text-slate-600">浮动盈亏基准</div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {([
+                              { value: 'buy_value', label: '买入价值' },
+                              { value: 'interest_base', label: '计息基数' },
+                            ] as const).map(option => (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => setDisplayConfig(current => ({ ...current, collateralGapBaseMode: option.value }))}
+                                className={`rounded-md border px-1.5 py-1 text-[11px] font-medium transition-colors ${collateralGapBaseMode === option.value ? 'border-blue-500 bg-blue-500 text-white' : 'border-blue-100 bg-white text-slate-600'}`}
+                              >
+                                {option.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {displayConfig.periodInterestTotal === true && (
                     <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 p-2">
                       <div className="mb-1.5 text-[11px] font-medium text-indigo-600">卡片显示周期</div>
@@ -4816,13 +4872,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         onToggle={() => setDisplayConfig(c => ({ ...c, tradingFee: !Boolean(c.tradingFee) }))}
                       />
                     )}
-                    <CompactDisplayToggle
-                      label="借出本金"
-                      checked={effectivePrincipalLentOut}
-                      onToggle={() => setFormData(d => ({ ...d, principalLentOut: !d.principalLentOut }))}
-                      tone="orange"
-                      disabled={isSelfFundedAsset}
-                    />
                     {formData.assetType === 'crypto_option' && (
                       <CompactDisplayToggle
                         label="Greeks"
@@ -4832,7 +4881,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       />
                     )}
                   </div>
-                  <p className="mt-1 text-[10px] leading-4 text-gray-400">{isSelfFundedAsset ? '自有资金不形成对外借款，本金去向固定为公司自有资金。' : '融资付息下：关闭表示资金留在公司账户；开启表示本金已实际借出。'}</p>
+                  <p className="mt-1 text-[10px] leading-4 text-gray-400">本金状态已移至页面顶部；担保缺口公式随“担保缺口”展示开关单独设置。</p>
                 </div>
                 <div className="mx-4 h-px bg-gray-100 my-2" />
                 {/* 右栏下半：收益分成区 */}

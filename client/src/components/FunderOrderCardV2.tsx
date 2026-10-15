@@ -26,6 +26,7 @@ import {
   copyFunderNoteText,
   NoteAvatar,
   FunderOrderCard,
+  getFunderCollateralRiskFormulaForDisplay,
   OwnerCollaborationInfoButton,
 } from "./FunderOrderCard";
 
@@ -3520,7 +3521,7 @@ export function FunderLenderCardSilver({
   const accruedInU = interestUnit === '元' ? displayAccrued / effectiveCnyRate : displayAccrued;
   const paidInU = interestUnit === '元' ? displayPaid / effectiveCnyRate : displayPaid;
   const lenderHasExplicitPrincipalLentOut = isPrincipalLentOutForDisplay(order);
-  const lenderPrincipalLentOut = lenderHasExplicitPrincipalLentOut;
+  const lenderUsesPrincipalCoverage = getFunderCollateralRiskFormulaForDisplay(order) === 'principal_coverage';
   // 约定融资本金是固定负债，不能跟随标的实时市值重估。
   const lenderFinancingPrincipalRaw = Number(_effectiveInterestBase || storedAmountUsdt || 0);
   const lenderFinancingPrincipalU = baseCur === 'CNY'
@@ -3532,13 +3533,13 @@ export function FunderLenderCardSilver({
   const collateralGap = _lnIsOpt
     ? (lenderIsSelfFundedOption
       ? optionCurrentValue
-      : (lenderPrincipalLentOut
+      : (lenderUsesPrincipalCoverage
         ? (collateralValue === null ? null : collateralValue - lenderFinancingPrincipalU - accruedInU + paidInU)
         : (optionFloatPnl === null || collateralValue === null
           ? null
           : optionFloatPnl + collateralValue - accruedInU + paidInU)))
     : (collateralValue !== null
-      ? (lenderPrincipalLentOut
+      ? (lenderUsesPrincipalCoverage
         ? collateralValue - lenderFinancingPrincipalU - accruedInU + paidInU
         : (floatPnl !== null
           ? collateralValue + floatPnl - accruedInU + paidInU
@@ -4220,16 +4221,16 @@ export function FunderLenderCardSilver({
                             <>
                               {/* 普通担保：原有三段式 */}
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>{lenderPrincipalLentOut ? '① 借出本金' : isOption && lenderIsSelfFundedOption ? '① 自有资产期权实时价值' : '① 浮动盈亏'}</div>
-                                <div>{lenderPrincipalLentOut
-                                  ? '本金已借出，不作为公司账户持仓；担保缺口需全额覆盖约定融资本金'
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>{lenderUsesPrincipalCoverage ? '① 融资本金' : isOption && lenderIsSelfFundedOption ? '① 自有资产期权实时价值' : '① 浮动盈亏'}</div>
+                                <div>{lenderUsesPrincipalCoverage
+                                  ? '已选择本金覆盖口径，担保缺口需覆盖约定融资本金'
                                   : isOption
                                     ? (lenderIsSelfFundedOption
                                       ? '期权标记价 × 持有张数（不扣自有权利金）'
                                       : '期权当前市值 − 权利金总成本（正数为浮盈，负数为亏损）')
                                     : '= 当前市值 − 计息基数（正数为浮盈，负数为亏损）'}</div>
                                 <div className="mt-1 font-mono">
-                                  {lenderPrincipalLentOut
+                                  {lenderUsesPrincipalCoverage
                                     ? <span style={{ color: '#3B82F6' }}>= −{lenderFinancingPrincipalU.toFixed(2)} U（约定融资本金）</span>
                                     : floatPnl !== null
                                     ? (lenderIsSelfFundedOption
@@ -4269,7 +4270,7 @@ export function FunderLenderCardSilver({
                                   <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敎口</div>
                                   <div>{lenderIsSelfFundedOption
                                     ? '自有资产期权仅采用实时合约价值，不扣权利金、不叠加利息或担保物'
-                                    : lenderPrincipalLentOut
+                                    : lenderUsesPrincipalCoverage
                                       ? '担保物 − 融资本金 − 待结利息(U) + 已结利息(U)（正数充足，负数缺口）'
                                       : '担保物 + 浮动盈亏 − 待结利息(U) + 已结利息(U)（正数充足，负数缺口）'}</div>
                                   {interestUnit === '元' && (
@@ -4281,7 +4282,7 @@ export function FunderLenderCardSilver({
                                       if (lenderIsSelfFundedOption) {
                                         return <span style={{ color: '#3B82F6' }}>= {(optionCurrentValue ?? 0).toFixed(2)}（期权实时价值） = <strong style={{ color: '#DC2626' }}>+{gap.toFixed(2)} U</strong></span>;
                                       }
-                                      if (lenderPrincipalLentOut) {
+                                      if (lenderUsesPrincipalCoverage) {
                                         return <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} − {lenderFinancingPrincipalU.toFixed(2)}（本金） − {accruedInU.toFixed(2)} + {paidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</strong></span>;
                                       }
                                       return floatPnl !== null
