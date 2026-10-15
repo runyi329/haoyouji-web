@@ -708,12 +708,13 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   };
   // 编辑已有订单时加载现有参与者
   const editingOrderId = editingOrder?.id ?? null;
-  const { data: existingParticipantsData, isFetching: existingParticipantsLoading } = trpc.ledger.funderGetOrderParticipants.useQuery(
+  const { data: existingParticipantsData, isLoading: existingParticipantsInitialLoading } = trpc.ledger.funderGetOrderParticipants.useQuery(
     { orderId: editingOrderId ?? 0, ledgerId },
     {
       enabled: !!editingOrderId && ledgerId > 0,
-      staleTime: 0,
-      refetchOnMount: 'always',
+      // 打开编辑页时由 handleOpenEdit 主动失效并读取一次；编辑过程中不因组件重挂载重复刷新。
+      staleTime: 60_000,
+      refetchOnMount: false,
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
     }
@@ -723,7 +724,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const participantsLoadedRef = useRef<string | null>(null);
   React.useEffect(() => {
     const loadKey = editingOrderId ? String(editingOrderId) : null;
-    if (existingParticipantsLoading || !existingParticipantsData || !loadKey || participantsLoadedRef.current === loadKey) return;
+    if (existingParticipantsInitialLoading || !existingParticipantsData || !loadKey || participantsLoadedRef.current === loadKey) return;
     participantsLoadedRef.current = loadKey;
     const loaded = (existingParticipantsData.participants as any[]).map((p: any) => ({
       userId: p.user_id,
@@ -760,10 +761,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       expanded: false,
     }));
     setParticipants(loaded as ParticipantForm[]);
-  }, [existingParticipantsData, editingOrderId, existingParticipantsLoading]);
+  }, [existingParticipantsData, editingOrderId, existingParticipantsInitialLoading]);
   const participantsHydrating = Boolean(editingOrderId)
     && participantsLoadedRef.current !== String(editingOrderId)
-    && existingParticipantsLoading;
+    && existingParticipantsInitialLoading;
 
   // 计息基数是否被用户手动改过：手动后不再自动带入融资金额
   const interestBaseTouchedRef = useRef(false);
@@ -5375,7 +5376,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 </button>
 
                 {participantsSectionExpanded && (<>
-                {participants.length === 0 && !existingParticipantsLoading && (
+                {participants.length === 0 && !participantsHydrating && (
                   <div className="mb-3 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-center text-xs text-gray-400">
                     当前没有拥有者组；添加后，原订单拥有者会自动纳入同一组，并以平级成员方式显示和配置。
                   </div>
