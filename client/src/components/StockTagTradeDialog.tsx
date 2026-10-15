@@ -21,9 +21,10 @@ type Props = {
 };
 
 const formatQuantity = (value: number) => value.toLocaleString("zh-CN", { maximumFractionDigits: 8 });
-const money = (value: number | null | undefined) => {
+const money = (value: number | null | undefined, currency: 'CNY' | 'USD' = 'CNY') => {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
-  return `¥${value.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const prefix = currency === 'USD' ? 'US$' : '¥';
+  return `${prefix}${value.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 function localInputTime(now = new Date()) {
@@ -40,6 +41,7 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, onOp
   const utils = trpc.useUtils();
   const [symbolQuery, setSymbolQuery] = useState("");
   const [selectedStock, setSelectedStock] = useState<any | null>(null);
+  const [stockMarket, setStockMarket] = useState<'A' | 'US'>('A');
   const [quantity, setQuantity] = useState("");
   const [executionPrice, setExecutionPrice] = useState("");
   const [actualTradedAt, setActualTradedAt] = useState(localInputTime());
@@ -64,15 +66,16 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, onOp
           quantity: Number(lot.quantity || 0),
           unitCost: Number(lot.unitCost || 0),
           marketPrice: position.marketPrice === null || position.marketPrice === undefined ? null : Number(position.marketPrice),
+          currency: String(position.currency || 'CNY').toUpperCase() === 'USD' ? 'USD' as const : 'CNY' as const,
         };
       })
     )).filter((lot: any) => lot.id > 0 && lot.quantity > 0);
   }, [portfolioQuery.data]);
 
   const selectedSaleLot = saleLots.find((lot: any) => lot.id === selectedLotId) || null;
-  const shouldSearchStock = open && type === "buy" && symbolQuery.trim().length >= 2 && !selectedStock;
-  const suggestionsQuery = trpc.searchManualAshareStocks.useQuery(
-    { query: symbolQuery.trim() },
+  const shouldSearchStock = open && type === "buy" && symbolQuery.trim().length >= (stockMarket === 'US' ? 1 : 2) && !selectedStock;
+  const suggestionsQuery = trpc.searchManualStocks.useQuery(
+    { query: symbolQuery.trim() || 'A', market: stockMarket },
     { enabled: shouldSearchStock, staleTime: 3_000 },
   );
   const suggestions = (suggestionsQuery.data as any)?.results || [];
@@ -80,6 +83,7 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, onOp
   const resetForm = () => {
     setSymbolQuery("");
     setSelectedStock(null);
+    setStockMarket('A');
     setQuantity("");
     setExecutionPrice("");
     setActualTradedAt(localInputTime());
@@ -165,14 +169,18 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, onOp
         <div className="space-y-4 pt-1">
           {type === "buy" ? (
             <>
+              <div className="grid grid-cols-2 overflow-hidden rounded-md border border-[#D8E0E8] text-xs font-medium">
+                <button type="button" onClick={() => { setStockMarket('A'); setSelectedStock(null); setSymbolQuery(''); }} className={`px-3 py-2 ${stockMarket === 'A' ? 'bg-[#C62828] text-white' : 'bg-white text-gray-500'}`}>A 股 · 人民币</button>
+                <button type="button" onClick={() => { setStockMarket('US'); setSelectedStock(null); setSymbolQuery(''); }} className={`border-l border-[#D8E0E8] px-3 py-2 ${stockMarket === 'US' ? 'bg-[#1565C0] text-white' : 'bg-white text-gray-500'}`}>美股 · 美元</button>
+              </div>
               <div>
-                <Label>股票代码、名称或拼音</Label>
+                <Label>{stockMarket === 'US' ? '美股代码或名称' : '股票代码、名称或拼音'}</Label>
                 <div className="relative mt-1">
-                  <Input value={selectedStock ? `${selectedStock.name} ${selectedStock.symbol}` : symbolQuery} onChange={(event) => { setSelectedStock(null); setSymbolQuery(event.target.value); }} placeholder="如 600519、贵州茅台或 gzm" />
+                  <Input value={selectedStock ? `${selectedStock.name} ${selectedStock.symbol}` : symbolQuery} onChange={(event) => { setSelectedStock(null); setSymbolQuery(event.target.value); }} placeholder={stockMarket === 'US' ? '如 CRCL、Circle、AAPL 或 BRK.B' : '如 600519、贵州茅台或 gzm'} autoCapitalize={stockMarket === 'US' ? 'characters' : 'none'} />
                   {suggestionsQuery.isFetching && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-gray-400" />}
                 </div>
-                {!selectedStock && suggestions.length > 0 && <div className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-gray-200 bg-white">{suggestions.map((stock: any) => <button key={stock.symbol} type="button" onClick={() => { setSelectedStock(stock); setSymbolQuery(""); if (stock.latestPrice) setExecutionPrice(String(stock.latestPrice)); }} className="w-full border-b px-3 py-2.5 text-left last:border-0 hover:bg-[#F4F8FF]"><span className="text-sm font-medium">{stock.name}</span><span className="ml-2 text-xs text-gray-500">{stock.symbol}</span>{stock.latestPrice ? <span className="float-right text-xs text-[#1565C0]">参考 {money(stock.latestPrice)}</span> : null}</button>)}</div>}
-                {selectedStock && <div className="mt-1 text-[11px] text-[#1565C0]">已核验：{selectedStock.name} · {selectedStock.symbol}；登记时参考价由服务器留档。</div>}
+                {!selectedStock && suggestions.length > 0 && <div className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-gray-200 bg-white">{suggestions.map((stock: any) => <button key={stock.symbol} type="button" onClick={() => { setSelectedStock(stock); setSymbolQuery(""); if (stock.latestPrice) setExecutionPrice(String(stock.latestPrice)); }} className="w-full border-b px-3 py-2.5 text-left last:border-0 hover:bg-[#F4F8FF]"><span className="text-sm font-medium">{stock.name}</span><span className="ml-2 text-xs text-gray-500">{stock.symbol}</span>{stock.latestPrice ? <span className="float-right text-xs text-[#1565C0]">参考 {money(stock.latestPrice, stock.currency === 'USD' ? 'USD' : 'CNY')}</span> : null}</button>)}</div>}
+                {selectedStock && <div className="mt-1 text-[11px] text-[#1565C0]">已核验：{selectedStock.name} · {selectedStock.symbol} · {selectedStock.currency === 'USD' ? '美元计价' : '人民币计价'}；登记时参考价由服务器留档。</div>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>实际买入价格</Label><Input inputMode="decimal" value={executionPrice} onChange={(event) => setExecutionPrice(event.target.value)} placeholder="0.00" className="mt-1" /></div>
@@ -190,7 +198,7 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, onOp
                 </select>
               </div>
               {portfolioQuery.isLoading && <div className="text-xs text-gray-400">正在载入可卖持仓编号…</div>}
-              {selectedSaleLot && <div className="rounded-lg border border-[#F1D8D8] bg-[#FFF8F8] px-3 py-2.5 text-xs leading-5 text-gray-600"><div className="font-semibold text-[#333333]">#{selectedSaleLot.positionNumber} · {selectedSaleLot.stockName} {selectedSaleLot.symbol}</div><div className="mt-1 flex justify-between gap-3"><span>买入价 {money(selectedSaleLot.unitCost)}</span><span>当前价 {money(selectedSaleLot.marketPrice)}</span></div><div className="mt-1 font-medium text-[#C62828]">本次将卖出全部剩余 {formatQuantity(selectedSaleLot.quantity)} 股</div></div>}
+              {selectedSaleLot && <div className="rounded-lg border border-[#F1D8D8] bg-[#FFF8F8] px-3 py-2.5 text-xs leading-5 text-gray-600"><div className="font-semibold text-[#333333]">#{selectedSaleLot.positionNumber} · {selectedSaleLot.stockName} {selectedSaleLot.symbol}</div><div className="mt-1 flex justify-between gap-3"><span>买入价 {money(selectedSaleLot.unitCost, selectedSaleLot.currency)}</span><span>当前价 {money(selectedSaleLot.marketPrice, selectedSaleLot.currency)}</span></div><div className="mt-1 font-medium text-[#C62828]">本次将卖出全部剩余 {formatQuantity(selectedSaleLot.quantity)} 股</div></div>}
               <div><Label>实际卖出价格</Label><Input inputMode="decimal" value={executionPrice} onChange={(event) => setExecutionPrice(event.target.value)} placeholder="0.00" className="mt-1" /></div>
               <div className="rounded-lg bg-[#F5F7FA] px-3 py-2 text-[11px] leading-5 text-gray-600">卖出只能结清一个已选持仓编号的全部剩余股数，不能减仓，也不会跨编号 FIFO 扣仓。</div>
             </>

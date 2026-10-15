@@ -1,5 +1,5 @@
 import { getDbConnection, getDbTransactionConnection } from "./db";
-import { fetchEndOfDayStockCloseSnapshots, fetchIntradayStockQuotes, searchManualAshareStocks } from "./price-scanner";
+import { fetchEndOfDayStockCloseSnapshots, fetchIntradayStockQuotes, searchManualStocks } from "./price-scanner";
 
 export type StockEventType = "buy" | "add" | "reduce" | "sell" | "note";
 export type AccountingMode = "manual_balance" | "stock_portfolio";
@@ -36,10 +36,18 @@ function beijingDate(): string {
 
 function normalizeSymbol(value: unknown): string {
   const raw = String(value || "").trim().toUpperCase();
-  if (!/^\d{6}\.(SH|SZ|BJ)$/.test(raw)) {
-    throw new Error("仅支持已核验的 A 股六码代码");
+  if (!/^\d{6}\.(SH|SZ|BJ)$/.test(raw) && !/^[A-Z][A-Z0-9.\-]{0,14}$/.test(raw)) {
+    throw new Error("仅支持已核验的 A 股代码或美股 ticker");
   }
   return raw;
+}
+
+function stockCurrency(symbol: string): 'CNY' | 'USD' {
+  return /^\d{6}\.(SH|SZ|BJ)$/.test(symbol) ? 'CNY' : 'USD';
+}
+
+function stockMarket(symbol: string): 'A' | 'US' {
+  return stockCurrency(symbol) === 'CNY' ? 'A' : 'US';
 }
 
 function toIso(value: unknown): string {
@@ -412,7 +420,7 @@ async function getLatestQuotes(categoryId: number, symbols: string[]): Promise<R
   return result;
 }
 
-/** 只返回当日盘中报价；跨日残留不能覆盖上一交易日的正式盘尾价。 */
+/** 返回各股票最后一笔盘中报价；美股按纽约交易日而非北京时间判断跨日。 */
 async function getLatestIntradayQuotes(categoryId: number, symbols: string[]): Promise<Record<string, StoredQuote>> {
   if (symbols.length === 0) return {};
   const conn = await getDbConnection();
@@ -422,8 +430,8 @@ async function getLatestIntradayQuotes(categoryId: number, symbols: string[]): P
   const [rows] = await (conn as any).execute(
     `SELECT symbol, price, price_date, captured_at
      FROM ledger_stock_intraday_quotes
-     WHERE category_id = ? AND price_date = ? AND symbol IN (${placeholders})`,
-    [categoryId, beijingDate(), ...unique],
+     WHERE category_id = ? AND symbol IN (${placeholders})`,
+    [categoryId, ...unique],
   );
   const result: Record<string, StoredQuote> = {};
   for (const row of rows as any[]) {
@@ -568,6 +576,32 @@ async function getLatestDailySnapshots(categoryId: number) {
   }));
 }
 
+type CurrencyPortfolioSummary = {
+  currency: 'CNY' | 'USD';
+  costValue: number;
+  marketValue: number | null;
+  floatingPnl: number | null;
+  positionCount: number;
+  unpricedPositionCount: number;
+};
+
+/** 混合市场的金额只在同币种内汇总，禁止把美元直接与人民币相加。 */
+function summarizePositionsByCurrency(positions: Array<{ currency?: string; costValue: number; marketValue: number | null; floatingPnl: number | null }>): CurrencyPortfolioSummary[] {
+  return (['CNY', 'USD'] as const).flatMap((currency) => {
+    const rows = positions.filter((position) => (position.currency || 'CNY') === currency);
+    if (rows.length === 0) return [];
+    const unpricedPositionCount = rows.filter((position) => position.marketValue === null).length;
+    return [{
+      currency,
+      costValue: rows.reduce((total, position) => total + position.costValue, 0),
+      marketValue: unpricedPositionCount > 0 ? null : rows.reduce((total, position) => total + (position.marketValue ?? 0), 0),
+      floatingPnl: unpricedPositionCount > 0 ? null : rows.reduce((total, position) => total + (position.floatingPnl ?? 0), 0),
+      positionCount: rows.length,
+      unpricedPositionCount,
+    }];
+  });
+}
+
 async function buildPortfolio(categoryId: number) {
   const allLots = await getActiveLots(categoryId);
   const symbols = allLots.map((lot) => lot.symbol);
@@ -583,6 +617,8 @@ async function buildPortfolio(categoryId: number) {
     const current = positionMap.get(lot.symbol) || {
       symbol: lot.symbol,
       stockName: lot.stockName,
+      currency: stockCurrency(lot.symbol),
+      market: stockMarket(lot.symbol),
       quantity: 0,
       costValue: 0,
       lots: [],
@@ -630,11 +666,13 @@ async function buildPortfolio(categoryId: number) {
     }));
 
   const realizedPnl = await getRealizedPnl(categoryId);
-  const costValue = positions.reduce((total, row) => total + row.costValue, 0);
-  const pricedPositions = positions.filter((row) => row.marketValue !== null);
-  const hasUnpricedPositions = positions.length !== pricedPositions.length;
-  const marketValue = positions.reduce((total, row) => total + (row.marketValue ?? 0), 0);
-  const floatingPnl = pricedPositions.reduce((total, row) => total + (row.floatingPnl ?? 0), 0);
+  const currencySummaries = summarizePositionsByCurrency(positions);
+  const isMixedCurrency = currencySummaries.length > 1;
+  const onlyCurrencySummary = currencySummaries[0];
+  const costValue = isMixedCurrency ? null : (onlyCurrencySummary?.costValue ?? 0);
+  const marketValue = isMixedCurrency ? null : (onlyCurrencySummary?.marketValue ?? 0);
+  const floatingPnl = isMixedCurrency ? null : (onlyCurrencySummary?.floatingPnl ?? 0);
+  const hasUnpricedPositions = currencySummaries.some((summary) => summary.unpricedPositionCount > 0);
   const dailySnapshots = await getLatestDailySnapshots(categoryId);
   const latestSnapshot = dailySnapshots[0] || null;
   const priorSnapshot = dailySnapshots[1] || null;
@@ -651,15 +689,17 @@ async function buildPortfolio(categoryId: number) {
     closedLots,
     summary: {
       // Never display or persist a partial portfolio aggregate as though missing prices were zero.
-      marketValue: hasUnpricedPositions ? null : marketValue,
+      marketValue: hasUnpricedPositions || isMixedCurrency ? null : marketValue,
       costValue,
-      floatingPnl: hasUnpricedPositions ? null : floatingPnl,
-      realizedPnl,
-      totalPnl: hasUnpricedPositions ? null : floatingPnl + realizedPnl,
+      floatingPnl: hasUnpricedPositions || isMixedCurrency ? null : floatingPnl,
+      realizedPnl: isMixedCurrency ? null : realizedPnl,
+      totalPnl: hasUnpricedPositions || isMixedCurrency || floatingPnl === null ? null : floatingPnl + realizedPnl,
       positionCount: positions.length,
-      unpricedPositionCount: positions.length - pricedPositions.length,
-      dailyChange,
-      dailyChangePercent,
+      unpricedPositionCount: currencySummaries.reduce((total, summary) => total + summary.unpricedPositionCount, 0),
+      currencySummaries,
+      isMixedCurrency,
+      dailyChange: isMixedCurrency ? null : dailyChange,
+      dailyChangePercent: isMixedCurrency ? null : dailyChangePercent,
       latestSnapshot,
       priorSnapshot,
     },
@@ -807,6 +847,8 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     const current = grouped.get(item.symbol) || {
       symbol: item.symbol,
       stockName: item.stockName,
+      currency: stockCurrency(item.symbol),
+      market: stockMarket(item.symbol),
       quantity: 0,
       costValue: 0,
       lots: [],
@@ -846,6 +888,9 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       hasPrice: marketPrice !== null,
     };
   });
+  const currencySummaries = summarizePositionsByCurrency(positions);
+  const isMixedCurrency = currencySummaries.length > 1;
+  const onlyCurrencySummary = currencySummaries[0];
   const closedLots = visibleParticipations
     .filter((item) => item.remainingQuantity <= EPSILON)
     .map((item) => ({
@@ -857,11 +902,11 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       unitCost: item.entryPrice,
       realizedPnl: item.realizedPnl,
     }));
-  const costValue = positions.reduce((total, position) => total + position.costValue, 0);
+  const costValue = isMixedCurrency ? null : (onlyCurrencySummary?.costValue ?? 0);
   const realizedPnl = visibleParticipations.reduce((total, item) => total + item.realizedPnl, 0);
-  const allPositionsPriced = positions.every((position) => position.marketValue !== null);
-  const marketValue = allPositionsPriced ? positions.reduce((total, position) => total + (position.marketValue ?? 0), 0) : null;
-  const floatingPnl = allPositionsPriced ? positions.reduce((total, position) => total + (position.floatingPnl ?? 0), 0) : null;
+  const allPositionsPriced = currencySummaries.every((summary) => summary.unpricedPositionCount === 0);
+  const marketValue = isMixedCurrency ? null : (onlyCurrencySummary?.marketValue ?? 0);
+  const floatingPnl = isMixedCurrency ? null : (onlyCurrencySummary?.floatingPnl ?? 0);
   const quoteDates = positions.map((position) => position.quoteDate).filter((date): date is string => Boolean(date));
   const valuationDate = allPositionsPriced && quoteDates.length === positions.length && new Set(quoteDates).size === 1
     ? quoteDates[0]
@@ -884,7 +929,7 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     bySymbol.set(String(row.symbol), numberValue(row.price));
     priceByDate.set(date, bySymbol);
   }
-  const dailySnapshots = Array.from(priceByDate.entries()).map(([snapshotDate, priceBySymbol]) => {
+  const dailySnapshots = isMixedCurrency ? [] : Array.from(priceByDate.entries()).map(([snapshotDate, priceBySymbol]) => {
     const effective = activeParticipations.filter((item) => (
       item.startDate <= snapshotDate && (!item.pauseDate || snapshotDate <= item.pauseDate)
     ));
@@ -924,12 +969,14 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       marketValue,
       costValue,
       floatingPnl,
-      realizedPnl,
-      totalPnl: floatingPnl === null ? (realizedPnl || null) : floatingPnl + realizedPnl,
+      realizedPnl: isMixedCurrency ? null : realizedPnl,
+      totalPnl: isMixedCurrency || floatingPnl === null ? null : floatingPnl + realizedPnl,
       positionCount: positions.length,
-      unpricedPositionCount: positions.filter((position) => position.marketValue === null).length,
-      dailyChange,
-      dailyChangePercent,
+      unpricedPositionCount: currencySummaries.reduce((total, summary) => total + summary.unpricedPositionCount, 0),
+      currencySummaries,
+      isMixedCurrency,
+      dailyChange: isMixedCurrency ? null : dailyChange,
+      dailyChangePercent: isMixedCurrency ? null : dailyChangePercent,
       latestSnapshot,
       priorSnapshot,
       valuationDate,
@@ -984,15 +1031,18 @@ export async function getMyStockTagOverview(input: { ledgerId: number; userId: n
     const valuationDate = portfolio.summary.valuationDate;
     const valuationPnl = portfolio.summary.totalPnl;
     const valuationMarketValue = portfolio.summary.marketValue;
+    const valuationCostValue = portfolio.summary.costValue;
+    const valuationFloatingPnl = portfolio.summary.floatingPnl;
+    const valuationRealizedPnl = portfolio.summary.realizedPnl;
     // 历史日历只认15:05盘尾；但当该日期的某个新批次尚未被盘尾任务覆盖时，
     // 使用同一批次已落库的审计参考价补齐“当前累计回报”。不覆盖任何已有有效盘尾。
-    if (valuationDate && valuationPnl !== null && valuationMarketValue !== null) {
+    if (valuationDate && valuationPnl !== null && valuationMarketValue !== null && valuationCostValue !== null && valuationFloatingPnl !== null && valuationRealizedPnl !== null) {
       const valuationSnapshot = {
         snapshotDate: valuationDate,
         marketValue: valuationMarketValue,
-        costValue: portfolio.summary.costValue,
-        floatingPnl: portfolio.summary.floatingPnl,
-        realizedPnl: portfolio.summary.realizedPnl,
+        costValue: valuationCostValue,
+        floatingPnl: valuationFloatingPnl,
+        realizedPnl: valuationRealizedPnl,
         totalPnl: valuationPnl,
         positionCount: portfolio.summary.positionCount,
       };
@@ -1063,11 +1113,10 @@ export async function getStockTagDailySnapshots(input: {
 
 async function verifyStockForTrade(symbol: string) {
   const normalized = normalizeSymbol(symbol);
-  const code = normalized.slice(0, 6);
-  const results = await searchManualAshareStocks(code);
+  const results = await searchManualStocks(normalized, stockMarket(normalized));
   const matched = results.find((row) => row.symbol === normalized);
   if (!matched) {
-    throw new Error("暂时无法核验该股票代码，请稍后重试");
+    throw new Error("暂时无法核验该股票代码或美股 ticker，请稍后重试");
   }
   if (!matched.latestPrice || matched.latestPrice <= 0 || !matched.latestPriceUpdatedAt) {
     throw new Error("暂时无法取得登记时参考价，请稍后重试后再登记");
@@ -1420,15 +1469,13 @@ export async function refreshLedgerStockTagCloseSnapshots(): Promise<{ categorie
     if (allSymbols.size === 0) return { categories: categoryIds.length, symbols: 0, updated: 0 };
 
     const quotes = await fetchEndOfDayStockCloseSnapshots(Array.from(allSymbols));
-    const date = beijingDate();
     let updated = 0;
     for (const [categoryId, symbols] of Array.from(symbolsByCategory.entries())) {
-      const freshSymbols = new Set<string>();
+      const pricedDates = new Map<string, string>();
       for (const symbol of symbols) {
         const quote = quotes[symbol];
         if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) continue;
-        // A prior trading day's fallback is still useful as a last displayed reference,
-        // but it must not manufacture a new daily valuation for a holiday/failure date.
+        // 报价源返回的交易日同时适用于 A 股和美股；禁止用北京时间硬改美股交易日。
         const priceDate = quote.priceDate || "";
         if (!priceDate) continue;
         await (conn as any).execute(
@@ -1438,16 +1485,20 @@ export async function refreshLedgerStockTagCloseSnapshots(): Promise<{ categorie
            ON DUPLICATE KEY UPDATE price = VALUES(price), captured_at = NOW()`,
           [STOCK_LEDGER_ID, categoryId, symbol, quote.price, priceDate],
         );
-        if (priceDate === date) freshSymbols.add(symbol);
+        pricedDates.set(symbol, priceDate);
         updated += 1;
       }
-      // Write a category snapshot only when every active symbol has an actual close for today.
-      // This keeps weekends, exchange holidays, and incomplete market responses from becoming
-      // fictitious snapshot dates while retaining the latest valid quote already on record.
-      if (symbols.some((symbol) => !freshSymbols.has(symbol))) continue;
+      const currencies = new Set(symbols.map(stockCurrency));
+      // 同标签混合人民币与美元时，逐笔估值仍实时更新，但不能将两种币直接写进一份金额快照。
+      // 待后续引入带汇率快照的多币种日结表前，保留各自原币种价格而不生成误导性总额。
+      if (currencies.size > 1) continue;
+      const snapshotDates = symbols.map((symbol) => pricedDates.get(symbol) || '');
+      // 仅当该市场的全部持仓都拿到同一真实交易日的收盘价时才固化日结。
+      if (snapshotDates.some((value) => !value) || new Set(snapshotDates).size !== 1) continue;
+      const snapshotDate = snapshotDates[0];
       const portfolio = await buildPortfolio(categoryId);
       // A failed quote leaves the previous valid quote in the calculation; no zero-value snapshot is written.
-      if (portfolio.summary.unpricedPositionCount > 0) continue;
+      if (portfolio.summary.unpricedPositionCount > 0 || portfolio.summary.marketValue === null || portfolio.summary.costValue === null || portfolio.summary.floatingPnl === null || portfolio.summary.realizedPnl === null || portfolio.summary.totalPnl === null) continue;
       await (conn as any).execute(
         `INSERT INTO ledger_stock_daily_snapshots
          (ledger_id, category_id, snapshot_date, market_value, cost_value, floating_pnl, realized_pnl, total_pnl, position_count, captured_at)
@@ -1459,7 +1510,7 @@ export async function refreshLedgerStockTagCloseSnapshots(): Promise<{ categorie
         [
           STOCK_LEDGER_ID,
           categoryId,
-          date,
+          snapshotDate,
           portfolio.summary.marketValue,
           portfolio.summary.costValue,
           portfolio.summary.floatingPnl,
@@ -1469,7 +1520,7 @@ export async function refreshLedgerStockTagCloseSnapshots(): Promise<{ categorie
         ],
       );
     }
-    console.log(`[37股票盘尾] ${date}：标签 ${categoryIds.length} 个，跟踪 ${allSymbols.size} 只，更新 ${updated} 条行情`);
+    console.log(`[37股票盘尾] ${beijingDate()}：标签 ${categoryIds.length} 个，跟踪 ${allSymbols.size} 只，更新 ${updated} 条行情`);
     return { categories: categoryIds.length, symbols: allSymbols.size, updated };
   } finally {
     closeRefreshInProgress = false;
@@ -1513,8 +1564,8 @@ export async function refreshLedgerStockTagIntradaySnapshots(): Promise<{ catego
         const quote = quotes[symbol];
         if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) continue;
         const priceDate = quote.priceDate || date;
-        // 节假日或上游返回前一交易日价格时，不能伪装成本交易日的实时行情。
-        if (priceDate !== date) continue;
+        // A 股仍按北京时间当日过滤；美股报价日期以交易所返回的纽约交易日为准。
+        if (stockCurrency(symbol) === 'CNY' && priceDate !== date) continue;
         await (conn as any).execute(
           `INSERT INTO ledger_stock_intraday_quotes
            (ledger_id, category_id, symbol, price, price_date, captured_at)

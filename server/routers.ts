@@ -32469,6 +32469,15 @@ insights 数组每项包含：
       return { quotes };
     }),
 
+  // 37号股票标签的统一检索：A股可按六码/名称/拼音，美股可按代码或名称模糊核验并返回美元报价。
+  searchManualStocks: protectedProcedure
+    .input(z.object({ query: z.string().trim().min(1).max(40), market: z.enum(['A', 'US']).default('A') }))
+    .query(async ({ input }) => {
+      const { searchManualStocks } = await import('./price-scanner');
+      const results = await searchManualStocks(input.query, input.market);
+      return { results };
+    }),
+
   // 手工股票组合的 A 股校验：按六码、中文名或拼音简称查询；价格只在选中股票时返回一次。
   searchManualAshareStocks: protectedProcedure
     .input(z.object({ query: z.string().trim().min(2).max(40) }))

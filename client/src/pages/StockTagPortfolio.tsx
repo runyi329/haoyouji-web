@@ -37,14 +37,18 @@ const eventTone: Record<EventType, string> = {
   note: "bg-gray-100 text-gray-600",
 };
 
-const money = (value: number | null | undefined, digits = 2) => {
+type StockCurrency = 'CNY' | 'USD';
+
+const normalizeCurrency = (value: unknown): StockCurrency => String(value || '').toUpperCase() === 'USD' ? 'USD' : 'CNY';
+
+const money = (value: number | null | undefined, digits = 2, currency: StockCurrency = 'CNY') => {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
-  return `¥${value.toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+  return `${currency === 'USD' ? 'US$' : '¥'}${value.toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 };
 
-const signedMoney = (value: number | null | undefined) => {
+const signedMoney = (value: number | null | undefined, currency: StockCurrency = 'CNY') => {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
-  return `${value > 0 ? "+" : value < 0 ? "−" : ""}${money(Math.abs(value))}`;
+  return `${value > 0 ? "+" : value < 0 ? "−" : ""}${money(Math.abs(value), 2, currency)}`;
 };
 
 const formatQuantity = (value: number) => value.toLocaleString("zh-CN", { maximumFractionDigits: 8 });
@@ -138,9 +142,13 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     .filter((value: string) => value.length > 0)
     .sort()
     .at(-1) || null;
+  const tagCurrencies = Array.from(new Set<StockCurrency>(tagPositions.map((position: any) => normalizeCurrency(position?.currency))));
+  const hasUsStocks = tagCurrencies.includes('USD');
+  const hasMixedCurrencies = tagCurrencies.length > 1;
+  const portfolioCurrency: StockCurrency = tagCurrencies.length === 1 ? tagCurrencies[0] : 'CNY';
   const snapshotDate = settledSnapshot?.snapshotDate ? String(settledSnapshot.snapshotDate) : null;
-  const snapshotStamp = snapshotDate && snapshotDate === latestQuoteDate
-    ? `${snapshotDate} · 15:05 盘尾快照`
+  const snapshotStamp = !hasMixedCurrencies && snapshotDate && snapshotDate === latestQuoteDate
+    ? `${snapshotDate} · ${hasUsStocks ? '美股盘后快照' : '15:05 盘尾快照'}`
     : null;
 
   const [showHistory, setShowHistory] = useState(false);
@@ -153,6 +161,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   const [eventType, setEventType] = useState<EventType>("buy");
   const [symbolQuery, setSymbolQuery] = useState("");
   const [selectedStock, setSelectedStock] = useState<any | null>(null);
+  const [correctionStockMarket, setCorrectionStockMarket] = useState<'A' | 'US'>('A');
   const [quantity, setQuantity] = useState("");
   const [executionPrice, setExecutionPrice] = useState("");
   const [actualTradedAt, setActualTradedAt] = useState(localInputTime());
@@ -165,9 +174,9 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   const [adminHoldingPerspective, setAdminHoldingPerspective] = useState<"position" | "member">("position");
   const [expandedAdminMemberId, setExpandedAdminMemberId] = useState<number | null>(null);
 
-  const shouldSearchStock = showActionDialog && !!correctingEvent && eventType !== "note" && symbolQuery.trim().length >= 2 && !selectedStock;
-  const { data: suggestionsData, isFetching: isSearchingStock } = trpc.searchManualAshareStocks.useQuery(
-    { query: symbolQuery.trim() },
+  const shouldSearchStock = showActionDialog && !!correctingEvent && eventType !== "note" && symbolQuery.trim().length >= (correctionStockMarket === 'US' ? 1 : 2) && !selectedStock;
+  const { data: suggestionsData, isFetching: isSearchingStock } = trpc.searchManualStocks.useQuery(
+    { query: symbolQuery.trim() || 'A', market: correctionStockMarket },
     { enabled: shouldSearchStock, staleTime: 3_000 },
   );
   const suggestions = (suggestionsData as any)?.results || [];
@@ -211,6 +220,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     setEventType("buy");
     setSymbolQuery("");
     setSelectedStock(null);
+    setCorrectionStockMarket('A');
     setQuantity("");
     setExecutionPrice("");
     setActualTradedAt(localInputTime());
@@ -228,6 +238,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     setCorrectingEvent(event);
     setEventType(event.type as EventType);
     setSelectedStock(event.symbol ? { symbol: event.symbol, name: event.stockName || event.symbol } : null);
+    setCorrectionStockMarket(/^\d{6}\.(SH|SZ|BJ)$/.test(String(event.symbol || '')) ? 'A' : 'US');
     setSymbolQuery("");
     setQuantity(event.quantity === null ? "" : String(event.quantity));
     setExecutionPrice(event.executionPrice === null ? "" : String(event.executionPrice));
@@ -289,6 +300,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   };
 
   const summary = (data as any)?.summary;
+  const currencySummaryRows = Array.isArray(summary?.currencySummaries) ? summary.currencySummaries as any[] : [];
+  const hasMixedViewCurrencies = Boolean(summary?.isMixedCurrency) || currencySummaryRows.length > 1;
   // 优先使用两个盘尾快照的累计盈亏差额。这样本地热预览即使仍在读取尚未部署的
   // 服务端摘要字段，也不会把当天新增的持仓本金误显示为当日盈亏。
   const dailyPnlFromSnapshots = (() => {
@@ -350,6 +363,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   }
   // 成员只能查看标签有哪些当前股票和各批次成交信息；标签总市值、总股数、成本及总盈亏不对成员公开。
   const allTagHoldingLots = tagPositions.flatMap((position: any) => (position.lots || []).map((lot: any) => {
+    const currency = normalizeCurrency(position.currency);
     const myHolding = myHoldingByLotId.get(Number(lot.id));
     const marketPrice = position.marketPrice;
     const myMarketValue = !myHolding || marketPrice === null || marketPrice === undefined ? null : myHolding.quantity * Number(marketPrice);
@@ -359,6 +373,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       position,
       symbol: position.symbol,
       stockName: position.stockName,
+      currency,
       marketPrice,
       quoteDate: position.quoteDate,
       quoteUpdatedAt: position.quoteUpdatedAt,
@@ -459,7 +474,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       }),
     };
   })() : null;
-  const holdingSummary = participantView ? memberHoldingSummary : accountHoldingSummary;
+  // 混合人民币/美元的标签只展示分币种汇总与逐笔数据，绝不构造一个错误的“总额”。
+  const holdingSummary = hasMixedViewCurrencies ? null : (participantView ? memberHoldingSummary : accountHoldingSummary);
   const holdingSummaryPnlLabel = participantView ? "总浮动盈亏" : "账户浮动盈亏";
   const holdingSummaryCostLabel = participantView ? "参与买入市值" : "账户持仓成本";
   const allocationMembersById = new Map<number, any>(
@@ -490,6 +506,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
           positionNumber: Number(holding.positionNumber || 0),
           stockName: String(holding.stockName || lot.stockName || "股票"),
           symbol: String(holding.symbol || lot.symbol || ""),
+          currency: normalizeCurrency(holding.currency),
           quantity,
           entryPrice,
           openingValue: entryPrice * quantity,
@@ -525,18 +542,22 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       : adminMemberPositionGroups.filter((group) => group.userId === expandedAdminMemberId);
     return <div className="space-y-3 px-3 py-3">{visibleMemberGroups.map((group) => {
       const isExpanded = expandedAdminMemberId === group.userId;
+      const groupCurrencies = new Set(group.positions.map((position: any) => normalizeCurrency(position.currency)));
+      const groupHasMixedCurrencies = groupCurrencies.size > 1;
+      const groupCurrency: StockCurrency = groupCurrencies.size === 1 ? Array.from(groupCurrencies)[0] : 'CNY';
       const memberPnlTone = Number(group.totalFloatingPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]";
       return <div key={group.userId} className={`overflow-hidden rounded-xl border border-[#E4EAF0] shadow-sm ${isExpanded ? "bg-[#FFFDFC]" : "bg-white"}`}>
         <button type="button" onClick={() => setExpandedAdminMemberId((current) => current === group.userId ? null : group.userId)} className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left">
           <span className="flex min-w-0 items-center gap-1.5"><span className="truncate text-sm font-semibold text-[#222222]">{group.name}</span><span aria-label={`关联持仓编号 ${group.positions.map((position: any) => position.positionNumber).join("、")}`} className="flex shrink-0 items-center gap-1">{group.positions.map((position: any) => <span key={position.lotId} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/80 text-[9px] font-bold leading-none text-[#9F1D1D]" style={{ background: "radial-gradient(circle at 31% 24%, #FFFFFF 0%, #FFFFFF 12%, #FFF7F7 13%, #FFD8D8 48%, #F09D9D 74%, #B71C1C 100%)", boxShadow: "inset 1px 1px 2px rgba(255,255,255,.95), inset -2px -2px 3px rgba(125,20,20,.42), 0 2px 3px rgba(77,12,12,.30)" }}>{position.positionNumber}</span>)}</span></span>
           <ChevronDown size={16} className="shrink-0 text-gray-400 transition-transform" style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }} />
         </button>
-        <div className="grid grid-cols-3 border-t border-[#E6E6E6] text-center">
-          <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2"><div className="text-[11px] text-gray-400">开仓总市值</div><div className="mt-0.5 break-all text-xs font-medium text-[#222222]">{money(group.totalOpeningMarketValue)}</div></div>
-          <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2"><div className="text-[11px] text-gray-400">总浮动盈亏</div><div className={`mt-0.5 break-all text-xs font-medium ${group.totalFloatingPnl === null ? "text-gray-400" : memberPnlTone}`}>{group.totalFloatingPnl === null ? "待报价" : signedMoney(group.totalFloatingPnl)}</div></div>
-          <div className="min-w-0 px-1.5 py-2"><div className="text-[11px] text-gray-400">所需保证金</div><div className="mt-0.5 break-all text-xs font-medium text-[#C62828]">{group.totalRequiredMargin === null ? "待报价" : money(group.totalRequiredMargin)}</div></div>
-        </div>
+        {groupHasMixedCurrencies ? <div className="border-t border-[#E6E6E6] px-3 py-2 text-center text-[11px] text-amber-700">该成员同时持有人民币与美元股票，请展开查看各持仓的原币种金额</div> : <div className="grid grid-cols-3 border-t border-[#E6E6E6] text-center">
+          <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2"><div className="text-[11px] text-gray-400">开仓总市值</div><div className="mt-0.5 break-all text-xs font-medium text-[#222222]">{money(group.totalOpeningMarketValue, 2, groupCurrency)}</div></div>
+          <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2"><div className="text-[11px] text-gray-400">总浮动盈亏</div><div className={`mt-0.5 break-all text-xs font-medium ${group.totalFloatingPnl === null ? "text-gray-400" : memberPnlTone}`}>{group.totalFloatingPnl === null ? "待报价" : signedMoney(group.totalFloatingPnl, groupCurrency)}</div></div>
+          <div className="min-w-0 px-1.5 py-2"><div className="text-[11px] text-gray-400">所需保证金</div><div className="mt-0.5 break-all text-xs font-medium text-[#C62828]">{group.totalRequiredMargin === null ? "待报价" : money(group.totalRequiredMargin, 2, groupCurrency)}</div></div>
+        </div>}
         {isExpanded && <div className="border-t border-[#E6E6E6] bg-white">{group.positions.map((position: any) => {
+          const positionCurrency = normalizeCurrency(position.currency);
           const positionPnlTone = Number(position.floatingPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]";
           return (
             <div key={position.lotId} className="border-t border-[#EEE8E4] px-3 py-2.5">
@@ -546,14 +567,14 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
               </div>
               <div className="mt-2 overflow-hidden border border-[#E6E6E6] text-center">
                 <div className="grid grid-cols-3">
-                  <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-1.5"><div className="text-[10px] text-gray-400">买入价</div><div className="mt-0.5 break-all text-[10px] font-medium text-[#222222]">{money(position.entryPrice)}</div></div>
+                  <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-1.5"><div className="text-[10px] text-gray-400">买入价</div><div className="mt-0.5 break-all text-[10px] font-medium text-[#222222]">{money(position.entryPrice, 2, positionCurrency)}</div></div>
                   <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-1.5"><div className="text-[10px] text-gray-400">买入股数</div><div className="mt-0.5 break-all text-[10px] font-medium text-[#222222]">{formatQuantity(position.quantity)} 股</div></div>
-                  <div className="min-w-0 px-1 py-1.5"><div className="text-[10px] text-gray-400">买入市值</div><div className="mt-0.5 break-all text-[10px] font-medium text-[#222222]">{money(position.openingValue)}</div></div>
+                  <div className="min-w-0 px-1 py-1.5"><div className="text-[10px] text-gray-400">买入市值</div><div className="mt-0.5 break-all text-[10px] font-medium text-[#222222]">{money(position.openingValue, 2, positionCurrency)}</div></div>
                 </div>
                 <div className="grid grid-cols-3 border-t border-[#E6E6E6]">
-                  <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-1.5"><div className="text-[10px] text-gray-400">当前价</div><div className="mt-0.5 break-all text-[10px] font-medium text-[#222222]">{money(position.marketPrice)}</div></div>
-                  <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-1.5"><div className="text-[10px] text-gray-400">当前市值</div><div className="mt-0.5 break-all text-[10px] font-medium text-[#222222]">{money(position.marketValue)}</div></div>
-                  <div className="min-w-0 px-1 py-1.5"><div className="text-[10px] text-gray-400">浮动盈亏</div><div className={`mt-0.5 break-all text-[10px] font-medium ${position.floatingPnl === null ? "text-gray-400" : positionPnlTone}`}>{position.floatingPnl === null ? "待报价" : signedMoney(position.floatingPnl)}</div></div>
+                  <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-1.5"><div className="text-[10px] text-gray-400">当前价</div><div className="mt-0.5 break-all text-[10px] font-medium text-[#222222]">{money(position.marketPrice, 2, positionCurrency)}</div></div>
+                  <div className="min-w-0 border-r border-[#E6E6E6] px-1 py-1.5"><div className="text-[10px] text-gray-400">当前市值</div><div className="mt-0.5 break-all text-[10px] font-medium text-[#222222]">{money(position.marketValue, 2, positionCurrency)}</div></div>
+                  <div className="min-w-0 px-1 py-1.5"><div className="text-[10px] text-gray-400">浮动盈亏</div><div className={`mt-0.5 break-all text-[10px] font-medium ${position.floatingPnl === null ? "text-gray-400" : positionPnlTone}`}>{position.floatingPnl === null ? "待报价" : signedMoney(position.floatingPnl, positionCurrency)}</div></div>
                 </div>
               </div>
             </div>
@@ -582,6 +603,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       const changeTone = Number(holding.priceChange || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]";
       const ownerHolding = holding.accountHolding;
       const personalHolding = holding.myHolding;
+      const holdingCurrency = normalizeCurrency(holding.currency);
       const currentLotAllocations = ((allocationLotById.get(Number(holding.lot.id))?.participations || []) as any[])
         .filter((allocation) => Number(allocation.remainingQuantity || 0) > 0)
         .map((allocation) => ({
@@ -640,11 +662,11 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
           {!participantView && canEdit && !isAdminLotExpanded && (
             <div className="grid grid-cols-3 border-t border-[#E8EEF1] bg-[#F8FAFB] text-[9px] tabular-nums">
               <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap border-b border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><span>持仓</span><b className="text-[10px] font-semibold text-gray-700">{formatQuantity(ownerHolding.quantity)}股</b></div>
-              <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap border-b border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><span>开仓价</span><b className="text-[10px] font-semibold text-gray-700">{money(holding.lot.unitCost)}</b></div>
-              <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap border-b border-[#E8EEF1] px-1 py-1.5 text-gray-500"><span>市值</span><b className="text-[10px] font-semibold text-gray-700">{money(ownerHolding.costValue)}</b></div>
-              <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap border-b border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><span>当前价格</span><b className="text-[10px] font-semibold text-gray-700">{money(holding.marketPrice)}</b></div>
-              <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap border-b border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><span>当前市值</span><b className="text-[10px] font-semibold text-gray-700">{money(ownerHolding.marketValue)}</b></div>
-              <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap border-b border-[#E8EEF1] px-1 py-1.5 text-gray-500"><span>盈亏</span><b className={`text-[10px] font-semibold ${holdingPnlTone}`}>{ownerHolding.floatingPnl === null ? '待更新' : signedMoney(ownerHolding.floatingPnl)}</b></div>
+              <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap border-b border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><span>开仓价</span><b className="text-[10px] font-semibold text-gray-700">{money(holding.lot.unitCost, 2, holdingCurrency)}</b></div>
+              <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap border-b border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><span>市值</span><b className="text-[10px] font-semibold text-gray-700">{money(ownerHolding.costValue, 2, holdingCurrency)}</b></div>
+              <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap border-b border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><span>当前价格</span><b className="text-[10px] font-semibold text-gray-700">{money(holding.marketPrice, 2, holdingCurrency)}</b></div>
+              <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap border-b border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><span>当前市值</span><b className="text-[10px] font-semibold text-gray-700">{money(ownerHolding.marketValue, 2, holdingCurrency)}</b></div>
+              <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap border-b border-[#E8EEF1] px-1 py-1.5 text-gray-500"><span>盈亏</span><b className={`text-[10px] font-semibold ${holdingPnlTone}`}>{ownerHolding.floatingPnl === null ? '待更新' : signedMoney(ownerHolding.floatingPnl, holdingCurrency)}</b></div>
               <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><span>已分配</span><b className="text-[10px] font-semibold text-gray-700">{formatQuantity(allocatedQuantity)}股</b></div>
               <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap border-r border-[#E8EEF1] px-1 py-1.5 text-gray-500"><span>剩余可分配</span><b className="text-[10px] font-semibold text-gray-700">{formatQuantity(remainingForAllocation)}股</b></div>
               <div className="flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap px-1 py-1.5 text-gray-500"><span>成员</span><b className="text-[10px] font-semibold text-gray-700">{sortedAllocations.length}</b><span>人</span></div>
@@ -652,12 +674,12 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
           )}
           {(participantView || isAdminLotExpanded) && <>
           <div className={quoteMetricGridClass}>
-            <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">买入价</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(holding.lot.unitCost)}</div></div>
-            <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">当前价</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(holding.marketPrice)}</div></div>
-            <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">当前涨跌</div><div className={`mt-0.5 break-all text-[11px] leading-4 font-medium ${changeTone}`}>{holding.priceChange === null ? "—" : signedMoney(holding.priceChange)}</div></div>
+            <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">买入价</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(holding.lot.unitCost, 2, holdingCurrency)}</div></div>
+            <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">当前价</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(holding.marketPrice, 2, holdingCurrency)}</div></div>
+            <div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">当前涨跌</div><div className={`mt-0.5 break-all text-[11px] leading-4 font-medium ${changeTone}`}>{holding.priceChange === null ? "—" : signedMoney(holding.priceChange, holdingCurrency)}</div></div>
             <div className="min-w-0 px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">涨跌幅</div><div className={`mt-0.5 break-all text-[11px] leading-4 font-medium ${changeTone}`}>{holding.priceChangePercent === null ? "—" : `${holding.priceChangePercent >= 0 ? "+" : ""}${(holding.priceChangePercent * 100).toFixed(2)}%`}</div></div>
           </div>
-          {participantView ? personalHolding && <div className="border-t border-[#D9D9D9] bg-white"><div className="flex items-center justify-between gap-3 border-b border-[#E6E6E6] px-2.5 py-2"><span className="flex min-w-0 items-center gap-1.5"><span className="font-semibold text-[#222222]">我的持仓</span><span className="whitespace-nowrap text-[10px] text-gray-400">{formatQuoteUpdate(holding.quoteUpdatedAt)}</span></span><span className="shrink-0 text-[11px] text-gray-500">所需保证金 <b className="ml-0.5 font-semibold text-[#C62828]">{money(personalHolding.requiredMargin)}</b></span></div><div className={responsiveMetricGridClass}><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">我的买入价</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(personalHolding.entryPrice)}</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓数量</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{formatQuantity(personalHolding.quantity)} 股</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓价值</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(personalHolding.marketValue)}</div></div><div className="min-w-0 px-1.5 py-2.5 text-center"><button type="button" onClick={() => setShowPnlFormula(true)} className="border-b border-dashed border-gray-400 pb-px whitespace-nowrap text-[11px] text-gray-400 hover:border-[#C62828] hover:text-[#C62828]" aria-label={`查看持仓编号 ${positionNumber} 的浮动盈亏计算公式`}>浮动盈亏</button><div className={`mt-0.5 break-all text-[11px] leading-4 font-medium ${holdingPnlTone}`}>{personalHolding.floatingPnl === null ? "—" : signedMoney(personalHolding.floatingPnl)}</div></div></div></div> : <><div className="grid grid-cols-4 border-t border-[#E6E6E6]"><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓数量</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{formatQuantity(ownerHolding.quantity)} 股</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓成本</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(ownerHolding.costValue)}</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓价值</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(ownerHolding.marketValue)}</div></div><div className="min-w-0 px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">浮动盈亏</div><div className={`mt-0.5 break-all text-[11px] leading-4 font-medium ${holdingPnlTone}`}>{ownerHolding.floatingPnl === null ? "—" : signedMoney(ownerHolding.floatingPnl)}</div></div></div>{canEdit && <div className="border-t border-[#D9D9D9] bg-[#FFFDFC]"><div className="grid grid-cols-4 border-b border-[#E6E6E6]"><div className="min-w-0 border-r border-[#E6E6E6] px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">已分配</div><div className="mt-0.5 text-[11px] font-medium text-[#222222]">{formatQuantity(allocatedQuantity)} 股</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">剩余可分配</div><div className="mt-0.5 text-[11px] font-medium text-[#222222]">{formatQuantity(remainingForAllocation)} 股</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">所需保证金</div><div className="mt-0.5 break-all text-[11px] font-medium text-[#C62828]">{money(ownerHolding.marketValue === null ? null : ownerHolding.marketValue * 0.2)}</div></div><div className="min-w-0 px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">分配人数</div><div className="mt-0.5 text-[11px] font-medium text-[#222222]">{sortedAllocations.length} 人</div></div></div>
+          {participantView ? personalHolding && <div className="border-t border-[#D9D9D9] bg-white"><div className="flex items-center justify-between gap-3 border-b border-[#E6E6E6] px-2.5 py-2"><span className="flex min-w-0 items-center gap-1.5"><span className="font-semibold text-[#222222]">我的持仓</span><span className="whitespace-nowrap text-[10px] text-gray-400">{formatQuoteUpdate(holding.quoteUpdatedAt)}</span></span><span className="shrink-0 text-[11px] text-gray-500">所需保证金 <b className="ml-0.5 font-semibold text-[#C62828]">{money(personalHolding.requiredMargin, 2, holdingCurrency)}</b></span></div><div className={responsiveMetricGridClass}><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">我的买入价</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(personalHolding.entryPrice, 2, holdingCurrency)}</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓数量</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{formatQuantity(personalHolding.quantity)} 股</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓价值</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(personalHolding.marketValue, 2, holdingCurrency)}</div></div><div className="min-w-0 px-1.5 py-2.5 text-center"><button type="button" onClick={() => setShowPnlFormula(true)} className="border-b border-dashed border-gray-400 pb-px whitespace-nowrap text-[11px] text-gray-400 hover:border-[#C62828] hover:text-[#C62828]" aria-label={`查看持仓编号 ${positionNumber} 的浮动盈亏计算公式`}>浮动盈亏</button><div className={`mt-0.5 break-all text-[11px] leading-4 font-medium ${holdingPnlTone}`}>{personalHolding.floatingPnl === null ? "—" : signedMoney(personalHolding.floatingPnl, holdingCurrency)}</div></div></div></div> : <><div className="grid grid-cols-4 border-t border-[#E6E6E6]"><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓数量</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{formatQuantity(ownerHolding.quantity)} 股</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓成本</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(ownerHolding.costValue, 2, holdingCurrency)}</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">持仓价值</div><div className="mt-0.5 break-all text-[11px] leading-4 font-medium text-[#222222]">{money(ownerHolding.marketValue, 2, holdingCurrency)}</div></div><div className="min-w-0 px-1.5 py-2.5 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">浮动盈亏</div><div className={`mt-0.5 break-all text-[11px] leading-4 font-medium ${holdingPnlTone}`}>{ownerHolding.floatingPnl === null ? "—" : signedMoney(ownerHolding.floatingPnl, holdingCurrency)}</div></div></div>{canEdit && <div className="border-t border-[#D9D9D9] bg-[#FFFDFC]"><div className="grid grid-cols-4 border-b border-[#E6E6E6]"><div className="min-w-0 border-r border-[#E6E6E6] px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">已分配</div><div className="mt-0.5 text-[11px] font-medium text-[#222222]">{formatQuantity(allocatedQuantity)} 股</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">剩余可分配</div><div className="mt-0.5 text-[11px] font-medium text-[#222222]">{formatQuantity(remainingForAllocation)} 股</div></div><div className="min-w-0 border-r border-[#E6E6E6] px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">所需保证金</div><div className="mt-0.5 break-all text-[11px] font-medium text-[#C62828]">{money(ownerHolding.marketValue === null ? null : ownerHolding.marketValue * 0.2, 2, holdingCurrency)}</div></div><div className="min-w-0 px-1 py-2 text-center"><div className="whitespace-nowrap text-[11px] text-gray-400">分配人数</div><div className="mt-0.5 text-[11px] font-medium text-[#222222]">{sortedAllocations.length} 人</div></div></div>
             {allocationMatrixQuery.isLoading ? <div className="px-2.5 py-3 text-[11px] text-gray-400">正在载入成员份额…</div> : <div className="divide-y divide-[#EEE8E4]">
               <div className="bg-[#FFF9F7] px-2.5 py-1.5 text-[11px] text-gray-500">成员份额（按当前股数由多到少）</div>
               {sortedAllocations.map((allocation) => {
@@ -665,7 +687,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
                 const allocationPnlTone = Number(allocation.floatingPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]";
                 return <div key={allocation.id} className={`flex items-center justify-between gap-3 px-2.5 py-2 ${isMine ? "bg-[#FFF6F4]" : ""}`}>
                   <span className={`min-w-0 truncate ${isMine ? "font-medium text-[#C62828]" : "text-[#333333]"}`}>{allocation.memberName}{isMine && <span className="ml-1 text-[10px]">（我）</span>}</span>
-                  <span className="shrink-0 whitespace-nowrap text-right"><span className="block"><b className="font-medium text-[#222222]">{formatQuantity(allocation.quantity)} 股</b><span className="mx-1 text-[11px] text-gray-500">·</span><span className="text-[11px] text-gray-500">{allocationPercent(allocation.quantity).toFixed(0)}%</span><span className="mx-1 text-[11px] text-gray-500">·</span><span className="text-[11px] text-gray-500">持仓成本 {money(allocation.quantity * Number(allocation.entryPrice || 0))}</span></span><span className={`mt-0.5 block text-[11px] ${allocationPnlTone}`}>本批浮动盈亏 {allocation.floatingPnl === null ? "—" : signedMoney(allocation.floatingPnl)}</span></span>
+                  <span className="shrink-0 whitespace-nowrap text-right"><span className="block"><b className="font-medium text-[#222222]">{formatQuantity(allocation.quantity)} 股</b><span className="mx-1 text-[11px] text-gray-500">·</span><span className="text-[11px] text-gray-500">{allocationPercent(allocation.quantity).toFixed(0)}%</span><span className="mx-1 text-[11px] text-gray-500">·</span><span className="text-[11px] text-gray-500">持仓成本 {money(allocation.quantity * Number(allocation.entryPrice || 0), 2, holdingCurrency)}</span></span><span className={`mt-0.5 block text-[11px] ${allocationPnlTone}`}>本批浮动盈亏 {allocation.floatingPnl === null ? "—" : signedMoney(allocation.floatingPnl, holdingCurrency)}</span></span>
                 </div>;
               })}
               {sortedAllocations.length === 0 && <div className="px-2.5 py-2 text-[11px] text-gray-400">当前尚未给任何成员分配本批次</div>}
@@ -684,7 +706,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       <header className="sticky top-0 z-20 bg-[#D32F2F] text-white px-4 pt-3 pb-3 shadow-sm">
         <div className="flex items-center gap-3">
           <button onClick={onBack} aria-label="返回"><ArrowLeft className="w-5 h-5" /></button>
-          <div className="min-w-0 flex-1"><div className="text-base font-semibold truncate">{categoryName}</div><div className="text-[11px] text-white/75">A 股账户 · {participantView ? "成员只读查看" : canEdit ? "管理员维护" : "只读查看"}</div></div>
+          <div className="min-w-0 flex-1"><div className="text-base font-semibold truncate">{categoryName}</div><div className="text-[11px] text-white/75">股票账户 · 支持 A 股与美股 · {participantView ? "成员只读查看" : canEdit ? "管理员维护" : "只读查看"}</div></div>
           {canEdit && <button onClick={() => openTrade("buy")} className="rounded-full bg-white text-[#D32F2F] p-2 shadow-sm" aria-label="买入股票"><Plus className="w-5 h-5" /></button>}
         </div>
       </header>
@@ -693,20 +715,29 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
         <section className="overflow-hidden rounded-2xl border border-[#F1E6DE] bg-white shadow-sm">
           <div className="bg-[#D32F2F] px-4 py-3">
             <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0"><div className="truncate text-sm font-semibold text-white">{accountName}整体持仓</div><div className="mt-0.5 text-[11px] text-white/75">{participantView ? `${accountName}全部 A 股持仓，不等同于您的个人份额` : `${accountName}全部 A 股持仓 · 管理员维护视图`}</div></div>
+              <div className="min-w-0"><div className="truncate text-sm font-semibold text-white">{accountName}整体持仓</div><div className="mt-0.5 text-[11px] text-white/75">{participantView ? `${accountName}全部股票持仓，不等同于您的个人份额` : `${accountName}全部股票持仓 · 管理员维护视图`}</div></div>
               <span className="shrink-0 rounded-full bg-white/15 px-2 py-1 text-[10px] text-white">{participantView ? `${accountName}总览` : "账户总览"}</span>
             </div>
-            {holdingSummary && <div className="mt-2 border-t border-white/20 pt-2">
+            {hasMixedViewCurrencies ? (<div className="mt-2 border-t border-white/20 pt-2">
+              <div className="mb-1.5 text-[11px] text-white/70">混合币种持仓按原币种分别汇总，不直接相加</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {currencySummaryRows.map((row: any) => {
+                  const currency = normalizeCurrency(row.currency);
+                  const pnl = row.floatingPnl === null || row.floatingPnl === undefined ? null : Number(row.floatingPnl);
+                  return <div key={currency} className="rounded-md bg-black/10 px-2 py-1.5 text-[10px] text-white"><div className="flex items-center justify-between"><span className="font-semibold">{currency === 'USD' ? '美元持仓' : '人民币持仓'}</span><span>{row.positionCount || 0} 只</span></div><div className="mt-1 flex justify-between gap-1"><span className="text-white/65">成本</span><b className="truncate">{money(Number(row.costValue || 0), 2, currency)}</b></div><div className="mt-0.5 flex justify-between gap-1"><span className="text-white/65">市值</span><b className="truncate">{money(row.marketValue === null || row.marketValue === undefined ? null : Number(row.marketValue), 2, currency)}</b></div><div className="mt-0.5 flex justify-between gap-1"><span className="text-white/65">浮盈</span><b className={pnl === null ? 'text-white/70' : pnl >= 0 ? 'text-[#FFD6D6]' : 'text-[#BDEDC6]'}>{pnl === null ? '待报价' : signedMoney(pnl, currency)}</b></div></div>;
+                })}
+              </div>
+            </div>) : holdingSummary && <div className="mt-2 border-t border-white/20 pt-2">
               <div className="flex items-center justify-between gap-3 text-[11px]"><span className="shrink-0 text-white/70">{participantView ? "当前参与持仓编号" : "当前账户持仓编号"}</span><div className="flex flex-wrap justify-end gap-1.5">{holdingSummary.positionNumbers.length > 0 ? holdingSummary.positionNumbers.map((positionNumber: string) => <span key={positionNumber} className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/80 text-[10px] font-bold leading-none text-[#9F1D1D]" style={{ background: "radial-gradient(circle at 31% 24%, #FFFFFF 0%, #FFFFFF 12%, #FFF7F7 13%, #FFD8D8 48%, #F09D9D 74%, #B71C1C 100%)", boxShadow: "inset 1px 1px 2px rgba(255,255,255,.95), inset -2px -2px 3px rgba(125,20,20,.42), 0 2px 3px rgba(77,12,12,.30)" }}>{positionNumber}</span>) : <span className="font-semibold text-white">—</span>}</div></div>
               <div className="mt-2 grid grid-cols-3 divide-x divide-white/20 rounded-md bg-black/10 text-center text-[10px]">
-                <div className="px-1.5 py-1.5"><div className="text-white/65">{holdingSummaryCostLabel}</div><div className="mt-0.5 truncate font-semibold text-white">{money(holdingSummary.purchaseValue)}</div></div>
-                <div className="px-1.5 py-1.5"><div className="text-white/65">当前持仓价值</div><div className="mt-0.5 truncate font-semibold text-white">{money(holdingSummary.marketValue)}</div></div>
-                <div className="px-1.5 py-1.5"><div className="text-white/65">所需保证金</div><div className="mt-0.5 truncate font-semibold text-white">{money(holdingSummary.requiredMargin)}</div></div>
+                <div className="px-1.5 py-1.5"><div className="text-white/65">{holdingSummaryCostLabel}</div><div className="mt-0.5 truncate font-semibold text-white">{money(holdingSummary.purchaseValue, 2, portfolioCurrency)}</div></div>
+                <div className="px-1.5 py-1.5"><div className="text-white/65">当前持仓价值</div><div className="mt-0.5 truncate font-semibold text-white">{money(holdingSummary.marketValue, 2, portfolioCurrency)}</div></div>
+                <div className="px-1.5 py-1.5"><div className="text-white/65">所需保证金</div><div className="mt-0.5 truncate font-semibold text-white">{money(holdingSummary.requiredMargin, 2, portfolioCurrency)}</div></div>
               </div>
               <div className={`mt-1 grid ${participantView ? "grid-cols-2" : "grid-cols-3"} divide-x divide-[#F2D0D0] rounded-md border border-white/60 bg-white text-center text-[11px] shadow-sm`}>
-                <div className="px-2 py-1.5"><button type="button" onClick={() => setShowPnlFormula(true)} className="border-b border-dashed border-gray-400 pb-px text-gray-500 hover:border-[#C62828] hover:text-[#C62828]" aria-label={`查看${holdingSummaryPnlLabel}计算公式`}>{holdingSummaryPnlLabel}</button><div className={`mt-0.5 truncate text-sm leading-5 font-bold ${holdingSummary.floatingPnl === null ? "text-gray-500" : holdingSummary.floatingPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{holdingSummary.floatingPnl === null ? "—" : signedMoney(holdingSummary.floatingPnl)}</div></div>
+                <div className="px-2 py-1.5"><button type="button" onClick={() => setShowPnlFormula(true)} className="border-b border-dashed border-gray-400 pb-px text-gray-500 hover:border-[#C62828] hover:text-[#C62828]" aria-label={`查看${holdingSummaryPnlLabel}计算公式`}>{holdingSummaryPnlLabel}</button><div className={`mt-0.5 truncate text-sm leading-5 font-bold ${holdingSummary.floatingPnl === null ? "text-gray-500" : holdingSummary.floatingPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{holdingSummary.floatingPnl === null ? "—" : signedMoney(holdingSummary.floatingPnl, portfolioCurrency)}</div></div>
                 <div className="px-2 py-1.5"><div className="text-gray-500">盈亏幅度</div><div className={`mt-0.5 truncate text-sm leading-5 font-bold ${holdingSummary.floatingPnlPercent === null ? "text-gray-500" : holdingSummary.floatingPnlPercent >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{holdingSummary.floatingPnlPercent === null ? "—" : `${holdingSummary.floatingPnlPercent >= 0 ? "+" : ""}${(holdingSummary.floatingPnlPercent * 100).toFixed(2)}%`}</div></div>
-                {!participantView && <div className="px-2 py-1.5"><button type="button" onClick={openDailyPnlHistory} className="border-b border-dashed border-gray-400 pb-px text-gray-500 hover:border-[#C62828] hover:text-[#C62828]" aria-label="查看每日盈亏记录">当日盈亏</button><div className={`mt-0.5 truncate font-semibold ${dailyPnlFromSnapshots === null ? "text-gray-500" : dailyPnlFromSnapshots >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{dailyPnlFromSnapshots === null ? "—" : signedMoney(dailyPnlFromSnapshots)}</div></div>}
+                {!participantView && <div className="px-2 py-1.5"><button type="button" onClick={openDailyPnlHistory} className="border-b border-dashed border-gray-400 pb-px text-gray-500 hover:border-[#C62828] hover:text-[#C62828]" aria-label="查看每日盈亏记录">当日盈亏</button><div className={`mt-0.5 truncate font-semibold ${dailyPnlFromSnapshots === null ? "text-gray-500" : dailyPnlFromSnapshots >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{dailyPnlFromSnapshots === null ? "—" : signedMoney(dailyPnlFromSnapshots, portfolioCurrency)}</div></div>}
               </div>
             </div>}
           </div>
@@ -733,7 +764,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
 
         <section className={participantView ? "border-t border-[#F1E6DE]" : "overflow-hidden rounded-xl border border-[#E4EAF0] bg-white shadow-sm"}>
           <button onClick={() => setShowHistory((value) => !value)} className="w-full px-3 py-3 flex items-center justify-between text-sm font-semibold text-[#222222]"><span className="flex items-center gap-1.5"><History className="w-4 h-4 text-gray-500" />{participantView ? "标签完整操作历史" : "完整操作历史"} ({historyRows.length})</span>{showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
-          {showHistory && <div className="border-t divide-y divide-gray-100">{historyRows.map((event: any) => <div key={event.id} className={`px-3 py-3 ${event.status === "voided" ? "bg-gray-50 opacity-75" : ""}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-1.5"><span className={`rounded px-1.5 py-0.5 text-[10px] ${eventTone[event.type as EventType]}`}>{eventLabels[event.type as EventType]}</span>{event.status === "voided" && <span className="text-[10px] text-gray-500">已作废</span>}<span className="text-xs font-medium text-[#222222] truncate">{event.stockName || "运营备注"}{event.symbol ? ` ${event.symbol}` : ""}</span></div><div className="mt-1 text-[11px] text-gray-500">实际：{formatDateTime(event.actualTradedAt)} · 登记：{formatDateTime(event.serverRegisteredAt)}</div>{event.note && <div className="mt-1 text-[11px] text-gray-600 break-words">{event.note}</div>}{event.status === "voided" && event.voidReason && <div className="mt-1 text-[11px] text-[#C62828]">作废原因：{event.voidReason}</div>}</div><div className="shrink-0 text-right text-xs text-gray-600">{event.quantity !== null ? <>{!participantView && <div>{formatQuantity(event.quantity)} 股</div>}<div className={participantView ? "font-medium text-[#222222]" : "mt-1"}>{money(event.executionPrice)}</div></> : null}{canEdit && event.status === "active" && <div className="mt-2 flex justify-end gap-2"><button onClick={() => openCorrection(event)} className="text-[11px] text-[#1565C0] underline">更正</button><button onClick={() => requestVoid(event)} disabled={voidEventMutation.isPending} className="text-[11px] text-[#C62828] underline">作废</button></div>}</div></div></div>)}</div>}
+          {showHistory && <div className="border-t divide-y divide-gray-100">{historyRows.map((event: any) => <div key={event.id} className={`px-3 py-3 ${event.status === "voided" ? "bg-gray-50 opacity-75" : ""}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-1.5"><span className={`rounded px-1.5 py-0.5 text-[10px] ${eventTone[event.type as EventType]}`}>{eventLabels[event.type as EventType]}</span>{event.status === "voided" && <span className="text-[10px] text-gray-500">已作废</span>}<span className="text-xs font-medium text-[#222222] truncate">{event.stockName || "运营备注"}{event.symbol ? ` ${event.symbol}` : ""}</span></div><div className="mt-1 text-[11px] text-gray-500">实际：{formatDateTime(event.actualTradedAt)} · 登记：{formatDateTime(event.serverRegisteredAt)}</div>{event.note && <div className="mt-1 text-[11px] text-gray-600 break-words">{event.note}</div>}{event.status === "voided" && event.voidReason && <div className="mt-1 text-[11px] text-[#C62828]">作废原因：{event.voidReason}</div>}</div><div className="shrink-0 text-right text-xs text-gray-600">{event.quantity !== null ? <>{!participantView && <div>{formatQuantity(event.quantity)} 股</div>}<div className={participantView ? "font-medium text-[#222222]" : "mt-1"}>{money(event.executionPrice, 2, /^\d{6}\.(SH|SZ|BJ)$/.test(String(event.symbol || '')) ? 'CNY' : 'USD')}</div></> : null}{canEdit && event.status === "active" && <div className="mt-2 flex justify-end gap-2"><button onClick={() => openCorrection(event)} className="text-[11px] text-[#1565C0] underline">更正</button><button onClick={() => requestVoid(event)} disabled={voidEventMutation.isPending} className="text-[11px] text-[#C62828] underline">作废</button></div>}</div></div></div>)}</div>}
         </section>
         </div>
       </main>
@@ -745,7 +776,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
             <div className="rounded-xl border border-[#F1D8D8] bg-[#FFF8F8] px-3 py-2.5 text-[11px] leading-5 text-gray-600">当日盈亏 = 当天盘尾累计盈亏 − 上一有效盘尾累计盈亏。新开仓、加仓或减仓的本金变动不会计入当日盈亏；首个有效盘尾以 0 为比较基准。</div>
             <div>
               <div className="mb-1.5 flex items-center justify-between text-xs"><span className="font-semibold text-[#333333]">盘尾净值记录</span><span className="text-[10px] text-gray-400">最新在上 · 仅有效交易日</span></div>
-              {dailySnapshotsQuery.isLoading ? <div className="rounded-lg bg-[#F7F7F7] px-3 py-3 text-center text-xs text-gray-400"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" />正在载入盘尾记录…</div> : dailyPnlHistoryRecords.length > 0 ? <div className="divide-y overflow-hidden rounded-xl border border-[#ECE6E2] bg-white">{dailyPnlHistoryRecords.map((record) => <div key={record.date} className="px-3 py-2.5"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-semibold text-[#333333]">{record.date}<span className="ml-1.5 text-[10px] font-normal text-gray-400">15:05 盘尾</span></div><div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-gray-400"><span>累计盈亏 {signedMoney(record.totalPnl)}</span><span>持仓市值 {money(record.marketValue)}</span><span>持仓成本 {money(record.costValue)}</span></div></div><div className="shrink-0 text-right"><div className="text-[10px] text-gray-400">当日盈亏</div><div className={`mt-0.5 text-sm font-bold ${record.dailyPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{signedMoney(record.dailyPnl)}</div></div></div></div>)}</div> : <div className="rounded-lg bg-[#F7F7F7] px-3 py-3 text-center text-xs text-gray-400">暂无有效盘尾记录</div>}
+              {dailySnapshotsQuery.isLoading ? <div className="rounded-lg bg-[#F7F7F7] px-3 py-3 text-center text-xs text-gray-400"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" />正在载入盘尾记录…</div> : dailyPnlHistoryRecords.length > 0 ? <div className="divide-y overflow-hidden rounded-xl border border-[#ECE6E2] bg-white">{dailyPnlHistoryRecords.map((record) => <div key={record.date} className="px-3 py-2.5"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-semibold text-[#333333]">{record.date}<span className="ml-1.5 text-[10px] font-normal text-gray-400">15:05 盘尾</span></div><div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-gray-400"><span>累计盈亏 {signedMoney(record.totalPnl, portfolioCurrency)}</span><span>持仓市值 {money(record.marketValue, 2, portfolioCurrency)}</span><span>持仓成本 {money(record.costValue, 2, portfolioCurrency)}</span></div></div><div className="shrink-0 text-right"><div className="text-[10px] text-gray-400">当日盈亏</div><div className={`mt-0.5 text-sm font-bold ${record.dailyPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{signedMoney(record.dailyPnl, portfolioCurrency)}</div></div></div></div>)}</div> : <div className="rounded-lg bg-[#F7F7F7] px-3 py-3 text-center text-xs text-gray-400">暂无有效盘尾记录</div>}
             </div>
           </div>
         </DialogContent>
@@ -754,14 +785,14 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       <Dialog open={showPnlFormula} onOpenChange={setShowPnlFormula}>
         <DialogContent className="max-h-[82vh] max-w-md overflow-y-auto px-4 pb-6">
           <DialogHeader><DialogTitle className="text-left">浮动盈亏推导</DialogTitle></DialogHeader>
-          {holdingSummary && <div className="space-y-3 pt-1">
+          {hasMixedViewCurrencies ? <div className="space-y-3 pt-1"><div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">当前标签同时含人民币与美元持仓。为避免把不同币种直接相加，系统只在顶部按币种分别展示成本、市值和浮动盈亏；请在下方逐笔查看每只股票的原币种计算。</div></div> : holdingSummary && <div className="space-y-3 pt-1">
             <div className="rounded-xl border border-[#F1D8D8] bg-[#FFF8F8] px-3 py-2.5">
               <div className="text-xs font-semibold text-[#742020]">总公式</div>
               <div className="mt-1 text-[11px] leading-5 text-gray-600">{participantView ? "总浮动盈亏 = 所有参与批次的买入市值 − 所有参与批次的当前持仓价值" : "账户浮动盈亏 = 全部当前持仓价值 − 全部持仓成本"}</div>
               <div className="mt-2 grid grid-cols-3 divide-x divide-[#F2DDDD] rounded-lg border border-[#F2DDDD] bg-white text-center text-[10px]">
-                <div className="px-1.5 py-1.5"><div className="text-gray-500">{participantView ? "买入市值" : "持仓成本"}</div><div className="mt-0.5 font-semibold text-[#222222]">{money(holdingSummary.purchaseValue)}</div></div>
-                <div className="px-1.5 py-1.5"><div className="text-gray-500">当前价值</div><div className="mt-0.5 font-semibold text-[#222222]">{money(holdingSummary.marketValue)}</div></div>
-                <div className="px-1.5 py-1.5"><div className="text-gray-500">{holdingSummaryPnlLabel}</div><div className={`mt-0.5 font-semibold ${holdingSummary.floatingPnl === null ? "text-gray-500" : holdingSummary.floatingPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{holdingSummary.floatingPnl === null ? "—" : signedMoney(holdingSummary.floatingPnl)}</div></div>
+                <div className="px-1.5 py-1.5"><div className="text-gray-500">{participantView ? "买入市值" : "持仓成本"}</div><div className="mt-0.5 font-semibold text-[#222222]">{money(holdingSummary.purchaseValue, 2, portfolioCurrency)}</div></div>
+                <div className="px-1.5 py-1.5"><div className="text-gray-500">当前价值</div><div className="mt-0.5 font-semibold text-[#222222]">{money(holdingSummary.marketValue, 2, portfolioCurrency)}</div></div>
+                <div className="px-1.5 py-1.5"><div className="text-gray-500">{holdingSummaryPnlLabel}</div><div className={`mt-0.5 font-semibold ${holdingSummary.floatingPnl === null ? "text-gray-500" : holdingSummary.floatingPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{holdingSummary.floatingPnl === null ? "—" : signedMoney(holdingSummary.floatingPnl, portfolioCurrency)}</div></div>
               </div>
               <div className="mt-2 text-center text-[11px] text-gray-500">盈亏幅度：{holdingSummary.floatingPnlPercent === null ? "—" : `${holdingSummary.floatingPnlPercent >= 0 ? "+" : ""}${(holdingSummary.floatingPnlPercent * 100).toFixed(2)}%`}</div>
             </div>
@@ -770,9 +801,9 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
               <div className="mb-1.5 text-xs font-semibold text-[#333333]">按{participantView ? "参与" : "账户"}持仓编号逐笔推导</div>
               <div className="space-y-2">
                 {holdingSummary.details.map((detail: any) => <div key={detail.positionNumber} className="rounded-xl border border-[#E8E8E8] bg-white p-3 text-[11px]">
-                  <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-1.5"><span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#EDB6B6] bg-[#FFF5F5] text-[9px] font-bold text-[#A42222]">{detail.positionNumber}</span><span className="truncate font-semibold text-[#222222]">{detail.stockName}</span><span className="shrink-0 text-gray-400">{detail.symbol}</span></div><span className={`shrink-0 font-semibold ${detail.floatingPnl === null ? "text-gray-400" : detail.floatingPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{detail.floatingPnl === null ? "待报价" : signedMoney(detail.floatingPnl)}</span></div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-[#FAFAFA] px-2 py-1.5 text-gray-600"><div>买入：{formatQuantity(detail.quantity)} 股 × {money(detail.entryPrice)} = <b className="font-medium text-[#222222]">{money(detail.purchaseValue)}</b></div><div>当前：{detail.currentPrice === null ? "待更新" : `${formatQuantity(detail.quantity)} 股 × ${money(detail.currentPrice)} = ${money(detail.currentValue)}`}</div></div>
-                  <div className="mt-1.5 text-gray-500">本批浮动盈亏 = {participantView ? `${money(detail.purchaseValue)} − ${detail.currentValue === null ? "当前持仓价值（待更新）" : money(detail.currentValue)}` : `${detail.currentValue === null ? "当前持仓价值（待更新）" : money(detail.currentValue)} − ${money(detail.purchaseValue)}`}{detail.floatingPnl === null ? "" : ` = ${signedMoney(detail.floatingPnl)}`}</div>
+                  <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-1.5"><span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#EDB6B6] bg-[#FFF5F5] text-[9px] font-bold text-[#A42222]">{detail.positionNumber}</span><span className="truncate font-semibold text-[#222222]">{detail.stockName}</span><span className="shrink-0 text-gray-400">{detail.symbol}</span></div><span className={`shrink-0 font-semibold ${detail.floatingPnl === null ? "text-gray-400" : detail.floatingPnl >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{detail.floatingPnl === null ? "待报价" : signedMoney(detail.floatingPnl, portfolioCurrency)}</span></div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-[#FAFAFA] px-2 py-1.5 text-gray-600"><div>买入：{formatQuantity(detail.quantity)} 股 × {money(detail.entryPrice, 2, portfolioCurrency)} = <b className="font-medium text-[#222222]">{money(detail.purchaseValue, 2, portfolioCurrency)}</b></div><div>当前：{detail.currentPrice === null ? "待更新" : `${formatQuantity(detail.quantity)} 股 × ${money(detail.currentPrice, 2, portfolioCurrency)} = ${money(detail.currentValue, 2, portfolioCurrency)}`}</div></div>
+                  <div className="mt-1.5 text-gray-500">本批浮动盈亏 = {participantView ? `${money(detail.purchaseValue, 2, portfolioCurrency)} − ${detail.currentValue === null ? "当前持仓价值（待更新）" : money(detail.currentValue, 2, portfolioCurrency)}` : `${detail.currentValue === null ? "当前持仓价值（待更新）" : money(detail.currentValue, 2, portfolioCurrency)} − ${money(detail.purchaseValue, 2, portfolioCurrency)}`}{detail.floatingPnl === null ? "" : ` = ${signedMoney(detail.floatingPnl, portfolioCurrency)}`}</div>
                 </div>)}
               </div>
             </div>
@@ -784,7 +815,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       <Sheet open={!!selectedPosition} onOpenChange={(open) => !open && setSelectedPosition(null)}>
         <SheetContent side="bottom" className="max-h-[82vh] rounded-t-2xl overflow-y-auto px-4 pb-6">
           <SheetHeader><SheetTitle className="text-left">{selectedPosition?.stockName} <span className="ml-1 text-sm font-normal text-gray-500">{selectedPosition?.symbol}</span></SheetTitle></SheetHeader>
-          {selectedPosition && <div className="mt-4 space-y-4"><div className="grid grid-cols-2 gap-2 text-sm"><div className="rounded-lg bg-[#FAF3ED] p-3"><div className="text-xs text-gray-500">当前市值</div><div className="mt-1 font-semibold">{money(selectedPosition.marketValue)}</div></div><div className="rounded-lg bg-[#FAF3ED] p-3"><div className="text-xs text-gray-500">浮动盈亏</div><div className={`mt-1 font-semibold ${Number(selectedPosition.floatingPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{signedMoney(selectedPosition.floatingPnl)}</div></div></div><div><div className="mb-2 text-sm font-semibold">持仓批次</div><div className="space-y-2">{selectedPosition.lots.map((lot: any) => <div key={lot.id} className="rounded-lg border border-gray-100 px-3 py-2 text-xs"><div className="flex justify-between"><span>{formatQuantity(lot.quantity)} 股 · 成本 {money(lot.unitCost)}</span><span className="text-gray-500">{formatDateTime(lot.openedAt)}</span></div></div>)}</div></div><div><div className="mb-2 text-sm font-semibold">审计证据</div><div className="space-y-2">{selectedHistory.map((event: any) => <div key={event.id} className="rounded-lg border border-gray-100 px-3 py-2 text-xs"><div className="flex justify-between gap-3"><span>{eventLabels[event.type as EventType]} · {event.quantity === null ? "备注" : `${formatQuantity(event.quantity)} 股 @ ${money(event.executionPrice)}`}</span><span className={event.status === "voided" ? "text-[#C62828]" : "text-gray-500"}>{event.status === "voided" ? "已作废" : "有效"}</span></div><div className="mt-1 text-gray-500">实际成交/接单：{formatDateTime(event.actualTradedAt)}</div><div className="text-gray-500">服务器登记：{formatDateTime(event.serverRegisteredAt)} · 管理员：{event.adminName}</div>{event.marketReferencePrice !== null && <div className="text-gray-500">登记时参考：{money(event.marketReferencePrice)} · {formatDateTime(event.marketReferenceAt)}</div>}</div>)}</div></div></div>}
+          {selectedPosition && <div className="mt-4 space-y-4"><div className="grid grid-cols-2 gap-2 text-sm"><div className="rounded-lg bg-[#FAF3ED] p-3"><div className="text-xs text-gray-500">当前市值</div><div className="mt-1 font-semibold">{money(selectedPosition.marketValue, 2, normalizeCurrency(selectedPosition.currency))}</div></div><div className="rounded-lg bg-[#FAF3ED] p-3"><div className="text-xs text-gray-500">浮动盈亏</div><div className={`mt-1 font-semibold ${Number(selectedPosition.floatingPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>{signedMoney(selectedPosition.floatingPnl, normalizeCurrency(selectedPosition.currency))}</div></div></div><div><div className="mb-2 text-sm font-semibold">持仓批次</div><div className="space-y-2">{selectedPosition.lots.map((lot: any) => <div key={lot.id} className="rounded-lg border border-gray-100 px-3 py-2 text-xs"><div className="flex justify-between"><span>{formatQuantity(lot.quantity)} 股 · 成本 {money(lot.unitCost, 2, normalizeCurrency(selectedPosition.currency))}</span><span className="text-gray-500">{formatDateTime(lot.openedAt)}</span></div></div>)}</div></div><div><div className="mb-2 text-sm font-semibold">审计证据</div><div className="space-y-2">{selectedHistory.map((event: any) => <div key={event.id} className="rounded-lg border border-gray-100 px-3 py-2 text-xs"><div className="flex justify-between gap-3"><span>{eventLabels[event.type as EventType]} · {event.quantity === null ? "备注" : `${formatQuantity(event.quantity)} 股 @ ${money(event.executionPrice, 2, /^\d{6}\.(SH|SZ|BJ)$/.test(String(event.symbol || '')) ? 'CNY' : 'USD')}`}</span><span className={event.status === "voided" ? "text-[#C62828]" : "text-gray-500"}>{event.status === "voided" ? "已作废" : "有效"}</span></div><div className="mt-1 text-gray-500">实际成交/接单：{formatDateTime(event.actualTradedAt)}</div><div className="text-gray-500">服务器登记：{formatDateTime(event.serverRegisteredAt)} · 管理员：{event.adminName}</div>{event.marketReferencePrice !== null && <div className="text-gray-500">登记时参考：{money(event.marketReferencePrice, 2, /^\d{6}\.(SH|SZ|BJ)$/.test(String(event.symbol || '')) ? 'CNY' : 'USD')} · {formatDateTime(event.marketReferenceAt)}</div>}</div>)}</div></div></div>}
         </SheetContent>
       </Sheet>
 

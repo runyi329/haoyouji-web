@@ -16,6 +16,7 @@ let tableReady: Promise<void> | null = null;
 let dailyTimer: NodeJS.Timeout | null = null;
 let intradayTimer: NodeJS.Timeout | null = null;
 let refreshInProgress = false;
+let lastUsCloseSession = '';
 
 function beijingDate(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -280,6 +281,41 @@ function isBeijingTradingWindow(now = new Date()): boolean {
     || (minutes >= 13 * 60 && minutes <= 15 * 60);
 }
 
+function getNewYorkClock(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || '';
+  const hour = Number(value('hour'));
+  const minute = Number(value('minute'));
+  return {
+    sessionDate: `${value('year')}-${value('month')}-${value('day')}`,
+    weekday: value('weekday'),
+    minutes: hour * 60 + minute,
+  };
+}
+
+/** 美股常规盘 09:30–16:00（纽约时区，自动处理夏令时）。 */
+function isUsTradingWindow(now = new Date()): boolean {
+  const clock = getNewYorkClock(now);
+  if (clock.weekday === 'Sat' || clock.weekday === 'Sun') return false;
+  return clock.minutes >= 9 * 60 + 30 && clock.minutes <= 16 * 60;
+}
+
+/** 收盘后首个十分钟窗口固化美股日结；交易所休市日由上游实际交易日价格兜底跳过。 */
+function getUsCloseSessionToRun(now = new Date()): string | null {
+  const clock = getNewYorkClock(now);
+  if (clock.weekday === 'Sat' || clock.weekday === 'Sun') return null;
+  return clock.minutes >= 16 * 60 && clock.minutes < 16 * 60 + 10 ? clock.sessionDate : null;
+}
+
 function millisecondsUntilNextFiveMinuteBoundary(now = new Date()): number {
   const next = new Date(now);
   next.setUTCSeconds(0, 0);
@@ -290,10 +326,18 @@ function millisecondsUntilNextFiveMinuteBoundary(now = new Date()): number {
 function scheduleNextManualStockIntradayRefresh(): void {
   intradayTimer = setTimeout(async () => {
     try {
-      if (isBeijingTradingWindow()) {
+      if (isBeijingTradingWindow() || isUsTradingWindow()) {
         await Promise.all([
           refreshManualStockIntradaySnapshots(),
           refreshLedgerStockTagIntradaySnapshots(),
+        ]);
+      }
+      const usCloseSession = getUsCloseSessionToRun();
+      if (usCloseSession && usCloseSession !== lastUsCloseSession) {
+        lastUsCloseSession = usCloseSession;
+        await Promise.all([
+          refreshManualStockCloseSnapshots(),
+          refreshLedgerStockTagCloseSnapshots(),
         ]);
       }
     } catch (error) {
@@ -305,7 +349,7 @@ function scheduleNextManualStockIntradayRefresh(): void {
 }
 
 function refreshIntradayQuotesOnStartup(): void {
-  if (!isBeijingTradingWindow()) return;
+  if (!isBeijingTradingWindow() && !isUsTradingWindow()) return;
   void Promise.all([
     refreshManualStockIntradaySnapshots(),
     refreshLedgerStockTagIntradaySnapshots(),
@@ -327,5 +371,5 @@ export function startManualStockCloseScheduler(): void {
   // 部署或 PM2 重启发生在交易时段时，先立即取一次报价，之后再对齐每五分钟整点。
   refreshIntradayQuotesOnStartup();
   scheduleNextManualStockIntradayRefresh();
-  console.log("[股票行情] 52订单、37股票标签及其股票保证金在交易时段每5分钟更新，15:05固化盘尾快照");
+  console.log("[股票行情] 52订单、37股票标签及其股票保证金按中美交易时段每5分钟更新；A股15:05、美股纽约16:00后固化盘尾快照");
 }

@@ -338,6 +338,18 @@ async function fetchYahooPrice(symbol: string): Promise<number | null> {
   return null;
 }
 
+/** Yahoo 回退未返回交易日期时，按纽约时区标记美股交易日，不能误用北京时间跨日。 */
+function newYorkTradingDate(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
 /** 国内优先的新浪批量行情：美股的第2列为最新价，hf_商品的第1列为最新价。 */
 async function fetchSinaQuotes(coins: string[]): Promise<Record<string, number>> {
   const reverse = new Map<string, string>();
@@ -375,19 +387,27 @@ type OnDemandStockQuote = {
   source: string;
   updatedAt: string;
   priceDate?: string;
+  name?: string;
 };
 
-export type ManualAshareStockSuggestion = {
-  /** 订单中统一保存的交易所代码，例如 600519.SH。 */
+export type ManualStockMarket = 'A' | 'US';
+
+export type ManualStockSuggestion = {
+  /** 订单中统一保存的交易所代码，例如 600519.SH 或 AAPL。 */
   symbol: string;
-  /** 管理员识别用的六码股票代码。 */
+  /** 管理员识别用的本地交易代码。 */
   code: string;
   name: string;
+  market: ManualStockMarket;
+  currency: 'CNY' | 'USD';
   /** 选中股票时写入一笔最新价；随后由每日 15:05 的盘尾快照覆盖。 */
   latestPrice?: number;
   latestPriceDate?: string;
   latestPriceUpdatedAt?: string;
 };
+
+/** 兼容既有52号订单调用；新37号标签统一使用 ManualStockSuggestion。 */
+export type ManualAshareStockSuggestion = ManualStockSuggestion;
 
 /**
  * 针对融资订单里管理员临时录入的股票代码查询最新价格。
@@ -424,13 +444,14 @@ async function fetchSinaOnDemandStockQuote(symbol: string): Promise<OnDemandStoc
     const usePreviousClose = aShare !== null && !isValidPrice(latestPrice) && isValidPrice(previousClose);
     const price = usePreviousClose ? previousClose : latestPrice;
     if (!isValidPrice(price)) return null;
-    const dateIndex = parts.findIndex((part) => /^\d{4}-\d{2}-\d{2}$/.test(String(part).trim()));
+    const dateIndex = parts.findIndex((part) => /^\d{4}-\d{2}-\d{2}(?:[ T].*)?$/.test(String(part).trim()));
     return {
       price,
       currency: aShare ? 'CNY' : 'USD',
       source: usePreviousClose ? '新浪财经·昨收参考' : '新浪财经',
       updatedAt: nowIso(),
-      priceDate: dateIndex >= 0 ? String(parts[dateIndex]).trim() : undefined,
+      priceDate: dateIndex >= 0 ? String(parts[dateIndex]).trim().slice(0, 10) : undefined,
+      name: String(parts[0] || '').trim() || undefined,
     };
   } catch {
     return null;
@@ -452,7 +473,23 @@ export async function fetchIntradayStockQuotes(symbols: string[]): Promise<Recor
 
   await Promise.all(uniqueSymbols.map(async (symbol) => {
     const sina = await fetchSinaOnDemandStockQuote(symbol);
-    if (sina) results[symbol] = sina;
+    if (sina) {
+      results[symbol] = sina;
+      return;
+    }
+    // 美股盘中更新与录入检索使用同一组回退来源，避免新浪短暂限流后持仓估值停止刷新。
+    if (!/^\d{6}\.(SH|SZ|BJ)$/.test(symbol)) {
+      const yahooPrice = await fetchYahooPrice(symbol);
+      if (yahooPrice) {
+        results[symbol] = {
+          price: yahooPrice,
+          currency: 'USD',
+          source: 'Yahoo Finance',
+          updatedAt: nowIso(),
+          priceDate: newYorkTradingDate(),
+        };
+      }
+    }
   }));
 
   return results;
@@ -465,7 +502,7 @@ function expectedAshareSuffix(code: string): 'SH' | 'SZ' | 'BJ' | null {
   return null;
 }
 
-type ManualAshareStockBase = Omit<ManualAshareStockSuggestion, 'latestPrice' | 'latestPriceDate' | 'latestPriceUpdatedAt'>;
+type ManualAshareStockBase = Omit<ManualStockSuggestion, 'latestPrice' | 'latestPriceDate' | 'latestPriceUpdatedAt'>;
 
 async function searchLocalManualAshareStocks(query: string): Promise<ManualAshareStockBase[]> {
   const rawQuery = String(query || '').trim();
@@ -487,14 +524,14 @@ async function searchLocalManualAshareStocks(query: string): Promise<ManualAshar
         : 'SELECT code, name FROM stock_list WHERE name LIKE ? ORDER BY name LIMIT 8',
       [isExactCode ? compactCode : `%${rawQuery}%`],
     );
-    return (rows as any[])
-      .map((row) => {
+    const suggestions: Array<ManualAshareStockBase | null> = (rows as any[])
+      .map((row): ManualAshareStockBase | null => {
         const code = String(row?.code || '').trim().padStart(6, '0');
         const suffix = expectedAshareSuffix(code);
         const name = String(row?.name || '').trim();
-        return suffix && name ? { symbol: `${code}.${suffix}`, code, name } : null;
-      })
-      .filter((item): item is ManualAshareStockBase => !!item);
+        return suffix && name ? { symbol: `${code}.${suffix}`, code, name, market: 'A' as const, currency: 'CNY' as const } : null;
+      });
+    return suggestions.filter((item): item is ManualAshareStockBase => item !== null);
   } catch {
     return [];
   }
@@ -541,7 +578,7 @@ export async function searchManualAshareStocks(query: string): Promise<ManualAsh
       const name = String(fields[4] || fields[0] || '').trim();
       if (!name) continue;
       const symbol = `${code}.${suffix}`;
-      deduped.set(symbol, { symbol, code, name });
+      deduped.set(symbol, { symbol, code, name, market: 'A', currency: 'CNY' });
     }
   } catch {
     // 建议源偶发网络/限流不应让管理员无法验证股票，继续读取本地目录。
@@ -551,6 +588,115 @@ export async function searchManualAshareStocks(query: string): Promise<ManualAsh
     ? remoteResults
     : await searchLocalManualAshareStocks(normalizedQuery);
   return await hydrateManualAshareStockSuggestions(baseResults);
+}
+
+type ManualUsStockBase = Pick<ManualStockSuggestion, 'symbol' | 'code' | 'name' | 'market' | 'currency'>;
+
+/**
+ * 美股基础目录已在生产库中维护。先在目录按代码、英文名及中文名模糊匹配，
+ * 再逐只取实时价核验，避免把用户输入的任意英文字符串误当成可交易 ticker。
+ */
+async function searchLocalManualUsStocks(query: string): Promise<ManualUsStockBase[]> {
+  const normalizedQuery = String(query || '').trim().toUpperCase();
+  if (!normalizedQuery || normalizedQuery.length > 40) return [];
+  try {
+    const { getDbConnection } = await import('./db');
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    const contains = `%${normalizedQuery}%`;
+    const startsWith = `${normalizedQuery}%`;
+    const [rows] = await (conn as any).execute(
+      `SELECT ts_code, name, enname
+       FROM us_stock_basic
+       WHERE classify = 'EQ'
+         AND (UPPER(ts_code) LIKE ? OR UPPER(COALESCE(name, '')) LIKE ? OR UPPER(COALESCE(enname, '')) LIKE ?)
+       ORDER BY CASE
+         WHEN UPPER(ts_code) = ? THEN 0
+         WHEN UPPER(ts_code) LIKE ? THEN 1
+         WHEN UPPER(COALESCE(enname, '')) = ? THEN 2
+         WHEN UPPER(COALESCE(enname, '')) LIKE ? THEN 3
+         WHEN UPPER(COALESCE(name, '')) LIKE ? THEN 4
+         ELSE 5
+       END, list_date DESC, ts_code ASC
+       LIMIT 8`,
+      [contains, contains, contains, normalizedQuery, startsWith, normalizedQuery, startsWith, startsWith],
+    );
+    return (rows as any[]).flatMap((row): ManualUsStockBase[] => {
+      const symbol = String(row?.ts_code || '').trim().toUpperCase();
+      if (!/^[A-Z][A-Z0-9.\-]{0,14}$/.test(symbol)) return [];
+      const name = String(row?.name || row?.enname || symbol).trim() || symbol;
+      return [{ symbol, code: symbol, name, market: 'US', currency: 'USD' }];
+    });
+  } catch {
+    // 目录暂不可用时，仍允许用合法 ticker 直接走行情源核验。
+    return [];
+  }
+}
+
+/** Yahoo 的搜索目录补足本地基础表中尚未同步的英文公司全名，例如 NVIDIA Corporation。 */
+async function searchYahooManualUsStocks(query: string): Promise<ManualUsStockBase[]> {
+  const normalizedQuery = String(query || '').trim();
+  if (!normalizedQuery || normalizedQuery.length > 40) return [];
+  const usEquityExchanges = new Set(['NMS', 'NYQ', 'ASE', 'NGM', 'NCM', 'NAS']);
+  try {
+    const data = await fetchJson(
+      `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(normalizedQuery)}&quotesCount=8&newsCount=0`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' } },
+    );
+    return (Array.isArray(data?.quotes) ? data.quotes : []).flatMap((row: any): ManualUsStockBase[] => {
+      const symbol = String(row?.symbol || '').trim().toUpperCase();
+      const quoteType = String(row?.quoteType || '').toUpperCase();
+      const exchange = String(row?.exchange || '').toUpperCase();
+      if (quoteType !== 'EQUITY' || !usEquityExchanges.has(exchange) || !/^[A-Z][A-Z0-9.\-]{0,14}$/.test(symbol)) return [];
+      const name = String(row?.longname || row?.shortname || symbol).trim() || symbol;
+      return [{ symbol, code: symbol, name, market: 'US', currency: 'USD' }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** 美股支持 ticker、英文名及目录中中文名的模糊搜索；候选项均必须有最新有效报价。 */
+export async function searchManualUsStocks(query: string): Promise<ManualStockSuggestion[]> {
+  const rawQuery = String(query || '').trim();
+  const normalizedQuery = rawQuery.toUpperCase();
+  if (!normalizedQuery || normalizedQuery.length > 40) return [];
+  const [yahooMatches, directoryMatches] = await Promise.all([
+    searchYahooManualUsStocks(rawQuery),
+    searchLocalManualUsStocks(rawQuery),
+  ]);
+  const candidates = new Map<string, ManualUsStockBase>();
+  // 输入合法 ticker 时即使基础目录尚未收录新股，也保持原有的直接核验能力。
+  if (/^[A-Z][A-Z0-9.\-]{0,14}$/.test(normalizedQuery)) {
+    candidates.set(normalizedQuery, {
+      symbol: normalizedQuery,
+      code: normalizedQuery,
+      name: normalizedQuery,
+      market: 'US',
+      currency: 'USD',
+    });
+  }
+  yahooMatches.forEach((item) => candidates.set(item.symbol, item));
+  directoryMatches.forEach((item) => candidates.set(item.symbol, item));
+  const bases = Array.from(candidates.values()).slice(0, 8);
+  if (bases.length === 0) return [];
+  const quotes = await fetchIntradayStockQuotes(bases.map((item) => item.symbol));
+  return bases.flatMap((item): ManualStockSuggestion[] => {
+    const quote = quotes[item.symbol];
+    if (!quote?.price || quote.price <= 0) return [];
+    return [{
+      ...item,
+      name: item.name || quote.name || item.symbol,
+      latestPrice: quote.price,
+      latestPriceDate: quote.priceDate,
+      latestPriceUpdatedAt: quote.updatedAt,
+    }];
+  });
+}
+
+/** 37号股票标签的统一检索入口：A股可按名称/拼音，美股可按代码或名称模糊核验。 */
+export async function searchManualStocks(query: string, market: ManualStockMarket = 'A'): Promise<ManualStockSuggestion[]> {
+  return market === 'US' ? searchManualUsStocks(query) : searchManualAshareStocks(query);
 }
 
 /** Tushare 仅作为日线收盘价兜底，令牌必须在服务端环境变量中配置。 */
@@ -618,7 +764,13 @@ export async function fetchEndOfDayStockCloseSnapshots(symbols: string[]): Promi
 
     const yahoo = await fetchYahooPrice(symbol);
     if (yahoo) {
-      results[symbol] = { price: yahoo, currency: 'USD', source: 'Yahoo Finance', updatedAt: nowIso() };
+      results[symbol] = {
+        price: yahoo,
+        currency: 'USD',
+        source: 'Yahoo Finance',
+        updatedAt: nowIso(),
+        priceDate: newYorkTradingDate(),
+      };
       return;
     }
   }));
