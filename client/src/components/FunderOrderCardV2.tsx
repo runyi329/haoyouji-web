@@ -1673,10 +1673,10 @@ export function FunderOrderCardV2Silver({
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId: (order as any).ledger_id ?? 0, userId: sharedCollateralViewUserId },
     {
-      enabled: isSharedMode && !!((order as any).ledger_id),
-      staleTime: 5000,
-      refetchInterval: 15000,
-      refetchIntervalInBackground: false,
+      // 完整共享池只在打开担保说明后读取，避免卡片列表并发请求。
+      enabled: isSharedMode && !!((order as any).ledger_id) && showCollateralInfo,
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
     }
   );
   // 第⑤项只能消费订单卡已确认的最终担保缺口。服务端摘要是简化口径，
@@ -3293,10 +3293,10 @@ export function FunderLenderCardSilver({
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId: ledgerId ?? 0, userId: sharedCollateralViewUserId },
     {
-      enabled: !!ledgerId && isSharedMode,
-      staleTime: 5000,
-      refetchInterval: 15000,
-      refetchIntervalInBackground: false,
+      // 完整共享池只在打开担保说明后读取，避免卡片列表并发请求。
+      enabled: !!ledgerId && isSharedMode && showCollateralInfo,
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
     }
   );
 
@@ -4344,17 +4344,16 @@ export function FunderLenderCardSilver({
                           </span>
                         ) : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>加载中...</span>
                       ) : isSharedMode ? (() => {
-                        // 共享池摘要复用服务端的逐笔结果，避免将已经借出的本金按市值再扣一次。
-                        if (!sharedPoolInfo) return <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>计算中...</span>;
-                        const totalGap = Number((sharedPoolInfo as any).totalGap);
-                        const gapKnown = Number.isFinite(totalGap);
-                        const gapSufficient = totalGap >= 0;
+                        // 列表优先显示本订单即时缺口；点击问号后才读取完整共享池汇总。
+                        const displayGap = sharedPoolInfo ? Number((sharedPoolInfo as any).totalGap) : collateralGap;
+                        const gapKnown = Number.isFinite(displayGap);
+                        const gapSufficient = Number(displayGap) >= 0;
                         return gapKnown
                           ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                               <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{gapSufficient ? '充足' : '不足'}</span>
-                              <span style={{ color: TXT_PRI }}>{gapSufficient ? '+' : ''}{totalGap.toFixed(2)} U</span>
+                              <span style={{ color: TXT_PRI }}>{gapSufficient ? '+' : ''}{Number(displayGap).toFixed(2)} U</span>
                             </span>
-                          : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>计算中...</span>;
+                          : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>加载中...</span>;
                       })() : (
                         <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                           <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{isSufficient ? '充足' : '不足'}</span>

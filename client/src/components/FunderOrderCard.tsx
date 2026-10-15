@@ -688,6 +688,26 @@ export function FunderOrderCard({
 }: FunderOrderCardProps) {
   const cardExportRef = useRef<HTMLDivElement>(null);
   const manualStockPnlDetailExportRef = useRef<HTMLDivElement>(null);
+  // 长列表中不让每张卡片同时请求37号标签、股票盘尾价与期权 Greeks。
+  // 卡片进入视窗（提前 600px 预取）后才读详情；编辑预览仍保持即时联动。
+  const [cardNearViewport, setCardNearViewport] = useState(previewMode || jointSegmentMode);
+  useEffect(() => {
+    if (previewMode || jointSegmentMode || cardNearViewport) return;
+    const node = cardExportRef.current;
+    if (!node || typeof IntersectionObserver === 'undefined') {
+      setCardNearViewport(true);
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setCardNearViewport(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '600px 0px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [previewMode, jointSegmentMode, cardNearViewport]);
+  const shouldLoadRemoteDetails = previewMode || jointSegmentMode || cardNearViewport;
   // 共享担保弹窗：点击订单号弹出第二层订单详情
   const [clickedOrderNo, setClickedOrderNo] = useState<string | null>(null);
   const [collateralDetail, setCollateralDetail] = useState<{
@@ -706,6 +726,22 @@ export function FunderOrderCard({
         : { ...previous, [normalizedOrderId]: gap }
     ));
   }, []);
+  // 担保说明状态前置：共享担保完整池只在用户打开说明时读取，避免长列表逐卡轮询。
+  const [_intShowInterestTip, _intSetShowInterestTip] = useState(false);
+  const [_intShowCollateralInfo, _intSetShowCollateralInfo] = useState(false);
+  // 37号担保货币详情与52订单担保缺口公式是两份不同内容，不能共用同一个弹窗状态。
+  const [showCollateralGapFormulaInfo, setShowCollateralGapFormulaInfo] = useState(false);
+  const [_intShowMarginInfo, _intSetShowMarginInfo] = useState(false);
+  const showInterestTip = _propShowInterestTip !== undefined ? _propShowInterestTip : _intShowInterestTip;
+  const setShowInterestTip = _propSetShowInterestTip ?? _intSetShowInterestTip;
+  const showCollateralInfo = _propShowCollateralInfo !== undefined ? _propShowCollateralInfo : _intShowCollateralInfo;
+  const setShowCollateralInfo = _propSetShowCollateralInfo ?? _intSetShowCollateralInfo;
+  const closeCollateralInfoDialog = () => {
+    setShowCollateralGapFormulaInfo(false);
+    setShowCollateralInfo(false);
+  };
+  const showMarginInfo = _propShowMarginInfo !== undefined ? _propShowMarginInfo : _intShowMarginInfo;
+  const setShowMarginInfo = _propSetShowMarginInfo ?? _intSetShowMarginInfo;
   // clickedOrder: 延迟计算，在 sharedPoolInfo 声明之后（见下方 clickedOrderResolved）
   // ===== 内部 fallback：当父组件未传入对应 props 时，组件自己管理 state 和 mutation =====
   const trpcUtils = trpc.useUtils();
@@ -913,10 +949,10 @@ export function FunderOrderCard({
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId, userId: sharedCollateralViewUserId },
     {
-      enabled: ledgerId > 0 && orderShareMode === 'self',
-      staleTime: 5000,
-      refetchInterval: 15000,
-      refetchIntervalInBackground: false,
+      // 共享池汇总仅供担保缺口说明弹窗使用；长列表不再逐卡请求/轮询完整池。
+      enabled: ledgerId > 0 && orderShareMode === 'self' && (showCollateralInfo || showCollateralGapFormulaInfo),
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
     }
   );
   // ⑤的展示摘要与原订单卡输入由同一次共享池权限查询返回。两份数据按订单 id
@@ -1088,42 +1124,42 @@ export function FunderOrderCard({
   const manualStockSymbols = useMemo(() => manualStockPositions.map((position) => position.symbol), [manualStockPositions]);
   const manualStockCloseQuery = (trpc as any).getManualStockCloseSnapshots.useQuery(
     { symbols: manualStockSymbols },
-    { enabled: isManualStockPnlSource && manualStockSymbols.length > 0, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false },
+    { enabled: shouldLoadRemoteDetails && isManualStockPnlSource && manualStockSymbols.length > 0, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false },
   );
 
   // 两个标签独立查询：盈亏只读净值，担保只读逐笔保证金；若选了同一标签，数据口径仍相同。
   const { data: _pnlTagConfig } = trpc.ledger.getTagConfig.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPnlTagName || '' },
-    { enabled: !!linkedPnlTagName, staleTime: 3000 }
+    { enabled: shouldLoadRemoteDetails && !!linkedPnlTagName, staleTime: 60_000, refetchOnWindowFocus: false }
   );
   const { data: _pnlTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPnlTagName || '' },
-    { enabled: !!linkedPnlTagName, staleTime: 3000 }
+    { enabled: shouldLoadRemoteDetails && !!linkedPnlTagName, staleTime: 60_000, refetchOnWindowFocus: false }
   );
   const { data: _collateralTagConfig } = trpc.ledger.getTagConfig.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '' },
-    { enabled: !!linkedCollateralTagName, staleTime: 3000 }
+    { enabled: shouldLoadRemoteDetails && !!linkedCollateralTagName, staleTime: 60_000, refetchOnWindowFocus: false }
   );
   const { data: _collateralTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '' },
-    { enabled: !!linkedCollateralTagName, staleTime: 3000 }
+    { enabled: shouldLoadRemoteDetails && !!linkedCollateralTagName, staleTime: 60_000, refetchOnWindowFocus: false }
   );
   const { data: _marginRateTagConfig } = trpc.ledger.getTagConfig.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedMarginRateTagName || '' },
-    { enabled: hasExternalMarginRateReference, staleTime: 3000 }
+    { enabled: shouldLoadRemoteDetails && hasExternalMarginRateReference, staleTime: 60_000, refetchOnWindowFocus: false }
   );
   const { data: _marginRateTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedMarginRateTagName || '' },
-    { enabled: hasExternalMarginRateReference, staleTime: 3000 }
+    { enabled: shouldLoadRemoteDetails && hasExternalMarginRateReference, staleTime: 60_000, refetchOnWindowFocus: false }
   );
   // 37号原页面与52引用页共享同一个服务端估值快照，禁止两边各自用不同时间点的ETH价格重算。
   const { data: _canonicalCollateralValuation } = (trpc.ledger as any).getTagMarginValuation.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedCollateralTagName || '' },
-    { enabled: hasExternalCollateral && !!linkedCollateralTagName, staleTime: 25_000, refetchInterval: 30_000, refetchIntervalInBackground: true }
+    { enabled: shouldLoadRemoteDetails && hasExternalCollateral && !!linkedCollateralTagName, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false, refetchOnWindowFocus: false }
   );
   const { data: _canonicalMarginRateValuation } = (trpc.ledger as any).getTagMarginValuation.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedMarginRateTagName || '' },
-    { enabled: hasExternalMarginRateReference, staleTime: 25_000, refetchInterval: 30_000, refetchIntervalInBackground: true }
+    { enabled: shouldLoadRemoteDetails && hasExternalMarginRateReference, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false, refetchOnWindowFocus: false }
   );
   // 与37号右侧“剩余保证金占基数比”完全一致：
   // (最新余额 − 初始金额) × 账号倍率 + 已付保证金，再除以37号保证金基数；
@@ -1147,15 +1183,15 @@ export function FunderOrderCard({
   // 与 RightInterestDetail 共用同一份标签分段；待结、已结分别拉取，允许引用不同标签。
   const { data: _linkedPendingInterestPeriods } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPendingInterestTagName },
-    { enabled: hasExternalPendingInterest, staleTime: 3000 }
+    { enabled: shouldLoadRemoteDetails && hasExternalPendingInterest, staleTime: 60_000, refetchOnWindowFocus: false }
   );
   const { data: _linkedPaidInterestPeriods } = (trpc.ledger as any).getTagInterestPeriods.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPaidInterestTagName },
-    { enabled: hasExternalPaidInterest, staleTime: 3000 }
+    { enabled: shouldLoadRemoteDetails && hasExternalPaidInterest, staleTime: 60_000, refetchOnWindowFocus: false }
   );
   const { data: _pendingInterestTagConfig } = trpc.ledger.getTagConfig.useQuery(
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: linkedPendingInterestTagName || '' },
-    { enabled: hasExternalPendingInterest, staleTime: 3000 }
+    { enabled: shouldLoadRemoteDetails && hasExternalPendingInterest, staleTime: 60_000, refetchOnWindowFocus: false }
   );
   const linkedCollateralMarginRecords = useMemo(() => {
     const configured = parseTagMarginRecords((_collateralTagConfig as any)?.margin_by_coin);
@@ -1168,11 +1204,11 @@ export function FunderOrderCard({
   );
   const linkedCollateralStockCloseQuery = (trpc as any).getManualStockCloseSnapshots.useQuery(
     { symbols: linkedCollateralMarginStockSymbols },
-    { enabled: hasExternalCollateral && linkedCollateralMarginStockSymbols.length > 0, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false },
+    { enabled: shouldLoadRemoteDetails && hasExternalCollateral && linkedCollateralMarginStockSymbols.length > 0, staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false },
   );
   const linkedCollateralStockQuotes = ((linkedCollateralStockCloseQuery.data as any)?.quotes ?? {}) as Record<string, { price?: number; currency?: string; priceDate?: string; updatedAt?: string }>;
   const { data: _extCryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    enabled: hasExternalDataSource, refetchInterval: 3000, staleTime: 0,
+    enabled: shouldLoadRemoteDetails && hasExternalDataSource, refetchInterval: 30_000, staleTime: 25_000, refetchIntervalInBackground: false,
   });
   // 读取三份独立数据：担保标签的逐笔保证金总值、按管理员口径显示的浮盈、
   // 以及37标签自己的真实当前持仓值。最后一项不能由倍率后浮盈反推。
@@ -1293,23 +1329,6 @@ export function FunderOrderCard({
       }, 0);
   }, [hasExternalPaidInterest, _linkedPaidInterestPeriods, linkedPaidInterestTagName]);
 
-  // 弹窗状态：优先使用父组件传入的 props，否则 fallback 到内部 state
-  // （父组件提升状态可防止数据刷新导致弹窗自动关闭）
-  const [_intShowInterestTip, _intSetShowInterestTip] = useState(false);
-  const [_intShowCollateralInfo, _intSetShowCollateralInfo] = useState(false);
-  // 37号担保货币详情与52订单担保缺口公式是两份不同内容，不能共用同一个弹窗状态。
-  const [showCollateralGapFormulaInfo, setShowCollateralGapFormulaInfo] = useState(false);
-  const [_intShowMarginInfo, _intSetShowMarginInfo] = useState(false);
-  const showInterestTip = _propShowInterestTip !== undefined ? _propShowInterestTip : _intShowInterestTip;
-  const setShowInterestTip = _propSetShowInterestTip ?? _intSetShowInterestTip;
-  const showCollateralInfo = _propShowCollateralInfo !== undefined ? _propShowCollateralInfo : _intShowCollateralInfo;
-  const setShowCollateralInfo = _propSetShowCollateralInfo ?? _intSetShowCollateralInfo;
-  const closeCollateralInfoDialog = () => {
-    setShowCollateralGapFormulaInfo(false);
-    setShowCollateralInfo(false);
-  };
-  const showMarginInfo = _propShowMarginInfo !== undefined ? _propShowMarginInfo : _intShowMarginInfo;
-  const setShowMarginInfo = _propSetShowMarginInfo ?? _intSetShowMarginInfo;
   // ===== 担保物快捷编辑面板 =====
   type QuickCollateralItem = { coin: string; qty: string; note?: string; source?: 'wallet' };
   const isQuickWalletCollateral = (asset: Partial<QuickCollateralItem> | null | undefined) =>
@@ -1700,7 +1719,7 @@ export function FunderOrderCard({
     exerciseDate: optionInfo?.exerciseDate || '',
     strikePrice: optionInfo?.strikePrice ? Number(optionInfo.strikePrice) : 0,
     direction: (optionInfo?.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
-    enabled: isOptionOrder && optionGreeksSupported && !!optionInfo?.exerciseDate && !!optionInfo?.strikePrice,
+    enabled: shouldLoadRemoteDetails && isOptionOrder && optionGreeksSupported && !!optionInfo?.exerciseDate && !!optionInfo?.strikePrice,
   });
   // 融资金额统一以 order.amount 的 USDT 基准值保存；amount_currency 表示买入价格和融资金额的计价币种。
   const storedAmount = parseFloat(order.amount || '0');
@@ -2381,7 +2400,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     return remaining;
   })();
   const externalCollateralValueU = isSharedMode
-    ? (sharedPoolInfo ? Number((sharedPoolInfo as any).totalCollateralValue) : null)
+    // 列表卡仅展示本订单即时担保；完整共享池总额按需在说明弹窗中读取。
+    ? (sharedPoolInfo ? Number((sharedPoolInfo as any).totalCollateralValue) : sharedOrderCollateralValueU)
     : (hasExternalCollateral ? extTagCollateralValueU : (collateralValueKnown ? collateralValue : null));
   const externalCollateralValueCny = hasExternalCollateral && !isSharedMode
     ? extTagCollateralValueCny

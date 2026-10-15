@@ -980,9 +980,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     { ledgerId, ...(selectedUserId ? { userId: selectedUserId } : {}), ...(adminOnly ? { roleFilter: "admin" as const } : {}), ...(financeOnly ? { financeOnly: true } : {}) },
     {
       enabled: ledgerId > 0 && !adminOnly,
-      staleTime: usesActivePagePolling ? 2_000 : 3_000,
-      // 37号与52号账本统一由活动页面两秒调度刷新，避免与旧三秒订单轮询重叠。
+      // 订单创建、编辑、结息与结清后都会显式失效并刷新；首屏无需每两秒重新读取整张订单表。
+      staleTime: usesActivePagePolling ? 15_000 : 10_000,
       refetchInterval: usesActivePagePolling ? false : 3_000,
+      refetchOnWindowFocus: false,
       placeholderData: (prev: any) => prev,
     }
   );
@@ -990,9 +991,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     { ledgerId },
     {
       enabled: ledgerId > 0 && !!adminOnly && isAdminUser,
-      staleTime: usesActivePagePolling ? 2_000 : 3_000,
-      // 37号与52号账本统一由活动页面两秒调度刷新，避免与旧三秒订单轮询重叠。
+      staleTime: usesActivePagePolling ? 15_000 : 10_000,
       refetchInterval: usesActivePagePolling ? false : 3_000,
+      refetchOnWindowFocus: false,
       placeholderData: (prev: any) => prev,
     }
   );
@@ -1019,7 +1020,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const sharedCollateralUserId = getParticipantUserIdForOrder(editingOrder) ?? editingOrder?.user_id ?? (formData as any)?.userId;
   const { data: sharedPoolData } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId, userId: Number(sharedCollateralUserId) },
-    { enabled: ledgerId > 0 && !!sharedCollateralUserId && collateralShareMode === 'self', staleTime: 5000 }
+    // 仅在新增或编辑共享担保订单时加载确认清单，列表首屏不占用连接。
+    { enabled: showForm && ledgerId > 0 && !!sharedCollateralUserId && collateralShareMode === 'self', staleTime: 30_000, refetchOnWindowFocus: false }
   );
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
   // 获取37号账本可引用标签。利息暂停与保证金查询暂停是独立状态，均保留历史引用能力。
@@ -1225,9 +1227,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   // 全量订单（不带 userId 过滤），专用于下拉框统计每个用户的订单数量
   const standardAllOrdersQuery = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId, ...(adminOnly ? { roleFilter: "admin" as const } : {}), ...(financeOnly ? { financeOnly: true } : {}) },
-    { enabled: ledgerId > 0 && !adminOnly, staleTime: 30000 }
+    // 未筛选成员时，standardOrderQuery 已经是同一份全量订单，禁止重复请求。
+    { enabled: ledgerId > 0 && !adminOnly && selectedUserId !== null, staleTime: 30_000, refetchOnWindowFocus: false }
   );
-  const allOrdersData = adminOnly ? adminOrderQuery.data : standardAllOrdersQuery.data;
+  const allOrdersData = adminOnly
+    ? adminOrderQuery.data
+    : (selectedUserId !== null ? standardAllOrdersQuery.data : standardOrderQuery.data);
   const allOrders: any[] = (allOrdersData as any)?.orders ?? allOrdersData ?? [];
   // 右侧借方列表会先于全量统计请求拿到卡片数据；在此期间以已显示订单兜底，避免下拉框只剩“全部成员”。
   const memberSelectorOrders: any[] = allOrders.length > 0 ? allOrders : assetOrders;
@@ -1760,7 +1765,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   // 回收站相关
   const { data: deletedOrdersData, refetch: refetchDeletedOrders } = trpc.ledger.funderGetDeletedOrders.useQuery(
     { ledgerId },
-    { enabled: !!ledgerId }
+    // 回收站抽屉打开后才读取，避免每次进入管理页都多一次订单查询。
+    { enabled: !!ledgerId && showRecycleBin, staleTime: 30_000, refetchOnWindowFocus: false }
   );
   const restoreMutation = trpc.ledger.funderRestoreOrder.useMutation({
     onSuccess: () => {
@@ -2531,7 +2537,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       personalHeaderLabel: formData.personalHeaderLabel.trim() || undefined,
       ownerVisibilityMode: formData.ownerVisibilityMode,
       ownerVisibleOwnerIds: formData.ownerVisibleOwnerIds,
-      tags: formData.tags.length > 0 ? formData.tags : undefined,
+      // 编辑时即使已删光标签也要明确传空数组，否则服务端会把它误当成“未编辑”，
+      // 进而继续保留数据库中的旧标签；新建空订单仍沿用未传标签的默认行为。
+      tags: editingOrder ? formData.tags : (formData.tags.length > 0 ? formData.tags : undefined),
       collateralShareMode: collateralShareMode !== 'none' ? collateralShareMode : undefined,
       collateralSource: orderCollateralSourceDraft,
       principalLentOut: effectivePrincipalLentOut,

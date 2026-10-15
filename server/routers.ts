@@ -21567,30 +21567,24 @@ ${klinesSummary}
         userId: z.number(),  // 目标用户ID（本人或管理员查看某用户）
       }))
       .query(async ({ ctx, input }) => {
-        const db = await getLedgerDb();
-        const roleRows = await db.execute(
-          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        // 共享担保弹窗会由多张卡片并发触发。必须复用项目的 MySQL 连接池，
+        // 不可在每次只读请求中重新进行远程 TCP/TLS 握手。
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const [roleRows] = await conn.execute(
+          `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+          [input.ledgerId, ctx.user.id],
         ) as any;
-        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        const role = (roleRows as any[])?.[0]?.role;
         const isManager = role === 'owner' || role === 'admin';
         const isSelf = ctx.user.id === input.userId;
         if (!isManager && !isSelf) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
 
         // 查询该用户名下所有开启了「本人订单共享」的活跃订单
-        const mysql = await import('mysql2/promise');
-        const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL || 'mysql://root:Miao@20190603@124.223.54.69:3306/crm_db';
-        const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
-        const conn = await mysql.createConnection({
-          host: parsedUrl.hostname,
-          port: parseInt(parsedUrl.port) || 3306,
-          user: decodeURIComponent(parsedUrl.username),
-          password: decodeURIComponent(parsedUrl.password),
-          database: parsedUrl.pathname.replace(/^\//, ''),
-        });
         try {
-          // 确保字段存在
-          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_share_mode VARCHAR(10) DEFAULT 'none'`).catch(() => {});
-          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS order_perspective VARCHAR(10) DEFAULT 'self'`).catch(() => {});
+          // 读取接口必须保持只读：此前每张卡片都会在请求时执行 DDL，多个卡片并发
+          // 打开共享担保时会争抢 MySQL 元数据锁，最终让弹窗长期停在“加载中”。
+          // 两列已由订单保存流程的幂等迁移确保存在，读取路径绝不能再执行 ALTER TABLE。
 
           // 共享担保池严格按订单拥有者隔离：只能汇总该用户自己创建、且归属为「本人」的订单。
           // 「他人」订单仅供列表展示，绝不能进入该用户的共享或非共享担保缺口弹窗；
@@ -21636,8 +21630,6 @@ ${klinesSummary}
           const { getLatestPrice, getMarketPriceHealth, getUsdtCnyRate } = await import('./price-scanner');
           const marketPriceHealth = getMarketPriceHealth();
           const usdtCnyRate = getUsdtCnyRate() || 6.8;
-
-          console.log('[SharedPool] orders count:', orders.length, orders.map((o: any) => ({ id: o.id, no: o.order_no, raw_assets: o.collateral_assets, type: typeof o.collateral_assets, isBuffer: Buffer.isBuffer(o.collateral_assets) })));
 
           // 构建实时价格映射（供前端弹窗计算缺口使用）
           const livePrices: Record<string, number> = {};
@@ -22096,7 +22088,6 @@ ${klinesSummary}
               // CNY 标的的买入价与数量天然以人民币相乘，优先标记为CNY，不能误跟随历史amount_currency。
               buyValueCurrency,
               principal,
-              collateralGapBaseMode,
               collateralGapBaseU,
               collateralRiskFormula,
               currentPrice,
@@ -22218,7 +22209,6 @@ ${klinesSummary}
           const totalGap = totalCollateralRequired + totalCollateralValue;
           const totalBuyValue = sharedOrderDetails.reduce((s: number, o: any) => s + (o.buyValue || 0), 0);
 
-          await conn.end();
           return {
             orders: sharedOrderDetails,
             nonSharedOrders: nonSharedOrderDetails,
@@ -22232,7 +22222,6 @@ ${klinesSummary}
             orderCount: sharedOrderDetails.length,
           };
         } catch (e: any) {
-          await conn.end();
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: e?.message || '查询失败' });
         }
       }),
@@ -24357,10 +24346,15 @@ ${klinesSummary}
         const shouldSyncParticipantPeriodInterestDisplay = input.displayConfig !== undefined
           && (Object.prototype.hasOwnProperty.call(input.displayConfig, 'periodInterestTotal')
             || Object.prototype.hasOwnProperty.call(input.displayConfig, 'periodInterestTotalPeriod'));
+        // 标签是整张订单的页眉信息，而不是某一位协作人的独立约定。
+        // 主订单改动（包括删除最后一个标签传入 []）必须同步覆盖所有个人快照，
+        // 否则列表会继续读取协作快照中的旧标签，造成“预览已删除、列表仍显示”。
+        const shouldSyncParticipantTags = input.tags !== undefined;
         const shouldSyncParticipantSnapshot = shouldSyncParticipantStatus
           || shouldSyncParticipantCollateral
           || shouldSyncParticipantSharedAsset
-          || shouldSyncParticipantPeriodInterestDisplay;
+          || shouldSyncParticipantPeriodInterestDisplay
+          || shouldSyncParticipantTags;
         try {
           if (input.status === 'settled' && interestEndDate) {
             const [interestRows] = await conn.execute(
@@ -24450,7 +24444,12 @@ ${klinesSummary}
                   participant.display_config,
                 );
               }
-              if (shouldSyncParticipantPeriodInterestDisplay) {
+              if (shouldSyncParticipantTags) {
+                // updatedOrder.tags 是数据库刚保存后的规范值：有标签为 JSON 文本，
+                // 已清空时为 null。直接赋值确保历史快照的旧标签不会反向覆盖它。
+                snapshot.tags = updatedOrder.tags ?? null;
+              }
+              if (shouldSyncParticipantPeriodInterestDisplay || shouldSyncParticipantTags) {
                 await conn.execute(
                   'UPDATE ledger_order_participants SET order_snapshot = ?, display_config = ?, updated_at = NOW() WHERE id = ?',
                   [JSON.stringify(snapshot), snapshot.display_config, participant.id],
@@ -24513,6 +24512,7 @@ ${klinesSummary}
           participantStatusSynced: shouldSyncParticipantStatus,
           participantCollateralSynced: shouldSyncParticipantCollateral,
           participantAssetSynced: shouldSyncParticipantSharedAsset,
+          participantTagsSynced: shouldSyncParticipantTags,
         };
       }),
     // 协作订单可只结清某一位拥有者／参与者的个人订单视图。
