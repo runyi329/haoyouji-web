@@ -19,6 +19,7 @@ import { startFunderScanner } from "../funder-price-scanner";
 import { startEnergyPriceScanner } from "../energy-price-scanner";
 import { smsService } from "../sms-service";
 import { ensureBeautyTables } from "../db-beauty-init";
+import { ensureZidingCommerceTables, runZidingOrderLifecycleSweep } from "../ziding-commerce-router";
 
 async function initFieldCategories() {
   try {
@@ -724,6 +725,8 @@ async function startServer() {
 
   // 37号股票标签的模式列必须先完成迁移，避免分类读取先于默认值列创建。
   await ensureLedgerStockPortfolioTables();
+  // 紫鼎商业联盟使用项目独立表；在热预览和生产启动时均确保结构可用。
+  await ensureZidingCommerceTables();
 
   // tRPC API
   // TEMP DEBUG: log Authorization header
@@ -780,6 +783,20 @@ async function startServer() {
 
     // 启动实时价格扫描器（每60秒刷新 BTC/ETH/SOL 现货价格）
     startPriceScanner();
+
+    // 紫鼎商城：每 10 分钟释放超时未传凭证订单的预占库存，并自动确认到期已发货订单。
+    const runZidingLifecycle = async () => {
+      try {
+        const result = await runZidingOrderLifecycleSweep();
+        if (result.cancelled || result.completed) {
+          console.log(`[ZidingLifecycle] 已取消 ${result.cancelled} 笔超时订单，已完成 ${result.completed} 笔已发货订单`);
+        }
+      } catch (error: any) {
+        console.error("[ZidingLifecycle] 扫描失败:", error?.message || error);
+      }
+    };
+    await runZidingLifecycle();
+    setInterval(runZidingLifecycle, 10 * 60 * 1000);
 
     // 管理员T+0逐笔挂单以统一 ETH 永续标记价自动确认成交；挂单未成交前不计入真实仓位和收益。
     startLedger52T0PendingOrderScanner();

@@ -193,6 +193,113 @@ export async function uploadFileToCOS(
   }
 }
 
+// ============================================================
+// 紫鼎商业联盟：付款凭证私有存储
+// ============================================================
+// 注意：付款凭证不得复用上方返回永久公开 URL 的上传方法。数据库只保存
+// objectKey；每一次预览都必须先在业务路由中做订单归属/项目管理员鉴权，再
+// 临时签发地址。
+const ZIDING_PAYMENT_PROOF_PREFIX = "ziding-commercial-alliance/payment-proofs/v1/";
+const ZIDING_PAYMENT_PROOF_MAX_BYTES = 10 * 1024 * 1024;
+const ZIDING_PAYMENT_PROOF_MAX_PIXELS = 40_000_000;
+
+export type ZidingPrivatePaymentProof = {
+  objectKey: string;
+  contentType: "image/webp";
+  byteSize: number;
+  sha256: string;
+};
+
+function parseZidingProofImage(data: string): { source: Buffer; contentType: string } {
+  const match = data.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/i);
+  if (!match) throw new Error("付款凭证仅支持 JPG、PNG 或 WebP 图片");
+  const source = Buffer.from(match[2].replace(/\s/g, ""), "base64");
+  if (!source.length || source.length > ZIDING_PAYMENT_PROOF_MAX_BYTES) {
+    throw new Error("付款凭证单张图片不能超过 10MB");
+  }
+  return { source, contentType: match[1].toLowerCase() };
+}
+
+/**
+ * 上传付款凭证到私有 COS 对象。
+ *
+ * 图片会被重编码为 WebP，从而移除 EXIF/GPS 等非必要元数据；返回原始图片的
+ * SHA-256，方便业务审计追溯。调用方必须在上传前完成“订单属于当前用户”的校验。
+ */
+export async function uploadPrivateZidingPaymentProof(input: {
+  imageData: string;
+  orderId: number;
+  ownerUserId: number;
+}): Promise<ZidingPrivatePaymentProof> {
+  const { source } = parseZidingProofImage(input.imageData);
+  const metadata = await sharp(source, { failOn: "error" }).metadata();
+  const pixels = Number(metadata.width || 0) * Number(metadata.height || 0);
+  if (!metadata.width || !metadata.height || pixels <= 0 || pixels > ZIDING_PAYMENT_PROOF_MAX_PIXELS) {
+    throw new Error("付款凭证图片尺寸无效或过大");
+  }
+
+  const sha256 = crypto.createHash("sha256").update(source).digest("hex");
+  const normalized = await sharp(source, { failOn: "error" })
+    .rotate()
+    .webp({ quality: 90 })
+    .toBuffer();
+  const objectKey = `${ZIDING_PAYMENT_PROOF_PREFIX}order/${input.orderId}/user/${input.ownerUserId}/${crypto.randomUUID()}.webp`;
+
+  await cos.putObject({
+    Bucket: BUCKET,
+    Region: REGION,
+    Key: objectKey,
+    Body: normalized,
+    ContentType: "image/webp",
+    ACL: "private",
+    CacheControl: "private, no-store",
+    ContentDisposition: 'inline; filename="payment-proof.webp"',
+  });
+
+  return {
+    objectKey,
+    contentType: "image/webp",
+    byteSize: normalized.length,
+    sha256,
+  };
+}
+
+/** 生成私有付款凭证的短时预览地址；授权由调用方负责。 */
+export async function createZidingPaymentProofViewUrl(
+  objectKey: string,
+  expiresSeconds = 300,
+  download = false,
+): Promise<{ url: string; expiresAt: string }> {
+  if (!objectKey.startsWith(ZIDING_PAYMENT_PROOF_PREFIX)) {
+    throw new Error("非法的付款凭证对象键");
+  }
+  const safeExpires = Math.max(60, Math.min(Math.floor(expiresSeconds), 300));
+  const url = await new Promise<string>((resolve, reject) => {
+    cos.getObjectUrl(
+      {
+        Bucket: BUCKET,
+        Region: REGION,
+        Key: objectKey,
+        Sign: true,
+        Method: "GET",
+        Expires: safeExpires,
+        // COS 会把此查询参数带入响应头；浏览器因此走下载而不是仅打开图片。
+        Query: download ? { "response-content-disposition": 'attachment; filename="payment-proof.webp"' } : undefined,
+      },
+      (error, data) => error ? reject(error) : resolve(data.Url),
+    );
+  });
+  return { url, expiresAt: new Date(Date.now() + safeExpires * 1000).toISOString() };
+}
+
+/** 仅允许由付款凭证业务清理私有对象，避免误删其他 COS 文件。 */
+export async function deletePrivateZidingPaymentProof(objectKey: string): Promise<void> {
+  if (!objectKey.startsWith(ZIDING_PAYMENT_PROOF_PREFIX)) {
+    throw new Error("非法的付款凭证对象键");
+  }
+  await cos.deleteObject({ Bucket: BUCKET, Region: REGION, Key: objectKey });
+}
+
 /**
  * 批量上传图片（自动压缩为WebP）
  * @param images 图片数据数组

@@ -509,6 +509,9 @@ function Router() {
         <Route path="/p/proj_hzxm2t/admin/panel" component={lazy(() => import("./pages/miban/MibanApp"))} />
         <Route path="/p/proj_hzxm2t/:rest*" component={lazy(() => import("./pages/miban/MibanApp"))} />
         <Route path="/p/proj_hzxm2t" component={lazy(() => import("./pages/miban/MibanApp"))} />
+        {/* 紫金商业联盟：项目级商城，后台入口由项目角色控制 */}
+        <Route path="/p/proj_stn4q7/:rest*" component={lazy(() => import("./pages/ziding/ZidingApp"))} />
+        <Route path="/p/proj_stn4q7" component={lazy(() => import("./pages/ziding/ZidingApp"))} />
         <Route path="/p/:slug" component={lazy(() => import("./pages/admin/ProjectLanding"))} />
         <Route path="/payment/result" component={PaymentResult} />
 

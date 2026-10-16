@@ -82,6 +82,7 @@ import { yabanOpsRouter } from "./yaban-ops-router";
 import { yabanStaffRouter } from "./yaban-staff-router";
 import { yabanTreatmentRouter } from "./yaban-treatment-router";
 import { versionRouter } from "./version-router";
+import { zidingCommerceRouter } from "./ziding-commerce-router";
 import { aiWalletRouter, assertAiWalletOperationEnabled } from "./ai-wallet-router";
 import { AI_WALLET_FUNDING_ASSETS, AI_WALLET_MARKET_ASSETS, AI_WALLET_SETTLEMENT_ASSETS } from "../shared/ai-wallet-assets";
 import * as dbMultiAssetWallet from "./db-multi-asset-wallet";
@@ -2223,6 +2224,7 @@ export const appRouter = router({
   yabanOps: yabanOpsRouter,
   yabanTreatment: yabanTreatmentRouter,
   version: versionRouter,
+  zidingCommerce: zidingCommerceRouter,
   // 全局 AI 智能钱包：项目账户档案、模板与只读逻辑档案。
   aiWallet: aiWalletRouter,
   prediction: predictionRouter,

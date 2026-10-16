@@ -25,9 +25,14 @@ export async function createContext(
 
   // 开启 DEV_BYPASS_AUTH 时自动使用测试用户；可通过 DEV_BYPASS_USER_ID
   // 指定真实账户，便于本地按目标权限预览。生产环境不会进入此分支。
-  // 但如果请求携带了 Authorization header，说明前端已有真实 token，不走 bypass
+  // DEV_FORCE_USER_ID 仅供热预览强制锁定身份，即使浏览器残留了其他账户的令牌也不受影响。
+  const forcedUserId = process.env.DEV_BYPASS_AUTH === 'true' ? Number(process.env.DEV_FORCE_USER_ID || 0) : 0;
+  if (Number.isInteger(forcedUserId) && forcedUserId > 0) {
+    user = await sdk.getCachedUserById(forcedUserId) ?? user;
+  }
+  // 常规预览下，若请求携带 Authorization header，说明前端已有真实 token，不走 bypass。
   const hasAuthHeader = !!(opts.req.headers.authorization);
-  if (process.env.DEV_BYPASS_AUTH === 'true' && !user && !hasAuthHeader) {
+  if (process.env.DEV_BYPASS_AUTH === 'true' && !forcedUserId && !user && !hasAuthHeader) {
     const configuredUserId = Number(process.env.DEV_BYPASS_USER_ID || 28);
     const configuredUser = Number.isInteger(configuredUserId) && configuredUserId > 0
       ? await sdk.getCachedUserById(configuredUserId)
