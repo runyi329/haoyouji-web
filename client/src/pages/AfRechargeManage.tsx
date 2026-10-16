@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ChevronLeft, Plus, Pencil, Trash2, RefreshCw, Search, X,
@@ -34,6 +34,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { UserAvatar } from "@/components/UserAvatar";
+import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type LedgerDatePreset = "all" | "today" | "this_month" | "last_month" | "custom";
@@ -472,6 +473,7 @@ export default function AfRechargeManage() {
   const [adjSearch, setAdjSearch] = useState("");
   const [adjShowDropdown, setAdjShowDropdown] = useState(false);
   const [adjSelectedUser, setAdjSelectedUser] = useState<any>(null);
+  const adjSelectedUserExportRef = useRef<HTMLDivElement | null>(null);
   const [adjCurrency, setAdjCurrency] = useState<AdjustmentAsset>("USDT");
   const [adjDirection, setAdjDirection] = useState<"add" | "sub">("add");
   const [adjAmount, setAdjAmount] = useState("");
@@ -1881,15 +1883,29 @@ export default function AfRechargeManage() {
             <div>
               <p className="text-[10px] text-gray-400 mb-1">调账用户</p>
             {adjSelectedUser ? (
-              <div className="bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5">
+              <div ref={adjSelectedUserExportRef} className="bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-[14px] font-bold text-black">{adjSelectedUser.name || adjSelectedUser.username}</p>
                     <p className="text-[11px] text-gray-400 mt-0.5">ID: {adjSelectedUser.id} · @{adjSelectedUser.username}</p>
                   </div>
-                  <button onClick={clearAdjUser} className="text-[11px] text-orange-500 font-semibold px-2 py-1 rounded-lg bg-orange-100 active:bg-orange-200">
-                    更换
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5" data-card-export-hide="true">
+                    <OrderCardImageDownload
+                      targetRef={adjSelectedUserExportRef}
+                      orderNo={adjSelectedUser.username || adjSelectedUser.id}
+                      color="#F97316"
+                      outerPadding={12}
+                      captureFullContent
+                      exportBackground="#FFF7ED"
+                      variant="bare"
+                      filenamePrefix="用户钱包"
+                      previewTitle="用户钱包图片预览"
+                      previewHint="包含当前用户的资产余额、担保冻结与实时估值"
+                    />
+                    <button onClick={clearAdjUser} className="text-[11px] text-orange-500 font-semibold px-2 py-1 rounded-lg bg-orange-100 active:bg-orange-200">
+                      更换
+                    </button>
+                  </div>
                 </div>
                 <div className="flex gap-2 mt-2.5">
                   <div className="flex-1 bg-white rounded-lg px-2.5 py-1.5 border border-orange-100">
@@ -2525,7 +2541,7 @@ export default function AfRechargeManage() {
                                       {isCny
                                         ? `¥${formatWalletAmount(asset.total, 2)}`
                                         : isUsdt
-                                          ? `${formatWalletAmount(asset.total, 2)} U`
+                                          ? formatWalletAmount(asset.total, 2)
                                           : asset.total.toLocaleString("zh-CN", { maximumFractionDigits: 8 })}
                                     </span>
                                   </span>
@@ -2628,10 +2644,8 @@ export default function AfRechargeManage() {
                     || sourceType === 'balance_history'
                     || isMultiAssetAdminAdjustment
                   );
-                  const currencyCode = String(r.currency ?? '').toUpperCase();
-                  const displayDigits = ['CNY', 'USDT'].includes(currencyCode)
-                    ? 2
-                    : (AI_WALLET_SETTLEMENT_ASSETS as readonly string[]).includes(currencyCode) ? 8 : 4;
+                  // 全局流水用于人工核账，统一以两位小数展示；原始账务精度仍由服务端保存与计算。
+                  const displayDigits = 2;
                   return (
                     <div key={r.id ?? i} className="py-2.5 border-b border-gray-50 last:border-0">
                       <div className="flex items-start justify-between">

@@ -3621,17 +3621,26 @@ ${klinesSummary}
           throw new Error('无权限');
         }
         const db = await getDb();
-        const heartbeat = await db
+        // 多链扫描器是生产环境每分钟运行的主扫描器；旧 blockchain 记录仅保留
+        // TRC20 子扫描兼容统计，不能用于监控页的运行状态判定。
+        const multiChainHeartbeat = await db
+          .select()
+          .from(schema.scannerHeartbeat)
+          .where(eq(schema.scannerHeartbeat.scannerType, 'multi-chain'))
+          .limit(1);
+
+        if (multiChainHeartbeat.length > 0) {
+          return multiChainHeartbeat[0];
+        }
+
+        // 兼容历史数据库尚未生成 multi-chain 心跳时的旧记录。
+        const blockchainHeartbeat = await db
           .select()
           .from(schema.scannerHeartbeat)
           .where(eq(schema.scannerHeartbeat.scannerType, 'blockchain'))
           .limit(1);
-        
-        if (heartbeat.length === 0) {
-          return null;
-        }
-        
-        return heartbeat[0];
+
+        return blockchainHeartbeat.length > 0 ? blockchainHeartbeat[0] : null;
       }),
     // 管理员添加收款地址
     adminAddWalletAddress: protectedProcedure
