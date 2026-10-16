@@ -11117,11 +11117,10 @@ ${klinesSummary}
         return await dbLedger.getLedgerById(input.id, ctx.user.id);
       }),
 
-    // 52号账本 T+0 速记账本：管理员读取其完整管理视图；普通成员默认只读取本人。
-    // 成员主动启用“全部推荐”时，服务端仅按该成员自身的递归推荐树扩大至已授权的后代订单。
-    // 管理员代入成员时，保持与成员本人相同的只读范围，不返回管理员全量流水。
+    // 52号账本 T+0 速记账本：管理员读取完整管理视图；普通成员仅读取本人订单及明确分层给本人的订单。
+    // 推荐关系不构成订单读取授权；管理员代入成员时同样保持该成员的严格只读范围。
     t0GetJournal: protectedProcedure
-      .input(z.object({ ledgerId: z.literal(52), includeReferralDescendants: z.boolean().optional() }))
+      .input(z.object({ ledgerId: z.literal(52) }))
       .query(async ({ ctx, input }) => {
         const journal = await import('./ledger52-t0-journal');
         if (ctx.isViewingAs) {
@@ -11145,7 +11144,6 @@ ${klinesSummary}
           return await journal.getLedger52T0Journal({
             mode: 'member',
             relatedUserId: ctx.user.id,
-            includeReferralDescendants: input.includeReferralDescendants,
           });
         }
         const scope = await journal.resolveLedger52T0JournalReadScope({
@@ -11153,9 +11151,7 @@ ${klinesSummary}
           role: ctx.user.role,
           isViewingAs: ctx.isViewingAs,
         });
-        return await journal.getLedger52T0Journal(scope.mode === 'member'
-          ? { ...scope, includeReferralDescendants: input.includeReferralDescendants }
-          : scope);
+        return await journal.getLedger52T0Journal(scope);
       }),
 
     // 收益转出记录：管理员随当前用户筛选登记；成员始终只读取本人共享流水。
@@ -11279,36 +11275,22 @@ ${klinesSummary}
         });
       }),
 
-    // 推荐集合始终沿用T+0账本的同一阅读权限边界：管理员取本人管理分支，成员仅取自己的分支。
+    // 推荐集合只供管理员在完整管理视图中筛选，普通成员与成员代入视图均不读取下线名单。
     t0GetReferralFilterOptions: protectedProcedure
       .input(z.object({ ledgerId: z.literal(52) }))
       .query(async ({ ctx }) => {
-        const journal = await import('./ledger52-t0-journal');
         if (ctx.isViewingAs) {
-          const realUser = ctx.realUser;
-          if (!realUser) {
-            throw new TRPCError({ code: 'FORBIDDEN', message: '无法确认代入管理员身份' });
-          }
-          const realMembership = await dbLedger.getUserMembership(52, realUser.id);
-          const realSystemRole = String((realUser as any).role || '');
-          const realUserIsManager = realSystemRole === 'super_admin'
-            || realSystemRole === 'admin'
-            || realMembership?.role === 'owner'
-            || realMembership?.role === 'admin';
-          if (!realUserIsManager) {
-            throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可代入查看T+0速记账本' });
-          }
-          const targetMembership = await dbLedger.getUserMembership(52, ctx.user.id);
-          if (!targetMembership) {
-            throw new TRPCError({ code: 'FORBIDDEN', message: '目标用户不是52号账本成员' });
-          }
-          return await journal.getLedger52T0JournalReferralFilterOptions({ mode: 'member', relatedUserId: ctx.user.id });
+          throw new TRPCError({ code: 'FORBIDDEN', message: '成员视角不可读取推荐订单筛选名单' });
         }
+        const journal = await import('./ledger52-t0-journal');
         const scope = await journal.resolveLedger52T0JournalReadScope({
           id: ctx.user.id,
           role: ctx.user.role,
           isViewingAs: ctx.isViewingAs,
         });
+        if (scope.mode !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可读取推荐订单筛选名单' });
+        }
         return await journal.getLedger52T0JournalReferralFilterOptions(scope);
       }),
 

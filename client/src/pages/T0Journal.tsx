@@ -1928,8 +1928,6 @@ function projectMemberProfitShareTrades(
   rawTrades: PreviewTrade[],
   snapshots: ProfitShareSnapshot[],
   viewerUserId: string,
-  visibleReferralDescendantUserIds = new Set<string>(),
-  showRawReferralTrades = false,
 ) {
   const viewerId = Number(viewerUserId);
   if (!Number.isInteger(viewerId) || viewerId <= 0) return rawTrades;
@@ -1948,12 +1946,6 @@ function projectMemberProfitShareTrades(
     // 关联用户本人始终查看完整原始订单；收益分配只影响其他受益人的投影，不能把本人的开仓隐藏。
     // 这也保证反向展示订单在成员端始终保留原方向、完整数量及原始损益口径。
     if (Number(trade.relatedUserId || 0) === viewerId) {
-      projected.push(trade);
-      continue;
-    }
-    // 只有主动选择“推荐”、具体下线或“全部”时，才按原始完整流水展示下线订单；
-    // 默认“本人”必须优先显示本人作为受益人的分佣投影，不能被预读取的下线原单覆盖。
-    if (showRawReferralTrades && trade.relatedUserId && visibleReferralDescendantUserIds.has(trade.relatedUserId)) {
       projected.push(trade);
       continue;
     }
@@ -2089,6 +2081,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [recentRelatedUsers, setRecentRelatedUsers] = useState<PreviewRelatedUser[]>([]);
   const [relatedFunds, setRelatedFunds] = useState<PreviewRelatedFund[]>([]);
   const [trades, setTrades] = useState<PreviewTrade[]>([]);
+  // 管理员切换历史呈现时保留原始流水；用户呈现基于它重新走与成员端相同的投影。
+  const [rawJournalTrades, setRawJournalTrades] = useState<PreviewTrade[]>([]);
   // 空数组代表“全部”；有选择时按同一维度的并集、不同维度的交集筛选。
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [relatedUserFilterIds, setRelatedUserFilterIds] = useState<string[]>([]);
@@ -2096,12 +2090,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [instrumentTypeFilterIds, setInstrumentTypeFilterIds] = useState<T0InstrumentType[]>([]);
   const [executionFilter, setExecutionFilter] = useState<T0ExecutionFilter>("all");
   const [hideLocked, setHideLocked] = useState(false);
-  // 成员首次进入默认筛本人；只有主动点过用户下拉后，空数组才代表其明确选择的“全部”。
+  // 成员端用户范围固定为本人；保留旧状态字段仅用于兼容此前浏览器保存的筛选状态。
   const [memberRelatedUserFilterTouched, setMemberRelatedUserFilterTouched] = useState(false);
-  // 成员存在有订单的推荐用户时自动读取本人完整分支；前端用户下拉再决定展示“全部/推荐/本人/单个推荐用户”。
-  const [includeMemberReferralDescendants, setIncludeMemberReferralDescendants] = useState(false);
   // 历史记录拥有独立筛选范围：不影响上方持仓汇总与T形交割表。
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
+  // 管理员筛到单个用户后，可在历史区仅切换展示口径，不改变其实际管理权限。
+  const [historyPresentation, setHistoryPresentation] = useState<"admin" | "member">("admin");
   const [historyAccountFilterIds, setHistoryAccountFilterIds] = useState<string[]>([]);
   const [historyRelatedUserFilterIds, setHistoryRelatedUserFilterIds] = useState<string[]>([]);
   const [historyRelatedFundFilterIds, setHistoryRelatedFundFilterIds] = useState<string[]>([]);
@@ -2135,7 +2129,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [deleteCandidate, setDeleteCandidate] = useState<PreviewTrade | null>(null);
   const [revertCandidate, setRevertCandidate] = useState<PreviewTrade | null>(null);
   const [historyActionMenuTradeId, setHistoryActionMenuTradeId] = useState<string | null>(null);
-  const [netProfitDetail, setNetProfitDetail] = useState<{ trade: PreviewTrade; detail: RecentJournalTradeDetail } | null>(null);
+  const [netProfitDetail, setNetProfitDetail] = useState<{
+    trade: PreviewTrade;
+    detail: RecentJournalTradeDetail;
+    presentation?: "admin" | "member";
+    viewerUserId?: number;
+  } | null>(null);
   const [showTotalNetProfitDetail, setShowTotalNetProfitDetail] = useState(false);
   const [totalRevenueDetailPage, setTotalRevenueDetailPage] = useState(1);
   const [showPayoutLog, setShowPayoutLog] = useState(false);
@@ -2234,7 +2233,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     staleTime: 250,
   });
   const t0JournalQuery = trpc.ledger.t0GetJournal.useQuery(
-    { ledgerId: 52, includeReferralDescendants: includeMemberReferralDescendants },
+    { ledgerId: 52 },
     {
       enabled: canAccess,
       staleTime: T0_JOURNAL_STALE_TIME_MS,
@@ -2244,6 +2243,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   const isMemberView = (t0JournalQuery.data as any)?.viewerMode === "member";
   const canManage = canAccess && (t0JournalQuery.data as any)?.viewerMode === "admin";
+  // 仅管理员已在顶部筛选出一位真实用户时，才允许将“历史记录”切换为该用户登录后的呈现。
+  const historyPerspectiveTargetUserId = canManage
+    && relatedUserFilterIds.length === 1
+    && /^\d+$/.test(relatedUserFilterIds[0])
+    ? Number(relatedUserFilterIds[0])
+    : 0;
+  const isHistoryUserPerspective = Boolean(
+    historyPresentation === "member" && historyPerspectiveTargetUserId > 0,
+  );
+  const historyIsMemberPresentation = isMemberView || isHistoryUserPerspective;
+  useEffect(() => {
+    if (historyPerspectiveTargetUserId === 0 && historyPresentation !== "admin") {
+      setHistoryPresentation("admin");
+    }
+  }, [historyPerspectiveTargetUserId, historyPresentation]);
   const payoutTargetRelatedUserId = isMemberView
     ? Number((t0JournalQuery.data as any)?.viewerRelatedUserId || 0)
     : (canManage && relatedUserFilterIds.length === 1 && /^\d+$/.test(relatedUserFilterIds[0])
@@ -2317,12 +2331,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     },
     onError: (error) => toast.error(error.message || "资金流水删除失败"),
   });
-  // 推荐树单独低频读取，避免52号账本的两秒流水轮询反复遍历 users 邀请关系。
-  // 管理员与成员均只会获得本人对应的一条递归“推荐”分支。
+  // 推荐树仅供管理员在完整管理视图内筛选，普通成员不读取任何下线名单。
   const t0ReferralFilterQuery = trpc.ledger.t0GetReferralFilterOptions.useQuery(
     { ledgerId: 52 },
     {
-      enabled: canAccess && (canManage || isMemberView),
+      enabled: canAccess && canManage,
       staleTime: 60_000,
       refetchInterval: 60_000,
       refetchOnWindowFocus: true,
@@ -2344,23 +2357,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const currentReferralRootUserId = useMemo(() => {
     const apiRootUserId = String((t0ReferralFilterQuery.data as any)?.rootUserId || "");
     if (/^\d+$/.test(apiRootUserId)) return apiRootUserId;
-    const memberRelatedUserId = String((t0JournalQuery.data as any)?.viewerRelatedUserId || "");
-    if (isMemberView && /^\d+$/.test(memberRelatedUserId)) return memberRelatedUserId;
     const signedInUserId = String((me as any)?.id || "");
     return canManage && /^\d+$/.test(signedInUserId) ? signedInUserId : "";
-  }, [canManage, isMemberView, me, t0JournalQuery.data, t0ReferralFilterQuery.data]);
-  const referralDataLoaded = (!canManage && !isMemberView) || t0ReferralFilterQuery.isSuccess;
+  }, [canManage, me, t0ReferralFilterQuery.data]);
+  const referralDataLoaded = !canManage || t0ReferralFilterQuery.isSuccess;
   const referralDescendantsForCurrentRoot = currentReferralRootUserId
     ? referralDescendantsByRootUserId.get(currentReferralRootUserId)
     : undefined;
-  // 没有任何带订单的递归推荐用户时，成员端保持原先的本人锁定；有订单时才读取完整分支并开放受限下拉。
-  useEffect(() => {
-    if (!isMemberView || !t0ReferralFilterQuery.isSuccess) return;
-    const shouldIncludeReferralDescendants = Boolean(referralDescendantsForCurrentRoot?.length);
-    setIncludeMemberReferralDescendants((current) => current === shouldIncludeReferralDescendants
-      ? current
-      : shouldIncludeReferralDescendants);
-  }, [isMemberView, referralDescendantsForCurrentRoot, t0ReferralFilterQuery.isSuccess]);
   const topFilterStorageKey = useMemo(() => {
     const journal = t0JournalQuery.data as any;
     const viewerMode = journal?.viewerMode;
@@ -2421,7 +2424,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     : [];
   const profitShareDraftTotal = profitShareAllocations.reduce((total, allocation) => total + (Number.isInteger(Number(allocation.percentage)) ? Number(allocation.percentage) : 0), 0);
   const netProfitShareDistribution = useMemo(() => {
-    if (!canManage || !netProfitDetail || netProfitDetail.detail.netPnl === undefined) return [];
+    if (!canManage || netProfitDetail?.presentation === "member" || !netProfitDetail || netProfitDetail.detail.netPnl === undefined) return [];
     return buildClosingProfitShareDistribution({
       trades,
       snapshots: profitShareSnapshots,
@@ -2528,21 +2531,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         beneficiaryUserName: snapshot.beneficiaryUserName ? String(snapshot.beneficiaryUserName) : undefined,
       }))
       : [];
-    const visibleReferralDescendantUserIds = new Set<string>(
-      (Array.isArray(journal.viewerReferralDescendantUserIds) ? journal.viewerReferralDescendantUserIds as unknown[] : [])
-        .map((userId: unknown) => String(userId))
-        .filter((userId): userId is string => /^\d+$/.test(userId)),
-    );
-    const showRawReferralTrades = relatedUserFilterIds.length === 0
-      || relatedUserFilterIds.some((userId) => Boolean(getT0ReferralDescendantsRootUserId(userId))
-        || visibleReferralDescendantUserIds.has(userId));
     const nextTrades = journal.viewerMode === "member"
       ? projectMemberProfitShareTrades(
         rawTrades,
         nextProfitShareSnapshots,
         String(journal.viewerRelatedUserId || ""),
-        visibleReferralDescendantUserIds,
-        showRawReferralTrades,
       )
       : projectAdminCounterpartyTrades(rawTrades);
     const nextRecoverableEntries: RecoverableTrade[] = Array.isArray(journal.recoverableEntries)
@@ -2555,6 +2548,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : [];
     setAccounts(nextAccounts);
     setRecentRelatedUsers(nextRecentRelatedUsers);
+    setRawJournalTrades(rawTrades);
     setRelatedFunds(nextRelatedFunds);
     setTrades(nextTrades);
     setProfitShareSnapshots(nextProfitShareSnapshots);
@@ -2741,11 +2735,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   // 历史记录先严格继承管理员端的账户、用户、项目、类型与状态筛选；成员端不含账户维度，
   // 再按历史面板内的条件作进一步细分，避免顶部筛到某位用户时历史仍显示全部流水。
+  // 管理员切为用户呈现时，历史区从原始流水重新生成与该用户本人相同的订单投影。
+  const historyPerspectiveTrades = useMemo(
+    () => isHistoryUserPerspective
+      ? projectMemberProfitShareTrades(
+        rawJournalTrades,
+        profitShareSnapshots,
+        String(historyPerspectiveTargetUserId),
+      )
+      : selectedTrades,
+    [historyPerspectiveTargetUserId, isHistoryUserPerspective, profitShareSnapshots, rawJournalTrades, selectedTrades],
+  );
   const historyExecutionScopedTrades = useMemo(
     () => historyExecutionFilter === "all"
-      ? selectedTrades
-      : selectedTrades.filter((trade) => matchesT0ExecutionFilter(trade, historyExecutionFilter)),
-    [selectedTrades, historyExecutionFilter],
+      ? historyPerspectiveTrades
+      : historyPerspectiveTrades.filter((trade) => matchesT0ExecutionFilter(trade, historyExecutionFilter)),
+    [historyPerspectiveTrades, historyExecutionFilter],
   );
   const historyLockVisibilityScopedTrades = useMemo(
     () => historyHideLocked
@@ -2778,8 +2783,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const journalScopeTrades = useMemo(
     () => historyInstrumentScopedTrades.filter((trade) => (
       trade.symbol === "ETH"
-      && (isMemberView || historyAccountFilterIds.length === 0 || historyAccountFilterIds.includes(trade.accountId))
-      && (historyRelatedUserFilterIds.length === 0
+      && (historyIsMemberPresentation || historyAccountFilterIds.length === 0 || historyAccountFilterIds.includes(trade.accountId))
+      // 用户呈现已在源数据层严格按本人/分层快照过滤，不能再套用管理员的用户、推荐或账户筛选。
+      && (isHistoryUserPerspective
+        || historyRelatedUserFilterIds.length === 0
         || historyRelatedUserFilter.waitingForReferralData
         || (historyRelatedUserFilter.includesUnlinked && (!trade.relatedUserId || trade.relatedUserHidden))
         || Boolean(trade.relatedUserId && historyRelatedUserFilter.userIds.has(trade.relatedUserId))
@@ -2788,7 +2795,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && (historyRelatedFundFilterIds.length === 0
         || historyRelatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
     )),
-    [historyInstrumentScopedTrades, isMemberView, historyAccountFilterIds, historyProfitShareBeneficiaryEntryIds, historyRelatedUserFilter, historyRelatedUserFilterIds, historyRelatedFundFilterIds],
+    [historyInstrumentScopedTrades, historyIsMemberPresentation, isHistoryUserPerspective, isMemberView, historyAccountFilterIds, historyProfitShareBeneficiaryEntryIds, historyRelatedUserFilter, historyRelatedUserFilterIds, historyRelatedFundFilterIds],
   );
   const availableJournalActions = useMemo(
     () => RECENT_JOURNAL_ACTIONS.filter((action) => journalScopeTrades.some((trade) => trade.action === action)),
@@ -2842,6 +2849,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
   }, [hasLinkedJournalPairs, showLinkedJournalGroups]);
   const recentJournalTradeDetails = useMemo(() => buildRecentJournalTradeDetails(trades), [trades]);
+  const historyPerspectiveTradeDetails = useMemo(
+    () => buildRecentJournalTradeDetails(historyPerspectiveTrades),
+    [historyPerspectiveTrades],
+  );
   // 顶部类型筛选会将平仓投影为“对应开仓类型的数量切片”。先在当前历史范围内重建一次
   // 明细，可保证合约/现货/期权的开平仓在任意组合筛选下都用同一条切片收益展示；
   // 原始流水映射保留为历史异常记录的兜底。
@@ -2852,7 +2863,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const getHistoricalTradeDetail = (trade: PreviewTrade) => (
     scopedRecentJournalTradeDetails.get(trade.id)
     ?? scopedRecentJournalTradeDetails.get(getDetailEntryId(trade))
-    ?? recentJournalTradeDetails.get(getDetailEntryId(trade))
+    ?? (isHistoryUserPerspective
+      ? historyPerspectiveTradeDetails.get(getDetailEntryId(trade))
+      : recentJournalTradeDetails.get(getDetailEntryId(trade)))
   );
   const getTradeAccountName = (trade: PreviewTrade) => trade.accountHidden
     ? "未关联账户"
@@ -2875,24 +2888,41 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       || 0,
   );
   /**
-   * 成员端始终展示本人本单可得；管理员默认“全部”视图也展示管理员本人的实际分佣。
-   * 只有管理员明确筛选单一用户时，才切换为该用户的实际可得；不能把订单关联用户
-   * 自动误当作受益人。完整订单净收益与全部分佣仅在管理员弹窗中展示。
+   * 成员呈现始终展示该用户本单可得；管理员“全部”视图展示完整订单的总净利润。
+   * 管理员仅在明确筛选单一用户时，才显示该用户的实际可得；不能把订单关联用户
+   * 或当前登录管理员自动误当作受益人。点击总净利润可展开全部分佣明细。
   */
+  const resolveMemberPayout = (
+    trade: PreviewTrade,
+    displayedNetPnlInput: number | undefined,
+    viewerUserId: number,
+    viewerTrades: PreviewTrade[],
+  ) => {
+    const displayedNetPnl = Number(displayedNetPnlInput);
+    if (!Number.isFinite(displayedNetPnl) || !Number.isInteger(viewerUserId) || viewerUserId <= 0) return null;
+    // 分层受益人的流水已在成员投影时完成数量、手续费与净收益的折算。
+    if (trade.profitShareBeneficiaryUserId) return { netPnl: displayedNetPnl, isProfitShared: true };
+    const allocations = buildClosingProfitShareDistribution({
+      trades: viewerTrades,
+      snapshots: profitShareSnapshots,
+      closing: trade,
+      displayedNetPnl,
+    });
+    if (allocations.length === 0) return null;
+    const allocation = allocations.find((item) => item.beneficiaryUserId === viewerUserId);
+    return { netPnl: allocation?.netPnl ?? 0, isProfitShared: true };
+  };
   const resolveDisplayedPayout = (trade: PreviewTrade, displayedNetPnlInput: number | undefined) => {
     const displayedNetPnl = Number(displayedNetPnlInput);
     const selectedAdminBeneficiaryUserId = !isMemberView
       && relatedUserFilterIds.length === 1
       && /^\d+$/.test(relatedUserFilterIds[0])
       ? Number(relatedUserFilterIds[0])
-      : viewerProfitShareBeneficiaryUserId;
-    const beneficiaryUserId = isMemberView
-      ? viewerProfitShareBeneficiaryUserId
-      : selectedAdminBeneficiaryUserId;
-    if (!Number.isFinite(displayedNetPnl) || !Number.isInteger(beneficiaryUserId) || beneficiaryUserId <= 0) return null;
-    if (isMemberView && trade.profitShareBeneficiaryUserId) {
-      return { netPnl: displayedNetPnl, isProfitShared: true };
+      : 0;
+    if (isMemberView) {
+      return resolveMemberPayout(trade, displayedNetPnl, viewerProfitShareBeneficiaryUserId, trades);
     }
+    if (!Number.isFinite(displayedNetPnl) || selectedAdminBeneficiaryUserId <= 0) return null;
     const allocations = buildClosingProfitShareDistribution({
       trades,
       snapshots: profitShareSnapshots,
@@ -2900,15 +2930,35 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       displayedNetPnl,
     });
     if (allocations.length === 0) return null;
-    const allocation = allocations.find((item) => item.beneficiaryUserId === beneficiaryUserId);
-    // 已有分成快照的订单只显示当前用户视图对应的本单可得；完整订单净收益和全体分配仍仅在管理员明细弹窗内显示。
+    const allocation = allocations.find((item) => item.beneficiaryUserId === selectedAdminBeneficiaryUserId);
     return { netPnl: allocation?.netPnl ?? 0, isProfitShared: true };
   };
   const resolveViewerPayout = (trade: PreviewTrade, detail?: RecentJournalTradeDetail) => {
     return resolveDisplayedPayout(trade, detail?.netPnl);
   };
-  const memberProfitShareDetail = netProfitDetail
-    ? resolveViewerPayout(netProfitDetail.trade, netProfitDetail.detail)
+  const resolveHistoryViewerPayout = (trade: PreviewTrade, detail?: RecentJournalTradeDetail) => {
+    if (isHistoryUserPerspective) {
+      return resolveMemberPayout(
+        trade,
+        detail?.netPnl,
+        historyPerspectiveTargetUserId,
+        historyPerspectiveTrades,
+      );
+    }
+    return resolveViewerPayout(trade, detail);
+  };
+  const netProfitDetailUsesMemberPresentation = Boolean(
+    netProfitDetail && (isMemberView || netProfitDetail.presentation === "member"),
+  );
+  const memberProfitShareDetail = netProfitDetail && netProfitDetailUsesMemberPresentation
+    ? resolveMemberPayout(
+      netProfitDetail.trade,
+      netProfitDetail.detail.netPnl,
+      netProfitDetail.presentation === "member"
+        ? Number(netProfitDetail.viewerUserId || 0)
+        : viewerProfitShareBeneficiaryUserId,
+      netProfitDetail.presentation === "member" ? historyPerspectiveTrades : trades,
+    )
     : null;
   const memberRelatedUserName = useMemo(() => {
     const selfName = String((me as any)?.name || (me as any)?.username || "").trim();
@@ -2956,25 +3006,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const currentReferralToken = currentReferralRootUserId
     ? createT0ReferralDescendantsToken(currentReferralRootUserId)
     : "";
-  const memberReferralDescendantUsers = useMemo<PreviewRelatedUser[]>(() => {
-    const allowedUserIds = new Set(currentReferralDescendants ?? []);
-    const rawUsers = (t0ReferralFilterQuery.data as any)?.descendantUsers;
-    if (!Array.isArray(rawUsers)) return [] as PreviewRelatedUser[];
-    const seen = new Set<string>();
-    return rawUsers.flatMap((rawUser: any) => {
-      const id = String(rawUser?.id || "");
-      if (!allowedUserIds.has(id) || seen.has(id)) return [];
-      seen.add(id);
-      const username = rawUser?.username ? String(rawUser.username) : "";
-      return [{
-        id,
-        name: String(rawUser?.name || username || `用户#${id}`),
-        username,
-        avatar: rawUser?.avatar ? String(rawUser.avatar) : undefined,
-      } satisfies PreviewRelatedUser];
-    });
-  }, [currentReferralDescendants, t0ReferralFilterQuery.data]);
-  const memberHasReferralFilterOptions = isMemberView && Boolean(currentReferralDescendants?.length);
   const shouldKeepCurrentReferralLoadingOption = Boolean(
     currentReferralToken
     && selectedReferralFilterIds.has(currentReferralToken)
@@ -2991,21 +3022,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     kind,
   });
   const relatedUserFilterOptions: T0MultiSelectOption[] = isMemberView
-    ? (memberHasReferralFilterOptions ? [
-      // “全部”由空选项表达；成员下拉依次显示本人、本人全部递归推荐与各推荐用户。
-      {
-        id: currentReferralRootUserId,
-        label: `${memberRelatedUserName}${(me as any)?.username ? ` · @${String((me as any).username)}` : ""}`,
-        summaryLabel: memberRelatedUserName,
-      },
-      {
-        id: currentReferralToken,
-        label: `推荐（${currentReferralDescendants!.length}）`,
-        summaryLabel: `推荐（${currentReferralDescendants!.length}）`,
-        kind: "referral-descendants" as const,
-      },
-      ...memberReferralDescendantUsers.map((user) => toRelatedUserFilterOption(user, "referral-member")),
-    ] : [])
+    ? []
     : [
       // 管理员只在本人下方显示一条递归“推荐”，不再为每位关联用户重复展示其推荐分支。
       ...(currentReferralRootUser ? [toRelatedUserFilterOption(currentReferralRootUser)] : []),
@@ -3053,9 +3070,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     ...(trades.some((trade) => !trade.relatedFundId) ? [{ id: "unclassified", label: "未区分项目（历史）" }] : []),
     ...historyAvailableRelatedFunds.map((fund) => ({ id: fund.id, label: fund.name })),
   ];
-  const topSelectableRelatedUserIds = isMemberView
-    ? [currentReferralRootUserId, ...(currentReferralDescendants ?? [])].filter(Boolean)
-    : recentRelatedUsers.map((user) => user.id);
+  const topSelectableRelatedUserIds = isMemberView ? [] : recentRelatedUsers.map((user) => user.id);
   const topRelatedUserSelectionIsAll = isT0RelatedUserSelectionEquivalentToAll(
     relatedUserFilterIds,
     topRelatedUserFilter,
@@ -3110,8 +3125,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }));
     setHistoryRelatedFundFilterIds((current) => current.filter((id) => id === "unclassified" || relatedFunds.some((fund) => fund.id === id)));
   }, [accounts, recentRelatedUsers, referralDataLoaded, referralDescendantsByRootUserId, relatedFunds]);
-  // 成员端没有独立的历史用户筛选面板；其历史记录必须严格跟随顶部受限用户下拉，
-  // 从而保证选“推荐”时不会混入本人订单，选“全部”时才展示本人加推荐。
+  // 成员端没有独立的历史用户筛选面板；历史记录沿用服务端的严格本人/显式分层可见范围。
   useEffect(() => {
     if (!isMemberView) return;
     setHistoryAccountFilterIds((current) => current.length === 0 ? current : []);
@@ -3130,7 +3144,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     };
     // 管理员保留账户、用户、项目三项；成员端仅展示用户与项目，均按内容智能分配宽度。
     const accountSummary = summaryFor("账户", accountFilterOptions, selectedAccountIds);
-    const userSummary = isMemberView && !memberHasReferralFilterOptions
+    const userSummary = isMemberView
       ? `用户${memberRelatedUserName}`
       : summaryFor("用户", relatedUserFilterOptions, relatedUserFilterIds);
     const fundSummary = shouldLockMemberFundFilter
@@ -3142,10 +3156,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     };
     const userSpec = {
       summary: userSummary,
-      // 成员首屏的“本人”是默认身份，不作为主动筛选：用户 / 项目初始保持等宽。
-      // 只有成员实际展开并选择过用户后，才按已选文字进入智能宽度分配。
+      // 成员端用户固定为本人，不作为可操作筛选：用户 / 项目初始保持等宽。
       selectedCount: isMemberView
-        ? (memberRelatedUserFilterTouched && !topRelatedUserSelectionIsAll ? relatedUserFilterIds.length : 0)
+        ? 0
         : (topRelatedUserSelectionIsAll ? 0 : relatedUserFilterIds.length),
     };
     const fundSpec = {
@@ -3156,7 +3169,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     return buildT0FilterGridTemplateColumns(isMemberView
       ? [userSpec, fundSpec]
       : [accountSpec, userSpec, fundSpec]);
-  }, [accountFilterOptions, isMemberView, lockedRelatedFundName, memberHasReferralFilterOptions, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberFundFilter, topRelatedUserSelectionIsAll]);
+  }, [accountFilterOptions, isMemberView, lockedRelatedFundName, memberRelatedUserName, relatedFundFilterOptions, relatedUserFilterOptions, relatedFundFilterIds, relatedUserFilterIds, selectedAccountIds, shouldLockMemberFundFilter, topRelatedUserSelectionIsAll]);
   const topInstrumentFilterSummary = getT0InstrumentFilterSummary(instrumentTypeFilterIds);
   const topExecutionFilterSummary = getT0ExecutionFilterSummary(executionFilter, hideLocked);
   const topTypeStatusGridTemplateColumns = useMemo(
@@ -4864,8 +4877,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }));
   };
 
-  const renderHistoryActionMenuButton = (trade: PreviewTrade) => {
-    if (!canManage) return null;
+  const renderHistoryActionMenuButton = (trade: PreviewTrade, memberPresentation = false) => {
+    if (!canManage || memberPresentation) return null;
     const isOpen = historyActionMenuTradeId === trade.id;
     return (
       <button
@@ -4881,8 +4894,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     );
   };
 
-  const renderHistoryActionMenu = (trade: PreviewTrade) => {
-    if (!canManage || historyActionMenuTradeId !== trade.id) return null;
+  const renderHistoryActionMenu = (trade: PreviewTrade, memberPresentation = false) => {
+    if (!canManage || memberPresentation || historyActionMenuTradeId !== trade.id) return null;
     const isOpening = ACTIONS[trade.action].opening;
     return (
       <div className="mt-1 flex justify-end gap-1.5" aria-label="历史记录管理操作">
@@ -4931,8 +4944,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         const detail = getHistoricalTradeDetail(closing);
         const isLong = ACTIONS[closing.action].side === "long";
         const showFullClosingContext = hasSystemGeneratedSettlementNote(closing.note);
-        const viewerPayout = resolveViewerPayout(closing, detail);
-        const hideRepeatedSettlementPrices = isMemberView && Boolean(viewerPayout);
+        const viewerPayout = resolveHistoryViewerPayout(closing, detail);
+        const hideRepeatedSettlementPrices = historyIsMemberPresentation && Boolean(viewerPayout);
         return (
           <div key={group.id} className="mx-3 my-2 rounded border border-dashed border-amber-200 bg-amber-50/35 px-3 py-2.5">
           <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
@@ -4941,11 +4954,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <span className="shrink-0 font-medium text-slate-800">{formatQuantity(closing.quantity)}E</span>
               {!hideRepeatedSettlementPrices && detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
               {!hideRepeatedSettlementPrices && detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>}
-              {!hideRepeatedSettlementPrices && detail?.isOptionQuote && <span className="shrink-0 text-violet-700">行权{formatPrice(closing.price)}</span>}
+            {!hideRepeatedSettlementPrices && detail?.isOptionQuote && <span className="shrink-0 text-violet-700">行权{formatPrice(closing.price)}</span>}
             {!detail && <span className="shrink-0 text-slate-600">{isLong ? "卖" : "买"}{formatPrice(closing.price)}</span>}
           </div>
           <div className={getHistoryContextLayoutClass(showFullClosingContext)}>
-            {!isMemberView && <>
+            {!historyIsMemberPresentation && <>
               <span className={getHistoryContextValueClass(showFullClosingContext)} title={getTradeAccountName(closing)}>{getTradeAccountName(closing)}</span>
               <span className="text-slate-300">·</span>
             </>}
@@ -4954,9 +4967,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <span className={getHistoryContextValueClass(showFullClosingContext)} title={getTradeRelatedFundName(closing)}>{getTradeRelatedFundName(closing)}</span>
             <span className="text-slate-300">·</span>
             <span className="shrink-0">{formatBeijingMonthDayTime(closing.createdAt)}</span>
-            {renderHistoryActionMenuButton(closing)}
+            {renderHistoryActionMenuButton(closing, historyIsMemberPresentation)}
           </div>
-          {renderHistoryActionMenu(closing)}
+          {renderHistoryActionMenu(closing, historyIsMemberPresentation)}
           {closing.note?.trim() && <div className="mt-1 truncate text-[11px] text-slate-500"><span>备注：</span>{closing.note.trim()}</div>}
         </div>
       );
@@ -4987,9 +5000,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <span className="ml-auto shrink-0 text-[10px] font-medium text-slate-500">
               {closedQuantity > 0 ? `已平 ${formatQuantity(closedQuantity)} · 剩 ${formatQuantity(remainingQuantity)}` : "未平"}
             </span>
-          </div>
+            </div>
           <div className={getHistoryContextLayoutClass(showFullOpeningContext)}>
-            {!isMemberView && <>
+            {!historyIsMemberPresentation && <>
               <span className={getHistoryContextValueClass(showFullOpeningContext)} title={getTradeAccountName(opening)}>{getTradeAccountName(opening)}</span>
               <span className="text-slate-300">·</span>
             </>}
@@ -4998,9 +5011,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <span className={getHistoryContextValueClass(showFullOpeningContext)} title={getTradeRelatedFundName(opening)}>{getTradeRelatedFundName(opening)}</span>
             <span className="text-slate-300">·</span>
             <span className="shrink-0">{formatT0TradeTimeline(opening)}</span>
-            {renderHistoryActionMenuButton(opening)}
+            {renderHistoryActionMenuButton(opening, historyIsMemberPresentation)}
           </div>
-          {renderHistoryActionMenu(opening)}
+          {renderHistoryActionMenu(opening, historyIsMemberPresentation)}
           {opening.note?.trim() && <div className="mt-1 truncate text-[11px] text-slate-500"><span>备注：</span>{opening.note.trim()}</div>}
         </div>
         {group.closings.map((allocation, index) => {
@@ -5008,9 +5021,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           const detail = buildLinkedClosingDetail(opening, allocation);
           const allocatedClosing = { ...closing, quantity: allocation.quantity, fee: detail.closingFee ?? closing.fee };
           const isLastClosing = index === group.closings.length - 1;
-          const viewerPayout = resolveViewerPayout(allocatedClosing, detail);
+          const viewerPayout = resolveHistoryViewerPayout(allocatedClosing, detail);
           const displayedNetPnl = viewerPayout?.netPnl ?? detail.netPnl;
-          const hideRepeatedSettlementPrices = isMemberView && Boolean(viewerPayout);
+          const hideRepeatedSettlementPrices = historyIsMemberPresentation && Boolean(viewerPayout);
           return (
             <div key={`${closing.id}-${index}`} className="relative border-t border-[#c7d0d7]/60 bg-white/28 px-3 py-2.5 pl-8">
               <span
@@ -5031,9 +5044,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
                 <button
                   type="button"
-                  onClick={() => setNetProfitDetail({ trade: allocatedClosing, detail })}
+                  onClick={() => setNetProfitDetail({
+                    trade: allocatedClosing,
+                    detail,
+                    presentation: historyIsMemberPresentation ? "member" : "admin",
+                    viewerUserId: historyIsMemberPresentation ? (isHistoryUserPerspective ? historyPerspectiveTargetUserId : viewerProfitShareBeneficiaryUserId) : undefined,
+                  })}
                   className={`shrink-0 border-b border-dotted pb-0.5 font-semibold outline-none ${displayedNetPnl! >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}
-                  aria-label={viewerPayout ? (canManage ? "查看关联平仓本单分成与全体分佣明细" : "查看关联平仓本单可得明细") : "查看关联平仓净利润计算明细"}
+                  aria-label={viewerPayout ? (historyIsMemberPresentation ? "查看关联平仓本单可得明细" : "查看关联平仓本单分成与全体分佣明细") : "查看关联平仓净利润计算明细"}
                 >
                   {formatSigned(displayedNetPnl!)}<span className="ml-0.5 text-slate-500">u</span>
                 </button>
@@ -5042,9 +5060,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <span className="text-[10px] text-slate-400">关联平仓</span>
                 <span className="text-slate-300">·</span>
                 <span className="text-slate-400">{formatBeijingMonthDayTime(closing.createdAt)}</span>
-                {canManage ? renderHistoryActionMenuButton(closing) : <span className="ml-auto shrink-0 text-[10px] text-slate-500">{viewerPayout ? "本单可得" : "净利润"}</span>}
+                {canManage && !historyIsMemberPresentation ? renderHistoryActionMenuButton(closing) : <span className="ml-auto shrink-0 text-[10px] text-slate-500">{viewerPayout ? "本单可得" : "净利润"}</span>}
               </div>
-              {renderHistoryActionMenu(closing)}
+              {renderHistoryActionMenu(closing, historyIsMemberPresentation)}
               {closing.note?.trim() && <div className="mt-1 truncate text-[11px] text-slate-500"><span>备注：</span>{closing.note.trim()}</div>}
             </div>
           );
@@ -5491,7 +5509,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   }}
                 />
               )}
-              {isMemberView && !memberHasReferralFilterOptions ? <LockedFilterValue label="用户" value={memberRelatedUserName} /> : (
+              {isMemberView ? <LockedFilterValue label="用户" value={memberRelatedUserName} /> : (
                 <T0MultiSelect
                   label="用户"
                   options={relatedUserFilterOptions}
@@ -5776,7 +5794,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           }}
         >
           <div
-            className="flex items-center justify-center border-b border-[#c7d0d7]/80 px-4 py-2.5"
+            className="relative flex items-center justify-center border-b border-[#c7d0d7]/80 px-4 py-2.5"
             style={{
               background: "linear-gradient(180deg, rgba(255,255,255,0.58), rgba(208,215,221,0.34))",
               boxShadow: "inset 0 1px 0 rgba(255,255,255,0.78), inset 0 -1px 0 rgba(71,85,105,0.10)",
@@ -5786,6 +5804,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               历史记录
               <span className="text-[11px] font-medium tracking-normal text-slate-500">{recentJournalTrades.length} 笔</span>
             </span>
+            {canManage && historyPerspectiveTargetUserId > 0 && <button
+              type="button"
+              aria-pressed={isHistoryUserPerspective}
+              aria-label={isHistoryUserPerspective ? "切换为管理员视角" : "切换为用户视角"}
+              title={isHistoryUserPerspective ? "切换为管理员视角" : "切换为用户视角"}
+              onClick={() => {
+                setHistoryPresentation((current) => current === "admin" ? "member" : "admin");
+                setHistoryActionMenuTradeId(null);
+                setNetProfitDetail(null);
+                setShowHistoryFilters(false);
+                setRecentJournalPage(1);
+              }}
+              className={`absolute right-4 h-6 rounded-[3px] border px-2 text-[11px] font-medium transition-colors active:scale-95 ${isHistoryUserPerspective ? "border-[#1a56db] bg-[#1a56db] text-white" : "border-[#c7d0d7] bg-white/40 text-slate-600"}`}
+            >
+              {isHistoryUserPerspective ? "用户视角" : "管理员视角"}
+            </button>}
           </div>
           <div>
               <div
@@ -5831,7 +5865,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   >
                     关联
                   </button>}
-                  {canManage && <button
+                  {canManage && !isHistoryUserPerspective && <button
                     type="button"
                     aria-label={showHistoryFilters ? "收起并清空历史筛选" : "筛选历史记录"}
                     aria-expanded={showHistoryFilters}
@@ -5857,7 +5891,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </button>}
                 </div>
               </div>
-              {canManage && showHistoryFilters && <div
+              {canManage && !isHistoryUserPerspective && showHistoryFilters && <div
                 className="relative z-20 border-b border-[#c7d0d7]/70 px-4 py-2.5"
                 style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.52), rgba(208,215,221,0.28))" }}
               >
@@ -5953,9 +5987,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 const isLong = ACTIONS[trade.action].side === "long";
                 const showFullHistoryContext = hasSystemGeneratedSettlementNote(trade.note);
                 const isAutomaticTakeProfit = trade.note?.includes("[系统自动止盈]") ?? false;
-                const viewerPayout = resolveViewerPayout(trade, detail);
+                const viewerPayout = resolveHistoryViewerPayout(trade, detail);
                 const displayedNetPnl = viewerPayout?.netPnl ?? detail?.netPnl;
-                const hideRepeatedSettlementPrices = isMemberView && Boolean(viewerPayout);
+                const hideRepeatedSettlementPrices = historyIsMemberPresentation && Boolean(viewerPayout);
                 return (
                 <div key={trade.id} className="border-b border-[#c7d0d7]/60 px-4 py-2.5 last:border-b-0">
                     <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
@@ -5974,16 +6008,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
                         <button
                           type="button"
-                          onClick={() => setNetProfitDetail({ trade, detail })}
+                          onClick={() => setNetProfitDetail({
+                            trade,
+                            detail,
+                            presentation: historyIsMemberPresentation ? "member" : "admin",
+                            viewerUserId: historyIsMemberPresentation ? (isHistoryUserPerspective ? historyPerspectiveTargetUserId : viewerProfitShareBeneficiaryUserId) : undefined,
+                          })}
                           className={`shrink-0 border-b border-dotted pb-0.5 font-semibold outline-none ${displayedNetPnl >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}
-                          aria-label={viewerPayout ? (canManage ? "查看本单分成与全体分佣明细" : "查看本单可得明细") : "查看净利润计算明细"}
+                          aria-label={viewerPayout ? (historyIsMemberPresentation ? "查看本单可得明细" : "查看本单分成与全体分佣明细") : "查看净利润计算明细"}
                         >
                           {formatSigned(displayedNetPnl)}<span className="ml-0.5 text-slate-500">u</span>
                         </button>
                       </>}
                     </div>
                     <div className={getHistoryContextLayoutClass(showFullHistoryContext)}>
-                      {!isMemberView && <>
+                      {!historyIsMemberPresentation && <>
                         <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeAccountName(trade)}>{getTradeAccountName(trade)}</span>
                         <span className="text-slate-300">·</span>
                       </>}
@@ -5992,12 +6031,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedFundName(trade)}>{getTradeRelatedFundName(trade)}</span>
                       <span className="text-slate-300">·</span>
                       <span className="shrink-0">{formatT0TradeTimeline(trade)}</span>
-                      {canManage ? renderHistoryActionMenuButton(trade) : !isOpening && detail && displayedNetPnl !== undefined && <>
+                      {canManage && !historyIsMemberPresentation ? renderHistoryActionMenuButton(trade) : !isOpening && detail && displayedNetPnl !== undefined && <>
                         <span className="text-slate-300">·</span>
                         <span className="ml-auto shrink-0 text-[10px] text-slate-500">{viewerPayout ? "本单可得" : "净利润"}</span>
                       </>}
                     </div>
-                    {renderHistoryActionMenu(trade)}
+                    {renderHistoryActionMenu(trade, historyIsMemberPresentation)}
                     {trade.note?.trim() && <div className="mt-1 truncate text-[11px] text-slate-500"><span>备注：</span>{trade.note.trim()}</div>}
                   </div>
                 );
@@ -6026,7 +6065,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </button>
                 </div>
               )}
-              {canManage && recoverableEntries.length > 0 && (
+              {canManage && !isHistoryUserPerspective && recoverableEntries.length > 0 && (
                 <div className="border-t border-slate-200 bg-amber-50/45">
                   <button
                     type="button"
@@ -7437,14 +7476,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-base font-semibold text-slate-900">{isMemberView && memberProfitShareDetail ? "本单收益" : isMemberView ? "净利润说明" : "净利润计算明细"}</div>
-                {!isMemberView && <div className="mt-1 text-xs text-slate-500">已扣除开仓与平仓两次实际手续费</div>}
+                <div className="text-base font-semibold text-slate-900">{netProfitDetailUsesMemberPresentation && memberProfitShareDetail ? "本单收益" : netProfitDetailUsesMemberPresentation ? "净利润说明" : "净利润计算明细"}</div>
+                {!netProfitDetailUsesMemberPresentation && <div className="mt-1 text-xs text-slate-500">已扣除开仓与平仓两次实际手续费</div>}
               </div>
               <button type="button" onClick={() => setNetProfitDetail(null)} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭净利润说明">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            {isMemberView ? (
+            {netProfitDetailUsesMemberPresentation ? (
               memberProfitShareDetail ? <>
                 <div className="mt-4 overflow-hidden rounded border border-indigo-100 bg-indigo-50/45 text-sm tabular-nums">
                   <div className="flex items-center justify-between gap-4 px-3 py-3.5">

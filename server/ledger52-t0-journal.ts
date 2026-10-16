@@ -31,7 +31,7 @@ export type T0JournalActor = {
 
 export type T0JournalReadScope =
   | { mode: "admin"; journalOwnerUserId: number }
-  | { mode: "member"; relatedUserId: number; includeReferralDescendants?: boolean };
+  | { mode: "member"; relatedUserId: number };
 
 export type SaveT0JournalEntryInput = {
   actorUserId: number;
@@ -1459,13 +1459,10 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
   const isAdminScope = scope.mode === "admin";
   const journalOwnerUserId = isAdminScope ? scope.journalOwnerUserId : 0;
   const relatedUserId = scope.mode === "member" ? scope.relatedUserId : 0;
-  // 普通成员默认仍仅读取本人；仅在其主动开启“全部推荐”后，才按本人递归推荐树扩展订单范围。
-  // 根用户由当前会话强制确定，客户端无法提交任意他人的 ID。
-  const memberReferralDescendantUserIds = !isAdminScope && scope.includeReferralDescendants
-    ? await getLedger52T0MemberReferralDescendantUserIds(conn, relatedUserId)
-    : [];
+  // 普通成员只可读取本人作为订单所属人，或本人被明确写入收益分配快照的订单。
+  // 推荐关系仅供管理员筛选与统计，绝不自动扩大普通成员的订单可见范围。
   const memberVisibleRelatedUserIds = !isAdminScope
-    ? Array.from(new Set([relatedUserId, ...memberReferralDescendantUserIds].filter((userId) => userId > 0)))
+    ? [relatedUserId].filter((userId) => userId > 0)
     : [];
   const memberRelatedUserPlaceholders = memberVisibleRelatedUserIds.map(() => "?").join(", ");
   const memberVisibilityParams = [...memberVisibleRelatedUserIds, relatedUserId];
@@ -1629,8 +1626,8 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
     viewerRelatedUserId: isAdminScope ? undefined : relatedUserId,
     // 管理员以账本实际所有者作为收益分成受益人；成员始终以本人关联用户身份计算本单可得。
     viewerProfitShareBeneficiaryUserId: isAdminScope ? journalOwnerUserId : relatedUserId,
-    // 仅在成员主动开启“全部推荐”时下发已授权的下线 ID，供前端保留本人收益投影并完整展示下线订单。
-    viewerReferralDescendantUserIds: isAdminScope ? [] : memberReferralDescendantUserIds,
+    // 普通成员不读取推荐下线名单，避免推荐关系成为订单访问权。
+    viewerReferralDescendantUserIds: [],
     accounts: asRows(accountResult).map(mapAccount),
     // 成员端只读，但需完整知悉自己订单的锁定与挂单状态；写权限仍由路由层管理员鉴权严格限制。
     entries: entryRows.map((entry) => mapEntry({
@@ -1963,35 +1960,7 @@ async function getLedger52T0ReferralDescendantUserIds(conn: any, rootUserId: num
 }
 
 /**
- * 成员只能沿自己的推荐树展开：先锚定本人已有 T+0 订单的管理账本，再从同一批账本订单中筛选后代。
- * 本人无订单时 52 号账本不显示 T 页签，下级订单不能单独触发入口；根用户始终由服务端会话确定。
- */
-async function getLedger52T0MemberReferralDescendantUserIds(conn: any, relatedUserId: number) {
-  if (relatedUserId <= 0) return [];
-  const [candidateRows] = await conn.execute(
-    `SELECT DISTINCT e.related_user_id AS user_id
-       FROM ledger52_t0_journal_entries e
-      WHERE e.ledger_id = ? AND e.related_user_id IS NOT NULL
-        AND e.user_id IN (
-          SELECT DISTINCT own_entry.user_id
-            FROM ledger52_t0_journal_entries own_entry
-           WHERE own_entry.ledger_id = ? AND own_entry.related_user_id = ?
-        )
-      ORDER BY e.related_user_id ASC
-      LIMIT 2000`,
-    [LEDGER_52_T0_JOURNAL_ID, LEDGER_52_T0_JOURNAL_ID, relatedUserId],
-  );
-  const selectableUserIds = Array.from(new Set(
-    asRows(candidateRows)
-      .map((row) => toNumber(row.user_id))
-      .filter((userId) => userId > 0),
-  ));
-  return getLedger52T0ReferralDescendantUserIds(conn, relatedUserId, selectableUserIds);
-}
-
-/**
- * 管理员只取本人一条递归“全部推荐”；成员也只取本人一条递归集合，供锁定用户栏旁的“全部推荐”开关使用。
- * 两种身份均不会取得其他根节点、其他分支名称或全站用户目录。
+ * 推荐筛选仅供管理员在自己的完整管理视图中使用，不向普通成员下发下线名单或订单访问权。
  */
 export async function getLedger52T0JournalReferralFilterOptions(scope: T0JournalReadScope): Promise<{
   rootUserId: number | null;
@@ -2009,7 +1978,7 @@ export async function getLedger52T0JournalReferralFilterOptions(scope: T0Journal
       rootUserId,
       await getLedger52T0AdminSelectableRelatedUserIds(conn, scope.journalOwnerUserId),
     )
-    : await getLedger52T0MemberReferralDescendantUserIds(conn, rootUserId);
+    : [];
   const descendantUsers = descendants.length > 0
     ? (() => conn.execute(
       `SELECT id, name, username, avatar
