@@ -3189,6 +3189,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     () => relatedFunds.filter((fund) => fund.relatedUserId === entryForm.relatedUserId),
     [relatedFunds, entryForm.relatedUserId],
   );
+  // 速记账本会定时同步历史关联用户；刚从全局搜索选中的用户尚未产生流水时，
+  // 服务端列表不会立刻包含他。把当前表单选择单独补入下拉，避免移动端回跳成“暂不关联”。
+  const entryRelatedUserOptions = useMemo<PreviewRelatedUser[]>(() => {
+    if (!entryForm.relatedUserId || recentRelatedUsers.some((user) => user.id === entryForm.relatedUserId)) {
+      return recentRelatedUsers;
+    }
+    return [{
+      id: entryForm.relatedUserId,
+      name: entryForm.relatedUserName || entryForm.relatedUsername || `用户#${entryForm.relatedUserId}`,
+      username: entryForm.relatedUsername || undefined,
+    }, ...recentRelatedUsers];
+  }, [entryForm.relatedUserId, entryForm.relatedUserName, entryForm.relatedUsername, recentRelatedUsers]);
   const directoryManagerItems = useMemo<Array<{ id: string; name: string; secondary?: string }>>(() => {
     if (directoryManagerKind === "account") {
       return accounts.map((account) => ({ id: account.id, name: account.name }));
@@ -6722,7 +6734,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                             clearRelatedUser();
                             return;
                           }
-                          const user = recentRelatedUsers.find((item) => item.id === userId);
+                          const user = entryRelatedUserOptions.find((item) => item.id === userId);
                           if (user) selectRelatedUser(user);
                         }}
                         aria-label="选择已有订单关联用户"
@@ -6730,7 +6742,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       >
                         <option value="">暂不关联</option>
                         {recentRelatedUsers.length > 0 && <option value="__manage_related_users__">编辑 / 删除关联用户…</option>}
-                        {recentRelatedUsers.map((user) => <option key={user.id} value={user.id}>{user.name}{user.username ? ` · @${user.username}` : ""}</option>)}
+                        {entryRelatedUserOptions.map((user) => <option key={user.id} value={user.id}>{user.name}{user.username ? ` · @${user.username}` : ""}</option>)}
                       </select>
                       <button
                         type="button"
