@@ -95,8 +95,6 @@ jobs:
           rsync -az --delete -e "${SSH_CMD}" dist/ "${REMOTE}:${APP_DIR}/dist/"
           rsync -az -e "${SSH_CMD}" package.json pnpm-lock.yaml "${REMOTE}:${APP_DIR}/"
           rsync -az -e "${SSH_CMD}" server/git-log.json "${REMOTE}:${APP_DIR}/server/git-log.json"
-          sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' ecosystem.config.cjs > /tmp/haoyouji-ecosystem.config.cjs
-          rsync -az -e "${SSH_CMD}" /tmp/haoyouji-ecosystem.config.cjs "${REMOTE}:${APP_DIR}/ecosystem.config.cjs"
 
           # 只有锁文件变化时才同步 node_modules；本次锁文件未变化，不会引入大文件传输。
           if [ "${LOCAL_LOCK_HASH}" != "${REMOTE_LOCK_HASH}" ]; then
@@ -109,7 +107,7 @@ jobs:
           ${SSH_CMD} "${REMOTE}" "EXPECTED_SHA='${EXPECTED_SHA}' bash -s" <<'ENDSSH'
           set -euo pipefail
           APP_DIR=/home/ubuntu/haoyouji-web
-          chown -R ubuntu:ubuntu "$APP_DIR/dist" "$APP_DIR/server/git-log.json" "$APP_DIR/package.json" "$APP_DIR/pnpm-lock.yaml" "$APP_DIR/ecosystem.config.cjs"
+          chown -R ubuntu:ubuntu "$APP_DIR/dist" "$APP_DIR/server/git-log.json" "$APP_DIR/package.json" "$APP_DIR/pnpm-lock.yaml"
           printf '%s\n' "$EXPECTED_SHA" > "$APP_DIR/dist/.deployed-commit"
           chown ubuntu:ubuntu "$APP_DIR/dist/.deployed-commit"
 
