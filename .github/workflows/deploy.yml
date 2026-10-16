@@ -13,7 +13,7 @@ on:
         required: false
         default: "手动部署"
 
-# 同一时间只允许一个生产部署；新提交按顺序部署，避免远端构建与 PM2 相互覆盖。
+# 同一时间只允许一个生产部署；新提交按顺序部署，避免构建与 PM2 相互覆盖。
 concurrency:
   group: haoyouji-production-deploy
   cancel-in-progress: false
@@ -23,13 +23,44 @@ permissions:
 
 jobs:
   deploy:
-    name: 部署指定提交到生产服务器
+    name: 云端构建并同步到生产服务器
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 20
     env:
       EXPECTED_SHA: ${{ github.sha }}
 
     steps:
+      # 不再由生产机访问 GitHub。生产机遇到网络抖动时，git fetch 会长时间卡住；
+      # 统一由 GitHub Actions Runner 拉取、构建，再通过 SSH 同步已验证产物。
+      - name: 检出指定提交
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: 配置 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - name: 配置 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: 安装构建依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建生产产物
+        run: |
+          set -euo pipefail
+          export NODE_OPTIONS="--max-old-space-size=4096"
+          pnpm run build
+          test -f dist/index.js
+          test -f dist/public/index.html
+
       - name: 配置 SSH
         run: |
           mkdir -p ~/.ssh
@@ -45,80 +76,42 @@ jobs:
           SSHEOF
           chmod 600 ~/.ssh/config
 
-      - name: 拉取、构建、同步并重启
+      - name: 同步构建产物并重启服务
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "EXPECTED_SHA='$EXPECTED_SHA' bash -s" <<'ENDSSH'
           set -euo pipefail
-          export PATH="/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
-
-          SOURCE_DIR=/root/haoyouji-web
           APP_DIR=/home/ubuntu/haoyouji-web
-          cd "$SOURCE_DIR"
+          SSH_CMD="ssh -i ~/.ssh/deploy_key -p ${DEPLOY_PORT}"
+          REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
+          LOCAL_LOCK_HASH=$(md5sum pnpm-lock.yaml | cut -d' ' -f1)
+          REMOTE_LOCK_HASH=$(${SSH_CMD} "${REMOTE}" "md5sum ${APP_DIR}/pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || true")
 
-          echo "部署目标提交：$EXPECTED_SHA"
-          OLD_LOCK_HASH=$(md5sum pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || echo none)
-          # 生产机到 GitHub 偶发 TLS 提前断连时，使用 HTTP/1.1 并短暂退避重试；
-          # 只对网络拉取重试，后续校验、构建和 PM2 失败仍会立即失败并保留日志。
-          FETCH_OK=0
-          for attempt in 1 2 3 4; do
-            if GIT_TERMINAL_PROMPT=0 git -c http.version=HTTP/1.1 fetch --quiet --no-tags origin main; then
-              FETCH_OK=1
-              break
-            fi
-            echo "第 ${attempt} 次拉取失败，${attempt}×3 秒后重试…" >&2
-            sleep $((attempt * 3))
-          done
-          if [ "$FETCH_OK" -ne 1 ]; then
-            echo "GitHub 拉取连续失败，未开始构建或重启。" >&2
-            exit 1
-          fi
-          if ! git cat-file -e "${EXPECTED_SHA}^{commit}" 2>/dev/null; then
-            echo "目标提交不在 origin/main 的已拉取历史中：$EXPECTED_SHA" >&2
-            exit 1
-          fi
-          git reset --hard "$EXPECTED_SHA"
-          git clean -fd
-          DEPLOYED_SHA=$(git rev-parse HEAD)
-          test "$DEPLOYED_SHA" = "$EXPECTED_SHA"
-          NEW_LOCK_HASH=$(md5sum pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || echo none)
-          echo "已锁定提交：$DEPLOYED_SHA"
-
-          if [ "$OLD_LOCK_HASH" != "$NEW_LOCK_HASH" ]; then
-            echo "锁文件已变化，安装依赖…"
-            pnpm install --frozen-lockfile
-          else
-            echo "锁文件未变化，跳过依赖安装。"
-          fi
-
-          echo "开始生产构建…"
-          export NODE_OPTIONS="--max-old-space-size=4096"
-          rm -rf "$SOURCE_DIR/dist"
-          pnpm run build
-          test -f "$SOURCE_DIR/dist/index.js"
-          test -f "$SOURCE_DIR/dist/public/index.html"
-
+          echo "部署目标提交：${EXPECTED_SHA}"
           echo "同步构建产物…"
-          mkdir -p "$APP_DIR/dist"
-          rsync -a --delete "$SOURCE_DIR/dist/" "$APP_DIR/dist/"
-          chown -R ubuntu:ubuntu "$APP_DIR/dist"
-          cp "$SOURCE_DIR/package.json" "$APP_DIR/package.json"
-          cp "$SOURCE_DIR/pnpm-lock.yaml" "$APP_DIR/pnpm-lock.yaml"
-          cp "$SOURCE_DIR/server/git-log.json" "$APP_DIR/server/git-log.json" 2>/dev/null || true
-          chown ubuntu:ubuntu "$APP_DIR/server/git-log.json" 2>/dev/null || true
+          ${SSH_CMD} "${REMOTE}" "mkdir -p ${APP_DIR}/dist ${APP_DIR}/server"
+          rsync -az --delete -e "${SSH_CMD}" dist/ "${REMOTE}:${APP_DIR}/dist/"
+          rsync -az -e "${SSH_CMD}" package.json pnpm-lock.yaml "${REMOTE}:${APP_DIR}/"
+          rsync -az -e "${SSH_CMD}" server/git-log.json "${REMOTE}:${APP_DIR}/server/git-log.json"
+          sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' ecosystem.config.cjs > /tmp/haoyouji-ecosystem.config.cjs
+          rsync -az -e "${SSH_CMD}" /tmp/haoyouji-ecosystem.config.cjs "${REMOTE}:${APP_DIR}/ecosystem.config.cjs"
 
-          if [ "$OLD_LOCK_HASH" != "$NEW_LOCK_HASH" ]; then
-            echo "同步更新后的 node_modules…"
-            rsync -a --delete "$SOURCE_DIR/node_modules/" "$APP_DIR/node_modules/"
-            chown -R ubuntu:ubuntu "$APP_DIR/node_modules"
+          # 只有锁文件变化时才同步 node_modules；本次锁文件未变化，不会引入大文件传输。
+          if [ "${LOCAL_LOCK_HASH}" != "${REMOTE_LOCK_HASH}" ]; then
+            echo "锁文件变化，同步运行依赖…"
+            rsync -az --delete -e "${SSH_CMD}" node_modules/ "${REMOTE}:${APP_DIR}/node_modules/"
+          else
+            echo "锁文件未变化，复用生产依赖。"
           fi
 
-          cp "$SOURCE_DIR/.env" "$APP_DIR/.env" 2>/dev/null || true
-          chown ubuntu:ubuntu "$APP_DIR/.env" 2>/dev/null || true
-          sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' \
-            "$SOURCE_DIR/ecosystem.config.cjs" > "$APP_DIR/ecosystem.config.cjs"
-          chown ubuntu:ubuntu "$APP_DIR/ecosystem.config.cjs"
+          ${SSH_CMD} "${REMOTE}" "EXPECTED_SHA='${EXPECTED_SHA}' bash -s" <<'ENDSSH'
+          set -euo pipefail
+          APP_DIR=/home/ubuntu/haoyouji-web
+          chown -R ubuntu:ubuntu "$APP_DIR/dist" "$APP_DIR/server/git-log.json" "$APP_DIR/package.json" "$APP_DIR/pnpm-lock.yaml" "$APP_DIR/ecosystem.config.cjs"
+          printf '%s\n' "$EXPECTED_SHA" > "$APP_DIR/dist/.deployed-commit"
+          chown ubuntu:ubuntu "$APP_DIR/dist/.deployed-commit"
 
           echo "重启 PM2…"
           if sudo -u ubuntu env HOME=/home/ubuntu pm2 describe haoyouji-web >/dev/null 2>&1; then
