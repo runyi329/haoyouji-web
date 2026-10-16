@@ -40,8 +40,7 @@ jobs:
 
       - name: 配置 pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.4.1
+        # 版本由 package.json 的 packageManager 字段唯一确定，避免双重声明冲突。
 
       - name: 配置 Node
         uses: actions/setup-node@v4
