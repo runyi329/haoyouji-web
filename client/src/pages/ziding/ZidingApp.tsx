@@ -2,7 +2,7 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, BarChart3, Bell, Check, ChevronRight, Copy, Download, FileImage,
-  Home, ImagePlus, LayoutDashboard, MapPin, Menu, Package, Plus, ReceiptText,
+  Home, ImagePlus, LayoutDashboard, MapPin, Menu, Package, Plus, ReceiptText, ZoomIn,
   LogOut, Save, ScanLine, Settings, ShieldCheck, ShoppingBag, ShoppingCart, Sparkles, Truck, UserRound, Wallet,
   UsersRound, X,
 } from "lucide-react";
@@ -291,10 +291,76 @@ function CheckoutSheet({ addresses, cartCount, paymentInstruction, submitting, l
 }
 
 function OrderDetailSheet({ order, paymentInstruction, isAdmin, onClose, onRefresh }: { order: any; paymentInstruction: string; isAdmin: boolean; onClose: () => void; onRefresh: () => void }) {
-  const uploadProof = trpc.zidingCommerce.uploadPaymentProof.useMutation({ onSuccess: onRefresh }); const cancel = trpc.zidingCommerce.cancelMyOrder.useMutation({ onSuccess: onRefresh }); const receipt = trpc.zidingCommerce.confirmReceipt.useMutation({ onSuccess: onRefresh }); const utils = trpc.useUtils();
-  const proof = async (proofId: number, download = false) => { try { const result = await utils.zidingCommerce.getPaymentProofUrl.fetch({ proofId, download }); window.open(result.url, "_blank", "noopener,noreferrer"); } catch (error: any) { alert(error.message || "凭证打开失败"); } };
-  const readFile = (event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 10 * 1024 * 1024) { alert("单张图片不能超过 10 兆"); return; } const reader = new FileReader(); reader.onload = () => uploadProof.mutate({ orderId: order.id, imageData: String(reader.result) }); reader.readAsDataURL(file); };
-  const tone = statusTone(order.status); return <div className="fixed inset-0 z-50 flex items-end bg-black/35" onClick={onClose}><div className="max-h-[90vh] w-full overflow-y-auto rounded-t-[28px] p-5" onClick={(e) => e.stopPropagation()} style={{ background: C.canvas }}><div className="flex justify-between"><div><div className="text-lg font-bold" style={{ color: C.ink }}>订单详情</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{order.orderNo}</div></div><button onClick={onClose}><X size={20} /></button></div><span className="mt-3 inline-block rounded-full px-2 py-1 text-[11px] font-semibold" style={{ color: tone.color, background: tone.bg }}>{order.statusLabel}</span><div className="mt-4 space-y-2">{order.items.map((item: any) => <div key={item.id} className="flex justify-between rounded-xl border p-3" style={{ background: C.paper, borderColor: C.line }}><div><div className="text-sm font-semibold" style={{ color: C.ink }}>{item.name}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{money(item.unitPrice)} × {item.quantity}</div></div><strong className="text-sm" style={{ color: C.ink }}>{money(item.lineTotal)}</strong></div>)}</div><Panel className="mt-3"><div className="text-sm font-semibold" style={{ color: C.ink }}>收货信息</div><div className="mt-2 text-xs leading-5" style={{ color: C.muted }}>{order.receiver.name}　{order.receiver.phone}<br />{order.receiver.province}{order.receiver.city}{order.receiver.district}{order.receiver.detail}</div></Panel><Panel className="mt-3"><div className="flex justify-between"><div className="text-sm font-semibold" style={{ color: C.ink }}>付款凭证</div>{!isAdmin && ["awaiting_proof", "proof_rejected"].includes(order.status) && <label className="cursor-pointer text-xs font-semibold" style={{ color: C.plum }}><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={readFile} />{uploadProof.isPending ? "上传中…" : "上传图片"}</label>}</div>{!isAdmin && ["awaiting_proof", "proof_rejected"].includes(order.status) && <div className="mt-3 rounded-xl border p-3 text-[11px] leading-5" style={{ borderColor: C.line, color: C.muted }}><strong style={{ color: C.ink }}>付款说明</strong><br />{paymentInstruction || "请按管理员说明完成付款后上传凭证。"}</div>}<p className="mt-2 text-[11px] leading-5" style={{ color: C.muted }}>凭证仅下单用户与紫鼎项目订单管理员可查看。单笔最多 3 张。</p>{order.proofs.length ? <div className="mt-3 flex flex-wrap gap-2">{order.proofs.map((p: any) => <div key={p.id} className="rounded-xl border px-2.5 py-2" style={{ borderColor: C.line }}><Button kind="quiet" onClick={() => proof(p.id)} className="border-0 p-0 text-xs"><FileImage size={14} />预览</Button><button onClick={() => proof(p.id, true)} className="ml-2 align-middle" title="下载 / 保存图片"><Download size={15} style={{ color: C.plum }} /></button></div>)}</div> : <div className="mt-3 text-xs" style={{ color: C.muted }}>暂未上传凭证</div>}</Panel>{order.shippingCompany && <Panel className="mt-3"><div className="flex gap-2"><Truck size={17} style={{ color: C.gold }} /><div><div className="text-sm font-semibold" style={{ color: C.ink }}>{order.shippingCompany}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{order.trackingNo}</div></div></div></Panel>}<Panel className="mt-3"><div className="text-sm font-semibold" style={{ color: C.ink }}>订单进度</div><div className="mt-3 space-y-3">{order.timeline.map((item: any, index: number) => <div key={`${item.type}-${index}`} className="flex gap-3"><span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: index === order.timeline.length - 1 ? C.gold : C.line }} /><div><div className="text-xs font-medium" style={{ color: C.ink }}>{item.text}</div><div className="mt-0.5 text-[10px]" style={{ color: C.muted }}>{dateTime(item.createdAt)}</div></div></div>)}</div></Panel>{!isAdmin && <div className="mt-4 flex gap-2">{["awaiting_proof", "proof_rejected"].includes(order.status) && <Button kind="quiet" onClick={() => { if (confirm("确认取消这笔订单吗？")) cancel.mutate({ id: order.id }); }}>取消订单</Button>}{order.status === "shipped" && <Button onClick={() => { if (confirm("确认已经收到商品吗？")) receipt.mutate({ id: order.id }); }}>确认收货</Button>}</div>}</div></div>;
+  const uploadProof = trpc.zidingCommerce.uploadPaymentProof.useMutation({ onSuccess: onRefresh });
+  const cancel = trpc.zidingCommerce.cancelMyOrder.useMutation({ onSuccess: onRefresh });
+  const receipt = trpc.zidingCommerce.confirmReceipt.useMutation({ onSuccess: onRefresh });
+  const utils = trpc.useUtils();
+  const [proofUrls, setProofUrls] = useState<Record<number, string>>({});
+  const [previewProof, setPreviewProof] = useState<{ id: number; url: string } | null>(null);
+  const [proofError, setProofError] = useState("");
+  const proofKey = (order.proofs || []).map((proof: any) => proof.id).join(",");
+  const getProofUrl = async (proofId: number, download = false) => {
+    const result = await utils.zidingCommerce.getPaymentProofUrl.fetch({ proofId, download });
+    return result.url;
+  };
+  useEffect(() => {
+    let active = true;
+    const proofs = order.proofs || [];
+    setProofUrls({});
+    setProofError("");
+    if (!proofs.length) return () => { active = false; };
+    Promise.all(proofs.map(async (proof: any) => {
+      try { return [Number(proof.id), await getProofUrl(Number(proof.id))] as const; } catch { return null; }
+    })).then((items) => {
+      if (!active) return;
+      setProofUrls(Object.fromEntries(items.filter(Boolean) as Array<[number, string]>));
+    });
+    return () => { active = false; };
+  }, [order.id, proofKey]);
+  const openProof = async (proofId: number) => {
+    try {
+      const url = proofUrls[proofId] || await getProofUrl(proofId);
+      setProofUrls((old) => ({ ...old, [proofId]: url }));
+      setPreviewProof({ id: proofId, url });
+    } catch (error: any) {
+      setProofError(error.message || "凭证打开失败，请稍后重试");
+    }
+  };
+  const downloadProof = async (proofId: number) => {
+    try { window.open(await getProofUrl(proofId, true), "_blank", "noopener,noreferrer"); }
+    catch (error: any) { setProofError(error.message || "凭证下载失败，请稍后重试"); }
+  };
+  const readFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setProofError("单张图片不能超过 10 兆"); return; }
+    setProofError("");
+    const reader = new FileReader();
+    reader.onload = () => uploadProof.mutate({ orderId: order.id, imageData: String(reader.result) }, { onError: (error) => setProofError(error.message || "凭证上传失败，请稍后重试") });
+    reader.readAsDataURL(file);
+  };
+  const tone = statusTone(order.status);
+  const canUpload = !isAdmin && ["awaiting_proof", "proof_rejected"].includes(order.status) && order.proofs.length < 3;
+  return <div className="fixed inset-0 z-50 flex items-end bg-black/35" onClick={onClose}>
+    <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-[28px] p-5" onClick={(e) => e.stopPropagation()} style={{ background: C.canvas }}>
+      <div className="flex justify-between"><div><div className="text-lg font-bold" style={{ color: C.ink }}>订单详情</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{order.orderNo}</div></div><button onClick={onClose}><X size={20} /></button></div>
+      <span className="mt-3 inline-block rounded-full px-2 py-1 text-[11px] font-semibold" style={{ color: tone.color, background: tone.bg }}>{order.statusLabel}</span>
+      <div className="mt-4 space-y-2">{order.items.map((item: any) => <div key={item.id} className="flex justify-between rounded-xl border p-3" style={{ background: C.paper, borderColor: C.line }}><div><div className="text-sm font-semibold" style={{ color: C.ink }}>{item.name}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{money(item.unitPrice)} × {item.quantity}</div></div><strong className="text-sm" style={{ color: C.ink }}>{money(item.lineTotal)}</strong></div>)}</div>
+      <section className="mt-3 rounded-[22px] border p-4" style={{ background: "#FCF6F7", borderColor: "#E6CBD5" }}>
+        <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-full" style={{ background: "#F0DFE6", color: C.plum }}><ReceiptText size={16} /></span><div><div className="text-sm font-semibold" style={{ color: C.ink }}>付款凭证</div><div className="mt-0.5 text-[10px]" style={{ color: C.muted }}>{order.proofs.length ? `已上传 ${order.proofs.length} / 3 张` : "完成付款后请上传凭证"}</div></div></div>{canUpload && <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-white" style={{ background: C.plum }}><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={readFile} />{uploadProof.isPending ? "上传中…" : <><ImagePlus size={14} />上传图片</>}</label>}</div>
+        {!isAdmin && ["awaiting_proof", "proof_rejected"].includes(order.status) && <div className="mt-3 rounded-xl border px-3 py-2.5 text-[11px] leading-5" style={{ borderColor: "#E6CBD5", background: "rgba(255,255,255,.72)", color: C.muted }}><strong style={{ color: C.ink }}>付款说明</strong><br />{paymentInstruction || "请按管理员说明完成付款后上传清晰凭证。"}</div>}
+        {proofError && <div className="mt-3 rounded-xl border px-3 py-2 text-xs leading-5" style={{ color: C.danger, borderColor: "#EACACA", background: "#FFF8F8" }}>{proofError}</div>}
+        {order.proofs.length ? <><div className="mt-3 grid grid-cols-3 gap-2">{order.proofs.map((proof: any, index: number) => <div key={proof.id} className="group relative aspect-square overflow-hidden rounded-xl border" style={{ background: "#F0EAEB", borderColor: "#E1CFD6" }}>{proofUrls[proof.id] ? <img src={proofUrls[proof.id]} alt={`付款凭证 ${index + 1}`} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-[10px]" style={{ color: C.muted }}>加载凭证…</div>}<button onClick={() => openProof(Number(proof.id))} className="absolute inset-0 grid place-items-center bg-black/5" aria-label={`放大查看付款凭证 ${index + 1}`}><span className="grid h-8 w-8 place-items-center rounded-full bg-white/90 shadow-sm" style={{ color: C.plum }}><ZoomIn size={17} /></span></button></div>)}</div><div className="mt-2 text-[10px]" style={{ color: C.muted }}>点击放大镜查看大图并保存。</div></> : <div className="mt-3 rounded-xl border border-dashed px-3 py-4 text-center text-xs leading-5" style={{ borderColor: "#DCC5CE", color: C.muted }}>{canUpload ? "上传后可在这里直接看到凭证缩略图，并点击放大镜查看大图。" : "暂未上传付款凭证"}</div>}
+        {!isAdmin && order.proofs.length >= 3 && ["awaiting_proof", "proof_rejected"].includes(order.status) && <div className="mt-2 text-[10px]" style={{ color: C.muted }}>已达到单笔订单最多 3 张凭证的上限。</div>}
+      </section>
+      <Panel className="mt-3"><div className="text-sm font-semibold" style={{ color: C.ink }}>收货信息</div><div className="mt-2 text-xs leading-5" style={{ color: C.muted }}>{order.receiver.name}　{order.receiver.phone}<br />{order.receiver.province}{order.receiver.city}{order.receiver.district}{order.receiver.detail}</div></Panel>
+      {order.shippingCompany && <Panel className="mt-3"><div className="flex gap-2"><Truck size={17} style={{ color: C.gold }} /><div><div className="text-sm font-semibold" style={{ color: C.ink }}>{order.shippingCompany}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{order.trackingNo}</div></div></div></Panel>}
+      <Panel className="mt-3"><div className="text-sm font-semibold" style={{ color: C.ink }}>订单进度</div><div className="mt-3 space-y-3">{order.timeline.map((item: any, index: number) => <div key={`${item.type}-${index}`} className="flex gap-3"><span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: index === order.timeline.length - 1 ? C.gold : C.line }} /><div><div className="text-xs font-medium" style={{ color: C.ink }}>{item.text}</div><div className="mt-0.5 text-[10px]" style={{ color: C.muted }}>{dateTime(item.createdAt)}</div></div></div>)}</div></Panel>
+      {!isAdmin && <div className="mt-4 flex gap-2">{["awaiting_proof", "proof_rejected"].includes(order.status) && <Button kind="quiet" onClick={() => { if (confirm("确认取消这笔订单吗？")) cancel.mutate({ id: order.id }); }}>取消订单</Button>}{order.status === "shipped" && <Button onClick={() => { if (confirm("确认已经收到商品吗？")) receipt.mutate({ id: order.id }); }}>确认收货</Button>}</div>}
+    </div>
+    {previewProof && <div className="fixed inset-0 z-[70] flex flex-col" style={{ background: "rgba(20,13,20,.94)" }} onClick={() => setPreviewProof(null)}><div className="flex items-center justify-between px-5 pb-3 pt-5"><div className="text-sm font-semibold text-white">付款凭证大图</div><button onClick={() => setPreviewProof(null)} className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-white" aria-label="关闭大图"><X size={19} /></button></div><div className="flex min-h-0 flex-1 items-center justify-center px-4 pb-3" onClick={(event) => event.stopPropagation()}><img src={previewProof.url} alt="付款凭证大图" className="max-h-full max-w-full rounded-xl object-contain shadow-2xl" /></div><div className="flex justify-center px-5 pb-7 pt-2"><button onClick={() => downloadProof(previewProof.id)} className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold" style={{ color: C.ink }}><Download size={16} />保存大图</button></div></div>}
+  </div>;
 }
 
 function ProfileApp({ go }: { go: (path?: string) => void }) { const context = trpc.zidingCommerce.myContext.useQuery(); const notices = trpc.zidingCommerce.listNotifications.useQuery(); return <div className="min-h-screen pb-24" style={{ background: C.canvas }}><Header title="我的" back={() => go("")} /><main className="mx-auto max-w-md space-y-4 px-4 pt-4"><Panel><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-full text-white" style={{ background: C.ink }}><UserRound size={20} /></div><div><div className="font-bold" style={{ color: C.ink }}>{context.data?.member.tier === "senior" ? "高级会员" : "初级会员"}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>紫鼎商业联盟会员</div></div></div></Panel><Panel><div className="flex items-center justify-between"><div><div className="text-sm font-semibold" style={{ color: C.ink }}>本月积分</div><div className="mt-2 text-2xl font-bold" style={{ color: C.ink }}>{Number(context.data?.points.earned || 0).toLocaleString()}</div></div><div className="text-right text-xs leading-5" style={{ color: C.muted }}>有效订购额 {money(context.data?.points.qualifiedAmount)}<br />当前系数 {Number(context.data?.points.currentMultiplier || 1).toFixed(2)}×</div></div></Panel><Panel><div className="mb-3 flex justify-between"><h3 className="text-sm font-semibold" style={{ color: C.ink }}>消息通知</h3><Bell size={16} style={{ color: C.gold }} /></div>{(notices.data || []).length ? <div className="space-y-3">{(notices.data || []).slice(0,8).map((notice: any) => <div key={notice.id} className="border-t pt-3" style={{ borderColor: C.line }}><div className="text-xs font-semibold" style={{ color: C.ink }}>{notice.title}</div><div className="mt-1 text-[11px] leading-5" style={{ color: C.muted }}>{notice.content}</div></div>)}</div> : <div className="text-xs" style={{ color: C.muted }}>暂时没有新消息。</div>}</Panel><Button kind="quiet" onClick={() => go("/orders")} className="w-full"><ReceiptText size={15} />查看我的订单</Button></main><BottomNav active="me" go={go} /></div>; }

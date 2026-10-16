@@ -182,7 +182,15 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+// 稳定热预览只关闭 Manus 容器的远程“刷新”指令监听：
+// 代码仍可按需由开发者重启预览，用户填写表单时不会被容器的周期刷新清空。
+const stablePreview = process.env.MANUS_STABLE_PREVIEW === "true";
+const plugins = [
+  react(),
+  tailwindcss(),
+  jsxLocPlugin(),
+  ...(stablePreview ? [] : [vitePluginManusRuntime(), vitePluginManusDebugCollector()]),
+];
 
 export default defineConfig({
   plugins,
@@ -206,7 +214,8 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    hmr: true,
+    // 稳定预览不建立 HMR 通道，也不监听文件改动，防止表单输入过程中被整页重载。
+    hmr: stablePreview ? false : true,
     proxy: {
       "/api": {
         target: "http://124.223.54.69:80",
@@ -214,7 +223,7 @@ export default defineConfig({
         secure: false,
       },
     },
-    watch: {
+    watch: stablePreview ? { ignored: ["**/*"] } : {
       usePolling: true,
       interval: 1000,
     },

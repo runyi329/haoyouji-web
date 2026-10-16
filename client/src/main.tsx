@@ -172,9 +172,11 @@ async function bootstrap() {
 bootstrap();
 
 // PWA 仅在生产环境启用；开发环境自动清理旧缓存，避免调试时持续加载旧代码。
+// 稳定预览同样清理 Service Worker：其接管页面时会主动导航，可能打断图片选择或表单填写。
+const isStablePreview = import.meta.env.VITE_MANUS_STABLE_PREVIEW === 'true';
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    if (import.meta.env.PROD) {
+    if (import.meta.env.PROD && !isStablePreview) {
       let refreshingForUpdate = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshingForUpdate) return;
