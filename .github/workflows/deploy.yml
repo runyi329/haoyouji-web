@@ -83,7 +83,8 @@ jobs:
         run: |
           set -euo pipefail
           APP_DIR=/home/ubuntu/haoyouji-web
-          SSH_CMD="ssh -i ~/.ssh/deploy_key -p ${DEPLOY_PORT}"
+          SSH_KEY="$HOME/.ssh/deploy_key"
+          SSH_CMD="ssh -i ${SSH_KEY} -p ${DEPLOY_PORT}"
           REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
           LOCAL_LOCK_HASH=$(md5sum pnpm-lock.yaml | cut -d' ' -f1)
           REMOTE_LOCK_HASH=$(${SSH_CMD} "${REMOTE}" "md5sum ${APP_DIR}/pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || true")
