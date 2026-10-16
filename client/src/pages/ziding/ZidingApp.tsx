@@ -3,11 +3,12 @@ import { useLocation } from "wouter";
 import {
   ArrowLeft, BarChart3, Bell, Check, ChevronRight, Download, FileImage,
   Home, ImagePlus, LayoutDashboard, MapPin, Menu, Package, Plus, ReceiptText,
-  Save, ScanLine, Settings, ShieldCheck, ShoppingBag, ShoppingCart, Sparkles, Truck, UserRound, Wallet,
+  LogOut, Save, ScanLine, Settings, ShieldCheck, ShoppingBag, ShoppingCart, Sparkles, Truck, UserRound, Wallet,
   UsersRound, X,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import VersionSwitcher from "@/components/VersionSwitcher";
 import zidingRegionData from "./ziding-region-data.json";
 
 const BASE = "/p/proj_stn4q7";
@@ -78,7 +79,7 @@ function Header({ title, right, back }: { title?: string; right?: React.ReactNod
   return <header className="sticky top-0 z-30 border-b px-4" style={{ background: "rgba(248,245,241,.94)", borderColor: C.line, backdropFilter: "blur(16px)" }}>
     <div className="mx-auto flex h-[58px] max-w-md items-center justify-between">
       <div className="flex min-w-0 items-center gap-2.5">
-        {back ? <button onClick={back} className="-ml-1 rounded-full p-1.5"><ArrowLeft size={19} style={{ color: C.ink }} /></button> : <div className="grid h-8 w-8 place-items-center rounded-xl text-sm font-bold text-white" style={{ background: C.ink }}>鼎</div>}
+        {back ? <button onClick={back} className="-ml-1 rounded-full p-1.5"><ArrowLeft size={19} style={{ color: C.ink }} /></button> : <VersionSwitcher variant="inline" currentVersionKey="proj_stn4q7" menuAlign="left" />}
         <div className="min-w-0"><div className="truncate text-[15px] font-bold" style={{ color: C.ink }}>{title || "紫鼎商业联盟"}</div></div>
       </div>{right}
     </div>
@@ -87,24 +88,33 @@ function Header({ title, right, back }: { title?: string; right?: React.ReactNod
 
 export default function ZidingApp() {
   const [location, navigate] = useLocation();
-  const { user, loading } = useAuth({ redirectOnUnauthenticated: false });
+  const { user, loading, logout } = useAuth({ redirectOnUnauthenticated: false });
   const context = trpc.zidingCommerce.myContext.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
   const path = location.startsWith(BASE) ? (location.slice(BASE.length) || "/") : "/";
   const go = (suffix = "") => navigate(`${BASE}${suffix}`);
+  const exit = async () => {
+    try {
+      await logout();
+      try { sessionStorage.removeItem("_viewing_version"); } catch { /* 忽略受限环境的存储异常 */ }
+      navigate("/login");
+    } catch {
+      alert("退出登录失败，请稍后重试。");
+    }
+  };
   if (loading || context.isLoading) return <div className="min-h-screen grid place-items-center text-sm" style={{ background: C.canvas, color: C.muted }}>正在进入紫鼎商业联盟…</div>;
   if (!user || context.error) return <LoginGate />;
   if (path.startsWith("/product-style")) return <ProductLongDetail product={{ id: 0, name: "养源归序早餐粉", subtitle: "一组四包", description: "为有节奏的清晨准备的便捷冲调食品。", imageUrl: COS_PRODUCT_IMAGES.breakfast, price: 0 }} onClose={() => go("")} preview />;
   if (path.startsWith("/admin")) return <AdminApp go={go} onExit={() => go("")} />;
   if (path.startsWith("/orders")) return <OrdersApp go={go} />;
   if (path.startsWith("/me")) return <ProfileApp go={go} />;
-  return <Storefront go={go} context={context.data as any} profile={user as any} />;
+  return <Storefront go={go} context={context.data as any} profile={user as any} onLogout={exit} />;
 }
 
 function LoginGate() {
   return <div className="min-h-screen flex items-center justify-center p-7" style={{ background: C.canvas }}><Panel className="max-w-sm text-center"><ShieldCheck className="mx-auto mb-3" size={26} style={{ color: C.gold }} /><h1 className="text-lg font-bold" style={{ color: C.ink }}>请先登录</h1><p className="mt-2 text-sm leading-6" style={{ color: C.muted }}>登录后即可查看紫鼎商业联盟专属商品、订单和本月积分。</p><a href="/login" className="mt-5 inline-flex rounded-xl px-4 py-2.5 text-sm font-bold text-white" style={{ background: C.ink }}>前往登录</a></Panel></div>;
 }
 
-function Storefront({ go, context, profile }: { go: (suffix?: string) => void; context: any; profile: any }) {
+function Storefront({ go, context, profile, onLogout }: { go: (suffix?: string) => void; context: any; profile: any; onLogout: () => Promise<void> }) {
   const products = trpc.zidingCommerce.listProducts.useQuery();
   // 入口按项目角色显示；所有管理写入仍由服务端的 requireAdmin 二次校验。
   const canManage = ["owner", "order_admin", "catalog_admin"].includes(String(context.member?.role || ""));
@@ -153,7 +163,7 @@ function Storefront({ go, context, profile }: { go: (suffix?: string) => void; c
       {products.isLoading ? <div className="py-12 text-center text-sm" style={{ color: C.muted }}>正在加载商品…</div> : list.length === 0 ? <EmptyProductState isAdmin={canManage} go={go} /> : <div className="-mx-3 grid grid-cols-2 gap-2">{list.map((product) => <ProductCard key={product.id} product={product} purchasable={isPurchasable(product)} onQuickAdd={() => quickAdd(product)} onOpen={() => setDetailProduct(product)} />)}</div>}
     </main>
     {showCart && <CartSheet rows={rows} total={total} onClose={() => setShowCart(false)} onChange={change} onCheckout={() => { setShowCart(false); go("/orders?checkout=1"); }} />}
-    {showQuickMenu && <QuickMenuDrawer profile={profile} identityLabel={Boolean(context.member?.isAdmin) ? "管理员" : context.member?.tier === "senior" ? "高级会员" : "初级会员"} orderSummary={orderSummary} canConfigure={Boolean(context.member?.isAdmin)} onClose={() => setShowQuickMenu(false)} onOrders={() => { setShowQuickMenu(false); go("/orders"); }} onSettings={() => { setShowQuickMenu(false); go("/admin"); }} onScan={() => { setShowQuickMenu(false); setShowScanner(true); }} />}
+    {showQuickMenu && <QuickMenuDrawer profile={profile} identityLabel={Boolean(context.member?.isAdmin) ? "管理员" : context.member?.tier === "senior" ? "高级会员" : "初级会员"} orderSummary={orderSummary} canConfigure={Boolean(context.member?.isAdmin)} onClose={() => setShowQuickMenu(false)} onOrders={() => { setShowQuickMenu(false); go("/orders"); }} onSettings={() => { setShowQuickMenu(false); go("/admin"); }} onScan={() => { setShowQuickMenu(false); setShowScanner(true); }} onLogout={onLogout} />}
     {showScanner && <ScannerSheet onClose={() => setShowScanner(false)} />}
     {detailProduct && <ProductLongDetail product={detailProduct} onClose={() => setDetailProduct(null)} onBuyNow={() => buyNow(detailProduct)} />}
     {addedName && <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full px-4 py-2 text-xs font-semibold text-white shadow-lg" style={{ background: C.ink }}>已加入购物车：{addedName}</div>}
@@ -182,7 +192,7 @@ function Stepper({ value, onChange }: { value: number; onChange: (value: number)
 function CartSheet({ rows, total, onClose, onChange, onCheckout }: { rows: any[]; total: number; onClose: () => void; onChange: (id: number, next: number) => void; onCheckout: () => void }) {
   return <div className="fixed inset-0 z-50 flex items-end bg-black/35" onClick={onClose}><div className="w-full rounded-t-[28px] p-5" onClick={(e) => e.stopPropagation()} style={{ background: C.canvas }}><div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-bold" style={{ color: C.ink }}>购物车</h3><button onClick={onClose}><X size={20} /></button></div>{rows.map((row) => <div className="mb-3 flex items-center justify-between rounded-xl border p-3" style={{ background: C.paper, borderColor: C.line }} key={row.id}><div><div className="text-sm font-semibold" style={{ color: C.ink }}>{row.name}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{money(row.price)}</div></div><Stepper value={row.quantity} onChange={(next) => onChange(row.id, next)} /></div>)}<div className="mt-5 flex items-center justify-between"><div><div className="text-xs" style={{ color: C.muted }}>合计</div><div className="text-xl font-bold" style={{ color: C.ink }}>{money(total)}</div></div><Button onClick={onCheckout} disabled={!rows.length}>去填写订单<ChevronRight size={15} /></Button></div></div></div>;
 }
-function QuickMenuDrawer({ profile, identityLabel, orderSummary, canConfigure, onClose, onOrders, onSettings, onScan }: { profile: any; identityLabel: string; orderSummary: { awaitingConfirmation: number; awaitingShipment: number; awaitingReceipt: number }; canConfigure: boolean; onClose: () => void; onOrders: () => void; onSettings: () => void; onScan: () => void }) {
+function QuickMenuDrawer({ profile, identityLabel, orderSummary, canConfigure, onClose, onOrders, onSettings, onScan, onLogout }: { profile: any; identityLabel: string; orderSummary: { awaitingConfirmation: number; awaitingShipment: number; awaitingReceipt: number }; canConfigure: boolean; onClose: () => void; onOrders: () => void; onSettings: () => void; onScan: () => void; onLogout: () => Promise<void> }) {
   const statuses = [["待确认", orderSummary.awaitingConfirmation], ["待发货", orderSummary.awaitingShipment], ["待收货", orderSummary.awaitingReceipt]] as const;
   const pendingTotal = statuses.reduce((sum, [, count]) => sum + Number(count || 0), 0);
   const nickname = String(profile?.name || profile?.username || "会员");
@@ -190,7 +200,7 @@ function QuickMenuDrawer({ profile, identityLabel, orderSummary, canConfigure, o
   const avatar = String(profile?.avatar || "").trim();
   return <div className="fixed inset-0 z-[60] bg-black/30" onClick={onClose}><aside className="ml-auto flex h-full w-[80vw] max-w-[360px] flex-col px-5 pb-7 pt-5 shadow-2xl" onClick={(event) => event.stopPropagation()} style={{ background: C.canvas }}>
     <div className="flex items-center justify-between border-b pb-4" style={{ borderColor: C.line }}><div className="flex min-w-0 items-center gap-2.5">{avatar ? <img src={avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" style={{ background: "#EEE4EA" }} /> : <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold" style={{ background: C.plum, color: "white" }}>{nickname.slice(0, 1)}</div>}<div className="min-w-0"><div className="flex items-center gap-1.5"><div className="truncate text-sm font-semibold" style={{ color: C.ink }}>{nickname}</div><span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: "#F2EAF0", color: C.plum }}>{identityLabel}</span></div><div className="mt-0.5 truncate text-[11px]" style={{ color: C.muted }}>{username}</div></div></div><button onClick={onScan} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold" style={{ background: "#F3EEE9", color: C.ink }}><ScanLine size={16} />扫一扫</button></div>
-    <section className="mt-5 border-y" style={{ borderColor: C.line }}><button onClick={onOrders} className="flex w-full items-center gap-3 py-4 text-left"><ReceiptText size={20} style={{ color: C.ink }} /><div className="min-w-0 flex-1"><div className="text-[15px] font-semibold" style={{ color: C.ink }}>我的订单</div>{pendingTotal > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{statuses.filter(([, count]) => count > 0).map(([label, count]) => <span key={label} className="rounded-full px-2 py-0.5 text-[10px]" style={{ color: C.plum, background: "#F2EAF0" }}>{label} {count}</span>)}</div> : <div className="mt-1 text-[11px]" style={{ color: C.muted }}>暂无待处理订单</div>}</div><ChevronRight size={17} style={{ color: C.muted }} /></button><div className="flex items-center gap-3 border-t py-4 opacity-45" style={{ borderColor: C.line }}><Wallet size={20} style={{ color: C.muted }} /><div className="flex-1"><div className="text-[15px] font-semibold" style={{ color: C.muted }}>我的钱包</div><div className="mt-1 text-[11px]" style={{ color: C.muted }}>暂未开放</div></div></div>{canConfigure && <button onClick={onSettings} className="flex w-full items-center gap-3 border-t py-4 text-left" style={{ borderColor: C.line }}><Settings size={20} style={{ color: C.ink }} /><span className="flex-1 text-[15px] font-semibold" style={{ color: C.ink }}>后台管理</span><ChevronRight size={17} style={{ color: C.muted }} /></button>}</section>
+    <section className="mt-5 border-y" style={{ borderColor: C.line }}><button onClick={onOrders} className="flex w-full items-center gap-3 py-4 text-left"><ReceiptText size={20} style={{ color: C.ink }} /><div className="min-w-0 flex-1"><div className="text-[15px] font-semibold" style={{ color: C.ink }}>我的订单</div>{pendingTotal > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{statuses.filter(([, count]) => count > 0).map(([label, count]) => <span key={label} className="rounded-full px-2 py-0.5 text-[10px]" style={{ color: C.plum, background: "#F2EAF0" }}>{label} {count}</span>)}</div> : <div className="mt-1 text-[11px]" style={{ color: C.muted }}>暂无待处理订单</div>}</div><ChevronRight size={17} style={{ color: C.muted }} /></button><div className="flex items-center gap-3 border-t py-4 opacity-45" style={{ borderColor: C.line }}><Wallet size={20} style={{ color: C.muted }} /><div className="flex-1"><div className="text-[15px] font-semibold" style={{ color: C.muted }}>我的钱包</div><div className="mt-1 text-[11px]" style={{ color: C.muted }}>暂未开放</div></div></div>{canConfigure && <button onClick={onSettings} className="flex w-full items-center gap-3 border-t py-4 text-left" style={{ borderColor: C.line }}><Settings size={20} style={{ color: C.ink }} /><span className="flex-1 text-[15px] font-semibold" style={{ color: C.ink }}>后台管理</span><ChevronRight size={17} style={{ color: C.muted }} /></button>}<button onClick={onLogout} className="flex w-full items-center justify-center gap-1.5 border-t py-2.5 text-[11px] font-semibold" style={{ borderColor: C.line, color: C.muted }}><LogOut size={13} />退出登录</button></section>
   </aside></div>;
 }
 function ScannerSheet({ onClose }: { onClose: () => void }) {

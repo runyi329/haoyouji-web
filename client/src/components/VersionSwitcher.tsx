@@ -15,6 +15,7 @@ import { trpc } from "@/lib/trpc";
  * - inline：内嵌进顶栏图标行（牙伴版顶栏「刷新/搜索/新增」一行）。
  */
 type Variant = "floating" | "inline";
+type MenuAlign = "left" | "right";
 
 // versionKey → 版本图标。未知版本回退到通用切换图标。
 const VERSION_ICONS: Record<string, string> = {
@@ -70,8 +71,16 @@ function VersionIcon({
 
 export default function VersionSwitcher({
   variant = "floating",
+  currentVersionKey,
+  menuAlign = "right",
 }: {
   variant?: Variant;
+  /**
+   * 定制项目页面可明确传入自身版本，避免根据通用路径误判为脉动版。
+   */
+  currentVersionKey?: string;
+  /** 顶栏左侧入口应让菜单向右展开，避免超出手机屏幕。 */
+  menuAlign?: MenuAlign;
 }) {
   const [location, setLocation] = useLocation();
   const [open, setOpen] = useState(false);
@@ -97,7 +106,7 @@ export default function VersionSwitcher({
 
   // 「当前所在版本」：按实际路径实时判定（/yaban/* 为牙伴，其余为脉动），
   // 而非归属版本 versionKey，以免在牙伴页面却把当前判成脉动、图标与可切项相反。
-  const currentKey = location.startsWith("/yaban") ? "yaban" : "maidong";
+  const currentKey = currentVersionKey || (location.startsWith("/yaban") ? "yaban" : "maidong");
 
   // 可切换范围：开放版本集合（switchableVersionKeys）；再并入归属版本与当前所在版本。
   // 新模型下后端仅在开放集合非空时下发具体列表，不再有“为空=全部”的隐含语义。
@@ -133,7 +142,7 @@ export default function VersionSwitcher({
 
   // 下拉菜单（两种模式共用）
   const Dropdown = (
-    <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50">
+    <div className={`absolute ${menuAlign === "left" ? "left-0" : "right-0"} mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50`}>
       <div className="px-3 py-2 text-xs text-gray-400 border-b border-gray-50">
         切换版本
       </div>
