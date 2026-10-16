@@ -1,8 +1,9 @@
-import { randomUUID } from "crypto";
+import { randomInt, randomUUID } from "crypto";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { router, protectedProcedure } from "./_core/trpc";
 import { getDbConnection, getDbTransactionConnection } from "./db";
+import { hashPassword } from "./auth";
 import { resolveUserVersion } from "./version-resolver";
 import {
   createZidingPaymentProofViewUrl,
@@ -42,6 +43,36 @@ const actorId = (ctx: any) => Number((ctx.realUser || ctx.user)?.id || 0);
 
 function toError(code: "FORBIDDEN" | "NOT_FOUND" | "BAD_REQUEST" | "INTERNAL_SERVER_ERROR", message: string): never {
   throw new TRPCError({ code, message });
+}
+
+/** 仅为紫鼎会员开通账号生成一次性展示的六位初始密码，不在数据库或日志中保存明文。 */
+function newZidingInitialPassword() {
+  return String(randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+/**
+ * 确认平台用户存在，并在启用紫鼎会员时授予其紫鼎版本入口。
+ * 不覆盖已有版本归属，只把紫鼎加入可切换范围；新建紫鼎会员会直接以紫鼎作为默认版本。
+ */
+async function ensureZidingVersionAccess(conn: DbConn, userId: number, grantAccess: boolean) {
+  const [rows] = await conn.execute(
+    `SELECT id,version_key,version_switch_scope FROM users WHERE id=? LIMIT 1`,
+    [userId],
+  );
+  const user = (rows as any[])[0];
+  if (!user) toError("NOT_FOUND", "未找到该平台用户");
+  if (!grantAccess) return;
+
+  const scopes = String(user.version_switch_scope || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!scopes.includes(ZIDING_PROJECT_KEY)) scopes.push(ZIDING_PROJECT_KEY);
+  const currentVersion = String(user.version_key || "").trim();
+  await conn.execute(
+    `UPDATE users SET version_key=?,version_switch_scope=? WHERE id=?`,
+    [currentVersion || ZIDING_PROJECT_KEY, scopes.join(","), userId],
+  );
 }
 
 function parseJson<T>(raw: unknown, fallback: T): T {
@@ -914,10 +945,47 @@ export const zidingCommerceRouter = router({
     return ((rows as any[]) || []).map((row) => ({ userId: Number(row.id), name: row.name || row.username || `用户${row.id}`, username: row.username || "", avatar: row.avatar || "" }));
   }),
 
+  adminCreateMember: protectedProcedure.input(z.object({
+    username: z.string().trim().min(1, "请填写用户名").max(20, "用户名最多20个字符").regex(/^[\u4e00-\u9fa5a-zA-Z0-9_]+$/, "用户名只能包含汉字、字母、数字和下划线"),
+    nickname: z.string().trim().max(50, "昵称最多50个字符").optional().default(""),
+  })).mutation(async ({ ctx, input }) => {
+    const { actorUserId } = await requireProjectAdmin(ctx, "all");
+    const initialPassword = newZidingInitialPassword();
+    const passwordHash = await hashPassword(initialPassword);
+    const txConn = await getDbTransactionConnection();
+    if (!txConn) toError("INTERNAL_SERVER_ERROR", "会员服务暂不可用，请稍后重试");
+    try {
+      await txConn.beginTransaction();
+      const [existingRows] = await txConn.execute(`SELECT id FROM users WHERE username=? LIMIT 1 FOR UPDATE`, [input.username]);
+      if ((existingRows as any[]).length) toError("BAD_REQUEST", "用户名已存在，请换一个用户名");
+      const nickname = input.nickname || input.username;
+      const [created] = await txConn.execute(
+        `INSERT INTO users (openId,username,passwordHash,name,loginMethod,role,version_key,version_switch_scope,lastSignedIn)
+         VALUES (?,?,?,?, 'password','parent',?,?,NOW())`,
+        [`ziding_${randomUUID()}`, input.username, passwordHash, nickname, ZIDING_PROJECT_KEY, ZIDING_PROJECT_KEY],
+      );
+      const userId = Number((created as any).insertId);
+      await txConn.execute(
+        `INSERT INTO ziding_project_members (version_key,user_id,member_tier,project_role,is_active,created_by,updated_by)
+         VALUES (?,?,'junior','user',1,?,?)`,
+        [ZIDING_PROJECT_KEY, userId, actorUserId, actorUserId],
+      );
+      await auditAdmin(txConn, actorUserId, "member_created", "member", userId, { username: input.username, nickname: input.nickname || null, tier: "junior" });
+      await txConn.commit();
+      return { userId, username: input.username, nickname, initialPassword };
+    } catch (error) {
+      await txConn.rollback();
+      throw error;
+    } finally {
+      if (typeof (txConn as any).release === "function") (txConn as any).release();
+    }
+  }),
+
   adminSaveMember: protectedProcedure.input(z.object({ userId: z.number().int().positive(), tier: z.enum(["junior", "senior"]), role: z.enum(["user", "order_admin", "catalog_admin", "owner"]), isActive: z.boolean() })).mutation(async ({ ctx, input }) => {
     const { conn, actorUserId, role: actorRole } = await requireProjectAdmin(ctx, "all");
     if (input.role === "owner" && actorRole !== "owner" && (ctx.realUser || ctx.user)?.role !== "super_admin") toError("FORBIDDEN", "仅项目负责人可授予负责人权限");
     if (input.userId === ZIDING_OWNER_USER_ID && (!input.isActive || input.role !== "owner")) toError("BAD_REQUEST", "紫鼎项目负责人不能在此处被停用或降级");
+    await ensureZidingVersionAccess(conn, input.userId, input.isActive);
     await conn.execute(`INSERT INTO ziding_project_members (version_key,user_id,member_tier,project_role,is_active,created_by,updated_by) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE member_tier=VALUES(member_tier),project_role=VALUES(project_role),is_active=VALUES(is_active),updated_by=VALUES(updated_by)`,
       [ZIDING_PROJECT_KEY, input.userId, input.tier, input.role, input.isActive ? 1 : 0, actorUserId, actorUserId]);
     await auditAdmin(conn, actorUserId, "member_updated", "member", input.userId, { tier: input.tier, role: input.role, isActive: input.isActive });

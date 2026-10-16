@@ -21,7 +21,7 @@
  */
 import { Fragment, useState, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, Minus, ChartNoAxesCombined, WalletCards, LockKeyhole, Unlock, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, Eye, EyeOff, Pause, Plus, Minus, ChartNoAxesCombined, WalletCards, LockKeyhole, Unlock, RotateCcw, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -1651,11 +1651,21 @@ export default function LedgerAAInitialBalance() {
                             disabled={isReadonly}
                             onChange={(event) => setStockParticipationDraft(draftKey, { pauseDate: event.target.value }, fallbackDraft)}
                             aria-label="暂停日期"
-                            className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-default"
+                            className={draft.pauseDate ? "absolute inset-y-0 left-0 right-6 z-0 h-full cursor-pointer opacity-0 disabled:cursor-default" : "absolute inset-0 z-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-default"}
                           />
                           {!isReadonly && draft.pauseDate && (
-                            <button type="button" aria-label="解除暂停日期" title="解除暂停日期" onClick={() => setStockParticipationDraft(draftKey, { pauseDate: '' }, fallbackDraft)} className="absolute right-0 top-0 z-20 flex h-full w-4 items-center justify-center text-gray-400 hover:text-[#B45309]">
-                              <RotateCcw size={11} />
+                            <button
+                              type="button"
+                              aria-label="清除暂停日期"
+                              title="清除暂停日期"
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setStockParticipationDraft(draftKey, { pauseDate: '' }, fallbackDraft);
+                              }}
+                              className="absolute right-0 top-0 z-30 flex h-full w-6 items-center justify-center text-gray-400 hover:text-[#B45309]"
+                            >
+                              <X size={13} strokeWidth={2.5} />
                             </button>
                           )}
                         </div>
@@ -3408,16 +3418,28 @@ export default function LedgerAAInitialBalance() {
                                   style={{ borderColor: '#FDE68A', backgroundColor: '#FFFBEB', color: '#92400E' }}
                                 />
                                 {entry.pauseDate && (
-                                  <button type="button" onClick={() => {
-                                    updateEntry(userId, cat.name, { pauseDate: '' });
-                                    setPauseWalletPlans((previous) => {
-                                      const key = `${userId}|${cat.name}`;
-                                      if (!previous[key]) return previous;
-                                      const next = { ...previous };
-                                      delete next[key];
-                                      return next;
-                                    });
-                                  }} className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full hover:bg-amber-100" style={{ fontSize: 11, color: '#B45309' }}>×</button>
+                                  <button
+                                    type="button"
+                                    aria-label="清除暂停日期"
+                                    title="清除暂停日期"
+                                    onPointerDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      updateEntry(userId, cat.name, { pauseDate: '' });
+                                      setPauseWalletPlans((previous) => {
+                                        const key = `${userId}|${cat.name}`;
+                                        if (!previous[key]) return previous;
+                                        const next = { ...previous };
+                                        delete next[key];
+                                        return next;
+                                      });
+                                    }}
+                                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full hover:bg-amber-100"
+                                    style={{ color: '#B45309' }}
+                                  >
+                                    <X size={14} strokeWidth={2.5} />
+                                  </button>
                                 )}
                               </div>
                               </div>
@@ -3591,7 +3613,7 @@ export default function LedgerAAInitialBalance() {
                         )}
                       </div>
                     </label>
-                    <label className="min-w-0">
+                    <div className="min-w-0">
                       <span className="block text-xs mb-1" style={{ color: '#B45309' }}>暂停日期</span>
                       {(() => {
                         const history = entry.pauseHistory ?? [];
@@ -3631,28 +3653,40 @@ export default function LedgerAAInitialBalance() {
                               style={{ borderColor: '#FDE68A', backgroundColor: '#FFFBEB', color: '#92400E' }}
                             />
                             {displayedPauseDate && !latestIsGlobalPause && (
-                              <button type="button" onClick={() => {
-                                if (latest) {
-                                  const nextHistory = history.map((item, index) => index === latestIndex ? { ...item, pauseDate: '' } : item);
-                                  updateEntry(userId, tagName, { pauseHistory: nextHistory });
-                                  setPauseWalletPlans((previous) => {
-                                    const key = `${userId}|${tagName}`;
-                                    if (!previous[key]) return previous;
-                                    const next = { ...previous };
-                                    delete next[key];
-                                    return next;
-                                  });
-                                } else if (pauseHandlingDraft) {
-                                  setPauseWalletHandlingDraft(null);
-                                } else {
-                                  updateEntry(userId, tagName, { pauseDate: '' });
-                                }
-                              }} className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full" style={{ fontSize: 11, color: '#B45309' }}>×</button>
+                              <button
+                                type="button"
+                                aria-label="清除暂停日期"
+                                title="清除暂停日期"
+                                onPointerDown={(event) => event.stopPropagation()}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  if (latest) {
+                                    const nextHistory = history.map((item, index) => index === latestIndex ? { ...item, pauseDate: '' } : item);
+                                    updateEntry(userId, tagName, { pauseHistory: nextHistory });
+                                    setPauseWalletPlans((previous) => {
+                                      const key = `${userId}|${tagName}`;
+                                      if (!previous[key]) return previous;
+                                      const next = { ...previous };
+                                      delete next[key];
+                                      return next;
+                                    });
+                                  } else if (pauseHandlingDraft) {
+                                    setPauseWalletHandlingDraft(null);
+                                  } else {
+                                    updateEntry(userId, tagName, { pauseDate: '' });
+                                  }
+                                }}
+                                className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full hover:bg-amber-100"
+                                style={{ color: '#B45309' }}
+                              >
+                                <X size={14} strokeWidth={2.5} />
+                              </button>
                             )}
                           </div>
                         );
                       })()}
-                    </label>
+                    </div>
                   </div>
                   {/* 暂停/重启记录 */}
                   <div className="space-y-2 pt-1">

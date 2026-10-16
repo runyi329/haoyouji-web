@@ -74,6 +74,7 @@ const THEMES: Record<LoginUi, LoginTheme> = {
 
 export default function Login() {
   const [, setLocation] = useLocation();
+  const isZidingMemberLogin = new URLSearchParams(window.location.search).get("project") === "proj_stn4q7";
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -97,7 +98,7 @@ export default function Login() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const inviteCode = params.get("invite");
-    if (inviteCode) {
+    if (inviteCode && !isZidingMemberLogin) {
       setRegInviteCode(inviteCode);
       setActiveTab("register");
     }
@@ -321,7 +322,7 @@ export default function Login() {
           {/* 登录/注册卡片 */}
           <div className={theme.cardClassName}>
             {/* Tab切换 */}
-            <div className="flex mb-6">
+            {isZidingMemberLogin ? <div className="mb-6 border-b pb-3"><div className="text-base font-medium text-gray-800">紫鼎商业联盟登录</div><p className="mt-1 text-xs leading-5 text-gray-500">新会员请联系紫鼎管理员开通账号，本站不提供自主注册。</p></div> : <div className="flex mb-6">
               <button
                 type="button"
                 onClick={() => setActiveTab("login")}
@@ -342,7 +343,7 @@ export default function Login() {
                 注册
                 {activeTab === "register" && <div className={`absolute bottom-0 left-0 right-0 h-0.5 ${theme.tabUnderline}`}></div>}
               </button>
-            </div>
+            </div>}
 
             {/* 登录区域 */}
             {activeTab === "login" && (
@@ -386,15 +387,16 @@ export default function Login() {
                   </button>
                 </div>
 
+                {isZidingMemberLogin && <p className="-mb-1 text-xs leading-5 text-gray-500">请使用管理员提供的用户名和初始密码登录。</p>}
                 {/* 登录按钮（长按2秒游客登录） */}
                 <button
                   type="button"
                   onClick={handleLogin}
-                  onMouseDown={handlePressStart}
-                  onMouseUp={handlePressEnd}
-                  onMouseLeave={handlePressEnd}
-                  onTouchStart={handlePressStart}
-                  onTouchEnd={handlePressEnd}
+                  onMouseDown={isZidingMemberLogin ? undefined : handlePressStart}
+                  onMouseUp={isZidingMemberLogin ? undefined : handlePressEnd}
+                  onMouseLeave={isZidingMemberLogin ? undefined : handlePressEnd}
+                  onTouchStart={isZidingMemberLogin ? undefined : handlePressStart}
+                  onTouchEnd={isZidingMemberLogin ? undefined : handlePressEnd}
                   disabled={loginMutation.isPending}
                   className={`w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${
                     loginUsername && loginPassword && agreedToTerms ? theme.primaryActiveClass : "bg-gray-200 text-gray-700 hover:bg-gray-300"
@@ -451,7 +453,7 @@ export default function Login() {
             )}
 
             {/* 注册区域 */}
-            {activeTab === "register" && (
+            {!isZidingMemberLogin && activeTab === "register" && (
               <div className="space-y-4">
                 {/* 用户名输入框 */}
                 <div className="relative">
