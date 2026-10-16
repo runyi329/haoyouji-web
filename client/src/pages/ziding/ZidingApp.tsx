@@ -326,7 +326,76 @@ function AdminApp({ onExit }: { go: (path?: string) => void; onExit: () => void 
   </div>;
 }
 
-function AdminOrders() { const [status, setStatus] = useState("all"); const [id, setId] = useState<number | null>(null); const list = trpc.zidingCommerce.adminListOrders.useQuery({ status }); const detail = trpc.zidingCommerce.adminOrderDetail.useQuery({ id: id! }, { enabled: !!id }); const review = trpc.zidingCommerce.adminReviewOrder.useMutation({ onSuccess: () => { detail.refetch(); list.refetch(); } }); const ship = trpc.zidingCommerce.adminShipOrder.useMutation({ onSuccess: () => { detail.refetch(); list.refetch(); } }); const utils = trpc.useUtils(); const proof = async (proofId: number, download = false) => { try { const result = await utils.zidingCommerce.getPaymentProofUrl.fetch({ proofId, download }); window.open(result.url, "_blank", "noopener,noreferrer"); } catch (error: any) { alert(error.message || "凭证打开失败"); } }; const action = (order: any) => { if (order.status === "proof_submitted") { const ok = confirm("确认已核验收款吗？选择取消可填写驳回原因。"); if (ok) review.mutate({ id: order.id, action: "confirm", remark: "" }); else { const reason = prompt("请填写需要补充的内容：", "请补充清晰付款凭证"); if (reason) review.mutate({ id: order.id, action: "reject", remark: reason }); } } else if (order.status === "confirmed") { const company = prompt("物流公司：", ""); const trackingNo = company ? prompt("物流单号：", "") : null; if (company && trackingNo) ship.mutate({ id: order.id, shippingCompany: company, trackingNo }); } }; return <div><div className="mb-3 flex gap-2 overflow-x-auto">{[["all","全部"],["proof_submitted","待确认"],["confirmed","待发货"],["shipped","已发货"]].map(([key,label]) => <button key={key} onClick={() => setStatus(key)} className="shrink-0 rounded-full px-3 py-1.5 text-xs" style={{ background: status === key ? C.ink : C.paper, color: status === key ? "white" : C.muted, border: `1px solid ${status === key ? C.ink : C.line}` }}>{label}</button>)}</div><div className="space-y-3">{(list.data || []).map((order: any) => <button key={order.id} onClick={() => setId(order.id)} className="w-full rounded-[20px] border p-4 text-left" style={{ background: C.paper, borderColor: C.line }}><div className="flex justify-between"><div><div className="text-sm font-semibold" style={{ color: C.ink }}>{order.orderNo}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{order.user.name}　{money(order.totalAmount)}</div></div><span className="text-xs" style={{ color: statusTone(order.status).color }}>{order.statusLabel}</span></div></button>)}</div>{id && detail.data && <div className="fixed inset-0 z-50 flex items-end bg-black/35" onClick={() => setId(null)}><div className="max-h-[90vh] w-full overflow-y-auto rounded-t-[28px] p-5" onClick={(e) => e.stopPropagation()} style={{ background: C.canvas }}><div className="flex justify-between"><div><div className="text-lg font-bold" style={{ color: C.ink }}>订单审核</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{detail.data.orderNo}</div></div><button onClick={() => setId(null)}><X size={20}/></button></div><div className="mt-4 space-y-2">{detail.data.items.map((item: any) => <div key={item.id} className="rounded-xl border p-3 text-sm" style={{ background: C.paper,borderColor:C.line }}>{item.name} × {item.quantity}<span className="float-right">{money(item.lineTotal)}</span></div>)}</div><Panel className="mt-3"><div className="text-sm font-semibold" style={{ color: C.ink }}>付款凭证</div><div className="mt-3 flex flex-wrap gap-2">{detail.data.proofs.map((p: any) => <div key={p.id} className="flex items-center gap-2 rounded-lg border px-2.5 py-2" style={{borderColor:C.line}}><Button kind="quiet" className="border-0 p-0 text-xs" onClick={() => proof(p.id)}><FileImage size={14}/>预览</Button><button onClick={() => proof(p.id,true)} title="下载 / 保存图片"><Download size={15} style={{color:C.plum}} /></button></div>)}{!detail.data.proofs.length && <span className="text-xs" style={{color:C.muted}}>尚未上传</span>}</div></Panel><Panel className="mt-3"><div className="text-xs" style={{color:C.muted}}>{detail.data.receiver.name}　{detail.data.receiver.phone}<br />{detail.data.receiver.province}{detail.data.receiver.city}{detail.data.receiver.district}{detail.data.receiver.detail}</div></Panel><div className="mt-4 flex gap-2">{detail.data.status === "proof_submitted" && <Button onClick={() => action(detail.data)}><Check size={15}/>确认收款</Button>}{detail.data.status === "confirmed" && <Button onClick={() => action(detail.data)}><Truck size={15}/>登记发货</Button>}</div></div></div>}</div>; }
+function AdminOrders() {
+  const [status, setStatus] = useState("all");
+  const [id, setId] = useState<number | null>(null);
+  const [reviewAction, setReviewAction] = useState<"fulfill" | "ship" | "reject" | null>(null);
+  const [reviewRemark, setReviewRemark] = useState("");
+  const [shippingForm, setShippingForm] = useState({ shippingCompany: "", trackingNo: "" });
+  const [reviewError, setReviewError] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const list = trpc.zidingCommerce.adminListOrders.useQuery({ status });
+  const detail = trpc.zidingCommerce.adminOrderDetail.useQuery({ id: id! }, { enabled: !!id });
+  const closeOrder = () => {
+    setId(null);
+    setReviewAction(null);
+    setReviewRemark("");
+    setShippingForm({ shippingCompany: "", trackingNo: "" });
+    setReviewError("");
+  };
+  const rejectProof = trpc.zidingCommerce.adminReviewOrder.useMutation({
+    onSuccess: () => {
+      setFeedback("已驳回付款凭证，会员可补充后重新上传。");
+      setStatus("all");
+      closeOrder();
+      void list.refetch();
+    },
+    onError: (error) => setReviewError(error.message || "驳回失败，请稍后重试"),
+  });
+  const fulfill = trpc.zidingCommerce.adminConfirmAndShipOrder.useMutation({
+    onSuccess: () => {
+      setFeedback("订单已发货。");
+      setStatus("shipped");
+      closeOrder();
+      void list.refetch();
+    },
+    onError: (error) => setReviewError(error.message || "确认收款并发货失败，请稍后重试"),
+  });
+  const utils = trpc.useUtils();
+  const proof = async (proofId: number, download = false) => {
+    try {
+      const result = await utils.zidingCommerce.getPaymentProofUrl.fetch({ proofId, download });
+      window.open(result.url, "_blank", "noopener,noreferrer");
+    } catch (error: any) {
+      alert(error.message || "凭证打开失败");
+    }
+  };
+  const openReview = (action: "fulfill" | "ship" | "reject") => {
+    setReviewAction(action);
+    setReviewError("");
+    setReviewRemark(action === "reject" ? "请补充清晰付款凭证" : "");
+    setShippingForm({ shippingCompany: "", trackingNo: "" });
+  };
+  const submitReview = () => {
+    if (!detail.data || !reviewAction) return;
+    if (reviewAction === "fulfill" || reviewAction === "ship") {
+      fulfill.mutate({ id: detail.data.id, shippingCompany: shippingForm.shippingCompany, trackingNo: shippingForm.trackingNo, remark: "" });
+    } else {
+      rejectProof.mutate({ id: detail.data.id, action: "reject", remark: reviewRemark });
+    }
+  };
+  const isSubmitting = rejectProof.isPending || fulfill.isPending;
+  const canSubmit = reviewAction !== "reject"
+    ? Boolean(shippingForm.shippingCompany.trim() && shippingForm.trackingNo.trim())
+    : Boolean(reviewRemark.trim());
+
+  return <div>
+    <div className="mb-3 flex gap-2 overflow-x-auto">{[["all", "全部"], ["awaiting_proof", "待凭证"], ["proof_submitted", "待处理"], ["shipped", "已发货"]].map(([key, label]) => <button key={key} onClick={() => setStatus(key)} className="shrink-0 rounded-full px-3 py-1.5 text-xs" style={{ background: status === key ? C.ink : C.paper, color: status === key ? "white" : C.muted, border: `1px solid ${status === key ? C.ink : C.line}` }}>{label}</button>)}</div>
+    {feedback && <div className="mb-3 flex items-center justify-between rounded-xl border px-3 py-2 text-xs" style={{ color: C.success, borderColor: "#B9DDC4", background: "#F4FBF6" }}><span>{feedback}</span><button onClick={() => setFeedback("")} aria-label="关闭提示"><X size={15} /></button></div>}
+    <div className="space-y-3">{(list.data || []).map((order: any) => <button key={order.id} onClick={() => { setFeedback(""); setId(order.id); }} className="w-full rounded-[20px] border p-4 text-left" style={{ background: C.paper, borderColor: C.line }}><div className="flex justify-between"><div><div className="text-sm font-semibold" style={{ color: C.ink }}>{order.orderNo}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{order.user.name}　{money(order.totalAmount)}</div></div><span className="text-xs" style={{ color: statusTone(order.status).color }}>{order.statusLabel}</span></div></button>)}</div>
+    {id && detail.data && <div className="fixed inset-0 z-50 flex items-end bg-black/35" onClick={closeOrder}><div className="max-h-[90vh] w-full overflow-y-auto rounded-t-[28px] p-5" onClick={(event) => event.stopPropagation()} style={{ background: C.canvas }}><div className="flex justify-between"><div><div className="text-lg font-bold" style={{ color: C.ink }}>订单处理</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{detail.data.orderNo}</div></div><button onClick={closeOrder}><X size={20} /></button></div><div className="mt-4 space-y-2">{detail.data.items.map((item: any) => <div key={item.id} className="rounded-xl border p-3 text-sm" style={{ background: C.paper, borderColor: C.line }}>{item.name} × {item.quantity}<span className="float-right">{money(item.lineTotal)}</span></div>)}</div><Panel className="mt-3"><div className="text-sm font-semibold" style={{ color: C.ink }}>付款凭证</div><div className="mt-3 flex flex-wrap gap-2">{detail.data.proofs.map((proofItem: any) => <div key={proofItem.id} className="flex items-center gap-2 rounded-lg border px-2.5 py-2" style={{ borderColor: C.line }}><Button kind="quiet" className="border-0 p-0 text-xs" onClick={() => proof(proofItem.id)}><FileImage size={14} />预览</Button><button onClick={() => proof(proofItem.id, true)} title="下载 / 保存图片"><Download size={15} style={{ color: C.plum }} /></button></div>)}{!detail.data.proofs.length && <span className="text-xs" style={{ color: C.muted }}>尚未上传</span>}</div></Panel><Panel className="mt-3"><div className="text-xs" style={{ color: C.muted }}>{detail.data.receiver.name}　{detail.data.receiver.phone}<br />{detail.data.receiver.province}{detail.data.receiver.city}{detail.data.receiver.district}{detail.data.receiver.detail}</div></Panel>{reviewAction && <Panel className="mt-3"><div className="text-sm font-semibold" style={{ color: C.ink }}>{reviewAction === "reject" ? "驳回付款凭证" : reviewAction === "ship" ? "登记发货" : "确认收款并发货"}</div><p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>{reviewAction === "reject" ? "驳回后会员可按说明补充付款凭证并重新提交。" : reviewAction === "ship" ? "这是此前旧流程中已确认收款的订单，补充发货信息后即可直接发货。" : "填写发货信息后一次提交，即代表已确认收款，订单会直接进入已发货。"}</p>{reviewAction !== "reject" ? <div className="mt-3 space-y-3"><div><Label>物流公司</Label><TextInput value={shippingForm.shippingCompany} placeholder="例如：顺丰速运" onChange={(event) => setShippingForm((old) => ({ ...old, shippingCompany: event.target.value }))} /></div><div><Label>物流单号</Label><TextInput value={shippingForm.trackingNo} placeholder="请输入物流单号" onChange={(event) => setShippingForm((old) => ({ ...old, trackingNo: event.target.value }))} /></div></div> : <div className="mt-3"><Label>驳回说明</Label><TextArea rows={3} value={reviewRemark} onChange={(event) => setReviewRemark(event.target.value)} /></div>}{reviewError && <div className="mt-3 rounded-xl border px-3 py-2 text-xs leading-5" style={{ color: C.danger, borderColor: "#EACACA", background: "#FFF8F8" }}>{reviewError}</div>}<div className="mt-4 flex gap-2"><Button kind="quiet" disabled={isSubmitting} onClick={() => { setReviewAction(null); setReviewError(""); }}>返回</Button><Button kind={reviewAction === "reject" ? "danger" : "default"} disabled={isSubmitting || !canSubmit} onClick={submitReview}>{isSubmitting ? "正在处理…" : reviewAction === "reject" ? "确认驳回" : reviewAction === "ship" ? "登记发货" : "确认收款并发货"}</Button></div></Panel>}<div className="mt-4 flex gap-2">{detail.data.status === "proof_submitted" && !reviewAction && <><Button kind="quiet" onClick={() => openReview("reject")}>驳回凭证</Button><Button onClick={() => openReview("fulfill")}><Truck size={15} />确认收款并发货</Button></>}{detail.data.status === "confirmed" && !reviewAction && <Button onClick={() => openReview("ship")}><Truck size={15} />登记发货</Button>}</div></div></div>}
+  </div>;
+}
 
 function AdminProducts() {
   const products = trpc.zidingCommerce.adminListProducts.useQuery();

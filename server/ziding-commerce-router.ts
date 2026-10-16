@@ -854,6 +854,57 @@ export const zidingCommerceRouter = router({
     return getOrderDetail(conn, order);
   }),
 
+  adminConfirmAndShipOrder: protectedProcedure.input(z.object({ id: z.number().int().positive(), shippingCompany: z.string().trim().min(1).max(80), trackingNo: z.string().trim().min(1).max(120), remark: z.string().trim().max(500).optional().default("") })).mutation(async ({ ctx, input }) => {
+    const { conn, actorUserId } = await requireProjectAdmin(ctx, "orders");
+    const txConn = await getDbTransactionConnection();
+    if (!txConn) toError("INTERNAL_SERVER_ERROR", "订单履约服务暂不可用，请稍后重试");
+    const month = nowMonth();
+    let shippedOrder: any = null;
+    let needsPaymentConfirmation = false;
+    try {
+      await txConn.beginTransaction();
+      const [lockedRows] = await txConn.execute(`SELECT * FROM ziding_orders WHERE id=? AND version_key=? LIMIT 1 FOR UPDATE`, [input.id, ZIDING_PROJECT_KEY]);
+      shippedOrder = (lockedRows as any[])[0];
+      if (!shippedOrder) toError("NOT_FOUND", "订单不存在");
+      needsPaymentConfirmation = shippedOrder.status === "proof_submitted";
+      if (!needsPaymentConfirmation && shippedOrder.status !== "confirmed") toError("BAD_REQUEST", "当前订单不支持登记发货");
+      const settings = await getSettings(txConn);
+      const days = Math.max(1, Math.min(Number(settings.auto_confirm_days || 7), 30));
+      if (needsPaymentConfirmation) {
+        await txConn.execute(
+          `UPDATE ziding_orders SET status='shipped', payment_confirmed_at=NOW(), points_month=?, admin_remark=?, shipping_company=?, tracking_no=?, shipped_at=NOW(), auto_complete_at=DATE_ADD(NOW(), INTERVAL ? DAY) WHERE id=?`,
+          [month, input.remark || null, input.shippingCompany, input.trackingNo, days, shippedOrder.id],
+        );
+        const [itemsRows] = await txConn.execute(`SELECT product_id,quantity FROM ziding_order_items WHERE order_id=?`, [shippedOrder.id]);
+        for (const item of (itemsRows as any[]) || []) {
+          await txConn.execute(`UPDATE ziding_products SET stock=GREATEST(0,stock-?), reserved_stock=GREATEST(0,reserved_stock-?) WHERE id=? AND version_key=?`, [Number(item.quantity), Number(item.quantity), Number(item.product_id), ZIDING_PROJECT_KEY]);
+        }
+        await writeEvent(txConn, { orderId: Number(shippedOrder.id), actorUserId, actorRole: "project_admin", eventType: "payment_confirmed", text: "管理员已确认收款" });
+      } else {
+        await txConn.execute(
+          `UPDATE ziding_orders SET status='shipped', admin_remark=COALESCE(NULLIF(?,''),admin_remark), shipping_company=?, tracking_no=?, shipped_at=NOW(), auto_complete_at=DATE_ADD(NOW(), INTERVAL ? DAY) WHERE id=?`,
+          [input.remark, input.shippingCompany, input.trackingNo, days, shippedOrder.id],
+        );
+      }
+      await writeEvent(txConn, { orderId: Number(shippedOrder.id), actorUserId, actorRole: "project_admin", eventType: "shipped", text: `已发货：${input.shippingCompany} ${input.trackingNo}` });
+      await txConn.commit();
+    } catch (error) {
+      await txConn.rollback().catch(() => undefined);
+      throw error;
+    } finally {
+      if (typeof (txConn as any).release === "function") (txConn as any).release();
+    }
+    let pointsDelta = 0;
+    if (needsPaymentConfirmation) {
+      const pointResult = await reconcileMonthlyPoints(conn, { userId: Number(shippedOrder.user_id), month, triggerOrderId: Number(shippedOrder.id), actorUserId, note: `订单 ${shippedOrder.order_no} 确认收款并发货，重算当月积分` });
+      pointsDelta = pointResult.delta;
+    }
+    const confirmationText = needsPaymentConfirmation ? "已确认收款并发货" : "已登记发货";
+    await sendNotification(conn, Number(shippedOrder.user_id), { orderId: Number(shippedOrder.id), type: "order_shipped", title: needsPaymentConfirmation ? "付款已确认，订单已发货" : "订单已发货", content: `订单 ${shippedOrder.order_no}${confirmationText}：${input.shippingCompany} ${input.trackingNo}${pointsDelta > 0 ? `。本月积分增加 ${pointsDelta} 分。` : ""}` });
+    await auditAdmin(conn, actorUserId, needsPaymentConfirmation ? "order_confirmed_and_shipped" : "order_shipped", "order", input.id, { shippingCompany: input.shippingCompany, trackingNo: input.trackingNo, remark: input.remark });
+    return { success: true };
+  }),
+
   adminReviewOrder: protectedProcedure.input(z.object({ id: z.number().int().positive(), action: z.enum(["confirm", "reject"]), remark: z.string().trim().max(500).optional().default("") })).mutation(async ({ ctx, input }) => {
     const { conn, actorUserId } = await requireProjectAdmin(ctx, "orders");
     const order = await getOrderWithOwnership(conn, input.id);
@@ -865,18 +916,30 @@ export const zidingCommerceRouter = router({
       await sendNotification(conn, Number(order.user_id), { orderId: Number(order.id), type: "proof_rejected", title: "付款凭证需要补充", content: input.remark || "请重新上传清晰、完整的付款凭证。" });
     } else {
       const month = nowMonth();
-      await conn.beginTransaction();
+      const txConn = await getDbTransactionConnection();
+      if (!txConn) toError("INTERNAL_SERVER_ERROR", "订单审核服务暂不可用，请稍后重试");
+      let confirmedOrder = order;
       try {
-        await conn.execute(`UPDATE ziding_orders SET status='confirmed', payment_confirmed_at=NOW(), points_month=?, admin_remark=? WHERE id=?`, [month, input.remark || null, order.id]);
-        const [itemsRows] = await conn.execute(`SELECT product_id,quantity FROM ziding_order_items WHERE order_id=?`, [order.id]);
+        await txConn.beginTransaction();
+        const [lockedRows] = await txConn.execute(`SELECT * FROM ziding_orders WHERE id=? AND version_key=? LIMIT 1 FOR UPDATE`, [order.id, ZIDING_PROJECT_KEY]);
+        confirmedOrder = (lockedRows as any[])[0];
+        if (!confirmedOrder) toError("NOT_FOUND", "订单不存在");
+        if (confirmedOrder.status !== "proof_submitted") toError("BAD_REQUEST", "当前订单不处于待确认收款状态");
+        await txConn.execute(`UPDATE ziding_orders SET status='confirmed', payment_confirmed_at=NOW(), points_month=?, admin_remark=? WHERE id=?`, [month, input.remark || null, confirmedOrder.id]);
+        const [itemsRows] = await txConn.execute(`SELECT product_id,quantity FROM ziding_order_items WHERE order_id=?`, [confirmedOrder.id]);
         for (const item of (itemsRows as any[]) || []) {
-          await conn.execute(`UPDATE ziding_products SET stock=GREATEST(0,stock-?), reserved_stock=GREATEST(0,reserved_stock-?) WHERE id=? AND version_key=?`, [Number(item.quantity), Number(item.quantity), Number(item.product_id), ZIDING_PROJECT_KEY]);
+          await txConn.execute(`UPDATE ziding_products SET stock=GREATEST(0,stock-?), reserved_stock=GREATEST(0,reserved_stock-?) WHERE id=? AND version_key=?`, [Number(item.quantity), Number(item.quantity), Number(item.product_id), ZIDING_PROJECT_KEY]);
         }
-        await writeEvent(conn, { orderId: Number(order.id), actorUserId, actorRole: "project_admin", eventType: "payment_confirmed", text: "管理员已确认收款，等待发货" });
-        await conn.commit();
-      } catch (error) { await conn.rollback(); throw error; }
-      const pointResult = await reconcileMonthlyPoints(conn, { userId: Number(order.user_id), month, triggerOrderId: Number(order.id), actorUserId, note: `订单 ${order.order_no} 确认收款，重算当月积分` });
-      await sendNotification(conn, Number(order.user_id), { orderId: Number(order.id), type: "payment_confirmed", title: "付款已确认", content: `订单 ${order.order_no} 已确认收款，等待发货。${pointResult.delta > 0 ? `本月积分增加 ${pointResult.delta} 分。` : ""}` });
+        await writeEvent(txConn, { orderId: Number(confirmedOrder.id), actorUserId, actorRole: "project_admin", eventType: "payment_confirmed", text: "管理员已确认收款，等待发货" });
+        await txConn.commit();
+      } catch (error) {
+        await txConn.rollback().catch(() => undefined);
+        throw error;
+      } finally {
+        if (typeof (txConn as any).release === "function") (txConn as any).release();
+      }
+      const pointResult = await reconcileMonthlyPoints(conn, { userId: Number(confirmedOrder.user_id), month, triggerOrderId: Number(confirmedOrder.id), actorUserId, note: `订单 ${confirmedOrder.order_no} 确认收款，重算当月积分` });
+      await sendNotification(conn, Number(confirmedOrder.user_id), { orderId: Number(confirmedOrder.id), type: "payment_confirmed", title: "付款已确认", content: `订单 ${confirmedOrder.order_no} 已确认收款，等待发货。${pointResult.delta > 0 ? `本月积分增加 ${pointResult.delta} 分。` : ""}` });
     }
     await auditAdmin(conn, actorUserId, input.action === "confirm" ? "order_payment_confirmed" : "order_payment_rejected", "order", input.id, { remark: input.remark });
     return { success: true };
