@@ -949,56 +949,170 @@ export const zidingCommerceRouter = router({
     return getOrderDetail(conn, order);
   }),
 
-  adminConfirmAndShipOrder: protectedProcedure.input(z.object({ id: z.number().int().positive(), shippingCompany: z.string().trim().min(1).max(80), trackingNo: z.string().trim().min(1).max(120), remark: z.string().trim().max(500).optional().default("") })).mutation(async ({ ctx, input }) => {
-    const { conn, actorUserId } = await requireProjectAdmin(ctx, "orders");
-    const txConn = await getDbTransactionConnection();
-    if (!txConn) toError("INTERNAL_SERVER_ERROR", "订单履约服务暂不可用，请稍后重试");
-    const month = nowMonth();
-    let shippedOrder: any = null;
-    let needsPaymentConfirmation = false;
-    try {
-      await txConn.beginTransaction();
-      const [lockedRows] = await txConn.execute(`SELECT * FROM ziding_orders WHERE id=? AND version_key=? LIMIT 1 FOR UPDATE`, [input.id, ZIDING_PROJECT_KEY]);
-      shippedOrder = (lockedRows as any[])[0];
-      if (!shippedOrder) toError("NOT_FOUND", "订单不存在");
-      needsPaymentConfirmation = shippedOrder.status === "proof_submitted";
-      if (!needsPaymentConfirmation && shippedOrder.status !== "confirmed") toError("BAD_REQUEST", "当前订单不支持登记发货");
-      const settings = await getSettings(txConn);
-      const days = Math.max(1, Math.min(Number(settings.auto_confirm_days || 7), 30));
-      if (needsPaymentConfirmation) {
-        await txConn.execute(
-          `UPDATE ziding_orders SET status='shipped', payment_confirmed_at=NOW(), points_month=?, admin_remark=?, shipping_company=?, tracking_no=?, shipped_at=NOW(), auto_complete_at=DATE_ADD(NOW(), INTERVAL ? DAY) WHERE id=?`,
-          [month, input.remark || null, input.shippingCompany, input.trackingNo, days, shippedOrder.id],
+  adminConfirmAndShipOrder: protectedProcedure
+    .input(
+      z.object({
+        id: z.number().int().positive(),
+        shippingCompany: z.string().trim().max(80).optional().default(""),
+        trackingNo: z.string().trim().max(120).optional().default(""),
+        noShipment: z.boolean().optional().default(false),
+        remark: z.string().trim().max(500).optional().default(""),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { conn, actorUserId } = await requireProjectAdmin(ctx, "orders");
+      const txConn = await getDbTransactionConnection();
+      if (!txConn)
+        toError("INTERNAL_SERVER_ERROR", "订单履约服务暂不可用，请稍后重试");
+      const month = nowMonth();
+      let shippedOrder: any = null;
+      let needsPaymentConfirmation = false;
+      try {
+        await txConn.beginTransaction();
+        const [lockedRows] = await txConn.execute(
+          `SELECT * FROM ziding_orders WHERE id=? AND version_key=? LIMIT 1 FOR UPDATE`,
+          [input.id, ZIDING_PROJECT_KEY]
         );
-        const [itemsRows] = await txConn.execute(`SELECT product_id,quantity FROM ziding_order_items WHERE order_id=?`, [shippedOrder.id]);
-        for (const item of (itemsRows as any[]) || []) {
-          await txConn.execute(`UPDATE ziding_products SET stock=GREATEST(0,stock-?), reserved_stock=GREATEST(0,reserved_stock-?) WHERE id=? AND version_key=?`, [Number(item.quantity), Number(item.quantity), Number(item.product_id), ZIDING_PROJECT_KEY]);
+        shippedOrder = (lockedRows as any[])[0];
+        if (!shippedOrder) toError("NOT_FOUND", "订单不存在");
+        needsPaymentConfirmation = shippedOrder.status === "proof_submitted";
+        if (!needsPaymentConfirmation && shippedOrder.status !== "confirmed")
+          toError("BAD_REQUEST", "当前订单不支持登记发货");
+        if (!input.noShipment && (!input.shippingCompany || !input.trackingNo))
+          toError("BAD_REQUEST", "请填写物流公司和物流单号，或选择无需物流");
+        const settings = await getSettings(txConn);
+        const days = Math.max(
+          1,
+          Math.min(Number(settings.auto_confirm_days || 7), 30)
+        );
+        if (needsPaymentConfirmation) {
+          if (input.noShipment) {
+            await txConn.execute(
+              `UPDATE ziding_orders SET status='completed', payment_confirmed_at=NOW(), points_month=?, admin_remark=?, shipping_company=NULL, tracking_no=NULL, shipped_at=NULL, auto_complete_at=NULL, completed_at=NOW() WHERE id=?`,
+              [month, input.remark || null, shippedOrder.id]
+            );
+          } else {
+            await txConn.execute(
+              `UPDATE ziding_orders SET status='shipped', payment_confirmed_at=NOW(), points_month=?, admin_remark=?, shipping_company=?, tracking_no=?, shipped_at=NOW(), auto_complete_at=DATE_ADD(NOW(), INTERVAL ? DAY) WHERE id=?`,
+              [
+                month,
+                input.remark || null,
+                input.shippingCompany,
+                input.trackingNo,
+                days,
+                shippedOrder.id,
+              ]
+            );
+          }
+          const [itemsRows] = await txConn.execute(
+            `SELECT product_id,quantity FROM ziding_order_items WHERE order_id=?`,
+            [shippedOrder.id]
+          );
+          for (const item of (itemsRows as any[]) || []) {
+            await txConn.execute(
+              `UPDATE ziding_products SET stock=GREATEST(0,stock-?), reserved_stock=GREATEST(0,reserved_stock-?) WHERE id=? AND version_key=?`,
+              [
+                Number(item.quantity),
+                Number(item.quantity),
+                Number(item.product_id),
+                ZIDING_PROJECT_KEY,
+              ]
+            );
+          }
+          await writeEvent(txConn, {
+            orderId: Number(shippedOrder.id),
+            actorUserId,
+            actorRole: "project_admin",
+            eventType: "payment_confirmed",
+            text: input.noShipment
+              ? "已确认收款，无需物流，订单已完成"
+              : "管理员已确认收款",
+          });
+        } else {
+          if (input.noShipment) {
+            await txConn.execute(
+              `UPDATE ziding_orders SET status='completed', admin_remark=COALESCE(NULLIF(?,''),admin_remark), shipping_company=NULL, tracking_no=NULL, shipped_at=NULL, auto_complete_at=NULL, completed_at=NOW() WHERE id=?`,
+              [input.remark, shippedOrder.id]
+            );
+          } else {
+            await txConn.execute(
+              `UPDATE ziding_orders SET status='shipped', admin_remark=COALESCE(NULLIF(?,''),admin_remark), shipping_company=?, tracking_no=?, shipped_at=NOW(), auto_complete_at=DATE_ADD(NOW(), INTERVAL ? DAY) WHERE id=?`,
+              [
+                input.remark,
+                input.shippingCompany,
+                input.trackingNo,
+                days,
+                shippedOrder.id,
+              ]
+            );
+          }
         }
-        await writeEvent(txConn, { orderId: Number(shippedOrder.id), actorUserId, actorRole: "project_admin", eventType: "payment_confirmed", text: "管理员已确认收款" });
-      } else {
-        await txConn.execute(
-          `UPDATE ziding_orders SET status='shipped', admin_remark=COALESCE(NULLIF(?,''),admin_remark), shipping_company=?, tracking_no=?, shipped_at=NOW(), auto_complete_at=DATE_ADD(NOW(), INTERVAL ? DAY) WHERE id=?`,
-          [input.remark, input.shippingCompany, input.trackingNo, days, shippedOrder.id],
-        );
+        await writeEvent(txConn, {
+          orderId: Number(shippedOrder.id),
+          actorUserId,
+          actorRole: "project_admin",
+          eventType: input.noShipment
+            ? "completed_without_shipping"
+            : "shipped",
+          text: input.noShipment
+            ? "无需物流，订单已完成"
+            : `已发货：${input.shippingCompany} ${input.trackingNo}`,
+        });
+        await txConn.commit();
+      } catch (error) {
+        await txConn.rollback().catch(() => undefined);
+        throw error;
+      } finally {
+        if (typeof (txConn as any).release === "function")
+          (txConn as any).release();
       }
-      await writeEvent(txConn, { orderId: Number(shippedOrder.id), actorUserId, actorRole: "project_admin", eventType: "shipped", text: `已发货：${input.shippingCompany} ${input.trackingNo}` });
-      await txConn.commit();
-    } catch (error) {
-      await txConn.rollback().catch(() => undefined);
-      throw error;
-    } finally {
-      if (typeof (txConn as any).release === "function") (txConn as any).release();
-    }
-    let pointsDelta = 0;
-    if (needsPaymentConfirmation) {
-      const pointResult = await reconcileMonthlyPoints(conn, { userId: Number(shippedOrder.user_id), month, triggerOrderId: Number(shippedOrder.id), actorUserId, note: `订单 ${shippedOrder.order_no} 确认收款并发货，重算当月积分` });
-      pointsDelta = pointResult.delta;
-    }
-    const confirmationText = needsPaymentConfirmation ? "已确认收款并发货" : "已登记发货";
-    await sendNotification(conn, Number(shippedOrder.user_id), { orderId: Number(shippedOrder.id), type: "order_shipped", title: needsPaymentConfirmation ? "付款已确认，订单已发货" : "订单已发货", content: `订单 ${shippedOrder.order_no}${confirmationText}：${input.shippingCompany} ${input.trackingNo}${pointsDelta > 0 ? `。本月积分增加 ${pointsDelta} 分。` : ""}` });
-    await auditAdmin(conn, actorUserId, needsPaymentConfirmation ? "order_confirmed_and_shipped" : "order_shipped", "order", input.id, { shippingCompany: input.shippingCompany, trackingNo: input.trackingNo, remark: input.remark });
-    return { success: true };
-  }),
+      let pointsDelta = 0;
+      if (needsPaymentConfirmation) {
+        const pointResult = await reconcileMonthlyPoints(conn, {
+          userId: Number(shippedOrder.user_id),
+          month,
+          triggerOrderId: Number(shippedOrder.id),
+          actorUserId,
+          note: `订单 ${shippedOrder.order_no} 确认收款并发货，重算当月积分`,
+        });
+        pointsDelta = pointResult.delta;
+      }
+      const confirmationText = input.noShipment
+        ? "已确认收款，无需物流，订单已完成"
+        : needsPaymentConfirmation
+          ? "已确认收款并发货"
+          : "已登记发货";
+      await sendNotification(conn, Number(shippedOrder.user_id), {
+        orderId: Number(shippedOrder.id),
+        type: input.noShipment ? "order_completed" : "order_shipped",
+        title: input.noShipment
+          ? "付款已确认，订单已完成"
+          : needsPaymentConfirmation
+            ? "付款已确认，订单已发货"
+            : "订单已发货",
+        content: input.noShipment
+          ? `订单 ${shippedOrder.order_no} 已确认收款，无需物流，订单已完成。${pointsDelta > 0 ? `本月积分增加 ${pointsDelta} 分。` : ""}`
+          : `订单 ${shippedOrder.order_no}${confirmationText}：${input.shippingCompany} ${input.trackingNo}${pointsDelta > 0 ? `。本月积分增加 ${pointsDelta} 分。` : ""}`,
+      });
+      await auditAdmin(
+        conn,
+        actorUserId,
+        input.noShipment
+          ? "order_completed_without_shipping"
+          : needsPaymentConfirmation
+            ? "order_confirmed_and_shipped"
+            : "order_shipped",
+        "order",
+        input.id,
+        {
+          shippingCompany: input.shippingCompany,
+          trackingNo: input.trackingNo,
+          noShipment: input.noShipment,
+          remark: input.remark,
+        }
+      );
+      return { success: true };
+    }),
 
   adminReviewOrder: protectedProcedure.input(z.object({ id: z.number().int().positive(), action: z.enum(["confirm", "reject"]), remark: z.string().trim().max(500).optional().default("") })).mutation(async ({ ctx, input }) => {
     const { conn, actorUserId } = await requireProjectAdmin(ctx, "orders");
@@ -1101,6 +1215,15 @@ export const zidingCommerceRouter = router({
     const kw = `%${input.keyword}%`;
     const [rows] = await conn.execute(`SELECT id,name,username,avatar FROM users WHERE name LIKE ? OR username LIKE ? ORDER BY name ASC LIMIT 20`, [kw, kw]);
     return ((rows as any[]) || []).map((row) => ({ userId: Number(row.id), name: row.name || row.username || `用户${row.id}`, username: row.username || "", avatar: row.avatar || "" }));
+  }),
+
+  adminCheckMemberUsername: protectedProcedure.input(z.object({
+    username: z.string().trim().min(1).max(20).regex(/^[\u4e00-\u9fa5a-zA-Z0-9_]+$/),
+  })).query(async ({ ctx, input }) => {
+    const { conn } = await requireProjectAdmin(ctx, "all");
+    const username = input.username.trim();
+    const [rows] = await conn.execute(`SELECT id FROM users WHERE username=? LIMIT 1`, [username]);
+    return { username, available: !((rows as any[]) || []).length };
   }),
 
   adminCreateMember: protectedProcedure.input(z.object({

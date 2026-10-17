@@ -1318,15 +1318,11 @@ function OrderDetailSheet({
                     )}
                     <button
                       onClick={() => openProof(Number(proof.id))}
-                      className="absolute inset-0 grid place-items-center bg-black/5"
+                      className="absolute bottom-2 right-2 grid h-8 w-8 place-items-center rounded-full bg-white/90 shadow-sm"
+                      style={{ color: C.plum }}
                       aria-label={`放大查看付款凭证 ${index + 1}`}
                     >
-                      <span
-                        className="grid h-8 w-8 place-items-center rounded-full bg-white/90 shadow-sm"
-                        style={{ color: C.plum }}
-                      >
-                        <ZoomIn size={17} />
-                      </span>
+                      <ZoomIn size={17} />
                     </button>
                   </div>
                 ))}
@@ -1510,19 +1506,36 @@ function AdminApp({ onExit }: { go: (path?: string) => void; onExit: () => void 
 function AdminOrders() {
   const [status, setStatus] = useState("all");
   const [id, setId] = useState<number | null>(null);
-  const [reviewAction, setReviewAction] = useState<"fulfill" | "ship" | "reject" | null>(null);
+  const [reviewAction, setReviewAction] = useState<
+    "fulfill" | "ship" | "reject" | null
+  >(null);
   const [reviewRemark, setReviewRemark] = useState("");
-  const [shippingForm, setShippingForm] = useState({ shippingCompany: "", trackingNo: "" });
+  const [shippingForm, setShippingForm] = useState({
+    shippingCompany: "",
+    trackingNo: "",
+    noShipment: false,
+  });
   const [reviewError, setReviewError] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [proofUrls, setProofUrls] = useState<Record<number, string>>({});
+  const [proofError, setProofError] = useState("");
   const list = trpc.zidingCommerce.adminListOrders.useQuery({ status });
-  const detail = trpc.zidingCommerce.adminOrderDetail.useQuery({ id: id! }, { enabled: !!id });
+  const detail = trpc.zidingCommerce.adminOrderDetail.useQuery(
+    { id: id! },
+    { enabled: !!id }
+  );
+  const utils = trpc.useUtils();
+  const proofKey = (detail.data?.proofs || [])
+    .map((proof: any) => proof.id)
+    .join(",");
   const closeOrder = () => {
     setId(null);
     setReviewAction(null);
     setReviewRemark("");
-    setShippingForm({ shippingCompany: "", trackingNo: "" });
+    setShippingForm({ shippingCompany: "", trackingNo: "", noShipment: false });
     setReviewError("");
+    setProofUrls({});
+    setProofError("");
   };
   const rejectProof = trpc.zidingCommerce.adminReviewOrder.useMutation({
     onSuccess: () => {
@@ -1531,51 +1544,447 @@ function AdminOrders() {
       closeOrder();
       void list.refetch();
     },
-    onError: (error) => setReviewError(error.message || "驳回失败，请稍后重试"),
+    onError: error => setReviewError(error.message || "驳回失败，请稍后重试"),
   });
   const fulfill = trpc.zidingCommerce.adminConfirmAndShipOrder.useMutation({
-    onSuccess: () => {
-      setFeedback("订单已发货。");
-      setStatus("shipped");
+    onSuccess: (_data, variables) => {
+      const noShipment = Boolean(variables.noShipment);
+      setFeedback(
+        noShipment ? "订单已确认收款并完成（无需物流）。" : "订单已发货。"
+      );
+      setStatus(noShipment ? "completed" : "shipped");
       closeOrder();
       void list.refetch();
     },
-    onError: (error) => setReviewError(error.message || "确认收款并发货失败，请稍后重试"),
+    onError: error =>
+      setReviewError(error.message || "订单处理失败，请稍后重试"),
   });
-  const utils = trpc.useUtils();
-  const proof = async (proofId: number, download = false) => {
+  useEffect(() => {
+    let active = true;
+    const proofs = detail.data?.proofs || [];
+    setProofUrls({});
+    setProofError("");
+    if (!proofs.length)
+      return () => {
+        active = false;
+      };
+    Promise.all(
+      proofs.map(async (proof: any) => {
+        try {
+          const result = await utils.zidingCommerce.getPaymentProofUrl.fetch({
+            proofId: Number(proof.id),
+          });
+          return [Number(proof.id), result.url] as const;
+        } catch (error: any) {
+          if (active)
+            setProofError(error.message || "付款凭证加载失败，请稍后重试");
+          return null;
+        }
+      })
+    ).then(items => {
+      if (active)
+        setProofUrls(
+          Object.fromEntries(items.filter(Boolean) as Array<[number, string]>)
+        );
+    });
+    return () => {
+      active = false;
+    };
+  }, [detail.data?.id, proofKey]);
+  const downloadProof = async (proofId: number) => {
     try {
-      const result = await utils.zidingCommerce.getPaymentProofUrl.fetch({ proofId, download });
+      const result = await utils.zidingCommerce.getPaymentProofUrl.fetch({
+        proofId,
+        download: true,
+      });
       window.open(result.url, "_blank", "noopener,noreferrer");
     } catch (error: any) {
-      alert(error.message || "凭证打开失败");
+      setProofError(error.message || "凭证下载失败，请稍后重试");
     }
   };
   const openReview = (action: "fulfill" | "ship" | "reject") => {
     setReviewAction(action);
     setReviewError("");
     setReviewRemark(action === "reject" ? "请补充清晰付款凭证" : "");
-    setShippingForm({ shippingCompany: "", trackingNo: "" });
+    setShippingForm({ shippingCompany: "", trackingNo: "", noShipment: false });
   };
   const submitReview = () => {
     if (!detail.data || !reviewAction) return;
     if (reviewAction === "fulfill" || reviewAction === "ship") {
-      fulfill.mutate({ id: detail.data.id, shippingCompany: shippingForm.shippingCompany, trackingNo: shippingForm.trackingNo, remark: "" });
+      fulfill.mutate({
+        id: detail.data.id,
+        shippingCompany: shippingForm.shippingCompany,
+        trackingNo: shippingForm.trackingNo,
+        noShipment: shippingForm.noShipment,
+        remark: "",
+      });
     } else {
-      rejectProof.mutate({ id: detail.data.id, action: "reject", remark: reviewRemark });
+      rejectProof.mutate({
+        id: detail.data.id,
+        action: "reject",
+        remark: reviewRemark,
+      });
     }
   };
   const isSubmitting = rejectProof.isPending || fulfill.isPending;
-  const canSubmit = reviewAction !== "reject"
-    ? Boolean(shippingForm.shippingCompany.trim() && shippingForm.trackingNo.trim())
-    : Boolean(reviewRemark.trim());
+  const canSubmit =
+    reviewAction !== "reject"
+      ? shippingForm.noShipment ||
+        Boolean(
+          shippingForm.shippingCompany.trim() && shippingForm.trackingNo.trim()
+        )
+      : Boolean(reviewRemark.trim());
+  const actionTitle =
+    reviewAction === "reject"
+      ? "驳回付款凭证"
+      : reviewAction === "ship"
+        ? shippingForm.noShipment
+          ? "确认完成（无需物流）"
+          : "登记发货"
+        : shippingForm.noShipment
+          ? "确认收款并完成"
+          : "确认收款并发货";
+  const actionDescription =
+    reviewAction === "reject"
+      ? "驳回后会员可按说明补充付款凭证并重新提交。"
+      : shippingForm.noShipment
+        ? "无需填写物流信息。确认后订单会直接完成，会员可在订单中查看完成状态。"
+        : reviewAction === "ship"
+          ? "这是此前已确认收款的订单，补充物流信息后即可登记发货。"
+          : "填写物流信息后一次提交，即代表已确认收款，订单会直接进入已发货。";
 
-  return <div>
-    <div className="mb-3 flex gap-2 overflow-x-auto">{[["all", "全部"], ["awaiting_proof", "待凭证"], ["proof_submitted", "待处理"], ["shipped", "已发货"]].map(([key, label]) => <button key={key} onClick={() => setStatus(key)} className="shrink-0 rounded-full px-3 py-1.5 text-xs" style={{ background: status === key ? C.ink : C.paper, color: status === key ? "white" : C.muted, border: `1px solid ${status === key ? C.ink : C.line}` }}>{label}</button>)}</div>
-    {feedback && <div className="mb-3 flex items-center justify-between rounded-xl border px-3 py-2 text-xs" style={{ color: C.success, borderColor: "#B9DDC4", background: "#F4FBF6" }}><span>{feedback}</span><button onClick={() => setFeedback("")} aria-label="关闭提示"><X size={15} /></button></div>}
-    <div className="space-y-3">{(list.data || []).map((order: any) => <button key={order.id} onClick={() => { setFeedback(""); setId(order.id); }} className="w-full rounded-[20px] border p-4 text-left" style={{ background: C.paper, borderColor: C.line }}><div className="flex justify-between"><div><div className="text-sm font-semibold" style={{ color: C.ink }}>{order.orderNo}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{order.user.name}　{money(order.totalAmount)}</div></div><span className="text-xs" style={{ color: statusTone(order.status).color }}>{order.statusLabel}</span></div></button>)}</div>
-    {id && detail.data && <div className="fixed inset-0 z-50 flex items-end bg-black/35" onClick={closeOrder}><div className="max-h-[90vh] w-full overflow-y-auto rounded-t-[28px] p-5" onClick={(event) => event.stopPropagation()} style={{ background: C.canvas }}><div className="flex justify-between"><div><div className="text-lg font-bold" style={{ color: C.ink }}>订单处理</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{detail.data.orderNo}</div></div><button onClick={closeOrder}><X size={20} /></button></div><div className="mt-4 space-y-2">{detail.data.items.map((item: any) => <div key={item.id} className="rounded-xl border p-3 text-sm" style={{ background: C.paper, borderColor: C.line }}>{item.name} × {item.quantity}<span className="float-right">{money(item.lineTotal)}</span></div>)}</div><Panel className="mt-3"><div className="text-sm font-semibold" style={{ color: C.ink }}>付款凭证</div><div className="mt-3 flex flex-wrap gap-2">{detail.data.proofs.map((proofItem: any) => <div key={proofItem.id} className="flex items-center gap-2 rounded-lg border px-2.5 py-2" style={{ borderColor: C.line }}><Button kind="quiet" className="border-0 p-0 text-xs" onClick={() => proof(proofItem.id)}><FileImage size={14} />预览</Button><button onClick={() => proof(proofItem.id, true)} title="下载 / 保存图片"><Download size={15} style={{ color: C.plum }} /></button></div>)}{!detail.data.proofs.length && <span className="text-xs" style={{ color: C.muted }}>尚未上传</span>}</div></Panel><Panel className="mt-3"><div className="text-xs" style={{ color: C.muted }}>{detail.data.receiver.name}　{detail.data.receiver.phone}<br />{detail.data.receiver.province}{detail.data.receiver.city}{detail.data.receiver.district}{detail.data.receiver.detail}</div></Panel>{reviewAction && <Panel className="mt-3"><div className="text-sm font-semibold" style={{ color: C.ink }}>{reviewAction === "reject" ? "驳回付款凭证" : reviewAction === "ship" ? "登记发货" : "确认收款并发货"}</div><p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>{reviewAction === "reject" ? "驳回后会员可按说明补充付款凭证并重新提交。" : reviewAction === "ship" ? "这是此前旧流程中已确认收款的订单，补充发货信息后即可直接发货。" : "填写发货信息后一次提交，即代表已确认收款，订单会直接进入已发货。"}</p>{reviewAction !== "reject" ? <div className="mt-3 space-y-3"><div><Label>物流公司</Label><TextInput value={shippingForm.shippingCompany} placeholder="例如：顺丰速运" onChange={(event) => setShippingForm((old) => ({ ...old, shippingCompany: event.target.value }))} /></div><div><Label>物流单号</Label><TextInput value={shippingForm.trackingNo} placeholder="请输入物流单号" onChange={(event) => setShippingForm((old) => ({ ...old, trackingNo: event.target.value }))} /></div></div> : <div className="mt-3"><Label>驳回说明</Label><TextArea rows={3} value={reviewRemark} onChange={(event) => setReviewRemark(event.target.value)} /></div>}{reviewError && <div className="mt-3 rounded-xl border px-3 py-2 text-xs leading-5" style={{ color: C.danger, borderColor: "#EACACA", background: "#FFF8F8" }}>{reviewError}</div>}<div className="mt-4 flex gap-2"><Button kind="quiet" disabled={isSubmitting} onClick={() => { setReviewAction(null); setReviewError(""); }}>返回</Button><Button kind={reviewAction === "reject" ? "danger" : "default"} disabled={isSubmitting || !canSubmit} onClick={submitReview}>{isSubmitting ? "正在处理…" : reviewAction === "reject" ? "确认驳回" : reviewAction === "ship" ? "登记发货" : "确认收款并发货"}</Button></div></Panel>}<div className="mt-4 flex gap-2">{detail.data.status === "proof_submitted" && !reviewAction && <><Button kind="quiet" onClick={() => openReview("reject")}>驳回凭证</Button><Button onClick={() => openReview("fulfill")}><Truck size={15} />确认收款并发货</Button></>}{detail.data.status === "confirmed" && !reviewAction && <Button onClick={() => openReview("ship")}><Truck size={15} />登记发货</Button>}</div></div></div>}
-  </div>;
+  return (
+    <div>
+      <div className="mb-3 flex gap-2 overflow-x-auto">
+        {[
+          ["all", "全部"],
+          ["awaiting_proof", "待凭证"],
+          ["proof_submitted", "待处理"],
+          ["shipped", "已发货"],
+          ["completed", "已完成"],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setStatus(key)}
+            className="shrink-0 rounded-full px-3 py-1.5 text-xs"
+            style={{
+              background: status === key ? C.ink : C.paper,
+              color: status === key ? "white" : C.muted,
+              border: `1px solid ${status === key ? C.ink : C.line}`,
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {feedback && (
+        <div
+          className="mb-3 flex items-center justify-between rounded-xl border px-3 py-2 text-xs"
+          style={{
+            color: C.success,
+            borderColor: "#B9DDC4",
+            background: "#F4FBF6",
+          }}
+        >
+          <span>{feedback}</span>
+          <button onClick={() => setFeedback("")} aria-label="关闭提示">
+            <X size={15} />
+          </button>
+        </div>
+      )}
+      <div className="space-y-3">
+        {(list.data || []).map((order: any) => (
+          <button
+            key={order.id}
+            onClick={() => {
+              setFeedback("");
+              setId(order.id);
+            }}
+            className="w-full rounded-[20px] border p-4 text-left"
+            style={{ background: C.paper, borderColor: C.line }}
+          >
+            <div className="flex justify-between">
+              <div>
+                <div className="text-sm font-semibold" style={{ color: C.ink }}>
+                  {order.orderNo}
+                </div>
+                <div className="mt-1 text-xs" style={{ color: C.muted }}>
+                  {order.user.name}　{money(order.totalAmount)}
+                </div>
+              </div>
+              <span
+                className="text-xs"
+                style={{ color: statusTone(order.status).color }}
+              >
+                {order.statusLabel}
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+      {id && detail.data && (
+        <div
+          className="fixed inset-0 z-50 flex items-end bg-black/35"
+          onClick={closeOrder}
+        >
+          <div
+            className="max-h-[90vh] w-full overflow-y-auto rounded-t-[28px] p-5"
+            onClick={event => event.stopPropagation()}
+            style={{ background: C.canvas }}
+          >
+            <div className="flex justify-between">
+              <div>
+                <div className="text-lg font-bold" style={{ color: C.ink }}>
+                  订单处理
+                </div>
+                <div className="mt-1 text-xs" style={{ color: C.muted }}>
+                  {detail.data.orderNo}
+                </div>
+              </div>
+              <button onClick={closeOrder} aria-label="关闭订单处理">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {detail.data.items.map((item: any) => (
+                <div
+                  key={item.id}
+                  className="rounded-xl border p-3 text-sm"
+                  style={{ background: C.paper, borderColor: C.line }}
+                >
+                  {item.name} × {item.quantity}
+                  <span className="float-right">{money(item.lineTotal)}</span>
+                </div>
+              ))}
+            </div>
+            <Panel className="mt-3">
+              <div className="text-sm font-semibold" style={{ color: C.ink }}>
+                付款凭证
+              </div>
+              <p className="mt-1 text-xs" style={{ color: C.muted }}>
+                凭证按上传顺序直接展示，可向下浏览核验。
+              </p>
+              {proofError && (
+                <div
+                  className="mt-3 rounded-xl border px-3 py-2 text-xs leading-5"
+                  style={{
+                    color: C.danger,
+                    borderColor: "#EACACA",
+                    background: "#FFF8F8",
+                  }}
+                >
+                  {proofError}
+                </div>
+              )}
+              <div className="mt-3 space-y-3">
+                {detail.data.proofs.map((proofItem: any, index: number) => (
+                  <div
+                    key={proofItem.id}
+                    className="overflow-hidden rounded-xl border"
+                    style={{ borderColor: C.line, background: "#F3EEE9" }}
+                  >
+                    {proofUrls[proofItem.id] ? (
+                      <img
+                        src={proofUrls[proofItem.id]}
+                        alt={`付款凭证 ${index + 1}`}
+                        className="block max-h-[520px] w-full object-contain"
+                      />
+                    ) : (
+                      <div
+                        className="grid h-44 place-items-center text-xs"
+                        style={{ color: C.muted }}
+                      >
+                        正在加载凭证…
+                      </div>
+                    )}
+                    <div
+                      className="flex items-center justify-between border-t px-3 py-2"
+                      style={{ borderColor: C.line, background: C.paper }}
+                    >
+                      <span
+                        className="text-xs font-semibold"
+                        style={{ color: C.ink }}
+                      >
+                        凭证 {index + 1}
+                      </span>
+                      <button
+                        onClick={() => downloadProof(Number(proofItem.id))}
+                        className="inline-flex items-center gap-1 text-xs font-semibold"
+                        style={{ color: C.plum }}
+                      >
+                        <Download size={14} />
+                        保存图片
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {!detail.data.proofs.length && (
+                  <div
+                    className="rounded-xl border border-dashed px-3 py-4 text-center text-xs"
+                    style={{ borderColor: C.line, color: C.muted }}
+                  >
+                    尚未上传付款凭证
+                  </div>
+                )}
+              </div>
+            </Panel>
+            <Panel className="mt-3">
+              <div className="text-xs" style={{ color: C.muted }}>
+                {detail.data.receiver.name}　{detail.data.receiver.phone}
+                <br />
+                {detail.data.receiver.province}
+                {detail.data.receiver.city}
+                {detail.data.receiver.district}
+                {detail.data.receiver.detail}
+              </div>
+            </Panel>
+            {reviewAction && (
+              <Panel className="mt-3">
+                <div className="text-sm font-semibold" style={{ color: C.ink }}>
+                  {actionTitle}
+                </div>
+                <p
+                  className="mt-1 text-xs leading-5"
+                  style={{ color: C.muted }}
+                >
+                  {actionDescription}
+                </p>
+                {reviewAction !== "reject" ? (
+                  <div className="mt-3 space-y-3">
+                    <label
+                      className="flex cursor-pointer items-start gap-2 rounded-xl border px-3 py-3 text-sm"
+                      style={{
+                        borderColor: shippingForm.noShipment
+                          ? "#D7BBC8"
+                          : C.line,
+                        background: shippingForm.noShipment
+                          ? "#FCF6F7"
+                          : C.paper,
+                        color: C.ink,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={shippingForm.noShipment}
+                        onChange={event =>
+                          setShippingForm(old => ({
+                            ...old,
+                            noShipment: event.target.checked,
+                          }))
+                        }
+                      />
+                      <span>
+                        <strong>无需物流</strong>
+                        <span
+                          className="mt-0.5 block text-[11px] leading-5"
+                          style={{ color: C.muted }}
+                        >
+                          适用于服务、虚拟商品、到店交付或已当面交付的订单。
+                        </span>
+                      </span>
+                    </label>
+                    {!shippingForm.noShipment && (
+                      <>
+                        <div>
+                          <Label>物流公司</Label>
+                          <TextInput
+                            value={shippingForm.shippingCompany}
+                            placeholder="例如：顺丰速运"
+                            onChange={event =>
+                              setShippingForm(old => ({
+                                ...old,
+                                shippingCompany: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label>物流单号</Label>
+                          <TextInput
+                            value={shippingForm.trackingNo}
+                            placeholder="请输入物流单号"
+                            onChange={event =>
+                              setShippingForm(old => ({
+                                ...old,
+                                trackingNo: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-3">
+                    <Label>驳回说明</Label>
+                    <TextArea
+                      rows={3}
+                      value={reviewRemark}
+                      onChange={event => setReviewRemark(event.target.value)}
+                    />
+                  </div>
+                )}
+                {reviewError && (
+                  <div
+                    className="mt-3 rounded-xl border px-3 py-2 text-xs leading-5"
+                    style={{
+                      color: C.danger,
+                      borderColor: "#EACACA",
+                      background: "#FFF8F8",
+                    }}
+                  >
+                    {reviewError}
+                  </div>
+                )}
+                <div className="mt-4 flex gap-2">
+                  <Button
+                    kind="quiet"
+                    disabled={isSubmitting}
+                    onClick={() => {
+                      setReviewAction(null);
+                      setReviewError("");
+                    }}
+                  >
+                    返回
+                  </Button>
+                  <Button
+                    disabled={isSubmitting || !canSubmit}
+                    onClick={submitReview}
+                  >
+                    {isSubmitting
+                      ? "正在处理…"
+                      : reviewAction === "reject"
+                        ? "确认驳回"
+                        : actionTitle}
+                  </Button>
+                </div>
+              </Panel>
+            )}
+            <div className="mt-4 flex gap-2">
+              {detail.data.status === "proof_submitted" && !reviewAction && (
+                <>
+                  <Button kind="quiet" onClick={() => openReview("reject")}>
+                    驳回凭证
+                  </Button>
+                  <Button onClick={() => openReview("fulfill")}>
+                    <Truck size={15} />
+                    确认收款并处理
+                  </Button>
+                </>
+              )}
+              {detail.data.status === "confirmed" && !reviewAction && (
+                <Button onClick={() => openReview("ship")}>
+                  <Truck size={15} />
+                  处理交付
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function AdminProducts() {
@@ -1645,6 +2054,14 @@ function AdminMembers() {
     },
     onError: (error) => alert(error.message),
   });
+  const [newMember, setNewMember] = useState({ username: "", nickname: "" });
+  const normalizedUsername = newMember.username.trim();
+  const usernameFormatValid = Boolean(normalizedUsername) && /^[\u4e00-\u9fa5a-zA-Z0-9_]+$/.test(normalizedUsername);
+  const usernameCheck = trpc.zidingCommerce.adminCheckMemberUsername.useQuery(
+    { username: normalizedUsername },
+    { enabled: usernameFormatValid, retry: false, refetchOnWindowFocus: false },
+  );
+  const usernameAvailable = usernameCheck.data?.username === normalizedUsername && usernameCheck.data.available === true;
   const create = trpc.zidingCommerce.adminCreateMember.useMutation({
     onSuccess: (result) => {
       members.refetch();
@@ -1655,9 +2072,9 @@ function AdminMembers() {
     onError: (error) => alert(error.message),
   });
   const [found, setFound] = useState<any[]>([]);
-  const [newMember, setNewMember] = useState({ username: "", nickname: "" });
   const [credentials, setCredentials] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedContent, setCopiedContent] = useState("");
   const roleLabel = (role: string) => ({ user: "普通用户", order_admin: "订单管理员", catalog_admin: "商品管理员", owner: "项目负责人" } as Record<string, string>)[role] || "普通用户";
   const tierLabel = (tier: string) => tier === "senior" ? "高级会员" : "初级会员";
   const find = async () => {
@@ -1673,7 +2090,7 @@ function AdminMembers() {
   };
   const copyLoginInfo = async () => {
     if (!credentials) return;
-    const content = `紫鼎商业联盟登录信息\n用户名：${credentials.username}\n初始密码：${credentials.initialPassword}\n登录方式：微信小程序搜索“人脉涌动”`;
+    const content = `紫鼎商业联盟登录信息\n用户名：${credentials.username}\n初始密码：${credentials.initialPassword}\n登录方式：微信小程序搜索“人脉永动”`;
     try {
       if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(content);
       else {
@@ -1687,6 +2104,7 @@ function AdminMembers() {
         textarea.remove();
       }
       setCopied(true);
+      setCopiedContent(content);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
       alert("复制失败，请手动记录账号和初始密码。");
@@ -1700,9 +2118,9 @@ function AdminMembers() {
         <span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold" style={{ background: "#F2EAF0", color: C.plum }}>管理员操作</span>
       </div>
       <div className="mt-4 space-y-3">
-        <div><Label>用户名</Label><TextInput maxLength={20} placeholder="汉字、字母、数字或下划线" value={newMember.username} onChange={(event) => setNewMember({ ...newMember, username: event.target.value })} /></div>
+        <div><Label>用户名</Label><TextInput maxLength={20} placeholder="汉字、字母、数字或下划线" value={newMember.username} onChange={(event) => setNewMember({ ...newMember, username: event.target.value })} />{normalizedUsername && !usernameFormatValid && <p className="mt-1.5 text-[11px]" style={{ color: C.danger }}>用户名只能包含汉字、字母、数字和下划线。</p>}{usernameFormatValid && usernameCheck.isLoading && <p className="mt-1.5 text-[11px]" style={{ color: C.muted }}>正在检查用户名…</p>}{usernameFormatValid && usernameCheck.data?.available === false && <p className="mt-1.5 text-[11px]" style={{ color: C.danger }}>该用户名已被使用，请更换后再开通。</p>}{usernameAvailable && <p className="mt-1.5 text-[11px]" style={{ color: C.success }}>用户名可用。</p>}{usernameFormatValid && usernameCheck.isError && <p className="mt-1.5 text-[11px]" style={{ color: C.danger }}>暂时无法检查用户名，请稍后重试。</p>}</div>
         <div><Label>昵称（选填）</Label><TextInput maxLength={50} placeholder="不填写时，默认使用用户名" value={newMember.nickname} onChange={(event) => setNewMember({ ...newMember, nickname: event.target.value })} /></div>
-        <Button className="w-full" disabled={create.isPending || !newMember.username.trim()} onClick={() => create.mutate({ username: newMember.username, nickname: newMember.nickname })}><Plus size={15} />{create.isPending ? "正在开通…" : "开通会员并生成登录信息"}</Button>
+        <Button className="w-full" disabled={create.isPending || !usernameAvailable} onClick={() => create.mutate({ username: normalizedUsername, nickname: newMember.nickname })}><Plus size={15} />{create.isPending ? "正在开通…" : "开通会员并生成登录信息"}</Button>
       </div>
       <div className="mt-4 border-t pt-3" style={{ borderColor: C.line }}><button onClick={() => setShowExistingAdd(!showExistingAdd)} className="text-xs font-semibold" style={{ color: C.plum }}>{showExistingAdd ? "收起已有账号添加" : "添加已有平台账号"}</button>{showExistingAdd && <div className="mt-3"><p className="text-xs leading-5" style={{ color: C.muted }}>搜索已有平台账号并加入紫鼎，启用后会自动获得紫鼎入口。</p><div className="mt-2 flex gap-2"><TextInput placeholder="昵称或用户名" value={keyword} onChange={(event) => setKeyword(event.target.value)} /><Button onClick={find}>搜索</Button></div>{found.map((user: any) => <button key={user.userId} onClick={() => choose(user)} className="mt-2 flex w-full items-center gap-2 border-t py-3 text-left text-xs" style={{ borderColor: C.line, color: C.ink }}><Plus size={14} style={{ color: C.plum }} /><span className="min-w-0 flex-1 truncate">{user.name}</span><span className="shrink-0" style={{ color: C.muted }}>{user.username}</span></button>)}</div>}</div>
     </Panel>
@@ -1712,7 +2130,8 @@ function AdminMembers() {
 
     {editingMember && memberForm && <div className="fixed inset-0 z-50 flex items-end bg-black/35" onClick={() => { setEditingMember(null); setMemberForm(null); }}><div className="max-h-[92vh] w-full overflow-y-auto rounded-t-[28px] p-5" onClick={(event) => event.stopPropagation()} style={{ background: C.canvas }}><div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-bold" style={{ color: C.ink }}>编辑会员</h3><p className="mt-1 text-xs" style={{ color: C.muted }}>修改后需点击保存才会生效。</p></div><button onClick={() => { setEditingMember(null); setMemberForm(null); }} aria-label="关闭"><X size={20} style={{ color: C.muted }} /></button></div><div className="mt-5 rounded-2xl border p-4" style={{ background: C.paper, borderColor: C.line }}><div className="text-sm font-semibold" style={{ color: C.ink }}>{editingMember.name}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{editingMember.username || `编号 ${editingMember.userId}`}</div></div><div className="mt-4 space-y-4"><div><Label>会员等级</Label><select value={memberForm.tier} onChange={(event) => setMemberForm({ ...memberForm, tier: event.target.value })} className="w-full rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: C.line, background: "#FFFEFC", color: C.ink }}><option value="junior">初级会员</option><option value="senior">高级会员</option></select></div><div><Label>项目身份</Label><select value={memberForm.role} onChange={(event) => setMemberForm({ ...memberForm, role: event.target.value })} className="w-full rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: C.line, background: "#FFFEFC", color: C.ink }}><option value="user">普通用户</option><option value="order_admin">订单管理员</option><option value="catalog_admin">商品管理员</option><option value="owner">项目负责人</option></select></div><div className="rounded-2xl border p-4" style={{ borderColor: C.line, background: C.paper }}><div className="flex items-start justify-between gap-4"><div><div className="text-sm font-semibold" style={{ color: C.ink }}>紫鼎访问</div><p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>{memberForm.isActive ? "当前可进入紫鼎商城；停用后不影响该账号的其他项目。" : "当前无法进入紫鼎商城；恢复后可重新使用紫鼎功能。"}</p></div><Button kind={memberForm.isActive ? "danger" : "quiet"} onClick={() => setMemberForm({ ...memberForm, isActive: !memberForm.isActive })}>{memberForm.isActive ? "停用紫鼎访问" : "恢复紫鼎访问"}</Button></div></div><Button className="w-full" disabled={save.isPending} onClick={() => save.mutate(memberForm)}><Save size={15} />{save.isPending ? "保存中…" : "保存修改"}</Button></div></div></div>}
 
-    {credentials && <div className="fixed inset-0 z-50 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center" onClick={() => setCredentials(null)}><div className="w-full max-w-sm rounded-[28px] p-5" onClick={(event) => event.stopPropagation()} style={{ background: C.canvas }}><div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-bold" style={{ color: C.ink }}>新会员已开通</h3><p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>初始密码只在本次显示，请立即复制并发送给会员。</p></div><button onClick={() => setCredentials(null)} aria-label="关闭"><X size={20} style={{ color: C.muted }} /></button></div><div className="mt-5 overflow-hidden rounded-2xl border" style={{ borderColor: C.line, background: C.paper }}><div className="flex items-center justify-between px-4 py-3"><span className="text-xs" style={{ color: C.muted }}>用户名</span><code className="text-sm font-bold" style={{ color: C.ink }}>{credentials.username}</code></div><div className="flex items-center justify-between border-t px-4 py-3" style={{ borderColor: C.line }}><span className="text-xs" style={{ color: C.muted }}>六位初始密码</span><code className="text-base font-bold tracking-[0.18em]" style={{ color: C.plum }}>{credentials.initialPassword}</code></div></div><p className="mt-3 text-xs leading-5" style={{ color: C.muted }}>请在微信小程序搜索“人脉涌动”，使用管理员提供的账号密码登录。紫鼎会员不支持自主注册。</p><Button className="mt-4 w-full" onClick={copyLoginInfo}><Copy size={15} />{copied ? "已复制登录信息" : "一键复制登录信息"}</Button><Button kind="quiet" className="mt-2 w-full" onClick={() => setCredentials(null)}>我已发送，关闭</Button></div></div>}
+    {credentials && <div className="fixed inset-0 z-50 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center" onClick={() => setCredentials(null)}><div className="w-full max-w-sm rounded-[28px] p-5" onClick={(event) => event.stopPropagation()} style={{ background: C.canvas }}><div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-bold" style={{ color: C.ink }}>新会员已开通</h3><p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>初始密码只在本次显示，请立即复制并发送给会员。</p></div><button onClick={() => setCredentials(null)} aria-label="关闭"><X size={20} style={{ color: C.muted }} /></button></div><div className="mt-5 overflow-hidden rounded-2xl border" style={{ borderColor: C.line, background: C.paper }}><div className="flex items-center justify-between px-4 py-3"><span className="text-xs" style={{ color: C.muted }}>用户名</span><code className="text-sm font-bold" style={{ color: C.ink }}>{credentials.username}</code></div><div className="flex items-center justify-between border-t px-4 py-3" style={{ borderColor: C.line }}><span className="text-xs" style={{ color: C.muted }}>六位初始密码</span><code className="text-base font-bold tracking-[0.18em]" style={{ color: C.plum }}>{credentials.initialPassword}</code></div></div><p className="mt-3 text-xs leading-5" style={{ color: C.muted }}>请在微信小程序搜索“人脉永动”，使用管理员提供的账号密码登录。紫鼎会员不支持自主注册。</p><Button className="mt-4 w-full" onClick={copyLoginInfo}><Copy size={15} />{copied ? "已复制登录信息" : "一键复制登录信息"}</Button><Button kind="quiet" className="mt-2 w-full" onClick={() => setCredentials(null)}>我已发送，关闭</Button></div></div>}
+    {copiedContent && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-5" onClick={() => setCopiedContent("")}><div className="w-full max-w-sm rounded-[28px] p-5" onClick={(event) => event.stopPropagation()} style={{ background: C.canvas }}><div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-bold" style={{ color: C.ink }}>登录信息已复制</h3><p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>以下完整内容已复制到剪贴板，可直接粘贴发送给会员。</p></div><button onClick={() => setCopiedContent("")} aria-label="关闭复制内容预览"><X size={20} style={{ color: C.muted }} /></button></div><pre className="mt-4 whitespace-pre-wrap break-words rounded-2xl border p-4 text-[13px] leading-6" style={{ borderColor: C.line, background: C.paper, color: C.ink, fontFamily: "inherit" }}>{copiedContent}</pre><Button className="mt-4 w-full" onClick={() => setCopiedContent("")}>我已查看</Button></div></div>}
   </div>;
 }
 
