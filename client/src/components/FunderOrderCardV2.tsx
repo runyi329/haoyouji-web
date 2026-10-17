@@ -2296,8 +2296,8 @@ export function FunderOrderCardV2Silver({
                 ? '共享担保'
                 : collateralAssets.length > 0
                   ? collateralAssets.length === 1
-                    ? collateralAssets[0].qty
-                    : collateralAssets.map((c, i) => <div key={i}>{c.qty} {c.coin}</div>)
+                    ? `${formatCoinQtyFunder(collateralAssets[0].qty, collateralAssets[0].coin)} ${collateralAssets[0].coin === 'CNY' ? '元' : collateralAssets[0].coin}`
+                    : collateralAssets.map((c, i) => <div key={i}>{formatCoinQtyFunder(c.qty, c.coin)} {c.coin === 'CNY' ? '元' : c.coin}</div>)
                   : '--'}
             </div>
           </div>
@@ -2717,7 +2717,7 @@ export function FunderOrderCardV2Silver({
                                         <span className="mr-1.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
                                         <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                         <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
-                                        {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {o.coin === 'BTC' ? Number(o.quantity).toFixed(2) : o.quantity}</span> : null}
+                                        {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {String(o.coin).toUpperCase() === 'BTC' ? Number(o.quantity).toFixed(2) : formatCoinQtyFunder(o.quantity, String(o.coin || ''))}</span> : null}
                                       </div>
                                       <div className="text-right">
                                         {gapKnown
@@ -4382,8 +4382,9 @@ export function FunderLenderCardSilver({
                           </span>
                         ) : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>加载中...</span>
                       ) : isSharedMode ? (() => {
-                        // 列表优先显示本订单即时缺口；点击问号后才读取完整共享池汇总。
-                        const displayGap = sharedPoolInfo ? Number((sharedPoolInfo as any).totalGap) : collateralGap;
+                        // 主卡始终显示本订单即时缺口；共享池总额只在说明弹窗中单列，
+                        // 不能因为点击问号读取到共享池后把另一张订单的缺口覆盖到本卡。
+                        const displayGap = collateralGap;
                         const gapKnown = Number.isFinite(displayGap);
                         const gapSufficient = Number(displayGap) >= 0;
                         return gapKnown

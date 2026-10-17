@@ -2353,7 +2353,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     const hasLinkedTag = Boolean(sharedOrderPoolDetail?.linked37PnlTagName || sharedOrderPoolDetail?.linked37TagName);
     const serverValue = Number(sharedOrderPoolDetail?.linked37FloatingPnl);
     if (hasLinkedTag && Number.isFinite(serverValue)) return serverValue;
-    return floatPnlForRisk;
+    // 手工股票组合的浮盈来自保存的盘尾价与组合口径；共享池摘要不会携带这项
+    // 估值，不能退回成订单币种的简化实时价，否则打开共享担保说明后主卡会跳数。
+    return formulaFloatingPnlU;
   })();
   const sharedOrderPendingInterestU = (() => {
     const serverCny = sharedOrderPoolDetail?.linked37PendingInterestCny;
@@ -3914,7 +3916,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                           <span className="mr-1.5 text-[10px] font-medium" style={{ color: '#9CA3AF' }}>{assetTypeLabel}</span>
                                           <button type="button" onClick={() => setClickedOrderNo(o.orderNo)} className="font-mono font-medium underline underline-offset-2 cursor-pointer" style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                           <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
-                                          {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {oCoin === 'BTC' ? oQty.toFixed(2) : oQty}</span> : null}
+                                          {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {oCoin === 'BTC' ? oQty.toFixed(2) : formatCoinQtyFunder(o.quantity, oCoin)}</span> : null}
                                         </div>
                                         <div className="text-right">
                                           {gap !== null

@@ -22250,6 +22250,78 @@ ${klinesSummary}
             }
           }
 
+          // 手工股票浮盈同样只读取已保存的盘尾价。共享池摘要之前只看订单本身的
+          // buy_quantity × 行情价，无法识别「手工股票组合」这类没有订单数量的订单，
+          // 导致打开共享担保说明后与订单卡主行变成两套缺口数值。
+          const parseManualStockPnlSource = (raw: unknown): {
+            positions: any[];
+            calculationMode: 'position_cost' | 'total_capital';
+            totalCapital: number;
+            capitalCurrency: string;
+            coefficient: number;
+          } | null => {
+            try {
+              const source = Buffer.isBuffer(raw) ? JSON.parse(raw.toString('utf8')) : (typeof raw === 'string' ? JSON.parse(raw) : raw);
+              if (!source || source.stockPnlSource !== 'manual_positions') return null;
+              const cached = source.stockManualPnl && typeof source.stockManualPnl === 'object' ? source.stockManualPnl : {};
+              const positions = Array.isArray(source.stockPositions) ? source.stockPositions : (Array.isArray(cached.positions) ? cached.positions : []);
+              if (positions.length === 0) return null;
+              const rawCoefficient = Number(source.stockPnlCoefficient ?? cached.coefficient ?? 1);
+              return {
+                positions,
+                calculationMode: source.stockPnlCalculationMode === 'total_capital' || cached.calculationMode === 'total_capital' ? 'total_capital' : 'position_cost',
+                totalCapital: Number(source.stockTotalCapital ?? cached.totalCapital ?? 0),
+                capitalCurrency: String(source.stockCapitalCurrency ?? cached.capitalCurrency ?? 'CNY').trim().toUpperCase(),
+                coefficient: Number.isFinite(rawCoefficient) && rawCoefficient > 0 ? rawCoefficient : 1,
+              };
+            } catch {
+              return null;
+            }
+          };
+          const manualStockSymbols = Array.from(new Set(allOwnerOrders.flatMap((order: any) => {
+            const source = parseManualStockPnlSource(order.collateral_source);
+            return source ? source.positions.map((position: any) => String(position?.symbol || '').trim().toUpperCase()).filter(Boolean) : [];
+          })));
+          let manualStockCloseQuotes: Record<string, { price?: number; currency?: string }> = {};
+          if (manualStockSymbols.length > 0) {
+            try {
+              const { getManualStockCloseSnapshots } = await import('./manual-stock-close-scheduler');
+              manualStockCloseQuotes = await getManualStockCloseSnapshots(manualStockSymbols);
+            } catch (error) {
+              console.warn('[SharedPool] 读取手工股票盘尾价失败:', error);
+            }
+          }
+          const calculateManualStockFloatingPnlU = (raw: unknown): number | null => {
+            const source = parseManualStockPnlSource(raw);
+            if (!source || !Number.isFinite(usdtCnyRate) || usdtCnyRate <= 0) return null;
+            let rawPnlCny = 0;
+            for (const position of source.positions) {
+              const symbol = String(position?.symbol || '').trim().toUpperCase();
+              const quantity = Number(position?.quantity);
+              const quote = manualStockCloseQuotes[symbol];
+              const savedPrice = Number(quote?.price);
+              const fallbackPrice = Number(position?.latestPrice);
+              const marketPrice = Number.isFinite(savedPrice) && savedPrice > 0 ? savedPrice : fallbackPrice;
+              const currency = String(quote?.currency || position?.currency || 'CNY').trim().toUpperCase();
+              const quoteToCny = ['USD', 'USDT', 'U'].includes(currency) ? usdtCnyRate : 1;
+              if (!symbol || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(marketPrice) || marketPrice <= 0) return null;
+              if (source.calculationMode === 'total_capital') {
+                rawPnlCny += marketPrice * quantity * quoteToCny;
+              } else {
+                const savedSellPrice = Number(position?.sellPrice);
+                const valuationPrice = Number.isFinite(savedSellPrice) && savedSellPrice > 0 ? savedSellPrice : marketPrice;
+                const buyPrice = Number(position?.buyPrice);
+                if (!Number.isFinite(buyPrice) || buyPrice <= 0) return null;
+                rawPnlCny += (valuationPrice - buyPrice) * quantity * quoteToCny;
+              }
+            }
+            if (source.calculationMode === 'total_capital') {
+              if (!Number.isFinite(source.totalCapital) || source.totalCapital <= 0) return null;
+              rawPnlCny -= source.totalCapital * (['USD', 'USDT', 'U'].includes(source.capitalCurrency) ? usdtCnyRate : 1);
+            }
+            return rawPnlCny * source.coefficient / usdtCnyRate;
+          };
+
           // 37号利息页的分段均以人民币存储。待结只取自动分段和手工正数，
           // 已结只取“计入已付”的手工负数绝对值；两者均不使用37号的净欠息/上欠。
           const linkedTagInterestPeriodsByName = new Map<string, any[]>();
@@ -22433,6 +22505,7 @@ ${klinesSummary}
                 ]
               : storedCollateralAssets;
             const linked37Collateral = calculateLinked37Collateral(o.collateral_source);
+            const manualStockFloatingPnlU = calculateManualStockFloatingPnlU(o.collateral_source);
             // 手工担保／全部拥有者的钱包冻结／37号引用担保是三个并行来源，必须相加，
             // 不能因为选择37号标签就覆盖本地和共同钱包担保。任一来源尚未有可用估值时
             // 保持 null，避免把未知价格伪装成 0 而低估或高估担保缺口。
@@ -22540,10 +22613,14 @@ ${klinesSummary}
             const linkedFloatingPnlU = linked37Collateral?.useFloatingPnl ? linked37Collateral.floatingPnl : null;
             const holdingValueU = linkedHoldingValueU !== null && Number.isFinite(linkedHoldingValueU)
               ? linkedHoldingValueU
+              : manualStockFloatingPnlU !== null && Number.isFinite(manualStockFloatingPnlU)
+                ? collateralGapBaseU + manualStockFloatingPnlU
               : currentValue;
             const principalLentOutValueU = collateralGapBaseU;
             const riskFloatingPnlU = linkedFloatingPnlU !== null && Number.isFinite(linkedFloatingPnlU)
               ? linkedFloatingPnlU
+              : manualStockFloatingPnlU !== null && Number.isFinite(manualStockFloatingPnlU)
+                ? manualStockFloatingPnlU
               : (holdingValueU !== null && Number.isFinite(holdingValueU) ? holdingValueU - collateralGapBaseU : null);
             const collateralRequired = usesFloatingPnl
               ? (riskFloatingPnlU === null ? null : riskFloatingPnlU - accruedInterestU + paidInterestU)
@@ -22567,6 +22644,7 @@ ${klinesSummary}
               currentPriceStale: quoteHealth?.stale ?? !isStablecoinCoin,
               currentValue,
               holdingValueU,
+              manualStockFloatingPnlU,
               principalLoss,
               // 保留利息累计额与已结利息，前端共享担保公式需明确展示：
               // 浮动盈亏 − 累计待结利息 + 已结利息，而不只返回已扣除付款的净待结额。
@@ -22704,7 +22782,7 @@ ${klinesSummary}
           const totalGap = totalCollateralRequired === null || totalCollateralValue === null
             ? null
             : totalCollateralRequired + totalCollateralValue;
-          const totalBuyValue = sharedOrderDetails.reduce((s: number, o: any) => s + (o.buyValue || 0), 0);
+          const totalBuyValue = sharedOrderDetails.reduce((s: number, o: any) => s + (Number(o.collateralGapBaseU) || Number(o.buyValue) || 0), 0);
 
           return {
             orders: sharedOrderDetails,
