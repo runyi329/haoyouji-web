@@ -1467,6 +1467,8 @@ const FUNDER_PARTICIPANT_SNAPSHOT_FIELDS = [
   'asset_type', 'tags', 'collateral_share_mode', 'principal_lent_out', 'broker_name', 'broker_account',
   'option_info', 'trade_direction', 'order_fill_status', 'order_perspective', 'trading_fee_rate_per_mille',
   'trading_fee_status', 'collateral_source', 'personal_header_label', 'frontend_placement', 'settled_at', 'interest_end_date',
+  // 拥有者可见范围和个人担保覆盖均是当前个人视图的业务状态，不能只留在关系冗余列。
+  'owner_visibility_mode', 'visible_owner_ids', 'participant_collateral_override',
   // 联合订单子段仅保存于参与者自己的 order_snapshot；绝不写入主订单。
   'joint_order_segments'
 ] as const;
@@ -1497,6 +1499,27 @@ function parseFunderDisplayConfig(value: unknown): Record<string, any> {
   } catch {
     return {};
   }
+}
+
+// 可见范围此前只在参与关系冗余列中。读取旧数据时先投影为个人快照字段，
+// 从而让完整编辑页可以稳定回显并在任何局部保存后保持原样。
+function resolveFunderOwnerVisibilitySnapshot(snapshot: Record<string, any> | null, participant: any): Record<string, any> | null {
+  if (!participant || String(participant.role || participant.participant_role || '').toLowerCase() !== 'owner') return snapshot;
+  const result: Record<string, any> = { ...(snapshot || {}) };
+  const rawMode = result.owner_visibility_mode ?? participant.visibility_mode;
+  result.owner_visibility_mode = ['self', 'total', 'breakdown', 'partners'].includes(String(rawMode))
+    ? String(rawMode)
+    : 'self';
+  try {
+    const rawIds = result.visible_owner_ids ?? participant.visible_owner_ids;
+    const parsedIds = typeof rawIds === 'string' ? JSON.parse(rawIds) : rawIds;
+    result.visible_owner_ids = Array.isArray(parsedIds)
+      ? parsedIds.map(Number).filter((id) => id > 0 && id !== Number(participant.user_id))
+      : [];
+  } catch {
+    result.visible_owner_ids = [];
+  }
+  return result;
 }
 
 const FUNDER_PERIOD_INTEREST_TOTAL_PERIODS = new Set(['week', 'month', 'quarter', 'halfYear', 'year']);
@@ -21446,12 +21469,11 @@ ${klinesSummary}
               if (puArr.length > 0) participantUserName = puArr[0].nickname || puArr[0].name || puArr[0].username || '';
             }
         }
-        // 给每个订单附带协作角色（如果当前用户是协作者）。
-        // 主订单 user_id 相同的 owner 协作记录只是该拥有者的配置快照，不能把主拥有者误标成参与者。
+        // 给每个订单附带当前用户的个人订单视图。首位拥有者也可能带有 owner 快照，
+        // 因此同样必须附加 participantInfo，供统一编辑器把保存精确写回该人快照。
         const ordersWithParticipant = orders.map((o: any) => {
           const pi = participantInfoMap[Number(o.id)];
-          const isPrimaryOwner = Number(o.user_id) === participantQueryUserId;
-          if (pi && !isPrimaryOwner) {
+          if (pi) {
             const collaboratorRole = String(pi.role || '').toLowerCase();
             const isCoOwner = collaboratorRole === 'owner';
             return {
@@ -21481,11 +21503,10 @@ ${klinesSummary}
           const pi = piDetailMap[Number(o.id)];
           const collaboratorRole = String(pi?.role || o?.participantInfo?.role || '').toLowerCase();
           const isCoOwner = collaboratorRole === 'owner';
-          // 共同拥有者与真实参与者都使用各自的独立订单快照；主拥有者自身的
-          // owner 快照仅用于编辑配置。两者的唯一差别是列表归属：owner 始终归本人。
-          const isCollaboratorOrder = participantQueryUserIdSet.has(Number(o.id))
-            && Number(o.user_id) !== participantQueryUserId;
-          if (!isCollaboratorOrder) return o;
+          // 每一位拥有者（包括物理主订单的首位拥有者）都使用自己的个人快照。
+          // 角色只决定列表归属，绝不能决定是否丢弃当前拥有者的编辑内容。
+          const isPersonalOrderView = participantQueryUserIdSet.has(Number(o.id));
+          if (!isPersonalOrderView) return o;
           const snapshot = restoreLegacyPersonalAssetCoin(
             syncFunderParticipantCollateralSnapshot(
               parseFunderParticipantSnapshot(pi?.order_snapshot),
@@ -21494,6 +21515,13 @@ ${klinesSummary}
             o,
           );
           const result = { ...o, ...(snapshot || {}) };
+          // 同一张订单的 user_id 是数据库存储锚点。协作人卡片覆盖业务字段后，
+          // 仍附带未经个人快照覆盖的主订单，供编辑器在切回主拥有者时恢复真实币种与金额。
+          const rootOrderForEditor = { ...o };
+          delete rootOrderForEditor.participantInfo;
+          delete rootOrderForEditor._collaborator_role;
+          delete rootOrderForEditor._isParticipant;
+          result._rootOrder = rootOrderForEditor;
           // 系统关联字段始终沿用主订单，业务字段则由参与者完整快照独立覆盖。
           // 结清状态是主子订单的关联状态：历史数据即使子订单快照仍为 active，也必须继承主单结清时间。
           if (o.status === 'settled') {
@@ -21520,23 +21548,28 @@ ${klinesSummary}
             result.owner_label = participantUserName; // 兼容旧版卡片字段
           }
           if (pi) {
-            if (pi.amount != null && pi.amount !== '') result.amount = pi.amount;
-            if (pi.amount_currency) result.amount_currency = pi.amount_currency;
-            if (pi.interest_rate != null && pi.interest_rate !== '') result.interest_rate_annual = pi.interest_rate;
-            if (pi.interest_base) result.interest_base = pi.interest_base;
-            if (pi.interest_base_currency) result.interest_base_currency = pi.interest_base_currency;
-            if (pi.interest_payment_type) result.interest_payment_type = pi.interest_payment_type;
-            if (pi.interest_start_date) result.interest_start_date = pi.interest_start_date;
-            if (pi.interest_rate_currency) result.interest_rate_currency = pi.interest_rate_currency;
-            if (pi.display_config) result.display_config = pi.display_config;
-            if (pi.buy_date_override) result.buy_date = pi.buy_date_override;
-            if (pi.broker_name_override) result.broker_name = pi.broker_name_override;
-            if (pi.broker_account_override) result.broker_account = pi.broker_account_override;
+            // order_snapshot 是个人订单视图唯一的业务事实来源。关系表冗余列仅用于
+            // 未曾保存过快照的历史记录兜底，绝不能把刚保存的个人内容再覆盖回旧值。
+            const snapshotHas = (field: string) => Object.prototype.hasOwnProperty.call(snapshot || {}, field);
+            if (!snapshotHas('amount') && pi.amount != null && pi.amount !== '') result.amount = pi.amount;
+            if (!snapshotHas('amount_currency') && pi.amount_currency) result.amount_currency = pi.amount_currency;
+            if (!snapshotHas('interest_rate_annual') && pi.interest_rate != null && pi.interest_rate !== '') result.interest_rate_annual = pi.interest_rate;
+            if (!snapshotHas('interest_base') && pi.interest_base) result.interest_base = pi.interest_base;
+            if (!snapshotHas('interest_base_currency') && pi.interest_base_currency) result.interest_base_currency = pi.interest_base_currency;
+            if (!snapshotHas('interest_payment_type') && pi.interest_payment_type) result.interest_payment_type = pi.interest_payment_type;
+            if (!snapshotHas('interest_start_date') && pi.interest_start_date) result.interest_start_date = pi.interest_start_date;
+            if (!snapshotHas('interest_rate_currency') && pi.interest_rate_currency) result.interest_rate_currency = pi.interest_rate_currency;
+            if (!snapshotHas('display_config') && pi.display_config) result.display_config = pi.display_config;
+            if (!snapshotHas('buy_date') && pi.buy_date_override) result.buy_date = pi.buy_date_override;
+            if (!snapshotHas('broker_name') && pi.broker_name_override) result.broker_name = pi.broker_name_override;
+            if (!snapshotHas('broker_account') && pi.broker_account_override) result.broker_account = pi.broker_account_override;
             if (pi.order_no_override) result.order_no = pi.order_no_override;
             result.participant_paid_interest = pi.paid_interest || '0';
             // 参与者备注必须与订单拥有者的 public_note 完全隔离；空备注也不能回退到主订单备注。
-            result.public_note = pi.note || null;
-            result.note = pi.note || null;
+            if (!snapshotHas('public_note')) {
+              result.public_note = pi.note || null;
+              result.note = pi.note || null;
+            }
           }
           try {
             const mainDisplayConfig = o.display_config ? (typeof o.display_config === 'string' ? JSON.parse(o.display_config) : o.display_config) : {};
@@ -22580,8 +22613,15 @@ ${klinesSummary}
             && String(participant.role || '').toLowerCase() === 'owner'
           ));
           const primaryOwnerSnapshot = primaryOwnerParticipant
-            ? parseFunderParticipantSnapshot(primaryOwnerParticipant.order_snapshot)
+            ? restoreLegacyPersonalAssetCoin(
+                syncFunderParticipantCollateralSnapshot(
+                  parseFunderParticipantSnapshot(primaryOwnerParticipant.order_snapshot),
+                  baseOrder,
+                ),
+                baseOrder,
+              )
             : null;
+          const primaryOwnerSnapshotWithVisibility = resolveFunderOwnerVisibilitySnapshot(primaryOwnerSnapshot, primaryOwnerParticipant);
           const primaryViewStatus = (baseOrder.status === 'settled' || baseOrder.status === 'completed')
             ? { status: baseOrder.status, settled_at: baseOrder.settled_at, interest_end_date: baseOrder.interest_end_date }
             : (primaryOwnerSnapshot?.status === 'settled'
@@ -22591,15 +22631,39 @@ ${klinesSummary}
                   interest_end_date: primaryOwnerSnapshot.interest_end_date || null,
                 }
               : {});
-          orderViews.push({
+          // 对共同订单，首位拥有者也是一张独立的个人订单视图，和其他拥有者使用
+          // 完全相同的快照读写规则。这样从任一入口打开、切换并保存时，都会落到
+          // 当前被选中的那位拥有者，而非悄悄回写 ledger_orders。
+          const primaryView = {
             ...baseOrder,
+            ...(primaryOwnerSnapshotWithVisibility || {}),
             ...primaryViewStatus,
             ...groupFields,
+            id: baseOrder.id,
+            ledger_id: baseOrder.ledger_id,
+            user_id: baseOrder.user_id,
+            order_no: baseOrder.order_no,
             _viewKey: `${orderId}:primary:${baseOrder.user_id}`,
             _orderViewKind: '主订单',
             _isParticipant: false,
             order_perspective: 'self',
-          });
+            ...(primaryOwnerParticipant && linkedParticipants.length > 1 ? {
+              participantInfo: {
+                userId: Number(baseOrder.user_id),
+                role: 'owner',
+                isPersonalOwnerView: true,
+                interestRate: primaryOwnerParticipant.interest_rate ?? null,
+                commissionRate: primaryOwnerParticipant.commission_rate ?? null,
+                commissionBase: primaryOwnerParticipant.commission_base || baseOrder.interest_base || null,
+                commissionStartDate: primaryOwnerParticipant.commission_start_date || baseOrder.interest_start_date || null,
+                paidCommission: primaryOwnerParticipant.paid_commission || '0',
+                paidInterest: primaryOwnerParticipant.paid_interest || '0',
+                note: primaryOwnerParticipant.note || null,
+                interestBaseCurrency: ['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes(primaryOwnerParticipant.interest_base_currency || baseOrder.interest_base_currency || '') ? 'CNY' : 'USDT',
+              },
+            } : {}),
+          } as any;
+          orderViews.push(primaryView);
 
           // 主拥有者在上方已经有主订单卡片，不再重复；其他协作人各保留一张可编辑的个人视图卡片。
           for (const participant of linkedParticipants) {
@@ -22607,9 +22671,12 @@ ${klinesSummary}
             if (!collaboratorUserId || collaboratorUserId === Number(baseOrder.user_id)) continue;
             const collaboratorRole = String(participant.role || '').toLowerCase();
             const isCoOwner = collaboratorRole === 'owner';
-            const snapshot = restoreLegacyPersonalAssetCoin(
-              syncFunderParticipantCollateralSnapshot(parseFunderParticipantSnapshot(participant.order_snapshot), baseOrder),
-              baseOrder,
+            const snapshot = resolveFunderOwnerVisibilitySnapshot(
+              restoreLegacyPersonalAssetCoin(
+                syncFunderParticipantCollateralSnapshot(parseFunderParticipantSnapshot(participant.order_snapshot), baseOrder),
+                baseOrder,
+              ),
+              participant,
             );
             const view = {
               ...baseOrder,
@@ -22643,19 +22710,24 @@ ${klinesSummary}
               },
               _participantSearchNote: participant.note || null,
             } as any;
-            // 这些列是早期参与者编辑页可能单独保存的字段；优先级高于历史快照。
-            if (participant.amount != null && participant.amount !== '') view.amount = participant.amount;
-            if (participant.amount_currency) view.amount_currency = participant.amount_currency;
-            if (participant.interest_rate != null && participant.interest_rate !== '') view.interest_rate_annual = participant.interest_rate;
-            if (participant.interest_base) view.interest_base = participant.interest_base;
-            if (participant.interest_base_currency) view.interest_base_currency = participant.interest_base_currency;
-            if (participant.interest_payment_type) view.interest_payment_type = participant.interest_payment_type;
-            if (participant.interest_start_date) view.interest_start_date = participant.interest_start_date;
-            if (participant.interest_rate_currency) view.interest_rate_currency = participant.interest_rate_currency;
-            if (participant.display_config) view.display_config = participant.display_config;
-            if (participant.buy_date_override) view.buy_date = participant.buy_date_override;
-            if (participant.broker_name_override) view.broker_name = participant.broker_name_override;
-            if (participant.broker_account_override) view.broker_account = participant.broker_account_override;
+            // 关系表旧列只为缺少对应快照字段的历史订单兜底；一旦个人快照中出现过
+            // 该字段（包括用户主动清空后的空值），均不得再被旧列覆盖。
+            const snapshotHas = (field: string) => Object.prototype.hasOwnProperty.call(snapshot || {}, field);
+            if (!snapshotHas('amount') && participant.amount != null && participant.amount !== '') view.amount = participant.amount;
+            if (!snapshotHas('amount_currency') && participant.amount_currency) view.amount_currency = participant.amount_currency;
+            if (!snapshotHas('interest_rate_annual') && participant.interest_rate != null && participant.interest_rate !== '') view.interest_rate_annual = participant.interest_rate;
+            if (!snapshotHas('interest_base') && participant.interest_base) view.interest_base = participant.interest_base;
+            if (!snapshotHas('interest_base_currency') && participant.interest_base_currency) view.interest_base_currency = participant.interest_base_currency;
+            if (!snapshotHas('interest_payment_type') && participant.interest_payment_type) view.interest_payment_type = participant.interest_payment_type;
+            if (!snapshotHas('interest_start_date') && participant.interest_start_date) view.interest_start_date = participant.interest_start_date;
+            if (!snapshotHas('interest_rate_currency') && participant.interest_rate_currency) view.interest_rate_currency = participant.interest_rate_currency;
+            if (!snapshotHas('display_config') && participant.display_config) view.display_config = participant.display_config;
+            if (!snapshotHas('buy_date') && participant.buy_date_override) view.buy_date = participant.buy_date_override;
+            if (!snapshotHas('broker_name') && participant.broker_name_override) view.broker_name = participant.broker_name_override;
+            if (!snapshotHas('broker_account') && participant.broker_account_override) view.broker_account = participant.broker_account_override;
+            // 从其他拥有者入口切回首位拥有者时，编辑器必须恢复首位拥有者的个人
+            // 快照（而非协作人卡片或物理主订单的旧业务字段）。
+            view._rootOrder = { ...primaryView };
             if (baseOrder.status === 'settled' || baseOrder.status === 'completed') {
               view.status = baseOrder.status;
               view.settled_at = baseOrder.settled_at;
@@ -25683,28 +25755,34 @@ ${klinesSummary}
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         await ensureFunderParticipantSnapshotColumns();
         const [snapshotRows] = await conn.execute(
-          `SELECT p.order_snapshot, o.* FROM ledger_order_participants p
+          `SELECT p.id AS participant_id, p.order_snapshot, p.order_no_override AS participant_order_no_override,
+                  p.paid_interest AS participant_paid_interest, o.* FROM ledger_order_participants p
            INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
            WHERE p.order_id = ? AND p.ledger_id = ? AND p.user_id = ? AND p.role <> 'inactive' LIMIT 1`,
           [input.orderId, input.ledgerId, input.userId]
         ) as any;
         const snapshotSource = Array.isArray(snapshotRows) ? snapshotRows[0] : null;
         if (!snapshotSource) throw new TRPCError({ code: 'NOT_FOUND', message: '参与者子订单不存在或已停用' });
+        // 此接口常被“佣金保存”单独调用。未携带的业务字段必须严格保留本人快照，
+        // 不能因为 input.x 为 undefined 而被写成 null，进而造成其他开关/利息配置回退。
+        const partialSnapshot: Record<string, any> = {
+          ...(input.interestRate !== undefined ? { interest_rate_annual: input.interestRate || null } : {}),
+          ...(input.interestBase !== undefined ? { interest_base: input.interestBase || null } : {}),
+          ...(input.interestBaseCurrency !== undefined ? { interest_base_currency: input.interestBaseCurrency || null } : {}),
+          ...(input.interestPaymentType !== undefined ? { interest_payment_type: input.interestPaymentType || null } : {}),
+          ...(input.interestStartDate !== undefined ? { interest_start_date: input.interestStartDate || null } : {}),
+          ...(input.interestRateCurrency !== undefined ? { interest_rate_currency: input.interestRateCurrency || null } : {}),
+          ...(input.displayConfig !== undefined ? { display_config: input.displayConfig || null } : {}),
+          ...(input.buyDateOverride !== undefined ? { buy_date: input.buyDateOverride || null } : {}),
+          ...(input.brokerNameOverride !== undefined ? { broker_name: input.brokerNameOverride || null } : {}),
+          ...(input.brokerAccountOverride !== undefined ? { broker_account: input.brokerAccountOverride || null } : {}),
+          ...(input.note !== undefined ? { public_note: input.note || null } : {}),
+        };
         const syncedSnapshot = syncFunderParticipantSharedAssetSnapshot(
           syncFunderParticipantCollateralSnapshot({
             ...buildFunderParticipantSnapshot(snapshotSource),
             ...(parseFunderParticipantSnapshot(snapshotSource.order_snapshot) || {}),
-            interest_rate_annual: input.interestRate === undefined || input.interestRate === '' ? null : input.interestRate,
-            interest_base: input.interestBase || null,
-            interest_base_currency: input.interestBaseCurrency || null,
-            interest_payment_type: input.interestPaymentType || null,
-            interest_start_date: input.interestStartDate || null,
-            interest_rate_currency: input.interestRateCurrency || null,
-            display_config: input.displayConfig || null,
-            buy_date: input.buyDateOverride || null,
-            broker_name: input.brokerNameOverride || null,
-            broker_account: input.brokerAccountOverride || null,
-            public_note: input.note || null,
+            ...partialSnapshot,
           }, snapshotSource),
           snapshotSource,
         );
@@ -25718,19 +25796,19 @@ ${klinesSummary}
             broker_name_override = ?, broker_account_override = ?,
             paid_interest = ?, order_snapshot = ?,
             updated_at = NOW()
-           WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> 'inactive'`,
+           WHERE id = ? AND order_id = ? AND ledger_id = ? AND user_id = ? AND role <> 'inactive'`,
           [
             input.commissionRate === undefined || input.commissionRate === '' ? null : input.commissionRate, input.commissionBase || null, input.commissionStartDate || null,
-            input.interestRate === undefined || input.interestRate === '' ? null : input.interestRate, input.interestBase || null, input.interestBaseCurrency || null,
-            input.interestPaymentType || null, input.interestStartDate || null, input.interestRateCurrency || null,
-            input.displayConfig || null, input.note || null,
-            input.orderNoOverride || null, input.buyDateOverride || null,
-            input.brokerNameOverride || null, input.brokerAccountOverride || null,
-            input.paidInterest || null, JSON.stringify(syncedSnapshot),
-            input.orderId, input.ledgerId, input.userId
+            syncedSnapshot.interest_rate_annual ?? null, syncedSnapshot.interest_base ?? null, syncedSnapshot.interest_base_currency ?? null,
+            syncedSnapshot.interest_payment_type ?? null, syncedSnapshot.interest_start_date ?? null, syncedSnapshot.interest_rate_currency ?? null,
+            syncedSnapshot.display_config ?? null, syncedSnapshot.public_note ?? null,
+            input.orderNoOverride === undefined ? snapshotSource.participant_order_no_override : input.orderNoOverride || null, syncedSnapshot.buy_date ?? null,
+            syncedSnapshot.broker_name ?? null, syncedSnapshot.broker_account ?? null,
+            input.paidInterest === undefined ? snapshotSource.participant_paid_interest : input.paidInterest || null, JSON.stringify(syncedSnapshot),
+            Number(snapshotSource.participant_id), input.orderId, input.ledgerId, input.userId
           ]
         );
-        return { success: true };
+        return { success: true, userId: input.userId, snapshot: syncedSnapshot };
       }),
     // 更新参与者独立子订单的全部业务字段；仅修改记账快照，不触发任何钱包流水。
     funderUpdateParticipantOrder: protectedProcedure
@@ -25751,9 +25829,11 @@ ${klinesSummary}
         const conn = await getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         const [rows] = await conn.execute(
-          `SELECT p.order_snapshot, p.role AS participant_role, o.* FROM ledger_order_participants p
+          `SELECT p.id AS participant_id, p.order_snapshot, p.role AS participant_role,
+                  p.visibility_mode AS owner_visibility_mode, p.visible_owner_ids AS visible_owner_ids, o.* FROM ledger_order_participants p
            INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
-           WHERE p.order_id = ? AND p.ledger_id = ? AND p.user_id = ? AND p.role <> 'inactive' LIMIT 1`,
+           WHERE p.order_id = ? AND p.ledger_id = ? AND p.user_id = ? AND p.role <> 'inactive'
+           ORDER BY p.id ASC LIMIT 1`,
           [input.orderId, input.ledgerId, input.userId]
         ) as any;
         let row = Array.isArray(rows) ? rows[0] : null;
@@ -25769,13 +25849,18 @@ ${klinesSummary}
             throw new TRPCError({ code: 'NOT_FOUND', message: '参与者子订单不存在或已停用' });
           }
           const initialSnapshot = buildFunderParticipantSnapshot(parentOrder);
-          await conn.execute(
+          const [insertResult] = await conn.execute(
             `INSERT INTO ledger_order_participants (order_id, ledger_id, user_id, role, order_snapshot, sort_order)
              VALUES (?, ?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE role = 'owner', previous_role = NULL, order_snapshot = VALUES(order_snapshot), sort_order = VALUES(sort_order), updated_at = NOW()`,
             [input.orderId, input.ledgerId, input.userId, 'owner', JSON.stringify(initialSnapshot), 0],
           );
-          row = { ...parentOrder, participant_role: 'owner', order_snapshot: JSON.stringify(initialSnapshot) };
+          row = {
+            ...parentOrder,
+            participant_id: Number((insertResult as any)?.insertId || 0),
+            participant_role: 'owner',
+            order_snapshot: JSON.stringify(initialSnapshot),
+          };
         }
         let mergedSnapshot = {
           ...buildFunderParticipantSnapshot(row),
@@ -25788,6 +25873,23 @@ ${klinesSummary}
           const frontendPlacement = normalizeFunderFrontendPlacement((input.snapshot as any).frontend_placement);
           if (frontendPlacement) mergedSnapshot.frontend_placement = frontendPlacement;
           else delete mergedSnapshot.frontend_placement;
+        }
+        // 可见范围是拥有者自己的配置。无论本次是保存利息开关、备注、担保还是联合子段，
+        // 未携带可见范围时都必须保留该人已有快照（再退回旧关系字段），绝不能默认重置为“仅自己”。
+        if (row.participant_role === 'owner') {
+          const visibilityMode = String(mergedSnapshot.owner_visibility_mode || 'self');
+          mergedSnapshot.owner_visibility_mode = ['self', 'total', 'breakdown', 'partners'].includes(visibilityMode)
+            ? visibilityMode
+            : 'self';
+          let visibleOwnerIds: unknown[] = [];
+          try {
+            const raw = mergedSnapshot.visible_owner_ids;
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            visibleOwnerIds = Array.isArray(parsed) ? parsed : [];
+          } catch {}
+          mergedSnapshot.visible_owner_ids = visibleOwnerIds
+            .map(Number)
+            .filter((id) => id > 0 && id !== Number(input.userId));
         }
         // 联合订单子段属于当前参与者的个人订单视图。无论客户端提交什么 owner_user_id，
         // 服务端都会重写为本次快照所属用户，且严格限制字段，杜绝不同参与者相互读取或串改。
@@ -25899,7 +26001,7 @@ ${klinesSummary}
              interest_base_currency = ?, interest_payment_type = ?, interest_start_date = ?, interest_rate_currency = ?,
              display_config = ?, note = ?, buy_date_override = ?, broker_name_override = ?, broker_account_override = ?,
              visibility_mode = ?, visible_owner_ids = ?, updated_at = NOW()
-           WHERE order_id = ? AND ledger_id = ? AND user_id = ? AND role <> 'inactive'`,
+           WHERE id = ? AND order_id = ? AND ledger_id = ? AND user_id = ? AND role <> 'inactive'`,
           [
             JSON.stringify(mergedSnapshot),
             mergedSnapshot.amount ?? null, mergedSnapshot.amount_currency ?? null,
@@ -25909,20 +26011,16 @@ ${klinesSummary}
             typeof mergedSnapshot.display_config === 'string' ? mergedSnapshot.display_config : JSON.stringify(mergedSnapshot.display_config ?? null),
             mergedSnapshot.public_note ?? null, mergedSnapshot.buy_date ?? null,
             mergedSnapshot.broker_name ?? null, mergedSnapshot.broker_account ?? null,
+            row.participant_role === 'owner' ? mergedSnapshot.owner_visibility_mode : null,
             row.participant_role === 'owner'
-              ? (['self', 'total', 'breakdown', 'partners'].includes(String((input.snapshot as any).owner_visibility_mode))
-                ? (input.snapshot as any).owner_visibility_mode
-                : 'self')
+              ? JSON.stringify(mergedSnapshot.visible_owner_ids || [])
               : null,
-            row.participant_role === 'owner'
-              ? JSON.stringify(Array.isArray((input.snapshot as any).visible_owner_ids)
-                ? (input.snapshot as any).visible_owner_ids.map(Number).filter((id: number) => id > 0 && id !== Number(input.userId))
-                : [])
-              : null,
-            input.orderId, input.ledgerId, input.userId,
+            Number(row.participant_id), input.orderId, input.ledgerId, input.userId,
           ]
         );
-        return { success: true };
+        // 将数据库实际落盘的快照回传给客户端，用于淘汰并发请求中可能返回的旧缓存。
+        // 不包含其他拥有者资料，也不会触发钱包、流水或主订单的任何写入。
+        return { success: true, userId: input.userId, snapshot: mergedSnapshot };
       }),
     // 录入已结佣金（卡片上的按钮，owner 操作）
     funderUpdatePaidCommission: protectedProcedure

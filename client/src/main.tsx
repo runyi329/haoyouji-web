@@ -126,8 +126,11 @@ const trpcClient = trpc.createClient({
     splitLink({
       // 影像上传等大体积请求不走 batch，避免多条合并后超体积导致整批失败。
       // 股票账户页在移动热预览中也单独请求，避免 WebView 解析合并请求 URL 时失败。
+      // 共同拥有者订单保存也必须独立发出：编辑页同时有行情、担保和成员读取请求，
+      // 手机 WebView 若把保存与任一慢查询合并，会一直停在“提交中”且保存请求根本未到达服务端。
       condition(op) {
-        return op.path === "yabanCustomer.uploadMedia"
+        return op.path === "ledger.funderUpdateParticipantOrder"
+          || op.path === "yabanCustomer.uploadMedia"
           || op.path === "ledger.getStockTagPortfolio"
           || op.path === "ledger.getStockTagPublicPortfolio"
           || op.path === "ledger.getMyStockTagParticipantPortfolio"

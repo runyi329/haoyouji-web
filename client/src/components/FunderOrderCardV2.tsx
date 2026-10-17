@@ -3526,14 +3526,16 @@ export function FunderLenderCardSilver({
   const displayAccrued = convertAccrued(accrued);
   const totalPaid = (order as any).paidTotal ? parseFloat((order as any).paidTotal.amount || '0') : 0;
   const displayPaid = convertAccrued(totalPaid);
+  const approxInterestMode = getDisplayMode(order, 'approxInterest', 'U');
+  const approxInterestValue = approxInterestMode === 'U'
+    ? (interestUnit === 'U' ? displayAccrued : displayAccrued / cnyRate)
+    : (interestUnit === 'U' ? displayAccrued * cnyRate : displayAccrued);
+  const approxInterestUnit = approxInterestMode === 'U' ? 'U' : '元';
   const approxPaidMode = getDisplayMode(order, 'approxPaid', 'U');
   const approxPaidValue = approxPaidMode === 'U'
     ? (interestUnit === 'U' ? displayPaid : displayPaid / cnyRate)
     : (interestUnit === 'U' ? displayPaid * cnyRate : displayPaid);
   const approxPaidUnit = approxPaidMode === 'U' ? 'U' : '元';
-  // 约等于换算
-  const approxAccrued = interestUnit === '元' ? displayAccrued / cnyRate : displayAccrued * cnyRate;
-  const approxUnit = interestUnit === '元' ? 'u' : '元';
   const periodInterestTotal = getPeriodInterestTotal(
     lenderDisplayConfig,
     _effectiveInterestBase,
@@ -3853,9 +3855,11 @@ export function FunderLenderCardSilver({
             <span style={{ fontSize: '1.6rem', fontWeight: 700, color: GRN_POSITIVE_COLOR, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: TXT_SHADOW_LG }}>
               {displayAccrued > 0 ? '+' : ''}{fmt(displayAccrued, 2)}
             </span>
-            <span className="text-[10px]" style={{ color: TXT_SEC, whiteSpace: 'nowrap' }}>
-              ≈{approxAccrued > 0 ? approxAccrued.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '--'} {approxUnit}
-            </span>
+            {approxInterestMode !== 'hidden' && (
+              <span className="text-[10px]" style={{ color: TXT_SEC, whiteSpace: 'nowrap' }}>
+                ≈{fmt(approxInterestValue, 2)} {approxInterestUnit}
+              </span>
+            )}
           </div>
           {_lnIsOpt && (
             <div className="mt-2 flex items-center justify-between gap-2 rounded-md px-2 py-1" style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.11)', border: `1px solid ${DIVIDER}` }}>

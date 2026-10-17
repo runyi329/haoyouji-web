@@ -790,11 +790,37 @@ export function FunderOrderCard({
   // 结息面板：利息约等于快捷配置
   const [interestApproxConfig, setInterestApproxConfig] = useState<{ approxInterest: string; approxPaid: string }>({ approxInterest: 'U', approxPaid: 'U' });
   const _intSaveInterestApproxMutation = trpc.ledger.financeUpdateOrder.useMutation({
-    onSuccess: () => { toast.success('显示设置已保存'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onSuccess: () => {
+      toast.success('显示设置已保存');
+      void trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId });
+      void trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+    },
     onError: (err) => toast.error(err.message),
   });
   const _intSaveParticipantDisplayMutation = trpc.ledger.funderUpdateParticipantOrder.useMutation({
-    onSuccess: () => { toast.success('参与者显示设置已保存'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onSuccess: (result, variables) => {
+      const savedSnapshot = (result as any)?.snapshot;
+      if (savedSnapshot && typeof savedSnapshot === 'object') {
+        trpcUtils.ledger.funderAdminGetOrderViews.setData(
+          { ledgerId: variables.ledgerId },
+          (current: any) => {
+            if (!current) return current;
+            const patchOrder = (item: any) => {
+              const userId = Number(item?.participantInfo?.userId ?? item?.participantInfo?.user_id ?? 0);
+              return Number(item?.id) === Number(variables.orderId) && userId === Number(variables.userId)
+                ? { ...item, ...savedSnapshot }
+                : item;
+            };
+            if (Array.isArray(current)) return current.map(patchOrder);
+            return Array.isArray(current.orders) ? { ...current, orders: current.orders.map(patchOrder) } : current;
+          },
+        );
+      }
+      toast.success('参与者显示设置已保存');
+      void trpcUtils.ledger.funderGetOrderParticipants.invalidate({ orderId: variables.orderId, ledgerId: variables.ledgerId });
+      void trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId: variables.ledgerId });
+      void trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId: variables.ledgerId });
+    },
     onError: (err) => toast.error(err.message),
   });
   // 已结利息历史浮层
@@ -849,7 +875,12 @@ export function FunderOrderCard({
     onError: (err) => toast.error(err.message),
   });
   const _intSaveParticipantsMutation = trpc.ledger.funderSaveOrderParticipants.useMutation({
-    onSuccess: () => { toast.success('参与方配置已保存'); _intSetShowParticipants(null); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onSuccess: () => {
+      toast.success('参与方配置已保存');
+      _intSetShowParticipants(null);
+      void trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId });
+      void trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+    },
     onError: (err) => toast.error(err.message),
   });
   // 内部结息查询（仅当未传入 interestPayments 时启用）
@@ -1377,7 +1408,11 @@ export function FunderOrderCard({
   const [quickCollateralGapApprox, setQuickCollateralGapApprox] = useState<'hidden' | 'U' | 'CNY'>('hidden');
   const [collateralMarginAlertThreshold, setCollateralMarginAlertThreshold] = useState('');
   const _intSaveCollateralMutation = trpc.ledger.financeUpdateOrder.useMutation({
-    onSuccess: () => { toast.success('担保已保存'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onSuccess: () => {
+      toast.success('担保已保存');
+      void trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId });
+      void trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+    },
     onError: (err) => toast.error(err.message),
   });
   // 有 participantInfo 表示当前卡片已经是某位共同拥有者或参与者的独立订单视图。
@@ -1394,7 +1429,8 @@ export function FunderOrderCard({
   const _intSaveWalletCollateralMutation = trpc.ledger.funderSaveWalletCollateral.useMutation({
     onSuccess: () => {
       toast.success('钱包担保已冻结保存');
-      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+      void trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId });
+      void trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
       quickWalletCollateralBalancesQuery.refetch();
     },
     onError: (err) => toast.error(err.message),
@@ -5201,9 +5237,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 try { const rawDC = order.display_config; newDC = rawDC ? (typeof rawDC === 'string' ? JSON.parse(rawDC) : { ...rawDC }) : {}; } catch {}
                 newDC.approxInterest = interestApproxConfig.approxInterest;
                 newDC.approxPaid = interestApproxConfig.approxPaid;
-                if (_participantUserId) {
+                // 首位拥有者同样带有个人快照；只要当前卡片明确了 participantInfo，
+                // 显示设置就只能写回该人，不能意外写到物理主订单。
+                if (quickViewParticipantUserId) {
                   _intSaveParticipantDisplayMutation.mutate({
-                    orderId: Number(order.id), ledgerId, userId: Number(_participantUserId),
+                    orderId: Number(order.id), ledgerId, userId: Number(quickViewParticipantUserId),
                     snapshot: { display_config: JSON.stringify(newDC) },
                   });
                 } else {
@@ -5358,11 +5396,15 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
           orderId={order.id}
           ledgerId={ledgerId}
           initialNote={order.public_note || ''}
-          onSaved={(raw) => { order.public_note = raw; }}
+          onSaved={(raw) => {
+            order.public_note = raw;
+            void trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId });
+            void trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+          }}
           currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar || (membersData as any[])?.find((u: any) => u.userId === (currentUser as any).id)?.avatar || undefined } : undefined}
           isAdmin={isAdmin}
           membersData={membersData as any[]}
-          participantUserId={_participantUserId}
+          participantUserId={quickViewParticipantUserId || undefined}
           isSettled={isSettled}
         />}
       </div>}
