@@ -753,7 +753,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [newCollaboratorRole, setNewCollaboratorRole] = useState<'owner' | 'funder'>('owner');
   const [participantsSectionExpanded, setParticipantsSectionExpanded] = useState(false);
   const [ownerAddPanelExpanded, setOwnerAddPanelExpanded] = useState(false);
-  const [primaryOwnerEditorExpanded, setPrimaryOwnerEditorExpanded] = useState(true);
   const saveParticipantFormMutation = trpc.ledger.funderSaveParticipantFullConfig.useMutation({
     onSuccess: (_result, vars) => {
       trpcUtils.ledger.funderGetOrderParticipants.invalidate({ orderId: vars.orderId, ledgerId: vars.ledgerId });
@@ -1035,9 +1034,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       const nameDiff = a.participant.userName.localeCompare(b.participant.userName, 'zh-Hans-CN');
       return nameDiff !== 0 ? nameDiff : a.participant.userId - b.participant.userId;
     }), [participants]);
-  const ownerGroupSize = participants.filter(participant => participant.role === 'owner').length;
-  // 第一位拥有者继续使用主订单编辑内容；多人时把它收成独立抽屉，避免与下方成员编辑重复。
-  const hasPrimaryOwnerDrawer = Boolean(editingOrder?.id) && !isSnapshotScopedEdit && ownerGroupSize > 1;
   const editableParticipants = useMemo(() => displayParticipants.filter(({ participant }) => !(
     participant.role === 'owner' && Number(participant.userId) === Number(formData.userId)
   )), [displayParticipants, formData.userId]);
@@ -1071,9 +1067,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       ?? formData.userId
       ?? 0,
   );
-  useEffect(() => {
-    setPrimaryOwnerEditorExpanded(!hasPrimaryOwnerDrawer);
-  }, [editingOrder?.id, hasPrimaryOwnerDrawer]);
 
   const { data: funderUsers, isLoading: usersLoading } = trpc.ledger.funderGetFunderUsers.useQuery(
     { ledgerId, ...(adminOnly ? { roleFilter: "admin" as const } : {}), ...(financeOnly ? { financeOnly: true } : {}) },
@@ -1706,18 +1699,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       } else {
         toast.success('更新成功');
       }
-      // 多拥有者订单中，顶部只代表第一位拥有者的主订单内容。
-      // 保存后留在同一编辑页并收起该抽屉，方便继续管理其余成员。
-      if (hasPrimaryOwnerDrawer && !isLinkedStatusUpdate) {
-        setPrimaryOwnerEditorExpanded(false);
-        setParticipantsSectionExpanded(false);
-        setOwnerAddPanelExpanded(false);
-        refetchOrders();
-        trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
-        return;
-      }
       setShowForm(false);
       setEditingOrder(null);
+      editorRootOrderRef.current = null;
       setParticipants([]);
       setJointOrderSegments([]);
       participantsLoadedRef.current = null;
