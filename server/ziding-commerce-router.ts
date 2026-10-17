@@ -1239,19 +1239,25 @@ export const zidingCommerceRouter = router({
       await txConn.beginTransaction();
       const [existingRows] = await txConn.execute(`SELECT id FROM users WHERE username=? LIMIT 1 FOR UPDATE`, [input.username]);
       if ((existingRows as any[]).length) toError("BAD_REQUEST", "用户名已存在，请换一个用户名");
+      // 不论由哪位紫鼎管理员执行开通，新会员均统一归属项目负责人盈盈（susan）。
+      // 版本字段刻意留空，由现有推荐链继承负责人名下的紫鼎版本设置。
+      const referrerUserId = ZIDING_OWNER_USER_ID;
+      const [referrerRows] = await txConn.execute(`SELECT id FROM users WHERE id=? LIMIT 1 FOR UPDATE`, [referrerUserId]);
+      if (!((referrerRows as any[]) || []).length) toError("INTERNAL_SERVER_ERROR", "紫鼎项目负责人账号不存在，无法开通会员");
       const nickname = input.nickname || input.username;
       const [created] = await txConn.execute(
-        `INSERT INTO users (openId,username,passwordHash,name,loginMethod,role,version_key,version_switch_scope,lastSignedIn)
-         VALUES (?,?,?,?, 'password','parent',?,?,NOW())`,
-        [`ziding_${randomUUID()}`, input.username, passwordHash, nickname, ZIDING_PROJECT_KEY, ZIDING_PROJECT_KEY],
+        `INSERT INTO users (openId,username,passwordHash,name,loginMethod,role,version_key,version_switch_scope,invited_by_user_id,invited_at,lastSignedIn)
+         VALUES (?,?,?,?, 'password','parent',NULL,NULL,?,NOW(),NOW())`,
+        [`ziding_${randomUUID()}`, input.username, passwordHash, nickname, referrerUserId],
       );
       const userId = Number((created as any).insertId);
+      await txConn.execute(`UPDATE users SET invite_count=COALESCE(invite_count,0)+1 WHERE id=?`, [referrerUserId]);
       await txConn.execute(
         `INSERT INTO ziding_project_members (version_key,user_id,member_tier,project_role,is_active,created_by,updated_by)
          VALUES (?,?,'junior','user',1,?,?)`,
         [ZIDING_PROJECT_KEY, userId, actorUserId, actorUserId],
       );
-      await auditAdmin(txConn, actorUserId, "member_created", "member", userId, { username: input.username, nickname: input.nickname || null, tier: "junior" });
+      await auditAdmin(txConn, actorUserId, "member_created", "member", userId, { username: input.username, nickname: input.nickname || null, tier: "junior", referrerUserId });
       await txConn.commit();
       return { userId, username: input.username, nickname, initialPassword };
     } catch (error) {
