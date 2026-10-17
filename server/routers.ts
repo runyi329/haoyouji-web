@@ -11603,6 +11603,10 @@ ${klinesSummary}
         price: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).refine((value) => Number(value) > 0, '价格必须大于0'),
         targetPrice: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/).optional(),
         note: z.string().trim().max(500).optional(),
+        sharedIncomeAllocations: z.array(z.object({
+          recipientUserId: z.number().int().positive(),
+          amount: z.string().trim().regex(/^(?:0|[1-9]\d{0,14})(?:\.\d{1,2})?$/, '共享收益金额最多两位小数').refine((value) => Number(value) > 0, '共享收益金额必须大于0'),
+        })).max(20).optional(),
         clientRequestId: z.string().trim().min(12).max(64),
       }).superRefine((input, issue) => {
         if ((input.action === 'openLong' || input.action === 'openShort') && !input.instrumentType) {
@@ -11610,6 +11614,10 @@ ${klinesSummary}
         }
       }))
       .mutation(async ({ ctx, input }) => {
+        // 热预览只用于核对界面与计算，严禁把测试平仓或共享收益写入实际账本。
+        if (process.env.PREVIEW_READONLY === 'true') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '当前为只读热预览：可以查看共享收益分配建议，但不会写入任何账本流水' });
+        }
         const journal = await import('./ledger52-t0-journal');
         await journal.assertLedger52T0JournalAccess({
           id: ctx.user.id,
@@ -11646,6 +11654,7 @@ ${klinesSummary}
           price: input.price,
           targetPrice: input.targetPrice,
           note: input.note,
+          sharedIncomeAllocations: input.sharedIncomeAllocations,
           clientRequestId: input.clientRequestId,
         });
       }),

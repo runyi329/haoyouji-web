@@ -73,6 +73,8 @@ export type SaveT0JournalEntryInput = {
   price: string;
   targetPrice?: string;
   note?: string;
+  /** 仅正向平仓时可从本单管理员收益份额中划出的共享收益；服务端按当时快照复核。 */
+  sharedIncomeAllocations?: Array<{ recipientUserId: number; amount: string }>;
   clientRequestId: string;
 };
 
@@ -1123,6 +1125,26 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         COMMENT='52号账本T+0速记账本：管理员登记、关联用户共享的收益转出流水；不影响订单收益'
     `);
 
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledger52_t0_journal_shared_income_transfers (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        closing_entry_id BIGINT UNSIGNED NOT NULL,
+        source_user_id BIGINT UNSIGNED DEFAULT NULL,
+        recipient_user_id BIGINT UNSIGNED NOT NULL,
+        amount DECIMAL(18,2) NOT NULL,
+        source_net_pnl DECIMAL(36,18) NOT NULL,
+        manager_pool_amount DECIMAL(36,18) NOT NULL,
+        created_by_user_id INT NOT NULL,
+        created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_t0_shared_income_closing_recipient (ledger_id, user_id, closing_entry_id, recipient_user_id),
+        KEY idx_t0_shared_income_recipient (ledger_id, user_id, recipient_user_id, created_at),
+        KEY idx_t0_shared_income_closing (ledger_id, user_id, closing_entry_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        COMMENT='52号账本T+0：仅从平仓管理员份额划出的共享收益；不改写原订单分佣快照'
+    `);
     const [payoutDirectionColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_payout_logs LIKE 'direction'`);
     if (asRows(payoutDirectionColumns).length === 0) {
       // 历史账本流水均是原“提现”语义，迁移后保留为 withdrawal，绝不改变历史金额。
@@ -1621,6 +1643,42 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
     getTakeProfitPlansByEntryId(conn, entryIds),
   ]);
 
+  const [sharedIncomeTransferResult] = await conn.execute(
+    `SELECT transfer.id, transfer.closing_entry_id, transfer.source_user_id, transfer.recipient_user_id,
+            transfer.amount, transfer.source_net_pnl, transfer.manager_pool_amount, transfer.created_at,
+            COALESCE(NULLIF(source_user.name, ''), NULLIF(source_user.username, ''), CONCAT('用户#', transfer.source_user_id)) AS source_user_name,
+            COALESCE(NULLIF(recipient_user.name, ''), NULLIF(recipient_user.username, ''), CONCAT('用户#', transfer.recipient_user_id)) AS recipient_user_name,
+            recipient_user.username AS recipient_username
+       FROM ledger52_t0_journal_shared_income_transfers transfer
+       LEFT JOIN users source_user ON source_user.id = transfer.source_user_id
+       LEFT JOIN users recipient_user ON recipient_user.id = transfer.recipient_user_id
+      WHERE transfer.ledger_id = ?${isAdminScope ? ' AND transfer.user_id = ?' : ' AND transfer.recipient_user_id = ?'}
+      ORDER BY transfer.created_at DESC, transfer.id DESC
+      LIMIT 200`,
+    isAdminScope
+      ? [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId]
+      : [LEDGER_52_T0_JOURNAL_ID, relatedUserId],
+  );
+  // 共享收益候选人仅按资金账本中已登记的“投入”判断是否已出本金；管理员端一次读取全部用户汇总。
+  const [payoutDepositTotalResult] = isAdminScope
+    ? await conn.execute(
+      `SELECT related_user_id, COALESCE(SUM(amount), 0) AS cumulative_deposit_amount
+         FROM ledger52_t0_journal_payout_logs
+        WHERE ledger_id = ? AND user_id = ? AND direction = 'deposit'
+        GROUP BY related_user_id`,
+      [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
+    )
+    : [[]];
+  const [payoutCashFlowResult] = isAdminScope
+    ? await conn.execute(
+      `SELECT related_user_id, DATE_FORMAT(occurred_on, '%Y-%m-%d') AS occurred_on, direction, amount
+         FROM ledger52_t0_journal_payout_logs
+        WHERE ledger_id = ? AND user_id = ?
+        ORDER BY occurred_on ASC, id ASC`,
+      [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
+    )
+    : [[]];
+
   return {
     viewerMode: scope.mode,
     viewerRelatedUserId: isAdminScope ? undefined : relatedUserId,
@@ -1639,6 +1697,29 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
     relatedFunds: asRows(relatedFundResult).map(mapRelatedFund),
     profitShareSnapshots: asRows(profitShareSnapshotResult).map(mapProfitShareSnapshot),
     profitShareRules: asRows(profitShareRuleResult).map(mapProfitShareRule),
+    sharedIncomeTransfers: asRows(sharedIncomeTransferResult).map((transfer) => ({
+      id: String(transfer.id),
+      closingEntryId: String(transfer.closing_entry_id),
+      sourceUserId: toNumber(transfer.source_user_id),
+      sourceUserName: String(transfer.source_user_name || `用户#${toNumber(transfer.source_user_id)}`),
+      recipientUserId: toNumber(transfer.recipient_user_id),
+      recipientUserName: String(transfer.recipient_user_name || `用户#${toNumber(transfer.recipient_user_id)}`),
+      recipientUsername: transfer.recipient_username ? String(transfer.recipient_username) : undefined,
+      amount: toNumber(transfer.amount),
+      sourceNetPnl: toNumber(transfer.source_net_pnl),
+      managerPoolAmount: toNumber(transfer.manager_pool_amount),
+      createdAt: isoTime(transfer.created_at),
+    })),
+    payoutDepositTotals: asRows(payoutDepositTotalResult).map((row) => ({
+      relatedUserId: toNumber(row.related_user_id),
+      cumulativeDepositAmount: toNumber(row.cumulative_deposit_amount),
+    })),
+    payoutCashFlows: asRows(payoutCashFlowResult).map((row) => ({
+      relatedUserId: toNumber(row.related_user_id),
+      occurredOn: String(row.occurred_on || "").slice(0, 10),
+      direction: String(row.direction) === "deposit" ? "deposit" : "withdrawal",
+      amount: toNumber(row.amount),
+    })),
     recoverableEntries: asRows(recoverableAuditResult)
       .map(mapRecoverableAudit)
       .filter((item): item is NonNullable<typeof item> => Boolean(item)),
@@ -2570,6 +2651,142 @@ async function writeClosingProfitShareSnapshots(tx: any, input: {
   }
 }
 
+type SharedIncomeTransferAllocation = { recipientUserId: number; amount: number };
+
+function normalizeSharedIncomeAllocations(raw: SaveT0JournalEntryInput["sharedIncomeAllocations"]): SharedIncomeTransferAllocation[] {
+  const totals = new Map<number, number>();
+  for (const item of raw ?? []) {
+    const recipientUserId = Number(item?.recipientUserId);
+    const amount = Number(item?.amount);
+    if (!Number.isInteger(recipientUserId) || recipientUserId <= 0 || !Number.isFinite(amount) || amount <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "共享收益对象或金额无效" });
+    }
+    const next = (totals.get(recipientUserId) || 0) + amount;
+    if (next > 10_000_000) throw new TRPCError({ code: "BAD_REQUEST", message: "共享收益金额超出允许范围" });
+    totals.set(recipientUserId, next);
+  }
+  return Array.from(totals.entries()).map(([recipientUserId, amount]) => ({
+    recipientUserId,
+    // 与账本资金流水一致，按 USDT 分处理，避免浮点尾差被写入审计记录。
+    amount: Math.round(amount * 100) / 100,
+  })).filter((item) => item.amount > 0);
+}
+
+/**
+ * 平仓共享收益只能动用这笔订单按开仓快照归属于管理员的正向净收益。
+ * 计算逐 FIFO 开仓切片进行：每片先扣相应开仓费和本次平仓费，再以管理员快照百分比取池子。
+ */
+async function calculateClosingManagerSharePool(tx: any, input: {
+  actorUserId: number;
+  positionRows: any[];
+  action: T0JournalAction;
+  targetPrice: string;
+  relatedUserId: number;
+  relatedFundId: number;
+  quantity: string;
+  closePrice: string;
+}) {
+  const matches = buildProfitShareOpeningMatches(
+    input.positionRows,
+    input.action,
+    input.targetPrice,
+    input.relatedUserId,
+    input.relatedFundId,
+    quantityToCents(input.quantity),
+  );
+  if (matches.length === 0) return { managerPoolAmount: 0, sourceNetPnl: 0 };
+  const openingById = new Map(input.positionRows.map((row) => [toNumber(row.id), row]));
+  const snapshots = await getEntryProfitShareSnapshotRows(tx, {
+    actorUserId: input.actorUserId,
+    entryIds: matches.map((match) => match.openingEntryId),
+    lock: true,
+  });
+  const snapshotsByOpening = new Map<number, any[]>();
+  for (const snapshot of snapshots) {
+    const openingEntryId = toNumber(snapshot.opening_entry_id);
+    snapshotsByOpening.set(openingEntryId, [...(snapshotsByOpening.get(openingEntryId) || []), snapshot]);
+  }
+  const closeQuantity = Number(input.quantity);
+  const closePrice = Number(input.closePrice);
+  const closingFee = closeQuantity * closePrice * Number(OKX_VIP2_TAKER_FEE_RATE);
+  let sourceNetPnl = 0;
+  let managerPoolAmount = 0;
+  const side = actionSide(input.action);
+  for (const match of matches) {
+    const opening = openingById.get(match.openingEntryId);
+    if (!opening) continue;
+    const quantity = match.matchedQuantityCents / 100;
+    const openingQuantity = Math.max(0.000001, toNumber(opening.quantity));
+    const openingPrice = toNumber(opening.price);
+    const grossPnl = side === "long"
+      ? (closePrice - openingPrice) * quantity
+      : (openingPrice - closePrice) * quantity;
+    const allocatedOpeningFee = toNumber(opening.fee_usdt) * (quantity / openingQuantity);
+    const allocatedClosingFee = closeQuantity > 0 ? closingFee * (quantity / closeQuantity) : 0;
+    const segmentNetPnl = grossPnl - allocatedOpeningFee - allocatedClosingFee;
+    sourceNetPnl += segmentNetPnl;
+    const managerPercentage = (snapshotsByOpening.get(match.openingEntryId) || [])
+      .filter((snapshot) => toNumber(snapshot.beneficiary_user_id) === input.actorUserId)
+      .reduce((total, snapshot) => total + toNumber(snapshot.share_percentage), 0);
+    // 共享收益不是向亏损切片追偿；仅可从该切片实际归属管理员的正收益中划出。
+    managerPoolAmount += Math.max(0, segmentNetPnl) * Math.max(0, managerPercentage) / 100;
+  }
+  return {
+    sourceNetPnl: Math.round(sourceNetPnl * 100000000) / 100000000,
+    managerPoolAmount: Math.floor((managerPoolAmount + 1e-9) * 100) / 100,
+  };
+}
+
+async function writeSharedIncomeTransfers(tx: any, input: {
+  actorUserId: number;
+  closingEntryId: number;
+  sourceUserId: number;
+  positionRows: any[];
+  action: T0JournalAction;
+  targetPrice: string;
+  relatedFundId: number;
+  quantity: string;
+  closePrice: string;
+  allocations?: SaveT0JournalEntryInput["sharedIncomeAllocations"];
+}) {
+  const allocations = normalizeSharedIncomeAllocations(input.allocations);
+  if (allocations.length === 0) return;
+  if (input.sourceUserId <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "未关联用户的订单不可分配共享收益" });
+  }
+  const { managerPoolAmount, sourceNetPnl } = await calculateClosingManagerSharePool(tx, input);
+  if (sourceNetPnl <= 0 || managerPoolAmount <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "仅有正向净收益且存在管理员收益份额的平仓订单可分配共享收益" });
+  }
+  const allocatedTotal = allocations.reduce((total, item) => total + item.amount, 0);
+  if (allocatedTotal - managerPoolAmount > 0.00001) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `共享收益合计不可超过本单管理员可用份额 ${managerPoolAmount.toFixed(2)} U` });
+  }
+  for (const allocation of allocations) {
+    if (allocation.recipientUserId === input.sourceUserId || allocation.recipientUserId === input.actorUserId) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "共享收益仅可分配给其他关联用户" });
+    }
+    const [recipientRows] = await tx.execute(`SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE`, [allocation.recipientUserId]);
+    if (!asRows(recipientRows)[0]) throw new TRPCError({ code: "NOT_FOUND", message: "共享收益对象不存在或已失效" });
+    await tx.execute(
+      `INSERT INTO ledger52_t0_journal_shared_income_transfers
+        (ledger_id, user_id, closing_entry_id, source_user_id, recipient_user_id, amount, source_net_pnl, manager_pool_amount, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        LEDGER_52_T0_JOURNAL_ID,
+        input.actorUserId,
+        input.closingEntryId,
+        input.sourceUserId,
+        allocation.recipientUserId,
+        allocation.amount.toFixed(2),
+        sourceNetPnl.toFixed(18),
+        managerPoolAmount.toFixed(18),
+        input.actorUserId,
+      ],
+    );
+  }
+}
+
 async function restoreEntryProfitShareSnapshots(tx: any, input: { actorUserId: number; entryId: number; snapshots: any[] }) {
   for (const snapshot of input.snapshots) {
     const openingEntryId = toNumber(snapshot.opening_entry_id ?? snapshot.openingEntryId);
@@ -3251,6 +3468,18 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
           targetPrice: String(storedTargetPrice),
           relatedFundId: relatedFund?.id ?? 0,
           quantity: normalizedQuantity,
+        });
+        await writeSharedIncomeTransfers(tx, {
+          actorUserId: input.actorUserId,
+          closingEntryId: entryId,
+          sourceUserId: relatedUserId,
+          positionRows: positionRowsForProfitShare,
+          action: input.action,
+          targetPrice: String(storedTargetPrice),
+          relatedFundId: relatedFund?.id ?? 0,
+          quantity: normalizedQuantity,
+          closePrice: String(effectivePrice),
+          allocations: input.sharedIncomeAllocations,
         });
       }
     }
