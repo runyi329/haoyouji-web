@@ -58,6 +58,42 @@ type JointOrderSegmentDraft = {
   display_config: Record<string, boolean | string>;
 };
 
+const formatTradingFeeRate = (value: unknown) => {
+  const rate = Number(value);
+  return Number.isFinite(rate) && rate >= 0 ? rate.toFixed(1) : '2.0';
+};
+
+const getWalletAssetDisplayDigits = (assetCode: string, amount: number) => {
+  if (['USDT', 'CNY'].includes(String(assetCode || '').toUpperCase())) return 2;
+  const absoluteAmount = Math.abs(amount);
+  if (absoluteAmount >= 1_000) return 2;
+  if (absoluteAmount >= 1) return 4;
+  if (absoluteAmount >= 0.01) return 6;
+  return 8;
+};
+
+const formatWalletAssetAmount = (assetCode: string, value: unknown) => {
+  const amount = Number(value ?? 0);
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const code = String(assetCode || '').toUpperCase();
+  const maximumFractionDigits = getWalletAssetDisplayDigits(code, safeAmount);
+  return safeAmount.toLocaleString('zh-CN', {
+    minimumFractionDigits: ['USDT', 'CNY'].includes(code) ? 2 : 0,
+    maximumFractionDigits,
+  });
+};
+
+const formatWalletAssetInput = (assetCode: string, value: unknown) => {
+  const amount = Number(value ?? 0);
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const code = String(assetCode || '').toUpperCase();
+  return safeAmount.toLocaleString('en-US', {
+    useGrouping: false,
+    minimumFractionDigits: ['USDT', 'CNY'].includes(code) ? 2 : 0,
+    maximumFractionDigits: getWalletAssetDisplayDigits(code, safeAmount),
+  });
+};
+
 function readJointOrderSegments(value: unknown): JointOrderSegmentDraft[] {
   let raw: unknown = value;
   try { if (typeof value === 'string') raw = JSON.parse(value); } catch { return []; }
@@ -87,7 +123,7 @@ function readJointOrderSegments(value: unknown): JointOrderSegmentDraft[] {
       profit_share_ratio: String(item.profit_share_ratio ?? ''),
       profit_share_type: item.profit_share_type === 'coin' ? 'coin' : 'interest',
       commission_share: String(item.commission_share ?? ''),
-      trading_fee_rate_per_mille: String(item.trading_fee_rate_per_mille ?? '2'),
+      trading_fee_rate_per_mille: formatTradingFeeRate(item.trading_fee_rate_per_mille),
       trading_fee_status: ['unpaid', 'half_paid', 'paid'].includes(String(item.trading_fee_status)) ? item.trading_fee_status : 'unpaid',
       collateral_assets: Array.isArray(item.collateral_assets) ? item.collateral_assets.flatMap((asset: any) => {
         const coin = String(asset?.coin || '').trim().toUpperCase();
@@ -288,7 +324,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     ownerVisibleOwnerIds: [] as number[],
     tags: [] as string[],
     principalLentOut: false,
-    tradingFeeRate: '2',
+    tradingFeeRate: '2.0',
     tradingFeeStatus: 'unpaid' as 'unpaid' | 'half_paid' | 'paid',
     brokerName: '',
     brokerAccount: '',
@@ -318,6 +354,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   // 担保货币编辑模式：编辑已有订单时默认只读，点「编辑」才可改；新建订单时恒为可编辑
   const [collateralEditMode, setCollateralEditMode] = useState(false);
   const [walletCollateralEditMode, setWalletCollateralEditMode] = useState(false);
+  // 只缓存本次输入草稿：界面按钱包规则收敛无意义尾零，实际冻结数量仍保留原始精度。
+  const [walletCollateralInputDrafts, setWalletCollateralInputDrafts] = useState<Record<string, string>>({});
   // 共享担保模式：none=不共享, self=本人订单共享, cross=与他人共享（占位）
   const [collateralShareMode, setCollateralShareMode] = useState<'none' | 'self' | 'cross'>('none');
   // 共享担保确认弹窗
@@ -585,8 +623,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     allowUserImageDownload: true,
     // 共同拥有者的个人订单视图固定显示本人姓名。
     ownerNameDisplay: 'self',
-    // 52号账本资金属性：仅控制前端标签展示，不参与任何计算；空值表示未标记。
-    assetFundingType: '',
+    // 52号账本资金属性：仅控制前端标签展示，不参与任何计算；默认展示为融资金额。
+    assetFundingType: 'financing',
     // 兼容已保存的早期“自有资金”展示标记。
     selfFundedAsset: false,
     // 左上角主展示由订单按需保存；不设默认值，以保持历史订单原有的展示口径。
@@ -708,13 +746,18 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   };
   // 编辑已有订单时加载现有参与者
   const editingOrderId = editingOrder?.id ?? null;
-  const { data: existingParticipantsData, isLoading: existingParticipantsInitialLoading } = trpc.ledger.funderGetOrderParticipants.useQuery(
+  const {
+    data: existingParticipantsData,
+    isLoading: existingParticipantsInitialLoading,
+    isFetching: existingParticipantsFetching,
+  } = trpc.ledger.funderGetOrderParticipants.useQuery(
     { orderId: editingOrderId ?? 0, ledgerId },
     {
       enabled: !!editingOrderId && ledgerId > 0,
-      // 打开编辑页时由 handleOpenEdit 主动失效并读取一次；编辑过程中不因组件重挂载重复刷新。
+      // 关闭个人订单编辑后再次打开同一主订单，也必须重新读取刚保存的个人快照。
+      // 不能沿用上一次打开时的缓存，否则展示开关会看起来“保存成功但回退”。
       staleTime: 60_000,
-      refetchOnMount: false,
+      refetchOnMount: 'always',
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
     }
@@ -724,7 +767,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const participantsLoadedRef = useRef<string | null>(null);
   React.useEffect(() => {
     const loadKey = editingOrderId ? String(editingOrderId) : null;
-    if (existingParticipantsInitialLoading || !existingParticipantsData || !loadKey || participantsLoadedRef.current === loadKey) return;
+    // 缓存数据会在重新打开编辑页时先出现；只在最新请求完成后回填，避免旧快照覆盖刚保存的开关。
+    if (existingParticipantsInitialLoading || existingParticipantsFetching || !existingParticipantsData || !loadKey || participantsLoadedRef.current === loadKey) return;
     participantsLoadedRef.current = loadKey;
     const loaded = (existingParticipantsData.participants as any[]).map((p: any) => ({
       userId: p.user_id,
@@ -754,14 +798,14 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       principalLentOut: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; const config = snapshot?.display_config ? (typeof snapshot.display_config === 'string' ? JSON.parse(snapshot.display_config) : snapshot.display_config) : {}; const isSelfFunded = config?.assetFundingType === 'self' || config?.selfFundedAsset === true || config?.selfFundedAsset === 'true'; return !isSelfFunded && (snapshot?.principal_lent_out === 1 || snapshot?.principal_lent_out === true); } catch { return false; } })(),
       collateralShareMode: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.collateral_share_mode === 'self' || snapshot?.collateral_share_mode === 'cross' ? snapshot.collateral_share_mode : 'none'; } catch { return 'none'; } })(),
       collateralSource: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.collateral_source || null; } catch { return null; } })(),
-      tradingFeeRate: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.trading_fee_rate_per_mille != null ? String(snapshot.trading_fee_rate_per_mille) : '2'; } catch { return '2'; } })(),
+      tradingFeeRate: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return formatTradingFeeRate(snapshot?.trading_fee_rate_per_mille); } catch { return '2.0'; } })(),
       tradingFeeStatus: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return ['unpaid', 'half_paid', 'paid'].includes(snapshot?.trading_fee_status) ? snapshot.trading_fee_status : 'unpaid'; } catch { return 'unpaid'; } })(),
       visibilityMode: (['self', 'total', 'breakdown', 'partners'].includes(p.visibility_mode) ? p.visibility_mode : 'self') as ParticipantForm['visibilityMode'],
       visibleOwnerIds: (() => { try { const ids = p.visible_owner_ids ? (typeof p.visible_owner_ids === 'string' ? JSON.parse(p.visible_owner_ids) : p.visible_owner_ids) : []; return Array.isArray(ids) ? ids.map(Number).filter(Boolean) : []; } catch { return []; } })(),
       expanded: false,
     }));
     setParticipants(loaded as ParticipantForm[]);
-  }, [existingParticipantsData, editingOrderId, existingParticipantsInitialLoading]);
+  }, [existingParticipantsData, editingOrderId, existingParticipantsFetching, existingParticipantsInitialLoading]);
   const participantsHydrating = Boolean(editingOrderId)
     && participantsLoadedRef.current !== String(editingOrderId)
     && existingParticipantsInitialLoading;
@@ -973,6 +1017,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       ...previous.filter((asset) => !isWalletCollateralAsset(asset)),
       ...currentAssets,
     ]);
+    setWalletCollateralInputDrafts({});
     walletCollateralHydrationRef.current = hydrationKey;
   }, [editingOrder?.id, walletCollateralUserId, walletCollateralContributorsQuery.data, currentWalletCollateralContributor]);
 
@@ -1796,13 +1841,19 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     onError: (err) => toast.error(err.message),
   });
   const updateParticipantOrderMutation = trpc.ledger.funderUpdateParticipantOrder.useMutation({
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
       toast.success('参与者子订单已保存');
       setShowForm(false);
       setEditingOrder(null);
       setParticipants([]);
       setJointOrderSegments([]);
       participantsLoadedRef.current = null;
+      // 个人完整编辑直接写 order_snapshot。预热最新查询缓存，确保返回主订单后再选此人时
+      // 所有展示开关、金额和备注均来自本次保存结果，而不是上次打开时的缓存。
+      void trpcUtils.ledger.funderGetOrderParticipants.fetch({
+        orderId: variables.orderId,
+        ledgerId: variables.ledgerId,
+      }).catch(() => undefined);
       refetchOrders();
       trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
       trpcUtils.ledger.financeGetOrders.invalidate({ ledgerId });
@@ -1991,7 +2042,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       ownerVisibleOwnerIds: [] as number[],
       tags: [] as string[],
       principalLentOut: false,
-      tradingFeeRate: '2',
+      tradingFeeRate: '2.0',
       tradingFeeStatus: 'unpaid' as 'unpaid' | 'half_paid' | 'paid',
       brokerName: '',
       brokerAccount: '',
@@ -2004,6 +2055,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'USDT', buyQty: '' });
     interestBaseTouchedRef.current = false; // 新建订单：允许融资金额(U)自动带入计息基数
     setCollateralAssets([]);
+    setWalletCollateralInputDrafts({});
     setCollateralEditMode(true); // 新建订单：担保货币恒为可编辑
     setWalletCollateralEditMode(true);
     setCollateralShareMode('none');
@@ -2112,7 +2164,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         : (() => { try { const ids = typeof (order as any).visible_owner_ids === 'string' ? JSON.parse((order as any).visible_owner_ids) : []; return Array.isArray(ids) ? ids.map(Number).filter(Boolean) : []; } catch { return []; } })(),
       tags: (() => { try { const t = order.tags; return Array.isArray(t) ? t : (typeof t === 'string' ? JSON.parse(t) : []); } catch { return []; } })(),
       principalLentOut: !!(order.principal_lent_out) && !(editDisplayConfig?.assetFundingType === 'self' || editDisplayConfig?.selfFundedAsset === true || editDisplayConfig?.selfFundedAsset === 'true'),
-      tradingFeeRate: order.trading_fee_rate_per_mille != null ? String(order.trading_fee_rate_per_mille) : '2',
+      tradingFeeRate: formatTradingFeeRate(order.trading_fee_rate_per_mille),
       tradingFeeStatus: (['unpaid', 'half_paid', 'paid'].includes(order.trading_fee_status) ? order.trading_fee_status : 'unpaid') as 'unpaid' | 'half_paid' | 'paid',
       brokerName: order.broker_name || '',
       brokerAccount: order.broker_account || '',
@@ -2169,6 +2221,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         setCollateralAssets([]);
       }
     } catch { setCollateralAssets([]); }
+    setWalletCollateralInputDrafts({});
     // 编辑已有订单：担保货币默认只读态，点「编辑」才可改
     setCollateralEditMode(false);
     setWalletCollateralEditMode(false);
@@ -2287,6 +2340,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
           || mergedDisplayConfig.assetFundingType === 'financing'
           || mergedDisplayConfig.selfFundedAsset === true
           || mergedDisplayConfig.selfFundedAsset === 'true';
+        // 空值来自旧版本的默认配置；当前选择器默认是“融资金额”，
+        // 读取旧订单时同步归一，保证编辑中的实时预览立即出现“融”标识。
+        if (!hasFundingAssetTag) {
+          mergedDisplayConfig.assetFundingType = 'financing';
+        }
         if (order.asset_type === 'crypto_option' && hasFundingAssetTag && safeConfig.showGreeksManualOverride !== true) {
           mergedDisplayConfig.showGreeks = true;
         }
@@ -2543,7 +2601,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       collateralShareMode: collateralShareMode !== 'none' ? collateralShareMode : undefined,
       collateralSource: orderCollateralSourceDraft,
       principalLentOut: effectivePrincipalLentOut,
-      tradingFeeRate: ledgerId === 52 ? (Number.isFinite(Number(formData.tradingFeeRate)) ? Math.max(0, Number(formData.tradingFeeRate)) : 2) : undefined,
+      tradingFeeRate: ledgerId === 52 ? Number(formatTradingFeeRate(formData.tradingFeeRate)) : undefined,
       tradingFeeStatus: ledgerId === 52 ? formData.tradingFeeStatus : undefined,
       orderFillStatus: formData.orderFillStatus,
       orderPerspective: formData.orderPerspective,
@@ -3981,10 +4039,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       <span key={`manual-${index}`} className="rounded-md bg-blue-100 px-2 py-1 text-[11px] font-medium text-blue-700">手工 · {asset.qty} {asset.coin}</span>
                     ))}
                     {walletCollateralContributors.map((contributor) => contributor.assets.map((asset, index) => (
-                      <span key={`wallet-${contributor.userId}-${index}`} className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">{contributor.name} · {asset.qty} {asset.coin}</span>
+                      <span key={`wallet-${contributor.userId}-${index}`} className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">{contributor.name} · {formatWalletAssetAmount(asset.coin, asset.qty)} {asset.coin}</span>
                     )))}
                     {!editingOrder?.id && collateralAssets.filter((asset) => isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').map((asset, index) => (
-                      <span key={`wallet-draft-${index}`} className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">钱包待冻结 · {asset.qty} {asset.coin}</span>
+                      <span key={`wallet-draft-${index}`} className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">钱包待冻结 · {formatWalletAssetAmount(asset.coin, asset.qty)} {asset.coin}</span>
                     ))}
                     {collateralAssets.filter((asset) => !isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').length === 0 && walletCollateralContributors.length === 0 && (!editingOrder?.id && collateralAssets.filter((asset) => isWalletCollateralAsset(asset) && asset.coin && asset.qty !== '').length === 0) && (
                       <span className="text-[11px] text-slate-400">暂无担保物</span>
@@ -4432,7 +4490,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         <div key={contributor.userId} className="flex flex-wrap items-center gap-1.5 text-[11px] leading-5">
                           <span className="font-semibold text-amber-900">{contributor.name}</span>
                           <span className="text-amber-500">·</span>
-                          {contributor.assets.map((asset, index) => <span key={`${contributor.userId}-${asset.coin}-${index}`} className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">{asset.qty} {asset.coin}</span>)}
+                          {contributor.assets.map((asset, index) => <span key={`${contributor.userId}-${asset.coin}-${index}`} className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">{formatWalletAssetAmount(asset.coin, asset.qty)} {asset.coin}</span>)}
                         </div>
                       ))}
                     </div>
@@ -4471,27 +4529,38 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         const frozen = Number(asset.frozenBalance ?? 0);
                         const selectedAmount = Number(selected?.qty ?? 0);
                         const maximum = Math.max(0, available + selectedAmount);
-                        const fractionDigits = assetCode === 'CNY' ? 2 : assetCode === 'USDT' ? 4 : 8;
+                        const selectedInputValue = selected
+                          ? (walletCollateralInputDrafts[assetCode] ?? formatWalletAssetInput(assetCode, selected.qty))
+                          : '';
                         const inputStep = assetCode === 'CNY' ? '0.01' : assetCode === 'USDT' ? '0.0001' : '0.00000001';
                         return (
                           <div key={assetCode} className="rounded-lg border border-amber-100 bg-white px-3 py-2.5">
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
                                 <div className="text-sm font-semibold text-gray-800">{assetCode} <span className="text-xs font-normal text-gray-400">{asset.assetName || ''}</span></div>
-                                <div className="mt-0.5 text-[11px] text-gray-500">可用 {available.toLocaleString('zh-CN', { maximumFractionDigits: fractionDigits })} · 已冻结 {frozen.toLocaleString('zh-CN', { maximumFractionDigits: fractionDigits })}</div>
+                                <div className="mt-0.5 text-[11px] text-gray-500">可用 {formatWalletAssetAmount(assetCode, available)} · 已冻结 {formatWalletAssetAmount(assetCode, frozen)}</div>
                               </div>
                               {selected ? (
                                 <button
                                   type="button"
                                   disabled={!walletCollateralEditMode && !!editingOrder?.id}
-                                  onClick={() => setCollateralAssets((previous) => previous.filter((item) => !(isWalletCollateralAsset(item) && item.coin === assetCode)))}
+                                  onClick={() => {
+                                    setCollateralAssets((previous) => previous.filter((item) => !(isWalletCollateralAsset(item) && item.coin === assetCode)));
+                                    setWalletCollateralInputDrafts((previous) => {
+                                      const { [assetCode]: _, ...remaining } = previous;
+                                      return remaining;
+                                    });
+                                  }}
                                   className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-500 disabled:opacity-50"
                                 >移除</button>
                               ) : (
                                 <button
                                   type="button"
                                   disabled={available <= 0 || (!walletCollateralEditMode && !!editingOrder?.id)}
-                                  onClick={() => setCollateralAssets((previous) => [...previous, { coin: assetCode, qty: '', note: '钱包担保冻结', source: 'wallet' }])}
+                                  onClick={() => {
+                                    setCollateralAssets((previous) => [...previous, { coin: assetCode, qty: '', note: '钱包担保冻结', source: 'wallet' }]);
+                                    setWalletCollateralInputDrafts((previous) => ({ ...previous, [assetCode]: '' }));
+                                  }}
                                   className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 disabled:opacity-50"
                                 >选择</button>
                               )}
@@ -4503,14 +4572,22 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                                   min="0"
                                   max={maximum > 0 ? maximum : undefined}
                                   step={inputStep}
-                                  value={selected.qty}
+                                  value={selectedInputValue}
                                   disabled={!walletCollateralEditMode && !!editingOrder?.id}
-                                  onChange={(event) => setCollateralAssets((previous) => previous.map((item) => isWalletCollateralAsset(item) && item.coin === assetCode ? { ...item, qty: event.target.value, source: 'wallet' } : item))}
-                                  placeholder={`最多 ${maximum.toLocaleString('zh-CN', { maximumFractionDigits: fractionDigits })}`}
+                                  onChange={(event) => {
+                                    const value = event.target.value;
+                                    setWalletCollateralInputDrafts((previous) => ({ ...previous, [assetCode]: value }));
+                                    setCollateralAssets((previous) => previous.map((item) => isWalletCollateralAsset(item) && item.coin === assetCode ? { ...item, qty: value, source: 'wallet' } : item));
+                                  }}
+                                  onBlur={() => setWalletCollateralInputDrafts((previous) => ({ ...previous, [assetCode]: formatWalletAssetInput(assetCode, selected.qty) }))}
+                                  placeholder={`最多 ${formatWalletAssetAmount(assetCode, maximum)}`}
                                   className="min-w-0 flex-1 rounded-lg border border-amber-200 px-3 py-2 text-sm font-semibold outline-none focus:border-amber-500 disabled:bg-gray-50"
                                 />
                                 <span className="text-xs font-semibold text-amber-700">{assetCode}</span>
-                                <button type="button" disabled={!walletCollateralEditMode && !!editingOrder?.id} onClick={() => setCollateralAssets((previous) => previous.map((item) => isWalletCollateralAsset(item) && item.coin === assetCode ? { ...item, qty: String(maximum), source: 'wallet' } : item))} className="text-xs font-semibold text-amber-700 disabled:opacity-50">全部</button>
+                                <button type="button" disabled={!walletCollateralEditMode && !!editingOrder?.id} onClick={() => {
+                                  setCollateralAssets((previous) => previous.map((item) => isWalletCollateralAsset(item) && item.coin === assetCode ? { ...item, qty: String(maximum), source: 'wallet' } : item));
+                                  setWalletCollateralInputDrafts((previous) => ({ ...previous, [assetCode]: formatWalletAssetInput(assetCode, maximum) }));
+                                }} className="text-xs font-semibold text-amber-700 disabled:opacity-50">全部</button>
                               </div>
                             )}
                           </div>
@@ -4901,6 +4978,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                               step="0.1"
                               value={formData.tradingFeeRate}
                               onChange={e => setFormData(d => ({ ...d, tradingFeeRate: e.target.value }))}
+                              onBlur={() => setFormData(d => ({ ...d, tradingFeeRate: formatTradingFeeRate(d.tradingFeeRate) }))}
                               className="w-16 rounded-lg border border-blue-200 bg-white px-2 py-1.5 text-center text-sm font-semibold text-blue-700 outline-none focus:border-blue-500"
                             />
                             <span className="text-sm font-medium text-gray-500">‰</span>
@@ -5575,7 +5653,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       principalLentOut: false,
                       collateralShareMode: 'none' as const,
                       collateralSource: null,
-                      tradingFeeRate: '2',
+                      tradingFeeRate: '2.0',
                       tradingFeeStatus: 'unpaid' as const,
                       visibilityMode: 'self' as const,
                       visibleOwnerIds: [],

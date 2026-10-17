@@ -1757,7 +1757,9 @@ export function FunderOrderCard({
     ? 'financing'
     : financingDisplayConfig?.assetFundingType === 'self' || financingDisplayConfig?.selfFundedAsset === true || financingDisplayConfig?.selfFundedAsset === 'true'
       ? 'self'
-      : null;
+      // 编辑器默认选择“融资金额”。历史订单虽未保存该字段，也须按同一口径展示，
+      // 避免订单模式和实时预览的资金属性标识不一致。
+      : 'financing';
   const hasExplicitPrincipalLentOut = (order.principal_lent_out === 1 || order.principal_lent_out === true)
     && assetFundingType !== 'self';
   const primaryAmountLabel = hasExplicitPrincipalLentOut ? '借出本金' : assetFundingType === 'self' ? '自有资金' : '融资金额';

@@ -1853,7 +1853,9 @@ export function FunderOrderCardV2Silver({
     ? 'financing'
     : cardDisplayConfig.assetFundingType === 'self' || cardDisplayConfig.selfFundedAsset === true || cardDisplayConfig.selfFundedAsset === 'true'
       ? 'self'
-      : null;
+      // 编辑器默认选择“融资金额”。未保存该字段的历史订单也按此默认值展示，
+      // 使卡片模式与订单模式、实时预览保持一致。
+      : 'financing';
   const primaryAmountLabel = cardHasExplicitPrincipalLentOut ? '借出本金' : assetFundingType === 'self' ? '自有资金' : '融资金额';
   // 52号账本的手续费只有在订单控制区明确开启后才向前端展示
   const isLedger52 = Number(ledgerId ?? (order as any).ledger_id) === 52;
@@ -3630,7 +3632,8 @@ export function FunderLenderCardSilver({
     ? 'financing'
     : dc?.assetFundingType === 'self' || dc?.selfFundedAsset === true || dc?.selfFundedAsset === 'true'
       ? 'self'
-      : null;
+      // 与编辑器默认值一致：历史空值表示未单独标记，但仍按融资金额展示。
+      : 'financing';
   const lenderPrimaryAmountLabel = lenderHasExplicitPrincipalLentOut ? '借出本金' : assetFundingType === 'self' ? '自有资金' : '融资金额';
 
   // 天数算法与 hook 一致：北京时间自然日，开始日算第1天
