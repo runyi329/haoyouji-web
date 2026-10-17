@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { getUserDisplayName, getUserSearchLabel, matchesUserSearch } from "@/lib/userIdentity";
-import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check, Search } from "lucide-react";
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER } from "@/components/FunderOrderCard";
 import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
@@ -948,13 +948,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     && !(editingOrder as any)?.participantInfo?.isPersonalOwnerView;
   const isSnapshotScopedEdit = !!editingOrder?.participantInfo && !isPrimaryOwnerEdit;
   const isRestrictedParticipantEdit = !!editingOrder?.participantInfo && editingCollaboratorRole !== 'owner';
-  const isOwnerPersonalView = isSnapshotScopedEdit && editingCollaboratorRole === 'owner';
-  // 所有协作人界面共用中文显示名优先级，避免手机号式 username 被当作姓名展示。
-  const getMemberDisplayName = (member: any, fallback = '当前成员') => getUserDisplayName(member, fallback);
   const personalViewName = String((editingOrder as any)?.participant_display_name
     || (editingOrder as any)?.participant_name
     || (editingOrder as any)?.owner_label
     || '当前成员');
+  // 所有协作人界面共用中文显示名优先级，避免手机号式 username 被当作姓名展示。
+  const getMemberDisplayName = (member: any, fallback = '当前成员') => getUserDisplayName(member, fallback);
   const primaryOwnerDisplayName = getMemberDisplayName(
     ((ledgerData as any)?.members || []).find((member: any) => Number(member.userId ?? member.id) === Number(formData.userId)),
     (editingOrder as any)?.owner_display_name || (editingOrder as any)?.nickname || (editingOrder as any)?.username || '当前拥有者',
@@ -2831,6 +2830,21 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
 
   const getPaymentLabel = (val: string) => INTEREST_PAYMENT_OPTIONS.find(o => o.value === val)?.label || val;
 
+  const closeOrderEditor = () => {
+    setShowForm(false);
+    setEditingOrder(null);
+    editorRootOrderRef.current = null;
+    setParticipants([]);
+    setJointOrderSegments([]);
+    setSelectedParticipantUserIds([]);
+    setParticipantUserSearch('');
+    setOwnerAddPanelExpanded(false);
+    setParticipantsSectionExpanded(false);
+    resetLinkedAmountFields();
+    participantsLoadedRef.current = null;
+    setShowDatePicker(false);
+  };
+
   return (
     <div>
       <div className="px-4 py-4">
@@ -3080,48 +3094,51 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col overflow-x-hidden" style={{ overscrollBehavior: 'contain' }}>
-            <div className="flex-shrink-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl" style={{ zIndex: 10 }}>
-              <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
-                {isSnapshotScopedEdit ? `配置 ${personalViewName} 的个人订单` : editingOrder ? '编辑订单' : '添加订单'}
-              </h3>
-              {editingOrder && canManageCollaboratorsInEditor && (
+            {!isSnapshotScopedEdit && (
+              <div className="flex-shrink-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl" style={{ zIndex: 10 }}>
+                <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
+                  {editingOrder ? '编辑订单' : '添加订单'}
+                </h3>
+                {editingOrder && canManageCollaboratorsInEditor && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setParticipantsSectionExpanded(true);
+                      setTimeout(() => participantsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+                    }}
+                    className="ml-auto mr-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700"
+                  >
+                    拥有者／参与者{participants.length > 0 ? ` ${participants.length}人` : ''}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => {
-                    setParticipantsSectionExpanded(true);
-                    setTimeout(() => participantsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
-                  }}
-                  className="ml-auto mr-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700"
+                  onClick={closeOrderEditor}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500"
+                  aria-label="关闭订单编辑"
                 >
-                  拥有者／参与者{participants.length > 0 ? ` ${participants.length}人` : ''}
+                  <X className="h-4 w-4" />
                 </button>
-              )}
-              <button
-                onClick={() => {
-                  setShowForm(false);
-                  setEditingOrder(null);
-                  editorRootOrderRef.current = null;
-                  setParticipants([]);
-                  setJointOrderSegments([]);
-                  setSelectedParticipantUserIds([]);
-                  setParticipantUserSearch('');
-                  setOwnerAddPanelExpanded(false);
-                  setParticipantsSectionExpanded(false);
-                  resetLinkedAmountFields();
-                  participantsLoadedRef.current = null;
-                  setShowDatePicker(false);
-                }}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg leading-none"
-              >
-                &times;
-              </button>
-            </div>
-
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
               {editorViewTargets.length > 1 && (
-                <label className="block rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
-                  <span className="mb-1 block text-xs font-medium text-blue-700">编辑对象</span>
+                <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <label htmlFor="funder-editor-view-target" className="text-xs font-medium text-blue-700">编辑对象</label>
+                    {isSnapshotScopedEdit && (
+                      <button
+                        type="button"
+                        onClick={closeOrderEditor}
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-gray-500 shadow-sm"
+                        aria-label="关闭订单编辑"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                   <select
+                    id="funder-editor-view-target"
                     value={activeEditorViewUserId}
                     onChange={event => {
                       const target = editorViewTargets.find(item => item.userId === Number(event.target.value));
@@ -3137,77 +3154,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       </option>
                     ))}
                   </select>
-                </label>
+                </div>
               )}
               <>
-              {/* 每位共同拥有者或历史参与者均编辑自己的完整订单快照；真实订单关系仍由主订单受控。 */}
-              {isSnapshotScopedEdit && (
-                <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
-                  <User className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-                  <div>
-                    <div className="text-sm font-medium text-blue-950">{personalViewName} 的完整个人订单视图</div>
-                    <div className="mt-0.5 text-xs leading-5 text-blue-700">所有金额、利息、担保、展示方式与备注均在此处独立保存；共享标的、真实身份与结清状态保持一致。</div>
-                  </div>
-                </div>
-              )}
-              {isOwnerPersonalView && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <label className="block text-sm font-semibold text-slate-800">同组拥有者信息可见范围</label>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">此设置只影响 {personalViewName} 查看同组其他拥有者的信息范围；订单卡片固定显示本人姓名。</p>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    {([
-                      { value: 'self', label: '仅本人金额' },
-                      { value: 'total', label: '仅订单总额' },
-                      { value: 'breakdown', label: '总额及明细' },
-                      { value: 'partners', label: '指定合作人' },
-                    ] as const).map(option => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setFormData(current => ({ ...current, ownerVisibilityMode: option.value }))}
-                        className={`rounded-xl border px-2 py-2 text-xs font-semibold transition-colors ${formData.ownerVisibilityMode === option.value ? 'border-slate-600 bg-white text-slate-900' : 'border-slate-200 bg-white text-slate-500'}`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                  {formData.ownerVisibilityMode === 'partners' && (
-                    <div className="mt-2 border-t border-slate-200 pt-2">
-                      <div className="mb-1.5 text-[11px] text-slate-500">选择可见的同组拥有者（不显示订单总额）</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {participants.filter(owner => owner.role === 'owner' && Number(owner.userId) !== Number(editingCollaboratorUserId)).map(owner => {
-                          const active = formData.ownerVisibleOwnerIds.includes(Number(owner.userId));
-                          return (
-                            <button
-                              key={owner.userId}
-                              type="button"
-                              onClick={() => setFormData(current => ({
-                                ...current,
-                                ownerVisibleOwnerIds: active
-                                  ? current.ownerVisibleOwnerIds.filter(id => id !== Number(owner.userId))
-                                  : [...current.ownerVisibleOwnerIds, Number(owner.userId)],
-                              }))}
-                              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${active ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-200 bg-white text-slate-700'}`}
-                            >
-                              {owner.userName}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-              {/* 标的类型必须与主订单一致；参与者可以完整配置自己的业务展示，但不能把同一张主订单改成另一种实际标的。 */}
-              {isSnapshotScopedEdit ? (
-                <div className="rounded-xl border border-blue-100 bg-blue-50/50 px-3 py-2.5">
-                  <div className="text-xs font-semibold text-blue-800">共享订单标的</div>
-                  <div className="mt-1 flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium text-blue-950">{formData.assetType === 'stock' ? '股票' : formData.assetType === 'crypto_option' ? '期权' : '数字币'}</span>
-                    <span className="text-right text-[11px] leading-4 text-blue-700">币种、类型与期权合约由主订单统一维护</span>
-                  </div>
-                </div>
-              ) : (
+              {/* 同一张订单的标的类型由主订单统一维护；个人页不重复显示说明。 */}
+              {!isSnapshotScopedEdit && (
                 <div className="grid grid-cols-5 gap-3">
                   <div className={(formData.assetType === 'crypto' || formData.assetType === '') ? 'col-span-3' : 'col-span-5'}>
                     <label className="block text-xs font-medium text-gray-600 mb-1">类型</label>
@@ -3463,18 +3414,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
 
               {/* 用户选择（从账本所有成员中选）：根据所选用户角色自动判断订单归属左侧(资方)或右侧(借方) */}
               <div className="flex gap-3 items-start">
-              {isSnapshotScopedEdit ? (
-                <div className="flex-1 min-w-0">
-                  <label className="block text-sm font-medium text-gray-600 mb-2">个人订单对象</label>
-                  <div className="flex min-h-[48px] items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-200 text-xs font-bold text-emerald-700">{String((editingOrder as any)?.participant_name || (editingOrder as any)?.owner_label || '?').slice(0, 1).toUpperCase()}</div>
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-emerald-900">{(editingOrder as any)?.participant_name || (editingOrder as any)?.owner_label || '当前协作人'}</div>
-                      <div className="text-[11px] text-emerald-700">身份与主订单关系由管理员统一维护</div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
+              {!isSnapshotScopedEdit && (
                 <div className="flex-1 min-w-0">
                   <label className="block text-sm font-medium text-gray-600 mb-2">
                     订单拥有者 <span className="text-red-400 ml-0.5">*</span>
@@ -3580,7 +3520,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
               {formData.assetType !== 'crypto_option' && (
                 <>
                 {/* 开仓日期（与用户同行并排） */}
-                <div className="flex-1 min-w-0" style={{}}>
+                <div className={isSnapshotScopedEdit ? 'w-full' : 'flex-1 min-w-0'}>
                   <label className="block text-sm font-medium text-gray-600 mb-2">开仓日期</label>
                   <div className="relative">
                     <button
