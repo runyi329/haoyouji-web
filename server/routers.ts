@@ -17759,7 +17759,9 @@ ${klinesSummary}
             amount: parseFloat(r.amount),
             sourceType: 'balance_history' as const,
             note: r.description || r.type,
-            type: r.type,
+            // 旧后台手工扣款曾借用 withdraw 类型；没有关联提现申请时属于支出而非冻结。
+            // 真实提现均有 related_id，继续按提现展示。
+            type: r.type === 'withdraw' && !r.related_id ? 'expense' : r.type,
             relatedId: r.related_id,
             createdAt: r.created_at,
           }));

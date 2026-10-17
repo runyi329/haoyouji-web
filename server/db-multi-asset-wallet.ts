@@ -641,7 +641,7 @@ export async function updateMultiAssetAdminAdjustmentNote(params: {
 }): Promise<{ success: true }> {
   if (!Number.isInteger(params.entryId) || params.entryId <= 0) throw new Error("数字资产流水无效");
   if (!Number.isInteger(params.actorUserId) || params.actorUserId <= 0) throw new Error("操作人无效");
-  const replacement = String(params.note || "").trim().slice(0, 500) || "管理员手动调账（未填写备注）";
+  const replacement = String(params.note || "").trim().slice(0, 500);
   await ensureMultiAssetWalletInfrastructure();
   const conn = await getDbTransactionConnection();
   if (!conn) throw new Error("数据库连接失败");

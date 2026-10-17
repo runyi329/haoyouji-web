@@ -1016,6 +1016,10 @@ export default function AfRechargeManage() {
     String(entry?.eventType ?? entry?.type ?? "") === "admin_adjustment"
     && !String(entry?.note ?? "").startsWith("[ADMIN_REVERSAL:")
   );
+  const cleanAdjustmentNote = (value: unknown) => {
+    const note = String(value ?? '').replace(/\[.*?\]/g, '').trim();
+    return /^(?:管理员)?手动调账[（(]未填写备注[）)]$/.test(note) ? '' : note;
+  };
   const openMultiAssetRevoke = (entry: any) => {
     setRevokeTarget({
       type: "multi_asset",
@@ -1026,7 +1030,7 @@ export default function AfRechargeManage() {
     setShowRevokeDialog(true);
   };
   const openMultiAssetNoteEditor = (entry: any) => {
-    const currentNote = String(entry.note ?? "").replace(/^(\[[^\]]+\])+/, "").trim();
+    const currentNote = cleanAdjustmentNote(entry.note);
     setNoteTarget({ multiAssetEntryId: Number(entry.id ?? entry.sourceId), currentNote });
     setNoteContent(currentNote);
     setNoteSelectedCommonNote(adjCommonNotes.includes(currentNote) ? currentNote : null);
@@ -2221,13 +2225,27 @@ export default function AfRechargeManage() {
                   <div className="mt-2 divide-y divide-violet-50">
                     {adjVisibleMultiAssetHistory.slice(0, 8).map((entry: any) => {
                       const amount = Number(entry.amount ?? 0);
-                      const label = entry.eventType === "transfer_in" ? "站内转账收款" : entry.eventType === "transfer_out" ? "站内转账汇款" : "后台手动调账";
+                      const label = entry.eventType === "transfer_in"
+                        ? "站内转账收款"
+                        : entry.eventType === "transfer_out"
+                          ? "站内转账汇款"
+                          : amount >= 0 ? "收入" : "支出";
                       const canManage = isReversibleMultiAssetAdjustment(entry);
+                      const noteText = cleanAdjustmentNote(entry.note);
+                      const createdAtText = new Date(entry.createdAt).toLocaleString("zh-CN");
+                      // 短备注与时间可共用第二行；较长备注独占一行，时间完整另起一行，避免把语义拆断。
+                      const showTimeInline = noteText.length > 0 && noteText.length <= 12;
                       return (
-                        <div key={entry.id} className="flex items-center justify-between gap-3 py-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-[11px] font-medium text-gray-700">{label} · {entry.assetCode}</p>
-                            <p className="truncate text-[10px] text-gray-400">{String(entry.note || "—").replace(/\[.*?\]/g, "").trim()} · {new Date(entry.createdAt).toLocaleString("zh-CN")}</p>
+                        <div key={entry.id} className="flex items-start justify-between gap-3 py-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-medium text-gray-700">{label} · {entry.assetCode}</p>
+                            {noteText ? (
+                              <p className="text-[10px] leading-4 text-gray-400 whitespace-normal break-words">
+                                {noteText}
+                                {showTimeInline && <span className="whitespace-nowrap"> · {createdAtText}</span>}
+                              </p>
+                            ) : null}
+                            {!showTimeInline && <p className="text-[10px] leading-4 text-gray-400 whitespace-nowrap">{createdAtText}</p>}
                           </div>
                           <div className="flex shrink-0 flex-col items-end gap-1">
                             <div className={`text-right text-[12px] font-bold ${amount >= 0 ? "text-green-600" : "text-red-500"}`}>
@@ -2287,18 +2305,18 @@ export default function AfRechargeManage() {
               ) : (
                 <div className="space-y-2">
                   {adjFilteredHistory.map((r: any, i: number) => {
-                    const typeLabel: Record<string, string> = { recharge: '充值到账', consume: '消费', refund: '退款', reward: '奖励', withdraw: '提现', reward_clawback: '奖励回收', commission: '佣金' };
+                    const typeLabel: Record<string, string> = { recharge: '充值到账', consume: '消费', refund: '退款', reward: '奖励', withdraw: '提现', expense: '支出', reward_clawback: '奖励回收', commission: '佣金' };
                     const sourceType = String(r.sourceType ?? '');
                     const sourceId = Number(String(r.id ?? '').split('_')[1] || 0);
                     const amount = Number(r.amount ?? 0);
-                    const noteText = String(r.note ?? r.description ?? '').replace(/\[.*?\]/g, '').trim();
+                    const noteText = cleanAdjustmentNote(r.note ?? r.description);
                     const isInternalTransfer = String(r.note ?? r.description ?? '').includes('[站内转账]');
                     const label = isInternalTransfer
                       ? (amount >= 0 ? '站内转账收款' : '站内转账汇款')
                       : sourceType === 'recharge'
                       ? '充值到账'
                       : sourceType === 'manual'
-                        ? '手动调账'
+                        ? (amount >= 0 ? '收入' : '支出')
                         : sourceType === 'opening'
                           ? '历史期初余额'
                           : typeLabel[r.type] ?? r.type ?? '系统流水';
@@ -2307,14 +2325,14 @@ export default function AfRechargeManage() {
                     const canEdit = !isInternalTransfer && (sourceType === 'manual' ? sourceId > 0 : historyId > 0);
                     return (
                       <div key={r.id ?? i} className="py-2 border-b border-gray-50 last:border-0">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-start justify-between">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 mb-0.5">
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600">USDT</span>
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{label}</span>
                             </div>
-                            <p className="text-[12px] text-gray-600 truncate">{noteText || '—'}</p>
-                            <p className="text-[10px] text-gray-400">{new Date(r.createdAt).toLocaleString('zh-CN')}</p>
+                            {noteText && <p className="text-[12px] leading-5 text-gray-600 whitespace-normal break-words">{noteText}</p>}
+                            <p className="text-[10px] text-gray-400 whitespace-nowrap">{new Date(r.createdAt).toLocaleString('zh-CN')}</p>
                             {r.balanceAfter != null && (
                               <p className="text-[10px] text-gray-400 mt-0.5">余额 {Number(r.balanceAfter).toFixed(2)} USDT</p>
                             )}
@@ -2617,23 +2635,32 @@ export default function AfRechargeManage() {
                     refund: '退款',
                     reward: '奖励',
                     withdraw: '提现',
+                    expense: '支出',
                     reward_clawback: '奖励回收',
                     commission: '佣金',
                     order_buy: '订单扣款',
                     order_settlement: '订单结算',
                     management_fee: '管理费',
                     manual: '手动调账',
-                    admin_adjustment: '数字资产手动调账',
+                    admin_adjustment: '调账',
                     transfer_in: '站内转账收款',
                     transfer_out: '站内转账汇款',
                   };
                   const sourceType = String(r.sourceType ?? 'balance_history');
                   const sourceId = Number(r.sourceId ?? r.id ?? 0);
+                  const amount = Number(r.amount ?? 0);
+                  const noteText = cleanAdjustmentNote(r.note);
                   const isInternalTransfer = String(r.note ?? '').includes('[站内转账]');
+                  // 担保冻结/解冻的中文动作和订单编号已在下一行备注完整显示，不重复渲染内部英文事件名。
+                  const isCollateralFlow = ['collateral_lock', 'collateral_release'].includes(String(r.type ?? ''));
                   const isMultiAssetLedger = sourceType === 'multi_asset';
                   const isMultiAssetAdminAdjustment = isMultiAssetLedger
                     && String(r.type ?? '') === 'admin_adjustment'
                     && !String(r.note ?? '').startsWith('[ADMIN_REVERSAL:');
+                  const isManualAdjustment = sourceType === 'manual' || isMultiAssetAdminAdjustment;
+                  const displayTypeLabel = isManualAdjustment
+                    ? amount >= 0 ? '收入' : '支出'
+                    : typeLabel[r.type] ?? r.type;
                   const canRevoke = sourceId > 0
                     && !['order_buy', 'order_settlement', 'management_fee'].includes(String(r.type ?? ''))
                     && !String(r.note ?? '').includes('撤回误操作')
@@ -2654,10 +2681,10 @@ export default function AfRechargeManage() {
                             <span className="text-[12px] font-semibold text-black">{r.userName}</span>
                             <span className="text-[10px] text-gray-400">@{r.username}</span>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${r.currency === 'CNY' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>{r.currency}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{isInternalTransfer ? '站内转账' : (typeLabel[r.type] ?? r.type)}</span>
+                            {!isCollateralFlow && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{isInternalTransfer ? '站内转账' : displayTypeLabel}</span>}
                           </div>
-                          <p className="text-[11px] text-gray-500 truncate">{String(r.note ?? "").replace(/\[.*?\]/g, "").trim() || "—"}</p>
-                          <p className="text-[10px] text-gray-400 mt-0.5">{new Date(r.createdAt).toLocaleString("zh-CN")}</p>
+                          {noteText && <p className="text-[11px] leading-5 text-gray-500 whitespace-normal break-words">{noteText}</p>}
+                          <p className="text-[10px] text-gray-400 mt-0.5 whitespace-nowrap">{new Date(r.createdAt).toLocaleString("zh-CN")}</p>
                           {r.balance != null && (
                             <p className="mt-0.5 text-[10px] text-gray-400">
                               该笔后余额 {r.currency === "CNY" ? "¥" : ""}{Number(r.balance).toFixed(displayDigits)} {r.currency}
@@ -2688,7 +2715,7 @@ export default function AfRechargeManage() {
                           {canEditNote && (
                             <button
                               onClick={() => {
-                                const raw = String(r.note ?? '').replace(/\[.*?\]/g, '').trim();
+                                const raw = cleanAdjustmentNote(r.note);
                                 if (isMultiAssetAdminAdjustment) {
                                   openMultiAssetNoteEditor(r);
                                   return;

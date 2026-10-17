@@ -8,7 +8,7 @@ import { getInternalTransferPresentation } from "@/lib/walletTransferPresentatio
 import { AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
 
 type PeriodFilter = "7d" | "30d" | "90d" | "custom" | "all";
-type TypeFilter = "all" | "recharge" | "transfer" | "order" | "reward" | "withdraw" | "adjustment";
+type TypeFilter = "all" | "recharge" | "transfer" | "order" | "reward" | "withdraw" | "expense" | "adjustment";
 
 type HistoryEntry = {
   id: string;
@@ -49,6 +49,7 @@ const typeOptions: Array<{ value: TypeFilter; label: string }> = [
   { value: "order", label: "订单" },
   { value: "reward", label: "奖励/入账" },
   { value: "withdraw", label: "提现" },
+  { value: "expense", label: "支出" },
   { value: "adjustment", label: "调整" },
 ];
 
@@ -72,10 +73,11 @@ function dateEnd(value: string): number | null {
 }
 
 function cleanNote(value: unknown) {
-  return String(value || "")
+  const note = String(value || "")
     .replace(/^\[CNY\]\s*/i, "")
     .replace(/\[站内转账\]\s*/g, "")
     .trim();
+  return /^(?:管理员)?手动调账[（(]未填写备注[）)]$/.test(note) ? "" : note;
 }
 
 function hasOrderContext(note: string) {
@@ -87,13 +89,25 @@ function getUsdtEntry(item: any): HistoryEntry {
   const incoming = amount >= 0;
   const rawNote = String(item.note || item.description || "");
   const note = cleanNote(rawNote);
+  const isExpense = item.type === "expense";
+  const isWithdrawalRequestFreeze = /^提现申请冻结\s+#\d+\b/.test(rawNote);
   const transfer = getInternalTransferPresentation(rawNote, incoming ? "in" : "out", item.counterpartyName);
   let type: Exclude<TypeFilter, "all"> = "adjustment";
   let primary = incoming ? "入账" : "扣除";
   let secondary = note || "USDT 资金流水";
   let status = incoming ? "已入账" : "已扣除";
 
-  if (transfer) {
+  if (isExpense) {
+    type = "expense";
+    primary = "支出";
+    secondary = note || "钱包支出";
+    status = "已支出";
+  } else if (isWithdrawalRequestFreeze) {
+    type = "withdraw";
+    primary = "提现申请冻结";
+    secondary = note || "提现申请余额冻结";
+    status = "余额已冻结";
+  } else if (transfer) {
     type = "transfer";
     primary = transfer.primary;
     secondary = transfer.secondary;
@@ -118,7 +132,8 @@ function getUsdtEntry(item: any): HistoryEntry {
     type = "reward";
     primary = "入账";
   } else if (item.sourceType === "manual") {
-    primary = incoming ? "入账" : "扣除";
+    primary = incoming ? "收入" : "支出";
+    status = incoming ? "已收入" : "已支出";
   }
 
   return {
@@ -148,9 +163,9 @@ function getAssetEntry(item: any): HistoryEntry {
     amount,
     balanceAfter: item.balanceAfter == null ? null : Number(item.balanceAfter),
     createdAt: String(item.createdAt || ""),
-    primary: transfer?.primary || (incoming ? "入账" : "扣除"),
+    primary: transfer?.primary || (incoming ? "收入" : "支出"),
     secondary: transfer?.secondary || cleanNote(item.note) || "数字资产调整",
-    status: isTransfer ? (incoming ? "已入账" : "已扣除") : (incoming ? "已入账" : "已扣除"),
+    status: isTransfer ? (incoming ? "已入账" : "已扣除") : (incoming ? "已收入" : "已支出"),
     type: isTransfer ? "transfer" : "adjustment",
   };
 }
@@ -351,15 +366,15 @@ export default function CryptoWalletTransactions() {
                 const iconSrc = getCryptoAssetIconSrc(entry.assetCode);
                 const incoming = entry.amount >= 0;
                 return <div key={entry.id} className="flex items-start justify-between gap-3 px-4 py-3.5" style={{ borderBottom: index < entries.length - 1 ? `1px solid ${theme.divider}` : "none" }}>
-                  <div className="flex min-w-0 items-start gap-2.5">
+                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
                     <span className="relative mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,.06)", border: `1px solid ${theme.border}` }}>
                       {iconSrc ? <img src={iconSrc} alt={`${entry.assetCode} 币种图标`} className="h-full w-full object-contain" /> : <span className="text-xs font-bold" style={{ color: theme.goldLight }}>{entry.assetCode.slice(0, 1)}</span>}
                       <span className="absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full border-2" style={{ background: incoming ? theme.green : theme.red, borderColor: theme.panel }} />
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium" style={{ color: "rgba(255,255,255,.9)" }}>{entry.primary} <span className="font-normal" style={{ color: theme.muted }}>· {entry.assetCode}</span></p>
-                      <p className="mt-0.5 text-[11px]" style={{ color: theme.muted }}>{formatTime(entry.createdAt)}</p>
-                      <p className="mt-1 max-w-52 truncate text-[10px]" style={{ color: theme.muted }}>{entry.secondary}</p>
+                      <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,.9)" }}>{entry.primary} <span className="font-normal" style={{ color: theme.muted }}>· {entry.assetCode}</span></p>
+                      <p className="mt-0.5 whitespace-nowrap text-[11px]" style={{ color: theme.muted }}>{formatTime(entry.createdAt)}</p>
+                      <p className="mt-1 break-words text-[10px] leading-4" style={{ color: theme.muted }}>{entry.secondary}</p>
                       <p className="mt-1 text-[10px]" style={{ color: theme.muted }}>{entry.status}{entry.balanceAfter != null ? ` · 该笔后余额 ${entry.balanceAfter.toLocaleString("zh-CN", { maximumFractionDigits: amountDigits(entry.assetCode) })} ${entry.assetCode}` : ""}</p>
                     </div>
                   </div>

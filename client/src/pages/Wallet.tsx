@@ -162,8 +162,15 @@ type WalletFlowPresentation = {
 function getUsdtFlowPresentation(item: { sourceType?: string; type?: string; amount?: number; note?: string }): WalletFlowPresentation {
   const amount = Number(item.amount ?? 0);
   const isIn = amount >= 0;
-  const note = summarizeWalletFlowNote(item.note);
-  const isInternalTransfer = String(item.note || "").includes("[站内转账]");
+  const rawNote = String(item.note || "");
+  const note = summarizeWalletFlowNote(rawNote);
+  const isExpense = item.type === "expense";
+  const isWithdrawalRequestFreeze = /^提现申请冻结\s+#\d+\b/.test(rawNote);
+  const isInternalTransfer = rawNote.includes("[站内转账]");
+  // 买入资产、手续费等旧手工扣款属于支出，不应误称为冻结。
+  if (isExpense) return { label: "支出", detail: note, status: "已支出", isIn: false };
+  // 提现申请先冻结余额；该条流水不是实际出金，需与后续审核结果区分展示。
+  if (isWithdrawalRequestFreeze) return { label: "提现申请冻结", detail: note, status: "余额已冻结", isIn: false };
   if (isInternalTransfer) {
     const transfer = getInternalTransferPresentation(item.note, isIn ? "in" : "out");
     return { label: transfer?.primary || (isIn ? "站内转账收款" : "站内转账汇款"), detail: transfer?.secondary, isIn };
@@ -172,11 +179,11 @@ function getUsdtFlowPresentation(item: { sourceType?: string; type?: string; amo
   if (item.sourceType === "withdraw") return { label: "提现", detail: note, isIn: false };
   if (item.sourceType === "opening") return { label: "历史期初余额", detail: note, isIn };
   if (item.sourceType === "manual") {
-    return { label: isIn ? (hasOrderContext(note) ? "订单入账" : "入账") : (hasOrderContext(note) ? "订单扣除" : "扣除"), detail: note, isIn };
+    return { label: isIn ? (hasOrderContext(note) ? "订单入账" : "收入") : (hasOrderContext(note) ? "订单扣除" : "支出"), detail: note, isIn };
   }
   if (item.sourceType === "balance_history") {
     if (hasOrderContext(note)) return { label: isIn ? "订单入账" : "订单扣除", detail: note, isIn };
-    const labels: Record<string, string> = { consume: "消费", refund: "退款", reward: "入账", withdraw: "提现", reward_clawback: "入账回退" };
+    const labels: Record<string, string> = { consume: "消费", refund: "退款", reward: "入账", withdraw: "提现", expense: "支出", reward_clawback: "入账回退" };
     return { label: labels[String(item.type || "")] || "资金流水", detail: note, isIn };
   }
   return { label: isIn ? "入账" : "扣除", detail: note, isIn };
@@ -218,7 +225,7 @@ function getDigitalFlowPresentation(item: { eventType?: string; amount?: number;
       };
     }
     default:
-      return { label: isIn ? "入账" : "扣除", status: isIn ? "已入账" : "已扣除", isIn };
+      return { label: isIn ? "收入" : "支出", status: isIn ? "已收入" : "已支出", isIn };
   }
 }
 
@@ -1353,10 +1360,10 @@ export default function Wallet() {
                   const presentation = getUsdtFlowPresentation(tx);
                   return <div
                     key={tx.id}
-                    className="flex items-center justify-between py-2"
+                    className="flex items-start justify-between gap-3 py-2"
                     style={{ borderBottom: idx < recentUsdtTx.length - 1 ? `1px solid ${G.divider}` : "none" }}
                   >
-                    <div className="flex items-center space-x-2">
+                    <div className="flex min-w-0 flex-1 items-start gap-2">
                       {/* 世界杯交易显示国旗，否则显示文字 */}
                       {(tx as any).wcCode ? (
                         <img
@@ -1365,16 +1372,16 @@ export default function Wallet() {
                           className="w-7 h-7 rounded-full object-cover flex-shrink-0"
                         />
                       ) : null}
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-center gap-1.5">
                           <WalletFlowTypeBadge label={presentation.label} note={presentation.detail || (tx as any).note} isIn={presentation.isIn} />
                           {!(tx as any).wcCode && <span className="truncate text-xs font-medium" style={{ color: G.white }}>{presentation.label}</span>}
                         </div>
-                        <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(tx.createdAt)}</div>
-                        {presentation.detail && <div className="mt-0.5 max-w-48 truncate text-[10px]" style={{ color: G.whiteDim }}>{presentation.detail}</div>}
+                        <div className="whitespace-nowrap text-xs" style={{ color: G.whiteDim }}>{formatTime(tx.createdAt)}</div>
+                        {presentation.detail && <div className="mt-0.5 break-words text-[10px] leading-4" style={{ color: G.whiteDim }}>{presentation.detail}</div>}
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="shrink-0 text-right">
                       <div className="text-sm font-bold tabular-nums"
                         style={{ color: presentation.isIn ? G.green : G.red }}>
                         {presentation.isIn ? "+" : "-"}
@@ -1443,8 +1450,8 @@ export default function Wallet() {
                           <WalletFlowTypeBadge label={presentation.label} note={presentation.detail} isIn={presentation.isIn} />
                           <span className="min-w-0 flex-1 truncate text-xs font-medium" style={{ color: G.white }}>{presentation.label} · CNY</span>
                         </div>
-                        <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(tx.createdAt)}</div>
-                        {presentation.detail && <div className="mt-0.5 break-words text-[10px] leading-4 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]" style={{ color: G.whiteDim }}>{presentation.detail}</div>}
+                        <div className="whitespace-nowrap text-xs" style={{ color: G.whiteDim }}>{formatTime(tx.createdAt)}</div>
+                        {presentation.detail && <div className="mt-0.5 break-words text-[10px] leading-4" style={{ color: G.whiteDim }}>{presentation.detail}</div>}
                       </div>
                     </div>
                     <div
@@ -1562,10 +1569,10 @@ export default function Wallet() {
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-1.5">
                             <WalletFlowTypeBadge label={presentation.label} note={flowDetail || item.note} isIn={presentation.isIn} />
-                            <span className="min-w-0 flex-1 truncate text-xs font-medium" style={{ color: G.white }}>{presentation.label} · {assetCode}</span>
+                            <span className="min-w-0 flex-1 text-xs font-medium" style={{ color: G.white }}>{presentation.label} · {assetCode}</span>
                           </div>
-                          <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(item.createdAt)}</div>
-                          {flowDetail && <div className="mt-0.5 break-words text-[10px] leading-4 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]" style={{ color: G.whiteDim }}>{flowDetail}</div>}
+                          <div className="whitespace-nowrap text-xs" style={{ color: G.whiteDim }}>{formatTime(item.createdAt)}</div>
+                          {flowDetail && <div className="mt-0.5 break-words text-[10px] leading-4" style={{ color: G.whiteDim }}>{flowDetail}</div>}
                         </div>
                       </div>
                       <div className="flex w-[124px] shrink-0 flex-col items-end text-right">

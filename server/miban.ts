@@ -2488,8 +2488,8 @@ export const mibanAdminUserRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new Error('DB not available');
       const type = input.amount >= 0 ? 'recharge' : 'withdraw';
-      // 管理员可不填写备注，但资金流水仍保留清晰、可追溯的系统审计说明。
-      const desc = input.note?.trim() || '手动调账（未填写备注）';
+      // 资金类型和操作时间已提供审计信息；未填写备注时保持为空，不生成占位文字。
+      const desc = input.note?.trim() || '';
       if (input.currency === 'USDT') {
         // 1. 更新 users.balance
         await (conn as any).execute(
@@ -2744,7 +2744,12 @@ export const mibanAdminUserRouter = router({
             CONVERT('balance_history' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS source_type,
             bh.user_id,
             bh.amount,
-            CONVERT(bh.type USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,
+            CONVERT(CASE
+              -- related_id 为空的旧 withdraw 是后台手工扣款的兼容写法，
+              -- 并非已发起的链上提现，也不会占用担保额度；展示为支出，真实提现仍保留 withdraw。
+              WHEN bh.type = 'withdraw' AND bh.related_id IS NULL THEN 'expense'
+              ELSE bh.type
+            END USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,
             CONVERT(COALESCE(NULLIF(UPPER(bh.currency), ''), 'USDT') USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS currency,
             CONVERT(bh.description USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
             bh.balance AS raw_balance,
@@ -2774,10 +2779,22 @@ export const mibanAdminUserRouter = router({
             mae.amount,
             CONVERT(mae.event_type USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,
             CONVERT(mae.asset_code USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS currency,
-            CONVERT(mae.note USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
+            CONVERT(CASE
+              -- 52 号融资订单的担保流水保留内部 #id，并补齐管理员可识别的订单编号。
+              WHEN mae.event_type IN ('collateral_lock', 'collateral_release')
+                AND mae.source_ledger_id = 52
+                AND collateral_order.order_no IS NOT NULL
+                THEN CONCAT(mae.note, ' · 订单编号 ', collateral_order.order_no)
+              ELSE mae.note
+            END USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
             mae.balance_after AS raw_balance,
             mae.created_at
           FROM ai_wallet_asset_entries mae
+          LEFT JOIN ledger_orders collateral_order
+            ON collateral_order.ledger_id = 52
+           AND mae.source_ledger_id = 52
+           AND mae.event_type IN ('collateral_lock', 'collateral_release')
+           AND collateral_order.id = CAST(SUBSTRING_INDEX(mae.note, '#', -1) AS UNSIGNED)
         `;
         const whereParts: string[] = [];
         const whereValues: unknown[] = [];
