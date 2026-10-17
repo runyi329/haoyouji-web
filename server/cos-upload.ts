@@ -248,16 +248,21 @@ export async function uploadPrivateZidingPaymentProof(input: {
     .toBuffer();
   const objectKey = `${ZIDING_PAYMENT_PROOF_PREFIX}order/${input.orderId}/user/${input.ownerUserId}/${crypto.randomUUID()}.webp`;
 
-  await cos.putObject({
-    Bucket: BUCKET,
-    Region: REGION,
-    Key: objectKey,
-    Body: normalized,
-    ContentType: "image/webp",
-    ACL: "private",
-    CacheControl: "private, no-store",
-    ContentDisposition: 'inline; filename="payment-proof.webp"',
-  });
+  try {
+    await cos.putObject({
+      Bucket: BUCKET,
+      Region: REGION,
+      Key: objectKey,
+      Body: normalized,
+      ContentType: "image/webp",
+      ACL: "private",
+      CacheControl: "private, no-store",
+      ContentDisposition: 'inline; filename="payment-proof.webp"',
+    });
+  } catch (error) {
+    console.error("[COS] 紫鼎付款凭证上传失败:", error);
+    throw new Error("付款凭证上传服务连接失败，请稍后再试");
+  }
 
   return {
     objectKey,
