@@ -1587,6 +1587,26 @@ async function buildFunderSettlementSnapshot(
   };
 }
 
+function hasFunderPublicNoteContent(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') {
+    const text = value.trim();
+    return text.length > 0 && text !== 'null' && text !== '[]';
+  }
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+// “公开备注”属于主订单的公共信息。个人快照确实可以留存补充备注，但历史快照
+// 常在主订单添加公开备注前创建，空值不能把仍存在于主订单的公开内容遮住。
+// 此处只在读取时回退，不回写个人快照，避免把公共内容误固化为个人备注。
+function resolveFunderPublicNoteForView(parentOrder: any, snapshot: Record<string, any> | null | undefined): any {
+  const personalPublicNote = snapshot?.public_note;
+  return hasFunderPublicNoteContent(personalPublicNote)
+    ? personalPublicNote
+    : (parentOrder?.public_note ?? null);
+}
+
 function parseFunderDisplayConfig(value: unknown): Record<string, any> {
   if (!value) return {};
   try {
@@ -21657,6 +21677,7 @@ ${klinesSummary}
             o,
           );
           const result = { ...o, ...(snapshot || {}) };
+          result.public_note = resolveFunderPublicNoteForView(o, snapshot);
           // 同一张订单的 user_id 是数据库存储锚点。协作人卡片覆盖业务字段后，
           // 仍附带未经个人快照覆盖的主订单，供编辑器在切回主拥有者时恢复真实币种与金额。
           const rootOrderForEditor = { ...o };
@@ -21707,10 +21728,10 @@ ${klinesSummary}
             if (!snapshotHas('broker_account') && pi.broker_account_override) result.broker_account = pi.broker_account_override;
             if (pi.order_no_override) result.order_no = pi.order_no_override;
             result.participant_paid_interest = pi.paid_interest || '0';
-            // 参与者备注必须与订单拥有者的 public_note 完全隔离；空备注也不能回退到主订单备注。
-            if (!snapshotHas('public_note')) {
-              result.public_note = pi.note || null;
-              result.note = pi.note || null;
+            // 有内容的参与者补充备注保留在个人视图；空值则由上方规则回退到主订单公开备注。
+            if (!snapshotHas('public_note') && hasFunderPublicNoteContent(pi.note)) {
+              result.public_note = pi.note;
+              result.note = pi.note;
             }
           }
           try {
@@ -22824,6 +22845,7 @@ ${klinesSummary}
           const primaryView = {
             ...baseOrder,
             ...(primaryOwnerSnapshotWithVisibility || {}),
+            public_note: resolveFunderPublicNoteForView(baseOrder, primaryOwnerSnapshotWithVisibility),
             ...primaryViewStatus,
             ...groupFields,
             id: baseOrder.id,
@@ -22871,6 +22893,7 @@ ${klinesSummary}
             const view = {
               ...baseOrder,
               ...(snapshot || {}),
+              public_note: resolveFunderPublicNoteForView(baseOrder, snapshot),
               ...groupFields,
               id: baseOrder.id,
               ledger_id: baseOrder.ledger_id,
@@ -24285,6 +24308,7 @@ ${klinesSummary}
               const mainOrderStatus = o.status;
               const mainOrderSettledAt = o.settled_at;
               const mainOrderInterestEndDate = o.interest_end_date;
+              const mainOrderPublicNote = o.public_note;
               const snapshot = restoreLegacyPersonalAssetCoin(
                 syncFunderParticipantCollateralSnapshot(
                   parseFunderParticipantSnapshot(pi.order_snapshot),
@@ -24293,6 +24317,7 @@ ${klinesSummary}
                 o,
               );
               if (snapshot) Object.assign(o, snapshot);
+              (o as any).public_note = resolveFunderPublicNoteForView({ public_note: mainOrderPublicNote }, snapshot);
               if (mainOrderStatus === 'settled' || mainOrderStatus === 'completed') {
                 o.status = mainOrderStatus;
                 o.settled_at = mainOrderSettledAt;
@@ -24429,6 +24454,7 @@ ${klinesSummary}
                   const mainOrderStatus = o.status;
                   const mainOrderSettledAt = o.settled_at;
                   const mainOrderInterestEndDate = o.interest_end_date;
+                  const mainOrderPublicNote = o.public_note;
                   const snapshot = restoreLegacyPersonalAssetCoin(
                     syncFunderParticipantCollateralSnapshot(
                       parseFunderParticipantSnapshot(pi.order_snapshot),
@@ -24437,6 +24463,7 @@ ${klinesSummary}
                     o,
                   );
                   if (snapshot) Object.assign(o, snapshot);
+                  (o as any).public_note = resolveFunderPublicNoteForView({ public_note: mainOrderPublicNote }, snapshot);
                   // 主订单与参与者订单共用结清状态；旧参与者快照可能仍为 active，不能覆盖主订单结清结果。
                   if (mainOrderStatus === 'settled' || mainOrderStatus === 'completed') {
                     o.status = mainOrderStatus;
