@@ -896,15 +896,15 @@ export function FunderOrderCard({
     { enabled: _activeShowPaymentPanelForQuery === order.id && Boolean(selectedJointPaymentSegmentId && selectedJointPaymentUserId) }
   );
   const _intAddPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
-    onSuccess: () => { toast.success('结息记录已添加'); _intSetPaymentForm({ amount: '', currency: 'U', exchangeRate: String(cnyRate || 6.75), payDate: new Date().toISOString().slice(0, 10), note: '' }); _intRefetchPayments(); refetchJointSegmentInterestPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onSuccess: () => { toast.success('结息记录已添加'); _intSetPaymentForm({ amount: '', currency: 'U', exchangeRate: String(cnyRate || 6.75), payDate: new Date().toISOString().slice(0, 10), note: '' }); _intRefetchPayments(); refetchJointSegmentInterestPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId }); },
     onError: (err) => toast.error(err.message),
   });
   const _intDeletePaymentMutation = trpc.ledger.funderDeleteInterestPayment.useMutation({
-    onSuccess: () => { toast.success('结息记录已删除'); _intRefetchPayments(); refetchJointSegmentInterestPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onSuccess: () => { toast.success('结息记录已删除'); _intRefetchPayments(); refetchJointSegmentInterestPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId }); },
     onError: (err) => toast.error(err.message),
   });
   const _intUpdatePaymentMutation = trpc.ledger.funderUpdateInterestPayment.useMutation({
-    onSuccess: () => { toast.success('结息记录已更新'); setEditPaymentId(null); _intRefetchPayments(); refetchJointSegmentInterestPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onSuccess: () => { toast.success('结息记录已更新'); setEditPaymentId(null); _intRefetchPayments(); refetchJointSegmentInterestPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId }); },
     onError: (err) => toast.error(err.message),
   });
   // 编辑结息记录的内联表单状态

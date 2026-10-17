@@ -1523,9 +1523,43 @@ function resolveFunderOwnerVisibilitySnapshot(snapshot: Record<string, any> | nu
 }
 
 const FUNDER_PERIOD_INTEREST_TOTAL_PERIODS = new Set(['week', 'month', 'quarter', 'halfYear', 'year']);
+const FUNDER_OWNER_GROUP_INTEREST_TERM_FIELDS = [
+  'interest_rate_annual', 'interest_base', 'interest_base_currency',
+  'interest_rate_currency', 'interest_payment_type', 'interest_start_date',
+] as const;
 
-// 周期总息是同一张订单的展示规则，不属于参与者独立约定的金额、利率或结算快照。
-// 因此管理员修改后要同步每个个人订单视图（包括已结清视图），但只改这两个展示字段。
+/** 共同拥有者的两项利息口径由物理主订单决定；历史订单缺省时继续各自计算。 */
+function normalizeFunderOwnerGroupInterestScope(value: unknown): 'unified' | 'individual' {
+  return String(value || '').trim().toLowerCase() === 'unified' ? 'unified' : 'individual';
+}
+function getFunderOwnerGroupInterestScopes(displayConfig: unknown) {
+  const config = parseFunderDisplayConfig(displayConfig);
+  return {
+    pending: normalizeFunderOwnerGroupInterestScope(config.pendingInterestScope),
+    paid: normalizeFunderOwnerGroupInterestScope(config.paidInterestScope),
+  } as const;
+}
+/**
+ * 待结利息选择统一时，基数、时间、年化、付息方式和币种均以主订单为准；
+ * 已结利息仅在读取 payment 流水时聚合，绝不改写原有流水归属。
+ */
+function syncFunderParticipantOwnerGroupInterestSnapshot(snapshot: Record<string, any>, parentOrder: any): Record<string, any> {
+  const next = { ...(snapshot || {}) };
+  const scopes = getFunderOwnerGroupInterestScopes(parentOrder?.display_config);
+  if (scopes.pending === 'unified') {
+    for (const field of FUNDER_OWNER_GROUP_INTEREST_TERM_FIELDS) {
+      if (parentOrder?.[field] !== undefined) next[field] = parentOrder[field];
+    }
+  }
+  next.display_config = JSON.stringify({
+    ...parseFunderDisplayConfig(next.display_config),
+    pendingInterestScope: scopes.pending,
+    paidInterestScope: scopes.paid,
+  });
+  return next;
+}
+
+// 周期总息和共同拥有者利息口径均是同一张订单的规则，不能因个人快照而分叉。
 function syncFunderParticipantPeriodInterestDisplayConfig(
   snapshot: Record<string, any>,
   parentOrder: any,
@@ -1537,14 +1571,14 @@ function syncFunderParticipantPeriodInterestDisplayConfig(
     ...parseFunderDisplayConfig(participantDisplayConfig),
   };
   const selectedPeriod = String(parentDisplayConfig.periodInterestTotalPeriod || 'month');
-  return {
+  return syncFunderParticipantOwnerGroupInterestSnapshot({
     ...snapshot,
     display_config: JSON.stringify({
       ...currentParticipantDisplayConfig,
       periodInterestTotal: parentDisplayConfig.periodInterestTotal === true,
       periodInterestTotalPeriod: FUNDER_PERIOD_INTEREST_TOTAL_PERIODS.has(selectedPeriod) ? selectedPeriod : 'month',
     }),
-  };
+  }, parentOrder);
 }
 
 function isSelfFundedFunderOrder(displayConfig: unknown): boolean {
@@ -21516,9 +21550,12 @@ ${klinesSummary}
           // 角色只决定列表归属，绝不能决定是否丢弃当前拥有者的编辑内容。
           const isPersonalOrderView = participantQueryUserIdSet.has(Number(o.id));
           if (!isPersonalOrderView) return o;
-          const snapshot = restoreLegacyPersonalAssetCoin(
-            syncFunderParticipantCollateralSnapshot(
-              parseFunderParticipantSnapshot(pi?.order_snapshot),
+          const snapshot = syncFunderParticipantOwnerGroupInterestSnapshot(
+            restoreLegacyPersonalAssetCoin(
+              syncFunderParticipantCollateralSnapshot(
+                parseFunderParticipantSnapshot(pi?.order_snapshot),
+                o,
+              ),
               o,
             ),
             o,
@@ -21597,6 +21634,7 @@ ${klinesSummary}
         let participantCountMap: Record<number, number> = {};
         let participantUserIdsMap: Record<number, number[]> = {};
         let ownerNamesMap: Record<number, Array<{ userId: number; name: string }>> = {};
+        const ownerUserIdsMap: Record<number, Set<number>> = {};
         // 52号同一融资订单允许多位拥有者分别冻结钱包资产；列表必须合并这些真实冻结台账，
         // 以确保每个拥有者视角看到的担保总值和缺口完全一致。
         let walletCollateralContributorsMap: Record<number, Array<{ userId: number; name: string; assets: Array<{ coin: string; qty: string; source: 'wallet'; note: string }> }>> = {};
@@ -21612,7 +21650,7 @@ ${klinesSummary}
               orderIds
             ).catch(() => null) as Promise<any>,
             conn.execute(
-              `SELECT order_id, user_id FROM ledger_order_participants WHERE role <> 'inactive' AND order_id IN (${placeholders})`,
+              `SELECT order_id, user_id, role FROM ledger_order_participants WHERE role <> 'inactive' AND order_id IN (${placeholders})`,
               orderIds
             ).catch(() => null) as Promise<any>,
             conn.execute(
@@ -21647,6 +21685,19 @@ ${klinesSummary}
               [input.ledgerId, ...walletHoldTags]
             ).catch(() => null) as Promise<any> : Promise.resolve(null)
           ]);
+          if (pcRowsResult) {
+            const pcArr = Array.isArray(pcRowsResult[0]) ? pcRowsResult[0] : (Array.isArray(pcRowsResult) ? pcRowsResult : []);
+            for (const row of pcArr) {
+              const oid = Number(row.order_id);
+              participantCountMap[oid] = (participantCountMap[oid] || 0) + 1;
+              if (!participantUserIdsMap[oid]) participantUserIdsMap[oid] = [];
+              participantUserIdsMap[oid].push(Number(row.user_id));
+              if (String(row.role || '').toLowerCase() === 'owner' && Number(row.user_id) > 0) {
+                if (!ownerUserIdsMap[oid]) ownerUserIdsMap[oid] = new Set<number>();
+                ownerUserIdsMap[oid].add(Number(row.user_id));
+              }
+            }
+          }
           if (ptRowsResult) {
             const ptArr = Array.isArray(ptRowsResult[0]) ? ptRowsResult[0] : (Array.isArray(ptRowsResult) ? ptRowsResult : []);
             const orderMap = new Map(ordersWithParticipantView.map((o: any) => [Number(o.id), o]));
@@ -21661,9 +21712,17 @@ ${klinesSummary}
               // 订单快照是否独立与结息流水作用域是两件事，不能仅凭 role='owner' 判为子流水。
               const isParticipantViewForOrder = scopedView && participantOrderSet.has(oid)
                 && Number(viewedOrder.user_id) !== participantQueryUserId;
-              const expectedParticipantId = isParticipantViewForOrder ? participantQueryUserId : null;
               const rowParticipantId = row.participant_user_id == null ? null : Number(row.participant_user_id);
-              if (rowParticipantId !== expectedParticipantId) continue;
+              const currentViewUserId = isParticipantViewForOrder ? participantQueryUserId : Number(viewedOrder.user_id);
+              const ownerIds = ownerUserIdsMap[oid] || new Set<number>();
+              ownerIds.add(Number(viewedOrder.user_id));
+              const isUnifiedOwnerInterest = ownerIds.size > 1
+                && ownerIds.has(currentViewUserId)
+                && getFunderOwnerGroupInterestScopes(viewedOrder.display_config).paid === 'unified';
+              const isInScope = isUnifiedOwnerInterest
+                ? rowParticipantId === null || ownerIds.has(Number(rowParticipantId))
+                : rowParticipantId === (isParticipantViewForOrder ? participantQueryUserId : null);
+              if (!isInScope) continue;
 
               const baseCurrencyRaw = String(viewedOrder.interest_base_currency || 'USDT').toUpperCase();
               const baseCurrency = baseCurrencyRaw === 'CNY' ? 'CNY' : 'USDT';
@@ -21676,15 +21735,6 @@ ${klinesSummary}
               if (paymentCurrency === 'USDT' && baseCurrency === 'CNY') converted = amount * exchangeRate;
               if (!paidTotalMap[oid]) paidTotalMap[oid] = { amount: 0, currency: baseCurrency };
               paidTotalMap[oid].amount += converted;
-            }
-          }
-          if (pcRowsResult) {
-            const pcArr = Array.isArray(pcRowsResult[0]) ? pcRowsResult[0] : (Array.isArray(pcRowsResult) ? pcRowsResult : []);
-            for (const row of pcArr) {
-              const oid = Number(row.order_id);
-              participantCountMap[oid] = (participantCountMap[oid] || 0) + 1;
-              if (!participantUserIdsMap[oid]) participantUserIdsMap[oid] = [];
-              participantUserIdsMap[oid].push(Number(row.user_id));
             }
           }
           if (ownerRowsResult) {
@@ -22630,7 +22680,10 @@ ${klinesSummary}
                 baseOrder,
               )
             : null;
-          const primaryOwnerSnapshotWithVisibility = resolveFunderOwnerVisibilitySnapshot(primaryOwnerSnapshot, primaryOwnerParticipant);
+          const primaryOwnerSnapshotWithVisibility = resolveFunderOwnerVisibilitySnapshot(
+            primaryOwnerSnapshot ? syncFunderParticipantOwnerGroupInterestSnapshot(primaryOwnerSnapshot, baseOrder) : null,
+            primaryOwnerParticipant,
+          );
           const primaryViewStatus = (baseOrder.status === 'settled' || baseOrder.status === 'completed')
             ? { status: baseOrder.status, settled_at: baseOrder.settled_at, interest_end_date: baseOrder.interest_end_date }
             : (primaryOwnerSnapshot?.status === 'settled'
@@ -22681,8 +22734,11 @@ ${klinesSummary}
             const collaboratorRole = String(participant.role || '').toLowerCase();
             const isCoOwner = collaboratorRole === 'owner';
             const snapshot = resolveFunderOwnerVisibilitySnapshot(
-              restoreLegacyPersonalAssetCoin(
-                syncFunderParticipantCollateralSnapshot(parseFunderParticipantSnapshot(participant.order_snapshot), baseOrder),
+              syncFunderParticipantOwnerGroupInterestSnapshot(
+                restoreLegacyPersonalAssetCoin(
+                  syncFunderParticipantCollateralSnapshot(parseFunderParticipantSnapshot(participant.order_snapshot), baseOrder),
+                  baseOrder,
+                ),
                 baseOrder,
               ),
               participant,
@@ -22744,6 +22800,52 @@ ${klinesSummary}
             }
             orderViews.push(serializeDates(view));
           }
+        }
+
+        // 为每张个人视图投影已结利息：统一时只合计共同拥有者，分开时只显示当前拥有者。
+        // 不改写任何历史流水的归属，因而切换模式后可立即按原始流水重新计算。
+        const paymentsResult = sourceOrders.length > 0
+          ? await db.execute(sql`
+              SELECT order_id, participant_user_id, amount, currency, exchange_rate
+                FROM ledger_order_payments
+               WHERE ledger_id = ${input.ledgerId}
+                 AND order_id IN (${sql.raw(sourceOrders.map((order: any) => Number(order.id)).filter(Boolean).join(','))})
+                 AND joint_segment_id IS NULL
+            `) as any
+          : [];
+        const payments = asRows(paymentsResult);
+        const sourceOrderById = new Map(sourceOrders.map((order: any) => [Number(order.id), order]));
+        for (const view of orderViews) {
+          const rootOrder = sourceOrderById.get(Number(view.id));
+          if (!rootOrder) continue;
+          const ownerIds = new Set<number>([Number(rootOrder.user_id)]);
+          (participantsByOrder.get(Number(view.id)) || []).forEach((participant: any) => {
+            if (String(participant.role || '').toLowerCase() === 'owner' && Number(participant.user_id) > 0) ownerIds.add(Number(participant.user_id));
+          });
+          const viewUserId = Number(view?.participantInfo?.userId || rootOrder.user_id);
+          const isOwnerView = ownerIds.has(viewUserId);
+          const isUnified = ownerIds.size > 1
+            && isOwnerView
+            && getFunderOwnerGroupInterestScopes(rootOrder.display_config).paid === 'unified';
+          const targetCurrency = ['CNY', 'RMB', '人民币'].includes(String(view.interest_base_currency || '').toUpperCase()) ? 'CNY' : 'U';
+          let total = 0;
+          let hasPayment = false;
+          for (const payment of payments) {
+            if (Number(payment.order_id) !== Number(view.id)) continue;
+            const participantUserId = payment.participant_user_id == null ? null : Number(payment.participant_user_id);
+            const inScope = isUnified
+              ? participantUserId === null || ownerIds.has(Number(participantUserId))
+              : (viewUserId === Number(rootOrder.user_id) ? participantUserId === null : participantUserId === viewUserId);
+            if (!inScope) continue;
+            const amount = Number(payment.amount || 0);
+            const paymentCurrency = ['CNY', 'RMB', '人民币'].includes(String(payment.currency || '').toUpperCase()) ? 'CNY' : 'U';
+            const exchangeRate = Number(payment.exchange_rate || 7) || 7;
+            total += paymentCurrency === targetCurrency
+              ? amount
+              : (targetCurrency === 'U' ? amount / exchangeRate : amount * exchangeRate);
+            hasPayment = true;
+          }
+          view.paidTotal = hasPayment ? { amount: String(total), currency: targetCurrency } : null;
         }
 
         // 统一订单台也使用订单卡片的实时估值；仅采集当前实际出现的标的与担保币种，避免无关行情扫描。
@@ -23615,7 +23717,36 @@ ${klinesSummary}
         if (input.jointSegmentId && !jointSegmentId) throw new TRPCError({ code: 'BAD_REQUEST', message: '联合订单段落无效' });
         if (jointSegmentId && !input.participantUserId) throw new TRPCError({ code: 'BAD_REQUEST', message: '请选择联合订单所属用户' });
         const segmentFilter = jointSegmentId ? sql`AND p.joint_segment_id = ${jointSegmentId}` : sql`AND p.joint_segment_id IS NULL`;
-        const rawRows = input.participantUserId
+        // 已结利息选“统一”时，只汇总物理主拥有者和所有 active owner 的流水；
+        // funder／borrower／broker 等普通参与者永远不会混入共同拥有者的金额。
+        const [interestScopeRows] = await db.execute(sql`
+          SELECT o.user_id AS root_user_id, o.display_config, p.user_id AS owner_user_id, p.role
+            FROM ledger_orders o
+            LEFT JOIN ledger_order_participants p
+              ON p.order_id = o.id AND p.ledger_id = o.ledger_id AND p.role = 'owner'
+           WHERE o.id = ${input.orderId} AND o.ledger_id = ${input.ledgerId} AND o.deleted_at IS NULL
+        `) as any;
+        const interestScopeSources = (interestScopeRows || []) as any[];
+        const scopeRoot = interestScopeSources[0] || null;
+        const ownerIds = new Set<number>([Number(scopeRoot?.root_user_id || 0)]);
+        interestScopeSources.forEach((source: any) => { if (Number(source?.owner_user_id) > 0) ownerIds.add(Number(source.owner_user_id)); });
+        const isUnifiedOwnerInterest = !jointSegmentId
+          && ownerIds.size > 1
+          && getFunderOwnerGroupInterestScopes(scopeRoot?.display_config).paid === 'unified';
+        if (isUnifiedOwnerInterest && !isManager && !ownerIds.has(Number(ctx.user.id))) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看共同拥有者结息记录' });
+        }
+        const ownerIdList = [...ownerIds].filter(Boolean);
+        const rawRows = isUnifiedOwnerInterest
+          ? await db.execute(
+              sql`SELECT p.*, u.username, u.name as operatorName
+                    FROM ledger_order_payments p
+                    LEFT JOIN users u ON u.id = p.created_by
+                   WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId}
+                     AND (p.participant_user_id IS NULL OR p.participant_user_id IN (${sql.raw(ownerIdList.join(','))})) ${segmentFilter}
+                   ORDER BY p.pay_date DESC, p.id DESC`
+            ) as any
+          : input.participantUserId
           ? await db.execute(
               sql`SELECT p.*, u.username, u.name as operatorName
                   FROM ledger_order_payments p
@@ -25787,12 +25918,15 @@ ${klinesSummary}
           ...(input.brokerAccountOverride !== undefined ? { broker_account: input.brokerAccountOverride || null } : {}),
           ...(input.note !== undefined ? { public_note: input.note || null } : {}),
         };
-        const syncedSnapshot = syncFunderParticipantSharedAssetSnapshot(
-          syncFunderParticipantCollateralSnapshot({
-            ...buildFunderParticipantSnapshot(snapshotSource),
-            ...(parseFunderParticipantSnapshot(snapshotSource.order_snapshot) || {}),
-            ...partialSnapshot,
-          }, snapshotSource),
+        const syncedSnapshot = syncFunderParticipantOwnerGroupInterestSnapshot(
+          syncFunderParticipantSharedAssetSnapshot(
+            syncFunderParticipantCollateralSnapshot({
+              ...buildFunderParticipantSnapshot(snapshotSource),
+              ...(parseFunderParticipantSnapshot(snapshotSource.order_snapshot) || {}),
+              ...partialSnapshot,
+            }, snapshotSource),
+            snapshotSource,
+          ),
           snapshotSource,
         );
         await conn.execute(
@@ -25871,6 +26005,17 @@ ${klinesSummary}
             order_snapshot: JSON.stringify(initialSnapshot),
           };
         }
+        // 只有两位及以上“拥有者”才启用组级利息规则；普通参与者始终沿用各自口径。
+        const [ownerRowsResult] = await conn.execute(
+          `SELECT id, user_id, order_snapshot, display_config
+             FROM ledger_order_participants
+            WHERE order_id = ? AND ledger_id = ? AND role = 'owner'
+            ORDER BY id ASC`,
+          [input.orderId, input.ledgerId],
+        ) as any;
+        const ownerRows = Array.isArray(ownerRowsResult) ? ownerRowsResult : [];
+        const ownerUserIds = new Set([Number(row.user_id), ...ownerRows.map((owner: any) => Number(owner.user_id))].filter(Boolean));
+        const hasMultipleOwners = ownerUserIds.size > 1;
         let mergedSnapshot = {
           ...buildFunderParticipantSnapshot(row),
           ...(parseFunderParticipantSnapshot(row.order_snapshot) || {}),
@@ -26000,6 +26145,44 @@ ${klinesSummary}
           }
           mergedSnapshot.display_config = JSON.stringify({ ...ownerDisplayConfig, ownerNameDisplay: 'self' });
         }
+        // 共同拥有者的两项利息模式是订单级规则。当前选中的拥有者保存时，先把模式写回
+        // 物理主订单；待结为统一时，当前输入的整套利息约定随即成为全组唯一事实来源。
+        const requestedDisplayConfig = parseFunderDisplayConfig((input.snapshot as any).display_config);
+        const hasPendingScopeInput = Object.prototype.hasOwnProperty.call(requestedDisplayConfig, 'pendingInterestScope');
+        const hasPaidScopeInput = Object.prototype.hasOwnProperty.call(requestedDisplayConfig, 'paidInterestScope');
+        const parentDisplayConfig = parseFunderDisplayConfig(row.display_config);
+        const currentScopes = getFunderOwnerGroupInterestScopes(parentDisplayConfig);
+        const nextScopes = {
+          pending: hasPendingScopeInput ? normalizeFunderOwnerGroupInterestScope(requestedDisplayConfig.pendingInterestScope) : currentScopes.pending,
+          paid: hasPaidScopeInput ? normalizeFunderOwnerGroupInterestScope(requestedDisplayConfig.paidInterestScope) : currentScopes.paid,
+        } as const;
+        const effectiveParentOrder: any = {
+          ...row,
+          display_config: JSON.stringify({
+            ...parentDisplayConfig,
+            pendingInterestScope: hasMultipleOwners ? nextScopes.pending : 'individual',
+            paidInterestScope: hasMultipleOwners ? nextScopes.paid : 'individual',
+          }),
+        };
+        if (hasMultipleOwners && nextScopes.pending === 'unified') {
+          for (const field of FUNDER_OWNER_GROUP_INTEREST_TERM_FIELDS) effectiveParentOrder[field] = mergedSnapshot[field] ?? null;
+        }
+        if (hasMultipleOwners && (hasPendingScopeInput || hasPaidScopeInput || nextScopes.pending === 'unified')) {
+          await conn.execute(
+            `UPDATE ledger_orders
+                SET display_config = ?, interest_rate_annual = ?, interest_base = ?, interest_base_currency = ?,
+                    interest_rate_currency = ?, interest_payment_type = ?, interest_start_date = ?, updated_at = NOW()
+              WHERE id = ? AND ledger_id = ?`,
+            [
+              effectiveParentOrder.display_config,
+              effectiveParentOrder.interest_rate_annual ?? null, effectiveParentOrder.interest_base ?? null,
+              effectiveParentOrder.interest_base_currency ?? null, effectiveParentOrder.interest_rate_currency ?? null,
+              effectiveParentOrder.interest_payment_type ?? null, effectiveParentOrder.interest_start_date ?? null,
+              input.orderId, input.ledgerId,
+            ],
+          );
+        }
+        mergedSnapshot = syncFunderParticipantOwnerGroupInterestSnapshot(mergedSnapshot, effectiveParentOrder);
         mergedSnapshot = syncFunderParticipantSharedAssetSnapshot(
           syncFunderParticipantCollateralSnapshot(mergedSnapshot, row),
           row,
@@ -26027,6 +26210,30 @@ ${klinesSummary}
             Number(row.participant_id), input.orderId, input.ledgerId, input.userId,
           ]
         );
+        // 待结选统一时，所有拥有者的约定字段立即跟随；两个模式键也一起回写，
+        // 防止从另一位拥有者入口重新打开后又被历史个人快照覆盖。
+        if (hasMultipleOwners && (hasPendingScopeInput || hasPaidScopeInput || nextScopes.pending === 'unified')) {
+          for (const owner of ownerRows) {
+            if (Number(owner.id) === Number(row.participant_id)) continue;
+            let ownerSnapshot = parseFunderParticipantSnapshot(owner.order_snapshot) || {};
+            if (nextScopes.pending === 'unified') {
+              for (const field of FUNDER_OWNER_GROUP_INTEREST_TERM_FIELDS) ownerSnapshot[field] = effectiveParentOrder[field] ?? null;
+            }
+            ownerSnapshot = syncFunderParticipantOwnerGroupInterestSnapshot(ownerSnapshot, effectiveParentOrder);
+            await conn.execute(
+              `UPDATE ledger_order_participants
+                  SET order_snapshot = ?, interest_rate = ?, interest_base = ?, interest_base_currency = ?,
+                      interest_payment_type = ?, interest_start_date = ?, interest_rate_currency = ?, display_config = ?, updated_at = NOW()
+                WHERE id = ? AND order_id = ? AND ledger_id = ? AND role = 'owner'`,
+              [
+                JSON.stringify(ownerSnapshot), ownerSnapshot.interest_rate_annual ?? null, ownerSnapshot.interest_base ?? null,
+                ownerSnapshot.interest_base_currency ?? null, ownerSnapshot.interest_payment_type ?? null,
+                ownerSnapshot.interest_start_date ?? null, ownerSnapshot.interest_rate_currency ?? null,
+                ownerSnapshot.display_config ?? null, Number(owner.id), input.orderId, input.ledgerId,
+              ],
+            );
+          }
+        }
         // 将数据库实际落盘的快照回传给客户端，用于淘汰并发请求中可能返回的旧缓存。
         // 不包含其他拥有者资料，也不会触发钱包、流水或主订单的任何写入。
         return { success: true, userId: input.userId, snapshot: mergedSnapshot };

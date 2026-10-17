@@ -667,6 +667,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     // 周期总息默认关闭；启用后仅在卡片模式显示管理员选定的一个周期总息。
     periodInterestTotal: false,
     periodInterestTotalPeriod: 'month',
+    // 共同拥有者利息模式：历史订单未设置时继续按每人独立计算。
+    pendingInterestScope: 'individual',
+    paidInterestScope: 'individual',
     // 仅控制普通用户前端的下载箭头；管理员订单列表始终可下载
     allowUserImageDownload: true,
     // 共同拥有者的个人订单视图固定显示本人姓名。
@@ -767,17 +770,19 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       orderId,
       ledgerId,
       participants: participants.map((p, i) => ({
+        // 共同拥有者的待结统一模式下，创建或重新保存关系时不能把旧个人参数写回。
+        // 普通参与者和“各自”模式则完整保留原来的个人约定。
         userId: p.userId,
         role: p.role,
         sortOrder: i,
         amount: p.amount || undefined,
         amountCurrency: p.amountCurrency || undefined,
-        interestRate: normalizeFunderAnnualRate(p.interestRateAnnual) || undefined,
-        interestBase: p.interestBase || undefined,
-        interestBaseCurrency: p.interestBaseCurrency || undefined,
-        interestPaymentType: p.interestPaymentType || undefined,
-        interestStartDate: p.interestStartDate || undefined,
-        interestRateCurrency: p.interestRateCurrency || undefined,
+        interestRate: p.role === 'owner' && displayConfig.pendingInterestScope === 'unified' ? normalizeFunderAnnualRate(formData.interestRateAnnual) || undefined : normalizeFunderAnnualRate(p.interestRateAnnual) || undefined,
+        interestBase: p.role === 'owner' && displayConfig.pendingInterestScope === 'unified' ? formData.interestBase || undefined : p.interestBase || undefined,
+        interestBaseCurrency: p.role === 'owner' && displayConfig.pendingInterestScope === 'unified' ? formData.interestBaseCurrency || undefined : p.interestBaseCurrency || undefined,
+        interestPaymentType: p.role === 'owner' && displayConfig.pendingInterestScope === 'unified' ? formData.interestPaymentType || undefined : p.interestPaymentType || undefined,
+        interestStartDate: p.role === 'owner' && displayConfig.pendingInterestScope === 'unified' ? formData.interestStartDate || undefined : p.interestStartDate || undefined,
+        interestRateCurrency: p.role === 'owner' && displayConfig.pendingInterestScope === 'unified' ? formData.interestRateCurrency || undefined : p.interestRateCurrency || undefined,
         visibilityMode: p.role === 'owner' ? p.visibilityMode : undefined,
         visibleOwnerIds: p.role === 'owner' ? p.visibleOwnerIds : undefined,
         displayConfig: JSON.stringify({
@@ -786,6 +791,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
           // 批量保存成员关系时，每位拥有者保留自己的开关；不能把当前编辑者
           // 的下载权限写给其他人，也不能用 undefined 抹去已保存的预警阈值。
           allowUserImageDownload: p.displayConfig.allowUserImageDownload !== false,
+          ...(p.role === 'owner' ? {
+            pendingInterestScope: displayConfig.pendingInterestScope === 'unified' ? 'unified' : 'individual',
+            paidInterestScope: displayConfig.paidInterestScope === 'unified' ? 'unified' : 'individual',
+          } : {}),
           ...(p.marginAlertThreshold ? { marginAlertThreshold: p.marginAlertThreshold } : {}),
           financingInputAmount: p.amount || '',
           financingInputCurrency: p.amountCurrency || formData.amountCurrency || 'USDT',
@@ -1199,6 +1208,38 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       ?? formData.userId
       ?? 0,
   );
+  // 本功能只适用于两位及以上平级拥有者；普通参与者不获得其他人的利息口径或流水。
+  // 不能仅依赖下拉框已经水合出的 editorViewTargets，否则从协作人入口刚打开时会被
+  // 短暂误判为单人订单，进而把控制项隐藏。主订单锚点、关系表原始数据和本地草稿三者
+  // 任一已拿到都可确认拥有者组。
+  const ownerInterestModeUserIds = new Set<number>();
+  const rootOwnerForInterestMode = Number(
+    (editorRootOrderRef.current || (editingOrder as any)?._rootOrder || editingOrder)?.user_id || 0,
+  );
+  if (rootOwnerForInterestMode > 0) ownerInterestModeUserIds.add(rootOwnerForInterestMode);
+  // 统一订单台已在卡片数据上附带完整关联 ID。协作人点“编辑”的第一帧就采用它，
+  // 不能等异步 funderGetOrderParticipants 返回后才显示，否则胡二入口会短暂没有该区块。
+  // 仅当前个人视图本身是拥有者时才采用，避免普通参与者被误纳入共同拥有者利息规则。
+  if (editingCollaboratorRole === 'owner') {
+    const immediateOwnerIds = Array.isArray((editingOrder as any)?._participantUserIds)
+      ? (editingOrder as any)._participantUserIds
+      : [];
+    immediateOwnerIds.map(Number).filter(Boolean).forEach((userId: number) => ownerInterestModeUserIds.add(userId));
+  }
+  editorViewTargets.filter(target => target.role === 'owner').forEach(target => {
+    if (Number(target.userId) > 0) ownerInterestModeUserIds.add(Number(target.userId));
+  });
+  participants.filter(participant => participant.role === 'owner').forEach(participant => {
+    if (Number(participant.userId) > 0) ownerInterestModeUserIds.add(Number(participant.userId));
+  });
+  (((existingParticipantsData as any)?.participants || []) as any[])
+    .filter(participant => String(participant?.role || '').toLowerCase() === 'owner')
+    .forEach(participant => {
+      if (Number(participant?.user_id) > 0) ownerInterestModeUserIds.add(Number(participant.user_id));
+    });
+  const hasMultipleOwnerInterestModes = ledgerId === 52
+    && Boolean(editingOrder?.id)
+    && ownerInterestModeUserIds.size > 1;
 
   const { data: funderUsers, isLoading: usersLoading } = trpc.ledger.funderGetFunderUsers.useQuery(
     { ledgerId, ...(adminOnly ? { roleFilter: "admin" as const } : {}), ...(financeOnly ? { financeOnly: true } : {}) },
@@ -2701,6 +2742,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         ? snapshot[key]
         : fallback
     );
+    const rootDisplayConfig = (() => { try { const value = rootOrder.display_config; return value ? (typeof value === 'string' ? JSON.parse(value) : value) : {}; } catch { return {}; } })();
+    const isPendingInterestUnified = rootDisplayConfig?.pendingInterestScope === 'unified';
     const participantOrder = {
       ...rootOrder,
       ...snapshot,
@@ -2714,16 +2757,19 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       order_no: rootOrder.order_no,
       amount: snapshotValue('amount', participant.amount || rootOrder.amount),
       amount_currency: snapshotValue('amount_currency', participant.amountCurrency || rootOrder.amount_currency),
-      interest_rate_annual: snapshotValue('interest_rate_annual', participant.interestRateAnnual || rootOrder.interest_rate_annual),
-      interest_base: snapshotValue('interest_base', participant.interestBase || rootOrder.interest_base),
-      interest_base_currency: snapshotValue('interest_base_currency', participant.interestBaseCurrency || rootOrder.interest_base_currency),
-      interest_rate_currency: snapshotValue('interest_rate_currency', participant.interestRateCurrency || rootOrder.interest_rate_currency),
-      interest_payment_type: snapshotValue('interest_payment_type', participant.interestPaymentType || rootOrder.interest_payment_type),
-      interest_start_date: snapshotValue('interest_start_date', participant.interestStartDate || rootOrder.interest_start_date),
+      interest_rate_annual: isPendingInterestUnified ? rootOrder.interest_rate_annual : snapshotValue('interest_rate_annual', participant.interestRateAnnual || rootOrder.interest_rate_annual),
+      interest_base: isPendingInterestUnified ? rootOrder.interest_base : snapshotValue('interest_base', participant.interestBase || rootOrder.interest_base),
+      interest_base_currency: isPendingInterestUnified ? rootOrder.interest_base_currency : snapshotValue('interest_base_currency', participant.interestBaseCurrency || rootOrder.interest_base_currency),
+      interest_rate_currency: isPendingInterestUnified ? rootOrder.interest_rate_currency : snapshotValue('interest_rate_currency', participant.interestRateCurrency || rootOrder.interest_rate_currency),
+      interest_payment_type: isPendingInterestUnified ? rootOrder.interest_payment_type : snapshotValue('interest_payment_type', participant.interestPaymentType || rootOrder.interest_payment_type),
+      interest_start_date: isPendingInterestUnified ? rootOrder.interest_start_date : snapshotValue('interest_start_date', participant.interestStartDate || rootOrder.interest_start_date),
       display_config: JSON.stringify({
+        ...rootDisplayConfig,
         ...(() => { try { const value = snapshot.display_config; return value ? (typeof value === 'string' ? JSON.parse(value) : value) : {}; } catch { return {}; } })(),
         ...participant.displayConfig,
         ...(participant.marginAlertThreshold ? { marginAlertThreshold: participant.marginAlertThreshold } : {}),
+        pendingInterestScope: rootDisplayConfig?.pendingInterestScope === 'unified' ? 'unified' : 'individual',
+        paidInterestScope: rootDisplayConfig?.paidInterestScope === 'unified' ? 'unified' : 'individual',
       }),
       personal_header_label: snapshotValue('personal_header_label', participant.personalHeaderLabel || ''),
       tags: JSON.stringify(participant.tags.length > 0 ? participant.tags : (() => { try { const value = snapshot.tags; return Array.isArray(value) ? value : (typeof value === 'string' ? JSON.parse(value) : []); } catch { return []; } })()),
@@ -3226,18 +3272,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     isAdmin={isAdminUser}
                     membersData={((ledgerData as any)?.members || funderUsers) as any[]}
                     ledgerId={ledgerId}
-                    showPaymentPanel={showPaymentPanel}
-                    setShowPaymentPanel={setShowPaymentPanel}
-                    paymentForm={paymentForm}
-                    setPaymentForm={setPaymentForm}
-                    editingPaymentId={editingPaymentId}
-                    setEditingPaymentId={setEditingPaymentId}
-                    showPaymentDatePicker={showPaymentDatePicker}
-                    setShowPaymentDatePicker={setShowPaymentDatePicker}
-                    addPaymentMutation={addPaymentMutation}
-                    updatePaymentMutation={updatePaymentMutation}
-                    deletePaymentMutation={deletePaymentMutation}
-                    interestPayments={interestPayments as any[]}
                     updateMutation={updateMutation}
                     handleOpenEdit={handleOpenEdit}
                     handleDelete={handleDelete}
@@ -4271,6 +4305,42 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         </button>
                       );
                     })}
+                  </div>
+                )}
+                {hasMultipleOwnerInterestModes && (
+                  <div className="mt-3 overflow-hidden rounded-xl border border-indigo-100 bg-indigo-50/60">
+                    <div className="border-b border-indigo-100 px-3 py-2 text-xs font-semibold text-indigo-900">共同拥有者利息约定</div>
+                    <div className="space-y-2 px-3 py-2.5">
+                      {([
+                        { key: 'pendingInterestScope' as const, label: '待结利息', description: '统一后同步计息基数、时间、年化、付息方式与币种' },
+                        { key: 'paidInterestScope' as const, label: '已结利息', description: '统一后所有拥有者查看同一笔已结利息合计' },
+                      ]).map(item => {
+                        const selected = displayConfig[item.key] === 'unified' ? 'unified' : 'individual';
+                        return (
+                          <div key={item.key} className="flex items-center gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-medium text-slate-700">{item.label}</div>
+                              <div className="mt-0.5 text-[10px] leading-4 text-slate-500">{item.description}</div>
+                            </div>
+                            <div className="flex shrink-0 overflow-hidden rounded-lg border border-indigo-200 bg-white">
+                              {([
+                                { value: 'individual', label: '各自' },
+                                { value: 'unified', label: '全局统一' },
+                              ] as const).map(option => (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() => setDisplayConfig(current => ({ ...current, [item.key]: option.value }))}
+                                  className={`px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${selected === option.value ? 'bg-indigo-600 text-white' : 'bg-white text-slate-500'}`}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
