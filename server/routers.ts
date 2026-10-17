@@ -29110,9 +29110,17 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         const YJH_USER_ID = 4957151;
         const JIANG_USER_ID = 870413;
-        if (ctx.user.id !== YJH_USER_ID && ctx.user.id !== JIANG_USER_ID) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作' });
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const canManageSwitch = ctx.user.id === YJH_USER_ID || ctx.user.id === JIANG_USER_ID;
+        if (!canManageSwitch) {
+          // 普通成员只读取生效倍数，确保开关开启后不会因无权查询而回退展示 5.25 倍。
+          const [memberRows] = await (conn as any).execute(
+            `SELECT 1 FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+            [input.ledgerId, ctx.user.id]
+          );
+          if (!(memberRows as any[])[0]) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        }
         const [rows] = await (conn as any).execute(
           `SELECT enabled, target_user_id, gift_ratio, updated_by, updated_at FROM af_525_switch WHERE ledger_id = ? LIMIT 1`,
           [input.ledgerId]
