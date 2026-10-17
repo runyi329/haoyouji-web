@@ -148,6 +148,10 @@ function createExactSnapshotContainer(
 ) {
   const rect = target.getBoundingClientRect();
   const sourceFullHeight = Math.max(rect.height, target.scrollHeight);
+  // 全内容账页导出额外保留水平出血区：移动端金额、分隔线或阴影即使贴近边缘，
+  // 也不会在最终图片的左右两侧被画布裁掉。
+  const horizontalPadding = outerPadding + (measureAfterAssets ? 16 : 0);
+  const verticalPadding = outerPadding;
   const clonedTarget = target.cloneNode(true) as HTMLElement;
   copyRenderedStyles(target, clonedTarget);
   if (exportBackground) {
@@ -180,11 +184,13 @@ function createExactSnapshotContainer(
     left: "0",
     top: "0",
     zIndex: "-2147483647",
-    width: `${rect.width + outerPadding * 2}px`,
+    width: `${rect.width + horizontalPadding * 2}px`,
     height: "auto",
-    padding: `${outerPadding}px`,
+    padding: `${verticalPadding}px ${horizontalPadding}px`,
     boxSizing: "border-box",
-    background: "transparent",
+    // 外侧安全边距使用与账页一致的底色，避免 PNG 透明区在预览棋盘背景上
+    // 被误认为左右内容遭到裁切。
+    background: exportBackground || "transparent",
     pointerEvents: "none",
     overflow: "visible",
   });
@@ -201,19 +207,22 @@ function createExactSnapshotContainer(
           return Math.max(bottom, elementRect.bottom - renderedRect.top);
         }, renderedRect.height)
       : 0;
+    // 全内容账页可能位于滚动弹窗内；以克隆后所有子元素的最远底部为准，
+    // 并给底部账目留出安全空白，避免长流水在画布边缘被裁掉。
     const fullHeight = Math.ceil(Math.max(
       hasCollapsedExportContent ? 0 : sourceFullHeight,
       clonedTarget.scrollHeight,
       renderedRect.height,
       renderedContentBottom,
-    ));
+    ) + (measureAfterAssets ? 16 : 0));
 
     if (measureAfterAssets) {
-      // 卡片模式保持自然高度；只固定外层画布，避免把卡片根节点本身锁成偏小高度。
-      clonedTarget.style.height = "auto";
+      // 全内容模式固定为已测得的完整高度，但不裁切溢出内容；
+      // 这样滚动弹窗中的长流水也能全部进入导出画布。
+      clonedTarget.style.height = `${fullHeight}px`;
       clonedTarget.style.minHeight = `${fullHeight}px`;
       clonedTarget.style.maxHeight = "none";
-      clonedTarget.style.overflow = "hidden";
+      clonedTarget.style.overflow = "visible";
     } else {
       // 订单模式沿用原来的固定尺寸镜像逻辑。
       clonedTarget.style.height = `${fullHeight}px`;
@@ -221,7 +230,7 @@ function createExactSnapshotContainer(
       clonedTarget.style.maxHeight = "none";
       clonedTarget.style.overflow = "hidden";
     }
-    container.style.height = `${fullHeight + outerPadding * 2}px`;
+    container.style.height = `${fullHeight + verticalPadding * 2}px`;
 
     clonedTarget.querySelector<HTMLElement>("[data-card-export-watermark]")?.remove();
     const watermark = document.createElement("div");
@@ -266,8 +275,8 @@ function createExactSnapshotContainer(
     clonedTarget.appendChild(watermark);
 
     return {
-      width: rect.width + outerPadding * 2,
-      height: fullHeight + outerPadding * 2,
+      width: rect.width + horizontalPadding * 2,
+      height: fullHeight + verticalPadding * 2,
     };
   };
 

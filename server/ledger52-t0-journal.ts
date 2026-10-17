@@ -1746,6 +1746,7 @@ function mapT0JournalPayoutLog(row: any): T0JournalPayoutLog {
 export async function getLedger52T0JournalPayoutLogs(input: {
   scope: T0JournalReadScope;
   relatedUserId?: number;
+  allUsers?: boolean;
 }) {
   const conn = await getDbConnection();
   if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "T+0速记账本数据库连接失败" });
@@ -1753,11 +1754,21 @@ export async function getLedger52T0JournalPayoutLogs(input: {
   const requestedRelatedUserId = Number(input.relatedUserId || 0);
   const adminScope = input.scope.mode === "admin" ? input.scope : null;
   const memberScope = input.scope.mode === "member" ? input.scope : null;
-  const relatedUserId = adminScope ? requestedRelatedUserId : memberScope?.relatedUserId || 0;
-  if (!Number.isInteger(relatedUserId) || relatedUserId <= 0) {
+  const readAllUsers = Boolean(adminScope && input.allUsers);
+  const relatedUserId = readAllUsers ? 0 : (adminScope ? requestedRelatedUserId : memberScope?.relatedUserId || 0);
+  if (!readAllUsers && (!Number.isInteger(relatedUserId) || relatedUserId <= 0)) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "请先选择一位关联用户后查看资金流水" });
   }
-  const sql = adminScope
+  const sql = readAllUsers
+    ? `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
+              payout.amount, payout.direction, payout.note, payout.created_at,
+              COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
+         FROM ledger52_t0_journal_payout_logs payout
+         LEFT JOIN users u ON u.id = payout.related_user_id
+        WHERE payout.ledger_id = ? AND payout.user_id = ?
+        ORDER BY payout.occurred_on DESC, payout.id DESC
+        LIMIT 5000`
+    : adminScope
     ? `SELECT payout.id, payout.related_user_id, DATE_FORMAT(payout.occurred_on, '%Y-%m-%d') AS occurred_on,
               payout.amount, payout.direction, payout.note, payout.created_at,
               COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name
@@ -1774,7 +1785,9 @@ export async function getLedger52T0JournalPayoutLogs(input: {
         WHERE payout.ledger_id = ? AND payout.related_user_id = ?
         ORDER BY payout.occurred_on DESC, payout.id DESC
         LIMIT 500`;
-  const params = adminScope
+  const params = readAllUsers
+    ? [LEDGER_52_T0_JOURNAL_ID, adminScope!.journalOwnerUserId]
+    : adminScope
     ? [LEDGER_52_T0_JOURNAL_ID, adminScope.journalOwnerUserId, relatedUserId]
     : [LEDGER_52_T0_JOURNAL_ID, relatedUserId];
   const [rows] = await conn.execute(sql, params);

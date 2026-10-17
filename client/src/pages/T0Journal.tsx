@@ -4,6 +4,7 @@ import {
   ArrowDownLeft,
   ArrowLeft,
   ArrowUpRight,
+  BookOpen,
   NotebookTabs,
   Check,
   ChevronDown,
@@ -16,6 +17,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Share2,
   ShieldCheck,
   SlidersHorizontal,
   Target,
@@ -35,7 +37,6 @@ type T0OptionDirection = "long_call" | "long_put" | "short_call" | "short_put";
 type T0OptionPremiumCurrency = "USDT" | "ETH";
 type T0GridDirection = "long" | "short";
 type T0JournalPayoutDirection = "withdrawal" | "deposit";
-type T0JournalPayoutLogView = "all" | T0JournalPayoutDirection;
 type T0JournalPayoutLog = {
   id: string;
   relatedUserId: number;
@@ -809,6 +810,7 @@ const ACTIONS: Record<TradeAction, { label: string; side: PositionSide; opening:
 const RECENT_JOURNAL_ACTIONS: TradeAction[] = ["openLong", "openShort", "closeLong", "closeShort"];
 const RECENT_JOURNAL_PAGE_SIZE = 10;
 const TOTAL_REVENUE_DETAIL_PAGE_SIZE = 10;
+const PAYOUT_INCOME_PAGE_SIZE = 20;
 
 const numberFormatter = new Intl.NumberFormat("zh-CN", {
   minimumFractionDigits: 2,
@@ -2204,6 +2206,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [, setLocation] = useLocation();
   const search = useSearch();
   const searchParams = new URLSearchParams(search);
+  const payoutEntryDirection = searchParams.get("payout") === "deposit"
+    ? "deposit"
+    : searchParams.get("payout") === "withdrawal"
+      ? "withdrawal"
+      : null;
   const [accounts, setAccounts] = useState<PreviewAccount[]>([]);
   const [recentRelatedUsers, setRecentRelatedUsers] = useState<PreviewRelatedUser[]>([]);
   const [relatedFunds, setRelatedFunds] = useState<PreviewRelatedFund[]>([]);
@@ -2274,10 +2281,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [showTotalNetProfitDetail, setShowTotalNetProfitDetail] = useState(false);
   const [totalRevenueDetailPage, setTotalRevenueDetailPage] = useState(1);
   const [showPayoutLog, setShowPayoutLog] = useState(false);
+  const [showGlobalLedger, setShowGlobalLedger] = useState(false);
+  const [globalLedgerTab, setGlobalLedgerTab] = useState<"positions" | "funds">("positions");
+  const [payoutIncomePage, setPayoutIncomePage] = useState(1);
   const [showPayoutXirrHelp, setShowPayoutXirrHelp] = useState(false);
-  const [showPayoutForm, setShowPayoutForm] = useState(false);
-  const [payoutDirection, setPayoutDirection] = useState<T0JournalPayoutDirection>("withdrawal");
-  const [payoutLogView, setPayoutLogView] = useState<T0JournalPayoutLogView>("all");
   const [payoutOccurredOn, setPayoutOccurredOn] = useState(() => getBeijingDateInputValue());
   const [payoutAmount, setPayoutAmount] = useState("");
   const [payoutNote, setPayoutNote] = useState("");
@@ -2477,23 +2484,28 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       refetchOnWindowFocus: true,
     },
   );
+  const t0GlobalPayoutLogsQuery = trpc.ledger.t0GetPayoutLogs.useQuery(
+    { ledgerId: 52, allUsers: true },
+    {
+      enabled: canManage && showGlobalLedger && globalLedgerTab === "funds",
+      staleTime: 0,
+      refetchOnWindowFocus: true,
+    },
+  );
   const t0Utils = trpc.useUtils();
   const resetPayoutLogForm = () => {
     setEditingPayoutLog(null);
     setPayoutAmount("");
     setPayoutNote("");
-    setPayoutDirection("withdrawal");
     setPayoutOccurredOn(getBeijingDateInputValue());
-    setShowPayoutForm(false);
   };
-  const openPayoutLogForm = (direction: T0JournalPayoutDirection) => {
+  const openPayoutEntryPage = (direction: T0JournalPayoutDirection) => {
     setEditingPayoutLog(null);
-    setPayoutDirection(direction);
-    setPayoutLogView(direction);
     setPayoutAmount("");
     setPayoutNote("");
     setPayoutOccurredOn(getBeijingDateInputValue());
-    setShowPayoutForm(true);
+    setShowPayoutLog(false);
+    setLocation(`/ledger/${ledgerId}/t0-journal?payout=${direction}`);
   };
   const createPayoutLogMutation = trpc.ledger.t0CreatePayoutLog.useMutation({
     onSuccess: async (createdLog) => {
@@ -2504,7 +2516,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ...(Array.isArray(current) ? current.filter((log) => log.id !== createdLog.id) : []),
       ]);
       resetPayoutLogForm();
-      setPayoutLogView(createdLog.direction === "deposit" ? "deposit" : "withdrawal");
       await t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput);
       toast.success("资金流水已保存");
     },
@@ -2518,7 +2529,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ...(Array.isArray(current) ? current.filter((log) => log.id !== updatedLog.id) : []),
       ]);
       resetPayoutLogForm();
-      setPayoutLogView(updatedLog.direction === "deposit" ? "deposit" : "withdrawal");
       await t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput);
       toast.success("资金流水已更新");
     },
@@ -3705,6 +3715,148 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     });
   }, [isMemberView, profitShareSnapshots, selectedFilledTrades, trades, viewerProfitShareBeneficiaryUserId]);
   const totalNetProfit = totalNetProfitDetails.reduce((total, detail) => total + detail.netPnl, 0);
+  const payoutSharedIncomeTransfers = useMemo(() => {
+    const targetUserId = Number(payoutTargetRelatedUserId);
+    return Number.isInteger(targetUserId) && targetUserId > 0
+      ? sharedIncomeTransfers.filter((transfer) => transfer.recipientUserId === targetUserId)
+      : [];
+  }, [payoutTargetRelatedUserId, sharedIncomeTransfers]);
+  const payoutSharedIncomeTotal = payoutSharedIncomeTransfers.reduce((total, transfer) => total + transfer.amount, 0);
+  // 收益账本使用“交易/分佣已实现收益 + 已到账共享收益”的完整口径；共享收益从其他订单的管理员份额划出，必须单独可追溯。
+  const payoutBookTotalIncome = totalNetProfit + payoutSharedIncomeTotal;
+  const payoutBookTotalIncomeClass = payoutBookTotalIncome > 0 ? "text-rose-600" : payoutBookTotalIncome < 0 ? "text-emerald-600" : "text-slate-700";
+  const payoutIncomeEntries = useMemo(() => {
+    const tradeEntries = totalNetProfitDetails
+      .filter((detail) => Number.isFinite(detail.netPnl) && Math.abs(detail.netPnl) > 0.000001)
+      .map((detail) => ({ kind: "trade" as const, id: `trade-${detail.trade.id}`, createdAt: detail.trade.createdAt, detail }));
+    const sharedEntries = payoutSharedIncomeTransfers
+      .map((transfer) => ({ kind: "shared" as const, id: `shared-${transfer.id}`, createdAt: transfer.createdAt, transfer }));
+    return [...tradeEntries, ...sharedEntries]
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id));
+  }, [payoutSharedIncomeTransfers, totalNetProfitDetails]);
+  const payoutIncomeTotalPages = Math.max(1, Math.ceil(payoutIncomeEntries.length / PAYOUT_INCOME_PAGE_SIZE));
+  const pagedPayoutIncomeEntries = useMemo(() => {
+    const start = (payoutIncomePage - 1) * PAYOUT_INCOME_PAGE_SIZE;
+    return payoutIncomeEntries.slice(start, start + PAYOUT_INCOME_PAGE_SIZE);
+  }, [payoutIncomeEntries, payoutIncomePage]);
+  useEffect(() => {
+    setPayoutIncomePage((current) => Math.min(current, payoutIncomeTotalPages));
+  }, [payoutIncomeTotalPages]);
+  useEffect(() => {
+    setPayoutIncomePage(1);
+  }, [payoutTargetRelatedUserId]);
+  const globalLedgerRows = useMemo(() => {
+    if (!canManage) return [];
+    const relatedUserById = new Map(recentRelatedUsers.map((user) => [user.id, user]));
+    const tradesByUserId = new Map<string, PreviewTrade[]>();
+    for (const trade of trades) {
+      const userId = String(trade.relatedUserId || "").trim();
+      if (!userId || trade.relatedUserHidden) continue;
+      const rows = tradesByUserId.get(userId) || [];
+      rows.push(trade);
+      tradesByUserId.set(userId, rows);
+    }
+    const sharedIncomeByUserId = new Map<string, number>();
+    for (const transfer of sharedIncomeTransfers) {
+      const userId = String(transfer.recipientUserId);
+      sharedIncomeByUserId.set(userId, (sharedIncomeByUserId.get(userId) || 0) + transfer.amount);
+    }
+    return Array.from(tradesByUserId.entries()).map(([userId, userTrades]) => {
+      const relatedUser = relatedUserById.get(userId);
+      const filledTrades = userTrades.filter((trade) => !trade.isPending);
+      const buckets = buildPositionBuckets(filledTrades);
+      const longOpeningCount = filledTrades.filter((trade) => trade.action === "openLong").length;
+      const shortOpeningCount = filledTrades.filter((trade) => trade.action === "openShort").length;
+      const longQuantity = buckets
+        .filter((bucket) => bucket.side === "long" && bucket.remainingQuantity > 0.0000001)
+        .reduce((total, bucket) => total + bucket.remainingQuantity, 0);
+      const shortQuantity = buckets
+        .filter((bucket) => bucket.side === "short" && bucket.remainingQuantity > 0.0000001)
+        .reduce((total, bucket) => total + bucket.remainingQuantity, 0);
+      const closedTrades = filledTrades.filter((trade) => !ACTIONS[trade.action].opening);
+      const detailsById = buildRecentJournalTradeDetails(filledTrades);
+      const realizedTradeIncome = closedTrades.reduce((total, trade) => total + (detailsById.get(trade.id)?.netPnl || 0), 0);
+      const sharedIncome = sharedIncomeByUserId.get(userId) || 0;
+      const lastActivityAt = userTrades
+        .map((trade) => getTradeActivityTime(trade))
+        .sort()
+        .at(-1) || "";
+      const fallbackTrade = userTrades[0];
+      return {
+        userId,
+        name: relatedUser?.name || fallbackTrade?.relatedUserName || fallbackTrade?.relatedUsername || `用户#${userId}`,
+        username: relatedUser?.username || fallbackTrade?.relatedUsername || "",
+        longQuantity,
+        shortQuantity,
+        longOpeningCount,
+        shortOpeningCount,
+        openingCount: longOpeningCount + shortOpeningCount,
+        closedCount: closedTrades.length,
+        orderCount: userTrades.length,
+        realizedTradeIncome,
+        sharedIncome,
+        totalIncome: realizedTradeIncome + sharedIncome,
+        lastActivityAt,
+      };
+    }).sort((left, right) => (
+      Number((right.longQuantity + right.shortQuantity) > 0.0000001) - Number((left.longQuantity + left.shortQuantity) > 0.0000001)
+      || right.lastActivityAt.localeCompare(left.lastActivityAt)
+      || left.name.localeCompare(right.name, "zh-CN")
+    ));
+  }, [canManage, recentRelatedUsers, sharedIncomeTransfers, trades]);
+  const globalLedgerSummary = useMemo(() => {
+    const summary = globalLedgerRows.reduce((total, row) => ({
+      longQuantity: total.longQuantity + row.longQuantity,
+      shortQuantity: total.shortQuantity + row.shortQuantity,
+    }), { longQuantity: 0, shortQuantity: 0 });
+    const netPosition = summary.longQuantity - summary.shortQuantity;
+    return {
+      ...summary,
+      netPosition,
+      netPositionLabel: netPosition > 0.0000001 ? "多" : netPosition < -0.0000001 ? "空" : "平",
+      netPositionClass: netPosition > 0.0000001 ? "text-rose-600" : netPosition < -0.0000001 ? "text-emerald-600" : "text-slate-500",
+    };
+  }, [globalLedgerRows]);
+  const globalFundsRows = useMemo(() => {
+    const relatedUserById = new Map(recentRelatedUsers.map((user) => [user.id, user]));
+    const rowsByUserId = new Map<string, { userId: string; name: string; deposit: number; tradeProfit: number; sharedProfit: number; withdrawal: number }>();
+    const ensureRow = (userId: string, fallbackName?: string) => {
+      const existing = rowsByUserId.get(userId);
+      if (existing) return existing;
+      const user = relatedUserById.get(userId);
+      const row = { userId, name: user?.name || fallbackName || `用户#${userId}`, deposit: 0, tradeProfit: 0, sharedProfit: 0, withdrawal: 0 };
+      rowsByUserId.set(userId, row);
+      return row;
+    };
+    for (const row of globalLedgerRows) {
+      const fundRow = ensureRow(row.userId, row.name);
+      fundRow.tradeProfit = row.realizedTradeIncome;
+      fundRow.sharedProfit = row.sharedIncome;
+    }
+    for (const transfer of sharedIncomeTransfers) {
+      const userId = String(transfer.recipientUserId);
+      if (!rowsByUserId.has(userId)) ensureRow(userId).sharedProfit += transfer.amount;
+    }
+    const payoutRows = Array.isArray(t0GlobalPayoutLogsQuery.data) ? t0GlobalPayoutLogsQuery.data : [];
+    for (const log of payoutRows as any[]) {
+      const userId = String(log.relatedUserId || "").trim();
+      if (!userId) continue;
+      const row = ensureRow(userId, String(log.relatedUserName || "").trim() || undefined);
+      const amount = Number(log.amount || 0);
+      if (!Number.isFinite(amount)) continue;
+      if (String(log.direction) === "deposit") row.deposit += amount;
+      else row.withdrawal += amount;
+    }
+    return Array.from(rowsByUserId.values()).sort((left, right) => (
+      right.deposit - left.deposit || (right.tradeProfit + right.sharedProfit) - (left.tradeProfit + left.sharedProfit) || left.name.localeCompare(right.name, "zh-CN")
+    ));
+  }, [globalLedgerRows, recentRelatedUsers, sharedIncomeTransfers, t0GlobalPayoutLogsQuery.data]);
+  const globalFundsSummary = useMemo(() => globalFundsRows.reduce((total, row) => ({
+    deposit: total.deposit + row.deposit,
+    tradeProfit: total.tradeProfit + row.tradeProfit,
+    sharedProfit: total.sharedProfit + row.sharedProfit,
+    withdrawal: total.withdrawal + row.withdrawal,
+  }), { deposit: 0, tradeProfit: 0, sharedProfit: 0, withdrawal: 0 }), [globalFundsRows]);
   const totalProfitAttribution = useMemo(() => {
     const targetUserId = payoutTargetRelatedUserId;
     const hasIndividualScope = Number.isInteger(targetUserId) && targetUserId > 0;
@@ -3736,11 +3888,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const depositLogs = payoutLogs.filter((log) => log.direction === "deposit");
   const cumulativePayoutAmount = withdrawalLogs.reduce((total, log) => total + (Number.isFinite(log.amount) ? log.amount : 0), 0);
   const cumulativeDepositAmount = depositLogs.reduce((total, log) => total + (Number.isFinite(log.amount) ? log.amount : 0), 0);
-  const payoutProfitCap = Math.max(0, totalNetProfit);
+  const payoutProfitCap = Math.max(0, payoutBookTotalIncome);
   const payoutXirrSummary = useMemo(() => {
     const asOfDate = getBeijingDateInputValue();
     // 收益账本的“当前总收益”不因提现回写扣减，因此期末账面净值须减去已提现收益，避免在 XIRR 中重复计入。
-    const currentNetValue = cumulativeDepositAmount + totalNetProfit - cumulativePayoutAmount;
+    const currentNetValue = cumulativeDepositAmount + payoutBookTotalIncome - cumulativePayoutAmount;
     const cashFlows: T0XirrCashFlow[] = [
       ...depositLogs.map((log) => ({ occurredOn: log.occurredOn, amount: -log.amount })),
       ...withdrawalLogs.map((log) => ({ occurredOn: log.occurredOn, amount: log.amount })),
@@ -3750,6 +3902,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       .map((log) => getT0CalendarDateUtc(log.occurredOn))
       .filter((timestamp): timestamp is number => timestamp !== null);
     const firstInvestmentTimestamp = investmentDates.length > 0 ? Math.min(...investmentDates) : null;
+    const firstInvestmentDate = depositLogs
+      .map((log) => String(log.occurredOn || "").slice(0, 10))
+      .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+      .sort()[0] || null;
     const asOfTimestamp = getT0CalendarDateUtc(asOfDate);
     const daysHeld = firstInvestmentTimestamp !== null && asOfTimestamp !== null
       ? Math.max(1, Math.floor((asOfTimestamp - firstInvestmentTimestamp) / (24 * 60 * 60 * 1000)) + 1)
@@ -3758,16 +3914,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       asOfDate,
       currentNetValue,
       daysHeld,
+      firstInvestmentDate,
       rate: calculateT0Xirr(cashFlows),
     };
-  }, [cumulativeDepositAmount, cumulativePayoutAmount, depositLogs, totalNetProfit, withdrawalLogs]);
+  }, [cumulativeDepositAmount, cumulativePayoutAmount, depositLogs, payoutBookTotalIncome, withdrawalLogs]);
   const remainingPayoutAmount = Math.max(0, payoutProfitCap - cumulativePayoutAmount);
   const payoutFormWithdrawalLimit = Math.max(
     0,
     payoutProfitCap - (cumulativePayoutAmount - (editingPayoutLog?.direction === "withdrawal" ? editingPayoutLog.amount : 0)),
   );
-  const visiblePayoutLogs = payoutLogView === "all" ? payoutLogs : payoutLogs.filter((log) => log.direction === payoutLogView);
-  const payoutLogSectionLabel = payoutLogView === "all" ? "资金流水" : payoutLogView === "deposit" ? "投入流水" : "提现流水";
+  const renderPayoutLogRow = (log: T0JournalPayoutLog) => {
+    const isDeposit = log.direction === "deposit";
+    return <div key={log.id} className="px-3 py-2.5 text-xs">
+      <div className="flex items-center justify-between gap-2"><span className="flex min-w-0 items-center gap-1.5 overflow-hidden font-medium text-slate-700"><span className="shrink-0">{log.occurredOn.replaceAll("-", "/")}</span><span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${isDeposit ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-600"}`}>{isDeposit ? "存入" : "提取"}</span>{log.note && <span className="min-w-0 truncate text-[11px] font-normal text-slate-400">· {log.note}</span>}</span><span className="flex shrink-0 items-center gap-1"><span className={`font-bold tabular-nums ${isDeposit ? "text-sky-700" : "text-slate-800"}`}>{isDeposit ? "+" : "−"}{formatPrice(log.amount)} U</span>{canManage && isPayoutListEditing && deletePayoutLogId !== log.id && <><button type="button" onClick={() => { setEditingPayoutLog(log); setIsPayoutListEditing(false); setPayoutOccurredOn(log.occurredOn); setPayoutAmount(log.amount.toFixed(2)); setPayoutNote(log.note || ""); }} className="flex h-7 w-7 items-center justify-center rounded text-slate-500 active:bg-slate-100" aria-label="编辑资金流水" title="编辑"><Pencil className="h-3.5 w-3.5" /></button><button type="button" onClick={() => setDeletePayoutLogId(log.id)} className="flex h-7 w-7 items-center justify-center rounded text-rose-500 active:bg-rose-50" aria-label="删除资金流水" title="删除"><Trash2 className="h-3.5 w-3.5" /></button></>}</span></div>
+      {canManage && isPayoutListEditing && deletePayoutLogId === log.id && <div className="mt-2 flex items-center justify-end gap-2 text-[11px]"><span className="mr-auto text-rose-600">确认删除这笔记录？</span><button type="button" onClick={() => setDeletePayoutLogId(null)} className="h-7 rounded border border-slate-300 bg-white px-2 font-medium text-slate-600">保留</button><button type="button" disabled={deletePayoutLogMutation.isPending} onClick={() => deletePayoutLogMutation.mutate({ ledgerId: 52, relatedUserId: payoutTargetRelatedUserId, id: log.id })} className="h-7 rounded bg-rose-600 px-2 font-semibold text-white disabled:opacity-45">{deletePayoutLogMutation.isPending ? "删除中" : "确认删除"}</button></div>}
+    </div>;
+  };
   // 总览展开后的多/空累计收益必须与顶部“总收益”使用相同的当前用户实际可得口径。
   // 原 summary 的 realized 是订单原始净额；筛选某位用户时会混入其他受益人的分成。
   const overviewSummary = useMemo(() => {
@@ -5784,6 +5946,86 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     );
   }
 
+  if (payoutEntryDirection) {
+    const isDepositEntry = payoutEntryDirection === "deposit";
+    const entryLogs = isDepositEntry ? depositLogs : withdrawalLogs;
+    const entryTotal = isDepositEntry ? cumulativeDepositAmount : cumulativePayoutAmount;
+    const entryTitle = isDepositEntry ? "登记投入" : "登记提现";
+    const entryFlowTitle = isDepositEntry ? "存入流水" : "提取流水";
+    const entryTone = isDepositEntry ? "text-sky-700" : "text-slate-800";
+    const entryButtonTone = isDepositEntry ? "bg-sky-600" : "bg-slate-800";
+    const closePayoutEntryPage = () => {
+      resetPayoutLogForm();
+      setIsPayoutListEditing(false);
+      setDeletePayoutLogId(null);
+      setLocation(`/ledger/${ledgerId}/t0-journal`);
+    };
+    const submitPayoutEntry = () => {
+      const amount = Number(payoutAmount);
+      if (!payoutOccurredOn) { toast.error("请选择登记日期"); return; }
+      if (!Number.isFinite(amount) || amount <= 0) { toast.error("请输入有效的登记金额"); return; }
+      if (!isDepositEntry && amount > payoutFormWithdrawalLimit + 0.005) { toast.error(`本次提现不能超过可提现的 ${formatPrice(payoutFormWithdrawalLimit)} U`); return; }
+      const payload = {
+        ledgerId: 52 as const,
+        relatedUserId: payoutTargetRelatedUserId,
+        occurredOn: payoutOccurredOn,
+        amount: amount.toFixed(2),
+        direction: payoutEntryDirection,
+        note: payoutNote.trim() || undefined,
+        maximumTotalAmount: !isDepositEntry ? payoutProfitCap.toFixed(2) : undefined,
+      };
+      if (editingPayoutLog) updatePayoutLogMutation.mutate({ ...payload, id: editingPayoutLog.id });
+      else createPayoutLogMutation.mutate(payload);
+    };
+
+    if (!canManage || payoutTargetRelatedUserId <= 0) {
+      return <div className="min-h-screen max-w-md mx-auto bg-slate-50">
+        <header className="flex h-14 items-center gap-3 border-b border-slate-200 bg-white px-4">
+          <button type="button" onClick={() => setLocation(`/ledger/${ledgerId}/t0-journal`)} aria-label="返回T+0速记账本" className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white active:scale-95"><ArrowLeft className="h-4 w-4 text-slate-700" /></button>
+          <h1 className="font-semibold text-slate-900">{entryTitle}</h1>
+        </header>
+        <div className="px-5 py-12 text-center text-sm leading-6 text-slate-500">请先在 T+0 速记账本中单选一位用户，再进行资金登记。</div>
+      </div>;
+    }
+
+    return <div className="min-h-screen max-w-md mx-auto bg-slate-50 pb-8">
+      <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] backdrop-blur">
+        <button type="button" onClick={closePayoutEntryPage} aria-label="返回T+0收益账本" className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white active:scale-95"><ArrowLeft className="h-4 w-4 text-slate-700" /></button>
+        <div className="min-w-0 flex-1"><h1 className="font-semibold text-slate-900">{entryTitle}</h1><div className="truncate text-[11px] text-slate-500">{payoutTargetUserIdentity.name}{payoutTargetUserIdentity.username ? ` · @${payoutTargetUserIdentity.username}` : ""}</div></div>
+        {entryLogs.length > 0 && <button type="button" onClick={() => { setIsPayoutListEditing((current) => !current); setDeletePayoutLogId(null); }} className={`h-8 rounded px-2 text-xs font-medium ${isPayoutListEditing ? "bg-slate-800 text-white" : "text-slate-600 active:bg-slate-100"}`}>{isPayoutListEditing ? "完成" : "编辑"}</button>}
+      </header>
+
+      <main className="space-y-3 px-3 py-4">
+        <section className="border-y border-slate-200 bg-white px-3 py-3">
+          <div className="flex items-baseline justify-between gap-3"><span className="text-xs font-medium text-slate-500">{entryFlowTitle}</span><span className={`text-base font-semibold tabular-nums ${entryTone}`}>{entryTotal > 0 ? (isDepositEntry ? "+" : "−") : ""}{entryTotal === 0 ? "0" : formatPrice(entryTotal)} <span className="text-[10px] font-medium opacity-75">U</span></span></div>
+          <div className="mt-1 text-[11px] text-slate-400">共 {entryLogs.length} 笔</div>
+        </section>
+
+        <section className="border-y border-slate-200 bg-white px-3 py-3">
+          {editingPayoutLog && <div className="mb-3 flex items-center justify-between text-xs"><span className="font-medium text-slate-600">编辑本笔{isDepositEntry ? "存入" : "提取"}</span><button type="button" onClick={resetPayoutLogForm} className="text-slate-400 active:text-slate-700">取消编辑</button></div>}
+          <div className="grid grid-cols-2 gap-2">
+            <label className="min-w-0 text-[11px] font-medium text-slate-600">日期
+              <input type="date" value={payoutOccurredOn} onChange={(event) => setPayoutOccurredOn(event.target.value)} className="t0-journal-date-input mt-1 block h-10 min-h-0 w-full appearance-none rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 text-slate-800" style={{ WebkitAppearance: "none", appearance: "none" }} />
+            </label>
+            <label className="min-w-0 text-[11px] font-medium text-slate-600">金额（U）
+              <input inputMode="decimal" placeholder="0.00" value={payoutAmount} onChange={(event) => setPayoutAmount(event.target.value)} className="mt-1 block h-10 min-h-0 w-full rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 tabular-nums text-slate-800" />
+            </label>
+          </div>
+          <label className="mt-3 block text-[11px] font-medium text-slate-600">备注（可选）
+            <input value={payoutNote} onChange={(event) => setPayoutNote(event.target.value)} maxLength={300} placeholder="" className="mt-1 block h-10 min-h-0 w-full rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 text-slate-800" />
+          </label>
+          {!isDepositEntry && <div className="mt-2 text-[11px] text-slate-500">本次提现不超过可提现的 {formatPrice(payoutFormWithdrawalLimit)} U。</div>}
+          <button type="button" disabled={createPayoutLogMutation.isPending || updatePayoutLogMutation.isPending} onClick={submitPayoutEntry} className={`mt-4 h-10 w-full rounded text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-45 ${entryButtonTone}`}>{createPayoutLogMutation.isPending || updatePayoutLogMutation.isPending ? "保存中" : editingPayoutLog ? "保存修改" : `保存${isDepositEntry ? "投入" : "提现"}`}</button>
+        </section>
+
+        <section className="border-y border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5 text-xs"><span className={`font-semibold ${entryTone}`}>{entryFlowTitle}</span><span className="text-slate-400">{entryLogs.length} 笔</span></div>
+          {t0PayoutLogsQuery.isLoading ? <div className="py-6 text-center text-xs text-slate-400">加载中…</div> : entryLogs.length > 0 ? <div className="divide-y divide-slate-100">{entryLogs.map(renderPayoutLogRow)}</div> : <div className="px-3 py-6 text-center text-xs text-slate-400">暂无{entryFlowTitle}记录</div>}
+        </section>
+      </main>
+    </div>;
+  }
+
   return (
     <div className={`${embedded ? "min-h-0 w-full" : "min-h-screen max-w-md mx-auto"} bg-slate-50 pb-8`}>
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 shadow-[0_1px_3px_rgba(15,23,42,0.05)] backdrop-blur">
@@ -5800,8 +6042,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     toast.message("请先在用户筛选中单选一位用户，再查看收益账本");
                     return;
                   }
-                  setShowPayoutForm(false);
                   setShowPayoutXirrHelp(false);
+                  setPayoutIncomePage(1);
                   setShowPayoutLog(true);
                 }}
                 aria-haspopup="dialog"
@@ -5812,6 +6054,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               >
                 <NotebookTabs className="h-[16px] w-[16px] !text-slate-500" stroke="currentColor" strokeWidth={2.15} />
               </button>
+              {canManage && <button
+                type="button"
+                onClick={() => setShowGlobalLedger(true)}
+                aria-haspopup="dialog"
+                aria-label="查看全局账本"
+                title="全局账本（管理员）"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-slate-300 bg-slate-50 text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)] transition active:scale-95 active:bg-slate-100"
+              >
+                <BookOpen className="h-[15px] w-[15px]" strokeWidth={2.1} />
+              </button>}
             </div>
             <button
               onClick={forceRefreshJournal}
@@ -7950,73 +8202,110 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         </div>
       )}
 
+      {showGlobalLedger && canManage && (
+        <div className="fixed inset-0 z-[58] bg-slate-50" role="dialog" aria-modal="true" aria-label="T加零全局账本">
+          <div className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden bg-slate-50">
+            <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] backdrop-blur">
+              <button type="button" onClick={() => setShowGlobalLedger(false)} aria-label="关闭全局账本" className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white active:scale-95"><ArrowLeft className="h-4 w-4 text-slate-700" /></button>
+              <div className="min-w-0 flex-1"><h2 className="font-semibold text-slate-900">T+0 全局账本</h2><div className="truncate text-[11px] text-slate-500">仅管理员可见 · 点击用户进入个人订单视图</div></div>
+            </header>
+            <div className="grid shrink-0 grid-cols-2 border-b border-slate-200 bg-white px-4 pt-2">
+              <button type="button" onClick={() => setGlobalLedgerTab("positions")} className={`h-9 border-b-2 text-sm font-semibold transition ${globalLedgerTab === "positions" ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400"}`}>币仓</button>
+              <button type="button" onClick={() => setGlobalLedgerTab("funds")} className={`h-9 border-b-2 text-sm font-semibold transition ${globalLedgerTab === "funds" ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400"}`}>用户资金</button>
+            </div>
+            <main className="min-h-0 flex-1 overflow-y-auto">
+              {globalLedgerTab === "positions" && <>
+              <div className="border-b border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500">有订单用户 <span className="font-semibold tabular-nums text-slate-800">{globalLedgerRows.length}</span> 人 · 按已成交开仓订单汇总</div>
+              {globalLedgerRows.length > 0 ? <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
+                <div className="flex h-8 items-center border-b border-slate-200 bg-slate-50 px-4 text-[11px] font-medium text-slate-500"><span className="w-[84px] shrink-0 border-r border-slate-200 pr-2">用户</span><div className="grid min-w-0 flex-1 grid-cols-3 divide-x divide-slate-200"><span className="pr-2 text-right">多（ETH）</span><span className="pr-2 text-right">空（ETH）</span><span className="pr-2 text-right">净多空</span></div></div>
+                {globalLedgerRows.map((row) => {
+                const netPosition = row.longQuantity - row.shortQuantity;
+                const netPositionLabel = netPosition > 0.0000001 ? "多" : netPosition < -0.0000001 ? "空" : "平";
+                const netPositionClass = netPosition > 0.0000001 ? "text-rose-600" : netPosition < -0.0000001 ? "text-emerald-600" : "text-slate-500";
+                return <button key={row.userId} type="button" onClick={() => {
+                  setRelatedUserFilterIds([row.userId]);
+                  setSelectedAccountIds([]);
+                  setRelatedFundFilterIds([]);
+                  setShowGlobalLedger(false);
+                  toast.message(`已切换至 ${row.name} 的订单视图`);
+                }} className="flex min-h-[56px] w-full items-center px-4 py-2 text-left transition active:bg-slate-50">
+                  <div className="w-[84px] shrink-0 truncate border-r border-slate-200 pr-2 text-[17px] font-semibold text-slate-800">{row.name}</div>
+                  <div className="grid min-w-0 flex-1 grid-cols-3 divide-x divide-slate-200 tabular-nums">
+                    <span className="whitespace-nowrap pr-2 text-right text-[19px] font-bold leading-none text-rose-600">{Math.round(row.longQuantity).toLocaleString("zh-CN")}</span>
+                    <span className="whitespace-nowrap pr-2 text-right text-[19px] font-bold leading-none text-emerald-600">{Math.round(row.shortQuantity).toLocaleString("zh-CN")}</span>
+                    <span className={`whitespace-nowrap pr-2 text-right text-[19px] font-bold leading-none ${netPositionClass}`}>{Math.round(Math.abs(netPosition)).toLocaleString("zh-CN")}<small className="ml-1 align-baseline text-[10px] font-semibold">{netPositionLabel}</small></span>
+                  </div>
+                </button>;
+              })}</div> : <div className="px-5 py-14 text-center text-sm text-slate-400">当前还没有关联用户订单。</div>}
+              </>}
+              {globalLedgerTab === "funds" && <>
+                <div className="border-b border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500">按用户汇总真实资金流水与已实现收益</div>
+                {globalFundsRows.length > 0 ? <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
+                  <div className="flex h-8 items-center border-b border-slate-200 bg-slate-50 px-4 text-[10px] font-medium text-slate-500"><span className="w-[70px] shrink-0 border-r border-slate-200 pr-2">用户</span><div className="grid min-w-0 flex-1 grid-cols-4 divide-x divide-slate-200"><span className="pr-1 text-right">入金</span><span className="pr-1 text-right">开平收益</span><span className="pr-1 text-right">共享收益</span><span className="pr-1 text-right">出金</span></div></div>
+                  {globalFundsRows.map((row) => {
+                    const tradeProfitClass = row.tradeProfit > 0 ? "text-rose-600" : row.tradeProfit < 0 ? "text-emerald-600" : "text-slate-700";
+                    return <button key={row.userId} type="button" onClick={() => {
+                      setRelatedUserFilterIds([row.userId]);
+                      setSelectedAccountIds([]);
+                      setRelatedFundFilterIds([]);
+                      setShowGlobalLedger(false);
+                      toast.message(`已切换至 ${row.name} 的订单视图`);
+                    }} className="flex min-h-[56px] w-full items-center px-4 py-2 text-left transition active:bg-slate-50">
+                      <div className="w-[70px] shrink-0 truncate border-r border-slate-200 pr-2 text-[16px] font-semibold text-slate-800">{row.name}</div>
+                      <div className="grid min-w-0 flex-1 grid-cols-4 divide-x divide-slate-200 tabular-nums">
+                        <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-slate-800">{Math.round(row.deposit).toLocaleString("zh-CN")}</span>
+                        <span className={`whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none ${tradeProfitClass}`}>{Math.round(row.tradeProfit).toLocaleString("zh-CN")}</span>
+                        <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-indigo-600">{Math.round(row.sharedProfit).toLocaleString("zh-CN")}</span>
+                        <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-slate-700">{Math.round(row.withdrawal).toLocaleString("zh-CN")}</span>
+                      </div>
+                    </button>;
+                  })}
+                </div> : <div className="px-5 py-14 text-center text-sm text-slate-400">暂无用户资金记录。</div>}
+              </>}
+            </main>
+            {globalLedgerTab === "positions" && globalLedgerRows.length > 0 && <footer className="flex min-h-[56px] shrink-0 items-center border-t-2 border-slate-300 bg-slate-50 px-4 shadow-[0_-2px_8px_rgba(15,23,42,0.08)]">
+              <div className="w-[84px] shrink-0 border-r border-slate-200 pr-2 text-[17px] font-bold text-slate-900">汇总</div>
+              <div className="grid min-w-0 flex-1 grid-cols-3 divide-x divide-slate-200 tabular-nums">
+                <span className="whitespace-nowrap pr-2 text-right text-[19px] font-bold leading-none text-rose-600">{Math.round(globalLedgerSummary.longQuantity).toLocaleString("zh-CN")}</span>
+                <span className="whitespace-nowrap pr-2 text-right text-[19px] font-bold leading-none text-emerald-600">{Math.round(globalLedgerSummary.shortQuantity).toLocaleString("zh-CN")}</span>
+                <span className={`whitespace-nowrap pr-2 text-right text-[19px] font-bold leading-none ${globalLedgerSummary.netPositionClass}`}>{Math.round(Math.abs(globalLedgerSummary.netPosition)).toLocaleString("zh-CN")}<small className="ml-1 align-baseline text-[10px] font-semibold">{globalLedgerSummary.netPositionLabel}</small></span>
+              </div>
+            </footer>}
+            {globalLedgerTab === "funds" && globalFundsRows.length > 0 && <footer className="flex min-h-[56px] shrink-0 items-center border-t-2 border-slate-300 bg-slate-50 px-4 shadow-[0_-2px_8px_rgba(15,23,42,0.08)]">
+              <div className="w-[70px] shrink-0 border-r border-slate-200 pr-2 text-[16px] font-bold text-slate-900">汇总</div>
+              <div className="grid min-w-0 flex-1 grid-cols-4 divide-x divide-slate-200 tabular-nums">
+                <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-slate-800">{Math.round(globalFundsSummary.deposit).toLocaleString("zh-CN")}</span>
+                <span className={`whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none ${globalFundsSummary.tradeProfit > 0 ? "text-rose-600" : globalFundsSummary.tradeProfit < 0 ? "text-emerald-600" : "text-slate-700"}`}>{Math.round(globalFundsSummary.tradeProfit).toLocaleString("zh-CN")}</span>
+                <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-indigo-600">{Math.round(globalFundsSummary.sharedProfit).toLocaleString("zh-CN")}</span>
+                <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-slate-700">{Math.round(globalFundsSummary.withdrawal).toLocaleString("zh-CN")}</span>
+              </div>
+            </footer>}
+          </div>
+        </div>
+      )}
+
       {showPayoutLog && (
         <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/45 p-4" role="dialog" aria-modal="true" aria-label="T+0收益账本">
           <div className="flex max-h-[88vh] w-full max-w-sm flex-col overflow-y-auto rounded-xl bg-white p-4 shadow-2xl">
             {canManage && (
-              <div data-html2canvas-ignore="true" className="order-1 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                <div className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500"><span>操作面板</span><span className="flex items-center gap-1"><OrderCardImageDownload targetRef={payoutSharedContentRef} currentUser={me as any} orderNo={`${payoutTargetUserIdentity.name}-${payoutLogSectionLabel}`} filenamePrefix="T+0收益账本" previewTitle="T+0收益账本图片预览" previewHint="包含昵称、用户名、收益统计与当前展示流水" color="#475569" outerPadding={12} captureFullContent exportBackground="#F8FAFC" variant="bare" buttonLabel="下载" /><button type="button" onClick={() => { setIsPayoutListEditing((current) => !current); setDeletePayoutLogId(null); }} className={`flex h-7 items-center gap-1 rounded px-1.5 font-medium ${isPayoutListEditing ? "bg-slate-700 text-white" : "text-slate-600 active:bg-slate-100"}`}><Pencil className="h-3.5 w-3.5" />{isPayoutListEditing ? "完成" : "编辑"}</button></span></div>
-                <div className="p-3">
-                {!showPayoutForm ? (
+              <>
+                <div data-html2canvas-ignore="true" className="order-1 border-b border-slate-200">
+                  <div className="flex items-center justify-between bg-white px-3 py-2 text-[11px] text-slate-500"><span>操作面板</span><OrderCardImageDownload targetRef={payoutSharedContentRef} currentUser={me as any} orderNo={payoutTargetUserIdentity.name} filenamePrefix="T+0收益账本" previewTitle="T+0收益账本图片预览" previewHint="包含昵称、用户名与收益统计" color="#475569" outerPadding={12} captureFullContent exportBackground="#F8FAFC" variant="bare" buttonLabel="下载" /></div>
+                </div>
+                <div data-html2canvas-ignore="true" className="order-4 mt-3 border-t border-slate-200 pt-3">
                   <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => openPayoutLogForm("deposit")} className="flex h-10 items-center justify-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 text-sm font-semibold text-sky-700 shadow-sm active:scale-[0.99]">
+                    <button type="button" onClick={() => openPayoutEntryPage("deposit")} className="flex h-10 items-center justify-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 text-sm font-semibold text-sky-700 shadow-sm active:scale-[0.99]">
                       <ArrowDownLeft className="h-4 w-4" /> 登记投入
                     </button>
-                    <button type="button" onClick={() => openPayoutLogForm("withdrawal")} className="flex h-10 items-center justify-center gap-1.5 rounded-lg bg-slate-800 text-sm font-semibold text-white shadow-sm active:scale-[0.99]">
+                    <button type="button" onClick={() => openPayoutEntryPage("withdrawal")} className="flex h-10 items-center justify-center gap-1.5 rounded-lg bg-slate-800 text-sm font-semibold text-white shadow-sm active:scale-[0.99]">
                       <ArrowUpRight className="h-4 w-4" /> 登记提现
                     </button>
                   </div>
-                ) : (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    {editingPayoutLog && <div className="mb-2 text-[11px] font-medium text-slate-500">编辑资金流水</div>}
-                    <div className="grid grid-cols-2 gap-2 rounded-md border border-slate-200 bg-white p-1 text-xs font-semibold">
-                      <button type="button" onClick={() => { setPayoutDirection("deposit"); setPayoutLogView("deposit"); }} className={`h-8 rounded transition ${payoutDirection === "deposit" ? "bg-sky-600 text-white" : "text-slate-500"}`}>投入</button>
-                      <button type="button" onClick={() => { setPayoutDirection("withdrawal"); setPayoutLogView("withdrawal"); }} className={`h-8 rounded transition ${payoutDirection === "withdrawal" ? "bg-slate-800 text-white" : "text-slate-500"}`}>提现</button>
-                    </div>
-                    <div className="mt-2 grid gap-2">
-                      <label className="min-w-0 text-[11px] font-medium text-slate-600">日期
-                        <input type="date" value={payoutOccurredOn} onChange={(event) => setPayoutOccurredOn(event.target.value)} className="t0-journal-date-input mt-1 block h-9 min-h-0 w-full appearance-none rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 text-slate-800" style={{ WebkitAppearance: "none", appearance: "none" }} />
-                      </label>
-                      <label className="min-w-0 text-[11px] font-medium text-slate-600">金额（U）
-                        <input inputMode="decimal" placeholder="0.00" value={payoutAmount} onChange={(event) => setPayoutAmount(event.target.value)} className="mt-1 block h-9 min-h-0 w-full rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 tabular-nums text-slate-800" />
-                      </label>
-                    </div>
-                    <label className="mt-2 block text-[11px] font-medium text-slate-600">备注（可选）
-                      <input value={payoutNote} onChange={(event) => setPayoutNote(event.target.value)} maxLength={300} placeholder={payoutDirection === "withdrawal" ? "例如：微信提现" : "例如：追加投入"} className="mt-1 block h-9 min-h-0 w-full rounded border border-slate-300 bg-white px-2 py-0 font-sans text-sm leading-5 text-slate-800" />
-                    </label>
-                    {payoutDirection === "withdrawal" && <div className="mt-2 text-[11px] text-slate-500">本次提现不超过可提现的 {formatPrice(payoutFormWithdrawalLimit)} U。</div>}
-                    <div className="mt-3 flex gap-2">
-                      <button type="button" onClick={resetPayoutLogForm} className="h-9 flex-1 rounded border border-slate-300 bg-white text-sm font-medium text-slate-600 active:scale-[0.99]">取消</button>
-                      <button
-                        type="button"
-                        disabled={createPayoutLogMutation.isPending || updatePayoutLogMutation.isPending}
-                        onClick={() => {
-                          const amount = Number(payoutAmount);
-                          if (!payoutOccurredOn) { toast.error("请选择登记日期"); return; }
-                          if (!Number.isFinite(amount) || amount <= 0) { toast.error("请输入有效的登记金额"); return; }
-                          if (payoutDirection === "withdrawal" && amount > payoutFormWithdrawalLimit + 0.005) { toast.error(`本次提现不能超过可提现的 ${formatPrice(payoutFormWithdrawalLimit)} U`); return; }
-                          const payload = {
-                            ledgerId: 52 as const,
-                            relatedUserId: payoutTargetRelatedUserId,
-                            occurredOn: payoutOccurredOn,
-                            amount: amount.toFixed(2),
-                            direction: payoutDirection,
-                            note: payoutNote.trim() || undefined,
-                            maximumTotalAmount: payoutDirection === "withdrawal" ? payoutProfitCap.toFixed(2) : undefined,
-                          };
-                          if (editingPayoutLog) updatePayoutLogMutation.mutate({ ...payload, id: editingPayoutLog.id });
-                          else createPayoutLogMutation.mutate(payload);
-                        }}
-                        className={`h-9 flex-1 rounded text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-45 ${payoutDirection === "withdrawal" ? "bg-slate-800" : "bg-sky-600"}`}
-                      >{createPayoutLogMutation.isPending || updatePayoutLogMutation.isPending ? "保存中" : editingPayoutLog ? "保存修改" : `保存${payoutDirection === "withdrawal" ? "提现" : "投入"}`}</button>
-                    </div>
-                  </div>
-                )}
                 </div>
-              </div>
+              </>
             )}
 
-            <div ref={payoutSharedContentRef} className="order-3 mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div ref={payoutSharedContentRef} className="order-3 mt-3 border-y border-slate-200 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-base font-semibold text-slate-900">T+0收益账本</div>
@@ -8024,39 +8313,52 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     昵称：{payoutTargetUserIdentity.name}{payoutTargetUserIdentity.username ? ` · 用户名：@${payoutTargetUserIdentity.username}` : ""}
                   </div>
                 </div>
-                <button type="button" data-card-export-hide="true" onClick={() => setShowPayoutLog(false)} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭T+0收益账本">
+                <button type="button" data-card-export-hide="true" onClick={() => setShowPayoutLog(false)} className="shrink-0 rounded p-1 text-slate-400 active:scale-90" aria-label="关闭T+0收益账本">
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <div className="mt-3 grid grid-cols-3 divide-x divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-center tabular-nums">
-                <button type="button" onClick={() => { setTotalRevenueDetailPage(1); setShowTotalNetProfitDetail(true); }} aria-haspopup="dialog" aria-label="查看总收益归因报告" className="min-w-0 px-1 py-2 transition active:bg-slate-100"><div className="whitespace-nowrap text-[10px] text-slate-500">当前总收益</div><div className={`mt-0.5 flex items-baseline justify-center whitespace-nowrap text-[clamp(10px,3.2vw,14px)] font-bold leading-none ${totalNetProfitClass}`}><span>{formatSigned(totalNetProfit)}</span><span className="ml-0.5 text-[10px] font-semibold opacity-75">U</span></div></button>
-                <button type="button" aria-pressed={payoutLogView === "deposit"} onClick={() => setPayoutLogView("deposit")} className={`min-w-0 px-1 py-2 transition ${payoutLogView === "deposit" ? "bg-white shadow-[inset_0_-2px_0_#0284c7]" : "active:bg-slate-100"}`}><div className="whitespace-nowrap text-[10px] text-slate-500">累计投入</div><div className="mt-0.5 flex items-baseline justify-center whitespace-nowrap text-[clamp(10px,3.2vw,14px)] font-bold leading-none text-sky-700"><span>+{formatPrice(cumulativeDepositAmount)}</span><span className="ml-0.5 text-[10px] font-semibold opacity-75">U</span></div></button>
-                <button type="button" aria-pressed={payoutLogView === "withdrawal"} onClick={() => setPayoutLogView("withdrawal")} className={`min-w-0 px-1 py-2 transition ${payoutLogView === "withdrawal" ? "bg-white shadow-[inset_0_-2px_0_#475569]" : "active:bg-slate-100"}`}><div className="whitespace-nowrap text-[10px] text-slate-500">累计提现</div><div className="mt-0.5 flex items-baseline justify-center whitespace-nowrap text-[clamp(10px,3.2vw,14px)] font-bold leading-none text-slate-800"><span>+{formatPrice(cumulativePayoutAmount)}</span><span className="ml-0.5 text-[10px] font-semibold opacity-75">U</span></div></button>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-indigo-100 bg-indigo-50/55 px-3 py-2 tabular-nums">
-                <div className="min-w-0">
-                  <div className="text-[11px] font-semibold text-indigo-900">实际年化回报率 <button type="button" onClick={() => setShowPayoutXirrHelp(true)} aria-haspopup="dialog" aria-label="查看XIRR计算说明" className="border-b border-dotted border-indigo-400 pb-px font-medium text-indigo-600 active:opacity-60">XIRR</button></div>
-                  <div className="mt-0.5 truncate text-[10px] text-indigo-700/75">
-                    {payoutXirrSummary.rate === null
-                      ? "需至少一笔跨日投入，以及当前账面净值或已提现收益"
-                      : `持有期：${payoutXirrSummary.daysHeld} 天`}
-                  </div>
-                </div>
-                <div className={`shrink-0 text-right text-base font-bold ${payoutXirrSummary.rate === null ? "text-slate-400" : payoutXirrSummary.rate >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                  {formatT0AnnualizedReturn(payoutXirrSummary.rate)}
+              <div className="mt-3 border-y border-slate-300 tabular-nums">
+                <button type="button" onClick={() => { setTotalRevenueDetailPage(1); setShowTotalNetProfitDetail(true); }} aria-haspopup="dialog" aria-label="查看总收益归因报告" className="w-full px-3 py-3 text-left transition active:bg-slate-50">
+                  <div className="text-xs font-semibold text-slate-600">当前总收益</div>
+                  <div className={`mt-1 truncate whitespace-nowrap text-[clamp(23px,6.8vw,29px)] font-bold leading-none ${payoutBookTotalIncomeClass}`}>{formatSigned(payoutBookTotalIncome)}<span className="ml-1 text-xs font-semibold opacity-75">U</span></div>
+                  <div className="mt-1 truncate text-[10px] text-slate-400">{payoutXirrSummary.firstInvestmentDate ? `${Number(payoutXirrSummary.firstInvestmentDate.slice(5, 7))}月${Number(payoutXirrSummary.firstInvestmentDate.slice(8, 10))}日 至 ${Number(payoutXirrSummary.asOfDate.slice(5, 7))}月${Number(payoutXirrSummary.asOfDate.slice(8, 10))}日 · ${payoutXirrSummary.daysHeld} 天` : "尚无投入期间"}{payoutSharedIncomeTotal > 0 ? ` · 含共享收益 +${formatPrice(payoutSharedIncomeTotal)} U` : ""}</div>
+                </button>
+                <div className="grid grid-cols-2 divide-x divide-slate-300 border-t border-slate-300">
+                  <div className="flex min-w-0 items-center justify-between gap-2 px-3 py-2.5 text-left"><span className="shrink-0 whitespace-nowrap text-[10px] font-medium text-slate-500">累计投入</span><span className="shrink-0 whitespace-nowrap text-[clamp(10px,3.1vw,12px)] font-semibold leading-none text-slate-800">{cumulativeDepositAmount > 0 ? "+" : ""}{cumulativeDepositAmount === 0 ? "0" : formatPrice(cumulativeDepositAmount)}<span className="ml-0.5 text-[9px] font-medium opacity-70">U</span></span></div>
+                  <div className="flex min-w-0 items-center justify-between gap-2 px-3 py-2.5 text-left"><span className="shrink-0 whitespace-nowrap text-[10px] font-medium text-slate-500">实际年化 <button type="button" onClick={() => setShowPayoutXirrHelp(true)} aria-haspopup="dialog" aria-label="查看XIRR计算说明" className="border-b border-dotted border-slate-400 pb-px font-medium text-slate-600 active:opacity-60">XIRR</button></span><span className={`min-w-0 truncate whitespace-nowrap text-[clamp(10px,3.1vw,12px)] font-semibold leading-none ${payoutXirrSummary.rate === null ? "text-slate-400" : "text-slate-800"}`}>{formatT0AnnualizedReturn(payoutXirrSummary.rate)}</span></div>
                 </div>
               </div>
-              <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
-              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-500"><span>{payoutLogSectionLabel}</span><span>{visiblePayoutLogs.length} 笔</span></div>
-              {t0PayoutLogsQuery.isLoading ? <div className="px-3 py-5 text-center text-xs text-slate-400">加载中…</div>
-                : visiblePayoutLogs.length > 0 ? <div className="divide-y divide-slate-100">{visiblePayoutLogs.map((log) => {
-                  const isDeposit = log.direction === "deposit";
-                  return <div key={log.id} className="px-3 py-2.5 text-xs">
-                    <div className="flex items-center justify-between gap-2"><span className="flex min-w-0 items-center gap-1.5 overflow-hidden font-medium text-slate-700"><span className="shrink-0">{log.occurredOn.replaceAll("-", "/")}</span><span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${isDeposit ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-600"}`}>{isDeposit ? "投入" : "提现"}</span>{log.note && <span className="min-w-0 truncate text-[11px] font-normal text-slate-400">· {log.note}</span>}</span><span className="flex shrink-0 items-center gap-1"><span className={`font-bold tabular-nums ${isDeposit ? "text-sky-700" : "text-slate-800"}`}>{isDeposit ? "+" : "−"}{formatPrice(log.amount)} U</span>{canManage && isPayoutListEditing && deletePayoutLogId !== log.id && <><button type="button" onClick={() => { setEditingPayoutLog(log); setIsPayoutListEditing(false); setPayoutDirection(log.direction); setPayoutLogView(log.direction); setPayoutOccurredOn(log.occurredOn); setPayoutAmount(log.amount.toFixed(2)); setPayoutNote(log.note || ""); setShowPayoutForm(true); }} className="flex h-7 w-7 items-center justify-center rounded text-slate-500 active:bg-slate-100" aria-label="编辑资金流水" title="编辑"><Pencil className="h-3.5 w-3.5" /></button><button type="button" onClick={() => setDeletePayoutLogId(log.id)} className="flex h-7 w-7 items-center justify-center rounded text-rose-500 active:bg-rose-50" aria-label="删除资金流水" title="删除"><Trash2 className="h-3.5 w-3.5" /></button></>}</span></div>
-                    {canManage && isPayoutListEditing && deletePayoutLogId === log.id && <div className="mt-2 flex items-center justify-end gap-2 text-[11px]"><span className="mr-auto text-rose-600">确认删除这笔记录？</span><button type="button" onClick={() => setDeletePayoutLogId(null)} className="h-7 rounded border border-slate-300 bg-white px-2 font-medium text-slate-600">保留</button><button type="button" disabled={deletePayoutLogMutation.isPending} onClick={() => deletePayoutLogMutation.mutate({ ledgerId: 52, relatedUserId: payoutTargetRelatedUserId, id: log.id })} className="h-7 rounded bg-rose-600 px-2 font-semibold text-white disabled:opacity-45">{deletePayoutLogMutation.isPending ? "删除中" : "确认删除"}</button></div>}
+
+              <section className="mt-3 border-y border-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 text-[11px]"><span className="font-semibold text-slate-700">已实现收益</span><span className="text-slate-400">共 {payoutIncomeEntries.length} 笔</span></div>
+                <div className="grid grid-cols-[60px_34px_52px_68px_minmax(0,1fr)] gap-x-1 border-b border-slate-100 px-3 py-1.5 text-[10px] font-medium text-slate-400 tabular-nums"><span className="text-center">时间</span><span className="text-center">类型</span><span className="text-center">数量</span><span className="text-right">价格/来源</span><span className="text-right">收益</span></div>
+                {payoutIncomeEntries.length > 0 ? <div className="divide-y divide-slate-100">{pagedPayoutIncomeEntries.map((entry) => {
+                  if (entry.kind === "shared") {
+                    return <div key={entry.id} className="grid grid-cols-[60px_34px_52px_68px_minmax(0,1fr)] items-center gap-x-1 bg-indigo-50/35 px-3 py-2 text-[10px] tabular-nums">
+                      <span className="whitespace-nowrap text-center font-mono tracking-[-0.04em] text-slate-400">{formatBeijingMonthDayTime(entry.createdAt)}</span>
+                      <span className="inline-flex items-center justify-center gap-0.5 whitespace-nowrap font-semibold text-indigo-700" title="共享收益"><Share2 className="h-3 w-3" />共享</span>
+                      <span className="whitespace-nowrap text-center font-medium text-slate-400">—</span>
+                      <span className="whitespace-nowrap text-right text-[9px] text-indigo-600" title={`来源平仓订单 #${entry.transfer.closingEntryId}`}>#{entry.transfer.closingEntryId}</span>
+                      <span className="whitespace-nowrap text-right font-semibold text-rose-600">{formatSigned(entry.transfer.amount)} U</span>
+                    </div>;
+                  }
+                  const { detail } = entry;
+                  const isLong = ACTIONS[detail.trade.action].side === "long";
+                  return <div key={entry.id} className="grid grid-cols-[60px_34px_52px_68px_minmax(0,1fr)] items-center gap-x-1 px-3 py-2 text-[10px] tabular-nums">
+                    <span className="whitespace-nowrap text-center font-mono tracking-[-0.04em] text-slate-400">{formatBeijingMonthDayTime(detail.trade.createdAt)}</span>
+                    <span className={`whitespace-nowrap text-center font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[detail.trade.action].label}</span>
+                    <span className="whitespace-nowrap text-center font-medium text-slate-700">{formatQuantity(detail.quantity)} ETH</span>
+                    <span className="whitespace-nowrap text-right text-slate-500">{formatPrice(detail.trade.price)}</span>
+                    <span className={`whitespace-nowrap text-right font-semibold ${detail.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(detail.netPnl)} U</span>
                   </div>;
-                })}</div> : <div className="px-3 py-5 text-center text-xs text-slate-400">暂无{payoutLogSectionLabel}记录</div>}
-              </div>
+                })}</div> : <div className="px-3 py-5 text-center text-xs text-slate-400">暂无已实现收益记录</div>}
+                {payoutIncomeEntries.length > 0 && payoutIncomeTotalPages > 1 && <div data-card-export-hide="true" className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] tabular-nums">
+                  <button type="button" disabled={payoutIncomePage <= 1} onClick={() => setPayoutIncomePage((current) => Math.max(1, current - 1))} className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35">上一页</button>
+                  <span className="whitespace-nowrap text-slate-500">第 {payoutIncomePage} 页 / 共 {payoutIncomeTotalPages} 页</span>
+                  <button type="button" disabled={payoutIncomePage >= payoutIncomeTotalPages} onClick={() => setPayoutIncomePage((current) => Math.min(payoutIncomeTotalPages, current + 1))} className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35">下一页</button>
+                </div>}
+              </section>
+
             </div>
           </div>
         </div>

@@ -11424,6 +11424,7 @@ ${klinesSummary}
         ledgerId: z.literal(52),
         relatedUserId: z.number().int().positive().optional(),
         previewUserId: z.number().int().positive().optional(),
+        allUsers: z.boolean().optional(),
       }))
       .query(async ({ ctx, input }) => {
         const journal = await import('./ledger52-t0-journal');
@@ -11470,7 +11471,7 @@ ${klinesSummary}
           role: ctx.user.role,
           isViewingAs: ctx.isViewingAs,
         });
-        return await journal.getLedger52T0JournalPayoutLogs({ scope, relatedUserId: input.relatedUserId });
+        return await journal.getLedger52T0JournalPayoutLogs({ scope, relatedUserId: input.relatedUserId, allUsers: input.allUsers });
       }),
 
     t0CreatePayoutLog: protectedProcedure
