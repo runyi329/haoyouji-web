@@ -61,6 +61,28 @@ export function formatOptionPremium(value: unknown, denomination: unknown): stri
   return Number.isFinite(amount) ? amount.toFixed(getOptionPremiumDisplayDecimals(denomination)) : '--';
 }
 
+// 担保说明中的币种数量与全局钱包保持同一显示规则：USDT/人民币两位，
+// 其余数字资产按数量级保留 2/4/6/8 位；仅影响显示，绝不改变担保数量或估值。
+function formatWalletStyleAssetAmount(assetCode: unknown, value: unknown): string {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return String(value ?? '');
+  const code = String(assetCode || '').trim().toUpperCase();
+  const absoluteAmount = Math.abs(amount);
+  const maximumFractionDigits = ['USDT', 'CNY'].includes(code)
+    ? 2
+    : absoluteAmount >= 1_000
+      ? 2
+      : absoluteAmount >= 1
+        ? 4
+        : absoluteAmount >= 0.01
+          ? 6
+          : 8;
+  return amount.toLocaleString('zh-CN', {
+    minimumFractionDigits: ['USDT', 'CNY'].includes(code) ? 2 : 0,
+    maximumFractionDigits,
+  });
+}
+
 /**
  * 本金状态只影响标题；担保缺口先读取单独保存的公式。
  * 未保存该字段的历史订单，继续以原“本金已借出”状态作为回退，避免历史数据跳变。
@@ -3319,7 +3341,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 <div key={`local-collateral-${index}`} className="flex items-start justify-between gap-2 text-xs mt-0.5">
                   <span className="text-gray-400 whitespace-nowrap">{isWalletAsset ? '钱包冻结担保' : '手工担保'}</span>
                   <span className="min-w-0 text-right font-medium tabular-nums" style={{ color: '#4B5563' }}>
-                    {Number(asset.qty).toLocaleString()} {asset.coin === 'CNY' ? '元' : asset.coin}
+                    {formatWalletStyleAssetAmount(asset.coin, asset.qty)} {asset.coin === 'CNY' ? '元' : asset.coin}
                     {itemValue !== null && itemValue !== undefined && <span className="ml-1 text-gray-400">（≈{itemValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u）</span>}
                   </span>
                 </div>
@@ -3340,7 +3362,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                       <div key={idx}>
                         <div className="flex items-center justify-between mt-0.5">
                           <span className="font-semibold" style={{ color: '#DC2626' }}>{collateralAssets.length > 1 ? `共享担保${idx + 1}` : '共享担保'}</span>
-                          <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(a.qty).toLocaleString()} {a.coin === 'CNY' ? '元' : a.coin}</span>
+                          <span className="font-medium" style={{ color: '#4B5563' }}>{formatWalletStyleAssetAmount(a.coin, a.qty)} {a.coin === 'CNY' ? '元' : a.coin}</span>
                         </div>
                         {collateralItemValues[idx] !== null && collateralItemValues[idx] !== undefined && (() => {
                           // 支持对象格式（每条独立）和字符串格式（全局兼容）
@@ -3865,6 +3887,9 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                       return { coin, qty, valueU };
                                     });
                                     const primaryCollateral = collateralItems.slice().sort((a: { valueU: number | null }, b: { valueU: number | null }) => (b.valueU ?? -Infinity) - (a.valueU ?? -Infinity))[0];
+                                    const primaryCollateralQuantity = primaryCollateral?.qty
+                                      ? formatWalletStyleAssetAmount(primaryCollateral.coin, primaryCollateral.qty)
+                                      : '';
                                     return (
                                       <div key={o.orderId} className="flex justify-between items-center gap-2">
                                         <div className="min-w-0 flex flex-wrap items-baseline">
@@ -3879,10 +3904,10 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                               style={{ color: '#9CA3AF', background: 'none', border: 'none', borderBottom: '1px dashed #9CA3AF', padding: 0 }}
                                               title="查看全部担保物"
                                             >
-                                              {primaryCollateral?.coin || '担保物'}{primaryCollateral?.qty ? ` × ${primaryCollateral.qty}` : ''} ···
+                                              {primaryCollateral?.coin || '担保物'}{primaryCollateralQuantity ? ` × ${primaryCollateralQuantity}` : ''} ···
                                             </button>
                                           ) : collateralItems.length === 1
-                                            ? <span className="ml-1.5 text-xs" style={{ color: '#9CA3AF' }}>{primaryCollateral?.coin || '担保物'}{primaryCollateral?.qty ? ` × ${primaryCollateral.qty}` : ''}</span>
+                                            ? <span className="ml-1.5 text-xs" style={{ color: '#9CA3AF' }}>{primaryCollateral?.coin || '担保物'}{primaryCollateralQuantity ? ` × ${primaryCollateralQuantity}` : ''}</span>
                                             : <span className="ml-1.5 text-xs" style={{ color: '#9CA3AF' }}>无担保物</span>}
                                         </div>
                                         <span className="font-mono font-semibold shrink-0" style={{ color: '#DC2626' }}>
@@ -3995,7 +4020,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                     const itemVal = collateralItemValues[idx];
                                     return (
                                       <div key={idx} className="mt-1 flex justify-between">
-                                        <span className="font-mono" style={{ color: '#6B7280' }}>{a.qty} {a.coin}</span>
+                                        <span className="font-mono" style={{ color: '#6B7280' }}>{formatWalletStyleAssetAmount(a.coin, a.qty)} {a.coin}</span>
                                         {itemVal !== null
                                           ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{itemVal.toFixed(2)} u</span>
                                           : <span className="font-mono" style={{ color: '#D1D5DB' }}>暂无实时价</span>
@@ -4106,7 +4131,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     <div className="py-2 space-y-1.5">
                       {collateralDetail.assets.slice().sort((a, b) => (b.valueU ?? -Infinity) - (a.valueU ?? -Infinity)).map((asset, index) => (
                         <div key={`${asset.coin}-${index}`} className="flex items-center justify-between py-1.5">
-                          <span className="font-mono text-sm" style={{ color: '#374151' }}>{asset.coin || '未知资产'}{asset.qty ? ` × ${asset.qty}` : ''}</span>
+                          <span className="font-mono text-sm" style={{ color: '#374151' }}>{asset.coin || '未知资产'}{asset.qty ? ` × ${formatWalletStyleAssetAmount(asset.coin, asset.qty)}` : ''}</span>
                           <span className="font-mono text-sm font-semibold" style={{ color: '#DC2626' }}>{asset.valueU === null ? '实时价加载中' : `≈ ${asset.valueU.toFixed(2)} u`}</span>
                         </div>
                       ))}
@@ -4255,7 +4280,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                                   const itemVal = collateralItemValues[idx];
                                   return (
                                     <div key={idx} className="mt-1 flex justify-between">
-                                      <span className="font-mono" style={{ color: '#6B7280' }}>{a.qty} {a.coin}</span>
+                                      <span className="font-mono" style={{ color: '#6B7280' }}>{formatWalletStyleAssetAmount(a.coin, a.qty)} {a.coin}</span>
                                       {itemVal !== null
                                         ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{(itemVal as number).toFixed(2)} u</span>
                                         : <span className="font-mono" style={{ color: '#D1D5DB' }}>暂无实时价</span>
