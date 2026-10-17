@@ -2472,10 +2472,10 @@ export default function CryptoPrediction() {
   const currentUserId = (meData as any)?.id;
   const canSeeQQ = currentUserId === 870413 || currentUserId === 4957151;
 
-  // 5.25 定向开关：仅 52 号账本查询（其他账本不查，默认开关关闭即 5.25 倍）
+  // 5.25 定向开关：按账本ID立即读取，不能依赖普通成员可能延迟返回的账本类型元数据。
   const { data: switch525Data } = trpc.ledger.af525GetSwitch.useQuery(
     { ledgerId },
-    { enabled: ledgerId === 52 && isCustomAF, staleTime: 30000, refetchOnWindowFocus: false }
+    { enabled: ledgerId === 52, staleTime: 30000, refetchOnWindowFocus: true }
   );
   // 当前有效倍数：52号账本开关开启时用 5，其他情况用 5.25
   const orderMultiplier = (ledgerId === 52 && (switch525Data as any)?.enabled) ? 5 : 5.25;
