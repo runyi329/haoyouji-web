@@ -56,6 +56,30 @@ type JointOrderSegmentDraft = {
   trading_fee_status: 'unpaid' | 'half_paid' | 'paid';
   collateral_assets: Array<{ coin: string; qty: string; note?: string; source?: 'manual' }>;
   display_config: Record<string, boolean | string>;
+  // 段级结清只写入个人订单快照，避免已结清段被后续普通编辑或实时行情覆盖。
+  status?: 'active' | 'settled' | 'completed';
+  settled_at?: string | null;
+  interest_end_date?: string | null;
+  settlement_snapshot?: FunderSettlementSnapshot;
+};
+
+type FunderSettlementSnapshot = {
+  version: 1;
+  effectiveDate: string;
+  holdingEndAt: string;
+  interestEndDate: string;
+  primaryPriceUsdt: string;
+  priceBySymbol: Record<string, string>;
+  usdtCnyRate: string;
+  priceMode: 'manual_historical' | 'live_confirmed';
+  capturedAt: string;
+  capturedBy: number;
+};
+
+type SettlementDraft = {
+  interestEndDate: string;
+  settlementPrice: string;
+  settlementExchangeRate: string;
 };
 
 const formatTradingFeeRate = (value: unknown) => {
@@ -131,6 +155,12 @@ function readJointOrderSegments(value: unknown): JointOrderSegmentDraft[] {
         return coin && qty ? [{ coin, qty, ...(asset?.note ? { note: String(asset.note).slice(0, 120) } : {}), source: 'manual' as const }] : [];
       }) : [],
       display_config: item.display_config && typeof item.display_config === 'object' && !Array.isArray(item.display_config) ? item.display_config : {},
+      status: ['settled', 'completed'].includes(String(item.status || '').toLowerCase()) ? 'settled' : 'active',
+      settled_at: item.settled_at ? String(item.settled_at) : null,
+      interest_end_date: item.interest_end_date ? String(item.interest_end_date).slice(0, 10) : null,
+      settlement_snapshot: item.settlement_snapshot && typeof item.settlement_snapshot === 'object' && !Array.isArray(item.settlement_snapshot)
+        ? item.settlement_snapshot as FunderSettlementSnapshot
+        : undefined,
     }];
   });
 }
@@ -922,7 +952,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [confirmSettleOrder, setConfirmSettleOrder] = useState<any | null>(null);
   // 仅在转结清时使用；清空后默认回到当前北京日期。
   const [settleInterestEndDate, setSettleInterestEndDate] = useState('');
+  const [settleValuation, setSettleValuation] = useState<SettlementDraft>({ interestEndDate: '', settlementPrice: '', settlementExchangeRate: '' });
   const [selectedSettleUserIds, setSelectedSettleUserIds] = useState<number[]>([]);
+  // 联合订单的第一段使用 __primary__ 标记，第二段使用各自稳定 ID；每段独立日期和结算价。
+  const [selectedJointSettleSegmentIds, setSelectedJointSettleSegmentIds] = useState<string[]>([]);
+  const [jointSettlementDrafts, setJointSettlementDrafts] = useState<Record<string, SettlementDraft>>({});
   // 弹窗状态提升：存储当前打开弹窗的 orderId，null 表示关闭（防止子组件因数据刷新重渲染导致弹窗自动关闭）
   const [collateralInfoOrderId, setCollateralInfoOrderId] = useState<number | null>(null);
   const [interestTipOrderId, setInterestTipOrderId] = useState<number | null>(null);
@@ -1889,6 +1923,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       toast.success(settledCount > 1 ? `已结清 ${settledCount} 个订单视图` : '订单视图已结清');
       refetchOrders();
       trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const settleJointSegmentsMutation = trpc.ledger.funderSettleJointOrderSegments.useMutation({
+    onSuccess: (result) => {
+      const count = Array.isArray((result as any)?.settledSegmentIds) ? (result as any).settledSegmentIds.length : 1;
+      toast.success((result as any)?.allSegmentsSettled ? '关联订单已全部结清' : `已结清 ${count} 个关联订单分段`);
+      refetchOrders();
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+      trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId });
     },
     onError: (err) => toast.error(err.message),
   });
@@ -3291,13 +3335,30 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     setParticipantsEditMode={setParticipantsEditMode}
                     onConfirmSettle={(targetOrder) => {
                       const currentViewUserId = Number(
-                        targetOrder?.participantInfo?.userId
+                        targetOrder?._jointSnapshotUserId
+                        ?? targetOrder?.participantInfo?.userId
                         ?? targetOrder?.participantInfo?.user_id
                         ?? targetOrder?.user_id
                         ?? 0,
                       );
+                      const today = getBeijingToday();
+                      const livePrice = Number(formLivePrices[String(targetOrder?.coin || '').toUpperCase()] || 0);
+                      const baseDraft: SettlementDraft = {
+                        interestEndDate: today,
+                        settlementPrice: Number.isFinite(livePrice) && livePrice > 0 ? String(livePrice) : '',
+                        settlementExchangeRate: String(cnyRate || ''),
+                      };
+                      const jointSegments = readJointOrderSegments(targetOrder?.joint_order_segments);
+                      const primaryAlreadySettled = String(targetOrder?.joint_order_primary_settlement?.status || '').toLowerCase() === 'settled';
+                      const activeJointSegmentIds = [
+                        ...(primaryAlreadySettled ? [] : ['__primary__']),
+                        ...jointSegments.filter((segment) => String(segment.status || '').toLowerCase() !== 'settled').map((segment) => segment.id),
+                      ];
                       setSettleInterestEndDate('');
+                      setSettleValuation(baseDraft);
                       setSelectedSettleUserIds(currentViewUserId > 0 ? [currentViewUserId] : []);
+                      setSelectedJointSettleSegmentIds(activeJointSegmentIds);
+                      setJointSettlementDrafts(Object.fromEntries(activeJointSegmentIds.map((segmentId) => [segmentId, { ...baseDraft }])));
                       setConfirmSettleOrder(targetOrder);
                     }}
                     showCollateralInfo={collateralInfoOrderId === order.id}
@@ -6233,7 +6294,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       {confirmSettleOrder !== null && (() => {
         const targetOrder = confirmSettleOrder;
         const targetUserId = Number(
-          targetOrder?.participantInfo?.userId
+          targetOrder?._jointSnapshotUserId
+          ?? targetOrder?.participantInfo?.userId
           ?? targetOrder?.participantInfo?.user_id
           ?? targetOrder?.user_id
           ?? 0,
@@ -6244,6 +6306,26 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         ].filter((userId) => userId > 0)));
         const otherUserCount = relatedUserIds.filter((userId) => userId !== targetUserId).length;
         const hasOtherCollaborators = otherUserCount > 0;
+        const jointSegments = readJointOrderSegments(targetOrder?.joint_order_segments);
+        const primaryJointSettlement = targetOrder?.joint_order_primary_settlement || {};
+        const jointSettlementEntries = [
+          {
+            segmentId: '__primary__',
+            label: '第一段（订单主体）',
+            interestStartDate: String(targetOrder?.interest_start_date || '').slice(0, 10),
+            isSettled: String(primaryJointSettlement?.status || '').toLowerCase() === 'settled',
+          },
+          ...jointSegments.map((segment, index) => ({
+            segmentId: segment.id,
+            label: `关联第${index + 2}段`,
+            interestStartDate: String(segment.interest_start_date || targetOrder?.interest_start_date || '').slice(0, 10),
+            isSettled: String((segment as any).status || '').toLowerCase() === 'settled',
+          })),
+        ];
+        const hasJointSegments = jointSegments.length > 0;
+        const selectedJointEntries = jointSettlementEntries.filter((entry) => selectedJointSettleSegmentIds.includes(entry.segmentId) && !entry.isSettled);
+        const allActiveJointSelected = jointSettlementEntries.filter((entry) => !entry.isSettled).length > 0
+          && selectedJointEntries.length === jointSettlementEntries.filter((entry) => !entry.isSettled).length;
         const targetName = String(
           targetOrder?.participant_display_name
           || targetOrder?.participant_name
@@ -6267,21 +6349,86 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         // 单人订单必须更新主订单状态；只写个人快照会显示“结清成功”，但主订单仍保持持有中。
         // 多人关联订单继续保留按个人视图结清的能力。
         const isWholeOrderSettlement = !hasOtherCollaborators;
-        const isSubmitting = isWholeOrderSettlement
-          ? updateMutation.isPending
-          : settleIndividualMutation.isPending;
+        const isSubmitting = hasJointSegments
+          ? settleJointSegmentsMutation.isPending
+          : (isWholeOrderSettlement ? updateMutation.isPending : settleIndividualMutation.isPending);
         return (
-          <div className="fixed inset-0 z-[500] flex items-center justify-center px-4" onClick={() => { setConfirmSettleOrder(null); setSettleInterestEndDate(''); setSelectedSettleUserIds([]); }}>
+          <div className="fixed inset-0 z-[500] flex items-center justify-center px-4" onClick={() => { setConfirmSettleOrder(null); setSettleInterestEndDate(''); setSelectedSettleUserIds([]); setSelectedJointSettleSegmentIds([]); setJointSettlementDrafts({}); }}>
             <div className="absolute inset-0 bg-black/50" />
             <div className="relative bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
-              <h3 className="text-base font-semibold text-gray-900 mb-2">{hasOtherCollaborators ? '选择需要结清的订单视图' : '确认结清'}</h3>
-              {hasOtherCollaborators ? (
+              <h3 className="text-base font-semibold text-gray-900 mb-2">{hasJointSegments ? '选择需要结清的关联订单分段' : hasOtherCollaborators ? '选择需要结清的订单视图' : '确认结清'}</h3>
+              {hasJointSegments ? (
+                <p className="text-sm text-indigo-600 mb-2">每一段可单独选择结算日。已结清的段继续留在原位；仅当全部分段结清后，整张订单才转入已结清。</p>
+              ) : hasOtherCollaborators ? (
                 <p className="text-sm text-indigo-600 mb-2">勾选谁，就只结清谁自己的订单视图；选择全部时，每位拥有者或参与者会分别结清。</p>
               ) : (
                 <p className="text-sm text-gray-600 mb-2">结清后该订单利息将停止计算，状态变为「已结清」。</p>
               )}
               <p className="text-sm text-gray-600 mb-3">本功能只改变融资付息的记账状态和页面显示，<span className="font-semibold text-gray-800">不会产生任何钱包流水</span>。</p>
-              {hasOtherCollaborators && (
+              {hasJointSegments ? (
+                <div className="mb-3 overflow-hidden rounded-xl border border-indigo-100 bg-indigo-50/50">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedJointSettleSegmentIds(allActiveJointSelected ? [] : jointSettlementEntries.filter((entry) => !entry.isSettled).map((entry) => entry.segmentId))}
+                    className="flex w-full items-center justify-between border-b border-indigo-100 bg-white px-3 py-2.5 text-left"
+                  >
+                    <span className="text-sm font-semibold text-indigo-950">全部未结清分段</span>
+                    <span className={`flex h-5 w-5 items-center justify-center rounded-md border text-xs font-bold ${allActiveJointSelected ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-indigo-200 bg-white text-transparent'}`}>✓</span>
+                  </button>
+                  <div className="divide-y divide-indigo-100">
+                    {jointSettlementEntries.map((entry) => {
+                      const checked = selectedJointSettleSegmentIds.includes(entry.segmentId) && !entry.isSettled;
+                      const draft = jointSettlementDrafts[entry.segmentId] || { interestEndDate: getBeijingToday(), settlementPrice: '', settlementExchangeRate: String(cnyRate || '') };
+                      const isHistorical = (draft.interestEndDate || getBeijingToday()) !== getBeijingToday();
+                      return (
+                        <div key={entry.segmentId} className={entry.isSettled ? 'bg-red-50/60' : 'bg-white'}>
+                          <button
+                            type="button"
+                            disabled={entry.isSettled}
+                            onClick={() => setSelectedJointSettleSegmentIds((current) => checked
+                              ? current.filter((id) => id !== entry.segmentId)
+                              : [...current, entry.segmentId])}
+                            className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left disabled:cursor-default"
+                          >
+                            <span className={`min-w-0 truncate text-sm ${entry.isSettled ? 'text-red-700' : 'text-slate-700'}`}>{entry.label}{entry.isSettled ? '（已结清）' : ''}</span>
+                            {!entry.isSettled && <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs font-bold ${checked ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-indigo-200 bg-white text-transparent'}`}>✓</span>}
+                          </button>
+                          {checked && (
+                            <div className="border-t border-indigo-100 bg-indigo-50/70 px-3 py-3">
+                              <label className="block text-xs font-semibold text-amber-900">本段利息结算截止日</label>
+                              <input
+                                type="date"
+                                value={draft.interestEndDate || getBeijingToday()}
+                                min={entry.interestStartDate || undefined}
+                                max={getBeijingToday()}
+                                onChange={(e) => setJointSettlementDrafts((current) => ({
+                                  ...current,
+                                  [entry.segmentId]: {
+                                    ...draft,
+                                    interestEndDate: e.target.value,
+                                    settlementPrice: e.target.value !== getBeijingToday() ? '' : draft.settlementPrice,
+                                  },
+                                }))}
+                                className="mt-1.5 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-amber-500"
+                              />
+                              {isHistorical ? (
+                                <div className="mt-2 grid grid-cols-2 gap-2">
+                                  <label className="block text-[11px] text-amber-900">最终结算价（U）
+                                    <input type="number" inputMode="decimal" min="0" step="any" value={draft.settlementPrice} onChange={(e) => setJointSettlementDrafts((current) => ({ ...current, [entry.segmentId]: { ...draft, settlementPrice: e.target.value } }))} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
+                                  </label>
+                                  <label className="block text-[11px] text-amber-900">USDT兑人民币
+                                    <input type="number" inputMode="decimal" min="0" step="any" value={draft.settlementExchangeRate} onChange={(e) => setJointSettlementDrafts((current) => ({ ...current, [entry.segmentId]: { ...draft, settlementExchangeRate: e.target.value } }))} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
+                                  </label>
+                                </div>
+                              ) : <p className="mt-2 text-[11px] leading-4 text-indigo-700">当天结清时，系统会立即冻结当前结算币价与 USDT 兑人民币汇率。</p>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : hasOtherCollaborators && (
                 <div className="mb-3 overflow-hidden rounded-xl border border-indigo-100 bg-indigo-50/50">
                   <button
                     type="button"
@@ -6311,46 +6458,97 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   </div>
                 </div>
               )}
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 mb-3">
-                <div className="text-sm font-semibold text-amber-900">利息结算截止日</div>
-                <p className="text-xs text-amber-800 mt-1">利息按北京时间自然日累计至该日。默认当天；若实际结清后才补录，可改为约定结息日期。</p>
-                <input
-                  type="date"
-                  value={settleInterestEndDate || getBeijingToday()}
-                  min={targetOrder?.interest_start_date ? String(targetOrder.interest_start_date).slice(0, 10) : undefined}
-                  max={getBeijingToday()}
-                  onChange={(e) => setSettleInterestEndDate(e.target.value)}
-                  className="mt-2 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-amber-500"
-                />
-              </div>
-              {hasOtherCollaborators && <p className="text-xs leading-5 text-gray-500 mb-4">已选 <span className="font-semibold text-indigo-700">{selectedIds.length}</span> 位。未勾选的拥有者或参与者继续保持持有中。</p>}
+              {!hasJointSegments && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 mb-3">
+                  <div className="text-sm font-semibold text-amber-900">利息结算截止日</div>
+                  <p className="text-xs text-amber-800 mt-1">利息按北京时间自然日累计至该日；当天自动冻结行情，历史日期需填写最终价和汇率。</p>
+                  <input
+                    type="date"
+                    value={settleValuation.interestEndDate || settleInterestEndDate || getBeijingToday()}
+                    min={targetOrder?.interest_start_date ? String(targetOrder.interest_start_date).slice(0, 10) : undefined}
+                    max={getBeijingToday()}
+                    onChange={(e) => {
+                      const nextDate = e.target.value;
+                      setSettleInterestEndDate(nextDate);
+                      setSettleValuation((current) => ({
+                        ...current,
+                        interestEndDate: nextDate,
+                        settlementPrice: nextDate !== getBeijingToday() ? '' : current.settlementPrice,
+                      }));
+                    }}
+                    className="mt-2 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-amber-500"
+                  />
+                  {(settleValuation.interestEndDate || settleInterestEndDate || getBeijingToday()) !== getBeijingToday() ? (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <label className="block text-[11px] text-amber-900">最终结算价（U）
+                        <input type="number" inputMode="decimal" min="0" step="any" value={settleValuation.settlementPrice} onChange={(e) => setSettleValuation((current) => ({ ...current, settlementPrice: e.target.value }))} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
+                      </label>
+                      <label className="block text-[11px] text-amber-900">USDT兑人民币
+                        <input type="number" inputMode="decimal" min="0" step="any" value={settleValuation.settlementExchangeRate} onChange={(e) => setSettleValuation((current) => ({ ...current, settlementExchangeRate: e.target.value }))} className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500" />
+                      </label>
+                    </div>
+                  ) : <p className="mt-2 text-[11px] leading-4 text-amber-800">确认时系统会从服务器行情缓存锁定当前结算币价和汇率。</p>}
+                </div>
+              )}
+              {hasJointSegments ? <p className="text-xs leading-5 text-gray-500 mb-4">已选 <span className="font-semibold text-indigo-700">{selectedJointEntries.length}</span> 段；未勾选的分段会继续持有并保持实时计算。</p> : hasOtherCollaborators && <p className="text-xs leading-5 text-gray-500 mb-4">已选 <span className="font-semibold text-indigo-700">{selectedIds.length}</span> 位。未勾选的拥有者或参与者继续保持持有中。</p>}
               <div className="flex gap-2.5">
-                <button onClick={() => { setConfirmSettleOrder(null); setSettleInterestEndDate(''); setSelectedSettleUserIds([]); }} disabled={isSubmitting} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600 disabled:opacity-50">取消</button>
+                <button onClick={() => { setConfirmSettleOrder(null); setSettleInterestEndDate(''); setSettleValuation({ interestEndDate: '', settlementPrice: '', settlementExchangeRate: '' }); setSelectedSettleUserIds([]); setSelectedJointSettleSegmentIds([]); setJointSettlementDrafts({}); }} disabled={isSubmitting} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600 disabled:opacity-50">取消</button>
                 <button
                   onClick={() => {
-                    const interestEndDate = settleInterestEndDate || getBeijingToday();
-                    if (isWholeOrderSettlement) {
-                      updateMutation.mutate({
-                        id: Number(targetOrder.id),
-                        ledgerId,
-                        status: 'settled',
-                        interestEndDate,
+                    const closeSettlementDialog = () => {
+                      setConfirmSettleOrder(null);
+                      setSettleInterestEndDate('');
+                      setSettleValuation({ interestEndDate: '', settlementPrice: '', settlementExchangeRate: '' });
+                      setSelectedSettleUserIds([]);
+                      setSelectedJointSettleSegmentIds([]);
+                      setJointSettlementDrafts({});
+                    };
+                    if (hasJointSegments) {
+                      if (targetUserId <= 0 || selectedJointEntries.length === 0) {
+                        toast.error('请至少选择一个未结清的关联分段');
+                        return;
+                      }
+                      const segments = selectedJointEntries.map((entry) => {
+                        const draft = jointSettlementDrafts[entry.segmentId] || { interestEndDate: getBeijingToday(), settlementPrice: '', settlementExchangeRate: '' };
+                        return { segmentId: entry.segmentId, ...draft };
                       });
-                    } else {
-                      settleIndividualMutation.mutate({
+                      const incompleteHistory = segments.some((segment) => segment.interestEndDate !== getBeijingToday()
+                        && (!(Number(segment.settlementPrice) > 0) || !(Number(segment.settlementExchangeRate) > 0)));
+                      if (incompleteHistory) {
+                        toast.error('历史结算日请逐段填写最终结算价和 USDT 兑人民币汇率');
+                        return;
+                      }
+                      settleJointSegmentsMutation.mutate({
                         orderId: Number(targetOrder.id),
                         ledgerId,
-                        userIds: selectedIds,
-                        interestEndDate,
-                      });
+                        userId: targetUserId,
+                        segments: segments.map((segment) => ({
+                          segmentId: segment.segmentId,
+                          interestEndDate: segment.interestEndDate || getBeijingToday(),
+                          ...(segment.settlementPrice ? { settlementPrice: segment.settlementPrice } : {}),
+                          ...(segment.settlementExchangeRate ? { settlementExchangeRate: segment.settlementExchangeRate } : {}),
+                        })),
+                      }, { onSuccess: closeSettlementDialog });
+                      return;
                     }
-                    setConfirmSettleOrder(null);
-                    setSettleInterestEndDate('');
-                    setSelectedSettleUserIds([]);
+                    const interestEndDate = settleValuation.interestEndDate || settleInterestEndDate || getBeijingToday();
+                    if (interestEndDate !== getBeijingToday() && (!(Number(settleValuation.settlementPrice) > 0) || !(Number(settleValuation.settlementExchangeRate) > 0))) {
+                      toast.error('历史结算日请填写最终结算价和 USDT 兑人民币汇率');
+                      return;
+                    }
+                    const valuation = {
+                      ...(settleValuation.settlementPrice ? { settlementPrice: settleValuation.settlementPrice } : {}),
+                      ...(settleValuation.settlementExchangeRate ? { settlementExchangeRate: settleValuation.settlementExchangeRate } : {}),
+                    };
+                    if (isWholeOrderSettlement) {
+                      updateMutation.mutate({ id: Number(targetOrder.id), ledgerId, status: 'settled', interestEndDate, ...valuation }, { onSuccess: closeSettlementDialog });
+                    } else {
+                      settleIndividualMutation.mutate({ orderId: Number(targetOrder.id), ledgerId, userIds: selectedIds, interestEndDate, ...valuation }, { onSuccess: closeSettlementDialog });
+                    }
                   }}
-                  disabled={isSubmitting || selectedIds.length === 0}
+                  disabled={isSubmitting || (hasJointSegments ? selectedJointEntries.length === 0 : selectedIds.length === 0)}
                   className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white disabled:opacity-50"
-                >{isSubmitting ? '结清中...' : hasOtherCollaborators ? `结清已选 ${selectedIds.length} 位` : '确认结清'}</button>
+                >{isSubmitting ? '结清中...' : hasJointSegments ? `结清已选 ${selectedJointEntries.length} 段` : hasOtherCollaborators ? `结清已选 ${selectedIds.length} 位` : '确认结清'}</button>
               </div>
             </div>
           </div>

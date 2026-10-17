@@ -1469,8 +1469,8 @@ const FUNDER_PARTICIPANT_SNAPSHOT_FIELDS = [
   'trading_fee_status', 'collateral_source', 'personal_header_label', 'frontend_placement', 'settled_at', 'interest_end_date',
   // 拥有者可见范围和个人担保覆盖均是当前个人视图的业务状态，不能只留在关系冗余列。
   'owner_visibility_mode', 'visible_owner_ids', 'participant_collateral_override',
-  // 联合订单子段仅保存于参与者自己的 order_snapshot；绝不写入主订单。
-  'joint_order_segments'
+  // 结清估值和联合订单子段仅保存于参与者自己的 order_snapshot；绝不写入主订单。
+  'settlement_snapshot', 'joint_order_primary_settlement', 'joint_order_segments'
 ] as const;
 
 function buildFunderParticipantSnapshot(source: any): Record<string, any> {
@@ -1489,6 +1489,102 @@ function parseFunderParticipantSnapshot(value: unknown): Record<string, any> | n
   } catch {
     return null;
   }
+}
+
+type FunderSettlementSnapshot = {
+  version: 1;
+  effectiveDate: string;
+  holdingEndAt: string;
+  interestEndDate: string;
+  primaryPriceUsdt: string;
+  priceBySymbol: Record<string, string>;
+  usdtCnyRate: string;
+  priceMode: 'manual_historical' | 'live_confirmed';
+  capturedAt: string;
+  capturedBy: number;
+};
+
+function getBeijingDateString(date = new Date()): string {
+  return new Date(date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function parseFunderJsonArray(value: unknown): any[] {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 每次结清只从服务器行情缓存取一次报价，历史结算日必须由管理员填入价格和汇率。 */
+async function buildFunderSettlementSnapshot(
+  sourceOrder: Record<string, any>,
+  effectiveDate: string,
+  actorUserId: number,
+  manualPrimaryPrice?: unknown,
+  manualUsdtCnyRate?: unknown,
+): Promise<FunderSettlementSnapshot> {
+  const isHistorical = effectiveDate !== getBeijingDateString();
+  const suppliedPrice = Number(manualPrimaryPrice);
+  const suppliedRate = Number(manualUsdtCnyRate);
+  const { getLatestPrice, getUsdtCnyRate } = await import('./price-scanner');
+  const liveRate = Number(getUsdtCnyRate() || 0);
+  const usdtCnyRate = isHistorical ? suppliedRate : (liveRate || suppliedRate);
+  if (!Number.isFinite(usdtCnyRate) || usdtCnyRate <= 0) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: isHistorical ? '历史结算日请填写当日 USDT 兑人民币汇率' : '当前汇率暂不可用，请稍后重试' });
+  }
+
+  const primarySymbol = String(sourceOrder.coin || '').trim().toUpperCase();
+  const livePrimaryPrice = primarySymbol === 'CNY'
+    ? 1 / usdtCnyRate
+    : primarySymbol === 'USDT'
+      ? 1
+      : Number(getLatestPrice(primarySymbol) || 0);
+  const primaryPriceUsdt = isHistorical ? suppliedPrice : (livePrimaryPrice || suppliedPrice);
+  if (!Number.isFinite(primaryPriceUsdt) || primaryPriceUsdt <= 0) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: isHistorical ? '历史结算日请填写该标的的最终结算价格' : '当前标的价格暂不可用，请稍后重试',
+    });
+  }
+
+  const symbols = new Set<string>(['USDT', 'CNY', primarySymbol]);
+  for (const asset of [...parseFunderJsonArray(sourceOrder.collateral_assets), ...parseFunderJsonArray(sourceOrder.lent_out_assets)]) {
+    const symbol = String(asset?.coin || '').trim().toUpperCase();
+    if (symbol) symbols.add(symbol);
+  }
+  let optionInfo: any = null;
+  try { optionInfo = typeof sourceOrder.option_info === 'string' ? JSON.parse(sourceOrder.option_info) : sourceOrder.option_info; } catch {}
+  const optionSymbol = String(optionInfo?.coin || optionInfo?.premiumCurrency || '').trim().toUpperCase();
+  if (optionSymbol) symbols.add(optionSymbol);
+
+  const priceBySymbol: Record<string, string> = { USDT: '1', CNY: String(1 / usdtCnyRate) };
+  for (const symbol of symbols) {
+    if (!symbol) continue;
+    if (symbol === primarySymbol) {
+      priceBySymbol[symbol] = String(primaryPriceUsdt);
+      continue;
+    }
+    if (symbol === 'USDT' || symbol === 'CNY') continue;
+    const price = Number(getLatestPrice(symbol) || 0);
+    // 行情不可用时不拿实时值补算；前端将显示暂无结算报价，而不是继续跳动。
+    if (Number.isFinite(price) && price > 0) priceBySymbol[symbol] = String(price);
+  }
+
+  return {
+    version: 1,
+    effectiveDate,
+    // 业务结算只选择日期，统一按北京时间当天结束冻结持有时长，避免浏览器时区差异。
+    holdingEndAt: `${effectiveDate}T23:59:59+08:00`,
+    interestEndDate: effectiveDate,
+    primaryPriceUsdt: String(primaryPriceUsdt),
+    priceBySymbol,
+    usdtCnyRate: String(usdtCnyRate),
+    priceMode: isHistorical ? 'manual_historical' : 'live_confirmed',
+    capturedAt: new Date().toISOString(),
+    capturedBy: actorUserId,
+  };
 }
 
 function parseFunderDisplayConfig(value: unknown): Record<string, any> {
@@ -21634,6 +21730,14 @@ ${klinesSummary}
         let participantCountMap: Record<number, number> = {};
         let participantUserIdsMap: Record<number, number[]> = {};
         let ownerNamesMap: Record<number, Array<{ userId: number; name: string }>> = {};
+        // 管理员默认的主订单列表不会切换到某位拥有者的个人视图。
+        // 关联分段只保存于对应拥有者快照中，因此只附带分段元数据和该快照的保存目标，
+        // 不把个人金额、利率或其他业务字段覆盖到主订单卡。
+        const jointOrderSnapshotMetaMap: Record<number, {
+          userId: number;
+          segments: any[];
+          primarySettlement: Record<string, any> | null;
+        }> = {};
         const ownerUserIdsMap: Record<number, Set<number>> = {};
         // 52号同一融资订单允许多位拥有者分别冻结钱包资产；列表必须合并这些真实冻结台账，
         // 以确保每个拥有者视角看到的担保总值和缺口完全一致。
@@ -21654,7 +21758,7 @@ ${klinesSummary}
               orderIds
             ).catch(() => null) as Promise<any>,
             conn.execute(
-              `SELECT p.order_id, p.user_id, p.sort_order, u.username, u.name, lm.nickname
+              `SELECT p.order_id, p.user_id, p.sort_order, p.order_snapshot, u.username, u.name, lm.nickname
                FROM ledger_order_participants p
                LEFT JOIN users u ON u.id = p.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = p.ledger_id AND lm.userId = p.user_id
@@ -21746,6 +21850,18 @@ ${klinesSummary}
                 userId: Number(row.user_id),
                 name: String(row.nickname || row.name || row.username || `用户${row.user_id}`),
               });
+              const ownerSnapshot = parseFunderParticipantSnapshot(row.order_snapshot);
+              const jointSegments = parseFunderJsonArray(ownerSnapshot?.joint_order_segments);
+              // 多个拥有者都有历史快照时，按参与关系的既有排序取首个实际携带分段的快照。
+              if (!jointOrderSnapshotMetaMap[oid] && jointSegments.length > 0) {
+                jointOrderSnapshotMetaMap[oid] = {
+                  userId: Number(row.user_id),
+                  segments: jointSegments,
+                  primarySettlement: ownerSnapshot?.joint_order_primary_settlement && typeof ownerSnapshot.joint_order_primary_settlement === 'object'
+                    ? ownerSnapshot.joint_order_primary_settlement
+                    : null,
+                };
+              }
             }
           }
           const appendWalletContributorAsset = (orderId: number, userId: number, name: string, coin: string, qty: string) => {
@@ -21768,16 +21884,25 @@ ${klinesSummary}
             for (const row of walletHoldRows) appendWalletContributorAsset(Number(orderIdByTag.get(String(row.tag_name)) || 0), Number(row.user_id), String(row.display_name || ''), String(row.asset_code || ''), String(row.amount || '0'));
           }
         }
-        const ordersWithPaid = ordersWithParticipantView.map((o: any) => ({
-          ...o,
-          paidTotal: paidTotalMap[Number(o.id)] || null,
-          participantCount: participantCountMap[Number(o.id)] || 0,
-          _participantUserIds: participantUserIdsMap[Number(o.id)] || [],
-          // 仅用于拥有者组的卡片姓名展示；不包含金额、备注、担保或任何资金数据。
-          owner_display_names: ownerNamesMap[Number(o.id)] || [],
-          // 钱包担保只来自已冻结台账；卡片以此合并全体拥有者的钱包担保，不读取任何可用余额。
-          wallet_collateral_contributors: walletCollateralContributorsMap[Number(o.id)] || [],
-        }));
+        const ordersWithPaid = ordersWithParticipantView.map((o: any) => {
+          // 已明确指定当前拥有者个人视图时，其自身快照优先；只有默认主订单卡才补齐分段元数据。
+          const jointMeta = o.participantInfo ? null : jointOrderSnapshotMetaMap[Number(o.id)];
+          return {
+            ...o,
+            ...(jointMeta ? {
+              joint_order_segments: jointMeta.segments,
+              joint_order_primary_settlement: jointMeta.primarySettlement,
+              _jointSnapshotUserId: jointMeta.userId,
+            } : {}),
+            paidTotal: paidTotalMap[Number(o.id)] || null,
+            participantCount: participantCountMap[Number(o.id)] || 0,
+            _participantUserIds: participantUserIdsMap[Number(o.id)] || [],
+            // 仅用于拥有者组的卡片姓名展示；不包含金额、备注、担保或任何资金数据。
+            owner_display_names: ownerNamesMap[Number(o.id)] || [],
+            // 钱包担保只来自已冻结台账；卡片以此合并全体拥有者的钱包担保，不读取任何可用余额。
+            wallet_collateral_contributors: walletCollateralContributorsMap[Number(o.id)] || [],
+          };
+        });
         // 资方与借方共用同一接口排序：持有中在前，已结清按结清时点倒序，已取消单独置底。
         const getOrderStatusRank = (order: any) => {
           const status = String(order?.status || '').toLowerCase();
@@ -24188,8 +24313,13 @@ ${klinesSummary}
               if (pi.display_config) (o as any).display_config = pi.display_config;
             } else if (participantRole && Number(o.user_id) === Number(targetUserId)) {
               // 主拥有者仍以主订单为内容来源，避免覆盖他的主订单字段；
-              // 但若其个人视图已单独结清，必须优先返回该结清状态。
+              // 但其个人结清/分段快照必须一并返回，确保结清后的估值不再读取实时行情。
               const ownSnapshot = parseFunderParticipantSnapshot((o as any)._participant_order_snapshot);
+              if (ownSnapshot) {
+                for (const field of ['settlement_snapshot', 'joint_order_primary_settlement', 'joint_order_segments']) {
+                  if (ownSnapshot[field] !== undefined) (o as any)[field] = ownSnapshot[field];
+                }
+              }
               if (o.status !== 'settled' && o.status !== 'completed' && ownSnapshot?.status === 'settled') {
                 o.status = 'settled';
                 o.settled_at = ownSnapshot.settled_at || null;
@@ -24332,8 +24462,13 @@ ${klinesSummary}
                   if (pi.display_config) (o as any).display_config = pi.display_config;
                 }
               } else if (pi && Number(o.user_id) === Number(targetUserId)) {
-                // 主拥有者订单仍显示主订单数据；仅叠加本人的独立结清状态。
+                // 主拥有者订单仍显示主订单数据；仅叠加本人的结清与联合分段快照。
                 const ownSnapshot = parseFunderParticipantSnapshot(pi.order_snapshot);
+                if (ownSnapshot) {
+                  for (const field of ['settlement_snapshot', 'joint_order_primary_settlement', 'joint_order_segments']) {
+                    if (ownSnapshot[field] !== undefined) (o as any)[field] = ownSnapshot[field];
+                  }
+                }
                 if (o.status !== 'settled' && o.status !== 'completed' && ownSnapshot?.status === 'settled') {
                   o.status = 'settled';
                   o.settled_at = ownSnapshot.settled_at || null;
@@ -24643,6 +24778,9 @@ ${klinesSummary}
         interestStartDate: z.string().optional(),
         // 结清时按北京自然日冻结利息；未传时默认结清当日。
         interestEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+        // 当天由服务器行情缓存取价；历史结算日要求管理员录入当日最终价与汇率。
+        settlementPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
+        settlementExchangeRate: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
         counterparty: z.string().optional(),
         collateralCoin: z.string().optional(),
         collateralQty: z.string().optional(),
@@ -24776,6 +24914,7 @@ ${klinesSummary}
         if (input.status === 'active') {
           updateCols.push('settled_at = ?'); updateVals.push(null);
           updateCols.push('interest_end_date = ?'); updateVals.push(null);
+          updateCols.push('settlement_snapshot = ?'); updateVals.push(null);
         }
         // DECIMAL/数字列：空字符串需转为 null，否则 MySQL 报 Incorrect decimal value
         const decimalCols = new Set(['amount', 'buy_price', 'buy_quantity', 'interest_rate_annual', 'interest_base', 'collateral_qty']);
@@ -24846,6 +24985,20 @@ ${klinesSummary}
             }
           }
         };
+        const ensureSettlementSnapshotColumn = async () => {
+          const [columns] = await conn.query(`
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = DATABASE() AND table_name = 'ledger_orders'
+              AND column_name = 'settlement_snapshot' LIMIT 1
+          `) as any;
+          if (!Array.isArray(columns) || columns.length === 0) {
+            try {
+              await conn.query("ALTER TABLE ledger_orders ADD COLUMN settlement_snapshot TEXT DEFAULT NULL COMMENT '结清时冻结的价格、汇率与业务结算日'");
+            } catch (error: any) {
+              if (error?.code !== 'ER_DUP_FIELDNAME') throw error;
+            }
+          }
+        };
         // 确保 collateral_assets 等新字段存在（兼容旧表结构）
         try {
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_assets TEXT DEFAULT NULL`);
@@ -24857,6 +25010,7 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS settled_at DATETIME DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS interest_end_date DATE DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS settlement_snapshot TEXT DEFAULT NULL`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS lent_out_assets TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_share_mode VARCHAR(10) DEFAULT 'none'`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS trade_direction VARCHAR(10) DEFAULT NULL`).catch(() => {});
@@ -24867,6 +25021,7 @@ ${klinesSummary}
         // 不依赖上方可能被旧版 MySQL 拒绝的 IF NOT EXISTS 语法；缺失时必须实际补齐。
         await ensureInterestEndDateColumn();
         await ensureFrontendPlacementColumn();
+        await ensureSettlementSnapshotColumn();
         let participantCount = 0;
         const shouldSyncParticipantStatus = input.status === 'settled' || input.status === 'active';
         // 默认参与者跟随主订单的担保物；只有已明确设置独立担保物的参与者才保留自己的覆盖。
@@ -24894,6 +25049,24 @@ ${klinesSummary}
           || shouldSyncParticipantPeriodInterestDisplay
           || shouldSyncParticipantTags;
         try {
+          let settlementSnapshot: FunderSettlementSnapshot | null = null;
+          if (input.status === 'settled' && interestEndDate) {
+            const [sourceRows] = await conn.execute(
+              'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1',
+              [input.id, input.ledgerId],
+            ) as any;
+            const sourceOrder = Array.isArray(sourceRows) ? sourceRows[0] : null;
+            if (!sourceOrder) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在或已删除' });
+            settlementSnapshot = await buildFunderSettlementSnapshot(
+              sourceOrder,
+              interestEndDate,
+              ctx.user.id,
+              input.settlementPrice,
+              input.settlementExchangeRate,
+            );
+            updateCols.push('settlement_snapshot = ?');
+            updateVals.push(JSON.stringify(settlementSnapshot));
+          }
           if (input.status === 'settled' && interestEndDate) {
             const [interestRows] = await conn.execute(
               'SELECT interest_start_date FROM ledger_orders WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1',
@@ -24973,7 +25146,9 @@ ${klinesSummary}
                   status: input.status,
                   settled_at: input.status === 'settled' ? statusChangedAt : null,
                   interest_end_date: input.status === 'settled' ? interestEndDate : null,
+                  settlement_snapshot: input.status === 'settled' ? settlementSnapshot : undefined,
                 };
+                if (input.status === 'active') delete snapshot.settlement_snapshot;
               }
               if (shouldSyncParticipantPeriodInterestDisplay) {
                 snapshot = syncFunderParticipantPeriodInterestDisplayConfig(
@@ -25063,6 +25238,8 @@ ${klinesSummary}
         userId: z.number().int().positive().optional(),
         userIds: z.array(z.number().int().positive()).min(1).optional(),
         interestEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        settlementPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
+        settlementExchangeRate: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
       }).refine((value) => Boolean(value.userId || value.userIds?.length), {
         message: '请至少选择一位拥有者或参与者',
       }))
@@ -25149,6 +25326,13 @@ ${klinesSummary}
             if (interestStartDate && input.interestEndDate < interestStartDate) {
               throw new TRPCError({ code: 'BAD_REQUEST', message: '结息截止日不能早于任一所选订单的计息开始日' });
             }
+            const settlementSnapshot = await buildFunderSettlementSnapshot(
+              snapshot,
+              input.interestEndDate,
+              ctx.user.id,
+              input.settlementPrice,
+              input.settlementExchangeRate,
+            );
             snapshotsToSave.push({
               participantId: Number(participant.id),
               snapshot: {
@@ -25156,6 +25340,7 @@ ${klinesSummary}
                 status: 'settled',
                 settled_at: settledAt,
                 interest_end_date: input.interestEndDate,
+                settlement_snapshot: settlementSnapshot,
               },
             });
           }
@@ -25180,6 +25365,159 @@ ${klinesSummary}
           } else {
             await transactionConnection.end?.().catch(() => {});
           }
+        }
+      }),
+    // 联合订单的各段只存在于某位拥有者的个人快照中。逐段结清绝不改主订单、不会释放担保，
+    // 也不会把已结清段从同一张订单卡中移走。
+    funderSettleJointOrderSegments: protectedProcedure
+      .input(z.object({
+        orderId: z.number().int().positive(),
+        ledgerId: z.number().int().positive(),
+        userId: z.number().int().positive(),
+        segments: z.array(z.object({
+          segmentId: z.string().min(1).max(64), // 第一段固定为 __primary__
+          interestEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          settlementPrice: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
+          settlementExchangeRate: z.string().regex(/^\d+(?:\.\d+)?$/).optional(),
+        })).min(1).max(9),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`,
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权结清联合订单分段' });
+        }
+        if (new Set(input.segments.map((segment) => segment.segmentId)).size !== input.segments.length) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '同一订单分段不能重复结清' });
+        }
+
+        await ensureFunderParticipantSnapshotColumns();
+        const conn = await getDbTransactionConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        try {
+          await conn.beginTransaction();
+          const [rows] = await conn.execute(
+            `SELECT p.id AS participant_id, p.order_snapshot, p.user_id, p.role, o.*
+             FROM ledger_order_participants p
+             INNER JOIN ledger_orders o ON o.id = p.order_id AND o.ledger_id = p.ledger_id
+             WHERE p.order_id = ? AND p.ledger_id = ? AND p.user_id = ?
+               AND p.role <> 'inactive' AND o.deleted_at IS NULL
+             ORDER BY p.id ASC LIMIT 1 FOR UPDATE`,
+            [input.orderId, input.ledgerId, input.userId],
+          ) as any;
+          const row = Array.isArray(rows) ? rows[0] : null;
+          if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: '未找到当前拥有者的联合订单视图' });
+
+          const snapshot = syncFunderParticipantSharedAssetSnapshot(
+            syncFunderParticipantCollateralSnapshot({
+              ...buildFunderParticipantSnapshot(row),
+              ...(parseFunderParticipantSnapshot(row.order_snapshot) || {}),
+            }, row),
+            row,
+          );
+          const jointSegments = Array.isArray(snapshot.joint_order_segments) ? snapshot.joint_order_segments : [];
+          if (jointSegments.length === 0) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '该订单没有可单独结清的关联分段' });
+          }
+          const suppliedById = new Map(input.segments.map((segment) => [segment.segmentId, segment]));
+          const validSegmentIds = new Set(['__primary__', ...jointSegments.map((segment: any) => String(segment?.id || ''))]);
+          for (const segmentId of suppliedById.keys()) {
+            if (!validSegmentIds.has(segmentId)) throw new TRPCError({ code: 'NOT_FOUND', message: '存在无效的关联订单分段' });
+          }
+
+          const settledAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+          const primaryState = snapshot.joint_order_primary_settlement && typeof snapshot.joint_order_primary_settlement === 'object'
+            ? { ...snapshot.joint_order_primary_settlement }
+            : {};
+          const primaryRequest = suppliedById.get('__primary__');
+          if (primaryRequest && primaryState.status !== 'settled') {
+            const interestStartDate = String(snapshot.interest_start_date || row.interest_start_date || '').slice(0, 10);
+            if (interestStartDate && primaryRequest.interestEndDate < interestStartDate) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: '第一段结息截止日不能早于计息开始日' });
+            }
+            primaryState.status = 'settled';
+            primaryState.settled_at = settledAt;
+            primaryState.interest_end_date = primaryRequest.interestEndDate;
+            primaryState.settlement_snapshot = await buildFunderSettlementSnapshot(
+              snapshot,
+              primaryRequest.interestEndDate,
+              ctx.user.id,
+              primaryRequest.settlementPrice,
+              primaryRequest.settlementExchangeRate,
+            );
+          }
+
+          const nextSegments = [];
+          for (const segment of jointSegments) {
+            const segmentId = String(segment?.id || '');
+            const request = suppliedById.get(segmentId);
+            const nextSegment = { ...(segment || {}) };
+            if (request && nextSegment.status !== 'settled') {
+              const interestStartDate = String(nextSegment.interest_start_date || snapshot.interest_start_date || row.interest_start_date || '').slice(0, 10);
+              if (interestStartDate && request.interestEndDate < interestStartDate) {
+                throw new TRPCError({ code: 'BAD_REQUEST', message: '关联分段的结息截止日不能早于其计息开始日' });
+              }
+              nextSegment.status = 'settled';
+              nextSegment.settled_at = settledAt;
+              nextSegment.interest_end_date = request.interestEndDate;
+              nextSegment.settlement_snapshot = await buildFunderSettlementSnapshot(
+                { ...snapshot, ...nextSegment },
+                request.interestEndDate,
+                ctx.user.id,
+                request.settlementPrice,
+                request.settlementExchangeRate,
+              );
+            }
+            nextSegments.push(nextSegment);
+          }
+
+          const everyPartSettled = primaryState.status === 'settled'
+            && nextSegments.every((segment: any) => segment?.status === 'settled');
+          const nextSnapshot: Record<string, any> = {
+            ...snapshot,
+            joint_order_primary_settlement: primaryState,
+            joint_order_segments: nextSegments,
+          };
+          if (everyPartSettled) {
+            const allDates = [primaryState, ...nextSegments]
+              .map((part: any) => String(part?.interest_end_date || '').slice(0, 10))
+              .filter(Boolean)
+              .sort();
+            nextSnapshot.status = 'settled';
+            nextSnapshot.settled_at = settledAt;
+            nextSnapshot.interest_end_date = allDates[allDates.length - 1] || null;
+            nextSnapshot.settlement_snapshot = primaryState.settlement_snapshot || null;
+          } else {
+            nextSnapshot.status = 'active';
+            nextSnapshot.settled_at = null;
+            nextSnapshot.interest_end_date = null;
+            delete nextSnapshot.settlement_snapshot;
+          }
+          await conn.execute(
+            'UPDATE ledger_order_participants SET order_snapshot = ?, updated_at = NOW() WHERE id = ? AND order_id = ? AND ledger_id = ? AND user_id = ?',
+            [JSON.stringify(nextSnapshot), Number(row.participant_id), input.orderId, input.ledgerId, input.userId],
+          );
+          await conn.commit();
+          return {
+            success: true,
+            orderId: input.orderId,
+            userId: input.userId,
+            settledSegmentIds: input.segments.map((segment) => segment.segmentId),
+            allSegmentsSettled: everyPartSettled,
+            snapshot: nextSnapshot,
+          };
+        } catch (error: any) {
+          try { await conn.rollback(); } catch {}
+          if (error instanceof TRPCError) throw error;
+          console.error('[funderSettleJointOrderSegments] failed:', error?.message || error);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '关联订单分段结清失败，请稍后重试' });
+        } finally {
+          const transactionConnection = conn as any;
+          if (typeof transactionConnection.release === 'function') transactionConnection.release();
+          else await transactionConnection.end?.().catch(() => {});
         }
       }),
     // 查询融资订单操作日志
@@ -26016,11 +26354,27 @@ ${klinesSummary}
         const ownerRows = Array.isArray(ownerRowsResult) ? ownerRowsResult : [];
         const ownerUserIds = new Set([Number(row.user_id), ...ownerRows.map((owner: any) => Number(owner.user_id))].filter(Boolean));
         const hasMultipleOwners = ownerUserIds.size > 1;
+        const persistedSnapshot = parseFunderParticipantSnapshot(row.order_snapshot) || {};
+        const persistedSettledSegmentsById = new Map(
+          (Array.isArray(persistedSnapshot.joint_order_segments) ? persistedSnapshot.joint_order_segments : [])
+            .filter((segment: any) => String(segment?.status || '').toLowerCase() === 'settled')
+            .map((segment: any) => [String(segment.id || ''), segment]),
+        );
         let mergedSnapshot = {
           ...buildFunderParticipantSnapshot(row),
-          ...(parseFunderParticipantSnapshot(row.order_snapshot) || {}),
+          ...persistedSnapshot,
           ...buildFunderParticipantSnapshot(input.snapshot),
         };
+        // 冻结估值只能由专门的结清接口写入或撤销；普通编辑不能让结清后的价格、汇率、日期恢复为实时值。
+        if (persistedSnapshot.settlement_snapshot) {
+          mergedSnapshot.settlement_snapshot = persistedSnapshot.settlement_snapshot;
+          mergedSnapshot.status = persistedSnapshot.status || 'settled';
+          mergedSnapshot.settled_at = persistedSnapshot.settled_at || null;
+          mergedSnapshot.interest_end_date = persistedSnapshot.interest_end_date || null;
+        }
+        if (persistedSnapshot.joint_order_primary_settlement?.status === 'settled') {
+          mergedSnapshot.joint_order_primary_settlement = persistedSnapshot.joint_order_primary_settlement;
+        }
         // 个人订单视图可独立强制指定用户前端分栏；auto/空值表示清除强制值并回到现有自动判断。
         // 该值只影响客户端“本人 / 参与”位置，不能改变协作角色、结息、担保或权限。
         if (Object.prototype.hasOwnProperty.call(input.snapshot, 'frontend_placement')) {
@@ -26086,8 +26440,11 @@ ${klinesSummary}
               return [{ coin, qty, ...(note ? { note } : {}), source: 'manual' as const }];
             });
           };
-          mergedSnapshot.joint_order_segments = rawSegments.slice(0, 8).map((raw: any, index: number) => ({
-            id: String(raw?.id || `segment-${index + 2}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) || `segment-${index + 2}`,
+          mergedSnapshot.joint_order_segments = rawSegments.slice(0, 8).map((raw: any, index: number) => {
+            const segmentId = String(raw?.id || `segment-${index + 2}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) || `segment-${index + 2}`;
+            const previousSettlement = persistedSettledSegmentsById.get(segmentId);
+            const nextSegment = {
+            id: segmentId,
             // 强制以当前参与者为唯一归属，不接受客户端指定他人。
             owner_user_id: Number(input.userId),
             amount: safeAmount(raw?.amount),
@@ -26114,7 +26471,12 @@ ${klinesSummary}
             // 第二段担保只写进当前参与者的个人快照；不触发钱包冻结或37号引用，避免跨段混算。
             collateral_assets: safeAssets(raw?.collateral_assets),
             display_config: safeDisplayConfig(raw?.display_config),
-          }));
+            };
+            // 已结清段仍可随原订单一起展示，但不能被普通保存改回持有中或替换冻结行情。
+            return previousSettlement
+              ? { ...nextSegment, status: 'settled', settled_at: previousSettlement.settled_at || null, interest_end_date: previousSettlement.interest_end_date || null, settlement_snapshot: previousSettlement.settlement_snapshot || null }
+              : nextSegment;
+          });
         }
         // 只有从参与者编辑页明确提交担保字段时，才记录为该参与者的独立担保物。
         // 普通金额、利率、备注等保存不能让历史担保快照重新覆盖主订单。

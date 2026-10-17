@@ -659,7 +659,7 @@ function readConfirmedExposureGap(value: unknown): number | null {
 
 export function FunderOrderCard({
   order,
-  livePrices,
+  livePrices: sourceLivePrices,
   priceDirection,
   currentUser,
   isAdmin,
@@ -710,6 +710,36 @@ export function FunderOrderCard({
 }: FunderOrderCardProps) {
   const cardExportRef = useRef<HTMLDivElement>(null);
   const manualStockPnlDetailExportRef = useRef<HTMLDivElement>(null);
+  const parseSettlementSnapshot = (value: unknown): Record<string, any> | null => {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, any> : null;
+    } catch {
+      return null;
+    }
+  };
+  const isPhysicalOrderSettled = order.status === 'settled' || order.status === 'completed';
+  const primaryJointSettlement = !jointSegmentMode && (order as any).joint_order_primary_settlement && typeof (order as any).joint_order_primary_settlement === 'object'
+    ? (order as any).joint_order_primary_settlement
+    : null;
+  const isPrimaryJointSegmentSettled = !jointSegmentMode && String(primaryJointSettlement?.status || '').toLowerCase() === 'settled';
+  const settlementSnapshot = parseSettlementSnapshot(
+    jointSegmentMode
+      ? (order as any).settlement_snapshot
+      : (isPrimaryJointSegmentSettled ? primaryJointSettlement?.settlement_snapshot : (order as any).settlement_snapshot),
+  );
+  const isPricingFrozen = (isPhysicalOrderSettled || isPrimaryJointSegmentSettled) && !!settlementSnapshot;
+  const frozenPrices: Record<string, number> = {};
+  if (isPricingFrozen) {
+    for (const [symbol, price] of Object.entries(settlementSnapshot?.priceBySymbol || {})) {
+      const numericPrice = Number(price);
+      if (Number.isFinite(numericPrice) && numericPrice > 0) frozenPrices[String(symbol).toUpperCase()] = numericPrice;
+    }
+    const primaryPrice = Number(settlementSnapshot?.primaryPriceUsdt);
+    if (Number.isFinite(primaryPrice) && primaryPrice > 0) frozenPrices[String(order.coin || '').toUpperCase()] = primaryPrice;
+  }
+  // 已结清的段绝不再回退到实时行情；缺少历史报价时显示为空，比持续跳动更安全。
+  const livePrices: Record<string, number> = isPricingFrozen ? frozenPrices : sourceLivePrices;
   // 长列表中不让每张卡片同时请求37号标签、股票盘尾价与期权 Greeks。
   // 卡片进入视窗（提前 600px 预取）后才读详情；编辑预览仍保持即时联动。
   const [cardNearViewport, setCardNearViewport] = useState(previewMode || jointSegmentMode);
@@ -729,7 +759,7 @@ export function FunderOrderCard({
     observer.observe(node);
     return () => observer.disconnect();
   }, [previewMode, jointSegmentMode, cardNearViewport]);
-  const shouldLoadRemoteDetails = previewMode || jointSegmentMode || cardNearViewport;
+  const shouldLoadRemoteDetails = !isPricingFrozen && (previewMode || jointSegmentMode || cardNearViewport);
   // 共享担保弹窗：点击订单号弹出第二层订单详情
   const [clickedOrderNo, setClickedOrderNo] = useState<string | null>(null);
   const [collateralDetail, setCollateralDetail] = useState<{
@@ -840,7 +870,11 @@ export function FunderOrderCard({
   const _participantUserId = _isParticipantOrder ? _collaboratorUserId : undefined;
   // 联合订单的主拥有者也有自己的个人快照，因此不能只以“非主拥有者”作为筛选条件。
   // 以当前卡片的协作身份优先；普通主单则回落到订单拥有者，保证第二段会进入实时预览。
-  const _jointSegmentScopeUserId = _collaboratorUserId > 0 ? _collaboratorUserId : _parentOwnerUserId;
+  // 管理员默认主订单卡只附带关联分段元数据时，使用其快照所属拥有者，不能错误按物理主单拥有者过滤。
+  const _jointSnapshotUserId = Number((order as any)._jointSnapshotUserId || 0);
+  const _jointSegmentScopeUserId = _jointSnapshotUserId > 0
+    ? _jointSnapshotUserId
+    : (_collaboratorUserId > 0 ? _collaboratorUserId : _parentOwnerUserId);
   const jointOrderSegments = useMemo(() => {
     if (jointSegmentMode || !_jointSegmentScopeUserId) return [] as Array<Record<string, any>>;
     let raw: unknown = (order as any).joint_order_segments;
@@ -992,9 +1026,12 @@ export function FunderOrderCard({
   // ===== END 内部 fallback =====
   const { data: _cnyRateData } = trpc.exchange.getRate.useQuery(
     { fromcoin: "USD", tocoin: "CNY", money: 1 },
-    { staleTime: 30000, refetchInterval: 30000, refetchIntervalInBackground: false }
+    { enabled: !isPricingFrozen, staleTime: 30000, refetchInterval: 30000, refetchIntervalInBackground: false }
   );
-  const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "6.8") || 6.8;
+  const frozenCnyRate = Number(settlementSnapshot?.usdtCnyRate);
+  const cnyRate = isPricingFrozen && Number.isFinite(frozenCnyRate) && frozenCnyRate > 0
+    ? frozenCnyRate
+    : (parseFloat((_cnyRateData as any)?.money ?? "6.8") || 6.8);
   // 共享担保只属于归属为本人的订单拥有者。参与者或「他人」订单即使快照带有 self，
   // 也不能形成或加入当前用户的共享池。
   const orderShareMode = (_isParticipantOrder || _isOtherPerspective) ? 'none' : (order as any).collateral_share_mode;
@@ -1624,19 +1661,22 @@ export function FunderOrderCard({
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
   // 已结订单优先使用管理员保存的结息截止日；老订单回退至实际结清时点，绝不继续算至今天。
-  const interestEndAt = (order as any).interest_end_date || order.settled_at || null;
+  const settlementState = isPrimaryJointSegmentSettled ? primaryJointSettlement : null;
+  const interestEndAt = settlementSnapshot?.interestEndDate || settlementState?.interest_end_date || (order as any).interest_end_date || order.settled_at || null;
+  const holdingEndAt = settlementSnapshot?.holdingEndAt || settlementState?.interest_end_date || order.settled_at || null;
+  const isInterestFrozen = isPricingFrozen || isPhysicalOrderSettled;
   const accrued = useAccruedInterestFunder(
-    (order.status === 'active' || interestEndAt) ? order.interest_base : null,
-    (order.status === 'active' || interestEndAt) ? order.interest_rate_annual : null,
-    (order.status === 'active' || interestEndAt) ? order.interest_start_date : null,
+    (!isInterestFrozen || interestEndAt) ? order.interest_base : null,
+    (!isInterestFrozen || interestEndAt) ? order.interest_rate_annual : null,
+    (!isInterestFrozen || interestEndAt) ? order.interest_start_date : null,
     interestEndAt
   );
 
   const statusLabel = STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status;
   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
   const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
-  const isSettled = order.status === 'settled' || order.status === 'completed';
-  const settledTimestamp = formatSettledTimestamp(order.settled_at);
+  const isSettled = isPhysicalOrderSettled;
+  const settledTimestamp = formatSettledTimestamp(settlementSnapshot?.effectiveDate || settlementState?.interest_end_date || order.settled_at);
   // “本人 / 他人”只决定列表归属；绿色主题只由真实参与关系决定。
   // order_perspective 不能作为颜色条件，避免“他人订单”被误标为参与订单。
   const collaboratorUserId = Number((order as any).participantInfo?.userId || (order as any).participantInfo?.user_id || 0);
@@ -1928,8 +1968,8 @@ export function FunderOrderCard({
   // 持有时长——已结清订单冻结在 settled_at 时刻；无数据或未到开仓日均显示 0小时
   const holdDurationLabel = (() => {
     if (!order.buy_date) return '0小时';
-    if (order.status !== 'active' && !order.settled_at) return '0小时';
-    const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+    if (isInterestFrozen && !holdingEndAt) return '0小时';
+    const endTs = holdingEndAt ? new Date(holdingEndAt).getTime() : Date.now();
     const elapsed = endTs - new Date(order.buy_date + 'T00:00:00').getTime();
     if (elapsed <= 0) return '0小时';
     const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
@@ -2524,16 +2564,16 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
     <>
     <div
       ref={jointSegmentMode ? undefined : cardExportRef}
-      className={jointSegmentMode ? 'w-full' : 'rounded-lg overflow-hidden relative'}
+      className={jointSegmentMode ? 'w-full relative overflow-hidden' : 'rounded-lg overflow-hidden relative'}
       style={jointSegmentMode
-        ? { background: isParticipantVisual ? '#F0FDF4' : '#ffffff' }
+        ? { background: isSettled ? '#FFF7F7' : (isParticipantVisual ? '#F0FDF4' : '#ffffff') }
         : {
-            background: isParticipantVisual ? '#F0FDF4' : '#ffffff',
-            border: isParticipantVisual ? '1px solid #86EFAC' : '1px solid #E8EDFF',
-            boxShadow: isParticipantVisual ? '0 1px 5px rgba(5,150,105,0.12)' : '0 1px 4px rgba(26,35,64,0.05)',
+            background: isPrimaryJointSegmentSettled ? '#FFF7F7' : (isParticipantVisual ? '#F0FDF4' : '#ffffff'),
+            border: isPrimaryJointSegmentSettled ? '1px solid #FECACA' : (isParticipantVisual ? '1px solid #86EFAC' : '1px solid #E8EDFF'),
+            boxShadow: isPrimaryJointSegmentSettled ? '0 1px 5px rgba(220,38,38,0.10)' : (isParticipantVisual ? '0 1px 5px rgba(5,150,105,0.12)' : '0 1px 4px rgba(26,35,64,0.05)'),
           }}
     >
-      {!jointSegmentMode && isSettled && (
+      {isSettled && (
         <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center" style={{ backgroundColor: 'rgba(220,38,38,0.06)', zIndex: 10 }}>
           <div style={{ border: '3px solid rgba(220,38,38,0.35)', color: 'rgba(220,38,38,0.35)', borderRadius: '8px', padding: '8px 24px', fontSize: '28px', fontWeight: 800, letterSpacing: '6px', lineHeight: '1.4', whiteSpace: 'nowrap', transform: 'rotate(-15deg)', textAlign: 'center' }}>
             <div>已结清</div>
@@ -2542,6 +2582,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         </div>
       )}
 
+      {!jointSegmentMode && !isSettled && isPrimaryJointSegmentSettled && (
+        <div className="border-b px-4 py-1.5 text-center text-xs font-semibold" style={{ borderColor: '#FECACA', color: '#B91C1C', backgroundColor: '#FFF1F2' }}>
+          第一段已结清{settledTimestamp ? ` · 结算日 ${settledTimestamp}` : ''}，其余关联分段继续持有
+        </div>
+      )}
       {!jointSegmentMode && <>
       {/* 帽子：标签行 + 操作按钮 */}
       <div
@@ -2797,7 +2842,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
             )}
             {show('todayPrice') && order.coin !== 'CNY' && order.coin !== 'USDT' && !isOptionOrder && liveP != null && (
               <div className="flex items-center justify-between">
-                <span className="text-gray-400 shrink-0">当前币价</span>
+                <span className="text-gray-400 shrink-0">{isPricingFrozen ? '结算币价' : '当前币价'}</span>
                 {(() => {
                   const buyPrice = order.buy_price ? quotedPriceUsdt : null;
                   let priceColor = '#4B5563';
@@ -2805,7 +2850,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     if (liveP > buyPrice) priceColor = '#DC2626';
                     else if (liveP < buyPrice) priceColor = '#16A34A';
                   }
-                  const dir = priceDirection?.[order.coin] ?? 'same';
+                  const dir = isPricingFrozen ? 'same' : (priceDirection?.[order.coin] ?? 'same');
                   return (
                     <span className="font-medium flex items-center gap-0.5" style={{ color: priceColor }}>
                       {dir === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
@@ -2816,7 +2861,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                 })()}
               </div>
             )}
-            {show('todayPrice') && order.coin !== 'CNY' && order.coin !== 'USDT' && !isOptionOrder && ((order as any).currentPriceUpdatedAt || (order as any).currentPriceStale) && (
+            {!isPricingFrozen && show('todayPrice') && order.coin !== 'CNY' && order.coin !== 'USDT' && !isOptionOrder && ((order as any).currentPriceUpdatedAt || (order as any).currentPriceStale) && (
               <div className="flex items-center justify-between text-[10px] -mt-1">
                 <span className="text-gray-400 shrink-0">行情状态</span>
                 <span style={{ color: (order as any).currentPriceStale ? '#D97706' : '#9CA3AF' }}>
@@ -4612,11 +4657,12 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       const segmentOrder = {
         ...order,
         ...segment,
-        // 每一段是同一张个人订单的一部分，继承主单状态，不能独自结清或单独记录已结利息。
+        // 每一段仍属于同一张订单，但有自己的结清状态、结算日和冻结行情。
         id: order.id,
-        status: order.status,
-        settled_at: order.settled_at,
-        interest_end_date: order.interest_end_date,
+        status: segment.status || order.status,
+        settled_at: segment.settled_at || order.settled_at,
+        interest_end_date: segment.interest_end_date || order.interest_end_date,
+        settlement_snapshot: segment.settlement_snapshot || null,
         order_no: order.order_no,
         paidTotal: null,
         joint_order_segments: [],
@@ -4641,7 +4687,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         <div
           key={`joint-segment-${order.id}-${String(segment.id || index)}`}
           className="w-full"
-          style={{ background: isParticipantVisual ? '#F0FDF4' : '#ffffff' }}
+          style={{ background: String(segment.status || '').toLowerCase() === 'settled' ? '#FFF7F7' : (isParticipantVisual ? '#F0FDF4' : '#ffffff') }}
         >
           <div className="relative mx-4 flex h-6 items-center justify-center">
             <div className="absolute inset-x-0 border-t border-dashed" style={{ borderColor: '#C7D2E6' }} />
@@ -4655,7 +4701,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
           </div>
           <FunderOrderCard
             order={segmentOrder}
-            livePrices={livePrices}
+            // 子段自行判断是否已结清；第一段已冻结时，其他仍持有的段必须继续读取实时行情。
+            livePrices={sourceLivePrices}
             priceDirection={priceDirection}
             currentUser={currentUser}
             isAdmin={isAdmin}
