@@ -231,6 +231,9 @@ export async function uploadPrivateZidingPaymentProof(input: {
   orderId: number;
   ownerUserId: number;
 }): Promise<ZidingPrivatePaymentProof> {
+  if (!COS_SECRET_ID || !COS_SECRET_KEY) {
+    throw new Error("付款凭证上传服务暂未配置，请稍后再试");
+  }
   const { source } = parseZidingProofImage(input.imageData);
   const metadata = await sharp(source, { failOn: "error" }).metadata();
   const pixels = Number(metadata.width || 0) * Number(metadata.height || 0);

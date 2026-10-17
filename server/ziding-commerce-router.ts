@@ -517,14 +517,14 @@ async function getOrderWithOwnership(conn: DbConn, orderId: number) {
 
 async function getOrderDetail(conn: DbConn, row: any) {
   const [itemRows, proofRows, eventRows] = await Promise.all([
-    conn.execute(`SELECT * FROM ziding_order_items WHERE order_id = ? ORDER BY id ASC`, [row.id]),
+    conn.execute(`SELECT oi.*, p.subtitle AS product_subtitle FROM ziding_order_items oi LEFT JOIN ziding_products p ON p.id=oi.product_id AND p.version_key=? WHERE oi.order_id=? ORDER BY oi.id ASC`, [ZIDING_PROJECT_KEY, row.id]),
     conn.execute(`SELECT id, created_at FROM ziding_payment_proofs WHERE version_key = ? AND order_id = ? AND status = 'active' ORDER BY id ASC`, [ZIDING_PROJECT_KEY, row.id]),
     conn.execute(`SELECT event_type, event_text, created_at FROM ziding_order_events WHERE version_key = ? AND order_id = ? ORDER BY id ASC`, [ZIDING_PROJECT_KEY, row.id]),
   ]);
   return {
     ...mapOrder(row),
     items: ((itemRows[0] as any[]) || []).map((item) => ({
-      id: Number(item.id), productId: Number(item.product_id), name: item.product_name, imageUrl: item.product_image_url || "",
+      id: Number(item.id), productId: Number(item.product_id), name: item.product_name, subtitle: String(item.product_subtitle || ""), imageUrl: item.product_image_url || "",
       unitPrice: MONEY(item.unit_price), quantity: Number(item.quantity), lineTotal: MONEY(item.line_total), earnsPoints: Number(item.earns_points) === 1,
     })),
     proofs: ((proofRows[0] as any[]) || []).map((proof) => ({ id: Number(proof.id), createdAt: proof.created_at })),
@@ -768,6 +768,101 @@ export const zidingCommerceRouter = router({
       throw error;
     }
   }),
+
+  // 分步下单页在用户确认后一次提交所选凭证，避免每选择一张图片就改变订单状态。
+  submitPaymentProofs: protectedProcedure
+    .input(
+      z.object({
+        orderId: z.number().int().positive(),
+        images: z.array(z.string().min(32).max(15_000_000)).min(1).max(3),
+        transferNote: z.string().trim().max(200).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      assertNotViewingAs(ctx);
+      const { effectiveUserId } = await getProjectAccess(ctx);
+      const txConn = await getDbTransactionConnection();
+      if (!txConn)
+        toError("INTERNAL_SERVER_ERROR", "订单服务暂不可用，请稍后重试");
+      const uploaded: Array<
+        Awaited<ReturnType<typeof uploadPrivateZidingPaymentProof>>
+      > = [];
+      let transactionStarted = false;
+      try {
+        await txConn.beginTransaction();
+        transactionStarted = true;
+        const [orderRows] = await txConn.execute(
+          `SELECT * FROM ziding_orders WHERE id=? AND version_key=? AND user_id=? LIMIT 1 FOR UPDATE`,
+          [input.orderId, ZIDING_PROJECT_KEY, effectiveUserId]
+        );
+        const order = (orderRows as any[])[0];
+        if (!order) toError("NOT_FOUND", "订单不存在");
+        if (
+          !["awaiting_proof", "proof_rejected"].includes(String(order.status))
+        )
+          toError("BAD_REQUEST", "当前订单不允许继续上传付款凭证");
+        const [proofCountRows] = await txConn.execute(
+          `SELECT COUNT(*) AS count FROM ziding_payment_proofs WHERE version_key=? AND order_id=? AND status='active'`,
+          [ZIDING_PROJECT_KEY, order.id]
+        );
+        const existingCount = Number((proofCountRows as any[])[0]?.count || 0);
+        if (existingCount + input.images.length > 3) {
+          toError(
+            "BAD_REQUEST",
+            `一笔订单最多上传 3 张付款凭证，当前还可提交 ${Math.max(0, 3 - existingCount)} 张`
+          );
+        }
+        for (const imageData of input.images) {
+          uploaded.push(
+            await uploadPrivateZidingPaymentProof({
+              imageData,
+              orderId: Number(order.id),
+              ownerUserId: effectiveUserId,
+            })
+          );
+        }
+        for (const proof of uploaded) {
+          await txConn.execute(
+            `INSERT INTO ziding_payment_proofs (version_key,order_id,owner_user_id,object_key,content_type,byte_size,sha256) VALUES (?,?,?,?,?,?,?)`,
+            [
+              ZIDING_PROJECT_KEY,
+              order.id,
+              effectiveUserId,
+              proof.objectKey,
+              proof.contentType,
+              proof.byteSize,
+              proof.sha256,
+            ]
+          );
+        }
+        await txConn.execute(
+          `UPDATE ziding_orders SET status='proof_submitted', proof_submitted_at=NOW(), reject_reason=NULL WHERE id=?`,
+          [order.id]
+        );
+        await writeEvent(txConn, {
+          orderId: Number(order.id),
+          actorUserId: effectiveUserId,
+          actorRole: "user",
+          eventType: "proof_submitted",
+          text: `已提交 ${uploaded.length} 张付款凭证${input.transferNote ? `（汇款备注：${input.transferNote}）` : ""}，等待管理员确认`,
+        });
+        await txConn.commit();
+        return { success: true, proofCount: existingCount + uploaded.length };
+      } catch (error) {
+        if (transactionStarted) await txConn.rollback().catch(() => undefined);
+        await Promise.all(
+          uploaded.map(proof =>
+            deletePrivateZidingPaymentProof(proof.objectKey).catch(
+              () => undefined
+            )
+          )
+        );
+        throw error;
+      } finally {
+        if (typeof (txConn as any).release === "function")
+          (txConn as any).release();
+      }
+    }),
 
   getPaymentProofUrl: protectedProcedure.input(z.object({ proofId: z.number().int().positive(), download: z.boolean().optional().default(false) })).query(async ({ ctx, input }) => {
     const { conn, effectiveUserId } = await getProjectAccess(ctx);

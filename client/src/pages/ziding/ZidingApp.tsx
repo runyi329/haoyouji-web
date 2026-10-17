@@ -104,6 +104,8 @@ export default function ZidingApp() {
   if (loading || context.isLoading) return <div className="min-h-screen grid place-items-center text-sm" style={{ background: C.canvas, color: C.muted }}>正在进入紫鼎商业联盟…</div>;
   if (!user || context.error) return <LoginGate />;
   if (path.startsWith("/product-style")) return <ProductLongDetail product={{ id: 0, name: "养源归序早餐粉", subtitle: "一组四包", description: "为有节奏的清晨准备的便捷冲调食品。", imageUrl: COS_PRODUCT_IMAGES.breakfast, price: 0 }} onClose={() => go("")} preview />;
+  if (path.startsWith("/checkout")) return <CheckoutPage go={go} />;
+  if (path.startsWith("/payment")) return <PaymentProofPage go={go} />;
   if (path.startsWith("/admin")) return <AdminApp go={go} onExit={() => go("")} />;
   if (path.startsWith("/orders")) return <OrdersApp go={go} />;
   if (path.startsWith("/me")) return <ProfileApp go={go} />;
@@ -149,7 +151,7 @@ function Storefront({ go, context, profile, onLogout }: { go: (suffix?: string) 
     setCart(nextCart);
     localStorage.setItem("ziding-cart", JSON.stringify(nextCart));
     setDetailProduct(null);
-    go("/orders?checkout=1");
+    go("/checkout");
   };
   return <div className="min-h-screen pb-8" style={{ background: C.canvas }}>
     <Header right={<button onClick={() => setShowQuickMenu(true)} className="grid h-9 w-9 place-items-center rounded-full" aria-label="打开功能菜单" style={{ background: "#F3EEE9", color: C.ink }}><Menu size={20} /></button>} />
@@ -162,7 +164,7 @@ function Storefront({ go, context, profile, onLogout }: { go: (suffix?: string) 
       <div className="mt-7 mb-3 flex items-end justify-between"><div><div className="text-[11px] font-semibold tracking-[.14em]" style={{ color: C.gold }}>甄选好物</div><h2 className="mt-1 text-xl font-bold" style={{ color: C.ink }}>精选产品</h2></div><button className="text-xs" style={{ color: C.plum }}>查看全部</button></div>
       {products.isLoading ? <div className="py-12 text-center text-sm" style={{ color: C.muted }}>正在加载商品…</div> : list.length === 0 ? <EmptyProductState isAdmin={canManage} go={go} /> : <div className="-mx-3 grid grid-cols-2 gap-2">{list.map((product) => <ProductCard key={product.id} product={product} purchasable={isPurchasable(product)} onQuickAdd={() => quickAdd(product)} onOpen={() => setDetailProduct(product)} />)}</div>}
     </main>
-    {showCart && <CartSheet rows={rows} total={total} onClose={() => setShowCart(false)} onChange={change} onCheckout={() => { setShowCart(false); go("/orders?checkout=1"); }} />}
+    {showCart && <CartSheet rows={rows} total={total} onClose={() => setShowCart(false)} onChange={change} onCheckout={() => { setShowCart(false); go("/checkout"); }} />}
     {showQuickMenu && <QuickMenuDrawer profile={profile} identityLabel={Boolean(context.member?.isAdmin) ? "管理员" : context.member?.tier === "senior" ? "高级会员" : "初级会员"} orderSummary={orderSummary} canConfigure={Boolean(context.member?.isAdmin)} onClose={() => setShowQuickMenu(false)} onOrders={() => { setShowQuickMenu(false); go("/orders"); }} onSettings={() => { setShowQuickMenu(false); go("/admin"); }} onScan={() => { setShowQuickMenu(false); setShowScanner(true); }} onLogout={onLogout} />}
     {showScanner && <ScannerSheet onClose={() => setShowScanner(false)} />}
     {detailProduct && <ProductLongDetail product={detailProduct} onClose={() => setDetailProduct(null)} onBuyNow={() => buyNow(detailProduct)} />}
@@ -253,54 +255,879 @@ function BottomNav({ active, go, cartCount, onCart }: { active: "home" | "orders
   return <nav className="fixed bottom-0 left-0 right-0 z-30 border-t px-5" style={{ background: "rgba(255,254,252,.96)", borderColor: C.line, backdropFilter: "blur(16px)" }}><div className="mx-auto flex h-[64px] max-w-md items-center justify-around">{nav.map((item) => { const Icon = item.icon; return <button key={item.key} onClick={() => go(item.target)} className="relative flex min-w-12 flex-col items-center gap-1 text-[10px]" style={{ color: active === item.key ? C.ink : C.muted }}><Icon size={19} strokeWidth={active === item.key ? 2.4 : 1.8} />{item.text}</button>; })}{onCart && <button onClick={onCart} className="relative flex min-w-12 flex-col items-center gap-1 text-[10px]" style={{ color: C.muted }}><ShoppingBag size={19} />购物车{cartCount ? <span className="absolute right-0 top-[-4px] grid h-4 min-w-4 place-items-center rounded-full px-1 text-[9px] text-white" style={{ background: C.ink }}>{cartCount}</span> : null}</button>}</div></nav>;
 }
 
+function CheckoutProgress({ current }: { current: 1 | 2 }) {
+  return (
+    <div
+      className="mb-5 flex items-center gap-2 text-[11px] font-semibold"
+      style={{ color: C.muted }}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className="grid h-6 w-6 place-items-center rounded-full text-white"
+          style={{ background: current > 1 ? C.success : C.ink }}
+        >
+          {current > 1 ? <Check size={14} /> : "1"}
+        </span>
+        <span style={{ color: current === 1 ? C.ink : C.muted }}>确认订单</span>
+      </div>
+      <span className="h-px flex-1" style={{ background: C.line }} />
+      <div className="flex items-center gap-2">
+        <span
+          className="grid h-6 w-6 place-items-center rounded-full border"
+          style={{
+            background: current === 2 ? C.ink : C.paper,
+            color: current === 2 ? "white" : C.muted,
+            borderColor: current === 2 ? C.ink : C.line,
+          }}
+        >
+          2
+        </span>
+        <span style={{ color: current === 2 ? C.ink : C.muted }}>提交凭证</span>
+      </div>
+    </div>
+  );
+}
+
 function OrdersApp({ go }: { go: (path?: string) => void }) {
-  const [status, setStatus] = useState("all"); const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [status, setStatus] = useState("all");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const context = trpc.zidingCommerce.myContext.useQuery();
-  const orders = trpc.zidingCommerce.myOrders.useQuery({ status }); const detail = trpc.zidingCommerce.myOrderDetail.useQuery({ id: selectedId! }, { enabled: !!selectedId });
-  const addresses = trpc.zidingCommerce.listAddresses.useQuery(); const [showCheckout, setShowCheckout] = useState(new URLSearchParams(window.location.search).get("checkout") === "1");
-  const [orderError, setOrderError] = useState("");
-  const closeCheckout = () => { setShowCheckout(false); const params = new URLSearchParams(window.location.search); params.delete("checkout"); window.history.replaceState(null, "", `${window.location.pathname}${params.size ? `?${params.toString()}` : ""}`); };
-  const create = trpc.zidingCommerce.createOrder.useMutation({
-    onSuccess: (result) => { localStorage.removeItem("ziding-cart"); setOrderError(""); closeCheckout(); orders.refetch(); setSelectedId(result.id); },
-    onError: (error) => {
-      const message = error.message || "订单创建失败，请稍后重试";
-      const isTechnicalFailure = error.data?.code === "INTERNAL_SERVER_ERROR" || /beginTransaction|rollback|commit|is not a function|ECONN/i.test(message);
-      setOrderError(isTechnicalFailure ? "订单服务暂时不可用，请稍后重试" : message);
+  const orders = trpc.zidingCommerce.myOrders.useQuery({ status });
+  const detail = trpc.zidingCommerce.myOrderDetail.useQuery(
+    { id: selectedId! },
+    { enabled: !!selectedId }
+  );
+  return (
+    <div className="min-h-screen pb-24" style={{ background: C.canvas }}>
+      <Header title="我的订单" back={() => go("")} />
+      <main className="mx-auto max-w-md px-4 pt-4">
+        <div className="mb-4 flex gap-2 overflow-x-auto">
+          {[
+            ["all", "全部"],
+            ["awaiting_proof", "待上传"],
+            ["proof_submitted", "待确认"],
+            ["confirmed", "待发货"],
+            ["shipped", "已发货"],
+            ["completed", "已完成"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setStatus(key)}
+              className="shrink-0 rounded-full px-3 py-1.5 text-xs"
+              style={{
+                background: status === key ? C.ink : C.paper,
+                color: status === key ? "white" : C.muted,
+                border: `1px solid ${status === key ? C.ink : C.line}`,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {orders.isLoading ? (
+          <div className="py-16 text-center text-sm" style={{ color: C.muted }}>
+            正在加载订单…
+          </div>
+        ) : (orders.data || []).length === 0 ? (
+          <Panel className="py-12 text-center">
+            <ReceiptText
+              className="mx-auto mb-3"
+              size={25}
+              style={{ color: C.gold }}
+            />
+            <div className="font-semibold" style={{ color: C.ink }}>
+              暂时没有订单
+            </div>
+            <p className="mt-2 text-xs" style={{ color: C.muted }}>
+              商品拍下后，会在这里显示订单进度。
+            </p>
+          </Panel>
+        ) : (
+          <div className="space-y-3">
+            {(orders.data || []).map((order: any) => (
+              <OrderRow
+                key={order.id}
+                order={order}
+                onClick={() => setSelectedId(order.id)}
+              />
+            ))}
+          </div>
+        )}
+      </main>
+      <BottomNav active="orders" go={go} />
+      {selectedId && detail.data && (
+        <OrderDetailSheet
+          order={detail.data as any}
+          paymentInstruction={String((context.data as any)?.paymentInstruction || "").trim().replace(/管理员/g, "收款方")}
+          isAdmin={false}
+          onClose={() => setSelectedId(null)}
+          onRefresh={() => {
+            void detail.refetch();
+            void orders.refetch();
+          }}
+          onSubmitProof={() => {
+            const orderId = Number((detail.data as any)?.id || selectedId);
+            setSelectedId(null);
+            go(`/payment?orderId=${orderId}`);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function OrderRow({ order, onClick }: { order: any; onClick: () => void }) {
+  const tone = statusTone(order.status);
+  return (
+    <button
+      onClick={onClick}
+      className="w-full rounded-[20px] border p-4 text-left"
+      style={{ background: C.paper, borderColor: C.line }}
+    >
+      <div className="flex justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold" style={{ color: C.ink }}>
+            {order.orderNo}
+          </div>
+          <div className="mt-1 text-xs" style={{ color: C.muted }}>
+            {dateTime(order.createdAt)}
+          </div>
+        </div>
+        <span
+          className="h-fit rounded-full px-2 py-1 text-[11px] font-semibold"
+          style={{ color: tone.color, background: tone.bg }}
+        >
+          {tone.text}
+        </span>
+      </div>
+      <div
+        className="mt-4 flex items-center justify-between border-t pt-3 text-sm"
+        style={{ borderColor: C.line }}
+      >
+        <span style={{ color: C.muted }}>订单金额</span>
+        <strong style={{ color: C.ink }}>{money(order.totalAmount)}</strong>
+      </div>
+    </button>
+  );
+}
+
+function CheckoutPage({ go }: { go: (path?: string) => void }) {
+  const products = trpc.zidingCommerce.listProducts.useQuery();
+  const addressesQuery = trpc.zidingCommerce.listAddresses.useQuery();
+  const utils = trpc.useUtils();
+  const rawCart = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("ziding-cart") || "{}");
+    } catch {
+      return {};
+    }
+  })() as Cart;
+  const rows = useMemo(
+    () =>
+      (products.data || [])
+        .filter((product: any) => rawCart[product.id])
+        .map((product: any) => ({
+          ...product,
+          quantity: Number(rawCart[product.id] || 0),
+        })),
+    [products.data, rawCart]
+  );
+  const cartItems = rows
+    .filter((row: any) => row.quantity > 0)
+    .map((row: any) => ({
+      productId: Number(row.id),
+      quantity: Number(row.quantity),
+    }));
+  const total = rows.reduce(
+    (sum: number, row: any) =>
+      sum + Number(row.price || 0) * Number(row.quantity || 0),
+    0
+  );
+  const addresses = (addressesQuery.data || []) as any[];
+  const [picked, setPicked] = useState<number | null>(null);
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [form, setForm] = useState({
+    receiverName: "",
+    receiverPhone: "",
+    province: "",
+    city: "",
+    district: "",
+    detail: "",
+    labelName: "常用地址",
+    isDefault: true,
+  });
+  const [error, setError] = useState("");
+  const [addressError, setAddressError] = useState("");
+  useEffect(() => {
+    if (!showAddressForm && !picked && addresses.length)
+      setPicked(
+        addresses.find(address => address.isDefault)?.id ||
+          addresses[0]?.id ||
+          null
+      );
+  }, [addresses, picked, showAddressForm]);
+  const saveAddress = trpc.zidingCommerce.saveAddress.useMutation({
+    onSuccess: async result => {
+      setPicked(result.id);
+      setShowAddressForm(false);
+      setAddressError("");
+      await utils.zidingCommerce.listAddresses.invalidate();
+    },
+    onError: saveError =>
+      setAddressError(saveError.message || "地址保存失败，请稍后重试"),
+  });
+  const createOrder = trpc.zidingCommerce.createOrder.useMutation({
+    onSuccess: result => {
+      localStorage.removeItem("ziding-cart");
+      go(`/payment?orderId=${result.id}`);
+    },
+    onError: createError => {
+      const message = createError.message || "订单创建失败，请稍后重试";
+      const isTechnicalFailure =
+        createError.data?.code === "INTERNAL_SERVER_ERROR" ||
+        /beginTransaction|rollback|commit|is not a function|ECONN/i.test(
+          message
+        );
+      setError(isTechnicalFailure ? "订单服务暂时不可用，请稍后重试" : message);
     },
   });
-  const productQuery = trpc.zidingCommerce.listProducts.useQuery(); const rawCart = (() => { try { return JSON.parse(localStorage.getItem("ziding-cart") || "{}"); } catch { return {}; } })() as Cart;
-  const cartItems = (productQuery.data || []).filter((p: any) => rawCart[p.id]).map((p: any) => ({ productId: p.id, quantity: rawCart[p.id] }));
-  const submit = (addressId: number) => { setOrderError(""); if (!cartItems.length) { setOrderError("购物车为空，请先返回首页选择商品"); return; } create.mutate({ addressId, items: cartItems }); };
-  return <div className="min-h-screen pb-24" style={{ background: C.canvas }}><Header title="我的订单" back={() => go("")} /><main className="mx-auto max-w-md px-4 pt-4"><div className="mb-4 flex gap-2 overflow-x-auto">{[["all","全部"],["awaiting_proof","待上传"],["proof_submitted","待确认"],["confirmed","待发货"],["shipped","已发货"],["completed","已完成"]].map(([key,label]) => <button key={key} onClick={() => setStatus(key)} className="shrink-0 rounded-full px-3 py-1.5 text-xs" style={{ background: status === key ? C.ink : C.paper, color: status === key ? "white" : C.muted, border: `1px solid ${status === key ? C.ink : C.line}` }}>{label}</button>)}</div>{orders.isLoading ? <div className="py-16 text-center text-sm" style={{ color: C.muted }}>正在加载订单…</div> : (orders.data || []).length === 0 ? <Panel className="py-12 text-center"><ReceiptText className="mx-auto mb-3" size={25} style={{ color: C.gold }} /><div className="font-semibold" style={{ color: C.ink }}>暂时没有订单</div><p className="mt-2 text-xs" style={{ color: C.muted }}>商品拍下后，会在这里显示订单进度。</p></Panel> : <div className="space-y-3">{(orders.data || []).map((order: any) => <OrderRow key={order.id} order={order} onClick={() => setSelectedId(order.id)} />)}</div>}</main><BottomNav active="orders" go={go} />{selectedId && detail.data && <OrderDetailSheet order={detail.data as any} paymentInstruction={(context.data as any)?.paymentInstruction || ""} isAdmin={false} onClose={() => setSelectedId(null)} onRefresh={() => { detail.refetch(); orders.refetch(); }} />}{showCheckout && <CheckoutSheet addresses={(addresses.data || []) as any[]} cartCount={cartItems.length} paymentInstruction={(context.data as any)?.paymentInstruction || ""} submitting={create.isPending} loadingProducts={productQuery.isLoading} error={orderError} onClose={closeCheckout} onSubmit={submit} />}</div>;
-}
-
-function OrderRow({ order, onClick }: { order: any; onClick: () => void }) { const tone = statusTone(order.status); return <button onClick={onClick} className="w-full rounded-[20px] border p-4 text-left" style={{ background: C.paper, borderColor: C.line }}><div className="flex justify-between gap-3"><div><div className="text-sm font-semibold" style={{ color: C.ink }}>{order.orderNo}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{dateTime(order.createdAt)}</div></div><span className="h-fit rounded-full px-2 py-1 text-[11px] font-semibold" style={{ color: tone.color, background: tone.bg }}>{tone.text}</span></div><div className="mt-4 flex items-center justify-between border-t pt-3 text-sm" style={{ borderColor: C.line }}><span style={{ color: C.muted }}>订单金额</span><strong style={{ color: C.ink }}>{money(order.totalAmount)}</strong></div></button>; }
-
-function CheckoutSheet({ addresses, cartCount, paymentInstruction, submitting, loadingProducts, error, onClose, onSubmit }: { addresses: any[]; cartCount: number; paymentInstruction: string; submitting: boolean; loadingProducts: boolean; error: string; onClose: () => void; onSubmit: (addressId: number) => void }) {
-  const utils = trpc.useUtils(); const [addressError, setAddressError] = useState("");
-  const [picked, setPicked] = useState<number | null>(addresses.find((a) => a.isDefault)?.id || addresses[0]?.id || null); const [createAddress, setCreateAddress] = useState(!addresses.length); const saveAddress = trpc.zidingCommerce.saveAddress.useMutation({ onSuccess: async (result) => { setPicked(result.id); setCreateAddress(false); await utils.zidingCommerce.listAddresses.invalidate(); }, onError: (saveError) => setAddressError(saveError.message || "地址保存失败，请稍后重试") });
-  const [form, setForm] = useState({ receiverName: "", receiverPhone: "", province: "", city: "", district: "", detail: "", labelName: "常用地址", isDefault: true });
-  const update = (key: string, value: string) => setForm((old) => ({ ...old, [key]: value }));
+  const update = (key: string, value: string) =>
+    setForm(old => ({ ...old, [key]: value }));
   const isDirectRegion = DIRECT_DISTRICT_REGIONS.has(form.province);
   const cityOptions = form.province ? getZidingCities(form.province) : [];
-  const districtOptions = form.province ? getZidingDistricts(form.province, isDirectRegion ? form.province : form.city) : [];
-  const canSaveAddress = Boolean(form.receiverName.trim() && form.receiverPhone.trim() && form.province && form.city && form.detail.trim());
-  const selectClass = "w-full rounded-xl border px-3 py-2.5 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-45";
-  const selectStyle = { borderColor: C.line, background: "#FFFEFC", color: C.ink };
-  return <div className="fixed inset-0 z-50 flex items-end bg-black/35" onClick={onClose}><div className="max-h-[88vh] w-full overflow-y-auto rounded-t-[28px] p-5" onClick={(e) => e.stopPropagation()} style={{ background: C.canvas }}><div className="flex items-center justify-between"><h3 className="text-lg font-bold" style={{ color: C.ink }}>确认订单</h3><button onClick={onClose}><X size={20} /></button></div><p className="mt-1 text-xs" style={{ color: C.muted }}>共 {cartCount} 件商品。拍下后上传付款凭证，管理员人工确认。</p>{(error || addressError) && <div className="mt-3 rounded-xl border px-3 py-2 text-xs leading-5" style={{ color: C.danger, borderColor: "#EACACA", background: "#FFF8F8" }}>{error || addressError}</div>}{!createAddress && addresses.length > 0 ? <div className="mt-4 space-y-2">{addresses.map((a) => <button key={a.id} onClick={() => setPicked(a.id)} className="w-full rounded-xl border p-3 text-left" style={{ background: picked === a.id ? "#F4EEF4" : C.paper, borderColor: picked === a.id ? C.plum : C.line }}><div className="text-sm font-semibold" style={{ color: C.ink }}>{a.receiverName}　{a.receiverPhone}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{a.province}{a.city}{a.district}{a.detail}</div></button>)}</div> : <div className="mt-4 grid grid-cols-2 gap-3"><div><Label>收件人</Label><TextInput value={form.receiverName} onChange={(e) => update("receiverName", e.target.value)} placeholder="请输入收件人姓名" /></div><div><Label>联系电话</Label><TextInput type="tel" value={form.receiverPhone} onChange={(e) => update("receiverPhone", e.target.value)} placeholder="请输入手机号码" /></div><div className="col-span-2"><Label>所在地区</Label><div className="grid grid-cols-2 gap-3"><select value={form.province} onChange={(e) => { const province = e.target.value; setForm((old) => ({ ...old, province, city: DIRECT_DISTRICT_REGIONS.has(province) ? province : "", district: "" })); }} className={selectClass} style={selectStyle}><option value="">省 / 直辖市 / 自治区</option>{ZIDING_REGIONS.map((region) => <option key={region.n} value={region.n}>{region.n}</option>)}</select>{!isDirectRegion && <select value={form.city} disabled={!form.province} onChange={(e) => setForm((old) => ({ ...old, city: e.target.value, district: "" }))} className={selectClass} style={selectStyle}><option value="">市 / 地区</option>{cityOptions.map((city) => <option key={city} value={city}>{city}</option>)}</select>}<select value={form.district} disabled={!form.province || (!isDirectRegion && !form.city)} onChange={(e) => update("district", e.target.value)} className={`${selectClass} ${isDirectRegion ? "" : "col-span-2"}`} style={selectStyle}><option value="">区 / 县（选填）</option>{districtOptions.map((district) => <option key={district} value={district}>{district}</option>)}</select></div></div><div className="col-span-2"><Label>详细地址</Label><TextInput value={form.detail} onChange={(e) => update("detail", e.target.value)} placeholder="街道、门牌号、楼栋和房间号" /></div></div>}<div className="mt-4 rounded-xl border p-3 text-xs leading-5" style={{ background: "#FFFEFC", borderColor: C.line, color: C.muted }}><div className="mb-1 font-semibold" style={{ color: C.ink }}>付款与凭证说明</div>{paymentInstruction || "请在订单创建后按管理员说明完成付款，并上传清晰付款凭证。"}</div><div className="mt-4 flex justify-between gap-3"><Button kind="quiet" onClick={() => setCreateAddress((v) => !v)}>{createAddress ? "选择已有地址" : "新增地址"}</Button>{createAddress ? <Button disabled={saveAddress.isPending || !canSaveAddress} onClick={() => { setAddressError(""); saveAddress.mutate(form); }}><Save size={14} />保存地址</Button> : <Button disabled={!picked || submitting || loadingProducts || cartCount === 0} onClick={() => picked && onSubmit(picked)}>{loadingProducts ? "正在加载商品…" : cartCount === 0 ? "购物车为空" : submitting ? "正在创建…" : "确认拍下"}<ChevronRight size={15} /></Button>}</div></div></div>;
+  const districtOptions = form.province
+    ? getZidingDistricts(
+        form.province,
+        isDirectRegion ? form.province : form.city
+      )
+    : [];
+  const canSaveAddress = Boolean(
+    form.receiverName.trim() &&
+      form.receiverPhone.trim() &&
+      form.province &&
+      form.city &&
+      form.detail.trim()
+  );
+  const hasSavedAddresses = addresses.length > 0;
+  const needsNewAddress = showAddressForm || !hasSavedAddresses;
+  const selectClass =
+    "w-full rounded-xl border px-3 py-2.5 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-45";
+  const selectStyle = {
+    borderColor: C.line,
+    background: "#FFFEFC",
+    color: C.ink,
+  };
+  const confirmOrder = () => {
+    setError("");
+    if (!cartItems.length) {
+      setError("购物车为空，请先返回首页选择商品");
+      return;
+    }
+    if (!picked) {
+      setError("请先选择或保存收货信息");
+      return;
+    }
+    createOrder.mutate({ addressId: picked, items: cartItems });
+  };
+  return (
+    <div className="min-h-screen pb-7" style={{ background: C.canvas }}>
+      <Header title="确认订单" back={() => go("")} />
+      <main className="mx-auto max-w-md px-4 pb-6 pt-4">
+        <CheckoutProgress current={1} />
+        <section
+          className="rounded-[22px] border p-4"
+          style={{ background: C.paper, borderColor: C.line }}
+        >
+          <div className="flex items-center gap-2">
+            <Package size={17} style={{ color: C.plum }} />
+            <h1 className="text-base font-bold" style={{ color: C.ink }}>
+              购买商品
+            </h1>
+          </div>
+          <div className="mt-3 space-y-3">
+            {products.isLoading ? (
+              <div
+                className="py-4 text-center text-sm"
+                style={{ color: C.muted }}
+              >
+                正在核对商品信息…
+              </div>
+            ) : rows.length ? (
+              rows.map((row: any) => (
+                <div
+                  key={row.id}
+                  className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0"
+                  style={{ borderColor: C.line }}
+                >
+                  <div
+                    className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl"
+                    style={{ background: "#F1ECE9" }}
+                  >
+                    {row.imageUrl ? (
+                      <img
+                        src={row.imageUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <Package size={19} style={{ color: C.muted }} />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className="truncate text-sm font-semibold"
+                      style={{ color: C.ink }}
+                    >
+                      {row.name}
+                    </div>
+                    <div className="mt-1 text-xs" style={{ color: C.muted }}>
+                      {row.subtitle || "商品信息以实际发货为准"}
+                    </div>
+                    <div className="mt-1 text-xs" style={{ color: C.muted }}>
+                      {money(row.price)} × {row.quantity}
+                    </div>
+                  </div>
+                  <strong className="text-sm" style={{ color: C.ink }}>
+                    {money(Number(row.price) * Number(row.quantity))}
+                  </strong>
+                </div>
+              ))
+            ) : (
+              <div
+                className="py-4 text-center text-sm"
+                style={{ color: C.muted }}
+              >
+                购物车为空，请返回首页重新选择商品。
+              </div>
+            )}
+          </div>
+          <div
+            className="mt-4 flex items-center justify-between border-t pt-3"
+            style={{ borderColor: C.line }}
+          >
+            <span className="text-sm" style={{ color: C.muted }}>
+              订单合计
+            </span>
+            <strong className="text-xl" style={{ color: C.ink }}>
+              {money(total)}
+            </strong>
+          </div>
+        </section>
+        <section
+          className="mt-4 rounded-[22px] border p-4"
+          style={{ background: C.paper, borderColor: C.line }}
+        >
+          <div className="flex items-center gap-2">
+            <MapPin size={17} style={{ color: C.plum }} />
+            <h2 className="text-base font-bold" style={{ color: C.ink }}>
+              收货信息
+            </h2>
+          </div>
+          <p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>
+            请确认收件人、联系电话和详细地址，订单创建后用于安排发货。
+          </p>
+          {(error || addressError) && (
+            <div
+              className="mt-3 rounded-xl border px-3 py-2 text-xs leading-5"
+              style={{
+                color: C.danger,
+                borderColor: "#EACACA",
+                background: "#FFF8F8",
+              }}
+            >
+              {error || addressError}
+            </div>
+          )}
+          {!needsNewAddress && (
+            <div className="mt-4 space-y-2">
+              {addresses.map(address => (
+                <button
+                  key={address.id}
+                  onClick={() => setPicked(address.id)}
+                  className="w-full rounded-xl border p-3 text-left"
+                  style={{
+                    background: picked === address.id ? "#F4EEF4" : C.paper,
+                    borderColor: picked === address.id ? C.plum : C.line,
+                  }}
+                >
+                  <div
+                    className="text-sm font-semibold"
+                    style={{ color: C.ink }}
+                  >
+                    {address.receiverName}　{address.receiverPhone}
+                  </div>
+                  <div
+                    className="mt-1 text-xs leading-5"
+                    style={{ color: C.muted }}
+                  >
+                    {address.province}
+                    {address.city}
+                    {address.district}
+                    {address.detail}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          {needsNewAddress && (
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div>
+                <Label>收件人</Label>
+                <TextInput
+                  value={form.receiverName}
+                  onChange={event => update("receiverName", event.target.value)}
+                  placeholder="请输入收件人姓名"
+                />
+              </div>
+              <div>
+                <Label>联系电话</Label>
+                <TextInput
+                  type="tel"
+                  value={form.receiverPhone}
+                  onChange={event =>
+                    update("receiverPhone", event.target.value)
+                  }
+                  placeholder="请输入手机号码"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label>所在地区</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <select
+                    value={form.province}
+                    onChange={event => {
+                      const province = event.target.value;
+                      setForm(old => ({
+                        ...old,
+                        province,
+                        city: DIRECT_DISTRICT_REGIONS.has(province)
+                          ? province
+                          : "",
+                        district: "",
+                      }));
+                    }}
+                    className={selectClass}
+                    style={selectStyle}
+                  >
+                    <option value="">省 / 直辖市 / 自治区</option>
+                    {ZIDING_REGIONS.map(region => (
+                      <option key={region.n} value={region.n}>
+                        {region.n}
+                      </option>
+                    ))}
+                  </select>
+                  {!isDirectRegion && (
+                    <select
+                      value={form.city}
+                      disabled={!form.province}
+                      onChange={event =>
+                        setForm(old => ({
+                          ...old,
+                          city: event.target.value,
+                          district: "",
+                        }))
+                      }
+                      className={selectClass}
+                      style={selectStyle}
+                    >
+                      <option value="">市 / 地区</option>
+                      {cityOptions.map(city => (
+                        <option key={city} value={city}>
+                          {city}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <select
+                    value={form.district}
+                    disabled={!form.province || (!isDirectRegion && !form.city)}
+                    onChange={event => update("district", event.target.value)}
+                    className={`${selectClass} ${isDirectRegion ? "" : "col-span-2"}`}
+                    style={selectStyle}
+                  >
+                    <option value="">区 / 县（选填）</option>
+                    {districtOptions.map(district => (
+                      <option key={district} value={district}>
+                        {district}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="col-span-2">
+                <Label>详细地址</Label>
+                <TextInput
+                  value={form.detail}
+                  onChange={event => update("detail", event.target.value)}
+                  placeholder="街道、门牌号、楼栋和房间号"
+                />
+              </div>
+            </div>
+          )}
+          <div className="mt-4 flex gap-2">
+            {hasSavedAddresses && (
+              <Button
+                kind="quiet"
+                onClick={() => {
+                  setAddressError("");
+                  setShowAddressForm(value => !value);
+                }}
+                className="flex-1"
+              >
+                {needsNewAddress ? "选择已有地址" : "新增收货地址"}
+              </Button>
+            )}
+            {needsNewAddress && (
+              <Button
+                onClick={() => {
+                  setAddressError("");
+                  saveAddress.mutate(form);
+                }}
+                disabled={!canSaveAddress || saveAddress.isPending}
+                className="flex-1"
+              >
+                <Save size={15} />
+                {saveAddress.isPending ? "保存中…" : "保存地址"}
+              </Button>
+            )}
+          </div>
+        </section>
+        <div
+          className="sticky bottom-3 mt-5 rounded-2xl border p-3 shadow-lg"
+          style={{
+            background: "rgba(255,254,252,.97)",
+            borderColor: C.line,
+            backdropFilter: "blur(14px)",
+          }}
+        >
+          <Button
+            className="w-full"
+            disabled={
+              !cartItems.length ||
+              !picked ||
+              createOrder.isPending ||
+              products.isLoading
+            }
+            onClick={confirmOrder}
+          >
+            {createOrder.isPending
+              ? "正在确认订单…"
+              : `确认订单 · ${money(total)}`}
+            <ChevronRight size={16} />
+          </Button>
+        </div>
+      </main>
+    </div>
+  );
 }
 
-function OrderDetailSheet({ order, paymentInstruction, isAdmin, onClose, onRefresh }: { order: any; paymentInstruction: string; isAdmin: boolean; onClose: () => void; onRefresh: () => void }) {
-  const uploadProof = trpc.zidingCommerce.uploadPaymentProof.useMutation({ onSuccess: onRefresh });
-  const cancel = trpc.zidingCommerce.cancelMyOrder.useMutation({ onSuccess: onRefresh });
-  const receipt = trpc.zidingCommerce.confirmReceipt.useMutation({ onSuccess: onRefresh });
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("图片读取失败，请重新选择"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function PaymentProofPage({ go }: { go: (path?: string) => void }) {
+  const orderId = Number(
+    new URLSearchParams(window.location.search).get("orderId") || 0
+  );
+  const detail = trpc.zidingCommerce.myOrderDetail.useQuery(
+    { id: orderId },
+    { enabled: Number.isInteger(orderId) && orderId > 0 }
+  );
+  const context = trpc.zidingCommerce.myContext.useQuery();
+  const [files, setFiles] = useState<File[]>([]);
+  const [error, setError] = useState("");
+  const [transferNote, setTransferNote] = useState("");
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const localPreviewUrls = useMemo(() => files.map(file => URL.createObjectURL(file)), [files]);
+  useEffect(() => () => { localPreviewUrls.forEach(url => URL.revokeObjectURL(url)); }, [localPreviewUrls]);
+  const submitProofs = trpc.zidingCommerce.submitPaymentProofs.useMutation({
+    onSuccess: () => {
+      localStorage.removeItem("ziding-cart");
+      go("/orders");
+    },
+    onError: submitError =>
+      setError(submitError.message || "付款凭证提交失败，请稍后重试"),
+  });
+  const chooseFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setError("单张付款凭证不能超过 10 兆");
+      return;
+    }
+    if (files.length >= remaining) {
+      setError(`本订单还可提交 ${Math.max(0, remaining - files.length)} 张付款凭证`);
+      return;
+    }
+    setError("");
+    setFiles(items => [...items, file]);
+  };
+  if (!orderId || !Number.isInteger(orderId))
+    return (
+      <div className="min-h-screen" style={{ background: C.canvas }}>
+        <Header title="提交转账凭证" back={() => go("/orders")} />
+        <main className="mx-auto max-w-md px-4 pt-6">
+          <Panel className="py-10 text-center">
+            <ReceiptText
+              className="mx-auto mb-3"
+              size={26}
+              style={{ color: C.gold }}
+            />
+            <div className="font-semibold" style={{ color: C.ink }}>
+              未找到待付款订单
+            </div>
+            <Button className="mt-4" onClick={() => go("/orders")}>
+              查看我的订单
+            </Button>
+          </Panel>
+        </main>
+      </div>
+    );
+  if (detail.isLoading)
+    return (
+      <div className="min-h-screen" style={{ background: C.canvas }}>
+        <Header title="提交转账凭证" back={() => go("/orders")} />
+        <div className="py-20 text-center text-sm" style={{ color: C.muted }}>
+          正在加载订单…
+        </div>
+      </div>
+    );
+  if (!detail.data)
+    return (
+      <div className="min-h-screen" style={{ background: C.canvas }}>
+        <Header title="提交转账凭证" back={() => go("/orders")} />
+        <main className="mx-auto max-w-md px-4 pt-6">
+          <Panel className="py-10 text-center">
+            <div className="font-semibold" style={{ color: C.ink }}>
+              订单暂不可查看
+            </div>
+            <Button className="mt-4" onClick={() => go("/orders")}>
+              返回订单列表
+            </Button>
+          </Panel>
+        </main>
+      </div>
+    );
+  const order = detail.data as any;
+  const paymentInstruction = String((context.data as any)?.paymentInstruction || "").trim().replace(/管理员/g, "收款方");
+  const remaining = Math.max(0, 3 - Number(order.proofs?.length || 0));
+  const canSubmit =
+    ["awaiting_proof", "proof_rejected"].includes(order.status) &&
+    remaining > 0;
+  const canAddMore = canSubmit && files.length < remaining;
+  const submit = async () => {
+    setError("");
+    if (!files.length) {
+      setError("请先选择至少一张转账凭证图片");
+      return;
+    }
+    if (files.length > remaining) {
+      setError(`本订单还可提交 ${remaining} 张付款凭证`);
+      return;
+    }
+    try {
+      const images = await Promise.all(files.map(fileToDataUrl));
+      submitProofs.mutate({
+        orderId,
+        images,
+        transferNote: transferNote.trim() || undefined,
+      });
+    } catch (readError: any) {
+      setError(readError?.message || "图片读取失败，请重新选择");
+    }
+  };
+  return (
+    <div className="min-h-screen pb-7" style={{ background: C.canvas }}>
+      <Header title="提交转账凭证" back={() => go("/orders")} />
+      <main className="mx-auto max-w-md px-4 pb-6 pt-4">
+        <CheckoutProgress current={2} />
+        <section
+          className="rounded-[22px] border p-5"
+          style={{ background: C.paper, borderColor: C.line }}
+        >
+          <div
+            className="grid h-11 w-11 place-items-center rounded-full"
+            style={{ background: "#F2EAF0", color: C.plum }}
+          >
+            <ReceiptText size={22} />
+          </div>
+          <h1 className="mt-4 text-xl font-bold" style={{ color: C.ink }}>
+            订单已确认
+          </h1>
+          <p className="mt-2 text-sm leading-6" style={{ color: C.muted }}>
+            请在完成汇款后提交清晰的转账凭证。保存成功后，可在“我的订单”中查看处理状态。
+          </p>
+          <div
+            className="mt-4 border-y"
+            style={{ borderColor: C.line }}
+          >
+            {order.items.slice(0, 2).map((item: any) => <div key={item.id} className="flex items-center gap-3 py-3 first:pt-3" style={{ borderBottom: "1px solid " + C.line }}>
+              <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl" style={{ background: "#F1ECE9" }}>{item.imageUrl ? <img src={item.imageUrl} alt="" className="h-full w-full object-cover" /> : <Package size={22} style={{ color: C.muted }} />}</div>
+              <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold" style={{ color: C.ink }}>{item.name}</div>{item.subtitle && <div className="mt-1 truncate text-xs" style={{ color: C.muted }}>{item.subtitle}</div>}<div className="mt-1 text-xs" style={{ color: C.muted }}>数量 × {item.quantity}</div></div>
+              <strong className="shrink-0 text-sm" style={{ color: C.ink }}>{money(item.lineTotal)}</strong>
+            </div>)}
+            {order.items.length > 2 && <div className="py-2 text-right text-[11px]" style={{ color: C.muted }}>另有 {order.items.length - 2} 种商品</div>}
+            <div className="flex items-center justify-between py-3 text-sm"><span style={{ color: C.muted }}>共 {order.items.reduce((total: number, item: any) => total + Number(item.quantity || 0), 0)} 件商品</span><div className="flex items-baseline gap-2"><span style={{ color: C.muted }}>应付</span><strong className="text-base" style={{ color: C.ink }}>{money(order.totalAmount)}</strong></div></div>
+          </div>
+          <div className="mt-2 text-[10px]" style={{ color: C.muted }}>订单编号 {order.orderNo}</div>
+        </section>
+        {paymentInstruction && (<section
+          className="mt-4 rounded-[22px] border p-4"
+          style={{ background: C.paper, borderColor: C.line }}
+        >
+          <div className="flex items-center gap-2">
+            <Wallet size={17} style={{ color: C.plum }} />
+            <h2 className="text-base font-bold" style={{ color: C.ink }}>
+              汇款说明
+            </h2>
+          </div>
+          <p
+            className="mt-3 whitespace-pre-wrap text-sm leading-6"
+            style={{ color: C.muted }}
+          >
+            {paymentInstruction}
+          </p>
+        </section>)}
+        <section
+          className="mt-4 rounded-[22px] border p-4"
+          style={{ background: C.paper, borderColor: C.line }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold" style={{ color: C.ink }}>
+                转账凭证
+              </h2>
+              <p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>
+                支持 JPG、PNG、WebP，单张不超过 10MB；最多 3 张。
+              </p>
+            </div>
+          </div>
+          {error && (
+            <div
+              className="mt-3 rounded-xl border px-3 py-2 text-xs leading-5"
+              style={{
+                color: C.danger,
+                borderColor: "#EACACA",
+                background: "#FFF8F8",
+              }}
+            >
+              {error}
+            </div>
+          )}
+          {canSubmit ? (
+            <>
+              {files.length === 0 ? (
+                <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-7 text-center" style={{ borderColor: "#D7BBC8", background: "#FCF6F7", color: C.plum }}>
+                  <ImagePlus size={20} />
+                  <span className="text-sm font-semibold">选择转账凭证图片</span>
+                  <input className="hidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseFiles} />
+                </label>
+              ) : (
+                <>
+                  <div className="mt-4 space-y-3">
+                    {files.map((file, index) => <div key={`${file.name}-${file.lastModified}`} className="relative aspect-[4/3] overflow-hidden rounded-2xl border" style={{ borderColor: C.line, background: "#F1ECE9" }}>
+                      <img src={localPreviewUrls[index]} alt={`转账凭证 ${index + 1}`} className="h-full w-full object-contain" />
+                      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-10">
+                        <span className="truncate text-xs font-semibold text-white">凭证 {index + 1}</span>
+                        <div className="flex items-center gap-2"><button onClick={() => setPreviewIndex(index)} className="grid h-8 w-8 place-items-center rounded-full bg-white/90" style={{ color: C.plum }} aria-label={`放大查看凭证 ${index + 1}`}><ZoomIn size={16} /></button><button onClick={() => { setFiles(items => items.filter((_, itemIndex) => itemIndex !== index)); setPreviewIndex(current => current === index ? null : current !== null && current > index ? current - 1 : current); }} className="grid h-8 w-8 place-items-center rounded-full bg-white/90" style={{ color: C.muted }} aria-label={`移除凭证 ${index + 1}`}><X size={15} /></button></div>
+                      </div>
+                    </div>)}
+                    {canAddMore && <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-4 text-center" style={{ borderColor: "#D7BBC8", background: "#FCF6F7", color: C.plum }}><Plus size={19} /><span className="text-sm font-semibold">继续添加转账凭证</span><input className="hidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseFiles} /></label>}
+                  </div>
+                  <p className="mt-2 text-[11px]" style={{ color: C.muted }}>{canAddMore ? `已添加 ${files.length} 张，还可添加 ${remaining - files.length} 张` : `已添加 ${files.length} 张`}</p>
+                </>
+              )}
+              <div className="mt-4">
+                <Label>转账备注 / 流水号（选填）</Label>
+                <TextInput
+                  value={transferNote}
+                  onChange={event => setTransferNote(event.target.value)}
+                  maxLength={200}
+                  placeholder="例如：付款人姓名、转账流水号后四位"
+                />
+              </div>
+              <Button
+                className="mt-4 w-full"
+                disabled={!files.length || submitProofs.isPending}
+                onClick={submit}
+              >
+                {submitProofs.isPending ? "正在提交凭证…" : "提交凭证"}
+              </Button>
+            </>
+          ) : (
+            <div
+              className="mt-4 rounded-xl border px-3 py-4 text-sm leading-6"
+              style={{
+                borderColor: C.line,
+                background: "#FFFEFC",
+                color: C.muted,
+              }}
+            >
+              {order.status === "proof_submitted"
+                ? "付款凭证已提交，等待收款确认。"
+                : "当前订单暂不需要继续提交付款凭证。"}
+              <Button
+                kind="quiet"
+                className="mt-3 w-full"
+                onClick={() => go("/orders")}
+              >
+                查看订单状态
+              </Button>
+            </div>
+          )}
+        </section>
+        <div
+          className="mt-4 text-center text-[11px] leading-5"
+          style={{ color: C.muted }}
+        >
+          付款凭证仅供订单本人及授权人员查看。
+        </div>
+      {previewIndex !== null && localPreviewUrls[previewIndex] && <div className="fixed inset-0 z-[70] flex flex-col" style={{ background: "rgba(20,13,20,.94)" }} onClick={() => setPreviewIndex(null)}><div className="flex items-center justify-between px-5 pb-3 pt-5"><div className="text-sm font-semibold text-white">转账凭证 {previewIndex + 1}</div><button onClick={() => setPreviewIndex(null)} className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-white" aria-label="关闭大图"><X size={19} /></button></div><div className="flex min-h-0 flex-1 items-center justify-center px-4 pb-8" onClick={event => event.stopPropagation()}><img src={localPreviewUrls[previewIndex]} alt={`转账凭证 ${previewIndex + 1} 大图`} className="max-h-full max-w-full rounded-xl object-contain shadow-2xl" /></div></div>}
+      </main>
+    </div>
+  );
+}
+
+function OrderDetailSheet({
+  order,
+  paymentInstruction,
+  isAdmin,
+  onClose,
+  onRefresh,
+  onSubmitProof,
+}: {
+  order: any;
+  paymentInstruction: string;
+  isAdmin: boolean;
+  onClose: () => void;
+  onRefresh: () => void;
+  onSubmitProof: () => void;
+}) {
+  const cancel = trpc.zidingCommerce.cancelMyOrder.useMutation({
+    onSuccess: onRefresh,
+  });
+  const receipt = trpc.zidingCommerce.confirmReceipt.useMutation({
+    onSuccess: onRefresh,
+  });
   const utils = trpc.useUtils();
   const [proofUrls, setProofUrls] = useState<Record<number, string>>({});
-  const [previewProof, setPreviewProof] = useState<{ id: number; url: string } | null>(null);
+  const [previewProof, setPreviewProof] = useState<{
+    id: number;
+    url: string;
+  } | null>(null);
   const [proofError, setProofError] = useState("");
   const proofKey = (order.proofs || []).map((proof: any) => proof.id).join(",");
   const getProofUrl = async (proofId: number, download = false) => {
-    const result = await utils.zidingCommerce.getPaymentProofUrl.fetch({ proofId, download });
+    const result = await utils.zidingCommerce.getPaymentProofUrl.fetch({
+      proofId,
+      download,
+    });
     return result.url;
   };
   useEffect(() => {
@@ -308,59 +1135,347 @@ function OrderDetailSheet({ order, paymentInstruction, isAdmin, onClose, onRefre
     const proofs = order.proofs || [];
     setProofUrls({});
     setProofError("");
-    if (!proofs.length) return () => { active = false; };
-    Promise.all(proofs.map(async (proof: any) => {
-      try { return [Number(proof.id), await getProofUrl(Number(proof.id))] as const; } catch { return null; }
-    })).then((items) => {
+    if (!proofs.length)
+      return () => {
+        active = false;
+      };
+    Promise.all(
+      proofs.map(async (proof: any) => {
+        try {
+          return [
+            Number(proof.id),
+            await getProofUrl(Number(proof.id)),
+          ] as const;
+        } catch {
+          return null;
+        }
+      })
+    ).then(items => {
       if (!active) return;
-      setProofUrls(Object.fromEntries(items.filter(Boolean) as Array<[number, string]>));
+      setProofUrls(
+        Object.fromEntries(items.filter(Boolean) as Array<[number, string]>)
+      );
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [order.id, proofKey]);
   const openProof = async (proofId: number) => {
     try {
-      const url = proofUrls[proofId] || await getProofUrl(proofId);
-      setProofUrls((old) => ({ ...old, [proofId]: url }));
+      const url = proofUrls[proofId] || (await getProofUrl(proofId));
+      setProofUrls(old => ({ ...old, [proofId]: url }));
       setPreviewProof({ id: proofId, url });
     } catch (error: any) {
       setProofError(error.message || "凭证打开失败，请稍后重试");
     }
   };
   const downloadProof = async (proofId: number) => {
-    try { window.open(await getProofUrl(proofId, true), "_blank", "noopener,noreferrer"); }
-    catch (error: any) { setProofError(error.message || "凭证下载失败，请稍后重试"); }
-  };
-  const readFile = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { setProofError("单张图片不能超过 10 兆"); return; }
-    setProofError("");
-    const reader = new FileReader();
-    reader.onload = () => uploadProof.mutate({ orderId: order.id, imageData: String(reader.result) }, { onError: (error) => setProofError(error.message || "凭证上传失败，请稍后重试") });
-    reader.readAsDataURL(file);
+    try {
+      window.open(
+        await getProofUrl(proofId, true),
+        "_blank",
+        "noopener,noreferrer"
+      );
+    } catch (error: any) {
+      setProofError(error.message || "凭证下载失败，请稍后重试");
+    }
   };
   const tone = statusTone(order.status);
-  const canUpload = !isAdmin && ["awaiting_proof", "proof_rejected"].includes(order.status) && order.proofs.length < 3;
-  return <div className="fixed inset-0 z-50 flex items-end bg-black/35" onClick={onClose}>
-    <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-[28px] p-5" onClick={(e) => e.stopPropagation()} style={{ background: C.canvas }}>
-      <div className="flex justify-between"><div><div className="text-lg font-bold" style={{ color: C.ink }}>订单详情</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{order.orderNo}</div></div><button onClick={onClose}><X size={20} /></button></div>
-      <span className="mt-3 inline-block rounded-full px-2 py-1 text-[11px] font-semibold" style={{ color: tone.color, background: tone.bg }}>{order.statusLabel}</span>
-      <div className="mt-4 space-y-2">{order.items.map((item: any) => <div key={item.id} className="flex justify-between rounded-xl border p-3" style={{ background: C.paper, borderColor: C.line }}><div><div className="text-sm font-semibold" style={{ color: C.ink }}>{item.name}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{money(item.unitPrice)} × {item.quantity}</div></div><strong className="text-sm" style={{ color: C.ink }}>{money(item.lineTotal)}</strong></div>)}</div>
-      <section className="mt-3 rounded-[22px] border p-4" style={{ background: "#FCF6F7", borderColor: "#E6CBD5" }}>
-        <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-full" style={{ background: "#F0DFE6", color: C.plum }}><ReceiptText size={16} /></span><div><div className="text-sm font-semibold" style={{ color: C.ink }}>付款凭证</div><div className="mt-0.5 text-[10px]" style={{ color: C.muted }}>{order.proofs.length ? `已上传 ${order.proofs.length} / 3 张` : "完成付款后请上传凭证"}</div></div></div>{canUpload && <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-white" style={{ background: C.plum }}><input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={readFile} />{uploadProof.isPending ? "上传中…" : <><ImagePlus size={14} />上传图片</>}</label>}</div>
-        {!isAdmin && ["awaiting_proof", "proof_rejected"].includes(order.status) && <div className="mt-3 rounded-xl border px-3 py-2.5 text-[11px] leading-5" style={{ borderColor: "#E6CBD5", background: "rgba(255,255,255,.72)", color: C.muted }}><strong style={{ color: C.ink }}>付款说明</strong><br />{paymentInstruction || "请按管理员说明完成付款后上传清晰凭证。"}</div>}
-        {proofError && <div className="mt-3 rounded-xl border px-3 py-2 text-xs leading-5" style={{ color: C.danger, borderColor: "#EACACA", background: "#FFF8F8" }}>{proofError}</div>}
-        {order.proofs.length ? <><div className="mt-3 grid grid-cols-3 gap-2">{order.proofs.map((proof: any, index: number) => <div key={proof.id} className="group relative aspect-square overflow-hidden rounded-xl border" style={{ background: "#F0EAEB", borderColor: "#E1CFD6" }}>{proofUrls[proof.id] ? <img src={proofUrls[proof.id]} alt={`付款凭证 ${index + 1}`} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-[10px]" style={{ color: C.muted }}>加载凭证…</div>}<button onClick={() => openProof(Number(proof.id))} className="absolute inset-0 grid place-items-center bg-black/5" aria-label={`放大查看付款凭证 ${index + 1}`}><span className="grid h-8 w-8 place-items-center rounded-full bg-white/90 shadow-sm" style={{ color: C.plum }}><ZoomIn size={17} /></span></button></div>)}</div><div className="mt-2 text-[10px]" style={{ color: C.muted }}>点击放大镜查看大图并保存。</div></> : <div className="mt-3 rounded-xl border border-dashed px-3 py-4 text-center text-xs leading-5" style={{ borderColor: "#DCC5CE", color: C.muted }}>{canUpload ? "上传后可在这里直接看到凭证缩略图，并点击放大镜查看大图。" : "暂未上传付款凭证"}</div>}
-        {!isAdmin && order.proofs.length >= 3 && ["awaiting_proof", "proof_rejected"].includes(order.status) && <div className="mt-2 text-[10px]" style={{ color: C.muted }}>已达到单笔订单最多 3 张凭证的上限。</div>}
-      </section>
-      <Panel className="mt-3"><div className="text-sm font-semibold" style={{ color: C.ink }}>收货信息</div><div className="mt-2 text-xs leading-5" style={{ color: C.muted }}>{order.receiver.name}　{order.receiver.phone}<br />{order.receiver.province}{order.receiver.city}{order.receiver.district}{order.receiver.detail}</div></Panel>
-      {order.shippingCompany && <Panel className="mt-3"><div className="flex gap-2"><Truck size={17} style={{ color: C.gold }} /><div><div className="text-sm font-semibold" style={{ color: C.ink }}>{order.shippingCompany}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{order.trackingNo}</div></div></div></Panel>}
-      <Panel className="mt-3"><div className="text-sm font-semibold" style={{ color: C.ink }}>订单进度</div><div className="mt-3 space-y-3">{order.timeline.map((item: any, index: number) => <div key={`${item.type}-${index}`} className="flex gap-3"><span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: index === order.timeline.length - 1 ? C.gold : C.line }} /><div><div className="text-xs font-medium" style={{ color: C.ink }}>{item.text}</div><div className="mt-0.5 text-[10px]" style={{ color: C.muted }}>{dateTime(item.createdAt)}</div></div></div>)}</div></Panel>
-      {!isAdmin && <div className="mt-4 flex gap-2">{["awaiting_proof", "proof_rejected"].includes(order.status) && <Button kind="quiet" onClick={() => { if (confirm("确认取消这笔订单吗？")) cancel.mutate({ id: order.id }); }}>取消订单</Button>}{order.status === "shipped" && <Button onClick={() => { if (confirm("确认已经收到商品吗？")) receipt.mutate({ id: order.id }); }}>确认收货</Button>}</div>}
+  const canSubmitProof =
+    !isAdmin &&
+    ["awaiting_proof", "proof_rejected"].includes(order.status) &&
+    order.proofs.length < 3;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end bg-black/35"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[90vh] w-full overflow-y-auto rounded-t-[28px] p-5"
+        onClick={e => e.stopPropagation()}
+        style={{ background: C.canvas }}
+      >
+        <div className="flex justify-between">
+          <div>
+            <div className="text-lg font-bold" style={{ color: C.ink }}>
+              订单详情
+            </div>
+            <div className="mt-1 text-xs" style={{ color: C.muted }}>
+              {order.orderNo}
+            </div>
+          </div>
+          <button onClick={onClose}>
+            <X size={20} />
+          </button>
+        </div>
+        <span
+          className="mt-3 inline-block rounded-full px-2 py-1 text-[11px] font-semibold"
+          style={{ color: tone.color, background: tone.bg }}
+        >
+          {order.statusLabel}
+        </span>
+        <div className="mt-4 space-y-2">
+          {order.items.map((item: any) => (
+            <div
+              key={item.id}
+              className="flex justify-between rounded-xl border p-3"
+              style={{ background: C.paper, borderColor: C.line }}
+            >
+              <div>
+                <div className="text-sm font-semibold" style={{ color: C.ink }}>
+                  {item.name}
+                </div>
+                <div className="mt-1 text-xs" style={{ color: C.muted }}>
+                  {money(item.unitPrice)} × {item.quantity}
+                </div>
+              </div>
+              <strong className="text-sm" style={{ color: C.ink }}>
+                {money(item.lineTotal)}
+              </strong>
+            </div>
+          ))}
+        </div>
+        <section
+          className="mt-3 rounded-[22px] border p-4"
+          style={{ background: "#FCF6F7", borderColor: "#E6CBD5" }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span
+                className="grid h-8 w-8 place-items-center rounded-full"
+                style={{ background: "#F0DFE6", color: C.plum }}
+              >
+                <ReceiptText size={16} />
+              </span>
+              <div>
+                <div className="text-sm font-semibold" style={{ color: C.ink }}>
+                  付款凭证
+                </div>
+                <div className="mt-0.5 text-[10px]" style={{ color: C.muted }}>
+                  {order.proofs.length
+                    ? `已上传 ${order.proofs.length} / 3 张`
+                    : "完成付款后请上传凭证"}
+                </div>
+              </div>
+            </div>
+            {canSubmitProof && (
+              <Button onClick={onSubmitProof} className="shrink-0">
+                <ImagePlus size={14} />
+                提交凭证
+              </Button>
+            )}
+          </div>
+          {!isAdmin &&
+            ["awaiting_proof", "proof_rejected"].includes(order.status) &&
+            paymentInstruction && (
+              <div
+                className="mt-3 rounded-xl border px-3 py-2.5 text-[11px] leading-5"
+                style={{
+                  borderColor: "#E6CBD5",
+                  background: "rgba(255,255,255,.72)",
+                  color: C.muted,
+                }}
+              >
+                <strong style={{ color: C.ink }}>付款说明</strong>
+                <br />
+                {paymentInstruction}
+              </div>
+            )}
+          {proofError && (
+            <div
+              className="mt-3 rounded-xl border px-3 py-2 text-xs leading-5"
+              style={{
+                color: C.danger,
+                borderColor: "#EACACA",
+                background: "#FFF8F8",
+              }}
+            >
+              {proofError}
+            </div>
+          )}
+          {order.proofs.length ? (
+            <>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {order.proofs.map((proof: any, index: number) => (
+                  <div
+                    key={proof.id}
+                    className="group relative aspect-square overflow-hidden rounded-xl border"
+                    style={{ background: "#F0EAEB", borderColor: "#E1CFD6" }}
+                  >
+                    {proofUrls[proof.id] ? (
+                      <img
+                        src={proofUrls[proof.id]}
+                        alt={`付款凭证 ${index + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="grid h-full place-items-center text-[10px]"
+                        style={{ color: C.muted }}
+                      >
+                        加载凭证…
+                      </div>
+                    )}
+                    <button
+                      onClick={() => openProof(Number(proof.id))}
+                      className="absolute inset-0 grid place-items-center bg-black/5"
+                      aria-label={`放大查看付款凭证 ${index + 1}`}
+                    >
+                      <span
+                        className="grid h-8 w-8 place-items-center rounded-full bg-white/90 shadow-sm"
+                        style={{ color: C.plum }}
+                      >
+                        <ZoomIn size={17} />
+                      </span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 text-[10px]" style={{ color: C.muted }}>
+                点击放大镜查看大图并保存。
+              </div>
+            </>
+          ) : (
+            <div
+              className="mt-3 rounded-xl border border-dashed px-3 py-4 text-center text-xs leading-5"
+              style={{ borderColor: "#DCC5CE", color: C.muted }}
+            >
+              {canSubmitProof
+                ? "尚未提交付款凭证，请前往独立页面完成上传。"
+                : "暂未上传付款凭证"}
+            </div>
+          )}
+          {!isAdmin &&
+            order.proofs.length >= 3 &&
+            ["awaiting_proof", "proof_rejected"].includes(order.status) && (
+              <div className="mt-2 text-[10px]" style={{ color: C.muted }}>
+                已达到单笔订单最多 3 张凭证的上限。
+              </div>
+            )}
+        </section>
+        <Panel className="mt-3">
+          <div className="text-sm font-semibold" style={{ color: C.ink }}>
+            收货信息
+          </div>
+          <div className="mt-2 text-xs leading-5" style={{ color: C.muted }}>
+            {order.receiver.name}　{order.receiver.phone}
+            <br />
+            {order.receiver.province}
+            {order.receiver.city}
+            {order.receiver.district}
+            {order.receiver.detail}
+          </div>
+        </Panel>
+        {order.shippingCompany && (
+          <Panel className="mt-3">
+            <div className="flex gap-2">
+              <Truck size={17} style={{ color: C.gold }} />
+              <div>
+                <div className="text-sm font-semibold" style={{ color: C.ink }}>
+                  {order.shippingCompany}
+                </div>
+                <div className="mt-1 text-xs" style={{ color: C.muted }}>
+                  {order.trackingNo}
+                </div>
+              </div>
+            </div>
+          </Panel>
+        )}
+        <Panel className="mt-3">
+          <div className="text-sm font-semibold" style={{ color: C.ink }}>
+            订单进度
+          </div>
+          <div className="mt-3 space-y-3">
+            {order.timeline.map((item: any, index: number) => (
+              <div key={`${item.type}-${index}`} className="flex gap-3">
+                <span
+                  className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                  style={{
+                    background:
+                      index === order.timeline.length - 1 ? C.gold : C.line,
+                  }}
+                />
+                <div>
+                  <div className="text-xs font-medium" style={{ color: C.ink }}>
+                    {item.text}
+                  </div>
+                  <div
+                    className="mt-0.5 text-[10px]"
+                    style={{ color: C.muted }}
+                  >
+                    {dateTime(item.createdAt)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+        {!isAdmin && (
+          <div className="mt-4 flex gap-2">
+            {["awaiting_proof", "proof_rejected"].includes(order.status) && (
+              <Button
+                kind="quiet"
+                onClick={() => {
+                  if (confirm("确认取消这笔订单吗？"))
+                    cancel.mutate({ id: order.id });
+                }}
+              >
+                取消订单
+              </Button>
+            )}
+            {order.status === "shipped" && (
+              <Button
+                onClick={() => {
+                  if (confirm("确认已经收到商品吗？"))
+                    receipt.mutate({ id: order.id });
+                }}
+              >
+                确认收货
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+      {previewProof && (
+        <div
+          className="fixed inset-0 z-[70] flex flex-col"
+          style={{ background: "rgba(20,13,20,.94)" }}
+          onClick={() => setPreviewProof(null)}
+        >
+          <div className="flex items-center justify-between px-5 pb-3 pt-5">
+            <div className="text-sm font-semibold text-white">付款凭证大图</div>
+            <button
+              onClick={() => setPreviewProof(null)}
+              className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-white"
+              aria-label="关闭大图"
+            >
+              <X size={19} />
+            </button>
+          </div>
+          <div
+            className="flex min-h-0 flex-1 items-center justify-center px-4 pb-3"
+            onClick={event => event.stopPropagation()}
+          >
+            <img
+              src={previewProof.url}
+              alt="付款凭证大图"
+              className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+            />
+          </div>
+          <div className="flex justify-center px-5 pb-7 pt-2">
+            <button
+              onClick={() => downloadProof(previewProof.id)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold"
+              style={{ color: C.ink }}
+            >
+              <Download size={16} />
+              保存大图
+            </button>
+          </div>
+        </div>
+      )}
     </div>
-    {previewProof && <div className="fixed inset-0 z-[70] flex flex-col" style={{ background: "rgba(20,13,20,.94)" }} onClick={() => setPreviewProof(null)}><div className="flex items-center justify-between px-5 pb-3 pt-5"><div className="text-sm font-semibold text-white">付款凭证大图</div><button onClick={() => setPreviewProof(null)} className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-white" aria-label="关闭大图"><X size={19} /></button></div><div className="flex min-h-0 flex-1 items-center justify-center px-4 pb-3" onClick={(event) => event.stopPropagation()}><img src={previewProof.url} alt="付款凭证大图" className="max-h-full max-w-full rounded-xl object-contain shadow-2xl" /></div><div className="flex justify-center px-5 pb-7 pt-2"><button onClick={() => downloadProof(previewProof.id)} className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold" style={{ color: C.ink }}><Download size={16} />保存大图</button></div></div>}
-  </div>;
+  );
 }
 
 function ProfileApp({ go }: { go: (path?: string) => void }) { const context = trpc.zidingCommerce.myContext.useQuery(); const notices = trpc.zidingCommerce.listNotifications.useQuery(); return <div className="min-h-screen pb-24" style={{ background: C.canvas }}><Header title="我的" back={() => go("")} /><main className="mx-auto max-w-md space-y-4 px-4 pt-4"><Panel><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-full text-white" style={{ background: C.ink }}><UserRound size={20} /></div><div><div className="font-bold" style={{ color: C.ink }}>{context.data?.member.tier === "senior" ? "高级会员" : "初级会员"}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>紫鼎商业联盟会员</div></div></div></Panel><Panel><div className="flex items-center justify-between"><div><div className="text-sm font-semibold" style={{ color: C.ink }}>本月积分</div><div className="mt-2 text-2xl font-bold" style={{ color: C.ink }}>{Number(context.data?.points.earned || 0).toLocaleString()}</div></div><div className="text-right text-xs leading-5" style={{ color: C.muted }}>有效订购额 {money(context.data?.points.qualifiedAmount)}<br />当前系数 {Number(context.data?.points.currentMultiplier || 1).toFixed(2)}×</div></div></Panel><Panel><div className="mb-3 flex justify-between"><h3 className="text-sm font-semibold" style={{ color: C.ink }}>消息通知</h3><Bell size={16} style={{ color: C.gold }} /></div>{(notices.data || []).length ? <div className="space-y-3">{(notices.data || []).slice(0,8).map((notice: any) => <div key={notice.id} className="border-t pt-3" style={{ borderColor: C.line }}><div className="text-xs font-semibold" style={{ color: C.ink }}>{notice.title}</div><div className="mt-1 text-[11px] leading-5" style={{ color: C.muted }}>{notice.content}</div></div>)}</div> : <div className="text-xs" style={{ color: C.muted }}>暂时没有新消息。</div>}</Panel><Button kind="quiet" onClick={() => go("/orders")} className="w-full"><ReceiptText size={15} />查看我的订单</Button></main><BottomNav active="me" go={go} /></div>; }
