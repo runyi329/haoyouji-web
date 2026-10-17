@@ -152,17 +152,18 @@ function createExactSnapshotContainer(
     clonedTarget.style.boxShadow = "none";
   }
 
-  clonedTarget.querySelectorAll<HTMLElement>(`[${EXPORT_HIDE_ATTRIBUTE}]`).forEach(element => {
-    element.style.visibility = "hidden";
-    element.style.pointerEvents = "none";
-  });
+  // 导出图必须和用户端/预览态一致：管理、编辑及下载控件不仅不可见，也不能保留空白占位。
+  // 先完成样式拷贝，再删除克隆节点，避免源卡片的交互区域被影响。
+  const exportHiddenElements = Array.from(clonedTarget.querySelectorAll<HTMLElement>(`[${EXPORT_HIDE_ATTRIBUTE}]`));
+  const hasCollapsedExportContent = exportHiddenElements.length > 0;
+  exportHiddenElements.forEach(element => element.remove());
 
   // 固定当前卡片宽度，但先释放源节点计算出的固定高度，允许备注等展开内容完整撑开。
   clonedTarget.style.width = `${rect.width}px`;
   clonedTarget.style.minWidth = `${rect.width}px`;
   clonedTarget.style.maxWidth = `${rect.width}px`;
   clonedTarget.style.height = "auto";
-  clonedTarget.style.minHeight = `${sourceFullHeight}px`;
+  clonedTarget.style.minHeight = hasCollapsedExportContent ? "0" : `${sourceFullHeight}px`;
   clonedTarget.style.maxHeight = "none";
   clonedTarget.style.margin = "0";
   clonedTarget.style.position = "relative";
@@ -198,7 +199,7 @@ function createExactSnapshotContainer(
         }, renderedRect.height)
       : 0;
     const fullHeight = Math.ceil(Math.max(
-      sourceFullHeight,
+      hasCollapsedExportContent ? 0 : sourceFullHeight,
       clonedTarget.scrollHeight,
       renderedRect.height,
       renderedContentBottom,

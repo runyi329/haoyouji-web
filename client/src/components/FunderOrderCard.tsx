@@ -4609,7 +4609,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
 
       {/* 底部操作栏：仅管理员可见 */}
       {!previewMode && !jointSegmentMode && isAdmin && (
-        <div className="flex items-center gap-1.5 px-4 py-2.5 border-t overflow-x-auto" style={{ borderColor: '#F3F4F6', backgroundColor: '#FAFBFF', flexWrap: 'nowrap' }}>
+        <div data-card-export-hide="true" className="flex items-center gap-1.5 px-4 py-2.5 border-t overflow-x-auto" style={{ borderColor: '#F3F4F6', backgroundColor: '#FAFBFF', flexWrap: 'nowrap' }}>
           {!isInvited && <button
             onClick={() => handleOpenEdit && handleOpenEdit(order, 'participants')}
             className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"

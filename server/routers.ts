@@ -21267,14 +21267,16 @@ ${klinesSummary}
           const adminUserIds = new Set(((adminMemberRows[0] || adminMemberRows) as any[]).map((r: any) => Number(r.userId)));
           filteredOrders = rawOrders.filter((o: any) => adminUserIds.has(Number(o.user_id)));
         }
-        // 把 Date 对象统一序列化为 yyyy-MM-dd 字符串，防止前端 .replace() 崩溃
+        // 日期字段保持兼容的 yyyy-MM-dd 格式；结清时间则保留时分秒，供列表按实际结清先后排序。
         const orders = filteredOrders.map((o: any) => {
           const result = { ...o };
           const dateFields = ['interest_start_date', 'buy_date', 'settled_at', 'created_at', 'updated_at', 'end_date', 'start_date'];
           for (const field of dateFields) {
             if (result[field] instanceof Date) {
               const d = result[field] as Date;
-              result[field] = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+              result[field] = field === 'settled_at'
+                ? d.toISOString()
+                : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
             }
           }
           return result;
@@ -21578,7 +21580,27 @@ ${klinesSummary}
           // 钱包担保只来自已冻结台账；卡片以此合并全体拥有者的钱包担保，不读取任何可用余额。
           wallet_collateral_contributors: walletCollateralContributorsMap[Number(o.id)] || [],
         }));
-        return { orders: ordersWithPaid, livePrices, _debug: { targetUserId, participantQueryUserIdEarly, participantOrderIds, viewAsUserId: input.viewAsUserId } };
+        // 资方与借方共用同一接口排序：持有中在前，已结清按结清时点倒序，已取消单独置底。
+        const getOrderStatusRank = (order: any) => {
+          const status = String(order?.status || '').toLowerCase();
+          if (status === 'settled' || status === 'completed') return 1;
+          if (status === 'cancelled') return 2;
+          return 0;
+        };
+        const getOrderSortTimestamp = (order: any, statusRank: number) => {
+          const value = statusRank === 1
+            ? (order?.settled_at || order?.interest_end_date || order?.updated_at || order?.created_at)
+            : (order?.created_at || order?.updated_at);
+          const timestamp = new Date(String(value || '')).getTime();
+          return Number.isFinite(timestamp) ? timestamp : 0;
+        };
+        const sortedOrders = [...ordersWithPaid].sort((a: any, b: any) => {
+          const aRank = getOrderStatusRank(a);
+          const bRank = getOrderStatusRank(b);
+          if (aRank !== bRank) return aRank - bRank;
+          return getOrderSortTimestamp(b, bRank) - getOrderSortTimestamp(a, aRank);
+        });
+        return { orders: sortedOrders, livePrices, _debug: { targetUserId, participantQueryUserIdEarly, participantOrderIds, viewAsUserId: input.viewAsUserId } };
       }),
 
     // 获取目标视角用户的独立共享担保池（本人订单 + 该用户的参与者子订单）
@@ -22414,7 +22436,9 @@ ${klinesSummary}
           for (const field of ['interest_start_date', 'buy_date', 'settled_at', 'created_at', 'updated_at', 'end_date', 'start_date', 'interest_end_date']) {
             if (next[field] instanceof Date) {
               const date = next[field] as Date;
-              next[field] = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+              next[field] = field === 'settled_at'
+                ? date.toISOString()
+                : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
             }
           }
           return next;
@@ -23868,21 +23892,25 @@ ${klinesSummary}
           }
         }
 
-        // 排序：已卖出下沉，未卖出按时间倒序（最新在最上面）
+        // 列表统一口径：未结清在前，已结清按实际结清时间倒序，已取消订单置底。
         const allOrders = [...orders].sort((a: any, b: any) => {
-          // 先按“已卖出”标记下沉
-          const aSold = String(a.admin_note || '').includes('[已卖出]') ? 1 : 0;
-          const bSold = String(b.admin_note || '').includes('[已卖出]') ? 1 : 0;
-          if (aSold !== bSold) return aSold - bSold;
-          // 再按状态排序：active > completed/settled > cancelled
           const statusOrder: Record<string, number> = { active: 0, completed: 1, settled: 1, cancelled: 2 };
           const aStatus = statusOrder[a.status] ?? 9;
           const bStatus = statusOrder[b.status] ?? 9;
           if (aStatus !== bStatus) return aStatus - bStatus;
-          // 同状态按 created_at 倒序
-          const aTime = new Date(a.created_at).getTime();
-          const bTime = new Date(b.created_at).getTime();
-          return bTime - aTime;
+          const getSortTime = (order: any, status: number) => {
+            const value = status === 1
+              ? (order.settled_at || order.interest_end_date || order.updated_at || order.created_at)
+              : (order.created_at || order.updated_at);
+            const timestamp = new Date(value).getTime();
+            return Number.isFinite(timestamp) ? timestamp : 0;
+          };
+          const timeDifference = getSortTime(b, bStatus) - getSortTime(a, aStatus);
+          if (timeDifference !== 0) return timeDifference;
+          // 同一状态、同一时间戳时仍保留“已卖出”置后这一原有辅助规则。
+          const aSold = String(a.admin_note || '').includes('[已卖出]') ? 1 : 0;
+          const bSold = String(b.admin_note || '').includes('[已卖出]') ? 1 : 0;
+          return aSold - bSold;
         });
         // 管理员全量视图需要补充参与者配置；普通成员已在上方的单次聚合读取中完成，
         // 绝不能再执行同一批查询，否则跨库往返会抵消首屏加速效果。

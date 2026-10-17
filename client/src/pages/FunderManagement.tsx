@@ -179,6 +179,52 @@ function CompactDisplayToggle({ label, checked, onToggle, tone = 'blue', disable
 
 const FUNDER_MEMBER_QUERY_HISTORY_KEY_PREFIX = 'funder_member_query_history_v1';
 const FUNDER_OWNER_RECENCY_KEY_PREFIX = 'funder_order_owner_recency_v1';
+const FUNDER_ANNUAL_RATE_QUICK_VALUES_KEY_PREFIX = 'funder_annual_rate_quick_values_v1';
+const DEFAULT_FUNDER_ANNUAL_RATE_QUICK_VALUES = ['8', '9', '10', '12', '16', '24', '36'];
+
+type FunderAnnualRateQuickValue = {
+  rate: string;
+};
+
+function normalizeFunderAnnualRateQuickValue(value: unknown): string | null {
+  const normalized = normalizeFunderAnnualRate(String(value ?? ''));
+  const absoluteRate = normalized.startsWith('-') ? normalized.slice(1) : normalized;
+  const numericRate = Number(absoluteRate);
+  return absoluteRate && Number.isFinite(numericRate) && numericRate > 0 ? absoluteRate : null;
+}
+
+function sortFunderAnnualRateQuickValues(values: FunderAnnualRateQuickValue[]): FunderAnnualRateQuickValue[] {
+  return [...values].sort((a, b) => Number(a.rate) - Number(b.rate));
+}
+
+function readFunderAnnualRateQuickValues(storageKey: string): FunderAnnualRateQuickValue[] {
+  const valuesByRate = new Map<string, FunderAnnualRateQuickValue>();
+  try {
+    const raw = typeof window === 'undefined' ? [] : JSON.parse(window.localStorage.getItem(storageKey) || '[]');
+    if (Array.isArray(raw)) {
+      raw.forEach((item: unknown) => {
+        const value = typeof item === 'string' ? { rate: item } : item as Partial<FunderAnnualRateQuickValue>;
+        const rate = normalizeFunderAnnualRateQuickValue(value?.rate);
+        if (!rate) return;
+        valuesByRate.set(rate, { rate });
+      });
+    }
+  } catch {
+    // 本地偏好读取失败时继续使用默认年化利率。
+  }
+  DEFAULT_FUNDER_ANNUAL_RATE_QUICK_VALUES.forEach(rate => {
+    if (!valuesByRate.has(rate)) valuesByRate.set(rate, { rate });
+  });
+  return sortFunderAnnualRateQuickValues(Array.from(valuesByRate.values()));
+}
+
+function persistFunderAnnualRateQuickValues(storageKey: string, values: FunderAnnualRateQuickValue[]) {
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(values.map(({ rate }) => ({ rate }))));
+  } catch {
+    // 存储被禁用时仍保留当前会话内排序。
+  }
+}
 
 function readFunderMemberQueryHistory(storageKey: string): Record<string, number> {
   try {
@@ -229,6 +275,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [orderSearchText, setOrderSearchText] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
+  // 在同一编辑框中切换拥有者／参与者时，始终保留主订单视图以支持切回。
+  const editorRootOrderRef = useRef<any>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showInterestDatePicker, setShowInterestDatePicker] = useState(false);
   // 联合订单子段保存到指定拥有者／参与者的个人快照；主订单不保存、不共享。
@@ -858,6 +906,38 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       return next;
     });
   }, [isAdminUser, ownerRecencyStorageKey]);
+  // 年化快捷值只属于当前管理员、当前账本与当前设备；利率正负由输入框左侧的收／付按钮控制。
+  const annualRateQuickValuesStorageKey = `${FUNDER_ANNUAL_RATE_QUICK_VALUES_KEY_PREFIX}:ledger:${ledgerId}:admin:${Number((currentUser as any)?.id || 0)}`;
+  const [annualRateQuickValues, setAnnualRateQuickValues] = useState<FunderAnnualRateQuickValue[]>(() =>
+    DEFAULT_FUNDER_ANNUAL_RATE_QUICK_VALUES.map(rate => ({ rate })),
+  );
+  const annualRateInputDirtyRef = useRef(false);
+  useEffect(() => {
+    if (!showForm) annualRateInputDirtyRef.current = false;
+  }, [showForm]);
+  useEffect(() => {
+    if (!isAdminUser || !showForm) return;
+    setAnnualRateQuickValues(readFunderAnnualRateQuickValues(annualRateQuickValuesStorageKey));
+  }, [annualRateQuickValuesStorageKey, isAdminUser, showForm]);
+  const rememberAnnualRateQuickValue = useCallback((value: unknown) => {
+    if (!isAdminUser) return;
+    const rate = normalizeFunderAnnualRateQuickValue(value);
+    if (!rate) return;
+    const existingValues = readFunderAnnualRateQuickValues(annualRateQuickValuesStorageKey);
+    const next = sortFunderAnnualRateQuickValues([
+      ...existingValues.filter(item => item.rate !== rate),
+      { rate },
+    ]);
+    persistFunderAnnualRateQuickValues(annualRateQuickValuesStorageKey, next);
+    setAnnualRateQuickValues(next);
+  }, [annualRateQuickValuesStorageKey, isAdminUser]);
+  const selectAnnualRateQuickValue = useCallback((rate: string) => {
+    setFormData(current => {
+      const isNegative = current.interestRateAnnual.startsWith('-');
+      return { ...current, interestRateAnnual: isNegative ? `-${rate}` : rate };
+    });
+    rememberAnnualRateQuickValue(rate);
+  }, [rememberAnnualRateQuickValue]);
   // 共同拥有者也会携带 participantInfo，以便加载其独立订单视图；这不能把拥有者误判成受限参与者。
   // 仅历史参与者保留“只编辑自己的独立参数”的限制。管理员仍可从任一协作视图进入整组配置。
   const editingCollaboratorRole = String((editingOrder as any)?.participantInfo?.role || '');
@@ -961,6 +1041,36 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const editableParticipants = useMemo(() => displayParticipants.filter(({ participant }) => !(
     participant.role === 'owner' && Number(participant.userId) === Number(formData.userId)
   )), [displayParticipants, formData.userId]);
+  const editorViewTargets = useMemo(() => {
+    if (!editingOrder?.id) return [] as Array<{ userId: number; userName: string; role: ParticipantForm['role']; participant?: ParticipantForm; isRoot: boolean }>;
+    const rootOrder = editorRootOrderRef.current || editingOrder;
+    const rootUserId = Number(rootOrder?.user_id || formData.userId || 0);
+    const result: Array<{ userId: number; userName: string; role: ParticipantForm['role']; participant?: ParticipantForm; isRoot: boolean }> = [];
+    const seenUserIds = new Set<number>();
+    if (rootUserId > 0) {
+      result.push({
+        userId: rootUserId,
+        userName: String(rootOrder?.owner_label || rootOrder?.owner_display_name || primaryOwnerDisplayName || '当前拥有者'),
+        role: 'owner',
+        isRoot: true,
+      });
+      seenUserIds.add(rootUserId);
+    }
+    for (const { participant } of displayParticipants) {
+      const userId = Number(participant.userId || 0);
+      if (!userId || seenUserIds.has(userId)) continue;
+      seenUserIds.add(userId);
+      result.push({ userId, userName: participant.userName, role: participant.role, participant, isRoot: false });
+    }
+    return result;
+  }, [displayParticipants, editingOrder, formData.userId, primaryOwnerDisplayName]);
+  const activeEditorViewUserId = Number(
+    (editingOrder as any)?.participantInfo?.userId
+      ?? (editingOrder as any)?.participantInfo?.user_id
+      ?? (editorRootOrderRef.current || editingOrder)?.user_id
+      ?? formData.userId
+      ?? 0,
+  );
   useEffect(() => {
     setPrimaryOwnerEditorExpanded(!hasPrimaryOwnerDrawer);
   }, [editingOrder?.id, hasPrimaryOwnerDrawer]);
@@ -2070,6 +2180,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     setManualStockCapitalCurrency('CNY');
     setManualStockPnlCoefficient('1');
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
+    editorRootOrderRef.current = null;
     setEditingOrder(null);
     setShowDatePicker(false);
     setShowInterestDatePicker(false);
@@ -2077,7 +2188,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   };
 
   const participantsSectionRef = React.useRef<HTMLDivElement>(null);
-  const handleOpenEdit = (order: any, scrollTo?: string) => {
+  const handleOpenEdit = (order: any, scrollTo?: string, preserveEditorRoot = false) => {
+    if (!preserveEditorRoot) editorRootOrderRef.current = order;
     // 已有订单的参与者总区域默认收起，避免多人配置占满编辑界面。
     setParticipants([]);
     setSelectedParticipantUserIds([]);
@@ -2413,25 +2525,26 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   // 身份、主订单 ID、共享标的和结清状态仍强制来自父订单，避免个人视图改写真实关联关系。
   const openParticipantFullView = (participant: ParticipantForm) => {
     if (!editingOrder?.id) return;
+    const rootOrder = editorRootOrderRef.current || editingOrder;
     const snapshot = participant.orderSnapshot || {};
     const participantOrder = {
-      ...editingOrder,
+      ...rootOrder,
       ...snapshot,
-      id: editingOrder.id,
-      ledger_id: editingOrder.ledger_id ?? ledgerId,
-      user_id: editingOrder.user_id,
-      status: editingOrder.status,
-      settled_at: editingOrder.settled_at,
-      interest_end_date: editingOrder.interest_end_date,
-      order_no: editingOrder.order_no,
-      amount: participant.amount || snapshot.amount || editingOrder.amount,
-      amount_currency: participant.amountCurrency || snapshot.amount_currency || editingOrder.amount_currency,
-      interest_rate_annual: participant.interestRateAnnual !== '' ? participant.interestRateAnnual : (snapshot.interest_rate_annual ?? editingOrder.interest_rate_annual),
-      interest_base: participant.interestBase !== '' ? participant.interestBase : (snapshot.interest_base ?? editingOrder.interest_base),
-      interest_base_currency: participant.interestBaseCurrency || snapshot.interest_base_currency || editingOrder.interest_base_currency,
-      interest_rate_currency: participant.interestRateCurrency || snapshot.interest_rate_currency || editingOrder.interest_rate_currency,
-      interest_payment_type: participant.interestPaymentType || snapshot.interest_payment_type || editingOrder.interest_payment_type,
-      interest_start_date: participant.interestStartDate || snapshot.interest_start_date || editingOrder.interest_start_date,
+      id: rootOrder.id,
+      ledger_id: rootOrder.ledger_id ?? ledgerId,
+      user_id: rootOrder.user_id,
+      status: rootOrder.status,
+      settled_at: rootOrder.settled_at,
+      interest_end_date: rootOrder.interest_end_date,
+      order_no: rootOrder.order_no,
+      amount: participant.amount || snapshot.amount || rootOrder.amount,
+      amount_currency: participant.amountCurrency || snapshot.amount_currency || rootOrder.amount_currency,
+      interest_rate_annual: participant.interestRateAnnual !== '' ? participant.interestRateAnnual : (snapshot.interest_rate_annual ?? rootOrder.interest_rate_annual),
+      interest_base: participant.interestBase !== '' ? participant.interestBase : (snapshot.interest_base ?? rootOrder.interest_base),
+      interest_base_currency: participant.interestBaseCurrency || snapshot.interest_base_currency || rootOrder.interest_base_currency,
+      interest_rate_currency: participant.interestRateCurrency || snapshot.interest_rate_currency || rootOrder.interest_rate_currency,
+      interest_payment_type: participant.interestPaymentType || snapshot.interest_payment_type || rootOrder.interest_payment_type,
+      interest_start_date: participant.interestStartDate || snapshot.interest_start_date || rootOrder.interest_start_date,
       display_config: JSON.stringify({
         ...(() => { try { const value = snapshot.display_config; return value ? (typeof value === 'string' ? JSON.parse(value) : value) : {}; } catch { return {}; } })(),
         ...participant.displayConfig,
@@ -2442,7 +2555,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       trade_direction: participant.tradeDirection ?? snapshot.trade_direction ?? null,
       order_fill_status: participant.orderFillStatus || snapshot.order_fill_status || 'filled',
       order_perspective: participant.orderPerspective || snapshot.order_perspective || 'self',
-      buy_date: participant.buyDate || snapshot.buy_date || editingOrder.buy_date,
+      buy_date: participant.buyDate || snapshot.buy_date || rootOrder.buy_date,
       broker_name: participant.brokerName || snapshot.broker_name || '',
       broker_account: participant.brokerAccount || snapshot.broker_account || '',
       principal_lent_out: participant.principalLentOut ? 1 : (snapshot.principal_lent_out || 0),
@@ -2460,12 +2573,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       },
       participant_name: participant.userName,
       owner_label: participant.userName,
-      order_owner_name: editingOrder.order_owner_name || editingOrder.owner_label || editingOrder.username || null,
+      order_owner_name: rootOrder.order_owner_name || rootOrder.owner_label || rootOrder.username || null,
       owner_visibility_mode: participant.visibilityMode,
       visible_owner_ids: participant.visibleOwnerIds,
       _isParticipant: participant.role !== 'owner',
     };
-    handleOpenEdit(participantOrder);
+    handleOpenEdit(participantOrder, undefined, true);
+  };
+  const openRootOrderView = () => {
+    if (!editorRootOrderRef.current) return;
+    handleOpenEdit(editorRootOrderRef.current, undefined, true);
   };
 
   const handleSubmit = () => {
@@ -2871,17 +2988,33 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
           ) : (() => {
             const filteredOrders = [...smartMatchedOrders].filter((o: any) => {
               if (!assetTypeFilter) return true;
-              if (assetTypeFilter === 'settled') return o.status === 'settled';
+              if (assetTypeFilter === 'settled') return o.status === 'settled' || o.status === 'completed';
               if (assetTypeFilter === 'stock') return o.asset_type === 'stock';
               if (assetTypeFilter === 'crypto') return o.asset_type === 'crypto' || !o.asset_type;
               if (assetTypeFilter === 'crypto_option') return o.asset_type === 'crypto_option';
               return true;
             }).sort((a: any, b: any) => {
-              const aSettled = a.status === 'settled' || a.status === 'cancelled' ? 1 : 0;
-              const bSettled = b.status === 'settled' || b.status === 'cancelled' ? 1 : 0;
-              if (aSettled !== bSettled) return aSettled - bSettled;
-              const aTime = new Date(a.created_at || a.createdAt || 0).getTime();
-              const bTime = new Date(b.created_at || b.createdAt || 0).getTime();
+              // 左侧、右侧及统一订单台都采用同一口径：未结清在前，已结清按实际结清时间倒序。
+              // 已取消订单保留在全部已结清订单之后，避免它们插入正常结清历史。
+              const getStatusRank = (order: any) => {
+                const status = String(order?.status || '').toLowerCase();
+                if (status === 'settled' || status === 'completed') return 1;
+                if (status === 'cancelled') return 2;
+                return 0;
+              };
+              const toTimestamp = (value: unknown) => {
+                const timestamp = new Date(String(value || '')).getTime();
+                return Number.isFinite(timestamp) ? timestamp : 0;
+              };
+              const aRank = getStatusRank(a);
+              const bRank = getStatusRank(b);
+              if (aRank !== bRank) return aRank - bRank;
+              const aTime = aRank === 1
+                ? toTimestamp(a.settled_at || a.interest_end_date || a.updated_at || a.created_at || a.createdAt)
+                : toTimestamp(a.created_at || a.createdAt || a.updated_at);
+              const bTime = bRank === 1
+                ? toTimestamp(b.settled_at || b.interest_end_date || b.updated_at || b.created_at || b.createdAt)
+                : toTimestamp(b.created_at || b.createdAt || b.updated_at);
               return bTime - aTime;
             });
             return filteredOrders.length === 0 ? (
@@ -2983,6 +3116,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 onClick={() => {
                   setShowForm(false);
                   setEditingOrder(null);
+                  editorRootOrderRef.current = null;
                   setParticipants([]);
                   setJointOrderSegments([]);
                   setSelectedParticipantUserIds([]);
@@ -3000,20 +3134,28 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
             </div>
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
-              {hasPrimaryOwnerDrawer && (
-                <button
-                  type="button"
-                  onClick={() => setPrimaryOwnerEditorExpanded(expanded => !expanded)}
-                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-left"
-                >
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-blue-950">当前订单内容</span>
-                    <span className="mt-0.5 block truncate text-xs text-blue-700">{formData.ownerLabel || primaryOwnerDisplayName} · 单独保存后自动收起</span>
-                  </span>
-                  <ChevronDown className={`h-5 w-5 shrink-0 text-blue-600 transition-transform ${primaryOwnerEditorExpanded ? 'rotate-180' : ''}`} />
-                </button>
+              {editorViewTargets.length > 1 && (
+                <label className="block rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
+                  <span className="mb-1 block text-xs font-medium text-blue-700">编辑对象</span>
+                  <select
+                    value={activeEditorViewUserId}
+                    onChange={event => {
+                      const target = editorViewTargets.find(item => item.userId === Number(event.target.value));
+                      if (!target || target.userId === activeEditorViewUserId) return;
+                      if (target.isRoot) openRootOrderView();
+                      else if (target.participant) openParticipantFullView(target.participant);
+                    }}
+                    className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950 outline-none focus:ring-2 focus:ring-blue-200"
+                  >
+                    {editorViewTargets.map(target => (
+                      <option key={target.userId} value={target.userId}>
+                        {target.userName} · {target.role === 'owner' ? '拥有者' : '参与者'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
-              {(!hasPrimaryOwnerDrawer || primaryOwnerEditorExpanded) && (<>
+              <>
               {/* 每位共同拥有者或历史参与者均编辑自己的完整订单快照；真实订单关系仍由主订单受控。 */}
               {isSnapshotScopedEdit && (
                 <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
@@ -3904,31 +4046,50 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
 
               {/* 约定年化利息 */}
               <div style={{}}>
-                <label className="block text-sm font-medium text-gray-600 mb-2">约定年化利息（%）</label>
-                {/* 收（红圈+）/ 付（绿圈-） 与利率输入同行 */}
-                <div className="flex items-center gap-2">
-                  {(() => { const isNeg = formData.interestRateAnnual.startsWith('-'); return (
-                  <>
-                    <button
-                      type="button"
-                      title="收"
-                      onClick={() => { const raw = normalizeFunderAnnualRate(formData.interestRateAnnual); const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setFormData(d => ({ ...d, interestRateAnnual: absVal })); }}
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-bold shrink-0 transition-all"
-                      style={!isNeg
-                        ? { background: '#FEE2E2', color: '#DC2626', border: '2px solid #DC2626' }
-                        : { backgroundColor: '#F3F4F6', color: '#9CA3AF', border: '2px solid transparent' }}
-                    >+</button>
-                    <button
-                      type="button"
-                      title="付"
-                      onClick={() => { const raw = normalizeFunderAnnualRate(formData.interestRateAnnual); const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setFormData(d => ({ ...d, interestRateAnnual: '-' + absVal })); }}
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-bold shrink-0 transition-all"
-                      style={isNeg
-                        ? { background: '#DEF7EC', color: '#059669', border: '2px solid #059669' }
-                        : { backgroundColor: '#F3F4F6', color: '#9CA3AF', border: '2px solid transparent' }}
-                    >−</button>
-                  </>
-                  ); })()}
+                <div className="mb-2 flex items-center gap-2">
+                  <label className="shrink-0 text-sm font-medium text-gray-600">约定年化利息</label>
+                  <select
+                    value={formData.interestPaymentType}
+                    onChange={e => setFormData(d => ({ ...d, interestPaymentType: e.target.value }))}
+                    aria-label="利息支付方式"
+                    className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-medium outline-none focus:border-blue-400"
+                    style={{ color: formData.interestPaymentType ? '#4B5563' : '#9CA3AF' }}
+                  >
+                    <option value="">利息支付方式</option>
+                    {INTEREST_PAYMENT_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <div className="flex shrink-0 overflow-hidden rounded-lg border border-gray-200">
+                    {(['USDT', 'CNY'] as const).map(cur => (
+                      <button
+                        key={cur}
+                        type="button"
+                        onClick={() => setFormData(d => ({ ...d, interestRateCurrency: cur }))}
+                        className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${formData.interestRateCurrency === cur ? 'bg-blue-600 text-white' : 'bg-white text-gray-500'}`}
+                      >
+                        {cur === 'USDT' ? 'USDT' : '人民币'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white">
+                  {(() => {
+                    const isNegative = formData.interestRateAnnual.startsWith('-');
+                    return (
+                      <button
+                        type="button"
+                        aria-label={isNegative ? '切换为收利息' : '切换为付利息'}
+                        onClick={() => setFormData(d => {
+                          const absoluteRate = d.interestRateAnnual.startsWith('-') ? d.interestRateAnnual.slice(1) : d.interestRateAnnual;
+                          return { ...d, interestRateAnnual: d.interestRateAnnual.startsWith('-') ? absoluteRate : `-${absoluteRate}` };
+                        })}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center border-r border-gray-200 text-2xl font-bold tabular-nums leading-tight transition-colors ${isNegative ? 'text-emerald-600 hover:bg-emerald-50' : 'text-red-600 hover:bg-red-50'}`}
+                      >
+                        {isNegative ? '−' : '+'}
+                      </button>
+                    );
+                  })()}
                   <input
                     type="text"
                     inputMode="decimal"
@@ -3936,50 +4097,40 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     onChange={e => {
                       const val = limitFunderAnnualRateInput(e.target.value);
                       if (val === null) return;
+                      annualRateInputDirtyRef.current = true;
                       const isNeg = formData.interestRateAnnual.startsWith('-');
                       setFormData(d => ({ ...d, interestRateAnnual: isNeg ? ('-' + val) : val }));
                     }}
-                    onBlur={() => setFormData(d => ({ ...d, interestRateAnnual: normalizeFunderAnnualRate(d.interestRateAnnual) }))}
-                    className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                    placeholder="如：8.5"
-                    style={{ display: 'block', boxSizing: 'border-box' }}
-                  />
-                  <span className="text-base font-medium text-gray-500 shrink-0">% / 年</span>
-                </div>
-                {/* 利息计价货币选择 */}
-                <div className="flex gap-2 mt-2">
-                  {(['USDT', 'CNY'] as const).map(cur => (
-                    <button
-                      key={cur}
-                      type="button"
-                      onClick={() => setFormData(d => ({ ...d, interestRateCurrency: cur }))}
-                      className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
-                      style={
-                        formData.interestRateCurrency === cur
-                          ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
-                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }
+                    onBlur={() => {
+                      const normalized = normalizeFunderAnnualRate(formData.interestRateAnnual);
+                      setFormData(d => ({ ...d, interestRateAnnual: normalizeFunderAnnualRate(d.interestRateAnnual) }));
+                      if (annualRateInputDirtyRef.current) {
+                        annualRateInputDirtyRef.current = false;
+                        rememberAnnualRateQuickValue(normalized);
                       }
-                    >
-                      {cur === 'USDT' ? 'U（USDT）' : '人民币（元）'}
-                    </button>
-                  ))}
+                    }}
+                    className={`min-w-0 flex-1 border-0 px-3 py-2 text-center text-lg font-bold tabular-nums leading-tight outline-none ${formData.interestRateAnnual.startsWith('-') ? 'text-emerald-600' : 'text-red-600'}`}
+                    placeholder="如：8.5"
+                  />
+                  <span className="flex shrink-0 items-center border-l border-gray-200 px-3 text-xs font-semibold" style={{ color: '#1A2340' }}>% / 年</span>
                 </div>
-              </div>
-
-              {/* 利息支付方式 */}
-              <div style={{}}>
-                <label className="block text-sm font-medium text-gray-600 mb-2">利息支付方式</label>
-                <select
-                  value={formData.interestPaymentType}
-                  onChange={e => setFormData(d => ({ ...d, interestPaymentType: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
-                  style={{ backgroundColor: '#fff', color: formData.interestPaymentType ? '#1A2340' : '#9CA3AF' }}
-                >
-                  <option value="">请选择支付方式</option>
-                  {INTEREST_PAYMENT_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+                {isAdminUser && (
+                  <div className="mt-2 flex flex-nowrap gap-1.5 overflow-x-auto pb-0.5">
+                    {annualRateQuickValues.map(item => {
+                      const isSelected = normalizeFunderAnnualRateQuickValue(formData.interestRateAnnual) === item.rate;
+                      return (
+                        <button
+                          key={item.rate}
+                          type="button"
+                          onClick={() => selectAnnualRateQuickValue(item.rate)}
+                          className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-sm font-medium text-gray-900 transition-colors ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white active:bg-gray-50'}`}
+                        >
+                          {item.rate}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* 担保货币分隔线：历史参与者使用自己的独立担保物，不继承订单拥有者。 */}
@@ -5506,7 +5657,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   </div>
                 );
               })()}
-              </>)}
+              </>
 
             {/* ===== 表单末尾：共同拥有者与历史参与者管理 ===== */}
             {canManageCollaboratorsInEditor && (
@@ -5515,16 +5666,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                       <Users2 className="h-4 w-4" />
-                      <span>{hasPrimaryOwnerDrawer ? '其余拥有者 / 参与者' : participants.length > 0 ? '拥有者组 / 参与者' : '添加拥有者 / 参与者（可选）'}</span>
+                      <span>{participants.length > 0 ? '拥有者组 / 参与者' : '添加拥有者 / 参与者（可选）'}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm">
-                        {participantsHydrating && participants.length === 0 ? '读取中' : `${hasPrimaryOwnerDrawer ? editableParticipants.length : participants.length} 人`}
+                        {participantsHydrating && participants.length === 0 ? '读取中' : `${participants.length} 人`}
                       </span>
                       <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${participantsSectionExpanded ? 'rotate-180' : ''}`} />
                     </div>
                   </div>
-                  <p className="mt-1.5 text-xs leading-5 text-slate-500">{participantsSectionExpanded ? (hasPrimaryOwnerDrawer ? '当前订单内容在上方；此处列出已关联成员，点击即可直接进入各自完整订单页。' : '同组拥有者完全平级；点击任一成员即可直接打开该成员的完整订单编辑页，保存后自动收起。') : participants.length > 0 ? '已收起，点击查看或调整已关联的拥有者／参与者。' : '不需要多人协作时无需操作；点击后才会添加拥有者或参与者。'}</p>
+                  <p className="mt-1.5 text-xs leading-5 text-slate-500">{participantsSectionExpanded ? '编辑对象可在表单顶部直接切换；此处用于查看、添加或调整已关联的拥有者／参与者。' : participants.length > 0 ? '已收起，点击查看或调整已关联的拥有者／参与者。' : '不需要多人协作时无需操作；点击后才会添加拥有者或参与者。'}</p>
                 </button>
 
                 {participantsSectionExpanded && (<>
@@ -5539,14 +5690,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   <div key={p.userId} className={`mb-3 overflow-hidden rounded-xl border ${p.role === 'owner' ? 'border-slate-200 bg-white' : 'border-emerald-200 bg-emerald-50'}`}>
                     {/* 协作成员头部 */}
                     <div
-                      className="flex cursor-pointer items-center gap-2 px-3 py-2.5"
-                      onClick={() => {
-                        if (editingOrder?.id) {
-                          openParticipantFullView(p);
-                          return;
-                        }
+                      className={`flex items-center gap-2 px-3 py-2.5 ${editingOrder?.id ? '' : 'cursor-pointer'}`}
+                      onClick={!editingOrder?.id ? () => {
                         setParticipants(prev => prev.map(pp => ({ ...pp, expanded: pp.userId === p.userId ? !pp.expanded : false })));
-                      }}
+                      } : undefined}
                     >
                       {p.avatar ? <img src={p.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" /> : <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${p.role === 'owner' ? 'bg-slate-200 text-slate-700' : 'bg-emerald-200 text-emerald-700'}`}>{p.userName.slice(0,1).toUpperCase()}</div>}
                       <div className="flex-1 min-w-0">
@@ -5558,12 +5705,10 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
                       )}
-                      {editingOrder?.id
-                        ? <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
-                        : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" style={{ transform: p.expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>}
+                      {!editingOrder?.id && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" style={{ transform: p.expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>}
                     </div>
 
-                    {/* 新建订单尚未落库时保留关系确认；已有订单点击成员会直接进入完整编辑页。 */}
+                    {/* 新建订单尚未落库时保留关系确认；已有订单的编辑对象只在顶部下拉框中切换。 */}
                     {!editingOrder?.id && p.expanded && (
                       <div className={`border-t ${p.role === 'owner' ? 'border-slate-200' : 'border-emerald-200'}`}>
                         <div className="space-y-3 px-3 py-3">
@@ -5809,8 +5954,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
               </div>
             )}
 
-            {/* 第一位拥有者的订单内容收起后，不显示其保存按钮；其他成员各自在个人订单页保存。 */}
-            {(!hasPrimaryOwnerDrawer || primaryOwnerEditorExpanded) && (
             <div className="border-t border-gray-100 pt-4 pb-2">
               <button
                 onClick={handleSubmit}
@@ -5822,12 +5965,11 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                   ? '提交中...'
                   : editingOrder && !isSnapshotScopedEdit
                     ? `保存订单与 ${participants.length} 位参与者`
-                    : editingOrder
+                  : editingOrder
                       ? '保存修改'
                       : '确认添加'}
               </button>
             </div>
-            )}
             </div>
           </div>
         </div>
@@ -5910,7 +6052,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         });
         const selectedIds = selectedSettleUserIds.filter((userId) => relatedUserIds.includes(userId));
         const allSelected = settleCandidates.length > 0 && selectedIds.length === settleCandidates.length;
-        const isSubmitting = settleIndividualMutation.isPending;
+        // 单人订单必须更新主订单状态；只写个人快照会显示“结清成功”，但主订单仍保持持有中。
+        // 多人关联订单继续保留按个人视图结清的能力。
+        const isWholeOrderSettlement = !hasOtherCollaborators;
+        const isSubmitting = isWholeOrderSettlement
+          ? updateMutation.isPending
+          : settleIndividualMutation.isPending;
         return (
           <div className="fixed inset-0 z-[500] flex items-center justify-center px-4" onClick={() => { setConfirmSettleOrder(null); setSettleInterestEndDate(''); setSelectedSettleUserIds([]); }}>
             <div className="absolute inset-0 bg-black/50" />
@@ -5969,19 +6116,29 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 <button onClick={() => { setConfirmSettleOrder(null); setSettleInterestEndDate(''); setSelectedSettleUserIds([]); }} disabled={isSubmitting} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600 disabled:opacity-50">取消</button>
                 <button
                   onClick={() => {
-                    settleIndividualMutation.mutate({
-                      orderId: Number(targetOrder.id),
-                      ledgerId,
-                      userIds: selectedIds,
-                      interestEndDate: settleInterestEndDate || getBeijingToday(),
-                    });
+                    const interestEndDate = settleInterestEndDate || getBeijingToday();
+                    if (isWholeOrderSettlement) {
+                      updateMutation.mutate({
+                        id: Number(targetOrder.id),
+                        ledgerId,
+                        status: 'settled',
+                        interestEndDate,
+                      });
+                    } else {
+                      settleIndividualMutation.mutate({
+                        orderId: Number(targetOrder.id),
+                        ledgerId,
+                        userIds: selectedIds,
+                        interestEndDate,
+                      });
+                    }
                     setConfirmSettleOrder(null);
                     setSettleInterestEndDate('');
                     setSelectedSettleUserIds([]);
                   }}
                   disabled={isSubmitting || selectedIds.length === 0}
                   className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white disabled:opacity-50"
-                >{settleIndividualMutation.isPending ? '结清中...' : hasOtherCollaborators ? `结清已选 ${selectedIds.length} 位` : '确认结清'}</button>
+                >{isSubmitting ? '结清中...' : hasOtherCollaborators ? `结清已选 ${selectedIds.length} 位` : '确认结清'}</button>
               </div>
             </div>
           </div>
