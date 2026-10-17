@@ -11129,9 +11129,35 @@ ${klinesSummary}
     // 52号账本 T+0 速记账本：管理员读取完整管理视图；普通成员仅读取本人订单及明确分层给本人的订单。
     // 推荐关系不构成订单读取授权；管理员代入成员时同样保持该成员的严格只读范围。
     t0GetJournal: protectedProcedure
-      .input(z.object({ ledgerId: z.literal(52) }))
+      .input(z.object({
+        ledgerId: z.literal(52),
+        // 仅用于账本管理员在当前页面内只读核对一位成员实际可见的订单范围。
+        // 不是登录代入，不会改变当前会话身份，也不能用于任何写入接口。
+        previewUserId: z.number().int().positive().optional(),
+      }))
       .query(async ({ ctx, input }) => {
         const journal = await import('./ledger52-t0-journal');
+        if (input.previewUserId) {
+          if (ctx.isViewingAs) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '代入会话中不可再次切换用户预览' });
+          }
+          const managerScope = await journal.resolveLedger52T0JournalReadScope({
+            id: ctx.user.id,
+            role: ctx.user.role,
+            isViewingAs: ctx.isViewingAs,
+          });
+          if (managerScope.mode !== 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可预览成员视角' });
+          }
+          const targetMembership = await dbLedger.getUserMembership(52, input.previewUserId);
+          if (!targetMembership || targetMembership.role === 'owner' || targetMembership.role === 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '请选择52号账本的普通成员进行预览' });
+          }
+          return await journal.getLedger52T0Journal({
+            mode: 'member',
+            relatedUserId: input.previewUserId,
+          });
+        }
         if (ctx.isViewingAs) {
           const realUser = ctx.realUser;
           if (!realUser) {
@@ -11163,14 +11189,92 @@ ${klinesSummary}
         return await journal.getLedger52T0Journal(scope);
       }),
 
+    // 管理员选择T+0用户视角时，仅展示在本账本内且拥有可见T+0订单范围的普通成员。
+    t0GetPreviewMembers: protectedProcedure
+      .input(z.object({ ledgerId: z.literal(52) }))
+      .query(async ({ ctx }) => {
+        if (ctx.isViewingAs) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '代入会话中不可读取用户预览名单' });
+        }
+        const journal = await import('./ledger52-t0-journal');
+        const managerScope = await journal.resolveLedger52T0JournalReadScope({
+          id: ctx.user.id,
+          role: ctx.user.role,
+          isViewingAs: ctx.isViewingAs,
+        });
+        if (managerScope.mode !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可查看用户预览名单' });
+        }
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'T+0速记账本数据库连接失败' });
+        const [rows] = await conn.execute(
+          `SELECT lm.userId AS id,
+                  COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', lm.userId)) AS name,
+                  NULLIF(u.username, '') AS username,
+                  NULLIF(u.avatar, '') AS avatar
+             FROM ledger_members lm
+             INNER JOIN users u ON u.id = lm.userId
+            WHERE lm.ledgerId = ?
+              AND lm.role NOT IN ('owner', 'admin')
+              AND EXISTS (
+                SELECT 1
+                  FROM ledger52_t0_journal_entries e
+                 WHERE e.ledger_id = ?
+                   AND e.user_id = ?
+                   AND (
+                     e.related_user_id = lm.userId
+                     OR EXISTS (
+                       SELECT 1
+                         FROM ledger52_t0_journal_entry_profit_shares shared_entry
+                        WHERE shared_entry.ledger_id = e.ledger_id
+                          AND shared_entry.user_id = e.user_id
+                          AND shared_entry.entry_id = e.id
+                          AND shared_entry.beneficiary_user_id = lm.userId
+                     )
+                   )
+              )
+            ORDER BY name ASC, lm.userId ASC
+            LIMIT 300`,
+          [52, 52, managerScope.journalOwnerUserId],
+        );
+        return (rows as any[]).map((row) => ({
+          id: Number(row.id),
+          name: String(row.name || `用户#${row.id}`),
+          username: row.username ? String(row.username) : undefined,
+          avatar: row.avatar ? String(row.avatar) : undefined,
+        }));
+      }),
+
     // 收益转出记录：管理员随当前用户筛选登记；成员始终只读取本人共享流水。
     t0GetPayoutLogs: protectedProcedure
       .input(z.object({
         ledgerId: z.literal(52),
         relatedUserId: z.number().int().positive().optional(),
+        previewUserId: z.number().int().positive().optional(),
       }))
       .query(async ({ ctx, input }) => {
         const journal = await import('./ledger52-t0-journal');
+        if (input.previewUserId) {
+          if (ctx.isViewingAs) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '代入会话中不可再次切换用户预览' });
+          }
+          const managerScope = await journal.resolveLedger52T0JournalReadScope({
+            id: ctx.user.id,
+            role: ctx.user.role,
+            isViewingAs: ctx.isViewingAs,
+          });
+          if (managerScope.mode !== 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅52号账本管理员可预览成员资金流水' });
+          }
+          const targetMembership = await dbLedger.getUserMembership(52, input.previewUserId);
+          if (!targetMembership || targetMembership.role === 'owner' || targetMembership.role === 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '请选择52号账本的普通成员进行预览' });
+          }
+          return await journal.getLedger52T0JournalPayoutLogs({
+            scope: { mode: 'member', relatedUserId: input.previewUserId },
+            relatedUserId: input.relatedUserId,
+          });
+        }
         if (ctx.isViewingAs) {
           const realUser = ctx.realUser;
           if (!realUser) throw new TRPCError({ code: 'FORBIDDEN', message: '无法确认代入查看身份' });

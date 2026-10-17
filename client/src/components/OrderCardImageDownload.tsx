@@ -24,6 +24,8 @@ interface OrderCardImageDownloadProps {
   variant?: "default" | "bare";
   /** 默认同时显示保存者和时间；可改为只显示截图时间。 */
   watermarkMode?: "user-and-time" | "time-only";
+  /** 水印文字不透明度；默认保持卡片下载的轻量水印。 */
+  watermarkOpacity?: number;
   /** 导出文件名前缀，默认沿用订单图片。 */
   filenamePrefix?: string;
   /** 图片预览窗口标题。 */
@@ -142,6 +144,7 @@ function createExactSnapshotContainer(
   outerPadding: number,
   measureAfterAssets: boolean,
   exportBackground?: string,
+  watermarkOpacity = 0.07,
 ) {
   const rect = target.getBoundingClientRect();
   const sourceFullHeight = Math.max(rect.height, target.scrollHeight);
@@ -232,6 +235,9 @@ function createExactSnapshotContainer(
       zIndex: "2147483646",
     });
 
+    const resolvedWatermarkOpacity = Number.isFinite(watermarkOpacity)
+      ? Math.min(0.2, Math.max(0.01, watermarkOpacity))
+      : 0.07;
     const rowStep = 78;
     const columnStep = 245;
     for (let y = -45, row = 0; y < fullHeight + 80; y += rowStep, row += 1) {
@@ -243,7 +249,7 @@ function createExactSnapshotContainer(
           position: "absolute",
           left: `${x}px`,
           top: `${y}px`,
-          color: "rgba(51, 65, 85, 0.07)",
+          color: `rgba(51, 65, 85, ${resolvedWatermarkOpacity})`,
           fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           fontSize: "11px",
           fontWeight: "600",
@@ -314,6 +320,7 @@ export function OrderCardImageDownload({
   exportBackground,
   variant = "default",
   watermarkMode = "user-and-time",
+  watermarkOpacity = 0.07,
   filenamePrefix = "订单",
   previewTitle = "订单图片预览",
   previewHint = "预览与当前页面卡片使用同一张图片",
@@ -349,7 +356,7 @@ export function OrderCardImageDownload({
     let snapshotContainer: HTMLElement | null = null;
 
     try {
-      const snapshot = createExactSnapshotContainer(target, watermarkText, outerPadding, captureFullContent, exportBackground);
+      const snapshot = createExactSnapshotContainer(target, watermarkText, outerPadding, captureFullContent, exportBackground, watermarkOpacity);
       snapshotContainer = snapshot.container;
       await waitForSnapshotAssets(snapshot.clonedTarget);
       const snapshotSize = snapshot.initialSize ?? snapshot.finalizeSnapshot();
