@@ -73,7 +73,10 @@ export type SaveT0JournalEntryInput = {
   price: string;
   targetPrice?: string;
   note?: string;
-  /** 仅正向平仓时可从本单管理员收益份额中划出的共享收益；服务端按当时快照复核。 */
+  /**
+   * 正向平仓时由管理员优先从本单净收益中分配的共享收益。
+   * 本次共享后剩余净收益才会按该订单既有分佣快照结算。
+   */
   sharedIncomeAllocations?: Array<{ recipientUserId: number; amount: string }>;
   clientRequestId: string;
 };
@@ -1136,6 +1139,7 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         amount DECIMAL(18,2) NOT NULL,
         source_net_pnl DECIMAL(36,18) NOT NULL,
         manager_pool_amount DECIMAL(36,18) NOT NULL,
+        reduces_regular_distribution TINYINT(1) NOT NULL DEFAULT 0,
         created_by_user_id INT NOT NULL,
         created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
         PRIMARY KEY (id),
@@ -1143,8 +1147,17 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
         KEY idx_t0_shared_income_recipient (ledger_id, user_id, recipient_user_id, created_at),
         KEY idx_t0_shared_income_closing (ledger_id, user_id, closing_entry_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        COMMENT='52号账本T+0：仅从平仓管理员份额划出的共享收益；不改写原订单分佣快照'
+        COMMENT='52号账本T+0：平仓正向净收益优先分配的共享收益；保留原订单分佣快照'
     `);
+    // 历史共享收益按旧规则已经完成结算，默认值 0 使其不回溯改变既有订单收益；
+    // 新规则写入 1，令读取端以“本单净收益 - 共享收益”作为原分佣的基数。
+    const [sharedIncomeReductionColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_shared_income_transfers LIKE 'reduces_regular_distribution'`);
+    if (asRows(sharedIncomeReductionColumns).length === 0) {
+      await db.execute(`
+        ALTER TABLE ledger52_t0_journal_shared_income_transfers
+          ADD COLUMN reduces_regular_distribution TINYINT(1) NOT NULL DEFAULT 0 AFTER manager_pool_amount
+      `);
+    }
     const [payoutDirectionColumns] = await db.execute(`SHOW COLUMNS FROM ledger52_t0_journal_payout_logs LIKE 'direction'`);
     if (asRows(payoutDirectionColumns).length === 0) {
       // 历史账本流水均是原“提现”语义，迁移后保留为 withdrawal，绝不改变历史金额。
@@ -1481,13 +1494,14 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
   const isAdminScope = scope.mode === "admin";
   const journalOwnerUserId = isAdminScope ? scope.journalOwnerUserId : 0;
   const relatedUserId = scope.mode === "member" ? scope.relatedUserId : 0;
-  // 普通成员只可读取本人作为订单所属人，或本人被明确写入收益分配快照的订单。
-  // 推荐关系仅供管理员筛选与统计，绝不自动扩大普通成员的订单可见范围。
+  // 普通成员只可读取本人作为订单所属人、本人被明确写入收益分配快照的订单，
+  // 或本人实际收到共享收益的来源平仓单。共享收益只在该平仓单内呈现，不生成独立交易流水。
+  // 推荐关系仅供管理员筛选与统计，绝不自动扩大普通成员的订单访问范围。
   const memberVisibleRelatedUserIds = !isAdminScope
     ? [relatedUserId].filter((userId) => userId > 0)
     : [];
   const memberRelatedUserPlaceholders = memberVisibleRelatedUserIds.map(() => "?").join(", ");
-  const memberVisibilityParams = [...memberVisibleRelatedUserIds, relatedUserId];
+  const memberVisibilityParams = [...memberVisibleRelatedUserIds, relatedUserId, relatedUserId];
   const memberVisibilitySql = `(
     e.related_user_id IN (${memberRelatedUserPlaceholders})
     OR EXISTS (
@@ -1497,6 +1511,14 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
          AND shared_entry.user_id = e.user_id
          AND shared_entry.entry_id = e.id
          AND shared_entry.beneficiary_user_id = ?
+    )
+    OR EXISTS (
+      SELECT 1
+        FROM ledger52_t0_journal_shared_income_transfers shared_income
+       WHERE shared_income.ledger_id = e.ledger_id
+         AND shared_income.user_id = e.user_id
+         AND shared_income.closing_entry_id = e.id
+         AND shared_income.recipient_user_id = ?
     )
   )`;
   const [accountResult, entryResult, recoverableAuditResult, recentUserResult, relatedFundResult] = await Promise.all([
@@ -1643,9 +1665,10 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
     getTakeProfitPlansByEntryId(conn, entryIds),
   ]);
 
-  const [sharedIncomeTransferResult] = await conn.execute(
+  const [sharedIncomeTransferResult, sharedIncomeReductionResult] = await Promise.all([
+    conn.execute(
     `SELECT transfer.id, transfer.closing_entry_id, transfer.source_user_id, transfer.recipient_user_id,
-            transfer.amount, transfer.source_net_pnl, transfer.manager_pool_amount, transfer.created_at,
+            transfer.amount, transfer.source_net_pnl, transfer.manager_pool_amount, transfer.reduces_regular_distribution, transfer.created_at,
             COALESCE(NULLIF(source_user.name, ''), NULLIF(source_user.username, ''), CONCAT('用户#', transfer.source_user_id)) AS source_user_name,
             COALESCE(NULLIF(recipient_user.name, ''), NULLIF(recipient_user.username, ''), CONCAT('用户#', transfer.recipient_user_id)) AS recipient_user_name,
             recipient_user.username AS recipient_username
@@ -1658,7 +1681,18 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
     isAdminScope
       ? [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId]
       : [LEDGER_52_T0_JOURNAL_ID, relatedUserId],
-  );
+    ),
+    entryIds.length > 0
+      ? conn.execute(
+        `SELECT closing_entry_id, COALESCE(SUM(amount), 0) AS total_amount, MAX(source_net_pnl) AS source_net_pnl
+           FROM ledger52_t0_journal_shared_income_transfers
+          WHERE ledger_id = ? AND reduces_regular_distribution = 1
+            AND closing_entry_id IN (${entryIds.map(() => "?").join(", ")})
+          GROUP BY closing_entry_id`,
+        [LEDGER_52_T0_JOURNAL_ID, ...entryIds],
+      )
+      : Promise.resolve([[]]),
+  ]);
   // 共享收益候选人仅按资金账本中已登记的“投入”判断是否已出本金；管理员端一次读取全部用户汇总。
   const [payoutDepositTotalResult] = isAdminScope
     ? await conn.execute(
@@ -1707,8 +1741,15 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
       recipientUsername: transfer.recipient_username ? String(transfer.recipient_username) : undefined,
       amount: toNumber(transfer.amount),
       sourceNetPnl: toNumber(transfer.source_net_pnl),
-      managerPoolAmount: toNumber(transfer.manager_pool_amount),
+      // 字段名沿用旧列以兼容已有数据库；新语义是本单可共享的正向净收益上限。
+      shareableAmount: toNumber(transfer.manager_pool_amount),
+      reducesRegularDistribution: Boolean(toNumber(transfer.reduces_regular_distribution)),
       createdAt: isoTime(transfer.created_at),
+    })),
+    sharedIncomeReductions: asRows(sharedIncomeReductionResult).map((row) => ({
+      closingEntryId: String(row.closing_entry_id),
+      amount: toNumber(row.total_amount),
+      sourceNetPnl: toNumber(row.source_net_pnl),
     })),
     payoutDepositTotals: asRows(payoutDepositTotalResult).map((row) => ({
       relatedUserId: toNumber(row.related_user_id),
@@ -2686,15 +2727,15 @@ function normalizeSharedIncomeAllocations(raw: SaveT0JournalEntryInput["sharedIn
 }
 
 /**
- * 平仓共享收益只能动用这笔订单按开仓快照归属于管理员的正向净收益。
- * 计算逐 FIFO 开仓切片进行：每片先扣相应开仓费和本次平仓费，再以管理员快照百分比取池子。
+ * 共享收益先从本次平仓的正向净收益中分配；剩余收益才按开仓时固化的分佣快照结算。
+ * 计算逐 FIFO 开仓切片进行，先扣相应开仓费和本次平仓费，再汇总为本单净收益。
  */
-async function calculateClosingManagerSharePool(tx: any, input: {
+async function calculateClosingSharedIncomePool(tx: any, input: {
   actorUserId: number;
+  sourceUserId: number;
   positionRows: any[];
   action: T0JournalAction;
   targetPrice: string;
-  relatedUserId: number;
   relatedFundId: number;
   quantity: string;
   closePrice: string;
@@ -2703,27 +2744,16 @@ async function calculateClosingManagerSharePool(tx: any, input: {
     input.positionRows,
     input.action,
     input.targetPrice,
-    input.relatedUserId,
+    input.sourceUserId,
     input.relatedFundId,
     quantityToCents(input.quantity),
   );
-  if (matches.length === 0) return { managerPoolAmount: 0, sourceNetPnl: 0 };
+  if (matches.length === 0) return { shareableAmount: 0, sourceNetPnl: 0 };
   const openingById = new Map(input.positionRows.map((row) => [toNumber(row.id), row]));
-  const snapshots = await getEntryProfitShareSnapshotRows(tx, {
-    actorUserId: input.actorUserId,
-    entryIds: matches.map((match) => match.openingEntryId),
-    lock: true,
-  });
-  const snapshotsByOpening = new Map<number, any[]>();
-  for (const snapshot of snapshots) {
-    const openingEntryId = toNumber(snapshot.opening_entry_id);
-    snapshotsByOpening.set(openingEntryId, [...(snapshotsByOpening.get(openingEntryId) || []), snapshot]);
-  }
   const closeQuantity = Number(input.quantity);
   const closePrice = Number(input.closePrice);
   const closingFee = closeQuantity * closePrice * Number(OKX_VIP2_TAKER_FEE_RATE);
   let sourceNetPnl = 0;
-  let managerPoolAmount = 0;
   const side = actionSide(input.action);
   for (const match of matches) {
     const opening = openingById.get(match.openingEntryId);
@@ -2738,15 +2768,12 @@ async function calculateClosingManagerSharePool(tx: any, input: {
     const allocatedClosingFee = closeQuantity > 0 ? closingFee * (quantity / closeQuantity) : 0;
     const segmentNetPnl = grossPnl - allocatedOpeningFee - allocatedClosingFee;
     sourceNetPnl += segmentNetPnl;
-    const managerPercentage = (snapshotsByOpening.get(match.openingEntryId) || [])
-      .filter((snapshot) => toNumber(snapshot.beneficiary_user_id) === input.actorUserId)
-      .reduce((total, snapshot) => total + toNumber(snapshot.share_percentage), 0);
-    // 共享收益不是向亏损切片追偿；仅可从该切片实际归属管理员的正收益中划出。
-    managerPoolAmount += Math.max(0, segmentNetPnl) * Math.max(0, managerPercentage) / 100;
   }
+  const roundedSourceNetPnl = Math.round(sourceNetPnl * 100000000) / 100000000;
   return {
-    sourceNetPnl: Math.round(sourceNetPnl * 100000000) / 100000000,
-    managerPoolAmount: Math.floor((managerPoolAmount + 1e-9) * 100) / 100,
+    sourceNetPnl: roundedSourceNetPnl,
+    // 共享以 U 分账；向下取整确保后续“剩余收益”不会出现超额分配。
+    shareableAmount: Math.floor((Math.max(0, roundedSourceNetPnl) + 1e-9) * 100) / 100,
   };
 }
 
@@ -2767,13 +2794,13 @@ async function writeSharedIncomeTransfers(tx: any, input: {
   if (input.sourceUserId <= 0) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "未关联用户的订单不可分配共享收益" });
   }
-  const { managerPoolAmount, sourceNetPnl } = await calculateClosingManagerSharePool(tx, input);
-  if (sourceNetPnl <= 0 || managerPoolAmount <= 0) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "仅有正向净收益且存在管理员收益份额的平仓订单可分配共享收益" });
+  const { shareableAmount, sourceNetPnl } = await calculateClosingSharedIncomePool(tx, input);
+  if (sourceNetPnl <= 0 || shareableAmount <= 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "仅正向净收益的平仓订单可分配共享收益" });
   }
   const allocatedTotal = allocations.reduce((total, item) => total + item.amount, 0);
-  if (allocatedTotal - managerPoolAmount > 0.00001) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: `共享收益合计不可超过本单管理员可用份额 ${managerPoolAmount.toFixed(2)} U` });
+  if (allocatedTotal - shareableAmount > 0.00001) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `共享收益合计不可超过本单可共享收益 ${shareableAmount.toFixed(2)} U` });
   }
   for (const allocation of allocations) {
     if (allocation.recipientUserId === input.sourceUserId || allocation.recipientUserId === input.actorUserId) {
@@ -2783,8 +2810,8 @@ async function writeSharedIncomeTransfers(tx: any, input: {
     if (!asRows(recipientRows)[0]) throw new TRPCError({ code: "NOT_FOUND", message: "共享收益对象不存在或已失效" });
     await tx.execute(
       `INSERT INTO ledger52_t0_journal_shared_income_transfers
-        (ledger_id, user_id, closing_entry_id, source_user_id, recipient_user_id, amount, source_net_pnl, manager_pool_amount, created_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (ledger_id, user_id, closing_entry_id, source_user_id, recipient_user_id, amount, source_net_pnl, manager_pool_amount, reduces_regular_distribution, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
       [
         LEDGER_52_T0_JOURNAL_ID,
         input.actorUserId,
@@ -2793,7 +2820,7 @@ async function writeSharedIncomeTransfers(tx: any, input: {
         allocation.recipientUserId,
         allocation.amount.toFixed(2),
         sourceNetPnl.toFixed(18),
-        managerPoolAmount.toFixed(18),
+        shareableAmount.toFixed(18),
         input.actorUserId,
       ],
     );
@@ -3371,7 +3398,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         throw new TRPCError({ code: "BAD_REQUEST", message: "平仓记录必须指定对应的开仓价格档位" });
       }
       const [positionRows] = await tx.execute(
-        `SELECT id, action, execution_status, is_locked, quantity, price, target_price, related_user_id, related_fund_id
+        `SELECT id, action, execution_status, is_locked, quantity, price, fee_usdt, target_price, related_user_id, related_fund_id
            FROM ledger52_t0_journal_entries
           WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
           ORDER BY created_at ASC, id ASC FOR UPDATE`,

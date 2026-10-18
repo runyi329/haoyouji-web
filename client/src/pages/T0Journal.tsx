@@ -17,7 +17,6 @@ import {
   Pencil,
   Plus,
   Search,
-  Share2,
   ShieldCheck,
   SlidersHorizontal,
   Target,
@@ -25,10 +24,16 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
+
+/** T+0账本采用页面内状态与确认页反馈，不显示顶部下拉式操作提示。 */
+const t0Toast = {
+  success: (..._args: unknown[]) => undefined,
+  error: (..._args: unknown[]) => undefined,
+  message: (..._args: unknown[]) => undefined,
+};
 
 type TradeAction = "openLong" | "closeLong" | "openShort" | "closeShort";
 type PositionSide = "long" | "short";
@@ -57,8 +62,24 @@ type SharedIncomeTransfer = {
   recipientUsername?: string;
   amount: number;
   sourceNetPnl: number;
-  managerPoolAmount: number;
+  shareableAmount: number;
+  reducesRegularDistribution: boolean;
   createdAt: string;
+};
+type SharedIncomeReduction = {
+  amount: number;
+  sourceNetPnl: number;
+};
+type TotalProfitAttributionDetailEntry = {
+  id: string;
+  kind: "order" | "commission" | "shared";
+  createdAt: string;
+  amount: number;
+  trade?: PreviewTrade;
+  quantity?: number;
+  transfer?: SharedIncomeTransfer;
+  sourceTrade?: PreviewTrade;
+  recipientName?: string;
 };
 function getBeijingDateInputValue(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -495,6 +516,9 @@ type PreviewTrade = {
   profitShareRate?: number;
   /** 仅成员收益投影视图使用：用于让“本人”筛选保留其作为受益人的订单，同时仍显示原始关联用户。 */
   profitShareBeneficiaryUserId?: string;
+  /** 共享收益不生成独立流水；仅在收款人的同一来源平仓单视图上标记其实际共享金额。 */
+  sharedIncomeRecipientUserId?: string;
+  sharedIncomeAmount?: number;
 };
 
 type LadderOptionMetadata = {
@@ -1433,17 +1457,44 @@ type ProfitShareDistributionItem = {
   netPnl: number;
 };
 
+/** 新规则下仅正向订单先分配共享收益，普通分佣读取本单剩余净收益；历史共享记录不会进入此映射。 */
+function getRegularDistributableNetPnl(
+  sourceNetPnl: number,
+  closingEntryId: string,
+  sharedIncomeReductions?: ReadonlyMap<string, SharedIncomeReduction>,
+) {
+  if (!Number.isFinite(sourceNetPnl) || sourceNetPnl <= 0) return sourceNetPnl;
+  const reduction = sharedIncomeReductions?.get(closingEntryId);
+  const sharedAmount = Number(reduction?.amount || 0);
+  if (!Number.isFinite(sharedAmount) || sharedAmount <= 0) return sourceNetPnl;
+  return Math.max(0, sourceNetPnl - Math.min(sourceNetPnl, sharedAmount));
+}
+
+/** 成员投影视图已先按原快照拆分净收益；此处再按本单剩余比例等比缩放，避免与共享收益重复入账。 */
+function getRegularDistributionScale(
+  closingEntryId: string,
+  sharedIncomeReductions?: ReadonlyMap<string, SharedIncomeReduction>,
+) {
+  const reduction = sharedIncomeReductions?.get(closingEntryId);
+  const sourceNetPnl = Number(reduction?.sourceNetPnl || 0);
+  const sharedAmount = Number(reduction?.amount || 0);
+  if (!Number.isFinite(sourceNetPnl) || sourceNetPnl <= 0 || !Number.isFinite(sharedAmount) || sharedAmount <= 0) return 1;
+  return Math.max(0, sourceNetPnl - Math.min(sourceNetPnl, sharedAmount)) / sourceNetPnl;
+}
+
 /**
  * 管理员历史记录的逐人分配明细：严格以平仓时继承的开仓快照为准。
  * 一笔平仓若 FIFO 关联多张开仓，逐张先扣对应手续费、再按该张开仓快照拆分，最后汇总到受益人。
+ * 对采用新规则的共享收益，先从本单正向净收益中扣除共享金额，再按原快照的比例结算剩余部分。
  */
 function buildClosingProfitShareDistribution(input: {
   trades: PreviewTrade[];
   snapshots: ProfitShareSnapshot[];
   closing: PreviewTrade;
   displayedNetPnl: number;
+  sharedIncomeReductions?: ReadonlyMap<string, SharedIncomeReduction>;
 }): ProfitShareDistributionItem[] {
-  const { trades, snapshots, closing, displayedNetPnl } = input;
+  const { trades, snapshots, closing, displayedNetPnl, sharedIncomeReductions } = input;
   const closingEntryId = getStoredEntryId(closing);
   const closingSnapshots = snapshots.filter((snapshot) => snapshot.entryId === closingEntryId);
   if (closingSnapshots.length === 0 || !Number.isFinite(displayedNetPnl)) return [];
@@ -1503,8 +1554,9 @@ function buildClosingProfitShareDistribution(input: {
   }
 
   const calculatedTotal = Array.from(totals.values()).reduce((total, item) => total + item.netPnl, 0);
-  // 统一以历史列表中显示的净利润为总额，消除浮点尾差及反向展示视图带来的展示口径差异。
-  const scale = Math.abs(calculatedTotal) > 1e-9 ? displayedNetPnl / calculatedTotal : 1;
+  // 统一以共享后的剩余净利润为分配总额，消除浮点尾差及反向展示视图带来的展示口径差异。
+  const regularDistributableNetPnl = getRegularDistributableNetPnl(displayedNetPnl, closingEntryId, sharedIncomeReductions);
+  const scale = Math.abs(calculatedTotal) > 1e-9 ? regularDistributableNetPnl / calculatedTotal : 1;
   return Array.from(totals.entries())
     .map(([beneficiaryUserId, item]) => ({
       beneficiaryUserId,
@@ -2106,6 +2158,56 @@ function projectMemberProfitShareTrades(
 }
 
 /**
+ * 共享收益是来源平仓单的一部分，而不是另一张交易流水。
+ * 仅为收款人的历史视角补上该来源平仓单；若该用户本就因原分佣可见该单，直接把共享金额合并到同一行。
+ */
+function attachSharedIncomePerspectiveTrades(
+  baseTrades: PreviewTrade[],
+  rawTrades: PreviewTrade[],
+  transfers: SharedIncomeTransfer[],
+  viewerUserId: number,
+) {
+  if (!Number.isInteger(viewerUserId) || viewerUserId <= 0) return baseTrades;
+  const sharedAmountByClosingId = new Map<string, number>();
+  for (const transfer of transfers) {
+    if (transfer.recipientUserId !== viewerUserId || !Number.isFinite(transfer.amount) || transfer.amount <= 0) continue;
+    const closingEntryId = String(transfer.closingEntryId || "").trim();
+    if (!closingEntryId) continue;
+    sharedAmountByClosingId.set(closingEntryId, (sharedAmountByClosingId.get(closingEntryId) || 0) + transfer.amount);
+  }
+  if (sharedAmountByClosingId.size === 0) return baseTrades;
+
+  const projected = [...baseTrades];
+  for (const [closingEntryId, sharedAmount] of sharedAmountByClosingId) {
+    const projectedIndex = projected.findIndex((trade) => (
+      !ACTIONS[trade.action].opening && getStoredEntryId(trade) === closingEntryId
+    ));
+    if (projectedIndex >= 0) {
+      const existing = projected[projectedIndex];
+      projected[projectedIndex] = {
+        ...existing,
+        sharedIncomeRecipientUserId: String(viewerUserId),
+        sharedIncomeAmount: (Number(existing.sharedIncomeAmount) || 0) + sharedAmount,
+      };
+      continue;
+    }
+    const sourceClosing = rawTrades.find((trade) => (
+      !ACTIONS[trade.action].opening && getStoredEntryId(trade) === closingEntryId
+    ));
+    if (!sourceClosing) continue;
+    projected.push({
+      ...sourceClosing,
+      id: `shared-income-view-${closingEntryId}-${viewerUserId}`,
+      sourceEntryId: getStoredEntryId(sourceClosing),
+      detailEntryId: getDetailEntryId(sourceClosing),
+      sharedIncomeRecipientUserId: String(viewerUserId),
+      sharedIncomeAmount: sharedAmount,
+    });
+  }
+  return projected.sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+}
+
+/**
  * 历史记录的关联视图：每张开仓单与其对应平仓流水组成一组。
  * 无法由现有 FIFO 口径匹配到开仓单的平仓记录也单独保留，避免审计流水被隐藏。
  */
@@ -2241,6 +2343,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   );
   /** 仅显示已实现净收益为正的平多、平空历史记录；管理员与成员端共用同一口径。 */
   const [showOnlyProfitableHistory, setShowOnlyProfitableHistory] = useState(false);
+  /** 仅显示当前用户实际获得过共享收益的来源平仓记录。 */
+  const [showOnlySharedIncomeHistory, setShowOnlySharedIncomeHistory] = useState(false);
   const [showLinkedJournalGroups, setShowLinkedJournalGroups] = useState(false);
   const [recentJournalPage, setRecentJournalPage] = useState(1);
   const [lastRelatedUserId, setLastRelatedUserId] = useState("");
@@ -2410,9 +2514,23 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       recipientUsername: item.recipientUsername ? String(item.recipientUsername) : undefined,
       amount: Number(item.amount || 0),
       sourceNetPnl: Number(item.sourceNetPnl || 0),
-      managerPoolAmount: Number(item.managerPoolAmount || 0),
+      shareableAmount: Number(item.shareableAmount || 0),
+      reducesRegularDistribution: Boolean(item.reducesRegularDistribution),
       createdAt: String(item.createdAt || ""),
     })).filter((item) => item.id && Number.isFinite(item.amount) && item.amount > 0) : [];
+  }, [t0JournalQuery.data]);
+  const sharedIncomeReductionsByClosingEntryId = useMemo(() => {
+    const rows = (t0JournalQuery.data as any)?.sharedIncomeReductions;
+    const reductions = new Map<string, SharedIncomeReduction>();
+    if (!Array.isArray(rows)) return reductions;
+    for (const row of rows) {
+      const closingEntryId = String(row?.closingEntryId || "").trim();
+      const amount = Number(row?.amount || 0);
+      const sourceNetPnl = Number(row?.sourceNetPnl || 0);
+      if (!closingEntryId || !Number.isFinite(amount) || amount <= 0 || !Number.isFinite(sourceNetPnl) || sourceNetPnl <= 0) continue;
+      reductions.set(closingEntryId, { amount, sourceNetPnl });
+    }
+    return reductions;
   }, [t0JournalQuery.data]);
   const payoutDepositAmountByRelatedUser = useMemo(() => new Map(
     (Array.isArray((t0JournalQuery.data as any)?.payoutDepositTotals)
@@ -2519,9 +2637,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       ]);
       resetPayoutLogForm();
       await t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput);
-      toast.success("资金流水已保存");
+      t0Toast.success("资金流水已保存");
     },
-    onError: (error) => toast.error(error.message || "资金流水保存失败"),
+    onError: (error) => t0Toast.error(error.message || "资金流水保存失败"),
   });
   const updatePayoutLogMutation = trpc.ledger.t0UpdatePayoutLog.useMutation({
     onSuccess: async (updatedLog) => {
@@ -2532,9 +2650,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       ]);
       resetPayoutLogForm();
       await t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput);
-      toast.success("资金流水已更新");
+      t0Toast.success("资金流水已更新");
     },
-    onError: (error) => toast.error(error.message || "资金流水更新失败"),
+    onError: (error) => t0Toast.error(error.message || "资金流水更新失败"),
   });
   const deletePayoutLogMutation = trpc.ledger.t0DeletePayoutLog.useMutation({
     onSuccess: async (deletedLog) => {
@@ -2545,9 +2663,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setDeletePayoutLogId(null);
       if (editingPayoutLog?.id === deletedLog.id) resetPayoutLogForm();
       await t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput);
-      toast.success("资金流水已删除");
+      t0Toast.success("资金流水已删除");
     },
-    onError: (error) => toast.error(error.message || "资金流水删除失败"),
+    onError: (error) => t0Toast.error(error.message || "资金流水删除失败"),
   });
   // 推荐树仅供管理员在完整管理视图内筛选，普通成员不读取任何下线名单。
   const t0ReferralFilterQuery = trpc.ledger.t0GetReferralFilterOptions.useQuery(
@@ -2652,8 +2770,48 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       snapshots: profitShareSnapshots,
       closing: netProfitDetail.trade,
       displayedNetPnl: netProfitDetail.detail.netPnl,
+      sharedIncomeReductions: sharedIncomeReductionsByClosingEntryId,
     });
-  }, [canManage, netProfitDetail, profitShareSnapshots, trades]);
+  }, [canManage, netProfitDetail, profitShareSnapshots, sharedIncomeReductionsByClosingEntryId, trades]);
+  /** 管理员查看单笔平仓时，必须把共享与本单原有分佣放回同一张去向表，完整对上净收益。 */
+  const netProfitAllocationSummary = useMemo(() => {
+    if (!canManage || netProfitDetail?.presentation === "member" || !netProfitDetail) return null;
+    const netPnl = Number(netProfitDetail.detail.netPnl);
+    if (!Number.isFinite(netPnl)) return null;
+    const closingEntryId = getStoredEntryId(netProfitDetail.trade);
+    const sharedRows = sharedIncomeTransfers
+      .filter((transfer) => transfer.closingEntryId === closingEntryId && Number.isFinite(transfer.amount) && Math.abs(transfer.amount) > 0.000001);
+    const sharedTotal = sharedRows.reduce((total, transfer) => total + transfer.amount, 0);
+    const regularPool = getRegularDistributableNetPnl(netPnl, closingEntryId, sharedIncomeReductionsByClosingEntryId);
+    const regularRows = netProfitShareDistribution
+      .filter((allocation) => Number.isFinite(allocation.netPnl) && Math.abs(allocation.netPnl) > 0.000001)
+      .map((allocation) => ({ ...allocation }));
+    const sourceUserId = Number(netProfitDetail.trade.relatedUserId || 0);
+    const sourceUserName = netProfitDetail.trade.relatedUserName
+      || netProfitDetail.trade.relatedUsername
+      || (sourceUserId > 0 ? `用户#${sourceUserId}` : "关联用户");
+    const regularTotalBeforeFallback = regularRows.reduce((total, allocation) => total + allocation.netPnl, 0);
+    const regularGap = regularPool - regularTotalBeforeFallback;
+    // 旧订单可能没有平仓快照或快照不完整；将尚未进入快照的部分明确归到下单用户，不能留成一笔无去向的余额。
+    if (Math.abs(regularGap) > 0.004) {
+      regularRows.push({
+        beneficiaryUserId: sourceUserId,
+        beneficiaryUserName: sourceUserName,
+        percentageLabel: regularRows.length === 0 ? "100%" : "未设比例部分",
+        netPnl: regularGap,
+      });
+    }
+    const regularTotal = regularRows.reduce((total, allocation) => total + allocation.netPnl, 0);
+    return {
+      netPnl,
+      sharedRows,
+      sharedTotal,
+      regularRows,
+      regularTotal,
+      allocationTotal: sharedTotal + regularTotal,
+      showCommissionBreakdown: regularRows.length > 1,
+    };
+  }, [canManage, netProfitDetail, netProfitShareDistribution, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers]);
 
   const lastRelatedUser = recentRelatedUsers.find((user) => user.id === lastRelatedUserId)
     ?? recentRelatedUsers[0]
@@ -2965,16 +3123,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 历史记录先严格继承管理员端的账户、用户、项目、类型与状态筛选；成员端不含账户维度，
   // 再按历史面板内的条件作进一步细分，避免顶部筛到某位用户时历史仍显示全部流水。
   // 管理员切为用户呈现时，历史区从原始流水重新生成与该用户本人相同的订单投影。
-  const historyPerspectiveTrades = useMemo(
-    () => isHistoryUserPerspective
+  const historyPerspectiveTrades = useMemo(() => {
+    const memberHistoryUserId = isHistoryUserPerspective
+      ? historyPerspectiveTargetUserId
+      : (isMemberView
+        ? Number((t0JournalQuery.data as any)?.viewerProfitShareBeneficiaryUserId || (t0JournalQuery.data as any)?.viewerRelatedUserId || 0)
+        : 0);
+    const baseTrades = isHistoryUserPerspective
       ? projectMemberProfitShareTrades(
         rawJournalTrades,
         profitShareSnapshots,
         String(historyPerspectiveTargetUserId),
       )
-      : selectedTrades,
-    [historyPerspectiveTargetUserId, isHistoryUserPerspective, profitShareSnapshots, rawJournalTrades, selectedTrades],
-  );
+      : selectedTrades;
+    return attachSharedIncomePerspectiveTrades(baseTrades, rawJournalTrades, sharedIncomeTransfers, memberHistoryUserId);
+  }, [historyPerspectiveTargetUserId, isHistoryUserPerspective, isMemberView, profitShareSnapshots, rawJournalTrades, selectedTrades, sharedIncomeTransfers, t0JournalQuery.data]);
   const historyExecutionScopedTrades = useMemo(
     () => historyExecutionFilter === "all"
       ? historyPerspectiveTrades
@@ -3020,6 +3183,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         || (historyRelatedUserFilter.includesUnlinked && (!trade.relatedUserId || trade.relatedUserHidden))
         || Boolean(trade.relatedUserId && historyRelatedUserFilter.userIds.has(trade.relatedUserId))
         || Boolean(trade.profitShareBeneficiaryUserId && historyRelatedUserFilter.userIds.has(trade.profitShareBeneficiaryUserId))
+        || Boolean(isMemberView && trade.sharedIncomeRecipientUserId)
         || (!isMemberView && historyProfitShareBeneficiaryEntryIds.has(getStoredEntryId(trade))))
       && (historyRelatedFundFilterIds.length === 0
         || historyRelatedFundFilterIds.some((id) => id === "unclassified" ? (!trade.relatedFundId || trade.relatedFundHidden) : trade.relatedFundId === id))
@@ -3031,18 +3195,27 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     [journalScopeTrades],
   );
   const availableJournalActionKey = availableJournalActions.join("|");
+  const hasSharedIncomeHistory = useMemo(
+    () => journalScopeTrades.some((trade) => Number(trade.sharedIncomeAmount || 0) > 0),
+    [journalScopeTrades],
+  );
   const recentJournalTrades = useMemo(
     () => showLinkedJournalGroups
       ? journalScopeTrades
-      : journalScopeTrades.filter((trade) => journalActionFilters.has(trade.action)),
-    [journalScopeTrades, journalActionFilters, showLinkedJournalGroups],
+      : showOnlySharedIncomeHistory
+        ? journalScopeTrades.filter((trade) => Number(trade.sharedIncomeAmount || 0) > 0)
+        : journalScopeTrades.filter((trade) => journalActionFilters.has(trade.action)),
+    [journalScopeTrades, journalActionFilters, showLinkedJournalGroups, showOnlySharedIncomeHistory],
   );
   const linkedJournalGroups = useMemo(
     () => buildLinkedJournalGroups(journalScopeTrades),
     [journalScopeTrades],
   );
   const hasLinkedJournalPairs = useMemo(
-    () => linkedJournalGroups.some((group) => Boolean(group.opening) && group.closings.length > 0),
+    () => linkedJournalGroups.some((group) => (
+      (Boolean(group.opening) && group.closings.length > 0)
+      || (!group.opening && Number(group.closings[0]?.trade.sharedIncomeAmount || 0) > 0)
+    )),
     [linkedJournalGroups],
   );
   useEffect(() => {
@@ -3112,18 +3285,35 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     viewerTrades: PreviewTrade[],
   ) => {
     const displayedNetPnl = Number(displayedNetPnlInput);
-    if (!Number.isFinite(displayedNetPnl) || !Number.isInteger(viewerUserId) || viewerUserId <= 0) return null;
+    if (!Number.isInteger(viewerUserId) || viewerUserId <= 0) return null;
+    const sharedIncomeAmount = Number(trade.sharedIncomeRecipientUserId) === viewerUserId
+      ? Math.max(0, Number(trade.sharedIncomeAmount) || 0)
+      : 0;
+    // 纯共享受益人没有原订单的成本明细，但仍应在同一来源平仓单中看到自己的已到账金额。
+    if (!Number.isFinite(displayedNetPnl)) {
+      return sharedIncomeAmount > 0 ? { netPnl: sharedIncomeAmount, isProfitShared: true } : null;
+    }
     // 分层受益人的流水已在成员投影时完成数量、手续费与净收益的折算。
-    if (trade.profitShareBeneficiaryUserId) return { netPnl: displayedNetPnl, isProfitShared: true };
+    if (trade.profitShareBeneficiaryUserId) {
+      return {
+        netPnl: displayedNetPnl * getRegularDistributionScale(getStoredEntryId(trade), sharedIncomeReductionsByClosingEntryId) + sharedIncomeAmount,
+        isProfitShared: true,
+      };
+    }
     const allocations = buildClosingProfitShareDistribution({
       trades: viewerTrades,
       snapshots: profitShareSnapshots,
       closing: trade,
       displayedNetPnl,
+      sharedIncomeReductions: sharedIncomeReductionsByClosingEntryId,
     });
-    if (allocations.length === 0) return null;
+    if (allocations.length === 0) {
+      return Number(trade.relatedUserId || 0) === viewerUserId
+        ? { netPnl: getRegularDistributableNetPnl(displayedNetPnl, getStoredEntryId(trade), sharedIncomeReductionsByClosingEntryId) + sharedIncomeAmount, isProfitShared: true }
+        : (sharedIncomeAmount > 0 ? { netPnl: sharedIncomeAmount, isProfitShared: true } : null);
+    }
     const allocation = allocations.find((item) => item.beneficiaryUserId === viewerUserId);
-    return { netPnl: allocation?.netPnl ?? 0, isProfitShared: true };
+    return { netPnl: (allocation?.netPnl ?? 0) + sharedIncomeAmount, isProfitShared: true };
   };
   const resolveDisplayedPayout = (trade: PreviewTrade, displayedNetPnlInput: number | undefined) => {
     const displayedNetPnl = Number(displayedNetPnlInput);
@@ -3141,8 +3331,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       snapshots: profitShareSnapshots,
       closing: trade,
       displayedNetPnl,
+      sharedIncomeReductions: sharedIncomeReductionsByClosingEntryId,
     });
-    if (allocations.length === 0) return null;
+    if (allocations.length === 0) {
+      return Number(trade.relatedUserId || 0) === selectedAdminBeneficiaryUserId
+        ? { netPnl: getRegularDistributableNetPnl(displayedNetPnl, getStoredEntryId(trade), sharedIncomeReductionsByClosingEntryId), isProfitShared: true }
+        : null;
+    }
     const allocation = allocations.find((item) => item.beneficiaryUserId === selectedAdminBeneficiaryUserId);
     return { netPnl: allocation?.netPnl ?? 0, isProfitShared: true };
   };
@@ -3160,15 +3355,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }
     return resolveViewerPayout(trade, detail);
   };
-  const visibleSharedIncomeTransfers = useMemo(() => {
-    if (isMemberView) return sharedIncomeTransfers;
-    const userPerspectiveId = isHistoryUserPerspective ? historyPerspectiveTargetUserId : 0;
-    if (userPerspectiveId > 0) return sharedIncomeTransfers.filter((item) => item.recipientUserId === userPerspectiveId);
-    if (historyRelatedUserFilterIds.length === 1 && /^\d+$/.test(historyRelatedUserFilterIds[0])) {
-      return sharedIncomeTransfers.filter((item) => item.recipientUserId === Number(historyRelatedUserFilterIds[0]));
-    }
-    return sharedIncomeTransfers;
-  }, [historyPerspectiveTargetUserId, historyRelatedUserFilterIds, isHistoryUserPerspective, isMemberView, sharedIncomeTransfers]);
   // “盈利”严格使用列表当前展示的净收益：成员端及管理员的用户呈现均按该用户实际可得收益；
   // 管理员完整视角则按订单总净收益。开仓没有已实现收益，不纳入此筛选。
   const profitableRecentJournalTrades = useMemo(() => recentJournalTrades.filter((trade) => {
@@ -3199,7 +3385,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   }, [recentJournalTotalPages]);
   /**
    * 共享收益平仓预览：候选人只来自当前仍有未平仓位的其他关联用户；
-   * 管理员可用额度只取这张待平仓订单按开仓快照分给管理员的正收益部分。
+   * 任意正向净收益订单都可先分配共享收益，剩余部分再按该订单的既有快照结算。
    */
   const sharedIncomeClosePreview = useMemo(() => {
     const closeQuantity = Number(normalizeEthQuantity(entryForm.quantity));
@@ -3211,15 +3397,19 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       || !isEligibleSharedIncomeInstrument(entryForm.instrumentType)
       || !Number.isFinite(closeQuantity) || closeQuantity <= 0 || !Number.isFinite(closePrice) || closePrice <= 0
       || !Number.isInteger(sourceUserId) || sourceUserId <= 0) {
-      return { sourceNetPnl: 0, managerPoolAmount: 0, candidates: [] as Array<{ userId: string; name: string; username?: string; remainingQuantity: number; longQuantity: number; shortQuantity: number; cumulativeDepositAmount: number; hasPrincipal: boolean; holdingNetPnl: number; closedNetPnl: number; receivedSharedIncome: number; realizedCashFlows: T0XirrCashFlow[]; realizedTerminalValue: number; heldDays: number; settlementAgeDays: number | null; annualizedReference: number | null }> };
+      return { sourceNetPnl: 0, shareableAmount: 0, candidates: [] as Array<{ userId: string; name: string; username?: string; remainingQuantity: number; longQuantity: number; shortQuantity: number; cumulativeDepositAmount: number; hasPrincipal: boolean; holdingNetPnl: number; closedNetPnl: number; receivedSharedIncome: number; realizedCashFlows: T0XirrCashFlow[]; realizedTerminalValue: number; heldDays: number; settlementAgeDays: number | null; annualizedReference: number | null }> };
     }
+    // 与最终提交一致：管理员反向展示下的“平空/平多”仅是视觉方向，FIFO 与盈亏必须使用原始流水方向。
+    const previewAction = closingSourceTrade?.isCounterpartyView
+      ? invertTradeAction(entryForm.action)
+      : entryForm.action;
     const syntheticClosing: PreviewTrade = {
       id: "shared-income-close-preview",
       accountId: entryForm.accountId,
       relatedUserId: String(sourceUserId),
       relatedFundId: entryForm.relatedFundId && entryForm.relatedFundId !== "legacy" ? entryForm.relatedFundId : undefined,
       symbol: "ETH",
-      action: entryForm.action,
+      action: previewAction,
       quantity: closeQuantity,
       price: closePrice,
       fee: closeQuantity * closePrice * OKX_VIP2_TAKER_FEE_RATE,
@@ -3230,19 +3420,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const allocations = buildOpeningClosingAllocations(allTrades);
     const managerUserId = Number((me as any)?.id || 0);
     let sourceNetPnl = 0;
-    let managerPoolAmount = 0;
     for (const opening of allTrades) {
       if (!ACTIONS[opening.action].opening || !isEligibleSharedIncomeInstrument(opening.instrumentType)) continue;
       const matched = (allocations.get(opening.id) || []).filter((allocation) => allocation.trade.id === syntheticClosing.id);
       if (matched.length === 0) continue;
-      const snapshots = getOpeningProfitShareSnapshotAllocations(profitShareSnapshots, getStoredEntryId(opening));
-      const managerPercentage = snapshots
-        .filter((snapshot) => snapshot.beneficiaryUserId === managerUserId)
-        .reduce((total, snapshot) => total + Number(snapshot.percentage || 0), 0);
       for (const allocation of matched) {
         const netPnl = Number(buildLinkedClosingDetail(opening, allocation).netPnl || 0);
         sourceNetPnl += netPnl;
-        managerPoolAmount += Math.max(0, netPnl) * Math.max(0, managerPercentage) / 100;
       }
     }
     const candidateByUser = new Map<string, { userId: string; name: string; username?: string; remainingQuantity: number; longQuantity: number; shortQuantity: number; firstOpenedAt: string; basis: number; unrealizedPnl: number }>();
@@ -3257,24 +3441,39 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }
     };
     const historicalClosingAllocations = buildOpeningClosingAllocations(trades);
+    const handledHistoricalClosingIds = new Set<string>();
     // 平仓流水历史上没有可靠的 instrumentType；必须从其 FIFO 配对的开仓单继承类型，不能直接按平仓行过滤。
     for (const opening of trades) {
       if (!ACTIONS[opening.action].opening || !isEligibleSharedIncomeInstrument(opening.instrumentType) || !opening.relatedUserId || opening.isPending) continue;
       for (const allocation of historicalClosingAllocations.get(opening.id) || []) {
         if (allocation.trade.isPending) continue;
-        const netPnl = Number(buildLinkedClosingDetail(opening, allocation).netPnl || 0);
         const settledOn = getBeijingDateInputValue(new Date(getTradeActivityTime(allocation.trade)));
         // 自己订单只要已平仓即属于结算，不以盈亏为条件。
         recordSettlementDate(opening.relatedUserId, settledOn);
-        // 候选人“已平总盈利”只累计正向已结算收益；亏损平仓不写入这项参考收益。
-        if (Number.isFinite(netPnl) && netPnl > 0.000001) {
-          closedNetPnlByUser.set(opening.relatedUserId, (closedNetPnlByUser.get(opening.relatedUserId) || 0) + netPnl);
-          // 分佣结算：正向平仓按开仓时固化的分佣比例给每位受益人计一次结算。
-          for (const distribution of getOpeningProfitShareSnapshotAllocations(profitShareSnapshots, getStoredEntryId(opening))) {
-            if (netPnl * Number(distribution.percentage || 0) > 0.000001) {
-              recordSettlementDate(distribution.beneficiaryUserId, settledOn);
-            }
+        const closingEntryId = getStoredEntryId(allocation.trade);
+        if (handledHistoricalClosingIds.has(closingEntryId)) continue;
+        handledHistoricalClosingIds.add(closingEntryId);
+        const netPnl = Number(recentJournalTradeDetails.get(allocation.trade.id)?.netPnl);
+        if (!Number.isFinite(netPnl) || netPnl <= 0.000001) continue;
+        const distributions = buildClosingProfitShareDistribution({
+          trades,
+          snapshots: profitShareSnapshots,
+          closing: allocation.trade,
+          displayedNetPnl: netPnl,
+          sharedIncomeReductions: sharedIncomeReductionsByClosingEntryId,
+        });
+        if (distributions.length === 0) {
+          const regularNetPnl = getRegularDistributableNetPnl(netPnl, closingEntryId, sharedIncomeReductionsByClosingEntryId);
+          if (regularNetPnl > 0.000001) {
+            closedNetPnlByUser.set(opening.relatedUserId, (closedNetPnlByUser.get(opening.relatedUserId) || 0) + regularNetPnl);
           }
+          continue;
+        }
+        for (const distribution of distributions) {
+          if (distribution.netPnl <= 0.000001) continue;
+          const beneficiaryUserId = String(distribution.beneficiaryUserId);
+          closedNetPnlByUser.set(beneficiaryUserId, (closedNetPnlByUser.get(beneficiaryUserId) || 0) + distribution.netPnl);
+          recordSettlementDate(beneficiaryUserId, settledOn);
         }
       }
     }
@@ -3361,10 +3560,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     }).sort((left, right) => Number(right.hasPrincipal) - Number(left.hasPrincipal) || (left.annualizedReference ?? Number.POSITIVE_INFINITY) - (right.annualizedReference ?? Number.POSITIVE_INFINITY) || right.heldDays - left.heldDays);
     return {
       sourceNetPnl,
-      managerPoolAmount: Math.floor((managerPoolAmount + 1e-9) * 100) / 100,
+      shareableAmount: Math.floor((Math.max(0, sourceNetPnl) + 1e-9) * 100) / 100,
       candidates,
     };
-  }, [canManage, closeConfirmationStep, entryForm.action, entryForm.accountId, entryForm.instrumentType, entryForm.price, entryForm.quantity, entryForm.relatedFundId, entryForm.relatedUserId, entryForm.targetPrice, lastMarkPrice, me, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, profitShareSnapshots, recentJournalTradeDetails, sharedIncomeTransfers, trades]);
+  }, [canManage, closeConfirmationStep, closingSourceTrade?.isCounterpartyView, entryForm.action, entryForm.accountId, entryForm.instrumentType, entryForm.price, entryForm.quantity, entryForm.relatedFundId, entryForm.relatedUserId, entryForm.targetPrice, lastMarkPrice, me, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, profitShareSnapshots, recentJournalTradeDetails, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, trades]);
   const sharedIncomeAllocatedTotal = useMemo(() => Object.values(sharedIncomeDrafts).reduce((total, amount) => total + (Number(amount) || 0), 0), [sharedIncomeDrafts]);
   const sharedIncomeSaveAllocations = useMemo(() => Object.entries(sharedIncomeDrafts)
     .map(([recipientUserId, amount]) => ({ recipientUserId: Number(recipientUserId), amount: (Number(amount) || 0).toFixed(2) }))
@@ -3590,6 +3789,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       // 只有一个项目时显示为固定默认值，但不应挤占成员端两栏的初始等宽布局。
       selectedCount: isMemberView && shouldLockMemberFundFilter ? 0 : relatedFundFilterIds.length,
     };
+    // 用户视角中“用户”是只读身份标识，不应像管理员筛选一样占用半行并留下无意义空白。
+    // 让它按昵称内容收紧，项目筛选承接剩余空间；长项目名称仍能得到完整的可用宽度。
+    if (isMemberView) return "fit-content(46%) minmax(0, 1fr)";
     return buildT0FilterGridTemplateColumns(isMemberView
       ? [userSpec, fundSpec]
       : [accountSpec, userSpec, fundSpec]);
@@ -3725,18 +3927,32 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : [];
   }, [payoutTargetRelatedUserId, sharedIncomeTransfers]);
   const payoutSharedIncomeTotal = payoutSharedIncomeTransfers.reduce((total, transfer) => total + transfer.amount, 0);
-  // 收益账本使用“交易/分佣已实现收益 + 已到账共享收益”的完整口径；共享收益从其他订单的管理员份额划出，必须单独可追溯。
-  const payoutBookTotalIncome = totalNetProfit + payoutSharedIncomeTotal;
+  // 单一用户总收益统一由三部分构成：本人订单、原订单分佣、已到账共享收益。
+  // 管理员全量视图没有单一收款人，因此共享收益已包含在原平仓净收益中，不能再次相加。
+  const totalIncome = totalNetProfit + payoutSharedIncomeTotal;
+  // 收益账本、顶部总收益、XIRR 与归因报告必须使用同一完整口径，避免共享收益只在局部页面可见。
+  const payoutBookTotalIncome = totalIncome;
   const payoutBookTotalIncomeClass = payoutBookTotalIncome > 0 ? "text-rose-600" : payoutBookTotalIncome < 0 ? "text-emerald-600" : "text-slate-700";
   const payoutIncomeEntries = useMemo(() => {
     const tradeEntries = totalNetProfitDetails
       .filter((detail) => Number.isFinite(detail.netPnl) && Math.abs(detail.netPnl) > 0.000001)
       .map((detail) => ({ kind: "trade" as const, id: `trade-${detail.trade.id}`, createdAt: detail.trade.createdAt, detail }));
     const sharedEntries = payoutSharedIncomeTransfers
-      .map((transfer) => ({ kind: "shared" as const, id: `shared-${transfer.id}`, createdAt: transfer.createdAt, transfer }));
+      .map((transfer) => {
+        const sourceTrade = rawJournalTrades.find((trade) => (
+          !ACTIONS[trade.action].opening && getStoredEntryId(trade) === transfer.closingEntryId
+        ));
+        return {
+          kind: "shared" as const,
+          id: `shared-${transfer.id}`,
+          createdAt: sourceTrade?.createdAt || transfer.createdAt,
+          transfer,
+          sourceTrade,
+        };
+      });
     return [...tradeEntries, ...sharedEntries]
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id));
-  }, [payoutSharedIncomeTransfers, totalNetProfitDetails]);
+  }, [payoutSharedIncomeTransfers, rawJournalTrades, totalNetProfitDetails]);
   const payoutIncomeTotalPages = Math.max(1, Math.ceil(payoutIncomeEntries.length / PAYOUT_INCOME_PAGE_SIZE));
   const pagedPayoutIncomeEntries = useMemo(() => {
     const start = (payoutIncomePage - 1) * PAYOUT_INCOME_PAGE_SIZE;
@@ -3752,19 +3968,56 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (!canManage) return [];
     const relatedUserById = new Map(recentRelatedUsers.map((user) => [user.id, user]));
     const tradesByUserId = new Map<string, PreviewTrade[]>();
+    const knownUserNames = new Map<string, { name: string; username?: string }>();
     for (const trade of trades) {
       const userId = String(trade.relatedUserId || "").trim();
       if (!userId || trade.relatedUserHidden) continue;
       const rows = tradesByUserId.get(userId) || [];
       rows.push(trade);
       tradesByUserId.set(userId, rows);
+      if (!knownUserNames.has(userId)) {
+        knownUserNames.set(userId, {
+          name: trade.relatedUserName || trade.relatedUsername || `用户#${userId}`,
+          username: trade.relatedUsername,
+        });
+      }
     }
     const sharedIncomeByUserId = new Map<string, number>();
     for (const transfer of sharedIncomeTransfers) {
       const userId = String(transfer.recipientUserId);
       sharedIncomeByUserId.set(userId, (sharedIncomeByUserId.get(userId) || 0) + transfer.amount);
+      if (!knownUserNames.has(userId)) knownUserNames.set(userId, { name: transfer.recipientUserName, username: transfer.recipientUsername });
     }
-    return Array.from(tradesByUserId.entries()).map(([userId, userTrades]) => {
+    // 普通交易收益按“共享先分配，剩余再按本单快照分佣”的同一口径归属，不能再把整笔收益都归给下单人。
+    const realizedTradeIncomeByUserId = new Map<string, number>();
+    const detailsByEntryId = buildRecentJournalTradeDetails(trades);
+    for (const closing of trades) {
+      if (closing.isPending || ACTIONS[closing.action].opening) continue;
+      const netPnl = Number(detailsByEntryId.get(closing.id)?.netPnl);
+      if (!Number.isFinite(netPnl)) continue;
+      const distributions = buildClosingProfitShareDistribution({
+        trades,
+        snapshots: profitShareSnapshots,
+        closing,
+        displayedNetPnl: netPnl,
+        sharedIncomeReductions: sharedIncomeReductionsByClosingEntryId,
+      });
+      if (distributions.length === 0) {
+        const sourceUserId = String(closing.relatedUserId || "").trim();
+        if (!sourceUserId) continue;
+        const regularNetPnl = getRegularDistributableNetPnl(netPnl, getStoredEntryId(closing), sharedIncomeReductionsByClosingEntryId);
+        realizedTradeIncomeByUserId.set(sourceUserId, (realizedTradeIncomeByUserId.get(sourceUserId) || 0) + regularNetPnl);
+        continue;
+      }
+      for (const distribution of distributions) {
+        const beneficiaryUserId = String(distribution.beneficiaryUserId);
+        realizedTradeIncomeByUserId.set(beneficiaryUserId, (realizedTradeIncomeByUserId.get(beneficiaryUserId) || 0) + distribution.netPnl);
+        if (!knownUserNames.has(beneficiaryUserId)) knownUserNames.set(beneficiaryUserId, { name: distribution.beneficiaryUserName });
+      }
+    }
+    const userIds = new Set([...tradesByUserId.keys(), ...sharedIncomeByUserId.keys(), ...realizedTradeIncomeByUserId.keys()]);
+    return Array.from(userIds).map((userId) => {
+      const userTrades = tradesByUserId.get(userId) || [];
       const relatedUser = relatedUserById.get(userId);
       const filledTrades = userTrades.filter((trade) => !trade.isPending);
       const buckets = buildPositionBuckets(filledTrades);
@@ -3777,18 +4030,23 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         .filter((bucket) => bucket.side === "short" && bucket.remainingQuantity > 0.0000001)
         .reduce((total, bucket) => total + bucket.remainingQuantity, 0);
       const closedTrades = filledTrades.filter((trade) => !ACTIONS[trade.action].opening);
-      const detailsById = buildRecentJournalTradeDetails(filledTrades);
-      const realizedTradeIncome = closedTrades.reduce((total, trade) => total + (detailsById.get(trade.id)?.netPnl || 0), 0);
+      const realizedTradeIncome = realizedTradeIncomeByUserId.get(userId) || 0;
       const sharedIncome = sharedIncomeByUserId.get(userId) || 0;
-      const lastActivityAt = userTrades
-        .map((trade) => getTradeActivityTime(trade))
+      const sharedActivityTimes = sharedIncomeTransfers
+        .filter((transfer) => String(transfer.recipientUserId) === userId)
+        .map((transfer) => transfer.createdAt);
+      const lastActivityAt = [
+        ...userTrades.map((trade) => getTradeActivityTime(trade)),
+        ...sharedActivityTimes,
+      ]
         .sort()
         .at(-1) || "";
       const fallbackTrade = userTrades[0];
+      const fallbackUser = knownUserNames.get(userId);
       return {
         userId,
-        name: relatedUser?.name || fallbackTrade?.relatedUserName || fallbackTrade?.relatedUsername || `用户#${userId}`,
-        username: relatedUser?.username || fallbackTrade?.relatedUsername || "",
+        name: relatedUser?.name || fallbackUser?.name || fallbackTrade?.relatedUserName || fallbackTrade?.relatedUsername || `用户#${userId}`,
+        username: relatedUser?.username || fallbackUser?.username || fallbackTrade?.relatedUsername || "",
         longQuantity,
         shortQuantity,
         longOpeningCount,
@@ -3806,7 +4064,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       || right.lastActivityAt.localeCompare(left.lastActivityAt)
       || left.name.localeCompare(right.name, "zh-CN")
     ));
-  }, [canManage, recentRelatedUsers, sharedIncomeTransfers, trades]);
+  }, [canManage, profitShareSnapshots, recentRelatedUsers, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, trades]);
   const globalLedgerSummary = useMemo(() => {
     const summary = globalLedgerRows.reduce((total, row) => ({
       longQuantity: total.longQuantity + row.longQuantity,
@@ -3860,6 +4118,74 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     sharedProfit: total.sharedProfit + row.sharedProfit,
     withdrawal: total.withdrawal + row.withdrawal,
   }), { deposit: 0, tradeProfit: 0, sharedProfit: 0, withdrawal: 0 }), [globalFundsRows]);
+  /**
+   * 管理员全局收益归因必须按同一笔平仓的最终去向拆分：
+   * 共享收益先单独列示，余额才按原分佣快照归入订单收益或分佣收益。
+   * 这样三项逐笔相加恰好等于全局净收益，既不遗漏共享，也不会重复计算。
+   */
+  const globalProfitAttribution = useMemo(() => {
+    let ownTradingNetProfit = 0;
+    let commissionShareNetProfit = 0;
+    let sharedIncomeNetProfit = 0;
+    const ownClosingIds = new Set<string>();
+    const commissionClosingIds = new Set<string>();
+    const includedClosingIds = new Set<string>();
+
+    for (const detail of totalNetProfitDetails) {
+      const netPnl = Number(detail.netPnl);
+      if (!Number.isFinite(netPnl)) continue;
+      const closing = detail.trade;
+      const closingEntryId = getStoredEntryId(closing);
+      includedClosingIds.add(closingEntryId);
+      const regularPool = getRegularDistributableNetPnl(netPnl, closingEntryId, sharedIncomeReductionsByClosingEntryId);
+      // 共享只可能来自正向净收益；以“原净收益 − 共享后剩余池”反算，可兼容历史记录与小数尾差。
+      const sharedAmount = netPnl > 0 ? Math.max(0, netPnl - regularPool) : 0;
+      sharedIncomeNetProfit += sharedAmount;
+
+      const distributions = buildClosingProfitShareDistribution({
+        trades,
+        snapshots: profitShareSnapshots,
+        closing,
+        displayedNetPnl: netPnl,
+        sharedIncomeReductions: sharedIncomeReductionsByClosingEntryId,
+      });
+      if (distributions.length === 0) {
+        ownTradingNetProfit += regularPool;
+        ownClosingIds.add(closingEntryId);
+        continue;
+      }
+
+      const sourceUserId = Number(closing.relatedUserId || 0);
+      let distributedRegularTotal = 0;
+      for (const distribution of distributions) {
+        const amount = Number(distribution.netPnl);
+        if (!Number.isFinite(amount)) continue;
+        distributedRegularTotal += amount;
+        if (sourceUserId > 0 && distribution.beneficiaryUserId === sourceUserId) {
+          ownTradingNetProfit += amount;
+          ownClosingIds.add(closingEntryId);
+        } else {
+          commissionShareNetProfit += amount;
+          commissionClosingIds.add(closingEntryId);
+        }
+      }
+      // 快照缺项或历史迁移数据不完整时，任何未拆出的常规收益仍归下单用户，不能形成无归属差额。
+      const regularGap = regularPool - distributedRegularTotal;
+      if (Math.abs(regularGap) > 0.000001) {
+        ownTradingNetProfit += regularGap;
+        ownClosingIds.add(closingEntryId);
+      }
+    }
+
+    return {
+      ownTradingNetProfit,
+      commissionShareNetProfit,
+      sharedIncomeNetProfit,
+      ownTradingCount: ownClosingIds.size,
+      commissionShareCount: commissionClosingIds.size,
+      sharedIncomeCount: sharedIncomeTransfers.filter((transfer) => includedClosingIds.has(transfer.closingEntryId)).length,
+    };
+  }, [profitShareSnapshots, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, totalNetProfitDetails, trades]);
   const totalProfitAttribution = useMemo(() => {
     const targetUserId = payoutTargetRelatedUserId;
     const hasIndividualScope = Number.isInteger(targetUserId) && targetUserId > 0;
@@ -3869,23 +4195,33 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const commissionShareDetails = hasIndividualScope
       ? totalNetProfitDetails.filter((detail) => Number(detail.trade.relatedUserId || 0) !== targetUserId)
       : [];
-    const ownTradingNetProfit = ownTradingDetails.reduce((total, detail) => total + detail.netPnl, 0);
-    const commissionShareNetProfit = commissionShareDetails.reduce((total, detail) => total + detail.netPnl, 0);
-    const contributionBase = Math.abs(ownTradingNetProfit) + Math.abs(commissionShareNetProfit);
+    const ownTradingNetProfit = hasIndividualScope
+      ? ownTradingDetails.reduce((total, detail) => total + detail.netPnl, 0)
+      : globalProfitAttribution.ownTradingNetProfit;
+    const commissionShareNetProfit = hasIndividualScope
+      ? commissionShareDetails.reduce((total, detail) => total + detail.netPnl, 0)
+      : globalProfitAttribution.commissionShareNetProfit;
+    const sharedIncomeNetProfit = hasIndividualScope
+      ? payoutSharedIncomeTotal
+      : globalProfitAttribution.sharedIncomeNetProfit;
+    const contributionBase = Math.abs(ownTradingNetProfit) + Math.abs(commissionShareNetProfit) + Math.abs(sharedIncomeNetProfit);
     const ownTradingRatio = contributionBase > 0.000001 ? Math.abs(ownTradingNetProfit) / contributionBase : 0;
     return {
       hasIndividualScope,
       ownTradingNetProfit,
       commissionShareNetProfit,
-      ownTradingCount: ownTradingDetails.length,
-      commissionShareCount: commissionShareDetails.length,
+      sharedIncomeNetProfit,
+      ownTradingCount: hasIndividualScope ? ownTradingDetails.length : globalProfitAttribution.ownTradingCount,
+      commissionShareCount: hasIndividualScope ? commissionShareDetails.length : globalProfitAttribution.commissionShareCount,
+      sharedIncomeCount: hasIndividualScope ? payoutSharedIncomeTransfers.length : globalProfitAttribution.sharedIncomeCount,
       ownTradingRatio,
       commissionShareRatio: contributionBase > 0.000001 ? Math.abs(commissionShareNetProfit) / contributionBase : 0,
+      sharedIncomeRatio: contributionBase > 0.000001 ? Math.abs(sharedIncomeNetProfit) / contributionBase : 0,
       // 总数始终直接复用页面顶部“总收益”的同一汇总值，展示与归因两处绝不因浮点累加顺序出现尾差。
-      total: totalNetProfit,
-      targetLabel: hasIndividualScope ? payoutTargetUserIdentity.name : "当前筛选范围",
+      total: totalIncome,
+      targetLabel: hasIndividualScope ? payoutTargetUserIdentity.name : "全部用户",
     };
-  }, [payoutTargetRelatedUserId, payoutTargetUserIdentity.name, totalNetProfit, totalNetProfitDetails]);
+  }, [globalProfitAttribution, payoutSharedIncomeTotal, payoutSharedIncomeTransfers.length, payoutTargetRelatedUserId, payoutTargetUserIdentity.name, totalIncome, totalNetProfitDetails]);
   // 资金账本只对账，不回写或扣减订单收益：投入、提现为两条独立方向；仅提现受当前正向总收益上限约束。
   const withdrawalLogs = payoutLogs.filter((log) => log.direction === "withdrawal");
   const depositLogs = payoutLogs.filter((log) => log.direction === "deposit");
@@ -3947,13 +4283,121 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       realized: realizedBySide.long + realizedBySide.short,
     };
   }, [summary, totalNetProfitDetails]);
+  /**
+   * 报告底部明细必须与上方三项归因逐笔相同：单一用户展示其订单/分佣和实际收到的共享；
+   * 管理员全量范围则从每笔平仓拆出共享、剩余订单收益和剩余分佣收益，不能再把共享藏在原订单净收益里。
+   */
+  const totalProfitAttributionDetailEntries = useMemo<TotalProfitAttributionDetailEntry[]>(() => {
+    const targetUserId = Number(payoutTargetRelatedUserId);
+    const hasIndividualScope = Number.isInteger(targetUserId) && targetUserId > 0;
+    const sourceTradeByClosingId = new Map(
+      rawJournalTrades
+        .filter((trade) => !ACTIONS[trade.action].opening)
+        .map((trade) => [getStoredEntryId(trade), trade]),
+    );
+    const selectedClosingIds = new Set(totalNetProfitDetails.map((detail) => getStoredEntryId(detail.trade)));
+    const sortByActivity = (entries: TotalProfitAttributionDetailEntry[]) => entries.sort((left, right) => (
+      right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id)
+    ));
+    const sharedTransfers = hasIndividualScope
+      ? payoutSharedIncomeTransfers
+      : sharedIncomeTransfers.filter((transfer) => selectedClosingIds.has(transfer.closingEntryId));
+    const sharedEntries = sharedTransfers
+      .filter((transfer) => Number.isFinite(transfer.amount) && Math.abs(transfer.amount) > 0.000001)
+      .map<TotalProfitAttributionDetailEntry>((transfer) => {
+        const sourceTrade = sourceTradeByClosingId.get(transfer.closingEntryId);
+        return {
+          id: `shared-${transfer.id}`,
+          kind: "shared",
+          createdAt: sourceTrade?.createdAt || transfer.createdAt,
+          amount: transfer.amount,
+          transfer,
+          sourceTrade,
+          quantity: sourceTrade?.quantity,
+          recipientName: transfer.recipientUserName,
+        };
+      });
+
+    // 成员 / 单用户筛选下，totalNetProfitDetails 已经是“共享之外”的本人实际可得，直接标注其来源即可。
+    if (hasIndividualScope) {
+      const regularEntries = totalNetProfitDetails
+        .filter((detail) => Number.isFinite(detail.netPnl) && Math.abs(detail.netPnl) > 0.000001)
+        .map<TotalProfitAttributionDetailEntry>((detail) => ({
+          id: `regular-${detail.trade.id}`,
+          kind: Number(detail.trade.relatedUserId || 0) === targetUserId ? "order" : "commission",
+          createdAt: detail.trade.createdAt,
+          amount: detail.netPnl,
+          trade: detail.trade,
+          quantity: detail.quantity,
+        }));
+      return sortByActivity([...regularEntries, ...sharedEntries]);
+    }
+
+    const regularEntries: TotalProfitAttributionDetailEntry[] = [];
+    for (const detail of totalNetProfitDetails) {
+      const netPnl = Number(detail.netPnl);
+      if (!Number.isFinite(netPnl)) continue;
+      const closing = detail.trade;
+      const closingEntryId = getStoredEntryId(closing);
+      const regularPool = getRegularDistributableNetPnl(netPnl, closingEntryId, sharedIncomeReductionsByClosingEntryId);
+      const distributions = buildClosingProfitShareDistribution({
+        trades,
+        snapshots: profitShareSnapshots,
+        closing,
+        displayedNetPnl: netPnl,
+        sharedIncomeReductions: sharedIncomeReductionsByClosingEntryId,
+      });
+      if (distributions.length === 0) {
+        if (Math.abs(regularPool) > 0.000001) {
+          regularEntries.push({
+            id: `order-${closing.id}`,
+            kind: "order",
+            createdAt: closing.createdAt,
+            amount: regularPool,
+            trade: closing,
+            quantity: detail.quantity,
+          });
+        }
+        continue;
+      }
+      const sourceUserId = Number(closing.relatedUserId || 0);
+      let distributedRegularTotal = 0;
+      for (const distribution of distributions) {
+        const amount = Number(distribution.netPnl);
+        if (!Number.isFinite(amount)) continue;
+        distributedRegularTotal += amount;
+        if (Math.abs(amount) <= 0.000001) continue;
+        regularEntries.push({
+          id: `${distribution.beneficiaryUserId === sourceUserId ? "order" : "commission"}-${closing.id}-${distribution.beneficiaryUserId}`,
+          kind: distribution.beneficiaryUserId === sourceUserId ? "order" : "commission",
+          createdAt: closing.createdAt,
+          amount,
+          trade: closing,
+          quantity: detail.quantity,
+          recipientName: distribution.beneficiaryUserName,
+        });
+      }
+      const regularGap = regularPool - distributedRegularTotal;
+      if (Math.abs(regularGap) > 0.000001) {
+        regularEntries.push({
+          id: `order-gap-${closing.id}`,
+          kind: "order",
+          createdAt: closing.createdAt,
+          amount: regularGap,
+          trade: closing,
+          quantity: detail.quantity,
+        });
+      }
+    }
+    return sortByActivity([...regularEntries, ...sharedEntries]);
+  }, [payoutSharedIncomeTransfers, payoutTargetRelatedUserId, profitShareSnapshots, rawJournalTrades, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, totalNetProfitDetails, trades]);
   const totalRevenueDetailTotalPages = Math.max(1, Math.ceil(
-    totalNetProfitDetails.length / TOTAL_REVENUE_DETAIL_PAGE_SIZE,
+    totalProfitAttributionDetailEntries.length / TOTAL_REVENUE_DETAIL_PAGE_SIZE,
   ));
-  const pagedTotalNetProfitDetails = useMemo(() => {
+  const pagedTotalProfitAttributionDetailEntries = useMemo(() => {
     const start = (totalRevenueDetailPage - 1) * TOTAL_REVENUE_DETAIL_PAGE_SIZE;
-    return totalNetProfitDetails.slice(start, start + TOTAL_REVENUE_DETAIL_PAGE_SIZE);
-  }, [totalNetProfitDetails, totalRevenueDetailPage]);
+    return totalProfitAttributionDetailEntries.slice(start, start + TOTAL_REVENUE_DETAIL_PAGE_SIZE);
+  }, [totalProfitAttributionDetailEntries, totalRevenueDetailPage]);
   useEffect(() => {
     setTotalRevenueDetailPage((current) => Math.min(current, totalRevenueDetailTotalPages));
   }, [totalRevenueDetailTotalPages]);
@@ -3966,13 +4410,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       .reduce((total, bucket) => total + bucket.remainingQuantity, 0);
     return longQuantity - shortQuantity;
   }, [totalPositionBuckets]);
-  const totalNetProfitClass = totalNetProfit > 0 ? "text-rose-600" : totalNetProfit < 0 ? "text-emerald-600" : "text-slate-700";
+  const totalNetProfitClass = totalIncome > 0 ? "text-rose-600" : totalIncome < 0 ? "text-emerald-600" : "text-slate-700";
   const netPositionClass = "text-slate-800";
   const roundedNetPositionText = (() => {
     const rounded = Math.round(totalPositionQuantity);
     return `${rounded < 0 ? "−" : ""}${Math.abs(rounded).toLocaleString("en-US")}`;
   })();
-  const totalNetProfitText = formatSigned(totalNetProfit);
+  const totalNetProfitText = formatSigned(totalIncome);
   const netPositionBreakdown = useMemo(() => {
     const buildSide = (side: PositionSide) => {
       const levels = totalPositionBuckets
@@ -4396,7 +4840,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     // 锁定是剩余仓位的操作保护：必须先通过“编辑”解除锁定，才允许创建新的平仓流水。
     // 服务端也会按 FIFO 实际匹配结果复核，避免已打开的表单绕过此处的前端提示。
     if (trade.isLocked) {
-      toast.error("该笔剩余仓位已锁定，请先点击“编辑”解除锁定后再平仓");
+      t0Toast.error("该笔剩余仓位已锁定，请先点击“编辑”解除锁定后再平仓");
       return;
     }
     // 在报价详情内切换至平仓表单时，沿用最初进入详情页的报价模式；
@@ -4417,7 +4861,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     )));
     const target = tradeUserBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(archivePriceForTrade(trade)));
     if (!target || target.remainingQuantity <= 0.0000001) {
-      toast.error("该笔仓位已无可平数量");
+      t0Toast.error("该笔仓位已无可平数量");
       return;
     }
     // 数量预填必须取这张主单本身尚未关联平仓的剩余量，不能误用同价位汇总仓量。
@@ -4426,7 +4870,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const sourceRemainingQuantity = Math.max(0, trade.quantity - sourceClosedQuantity);
     const closableQuantity = Math.min(target.remainingQuantity, sourceRemainingQuantity);
     if (closableQuantity <= 0.0000001) {
-      toast.error("该笔订单已无可平数量");
+      t0Toast.error("该笔订单已无可平数量");
       return;
     }
     const action: TradeAction = side === "long" ? "closeLong" : "closeShort";
@@ -4470,7 +4914,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
   const openEditOpeningTrade = (trade: PreviewTrade) => {
     if (!ACTIONS[trade.action].opening) {
-      toast.error("当前仅支持编辑开仓记录");
+      t0Toast.error("当前仅支持编辑开仓记录");
       return;
     }
     // 同上：详情页中的“编辑”不得覆盖其原始逐笔/整合报价来源。
@@ -4533,7 +4977,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       };
       setAccounts((current) => [account, ...current.filter((item) => item.id !== account.id)]);
     },
-    onError: (error) => toast.error(error.message || "下单账户选择未保存"),
+    onError: (error) => t0Toast.error(error.message || "下单账户选择未保存"),
   });
 
   const renameAccountMutation = trpc.ledger.t0RenameAccount.useMutation({
@@ -4549,9 +4993,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setDirectoryRenameTarget(null);
       setDirectoryDeleteTarget(null);
       void t0JournalQuery.refetch();
-      toast.success("账户名称已更新，历史记录已同步显示新名称");
+      t0Toast.success("账户名称已更新，历史记录已同步显示新名称");
     },
-    onError: (error) => toast.error(error.message || "账户名称修改失败"),
+    onError: (error) => t0Toast.error(error.message || "账户名称修改失败"),
   });
 
   const renameRelatedFundMutation = trpc.ledger.t0RenameRelatedFund.useMutation({
@@ -4568,9 +5012,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setDirectoryRenameTarget(null);
       setDirectoryDeleteTarget(null);
       void t0JournalQuery.refetch();
-      toast.success("项目名称已更新，历史记录已同步显示新名称");
+      t0Toast.success("项目名称已更新，历史记录已同步显示新名称");
     },
-    onError: (error) => toast.error(error.message || "项目名称修改失败"),
+    onError: (error) => t0Toast.error(error.message || "项目名称修改失败"),
   });
 
   const deleteDirectoryItemMutation = trpc.ledger.t0DeleteDirectoryItem.useMutation({
@@ -4600,11 +5044,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }
       setDirectoryDeleteTarget(null);
       void t0JournalQuery.refetch();
-      toast.success(target?.kind === "relatedUser"
+      t0Toast.success(target?.kind === "relatedUser"
         ? `关联用户已从当前T+0账本移除；${Number(data?.impact?.affectedEntryCount || 0)} 条历史记录现显示为未关联`
         : `${target?.kind === "account" ? "账户" : "项目"}已删除；${Number(data?.impact?.affectedEntryCount || 0)} 条历史记录现显示为未关联`);
     },
-    onError: (error) => toast.error(error.message || "目录删除失败"),
+    onError: (error) => t0Toast.error(error.message || "目录删除失败"),
   });
 
   const setProfitShareRuleMutation = trpc.ledger.t0SetProfitShareRule.useMutation({
@@ -4624,11 +5068,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setProfitShareRecipientSearch("");
       void t0JournalQuery.refetch();
       const syncedActiveOpeningCount = Number(data?.syncedActiveOpeningCount || 0);
-      toast.success(syncedActiveOpeningCount > 0
+      t0Toast.success(syncedActiveOpeningCount > 0
         ? `收益分配已保存，已同步${syncedActiveOpeningCount}笔进行中订单与后续新订单`
         : "收益分配已保存；后续新订单将采用新清单，已平历史保持不变");
     },
-    onError: (error) => toast.error(error.message || "收益分配保存失败"),
+    onError: (error) => t0Toast.error(error.message || "收益分配保存失败"),
   });
 
   const updateOpeningProfitShareMutation = trpc.ledger.t0UpdateOpeningProfitShare.useMutation({
@@ -4638,9 +5082,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setProfitShareAllocations([]);
       setProfitShareRecipientSearch("");
       void t0JournalQuery.refetch();
-      toast.success("本单剩余仓位与后续新订单的收益分配已保存；已平历史保持不变");
+      t0Toast.success("本单剩余仓位与后续新订单的收益分配已保存；已平历史保持不变");
     },
-    onError: (error) => toast.error(error.message || "本单收益分配保存失败"),
+    onError: (error) => t0Toast.error(error.message || "本单收益分配保存失败"),
   });
 
   const saveEntryMutation = trpc.ledger.t0CreateEntry.useMutation({
@@ -4744,7 +5188,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         setCloseConfirmationStep("input");
         if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
       }
-      toast.success(isClosingEntry
+      t0Toast.success(isClosingEntry
         ? `已确认${ACTIONS[entry.action].label} ${formatQuantity(entry.quantity)} ETH`
         : entry.isPending
           ? "挂单已保存，等待统一参考价触发成交"
@@ -4764,7 +5208,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         setShowEntrySheet(true);
         setCloseConfirmationStep("review");
       }
-      toast.error(isClosingEntry ? `平仓未确认：${message}` : message);
+      t0Toast.error(isClosingEntry ? `平仓未确认：${message}` : message);
     },
   });
 
@@ -4882,7 +5326,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       });
       setShowEntrySheet(true);
       if (variables?.profitShareAllocations) void t0JournalQuery.refetch();
-      toast.success(variables?.manualConfirmPendingFill
+      t0Toast.success(variables?.manualConfirmPendingFill
         ? `挂单已手动确认成交，成交价 ${formatPrice(entry.price)}`
         : entry.isPending
           ? "挂单已保存，等待统一参考价触发成交"
@@ -4890,7 +5334,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             ? "开仓已锁定，逐笔报价将显示黑金锁标"
             : "开仓记录已修改");
     },
-    onError: (error) => toast.error(error.message || "开仓记录修改失败"),
+    onError: (error) => t0Toast.error(error.message || "开仓记录修改失败"),
   });
 
   const deleteOpeningEntryMutation = trpc.ledger.t0DeleteOpeningEntry.useMutation({
@@ -4911,9 +5355,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
           trade: previewTradeFromEntry(data.entry),
         }, ...current.filter((item) => item.auditId !== String(data.auditId))]);
       }
-      toast.success("开仓记录已删除，可在最近撤回中恢复");
+      t0Toast.success("开仓记录已删除，可在最近撤回中恢复");
     },
-    onError: (error) => toast.error(error.message || "开仓记录删除失败"),
+    onError: (error) => t0Toast.error(error.message || "开仓记录删除失败"),
   });
 
   const revertEntryMutation = trpc.ledger.t0RevertEntry.useMutation({
@@ -4934,9 +5378,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         }, ...current.filter((item) => item.auditId !== String(data.auditId))]);
       }
       setRevertCandidate(null);
-      toast.success("速记已回撤，可在最近撤回中恢复");
+      t0Toast.success("速记已回撤，可在最近撤回中恢复");
     },
-    onError: (error) => toast.error(error.message || "速记回撤失败"),
+    onError: (error) => t0Toast.error(error.message || "速记回撤失败"),
   });
 
   const restoreEntryMutation = trpc.ledger.t0RestoreEntry.useMutation({
@@ -4946,9 +5390,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setTrades((current) => [...current.filter((trade) => getStoredEntryId(trade) !== entry.id), visibleEntry]);
       setRecoverableEntries((current) => current.filter((item) => item.auditId !== String(variables.auditId)));
       setRestoreCandidate(null);
-      toast.success("速记已恢复");
+      t0Toast.success("速记已恢复");
     },
-    onError: (error) => toast.error(error.message || "速记恢复失败"),
+    onError: (error) => t0Toast.error(error.message || "速记恢复失败"),
   });
 
   const openProfitShareManager = (source: PreviewRelatedFund) => {
@@ -4975,7 +5419,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const openEntryProfitShareManager = () => {
     const opening = editingOriginalTrade;
     if (!opening || opening.isPending || !opening.relatedFundId || !opening.relatedUserId) {
-      toast.error("仅已成交且已关联项目的持仓单可以编辑收益分配");
+      t0Toast.error("仅已成交且已关联项目的持仓单可以编辑收益分配");
       return;
     }
     const source = relatedFunds.find((fund) => fund.id === opening.relatedFundId) ?? {
@@ -4989,7 +5433,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       percentage: String(allocation.percentage),
     }));
     if (draft.length === 0) {
-      toast.error("该持仓单尚未固化收益分配，无法直接编辑");
+      t0Toast.error("该持仓单尚未固化收益分配，无法直接编辑");
       return;
     }
     setRelatedUserPickerOpen(false);
@@ -5013,7 +5457,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
   const submitProfitShareRule = () => {
     if (!profitShareSource || profitShareAllocations.length === 0) {
-      toast.error("请设置完整的收益分配清单");
+      t0Toast.error("请设置完整的收益分配清单");
       return;
     }
     const allocations = profitShareAllocations.map((allocation) => ({
@@ -5021,18 +5465,18 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       percentage: Number(allocation.percentage),
     }));
     if (allocations.some((allocation) => !Number.isInteger(allocation.beneficiaryUserId) || !Number.isFinite(allocation.percentage) || allocation.percentage <= 0 || allocation.percentage > 100)) {
-      toast.error("每位分配人的比例必须大于0%且不超过100%");
+      t0Toast.error("每位分配人的比例必须大于0%且不超过100%");
       return;
     }
     const totalPercentage = allocations.reduce((total, allocation) => total + allocation.percentage, 0);
     if (Math.abs(totalPercentage - 100) > 0.00001) {
-      toast.error(`分配合计必须为100%，当前为${totalPercentage.toFixed(2)}%`);
+      t0Toast.error(`分配合计必须为100%，当前为${totalPercentage.toFixed(2)}%`);
       return;
     }
     if (entryProfitShareEditTarget) {
       const entryId = Number(getStoredEntryId(entryProfitShareEditTarget));
       if (!Number.isInteger(entryId) || entryId <= 0) {
-        toast.error("未能识别当前持仓单，请关闭后重新打开编辑");
+        t0Toast.error("未能识别当前持仓单，请关闭后重新打开编辑");
         return;
       }
       updateOpeningProfitShareMutation.mutate({ ledgerId: 52, entryId, allocations });
@@ -5049,7 +5493,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
   const openDirectoryManager = (kind: JournalDirectoryKind) => {
     if (kind === "relatedFund" && !entryForm.relatedUserId) {
-      toast.error("请先选择关联用户，再管理该用户的项目名称");
+      t0Toast.error("请先选择关联用户，再管理该用户的项目名称");
       return;
     }
     setRelatedUserPickerOpen(false);
@@ -5082,7 +5526,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (!directoryRenameTarget) return;
     const name = directoryRenameDraft.trim();
     if (!name) {
-      toast.error("请输入新名称");
+      t0Toast.error("请输入新名称");
       return;
     }
     if (name === directoryRenameTarget.name) {
@@ -5195,29 +5639,29 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const normalizedRelatedFundName = entryForm.relatedFundName.trim();
 
     if (quantityFormatError) {
-      toast.error(quantityFormatError);
+      t0Toast.error(quantityFormatError);
       return;
     }
     if (!Number.isFinite(quantity) || quantity <= 0) {
-      toast.error("请输入大于 0 的 ETH 数量");
+      t0Toast.error("请输入大于 0 的 ETH 数量");
       return;
     }
     if (selectedAction.opening && !entryForm.instrumentType) {
-      toast.error("请选择现货、合约、期权或网格");
+      t0Toast.error("请选择现货、合约、期权或网格");
       return;
     }
     if (isOptionOpening) {
       if (optionFormValidationMessage) {
-        toast.error(optionFormValidationMessage);
+        t0Toast.error(optionFormValidationMessage);
         return;
       }
     }
     if (isGridOpening && gridFormValidationMessage) {
-      toast.error(gridFormValidationMessage);
+      t0Toast.error(gridFormValidationMessage);
       return;
     }
     if (!Number.isFinite(price) || price <= 0) {
-      toast.error(isOptionOpening ? "请输入行权价" : isGridOpening ? "请先填写网格区间" : "请输入成交价格");
+      t0Toast.error(isOptionOpening ? "请输入行权价" : isGridOpening ? "请先填写网格区间" : "请输入成交价格");
       return;
     }
     const takeProfitPlans = entryForm.isTakeProfit ? normalizeTakeProfitPlanDrafts(entryForm.takeProfitPlans) : [];
@@ -5225,11 +5669,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && (entryForm.instrumentType === "spot" || entryForm.instrumentType === "contract");
     if (entryForm.isTakeProfit) {
       if (!isTakeProfitEligible) {
-        toast.error("止盈仅支持现货和合约开仓");
+        t0Toast.error("止盈仅支持现货和合约开仓");
         return;
       }
       if (takeProfitPlans.length === 0) {
-        toast.error("请至少添加一段止盈计划");
+        t0Toast.error("请至少添加一段止盈计划");
         return;
       }
       let takeProfitTotalQuantity = 0;
@@ -5238,25 +5682,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         const takeProfitPrice = Number(plan.price);
         const takeProfitQuantity = Number(plan.quantity);
         if (!Number.isFinite(takeProfitPrice) || takeProfitPrice <= 0) {
-          toast.error(`第 ${index + 1} 段止盈价格无效`);
+          t0Toast.error(`第 ${index + 1} 段止盈价格无效`);
           return;
         }
         if (!Number.isFinite(takeProfitQuantity) || takeProfitQuantity <= 0) {
-          toast.error(`第 ${index + 1} 段止盈数量无效`);
+          t0Toast.error(`第 ${index + 1} 段止盈数量无效`);
           return;
         }
         if (selectedAction.side === "long" && takeProfitPrice <= price) {
-          toast.error(`第 ${index + 1} 段多单止盈价须高于开仓价`);
+          t0Toast.error(`第 ${index + 1} 段多单止盈价须高于开仓价`);
           return;
         }
         if (selectedAction.side === "short" && takeProfitPrice >= price) {
-          toast.error(`第 ${index + 1} 段空单止盈价须低于开仓价`);
+          t0Toast.error(`第 ${index + 1} 段空单止盈价须低于开仓价`);
           return;
         }
         takeProfitTotalQuantity += takeProfitQuantity;
       }
       if (takeProfitTotalQuantity > quantity + 0.0000001) {
-        toast.error("全部止盈数量合计不得超过本笔可用数量");
+        t0Toast.error("全部止盈数量合计不得超过本笔可用数量");
         return;
       }
     }
@@ -5266,41 +5710,41 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ? undefined
         : archivePriceForSide(selectedAction.side, entryForm.targetPrice);
     if (!hasPersistedAccountId && !normalizedAccountName) {
-      toast.error("请在最后选择或新建下单账户");
+      t0Toast.error("请在最后选择或新建下单账户");
       return;
     }
     if (entryForm.relatedUserId && !normalizedRelatedUserId) {
-      toast.error("关联用户信息无效，请重新选择或暂不关联");
+      t0Toast.error("关联用户信息无效，请重新选择或暂不关联");
       return;
     }
     if (entryForm.relatedFundId && entryForm.relatedFundId !== "legacy" && !normalizedRelatedFundId) {
-      toast.error("专项款信息无效，请重新选择或新建");
+      t0Toast.error("专项款信息无效，请重新选择或新建");
       return;
     }
     if (!normalizedRelatedUserId && (normalizedRelatedFundId || normalizedRelatedFundName)) {
-      toast.error("请先选择关联用户，再选择专项款");
+      t0Toast.error("请先选择关联用户，再选择专项款");
       return;
     }
     if (selectedAction.opening && !entryForm.editingEntryId && normalizedRelatedUserId && !normalizedRelatedFundId && !normalizedRelatedFundName) {
-      toast.error("关联用户开仓时，请选择或新建专项款");
+      t0Toast.error("关联用户开仓时，请选择或新建专项款");
       return;
     }
     if (selectedAction.opening && !entryForm.editingEntryId && normalizedRelatedUserId
       && ((normalizedRelatedFundId && !profitShareRules.some((rule) => rule.relatedFundId === normalizedRelatedFundId))
         || (!normalizedRelatedFundId && Boolean(normalizedRelatedFundName)))) {
-      toast.error("请先点击项目右侧的“收益分配”，完成合计100%的用户分配设置");
+      t0Toast.error("请先点击项目右侧的“收益分配”，完成合计100%的用户分配设置");
       return;
     }
 
     if (entryForm.editingEntryId) {
       const entryId = Number(entryForm.editingEntryId);
       if (!selectedAction.opening || !Number.isInteger(entryId) || entryId <= 0) {
-        toast.error("仅可编辑有效的开仓记录");
+        t0Toast.error("仅可编辑有效的开仓记录");
         return;
       }
       const editingInstrumentType = entryForm.instrumentType;
       if (!editingInstrumentType) {
-        toast.error("请选择现货、合约、期权或网格");
+        t0Toast.error("请选择现货、合约、期权或网格");
         return;
       }
       const safeDependentEdit = getSafeDependentOpeningEdit({
@@ -5356,7 +5800,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
     if (!selectedAction.opening) {
       if (archiveTargetPrice === undefined) {
-        toast.error("请先在价格簿中点选要平的价格档位");
+        t0Toast.error("请先在价格簿中点选要平的价格档位");
         return;
       }
       const side = selectedAction.side;
@@ -5369,11 +5813,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       const closeScopeBuckets = buildPositionBuckets(closeScopeTrades);
       const target = closeScopeBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(archiveTargetPrice));
       if (!target || target.remainingQuantity <= 0) {
-        toast.error("该价格档位已无可平数量");
+        t0Toast.error("该价格档位已无可平数量");
         return;
       }
       if (quantity - target.remainingQuantity > 0.0000001) {
-        toast.error(`该价格档位最多可平 ${formatQuantity(target.remainingQuantity)} ETH`);
+        t0Toast.error(`该价格档位最多可平 ${formatQuantity(target.remainingQuantity)} ETH`);
         return;
       }
       if (closeConfirmationStep === "input") {
@@ -5435,12 +5879,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setTrades((current) => [...current, visibleTrade]);
     if (awaitsClosingCommit) {
       setCloseSaveError(null);
-      toast.message("正在确认平仓，等待账本写入");
+      t0Toast.message("正在确认平仓，等待账本写入");
     } else {
       setShowEntrySheet(false);
       setCloseConfirmationStep("input");
       if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
-      toast.message("已速记，正在后台保存");
+      t0Toast.message("已速记，正在后台保存");
     }
     saveEntryMutation.mutate({
       ledgerId: 52,
@@ -5590,6 +6034,38 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         const showFullClosingContext = hasSystemGeneratedSettlementNote(closing.note);
         const viewerPayout = resolveHistoryViewerPayout(closing, detail);
         const hideRepeatedSettlementPrices = historyIsMemberPresentation && Boolean(viewerPayout);
+        const isSharedIncomePerspective = Number(closing.sharedIncomeAmount || 0) > 0;
+        const displayedSharedIncome = viewerPayout?.netPnl ?? Number(closing.sharedIncomeAmount || 0);
+        if (isSharedIncomePerspective) {
+          const sharedDetail = detail ?? { netPnl: displayedSharedIncome };
+          return (
+            <div key={group.id} className="mx-3 my-2 rounded border border-l-[3px] bg-blue-50/35 px-3 py-2.5" style={{ borderColor: "#bfdbfe", borderLeftColor: "#2563eb", borderLeftWidth: "3px" }}>
+              <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
+                <div className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
+                  <span className="shrink-0 font-semibold" style={{ color: "#2563eb" }}>共享</span>
+                  <span className="shrink-0 text-[10px] font-medium text-slate-400">来源平仓</span>
+                  <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[closing.action].label}</span>
+                  <span className="shrink-0 font-medium text-slate-800">{formatQuantity(closing.quantity)}E</span>
+                  <span className="shrink-0 text-slate-600">{formatPrice(closing.price)}</span>
+                </div>
+                <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
+                <button
+                  type="button"
+                  onClick={() => setNetProfitDetail({
+                    trade: closing,
+                    detail: sharedDetail,
+                    presentation: "member",
+                    viewerUserId: isHistoryUserPerspective ? historyPerspectiveTargetUserId : viewerProfitShareBeneficiaryUserId,
+                  })}
+                  className={`shrink-0 border-b border-dotted pb-0.5 font-semibold outline-none ${displayedSharedIncome >= 0 ? "border-rose-500 text-rose-600" : "border-emerald-500 text-emerald-600"}`}
+                  aria-label="查看共享收益明细"
+                >
+                  {formatSigned(displayedSharedIncome)}<span className="ml-0.5 text-slate-500">u</span>
+                </button>
+              </div>
+            </div>
+          );
+        }
         return (
           <div key={group.id} className="mx-3 my-2 rounded border border-dashed border-amber-200 bg-amber-50/35 px-3 py-2.5">
           <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
@@ -5992,9 +6468,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     };
     const submitPayoutEntry = () => {
       const amount = Number(payoutAmount);
-      if (!payoutOccurredOn) { toast.error("请选择登记日期"); return; }
-      if (!Number.isFinite(amount) || amount <= 0) { toast.error("请输入有效的登记金额"); return; }
-      if (!isDepositEntry && amount > payoutFormWithdrawalLimit + 0.005) { toast.error(`本次提现不能超过可提现的 ${formatPrice(payoutFormWithdrawalLimit)} U`); return; }
+      if (!payoutOccurredOn) { t0Toast.error("请选择登记日期"); return; }
+      if (!Number.isFinite(amount) || amount <= 0) { t0Toast.error("请输入有效的登记金额"); return; }
+      if (!isDepositEntry && amount > payoutFormWithdrawalLimit + 0.005) { t0Toast.error(`本次提现不能超过可提现的 ${formatPrice(payoutFormWithdrawalLimit)} U`); return; }
       const payload = {
         ledgerId: 52 as const,
         relatedUserId: payoutTargetRelatedUserId,
@@ -6069,7 +6545,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 type="button"
                 onClick={() => {
                   if (payoutTargetRelatedUserId <= 0) {
-                    toast.message("请先在用户筛选中单选一位用户，再查看收益账本");
+                    t0Toast.message("请先在用户筛选中单选一位用户，再查看收益账本");
                     return;
                   }
                   setShowPayoutXirrHelp(false);
@@ -6610,14 +7086,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div className="flex flex-nowrap items-center gap-0.5 overflow-x-auto [scrollbar-width:none] sm:gap-1" role="group" aria-label="历史记录动作筛选">
                   {availableJournalActions.length > 1 && <button
                     type="button"
-                    aria-pressed={allJournalActionsSelected && !showOnlyProfitableHistory && !showLinkedJournalGroups}
+                    aria-pressed={allJournalActionsSelected && !showOnlyProfitableHistory && !showOnlySharedIncomeHistory && !showLinkedJournalGroups}
                     onClick={() => {
                       setShowOnlyProfitableHistory(false);
+                      setShowOnlySharedIncomeHistory(false);
                       setShowLinkedJournalGroups(false);
                       setJournalActionFilters(new Set(availableJournalActions));
                       setRecentJournalPage(1);
                     }}
-                    className={`h-[22px] shrink-0 whitespace-nowrap rounded-[3px] border px-1 text-[10px] font-medium leading-none transition-colors active:scale-95 ${allJournalActionsSelected && !showOnlyProfitableHistory && !showLinkedJournalGroups ? "border-[#75818c] bg-[#75818c] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
+                    className={`h-[22px] shrink-0 whitespace-nowrap rounded-[3px] border px-1 text-[10px] font-medium leading-none transition-colors active:scale-95 ${allJournalActionsSelected && !showOnlyProfitableHistory && !showOnlySharedIncomeHistory && !showLinkedJournalGroups ? "border-[#75818c] bg-[#75818c] text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
                   >
                     全部
                   </button>}
@@ -6628,6 +7105,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     title="仅显示净收益大于 0 的平多与平空记录"
                     onClick={() => {
                       setShowOnlyProfitableHistory((current) => !current);
+                      setShowOnlySharedIncomeHistory(false);
                       setShowLinkedJournalGroups(false);
                       // 进入“盈利”时必须同时覆盖平多和平空，不能继承此前单一动作的筛选。
                       setJournalActionFilters(new Set(availableJournalActions));
@@ -6637,8 +7115,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   >
                     盈利
                   </button>
+                  {hasSharedIncomeHistory && <button
+                    type="button"
+                    aria-pressed={showOnlySharedIncomeHistory}
+                    aria-label="仅显示共享收益记录"
+                    title="仅显示当前用户获得过共享收益的记录"
+                    onClick={() => {
+                      setShowOnlyProfitableHistory(false);
+                      setShowLinkedJournalGroups(false);
+                      setJournalActionFilters(new Set(availableJournalActions));
+                      setShowOnlySharedIncomeHistory((current) => !current);
+                      setRecentJournalPage(1);
+                    }}
+                    className={`h-[22px] shrink-0 whitespace-nowrap rounded-[3px] border px-1 text-[10px] font-medium leading-none transition-colors active:scale-95 ${showOnlySharedIncomeHistory ? "border-blue-600 bg-blue-600 text-white" : "border-[#c7d0d7] bg-white/28 text-slate-600"}`}
+                  >
+                    共享
+                  </button>}
                   {availableJournalActions.map((action) => {
                     const selected = !showOnlyProfitableHistory
+                      && !showOnlySharedIncomeHistory
                       && !showLinkedJournalGroups
                       && !allJournalActionsSelected
                       && journalActionFilters.has(action);
@@ -6649,6 +7144,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         aria-pressed={selected}
                         onClick={() => {
                           setShowOnlyProfitableHistory(false);
+                          setShowOnlySharedIncomeHistory(false);
                           setShowLinkedJournalGroups(false);
                           selectJournalActionFilter(action);
                         }}
@@ -6663,6 +7159,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     aria-pressed={showLinkedJournalGroups}
                     onClick={() => {
                       setShowOnlyProfitableHistory(false);
+                      setShowOnlySharedIncomeHistory(false);
                       setJournalActionFilters(new Set(availableJournalActions));
                       setShowLinkedJournalGroups((current) => !current);
                       setRecentJournalPage(1);
@@ -6695,15 +7192,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   >
                     <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2.25} />
                   </button>}
-                  {(showOnlyProfitableHistory || showLinkedJournalGroups) && <div data-card-export-hide="true" className="ml-auto flex shrink-0 items-center">
+                  {(showOnlyProfitableHistory || showOnlySharedIncomeHistory || showLinkedJournalGroups) && <div data-card-export-hide="true" className="ml-auto flex shrink-0 items-center">
                     <OrderCardImageDownload
                       targetRef={profitableHistoryExportRef}
                       currentUser={me as any}
-                      orderNo={showLinkedJournalGroups ? "关联历史" : "盈利历史"}
-                      filenamePrefix={showLinkedJournalGroups ? "52号账本T0关联" : "52号账本T0盈利"}
-                      previewTitle={showLinkedJournalGroups ? "T+0关联历史记录图片预览" : "T+0盈利历史记录图片预览"}
+                      orderNo={showLinkedJournalGroups ? "关联历史" : showOnlySharedIncomeHistory ? "共享收益历史" : "盈利历史"}
+                      filenamePrefix={showLinkedJournalGroups ? "52号账本T0关联" : showOnlySharedIncomeHistory ? "52号账本T0共享收益" : "52号账本T0盈利"}
+                      previewTitle={showLinkedJournalGroups ? "T+0关联历史记录图片预览" : showOnlySharedIncomeHistory ? "T+0共享收益记录图片预览" : "T+0盈利历史记录图片预览"}
                       previewHint={showLinkedJournalGroups
                         ? "仅包含当前关联历史记录；筛选菜单与管理控件已隐藏"
+                        : showOnlySharedIncomeHistory
+                          ? "仅包含当前用户获得的共享收益记录；筛选菜单与管理控件已隐藏"
                         : "仅包含当前筛选结果的历史记录；筛选菜单与管理控件已隐藏"}
                       color="#111827"
                       outerPadding={12}
@@ -6803,22 +7302,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   />
                 </div>
               </div>}
-              {visibleSharedIncomeTransfers.map((transfer) => (
-                <div key={`shared-income-${transfer.id}`} className="border-b border-indigo-100 bg-indigo-50/35 px-4 py-2.5">
-                  <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
-                    <span className="shrink-0 rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">共享收益订单</span>
-                    <span className="min-w-0 truncate font-semibold text-slate-800">{isMemberView || isHistoryUserPerspective ? transfer.sourceUserName : `${transfer.recipientUserName} · 来源 ${transfer.sourceUserName}`}</span>
-                    <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
-                    <span className="shrink-0 font-semibold text-rose-600">+{formatPrice(transfer.amount)}<span className="ml-0.5 text-slate-500">u</span></span>
-                  </div>
-                  <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] text-slate-500">
-                    <span className="truncate">来源订单 #{transfer.closingEntryId}</span>
-                    <span className="text-slate-300">·</span>
-                    <span className="shrink-0">{formatT0TradeTimeline({ createdAt: transfer.createdAt, recordedAt: transfer.createdAt } as PreviewTrade)}</span>
-                    {canManage && !isHistoryUserPerspective && <><span className="text-slate-300">·</span><span className="ml-auto shrink-0">管理员划出</span></>}
-                  </div>
-                </div>
-              ))}
               {visibleRecentJournalTrades.length === 0 ? (
                 <div className="px-4 py-5 text-center text-xs text-slate-500">当前筛选范围还没有历史记录</div>
               ) : showLinkedJournalGroups ? (
@@ -6827,11 +7310,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 const detail = getHistoricalTradeDetail(trade);
                 const isOpening = ACTIONS[trade.action].opening;
                 const isLong = ACTIONS[trade.action].side === "long";
+                const isSharedIncomePerspective = Number(trade.sharedIncomeAmount || 0) > 0;
+                const displayDetail = detail ?? (isSharedIncomePerspective ? { netPnl: 0 } : undefined);
                 const showFullHistoryContext = hasSystemGeneratedSettlementNote(trade.note);
                 const isAutomaticTakeProfit = trade.note?.includes("[系统自动止盈]") ?? false;
                 const viewerPayout = resolveHistoryViewerPayout(trade, detail);
                 const displayedNetPnl = viewerPayout?.netPnl ?? detail?.netPnl;
                 const hideRepeatedSettlementPrices = historyIsMemberPresentation && Boolean(viewerPayout);
+                const sharedClosingPriceLabel = isLong ? "卖" : "买";
                 return (
                 <div key={trade.id} className="border-b border-[#c7d0d7]/60 px-4 py-2.5 last:border-b-0">
                     <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs tabular-nums">
@@ -6839,20 +7325,21 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[trade.action].label}</span>
                         {isAutomaticTakeProfit && <Target className="h-3.5 w-3.5 shrink-0 text-emerald-600" strokeWidth={2.5} aria-label="系统自动止盈" />}
                         <span className="shrink-0 font-medium text-slate-800">{formatQuantity(trade.quantity)}E</span>
+                        {isSharedIncomePerspective && !isOpening && <span className="shrink-0 text-slate-600">{sharedClosingPriceLabel}{formatPrice(trade.price)}</span>}
                         {trade.isPending && <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-sky-700"><Clock3 className="h-3 w-3" />挂单</span>}
                         {!hideRepeatedSettlementPrices && detail?.buyPrice !== undefined && <span className="shrink-0 text-slate-600">买{detail.buyQuote ?? formatPrice(detail.buyPrice)}</span>}
                         {!hideRepeatedSettlementPrices && detail?.sellPrice !== undefined && <span className="shrink-0 text-slate-600">卖{detail.sellQuote ?? formatPrice(detail.sellPrice)}</span>}
                         {!hideRepeatedSettlementPrices && detail?.isOptionQuote && <span className="shrink-0 text-violet-700">行权{formatPrice(trade.price)}</span>}
-                        {!detail && <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{formatPrice(trade.price)}</span>}
+                        {!detail && !isSharedIncomePerspective && <span className="shrink-0 text-slate-600">{isLong ? "买" : "卖"}{formatPrice(trade.price)}</span>}
                         {trade.isSyncing && <span className="shrink-0 text-amber-600">保存中</span>}
                       </div>
-                      {!isOpening && detail && displayedNetPnl !== undefined && <>
+                      {!isOpening && displayDetail && displayedNetPnl !== undefined && <>
                         <span aria-hidden="true" className="min-w-2 flex-1 translate-y-[-1px] border-t border-dotted border-slate-400/80" />
                         <button
                           type="button"
                           onClick={() => setNetProfitDetail({
                             trade,
-                            detail,
+                            detail: displayDetail,
                             presentation: historyIsMemberPresentation ? "member" : "admin",
                             viewerUserId: historyIsMemberPresentation ? (isHistoryUserPerspective ? historyPerspectiveTargetUserId : viewerProfitShareBeneficiaryUserId) : undefined,
                           })}
@@ -6868,18 +7355,23 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeAccountName(trade)}>{getTradeAccountName(trade)}</span>
                         <span className="text-slate-300">·</span>
                       </>}
-                      <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedUserName(trade)}>{getTradeRelatedUserName(trade)}</span>
-                      <span className="text-slate-300">·</span>
-                      <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedFundName(trade)}>{getTradeRelatedFundName(trade)}</span>
-                      <span className="text-slate-300">·</span>
+                      {isSharedIncomePerspective ? <>
+                        <span className={getHistoryContextValueClass(showFullHistoryContext)}>共享收益</span>
+                        <span className="text-slate-300">·</span>
+                      </> : <>
+                        <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedUserName(trade)}>{getTradeRelatedUserName(trade)}</span>
+                        <span className="text-slate-300">·</span>
+                        <span className={getHistoryContextValueClass(showFullHistoryContext)} title={getTradeRelatedFundName(trade)}>{getTradeRelatedFundName(trade)}</span>
+                        <span className="text-slate-300">·</span>
+                      </>}
                       <span className="shrink-0">{formatT0TradeTimeline(trade)}</span>
-                      {canManage && !historyIsMemberPresentation ? renderHistoryActionMenuButton(trade) : !isOpening && detail && displayedNetPnl !== undefined && <>
+                      {canManage && !historyIsMemberPresentation ? renderHistoryActionMenuButton(trade) : !isOpening && displayDetail && displayedNetPnl !== undefined && <>
                         <span className="text-slate-300">·</span>
                         <span className="ml-auto shrink-0 text-[10px] text-slate-500">{viewerPayout ? "本单可得" : "净利润"}</span>
                       </>}
                     </div>
                     {renderHistoryActionMenu(trade, historyIsMemberPresentation)}
-                    {trade.note?.trim() && <div className="mt-1 truncate text-[11px] text-slate-500"><span>备注：</span>{trade.note.trim()}</div>}
+                    {!isSharedIncomePerspective && trade.note?.trim() && <div className="mt-1 truncate text-[11px] text-slate-500"><span>备注：</span>{trade.note.trim()}</div>}
                   </div>
                 );
               })}
@@ -7836,7 +8328,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-amber-800">确认平仓与共享收益</div>
-                  <div className="mt-0.5 text-[11px] text-slate-500">共享收益仅从本单管理员份额划拨，不影响订单关联用户的收益。</div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">共享收益先从本单正向净收益分配，剩余收益按本单既有比例结算。</div>
                 </div>
                 <span className={`rounded px-2 py-1 text-[11px] font-semibold tabular-nums ${sharedIncomeClosePreview.sourceNetPnl > 0 ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                   净收益 {sharedIncomeClosePreview.sourceNetPnl > 0 ? "+" : ""}{formatPrice(sharedIncomeClosePreview.sourceNetPnl)} U
@@ -7849,7 +8341,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div className="mt-1 text-[11px] leading-4 text-amber-800/85">对应开仓价 {entryForm.targetPrice === undefined ? "--" : formatPrice(entryForm.targetPrice)}；确认后立即写入速记流水。</div>
               </div>
             </div>
-            {sharedIncomeClosePreview.managerPoolAmount > 0 && sharedIncomeClosePreview.sourceNetPnl > 0 ? <div className="px-4 py-3">
+            {sharedIncomeClosePreview.shareableAmount > 0 && sharedIncomeClosePreview.sourceNetPnl > 0 ? <div className="px-4 py-3">
               <div>
                 <div>
                   <div className="text-sm font-semibold text-slate-800">共享收益建议</div>
@@ -7861,12 +8353,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     <div className="mt-0.5 whitespace-nowrap text-[13px] font-bold tabular-nums text-rose-600">+{formatPrice(sharedIncomeClosePreview.sourceNetPnl)}<span className="ml-0.5 text-[10px] font-semibold">U</span></div>
                   </div>
                   <div className="min-w-0 px-1.5 py-2">
-                    <div className="whitespace-nowrap text-[10px] text-slate-500">本单管理员可用</div>
-                    <div className="mt-0.5 whitespace-nowrap text-[13px] font-bold tabular-nums text-rose-600">{formatPrice(sharedIncomeClosePreview.managerPoolAmount)}<span className="ml-0.5 text-[10px] font-semibold">U</span></div>
+                    <div className="whitespace-nowrap text-[10px] text-slate-500">本单可共享</div>
+                    <div className="mt-0.5 whitespace-nowrap text-[13px] font-bold tabular-nums text-rose-600">{formatPrice(sharedIncomeClosePreview.shareableAmount)}<span className="ml-0.5 text-[10px] font-semibold">U</span></div>
                   </div>
                   <div className="min-w-0 px-1.5 py-2">
-                    <div className="whitespace-nowrap text-[10px] text-slate-500">可用占比</div>
-                    <div className="mt-0.5 whitespace-nowrap text-[13px] font-bold tabular-nums text-rose-600">{formatPrice(sharedIncomeClosePreview.managerPoolAmount / sharedIncomeClosePreview.sourceNetPnl * 100)}<span className="ml-0.5 text-[10px] font-semibold">%</span></div>
+                    <div className="whitespace-nowrap text-[10px] text-slate-500">可共享占比</div>
+                    <div className="mt-0.5 whitespace-nowrap text-[13px] font-bold tabular-nums text-rose-600">{formatPrice(sharedIncomeClosePreview.shareableAmount / sharedIncomeClosePreview.sourceNetPnl * 100)}<span className="ml-0.5 text-[10px] font-semibold">%</span></div>
                   </div>
                 </div>
               </div>
@@ -7874,12 +8366,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <button type="button" onClick={() => {
                   const recipients = sharedIncomeClosePreview.candidates.filter((candidate) => candidate.hasPrincipal).slice(0, Math.min(3, sharedIncomeClosePreview.candidates.filter((candidate) => candidate.hasPrincipal).length));
                   if (recipients.length === 0) return;
-                  const base = Math.floor(sharedIncomeClosePreview.managerPoolAmount * 100 / recipients.length) / 100;
-                  setSharedIncomeDrafts(Object.fromEntries(recipients.map((candidate, index) => [candidate.userId, (index === 0 ? sharedIncomeClosePreview.managerPoolAmount - base * (recipients.length - 1) : base).toFixed(2)])));
+                  const base = Math.floor(sharedIncomeClosePreview.shareableAmount * 100 / recipients.length) / 100;
+                  setSharedIncomeDrafts(Object.fromEntries(recipients.map((candidate, index) => [candidate.userId, (index === 0 ? sharedIncomeClosePreview.shareableAmount - base * (recipients.length - 1) : base).toFixed(2)])));
                   setSharedIncomeTargetSelections({});
                 }} className="h-8 rounded border border-indigo-200 bg-indigo-50 px-2.5 text-[11px] font-semibold text-indigo-700 active:scale-[0.98]">智能均分</button>
                 <button type="button" onClick={() => { setSharedIncomeDrafts({}); setSharedIncomeTargetSelections({}); }} className="h-8 rounded border border-slate-200 bg-white px-2.5 text-[11px] font-semibold text-slate-600 active:scale-[0.98]">跳过共享</button>
-                <span className={`ml-auto self-center whitespace-nowrap text-[10px] font-semibold tabular-nums ${sharedIncomeAllocatedTotal - sharedIncomeClosePreview.managerPoolAmount > 0.00001 ? "text-rose-600" : "text-slate-500"}`}>分配 {formatPrice(sharedIncomeAllocatedTotal)} · 留存 {formatPrice(Math.max(0, sharedIncomeClosePreview.managerPoolAmount - sharedIncomeAllocatedTotal))} U</span>
+                <span className={`ml-auto self-center whitespace-nowrap text-[10px] font-semibold tabular-nums ${sharedIncomeAllocatedTotal - sharedIncomeClosePreview.shareableAmount > 0.00001 ? "text-rose-600" : "text-slate-500"}`}>分配 {formatPrice(sharedIncomeAllocatedTotal)} · 留存 {formatPrice(Math.max(0, sharedIncomeClosePreview.shareableAmount - sharedIncomeAllocatedTotal))} U</span>
               </div>
               {sharedIncomeClosePreview.candidates.length > 0 ? <div className="mt-2 divide-y divide-slate-100 overflow-hidden rounded border border-slate-200">
                 {sharedIncomeClosePreview.candidates.slice(0, 6).map((candidate) => {
@@ -7890,15 +8382,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     { occurredOn: getBeijingDateInputValue(), amount: candidate.realizedTerminalValue + currentSharedIncomeAmount, atEndOfBeijingDay: true },
                   ]);
                   const allocationReservedForOthers = Math.max(0, sharedIncomeAllocatedTotal - currentSharedIncomeAmount);
-                  const availableForCandidate = Math.max(0, sharedIncomeClosePreview.managerPoolAmount - allocationReservedForOthers);
+                  const availableForCandidate = Math.max(0, sharedIncomeClosePreview.shareableAmount - allocationReservedForOthers);
                   const selectedTargetRate = sharedIncomeTargetSelections[candidate.userId];
                   const onePercentShareAmount = candidate.cumulativeDepositAmount * 0.01;
                   const canAllocateOnePercent = onePercentShareAmount > 0.004 && onePercentShareAmount <= availableForCandidate + 0.004;
                   const twoPercentShareAmount = candidate.cumulativeDepositAmount * 0.02;
                   const canAllocateTwoPercent = twoPercentShareAmount > 0.004 && twoPercentShareAmount <= availableForCandidate + 0.004;
-                  const orderPoolOnePercentShareAmount = sharedIncomeClosePreview.managerPoolAmount * 0.01;
+                  const orderPoolOnePercentShareAmount = sharedIncomeClosePreview.shareableAmount * 0.01;
                   const canAllocateOrderPoolOnePercent = orderPoolOnePercentShareAmount > 0.004 && orderPoolOnePercentShareAmount <= availableForCandidate + 0.004;
-                  const orderPoolTwoPercentShareAmount = sharedIncomeClosePreview.managerPoolAmount * 0.02;
+                  const orderPoolTwoPercentShareAmount = sharedIncomeClosePreview.shareableAmount * 0.02;
                   const canAllocateOrderPoolTwoPercent = orderPoolTwoPercentShareAmount > 0.004 && orderPoolTwoPercentShareAmount <= availableForCandidate + 0.004;
                   const annualizedTargetOptions = [3.65, 1, 0.52, 1.04].map((targetRate) => ({
                     targetRate,
@@ -7963,12 +8455,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           setSharedIncomeTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
                           setSharedIncomeDrafts((current) => ({ ...current, [candidate.userId]: twoPercentShareAmount.toFixed(2) }));
                         }} className="h-4 whitespace-nowrap rounded border border-amber-200 bg-amber-50 text-[8px] font-semibold tabular-nums text-amber-700 active:scale-[0.98] disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300">本金 2%</button>
-                        <button type="button" disabled={!canAllocateOrderPoolOnePercent} aria-label="按本单可用分配额的1%分配" title={canAllocateOrderPoolOnePercent ? `按本单管理员可用分配额的 1% 分配，即 ${formatPrice(orderPoolOnePercentShareAmount)} U` : `剩余额度不足以分配 ${formatPrice(orderPoolOnePercentShareAmount)} U`} onClick={() => {
+                        <button type="button" disabled={!canAllocateOrderPoolOnePercent} aria-label="按本单可共享收益的1%分配" title={canAllocateOrderPoolOnePercent ? `按本单可共享收益的 1% 分配，即 ${formatPrice(orderPoolOnePercentShareAmount)} U` : `剩余额度不足以分配 ${formatPrice(orderPoolOnePercentShareAmount)} U`} onClick={() => {
                           if (!canAllocateOrderPoolOnePercent) return;
                           setSharedIncomeTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
                           setSharedIncomeDrafts((current) => ({ ...current, [candidate.userId]: orderPoolOnePercentShareAmount.toFixed(2) }));
                         }} style={canAllocateOrderPoolOnePercent ? { backgroundColor: "#2563EB", borderColor: "#1D4ED8", color: "#FFFFFF" } : undefined} className="h-4 whitespace-nowrap rounded border text-[8px] font-semibold tabular-nums shadow-sm active:scale-[0.98] disabled:border-slate-200 disabled:bg-white disabled:text-slate-300 disabled:shadow-none">本单 1%</button>
-                        <button type="button" disabled={!canAllocateOrderPoolTwoPercent} aria-label="按本单可用分配额的2%分配" title={canAllocateOrderPoolTwoPercent ? `按本单管理员可用分配额的 2% 分配，即 ${formatPrice(orderPoolTwoPercentShareAmount)} U` : `剩余额度不足以分配 ${formatPrice(orderPoolTwoPercentShareAmount)} U`} onClick={() => {
+                        <button type="button" disabled={!canAllocateOrderPoolTwoPercent} aria-label="按本单可共享收益的2%分配" title={canAllocateOrderPoolTwoPercent ? `按本单可共享收益的 2% 分配，即 ${formatPrice(orderPoolTwoPercentShareAmount)} U` : `剩余额度不足以分配 ${formatPrice(orderPoolTwoPercentShareAmount)} U`} onClick={() => {
                           if (!canAllocateOrderPoolTwoPercent) return;
                           setSharedIncomeTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
                           setSharedIncomeDrafts((current) => ({ ...current, [candidate.userId]: orderPoolTwoPercentShareAmount.toFixed(2) }));
@@ -7996,14 +8488,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   </div>;
                 })}
               </div> : <div className="mt-2 rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-500">当前没有符合条件的其他未平仓关联用户；可直接跳过共享并确认平仓。</div>}
-              <div className="mt-2 rounded bg-slate-50 px-2.5 py-2 text-[10px] leading-4 text-slate-500">平仓后会以“共享收益订单”写入受益用户的交易流水；来源订单编号会保留供用户核对。管理员端同时保留给出与收到的平衡参考。</div>
-            </div> : <div className="px-4 py-3 text-[11px] leading-5 text-slate-500">本单没有可用于共享的管理员正向收益份额，可直接确认平仓；收益为负、无管理员份额或未关联用户的订单不会触发共享分配。</div>}
+              <div className="mt-2 rounded bg-slate-50 px-2.5 py-2 text-[10px] leading-4 text-slate-500">平仓后会以“共享”写入受益用户的交易流水；来源订单编号会保留供核对。</div>
+            </div> : <div className="px-4 py-3 text-[11px] leading-5 text-slate-500">本单没有可共享的正向净收益，可直接确认平仓；收益为负或未关联用户的订单不会触发共享分配。</div>}
             {closeSaveError && <div role="alert" className="mx-4 mb-1 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
               <span className="font-semibold">平仓未确认：</span>{closeSaveError}。请保留当前页面修改后重新确认。
             </div>}
             <div className="sticky bottom-0 grid grid-cols-2 gap-3 border-t border-slate-100 bg-white/95 px-4 py-3 backdrop-blur">
               <button type="button" disabled={saveEntryMutation.isPending} onClick={() => setCloseConfirmationStep("input")} className="h-11 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700 active:scale-[0.99] disabled:opacity-40">返回修改</button>
-              <button disabled={saveEntryMutation.isPending || sharedIncomeAllocatedTotal - sharedIncomeClosePreview.managerPoolAmount > 0.00001} onClick={() => handleSaveEntry()} className="h-11 rounded bg-amber-600 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">确认{ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH</button>
+              <button disabled={saveEntryMutation.isPending || sharedIncomeAllocatedTotal - sharedIncomeClosePreview.shareableAmount > 0.00001} onClick={() => handleSaveEntry()} className="h-11 rounded bg-amber-600 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">确认{ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH</button>
             </div>
           </div>
         </div>
@@ -8277,7 +8769,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   setSelectedAccountIds([]);
                   setRelatedFundFilterIds([]);
                   setShowGlobalLedger(false);
-                  toast.message(`已切换至 ${row.name} 的订单视图`);
+                  t0Toast.message(`已切换至 ${row.name} 的订单视图`);
                 }} className="flex min-h-[56px] w-full items-center px-4 py-2 text-left transition active:bg-slate-50">
                   <div className="w-[84px] shrink-0 truncate border-r border-slate-200 pr-2 text-[17px] font-semibold text-slate-800">{row.name}</div>
                   <div className="grid min-w-0 flex-1 grid-cols-3 divide-x divide-slate-200 tabular-nums">
@@ -8299,13 +8791,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                       setSelectedAccountIds([]);
                       setRelatedFundFilterIds([]);
                       setShowGlobalLedger(false);
-                      toast.message(`已切换至 ${row.name} 的订单视图`);
+                      t0Toast.message(`已切换至 ${row.name} 的订单视图`);
                     }} className="flex min-h-[56px] w-full items-center px-4 py-2 text-left transition active:bg-slate-50">
                       <div className="w-[70px] shrink-0 truncate border-r border-slate-200 pr-2 text-[16px] font-semibold text-slate-800">{row.name}</div>
                       <div className="grid min-w-0 flex-1 grid-cols-4 divide-x divide-slate-200 tabular-nums">
                         <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-slate-800">{Math.round(row.deposit).toLocaleString("zh-CN")}</span>
                         <span className={`whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none ${tradeProfitClass}`}>{Math.round(row.tradeProfit).toLocaleString("zh-CN")}</span>
-                        <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-indigo-600">{Math.round(row.sharedProfit).toLocaleString("zh-CN")}</span>
+                        <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-blue-600">{Math.round(row.sharedProfit).toLocaleString("zh-CN")}</span>
                         <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-slate-700">{Math.round(row.withdrawal).toLocaleString("zh-CN")}</span>
                       </div>
                     </button>;
@@ -8371,11 +8863,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <button type="button" onClick={() => { setTotalRevenueDetailPage(1); setShowTotalNetProfitDetail(true); }} aria-haspopup="dialog" aria-label="查看总收益归因报告" className="w-full px-3 py-3 text-left transition active:bg-slate-50">
                   <div className="text-xs font-semibold text-slate-600">当前总收益</div>
                   <div className={`mt-1 truncate whitespace-nowrap text-[clamp(23px,6.8vw,29px)] font-bold leading-none ${payoutBookTotalIncomeClass}`}>{formatSigned(payoutBookTotalIncome)}<span className="ml-1 text-xs font-semibold opacity-75">U</span></div>
-                  <div className="mt-1 truncate text-[10px] text-slate-400">{payoutXirrSummary.firstInvestmentDate ? `${Number(payoutXirrSummary.firstInvestmentDate.slice(5, 7))}月${Number(payoutXirrSummary.firstInvestmentDate.slice(8, 10))}日 至 ${Number(payoutXirrSummary.asOfDate.slice(5, 7))}月${Number(payoutXirrSummary.asOfDate.slice(8, 10))}日 · ${payoutXirrSummary.daysHeld} 天` : "尚无投入期间"}{payoutSharedIncomeTotal > 0 ? ` · 含共享收益 +${formatPrice(payoutSharedIncomeTotal)} U` : ""}</div>
+                  <div className="mt-1 truncate text-[10px] text-slate-400">{payoutXirrSummary.firstInvestmentDate ? `${Number(payoutXirrSummary.firstInvestmentDate.slice(5, 7))}月${Number(payoutXirrSummary.firstInvestmentDate.slice(8, 10))}日 至 ${Number(payoutXirrSummary.asOfDate.slice(5, 7))}月${Number(payoutXirrSummary.asOfDate.slice(8, 10))}日 · ${payoutXirrSummary.daysHeld} 天` : "尚无投入期间"}</div>
                 </button>
-                <div className="grid grid-cols-2 divide-x divide-slate-300 border-t border-slate-300">
-                  <div className="flex min-w-0 items-center justify-between gap-2 px-3 py-2.5 text-left"><span className="shrink-0 whitespace-nowrap text-[10px] font-medium text-slate-500">累计投入</span><span className="shrink-0 whitespace-nowrap text-[clamp(10px,3.1vw,12px)] font-semibold leading-none text-slate-800">{cumulativeDepositAmount > 0 ? "+" : ""}{cumulativeDepositAmount === 0 ? "0" : formatPrice(cumulativeDepositAmount)}<span className="ml-0.5 text-[9px] font-medium opacity-70">U</span></span></div>
-                  <div className="flex min-w-0 items-center justify-between gap-2 px-3 py-2.5 text-left"><span className="shrink-0 whitespace-nowrap text-[10px] font-medium text-slate-500">实际年化 <button type="button" onClick={() => setShowPayoutXirrHelp(true)} aria-haspopup="dialog" aria-label="查看XIRR计算说明" className="border-b border-dotted border-slate-400 pb-px font-medium text-slate-600 active:opacity-60">XIRR</button></span><span className={`min-w-0 truncate whitespace-nowrap text-[clamp(10px,3.1vw,12px)] font-semibold leading-none ${payoutXirrSummary.rate === null ? "text-slate-400" : "text-slate-800"}`}>{formatT0AnnualizedReturn(payoutXirrSummary.rate)}</span></div>
+                <div className="flex min-w-0 items-center justify-between gap-[clamp(12px,4vw,20px)] border-t border-slate-300 px-[clamp(12px,3.5vw,16px)] py-[clamp(10px,2.8vw,13px)] text-left tabular-nums">
+                  <div className="flex shrink-0 items-center gap-[clamp(6px,1.8vw,10px)] whitespace-nowrap"><span className="text-[clamp(11px,3vw,13px)] font-medium text-slate-500">累计投入</span><span className="text-[clamp(12px,3.4vw,14px)] font-semibold leading-none text-slate-800">{cumulativeDepositAmount > 0 ? "+" : ""}{cumulativeDepositAmount === 0 ? "0" : formatPrice(cumulativeDepositAmount)}<span className="ml-0.5 text-[10px] font-medium opacity-70">U</span></span></div>
+                  <span aria-hidden="true" className="h-4 shrink-0 border-l border-slate-300" />
+                  <div className="flex shrink-0 items-center gap-[clamp(6px,1.8vw,10px)] whitespace-nowrap"><button type="button" onClick={() => setShowPayoutXirrHelp(true)} aria-haspopup="dialog" aria-label="查看实际年化计算说明" className="border-b border-dotted border-slate-400 pb-px text-[clamp(11px,3vw,13px)] font-medium text-slate-500 active:opacity-60">实际年化</button><span className={`text-[clamp(12px,3.4vw,14px)] font-semibold leading-none ${payoutXirrSummary.rate === null ? "text-slate-400" : "text-slate-800"}`}>{formatT0AnnualizedReturn(payoutXirrSummary.rate)}</span></div>
                 </div>
               </div>
 
@@ -8384,11 +8877,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div className="grid grid-cols-[60px_34px_52px_68px_minmax(0,1fr)] gap-x-1 border-b border-slate-100 px-3 py-1.5 text-[10px] font-medium text-slate-400 tabular-nums"><span className="text-center">时间</span><span className="text-center">类型</span><span className="text-center">数量</span><span className="text-right">价格/来源</span><span className="text-right">收益</span></div>
                 {payoutIncomeEntries.length > 0 ? <div className="divide-y divide-slate-100">{pagedPayoutIncomeEntries.map((entry) => {
                   if (entry.kind === "shared") {
-                    return <div key={entry.id} className="grid grid-cols-[60px_34px_52px_68px_minmax(0,1fr)] items-center gap-x-1 bg-indigo-50/35 px-3 py-2 text-[10px] tabular-nums">
+                    const sourceTrade = entry.sourceTrade;
+                    return <div key={entry.id} className="grid grid-cols-[60px_34px_52px_68px_minmax(0,1fr)] items-center gap-x-1 px-3 py-2 text-[10px] tabular-nums">
                       <span className="whitespace-nowrap text-center font-mono tracking-[-0.04em] text-slate-400">{formatBeijingMonthDayTime(entry.createdAt)}</span>
-                      <span className="inline-flex items-center justify-center gap-0.5 whitespace-nowrap font-semibold text-indigo-700" title="共享收益"><Share2 className="h-3 w-3" />共享</span>
-                      <span className="whitespace-nowrap text-center font-medium text-slate-400">—</span>
-                      <span className="whitespace-nowrap text-right text-[9px] text-indigo-600" title={`来源平仓订单 #${entry.transfer.closingEntryId}`}>#{entry.transfer.closingEntryId}</span>
+                      <span className="whitespace-nowrap text-center font-semibold" style={{ color: "#2563eb" }} title="共享收益">共享</span>
+                      <span className="whitespace-nowrap text-center font-medium text-slate-700">{sourceTrade ? `${formatQuantity(sourceTrade.quantity)} ETH` : "—"}</span>
+                      <span className="whitespace-nowrap text-right text-slate-500" title={sourceTrade ? `来源平仓价 ${formatPrice(sourceTrade.price)}` : `来源平仓订单 #${entry.transfer.closingEntryId}`}>{sourceTrade ? formatPrice(sourceTrade.price) : `#${entry.transfer.closingEntryId}`}</span>
                       <span className="whitespace-nowrap text-right font-semibold text-rose-600">{formatSigned(entry.transfer.amount)} U</span>
                     </div>;
                   }
@@ -8415,20 +8909,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       )}
 
       {showPayoutLog && showPayoutXirrHelp && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-5" role="dialog" aria-modal="true" aria-label="XIRR年化回报率计算说明">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-5" role="dialog" aria-modal="true" aria-label="实际年化计算说明">
           <div className="max-h-[86vh] w-full max-w-sm overflow-y-auto rounded-xl bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-base font-semibold text-slate-900">XIRR 实际年化回报率</div>
-                <div className="mt-1 text-xs leading-5 text-slate-500">按每笔资金在北京时间的实际占用日数计算，适用于分批投入、分批提现。</div>
+                <div className="text-base font-semibold text-slate-900">实际年化说明</div>
+                <div className="mt-1 text-xs leading-5 text-slate-500">采用 XIRR 方法，按每笔资金在北京时间的实际占用日数计算，适用于分批投入、分批提现。</div>
               </div>
-              <button type="button" onClick={() => setShowPayoutXirrHelp(false)} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭XIRR计算说明">
+              <button type="button" onClick={() => setShowPayoutXirrHelp(false)} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭实际年化计算说明">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <section className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50/55 p-3">
-              <div className="text-xs font-semibold text-indigo-900">本账本的现金流口径</div>
+              <div className="text-xs font-semibold text-indigo-900">实际年化如何计算</div>
               <div className="mt-2 space-y-1.5 text-[11px] leading-5 text-slate-600">
                 <div className="flex gap-2"><span className="shrink-0 font-semibold text-sky-700">投入（负）</span><span>每笔登记投入，按实际发生日记为投资人现金流出。</span></div>
                 <div className="flex gap-2"><span className="shrink-0 font-semibold text-slate-700">提现（正）</span><span>每笔登记提现，按实际发生日记为投资人现金流入。</span></div>
@@ -8445,9 +8939,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   <div className="mt-1 font-semibold tabular-nums text-indigo-700">当前期末净值：{formatSigned(payoutXirrSummary.currentNetValue)} U</div>
                 </div>
                 <div>
-                  <div className="text-slate-400">XIRR 求解公式</div>
+                  <div className="text-slate-400">什么是 XIRR</div>
                   <div className="mt-0.5 break-words font-mono text-[10px] text-slate-800">Σ [ CFᵢ ÷ (1 + r)^(dᵢ ÷ 365) ] = 0</div>
-                  <div className="mt-1 text-[10px] leading-4 text-slate-500">CFᵢ 为每笔现金流；dᵢ 为该笔现金流距首笔投入的北京时间计算天数；首日与截至日均计入持有期；r 为求得的实际年化回报率。</div>
+                  <div className="mt-1 text-[10px] leading-4 text-slate-500">XIRR 会为每笔不同日期的投入、提现与期末净值寻找同一个年化回报率。CFᵢ 为每笔现金流；dᵢ 为该笔现金流距首笔投入的北京时间计算天数；首日与截至日均计入持有期；r 为求得的实际年化回报率。</div>
                 </div>
               </div>
             </section>
@@ -8470,7 +8964,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-base font-semibold text-slate-900">总收益归因报告</div>
-                <div className="mt-1 text-xs text-slate-500">{totalProfitAttribution.targetLabel} · 已实现收益，已扣开仓与平仓手续费</div>
+                <div className="mt-1 text-xs text-slate-500">{totalProfitAttribution.targetLabel} · 已实现收益</div>
               </div>
               <button type="button" onClick={() => {
                 setShowTotalNetProfitDetail(false);
@@ -8480,25 +8974,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             </div>
 
             <section className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-              <div className="bg-gradient-to-br from-slate-50 via-white to-rose-50/45 px-4 py-3.5">
-                <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <div className="text-[11px] font-semibold text-slate-500">总收益</div>
-                    <div className="mt-1 text-[10px] text-slate-400">自身交易净收益 + 佣金分成</div>
-                  </div>
-                  <div className={`shrink-0 whitespace-nowrap text-[26px] font-bold leading-none tabular-nums ${totalNetProfitClass}`}>{formatSigned(totalProfitAttribution.total)} <span className="text-xs font-semibold opacity-70">U</span></div>
-                </div>
+              <div className="bg-gradient-to-br from-slate-50 via-white to-rose-50/45 px-4 py-3.5 text-left">
+                <div className="text-[11px] font-semibold text-slate-500">总收益</div>
+                <div className={`mt-1.5 whitespace-nowrap text-[26px] font-bold leading-none tabular-nums ${totalNetProfitClass}`}>{formatPrice(totalProfitAttribution.total)} <span className="text-xs font-semibold opacity-70">U</span></div>
               </div>
-              <div className="grid grid-cols-2 divide-x divide-slate-200 border-t border-slate-100 bg-white text-center tabular-nums">
-                <div className="min-w-0 px-3 py-3">
-                  <div className="truncate text-[10px] text-slate-500">{totalProfitAttribution.hasIndividualScope ? "自身交易净收益" : "订单交易净收益"}</div>
-                  <div className={`mt-1 whitespace-nowrap text-base font-bold ${totalProfitAttribution.ownTradingNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(totalProfitAttribution.ownTradingNetProfit)} <span className="text-[10px]">U</span></div>
-                  <div className="mt-1 text-[10px] text-slate-400">{totalProfitAttribution.ownTradingCount} 笔已平仓</div>
+              <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 bg-white text-center tabular-nums">
+                <div className="min-w-0 overflow-hidden px-[clamp(5px,1.8vw,9px)] py-3">
+                  <div className="whitespace-nowrap text-[10px] font-medium text-slate-500">订单收益</div>
+                  <div className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(9px,3vw,15px)] font-bold leading-none ${totalProfitAttribution.ownTradingNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(totalProfitAttribution.ownTradingNetProfit)} <span className="text-[8px] font-medium tracking-normal">U</span></div>
+                  <div className="mt-1 whitespace-nowrap text-[9px] text-slate-400">{totalProfitAttribution.ownTradingCount} 笔已平仓</div>
                 </div>
-                <div className="min-w-0 px-3 py-3">
-                  <div className="truncate text-[10px] text-slate-500">佣金分成收入</div>
-                  <div className={`mt-1 whitespace-nowrap text-base font-bold ${totalProfitAttribution.commissionShareNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(totalProfitAttribution.commissionShareNetProfit)} <span className="text-[10px]">U</span></div>
-                  <div className="mt-1 text-[10px] text-slate-400">{totalProfitAttribution.commissionShareCount} 笔关联收益</div>
+                <div className="min-w-0 overflow-hidden px-[clamp(5px,1.8vw,9px)] py-3">
+                  <div className="whitespace-nowrap text-[10px] font-medium text-slate-500">分佣收益</div>
+                  <div className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(9px,3vw,15px)] font-bold leading-none ${totalProfitAttribution.commissionShareNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(totalProfitAttribution.commissionShareNetProfit)} <span className="text-[8px] font-medium tracking-normal">U</span></div>
+                  <div className="mt-1 whitespace-nowrap text-[9px] text-slate-400">{totalProfitAttribution.commissionShareCount} 笔分佣收益</div>
+                </div>
+                <div className="min-w-0 overflow-hidden px-[clamp(5px,1.8vw,9px)] py-3">
+                  <div className="whitespace-nowrap text-[10px] font-medium text-slate-500">共享收益</div>
+                  <div className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(9px,3vw,15px)] font-bold leading-none ${totalProfitAttribution.sharedIncomeNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(totalProfitAttribution.sharedIncomeNetProfit)} <span className="text-[8px] font-medium tracking-normal">U</span></div>
+                  <div className="mt-1 whitespace-nowrap text-[9px] text-slate-400">{totalProfitAttribution.sharedIncomeCount} 笔共享收益</div>
                 </div>
               </div>
             </section>
@@ -8506,25 +9000,29 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             <section className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-xs font-semibold text-slate-800">收益构成</div>
-                <div className="text-[10px] text-slate-400">占比按两项收益绝对值计算</div>
+                <div className="text-[10px] text-slate-400">占比按三项收益绝对值计算</div>
               </div>
               <div className="mt-3 flex items-center gap-3">
                 <div
                   className="relative h-[68px] w-[68px] shrink-0 rounded-full"
-                  style={{ background: (totalProfitAttribution.ownTradingRatio + totalProfitAttribution.commissionShareRatio) > 0
-                    ? `conic-gradient(${totalProfitAttribution.ownTradingNetProfit >= 0 ? "#e11d48" : "#059669"} 0 ${(totalProfitAttribution.ownTradingRatio * 100).toFixed(3)}%, ${totalProfitAttribution.commissionShareNetProfit >= 0 ? "#fb7185" : "#34d399"} ${(totalProfitAttribution.ownTradingRatio * 100).toFixed(3)}% 100%)`
+                  style={{ background: (totalProfitAttribution.ownTradingRatio + totalProfitAttribution.commissionShareRatio + totalProfitAttribution.sharedIncomeRatio) > 0
+                    ? `conic-gradient(${totalProfitAttribution.ownTradingNetProfit >= 0 ? "#e11d48" : "#059669"} 0 ${(totalProfitAttribution.ownTradingRatio * 100).toFixed(3)}%, ${totalProfitAttribution.commissionShareNetProfit >= 0 ? "#fb7185" : "#34d399"} ${(totalProfitAttribution.ownTradingRatio * 100).toFixed(3)}% ${((totalProfitAttribution.ownTradingRatio + totalProfitAttribution.commissionShareRatio) * 100).toFixed(3)}%, #2563eb ${((totalProfitAttribution.ownTradingRatio + totalProfitAttribution.commissionShareRatio) * 100).toFixed(3)}% 100%)`
                     : "#cbd5e1" }}
                 >
-                  <div className="absolute inset-[9px] flex flex-col items-center justify-center rounded-full bg-white"><span className="text-[9px] text-slate-400">总收益</span><span className={`mt-0.5 text-[11px] font-bold tabular-nums ${totalNetProfitClass}`}>{formatSigned(totalProfitAttribution.total)}</span></div>
+                  <div className="absolute inset-[9px] flex flex-col items-center justify-center rounded-full bg-white"><span className="text-[9px] text-slate-400">总收益</span><span className={`mt-0.5 whitespace-nowrap text-[clamp(7px,2.5vw,11px)] font-bold leading-none tracking-[-0.05em] tabular-nums ${totalNetProfitClass}`}>{formatPrice(totalProfitAttribution.total)}</span></div>
                 </div>
                 <div className="min-w-0 flex-1 space-y-2.5">
                   <div>
-                    <div className="flex items-center justify-between gap-2 text-[11px]"><span className="min-w-0 truncate text-slate-600">{totalProfitAttribution.hasIndividualScope ? "自身交易" : "订单交易"}</span><span className={`shrink-0 font-semibold tabular-nums ${totalProfitAttribution.ownTradingNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{Math.round(totalProfitAttribution.ownTradingRatio * 100)}%</span></div>
+                    <div className="flex items-center justify-between gap-2 text-[11px]"><span className="min-w-0 truncate text-slate-600">订单收益</span><span className={`shrink-0 font-semibold tabular-nums ${totalProfitAttribution.ownTradingNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{Math.round(totalProfitAttribution.ownTradingRatio * 100)}%</span></div>
                     <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${totalProfitAttribution.ownTradingNetProfit >= 0 ? "bg-rose-500" : "bg-emerald-500"}`} style={{ width: `${totalProfitAttribution.ownTradingRatio * 100}%` }} /></div>
                   </div>
                   <div>
-                    <div className="flex items-center justify-between gap-2 text-[11px]"><span className="min-w-0 truncate text-slate-600">佣金分成</span><span className={`shrink-0 font-semibold tabular-nums ${totalProfitAttribution.commissionShareNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{Math.round(totalProfitAttribution.commissionShareRatio * 100)}%</span></div>
+                    <div className="flex items-center justify-between gap-2 text-[11px]"><span className="min-w-0 truncate text-slate-600">分佣收益</span><span className={`shrink-0 font-semibold tabular-nums ${totalProfitAttribution.commissionShareNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{Math.round(totalProfitAttribution.commissionShareRatio * 100)}%</span></div>
                     <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${totalProfitAttribution.commissionShareNetProfit >= 0 ? "bg-rose-400" : "bg-emerald-400"}`} style={{ width: `${totalProfitAttribution.commissionShareRatio * 100}%` }} /></div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between gap-2 text-[11px]"><span className="min-w-0 truncate text-slate-600">共享收益</span><span className="shrink-0 font-semibold tabular-nums text-blue-600">{Math.round(totalProfitAttribution.sharedIncomeRatio * 100)}%</span></div>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-blue-600" style={{ width: `${totalProfitAttribution.sharedIncomeRatio * 100}%` }} /></div>
                   </div>
                 </div>
               </div>
@@ -8532,25 +9030,38 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
             <div className="mt-3 overflow-hidden rounded border border-slate-200">
               <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-                <span>已实现订单明细</span>
-                <span>{totalNetProfitDetails.length} 笔</span>
+                <span>已实现收益明细</span>
+                <span>{totalProfitAttributionDetailEntries.length} 笔</span>
               </div>
-              {totalNetProfitDetails.length > 0 ? (
+              {totalProfitAttributionDetailEntries.length > 0 ? (
                 <div className="divide-y divide-slate-100">
-                  {pagedTotalNetProfitDetails.map((detail) => {
-                    const isLong = ACTIONS[detail.trade.action].side === "long";
+                  {pagedTotalProfitAttributionDetailEntries.map((entry) => {
+                    const referenceTrade = entry.trade ?? entry.sourceTrade;
+                    const isLong = referenceTrade ? ACTIONS[referenceTrade.action].side === "long" : true;
+                    const typeLabel = entry.kind === "shared"
+                      ? "共享"
+                      : entry.kind === "commission"
+                        ? "分佣"
+                        : (referenceTrade ? ACTIONS[referenceTrade.action].label : "订单");
+                    const typeClass = entry.kind === "shared"
+                      ? "text-blue-600"
+                      : entry.kind === "commission"
+                        ? "text-indigo-600"
+                        : (isLong ? "text-rose-600" : "text-emerald-600");
+                    const displayQuantity = entry.quantity ?? referenceTrade?.quantity;
                     return (
-                      <div key={detail.trade.id} className="flex min-w-0 items-center gap-2 px-3 py-2 text-[11px] tabular-nums whitespace-nowrap">
-                        <span className="shrink-0 text-slate-400">{formatBeijingMonthDayTime(detail.trade.createdAt)}</span>
-                        <span className={`shrink-0 font-semibold ${isLong ? "text-rose-600" : "text-emerald-600"}`}>{ACTIONS[detail.trade.action].label}</span>
-                        <span className="shrink-0 font-medium text-slate-700">{formatQuantity(detail.quantity)} ETH</span>
-                        <span className={`ml-auto shrink-0 font-semibold ${detail.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(detail.netPnl)} U</span>
+                      <div key={entry.id} className="flex min-w-0 items-center gap-2 px-3 py-2 text-[11px] tabular-nums whitespace-nowrap">
+                        <span className="shrink-0 text-slate-400">{formatBeijingMonthDayTime(entry.createdAt)}</span>
+                        <span className={`shrink-0 font-semibold ${typeClass}`} title={entry.recipientName}>{typeLabel}</span>
+                        <span className="shrink-0 font-medium text-slate-700">{displayQuantity === undefined ? "—" : `${formatQuantity(displayQuantity)} ETH`}</span>
+                        <span className="shrink-0 text-slate-500">{referenceTrade ? formatPrice(referenceTrade.price) : "—"}</span>
+                        <span className={`ml-auto shrink-0 font-semibold ${entry.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(entry.amount)} U</span>
                       </div>
                     );
                   })}
                 </div>
-              ) : <div className="px-3 py-5 text-center text-xs text-slate-400">当前筛选范围暂无已平仓记录</div>}
-              {totalNetProfitDetails.length > 0 && totalRevenueDetailTotalPages > 1 && (
+              ) : <div className="px-3 py-5 text-center text-xs text-slate-400">当前筛选范围暂无已实现收益记录</div>}
+              {totalProfitAttributionDetailEntries.length > 0 && totalRevenueDetailTotalPages > 1 && (
                 <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-3 py-2 text-[11px] tabular-nums">
                   <button
                   type="button"
@@ -8680,7 +9191,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
 
       {netProfitDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="净利润计算明细">
-          <div className="w-full max-w-sm rounded bg-white p-5 shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-base font-semibold text-slate-900">{netProfitDetailUsesMemberPresentation && memberProfitShareDetail ? "本单收益" : netProfitDetailUsesMemberPresentation ? "净利润说明" : "净利润计算明细"}</div>
@@ -8695,10 +9206,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <div className="mt-4 overflow-hidden rounded border border-indigo-100 bg-indigo-50/45 text-sm tabular-nums">
                   <div className="flex items-center justify-between gap-4 px-3 py-3.5">
                     <span className="font-semibold text-slate-800">本单可得</span>
-                    <span className={`text-lg font-semibold ${memberProfitShareDetail.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(memberProfitShareDetail.netPnl)} U</span>
+                    <span className={`text-lg font-semibold ${memberProfitShareDetail.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(memberProfitShareDetail.netPnl)}<span className="ml-0.5 font-normal text-slate-900">u</span></span>
                   </div>
                 </div>
-                <div className="mt-3 px-1 text-[11px] leading-5 text-slate-400">已按本单实际归属计算，扣除交易费、手续费及分成后的净利润。</div>
+                <div className="mt-3 px-1 text-[11px] leading-5 text-slate-400">{Number(netProfitDetail.trade.sharedIncomeAmount || 0) > 0 ? "本单共享收益已计入本单可得。" : "已按本单实际归属计算。"}</div>
               </> : <>
                 <div className="mt-5 rounded bg-slate-50 px-4 py-4 text-center text-sm text-slate-600">已扣除交易成本后的净利润。</div>
                 {(netProfitDetail.detail.buyPrice !== undefined || netProfitDetail.detail.sellPrice !== undefined) && <div className="mt-3 px-1 text-[11px] tabular-nums text-slate-400">
@@ -8706,34 +9217,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>}
               </>
             ) : <>
-              <div className="mt-4 rounded bg-slate-50 px-3 py-2.5 text-xs tabular-nums text-slate-700">
-                {ACTIONS[netProfitDetail.trade.action].label} {formatQuantity(netProfitDetail.trade.quantity)} ETH
-              </div>
-              <div className="mt-3 space-y-2 text-sm tabular-nums">
-                <div className="flex items-center justify-between gap-4"><span className="text-slate-500">毛收益</span><span className="font-medium text-slate-700">{formatSigned(netProfitDetail.detail.grossPnl ?? 0)} U</span></div>
-                <div className="flex items-center justify-between gap-4"><span className="text-slate-500">开仓手续费分摊</span><span className="font-medium text-slate-700">−{formatFee(netProfitDetail.detail.allocatedOpeningFee ?? 0)} U</span></div>
-                <div className="flex items-center justify-between gap-4"><span className="text-slate-500">本笔平仓手续费</span><span className="font-medium text-slate-700">−{formatFee(netProfitDetail.detail.closingFee ?? 0)} U</span></div>
-                <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-2"><span className="font-semibold text-slate-800">净利润</span><span className={`font-semibold ${(netProfitDetail.detail.netPnl ?? 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(netProfitDetail.detail.netPnl ?? 0)} U</span></div>
-              </div>
-              {netProfitShareDistribution.length > 0 && <div className="mt-4 overflow-hidden rounded border border-indigo-100 bg-indigo-50/45">
-                <div className="border-b border-indigo-100 bg-white/60 px-3 py-2">
-                  <div className="text-xs font-semibold text-indigo-900">分佣明细（开仓快照）</div>
-                  <div className="mt-0.5 text-[10px] leading-4 text-indigo-700/80">当前没有额外管理费；已先扣除上方开仓与平仓交易手续费，再按开仓时固化的比例拆分。</div>
-                </div>
+              <section className="mt-3 overflow-hidden rounded border border-slate-200 bg-slate-50/60 text-xs tabular-nums">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white/70 px-2.5 py-1.5"><span className="font-semibold text-slate-800">{ACTIONS[netProfitDetail.trade.action].label} {formatQuantity(netProfitDetail.trade.quantity)} ETH</span><span className={(netProfitDetail.detail.grossPnl ?? 0) >= 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600"}>{formatSigned(netProfitDetail.detail.grossPnl ?? 0)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
+                <div className="flex items-center justify-between gap-3 px-2.5 py-1.5 text-slate-600"><span>手续费</span><span className="font-medium text-emerald-600">−{formatFee((netProfitDetail.detail.allocatedOpeningFee ?? 0) + (netProfitDetail.detail.closingFee ?? 0))}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
+                <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white/70 px-2.5 py-1.5"><span className="font-semibold text-slate-700">净收益</span><span className={`font-semibold ${(netProfitDetail.detail.netPnl ?? 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(netProfitDetail.detail.netPnl ?? 0)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
+              </section>
+              {netProfitAllocationSummary?.sharedRows.length ? <section className="mt-2 overflow-hidden rounded border border-indigo-100 bg-indigo-50/35 text-xs tabular-nums">
+                <div className="flex items-center justify-between gap-3 border-b border-indigo-100 bg-white/70 px-2.5 py-1.5"><span className="font-semibold text-slate-900">最大可分配共享收益</span><span className="font-semibold text-slate-900">{formatSigned(netProfitAllocationSummary.netPnl)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
                 <div className="divide-y divide-indigo-100/90 bg-white/55">
-                  {netProfitShareDistribution.map((allocation) => <div key={allocation.beneficiaryUserId} className="flex items-center justify-between gap-3 px-3 py-2 text-xs tabular-nums">
-                    <div className="min-w-0">
-                      <div className="truncate font-semibold text-slate-800">{allocation.beneficiaryUserName}</div>
-                      <div className="mt-0.5 text-[10px] text-slate-500">分成 {allocation.percentageLabel}</div>
-                    </div>
-                    <div className={`shrink-0 text-sm font-semibold ${allocation.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(allocation.netPnl)} U</div>
-                  </div>)}
+                  {netProfitAllocationSummary.sharedRows.map((transfer) => <div key={transfer.id} className="flex items-center justify-between gap-3 px-2.5 py-1.5 tabular-nums"><span className="min-w-0 truncate font-medium text-slate-800">{transfer.recipientUserName}</span><span className={`shrink-0 font-semibold ${transfer.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(transfer.amount)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>)}
                 </div>
-                <div className="flex items-center justify-between gap-3 border-t border-indigo-100 bg-white/70 px-3 py-2 text-xs tabular-nums">
-                  <span className="font-semibold text-slate-700">分配合计</span>
-                  <span className={`font-semibold ${(netProfitDetail.detail.netPnl ?? 0) >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(netProfitShareDistribution.reduce((total, allocation) => total + allocation.netPnl, 0))} U</span>
+                <div className="flex items-center justify-between gap-3 border-t border-indigo-100 bg-white/70 px-2.5 py-1.5 tabular-nums"><span className="font-semibold text-slate-700">剩余</span><span className="font-semibold text-slate-900">{formatSigned(netProfitAllocationSummary.netPnl - netProfitAllocationSummary.sharedTotal)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
+              </section> : null}
+              {netProfitAllocationSummary?.regularRows.length ? <section className="mt-2 overflow-hidden rounded border border-slate-200 bg-slate-50/60 text-xs tabular-nums">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white/70 px-2.5 py-1.5"><span className="font-semibold text-slate-900">利润分配</span><span className="font-semibold text-slate-900">{formatSigned(netProfitAllocationSummary.regularTotal)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>
+                <div className="divide-y divide-slate-100 bg-white/55">
+                  {netProfitAllocationSummary.regularRows.map((allocation, index) => <div key={`${allocation.beneficiaryUserId}-${index}`} className="flex items-center justify-between gap-3 px-2.5 py-1.5 tabular-nums"><span className="min-w-0 truncate font-medium text-slate-800">{allocation.beneficiaryUserName}<small className="ml-1 text-[10px] font-normal text-slate-500">{allocation.percentageLabel}</small></span><span className={`shrink-0 font-semibold ${allocation.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(allocation.netPnl)}<span className="ml-0.5 font-normal text-slate-900">u</span></span></div>)}
                 </div>
-              </div>}
+              </section> : null}
             </>}
             <button type="button" onClick={() => setNetProfitDetail(null)} className="mt-5 h-11 w-full rounded bg-slate-800 text-sm font-semibold text-white active:scale-[0.99]">知道了</button>
           </div>
