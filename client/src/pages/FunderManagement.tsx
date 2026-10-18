@@ -827,7 +827,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
           } : {}),
           ...(p.marginAlertThreshold ? { marginAlertThreshold: p.marginAlertThreshold } : {}),
           financingInputAmount: p.amount || '',
-          financingInputCurrency: p.amountCurrency || formData.amountCurrency || 'USDT',
+          financingInputCurrency: p.amountCurrency || 'USDT',
         }),
       })),
     });
@@ -877,15 +877,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       userName: getUserDisplayName(p, `成员 #${p.user_id}`),
       avatar: p.avatar,
       role: (['owner', 'funder', 'borrower', 'broker'].includes(p.role) ? p.role : 'funder') as ParticipantForm['role'],
-      coin: String(snapshotValue('coin', p.coin || formData.coin) || ''),
+      // 已有关联成员的值只从自己的快照/关系行读取；不能用当前正在编辑的人的表单补齐。
+      coin: String(snapshotValue('coin', p.coin || '') || ''),
       amount: String(snapshotValue('amount', p.amount || '') || ''),
-      amountCurrency: String(snapshotValue('amount_currency', p.amount_currency || formData.amountCurrency || 'USDT') || 'USDT'),
-      interestRateAnnual: normalizeFunderAnnualRate(String(snapshotValue('interest_rate_annual', p.interest_rate || formData.interestRateAnnual || '') || '')),
-      interestBase: String(snapshotValue('interest_base', p.interest_base || formData.interestBase || '') || ''),
-      interestBaseCurrency: String(snapshotValue('interest_base_currency', p.interest_base_currency || formData.interestBaseCurrency || 'USDT') || 'USDT'),
-      interestRateCurrency: String(snapshotValue('interest_rate_currency', p.interest_rate_currency || formData.interestRateCurrency || 'USDT') || 'USDT'),
-      interestPaymentType: String(snapshotValue('interest_payment_type', p.interest_payment_type || formData.interestPaymentType || '') || ''),
-      interestStartDate: String(snapshotValue('interest_start_date', p.interest_start_date || formData.interestStartDate || '') || ''),
+      amountCurrency: String(snapshotValue('amount_currency', p.amount_currency || 'USDT') || 'USDT'),
+      interestRateAnnual: normalizeFunderAnnualRate(String(snapshotValue('interest_rate_annual', p.interest_rate || '') || '')),
+      interestBase: String(snapshotValue('interest_base', p.interest_base || '') || ''),
+      interestBaseCurrency: String(snapshotValue('interest_base_currency', p.interest_base_currency || 'USDT') || 'USDT'),
+      interestRateCurrency: String(snapshotValue('interest_rate_currency', p.interest_rate_currency || 'USDT') || 'USDT'),
+      interestPaymentType: String(snapshotValue('interest_payment_type', p.interest_payment_type || '') || ''),
+      interestStartDate: String(snapshotValue('interest_start_date', p.interest_start_date || '') || ''),
       displayConfig: (() => {
         try {
           const rawConfig = snapshot?.display_config ?? p.display_config;
@@ -911,7 +912,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       tradeDirection: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.trade_direction === 'long' || snapshot?.trade_direction === 'short' ? snapshot.trade_direction : null; } catch { return null; } })(),
       orderFillStatus: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.order_fill_status === 'pending' ? 'pending' : 'filled'; } catch { return 'filled'; } })(),
       orderPerspective: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.order_perspective === 'other' ? 'other' : 'self'; } catch { return 'self'; } })(),
-      buyDate: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.buy_date ? String(snapshot.buy_date).slice(0, 10) : (formData.buyDate || ''); } catch { return formData.buyDate || ''; } })(),
+      buyDate: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.buy_date ? String(snapshot.buy_date).slice(0, 10) : ''; } catch { return ''; } })(),
       brokerName: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.broker_name || ''; } catch { return ''; } })(),
       brokerAccount: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; return snapshot?.broker_account || ''; } catch { return ''; } })(),
       principalLentOut: (() => { try { const snapshot = p.order_snapshot ? (typeof p.order_snapshot === 'string' ? JSON.parse(p.order_snapshot) : p.order_snapshot) : {}; const config = snapshot?.display_config ? (typeof snapshot.display_config === 'string' ? JSON.parse(snapshot.display_config) : snapshot.display_config) : {}; const isSelfFunded = config?.assetFundingType === 'self' || config?.selfFundedAsset === true || config?.selfFundedAsset === 'true'; return !isSelfFunded && (snapshot?.principal_lent_out === 1 || snapshot?.principal_lent_out === true); } catch { return false; } })(),
@@ -2787,6 +2788,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         : fallback
     );
     const rootDisplayConfig = (() => { try { const value = rootOrder.display_config; return value ? (typeof value === 'string' ? JSON.parse(value) : value) : {}; } catch { return {}; } })();
+    const personalDisplayConfig = (() => { try { const value = snapshot.display_config; return value ? (typeof value === 'string' ? JSON.parse(value) : value) : {}; } catch { return {}; } })();
     const isPendingInterestUnified = rootDisplayConfig?.pendingInterestScope === 'unified';
     const participantOrder = {
       ...rootOrder,
@@ -2808,8 +2810,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       interest_payment_type: isPendingInterestUnified ? rootOrder.interest_payment_type : snapshotValue('interest_payment_type', participant.interestPaymentType || rootOrder.interest_payment_type),
       interest_start_date: isPendingInterestUnified ? rootOrder.interest_start_date : snapshotValue('interest_start_date', participant.interestStartDate || rootOrder.interest_start_date),
       display_config: JSON.stringify({
-        ...rootDisplayConfig,
-        ...(() => { try { const value = snapshot.display_config; return value ? (typeof value === 'string' ? JSON.parse(value) : value) : {}; } catch { return {}; } })(),
+        // 展示开关属于当前拥有者；主订单只提供两项明确的组级利息模式。
+        ...personalDisplayConfig,
         ...participant.displayConfig,
         ...(participant.marginAlertThreshold ? { marginAlertThreshold: participant.marginAlertThreshold } : {}),
         pendingInterestScope: rootDisplayConfig?.pendingInterestScope === 'unified' ? 'unified' : 'individual',

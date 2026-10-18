@@ -1447,7 +1447,9 @@ async function ensureFunderParticipantSnapshotColumnsInternal(): Promise<void> {
   if (!existing.has('visible_owner_ids')) {
     try { await (conn as any).execute(`ALTER TABLE ledger_order_participants ADD COLUMN visible_owner_ids TEXT NULL COMMENT '指定可见的其他拥有者用户ID JSON列表'`); } catch {}
   }
-  // 旧参与关系首次升级时，以当前主订单为默认快照，并叠加已经存在的参与者独立字段。
+  // 旧参与关系首次升级时，只固化该关系行已经存在的个人字段。
+  // 主订单只能作为读取时的初始默认值，不能在一次“读取/补列”中写进个人快照，
+  // 否则会把主订单币种、数量、价格和利息混入本应独立的拥有者页面。
   const [backfillRows] = await (conn as any).execute(
     `SELECT p.id AS participant_id, p.amount AS participant_amount, p.amount_currency AS participant_amount_currency,
             p.interest_rate AS participant_interest_rate, p.interest_base AS participant_interest_base,
@@ -1462,7 +1464,7 @@ async function ensureFunderParticipantSnapshotColumnsInternal(): Promise<void> {
      WHERE p.order_snapshot IS NULL`
   );
   for (const row of (backfillRows as any[])) {
-    const snapshot = buildFunderParticipantSnapshot(row);
+    const snapshot: Record<string, any> = {};
     if (row.participant_amount != null && row.participant_amount !== '') snapshot.amount = row.participant_amount;
     if (row.participant_amount_currency) snapshot.amount_currency = row.participant_amount_currency;
     if (row.participant_interest_rate != null && row.participant_interest_rate !== '') snapshot.interest_rate_annual = row.participant_interest_rate;
@@ -1501,7 +1503,6 @@ async function ensureFunderParticipantSnapshotColumnsInternal(): Promise<void> {
       && String(existingSnapshot?.interest_end_date || '') === String(parentInterestEndDate || '')
     ) continue;
     const snapshot = {
-      ...buildFunderParticipantSnapshot(row),
       ...(existingSnapshot || {}),
       status: 'settled',
       settled_at: parentSettledAt || null,
@@ -1695,7 +1696,6 @@ function resolveFunderOwnerVisibilitySnapshot(snapshot: Record<string, any> | nu
   return result;
 }
 
-const FUNDER_PERIOD_INTEREST_TOTAL_PERIODS = new Set(['week', 'month', 'quarter', 'halfYear', 'year']);
 const FUNDER_OWNER_GROUP_INTEREST_TERM_FIELDS = [
   'interest_rate_annual', 'interest_base', 'interest_base_currency',
   'interest_rate_currency', 'interest_payment_type', 'interest_start_date',
@@ -1732,25 +1732,20 @@ function syncFunderParticipantOwnerGroupInterestSnapshot(snapshot: Record<string
   return next;
 }
 
-// 周期总息和共同拥有者利息口径均是同一张订单的规则，不能因个人快照而分叉。
+// 周期总息属于个人展示设置，不能因保存其他拥有者或主订单而覆盖。
+// 只有两项明确的组级利息口径允许在此处投影进个人快照。
 function syncFunderParticipantPeriodInterestDisplayConfig(
   snapshot: Record<string, any>,
   parentOrder: any,
   participantDisplayConfig?: unknown,
 ): Record<string, any> {
-  const parentDisplayConfig = parseFunderDisplayConfig(parentOrder?.display_config);
   const currentParticipantDisplayConfig = {
     ...parseFunderDisplayConfig(snapshot.display_config),
     ...parseFunderDisplayConfig(participantDisplayConfig),
   };
-  const selectedPeriod = String(parentDisplayConfig.periodInterestTotalPeriod || 'month');
   return syncFunderParticipantOwnerGroupInterestSnapshot({
     ...snapshot,
-    display_config: JSON.stringify({
-      ...currentParticipantDisplayConfig,
-      periodInterestTotal: parentDisplayConfig.periodInterestTotal === true,
-      periodInterestTotalPeriod: FUNDER_PERIOD_INTEREST_TOTAL_PERIODS.has(selectedPeriod) ? selectedPeriod : 'month',
-    }),
+    display_config: JSON.stringify(currentParticipantDisplayConfig),
   }, parentOrder);
 }
 
@@ -1801,7 +1796,9 @@ const FUNDER_PARTICIPANT_COLLATERAL_FIELDS = [
 
 function syncFunderParticipantCollateralSnapshot(snapshot: Record<string, any> | null | undefined, parentOrder: any): Record<string, any> {
   const next = { ...(snapshot || {}) };
-  if (next.participant_collateral_override === true) return next;
+  // 各拥有者默认保留自己的担保。仅显式选择“共享担保（cross）”时，
+  // 才持续投影主订单担保；不能因保存别的字段把主订单担保回写给本人。
+  if (next.participant_collateral_override === true || next.collateral_share_mode !== 'cross') return next;
   for (const field of FUNDER_PARTICIPANT_COLLATERAL_FIELDS) {
     if (parentOrder && parentOrder[field] !== undefined) {
       next[field] = parentOrder[field];
@@ -1812,20 +1809,10 @@ function syncFunderParticipantCollateralSnapshot(snapshot: Record<string, any> |
   return next;
 }
 
-// 协作人保存的是完整的个人订单视图。购买币种（coin）可以与主订单不同，
-// 例如共同拥有者可独立选择 UNI 本位；绝不能在保存时回写成主订单的 USDT。
-// 订单类型和期权合约结构仍属于同一张关联订单，保持与主订单同步。
-const FUNDER_PARTICIPANT_SHARED_ASSET_FIELDS = ['asset_type', 'option_info'] as const;
-function syncFunderParticipantSharedAssetSnapshot(snapshot: Record<string, any> | null | undefined, parentOrder: any): Record<string, any> {
-  const next = { ...(snapshot || {}) };
-  for (const field of FUNDER_PARTICIPANT_SHARED_ASSET_FIELDS) {
-    if (parentOrder && parentOrder[field] !== undefined) {
-      next[field] = parentOrder[field];
-    } else {
-      delete next[field];
-    }
-  }
-  return next;
+// 协作人保存的是完整的个人订单视图。关联组只共享切换关系，
+// 不自动同步币种、数量、价格、资产类型或期权信息。
+function syncFunderParticipantSharedAssetSnapshot(snapshot: Record<string, any> | null | undefined, _parentOrder: any): Record<string, any> {
+  return { ...(snapshot || {}) };
 }
 
 /**
@@ -24057,9 +24044,9 @@ ${klinesSummary}
           } else {
             const settledAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
             for (const participant of participants) {
+              const persistedSnapshot = parseFunderParticipantSnapshot(participant.order_snapshot) || {};
               const snapshot = {
-                ...buildFunderParticipantSnapshot(order),
-                ...(parseFunderParticipantSnapshot(participant.order_snapshot) || {}),
+                ...(Object.keys(persistedSnapshot).length > 0 ? persistedSnapshot : buildFunderParticipantSnapshot(order)),
                 status: 'settled',
                 settled_at: settledAt,
               };
@@ -25664,9 +25651,8 @@ ${klinesSummary}
             }
           }
 
-          // 融资付息仅为记账展示。主订单结清/恢复时同步状态；担保物更新时同步默认担保字段。
-          // 参与者各自的金额、利率、备注和结息记录仍完整保留在独立快照中。
-          // 周期总息例外：它是整张订单的展示设置，所有个人视图（含已结清）统一跟随主订单。
+          // 融资付息仅为记账展示。主订单结清/恢复仅同步状态；
+          // 参与者的币种、数量、金额、利息、担保与展示设置均保留在独立快照中。
           if (shouldSyncParticipantSnapshot) {
             const [orderRows] = await conn.execute(
               'SELECT * FROM ledger_orders WHERE id = ? AND ledger_id = ? LIMIT 1',
@@ -25682,11 +25668,12 @@ ${klinesSummary}
             const activeParticipants = Array.isArray(participantRows) ? participantRows : [];
             participantCount = activeParticipants.length;
             for (const participant of activeParticipants) {
+              const persistedSnapshot = parseFunderParticipantSnapshot(participant.order_snapshot) || {};
+              const snapshotBase = Object.keys(persistedSnapshot).length > 0
+                ? persistedSnapshot
+                : buildFunderParticipantSnapshot(updatedOrder);
               let snapshot = syncFunderParticipantSharedAssetSnapshot(
-                syncFunderParticipantCollateralSnapshot({
-                  ...buildFunderParticipantSnapshot(updatedOrder),
-                  ...(parseFunderParticipantSnapshot(participant.order_snapshot) || {}),
-                }, updatedOrder),
+                syncFunderParticipantCollateralSnapshot(snapshotBase, updatedOrder),
                 updatedOrder,
               );
               if (shouldSyncParticipantStatus) {
@@ -25862,21 +25849,24 @@ ${klinesSummary}
               participantMap.set(targetUserId, participant);
             }
 
-            const snapshot = syncFunderParticipantSharedAssetSnapshot(
-              syncFunderParticipantCollateralSnapshot({
-                ...buildFunderParticipantSnapshot(parentOrder),
-                ...(parseFunderParticipantSnapshot(participant.order_snapshot) || {}),
-              }, parentOrder),
+            const persistedSnapshot = parseFunderParticipantSnapshot(participant.order_snapshot) || {};
+            const personalSnapshot = syncFunderParticipantSharedAssetSnapshot(
+              syncFunderParticipantCollateralSnapshot(
+                Object.keys(persistedSnapshot).length > 0 ? persistedSnapshot : buildFunderParticipantSnapshot(parentOrder),
+                parentOrder,
+              ),
               parentOrder,
             );
+            // 计算结清价可读取主订单作为缺字段的显示默认值，但绝不把这些默认值写回个人快照。
+            const settlementSource = { ...buildFunderParticipantSnapshot(parentOrder), ...personalSnapshot };
             const interestStartDate = String(
-              snapshot.interest_start_date || participant.interest_start_date || parentOrder.interest_start_date || '',
+              settlementSource.interest_start_date || participant.interest_start_date || parentOrder.interest_start_date || '',
             ).slice(0, 10);
             if (interestStartDate && input.interestEndDate < interestStartDate) {
               throw new TRPCError({ code: 'BAD_REQUEST', message: '结息截止日不能早于任一所选订单的计息开始日' });
             }
             const settlementSnapshot = await buildFunderSettlementSnapshot(
-              snapshot,
+              settlementSource,
               input.interestEndDate,
               ctx.user.id,
               input.settlementPrice,
@@ -25885,7 +25875,7 @@ ${klinesSummary}
             snapshotsToSave.push({
               participantId: Number(participant.id),
               snapshot: {
-                ...snapshot,
+                ...personalSnapshot,
                 status: 'settled',
                 settled_at: settledAt,
                 interest_end_date: input.interestEndDate,
@@ -25960,11 +25950,12 @@ ${klinesSummary}
           const row = Array.isArray(rows) ? rows[0] : null;
           if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: '未找到当前拥有者的联合订单视图' });
 
+          const persistedSnapshot = parseFunderParticipantSnapshot(row.order_snapshot) || {};
           const snapshot = syncFunderParticipantSharedAssetSnapshot(
-            syncFunderParticipantCollateralSnapshot({
-              ...buildFunderParticipantSnapshot(row),
-              ...(parseFunderParticipantSnapshot(row.order_snapshot) || {}),
-            }, row),
+            syncFunderParticipantCollateralSnapshot(
+              Object.keys(persistedSnapshot).length > 0 ? persistedSnapshot : buildFunderParticipantSnapshot(row),
+              row,
+            ),
             row,
           );
           const jointSegments = Array.isArray(snapshot.joint_order_segments) ? snapshot.joint_order_segments : [];
@@ -26675,21 +26666,22 @@ ${klinesSummary}
           const effectiveRole = p.role || existing?.role || 'funder';
           const isOwnerRole = effectiveRole === 'owner';
           const existingSnapshot = parseFunderParticipantSnapshot(existing?.order_snapshot) || {};
+          // 新加入拥有者可从主订单获得一次初始默认值；已有个人快照则永远只以本人为基底。
+          const snapshotBase = Object.keys(existingSnapshot).length > 0 ? existingSnapshot : parentSnapshot;
           const snapshot = syncFunderParticipantSharedAssetSnapshot(
             syncFunderParticipantCollateralSnapshot({
-              ...parentSnapshot,
-              ...existingSnapshot,
+              ...snapshotBase,
               // 未在本次表单编辑的字段必须保留该拥有者已有快照；尤其是自动补齐的主订单拥有者。
-              amount: p.amount === undefined ? (existingSnapshot.amount ?? parentSnapshot.amount ?? null) : (p.amount || null),
-              amount_currency: p.amountCurrency === undefined ? (existingSnapshot.amount_currency ?? parentSnapshot.amount_currency ?? null) : (p.amountCurrency || null),
-              interest_rate_annual: p.interestRate === undefined ? (existingSnapshot.interest_rate_annual ?? parentSnapshot.interest_rate_annual ?? null) : (p.interestRate || null),
-              interest_base: p.interestBase === undefined ? (existingSnapshot.interest_base ?? parentSnapshot.interest_base ?? null) : (p.interestBase || null),
-              interest_base_currency: p.interestBaseCurrency === undefined ? (existingSnapshot.interest_base_currency ?? parentSnapshot.interest_base_currency ?? null) : (p.interestBaseCurrency || null),
-              interest_payment_type: p.interestPaymentType === undefined ? (existingSnapshot.interest_payment_type ?? parentSnapshot.interest_payment_type ?? null) : (p.interestPaymentType || null),
-              interest_start_date: p.interestStartDate === undefined ? (existingSnapshot.interest_start_date ?? parentSnapshot.interest_start_date ?? null) : (p.interestStartDate || null),
-              interest_rate_currency: p.interestRateCurrency === undefined ? (existingSnapshot.interest_rate_currency ?? parentSnapshot.interest_rate_currency ?? null) : (p.interestRateCurrency || null),
-              display_config: p.displayConfig === undefined ? (existingSnapshot.display_config ?? parentSnapshot.display_config ?? null) : (p.displayConfig || null),
-              public_note: p.note === undefined ? (existingSnapshot.public_note ?? null) : p.note,
+              amount: p.amount === undefined ? (snapshotBase.amount ?? null) : (p.amount || null),
+              amount_currency: p.amountCurrency === undefined ? (snapshotBase.amount_currency ?? null) : (p.amountCurrency || null),
+              interest_rate_annual: p.interestRate === undefined ? (snapshotBase.interest_rate_annual ?? null) : (p.interestRate || null),
+              interest_base: p.interestBase === undefined ? (snapshotBase.interest_base ?? null) : (p.interestBase || null),
+              interest_base_currency: p.interestBaseCurrency === undefined ? (snapshotBase.interest_base_currency ?? null) : (p.interestBaseCurrency || null),
+              interest_payment_type: p.interestPaymentType === undefined ? (snapshotBase.interest_payment_type ?? null) : (p.interestPaymentType || null),
+              interest_start_date: p.interestStartDate === undefined ? (snapshotBase.interest_start_date ?? null) : (p.interestStartDate || null),
+              interest_rate_currency: p.interestRateCurrency === undefined ? (snapshotBase.interest_rate_currency ?? null) : (p.interestRateCurrency || null),
+              display_config: p.displayConfig === undefined ? (snapshotBase.display_config ?? null) : (p.displayConfig || null),
+              public_note: p.note === undefined ? (snapshotBase.public_note ?? null) : p.note,
             }, parentOrder),
             parentOrder,
           );
@@ -26805,11 +26797,14 @@ ${klinesSummary}
           ...(input.brokerAccountOverride !== undefined ? { broker_account: input.brokerAccountOverride || null } : {}),
           ...(input.note !== undefined ? { public_note: input.note || null } : {}),
         };
+        const persistedSnapshot = parseFunderParticipantSnapshot(snapshotSource.order_snapshot) || {};
+        const snapshotBase = Object.keys(persistedSnapshot).length > 0
+          ? persistedSnapshot
+          : buildFunderParticipantSnapshot(snapshotSource);
         const syncedSnapshot = syncFunderParticipantOwnerGroupInterestSnapshot(
           syncFunderParticipantSharedAssetSnapshot(
             syncFunderParticipantCollateralSnapshot({
-              ...buildFunderParticipantSnapshot(snapshotSource),
-              ...(parseFunderParticipantSnapshot(snapshotSource.order_snapshot) || {}),
+              ...snapshotBase,
               ...partialSnapshot,
             }, snapshotSource),
             snapshotSource,
@@ -26882,7 +26877,7 @@ ${klinesSummary}
           const [insertResult] = await conn.execute(
             `INSERT INTO ledger_order_participants (order_id, ledger_id, user_id, role, order_snapshot, sort_order)
              VALUES (?, ?, ?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE role = 'owner', previous_role = NULL, order_snapshot = VALUES(order_snapshot), sort_order = VALUES(sort_order), updated_at = NOW()`,
+             ON DUPLICATE KEY UPDATE role = 'owner', previous_role = NULL, order_snapshot = COALESCE(order_snapshot, VALUES(order_snapshot)), sort_order = VALUES(sort_order), updated_at = NOW()`,
             [input.orderId, input.ledgerId, input.userId, 'owner', JSON.stringify(initialSnapshot), 0],
           );
           row = {
@@ -26909,9 +26904,11 @@ ${klinesSummary}
             .filter((segment: any) => String(segment?.status || '').toLowerCase() === 'settled')
             .map((segment: any) => [String(segment.id || ''), segment]),
         );
+        const snapshotBase = Object.keys(persistedSnapshot).length > 0
+          ? persistedSnapshot
+          : buildFunderParticipantSnapshot(row);
         let mergedSnapshot = {
-          ...buildFunderParticipantSnapshot(row),
-          ...persistedSnapshot,
+          ...snapshotBase,
           ...buildFunderParticipantSnapshot(input.snapshot),
         };
         // 冻结估值只能由专门的结清接口写入或撤销；普通编辑不能让结清后的价格、汇率、日期恢复为实时值。
