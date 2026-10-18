@@ -167,8 +167,13 @@ function getUsdtFlowPresentation(item: { sourceType?: string; type?: string; amo
   const isExpense = item.type === "expense";
   const isWithdrawalRequestFreeze = /^提现申请冻结\s+#\d+\b/.test(rawNote);
   const isInternalTransfer = rawNote.includes("[站内转账]");
+  const isAfPrincipalHold = item.sourceType === "wallet_hold" && item.type === "principal_hold";
+  const isAfPrincipalRelease = item.sourceType === "wallet_hold" && item.type === "principal_hold_release";
   // 买入资产、手续费等旧手工扣款属于支出，不应误称为冻结。
   if (isExpense) return { label: "支出", detail: note, status: "已支出", isIn: false };
+  // 谷底征筹本金与融资订单担保共用项目冻结台账；只转移可用额，不能显示为支出。
+  if (isAfPrincipalHold) return { label: "谷底征筹本金冻结", detail: note, status: "本金已冻结", isIn: false };
+  if (isAfPrincipalRelease) return { label: "谷底征筹本金解冻", detail: note, status: "本金已解冻", isIn: true };
   // 提现申请先冻结余额；该条流水不是实际出金，需与后续审核结果区分展示。
   if (isWithdrawalRequestFreeze) return { label: "提现申请冻结", detail: note, status: "余额已冻结", isIn: false };
   if (isInternalTransfer) {
@@ -976,7 +981,7 @@ export default function Wallet() {
       // 与 CryptoWalletTransactions 完整明细页保持相同的主源与安全回退顺序。
       (ledger52UsdtHistoryQuery.data ?? []).forEach(put);
       (recentManualQuery.data ?? [])
-        .filter((item: any) => !String(item.note || "").startsWith("[CNY]") && !String(item.note || "").startsWith("[BALANCE_BASE]"))
+        .filter((item: any) => !String(item.note || "").startsWith("[CNY]") && !String(item.note || "").startsWith("[BALANCE_BASE]") && !String(item.note || "").startsWith("[AF52本金冻结迁移-"))
         .forEach((item: any) => put({
           ...item,
           id: `manual-fallback-${item.id}`,

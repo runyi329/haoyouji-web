@@ -106,8 +106,9 @@ async function fetch4hLowPrice(coin: string): Promise<{ low: number; scanFrom: D
 /**
  * 执行一次扫描：检查所有已成交买入订单，触发档位
  * @param targetOrderId 可选，指定只扫描某笔订单（新订单即时扫描用）
+ * @param targetCoin 可选，定向扫描时只刷新该订单币种，避免为了打开详情额外请求其他行情。
  */
-export async function runTierScan(targetOrderId?: number) {
+export async function runTierScan(targetOrderId?: number, targetCoin?: string) {
   // 全量扫描防重入：如果已有全量扫描在运行，跳过（即时扫描不受锁影响）
   if (!targetOrderId && globalScanLock) {
     console.log('[AF扫描] 已有全量扫描运行中，跳过本次');
@@ -127,7 +128,12 @@ export async function runTierScan(targetOrderId?: number) {
     ? `[AF扫描] 即时扫描订单#${targetOrderId}...`
     : "[AF扫描] 开始全量扫描收益权档位...");
 
-  for (const coin of Object.keys(COIN_SYMBOLS)) {
+  const targetCoinKey = String(targetCoin || '').toUpperCase();
+  const coinsToScan = targetCoinKey && COIN_SYMBOLS[targetCoinKey]
+    ? [targetCoinKey]
+    : Object.keys(COIN_SYMBOLS);
+
+  for (const coin of coinsToScan) {
     try {
       scanStatus[coin] = { ...scanStatus[coin], scanning: true, lastScanAt: scanStatus[coin]?.lastScanAt || "", lowestPrice: scanStatus[coin]?.lowestPrice || "" };
 
@@ -199,11 +205,11 @@ export async function runTierScan(targetOrderId?: number) {
                 scan_count = scan_count + 1,
                 last_scan_at = NOW(),
                 last_low_price = ?,
-                all_time_low_price = CASE WHEN ? < CAST(COALESCE(all_time_low_price, '999999999') AS DECIMAL(20,8)) THEN ? ELSE all_time_low_price END,
                 all_time_low_at = CASE WHEN ? < CAST(COALESCE(all_time_low_price, '999999999') AS DECIMAL(20,8)) THEN NOW() ELSE all_time_low_at END,
+                all_time_low_price = CASE WHEN ? < CAST(COALESCE(all_time_low_price, '999999999') AS DECIMAL(20,8)) THEN ? ELSE all_time_low_price END,
                 updated_at = NOW()
                WHERE order_id = ?`,
-              [lowStr, low, lowStr, low, order.id]
+              [lowStr, low, low, lowStr, order.id]
             );
           } else {
             // 插入新记录
@@ -278,7 +284,7 @@ export function triggerImmediateScan(orderId: number) {
 }
 
 /**
- * 启动定时扫描（每3秒一次，规范：crypto-price-unified）
+ * 启动定时扫描（每4小时一次，按4小时K线口径）
  */
 export function startTierScanner() {
   // 先立即执行一次

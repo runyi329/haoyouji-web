@@ -122,14 +122,14 @@ export default function AfProfitForecast() {
       .filter((o: any) => o.side === 'buy' && o.status === 'completed' && o.sellStatus !== 'sold')
       .reduce((sum: number, o: any) => {
         const amount = parseFloat(o.amount || '0');
-        const tradeValue = o.isGift ? amount : amount * 5.25;
+        const tradeValue = o.isGift ? amount : amount * orderMultiplier;
         const dailyFee = tradeValue / 0.75 * 0.12 / 365;
         const confirmedDate = new Date(o.createdAt);
         const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
         const holdDays = Math.max(1, Math.floor((todayStart.getTime() - confirmedDay.getTime()) / (1000*60*60*24)) + 1);
         return sum + dailyFee * holdDays;
       }, 0);
-  }, [coinOrders]);
+  }, [coinOrders, orderMultiplier]);
 
   // 含管理费均价 = (折后持仓成本 + 累计管理费) / 折后数量
   const avgCostWithFee = useMemo(() => {

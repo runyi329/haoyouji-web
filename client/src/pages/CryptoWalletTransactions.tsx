@@ -8,7 +8,7 @@ import { getInternalTransferPresentation } from "@/lib/walletTransferPresentatio
 import { AI_WALLET_SETTLEMENT_ASSETS } from "@shared/ai-wallet-assets";
 
 type PeriodFilter = "7d" | "30d" | "90d" | "custom" | "all";
-type TypeFilter = "all" | "recharge" | "transfer" | "order" | "reward" | "withdraw" | "expense" | "adjustment";
+type TypeFilter = "all" | "recharge" | "transfer" | "order" | "reward" | "withdraw" | "expense" | "adjustment" | "frozen";
 
 type HistoryEntry = {
   id: string;
@@ -20,6 +20,8 @@ type HistoryEntry = {
   secondary: string;
   status: string;
   type: Exclude<TypeFilter, "all">;
+  isFrozen?: boolean;
+  isRelease?: boolean;
 };
 
 const theme = {
@@ -50,6 +52,7 @@ const typeOptions: Array<{ value: TypeFilter; label: string }> = [
   { value: "reward", label: "奖励/入账" },
   { value: "withdraw", label: "提现" },
   { value: "expense", label: "支出" },
+  { value: "frozen", label: "冻结" },
   { value: "adjustment", label: "调整" },
 ];
 
@@ -90,6 +93,8 @@ function getUsdtEntry(item: any): HistoryEntry {
   const rawNote = String(item.note || item.description || "");
   const note = cleanNote(rawNote);
   const isExpense = item.type === "expense";
+  const isPrincipalHold = item.sourceType === "wallet_hold" && item.type === "principal_hold";
+  const isPrincipalRelease = item.sourceType === "wallet_hold" && item.type === "principal_hold_release";
   const isWithdrawalRequestFreeze = /^提现申请冻结\s+#\d+\b/.test(rawNote);
   const transfer = getInternalTransferPresentation(rawNote, incoming ? "in" : "out", item.counterpartyName);
   let type: Exclude<TypeFilter, "all"> = "adjustment";
@@ -97,7 +102,12 @@ function getUsdtEntry(item: any): HistoryEntry {
   let secondary = note || "USDT 资金流水";
   let status = incoming ? "已入账" : "已扣除";
 
-  if (isExpense) {
+  if (isPrincipalHold || isPrincipalRelease) {
+    type = "frozen";
+    primary = isPrincipalRelease ? "谷底征筹本金解冻" : "谷底征筹本金冻结";
+    secondary = note || (isPrincipalRelease ? "订单本金已回到可用余额" : "订单本金已从可用余额转入冻结");
+    status = isPrincipalRelease ? "本金已解冻" : "本金已冻结";
+  } else if (isExpense) {
     type = "expense";
     primary = "支出";
     secondary = note || "钱包支出";
@@ -146,6 +156,8 @@ function getUsdtEntry(item: any): HistoryEntry {
     secondary,
     status,
     type,
+    isFrozen: isPrincipalHold || isPrincipalRelease,
+    isRelease: isPrincipalRelease,
   };
 }
 
@@ -364,12 +376,15 @@ export default function CryptoWalletTransactions() {
             <div>
               {entries.map((entry, index) => {
                 const iconSrc = getCryptoAssetIconSrc(entry.assetCode);
-                const incoming = entry.amount >= 0;
+                const frozen = entry.isFrozen === true;
+                const incoming = frozen ? entry.isRelease === true : entry.amount >= 0;
+                const amountColor = frozen ? (entry.isRelease ? theme.green : theme.goldLight) : (incoming ? theme.green : theme.red);
+                const markerColor = frozen ? (entry.isRelease ? theme.green : theme.gold) : (incoming ? theme.green : theme.red);
                 return <div key={entry.id} className="flex items-start justify-between gap-3 px-4 py-3.5" style={{ borderBottom: index < entries.length - 1 ? `1px solid ${theme.divider}` : "none" }}>
                   <div className="flex min-w-0 flex-1 items-start gap-2.5">
                     <span className="relative mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,.06)", border: `1px solid ${theme.border}` }}>
                       {iconSrc ? <img src={iconSrc} alt={`${entry.assetCode} 币种图标`} className="h-full w-full object-contain" /> : <span className="text-xs font-bold" style={{ color: theme.goldLight }}>{entry.assetCode.slice(0, 1)}</span>}
-                      <span className="absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full border-2" style={{ background: incoming ? theme.green : theme.red, borderColor: theme.panel }} />
+                      <span className="absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full border-2" style={{ background: markerColor, borderColor: theme.panel }} />
                     </span>
                     <div className="min-w-0">
                       <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,.9)" }}>{entry.primary} <span className="font-normal" style={{ color: theme.muted }}>· {entry.assetCode}</span></p>
@@ -379,7 +394,7 @@ export default function CryptoWalletTransactions() {
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="text-sm font-bold tabular-nums" style={{ color: incoming ? theme.green : theme.red }}>{incoming ? "+" : "-"}{Math.abs(entry.amount).toLocaleString("zh-CN", { minimumFractionDigits: entry.assetCode === "USDT" ? 2 : 0, maximumFractionDigits: amountDigits(entry.assetCode) })}</p>
+                    <p className="text-sm font-bold tabular-nums" style={{ color: amountColor }}>{frozen ? `${entry.isRelease ? "解冻 " : "冻结 "}` : (incoming ? "+" : "-")}{Math.abs(entry.amount).toLocaleString("zh-CN", { minimumFractionDigits: entry.assetCode === "USDT" ? 2 : 0, maximumFractionDigits: amountDigits(entry.assetCode) })}</p>
                     <p className="mt-0.5 text-[10px] font-medium" style={{ color: theme.muted }}>{entry.assetCode}</p>
                   </div>
                 </div>;
@@ -388,7 +403,7 @@ export default function CryptoWalletTransactions() {
           )}
         </section>
 
-        <p className="px-1 text-center text-[10px] leading-4" style={{ color: theme.muted }}>仅展示真实影响资产余额的流水；担保冻结和解冻仅改变可用/冻结分层，不在资金明细中重复展示。</p>
+        <p className="px-1 text-center text-[10px] leading-4" style={{ color: theme.muted }}>订单本金冻结仅在可用额与冻结额之间划转，不会减少总资产；其余资金流水按实际收支展示。</p>
       </main>
     </div>
   );

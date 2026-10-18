@@ -7,9 +7,10 @@ import { FunderOrderCard } from "@/components/FunderOrderCard";
 import { OrderDetail as GdOrderDetail } from "@/pages/CryptoPrediction";
 
 // 持币量格式化：整数位数 + 小数位数 = 5位，不足补0
-function formatQty(val: string | number): string {
+function formatQty(val: string | number, coin?: string): string {
   const n = parseFloat(String(val) || '0');
-  if (isNaN(n)) return '0.0000';
+  if (isNaN(n)) return coin === 'ETH' ? '0.00' : '0.0000';
+  if (coin === 'ETH') return n.toFixed(2);
   const intPart = Math.floor(Math.abs(n)).toString();
   const intLen = intPart === '0' ? 1 : intPart.length;
   const decLen = Math.max(0, 5 - intLen);
@@ -25,9 +26,9 @@ const EQUITY_DISCOUNT_RATES: Record<number, number> = {
   5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
 };
 
-function calcFeeItem(o: any) {
+function calcFeeItem(o: any, orderMultiplier: number) {
   const amount = parseFloat(o.amount || '0');
-  const tradeValue = o.isGift ? amount : amount * 5.25;
+  const tradeValue = o.isGift ? amount : amount * orderMultiplier;
   const dailyFee = tradeValue / 0.75 * 0.12 / 365;
   const confirmedDate = new Date(o.createdAt);
   const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
@@ -191,6 +192,11 @@ export default function AfFeeDetail() {
     { ledgerId },
     { enabled: !!ledgerId }
   );
+  const { data: switch525Data } = trpc.ledger.af525GetSwitch.useQuery(
+    { ledgerId },
+    { enabled: ledgerId === 52, staleTime: 30_000, refetchOnWindowFocus: true }
+  );
+  const orderMultiplier = ledgerId === 52 && (switch525Data as any)?.enabled ? 5 : 5.25;
 
   // 融资付息订单（仅切到该 Tab 时加载）
   const { data: financeOrdersData, isLoading: financeLoading } = trpc.ledger.financeGetOrders.useQuery(
@@ -254,7 +260,7 @@ export default function AfFeeDetail() {
 
   const feeItems = ((orders as any[]) ?? [])
     .filter((o: any) => o.side === 'buy' && o.status === 'completed')
-    .map(calcFeeItem);
+    .map((order: any) => calcFeeItem(order, orderMultiplier));
 
   const userMap = new Map<string, { userId: string; nickname: string; username: string; orders: ReturnType<typeof calcFeeItem>[] }>();
   for (const item of feeItems) {
@@ -865,7 +871,7 @@ export default function AfFeeDetail() {
                               <td className="text-[10px] text-gray-400 text-center px-2 py-1.5 border-r border-gray-200 font-mono">{String(item.id).padStart(4, '0').slice(-4)}</td>
                               <td className="text-[10px] text-center px-2 py-1.5 border-r border-gray-200 font-semibold" style={{ color: (item as any).tierMode === 'linear' ? '#3B82F6' : '#0d9488' }}>{(item as any).tierMode === 'linear' ? 'L' : `D${item.equityTier}`}</td>
                               <td className="text-[10px] text-gray-400 text-center px-2 py-1.5 border-r border-gray-200">{item.coin}</td>
-                              <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{formatQty((item as any).quantity||'0')}</td>
+                              <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{formatQty((item as any).quantity||'0', item.coin)}</td>
                               <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{Math.round(parseFloat(item.amount||'0'))}u</td>
                               <td className="text-[11px] font-bold text-gray-800 text-right px-3 py-1.5">{item.dailyFee.toFixed(2)}</td>
                             </tr>
@@ -991,7 +997,7 @@ export default function AfFeeDetail() {
                         {[...person.orders].sort((a: any, b: any) => {
                           const dir = gjPersonOrderSortAsc ? 1 : -1;
                           if (gjPersonOrderSort === 'days') return ((a.holdDays || 0) - (b.holdDays || 0)) * dir;
-                          if (gjPersonOrderSort === 'amount') return ((a.tradeValue || parseFloat(a.amount||'0')*5.25) - (b.tradeValue || parseFloat(b.amount||'0')*5.25)) * dir;
+                          if (gjPersonOrderSort === 'amount') return ((a.tradeValue || parseFloat(a.amount||'0')*orderMultiplier) - (b.tradeValue || parseFloat(b.amount||'0')*orderMultiplier)) * dir;
                           if (gjPersonOrderSort === 'acc') return (a.totalFee - b.totalFee) * dir;
                           if (gjPersonOrderSort === 'paid') return ((parseFloat(a.prepaidFee||'0')) - (parseFloat(b.prepaidFee||'0'))) * dir;
                           if (gjPersonOrderSort === 'pending') return ((-a.totalFee + parseFloat(a.prepaidFee||'0')) - (-b.totalFee + parseFloat(b.prepaidFee||'0'))) * dir;
@@ -1011,7 +1017,7 @@ export default function AfFeeDetail() {
                           const qty = parseFloat((item as any).quantity || '0');
                           const discountRate = (item as any).discountRate ?? 1.0;
                           const qtyDiscounted = qty * discountRate;
-                          const fmtQty = (v: number) => v.toFixed(2);
+                          const fmtQty = (v: number) => item.coin === 'ETH' ? v.toFixed(2) : v.toFixed(2);
                           const qtyDisplay = qty > 0 ? (fmtQty(qty) + '→' + fmtQty(qtyDiscounted)) : '-';
                           const gjOrdRow1 = [
                             { label: '币种 ' + (item.coin || '-'), value: qtyDisplay, color: coinColor, bold: false },
@@ -1020,7 +1026,7 @@ export default function AfFeeDetail() {
                             { label: '持有', value: (item.holdDays || 0) + '天', color: '#475569' },
                           ];
                           const gjOrdRow2 = [
-                            { label: '本金(U)', value: Math.round((item as any).isGift ? parseFloat(item.amount||'0') : (item as any).tradeValue || parseFloat(item.amount||'0') * 5.25).toString(), color: '#334155' },
+                            { label: '本金(U)', value: Math.round((item as any).isGift ? parseFloat(item.amount||'0') : (item as any).tradeValue || parseFloat(item.amount||'0') * orderMultiplier).toString(), color: '#334155' },
                             { label: '累计应收', value: numDisplay(accInterestSigned), color: numColor(accInterestSigned) },
                             { label: '已收(U)', value: prepaidFee > 0 ? prepaidFee.toFixed(2) : '0.00', color: prepaidFee > 0 ? '#dc2626' : '#94a3b8' }, // 已收是正数红色（收进来的）
                             { label: '待收(U)', value: numDisplay(remainingFee), color: numColor(remainingFee), isCharge: true },
@@ -1143,7 +1149,7 @@ export default function AfFeeDetail() {
                       </div>
                       <div className="flex gap-4 mt-1">
                         <span className="text-[10px] text-gray-400 whitespace-nowrap">持仓金额 <span className="text-orange-500 font-semibold">{Math.round(cg.totalHolding)}</span> u</span>
-                        <span className="text-[10px] text-gray-400 whitespace-nowrap">持币量 <span className="text-purple-500 font-semibold">{formatQty(cg.totalQty)}</span></span>
+                        <span className="text-[10px] text-gray-400 whitespace-nowrap">持币量 <span className="text-purple-500 font-semibold">{formatQty(cg.totalQty, cg.coin)}</span></span>
                       </div>
                       <div className="flex gap-4 mt-1">
                         <span className="text-[10px] text-gray-400 whitespace-nowrap">月化 <span className="text-blue-500 font-semibold">{Math.round(cg.dailyTotal*30)}</span> u</span>
@@ -1173,7 +1179,7 @@ export default function AfFeeDetail() {
                               </td>
                               <td className="text-[10px] text-gray-400 text-center px-2 py-1.5 border-r border-gray-200 font-mono">{String(item.id).padStart(4,'0').slice(-4)}</td>
                               <td className="text-[10px] text-center px-2 py-1.5 border-r border-gray-200 font-semibold" style={{ color: (item as any).tierMode === 'linear' ? '#3B82F6' : '#0d9488' }}>{(item as any).tierMode === 'linear' ? 'L' : `D${item.equityTier}`}</td>
-                              <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{formatQty((item as any).quantity||'0')}</td>
+                              <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{formatQty((item as any).quantity||'0', item.coin)}</td>
                               <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{Math.round(parseFloat(item.amount||'0'))}u</td>
                               <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{item.holdDays}天</td>
                               <td className="text-[11px] font-bold text-gray-800 text-right px-3 py-1.5">{item.dailyFee.toFixed(2)}</td>
@@ -1184,7 +1190,7 @@ export default function AfFeeDetail() {
                             <tr className="bg-gray-50">
                               <td className="text-[10px] text-gray-500 font-semibold px-3 py-1.5 border-t border-gray-200" colSpan={2}>合计</td>
                               <td className="text-[10px] text-gray-500 px-2 py-1.5 border-t border-gray-200"></td>
-                              <td className="text-[10px] font-bold text-purple-600 text-right px-2 py-1.5 border-t border-gray-200">{formatQty(cg.totalQty)}</td>
+                              <td className="text-[10px] font-bold text-purple-600 text-right px-2 py-1.5 border-t border-gray-200">{formatQty(cg.totalQty, cg.coin)}</td>
                               <td className="text-[10px] font-bold text-orange-500 text-right px-2 py-1.5 border-t border-gray-200">{Math.round(cg.totalHolding)}u</td>
                               <td className="text-[10px] text-gray-500 px-2 py-1.5 border-t border-gray-200"></td>
                               <td className="text-xs font-bold text-blue-600 text-right px-3 py-1.5 border-t border-gray-200">{cg.dailyTotal.toFixed(2)}</td>
@@ -2434,7 +2440,7 @@ export default function AfFeeDetail() {
                   <span className="font-medium">{amount.toFixed(2)} U</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-100 pb-1.5">
-                  <span className="text-gray-500">订单价值{aprInfo.isGift ? '（赠单）' : '（×5.25）'}</span>
+                  <span className="text-gray-500">订单价值{aprInfo.isGift ? '（赠单）' : `（×${orderMultiplier}）`}</span>
                   <span className="font-medium">{tradeValue.toFixed(2)} U</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-100 pb-1.5">
@@ -2540,7 +2546,7 @@ export default function AfFeeDetail() {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <GdOrderDetail order={gjDetailOrder} timeStr={gjDetailOrder?.createdAt ? new Date(gjDetailOrder.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''} ledgerId={ledgerId} viewAsUserId={gjDetailOrder?.userId || undefined} />
+            <GdOrderDetail order={gjDetailOrder} timeStr={gjDetailOrder?.createdAt ? new Date(gjDetailOrder.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''} ledgerId={ledgerId} viewAsUserId={gjDetailOrder?.userId || undefined} orderMultiplier={orderMultiplier} />
           </div>
         </div>
       )}

@@ -1,7 +1,9 @@
 // Service Worker for 脉动 PWA
 // 版本号：每次更新 SW 时需要修改此版本号以触发更新
-const CACHE_VERSION = 'v2.3.2';
+// 热预览必须立刻拿到最新界面模块；版本变化会让已打开的手机页面主动更新工作线程。
+const CACHE_VERSION = 'v2.3.3';
 const CACHE_NAME = `maidong-cache-${CACHE_VERSION}`;
+const IS_MANUS_PREVIEW = /\.manus\.computer$/i.test(self.location.hostname);
 
 // 需要缓存的静态资源（不缓存 index.html，避免部署后旧缓存导致白屏）
 const STATIC_CACHE_URLS = [
@@ -67,6 +69,12 @@ self.addEventListener('fetch', (event) => {
 
   // API 请求：始终走网络，不缓存（避免用户切换后返回旧用户数据）
   if (url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  // Manus 热链接用于实时验收，不能让 Safari/PWA 用离线资源覆盖最新的 Vite 模块。
+  if (IS_MANUS_PREVIEW) {
+    event.respondWith(fetch(request, { cache: 'no-store' }));
     return;
   }
 

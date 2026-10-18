@@ -2305,14 +2305,20 @@ export default function AfRechargeManage() {
               ) : (
                 <div className="space-y-2">
                   {adjFilteredHistory.map((r: any, i: number) => {
-                    const typeLabel: Record<string, string> = { recharge: '充值到账', consume: '消费', refund: '退款', reward: '奖励', withdraw: '提现', expense: '支出', reward_clawback: '奖励回收', commission: '佣金' };
+                    const typeLabel: Record<string, string> = { recharge: '充值到账', consume: '消费', refund: '退款', reward: '奖励', withdraw: '提现', expense: '支出', reward_clawback: '奖励回收', commission: '佣金', principal_hold: '业务冻结', principal_hold_release: '业务解冻' };
                     const sourceType = String(r.sourceType ?? '');
                     const sourceId = Number(String(r.id ?? '').split('_')[1] || 0);
                     const amount = Number(r.amount ?? 0);
                     const noteText = cleanAdjustmentNote(r.note ?? r.description);
                     const isInternalTransfer = String(r.note ?? r.description ?? '').includes('[站内转账]');
+                    const isPrincipalHold = sourceType === 'wallet_hold' && String(r.type ?? '') === 'principal_hold';
+                    const isPrincipalRelease = sourceType === 'wallet_hold' && String(r.type ?? '') === 'principal_hold_release';
                     const label = isInternalTransfer
                       ? (amount >= 0 ? '站内转账收款' : '站内转账汇款')
+                      : isPrincipalHold
+                      ? '业务冻结'
+                      : isPrincipalRelease
+                      ? '业务解冻'
                       : sourceType === 'recharge'
                       ? '充值到账'
                       : sourceType === 'manual'
@@ -2321,7 +2327,7 @@ export default function AfRechargeManage() {
                           ? '历史期初余额'
                           : typeLabel[r.type] ?? r.type ?? '系统流水';
                     const historyId = sourceType === 'recharge' ? Number(r.historyId || 0) : sourceType === 'balance_history' ? sourceId : 0;
-                    const canRevoke = !isInternalTransfer && sourceId > 0 && sourceType !== 'opening' && !noteText.includes('撤回误操作');
+                    const canRevoke = !isInternalTransfer && sourceType !== 'wallet_hold' && sourceId > 0 && sourceType !== 'opening' && !noteText.includes('撤回误操作');
                     const canEdit = !isInternalTransfer && (sourceType === 'manual' ? sourceId > 0 : historyId > 0);
                     return (
                       <div key={r.id ?? i} className="py-2 border-b border-gray-50 last:border-0">
@@ -2329,7 +2335,7 @@ export default function AfRechargeManage() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 mb-0.5">
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600">USDT</span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{label}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isPrincipalHold ? 'bg-amber-50 text-amber-700' : isPrincipalRelease ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{label}</span>
                             </div>
                             {noteText && <p className="text-[12px] leading-5 text-gray-600 whitespace-normal break-words">{noteText}</p>}
                             <p className="text-[10px] text-gray-400 whitespace-nowrap">{new Date(r.createdAt).toLocaleString('zh-CN')}</p>
@@ -2338,7 +2344,7 @@ export default function AfRechargeManage() {
                             )}
                           </div>
                           <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
-                            <p className={`text-[14px] font-bold ${amount >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                            <p className={`text-[14px] font-bold ${isPrincipalHold ? 'text-amber-700' : isPrincipalRelease ? 'text-green-600' : amount >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                               {amount >= 0 ? '+' : ''}{amount.toFixed(2)}
                             </p>
                             {canRevoke && (
@@ -2643,6 +2649,8 @@ export default function AfRechargeManage() {
                     management_fee: '管理费',
                     manual: '手动调账',
                     admin_adjustment: '调账',
+                    principal_hold: '业务冻结',
+                    principal_hold_release: '业务解冻',
                     transfer_in: '站内转账收款',
                     transfer_out: '站内转账汇款',
                   };
@@ -2653,18 +2661,22 @@ export default function AfRechargeManage() {
                   const isInternalTransfer = String(r.note ?? '').includes('[站内转账]');
                   // 担保冻结/解冻的中文动作和订单编号已在下一行备注完整显示，不重复渲染内部英文事件名。
                   const isCollateralFlow = ['collateral_lock', 'collateral_release'].includes(String(r.type ?? ''));
+                  const isAfPrincipalFlow = sourceType === 'wallet_hold' && String(r.note ?? '').startsWith('谷底征筹本金');
                   const isMultiAssetLedger = sourceType === 'multi_asset';
                   const isMultiAssetAdminAdjustment = isMultiAssetLedger
                     && String(r.type ?? '') === 'admin_adjustment'
                     && !String(r.note ?? '').startsWith('[ADMIN_REVERSAL:');
                   const isManualAdjustment = sourceType === 'manual' || isMultiAssetAdminAdjustment;
-                  const displayTypeLabel = isManualAdjustment
+                  const displayTypeLabel = isAfPrincipalFlow
+                    ? String(r.type ?? '') === 'collateral_release' ? '业务解冻' : '业务冻结'
+                    : isManualAdjustment
                     ? amount >= 0 ? '收入' : '支出'
                     : typeLabel[r.type] ?? r.type;
                   const canRevoke = sourceId > 0
                     && !['order_buy', 'order_settlement', 'management_fee'].includes(String(r.type ?? ''))
                     && !String(r.note ?? '').includes('撤回误操作')
                     && !isInternalTransfer
+                    && sourceType !== 'wallet_hold'
                     && (!isMultiAssetLedger || isMultiAssetAdminAdjustment);
                   const canEditNote = !isInternalTransfer && sourceId > 0 && (
                     sourceType === 'manual'
@@ -2681,7 +2693,7 @@ export default function AfRechargeManage() {
                             <span className="text-[12px] font-semibold text-black">{r.userName}</span>
                             <span className="text-[10px] text-gray-400">@{r.username}</span>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${r.currency === 'CNY' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>{r.currency}</span>
-                            {!isCollateralFlow && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{isInternalTransfer ? '站内转账' : displayTypeLabel}</span>}
+                            {(!isCollateralFlow || isAfPrincipalFlow) && <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isAfPrincipalFlow ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>{isInternalTransfer ? '站内转账' : displayTypeLabel}</span>}
                           </div>
                           {noteText && <p className="text-[11px] leading-5 text-gray-500 whitespace-normal break-words">{noteText}</p>}
                           <p className="text-[10px] text-gray-400 mt-0.5 whitespace-nowrap">{new Date(r.createdAt).toLocaleString("zh-CN")}</p>
@@ -2692,7 +2704,7 @@ export default function AfRechargeManage() {
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
-                          <p className={`text-[14px] font-bold ${Number(r.amount) >= 0 ? "text-green-600" : "text-red-500"}`}>
+                          <p className={`text-[14px] font-bold ${isAfPrincipalFlow ? (Number(r.amount) >= 0 ? "text-green-600" : "text-amber-700") : Number(r.amount) >= 0 ? "text-green-600" : "text-red-500"}`}>
                             {Number(r.amount) >= 0 ? "+" : ""}{r.currency === "CNY" ? "¥" : ""}{Number(r.amount).toFixed(displayDigits)}
                           </p>
                           {canRevoke && (

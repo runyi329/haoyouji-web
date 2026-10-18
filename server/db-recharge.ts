@@ -1631,6 +1631,7 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
      WHERE user_id = ?
        AND amount != 0
        AND note NOT LIKE '[BALANCE_BASE]%'
+       AND COALESCE(note, '') NOT LIKE '[AF52本金冻结迁移-%'
      ORDER BY created_at ASC`,
     [userId]
   ) as any[];

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, Pencil, Check, X, ChevronRight, ChevronDown, Trash2, Search } from "lucide-react";
+import { ArrowLeft, Pencil, Check, X, ChevronRight, ChevronDown, Trash2, Search, MoreHorizontal } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,8 +14,40 @@ import {
 // AfFeeDetail 页面通过路由跳转，已删除内嵌 FeeDetailModal
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
 
 // 综合状态标签（买入状态 + 卖出状态）
+const ORDER_TAG_CLASS = "inline-flex shrink-0 items-center rounded-[1px] px-1.5 py-0.5 text-[10px] font-medium leading-none text-white";
+const ORDER_TAG_COLORS = {
+  normal: "bg-blue-600",
+  gift: "bg-violet-600",
+  special: "bg-teal-600",
+  advanced: "bg-indigo-600",
+  linear: "bg-cyan-600",
+  step: "bg-sky-700",
+  metadata: "bg-slate-600",
+  holding: "bg-emerald-600",
+  selling: "bg-purple-600",
+  sold: "bg-sky-600",
+  cancelled: "bg-slate-500",
+  pending: "bg-indigo-500",
+  fee: "bg-cyan-700",
+} as const;
+
+const formatAfQuantity = (value: unknown, coin: string, decimals = 8): string => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return String(value ?? '');
+  return coin === 'ETH' ? amount.toFixed(2) : amount.toFixed(decimals).replace(/\.?0+$/, '');
+};
+
+// 优先显示中文用户名或昵称；两个字段都没有中文时再回退显示英文名称。
+const getPreferredAfName = (username: unknown, nickname: unknown, fallback: string): string => {
+  const candidates = [nickname, username]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map(value => value.trim());
+  return candidates.find(value => /[\u3400-\u9fff]/.test(value)) ?? candidates[0] ?? fallback;
+};
+
 const getStatusDisplay = (order: any) => {
   if (order.isAdvanced) {
     if (order.advancedStatus === 'cancelled' || order.status === 'cancelled') return { label: '已撤单', color: 'text-gray-400' };
@@ -87,14 +119,14 @@ const getTodayBJDateOnly = (): Date => {
 };
 
 // 管理费明细弹窗组件
-function FeeDetailModal({ orders, onClose }: { orders: any[], onClose: () => void }) {
+function FeeDetailModal({ orders, onClose, orderMultiplier }: { orders: any[], onClose: () => void, orderMultiplier: number }) {
   const todayStart = getTodayBJDateOnly();
 
   const feeItems = orders
     .filter((o: any) => !(o as any).isSimulated && o.side === 'buy' && o.status === 'completed')
     .map((o: any) => {
       const amount = parseFloat(o.amount || '0');
-      const tradeValue = o.isGift ? amount : amount * 5.25;
+      const tradeValue = o.isGift ? amount : amount * orderMultiplier;
       const dailyFee = tradeValue / 0.75 * 0.12 / 365;
       // 管理费从下单时间（created_at）开始计算，修改价格等操作不影响管理费
       const confirmedDay = getBJDateOnly(o.createdAt);
@@ -147,14 +179,14 @@ function FeeDetailModal({ orders, onClose }: { orders: any[], onClose: () => voi
             <div key={item.id} className="bg-gray-50 rounded-xl p-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[11px] font-mono text-gray-400">{item.orderNo}</span>
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                  item.feeType === '已结清' ? 'bg-gray-100 text-gray-500' : 'bg-orange-50 text-orange-500'
+                <span className={`${ORDER_TAG_CLASS} ${
+                  item.feeType === '已结清' ? ORDER_TAG_COLORS.cancelled : ORDER_TAG_COLORS.fee
                 }`}>{item.feeType}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-xs text-gray-600 font-medium">{item.username && item.nickname && item.username !== item.nickname ? `${item.username}/${item.nickname}` : item.nickname || item.username}</span>
-                  {item.isGift && <span className="ml-1 text-[10px] text-red-400">赠</span>}
+                  {item.isGift && <span className={`ml-1 ${ORDER_TAG_CLASS} ${ORDER_TAG_COLORS.gift}`}>赠单</span>}
                 </div>
                 <span className="text-base font-bold text-purple-700">{item.totalFee.toFixed(4)} U</span>
               </div>
@@ -184,64 +216,64 @@ function FeeDetailModal({ orders, onClose }: { orders: any[], onClose: () => voi
 }
 
 // 订单详情管理费行（独立子组件，避免在IIFE中使用Hooks）
-function FeeRow({ order, ledgerId, viewAsUserId }: { order: any; ledgerId: number; viewAsUserId?: number }) {
-  const [feeExpanded, setFeeExpanded] = useState(false);
-  const { data: prepaidLogs } = trpc.ledger.afGetPrepaidFeeLogs.useQuery(
-    { ledgerId: order.ledgerId || ledgerId, orderId: order.id, viewAsUserId: viewAsUserId || undefined },
-    { enabled: feeExpanded }
-  );
+function FeeRow({ order, ledgerId, orderMultiplier, isExpanded = true, onToggle }: { order: any; ledgerId: number; orderMultiplier: number; isExpanded?: boolean; onToggle?: () => void }) {
   const amount = parseFloat(order.amount);
-  const tradeValue = order.isGift ? amount : amount * 5.25;
-  const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+  const tradeValue = order.isGift ? amount : amount * orderMultiplier;
+  const dailyFee = tradeValue * 0.16 / 365;
   const startDay = getBJDateOnly(order.createdAt);
   const endDay = (order.sellStatus === 'sold' && order.sellConfirmedAt)
     ? getBJDateOnly(order.sellConfirmedAt)
     : getTodayBJDateOnly();
   const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
   const totalFee = dailyFee * holdDays;
+  const isGiftOrder = order.isGift === true || order.isGift === 1;
+  // 手续费仅适用于赠单：按赠送价值的一次性千分之二计算。
+  const handlingFee = isGiftOrder ? tradeValue * 0.002 : 0;
+  const totalPayable = totalFee + handlingFee;
   const isPending = order.status === 'pending';
   const isSold = order.sellStatus === 'sold';
-  // fmtDay: UTC日期即为北京时间日期
-  const fmtDay = (d: Date) => `${d.getUTCMonth()+1}/${d.getUTCDate()}`;
-  const prepaidFee = order.prepaidFee || 0;
-  const remainingFee = Math.max(0, totalFee - prepaidFee);
+  // UTC日期即为北京时间日期，管理端以中文日期展示。
+  const fmtDay = (d: Date) => `${d.getUTCMonth()+1}月${d.getUTCDate()}日`;
   return (
-    <div className="col-span-2">
-      <div className="flex items-center gap-1">
-        <span className="text-gray-400 w-16 shrink-0">待付管理费</span>
-        <span className={`font-medium ${isPending ? 'text-gray-400' : isSold ? 'text-gray-500' : 'text-orange-500'}`}>
-          {remainingFee.toFixed(4)} <span className="text-gray-400">u</span>
+    <div className={`mt-0 border-t border-gray-200 ${isExpanded ? 'px-3 py-3 text-xs space-y-2' : 'px-3 py-2 text-[11px] leading-4'}`}>
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={!onToggle}
+        aria-expanded={isExpanded}
+        className={`${isExpanded ? 'mb-3' : ''} flex w-full items-center justify-between gap-3 text-left disabled:cursor-default`}
+      >
+        <span className="inline-flex items-center gap-1 font-semibold text-blue-600">
+          管理费
+          {onToggle && <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />}
         </span>
-        <span className="text-gray-400 ml-1 text-[10px]">({fmtDay(startDay)}→{fmtDay(endDay)} {holdDays}天{isPending ? ' 撤单则作废' : ''}{isSold ? ' ✓已停计' : ''})</span>
+        <span className="min-w-0 text-right font-medium text-gray-900">{fmtDay(startDay)}至{fmtDay(endDay)}，共{holdDays}天{isPending ? ' · 撤单则作废' : ''}{isSold ? ' · 已停计' : ''}</span>
+      </button>
+      {isExpanded && <div className="space-y-2">
+      <div className="flex justify-between">
+        <span className="text-gray-900">每日费用</span>
+        <span className="flex shrink-0 items-baseline gap-1 font-medium text-gray-900">
+          <span className="whitespace-nowrap font-normal text-gray-400">{tradeValue.toFixed(2)} × 年化16% ÷ 365 =</span>
+          <span>{dailyFee.toFixed(2)} u</span>
+        </span>
       </div>
-      <div className="mt-2 bg-gray-50 rounded-xl p-3 text-xs space-y-1.5">
+      {isGiftOrder && (
         <div className="flex justify-between">
-          <span className="text-gray-500">实际管理费</span>
-          <span className="font-medium text-gray-700">{totalFee.toFixed(4)} u
-            <span className="text-gray-400 ml-1">({dailyFee.toFixed(4)}/天×{holdDays}天)</span>
+          <span className="text-gray-900">手续费</span>
+          <span className="flex shrink-0 items-baseline gap-1 font-medium text-gray-900">
+            <span className="whitespace-nowrap font-normal text-gray-400">{tradeValue.toFixed(2)} × 0.2% =</span>
+            <span>{handlingFee.toFixed(2)} u</span>
           </span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">已付管理费</span>
-          <span className="font-medium text-green-600">{prepaidFee.toFixed(4)} u</span>
-        </div>
-        <div className="flex justify-between border-t border-gray-200 pt-1.5">
-          <span className="text-gray-500">待付管理费</span>
-          <span className="font-bold text-orange-500">{remainingFee.toFixed(4)} u</span>
-        </div>
-        {prepaidLogs && prepaidLogs.logs.length > 0 && (
-          <div className="mt-2 border-t border-gray-200 pt-2">
-            <div className="text-gray-400 mb-1">已付记录</div>
-            {prepaidLogs.logs.map((log: any, i: number) => (
-              <div key={i} className="flex justify-between text-[10px] py-0.5">
-                <span className="text-gray-400">{log.createdAt?.slice(0,10)}</span>
-                <span className="text-green-600 font-medium">+{log.amount.toFixed(4)} u</span>
-                {log.note && <span className="text-gray-400 ml-1 truncate max-w-[80px]">{log.note}</span>}
-              </div>
-            ))}
-          </div>
-        )}
+      )}
+      <div className="flex justify-between">
+        <span className="text-gray-900">应付费用</span>
+        <span className="flex shrink-0 items-baseline gap-1 font-medium text-gray-900">
+          <span className="whitespace-nowrap font-normal text-gray-400">{dailyFee.toFixed(2)} × {holdDays}天{isGiftOrder ? ` + ${handlingFee.toFixed(2)}` : ''} =</span>
+          <span>{totalPayable.toFixed(2)} u</span>
+        </span>
       </div>
+      </div>}
     </div>
   );
 }
@@ -253,6 +285,8 @@ export default function AfOrderManage() {
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
+  // 每张订单卡保存独立节点；下载组件按点击时的节点生成整卡图片。
+  const orderCardExportNodes = useRef(new Map<number, HTMLDivElement>());
   // 搜索关键词
   const [searchQuery, setSearchQuery] = useState('');
   // 删除确认
@@ -291,6 +325,20 @@ export default function AfOrderManage() {
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
   const toggleDate = (dateKey: string) => setExpandedDates(prev => ({ ...prev, [dateKey]: !(prev[dateKey] ?? false) }));
   const toggleGiftOrders = (orderId: number) => setExpandedGiftOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
+  // 订单数据固定展开；关联订单、订单信息和管理费默认收起。
+  type OrderSection = 'relation' | 'info' | 'fee';
+  const [expandedOrderSections, setExpandedOrderSections] = useState<Record<string, boolean>>({});
+  const isOrderSectionExpanded = (orderId: number, section: OrderSection) => {
+    const key = `${orderId}:${section}`;
+    return expandedOrderSections[key] ?? false;
+  };
+  const toggleOrderSection = (orderId: number, section: OrderSection) => {
+    const key = `${orderId}:${section}`;
+    setExpandedOrderSections(previous => ({
+      ...previous,
+      [key]: !(previous[key] ?? false),
+    }));
+  };
   // 持仓人员弹窗
   const [holdersPopup, setHoldersPopup] = useState<string[] | null>(null);
   // 持仓币种档位详情弹窗：存储当前展开的币种名称
@@ -304,8 +352,14 @@ export default function AfOrderManage() {
   );
   const { data: orders, isLoading, refetch: refetchOrders } = trpc.ledger.afAdminGetOrders.useQuery(
     { ledgerId },
-    { enabled: !!ledgerId }
+    { enabled: !!ledgerId, staleTime: 0, refetchOnMount: 'always' }
   );
+  const { data: switch525Data } = trpc.ledger.af525GetSwitch.useQuery(
+    { ledgerId },
+    { enabled: ledgerId === 52, staleTime: 30_000, refetchOnWindowFocus: true }
+  );
+  // 开关开启时，所有主订单统一按5倍；额外0.25倍仅作为YJH的独立赠单。
+  const orderMultiplier = ledgerId === 52 && (switch525Data as any)?.enabled ? 5 : 5.25;
 
   // 实时币价（每3秒刷新，与全站规范一致）
   // 走服务器tRPC获取币价（price-scanner缓存，3秒刷新）
@@ -316,7 +370,11 @@ export default function AfOrderManage() {
   const editingOrder = orders?.find((o: any) => o.id === editingId);
   const { data: tierHistoryData } = trpc.ledger.afAdminGetTierHistory.useQuery(
     { ledgerId, orderId: editingId! },
-    { enabled: !!ledgerId && !!editingId && editingOrder?.status === 'completed' }
+    {
+      enabled: !!ledgerId && !!editingId && editingOrder?.status === 'completed',
+      staleTime: 0,
+      refetchOnMount: 'always',
+    }
   );
   const tierHistory = tierHistoryData?.list;
   const lowestScan = tierHistoryData?.lowestScan;
@@ -409,7 +467,7 @@ export default function AfOrderManage() {
     const totalRefund = isGiftOrder ? Math.max(0, totalProfit) : principal + Math.max(0, totalProfit);
 
     // 管理费计算：从下单时间（createdAt）开始，修改价格等操作不影响管理费
-    const tradeValue = isGiftOrder ? principal : principal * 5.25;
+    const tradeValue = isGiftOrder ? principal : principal * orderMultiplier;
     const dailyFee = tradeValue / 0.75 * 0.12 / 365;
     // 开始日期：从下单时间（createdAt）算起，撤单则作废，成交后累计不重置
     const confirmedDay = getBJDateOnly(order.createdAt);
@@ -448,20 +506,20 @@ export default function AfOrderManage() {
 
   const saveEdit = () => {
     if (!editState) return;
-    
+
     // 如果要确认卖出成交，必须输入实际卖出价
     const isConfirmingSellComplete = editState.sellStatus === 'sold';
     if (isConfirmingSellComplete && !editState.actualSellPrice) {
       toast.error("请输入实际卖出价格");
       return;
     }
-    
+
     // 买单：金额(amount)固定不变，数量根据新价格自动重算
     const price = parseFloat(editState.limitPrice);
     const amount = parseFloat(editState.amount);
     let finalQuantity = editState.quantity;
     if (!isNaN(price) && !isNaN(amount) && price > 0 && amount > 0) {
-      finalQuantity = (amount * 5.25 / price).toFixed(8);
+      finalQuantity = (amount * orderMultiplier / price).toFixed(8);
     }
 
     updateMutation.mutate({
@@ -538,7 +596,855 @@ export default function AfOrderManage() {
     return `${yy}-${mm}-${dd} ${hh}:${min}:${ss}`;
   };
 
-  return (
+    // 五个分组视图共用同一张订单卡，避免界面与交互在不同维度发生分叉。
+  const renderUnifiedOrderCard = (order: any) => {
+              const isEditing = editingId === order.id;
+              const statusDisplay = getStatusDisplay(order);
+              const isRelationExpanded = isOrderSectionExpanded(order.id, 'relation');
+              const isInfoExpanded = isOrderSectionExpanded(order.id, 'info');
+              const isFeeExpanded = isOrderSectionExpanded(order.id, 'fee');
+              // 计算编辑时的实时数量（始终用数据库原始买入价 order.limitPrice，避免被卖出价误覆盖）
+              let previewQuantity = editState?.quantity ?? "";
+              if (isEditing && editState) {
+                const p = parseFloat(order.limitPrice); // 用 order.limitPrice 而非 editState.limitPrice
+                const a = parseFloat(editState.amount);
+                if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) {
+                  previewQuantity = (a * orderMultiplier / p).toFixed(8);
+                }
+              }
+
+              // 生成订单编号（用UTC方法，因为MySQL存的北京时间在UTC环境下UTC值=北京时间值）
+              const orderDate = new Date(order.createdAt);
+              const yy = String(orderDate.getUTCFullYear()).slice(2);
+              const mm = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
+              const dd = String(orderDate.getUTCDate()).padStart(2, '0');
+              const orderNo = (order.isSimulated && order.simulationOrderNo) ? order.simulationOrderNo : `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
+
+              return (
+                <div
+                  key={order.id}
+                  ref={(node) => {
+                    if (node) orderCardExportNodes.current.set(order.id, node);
+                    else orderCardExportNodes.current.delete(order.id);
+                  }}
+                  className="rounded-2xl p-4 shadow-sm mb-3 bg-white"
+                >
+                  {/* 订单基础信息：逐行展示，避免左右错位 */}
+                  <div className="relative">
+                    {!isEditing && !order.isAdvanced && (
+                      <div className="absolute right-3 top-2 z-20 flex items-center gap-1" data-card-export-hide="true">
+                        <OrderCardImageDownload
+                          targetRef={{
+                            get current() {
+                              return orderCardExportNodes.current.get(order.id) ?? null;
+                            },
+                          } as RefObject<HTMLElement | null>}
+                          orderNo={orderNo}
+                          color="#64748B"
+                          outerPadding={12}
+                          captureFullContent
+                          variant="default"
+                          filenamePrefix="52号账本谷底征筹"
+                          previewTitle="订单图片预览"
+                          previewHint="仅包含当前订单信息、数据、费用与关联订单"
+                        />
+                        <details className="relative">
+                          <summary aria-label="订单操作" className="flex h-8 w-8 list-none items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 [&::-webkit-details-marker]:hidden">
+                            <MoreHorizontal className="h-5 w-5" />
+                          </summary>
+                          <div className="absolute right-0 top-9 w-24 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                            <button type="button" onClick={() => startEdit(order)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50">
+                              <Pencil className="h-3.5 w-3.5" /> 编辑
+                            </button>
+                            <button type="button" onClick={() => { setDeleteTarget(order); const isGift = order.isGift === true || order.isGift === 1; setDeleteScope(isGift ? 'all' : 'all'); setSelectedGiftIds([]); setRefundChecked(order.status === 'pending' && !isGift); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50">
+                              <Trash2 className="h-3.5 w-3.5" /> 删除
+                            </button>
+                          </div>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                  <div className={`mb-3 flex justify-end border-b border-gray-200 px-3 pb-2 ${!isEditing && !order.isAdvanced ? 'hidden' : ''}`}>
+                      {!isEditing ? (
+                        order.isAdvanced ? (
+                          order.status === 'pending' ? (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={fulfillAdvancedMutation.isPending || cancelAdvancedMutation.isPending}
+                                onClick={() => {
+                                  setAdvancedFulfillTarget(order);
+                                  setAdvancedExecutionPrice(String(order.advancedLimitPrice || order.originalLimitPrice || order.limitPrice || ''));
+                                }}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"
+                              >
+                                <Check className="w-3 h-3" /> {fulfillAdvancedMutation.isPending ? '确认中...' : '确认成交'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={fulfillAdvancedMutation.isPending || cancelAdvancedMutation.isPending}
+                                onClick={() => {
+                                  setAdvancedCancelTarget(order);
+                                  setAdvancedCancelReason('');
+                                }}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"
+                              >
+                                <X className="w-3 h-3" /> {cancelAdvancedMutation.isPending ? '撤销中...' : '撤销委托'}
+                              </button>
+                            </div>
+                          ) : order.status === 'cancelled' ? <span className="text-[10px] text-gray-500">高级委托已撤销</span> : (
+                            <button
+                              type="button"
+                              onClick={() => startEdit(order)}
+                              className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-200"
+                            >
+                              <Pencil className="w-3 h-3" /> 卖出结算
+                            </button>
+                          )
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => startEdit(order)}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"
+                            >
+                              <Pencil className="w-3 h-3" /> 编辑
+                            </button>
+                            <button
+                              onClick={() => {
+                                setDeleteTarget(order);
+                                const isGift = order.isGift === true || order.isGift === 1;
+                                setDeleteScope(isGift ? 'all' : 'all');
+                                setSelectedGiftIds([]);
+                                setRefundChecked(order.status === 'pending' && !isGift);
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"
+                            >
+                              <Trash2 className="w-3 h-3" /> 删除
+                            </button>
+                          </div>
+                        )
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={saveEdit}
+                            disabled={updateMutation.isPending}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"
+                          >
+                            <Check className="w-3 h-3" /> 保存
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"
+                          >
+                            <X className="w-3 h-3" /> 取消
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                  {/* 订单数据 */}
+                  <div className="px-3 py-3">
+                    <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs font-semibold text-blue-600">订单数据</span>
+                      {(order.isGift === true || order.isGift === 1) ? (
+                        <span className={`${ORDER_TAG_CLASS} ${ORDER_TAG_COLORS.gift}`}>赠单</span>
+                      ) : (
+                        <span className={`${ORDER_TAG_CLASS} ${ORDER_TAG_COLORS.normal}`}>正单</span>
+                      )}
+                      <span className={`${ORDER_TAG_CLASS} ${ORDER_TAG_COLORS.metadata}`}>{order.coin}</span>
+                      {isEditing ? (
+                        <div className="flex items-center gap-1">
+                          <select
+                            value={editState!.status}
+                            onChange={(e) => setEditState({ ...editState!, status: e.target.value as any })}
+                            className="border border-gray-300 rounded px-2 py-0.5 text-xs"
+                          >
+                            <option value="pending">委买中</option>
+                            <option value="completed">买入成交</option>
+                            <option value="cancelled">已撤单</option>
+                          </select>
+                          <select
+                            value={editState!.sellStatus || ''}
+                            onChange={(e) => {
+                              const nextSellStatus = e.target.value || null;
+                              setEditState({ ...editState!, sellStatus: nextSellStatus, status: nextSellStatus ? 'completed' : editState!.status });
+                            }}
+                            className="border border-gray-300 rounded px-2 py-0.5 text-xs"
+                          >
+                            <option value="">持仓中</option>
+                            <option value="selling">委卖中</option>
+                            <option value="sold">已卖出</option>
+                          </select>
+                        </div>
+                      ) : (
+                        <span className={`${ORDER_TAG_CLASS} ${
+                          statusDisplay.label === '持仓中' ? ORDER_TAG_COLORS.holding :
+                          statusDisplay.label === '委卖中' ? ORDER_TAG_COLORS.selling :
+                          statusDisplay.label === '已卖出' ? ORDER_TAG_COLORS.sold :
+                          statusDisplay.label === '已撤单' ? ORDER_TAG_COLORS.cancelled :
+                          statusDisplay.label === '高级委托保护中' ? ORDER_TAG_COLORS.advanced :
+                          ORDER_TAG_COLORS.pending
+                        }`}>{statusDisplay.label}</span>
+                      )}
+                      {(order.is525Gift || (
+                        order.isGift
+                        && Number(order.sourceAmount || 0) > 0
+                        && Math.abs(Number(order.amount || 0) / Number(order.sourceAmount || 0) - 0.25) < 0.000001
+                      )) && <span className={`${ORDER_TAG_CLASS} ${ORDER_TAG_COLORS.special}`}>0.25</span>}
+                    </div>
+                    <div className="space-y-2 text-xs">
+                    {/* 主单投入（左列） */}
+                    {(() => {
+                      const srcAmt = parseFloat(order.sourceAmount || '0');
+                      const selfAmt = parseFloat(order.amount || '0');
+                      const isGiftOrder = order.isGift === true || order.isGift === 1;
+                      const investAmt = isGiftOrder ? srcAmt : selfAmt;
+                      const sourceOrder = isGiftOrder && order.sourceOrderId
+                        ? (orders as any[] || []).find((item: any) => item.id === order.sourceOrderId)
+                        : null;
+                      const investorName = isGiftOrder
+                        ? (sourceOrder?.nickname || sourceOrder?.username || order.sourceUsername || '')
+                        : '';
+                      const displayInvestAmt = Number.isInteger(investAmt) ? investAmt.toFixed(0) : investAmt.toFixed(2);
+                      return (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="min-w-0 text-gray-900">主单投入</span>
+                          <span className="flex shrink-0 items-baseline gap-1 font-medium text-gray-900 whitespace-nowrap">
+                            {investorName && <span className="text-[11px] font-normal text-gray-400">（{investorName}）</span>}
+                            <span>{displayInvestAmt} u</span>
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    {/* 赠送价值（赠单专用，含倍数；正单不显示此行） */}
+                    {order.isGift && (() => {
+                      const srcAmt = parseFloat(order.sourceAmount || '0');
+                      const giftAmt = parseFloat(order.amount || '0');
+                      const ratio = srcAmt > 0 ? (giftAmt / srcAmt) : 0;
+                      const displaySrcAmt = Number.isInteger(srcAmt) ? srcAmt.toFixed(0) : srcAmt.toFixed(2);
+                      const displayGiftAmt = Number.isInteger(giftAmt) ? giftAmt.toFixed(0) : giftAmt.toFixed(2);
+                      return (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="min-w-0 text-gray-900">赠送价值</span>
+                          <span className="flex shrink-0 items-baseline gap-1 font-medium text-gray-900">
+                            {ratio > 0 && <span className="whitespace-nowrap font-normal text-gray-400">{displaySrcAmt} × {Number(ratio.toFixed(4)).toString()} =</span>}
+                            <span>{displayGiftAmt} u</span>
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    {/* 买入委托价 */}
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="shrink-0 text-gray-900">
+                        买入价
+                        {(() => {
+                          const buyDate = new Date(order.confirmedAt || order.createdAt);
+                          return Number.isNaN(buyDate.getTime())
+                            ? null
+                            : <span className="ml-1 text-[10px] text-gray-400">{buyDate.getUTCMonth() + 1}月{buyDate.getUTCDate()}日</span>;
+                        })()}
+                      </span>
+                      {isEditing && editState!.status === 'pending' ? (
+                        <input
+                          type="number"
+                          value={editState!.limitPrice}
+                          onChange={(e) => setEditState({ ...editState!, limitPrice: e.target.value })}
+                          className="border border-gray-300 rounded px-2 py-0.5 text-sm w-24"
+                        />
+                      ) : (
+                        <span className="font-medium text-gray-900">
+                          {parseFloat(order.limitPrice).toLocaleString()} <span>u</span>
+                        </span>
+                      )}
+                    </div>
+                    {/* 数量 */}
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="shrink-0 text-gray-900">数量</span>
+                      <span className="flex shrink-0 items-baseline gap-1 font-medium text-gray-900">
+                        {(() => {
+                          const raw = isEditing ? (previewQuantity || editState!.quantity) : order.quantity;
+                          const num = parseFloat(raw);
+                          const trimmed = isNaN(num) ? raw : formatAfQuantity(num, order.coin);
+                          const amount = parseFloat(order.amount || '0');
+                          const isGiftOrder = order.isGift === true || order.isGift === 1;
+                          const buyPrice = parseFloat(order.limitPrice || '0');
+                          const formatFormulaAmount = (value: number) => Number.isInteger(value) ? value.toFixed(0) : value.toFixed(2);
+                          const multiplierText = Number.isInteger(orderMultiplier) ? orderMultiplier.toFixed(0) : orderMultiplier.toFixed(2);
+                          return <>
+                            {amount > 0 && buyPrice > 0 && (
+                              <span className="whitespace-nowrap font-normal text-gray-400">
+                                {isGiftOrder
+                                  ? `${formatFormulaAmount(amount)} ÷ ${formatFormulaAmount(buyPrice)} =`
+                                  : `${formatFormulaAmount(amount)} × ${multiplierText}倍 ÷ ${formatFormulaAmount(buyPrice)} =`}
+                              </span>
+                            )}
+                            <span>{trimmed} {order.coin}</span>
+                          </>;
+                        })()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="shrink-0 text-gray-900">开仓时间</span>
+                      <span className="font-medium text-gray-900">{formatDate(order.createdAt)}</span>
+                    </div>
+                    {/* 高级委托专属审计信息；公共订单字段和管理费仍沿用普通谷底增筹布局。 */}
+                    {order.isAdvanced && (() => {
+                      const startMs = new Date(order.createdAt).getTime();
+                      const terminalAt = order.advancedStatus === 'fulfilled'
+                        ? (order.fulfilledAt || order.confirmedAt)
+                        : order.advancedStatus === 'cancelled'
+                          ? order.cancelledAt
+                          : null;
+                      const endMs = terminalAt ? new Date(terminalAt).getTime() : Date.now();
+                      const chargedDays = Number.isFinite(startMs) ? Math.max(1, Math.ceil(Math.max(0, endMs - startMs) / (24 * 60 * 60 * 1000))) : 1;
+                      return <>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="shrink-0 text-gray-900">委托价</span>
+                          <span className="font-medium text-purple-700">{Number(order.advancedLimitPrice || order.originalLimitPrice || order.limitPrice || 0).toLocaleString()} <span>u</span></span>
+                        </div>
+                        {order.fulfilledPrice && (
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="shrink-0 text-gray-900">实际买入</span>
+                            <span className="font-medium text-green-600">{Number(order.fulfilledPrice).toLocaleString()} <span>u</span></span>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="shrink-0 text-gray-900">提交现价</span>
+                          <span className="font-medium text-gray-700">{order.submittedSpotPrice ? `${Number(order.submittedSpotPrice).toLocaleString()} u` : '—'}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="shrink-0 text-gray-900">委托时长</span>
+                          <span className="font-medium text-gray-700">{chargedDays}天</span>
+                        </div>
+                        {order.advancedStatus === 'cancelled' && (
+                          <div className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-[11px] text-gray-600 space-y-1">
+                            <div className="flex items-center justify-between gap-3">
+                              <span>撤销处理</span>
+                              <span className="font-medium text-gray-800">{order.cancelledByUserId ? `管理员#${order.cancelledByUserId}撤销` : '用户自主撤销'}</span>
+                            </div>
+                            <div className="leading-5">仅退冻结本金 {Number(order.amount || 0).toFixed(2)} u；管理员此前另行手动发放至钱包的款项不退回，本次不新增任何收益、管理费或赠单。</div>
+                            {order.cancelReason && <div className="leading-5 text-gray-500">原因：{order.cancelReason}</div>}
+                            {order.refundBalanceId && <div className="text-gray-400">退款流水 #{order.refundBalanceId}</div>}
+                          </div>
+                        )}
+                      </>;
+                    })()}
+                    {/* 档位计算方式（仅已成交订单显示） */}
+                    {isEditing && editState!.status === 'completed' && (
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="shrink-0 text-gray-900">档位模式</span>
+                        <div className="flex rounded overflow-hidden border border-gray-300 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setEditState({ ...editState!, tierMode: 'step' })}
+                            className={`px-2 py-0.5 transition-colors ${
+                              editState!.tierMode === 'step'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >阶梯</button>
+                          <button
+                            type="button"
+                            onClick={() => setEditState({ ...editState!, tierMode: 'linear' })}
+                            className={`px-2 py-0.5 transition-colors ${
+                              editState!.tierMode === 'linear'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >线性</button>
+                        </div>
+                      </div>
+                    )}
+                    {/* 实际有效持仓（单独一行，仅当权益有折扣档位>0时显示） */}
+                    {order.status === 'completed' && (() => {
+                      const raw = order.quantity;
+                      const num = parseFloat(raw);
+                      let rate: number;
+                      if (order.tierMode === 'linear') {
+                        const buyP = parseFloat(order.limitPrice || '0');
+                        const allLow = order.allTimeLowPrice ? parseFloat(String(order.allTimeLowPrice)) : 0;
+                        rate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
+                      } else {
+                        rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
+                      }
+                      if (rate >= 1.0) return null;
+                      const effectiveNum = num * rate;
+                      const pct = (rate * 100).toFixed(2);
+                      return (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="shrink-0 text-gray-900">实际持仓</span>
+                          <span className="text-xs text-orange-500">
+                            {formatAfQuantity(effectiveNum, order.coin)} {order.coin} ({pct}%)
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    {/* 卖出价格（委卖中或已卖出时显示） */}
+                    {(order.sellStatus === 'selling' || order.sellStatus === 'sold') && (
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="shrink-0 text-gray-900">卖出价</span>
+                        <span className="font-medium text-gray-900">
+                          {parseFloat(order.sellPrice).toLocaleString()} <span>u</span>
+                        </span>
+                      </div>
+                    )}
+                    {/* 卖出时间（已卖出时显示） */}
+                    {order.sellStatus === 'sold' && order.sellConfirmedAt && (
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="shrink-0 text-gray-900">卖出时间</span>
+                        <span className="text-gray-500">{formatDate(order.sellConfirmedAt)}</span>
+                      </div>
+                    )}
+                    {/* 已卖出结算详情展示块 */}
+                    {order.sellStatus === 'sold' && order.sellPrice && (() => {
+                      const calc = calculateProfit(order, order.sellPrice);
+                      if (!calc) return null;
+                      const isGift = order.isGift === true || order.isGift === 1;
+                      const startDate = new Date(order.createdAt);
+                      const endDate = new Date(order.sellConfirmedAt);
+                      const fmtD = (d: Date) => `${d.getUTCMonth()+1}月${d.getUTCDate()}日`;
+                      return (
+                        <div className="mt-1">
+                          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-1.5 text-xs">
+                            <p className="text-xs font-semibold text-blue-600 mb-2">结算明细</p>
+                            {/* 买卖价格 */}
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">持币数量</span>
+                              <span className="font-medium text-gray-800">{formatAfQuantity(calc.coinQuantity, order.coin, 6)} {order.coin}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">买入价</span>
+                              <span className="font-medium text-gray-800">{calc.buyPrice.toLocaleString()} USDT</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">卖出价</span>
+                              <span className="font-medium text-gray-800">{calc.sellPrice.toLocaleString()} USDT</span>
+                            </div>
+                            {/* 权益档位 */}
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">权益档位</span>
+                              <span className="font-medium text-amber-600">
+                                {(() => {
+                                  const rate = EQUITY_DISCOUNT_RATES[calc.equityTier] || 1.0;
+                                  const tierName = calc.equityTier === 0 ? 'D0档（基准档）' : `D${calc.equityTier}档（跌${calc.equityTier * 10}%）`;
+                                  return `${(rate * 100).toFixed(2)}% · ${tierName}`;
+                                })()}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">有效币数</span>
+                              <span className="font-medium text-gray-800">{calc.effectiveQuantity.toFixed(6)} {order.coin}</span>
+                            </div>
+                            {/* 收益计算 */}
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">单位收益</span>
+                              <span className={`font-medium ${calc.unitProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {calc.unitProfit >= 0 ? '+' : ''}{calc.unitProfit.toFixed(2)} USDT
+                              </span>
+                            </div>
+                            <div className="border-t border-blue-200 pt-1.5 mt-0.5 flex justify-between">
+                              <span className="text-gray-600 font-medium">总收益</span>
+                              <span className={`font-bold text-base ${calc.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {calc.totalProfit >= 0 ? '+' : ''}{calc.totalProfit.toFixed(4)} USDT
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              {isGift ? (
+                                <span className="text-amber-600 font-medium">纯收益小计 <span className="text-[10px] font-normal text-amber-400">（赠单不含本金）</span></span>
+                              ) : (
+                                <span className="text-gray-600">本金+收益小计</span>
+                              )}
+                              <span className="font-medium text-gray-800">{calc.totalRefund.toFixed(4)} USDT</span>
+                            </div>
+                            {/* 管理费 */}
+                            <div className="flex justify-between">
+                              <span className="text-red-500">管理费扣除</span>
+                              <span className="font-medium text-red-500">- {calc.managementFee.toFixed(4)} USDT</span>
+                            </div>
+                            <div className="text-[10px] text-red-400">
+                              计费区间：{fmtD(startDate)} → {fmtD(endDate)}（共{calc.holdDays}天，{calc.dailyFee.toFixed(4)} USDT/天）
+                            </div>
+                            {/* 实际到账 */}
+                            <div className="flex justify-between bg-green-50 rounded-lg px-2 py-1.5 border border-green-200 mt-1">
+                              <span className="text-green-700 font-bold">实际到账</span>
+                              <span className="font-bold text-green-600 text-base">{calc.actualRefund.toFixed(4)} USDT</span>
+                            </div>
+                            <p className="text-[10px] text-blue-500 mt-1">
+                              {isGift
+                                ? `纯收益 - 管理费 = ${Math.max(0, calc.totalProfit).toFixed(4)} - ${calc.managementFee.toFixed(4)} = ${calc.actualRefund.toFixed(4)} USDT（赠单不含本金）`
+                                : `本金 + 收益 - 管理费 = ${calc.principal.toFixed(2)} + ${Math.max(0, calc.totalProfit).toFixed(4)} - ${calc.managementFee.toFixed(4)} = ${calc.actualRefund.toFixed(4)} USDT`
+                              }
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 当前权益 */}
+                    {order.status === 'completed' && (() => {
+                      let rate: number;
+                      let tierLabel: string;
+                      if (order.tierMode === 'linear') {
+                        const buyP = parseFloat(order.limitPrice || '0');
+                        const allLow = order.allTimeLowPrice ? parseFloat(String(order.allTimeLowPrice)) : 0;
+                        rate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
+                        tierLabel = 'L';
+                      } else {
+                        rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
+                        tierLabel = order.equityTier === 0 ? 'D0档' : `D${order.equityTier}档`;
+                      }
+                      const pct = (rate * 100).toFixed(2);
+                      return (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="flex min-w-0 items-center gap-1.5 text-gray-900">
+                            当前权益
+                            <span className={`${ORDER_TAG_CLASS} ${order.tierMode === 'linear' ? ORDER_TAG_COLORS.linear : ORDER_TAG_COLORS.step}`}>{order.tierMode === 'linear' ? '线性' : '阶梯'}</span>
+                          </span>
+                          <span className={`flex shrink-0 items-baseline gap-1 font-medium ${rate >= 1.0 ? 'text-gray-900' : 'text-orange-500'}`}>
+                            <span className="font-normal text-gray-400">（{tierLabel}）</span>
+                            <span>{pct}%</span>
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    {/* 自订单成交起持续累计，展示本单持仓期间的最低扫描价。 */}
+                    {order.status === 'completed' && (order as any).allTimeLowPrice && (() => {
+                      const lowPrice = parseFloat((order as any).allTimeLowPrice);
+                      const lowAt = (order as any).allTimeLowAt;
+                      const lowDate = lowAt ? new Date(lowAt) : null;
+                      const fmtLow = lowDate ? (() => {
+                        // MySQL存的北京时间，直接用UTC方法即可，不需要+8小时
+                        const mo = lowDate.getUTCMonth() + 1;
+                        const da = lowDate.getUTCDate();
+                        const hh = String(lowDate.getUTCHours()).padStart(2, '0');
+                        const mi = String(lowDate.getUTCMinutes()).padStart(2, '0');
+                        const sc = String(lowDate.getUTCSeconds()).padStart(2, '0');
+                        return `${mo}/${da} ${hh}:${mi}:${sc}`;
+                      })() : '';
+                      return (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="min-w-0 text-gray-900">持仓期最低扫描价</span>
+                          <span className="flex shrink-0 items-baseline gap-1 font-medium text-gray-900">
+                            {fmtLow && <span className="font-normal text-gray-400">（{fmtLow}）</span>}
+                            <span>{lowPrice.toLocaleString()} u</span>
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    {/* 累计管理费：待付管理费（已扣预收部分） */}
+                    </div>
+                  </div>
+
+                  {/* 关联订单：正单与每张赠单均展示同一组关联明细，方便在时间维度逐卡核对。 */}
+                  {(() => {
+                    const isGiftOrder = order.isGift === true || order.isGift === 1;
+                    const sourceOrder = isGiftOrder && order.sourceOrderId
+                      ? (orders as any[] || []).find((item: any) => item.id === order.sourceOrderId)
+                      : null;
+                    const relationOrder = sourceOrder || order;
+                    const giftOrders: any[] = (relationOrder as any).giftOrders || [];
+                    const advancedRecipients: any[] = (relationOrder as any).advancedGiftRecipients || [];
+                    const isAdvancedOrder = Boolean(relationOrder.isAdvanced);
+                    if (giftOrders.length === 0 && (!isAdvancedOrder || advancedRecipients.length === 0)) return null;
+                    const isDirected525Gift = (gift: any) => Boolean(gift.is525Gift) || (
+                      Number(relationOrder.amount || 0) > 0
+                      && Math.abs(Number(gift.amount || 0) / Number(relationOrder.amount || 0) - 0.25) < 0.000001
+                    );
+                    const regularGifts = giftOrders.filter((gift: any) => !isDirected525Gift(gift));
+                    const directedGifts = giftOrders.filter((gift: any) => isDirected525Gift(gift));
+                    const linkedQuantityTotal = Number(relationOrder.quantity || 0) + giftOrders.reduce((sum: number, gift: any) => sum + Number(gift.quantity || 0), 0);
+                    const linkedOrderCount = giftOrders.length + 1;
+                    const recipientName = (gift: any) => gift.nickname || gift.username || `用户${gift.userId}`;
+                    const isSelfRecipient = (gift: any) => String(gift.userId) === String(relationOrder.userId);
+                    return (
+                      <div className={`border-t border-gray-200 ${isRelationExpanded ? 'px-3 py-3 text-xs space-y-2' : 'px-3 py-2 text-[11px] leading-4'}`}>
+                        <button
+                          type="button"
+                          onClick={() => toggleOrderSection(order.id, 'relation')}
+                          aria-expanded={isRelationExpanded}
+                          className={`${isRelationExpanded ? 'mb-3 text-xs' : 'text-[11px] leading-4'} flex w-full items-center justify-between gap-3`}
+                        >
+                          <span className="inline-flex items-center gap-1 font-semibold text-blue-600">
+                            关联订单
+                            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isRelationExpanded ? '' : '-rotate-90'}`} />
+                          </span>
+                          {!isRelationExpanded && <span className="min-w-0 truncate text-right text-[11px] font-medium leading-4 text-gray-900">{linkedOrderCount}单 · {formatAfQuantity(linkedQuantityTotal, relationOrder.coin)} {relationOrder.coin}</span>}
+                        </button>
+                        {isRelationExpanded && <>
+                        {isGiftOrder && sourceOrder && <div className="flex items-center justify-between gap-3">
+                          <span className="flex min-w-0 items-center gap-1.5 truncate">
+                            <span className={`${ORDER_TAG_CLASS} ${ORDER_TAG_COLORS.normal}`}>正单</span>
+                            <span className="truncate font-medium text-gray-900">{sourceOrder.username && sourceOrder.nickname && sourceOrder.username !== sourceOrder.nickname ? `${sourceOrder.username}/${sourceOrder.nickname}` : sourceOrder.nickname || sourceOrder.username || `用户${sourceOrder.userId}`}</span>
+                          </span>
+                          <span className="flex shrink-0 items-baseline gap-1.5">
+                            <span className="font-medium text-gray-900">{formatAfQuantity(sourceOrder.quantity, sourceOrder.coin || relationOrder.coin)} {sourceOrder.coin || relationOrder.coin}</span>
+                          </span>
+                        </div>}
+                        {giftOrders.length > 0 ? <>
+                          {regularGifts.map((gift: any) => <div key={gift.id} className="flex items-center justify-between gap-3">
+                            <span className="flex min-w-0 items-center gap-1.5 truncate">
+                              <span className={`${ORDER_TAG_CLASS} ${ORDER_TAG_COLORS.gift}`}>赠单</span>
+                              <span className="truncate font-medium text-gray-900">{recipientName(gift)}{isSelfRecipient(gift) && <span className="ml-1 text-[10px] font-normal text-gray-400">（本人）</span>}</span>
+                            </span>
+                            <span className="flex shrink-0 items-baseline gap-1.5">
+                              <span className="text-xs text-gray-400">{Number(gift.payoutRatio || 0).toFixed(2)}%</span>
+                              <span className="font-medium text-gray-900">{formatAfQuantity(gift.quantity, gift.coin || relationOrder.coin)} {gift.coin || relationOrder.coin}</span>
+                            </span>
+                          </div>)}
+                          {directedGifts.map((gift: any) => {
+                            const giftCoin = gift.coin || relationOrder.coin;
+                            const multiplier = Number(gift.giftMultiplier || 0.25);
+                            return <div key={gift.id} className="flex items-center justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-1.5 truncate">
+                                <span className={`${ORDER_TAG_CLASS} ${ORDER_TAG_COLORS.special}`}>{multiplier.toFixed(2)}</span>
+                                <span className="truncate font-medium text-gray-900">{recipientName(gift)}{isSelfRecipient(gift) && <span className="ml-1 text-[10px] font-normal text-gray-400">（本人）</span>}</span>
+                              </div>
+                              <span className="flex shrink-0 items-baseline gap-1.5">
+                                <span className="font-medium text-gray-900">{formatAfQuantity(gift.quantity, giftCoin)} {giftCoin}</span>
+                              </span>
+                            </div>;
+                          })}
+                          <div className="flex items-center justify-between gap-3 border-t border-gray-200 pt-2">
+                            <span className="font-medium text-gray-900">合计<span className="ml-0.5 text-[10px] font-normal text-gray-400">（{giftOrders.length + 1}）</span> = 正<span className="ml-0.5 text-[10px] font-normal text-gray-400">（1）</span> + 赠<span className="ml-0.5 text-[10px] font-normal text-gray-400">（{giftOrders.length}）</span></span>
+                            <span className="shrink-0 font-semibold text-gray-900">{formatAfQuantity(linkedQuantityTotal, relationOrder.coin)} {relationOrder.coin}</span>
+                          </div>
+                        </> : <>
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="shrink-0 text-gray-500">预计赠送用户</span>
+                            <span className="text-right leading-5 text-gray-900">{advancedRecipients.map((recipient: any) => `${recipient.username}（${recipient.type}${recipient.type === '5.25赠单' ? `${Number(recipient.ratio || 0).toFixed(2)}倍` : `${recipient.ratio}%`}）`).join('、')}</span>
+                          </div>
+                        </>}
+                        </>}
+                      </div>
+                    );
+                  })()}
+
+                  {/* 订单信息：归入功能分区，置于关联订单之后。 */}
+                  <div className={`border-t border-gray-200 text-gray-700 ${isInfoExpanded ? 'px-3 py-3 text-xs space-y-2' : 'px-3 py-2 text-[11px] leading-4'}`}>
+                    <div className={`${isInfoExpanded ? 'mb-3 text-xs' : 'text-[11px] leading-4'} flex items-center gap-1.5 font-semibold text-blue-600`}>
+                      <button
+                        type="button"
+                        onClick={() => toggleOrderSection(order.id, 'info')}
+                        aria-expanded={isInfoExpanded}
+                        className="inline-flex items-center gap-1"
+                      >
+                        <span>订单信息</span>
+                        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isInfoExpanded ? '' : '-rotate-90'}`} />
+                      </button>
+                      {order.isAdvanced && <span className={`${ORDER_TAG_CLASS} ${ORDER_TAG_COLORS.advanced}`}>高级委托</span>}
+                      {!isInfoExpanded && (() => {
+                        const recipient = getPreferredAfName(order.username, order.nickname, `用户${order.userId}`);
+                        if (!(order.isGift === true || order.isGift === 1)) {
+                          return <span className="ml-auto min-w-0 truncate text-right text-[11px] font-medium leading-4 text-gray-900">{recipient}</span>;
+                        }
+                        const sourceOrder = order.sourceOrderId
+                          ? (orders as any[] || []).find((item: any) => item.id === order.sourceOrderId)
+                          : null;
+                        const giver = sourceOrder
+                          ? getPreferredAfName(sourceOrder.username, sourceOrder.nickname, `用户${sourceOrder.userId}`)
+                          : getPreferredAfName(order.sourceUsername, null, '');
+                        return <span className="ml-auto min-w-0 truncate text-right text-[11px] font-medium leading-4 text-gray-900">{giver ? `${giver} → ${recipient}` : recipient}</span>;
+                      })()}
+                    </div>
+                    {isInfoExpanded && <>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="shrink-0 text-gray-900">{order.isGift ? '受赠用户' : '持单用户'}</span>
+                      <span className="min-w-0 flex-1 truncate text-right font-medium text-gray-700">{getPreferredAfName(order.username, order.nickname, `用户${order.userId}`)}</span>
+                    </div>
+                    {(order.isGift === true || order.isGift === 1) && (() => {
+                      const sourceOrder = order.sourceOrderId
+                        ? (orders as any[] || []).find((item: any) => item.id === order.sourceOrderId)
+                        : null;
+                      const giverName = sourceOrder
+                        ? getPreferredAfName(sourceOrder.username, sourceOrder.nickname, `用户${sourceOrder.userId}`)
+                        : getPreferredAfName(order.sourceUsername, null, '');
+                      if (!giverName) return null;
+                      return <div className="flex items-center justify-between gap-3">
+                        <span className="shrink-0 text-gray-900">赠送用户</span>
+                        <span className="min-w-0 flex-1 truncate text-right font-medium text-gray-700">{giverName}</span>
+                      </div>;
+                    })()}
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="shrink-0 text-gray-900">登记时间</span>
+                      <span>{order.confirmedAt ? formatDate(order.confirmedAt) : '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="shrink-0 text-gray-900">本单编号</span>
+                      <span className="font-mono text-gray-700">{orderNo}</span>
+                    </div>
+                    {(order.isGift === true || order.isGift === 1) && (() => {
+                      const parentOrder = order.sourceOrderId ? (orders as any[] || []).find((item: any) => item.id === order.sourceOrderId) : null;
+                      if (!parentOrder) return null;
+                      const parentDate = new Date(parentOrder.createdAt);
+                      const parentNo = `AF${String(parentDate.getUTCFullYear()).slice(2)}${String(parentDate.getUTCMonth() + 1).padStart(2, '0')}${String(parentDate.getUTCDate()).padStart(2, '0')}${String(parentOrder.id).padStart(6, '0')}`;
+                      return <div className="flex items-center justify-between gap-3">
+                        <span className="shrink-0 text-gray-900">正单编号</span>
+                        <span className="ml-auto min-w-0 truncate font-mono text-gray-700">{parentNo}</span>
+                      </div>;
+                    })()}
+                    </>}
+                  </div>
+
+                  {(order.status === 'completed' || order.status === 'pending') && (
+                    <FeeRow
+                      order={order}
+                      ledgerId={ledgerId}
+                      orderMultiplier={orderMultiplier}
+                      isExpanded={isFeeExpanded}
+                      onToggle={() => toggleOrderSection(order.id, 'fee')}
+                    />
+                  )}
+
+                  {/* 编辑时：确认卖出成交 → 输入实际卖出价 + 实时利润计算 */}
+                  {isEditing && editState?.sellStatus === 'sold' && (
+                    <div className="mt-3 space-y-3">
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                        <p className="text-xs text-orange-600 font-medium mb-2">确认卖出成交，请输入实际卖出价格</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500 whitespace-nowrap">实际卖出价</span>
+                          <input
+                            type="number"
+                            placeholder="输入实际成交价格"
+                            value={editState!.actualSellPrice}
+                            onChange={(e) => setEditState({ ...editState!, actualSellPrice: e.target.value })}
+                            className="border border-orange-300 rounded px-2 py-1 text-sm w-full focus:outline-none focus:border-orange-500"
+                          />
+                          <span className="text-xs text-gray-400 whitespace-nowrap">USDT</span>
+                        </div>
+                      </div>
+
+                      {/* 实时利润计算 */}
+                      {editState!.actualSellPrice && calculateProfit(order, editState!.actualSellPrice) && (() => {
+                        const calc = calculateProfit(order, editState!.actualSellPrice)!;
+                        return (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                            <p className="text-xs font-medium text-blue-600">实时利润计算</p>
+                            <div className="space-y-1.5 text-xs">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">持币数量</span>
+                                <span className="font-medium text-gray-800">{formatAfQuantity(calc.coinQuantity, order.coin, 6)} {order.coin}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">买入价</span>
+                                <span className="font-medium text-gray-800">{calc.buyPrice.toLocaleString()} USDT</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">卖出价</span>
+                                <span className="font-medium text-gray-800">{calc.sellPrice.toLocaleString()} USDT</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">权益折扣档位</span>
+                                <span className="font-medium text-amber-600">
+                                  {(() => {
+                                    const rate = EQUITY_DISCOUNT_RATES[calc.equityTier] || 1.0;
+                                    const tierName = calc.equityTier === 0 ? 'D0档（基准档）' : `D${calc.equityTier}档（跌${calc.equityTier * 10}%）`;
+                                    return `${(rate * 100).toFixed(2)}% · ${tierName}`;
+                                  })()}
+                                </span>
+                              </div>
+                              {/* 扣档历史记录 + 每次打开详情即时刷新的最新扫描低点 */}
+                              <div className="bg-amber-50 border border-amber-200 rounded p-2 mt-1">
+                                <p className="text-[10px] text-amber-600 font-medium mb-1">扣档触发记录</p>
+                                {tierHistory && tierHistory.length > 0 ? (
+                                  tierHistory.map((t: any) => {
+                                    const dt = new Date(t.triggeredAt);
+                                    // 直接用UTC方法，MySQL存的北京时间在UTC环境下UTC值=北京时间值
+                                    const dateStr = `${dt.getUTCMonth()+1}月${dt.getUTCDate()}日 ${dt.getUTCHours().toString().padStart(2,'0')}:${dt.getUTCMinutes().toString().padStart(2,'0')}`;
+                                    return (
+                                      <div key={t.tier} className="flex justify-between text-[10px] text-amber-700 py-0.5">
+                                        <span>D{t.tier}档触发 · 第{t.scanCount}次扫描 · {dateStr}</span>
+                                        <span className="font-medium">{parseFloat(t.triggerPrice).toLocaleString()} USDT</span>
+                                      </div>
+                                    );
+                                  })
+                                ) : (
+                                  <div className="text-[10px] text-amber-500 py-0.5">未触发任何扣档，当前为D0基准档</div>
+                                )}
+                                {lowestScan ? (
+                                  <div className="mt-1.5 pt-1.5 border-t border-amber-200">
+                                    <div className="flex justify-between text-[10px] text-gray-500 py-0.5">
+                                      <span>最新扫描最低价 · 第{lowestScan.scanCount}次扫描 · {(() => { const dt = new Date(lowestScan.scannedAt); return `${dt.getUTCMonth()+1}月${dt.getUTCDate()}日 ${dt.getUTCHours().toString().padStart(2,'0')}:${dt.getUTCMinutes().toString().padStart(2,'0')}`; })()}</span>
+                                      <span className="font-semibold text-gray-700">{parseFloat(lowestScan.price).toLocaleString()} USDT</span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="mt-1.5 pt-1.5 border-t border-amber-200 text-[10px] text-gray-400">暂无扫描记录</div>
+                                )}
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">有效币数</span>
+                                <span className="font-medium text-gray-800">{calc.effectiveQuantity.toFixed(6)} {order.coin}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">单位收益</span>
+                                <span className={`font-medium ${calc.unitProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {calc.unitProfit >= 0 ? '+' : ''}{calc.unitProfit.toFixed(2)} USDT
+                                </span>
+                              </div>
+                              <div className="border-t border-blue-200 pt-2 mt-1 flex justify-between">
+                                <span className="text-gray-600 font-medium">总收益</span>
+                                <span className={`font-bold text-base ${calc.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {calc.totalProfit >= 0 ? '+' : ''}{calc.totalProfit.toFixed(4)} USDT
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                {order.isGift ? (
+                                  <span className="text-amber-600 font-medium">纯收益小计 <span className="text-[10px] font-normal text-amber-400">（赠单不含本金返还）</span></span>
+                                ) : (
+                                  <span className="text-gray-600">本金+收益小计</span>
+                                )}
+                                <span className="font-medium text-gray-800">{calc.totalRefund.toFixed(4)} USDT</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-red-500">管理费扣除 ({calc.holdDays}天)</span>
+                                <span className="font-medium text-red-500">- {calc.managementFee.toFixed(4)} USDT</span>
+                              </div>
+                              <div className="text-[10px] text-red-400">
+                                {(() => {
+                                  // 直接用UTC方法，MySQL存的北京时间在UTC环境下UTC值=北京时间值
+                                  const startDate = new Date(order.createdAt);
+                                  const endDate = (order.sellStatus === 'sold' && order.sellConfirmedAt)
+                                    ? new Date(order.sellConfirmedAt)
+                                    : new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+                                  const fmt = (d: Date) => `${d.getUTCMonth()+1}月${d.getUTCDate()}日`;
+                                  return `计费区间：${fmt(startDate)} → ${fmt(endDate)}（共${calc.holdDays}天，${calc.dailyFee.toFixed(4)} USDT/天）`;
+                                })()}
+                              </div>
+                              <div className="flex justify-between bg-green-50 rounded px-2 py-1.5 border border-green-200">
+                                <span className="text-green-700 font-bold">实际到账</span>
+                                <span className="font-bold text-green-600 text-base">{calc.actualRefund.toFixed(4)} USDT</span>
+                              </div>
+                            </div>
+                            <p className="text-[10px] text-blue-500 mt-2">
+                              {order.isGift
+                                ? `纯收益 - 管理费 = ${Math.max(0, calc.totalProfit).toFixed(4)} - ${calc.managementFee.toFixed(4)} = ${calc.actualRefund.toFixed(4)} USDT（赠单不含本金）`
+                                : `本金 + 收益 - 管理费 = ${calc.principal.toFixed(2)} + ${Math.max(0, calc.totalProfit).toFixed(4)} - ${calc.managementFee.toFixed(4)} = ${calc.actualRefund.toFixed(4)} USDT`
+                              }
+                            </p>
+                          </div>
+                        );
+                      })()}
+
+                      <p className="text-[10px] text-orange-400">
+                        {order.isGift ? '系统将根据此价格计算纯收益到用户余额（赠单不返还本金）' : '系统将根据此价格计算收益并返还本金+收益到用户余额'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 编辑时的操作说明 */}
+                  {isEditing && (
+                    <div className="mt-3 text-xs text-gray-400 bg-gray-50 rounded-lg p-2">
+                      <p>· 修改买入状态为「已撤单」：将退回已扣余额</p>
+                      <p>· 数量 = 实际投入 × {orderMultiplier} / 价格（自动计算）</p>
+                      {editState?.sellStatus === 'selling' && <p>· 当前为委卖中状态，可改为「已卖出」确认成交</p>}
+                      {editState?.sellStatus === 'sold' && <p>· 确认卖出成交：{order.isGift ? '返还纯收益到用户余额（赠单不含本金）' : '返还本金 + 实际收益到用户余额'}</p>}
+                    </div>
+                  )}
+                </div>
+              );
+                };
+
+return (
     <div className="min-h-screen pb-10" style={{ background: '#f5f7fa' }}>
 
       {/* ── 顶部蓝色区域 ── */}
@@ -622,7 +1528,7 @@ export default function AfOrderManage() {
                 // 计算该订单实时管理费
                 const amount = parseFloat(o.amount) || 0;
                 if (amount > 0) {
-                  const tradeValue = o.isGift ? amount : amount * 5.25;
+                  const tradeValue = o.isGift ? amount : amount * orderMultiplier;
                   const dailyFee = tradeValue / 0.75 * 0.12 / 365;
                   const createdDay = getBJDateOnly(o.createdAt);
                   const holdDays = Math.max(1, Math.floor((todayStart.getTime() - createdDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
@@ -1171,75 +2077,8 @@ export default function AfOrderManage() {
                           {visibleOrders.length === 0 ? (
                             <div className="text-center py-3 text-[11px] text-gray-400">无匹配订单</div>
                           ) : visibleOrders.map((order: any) => {
-                            const isEditing = editingId === order.id;
-                            const statusDisplay = getStatusDisplay(order);
-                            let previewQuantity = editState?.quantity ?? "";
-                            if (isEditing && editState) {
-                              const p = parseFloat(order.limitPrice);
-                              const a = parseFloat(editState.amount);
-                              if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) {
-                                previewQuantity = (a * 5.25 / p).toFixed(8);
-                              }
-                            }
-                            const orderDate = new Date(order.createdAt);
-                            const yy = String(orderDate.getUTCFullYear()).slice(2);
-                            const mm2 = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
-                            const dd2 = String(orderDate.getUTCDate()).padStart(2, '0');
-                            const orderNo = (order.isSimulated && order.simulationOrderNo) ? order.simulationOrderNo : `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
-                            return (
-                              <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
-                                <div className="flex items-start justify-between mb-3 gap-3">
-                                  <div className="flex flex-col gap-1 min-w-0">
-                                    <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-xs font-medium text-gray-700 shrink-0">
-                                        {order.username && order.nickname && order.username !== order.nickname ? `${order.username}/${order.nickname}` : order.nickname || order.username || `用户${order.userId}`}
-                                      </span>
-                                      {order.isGift && (<span className="inline-flex items-center justify-center font-black select-none shrink-0" style={{width:18,height:18,borderRadius:'50%',fontSize:10,color:'#FFD700',background:'radial-gradient(circle at 35% 30%, #5a1a1a 0%, #1a0a00 55%, #3d0000 100%)',boxShadow:'0 1px 4px rgba(0,0,0,0.4)',border:'1.5px solid #8B4513',textShadow:'0 1px 2px rgba(255,180,0,0.8)'}}>赠</span>)}
-                                      {order.status === 'completed' && (order.tierMode === 'linear' ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#EFF6FF',color:'#3B82F6',border:'1px solid #BFDBFE'}}>线性</span> : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#FFF7ED',color:'#D97706',border:'1px solid #FED7AA'}}>阶梯</span>)}
-                                    </div>
-                                  </div>
-                                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                    <div className="flex flex-col items-end gap-0.5">
-                                      <span className="text-[10px] text-gray-400"><span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}</span>
-                                      {order.confirmedAt && <span className="text-[10px] text-blue-400"><span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}</span>}
-                                      {order.sellStatus==='selling'&&order.sellAt&&<span className="text-[10px] text-orange-400"><span className="text-orange-300 mr-1">委卖</span>{formatDate(order.sellAt)}</span>}
-                                      {order.sellStatus==='sold'&&order.sellConfirmedAt&&<span className="text-[10px] text-green-500"><span className="text-green-400 mr-1">确认</span>{formatDate(order.sellConfirmedAt)}</span>}
-                                    </div>
-                                    {!isEditing ? (
-                                      <div className="flex items-center gap-1.5">
-                                        <button onClick={() => startEdit(order)} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><Pencil className="w-3 h-3" /> 编辑</button>
-                                        <button onClick={() => { setDeleteTarget(order); const ig = order.isGift===true||order.isGift===1; setDeleteScope('all'); setSelectedGiftIds([]); setRefundChecked(order.status==='pending'&&!ig); }} className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"><Trash2 className="w-3 h-3" /> 删除</button>
-                                      </div>
-                                    ) : (
-                                      <div className="flex items-center gap-1.5">
-                                        <button onClick={saveEdit} disabled={updateMutation.isPending} className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"><Check className="w-3 h-3" /> 保存</button>
-                                        <button onClick={cancelEdit} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><X className="w-3 h-3" /> 取消</button>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-y-2 gap-x-2 text-xs">
-                                  <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">币种</span><span className="font-medium">{order.coin}</span></div>
-                                  <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">状态</span>{isEditing ? (<div className="flex flex-col gap-1"><select value={editState!.status} onChange={(e)=>setEditState({...editState!,status:e.target.value as any})} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="pending">委买中</option><option value="completed">买入成交</option><option value="cancelled">已撤单</option></select><select value={editState!.sellStatus||''} onChange={(e)=>{const nextSellStatus=e.target.value||null;setEditState({...editState!,sellStatus:nextSellStatus,status:nextSellStatus?'completed':editState!.status});}} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="">持仓中</option><option value="selling">委卖中</option><option value="sold">已卖出</option></select></div>) : (<span className={`font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>)}</div>
-                                  {isEditing&&editState!.status==='completed'&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">档位模式</span><div className="flex rounded overflow-hidden border border-gray-300 text-xs"><button type="button" onClick={()=>setEditState({...editState!,tierMode:'step'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='step'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>阶梯</button><button type="button" onClick={()=>setEditState({...editState!,tierMode:'linear'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='linear'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>线性</button></div></div>}
-                                  <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">买入价</span>{isEditing&&editState!.status==='pending'?<input type="number" value={editState!.limitPrice} onChange={(e)=>setEditState({...editState!,limitPrice:e.target.value})} className="border border-gray-300 rounded px-2 py-0.5 text-sm w-24" />:<span className="font-medium text-gray-900">{parseFloat(order.limitPrice).toLocaleString()} <span className="text-gray-400">u</span></span>}</div>
-                                  <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">数量</span><span className="font-medium text-gray-900">{(()=>{const raw=isEditing?(previewQuantity||editState!.quantity):order.quantity;const num=parseFloat(raw);const trimmed=isNaN(num)?raw:num.toFixed(8).replace(/\.?0+$/,'');return `${trimmed} ${order.coin}`;})()}</span></div>
-                                  {order.status==='completed'&&(()=>{const raw=order.quantity;const num=parseFloat(raw);let rate:number;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;}if(rate>=1.0)return null;const effectiveNum=num*rate;const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">实际持仓</span><span className="text-xs text-orange-500">{effectiveNum.toFixed(8).replace(/\.?0+$/,'')} {order.coin} ({pct}%)</span></div>);})()}
-                                  {(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const selfAmt=parseFloat(order.amount||'0');const investAmt=order.isGift?srcAmt:selfAmt;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">实际投入</span><span className="font-medium text-gray-900">{investAmt.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
-                                  {(()=>{const amount=parseFloat(order.amount);const tradeValue=order.isGift?amount:amount*5.25;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">订单价値</span><span className="text-gray-900 font-medium">{tradeValue.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
-                                  {order.isGift&&(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const giftAmt=parseFloat(order.amount||'0');const ratio=srcAmt>0?(giftAmt/srcAmt):0;return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">赠送市値</span><span className="font-medium text-gray-900">{giftAmt.toFixed(2)} <span className="text-gray-400">u</span>{ratio>0&&<span className="font-normal text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}</span></div>);})()}
-                                  {(order.sellStatus==='selling'||order.sellStatus==='sold')&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">卖出价</span><span className="font-medium text-gray-900">{parseFloat(order.sellPrice).toLocaleString()} <span className="text-gray-400">u</span></span></div>}
-                                  {order.sellStatus==='sold'&&order.sellConfirmedAt&&<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">卖出时间</span><span className="text-gray-500">{formatDate(order.sellConfirmedAt)}</span></div>}
-                                  {order.status==='completed'&&(()=>{let rate:number;let tierLabel:string;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;tierLabel='L';}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;tierLabel=order.equityTier===0?'D0档':`D${order.equityTier}档`;}const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">当前权益</span><span className={`font-medium ${rate>=1.0?'text-gray-900':'text-orange-500'}`}>{pct}% <span className="text-gray-400">({tierLabel})</span></span></div>);})()}
-                                  {(order.status==='completed'||order.status==='pending')&&<FeeRow order={order} ledgerId={ledgerId} />}
-                                </div>
-                                {(order.isGift===true||order.isGift===1)&&(()=>{const parentOrder=order.sourceOrderId?(orders as any[]||[]).find((o:any)=>o.id===order.sourceOrderId):null;const parentStatus=parentOrder?(parentOrder.sellStatus==='sold'?'已卖出':parentOrder.sellStatus==='selling'?'委卖中':parentOrder.status==='completed'?'持仓中':parentOrder.status==='cancelled'?'已撤单':'委买中'):null;const parentStatusColor=parentOrder?(parentOrder.sellStatus==='sold'?'text-blue-500':parentOrder.sellStatus==='selling'?'text-red-500':parentOrder.status==='completed'?'text-green-500':'text-gray-400'):'text-gray-400';const parentOrderNo=parentOrder?(()=>{const d=new Date(parentOrder.createdAt);return `AF${String(d.getUTCFullYear()).slice(2)}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}${String(parentOrder.id).padStart(6,'0')}`;})():null;return(<div className="mt-2 text-xs rounded-lg px-3 py-2 border border-purple-100 bg-purple-50"><div className="flex items-center justify-between"><span className="text-purple-600 font-medium">推荐人奖励赠单</span>{order.sourceUsername&&<span className="text-gray-500">来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span></span>}</div>{parentOrder&&<div className="mt-1 flex items-center gap-1.5 text-gray-500"><span>关联正单</span>{parentOrderNo&&<span className="font-mono text-gray-600">{parentOrderNo}</span>}<span className={`font-medium ${parentStatusColor}`}>{parentStatus}</span></div>}</div>);})()}
-                                {!(order.isGift===true||order.isGift===1)&&(()=>{const giftOrders:any[]=(order as any).giftOrders||[];if(giftOrders.length===0)return null;const soldCount=giftOrders.filter((g:any)=>g.sellStatus==='sold').length;const sellingCount=giftOrders.filter((g:any)=>g.sellStatus==='selling').length;const holdingCount=giftOrders.length-soldCount-sellingCount;return(<div className="mt-2 text-xs rounded-lg px-3 py-1.5 border border-purple-100 bg-purple-50 flex items-center gap-2 flex-wrap"><span className="text-purple-600 font-medium">关联赠单 {giftOrders.length}笔</span>{soldCount>0&&<span className="text-blue-500">已卖出 {soldCount}</span>}{sellingCount>0&&<span className="text-red-500">委卖中 {sellingCount}</span>}{holdingCount>0&&<span className="text-green-500">持仓中 {holdingCount}</span>}</div>);})()}
-                                {isEditing && editState?.sellStatus === 'sold' && (<div className="mt-3 space-y-3"><div className="bg-orange-50 border border-orange-200 rounded-lg p-3"><p className="text-xs text-orange-600 font-medium mb-2">确认卖出成交，请输入实际卖出价格</p><div className="flex items-center gap-2"><span className="text-xs text-gray-500 whitespace-nowrap">实际卖出价</span><input type="number" placeholder="输入实际成交价格" value={editState!.actualSellPrice} onChange={(e) => setEditState({ ...editState!, actualSellPrice: e.target.value })} className="border border-orange-300 rounded px-2 py-1 text-sm w-full focus:outline-none focus:border-orange-500" /><span className="text-xs text-gray-400 whitespace-nowrap">USDT</span></div></div>{editState!.actualSellPrice && calculateProfit(order, editState!.actualSellPrice) && (() => { const calc = calculateProfit(order, editState!.actualSellPrice)!; return (<div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2"><p className="text-xs font-medium text-blue-600">实时利润计算</p><div className="space-y-1.5 text-xs"><div className="flex justify-between"><span className="text-gray-600">持币数量</span><span className="font-medium text-gray-800">{calc.coinQuantity.toFixed(6)} {order.coin}</span></div><div className="flex justify-between"><span className="text-gray-600">买入价</span><span className="font-medium text-gray-800">{calc.buyPrice.toLocaleString()} USDT</span></div><div className="flex justify-between"><span className="text-gray-600">卖出价</span><span className="font-medium text-gray-800">{calc.sellPrice.toLocaleString()} USDT</span></div></div></div>); })()}</div>)}
-                              </div>
-                            );
-                          })}
+    return renderUnifiedOrderCard(order);
+  })}
                         </div>
                       </div>
                     )}
@@ -1325,57 +2164,8 @@ export default function AfOrderManage() {
                     {isOpen && (
                       <div className="mt-1 mb-2 pt-2">
                         {flatOrders.map((order: any) => {
-                          const isEditing = editingId === order.id;
-                          const statusDisplay = getStatusDisplay(order);
-                          let previewQuantity = editState?.quantity ?? "";
-                          if (isEditing && editState) { const p = parseFloat(order.limitPrice); const a = parseFloat(editState.amount); if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) { previewQuantity = (a * 5.25 / p).toFixed(8); } }
-                          const orderDate = new Date(order.createdAt);
-                          const yy = String(orderDate.getUTCFullYear()).slice(2);
-                          const mm2 = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
-                          const dd2 = String(orderDate.getUTCDate()).padStart(2, '0');
-                          const orderNo = (order.isSimulated && order.simulationOrderNo) ? order.simulationOrderNo : `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
-                          return (
-                            <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
-                              <div className="flex items-start justify-between mb-3 gap-3">
-                                <div className="flex flex-col gap-1 min-w-0">
-                                  <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-xs font-medium text-gray-700 shrink-0">{order.username && order.nickname && order.username !== order.nickname ? `${order.username}/${order.nickname}` : order.nickname || order.username || `用户${order.userId}`}</span>
-                                    {order.isGift && (<span className="inline-flex items-center justify-center font-black select-none shrink-0" style={{width:18,height:18,borderRadius:'50%',fontSize:10,color:'#FFD700',background:'radial-gradient(circle at 35% 30%, #5a1a1a 0%, #1a0a00 55%, #3d0000 100%)',boxShadow:'0 1px 4px rgba(0,0,0,0.4)',border:'1.5px solid #8B4513',textShadow:'0 1px 2px rgba(255,180,0,0.8)'}}>赠</span>)}
-                                    {order.status === 'completed' && (order.tierMode === 'linear' ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#EFF6FF',color:'#3B82F6',border:'1px solid #BFDBFE'}}>线性</span> : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#FFF7ED',color:'#D97706',border:'1px solid #FED7AA'}}>阶梯</span>)}
-                                  </div>
-                                </div>
-                                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                  <div className="flex flex-col items-end gap-0.5">
-                                    <span className="text-[10px] text-gray-400"><span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}</span>
-                                    {order.confirmedAt && <span className="text-[10px] text-blue-400"><span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}</span>}
-                                    {order.sellStatus==='selling'&&order.sellAt&&<span className="text-[10px] text-orange-400"><span className="text-orange-300 mr-1">委卖</span>{formatDate(order.sellAt)}</span>}
-                                    {order.sellStatus==='sold'&&order.sellConfirmedAt&&<span className="text-[10px] text-green-500"><span className="text-green-400 mr-1">确认</span>{formatDate(order.sellConfirmedAt)}</span>}
-                                  </div>
-                                  {!isEditing ? (<div className="flex items-center gap-1.5"><button onClick={() => startEdit(order)} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><Pencil className="w-3 h-3" /> 编辑</button><button onClick={() => { setDeleteTarget(order); const ig = order.isGift===true||order.isGift===1; setDeleteScope('all'); setSelectedGiftIds([]); setRefundChecked(order.status==='pending'&&!ig); }} className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"><Trash2 className="w-3 h-3" /> 删除</button></div>) : (<div className="flex items-center gap-1.5"><button onClick={saveEdit} disabled={updateMutation.isPending} className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"><Check className="w-3 h-3" /> 保存</button><button onClick={cancelEdit} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><X className="w-3 h-3" /> 取消</button></div>)}
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-2 gap-y-2 gap-x-2 text-xs">
-                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">币种</span><span className="font-medium">{order.coin}</span></div>
-                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">状态</span>{isEditing ? (<div className="flex flex-col gap-1"><select value={editState!.status} onChange={(e)=>setEditState({...editState!,status:e.target.value as any})} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="pending">委买中</option><option value="completed">买入成交</option><option value="cancelled">已撤单</option></select><select value={editState!.sellStatus||''} onChange={(e)=>{const nextSellStatus=e.target.value||null;setEditState({...editState!,sellStatus:nextSellStatus,status:nextSellStatus?'completed':editState!.status});}} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="">持仓中</option><option value="selling">委卖中</option><option value="sold">已卖出</option></select></div>) : (<span className={`font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>)}</div>
-                                {isEditing&&editState!.status==='completed'&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">档位模式</span><div className="flex rounded overflow-hidden border border-gray-300 text-xs"><button type="button" onClick={()=>setEditState({...editState!,tierMode:'step'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='step'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>阶梯</button><button type="button" onClick={()=>setEditState({...editState!,tierMode:'linear'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='linear'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>线性</button></div></div>}
-                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">买入价</span>{isEditing&&editState!.status==='pending'?<input type="number" value={editState!.limitPrice} onChange={(e)=>setEditState({...editState!,limitPrice:e.target.value})} className="border border-gray-300 rounded px-2 py-0.5 text-sm w-24" />:<span className="font-medium text-gray-900">{parseFloat(order.limitPrice).toLocaleString()} <span className="text-gray-400">u</span></span>}</div>
-                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">数量</span><span className="font-medium text-gray-900">{(()=>{const raw=isEditing?(previewQuantity||editState!.quantity):order.quantity;const num=parseFloat(raw);const trimmed=isNaN(num)?raw:num.toFixed(8).replace(/\.?0+$/,'');return `${trimmed} ${order.coin}`;})()}</span></div>
-                                {order.status==='completed'&&(()=>{const raw=order.quantity;const num=parseFloat(raw);let rate:number;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;}if(rate>=1.0)return null;const effectiveNum=num*rate;const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">实际持仓</span><span className="text-xs text-orange-500">{effectiveNum.toFixed(8).replace(/\.?0+$/,'')} {order.coin} ({pct}%)</span></div>);})()}
-                                {(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const selfAmt=parseFloat(order.amount||'0');const investAmt=order.isGift?srcAmt:selfAmt;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">实际投入</span><span className="font-medium text-gray-900">{investAmt.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
-                                {(()=>{const amount=parseFloat(order.amount);const tradeValue=order.isGift?amount:amount*5.25;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">订单价値</span><span className="text-gray-900 font-medium">{tradeValue.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
-                                {order.isGift&&(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const giftAmt=parseFloat(order.amount||'0');const ratio=srcAmt>0?(giftAmt/srcAmt):0;return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">赠送市値</span><span className="font-medium text-gray-900">{giftAmt.toFixed(2)} <span className="text-gray-400">u</span>{ratio>0&&<span className="font-normal text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}</span></div>);})()}
-                                {(order.sellStatus==='selling'||order.sellStatus==='sold')&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">卖出价</span><span className="font-medium text-gray-900">{parseFloat(order.sellPrice).toLocaleString()} <span className="text-gray-400">u</span></span></div>}
-                                {order.sellStatus==='sold'&&order.sellConfirmedAt&&<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">卖出时间</span><span className="text-gray-500">{formatDate(order.sellConfirmedAt)}</span></div>}
-                                {order.status==='completed'&&(()=>{let rate:number;let tierLabel:string;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;tierLabel='L';}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;tierLabel=order.equityTier===0?'D0档':`D${order.equityTier}档`;}const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">当前权益</span><span className={`font-medium ${rate>=1.0?'text-gray-900':'text-orange-500'}`}>{pct}% <span className="text-gray-400">({tierLabel})</span></span></div>);})()}
-                                {(order.status==='completed'||order.status==='pending')&&<FeeRow order={order} ledgerId={ledgerId} />}
-                              </div>
-                              {(order.isGift===true||order.isGift===1)&&(()=>{const parentOrder=order.sourceOrderId?(orders as any[]||[]).find((o:any)=>o.id===order.sourceOrderId):null;const parentStatus=parentOrder?(parentOrder.sellStatus==='sold'?'已卖出':parentOrder.sellStatus==='selling'?'委卖中':parentOrder.status==='completed'?'持仓中':parentOrder.status==='cancelled'?'已撤单':'委买中'):null;const parentStatusColor=parentOrder?(parentOrder.sellStatus==='sold'?'text-blue-500':parentOrder.sellStatus==='selling'?'text-red-500':parentOrder.status==='completed'?'text-green-500':'text-gray-400'):'text-gray-400';const parentOrderNo=parentOrder?(()=>{const d=new Date(parentOrder.createdAt);return `AF${String(d.getUTCFullYear()).slice(2)}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}${String(parentOrder.id).padStart(6,'0')}`;})():null;return(<div className="mt-2 text-xs rounded-lg px-3 py-2 border border-purple-100 bg-purple-50"><div className="flex items-center justify-between"><span className="text-purple-600 font-medium">推荐人奖励赠单</span>{order.sourceUsername&&<span className="text-gray-500">来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span></span>}</div>{parentOrder&&<div className="mt-1 flex items-center gap-1.5 text-gray-500"><span>关联正单</span>{parentOrderNo&&<span className="font-mono text-gray-600">{parentOrderNo}</span>}<span className={`font-medium ${parentStatusColor}`}>{parentStatus}</span></div>}</div>);})()}
-                              {!(order.isGift===true||order.isGift===1)&&(()=>{const giftOrders:any[]=(order as any).giftOrders||[];if(giftOrders.length===0)return null;const soldCount=giftOrders.filter((g:any)=>g.sellStatus==='sold').length;const sellingCount=giftOrders.filter((g:any)=>g.sellStatus==='selling').length;const holdingCount=giftOrders.length-soldCount-sellingCount;return(<div className="mt-2 text-xs rounded-lg px-3 py-1.5 border border-purple-100 bg-purple-50 flex items-center gap-2 flex-wrap"><span className="text-purple-600 font-medium">关联赠单 {giftOrders.length}笔</span>{soldCount>0&&<span className="text-blue-500">已卖出 {soldCount}</span>}{sellingCount>0&&<span className="text-red-500">委卖中 {sellingCount}</span>}{holdingCount>0&&<span className="text-green-500">持仓中 {holdingCount}</span>}</div>);})()}
-                              {isEditing && editState?.sellStatus === 'sold' && (<div className="mt-3 space-y-3"><div className="bg-orange-50 border border-orange-200 rounded-lg p-3"><p className="text-xs text-orange-600 font-medium mb-2">确认卖出成交，请输入实际卖出价格</p><div className="flex items-center gap-2"><span className="text-xs text-gray-500 whitespace-nowrap">实际卖出价</span><input type="number" placeholder="输入实际成交价格" value={editState!.actualSellPrice} onChange={(e) => setEditState({ ...editState!, actualSellPrice: e.target.value })} className="border border-orange-300 rounded px-2 py-1 text-sm w-full focus:outline-none focus:border-orange-500" /><span className="text-xs text-gray-400 whitespace-nowrap">USDT</span></div></div>{editState!.actualSellPrice && calculateProfit(order, editState!.actualSellPrice) && (() => { const calc = calculateProfit(order, editState!.actualSellPrice)!; return (<div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2"><p className="text-xs font-medium text-blue-600">实时利润计算</p><div className="space-y-1.5 text-xs"><div className="flex justify-between"><span className="text-gray-600">持币数量</span><span className="font-medium text-gray-800">{calc.coinQuantity.toFixed(6)} {order.coin}</span></div><div className="flex justify-between"><span className="text-gray-600">买入价</span><span className="font-medium text-gray-800">{calc.buyPrice.toLocaleString()} USDT</span></div><div className="flex justify-between"><span className="text-gray-600">卖出价</span><span className="font-medium text-gray-800">{calc.sellPrice.toLocaleString()} USDT</span></div></div></div>); })()}</div>)}
-                            </div>
-                          );
-                        })}
+    return renderUnifiedOrderCard(order);
+  })}
                       </div>
                     )}
                   </div>
@@ -1507,57 +2297,8 @@ export default function AfOrderManage() {
                     {isOpen && (
                       <div className="mt-1 mb-2 pt-2">
                         {flatOrders.map((order: any) => {
-                          const isEditing = editingId === order.id;
-                          const statusDisplay = getStatusDisplay(order);
-                          let previewQuantity = editState?.quantity ?? "";
-                          if (isEditing && editState) { const p = parseFloat(order.limitPrice); const a = parseFloat(editState.amount); if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) { previewQuantity = (a * 5.25 / p).toFixed(8); } }
-                          const orderDate = new Date(order.createdAt);
-                          const yy = String(orderDate.getUTCFullYear()).slice(2);
-                          const mm2 = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
-                          const dd2 = String(orderDate.getUTCDate()).padStart(2, '0');
-                          const orderNo = (order.isSimulated && order.simulationOrderNo) ? order.simulationOrderNo : `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
-                          return (
-                            <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
-                              <div className="flex items-start justify-between mb-3 gap-3">
-                                <div className="flex flex-col gap-1 min-w-0">
-                                  <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-xs font-medium text-gray-700 shrink-0">{order.username && order.nickname && order.username !== order.nickname ? `${order.username}/${order.nickname}` : order.nickname || order.username || `用户${order.userId}`}</span>
-                                    {order.isGift && (<span className="inline-flex items-center justify-center font-black select-none shrink-0" style={{width:18,height:18,borderRadius:'50%',fontSize:10,color:'#FFD700',background:'radial-gradient(circle at 35% 30%, #5a1a1a 0%, #1a0a00 55%, #3d0000 100%)',boxShadow:'0 1px 4px rgba(0,0,0,0.4)',border:'1.5px solid #8B4513',textShadow:'0 1px 2px rgba(255,180,0,0.8)'}}>赠</span>)}
-                                    {order.status === 'completed' && (order.tierMode === 'linear' ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#EFF6FF',color:'#3B82F6',border:'1px solid #BFDBFE'}}>线性</span> : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#FFF7ED',color:'#D97706',border:'1px solid #FED7AA'}}>阶梯</span>)}
-                                  </div>
-                                </div>
-                                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                  <div className="flex flex-col items-end gap-0.5">
-                                    <span className="text-[10px] text-gray-400"><span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}</span>
-                                    {order.confirmedAt && <span className="text-[10px] text-blue-400"><span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}</span>}
-                                    {order.sellStatus==='selling'&&order.sellAt&&<span className="text-[10px] text-orange-400"><span className="text-orange-300 mr-1">委卖</span>{formatDate(order.sellAt)}</span>}
-                                    {order.sellStatus==='sold'&&order.sellConfirmedAt&&<span className="text-[10px] text-green-500"><span className="text-green-400 mr-1">确认</span>{formatDate(order.sellConfirmedAt)}</span>}
-                                  </div>
-                                  {!isEditing ? (<div className="flex items-center gap-1.5"><button onClick={() => startEdit(order)} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><Pencil className="w-3 h-3" /> 编辑</button><button onClick={() => { setDeleteTarget(order); const ig = order.isGift===true||order.isGift===1; setDeleteScope('all'); setSelectedGiftIds([]); setRefundChecked(order.status==='pending'&&!ig); }} className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"><Trash2 className="w-3 h-3" /> 删除</button></div>) : (<div className="flex items-center gap-1.5"><button onClick={saveEdit} disabled={updateMutation.isPending} className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"><Check className="w-3 h-3" /> 保存</button><button onClick={cancelEdit} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><X className="w-3 h-3" /> 取消</button></div>)}
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-2 gap-y-2 gap-x-2 text-xs">
-                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">币种</span><span className="font-medium">{order.coin}</span></div>
-                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">状态</span>{isEditing ? (<div className="flex flex-col gap-1"><select value={editState!.status} onChange={(e)=>setEditState({...editState!,status:e.target.value as any})} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="pending">委买中</option><option value="completed">买入成交</option><option value="cancelled">已撤单</option></select><select value={editState!.sellStatus||''} onChange={(e)=>{const nextSellStatus=e.target.value||null;setEditState({...editState!,sellStatus:nextSellStatus,status:nextSellStatus?'completed':editState!.status});}} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="">持仓中</option><option value="selling">委卖中</option><option value="sold">已卖出</option></select></div>) : (<span className={`font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>)}</div>
-                                {isEditing&&editState!.status==='completed'&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">档位模式</span><div className="flex rounded overflow-hidden border border-gray-300 text-xs"><button type="button" onClick={()=>setEditState({...editState!,tierMode:'step'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='step'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>阶梯</button><button type="button" onClick={()=>setEditState({...editState!,tierMode:'linear'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='linear'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>线性</button></div></div>}
-                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">买入价</span>{isEditing&&editState!.status==='pending'?<input type="number" value={editState!.limitPrice} onChange={(e)=>setEditState({...editState!,limitPrice:e.target.value})} className="border border-gray-300 rounded px-2 py-0.5 text-sm w-24" />:<span className="font-medium text-gray-900">{parseFloat(order.limitPrice).toLocaleString()} <span className="text-gray-400">u</span></span>}</div>
-                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">数量</span><span className="font-medium text-gray-900">{(()=>{const raw=isEditing?(previewQuantity||editState!.quantity):order.quantity;const num=parseFloat(raw);const trimmed=isNaN(num)?raw:num.toFixed(8).replace(/\.?0+$/,'');return `${trimmed} ${order.coin}`;})()}</span></div>
-                                {order.status==='completed'&&(()=>{const raw=order.quantity;const num=parseFloat(raw);let rate:number;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;}if(rate>=1.0)return null;const effectiveNum=num*rate;const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">实际持仓</span><span className="text-xs text-orange-500">{effectiveNum.toFixed(8).replace(/\.?0+$/,'')} {order.coin} ({pct}%)</span></div>);})()}
-                                {(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const selfAmt=parseFloat(order.amount||'0');const investAmt=order.isGift?srcAmt:selfAmt;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">实际投入</span><span className="font-medium text-gray-900">{investAmt.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
-                                {(()=>{const amount=parseFloat(order.amount);const tradeValue=order.isGift?amount:amount*5.25;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">订单价値</span><span className="text-gray-900 font-medium">{tradeValue.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
-                                {order.isGift&&(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const giftAmt=parseFloat(order.amount||'0');const ratio=srcAmt>0?(giftAmt/srcAmt):0;return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">赠送市値</span><span className="font-medium text-gray-900">{giftAmt.toFixed(2)} <span className="text-gray-400">u</span>{ratio>0&&<span className="font-normal text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}</span></div>);})()}
-                                {(order.sellStatus==='selling'||order.sellStatus==='sold')&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">卖出价</span><span className="font-medium text-gray-900">{parseFloat(order.sellPrice).toLocaleString()} <span className="text-gray-400">u</span></span></div>}
-                                {order.sellStatus==='sold'&&order.sellConfirmedAt&&<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">卖出时间</span><span className="text-gray-500">{formatDate(order.sellConfirmedAt)}</span></div>}
-                                {order.status==='completed'&&(()=>{let rate:number;let tierLabel:string;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;tierLabel='L';}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;tierLabel=order.equityTier===0?'D0档':`D${order.equityTier}档`;}const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">当前权益</span><span className={`font-medium ${rate>=1.0?'text-gray-900':'text-orange-500'}`}>{pct}% <span className="text-gray-400">({tierLabel})</span></span></div>);})()}
-                                {(order.status==='completed'||order.status==='pending')&&<FeeRow order={order} ledgerId={ledgerId} />}
-                              </div>
-                              {(order.isGift===true||order.isGift===1)&&(()=>{const parentOrder=order.sourceOrderId?(orders as any[]||[]).find((o:any)=>o.id===order.sourceOrderId):null;const parentStatus=parentOrder?(parentOrder.sellStatus==='sold'?'已卖出':parentOrder.sellStatus==='selling'?'委卖中':parentOrder.status==='completed'?'持仓中':parentOrder.status==='cancelled'?'已撤单':'委买中'):null;const parentStatusColor=parentOrder?(parentOrder.sellStatus==='sold'?'text-blue-500':parentOrder.sellStatus==='selling'?'text-red-500':parentOrder.status==='completed'?'text-green-500':'text-gray-400'):'text-gray-400';const parentOrderNo=parentOrder?(()=>{const d=new Date(parentOrder.createdAt);return `AF${String(d.getUTCFullYear()).slice(2)}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}${String(parentOrder.id).padStart(6,'0')}`;})():null;return(<div className="mt-2 text-xs rounded-lg px-3 py-2 border border-purple-100 bg-purple-50"><div className="flex items-center justify-between"><span className="text-purple-600 font-medium">推荐人奖励赠单</span>{order.sourceUsername&&<span className="text-gray-500">来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span></span>}</div>{parentOrder&&<div className="mt-1 flex items-center gap-1.5 text-gray-500"><span>关联正单</span>{parentOrderNo&&<span className="font-mono text-gray-600">{parentOrderNo}</span>}<span className={`font-medium ${parentStatusColor}`}>{parentStatus}</span></div>}</div>);})()}
-                              {!(order.isGift===true||order.isGift===1)&&(()=>{const giftOrders:any[]=(order as any).giftOrders||[];if(giftOrders.length===0)return null;const soldCount=giftOrders.filter((g:any)=>g.sellStatus==='sold').length;const sellingCount=giftOrders.filter((g:any)=>g.sellStatus==='selling').length;const holdingCount=giftOrders.length-soldCount-sellingCount;return(<div className="mt-2 text-xs rounded-lg px-3 py-1.5 border border-purple-100 bg-purple-50 flex items-center gap-2 flex-wrap"><span className="text-purple-600 font-medium">关联赠单 {giftOrders.length}笔</span>{soldCount>0&&<span className="text-blue-500">已卖出 {soldCount}</span>}{sellingCount>0&&<span className="text-red-500">委卖中 {sellingCount}</span>}{holdingCount>0&&<span className="text-green-500">持仓中 {holdingCount}</span>}</div>);})()}
-                              {isEditing && editState?.sellStatus === 'sold' && (<div className="mt-3 space-y-3"><div className="bg-orange-50 border border-orange-200 rounded-lg p-3"><p className="text-xs text-orange-600 font-medium mb-2">确认卖出成交，请输入实际卖出价格</p><div className="flex items-center gap-2"><span className="text-xs text-gray-500 whitespace-nowrap">实际卖出价</span><input type="number" placeholder="输入实际成交价格" value={editState!.actualSellPrice} onChange={(e) => setEditState({ ...editState!, actualSellPrice: e.target.value })} className="border border-orange-300 rounded px-2 py-1 text-sm w-full focus:outline-none focus:border-orange-500" /><span className="text-xs text-gray-400 whitespace-nowrap">USDT</span></div></div>{editState!.actualSellPrice && calculateProfit(order, editState!.actualSellPrice) && (() => { const calc = calculateProfit(order, editState!.actualSellPrice)!; return (<div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2"><p className="text-xs font-medium text-blue-600">实时利润计算</p><div className="space-y-1.5 text-xs"><div className="flex justify-between"><span className="text-gray-600">持币数量</span><span className="font-medium text-gray-800">{calc.coinQuantity.toFixed(6)} {order.coin}</span></div><div className="flex justify-between"><span className="text-gray-600">买入价</span><span className="font-medium text-gray-800">{calc.buyPrice.toLocaleString()} USDT</span></div><div className="flex justify-between"><span className="text-gray-600">卖出价</span><span className="font-medium text-gray-800">{calc.sellPrice.toLocaleString()} USDT</span></div></div></div>); })()}</div>)}
-                            </div>
-                          );
-                        })}
+    return renderUnifiedOrderCard(order);
+  })}
                       </div>
                     )}
                   </div>
@@ -1683,58 +2424,8 @@ export default function AfOrderManage() {
                     {isOpen && (
                       <div className="mt-1 mb-2 pt-2">
                         {flatOrders.map((order: any) => {
-                          const isEditing = editingId === order.id;
-                          const statusDisplay = getStatusDisplay(order);
-                          let previewQuantity = editState?.quantity ?? "";
-                          if (isEditing && editState) { const p = parseFloat(order.limitPrice); const a = parseFloat(editState.amount); if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) { previewQuantity = (a * 5.25 / p).toFixed(8); } }
-                          const orderDate = new Date(order.createdAt);
-                          const bjDate = new Date(orderDate.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
-                          const yy = String(bjDate.getFullYear()).slice(2);
-                          const mm2 = String(bjDate.getMonth() + 1).padStart(2, '0');
-                          const dd2 = String(bjDate.getDate()).padStart(2, '0');
-                          const orderNo = (order.isSimulated && order.simulationOrderNo) ? order.simulationOrderNo : `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
-                          return (
-                            <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
-                              <div className="flex items-start justify-between mb-3 gap-3">
-                                <div className="flex flex-col gap-1 min-w-0">
-                                  <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-xs font-medium text-gray-700 shrink-0">{order.username && order.nickname && order.username !== order.nickname ? `${order.username}/${order.nickname}` : order.nickname || order.username || `用户${order.userId}`}</span>
-                                    {order.isGift && (<span className="inline-flex items-center justify-center font-black select-none shrink-0" style={{width:18,height:18,borderRadius:'50%',fontSize:10,color:'#FFD700',background:'radial-gradient(circle at 35% 30%, #5a1a1a 0%, #1a0a00 55%, #3d0000 100%)',boxShadow:'0 1px 4px rgba(0,0,0,0.4)',border:'1.5px solid #8B4513',textShadow:'0 1px 2px rgba(255,180,0,0.8)'}}>赠</span>)}
-                                    {order.status === 'completed' && (order.tierMode === 'linear' ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#EFF6FF',color:'#3B82F6',border:'1px solid #BFDBFE'}}>线性</span> : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#FFF7ED',color:'#D97706',border:'1px solid #FED7AA'}}>阶梯</span>)}
-                                  </div>
-                                </div>
-                                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                  <div className="flex flex-col items-end gap-0.5">
-                                    <span className="text-[10px] text-gray-400"><span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}</span>
-                                    {order.confirmedAt && <span className="text-[10px] text-blue-400"><span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}</span>}
-                                    {order.sellStatus==='selling'&&order.sellAt&&<span className="text-[10px] text-orange-400"><span className="text-orange-300 mr-1">委卖</span>{formatDate(order.sellAt)}</span>}
-                                    {order.sellStatus==='sold'&&order.sellConfirmedAt&&<span className="text-[10px] text-green-500"><span className="text-green-400 mr-1">确认</span>{formatDate(order.sellConfirmedAt)}</span>}
-                                  </div>
-                                  {!isEditing ? (<div className="flex items-center gap-1.5"><button onClick={() => startEdit(order)} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><Pencil className="w-3 h-3" /> 编辑</button><button onClick={() => { setDeleteTarget(order); const ig = order.isGift===true||order.isGift===1; setDeleteScope('all'); setSelectedGiftIds([]); setRefundChecked(order.status==='pending'&&!ig); }} className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"><Trash2 className="w-3 h-3" /> 删除</button></div>) : (<div className="flex items-center gap-1.5"><button onClick={saveEdit} disabled={updateMutation.isPending} className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"><Check className="w-3 h-3" /> 保存</button><button onClick={cancelEdit} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><X className="w-3 h-3" /> 取消</button></div>)}
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-2 gap-y-2 gap-x-2 text-xs">
-                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">币种</span><span className="font-medium">{order.coin}</span></div>
-                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">状态</span>{isEditing ? (<div className="flex flex-col gap-1"><select value={editState!.status} onChange={(e)=>setEditState({...editState!,status:e.target.value as any})} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="pending">委买中</option><option value="completed">买入成交</option><option value="cancelled">已撤单</option></select><select value={editState!.sellStatus||''} onChange={(e)=>{const nextSellStatus=e.target.value||null;setEditState({...editState!,sellStatus:nextSellStatus,status:nextSellStatus?'completed':editState!.status});}} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="">持仓中</option><option value="selling">委卖中</option><option value="sold">已卖出</option></select></div>) : (<span className={`font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>)}</div>
-                                {isEditing&&editState!.status==='completed'&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">档位模式</span><div className="flex rounded overflow-hidden border border-gray-300 text-xs"><button type="button" onClick={()=>setEditState({...editState!,tierMode:'step'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='step'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>阶梯</button><button type="button" onClick={()=>setEditState({...editState!,tierMode:'linear'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='linear'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>线性</button></div></div>}
-                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">买入价</span>{isEditing&&editState!.status==='pending'?<input type="number" value={editState!.limitPrice} onChange={(e)=>setEditState({...editState!,limitPrice:e.target.value})} className="border border-gray-300 rounded px-2 py-0.5 text-sm w-24" />:<span className="font-medium text-gray-900">{parseFloat(order.limitPrice).toLocaleString()} <span className="text-gray-400">u</span></span>}</div>
-                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">数量</span><span className="font-medium text-gray-900">{(()=>{const raw=isEditing?(previewQuantity||editState!.quantity):order.quantity;const num=parseFloat(raw);const trimmed=isNaN(num)?raw:num.toFixed(8).replace(/\.?0+$/,'');return `${trimmed} ${order.coin}`;})()}</span></div>
-                                {order.status==='completed'&&(()=>{const raw=order.quantity;const num=parseFloat(raw);let rate:number;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;}if(rate>=1.0)return null;const effectiveNum=num*rate;const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">实际持仓</span><span className="text-xs text-orange-500">{effectiveNum.toFixed(8).replace(/\.?0+$/,'')} {order.coin} ({pct}%)</span></div>);})()}
-                                {(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const selfAmt=parseFloat(order.amount||'0');const investAmt=order.isGift?srcAmt:selfAmt;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">实际投入</span><span className="font-medium text-gray-900">{investAmt.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
-                                {(()=>{const amount=parseFloat(order.amount);const tradeValue=order.isGift?amount:amount*5.25;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">订单价値</span><span className="text-gray-900 font-medium">{tradeValue.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
-                                {order.isGift&&(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const giftAmt=parseFloat(order.amount||'0');const ratio=srcAmt>0?(giftAmt/srcAmt):0;return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">赠送市値</span><span className="font-medium text-gray-900">{giftAmt.toFixed(2)} <span className="text-gray-400">u</span>{ratio>0&&<span className="font-normal text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}</span></div>);})()}
-                                {(order.sellStatus==='selling'||order.sellStatus==='sold')&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">卖出价</span><span className="font-medium text-gray-900">{parseFloat(order.sellPrice).toLocaleString()} <span className="text-gray-400">u</span></span></div>}
-                                {order.sellStatus==='sold'&&order.sellConfirmedAt&&<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">卖出时间</span><span className="text-gray-500">{formatDate(order.sellConfirmedAt)}</span></div>}
-                                {order.status==='completed'&&(()=>{let rate:number;let tierLabel:string;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;tierLabel='L';}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;tierLabel=order.equityTier===0?'D0档':`D${order.equityTier}档`;}const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">当前权益</span><span className={`font-medium ${rate>=1.0?'text-gray-900':'text-orange-500'}`}>{pct}% <span className="text-gray-400">({tierLabel})</span></span></div>);})()}
-                                {(order.status==='completed'||order.status==='pending')&&<FeeRow order={order} ledgerId={ledgerId} />}
-                              </div>
-                              {(order.isGift===true||order.isGift===1)&&(()=>{const parentOrder=order.sourceOrderId?(orders as any[]||[]).find((o:any)=>o.id===order.sourceOrderId):null;const parentStatus=parentOrder?(parentOrder.sellStatus==='sold'?'已卖出':parentOrder.sellStatus==='selling'?'委卖中':parentOrder.status==='completed'?'持仓中':parentOrder.status==='cancelled'?'已撤单':'委买中'):null;const parentStatusColor=parentOrder?(parentOrder.sellStatus==='sold'?'text-blue-500':parentOrder.sellStatus==='selling'?'text-red-500':parentOrder.status==='completed'?'text-green-500':'text-gray-400'):'text-gray-400';const parentOrderNo=parentOrder?(()=>{const d=new Date(parentOrder.createdAt);const bjd=new Date(d.toLocaleString('en-US',{timeZone:'Asia/Shanghai'}));return `AF${String(bjd.getFullYear()).slice(2)}${String(bjd.getMonth()+1).padStart(2,'0')}${String(bjd.getDate()).padStart(2,'0')}${String(parentOrder.id).padStart(6,'0')}`;})():null;return(<div className="mt-2 text-xs rounded-lg px-3 py-2 border border-purple-100 bg-purple-50"><div className="flex items-center justify-between"><span className="text-purple-600 font-medium">推荐人奖励赠单</span>{order.sourceUsername&&<span className="text-gray-500">来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span></span>}</div>{parentOrder&&<div className="mt-1 flex items-center gap-1.5 text-gray-500"><span>关联正单</span>{parentOrderNo&&<span className="font-mono text-gray-600">{parentOrderNo}</span>}<span className={`font-medium ${parentStatusColor}`}>{parentStatus}</span></div>}</div>);})()}
-                              {!(order.isGift===true||order.isGift===1)&&(()=>{const giftOrders:any[]=(order as any).giftOrders||[];if(giftOrders.length===0)return null;const soldCount=giftOrders.filter((g:any)=>g.sellStatus==='sold').length;const sellingCount=giftOrders.filter((g:any)=>g.sellStatus==='selling').length;const holdingCount=giftOrders.length-soldCount-sellingCount;return(<div className="mt-2 text-xs rounded-lg px-3 py-1.5 border border-purple-100 bg-purple-50 flex items-center gap-2 flex-wrap"><span className="text-purple-600 font-medium">关联赠单 {giftOrders.length}笔</span>{soldCount>0&&<span className="text-blue-500">已卖出 {soldCount}</span>}{sellingCount>0&&<span className="text-red-500">委卖中 {sellingCount}</span>}{holdingCount>0&&<span className="text-green-500">持仓中 {holdingCount}</span>}</div>);})()}
-                              {isEditing && editState?.sellStatus === 'sold' && (<div className="mt-3 space-y-3"><div className="bg-orange-50 border border-orange-200 rounded-lg p-3"><p className="text-xs text-orange-600 font-medium mb-2">确认卖出成交，请输入实际卖出价格</p><div className="flex items-center gap-2"><span className="text-xs text-gray-500 whitespace-nowrap">实际卖出价</span><input type="number" placeholder="输入实际成交价格" value={editState!.actualSellPrice} onChange={(e) => setEditState({ ...editState!, actualSellPrice: e.target.value })} className="border border-orange-300 rounded px-2 py-1 text-sm w-full focus:outline-none focus:border-orange-500" /><span className="text-xs text-gray-400 whitespace-nowrap">USDT</span></div></div>{editState!.actualSellPrice && calculateProfit(order, editState!.actualSellPrice) && (() => { const calc = calculateProfit(order, editState!.actualSellPrice)!; return (<div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2"><p className="text-xs font-medium text-blue-600">实时利润计算</p><div className="space-y-1.5 text-xs"><div className="flex justify-between"><span className="text-gray-600">持币数量</span><span className="font-medium text-gray-800">{calc.coinQuantity.toFixed(6)} {order.coin}</span></div><div className="flex justify-between"><span className="text-gray-600">买入价</span><span className="font-medium text-gray-800">{calc.buyPrice.toLocaleString()} USDT</span></div><div className="flex justify-between"><span className="text-gray-600">卖出价</span><span className="font-medium text-gray-800">{calc.sellPrice.toLocaleString()} USDT</span></div></div></div>); })()}</div>)}
-                            </div>
-                          );
-                        })}
+    return renderUnifiedOrderCard(order);
+  })}
                       </div>
                     )}
                   </div>
@@ -1909,716 +2600,13 @@ export default function AfOrderManage() {
                       );
                     })()}
                     {/* 该日期下的订单列表 */}
-                    {isOpen && groupOrders.map((order: any) => {
-              const isEditing = editingId === order.id;
-              const statusDisplay = getStatusDisplay(order);
-              // 计算编辑时的实时数量（始终用数据库原始买入价 order.limitPrice，避免被卖出价误覆盖）
-              let previewQuantity = editState?.quantity ?? "";
-              if (isEditing && editState) {
-                const p = parseFloat(order.limitPrice); // 用 order.limitPrice 而非 editState.limitPrice
-                const a = parseFloat(editState.amount);
-                if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) {
-                  previewQuantity = (a * 5.25 / p).toFixed(8);
-                }
-              }
-
-              // 生成订单编号（用UTC方法，因为MySQL存的北京时间在UTC环境下UTC值=北京时间值）
-              const orderDate = new Date(order.createdAt);
-              const yy = String(orderDate.getUTCFullYear()).slice(2);
-              const mm = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
-              const dd = String(orderDate.getUTCDate()).padStart(2, '0');
-              const orderNo = (order.isSimulated && order.simulationOrderNo) ? order.simulationOrderNo : `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
-
-              return (
-                <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
-                  {/* 卡片头部：左信息 + 右时间按钮 */}
-                  <div className="flex items-start justify-between mb-3 gap-3">
-                    {/* 左侧：订单号 + 用户名 + 标签 */}
-                    <div className="flex flex-col gap-1 min-w-0">
-                      <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs font-medium text-gray-700 shrink-0">
-                          {order.username && order.nickname && order.username !== order.nickname
-                            ? `${order.username}/${order.nickname}`
-                            : order.nickname || order.username || `用户${order.userId}`}
-                        </span>
-                        {order.isAdvanced && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: '#F3EEFF', color: '#6D4CCB', border: '1px solid #DDD1FF' }}>高级委托</span>
-                        )}
-                        {order.isGift && (
-                          <span
-                            className="inline-flex items-center justify-center font-black select-none shrink-0"
-                            style={{
-                              width: 18, height: 18, borderRadius: '50%', fontSize: 10,
-                              color: '#FFD700',
-                              background: 'radial-gradient(circle at 35% 30%, #5a1a1a 0%, #1a0a00 55%, #3d0000 100%)',
-                              boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
-                              border: '1.5px solid #8B4513',
-                              textShadow: '0 1px 2px rgba(255,180,0,0.8)',
-                            }}
-                          >赠</span>
-                        )}
-                        {order.status === 'completed' && (
-                          order.tierMode === 'linear'
-                            ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: '#EFF6FF', color: '#3B82F6', border: '1px solid #BFDBFE' }}>线性</span>
-                            : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: '#FFF7ED', color: '#D97706', border: '1px solid #FED7AA' }}>阶梯</span>
-                        )}
-                      </div>
-                    </div>
-                    {/* 右侧：时间 + 按钮 */}
-                    <div className="flex flex-col items-end gap-1.5 shrink-0">
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span className="text-[10px] text-gray-400">
-                          <span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}
-                        </span>
-                        {order.confirmedAt && (
-                          <span className="text-[10px] text-blue-400">
-                            <span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}
-                          </span>
-                        )}
-                        {order.sellStatus==='selling'&&order.sellAt&&<span className="text-[10px] text-orange-400"><span className="text-orange-300 mr-1">委卖</span>{formatDate(order.sellAt)}</span>}
-                        {order.sellStatus==='sold'&&order.sellConfirmedAt&&<span className="text-[10px] text-green-500"><span className="text-green-400 mr-1">确认</span>{formatDate(order.sellConfirmedAt)}</span>}
-                      </div>
-                      {!isEditing ? (
-                        order.isAdvanced ? (
-                          order.status === 'pending' ? (
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                disabled={fulfillAdvancedMutation.isPending || cancelAdvancedMutation.isPending}
-                                onClick={() => {
-                                  setAdvancedFulfillTarget(order);
-                                  setAdvancedExecutionPrice(String(order.advancedLimitPrice || order.originalLimitPrice || order.limitPrice || ''));
-                                }}
-                                className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"
-                              >
-                                <Check className="w-3 h-3" /> {fulfillAdvancedMutation.isPending ? '确认中...' : '确认成交'}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={fulfillAdvancedMutation.isPending || cancelAdvancedMutation.isPending}
-                                onClick={() => {
-                                  setAdvancedCancelTarget(order);
-                                  setAdvancedCancelReason('');
-                                }}
-                                className="inline-flex items-center gap-1 text-[11px] font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"
-                              >
-                                <X className="w-3 h-3" /> {cancelAdvancedMutation.isPending ? '撤销中...' : '撤销委托'}
-                              </button>
-                            </div>
-                          ) : order.status === 'cancelled' ? <span className="text-[10px] text-gray-500">高级委托已撤销</span> : <span className="text-[10px] text-green-600">高级委托已按普通持仓管理</span>
-                        ) : (
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => startEdit(order)}
-                              className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"
-                            >
-                              <Pencil className="w-3 h-3" /> 编辑
-                            </button>
-                            <button
-                              onClick={() => {
-                                setDeleteTarget(order);
-                                const isGift = order.isGift === true || order.isGift === 1;
-                                setDeleteScope(isGift ? 'all' : 'all');
-                                setSelectedGiftIds([]);
-                                setRefundChecked(order.status === 'pending' && !isGift);
-                              }}
-                              className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"
-                            >
-                              <Trash2 className="w-3 h-3" /> 删除
-                            </button>
-                          </div>
-                        )
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={saveEdit}
-                            disabled={updateMutation.isPending}
-                            className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"
-                          >
-                            <Check className="w-3 h-3" /> 保存
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"
-                          >
-                            <X className="w-3 h-3" /> 取消
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 订单信息 */}
-                  <div className="grid grid-cols-2 gap-y-2 gap-x-2 text-xs">
-                    {/* 币种 */}
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-400 w-12 shrink-0">币种</span>
-                      <span className="font-medium">{order.coin}</span>
-                    </div>
-                    {/* 状态（综合买入+卖出状态） */}
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-400 w-12 shrink-0">状态</span>
-                      {isEditing ? (
-                        <div className="flex flex-col gap-1">
-                          <select
-                            value={editState!.status}
-                            onChange={(e) => setEditState({ ...editState!, status: e.target.value as any })}
-                            className="border border-gray-300 rounded px-2 py-0.5 text-xs"
-                          >
-                            <option value="pending">委买中</option>
-                            <option value="completed">买入成交</option>
-                            <option value="cancelled">已撤单</option>
-                          </select>
-                          <select
-                            value={editState!.sellStatus || ''}
-                            onChange={(e) => {
-                              const nextSellStatus = e.target.value || null;
-                              setEditState({
-                                ...editState!,
-                                sellStatus: nextSellStatus,
-                                // 选择委卖或已卖出时，自动将订单设为买入成交，确保所有订单类型均可录入实际卖出价。
-                                status: nextSellStatus ? 'completed' : editState!.status,
-                              });
-                            }}
-                            className="border border-gray-300 rounded px-2 py-0.5 text-xs"
-                          >
-                            <option value="">持仓中</option>
-                            <option value="selling">委卖中</option>
-                            <option value="sold">已卖出</option>
-                          </select>
-                        </div>
-                      ) : (
-                        <span className={`font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>
-                      )}
-                    </div>
-                    {/* 高级委托专属审计信息；公共订单字段和管理费仍沿用普通谷底增筹布局。 */}
-                    {order.isAdvanced && (() => {
-                      const startMs = new Date(order.createdAt).getTime();
-                      const terminalAt = order.advancedStatus === 'fulfilled'
-                        ? (order.fulfilledAt || order.confirmedAt)
-                        : order.advancedStatus === 'cancelled'
-                          ? order.cancelledAt
-                          : null;
-                      const endMs = terminalAt ? new Date(terminalAt).getTime() : Date.now();
-                      const chargedDays = Number.isFinite(startMs) ? Math.max(1, Math.ceil(Math.max(0, endMs - startMs) / (24 * 60 * 60 * 1000))) : 1;
-                      return <>
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400 w-12 shrink-0">委托价</span>
-                          <span className="font-medium text-purple-700">{Number(order.advancedLimitPrice || order.originalLimitPrice || order.limitPrice || 0).toLocaleString()} <span className="text-gray-400">u</span></span>
-                        </div>
-                        {order.fulfilledPrice && (
-                          <div className="flex items-center gap-1">
-                            <span className="text-gray-400 w-12 shrink-0">实际买入</span>
-                            <span className="font-medium text-green-600">{Number(order.fulfilledPrice).toLocaleString()} <span className="text-gray-400">u</span></span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400 w-12 shrink-0">提交现价</span>
-                          <span className="font-medium text-gray-700">{order.submittedSpotPrice ? `${Number(order.submittedSpotPrice).toLocaleString()} u` : '—'}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400 w-12 shrink-0">委托时长</span>
-                          <span className="font-medium text-gray-700">{chargedDays}天</span>
-                        </div>
-                        {order.advancedStatus === 'cancelled' && (
-                          <div className="col-span-2 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-[11px] text-gray-600 space-y-1">
-                            <div className="flex items-center justify-between gap-3">
-                              <span>撤销处理</span>
-                              <span className="font-medium text-gray-800">{order.cancelledByUserId ? `管理员#${order.cancelledByUserId}撤销` : '用户自主撤销'}</span>
-                            </div>
-                            <div className="leading-5">仅退冻结本金 {Number(order.amount || 0).toFixed(2)} u；管理员此前另行手动发放至钱包的款项不退回，本次不新增任何收益、管理费或赠单。</div>
-                            {order.cancelReason && <div className="leading-5 text-gray-500">原因：{order.cancelReason}</div>}
-                            {order.refundBalanceId && <div className="text-gray-400">退款流水 #{order.refundBalanceId}</div>}
-                          </div>
-                        )}
-                      </>;
-                    })()}
-                    {/* 档位计算方式（仅已成交订单显示） */}
-                    {isEditing && editState!.status === 'completed' && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-gray-400 w-12 shrink-0">档位模式</span>
-                        <div className="flex rounded overflow-hidden border border-gray-300 text-xs">
-                          <button
-                            type="button"
-                            onClick={() => setEditState({ ...editState!, tierMode: 'step' })}
-                            className={`px-2 py-0.5 transition-colors ${
-                              editState!.tierMode === 'step'
-                                ? 'bg-blue-500 text-white'
-                                : 'bg-white text-gray-600 hover:bg-gray-50'
-                            }`}
-                          >阶梯</button>
-                          <button
-                            type="button"
-                            onClick={() => setEditState({ ...editState!, tierMode: 'linear' })}
-                            className={`px-2 py-0.5 transition-colors ${
-                              editState!.tierMode === 'linear'
-                                ? 'bg-blue-500 text-white'
-                                : 'bg-white text-gray-600 hover:bg-gray-50'
-                            }`}
-                          >线性</button>
-                        </div>
+                    {isOpen && (
+                      <div className="mt-2">
+                      {groupOrders.map((order: any) => {
+    return renderUnifiedOrderCard(order);
+  })}
                       </div>
                     )}
-                    {/* 买入委托价 */}
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-400 w-12 shrink-0">买入价</span>
-                      {isEditing && editState!.status === 'pending' ? (
-                        <input
-                          type="number"
-                          value={editState!.limitPrice}
-                          onChange={(e) => setEditState({ ...editState!, limitPrice: e.target.value })}
-                          className="border border-gray-300 rounded px-2 py-0.5 text-sm w-24"
-                        />
-                      ) : (
-                        <span className="font-medium text-gray-900">
-                          {parseFloat(order.limitPrice).toLocaleString()} <span className="text-gray-400">u</span>
-                        </span>
-                      )}
-                    </div>
-                    {/* 数量 */}
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-400 w-12 shrink-0">数量</span>
-                      <span className="font-medium text-gray-900">
-                        {(() => {
-                          const raw = isEditing ? (previewQuantity || editState!.quantity) : order.quantity;
-                          const num = parseFloat(raw);
-                          const trimmed = isNaN(num) ? raw : num.toFixed(8).replace(/\.?0+$/, '');
-                          return `${trimmed} ${order.coin}`;
-                        })()}
-                      </span>
-                    </div>
-                    {/* 实际有效持仓（单独一行，仅当权益有折扣档位>0时显示） */}
-                    {order.status === 'completed' && (() => {
-                      const raw = order.quantity;
-                      const num = parseFloat(raw);
-                      let rate: number;
-                      if (order.tierMode === 'linear') {
-                        const buyP = parseFloat(order.limitPrice || '0');
-                        const allLow = order.allTimeLowPrice ? parseFloat(String(order.allTimeLowPrice)) : 0;
-                        rate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
-                      } else {
-                        rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
-                      }
-                      if (rate >= 1.0) return null;
-                      const effectiveNum = num * rate;
-                      const pct = (rate * 100).toFixed(2);
-                      return (
-                        <div className="flex items-center gap-1 col-span-2">
-                          <span className="text-gray-400 w-12 shrink-0">实际持仓</span>
-                          <span className="text-xs text-orange-500">
-                            {effectiveNum.toFixed(8).replace(/\.?0+$/, '')} {order.coin} ({pct}%)
-                          </span>
-                        </div>
-                      );
-                    })()}
-                    {/* 实际投入（左列） */}
-                    {(() => {
-                      const srcAmt = parseFloat(order.sourceAmount || '0');
-                      const selfAmt = parseFloat(order.amount || '0');
-                      const investAmt = order.isGift ? srcAmt : selfAmt;
-                      return (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400 w-12 shrink-0">实际投入</span>
-                          <span className="font-medium text-gray-900">{investAmt.toFixed(2)} <span className="text-gray-400">u</span></span>
-                        </div>
-                      );
-                    })()}
-                    {/* 订单价值（右列） */}
-                    {(() => {
-                      const amount = parseFloat(order.amount);
-                      const tradeValue = order.isGift ? amount : amount * 5.25;
-                      return (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400 w-12 shrink-0">订单价值</span>
-                          <span className="text-gray-900 font-medium">{tradeValue.toFixed(2)} <span className="text-gray-400">u</span></span>
-                        </div>
-                      );
-                    })()}
-                    {/* 赠送市值（赠单专用，含倍数；正单不显示此行） */}
-                    {order.isGift && (() => {
-                      const srcAmt = parseFloat(order.sourceAmount || '0');
-                      const giftAmt = parseFloat(order.amount || '0');
-                      const ratio = srcAmt > 0 ? (giftAmt / srcAmt) : 0;
-                      return (
-                        <div className="flex items-center gap-1 col-span-2">
-                          <span className="text-gray-400 w-12 shrink-0">赠送市值</span>
-                          <span className="font-medium text-gray-900">
-                            {giftAmt.toFixed(2)} <span className="text-gray-400">u</span>
-                            {ratio > 0 && <span className="font-normal text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}
-                          </span>
-                        </div>
-                      );
-                    })()}
-                    {/* 卖出价格（委卖中或已卖出时显示） */}
-                    {(order.sellStatus === 'selling' || order.sellStatus === 'sold') && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-gray-400 w-12 shrink-0">卖出价</span>
-                        <span className="font-medium text-gray-900">
-                          {parseFloat(order.sellPrice).toLocaleString()} <span className="text-gray-400">u</span>
-                        </span>
-                      </div>
-                    )}
-                    {/* 卖出时间（已卖出时显示） */}
-                    {order.sellStatus === 'sold' && order.sellConfirmedAt && (
-                      <div className="flex items-center gap-1 col-span-2">
-                        <span className="text-gray-400 w-12 shrink-0">卖出时间</span>
-                        <span className="text-gray-500">{formatDate(order.sellConfirmedAt)}</span>
-                      </div>
-                    )}
-                    {/* 已卖出结算详情展示块 */}
-                    {order.sellStatus === 'sold' && order.sellPrice && (() => {
-                      const calc = calculateProfit(order, order.sellPrice);
-                      if (!calc) return null;
-                      const isGift = order.isGift === true || order.isGift === 1;
-                      const startDate = new Date(order.createdAt);
-                      const endDate = new Date(order.sellConfirmedAt);
-                      const fmtD = (d: Date) => `${d.getUTCMonth()+1}月${d.getUTCDate()}日`;
-                      return (
-                        <div className="col-span-2 mt-1">
-                          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-1.5 text-xs">
-                            <p className="text-xs font-semibold text-blue-600 mb-2">结算明细</p>
-                            {/* 买卖价格 */}
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">持币数量</span>
-                              <span className="font-medium text-gray-800">{calc.coinQuantity.toFixed(6)} {order.coin}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">买入价</span>
-                              <span className="font-medium text-gray-800">{calc.buyPrice.toLocaleString()} USDT</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">卖出价</span>
-                              <span className="font-medium text-gray-800">{calc.sellPrice.toLocaleString()} USDT</span>
-                            </div>
-                            {/* 权益档位 */}
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">权益档位</span>
-                              <span className="font-medium text-amber-600">
-                                {(() => {
-                                  const rate = EQUITY_DISCOUNT_RATES[calc.equityTier] || 1.0;
-                                  const tierName = calc.equityTier === 0 ? 'D0档（基准档）' : `D${calc.equityTier}档（跌${calc.equityTier * 10}%）`;
-                                  return `${(rate * 100).toFixed(2)}% · ${tierName}`;
-                                })()}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">有效币数</span>
-                              <span className="font-medium text-gray-800">{calc.effectiveQuantity.toFixed(6)} {order.coin}</span>
-                            </div>
-                            {/* 收益计算 */}
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">单位收益</span>
-                              <span className={`font-medium ${calc.unitProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {calc.unitProfit >= 0 ? '+' : ''}{calc.unitProfit.toFixed(2)} USDT
-                              </span>
-                            </div>
-                            <div className="border-t border-blue-200 pt-1.5 mt-0.5 flex justify-between">
-                              <span className="text-gray-600 font-medium">总收益</span>
-                              <span className={`font-bold text-base ${calc.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {calc.totalProfit >= 0 ? '+' : ''}{calc.totalProfit.toFixed(4)} USDT
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              {isGift ? (
-                                <span className="text-amber-600 font-medium">纯收益小计 <span className="text-[10px] font-normal text-amber-400">（赠单不含本金）</span></span>
-                              ) : (
-                                <span className="text-gray-600">本金+收益小计</span>
-                              )}
-                              <span className="font-medium text-gray-800">{calc.totalRefund.toFixed(4)} USDT</span>
-                            </div>
-                            {/* 管理费 */}
-                            <div className="flex justify-between">
-                              <span className="text-red-500">管理费扣除</span>
-                              <span className="font-medium text-red-500">- {calc.managementFee.toFixed(4)} USDT</span>
-                            </div>
-                            <div className="text-[10px] text-red-400">
-                              计费区间：{fmtD(startDate)} → {fmtD(endDate)}（共{calc.holdDays}天，{calc.dailyFee.toFixed(4)} USDT/天）
-                            </div>
-                            {/* 实际到账 */}
-                            <div className="flex justify-between bg-green-50 rounded-lg px-2 py-1.5 border border-green-200 mt-1">
-                              <span className="text-green-700 font-bold">实际到账</span>
-                              <span className="font-bold text-green-600 text-base">{calc.actualRefund.toFixed(4)} USDT</span>
-                            </div>
-                            <p className="text-[10px] text-blue-500 mt-1">
-                              {isGift
-                                ? `纯收益 - 管理费 = ${Math.max(0, calc.totalProfit).toFixed(4)} - ${calc.managementFee.toFixed(4)} = ${calc.actualRefund.toFixed(4)} USDT（赠单不含本金）`
-                                : `本金 + 收益 - 管理费 = ${calc.principal.toFixed(2)} + ${Math.max(0, calc.totalProfit).toFixed(4)} - ${calc.managementFee.toFixed(4)} = ${calc.actualRefund.toFixed(4)} USDT`
-                              }
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* 当前权益 */}
-                    {order.status === 'completed' && (() => {
-                      let rate: number;
-                      let tierLabel: string;
-                      if (order.tierMode === 'linear') {
-                        const buyP = parseFloat(order.limitPrice || '0');
-                        const allLow = order.allTimeLowPrice ? parseFloat(String(order.allTimeLowPrice)) : 0;
-                        rate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
-                        tierLabel = 'L';
-                      } else {
-                        rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
-                        tierLabel = order.equityTier === 0 ? 'D0档' : `D${order.equityTier}档`;
-                      }
-                      const pct = (rate * 100).toFixed(2);
-                      return (
-                        <div className="flex items-center gap-1 col-span-2">
-                          <span className="text-gray-400 w-12 shrink-0">当前权益</span>
-                          <span className={`font-medium ${rate >= 1.0 ? 'text-gray-900' : 'text-orange-500'}`}>{pct}% <span className="text-gray-400">({tierLabel})</span></span>
-                        </div>
-                      );
-                    })()}
-                    {/* 扫描最低价（持仓中/委卖中显示） */}
-                    {order.status === 'completed' && (order as any).allTimeLowPrice && (() => {
-                      const lowPrice = parseFloat((order as any).allTimeLowPrice);
-                      const lowAt = (order as any).allTimeLowAt;
-                      const lowDate = lowAt ? new Date(lowAt) : null;
-                      const fmtLow = lowDate ? (() => {
-                        // MySQL存的北京时间，直接用UTC方法即可，不需要+8小时
-                        const mo = lowDate.getUTCMonth() + 1;
-                        const da = lowDate.getUTCDate();
-                        const hh = String(lowDate.getUTCHours()).padStart(2, '0');
-                        const mi = String(lowDate.getUTCMinutes()).padStart(2, '0');
-                        const sc = String(lowDate.getUTCSeconds()).padStart(2, '0');
-                        return `${mo}/${da} ${hh}:${mi}:${sc}`;
-                      })() : '';
-                      return (
-                        <div className="flex items-center gap-1 col-span-2">
-                          <span className="text-gray-400 w-12 shrink-0">最低扫描</span>
-                          <span className="font-medium text-blue-600">
-                            {lowPrice.toLocaleString()} <span className="text-gray-400">u</span>
-                            {fmtLow && <span className="text-gray-400 ml-1">({fmtLow})</span>}
-                          </span>
-                        </div>
-                      );
-                    })()}
-                    {/* 累计管理费：待付管理费（已扣预收部分） */}
-                    {(order.status === 'completed' || order.status === 'pending') && (
-                      <FeeRow order={order} ledgerId={ledgerId} />
-                    )}
-                  </div>
-
-                  {/* 赠单来源信息 + 关联正单状态 */}
-                  {(order.isGift === true || order.isGift === 1) && (() => {
-                    const srcAmt = parseFloat(order.sourceAmount || '0');
-                    const giftAmt = parseFloat(order.amount || '0');
-                    // 在 orders 中找到关联正单
-                    const parentOrder = order.sourceOrderId
-                      ? (orders as any[] || []).find((o: any) => o.id === order.sourceOrderId)
-                      : null;
-                    const parentStatus = parentOrder
-                      ? (parentOrder.sellStatus === 'sold' ? '已卖出' :
-                         parentOrder.sellStatus === 'selling' ? '委卖中' :
-                         parentOrder.status === 'completed' ? '持仓中' :
-                         parentOrder.status === 'cancelled' ? '已撤单' : '委买中')
-                      : null;
-                    const parentStatusColor = parentOrder
-                      ? (parentOrder.sellStatus === 'sold' ? 'text-blue-500' :
-                         parentOrder.sellStatus === 'selling' ? 'text-red-500' :
-                         parentOrder.status === 'completed' ? 'text-green-500' : 'text-gray-400')
-                      : 'text-gray-400';
-                    const parentOrderNo = parentOrder ? (() => {
-                      const d = new Date(parentOrder.createdAt);
-                      return `AF${String(d.getUTCFullYear()).slice(2)}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}${String(parentOrder.id).padStart(6,'0')}`;
-                    })() : null;
-                    return (
-                      <div className="mt-2 text-xs rounded-lg px-3 py-2 border border-purple-100 bg-purple-50">
-                        <div className="flex items-center justify-between">
-                          <span className="text-purple-600 font-medium">推荐人奖励赠单</span>
-                          {order.sourceUsername && (
-                            <span className="text-gray-500">来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span></span>
-                          )}
-                        </div>
-                        {parentOrder && (
-                          <div className="mt-1 flex items-center gap-1.5 text-gray-500">
-                            <span>关联正单</span>
-                            {parentOrderNo && <span className="font-mono text-gray-600">{parentOrderNo}</span>}
-                            <span className={`font-medium ${parentStatusColor}`}>{parentStatus}</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* 正单关联赠单：成交后显示实际赠单受益人；高级委托待成交时显示按当前配置预计的受益人。 */}
-                  {!(order.isGift === true || order.isGift === 1) && (() => {
-                    const giftOrders: any[] = (order as any).giftOrders || [];
-                    const advancedRecipients: any[] = (order as any).advancedGiftRecipients || [];
-                    const isAdvancedOrder = Boolean(order.isAdvanced);
-                    if (giftOrders.length === 0 && (!isAdvancedOrder || advancedRecipients.length === 0)) return null;
-                    const soldCount = giftOrders.filter((g: any) => g.sellStatus === 'sold').length;
-                    const sellingCount = giftOrders.filter((g: any) => g.sellStatus === 'selling').length;
-                    const holdingCount = giftOrders.length - soldCount - sellingCount;
-                    return (
-                      <div className="mt-2 text-xs rounded-lg px-3 py-2 border border-purple-100 bg-purple-50 space-y-1.5">
-                        {giftOrders.length > 0 ? <>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-purple-600 font-medium">关联赠单 {giftOrders.length}笔</span>
-                            {soldCount > 0 && <span className="text-blue-500">已卖出 {soldCount}</span>}
-                            {sellingCount > 0 && <span className="text-red-500">委卖中 {sellingCount}</span>}
-                            {holdingCount > 0 && <span className="text-green-500">持仓中 {holdingCount}</span>}
-                          </div>
-                          <div className="text-gray-600 leading-5">赠予：{giftOrders.map((g: any) => `${g.nickname || g.username || `用户${g.userId}`}${g.payoutRatio ? `（拨比${g.payoutRatio}%）` : g.giftMultiplier ? '（5.25赠单）' : ''}`).join('、')}</div>
-                        </> : <>
-                          <div className="text-purple-600 font-medium">确认后预计赠单受益人</div>
-                          <div className="text-gray-600 leading-5">{advancedRecipients.map((recipient: any) => `${recipient.username}（${recipient.type}${recipient.type === '5.25赠单' ? `${(Number(recipient.ratio || 0) * 100).toFixed(0)}%` : `${recipient.ratio}%`}）`).join('、')}</div>
-                        </>}
-                      </div>
-                    );
-                  })()}
-
-                  {/* 编辑时：确认卖出成交 → 输入实际卖出价 + 实时利润计算 */}
-                  {isEditing && editState?.sellStatus === 'sold' && (
-                    <div className="mt-3 space-y-3">
-                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                        <p className="text-xs text-orange-600 font-medium mb-2">确认卖出成交，请输入实际卖出价格</p>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500 whitespace-nowrap">实际卖出价</span>
-                          <input
-                            type="number"
-                            placeholder="输入实际成交价格"
-                            value={editState!.actualSellPrice}
-                            onChange={(e) => setEditState({ ...editState!, actualSellPrice: e.target.value })}
-                            className="border border-orange-300 rounded px-2 py-1 text-sm w-full focus:outline-none focus:border-orange-500"
-                          />
-                          <span className="text-xs text-gray-400 whitespace-nowrap">USDT</span>
-                        </div>
-                      </div>
-
-                      {/* 实时利润计算 */}
-                      {editState!.actualSellPrice && calculateProfit(order, editState!.actualSellPrice) && (() => {
-                        const calc = calculateProfit(order, editState!.actualSellPrice)!;
-                        return (
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
-                            <p className="text-xs font-medium text-blue-600">实时利润计算</p>
-                            <div className="space-y-1.5 text-xs">
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">持币数量</span>
-                                <span className="font-medium text-gray-800">{calc.coinQuantity.toFixed(6)} {order.coin}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">买入价</span>
-                                <span className="font-medium text-gray-800">{calc.buyPrice.toLocaleString()} USDT</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">卖出价</span>
-                                <span className="font-medium text-gray-800">{calc.sellPrice.toLocaleString()} USDT</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">权益折扣档位</span>
-                                <span className="font-medium text-amber-600">
-                                  {(() => {
-                                    const rate = EQUITY_DISCOUNT_RATES[calc.equityTier] || 1.0;
-                                    const tierName = calc.equityTier === 0 ? 'D0档（基准档）' : `D${calc.equityTier}档（跌${calc.equityTier * 10}%）`;
-                                    return `${(rate * 100).toFixed(2)}% · ${tierName}`;
-                                  })()}
-                                </span>
-                              </div>
-                              {/* 扣档历史记录 + 历史最低扫描价 */}
-                              <div className="bg-amber-50 border border-amber-200 rounded p-2 mt-1">
-                                <p className="text-[10px] text-amber-600 font-medium mb-1">扣档触发记录</p>
-                                {tierHistory && tierHistory.length > 0 ? (
-                                  tierHistory.map((t: any) => {
-                                    const dt = new Date(t.triggeredAt);
-                                    // 直接用UTC方法，MySQL存的北京时间在UTC环境下UTC值=北京时间值
-                                    const dateStr = `${dt.getUTCMonth()+1}月${dt.getUTCDate()}日 ${dt.getUTCHours().toString().padStart(2,'0')}:${dt.getUTCMinutes().toString().padStart(2,'0')}`;
-                                    return (
-                                      <div key={t.tier} className="flex justify-between text-[10px] text-amber-700 py-0.5">
-                                        <span>D{t.tier}档触发 · 第{t.scanCount}次扫描 · {dateStr}</span>
-                                        <span className="font-medium">{parseFloat(t.triggerPrice).toLocaleString()} USDT</span>
-                                      </div>
-                                    );
-                                  })
-                                ) : (
-                                  <div className="text-[10px] text-amber-500 py-0.5">未触发任何扣档，当前为D0基准档</div>
-                                )}
-                                {lowestScan ? (
-                                  <div className="mt-1.5 pt-1.5 border-t border-amber-200">
-                                    <div className="flex justify-between text-[10px] text-gray-500 py-0.5">
-                                      <span>历史最低扫描价 · 第{lowestScan.scanCount}次扫描 · {(() => { const dt = new Date(lowestScan.scannedAt); return `${dt.getUTCMonth()+1}月${dt.getUTCDate()}日 ${dt.getUTCHours().toString().padStart(2,'0')}:${dt.getUTCMinutes().toString().padStart(2,'0')}`; })()}</span>
-                                      <span className="font-semibold text-gray-700">{parseFloat(lowestScan.price).toLocaleString()} USDT</span>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="mt-1.5 pt-1.5 border-t border-amber-200 text-[10px] text-gray-400">暂无扫描记录</div>
-                                )}
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">有效币数</span>
-                                <span className="font-medium text-gray-800">{calc.effectiveQuantity.toFixed(6)} {order.coin}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">单位收益</span>
-                                <span className={`font-medium ${calc.unitProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {calc.unitProfit >= 0 ? '+' : ''}{calc.unitProfit.toFixed(2)} USDT
-                                </span>
-                              </div>
-                              <div className="border-t border-blue-200 pt-2 mt-1 flex justify-between">
-                                <span className="text-gray-600 font-medium">总收益</span>
-                                <span className={`font-bold text-base ${calc.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {calc.totalProfit >= 0 ? '+' : ''}{calc.totalProfit.toFixed(4)} USDT
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                {order.isGift ? (
-                                  <span className="text-amber-600 font-medium">纯收益小计 <span className="text-[10px] font-normal text-amber-400">（赠单不含本金返还）</span></span>
-                                ) : (
-                                  <span className="text-gray-600">本金+收益小计</span>
-                                )}
-                                <span className="font-medium text-gray-800">{calc.totalRefund.toFixed(4)} USDT</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-red-500">管理费扣除 ({calc.holdDays}天)</span>
-                                <span className="font-medium text-red-500">- {calc.managementFee.toFixed(4)} USDT</span>
-                              </div>
-                              <div className="text-[10px] text-red-400">
-                                {(() => {
-                                  // 直接用UTC方法，MySQL存的北京时间在UTC环境下UTC值=北京时间值
-                                  const startDate = new Date(order.createdAt);
-                                  const endDate = (order.sellStatus === 'sold' && order.sellConfirmedAt)
-                                    ? new Date(order.sellConfirmedAt)
-                                    : new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
-                                  const fmt = (d: Date) => `${d.getUTCMonth()+1}月${d.getUTCDate()}日`;
-                                  return `计费区间：${fmt(startDate)} → ${fmt(endDate)}（共${calc.holdDays}天，${calc.dailyFee.toFixed(4)} USDT/天）`;
-                                })()}
-                              </div>
-                              <div className="flex justify-between bg-green-50 rounded px-2 py-1.5 border border-green-200">
-                                <span className="text-green-700 font-bold">实际到账</span>
-                                <span className="font-bold text-green-600 text-base">{calc.actualRefund.toFixed(4)} USDT</span>
-                              </div>
-                            </div>
-                            <p className="text-[10px] text-blue-500 mt-2">
-                              {order.isGift
-                                ? `纯收益 - 管理费 = ${Math.max(0, calc.totalProfit).toFixed(4)} - ${calc.managementFee.toFixed(4)} = ${calc.actualRefund.toFixed(4)} USDT（赠单不含本金）`
-                                : `本金 + 收益 - 管理费 = ${calc.principal.toFixed(2)} + ${Math.max(0, calc.totalProfit).toFixed(4)} - ${calc.managementFee.toFixed(4)} = ${calc.actualRefund.toFixed(4)} USDT`
-                              }
-                            </p>
-                          </div>
-                        );
-                      })()}
-
-                      <p className="text-[10px] text-orange-400">
-                        {order.isGift ? '系统将根据此价格计算纯收益到用户余额（赠单不返还本金）' : '系统将根据此价格计算收益并返还本金+收益到用户余额'}
-                      </p>
-                    </div>
-                  )}
-                  
-                  {/* 编辑时的操作说明 */}
-                  {isEditing && (
-                    <div className="mt-3 text-xs text-gray-400 bg-gray-50 rounded-lg p-2">
-                      <p>· 修改买入状态为「已撤单」：将退回已扣余额</p>
-                      <p>· 数量 = 实际投入 × 5.25 / 价格（自动计算）</p>
-                      {editState?.sellStatus === 'selling' && <p>· 当前为委卖中状态，可改为「已卖出」确认成交</p>}
-                      {editState?.sellStatus === 'sold' && <p>· 确认卖出成交：{order.isGift ? '返还纯收益到用户余额（赠单不含本金）' : '返还本金 + 实际收益到用户余额'}</p>}
-                    </div>
-                  )}
-                </div>
-              );
-                })}
                   </div>
                 );
               });
@@ -2894,4 +2882,3 @@ export default function AfOrderManage() {
   );
 }
 
- 

@@ -1308,6 +1308,63 @@ async function getAfOrderMultiplierForLedger(conn: any, ledgerId: number): Promi
   }
 }
 
+// ===== 52号账本谷底征筹：订单本金统一由钱包冻结台账托管 =====
+// 该标签与“融资订单”担保标签严格隔离，绝不可复用融资订单的批量释放函数。
+const AF52_WALLET_HOLD_TAG_PREFIX = '52号谷底征筹订单';
+let afWalletHoldColumnsReady: Promise<void> | null = null;
+
+function getAf52WalletHoldTag(orderId: number): string {
+  return `${AF52_WALLET_HOLD_TAG_PREFIX} #${orderId} 本金`;
+}
+
+function getAf52WalletHoldRequestId(orderId: number): string {
+  return `AF52:H:${orderId}`;
+}
+
+async function ensureAfWalletHoldColumns(): Promise<void> {
+  if (!afWalletHoldColumnsReady) {
+    afWalletHoldColumnsReady = (async () => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error('数据库连接失败，无法初始化订单钱包冻结字段');
+      const [rows] = await (conn as any).execute(
+        `SELECT COLUMN_NAME FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'af_orders'
+           AND column_name IN ('principal_hold_id', 'principal_hold_request_id')`,
+      );
+      const existing = new Set(asRows(rows).map((row: any) => String(row.COLUMN_NAME || row.column_name)));
+      if (!existing.has('principal_hold_id')) {
+        await (conn as any).execute(
+          `ALTER TABLE af_orders ADD COLUMN principal_hold_id BIGINT UNSIGNED NULL COMMENT '52号谷底征筹订单本金钱包冻结ID'`,
+        );
+      }
+      if (!existing.has('principal_hold_request_id')) {
+        await (conn as any).execute(
+          `ALTER TABLE af_orders ADD COLUMN principal_hold_request_id VARCHAR(112) NULL COMMENT '52号谷底征筹本金冻结幂等请求号'`,
+        );
+      }
+    })().catch((error) => {
+      afWalletHoldColumnsReady = null;
+      throw error;
+    });
+  }
+  await afWalletHoldColumnsReady;
+}
+
+async function getAf52ActivePrincipalHoldForUpdate(transaction: any, orderId: number, userId: number) {
+  const [rows] = await transaction.execute(
+    `SELECT h.id, h.amount, h.released_amount, h.status, h.user_id, h.asset_code, h.tag_name
+       FROM ai_wallet_project_holds h
+       INNER JOIN af_orders o ON o.principal_hold_id = h.id
+      WHERE o.id = ? AND o.ledger_id = 52 AND o.user_id = ?
+        AND h.ledger_id = 52 AND h.user_id = ? AND h.asset_code = 'USDT'
+        AND h.tag_name = ? AND h.status = 'active'
+        AND h.amount > COALESCE(h.released_amount, 0)
+      LIMIT 1 FOR UPDATE`,
+    [orderId, userId, userId, getAf52WalletHoldTag(orderId)],
+  );
+  return asRows(rows)[0] ?? null;
+}
+
 const AF_525_TARGET_USER_ID = 4957151;
 
 /**
@@ -3653,6 +3710,7 @@ ${klinesSummary}
                 WHERE user_id = ${targetUserId}
                   AND amount != 0
                   AND (note IS NULL OR note NOT LIKE '%[ERROR]%')
+                  AND (note IS NULL OR note NOT LIKE '[AF52本金冻结迁移-%')
                 ORDER BY created_at DESC
                 LIMIT ${limit}`
           ) as any;
@@ -17314,7 +17372,15 @@ ${klinesSummary}
             if (allPrices[coin]?.price) livePrices[coin] = allPrices[coin].price;
           }
         } catch {}
-        return { total: userBalance + manual, inviteCount, directReferralCount, indirectReferralCount, positions, livePrices };
+        const total = userBalance + manual;
+        let available = total;
+        let frozen = 0;
+        if (input.ledgerId === 52) {
+          const wallet = await getLedger37FundingBalanceSummary(targetUserId, 'USDT');
+          available = wallet.available;
+          frozen = wallet.frozen;
+        }
+        return { total, available, frozen, inviteCount, directReferralCount, indirectReferralCount, positions, livePrices };
       }),
     // AF 邀请树：递归查询所有被邀请用户并标注层数（仅YJH本人可调用）
     afGetInviteTree: protectedProcedure
@@ -17673,6 +17739,7 @@ ${klinesSummary}
                  GROUP BY o.id, o.user_id, o.coin, o.limit_price, o.sell_price, o.quantity, o.amount, o.is_gift, o.sell_confirmed_at, o.updated_at, o.created_at`,
                 [input.ledgerId, ...userIds6]
               ) as any[];
+              const activeOrderMultiplier = await getAfOrderMultiplierForLedger(rawDb, input.ledgerId);
               for (const row of (soldProfitRows as any[])) {
                 const buyPrice = parseFloat(row.buy_price?.toString() || '0');
                 const sellPrice = parseFloat(row.sell_price?.toString() || '0');
@@ -17688,7 +17755,7 @@ ${klinesSummary}
                 const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
                 const createdDay = new Date(new Date(row.created_at).getFullYear(), new Date(row.created_at).getMonth(), new Date(row.created_at).getDate());
                 const holdDays = Math.max(1, Math.floor((confirmedDay.getTime() - createdDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-                const tradeValue = isGift ? principal : principal * 5.25;
+                const tradeValue = isGift ? principal : principal * activeOrderMultiplier;
                 const dailyFee = tradeValue / 0.75 * 0.12 / 365;
                 const managementFee = dailyFee * holdDays;
                 const netProfit = Math.max(0, grossProfit) - managementFee;
@@ -17894,6 +17961,8 @@ ${klinesSummary}
                 WHERE m.user_id = ${targetUserId}
                   AND m.note NOT LIKE '[CNY]%'
                   AND m.note NOT LIKE '[BALANCE_BASE]%'
+                  // 本金迁入冻结会保留一正一负两条审计账务；用户端以真实冻结台账替代展示，避免误读为支出/收入。
+                  AND COALESCE(m.note, '') NOT LIKE '[AF52本金冻结迁移-%'
                 ORDER BY m.created_at DESC`
           ) as any;
           manualList = ((manualRows[0] || manualRows) as any[]).map((r: any) => {
@@ -17923,6 +17992,71 @@ ${klinesSummary}
           });
         } catch (_) {
           // 表不存在时忽略
+        }
+        // 2.5 谷底征筹本金冻结：资金只从可用额转入冻结额，不能伪装成订单扣款。
+        // 标签同时保存内部订单ID；接口统一补全为完整订单编号，以便用户与后台按同一号码核对。
+        const formatAfOrderNo = (orderId: unknown, createdAt: unknown) => {
+          const id = Number(orderId);
+          const date = new Date(String(createdAt || ''));
+          if (!(id > 0) || Number.isNaN(date.getTime())) return `订单 #${id || ''}`.trim();
+          const yy = String(date.getFullYear()).slice(2);
+          const mm = String(date.getMonth() + 1).padStart(2, '0');
+          const dd = String(date.getDate()).padStart(2, '0');
+          return `AF${yy}${mm}${dd}${String(id).padStart(6, '0')}`;
+        };
+        let principalHoldList: any[] = [];
+        let principalReleaseList: any[] = [];
+        try {
+          const [holdResult, releaseResult] = await Promise.all([
+            db.execute(sql`SELECT h.id, h.ledger_id, h.amount, h.status, h.created_at,
+                                  o.id AS order_id, o.created_at AS order_created_at
+                           FROM ai_wallet_project_holds h
+                           LEFT JOIN af_orders o
+                             ON o.ledger_id = h.ledger_id
+                            AND h.tag_name = CONCAT('52号谷底征筹订单 #', o.id, ' 本金')
+                          WHERE h.user_id = ${targetUserId}
+                            AND h.ledger_id = 52
+                            AND h.asset_code = 'USDT'
+                            AND h.tag_name LIKE '52号谷底征筹订单 #% 本金'
+                          ORDER BY h.created_at DESC, h.id DESC`),
+            db.execute(sql`SELECT r.id, r.amount, r.created_at,
+                                  h.id AS hold_id, h.ledger_id, h.tag_name,
+                                  o.id AS order_id, o.created_at AS order_created_at
+                           FROM ai_wallet_project_hold_releases r
+                           INNER JOIN ai_wallet_project_holds h ON h.id = r.hold_id
+                           LEFT JOIN af_orders o
+                             ON o.ledger_id = h.ledger_id
+                            AND h.tag_name = CONCAT('52号谷底征筹订单 #', o.id, ' 本金')
+                          WHERE h.user_id = ${targetUserId}
+                            AND h.ledger_id = 52
+                            AND h.asset_code = 'USDT'
+                            AND h.tag_name LIKE '52号谷底征筹订单 #% 本金'
+                            AND r.status = 'active'
+                          ORDER BY r.created_at DESC, r.id DESC`),
+          ]);
+          const holdRows = (holdResult[0] || holdResult) as any[];
+          const releaseRows = (releaseResult[0] || releaseResult) as any[];
+          principalHoldList = (Array.isArray(holdRows) ? holdRows : []).map((row: any) => ({
+            id: `hold_${row.id}`,
+            // 仅用于方向和显示金额；下方累计余额明确不把冻结计作收支。
+            amount: -Math.abs(parseFloat(String(row.amount || '0'))),
+            sourceType: 'wallet_hold' as const,
+            type: 'principal_hold' as const,
+            status: String(row.status || '') === 'released' ? '本金已解冻' : '本金已冻结',
+            note: `谷底征筹本金冻结 · ${formatAfOrderNo(row.order_id, row.order_created_at)}`,
+            createdAt: row.created_at,
+          }));
+          principalReleaseList = (Array.isArray(releaseRows) ? releaseRows : []).map((row: any) => ({
+            id: `hold_release_${row.id}`,
+            amount: Math.abs(parseFloat(String(row.amount || '0'))),
+            sourceType: 'wallet_hold' as const,
+            type: 'principal_hold_release' as const,
+            status: '本金已解冻',
+            note: `谷底征筹本金解冻 · ${formatAfOrderNo(row.order_id, row.order_created_at)}`,
+            createdAt: row.created_at,
+          }));
+        } catch (_) {
+          // 冻结基础表尚未初始化的旧环境不影响既有钱包流水。
         }
         // 3. balance_history 作为历史兼容层（处理改造前的旧数据）
         // 改造后 addUserBalance 已统一写入 af_manual_balances，新记录不再依赖 balance_history
@@ -17965,7 +18099,7 @@ ${klinesSummary}
         } catch (_) { /* 忽略 */ }
 
         // 4. 合并并按时间正序排列（从旧到新）。此处只保留一次实际影响 USDT 余额的事件。
-        const combinedAsc = [...rechargeList, ...manualList, ...bhList].sort(
+        const combinedAsc = [...rechargeList, ...manualList, ...principalHoldList, ...principalReleaseList, ...bhList].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
 
@@ -17991,7 +18125,10 @@ ${klinesSummary}
         const combinedDesc = [...combinedAsc].reverse();
         return combinedDesc.map(item => ({
           ...item,
-          balanceAfter: balanceMap.get(String((item as any).id)) ?? null,
+          // 项目冻结只在可用额与冻结额之间划转，不属于收支流水；不展示不适用的累计收支余额。
+          balanceAfter: (item as any).sourceType === 'wallet_hold'
+            ? null
+            : balanceMap.get(String((item as any).id)) ?? null,
         }));
       }),
     // AF 提交委托订单
@@ -18014,6 +18151,7 @@ ${klinesSummary}
       .mutation(async ({ ctx, input }) => {
         if (input.side === 'buy') await assertAiWalletOperationEnabled(`ledger:${input.ledgerId}`, "order_debit");
         const db = await getLedgerDb();
+        if (input.ledgerId === 52) await ensureAfWalletHoldColumns();
 
         if (input.side === 'sell' && input.sourceOrderId) {
           // ★ 委托卖出：不创建新订单，直接在原买单上更新卖出字段
@@ -18079,8 +18217,75 @@ ${klinesSummary}
           };
         }
 
+        let createdOrderId: number | null = null;
+        let principalFrozenAtWallet = false;
+
+        // 52号账本的新普通委买：订单与钱包本金冻结必须同一事务提交。
+        // 冻结不改变总资产，只会占用可用USDT；历史订单继续保持旧的手工流水口径。
+        if (input.ledgerId === 52) {
+          const amountNum = Number(input.amount);
+          const limitPriceNum = Number(input.limitPrice);
+          if (!Number.isFinite(amountNum) || amountNum <= 0 || !Number.isFinite(limitPriceNum) || limitPriceNum <= 0) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '请输入有效的委托价格和投资额' });
+          }
+          await ensureLedger37WalletInfrastructure();
+          const transaction = await getDbTransactionConnection();
+          if (!transaction) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
+          try {
+            await (transaction as any).beginTransaction();
+            const [memberRows] = await (transaction as any).execute(
+              `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1 FOR UPDATE`,
+              [input.ledgerId, ctx.user.id],
+            );
+            if (!asRows(memberRows)[0]) {
+              throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员，不能提交委托' });
+            }
+            const multiplier = await getAfOrderMultiplierForLedger(transaction as any, input.ledgerId);
+            const normalizedAmount = amountNum.toFixed(8);
+            const quantity = (amountNum * multiplier / limitPriceNum).toFixed(8);
+            const [orderResult] = await (transaction as any).execute(
+              `INSERT INTO af_orders
+               (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, created_at, updated_at)
+               VALUES (?, ?, ?, 'buy', ?, ?, ?, ?, 'pending', ?, NOW(), NOW())`,
+              [input.ledgerId, ctx.user.id, input.coin, String(limitPriceNum), String(limitPriceNum), normalizedAmount, quantity, orderType],
+            );
+            createdOrderId = Number((orderResult as any).insertId || 0);
+            if (!createdOrderId) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '创建委托订单失败' });
+            const hold = await freezeLedger37WalletHold({
+              userId: ctx.user.id,
+              tagName: getAf52WalletHoldTag(createdOrderId),
+              assetCode: 'USDT',
+              amount: normalizedAmount,
+              actorUserId: ctx.user.id,
+              ledgerId: 52,
+              requestId: getAf52WalletHoldRequestId(createdOrderId),
+              transaction,
+            });
+            await (transaction as any).execute(
+              `UPDATE af_orders
+                  SET principal_hold_id = ?, principal_hold_request_id = ?,
+                      is_locked = ?, lock_expiry = ?, lock_instrument = ?, lock_yield = ?
+                WHERE id = ? AND ledger_id = 52`,
+              [
+                hold.hold.id,
+                getAf52WalletHoldRequestId(createdOrderId),
+                verifiedLock ? 1 : 0,
+                verifiedLock?.expiry ?? null,
+                verifiedLock?.instrument ?? null,
+                verifiedLock?.yield ?? null,
+                createdOrderId,
+              ],
+            );
+            await (transaction as any).commit();
+            principalFrozenAtWallet = true;
+          } catch (error) {
+            try { await (transaction as any).rollback(); } catch {}
+            throw error;
+          } finally {
+            (transaction as any).release?.();
+          }
         // 市价单直接自动成交，无需管理员手工确认
-        if (input.isMarketOrder) {
+        } else if (input.isMarketOrder) {
           // ★ 安全校验：后端验证市价权限，防止前端绕过
           const YJH_ID = 4957151;
           const ADMIN_ID = 870413;
@@ -18110,9 +18315,9 @@ ${klinesSummary}
             sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, created_at, updated_at) VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, 'buy', ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, NOW(), NOW())`
           );
         }
-        // 委托买入：扣除余额，并回填订单号
+        // 委托买入：旧账本保持手工扣款；52号新订单的本金已冻结，不得再写负数流水。
         const amountNum = parseFloat(input.amount);
-        if (!isNaN(amountNum) && amountNum > 0) {
+        if (!principalFrozenAtWallet && !isNaN(amountNum) && amountNum > 0) {
           // 查询刚创建的订单 ID
           const newOrderRows = await db.execute(
             sql`SELECT id FROM af_orders WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} AND side = 'buy' ORDER BY created_at DESC LIMIT 1`
@@ -18133,7 +18338,7 @@ ${klinesSummary}
           );
         }
         // 同步生成 pending 状态的赠予订单（按拨比配置预生成）
-        const newOrderId2 = (await db.execute(
+        const newOrderId2 = createdOrderId ?? (await db.execute(
           sql`SELECT id FROM af_orders WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} AND side = 'buy' ORDER BY created_at DESC LIMIT 1`
         ) as any)?.[0]?.[0]?.id ?? (await db.execute(
           sql`SELECT id FROM af_orders WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} AND side = 'buy' ORDER BY created_at DESC LIMIT 1`
@@ -18251,7 +18456,9 @@ ${klinesSummary}
         if (!Number.isFinite(amount) || amount <= 0) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '请输入有效投资额' });
         }
-                await ensureAfAdvancedOrdersTable();
+        await ensureAfAdvancedOrdersTable();
+        await ensureAfWalletHoldColumns();
+        await ensureLedger37WalletInfrastructure();
         const conn = await getDbTransactionConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
         await (conn as any).beginTransaction();
@@ -18263,25 +18470,8 @@ ${klinesSummary}
           if (!(memberRows as any[])?.[0]) {
             throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员，不能提交高级委托' });
           }
-          // 锁定用户余额行，避免两个并发下单请求同时透支同一钱包。
-          const [userRows] = await (conn as any).execute(
-            `SELECT COALESCE(balance, 0) AS balance FROM users WHERE id = ? FOR UPDATE`,
-            [ctx.user.id]
-          );
-          if (!(userRows as any[])?.[0]) throw new TRPCError({ code: 'NOT_FOUND', message: '用户不存在' });
-          const [manualRows] = await (conn as any).execute(
-            `SELECT amount FROM af_manual_balances
-             WHERE user_id = ? AND note NOT LIKE '[CNY]%' AND note NOT LIKE '[BALANCE_BASE]%'
-             FOR UPDATE`,
-            [ctx.user.id]
-          );
-          const manualTotal = (manualRows as any[]).reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
-          const available = Number((userRows as any[])[0].balance || 0) + manualTotal;
-          if (amount > available + 1e-8) {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: '投资额超过钱包可用余额' });
-          }
 
-          // 余额锁定后再读取同源ETH报价，防止客户端价格或过期行情绕过价格档位规则。
+          // 冻结本金前读取同源ETH报价，防止客户端价格或过期行情绕过价格档位规则。
           const market = await getFreshAfAdvancedEthPrice();
           if (limitPrice >= market.price) {
             throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托价必须低于当前ETH实时价格' });
@@ -18298,11 +18488,20 @@ ${klinesSummary}
           const orderId = Number((orderResult as any).insertId || 0);
           if (!orderId) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '创建高级委托失败' });
 
-          const freezeNote = `高级委托冻结 ETH ${normalizedAmount} USDT #${orderId}`;
-          const [freezeResult] = await (conn as any).execute(
-            `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
-             VALUES (?, ?, ?, ?, NOW(), NOW())`,
-            [input.ledgerId, ctx.user.id, -amount, freezeNote]
+          const principalHold = await freezeLedger37WalletHold({
+            userId: ctx.user.id,
+            tagName: getAf52WalletHoldTag(orderId),
+            assetCode: 'USDT',
+            amount: normalizedAmount,
+            actorUserId: ctx.user.id,
+            ledgerId: 52,
+            requestId: getAf52WalletHoldRequestId(orderId),
+            transaction: conn,
+          });
+          await (conn as any).execute(
+            `UPDATE af_orders SET principal_hold_id = ?, principal_hold_request_id = ?
+              WHERE id = ? AND ledger_id = 52`,
+            [principalHold.hold.id, getAf52WalletHoldRequestId(orderId), orderId],
           );
           // 高级委托不再约定或自动计算固定周收益；保留既有非空字段，新增订单统一写0。
           const weeklyYieldRate = 0;
@@ -18310,7 +18509,7 @@ ${klinesSummary}
             `INSERT INTO af_advanced_orders
              (ledger_id, user_id, order_id, coin, limit_price, submitted_spot_price, amount, quantity, weekly_yield_rate, status, freeze_balance_id, created_at, updated_at)
              VALUES (?, ?, ?, 'ETH', ?, ?, ?, ?, ?, 'active', ?, NOW(), NOW())`,
-            [input.ledgerId, ctx.user.id, orderId, limitPrice, market.price, normalizedAmount, quantity, weeklyYieldRate, Number((freezeResult as any).insertId || 0) || null]
+            [input.ledgerId, ctx.user.id, orderId, limitPrice, market.price, normalizedAmount, quantity, weeklyYieldRate, null]
           );
           await (conn as any).commit();
           return {
@@ -18320,7 +18519,7 @@ ${klinesSummary}
             limitPrice,
             amount: normalizedAmount,
             quantity,
-            manualPayoutOnly: true,
+            walletPrincipalFrozen: true,
           };
                 } catch (error) {
           try { await (conn as any).rollback(); } catch {}
@@ -18334,13 +18533,14 @@ ${klinesSummary}
       .input(z.object({ ledgerId: z.literal(52), orderId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         await ensureAfAdvancedOrdersTable();
+        await ensureAfWalletHoldColumns();
         const conn = await getDbTransactionConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
         await (conn as any).beginTransaction();
         try {
           const [rows] = await (conn as any).execute(
             `SELECT ao.id AS advanced_id, ao.status AS advanced_status, ao.limit_price, ao.submitted_spot_price, ao.amount,
-                    o.id AS order_id, o.status AS order_status
+                    o.id AS order_id, o.user_id, o.principal_hold_id, o.status AS order_status
              FROM af_advanced_orders ao
              INNER JOIN af_orders o ON o.id = ao.order_id AND o.ledger_id = ao.ledger_id
              WHERE ao.ledger_id = ? AND ao.order_id = ? AND ao.user_id = ?
@@ -18388,11 +18588,21 @@ ${klinesSummary}
              WHERE id = ? AND ledger_id = ? AND status = 'pending'`,
             [advanced.order_id, input.ledgerId]
           );
-          await (conn as any).execute(
-            `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
-             VALUES (?, ?, ?, ?, NOW(), NOW())`,
-            [input.ledgerId, ctx.user.id, amount, `高级委托撤单退回 ETH ${amount.toFixed(8)} USDT #${advanced.order_id}`]
-          );
+          if (Number(advanced.principal_hold_id || 0) > 0) {
+            const hold = await getAf52ActivePrincipalHoldForUpdate(conn, Number(advanced.order_id), Number(advanced.user_id));
+            if (!hold) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '未找到高级委托的有效钱包本金冻结，已阻止撤单，请人工核查' });
+            await releaseLedger37WalletHold({
+              holdId: Number(hold.id), actorUserId: ctx.user.id, ledgerId: 52,
+              reason: 'af_advanced_order_cancel', transaction: conn,
+            });
+          } else {
+            // 兼容历史高级委托：它们的本金曾写入手工余额流水，只能沿用原退款方式。
+            await (conn as any).execute(
+              `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+               VALUES (?, ?, ?, ?, NOW(), NOW())`,
+              [input.ledgerId, ctx.user.id, amount, `高级委托撤单退回 ETH ${amount.toFixed(8)} USDT #${advanced.order_id}`]
+            );
+          }
           await (conn as any).commit();
           return { success: true, cancelable: true, currentPrice: market.price };
                 } catch (error) {
@@ -18411,6 +18621,7 @@ ${klinesSummary}
       }))
       .mutation(async ({ ctx, input }) => {
         await ensureAfAdvancedOrdersTable();
+        await ensureAfWalletHoldColumns();
         const conn = await getDbTransactionConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
 
@@ -18429,7 +18640,7 @@ ${klinesSummary}
           const [rows] = await (conn as any).execute(
             `SELECT ao.id AS advanced_id, ao.status AS advanced_status, ao.amount AS advanced_amount,
                     ao.freeze_balance_id, ao.refund_balance_id,
-                    o.id AS order_id, o.user_id, o.coin, o.status AS order_status
+                    o.id AS order_id, o.user_id, o.coin, o.principal_hold_id, o.status AS order_status
              FROM af_advanced_orders ao
              INNER JOIN af_orders o ON o.id = ao.order_id AND o.ledger_id = ao.ledger_id
              WHERE ao.ledger_id = ? AND ao.order_id = ?
@@ -18458,33 +18669,48 @@ ${klinesSummary}
             throw new TRPCError({ code: 'CONFLICT', message: '该订单已存在退款审计流水，已阻止重复退款，请人工核查' });
           }
 
-          const freezeBalanceId = Number(advanced.freeze_balance_id || 0);
-          if (!freezeBalanceId) {
-            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '未找到该高级委托的冻结本金流水，已阻止退款，请人工核查' });
-          }
-          const [freezeRows] = await (conn as any).execute(
-            `SELECT id, amount FROM af_manual_balances
-             WHERE id = ? AND ledger_id = ? AND user_id = ?
-             FOR UPDATE`,
-            [freezeBalanceId, input.ledgerId, advanced.user_id]
-          );
-          const freezeRecord = (freezeRows as any[])?.[0];
-          const frozenAmount = Number(freezeRecord?.amount || 0);
-          const refundAmount = Number((-frozenAmount).toFixed(8));
+          let refundBalanceId: number | null = null;
+          let refundAmount = Number(advanced.advanced_amount || 0);
           const expectedAmount = Number(advanced.advanced_amount || 0);
-          if (!freezeRecord || !Number.isFinite(refundAmount) || refundAmount <= 0 || Math.abs(refundAmount - expectedAmount) > 0.00000001) {
-            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '冻结本金流水校验失败，已阻止退款，请人工核查' });
-          }
-
           const normalizedReason = input.reason.replace(/[\r\n]+/g, ' ').trim();
-          const refundNote = `管理员撤销高级委托，仅退冻结本金 ETH ${refundAmount.toFixed(8)} USDT #${advanced.order_id}（管理员#${ctx.user.id}；原因：${normalizedReason}）`;
-          const [refundResult] = await (conn as any).execute(
-            `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
-             VALUES (?, ?, ?, ?, NOW(), NOW())`,
-            [input.ledgerId, advanced.user_id, refundAmount, refundNote]
-          );
-          const refundBalanceId = Number((refundResult as any).insertId || 0);
-          if (!refundBalanceId) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '退款流水写入失败，事务已回滚' });
+          if (Number(advanced.principal_hold_id || 0) > 0) {
+            const hold = await getAf52ActivePrincipalHoldForUpdate(conn, Number(advanced.order_id), Number(advanced.user_id));
+            if (!hold) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '未找到高级委托的有效钱包本金冻结，已阻止退款，请人工核查' });
+            const released = await releaseLedger37WalletHold({
+              holdId: Number(hold.id), actorUserId: ctx.user.id, ledgerId: 52,
+              reason: 'af_advanced_order_admin_cancel', transaction: conn,
+            });
+            refundAmount = Number(released.releasedAmount || 0);
+            if (!Number.isFinite(refundAmount) || refundAmount <= 0 || Math.abs(refundAmount - expectedAmount) > 0.00000001) {
+              throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '钱包本金冻结金额校验失败，已阻止退款，请人工核查' });
+            }
+          } else {
+            // 兼容旧单：旧高级委托的冻结本金记录在手工余额流水中。
+            const freezeBalanceId = Number(advanced.freeze_balance_id || 0);
+            if (!freezeBalanceId) {
+              throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '未找到该高级委托的冻结本金流水，已阻止退款，请人工核查' });
+            }
+            const [freezeRows] = await (conn as any).execute(
+              `SELECT id, amount FROM af_manual_balances
+               WHERE id = ? AND ledger_id = ? AND user_id = ?
+               FOR UPDATE`,
+              [freezeBalanceId, input.ledgerId, advanced.user_id]
+            );
+            const freezeRecord = (freezeRows as any[])?.[0];
+            const frozenAmount = Number(freezeRecord?.amount || 0);
+            refundAmount = Number((-frozenAmount).toFixed(8));
+            if (!freezeRecord || !Number.isFinite(refundAmount) || refundAmount <= 0 || Math.abs(refundAmount - expectedAmount) > 0.00000001) {
+              throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '冻结本金流水校验失败，已阻止退款，请人工核查' });
+            }
+            const refundNote = `管理员撤销高级委托，仅退冻结本金 ETH ${refundAmount.toFixed(8)} USDT #${advanced.order_id}（管理员#${ctx.user.id}；原因：${normalizedReason}）`;
+            const [refundResult] = await (conn as any).execute(
+              `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+               VALUES (?, ?, ?, ?, NOW(), NOW())`,
+              [input.ledgerId, advanced.user_id, refundAmount, refundNote]
+            );
+            refundBalanceId = Number((refundResult as any).insertId || 0);
+            if (!refundBalanceId) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '退款流水写入失败，事务已回滚' });
+          }
 
           const [advancedUpdate] = await (conn as any).execute(
             `UPDATE af_advanced_orders
@@ -18785,6 +19011,16 @@ ${klinesSummary}
               WHERE ledger_id = ${input.ledgerId} AND status = 'active' AND limit_price >= ${market.price}`);
           } catch { /* 行情不可用时不改变已落库状态 */ }
         }
+        if (input.ledgerId === 52) {
+          try {
+            // 每次重新打开订单管理都补扫一次。权益计算仍使用历史最低价，
+            // 卡片展示则使用本次扫描的4小时K线最低价和扫描时间。
+            const { runTierScan } = await import('./af-tier-scanner');
+            await runTierScan();
+          } catch (error) {
+            console.warn('[AF扫描] 打开订单管理时刷新扫描价失败:', error);
+          }
+        }
         // prepaid_fee 字段和 af_fee_prepaid_logs 表已在生产环境建好，无需每次 ALTER
         const [rows] = await db.execute(
           sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at,
@@ -18855,12 +19091,14 @@ ${klinesSummary}
           equityTier: 0,
           allTimeLowPrice: null as string | null,
           allTimeLowAt: null as string | null,
+          latestScanLowPrice: null as string | null,
+          latestScanAt: null as string | null,
           prepaidFee: parseFloat(r.prepaid_fee || '0'),
           tierMode: (r.tier_mode || 'step') as 'step' | 'linear',
           isSimulated: Number(r.is_simulated || 0) === 1,
         }));
         
-        // 批量查询每笔订单的扫描最低价（af_order_scan_stats）
+        // 批量查询历史最低价（权益计算）和最新扫描低点（卡片展示）。
         try {
           const allOrderIds = list.map((o: any) => o.id);
           if (allOrderIds.length > 0) {
@@ -18868,21 +19106,27 @@ ${klinesSummary}
             const conn2 = await (await import('./db')).getDbConnection();
             if (conn2) {
               const [scanStatRows] = await (conn2 as any).execute(
-                `SELECT order_id, all_time_low_price, all_time_low_at FROM af_order_scan_stats WHERE order_id IN (${placeholders2})`,
+                `SELECT order_id, all_time_low_price, all_time_low_at, last_low_price, last_scan_at FROM af_order_scan_stats WHERE order_id IN (${placeholders2})`,
                 allOrderIds
               );
-              const scanMap: Record<number, { price: string; at: string | null }> = {};
+              const scanMap: Record<number, { allTimePrice: string; allTimeAt: string | null; latestPrice: string; latestAt: string | null }> = {};
               for (const s of (scanStatRows as any[])) {
                 scanMap[Number(s.order_id)] = {
-                  price: s.all_time_low_price ? String(s.all_time_low_price) : '',
-                  at: s.all_time_low_at ? toBeijingTimeStr(s.all_time_low_at) : null,
+                  allTimePrice: s.all_time_low_price ? String(s.all_time_low_price) : '',
+                  allTimeAt: s.all_time_low_at ? toBeijingTimeStr(s.all_time_low_at) : null,
+                  latestPrice: s.last_low_price ? String(s.last_low_price) : '',
+                  // 扫描器以北京时间写入 last_scan_at；卡片用 UTC 字段格式化该“墙上时间”，
+                  // 因此直接保留时间分量，不能再做一次 +8 小时转换。
+                  latestAt: s.last_scan_at ? new Date(s.last_scan_at).toISOString() : null,
                 };
               }
               for (const order of list) {
                 const oid = Number(order.id);
                 if (scanMap[oid]) {
-                  order.allTimeLowPrice = scanMap[oid].price || null;
-                  order.allTimeLowAt = scanMap[oid].at || null;
+                  order.allTimeLowPrice = scanMap[oid].allTimePrice || null;
+                  order.allTimeLowAt = scanMap[oid].allTimeAt || null;
+                  order.latestScanLowPrice = scanMap[oid].latestPrice || null;
+                  order.latestScanAt = scanMap[oid].latestAt || null;
                 }
               }
             }
@@ -18931,12 +19175,10 @@ ${klinesSummary}
                         g.status, g.sell_status, g.gift_multiplier, g.limit_price, g.created_at,
                         COALESCE(g.tier_mode, 'step') as tier_mode,
                         u.username, COALESCE(u.name,'') as user_name,
-                        COALESCE(pr.ratio, NULL) as payout_ratio
+                        CASE WHEN r525.id IS NULL THEN 0 ELSE 1 END as is_525_gift
                  FROM af_orders g
                  LEFT JOIN users u ON u.id = g.user_id
-                 LEFT JOIN af_payout_ratios pr ON pr.ledger_id = g.ledger_id
-                   AND pr.source_user_id = g.source_user_id
-                   AND pr.beneficiary_user_id = g.user_id
+                 LEFT JOIN af_525_gift_records r525 ON r525.gift_order_id = g.id
                  WHERE g.source_order_id IN (${placeholders}) AND g.is_gift = 1
                  ORDER BY g.gift_multiplier DESC, g.amount DESC`,
                 normalOrderIds
@@ -18990,7 +19232,9 @@ ${klinesSummary}
                     status: String(g.status || ''),
                     sellStatus: g.sell_status ? String(g.sell_status) : null,
                     giftMultiplier: String(g.gift_multiplier || ''),
-                    payoutRatio: g.payout_ratio != null ? String(g.payout_ratio) : null,
+                    // 常规拨比以赠单生成当日冻结的倍率为准，不再关联当前配置表，避免历史重复行放大为多条展示。
+                    payoutRatio: Number(g.is_525_gift || 0) === 1 ? null : (Number(g.gift_multiplier || 0) * 100).toFixed(2),
+                    is525Gift: Number(g.is_525_gift || 0) === 1,
                     equityTier: tierMap[Number(g.id)] ?? 0,
                     tierMode: (g.tier_mode || 'step') as 'step' | 'linear',
                     allTimeLowPrice: giftScanMap[Number(g.id)] ?? null,
@@ -19156,6 +19400,7 @@ ${klinesSummary}
         ) as any;
         const buyOrders = ((buyOrderRows[0] || buyOrderRows) as any[]);
 
+        const activeOrderMultiplier = await getAfOrderMultiplierForLedger(await (await import('./db')).getDbConnection(), input.ledgerId);
         let ongoingFee = 0;   // 进行中管理费
         let settledFee = 0;   // 已结清管理费
         let todayFee = 0;     // 今日管理费（北京时间今天产生的管理费，仅计费中订单）
@@ -19169,9 +19414,9 @@ ${klinesSummary}
         for (const bo of buyOrders) {
           const amount = parseFloat(bo.amount || '0');
           if (amount <= 0) continue;
-          // 成交价値 = 普通订单用 amount×5.25，赠送订单用 amount（已是市値）
+          // 成交价值：普通订单使用当前开关对应的主订单倍数，赠单用自身市值。
           const isGift = parseInt(bo.is_gift || '0') === 1;
-          const tradeValue = isGift ? amount : amount * 5.25;
+          const tradeValue = isGift ? amount : amount * activeOrderMultiplier;
           const dailyFee = tradeValue / 0.75 * 0.12 / 365;
           // 管理费从下单时间（created_at）开始计算，修改价格等操作不影响管理费
           const confirmedDate = new Date(bo.created_at);
@@ -19225,6 +19470,17 @@ ${klinesSummary}
         // 买入成交时间（status=completed 时 updated_at，否则 created_at）
         const buyConfirmedAt = orderInfo?.updated_at || orderInfo?.created_at;
 
+        // 每次打开详情都定向补扫本订单币种：档位仍按4小时K线低点计算，
+        // 但展示不应停留在上次查看时的扫描结果。
+        if (coin && orderInfo?.status === 'completed') {
+          try {
+            const { runTierScan } = await import('./af-tier-scanner');
+            await runTierScan(input.orderId, coin);
+          } catch (error) {
+            console.warn(`[AF扫描] 打开订单#${input.orderId}时刷新${coin}扫描价失败:`, error);
+          }
+        }
+
         // 查询扣档记录
         const tierRows = await db.execute(
           sql`SELECT t.id, t.tier, t.trigger_price, t.triggered_at, t.buy_price,
@@ -19245,7 +19501,8 @@ ${klinesSummary}
           scanCount: Number(r.scan_count || 0),
         }));
 
-        // 查询历史最低扫描价（买入成交后的所有扫描中最低的那一次）
+        // 查询最新一次扫描的4小时最低价。扣档历史仍保留在 list 中；此处专门
+        // 让详情页在每次打开时展示刚刚刷新出的扫描结果，而不是历史最低点。
         let lowestScan: { price: string; scannedAt: any; scanCount: number } | null = null;
         if (coin) {
           // 根据是否有买入时间选择不同的查询
@@ -19260,7 +19517,7 @@ ${klinesSummary}
                     FROM af_price_scan_logs s
                     WHERE s.coin = ${coin}
                     AND s.scanned_at >= ${buyConfirmedAt}
-                    ORDER BY s.low_price ASC
+                    ORDER BY s.scanned_at DESC
                     LIMIT 1`
               ) as any
             : await db.execute(
@@ -19272,7 +19529,7 @@ ${klinesSummary}
                            ) as scan_count
                     FROM af_price_scan_logs s
                     WHERE s.coin = ${coin}
-                    ORDER BY s.low_price ASC
+                    ORDER BY s.scanned_at DESC
                     LIMIT 1`
               ) as any;
           const lr = (lowestRows[0]?.[0] ?? lowestRows[0]);
@@ -19473,8 +19730,9 @@ ${klinesSummary}
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         // 查询原始订单信息
         await ensureAfSimulationColumns();
+        if (input.ledgerId === 52) await ensureAfWalletHoldColumns();
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, source_order_id, sell_status, sell_price, sell_confirmed_at, tier_mode, created_at, COALESCE(is_simulated, 0) as is_simulated FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, sell_status, sell_price, sell_confirmed_at, tier_mode, created_at, principal_hold_id, COALESCE(is_simulated, 0) as is_simulated FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
@@ -19485,7 +19743,10 @@ ${klinesSummary}
             [input.ledgerId, input.orderId]
           ) as any[];
           if ((advancedRows as any[])?.[0]) {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托请使用专用确认成交流程，不能通过普通订单编辑修改' });
+            const isAdvancedSellAction = ['selling', 'sold', 'sell_cancelled'].includes(String(input.sellStatus || ''));
+            if (!isAdvancedSellAction || order.status !== 'completed') {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: '高级委托请先使用专用确认成交流程；成交后仅可通过卖出操作结算' });
+            }
           }
         }
         const oldStatus = order.status;
@@ -19496,6 +19757,14 @@ ${klinesSummary}
         const coin = order.coin;
         const side = order.side;
         const isSimulated = Number(order.is_simulated || 0) === 1;
+
+        if (input.ledgerId === 52 && Number(order.principal_hold_id || 0) > 0
+          && input.amount !== undefined && newStatus === 'pending' && Math.abs(newAmount - oldAmount) > 0.001) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: '该订单本金已冻结。为避免冻结金额与订单金额不一致，请先撤单后按新金额重新创建。',
+          });
+        }
         
         let balanceAdjust = 0;
         let balanceNote = '';
@@ -19562,8 +19831,9 @@ ${klinesSummary}
           const todayNow = new Date();
           const todayDay = new Date(todayNow.getFullYear(), todayNow.getMonth(), todayNow.getDate());
           const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-          // 管理费基数：赠予订单用订单价值(oldAmount)，普通订单用本金*5.25
-          const tradeValue = isGift ? oldAmount : oldAmount * 5.25;
+          // 管理费基数：赠予订单用订单价值，普通订单使用当前开关对应的主订单倍数。
+          const activeOrderMultiplier = await getAfOrderMultiplierForLedger(await (await import('./db')).getDbConnection(), input.ledgerId);
+          const tradeValue = isGift ? oldAmount : oldAmount * activeOrderMultiplier;
           const dailyFee = tradeValue / 0.75 * 0.12 / 365;
           const totalManagementFee = dailyFee * holdDays;
           // 查询该订单已预收的管理费
@@ -19573,10 +19843,74 @@ ${klinesSummary}
           const prepaidFee = parseFloat((prepaidFeeRow[0]?.[0] ?? prepaidFeeRow[0])?.prepaid_fee || '0');
           const managementFee = Math.max(0, totalManagementFee - prepaidFee);
           console.log(`[AF卖出成交] 管理费: 本金=${principal}, 成交价值=${tradeValue.toFixed(2)}, 下单日=${confirmedDate.toISOString().slice(0,10)}, 持有天数=${holdDays}, 总管理费=${totalManagementFee.toFixed(4)}, 已预收=${prepaidFee.toFixed(4)}, 待付管理费=${managementFee.toFixed(4)}`);
+
+          // 所有赠单均按赠送价值收取一次性2‰手续费；它不从正单本金中扣除。
+          const handlingFee = isGift ? oldAmount * 0.002 : 0;
+          const settlementFee = managementFee + handlingFee;
+
+          // 新创建的52号正单：本金此前只冻结、未扣减总额。卖出时必须先释放该笔本金，
+          // 再将扣除费用后的利润单独入账，避免把本金作为手工收入重复返还。
+          if (input.ledgerId === 52 && !isGift && Number(order.principal_hold_id || 0) > 0) {
+            await ensureLedger37WalletInfrastructure();
+            const transaction = await getDbTransactionConnection();
+            if (!transaction) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
+            try {
+              await (transaction as any).beginTransaction();
+              const [freshOrderRows] = await (transaction as any).execute(
+                `SELECT id, user_id, status, sell_status, principal_hold_id
+                   FROM af_orders WHERE id = ? AND ledger_id = 52 LIMIT 1 FOR UPDATE`,
+                [input.orderId],
+              );
+              const freshOrder = asRows(freshOrderRows)[0];
+              if (!freshOrder) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在' });
+              if (String(freshOrder.sell_status || '') === 'sold') {
+                await (transaction as any).commit();
+                return { success: true, alreadySettled: true };
+              }
+              const hold = await getAf52ActivePrincipalHoldForUpdate(transaction, input.orderId, Number(freshOrder.user_id));
+              if (!hold) {
+                throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '未找到订单的有效钱包本金冻结，已阻止结算，请人工核查' });
+              }
+              const released = await releaseLedger37WalletHold({
+                holdId: Number(hold.id), actorUserId: ctx.user.id, ledgerId: 52,
+                reason: 'af_order_sell_settlement', transaction,
+              });
+              const netProfitCredit = Math.max(0, profit - settlementFee);
+              const settlementNote = `谷底征筹卖出结算 ${coin} #${input.orderId}：本金解冻${Number(released.releasedAmount).toFixed(2)} U，收益${profit.toFixed(2)} U，管理费${managementFee.toFixed(2)} U，手续费${handlingFee.toFixed(2)} U，净收益${netProfitCredit.toFixed(2)} U`;
+              if (netProfitCredit > 0.00000001) {
+                await (transaction as any).execute(
+                  `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+                   VALUES (52, ?, ?, ?, NOW(), NOW())`,
+                  [Number(freshOrder.user_id), netProfitCredit.toFixed(8), settlementNote],
+                );
+              }
+              await (transaction as any).execute(
+                `UPDATE af_orders
+                    SET sell_status = 'sold', sell_price = COALESCE(?, sell_price),
+                        sell_confirmed_at = NOW(), updated_at = NOW()
+                  WHERE id = ? AND ledger_id = 52 AND COALESCE(sell_status, '') <> 'sold'`,
+                [input.sellPrice ? actualSellPrice : null, input.orderId],
+              );
+              await (transaction as any).commit();
+              return {
+                success: true,
+                principalReleased: Number(released.releasedAmount),
+                profit: Number(profit.toFixed(8)),
+                managementFee: Number(managementFee.toFixed(8)),
+                handlingFee: Number(handlingFee.toFixed(8)),
+                netProfitCredit: Number(netProfitCredit.toFixed(8)),
+              };
+            } catch (error) {
+              try { await (transaction as any).rollback(); } catch {}
+              throw error;
+            } finally {
+              (transaction as any).release?.();
+            }
+          }
           
           // 赠予订单买入时未扣本金，卖出时只结算纯利润，不加回本金
           const grossReturn = isGift ? Math.max(0, profit) : (principal + Math.max(0, profit));
-          balanceAdjust = Math.max(0, grossReturn - managementFee);
+          balanceAdjust = Math.max(0, grossReturn - settlementFee);
           // note 格式统一加入订单 ID，确保查重逻辑能正确匹配
           if (isGift) {
             balanceNote = `卖出成交 ${coin} 净收益${balanceAdjust.toFixed(2)} U #${input.orderId}`;
@@ -19602,7 +19936,7 @@ ${klinesSummary}
               console.warn(`[AF卖出成交] 订单#${input.orderId} 已有结算记录，跳过重复结算`);
             }
           } else {
-            console.warn(`[AF卖出成交] 订单#${input.orderId} 净回款为0（本金=${principal}, 收益=${profit.toFixed(4)}, 管理费=${managementFee.toFixed(4)}），跳过写入`);
+            console.warn(`[AF卖出成交] 订单#${input.orderId} 净回款为0（本金=${principal}, 收益=${profit.toFixed(4)}, 管理费=${managementFee.toFixed(4)}, 手续费=${handlingFee.toFixed(4)}），跳过写入`);
           }
           // 更新卖出状态
           const sellPriceUpdate = input.sellPrice ? `, sell_price = '${input.sellPrice.replace(/'/g, '')}'` : '';
@@ -19636,6 +19970,52 @@ ${klinesSummary}
         // 1. 状态变化：待定→已成交
         if (oldStatus === 'pending' && newStatus === 'completed') {
           // 委买成交：买入时已扣了余额，无需额外操作
+        }
+        // 新的52号钱包冻结委买由管理员撤销时，必须只释放对应本金；不得写手工正数退款。
+        if (input.ledgerId === 52 && Number(order.principal_hold_id || 0) > 0
+          && !isSimulated && oldStatus === 'pending' && newStatus === 'cancelled') {
+          await ensureLedger37WalletInfrastructure();
+          const transaction = await getDbTransactionConnection();
+          if (!transaction) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
+          try {
+            await (transaction as any).beginTransaction();
+            const [freshOrderRows] = await (transaction as any).execute(
+              `SELECT id, user_id, status FROM af_orders WHERE id = ? AND ledger_id = 52 LIMIT 1 FOR UPDATE`,
+              [input.orderId],
+            );
+            const freshOrder = asRows(freshOrderRows)[0];
+            if (!freshOrder) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在' });
+            if (String(freshOrder.status) === 'cancelled') {
+              await (transaction as any).commit();
+              return { success: true, alreadyCancelled: true };
+            }
+            if (String(freshOrder.status) !== 'pending') {
+              throw new TRPCError({ code: 'CONFLICT', message: '订单状态已变化，请刷新后重试' });
+            }
+            const hold = await getAf52ActivePrincipalHoldForUpdate(transaction, input.orderId, Number(freshOrder.user_id));
+            if (!hold) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '未找到订单的有效钱包本金冻结，已阻止撤单，请人工核查' });
+            await releaseLedger37WalletHold({
+              holdId: Number(hold.id), actorUserId: ctx.user.id, ledgerId: 52,
+              reason: 'af_order_admin_cancel', transaction,
+            });
+            await (transaction as any).execute(
+              `UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
+                WHERE id = ? AND ledger_id = 52 AND status = 'pending'`,
+              [input.orderId],
+            );
+            await (transaction as any).execute(
+              `UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
+                WHERE source_order_id = ? AND ledger_id = 52 AND is_gift = 1 AND status != 'cancelled'`,
+              [input.orderId],
+            );
+            await (transaction as any).commit();
+            return { success: true, principalReleased: true };
+          } catch (error) {
+            try { await (transaction as any).rollback(); } catch {}
+            throw error;
+          } finally {
+            (transaction as any).release?.();
+          }
         }
         // 2. 状态变化：待定→已撤单
         if (oldStatus === 'pending' && newStatus === 'cancelled') {
@@ -19873,7 +20253,8 @@ ${klinesSummary}
               const targetUserId525 = sw.target_user_id;
               const giftRatio525 = parseFloat(sw.gift_ratio); // 0.25
               const actualSpend525 = parseFloat(order.amount || '0');
-              const actualPrice525 = parseFloat(order.limit_price || '0');
+              // 订单成交时允许管理员将委买价更新为实际成交价；定向赠单必须跟随该最终价格，不能继续使用更新前的委买价。
+              const actualPrice525 = parseFloat(input.limitPrice || order.limit_price || '0');
               if (actualSpend525 <= 0 || actualPrice525 <= 0) return;
               // 赠单金额 = 用户投入 × 0.25（与正单 5.25 倍计算方式一致，不乘权益系数）
               const giftAmount525 = (actualSpend525 * giftRatio525).toFixed(8);
@@ -19892,7 +20273,7 @@ ${klinesSummary}
               await (conn525 as any).execute(
                 `INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, confirmed_at, created_at, updated_at)
                  VALUES (?, ?, ?, 'buy', ?, ?, ?, 'completed', 1, '0.2500', ?, ?, ?, NOW(), NOW(), NOW())`,
-                [input.ledgerId, targetUserId525, order.coin, order.limit_price, giftAmount525, giftQty525, input.orderId, userId, actualSpend525.toFixed(8)]
+                [input.ledgerId, targetUserId525, order.coin, actualPrice525.toFixed(8), giftAmount525, giftQty525, input.orderId, userId, actualSpend525.toFixed(8)]
               );
               // 查询刚插入的赠单 ID
               const [newGiftRows] = await (conn525 as any).execute(
@@ -19922,8 +20303,9 @@ ${klinesSummary}
         
         const db = await getLedgerDb();
         await ensureAfSimulationColumns();
+        if (input.ledgerId === 52) await ensureAfWalletHoldColumns();
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, amount, status, sell_status, COALESCE(is_simulated, 0) as is_simulated FROM af_orders
+          sql`SELECT id, user_id, coin, side, amount, status, sell_status, principal_hold_id, COALESCE(is_simulated, 0) as is_simulated FROM af_orders
               WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
@@ -19973,6 +20355,54 @@ ${klinesSummary}
         // 撤销委托买入
         if (order.status !== 'pending') throw new Error('只有委托中的订单才能撤单');
         const amount = parseFloat(order.amount || '0');
+        // 52号新订单使用钱包冻结本金；撤单只能释放该订单自身的冻结，不能写手工正数退款。
+        if (input.ledgerId === 52 && Number(order.principal_hold_id || 0) > 0 && Number(order.is_simulated || 0) !== 1) {
+          await ensureLedger37WalletInfrastructure();
+          const transaction = await getDbTransactionConnection();
+          if (!transaction) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用，请稍后重试' });
+          try {
+            await (transaction as any).beginTransaction();
+            const [lockedOrderRows] = await (transaction as any).execute(
+              `SELECT id, status FROM af_orders WHERE id = ? AND ledger_id = 52 AND user_id = ? LIMIT 1 FOR UPDATE`,
+              [input.orderId, ctx.user.id],
+            );
+            const lockedOrder = asRows(lockedOrderRows)[0];
+            if (!lockedOrder) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在或无权限' });
+            if (String(lockedOrder.status) === 'cancelled') {
+              await (transaction as any).commit();
+              return { success: true, alreadyCancelled: true };
+            }
+            if (String(lockedOrder.status) !== 'pending') {
+              throw new TRPCError({ code: 'CONFLICT', message: '订单状态已变化，请刷新后重试' });
+            }
+            const hold = await getAf52ActivePrincipalHoldForUpdate(transaction, input.orderId, ctx.user.id);
+            if (!hold) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '未找到该订单的有效钱包本金冻结，已阻止撤单，请人工核查' });
+            await releaseLedger37WalletHold({
+              holdId: Number(hold.id),
+              actorUserId: ctx.user.id,
+              ledgerId: 52,
+              reason: 'af_order_cancel',
+              transaction,
+            });
+            await (transaction as any).execute(
+              `UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
+                WHERE id = ? AND ledger_id = 52 AND status = 'pending'`,
+              [input.orderId],
+            );
+            await (transaction as any).execute(
+              `UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
+                WHERE source_order_id = ? AND ledger_id = 52 AND is_gift = 1 AND status != 'cancelled'`,
+              [input.orderId],
+            );
+            await (transaction as any).commit();
+            return { success: true, principalReleased: true };
+          } catch (error) {
+            try { await (transaction as any).rollback(); } catch {}
+            throw error;
+          } finally {
+            (transaction as any).release?.();
+          }
+        }
         // 买单撤单：退回冻结金额
         if (Number(order.is_simulated || 0) !== 1 && amount > 0.001) {
           await db.execute(
@@ -20014,9 +20444,12 @@ ${klinesSummary}
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         // 查询订单信息
         await ensureAfSimulationColumns();
-        if (input.ledgerId === 52) await ensureAfAdvancedOrdersTable();
+        if (input.ledgerId === 52) {
+          await ensureAfAdvancedOrdersTable();
+          await ensureAfWalletHoldColumns();
+        }
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, amount, quantity, status, is_gift, source_order_id, sell_status, COALESCE(is_simulated, 0) as is_simulated FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          sql`SELECT id, user_id, coin, side, amount, quantity, status, is_gift, source_order_id, sell_status, principal_hold_id, COALESCE(is_simulated, 0) as is_simulated FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
@@ -20032,8 +20465,15 @@ ${klinesSummary}
         const userId = order.user_id;
         const amount = parseFloat(order.amount || '0');
         const isGift = parseInt(order.is_gift || '0') === 1;
+        const hasWalletPrincipalHold = input.ledgerId === 52 && !isGift && Number(order.principal_hold_id || 0) > 0;
+        if (hasWalletPrincipalHold && String(order.sell_status || '') !== 'sold') {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: '该订单本金仍由钱包冻结。请先按撤单或卖出结算流程处理，不能直接删除。',
+          });
+        }
         // 退款逻辑：管理员勾选了退款且订单有金额
-        if (input.refund && Number(order.is_simulated || 0) !== 1 && !isGift && amount > 0.001) {
+        if (input.refund && !hasWalletPrincipalHold && Number(order.is_simulated || 0) !== 1 && !isGift && amount > 0.001) {
           await db.execute(
             sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
                 VALUES (${input.ledgerId}, ${userId}, ${amount}, ${`管理员删除订单退回 ${order.coin} ${amount} USDT`}, NOW(), NOW())`
@@ -20235,7 +20675,8 @@ ${klinesSummary}
         // 计算当前总管理费
         const isGift = !!order.is_gift;
         const oldAmount = parseFloat(order.amount || '0');
-        const tradeValue = isGift ? oldAmount : oldAmount * 5.25;
+        const activeOrderMultiplier = await getAfOrderMultiplierForLedger(await (await import('./db')).getDbConnection(), input.ledgerId);
+        const tradeValue = isGift ? oldAmount : oldAmount * activeOrderMultiplier;
         const dailyFee = tradeValue / 0.75 * 0.12 / 365;
         const confirmedDate = new Date(order.created_at);
         const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
@@ -20310,7 +20751,8 @@ ${klinesSummary}
           // 计算总管理费
           const isGift = !!order.is_gift;
           const oldAmount = parseFloat(order.amount || '0');
-          const tradeValue = isGift ? oldAmount : oldAmount * 5.25;
+          const activeOrderMultiplier = await getAfOrderMultiplierForLedger(await (await import('./db')).getDbConnection(), input.ledgerId);
+          const tradeValue = isGift ? oldAmount : oldAmount * activeOrderMultiplier;
           const dailyFee = tradeValue / 0.75 * 0.12 / 365;
           const confirmedDate = new Date(order.created_at);
           const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
@@ -20364,6 +20806,7 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         const { getLatestPrice } = await import('./price-scanner');
         const db = await getLedgerDb();
+        const activeOrderMultiplier = await getAfOrderMultiplierForLedger(await (await import('./db')).getDbConnection(), input.ledgerId);
         // 代看视角时查目标用户的订单，否则查自己的
         const targetUserId = input.viewAsUserId || ctx.user.id;
         // 查询目标用户所有买单（委托中 + 已成交 + 委卖中 + 已卖出，不含已撤销）
@@ -20431,7 +20874,7 @@ ${klinesSummary}
             // 累计管理费（仅持仓中订单）
             const principal2 = parseFloat(order.amount || '0');
             const isGift2 = parseInt(order.is_gift || '0') === 1;
-            const tradeValue2 = isGift2 ? principal2 : principal2 * 5.25;
+            const tradeValue2 = isGift2 ? principal2 : principal2 * activeOrderMultiplier;
             const dailyFee2 = tradeValue2 / 0.75 * 0.12 / 365;
             const createdDay2 = new Date(order.created_at);
             const createdDayStart2 = new Date(createdDay2.getFullYear(), createdDay2.getMonth(), createdDay2.getDate());
@@ -20454,7 +20897,7 @@ ${klinesSummary}
               const todayDayOnly = new Date();
               const todayDay = new Date(todayDayOnly.getFullYear(), todayDayOnly.getMonth(), todayDayOnly.getDate());
               const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-              const tradeValue = isGift ? principal : principal * 5.25;
+              const tradeValue = isGift ? principal : principal * activeOrderMultiplier;
               const dailyFee = tradeValue / 0.75 * 0.12 / 365;
               const managementFee = dailyFee * holdDays;
               const netProfit = Math.max(0, grossProfit) - managementFee;
@@ -20533,7 +20976,7 @@ ${klinesSummary}
           teamPnl[coin].effQty += effQ;
           const principal = parseFloat(order.amount || '0');
           const isGift = parseInt(order.is_gift || '0') === 1;
-          const tv = isGift ? principal : principal * 5.25;
+          const tv = isGift ? principal : principal * activeOrderMultiplier;
           const df = tv / 0.75 * 0.12 / 365;
           const cd = new Date(order.created_at);
           const cds = new Date(cd.getFullYear(), cd.getMonth(), cd.getDate());

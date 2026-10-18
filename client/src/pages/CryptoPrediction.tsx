@@ -785,7 +785,7 @@ export function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                 </div>
                 <div>
                   <span style={{ color: '#888' }}>累计买入ETH</span>
-                  <div className="font-bold" style={{ color: '#1a1a1a' }}>{ethPos.summary.totalEthQty.toFixed(6)} ETH</div>
+                  <div className="font-bold" style={{ color: '#1a1a1a' }}>{formatCoinQty(ethPos.summary.totalEthQty, 'ETH')} ETH</div>
                 </div>
                 <div>
                   <span style={{ color: '#888' }}>平均买入价</span>
@@ -806,8 +806,8 @@ export function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                     <span style={{ color: '#888' }}>实时持有</span>
                     <div className="font-bold" style={{ color: '#4F46E5' }}>
                       {ethPos.summary.avgBuyPrice > 0
-                        ? (ethPos.summary.netLoss / ethPos.summary.avgBuyPrice).toFixed(6) + ' ETH'
-                        : '0.000000 ETH'}
+                        ? formatCoinQty(ethPos.summary.netLoss / ethPos.summary.avgBuyPrice, 'ETH') + ' ETH'
+                        : '0.00 ETH'}
                     </div>
                   </div>
                 </div>
@@ -865,7 +865,7 @@ export function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                         {rec.orderNo && <span style={{ color: '#999' }}>编号{rec.orderNo}</span>}
                       </div>
                       <div style={{ fontSize: '0.7rem', color: '#999' }}>
-                        价格 {rec.ethPrice.toFixed(2)} U · 数量 {rec.ethQty.toFixed(6)} ETH
+                        价格 {rec.ethPrice.toFixed(2)} U · 数量 {formatCoinQty(rec.ethQty, 'ETH')} ETH
                       </div>
                     </div>
                     <div className="flex-shrink-0 text-right ml-2">
@@ -1232,6 +1232,7 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
 }
 
 function formatCoinQty(qty: number, coin: string): string {
+  if (coin === 'ETH') return (Number.isFinite(qty) ? qty : 0).toFixed(2);
   if (qty === 0) return '0';
   if (INTEGER_COINS_FIN.has(coin)) return Math.round(qty).toLocaleString('en-US');
   if (coin === 'BTC') return parseFloat(qty.toFixed(6)).toString();
@@ -1415,8 +1416,8 @@ const TIER_LABELS = [
   { tier: 9, drop: '-90%', ratio: '1/10', pct: '13.3%' },
 ];
 
-export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
-  order: any; timeStr: string; ledgerId: number; viewAsUserId?: number;
+export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId, orderMultiplier = 5.25 }: {
+  order: any; timeStr: string; ledgerId: number; viewAsUserId?: number; orderMultiplier?: number;
 }) {
   const { data: tierData, isLoading: tierLoading } = trpc.ledger.afGetTierData.useQuery(
     { orderId: order.id, ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
@@ -1588,7 +1589,7 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               <span className="text-[#9CA3AF]">持仓数量</span>
               <span>
                 <span className="text-[11px] text-[#9CA3AF]">{parseFloat(order.amount).toFixed(2)} ÷ {parseFloat(order.limitPrice).toLocaleString()} = </span>
-                <span className="text-[#1E293B] font-medium">{parseFloat(order.quantity).toFixed(8).replace(/\.?0+$/, '')} {order.coin}</span>
+                <span className="text-[#1E293B] font-medium">{formatCoinQty(parseFloat(order.quantity), order.coin)} {order.coin}</span>
               </span>
             </div>
           </>
@@ -1614,7 +1615,7 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               const _qty = parseFloat(order.quantity);
               const _prc = parseFloat(order.limitPrice);
               // 从 quantity*price/amount 反推实际倍数（历史订单可能是5.25，开关开启后是5）
-              const _multiplier = (_qty > 0 && _prc > 0 && _amt > 0) ? parseFloat((_qty * _prc / _amt).toFixed(2)) : 5.25;
+              const _multiplier = (_qty > 0 && _prc > 0 && _amt > 0) ? parseFloat((_qty * _prc / _amt).toFixed(2)) : orderMultiplier;
               const _tradeVal = _amt * _multiplier;
               return (
                 <>
@@ -1629,7 +1630,7 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                     <span className="text-[#9CA3AF]">持仓数量</span>
                     <span>
                       <span className="text-[11px] text-[#9CA3AF]">{_tradeVal.toFixed(2)} ÷ {_prc.toLocaleString()} = </span>
-                      <span className="text-[#1E293B] font-medium">{_qty.toFixed(8).replace(/\.?0+$/, '')} {order.coin}</span>
+                      <span className="text-[#1E293B] font-medium">{formatCoinQty(_qty, order.coin)} {order.coin}</span>
                     </span>
                   </div>
                 </>
@@ -1640,9 +1641,9 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 
         {/* 管理费（仅已成交订单显示） */}
         {order.side === 'buy' && isContract && (() => {
-          // 成交价値：普通订单 = amount×5.25，赠送订单 = amount（赠送市値）
+          // 成交价値：普通订单按当前开关倍率计算，赠送订单直接使用自身市值
           const amount = parseFloat(order.amount);
-          const tradeValue = order.isGift ? amount : amount * 5.25;
+          const tradeValue = order.isGift ? amount : amount * orderMultiplier;
           const dailyFee = tradeValue / 0.75 * 0.12 / 365;
           // 已撤单的委买订单：管理费为0（撤单时全额退回本金，未实际收取管理费）
           const isCancelledBuy = order.status === 'cancelled';
@@ -1703,7 +1704,7 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           const actualInvestment = parseFloat(order.amount);
           const grossProfit = (sellPrice - buyPrice) * quantity; // 差价收益（未扣管理费）
           // 重新计算管理费（与上方管理费区块保持一致）
-          const tradeValue2 = order.isGift ? actualInvestment : actualInvestment * 5.25;
+          const tradeValue2 = order.isGift ? actualInvestment : actualInvestment * orderMultiplier;
           const dailyFee2 = tradeValue2 / 0.75 * 0.12 / 365;
           const startDate2 = new Date(order.createdAt);
           const startDay2 = new Date(startDate2.getFullYear(), startDate2.getMonth(), startDate2.getDate());
@@ -1741,7 +1742,7 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           const walletReturn = Math.max(0, (order.isGift ? 0 : actualInvestment) + settlementProfit - dueManagementFee);
           const multiplier = actualInvestment > 0 && buyPrice > 0
             ? (quantity * buyPrice / actualInvestment)
-            : (order.isGift ? 1 : 5.25);
+            : (order.isGift ? 1 : orderMultiplier);
           return (
             <>
               <div className="flex justify-between items-start">
@@ -2069,15 +2070,15 @@ export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                 pct = parseFloat(pctStr) / 100;
               }
               const remaining = qty * pct;
-              const displayRemaining = remaining.toFixed(6).replace(/[.]?0+$/, '');
-              const displayQty = qty.toFixed(6).replace(/[.]?0+$/, '');
+              const displayRemaining = formatCoinQty(remaining, order.coin);
+              const displayQty = formatCoinQty(qty, order.coin);
               const scanPrice = tierData?.scanStatus?.lowestPrice ? parseFloat(String(tierData.scanStatus.lowestPrice))
                 : (tierData?.latestLowPrice ? parseFloat(String(tierData.latestLowPrice)) : 0);
               const refPrice = livePrice > 0 ? livePrice : scanPrice;
               const refPriceLabel = livePrice > 0 ? '' : (scanPrice > 0 ? '扫描价' : '');
               const marketValue = refPrice > 0 ? remaining * refPrice : null;
               const amount = parseFloat(order.amount);
-              const tradeValue = order.isGift ? amount : amount * 5.25;
+              const tradeValue = order.isGift ? amount : amount * orderMultiplier;
               const dailyFee = tradeValue / 0.75 * 0.12 / 365;
               // 已撤单的委买订单：管理费为0
               const isCancelledBuy = order.status === 'cancelled';
@@ -2508,7 +2509,7 @@ export default function CryptoPrediction() {
     // 融资付息列表不依赖谷底增筹的钱包汇总；避免切入融资页时与订单读取争抢数据库连接。
     { enabled: !!ledgerId && tab !== 'finance', staleTime: 30000 }
   );
-  const availableUsdt = (assetData as any)?.total ?? 0;
+  const availableUsdt = (assetData as any)?.available ?? (assetData as any)?.total ?? 0;
   // 委托订单
   const utils = trpc.useUtils();
   const { data: ordersData, isLoading: ordersLoading } = trpc.ledger.afGetOrders.useQuery(
@@ -3066,13 +3067,13 @@ export default function CryptoPrediction() {
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="text-xs font-semibold" style={{ color: '#1A56DB' }}>可买数量（{orderMultiplier}倍收益）</span>
                           <span className="text-sm font-bold" style={{ color: qty !== null ? '#1A2340' : '#9CA3AF' }}>
-                            {qty !== null ? `${qty.toFixed(6)} ${coin.name}` : `-- ${coin.name}`}
+                            {qty !== null ? `${coin.name === 'ETH' ? qty.toFixed(2) : qty.toFixed(6)} ${coin.name}` : `-- ${coin.name}`}
                           </span>
                         </div>
                         <div className="text-xs" style={{ color: '#6B7A9A' }}>
                           {hasAmt && hasPrice ? (
                             <span>
-                              {amt.toLocaleString('en-US', { maximumFractionDigits: 2 })} ÷ {price.toLocaleString()} × {orderMultiplier} = <span className="font-semibold" style={{ color: '#1A56DB' }}>{qty!.toFixed(6)} {coin.name}</span>
+                              {amt.toLocaleString('en-US', { maximumFractionDigits: 2 })} ÷ {price.toLocaleString()} × {orderMultiplier} = <span className="font-semibold" style={{ color: '#1A56DB' }}>{coin.name === 'ETH' ? qty!.toFixed(2) : qty!.toFixed(6)} {coin.name}</span>
                             </span>
                           ) : hasAmt && !hasPrice ? (
                             <span style={{ color: '#EF4444' }}>请先选择委托价格</span>
@@ -3254,7 +3255,7 @@ export default function CryptoPrediction() {
                               </div>
                             </div>
                             <div className="flex flex-col items-end gap-0.5">
-                              <span className="text-xs text-white">{(() => { const q = parseFloat(o.quantity); return q % 1 === 0 ? q.toString() : q.toFixed(8).replace(/0+$/, '').replace(/\.$/, ''); })()} {o.coin}</span>
+                              <span className="text-xs text-white">{(() => { const q = parseFloat(o.quantity); return o.coin === 'ETH' ? q.toFixed(2) : (q % 1 === 0 ? q.toString() : q.toFixed(8).replace(/0+$/, '').replace(/\.$/, '')); })()} {o.coin}</span>
                               <span className="text-[10px] text-gray-500">金额 {parseFloat(o.amount).toFixed(2)} USDT</span>
                             </div>
                           </div>
@@ -3540,6 +3541,7 @@ export default function CryptoPrediction() {
                               <span className="tabular-nums" style={{ color: (order as any).sellStatus === 'sold' ? '#9CA3AF' : '#1A2340' }}>
                                 {(() => {
                                   const q = parseFloat(order.quantity);
+                                  if ((order as any).coin === 'ETH') return q.toFixed(2);
                                   if (q === 0) return '0';
                                   const intDigits = Math.max(1, Math.floor(Math.abs(q)).toString().length);
                                   const decDigits = Math.max(0, 4 - intDigits);
@@ -3580,7 +3582,7 @@ export default function CryptoPrediction() {
                           {orderDetailId === order.id && (
                             <tr key={`detail-${order.id}`}>
                               <td colSpan={7} style={{ padding: 0 }}>
-                                <OrderDetail order={order} timeStr={timeStr} ledgerId={ledgerId} viewAsUserId={viewAsUserId} />
+                                <OrderDetail order={order} timeStr={timeStr} ledgerId={ledgerId} viewAsUserId={viewAsUserId} orderMultiplier={orderMultiplier} />
                               </td>
                             </tr>
                           )}
@@ -3599,7 +3601,7 @@ export default function CryptoPrediction() {
                 let totalFee = 0;
                 activeFeeOrders.forEach((o: any) => {
                   const amount = parseFloat(o.amount);
-                  const tradeValue = o.isGift ? amount : amount * 5.25;
+                  const tradeValue = o.isGift ? amount : amount * orderMultiplier;
                   const dailyFee = tradeValue / 0.75 * 0.12 / 365;
                   const startDate = new Date(o.createdAt);
                   const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
@@ -3623,7 +3625,7 @@ export default function CryptoPrediction() {
                 const feeOrders = orders.filter((o: any) => !(o as any).isSimulated && o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹') && o.sellStatus !== 'sold');
                 const feeItems = feeOrders.map((o: any) => {
                   const amount = parseFloat(o.amount);
-                  const tradeValue = o.isGift ? amount : amount * 5.25;
+                  const tradeValue = o.isGift ? amount : amount * orderMultiplier;
                   const dailyFee = tradeValue / 0.75 * 0.12 / 365;
                   const startDate = new Date(o.createdAt);
                   const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
@@ -3673,7 +3675,7 @@ export default function CryptoPrediction() {
                       </div>
                       {/* 说明 */}
                       <div className="mt-3 text-center text-xs" style={{ color: '#9CA3AF' }}>
-                        管理费 = 本金 × 5.25 ÷ 0.75 × 12% ÷ 365 × 持有天数
+                        管理费 = 本金 × {orderMultiplier} ÷ 0.75 × 12% ÷ 365 × 持有天数
                       </div>
                       {/* 关闭按钮 */}
                       <button onClick={() => setShowFeeModal(false)} className="w-full mt-4 py-3 rounded-2xl text-sm font-semibold" style={{ backgroundColor: '#1A56DB', color: '#fff' }}>

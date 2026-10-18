@@ -796,6 +796,7 @@ async function getUnifiedUsdtBalanceAfterByHistoryId(conn: any, userIds: number[
        WHERE user_id IN (${placeholders})
          AND note NOT LIKE '[CNY]%'
          AND note NOT LIKE '[BALANCE_BASE]%'
+         AND COALESCE(note, '') NOT LIKE '[AF52本金冻结迁移-%'
        ORDER BY created_at ASC, id ASC`,
       ids,
     ) as any[];
@@ -897,6 +898,7 @@ async function getUnifiedWalletBalanceAfterByEventKey(conn: any, userIds: number
        WHERE user_id IN (${placeholders})
          AND COALESCE(note, '') NOT LIKE '[CNY]%'
          AND COALESCE(note, '') NOT LIKE '[BALANCE_BASE]%'
+         AND COALESCE(note, '') NOT LIKE '[AF52本金冻结迁移-%'
        ORDER BY created_at ASC, id ASC`,
       ids,
     ) as any[];
@@ -1027,6 +1029,7 @@ async function getWalletDailyBalanceTrend(conn: any, daysInput: number, userId?:
     FROM af_manual_balances m
     WHERE COALESCE(m.note, '') NOT LIKE '[CNY]%'
       AND COALESCE(m.note, '') NOT LIKE '[BALANCE_BASE]%'
+      AND COALESCE(m.note, '') NOT LIKE '[AF52本金冻结迁移-%'
     UNION ALL
     SELECT bh.user_id, bh.amount, bh.created_at
     FROM balance_history bh
@@ -2682,6 +2685,7 @@ export const mibanAdminUserRouter = router({
           FROM af_manual_balances m
           WHERE COALESCE(m.note, '') NOT LIKE '[CNY]%'
             AND COALESCE(m.note, '') NOT LIKE '[BALANCE_BASE]%'
+            AND COALESCE(m.note, '') NOT LIKE '[AF52本金冻结迁移-%'
 
           UNION ALL
 
@@ -2714,11 +2718,19 @@ export const mibanAdminUserRouter = router({
             -h.amount AS amount,
             CONVERT('collateral_lock' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,
             CONVERT(h.asset_code USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS currency,
-            CONVERT(CONCAT('37号账本保证金冻结 · ', h.tag_name) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
+            CONVERT(CASE
+              WHEN h.ledger_id = 52 THEN CONCAT('谷底征筹本金 · ', COALESCE(CONCAT('AF', DATE_FORMAT(principal_order.created_at, '%y%m%d'), LPAD(principal_order.id, 6, '0')), h.tag_name))
+              ELSE CONCAT('37号账本保证金冻结 · ', h.tag_name)
+            END USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
             NULL AS raw_balance,
             h.created_at
           FROM ai_wallet_project_holds h
-          WHERE h.ledger_id = 37 AND h.asset_code IN ('CNY', 'USDT')
+          LEFT JOIN af_orders principal_order
+            ON principal_order.ledger_id = 52
+           AND h.ledger_id = 52
+           AND h.tag_name = CONCAT('52号谷底征筹订单 #', principal_order.id, ' 本金')
+          WHERE (h.ledger_id = 37 AND h.asset_code IN ('CNY', 'USDT'))
+             OR (h.ledger_id = 52 AND h.asset_code = 'USDT' AND h.tag_name LIKE '52号谷底征筹订单 #% 本金')
 
           UNION ALL
 
@@ -2730,11 +2742,20 @@ export const mibanAdminUserRouter = router({
             h.amount,
             CONVERT('collateral_release' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,
             CONVERT(h.asset_code USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS currency,
-            CONVERT(CONCAT('37号账本保证金解冻 · ', h.tag_name) USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
+            CONVERT(CASE
+              WHEN h.ledger_id = 52 THEN CONCAT('谷底征筹本金 · ', COALESCE(CONCAT('AF', DATE_FORMAT(principal_order_release.created_at, '%y%m%d'), LPAD(principal_order_release.id, 6, '0')), h.tag_name))
+              ELSE CONCAT('37号账本保证金解冻 · ', h.tag_name)
+            END USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS note,
             NULL AS raw_balance,
             h.released_at
           FROM ai_wallet_project_holds h
-          WHERE h.ledger_id = 37 AND h.asset_code IN ('CNY', 'USDT') AND h.status = 'released'
+          LEFT JOIN af_orders principal_order_release
+            ON principal_order_release.ledger_id = 52
+           AND h.ledger_id = 52
+           AND h.tag_name = CONCAT('52号谷底征筹订单 #', principal_order_release.id, ' 本金')
+          WHERE ((h.ledger_id = 37 AND h.asset_code IN ('CNY', 'USDT'))
+              OR (h.ledger_id = 52 AND h.asset_code = 'USDT' AND h.tag_name LIKE '52号谷底征筹订单 #% 本金'))
+            AND h.status = 'released'
 
           UNION ALL
 
