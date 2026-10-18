@@ -3983,18 +3983,34 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       }
     }
     const sharedIncomeByUserId = new Map<string, number>();
+    const sharedIncomeExpenseByUserId = new Map<string, number>();
     for (const transfer of sharedIncomeTransfers) {
-      const userId = String(transfer.recipientUserId);
-      sharedIncomeByUserId.set(userId, (sharedIncomeByUserId.get(userId) || 0) + transfer.amount);
-      if (!knownUserNames.has(userId)) knownUserNames.set(userId, { name: transfer.recipientUserName, username: transfer.recipientUsername });
+      const recipientUserId = String(transfer.recipientUserId);
+      const sourceUserId = String(transfer.sourceUserId || "").trim();
+      sharedIncomeByUserId.set(recipientUserId, (sharedIncomeByUserId.get(recipientUserId) || 0) + transfer.amount);
+      // 共享支出归属来源订单人：这笔正向平仓收益中被优先划拨出去的部分，不与原分佣混算。
+      if (sourceUserId) {
+        sharedIncomeExpenseByUserId.set(sourceUserId, (sharedIncomeExpenseByUserId.get(sourceUserId) || 0) + transfer.amount);
+        if (!knownUserNames.has(sourceUserId)) knownUserNames.set(sourceUserId, { name: transfer.sourceUserName });
+      }
+      if (!knownUserNames.has(recipientUserId)) knownUserNames.set(recipientUserId, { name: transfer.recipientUserName, username: transfer.recipientUsername });
     }
-    // 普通交易收益按“共享先分配，剩余再按本单快照分佣”的同一口径归属，不能再把整笔收益都归给下单人。
-    const realizedTradeIncomeByUserId = new Map<string, number>();
+    // 普通交易收益按“共享先分配，剩余再按本单快照分佣”的同一口径归属。
+    // 对每位用户分别保留：本人订单实际归属、来自他人订单的佣金收益、本人订单分给他人的佣金支出。
+    // 共享收益是独立的优先分配，不计入佣金支出。
+    const orderProfitByUserId = new Map<string, number>();
+    const commissionIncomeByUserId = new Map<string, number>();
+    const commissionExpenseByUserId = new Map<string, number>();
+    const addIncome = (target: Map<string, number>, userId: string, amount: number) => {
+      if (!userId || !Number.isFinite(amount)) return;
+      target.set(userId, (target.get(userId) || 0) + amount);
+    };
     const detailsByEntryId = buildRecentJournalTradeDetails(trades);
     for (const closing of trades) {
       if (closing.isPending || ACTIONS[closing.action].opening) continue;
       const netPnl = Number(detailsByEntryId.get(closing.id)?.netPnl);
       if (!Number.isFinite(netPnl)) continue;
+      const sourceUserId = String(closing.relatedUserId || "").trim();
       const distributions = buildClosingProfitShareDistribution({
         trades,
         snapshots: profitShareSnapshots,
@@ -4003,19 +4019,31 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         sharedIncomeReductions: sharedIncomeReductionsByClosingEntryId,
       });
       if (distributions.length === 0) {
-        const sourceUserId = String(closing.relatedUserId || "").trim();
         if (!sourceUserId) continue;
         const regularNetPnl = getRegularDistributableNetPnl(netPnl, getStoredEntryId(closing), sharedIncomeReductionsByClosingEntryId);
-        realizedTradeIncomeByUserId.set(sourceUserId, (realizedTradeIncomeByUserId.get(sourceUserId) || 0) + regularNetPnl);
+        addIncome(orderProfitByUserId, sourceUserId, regularNetPnl);
         continue;
       }
       for (const distribution of distributions) {
         const beneficiaryUserId = String(distribution.beneficiaryUserId);
-        realizedTradeIncomeByUserId.set(beneficiaryUserId, (realizedTradeIncomeByUserId.get(beneficiaryUserId) || 0) + distribution.netPnl);
+        if (beneficiaryUserId === sourceUserId) {
+          addIncome(orderProfitByUserId, beneficiaryUserId, distribution.netPnl);
+        } else {
+          addIncome(commissionIncomeByUserId, beneficiaryUserId, distribution.netPnl);
+          // 佣金支出是这位下单人原订单上实际划给其他受益人的分佣；共享转账不计入此项。
+          addIncome(commissionExpenseByUserId, sourceUserId, distribution.netPnl);
+        }
         if (!knownUserNames.has(beneficiaryUserId)) knownUserNames.set(beneficiaryUserId, { name: distribution.beneficiaryUserName });
       }
     }
-    const userIds = new Set([...tradesByUserId.keys(), ...sharedIncomeByUserId.keys(), ...realizedTradeIncomeByUserId.keys()]);
+    const userIds = new Set([
+      ...tradesByUserId.keys(),
+      ...sharedIncomeByUserId.keys(),
+      ...orderProfitByUserId.keys(),
+      ...commissionIncomeByUserId.keys(),
+      ...commissionExpenseByUserId.keys(),
+      ...sharedIncomeExpenseByUserId.keys(),
+    ]);
     return Array.from(userIds).map((userId) => {
       const userTrades = tradesByUserId.get(userId) || [];
       const relatedUser = relatedUserById.get(userId);
@@ -4030,8 +4058,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         .filter((bucket) => bucket.side === "short" && bucket.remainingQuantity > 0.0000001)
         .reduce((total, bucket) => total + bucket.remainingQuantity, 0);
       const closedTrades = filledTrades.filter((trade) => !ACTIONS[trade.action].opening);
-      const realizedTradeIncome = realizedTradeIncomeByUserId.get(userId) || 0;
+      const orderProfit = orderProfitByUserId.get(userId) || 0;
+      const commissionIncome = commissionIncomeByUserId.get(userId) || 0;
+      const commissionExpense = commissionExpenseByUserId.get(userId) || 0;
+      const realizedTradeIncome = orderProfit + commissionIncome;
       const sharedIncome = sharedIncomeByUserId.get(userId) || 0;
+      const sharedIncomeExpense = sharedIncomeExpenseByUserId.get(userId) || 0;
       const sharedActivityTimes = sharedIncomeTransfers
         .filter((transfer) => String(transfer.recipientUserId) === userId)
         .map((transfer) => transfer.createdAt);
@@ -4054,8 +4086,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         openingCount: longOpeningCount + shortOpeningCount,
         closedCount: closedTrades.length,
         orderCount: userTrades.length,
+        orderProfit,
+        commissionIncome,
+        commissionExpense,
         realizedTradeIncome,
         sharedIncome,
+        sharedIncomeExpense,
         totalIncome: realizedTradeIncome + sharedIncome,
         lastActivityAt,
       };
@@ -4080,19 +4116,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   }, [globalLedgerRows]);
   const globalFundsRows = useMemo(() => {
     const relatedUserById = new Map(recentRelatedUsers.map((user) => [user.id, user]));
-    const rowsByUserId = new Map<string, { userId: string; name: string; deposit: number; tradeProfit: number; sharedProfit: number; withdrawal: number }>();
+    const rowsByUserId = new Map<string, { userId: string; name: string; deposit: number; orderProfit: number; commissionProfit: number; sharedProfit: number; commissionExpense: number; sharedExpense: number; withdrawal: number }>();
     const ensureRow = (userId: string, fallbackName?: string) => {
       const existing = rowsByUserId.get(userId);
       if (existing) return existing;
       const user = relatedUserById.get(userId);
-      const row = { userId, name: user?.name || fallbackName || `用户#${userId}`, deposit: 0, tradeProfit: 0, sharedProfit: 0, withdrawal: 0 };
+      const row = { userId, name: user?.name || fallbackName || `用户#${userId}`, deposit: 0, orderProfit: 0, commissionProfit: 0, sharedProfit: 0, commissionExpense: 0, sharedExpense: 0, withdrawal: 0 };
       rowsByUserId.set(userId, row);
       return row;
     };
     for (const row of globalLedgerRows) {
       const fundRow = ensureRow(row.userId, row.name);
-      fundRow.tradeProfit = row.realizedTradeIncome;
+      fundRow.orderProfit = row.orderProfit;
+      fundRow.commissionProfit = row.commissionIncome;
       fundRow.sharedProfit = row.sharedIncome;
+      fundRow.commissionExpense = row.commissionExpense;
+      fundRow.sharedExpense = row.sharedIncomeExpense;
     }
     for (const transfer of sharedIncomeTransfers) {
       const userId = String(transfer.recipientUserId);
@@ -4109,15 +4148,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       else row.withdrawal += amount;
     }
     return Array.from(rowsByUserId.values()).sort((left, right) => (
-      right.deposit - left.deposit || (right.tradeProfit + right.sharedProfit) - (left.tradeProfit + left.sharedProfit) || left.name.localeCompare(right.name, "zh-CN")
+      right.deposit - left.deposit
+      || (right.orderProfit + right.commissionProfit + right.sharedProfit) - (left.orderProfit + left.commissionProfit + left.sharedProfit)
+      || left.name.localeCompare(right.name, "zh-CN")
     ));
   }, [globalLedgerRows, recentRelatedUsers, sharedIncomeTransfers, t0GlobalPayoutLogsQuery.data]);
   const globalFundsSummary = useMemo(() => globalFundsRows.reduce((total, row) => ({
     deposit: total.deposit + row.deposit,
-    tradeProfit: total.tradeProfit + row.tradeProfit,
+    orderProfit: total.orderProfit + row.orderProfit,
+    commissionProfit: total.commissionProfit + row.commissionProfit,
     sharedProfit: total.sharedProfit + row.sharedProfit,
+    commissionExpense: total.commissionExpense + row.commissionExpense,
+    sharedExpense: total.sharedExpense + row.sharedExpense,
     withdrawal: total.withdrawal + row.withdrawal,
-  }), { deposit: 0, tradeProfit: 0, sharedProfit: 0, withdrawal: 0 }), [globalFundsRows]);
+  }), { deposit: 0, orderProfit: 0, commissionProfit: 0, sharedProfit: 0, commissionExpense: 0, sharedExpense: 0, withdrawal: 0 }), [globalFundsRows]);
   /**
    * 管理员全局收益归因必须按同一笔平仓的最终去向拆分：
    * 共享收益先单独列示，余额才按原分佣快照归入订单收益或分佣收益。
@@ -8781,24 +8825,34 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               })}</div> : <div className="px-5 py-14 text-center text-sm text-slate-400">当前还没有关联用户订单。</div>}
               </>}
               {globalLedgerTab === "funds" && <>
-                <div className="border-b border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500">按用户汇总真实资金流水与已实现收益</div>
+                <div className="border-b border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-500">按用户汇总资金流水、订单 / 佣金 / 共享收益及对应支出</div>
                 {globalFundsRows.length > 0 ? <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
-                  <div className="flex h-8 items-center border-b border-slate-200 bg-slate-50 px-4 text-[10px] font-medium text-slate-500"><span className="w-[70px] shrink-0 border-r border-slate-200 pr-2">用户</span><div className="grid min-w-0 flex-1 grid-cols-4 divide-x divide-slate-200"><span className="pr-1 text-right">入金</span><span className="pr-1 text-right">开平收益</span><span className="pr-1 text-right">共享收益</span><span className="pr-1 text-right">出金</span></div></div>
+                  <div className="flex h-8 items-center border-b border-slate-200 bg-slate-50 px-1 text-[10px] font-medium text-slate-500"><span className="w-[58px] shrink-0 border-r border-slate-200 pr-1">用户</span><div className="grid min-w-0 flex-1 grid-cols-7 divide-x divide-slate-200"><span className="pr-1 text-right">入金</span><span className="pr-1 text-right">订单收益</span><span className="pr-1 text-right">佣金收益</span><span className="pr-1 text-right">共享收益</span><span className="pr-1 text-right">佣金支出</span><span className="pr-1 text-right">共享支出</span><span className="pr-1 text-right">出金</span></div></div>
                   {globalFundsRows.map((row) => {
-                    const tradeProfitClass = row.tradeProfit > 0 ? "text-rose-600" : row.tradeProfit < 0 ? "text-emerald-600" : "text-slate-700";
+                    const orderProfitClass = row.orderProfit > 0 ? "text-rose-600" : row.orderProfit < 0 ? "text-emerald-600" : "text-slate-700";
+                    const commissionProfitClass = row.commissionProfit > 0 ? "text-rose-600" : row.commissionProfit < 0 ? "text-emerald-600" : "text-slate-700";
+                    // 佣金支出以负号列示：它已从本人的订单收益中扣减，不会再参与总收益相加。
+                    const commissionExpenseDisplay = -row.commissionExpense;
+                    const commissionExpenseClass = commissionExpenseDisplay > 0 ? "text-rose-600" : commissionExpenseDisplay < 0 ? "text-emerald-600" : "text-slate-700";
+                    // 共享支出同样是来源订单已优先划拨的部分，已经从本人的订单收益中扣减。
+                    const sharedExpenseDisplay = -row.sharedExpense;
+                    const sharedExpenseClass = sharedExpenseDisplay > 0 ? "text-rose-600" : sharedExpenseDisplay < 0 ? "text-emerald-600" : "text-slate-700";
                     return <button key={row.userId} type="button" onClick={() => {
                       setRelatedUserFilterIds([row.userId]);
                       setSelectedAccountIds([]);
                       setRelatedFundFilterIds([]);
                       setShowGlobalLedger(false);
                       t0Toast.message(`已切换至 ${row.name} 的订单视图`);
-                    }} className="flex min-h-[56px] w-full items-center px-4 py-2 text-left transition active:bg-slate-50">
-                      <div className="w-[70px] shrink-0 truncate border-r border-slate-200 pr-2 text-[16px] font-semibold text-slate-800">{row.name}</div>
-                      <div className="grid min-w-0 flex-1 grid-cols-4 divide-x divide-slate-200 tabular-nums">
-                        <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-slate-800">{Math.round(row.deposit).toLocaleString("zh-CN")}</span>
-                        <span className={`whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none ${tradeProfitClass}`}>{Math.round(row.tradeProfit).toLocaleString("zh-CN")}</span>
-                        <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-blue-600">{Math.round(row.sharedProfit).toLocaleString("zh-CN")}</span>
-                        <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-slate-700">{Math.round(row.withdrawal).toLocaleString("zh-CN")}</span>
+                    }} className="flex min-h-[52px] w-full items-center px-1 py-2 text-left transition active:bg-slate-50">
+                      <div className="w-[58px] shrink-0 truncate border-r border-slate-200 pr-1 text-[14px] font-semibold text-slate-800">{row.name}</div>
+                      <div className="grid min-w-0 flex-1 grid-cols-7 divide-x divide-slate-200 tabular-nums">
+                        <span className="whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none text-slate-800">{Math.round(row.deposit).toLocaleString("zh-CN")}</span>
+                        <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${orderProfitClass}`}>{Math.round(row.orderProfit).toLocaleString("zh-CN")}</span>
+                        <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${commissionProfitClass}`}>{Math.round(row.commissionProfit).toLocaleString("zh-CN")}</span>
+                        <span className="whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none text-blue-600">{Math.round(row.sharedProfit).toLocaleString("zh-CN")}</span>
+                        <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${commissionExpenseClass}`}>{Math.round(commissionExpenseDisplay).toLocaleString("zh-CN")}</span>
+                        <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${sharedExpenseClass}`}>{Math.round(sharedExpenseDisplay).toLocaleString("zh-CN")}</span>
+                        <span className="whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none text-slate-700">{Math.round(row.withdrawal).toLocaleString("zh-CN")}</span>
                       </div>
                     </button>;
                   })}
@@ -8813,13 +8867,16 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <span className={`whitespace-nowrap pr-2 text-right text-[19px] font-bold leading-none ${globalLedgerSummary.netPositionClass}`}>{Math.round(Math.abs(globalLedgerSummary.netPosition)).toLocaleString("zh-CN")}<small className="ml-1 align-baseline text-[10px] font-semibold">{globalLedgerSummary.netPositionLabel}</small></span>
               </div>
             </footer>}
-            {globalLedgerTab === "funds" && globalFundsRows.length > 0 && <footer className="flex min-h-[56px] shrink-0 items-center border-t-2 border-slate-300 bg-slate-50 px-4 shadow-[0_-2px_8px_rgba(15,23,42,0.08)]">
-              <div className="w-[70px] shrink-0 border-r border-slate-200 pr-2 text-[16px] font-bold text-slate-900">汇总</div>
-              <div className="grid min-w-0 flex-1 grid-cols-4 divide-x divide-slate-200 tabular-nums">
-                <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-slate-800">{Math.round(globalFundsSummary.deposit).toLocaleString("zh-CN")}</span>
-                <span className={`whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none ${globalFundsSummary.tradeProfit > 0 ? "text-rose-600" : globalFundsSummary.tradeProfit < 0 ? "text-emerald-600" : "text-slate-700"}`}>{Math.round(globalFundsSummary.tradeProfit).toLocaleString("zh-CN")}</span>
-                <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-indigo-600">{Math.round(globalFundsSummary.sharedProfit).toLocaleString("zh-CN")}</span>
-                <span className="whitespace-nowrap pr-1 text-right text-[14px] font-bold leading-none text-slate-700">{Math.round(globalFundsSummary.withdrawal).toLocaleString("zh-CN")}</span>
+            {globalLedgerTab === "funds" && globalFundsRows.length > 0 && <footer className="flex min-h-[56px] shrink-0 items-center border-t-2 border-slate-300 bg-slate-50 px-1 shadow-[0_-2px_8px_rgba(15,23,42,0.08)]">
+              <div className="w-[58px] shrink-0 border-r border-slate-200 pr-1 text-[14px] font-bold text-slate-900">汇总</div>
+              <div className="grid min-w-0 flex-1 grid-cols-7 divide-x divide-slate-200 tabular-nums">
+                <span className="whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none text-slate-800">{Math.round(globalFundsSummary.deposit).toLocaleString("zh-CN")}</span>
+                <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${globalFundsSummary.orderProfit > 0 ? "text-rose-600" : globalFundsSummary.orderProfit < 0 ? "text-emerald-600" : "text-slate-700"}`}>{Math.round(globalFundsSummary.orderProfit).toLocaleString("zh-CN")}</span>
+                <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${globalFundsSummary.commissionProfit > 0 ? "text-rose-600" : globalFundsSummary.commissionProfit < 0 ? "text-emerald-600" : "text-slate-700"}`}>{Math.round(globalFundsSummary.commissionProfit).toLocaleString("zh-CN")}</span>
+                <span className="whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none text-blue-600">{Math.round(globalFundsSummary.sharedProfit).toLocaleString("zh-CN")}</span>
+                <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${globalFundsSummary.commissionExpense > 0 ? "text-emerald-600" : globalFundsSummary.commissionExpense < 0 ? "text-rose-600" : "text-slate-700"}`}>{Math.round(-globalFundsSummary.commissionExpense).toLocaleString("zh-CN")}</span>
+                <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${globalFundsSummary.sharedExpense > 0 ? "text-emerald-600" : globalFundsSummary.sharedExpense < 0 ? "text-rose-600" : "text-slate-700"}`}>{Math.round(-globalFundsSummary.sharedExpense).toLocaleString("zh-CN")}</span>
+                <span className="whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none text-slate-700">{Math.round(globalFundsSummary.withdrawal).toLocaleString("zh-CN")}</span>
               </div>
             </footer>}
           </div>
