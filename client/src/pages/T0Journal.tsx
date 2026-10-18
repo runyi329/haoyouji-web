@@ -2264,6 +2264,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [directoryRenameDraft, setDirectoryRenameDraft] = useState("");
   const [showEntrySheet, setShowEntrySheet] = useState(false);
   const [closeConfirmationStep, setCloseConfirmationStep] = useState<"input" | "review">("input");
+  // 平仓必须以服务端事务提交为准；失败时保留二次确认页，不能让界面误以为已成交。
+  const [closeSaveError, setCloseSaveError] = useState<string | null>(null);
   /** 平仓确认中的共享收益草案：仅在提交当下传入服务端，额度仍由服务端用收益快照复核。 */
   const [sharedIncomeDrafts, setSharedIncomeDrafts] = useState<Record<string, string>>({});
   const [sharedIncomeTargetSelections, setSharedIncomeTargetSelections] = useState<Record<string, number>>({});
@@ -2710,6 +2712,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     if (closeConfirmationStep === "input" || !showEntrySheet) {
       setSharedIncomeDrafts({});
       setSharedIncomeTargetSelections({});
+      setCloseSaveError(null);
     }
   }, [closeConfirmationStep, showEntrySheet]);
 
@@ -4734,14 +4737,34 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         setLastSavedQuantity(savedQuantity);
       }
       if (entry.instrumentType) setLastOpeningInstrumentType(entry.instrumentType);
-      toast.success(entry.isPending ? "挂单已保存，等待统一参考价触发成交" : entry.isLocked ? "速记已保存，逐笔报价将显示黑金锁标" : "速记已保存");
+      const isClosingEntry = !ACTIONS[entry.action].opening;
+      if (isClosingEntry) {
+        setCloseSaveError(null);
+        setShowEntrySheet(false);
+        setCloseConfirmationStep("input");
+        if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
+      }
+      toast.success(isClosingEntry
+        ? `已确认${ACTIONS[entry.action].label} ${formatQuantity(entry.quantity)} ETH`
+        : entry.isPending
+          ? "挂单已保存，等待统一参考价触发成交"
+          : entry.isLocked
+            ? "速记已保存，逐笔报价将显示黑金锁标"
+            : "速记已保存");
     },
     onError: (error, variables: any) => {
       setTrades((current) => current.filter((trade) => trade.clientRequestId !== variables.clientRequestId));
       if (!variables.accountId) {
         setAccounts((current) => current.filter((account) => account.id !== `pending-account-${variables.clientRequestId}`));
       }
-      toast.error(error.message || "速记保存失败，已撤回本地显示");
+      const message = error.message || "速记保存失败，已撤回本地显示";
+      const isClosingEntry = variables.action === "closeLong" || variables.action === "closeShort";
+      if (isClosingEntry) {
+        setCloseSaveError(message);
+        setShowEntrySheet(true);
+        setCloseConfirmationStep("review");
+      }
+      toast.error(isClosingEntry ? `平仓未确认：${message}` : message);
     },
   });
 
@@ -5354,6 +5377,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         return;
       }
       if (closeConfirmationStep === "input") {
+        setCloseSaveError(null);
         setCloseConfirmationStep("review");
         return;
       }
@@ -5407,11 +5431,17 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const visibleTrade = canManage && (Boolean(trade.isCounterparty) || isCounterpartyClosing)
       ? asAdminCounterpartyTrade(trade)
       : trade;
+    const awaitsClosingCommit = !selectedAction.opening && closeConfirmationStep === "review";
     setTrades((current) => [...current, visibleTrade]);
-    setShowEntrySheet(false);
-    setCloseConfirmationStep("input");
-    if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
-    toast.message("已速记，正在后台保存");
+    if (awaitsClosingCommit) {
+      setCloseSaveError(null);
+      toast.message("正在确认平仓，等待账本写入");
+    } else {
+      setShowEntrySheet(false);
+      setCloseConfirmationStep("input");
+      if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
+      toast.message("已速记，正在后台保存");
+    }
     saveEntryMutation.mutate({
       ledgerId: 52,
       accountId: hasPersistedAccountId ? Number(entryForm.accountId) : undefined,
@@ -7968,9 +7998,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </div> : <div className="mt-2 rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-500">当前没有符合条件的其他未平仓关联用户；可直接跳过共享并确认平仓。</div>}
               <div className="mt-2 rounded bg-slate-50 px-2.5 py-2 text-[10px] leading-4 text-slate-500">平仓后会以“共享收益订单”写入受益用户的交易流水；来源订单编号会保留供用户核对。管理员端同时保留给出与收到的平衡参考。</div>
             </div> : <div className="px-4 py-3 text-[11px] leading-5 text-slate-500">本单没有可用于共享的管理员正向收益份额，可直接确认平仓；收益为负、无管理员份额或未关联用户的订单不会触发共享分配。</div>}
+            {closeSaveError && <div role="alert" className="mx-4 mb-1 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
+              <span className="font-semibold">平仓未确认：</span>{closeSaveError}。请保留当前页面修改后重新确认。
+            </div>}
             <div className="sticky bottom-0 grid grid-cols-2 gap-3 border-t border-slate-100 bg-white/95 px-4 py-3 backdrop-blur">
               <button type="button" disabled={saveEntryMutation.isPending} onClick={() => setCloseConfirmationStep("input")} className="h-11 rounded border border-slate-200 bg-white text-sm font-semibold text-slate-700 active:scale-[0.99] disabled:opacity-40">返回修改</button>
-              <button disabled={saveEntryMutation.isPending || sharedIncomeAllocatedTotal - sharedIncomeClosePreview.managerPoolAmount > 0.00001} onClick={() => handleSaveEntry()} className="h-11 rounded bg-amber-600 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">{sharedIncomeSaveAllocations.length > 0 ? `确认平仓并共享 ${formatPrice(sharedIncomeAllocatedTotal)} U` : "确认平仓"}</button>
+              <button disabled={saveEntryMutation.isPending || sharedIncomeAllocatedTotal - sharedIncomeClosePreview.managerPoolAmount > 0.00001} onClick={() => handleSaveEntry()} className="h-11 rounded bg-amber-600 text-sm font-semibold text-white shadow-sm active:scale-[0.99] disabled:opacity-40">确认{ACTIONS[entryForm.action].label} {formatQuantity(Number(entryForm.quantity))} ETH</button>
             </div>
           </div>
         </div>
