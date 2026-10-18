@@ -7126,7 +7126,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         onChange={(event) => setEntryForm((current) => ({ ...current, quantity: event.target.value }))}
                         onBlur={() => setEntryForm((current) => ({ ...current, quantity: normalizeEthQuantity(current.quantity) }))}
                         placeholder="0.00"
-                        className={`h-14 w-full rounded border px-3 pr-[8.9rem] text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-50 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
+                        className={`h-14 w-full rounded border px-3 ${ACTIONS[entryForm.action].opening ? "pr-[8.9rem]" : "pr-3"} text-xl font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-50 ${quantityFormatError ? "border-rose-400 bg-rose-50 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                       />
                       {ACTIONS[entryForm.action].opening && <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
                         <button
@@ -7866,6 +7866,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   const canAllocateOnePercent = onePercentShareAmount > 0.004 && onePercentShareAmount <= availableForCandidate + 0.004;
                   const twoPercentShareAmount = candidate.cumulativeDepositAmount * 0.02;
                   const canAllocateTwoPercent = twoPercentShareAmount > 0.004 && twoPercentShareAmount <= availableForCandidate + 0.004;
+                  const orderPoolOnePercentShareAmount = sharedIncomeClosePreview.managerPoolAmount * 0.01;
+                  const canAllocateOrderPoolOnePercent = orderPoolOnePercentShareAmount > 0.004 && orderPoolOnePercentShareAmount <= availableForCandidate + 0.004;
+                  const orderPoolTwoPercentShareAmount = sharedIncomeClosePreview.managerPoolAmount * 0.02;
+                  const canAllocateOrderPoolTwoPercent = orderPoolTwoPercentShareAmount > 0.004 && orderPoolTwoPercentShareAmount <= availableForCandidate + 0.004;
                   const annualizedTargetOptions = [3.65, 1, 0.52, 1.04].map((targetRate) => ({
                     targetRate,
                     topUp: calculateT0XirrTargetTopUp(candidate.realizedCashFlows, candidate.realizedTerminalValue, targetRate),
@@ -7900,7 +7904,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                         <div className="mt-0.5 whitespace-nowrap text-[10px] text-slate-500">持仓总盈亏 <b className={candidate.holdingNetPnl >= 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600"}>{formatSigned(candidate.holdingNetPnl)} U</b></div>
                       </> : <div className="mt-0.5 text-[10px] text-slate-500">未投入本金，不参与共享收益分配</div>}
                     </div>
-                    <div className="flex w-[92px] flex-col items-end justify-between gap-2 self-stretch">
+                    <div className={`relative w-[92px] ${candidate.hasPrincipal ? "row-span-2 self-stretch pb-10" : "self-stretch"}`}>
                       {candidate.hasPrincipal && <div className="grid w-full grid-cols-2 gap-1">
                         {annualizedTargetOptions.map(({ targetRate, topUp }) => {
                           const hasAlreadyReachedTarget = candidate.annualizedReference !== null
@@ -7917,20 +7921,33 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                               if (topUp <= 0.004) { const { [candidate.userId]: _removed, ...rest } = current; return rest; }
                               return { ...current, [candidate.userId]: topUp.toFixed(2) };
                             });
-                          }} className={`h-5 rounded border text-[8px] font-semibold tabular-nums active:scale-[0.98] disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300 ${isSelectedTarget ? "border-indigo-600 bg-indigo-600 text-white" : isOtherTargetDimmed ? "border-slate-200 bg-slate-100 text-slate-400" : "border-indigo-200 bg-indigo-50 text-indigo-700"}`}>{targetLabel}</button>;
+                          }} className={`h-4 rounded border text-[8px] font-semibold tabular-nums active:scale-[0.98] disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300 ${isSelectedTarget ? "border-indigo-600 bg-indigo-600 text-white" : isOtherTargetDimmed ? "border-slate-200 bg-slate-100 text-slate-400" : "border-indigo-200 bg-indigo-50 text-indigo-700"}`}>{targetLabel}</button>;
                         })}
                         <button type="button" disabled={!canAllocateOnePercent} title={canAllocateOnePercent ? `按该用户累计投入本金的 1% 分配，即 ${formatPrice(onePercentShareAmount)} U` : `剩余额度不足以分配 ${formatPrice(onePercentShareAmount)} U`} onClick={() => {
                           if (!canAllocateOnePercent) return;
                           setSharedIncomeTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
                           setSharedIncomeDrafts((current) => ({ ...current, [candidate.userId]: onePercentShareAmount.toFixed(2) }));
-                        }} className="h-5 rounded border border-amber-200 bg-amber-50 text-[8px] font-semibold tabular-nums text-amber-700 active:scale-[0.98] disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300">1%</button>
+                        }} className="h-4 whitespace-nowrap rounded border border-amber-200 bg-amber-50 text-[8px] font-semibold tabular-nums text-amber-700 active:scale-[0.98] disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300">本金 1%</button>
                         <button type="button" disabled={!canAllocateTwoPercent} title={canAllocateTwoPercent ? `按该用户累计投入本金的 2% 分配，即 ${formatPrice(twoPercentShareAmount)} U` : `剩余额度不足以分配 ${formatPrice(twoPercentShareAmount)} U`} onClick={() => {
                           if (!canAllocateTwoPercent) return;
                           setSharedIncomeTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
                           setSharedIncomeDrafts((current) => ({ ...current, [candidate.userId]: twoPercentShareAmount.toFixed(2) }));
-                        }} className="h-5 rounded border border-amber-200 bg-amber-50 text-[8px] font-semibold tabular-nums text-amber-700 active:scale-[0.98] disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300">2%</button>
+                        }} className="h-4 whitespace-nowrap rounded border border-amber-200 bg-amber-50 text-[8px] font-semibold tabular-nums text-amber-700 active:scale-[0.98] disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300">本金 2%</button>
+                        <button type="button" disabled={!canAllocateOrderPoolOnePercent} aria-label="按本单可用分配额的1%分配" title={canAllocateOrderPoolOnePercent ? `按本单管理员可用分配额的 1% 分配，即 ${formatPrice(orderPoolOnePercentShareAmount)} U` : `剩余额度不足以分配 ${formatPrice(orderPoolOnePercentShareAmount)} U`} onClick={() => {
+                          if (!canAllocateOrderPoolOnePercent) return;
+                          setSharedIncomeTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
+                          setSharedIncomeDrafts((current) => ({ ...current, [candidate.userId]: orderPoolOnePercentShareAmount.toFixed(2) }));
+                        }} style={canAllocateOrderPoolOnePercent ? { backgroundColor: "#2563EB", borderColor: "#1D4ED8", color: "#FFFFFF" } : undefined} className="h-4 whitespace-nowrap rounded border text-[8px] font-semibold tabular-nums shadow-sm active:scale-[0.98] disabled:border-slate-200 disabled:bg-white disabled:text-slate-300 disabled:shadow-none">本单 1%</button>
+                        <button type="button" disabled={!canAllocateOrderPoolTwoPercent} aria-label="按本单可用分配额的2%分配" title={canAllocateOrderPoolTwoPercent ? `按本单管理员可用分配额的 2% 分配，即 ${formatPrice(orderPoolTwoPercentShareAmount)} U` : `剩余额度不足以分配 ${formatPrice(orderPoolTwoPercentShareAmount)} U`} onClick={() => {
+                          if (!canAllocateOrderPoolTwoPercent) return;
+                          setSharedIncomeTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
+                          setSharedIncomeDrafts((current) => ({ ...current, [candidate.userId]: orderPoolTwoPercentShareAmount.toFixed(2) }));
+                        }} style={canAllocateOrderPoolTwoPercent ? { backgroundColor: "#2563EB", borderColor: "#1D4ED8", color: "#FFFFFF" } : undefined} className="h-4 whitespace-nowrap rounded border text-[8px] font-semibold tabular-nums shadow-sm active:scale-[0.98] disabled:border-slate-200 disabled:bg-white disabled:text-slate-300 disabled:shadow-none">本单 2%</button>
                       </div>}
-                      <div className="relative w-full"><input aria-label={`${candidate.name}共享收益金额`} disabled={!candidate.hasPrincipal} value={sharedIncomeDrafts[candidate.userId] ?? ""} onChange={(event) => {
+                      <div className={candidate.hasPrincipal ? "absolute bottom-0 right-0 w-full" : "relative w-full"}>{candidate.hasPrincipal && (sharedIncomeDrafts[candidate.userId] ?? "").trim() !== "" && <button type="button" aria-label={`清零${candidate.name}本单共享收益`} title="清零本单共享收益" onClick={() => {
+                        setSharedIncomeTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
+                        setSharedIncomeDrafts((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
+                      }} className="absolute left-1 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-xl leading-none text-slate-500 active:bg-slate-100 active:text-slate-800">×</button>}<input aria-label={`${candidate.name}共享收益金额`} disabled={!candidate.hasPrincipal} value={sharedIncomeDrafts[candidate.userId] ?? ""} onChange={(event) => {
                         const nextValue = event.target.value.replace(/[^0-9.]/g, "");
                         setSharedIncomeTargetSelections((current) => { const { [candidate.userId]: _removed, ...rest } = current; return rest; });
                         setSharedIncomeDrafts((current) => {
@@ -7938,9 +7955,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           if (!nextValue) { const { [candidate.userId]: _removed, ...rest } = current; return rest; }
                           return { ...current, [candidate.userId]: nextValue };
                         });
-                      }} inputMode="decimal" className="h-8 w-full rounded border border-slate-200 bg-white pr-4 text-right text-[12px] font-semibold tabular-nums text-slate-800 outline-none focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-300" /><span className="pointer-events-none absolute bottom-1.5 right-1.5 text-[10px] leading-none text-slate-400">U</span></div>
+                      }} inputMode="decimal" className="h-8 w-full rounded border border-slate-200 bg-white pl-8 pr-2 text-right text-[16px] font-semibold tabular-nums text-slate-800 outline-none focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-300" /></div>
                     </div>
-                    {candidate.hasPrincipal && <div className="col-span-2 mt-0.5 flex items-center gap-1.5">
+                    {candidate.hasPrincipal && <div className="col-start-1 mt-0.5 flex items-center gap-1.5">
                       <span className={`shrink-0 text-[9px] font-medium ${settlementAgeDays === null || settlementAgeDays >= 8 ? "text-rose-600" : settlementAgeDays >= 4 ? "text-amber-600" : "text-emerald-600"}`}>{settlementEnergyLabel}</span>
                       <div className="flex min-w-0 flex-1 items-center gap-px" aria-label={settlementEnergyLabel}>
                         {Array.from({ length: settlementEnergyCells }, (_, index) => <span key={index} className={`h-2 w-2 shrink-0 rounded-[1px] ${settlementEnergyTone}`} />)}
