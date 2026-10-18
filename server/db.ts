@@ -214,6 +214,32 @@ export async function getDbTransactionConnection(): Promise<mysql.PoolConnection
   return _connection;
 }
 
+/**
+ * 查询由紫鼎会员管理触发的全站登录停用记录。
+ * 表在紫鼎模块首次初始化时创建；旧环境尚未创建该表时，应保持既有登录可用。
+ */
+export async function getActiveZidingLoginBlock(userId: number) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database not available");
+  try {
+    const [rows] = await conn.execute(
+      `SELECT user_id, blocked_by, blocked_at
+       FROM ziding_global_login_blocks
+       WHERE user_id=? AND is_active=1
+       LIMIT 1`,
+      [userId]
+    );
+    return ((rows as any[]) || [])[0] || null;
+  } catch (error: any) {
+    // 首次部署前，登录模块可能先于紫鼎模块调用；不存在停用表不应中断全站登录。
+    if (
+      error?.code === "ER_NO_SUCH_TABLE" ||
+      error?.code === "ER_BAD_TABLE_ERROR"
+    )
+      return null;
+    throw error;
+  }
+}
 // ==================== 用户相关 ====================
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) {

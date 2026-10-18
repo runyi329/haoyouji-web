@@ -69,6 +69,15 @@ export async function loginWithPassword(
     };
   }
 
+  // 业务管理员的删除操作与密码输错触发的安全锁分开记录，恢复会员时不会误解锁安全锁定。
+  if (await db.getActiveZidingLoginBlock(user.id)) {
+    return {
+      success: false,
+      error: "该账号已被管理员停用，请联系为您开通账号的管理员",
+      isLocked: true,
+    };
+  }
+
   // 验证密码
   if (!user.passwordHash) {
     return {

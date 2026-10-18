@@ -2039,60 +2039,117 @@ function AdminProducts() {
 }
 
 function AdminMembers() {
-  const members = trpc.zidingCommerce.adminListMembers.useQuery();
+  const members = trpc.zidingCommerce.adminListMembers.useQuery({
+    status: "active",
+  });
+  const [showDeletedMembers, setShowDeletedMembers] = useState(false);
+  const deletedMembers = trpc.zidingCommerce.adminListMembers.useQuery(
+    { status: "deleted" },
+    { enabled: showDeletedMembers }
+  );
   const [keyword, setKeyword] = useState("");
-  const search = trpc.zidingCommerce.adminSearchUsers.useQuery({ keyword: keyword || "_" }, { enabled: false });
+  const search = trpc.zidingCommerce.adminSearchUsers.useQuery(
+    { keyword: keyword || "_" },
+    { enabled: false }
+  );
   const [editingMember, setEditingMember] = useState<any>(null);
   const [memberForm, setMemberForm] = useState<any>(null);
+  const [memberToDelete, setMemberToDelete] = useState<any>(null);
   const [isMemberEditMode, setIsMemberEditMode] = useState(false);
   const [showExistingAdd, setShowExistingAdd] = useState(false);
+  const refreshMembers = () => {
+    void members.refetch();
+    if (showDeletedMembers) void deletedMembers.refetch();
+  };
   const save = trpc.zidingCommerce.adminSaveMember.useMutation({
     onSuccess: () => {
-      members.refetch();
+      refreshMembers();
       setEditingMember(null);
       setMemberForm(null);
     },
-    onError: (error) => alert(error.message),
+    onError: error => alert(error.message),
+  });
+  const deleteMember = trpc.zidingCommerce.adminDeleteMember.useMutation({
+    onSuccess: () => {
+      refreshMembers();
+      setMemberToDelete(null);
+      setEditingMember(null);
+      setMemberForm(null);
+    },
+    onError: error => alert(error.message),
+  });
+  const restoreMember = trpc.zidingCommerce.adminRestoreMember.useMutation({
+    onSuccess: () => refreshMembers(),
+    onError: error => alert(error.message),
   });
   const [newMember, setNewMember] = useState({ username: "", nickname: "" });
   const normalizedUsername = newMember.username.trim();
-  const usernameFormatValid = Boolean(normalizedUsername) && /^[\u4e00-\u9fa5a-zA-Z0-9_]+$/.test(normalizedUsername);
+  const usernameFormatValid =
+    Boolean(normalizedUsername) &&
+    /^[\u4e00-\u9fa5a-zA-Z0-9_]+$/.test(normalizedUsername);
   const usernameCheck = trpc.zidingCommerce.adminCheckMemberUsername.useQuery(
     { username: normalizedUsername },
-    { enabled: usernameFormatValid, retry: false, refetchOnWindowFocus: false },
+    { enabled: usernameFormatValid, retry: false, refetchOnWindowFocus: false }
   );
-  const usernameAvailable = usernameCheck.data?.username === normalizedUsername && usernameCheck.data.available === true;
+  const usernameAvailable =
+    usernameCheck.data?.username === normalizedUsername &&
+    usernameCheck.data.available === true;
   const create = trpc.zidingCommerce.adminCreateMember.useMutation({
-    onSuccess: (result) => {
-      members.refetch();
+    onSuccess: result => {
+      refreshMembers();
       setNewMember({ username: "", nickname: "" });
       setCredentials(result);
       setCopied(false);
     },
-    onError: (error) => alert(error.message),
+    onError: error => alert(error.message),
   });
   const [found, setFound] = useState<any[]>([]);
   const [credentials, setCredentials] = useState<any>(null);
   const [copied, setCopied] = useState(false);
   const [copiedContent, setCopiedContent] = useState("");
-  const roleLabel = (role: string) => ({ user: "普通用户", order_admin: "订单管理员", catalog_admin: "商品管理员", owner: "项目负责人" } as Record<string, string>)[role] || "普通用户";
-  const tierLabel = (tier: string) => tier === "senior" ? "高级会员" : "初级会员";
+  const roleLabel = (role: string) =>
+    (
+      ({
+        user: "普通用户",
+        order_admin: "订单管理员",
+        catalog_admin: "商品管理员",
+        owner: "项目负责人",
+      }) as Record<string, string>
+    )[role] || "普通用户";
+  const tierLabel = (tier: string) =>
+    tier === "senior" ? "高级会员" : "初级会员";
   const find = async () => {
     if (!keyword.trim()) return;
     const result = await search.refetch();
-    setFound((result.data || []).filter((user: any) => user.name.includes(keyword) || user.username.includes(keyword)));
+    setFound(
+      (result.data || []).filter(
+        (user: any) =>
+          user.name.includes(keyword) || user.username.includes(keyword)
+      )
+    );
   };
-  const choose = (user: any) => save.mutate({ userId: user.userId, tier: "junior", role: "user", isActive: true });
+  const choose = (user: any) =>
+    save.mutate({
+      userId: user.userId,
+      tier: "junior",
+      role: "user",
+      isActive: true,
+    });
   const openEditor = (member: any) => {
     if (!isMemberEditMode) return;
     setEditingMember(member);
-    setMemberForm({ userId: member.userId, tier: member.tier, role: member.role, isActive: member.isActive });
+    setMemberForm({
+      userId: member.userId,
+      tier: member.tier,
+      role: member.role,
+    });
   };
   const copyLoginInfo = async () => {
     if (!credentials) return;
     const content = `紫鼎商业联盟登录信息\n用户名：${credentials.username}\n初始密码：${credentials.initialPassword}\n登录方式：微信小程序搜索“人脉永动”`;
     try {
-      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(content);
+      if (navigator.clipboard?.writeText)
+        await navigator.clipboard.writeText(content);
       else {
         const textarea = document.createElement("textarea");
         textarea.value = content;
@@ -2111,30 +2168,552 @@ function AdminMembers() {
     }
   };
 
-  return <div>
-    <Panel>
-      <div className="flex items-start justify-between gap-3">
-        <div><div className="text-sm font-semibold" style={{ color: C.ink }}>开通新会员</div><p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>紫鼎会员仅由管理员开通。新账号默认是初级会员，初始密码会随机生成六位数字。</p></div>
-        <span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold" style={{ background: "#F2EAF0", color: C.plum }}>管理员操作</span>
+  return (
+    <div>
+      <Panel>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold" style={{ color: C.ink }}>
+              开通新会员
+            </div>
+            <p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>
+              紫鼎会员仅由管理员开通。新账号默认是初级会员，初始密码会随机生成六位数字。
+            </p>
+          </div>
+          <span
+            className="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold"
+            style={{ background: "#F2EAF0", color: C.plum }}
+          >
+            管理员操作
+          </span>
+        </div>
+        <div className="mt-4 space-y-3">
+          <div>
+            <Label>用户名</Label>
+            <TextInput
+              maxLength={20}
+              placeholder="汉字、字母、数字或下划线"
+              value={newMember.username}
+              onChange={event =>
+                setNewMember({ ...newMember, username: event.target.value })
+              }
+            />
+            {normalizedUsername && !usernameFormatValid && (
+              <p className="mt-1.5 text-[11px]" style={{ color: C.danger }}>
+                用户名只能包含汉字、字母、数字和下划线。
+              </p>
+            )}
+            {usernameFormatValid && usernameCheck.isLoading && (
+              <p className="mt-1.5 text-[11px]" style={{ color: C.muted }}>
+                正在检查用户名…
+              </p>
+            )}
+            {usernameFormatValid && usernameCheck.data?.available === false && (
+              <p className="mt-1.5 text-[11px]" style={{ color: C.danger }}>
+                该用户名已被使用，请更换后再开通。
+              </p>
+            )}
+            {usernameAvailable && (
+              <p className="mt-1.5 text-[11px]" style={{ color: C.success }}>
+                用户名可用。
+              </p>
+            )}
+            {usernameFormatValid && usernameCheck.isError && (
+              <p className="mt-1.5 text-[11px]" style={{ color: C.danger }}>
+                暂时无法检查用户名，请稍后重试。
+              </p>
+            )}
+          </div>
+          <div>
+            <Label>昵称（选填）</Label>
+            <TextInput
+              maxLength={50}
+              placeholder="不填写时，默认使用用户名"
+              value={newMember.nickname}
+              onChange={event =>
+                setNewMember({ ...newMember, nickname: event.target.value })
+              }
+            />
+          </div>
+          <Button
+            className="w-full"
+            disabled={create.isPending || !usernameAvailable}
+            onClick={() =>
+              create.mutate({
+                username: normalizedUsername,
+                nickname: newMember.nickname,
+              })
+            }
+          >
+            <Plus size={15} />
+            {create.isPending ? "正在开通…" : "开通会员并生成登录信息"}
+          </Button>
+        </div>
+        <div className="mt-4 border-t pt-3" style={{ borderColor: C.line }}>
+          <button
+            onClick={() => setShowExistingAdd(!showExistingAdd)}
+            className="text-xs font-semibold"
+            style={{ color: C.plum }}
+          >
+            {showExistingAdd ? "收起已有账号添加" : "添加已有平台账号"}
+          </button>
+          {showExistingAdd && (
+            <div className="mt-3">
+              <p className="text-xs leading-5" style={{ color: C.muted }}>
+                搜索已有平台账号并加入紫鼎；添加后仅由您管理。
+              </p>
+              <div className="mt-2 flex gap-2">
+                <TextInput
+                  placeholder="昵称或用户名"
+                  value={keyword}
+                  onChange={event => setKeyword(event.target.value)}
+                />
+                <Button onClick={find}>搜索</Button>
+              </div>
+              {found.map((user: any) => (
+                <button
+                  key={user.userId}
+                  onClick={() => choose(user)}
+                  className="mt-2 flex w-full items-center gap-2 border-t py-3 text-left text-xs"
+                  style={{ borderColor: C.line, color: C.ink }}
+                >
+                  <Plus size={14} style={{ color: C.plum }} />
+                  <span className="min-w-0 flex-1 truncate">{user.name}</span>
+                  <span className="shrink-0" style={{ color: C.muted }}>
+                    {user.username}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Panel>
+
+      <div className="mt-6 flex items-center justify-between">
+        <div>
+          <div className="text-sm font-semibold" style={{ color: C.ink }}>
+            我开通的会员
+          </div>
+          <p className="mt-1 text-[11px]" style={{ color: C.muted }}>
+            {isMemberEditMode
+              ? "点击某位会员进入编辑。"
+              : "仅显示由您手动开通或添加的会员。"}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs" style={{ color: C.muted }}>
+            {(members.data || []).length} 人
+          </span>
+          <Button
+            kind="quiet"
+            onClick={() => setIsMemberEditMode(!isMemberEditMode)}
+          >
+            {isMemberEditMode ? "完成" : "编辑"}
+          </Button>
+        </div>
       </div>
-      <div className="mt-4 space-y-3">
-        <div><Label>用户名</Label><TextInput maxLength={20} placeholder="汉字、字母、数字或下划线" value={newMember.username} onChange={(event) => setNewMember({ ...newMember, username: event.target.value })} />{normalizedUsername && !usernameFormatValid && <p className="mt-1.5 text-[11px]" style={{ color: C.danger }}>用户名只能包含汉字、字母、数字和下划线。</p>}{usernameFormatValid && usernameCheck.isLoading && <p className="mt-1.5 text-[11px]" style={{ color: C.muted }}>正在检查用户名…</p>}{usernameFormatValid && usernameCheck.data?.available === false && <p className="mt-1.5 text-[11px]" style={{ color: C.danger }}>该用户名已被使用，请更换后再开通。</p>}{usernameAvailable && <p className="mt-1.5 text-[11px]" style={{ color: C.success }}>用户名可用。</p>}{usernameFormatValid && usernameCheck.isError && <p className="mt-1.5 text-[11px]" style={{ color: C.danger }}>暂时无法检查用户名，请稍后重试。</p>}</div>
-        <div><Label>昵称（选填）</Label><TextInput maxLength={50} placeholder="不填写时，默认使用用户名" value={newMember.nickname} onChange={(event) => setNewMember({ ...newMember, nickname: event.target.value })} /></div>
-        <Button className="w-full" disabled={create.isPending || !usernameAvailable} onClick={() => create.mutate({ username: normalizedUsername, nickname: newMember.nickname })}><Plus size={15} />{create.isPending ? "正在开通…" : "开通会员并生成登录信息"}</Button>
+      <div className="mt-3 border-y" style={{ borderColor: C.line }}>
+        {(members.data || []).map((member: any, index: number) => (
+          <button
+            key={member.userId}
+            disabled={!isMemberEditMode}
+            onClick={() => openEditor(member)}
+            className={`flex w-full items-center gap-3 py-3.5 text-left disabled:cursor-default ${index ? "border-t" : ""}`}
+            style={{ borderColor: C.line }}
+          >
+            <div
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold"
+              style={{ background: "#F2EAF0", color: C.plum }}
+            >
+              {String(member.name || "会").slice(0, 1)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div
+                className="truncate text-sm font-semibold"
+                style={{ color: C.ink }}
+              >
+                {member.name}
+              </div>
+              <div className="mt-1 truncate text-xs" style={{ color: C.muted }}>
+                {member.username || `编号 ${member.userId}`}　·　
+                {tierLabel(member.tier)}　·　{roleLabel(member.role)}
+              </div>
+            </div>
+            {isMemberEditMode && (
+              <ChevronRight
+                size={17}
+                className="shrink-0"
+                style={{ color: C.plum }}
+              />
+            )}
+          </button>
+        ))}
       </div>
-      <div className="mt-4 border-t pt-3" style={{ borderColor: C.line }}><button onClick={() => setShowExistingAdd(!showExistingAdd)} className="text-xs font-semibold" style={{ color: C.plum }}>{showExistingAdd ? "收起已有账号添加" : "添加已有平台账号"}</button>{showExistingAdd && <div className="mt-3"><p className="text-xs leading-5" style={{ color: C.muted }}>搜索已有平台账号并加入紫鼎，启用后会自动获得紫鼎入口。</p><div className="mt-2 flex gap-2"><TextInput placeholder="昵称或用户名" value={keyword} onChange={(event) => setKeyword(event.target.value)} /><Button onClick={find}>搜索</Button></div>{found.map((user: any) => <button key={user.userId} onClick={() => choose(user)} className="mt-2 flex w-full items-center gap-2 border-t py-3 text-left text-xs" style={{ borderColor: C.line, color: C.ink }}><Plus size={14} style={{ color: C.plum }} /><span className="min-w-0 flex-1 truncate">{user.name}</span><span className="shrink-0" style={{ color: C.muted }}>{user.username}</span></button>)}</div>}</div>
-    </Panel>
+      {!members.isLoading && !(members.data || []).length && (
+        <div className="py-8 text-center text-sm" style={{ color: C.muted }}>
+          暂无由您开通的会员。
+        </div>
+      )}
 
-    <div className="mt-6 flex items-center justify-between"><div><div className="text-sm font-semibold" style={{ color: C.ink }}>已开通会员</div><p className="mt-1 text-[11px]" style={{ color: C.muted }}>{isMemberEditMode ? "点击某位会员进入编辑。" : "展示当前会员等级与项目身份。"}</p></div><div className="flex items-center gap-3"><span className="text-xs" style={{ color: C.muted }}>{(members.data || []).length} 人</span><Button kind="quiet" onClick={() => setIsMemberEditMode(!isMemberEditMode)}>{isMemberEditMode ? "完成" : "编辑"}</Button></div></div>
-    <div className="mt-3 border-y" style={{ borderColor: C.line }}>{(members.data || []).map((member: any, index: number) => <button key={member.userId} disabled={!isMemberEditMode} onClick={() => openEditor(member)} className={`flex w-full items-center gap-3 py-3.5 text-left disabled:cursor-default ${index ? "border-t" : ""}`} style={{ borderColor: C.line }}><div className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold" style={{ background: "#F2EAF0", color: C.plum }}>{String(member.name || "会").slice(0, 1)}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="truncate text-sm font-semibold" style={{ color: C.ink }}>{member.name}</span><span className="shrink-0 text-[10px]" style={{ color: member.isActive ? C.success : C.danger }}>{member.isActive ? "已启用" : "已停用"}</span></div><div className="mt-1 truncate text-xs" style={{ color: C.muted }}>{member.username || `编号 ${member.userId}`}　·　{tierLabel(member.tier)}　·　{roleLabel(member.role)}</div></div>{isMemberEditMode && <ChevronRight size={17} className="shrink-0" style={{ color: C.plum }} />}</button>)}</div>
+      <div className="mt-4 border-t pt-3" style={{ borderColor: C.line }}>
+        <button
+          onClick={() => setShowDeletedMembers(!showDeletedMembers)}
+          className="text-xs font-semibold"
+          style={{ color: C.plum }}
+        >
+          {showDeletedMembers ? "收起已删除会员" : "查看已删除会员"}
+        </button>
+      </div>
+      {showDeletedMembers && (
+        <Panel className="mt-3">
+          <div>
+            <div className="text-sm font-semibold" style={{ color: C.ink }}>
+              已删除会员
+            </div>
+            <p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>
+              删除会限制账号登录全站；资料仍保留，恢复后可重新登录。
+            </p>
+          </div>
+          <div className="mt-3 divide-y" style={{ borderColor: C.line }}>
+            {(deletedMembers.data || []).map((member: any) => (
+              <div key={member.userId} className="flex items-center gap-3 py-3">
+                <div
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold"
+                  style={{ background: "#F4EAEA", color: C.danger }}
+                >
+                  {String(member.name || "会").slice(0, 1)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div
+                    className="truncate text-sm font-semibold"
+                    style={{ color: C.ink }}
+                  >
+                    {member.name}
+                  </div>
+                  <div
+                    className="mt-1 truncate text-xs"
+                    style={{ color: C.muted }}
+                  >
+                    {member.username || `编号 ${member.userId}`}　·　
+                    {tierLabel(member.tier)}
+                  </div>
+                </div>
+                <Button
+                  kind="quiet"
+                  disabled={restoreMember.isPending}
+                  onClick={() =>
+                    restoreMember.mutate({ userId: member.userId })
+                  }
+                >
+                  {restoreMember.isPending ? "恢复中…" : "恢复"}
+                </Button>
+              </div>
+            ))}
+          </div>
+          {deletedMembers.isLoading && (
+            <div
+              className="py-5 text-center text-xs"
+              style={{ color: C.muted }}
+            >
+              正在读取…
+            </div>
+          )}
+          {!deletedMembers.isLoading && !(deletedMembers.data || []).length && (
+            <div
+              className="py-5 text-center text-xs"
+              style={{ color: C.muted }}
+            >
+              暂无已删除会员。
+            </div>
+          )}
+        </Panel>
+      )}
 
-    {editingMember && memberForm && <div className="fixed inset-0 z-50 flex items-end bg-black/35" onClick={() => { setEditingMember(null); setMemberForm(null); }}><div className="max-h-[92vh] w-full overflow-y-auto rounded-t-[28px] p-5" onClick={(event) => event.stopPropagation()} style={{ background: C.canvas }}><div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-bold" style={{ color: C.ink }}>编辑会员</h3><p className="mt-1 text-xs" style={{ color: C.muted }}>修改后需点击保存才会生效。</p></div><button onClick={() => { setEditingMember(null); setMemberForm(null); }} aria-label="关闭"><X size={20} style={{ color: C.muted }} /></button></div><div className="mt-5 rounded-2xl border p-4" style={{ background: C.paper, borderColor: C.line }}><div className="text-sm font-semibold" style={{ color: C.ink }}>{editingMember.name}</div><div className="mt-1 text-xs" style={{ color: C.muted }}>{editingMember.username || `编号 ${editingMember.userId}`}</div></div><div className="mt-4 space-y-4"><div><Label>会员等级</Label><select value={memberForm.tier} onChange={(event) => setMemberForm({ ...memberForm, tier: event.target.value })} className="w-full rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: C.line, background: "#FFFEFC", color: C.ink }}><option value="junior">初级会员</option><option value="senior">高级会员</option></select></div><div><Label>项目身份</Label><select value={memberForm.role} onChange={(event) => setMemberForm({ ...memberForm, role: event.target.value })} className="w-full rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: C.line, background: "#FFFEFC", color: C.ink }}><option value="user">普通用户</option><option value="order_admin">订单管理员</option><option value="catalog_admin">商品管理员</option><option value="owner">项目负责人</option></select></div><div className="rounded-2xl border p-4" style={{ borderColor: C.line, background: C.paper }}><div className="flex items-start justify-between gap-4"><div><div className="text-sm font-semibold" style={{ color: C.ink }}>紫鼎访问</div><p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>{memberForm.isActive ? "当前可进入紫鼎商城；停用后不影响该账号的其他项目。" : "当前无法进入紫鼎商城；恢复后可重新使用紫鼎功能。"}</p></div><Button kind={memberForm.isActive ? "danger" : "quiet"} onClick={() => setMemberForm({ ...memberForm, isActive: !memberForm.isActive })}>{memberForm.isActive ? "停用紫鼎访问" : "恢复紫鼎访问"}</Button></div></div><Button className="w-full" disabled={save.isPending} onClick={() => save.mutate(memberForm)}><Save size={15} />{save.isPending ? "保存中…" : "保存修改"}</Button></div></div></div>}
+      {editingMember && memberForm && (
+        <div
+          className="fixed inset-0 z-50 flex items-end bg-black/35"
+          onClick={() => {
+            setEditingMember(null);
+            setMemberForm(null);
+          }}
+        >
+          <div
+            className="max-h-[92vh] w-full overflow-y-auto rounded-t-[28px] p-5"
+            onClick={event => event.stopPropagation()}
+            style={{ background: C.canvas }}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold" style={{ color: C.ink }}>
+                  编辑会员
+                </h3>
+                <p className="mt-1 text-xs" style={{ color: C.muted }}>
+                  修改后需点击保存才会生效。
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setEditingMember(null);
+                  setMemberForm(null);
+                }}
+                aria-label="关闭"
+              >
+                <X size={20} style={{ color: C.muted }} />
+              </button>
+            </div>
+            <div
+              className="mt-5 rounded-2xl border p-4"
+              style={{ background: C.paper, borderColor: C.line }}
+            >
+              <div className="text-sm font-semibold" style={{ color: C.ink }}>
+                {editingMember.name}
+              </div>
+              <div className="mt-1 text-xs" style={{ color: C.muted }}>
+                {editingMember.username || `编号 ${editingMember.userId}`}
+              </div>
+            </div>
+            <div className="mt-4 space-y-4">
+              <div>
+                <Label>会员等级</Label>
+                <select
+                  value={memberForm.tier}
+                  onChange={event =>
+                    setMemberForm({ ...memberForm, tier: event.target.value })
+                  }
+                  className="w-full rounded-xl border px-3 py-2.5 text-sm"
+                  style={{
+                    borderColor: C.line,
+                    background: "#FFFEFC",
+                    color: C.ink,
+                  }}
+                >
+                  <option value="junior">初级会员</option>
+                  <option value="senior">高级会员</option>
+                </select>
+              </div>
+              <div>
+                <Label>项目身份</Label>
+                <select
+                  value={memberForm.role}
+                  onChange={event =>
+                    setMemberForm({ ...memberForm, role: event.target.value })
+                  }
+                  className="w-full rounded-xl border px-3 py-2.5 text-sm"
+                  style={{
+                    borderColor: C.line,
+                    background: "#FFFEFC",
+                    color: C.ink,
+                  }}
+                >
+                  <option value="user">普通用户</option>
+                  <option value="order_admin">订单管理员</option>
+                  <option value="catalog_admin">商品管理员</option>
+                  <option value="owner">项目负责人</option>
+                </select>
+              </div>
+              <Button
+                className="w-full"
+                disabled={save.isPending}
+                onClick={() => save.mutate({ ...memberForm, isActive: true })}
+              >
+                <Save size={15} />
+                {save.isPending ? "保存中…" : "保存修改"}
+              </Button>
+              <div
+                className="rounded-2xl border p-4"
+                style={{ borderColor: "#F1CECE", background: "#FFF8F8" }}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div
+                      className="text-sm font-semibold"
+                      style={{ color: C.danger }}
+                    >
+                      删除会员
+                    </div>
+                    <p
+                      className="mt-1 text-xs leading-5"
+                      style={{ color: C.muted }}
+                    >
+                      账号将无法登录脉动网全站；资料与历史数据保留，可在已删除会员中恢复。
+                    </p>
+                  </div>
+                  <Button
+                    kind="danger"
+                    onClick={() => setMemberToDelete(editingMember)}
+                  >
+                    删除
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-    {credentials && <div className="fixed inset-0 z-50 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center" onClick={() => setCredentials(null)}><div className="w-full max-w-sm rounded-[28px] p-5" onClick={(event) => event.stopPropagation()} style={{ background: C.canvas }}><div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-bold" style={{ color: C.ink }}>新会员已开通</h3><p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>初始密码只在本次显示，请立即复制并发送给会员。</p></div><button onClick={() => setCredentials(null)} aria-label="关闭"><X size={20} style={{ color: C.muted }} /></button></div><div className="mt-5 overflow-hidden rounded-2xl border" style={{ borderColor: C.line, background: C.paper }}><div className="flex items-center justify-between px-4 py-3"><span className="text-xs" style={{ color: C.muted }}>用户名</span><code className="text-sm font-bold" style={{ color: C.ink }}>{credentials.username}</code></div><div className="flex items-center justify-between border-t px-4 py-3" style={{ borderColor: C.line }}><span className="text-xs" style={{ color: C.muted }}>六位初始密码</span><code className="text-base font-bold tracking-[0.18em]" style={{ color: C.plum }}>{credentials.initialPassword}</code></div></div><p className="mt-3 text-xs leading-5" style={{ color: C.muted }}>请在微信小程序搜索“人脉永动”，使用管理员提供的账号密码登录。紫鼎会员不支持自主注册。</p><Button className="mt-4 w-full" onClick={copyLoginInfo}><Copy size={15} />{copied ? "已复制登录信息" : "一键复制登录信息"}</Button><Button kind="quiet" className="mt-2 w-full" onClick={() => setCredentials(null)}>我已发送，关闭</Button></div></div>}
-    {copiedContent && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-5" onClick={() => setCopiedContent("")}><div className="w-full max-w-sm rounded-[28px] p-5" onClick={(event) => event.stopPropagation()} style={{ background: C.canvas }}><div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-bold" style={{ color: C.ink }}>登录信息已复制</h3><p className="mt-1 text-xs leading-5" style={{ color: C.muted }}>以下完整内容已复制到剪贴板，可直接粘贴发送给会员。</p></div><button onClick={() => setCopiedContent("")} aria-label="关闭复制内容预览"><X size={20} style={{ color: C.muted }} /></button></div><pre className="mt-4 whitespace-pre-wrap break-words rounded-2xl border p-4 text-[13px] leading-6" style={{ borderColor: C.line, background: C.paper, color: C.ink, fontFamily: "inherit" }}>{copiedContent}</pre><Button className="mt-4 w-full" onClick={() => setCopiedContent("")}>我已查看</Button></div></div>}
-  </div>;
+      {memberToDelete && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-5"
+          onClick={() => setMemberToDelete(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-[28px] p-5"
+            onClick={event => event.stopPropagation()}
+            style={{ background: C.canvas }}
+          >
+            <h3 className="text-lg font-bold" style={{ color: C.ink }}>
+              确认删除会员？
+            </h3>
+            <p className="mt-3 text-sm leading-6" style={{ color: C.muted }}>
+              “{memberToDelete.name}
+              ”将无法登录脉动网全站。账号资料和历史记录不会被物理删除，您可在“已删除会员”中恢复。
+            </p>
+            <div className="mt-5 flex gap-3">
+              <Button
+                kind="quiet"
+                className="flex-1"
+                disabled={deleteMember.isPending}
+                onClick={() => setMemberToDelete(null)}
+              >
+                取消
+              </Button>
+              <Button
+                kind="danger"
+                className="flex-1"
+                disabled={deleteMember.isPending}
+                onClick={() =>
+                  deleteMember.mutate({ userId: memberToDelete.userId })
+                }
+              >
+                {deleteMember.isPending ? "删除中…" : "确认删除"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {credentials && (
+        <div
+          className="fixed inset-0 z-50 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center"
+          onClick={() => setCredentials(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-[28px] p-5"
+            onClick={event => event.stopPropagation()}
+            style={{ background: C.canvas }}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold" style={{ color: C.ink }}>
+                  新会员已开通
+                </h3>
+                <p
+                  className="mt-1 text-xs leading-5"
+                  style={{ color: C.muted }}
+                >
+                  初始密码只在本次显示，请立即复制并发送给会员。
+                </p>
+              </div>
+              <button onClick={() => setCredentials(null)} aria-label="关闭">
+                <X size={20} style={{ color: C.muted }} />
+              </button>
+            </div>
+            <div
+              className="mt-5 overflow-hidden rounded-2xl border"
+              style={{ borderColor: C.line, background: C.paper }}
+            >
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-xs" style={{ color: C.muted }}>
+                  用户名
+                </span>
+                <code className="text-sm font-bold" style={{ color: C.ink }}>
+                  {credentials.username}
+                </code>
+              </div>
+              <div
+                className="flex items-center justify-between border-t px-4 py-3"
+                style={{ borderColor: C.line }}
+              >
+                <span className="text-xs" style={{ color: C.muted }}>
+                  六位初始密码
+                </span>
+                <code
+                  className="text-base font-bold tracking-[0.18em]"
+                  style={{ color: C.plum }}
+                >
+                  {credentials.initialPassword}
+                </code>
+              </div>
+            </div>
+            <p className="mt-3 text-xs leading-5" style={{ color: C.muted }}>
+              请在微信小程序搜索“人脉永动”，使用管理员提供的账号密码登录。紫鼎会员不支持自主注册。
+            </p>
+            <Button className="mt-4 w-full" onClick={copyLoginInfo}>
+              <Copy size={15} />
+              {copied ? "已复制登录信息" : "一键复制登录信息"}
+            </Button>
+            <Button
+              kind="quiet"
+              className="mt-2 w-full"
+              onClick={() => setCredentials(null)}
+            >
+              我已发送，关闭
+            </Button>
+          </div>
+        </div>
+      )}
+      {copiedContent && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-5"
+          onClick={() => setCopiedContent("")}
+        >
+          <div
+            className="w-full max-w-sm rounded-[28px] p-5"
+            onClick={event => event.stopPropagation()}
+            style={{ background: C.canvas }}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold" style={{ color: C.ink }}>
+                  登录信息已复制
+                </h3>
+                <p
+                  className="mt-1 text-xs leading-5"
+                  style={{ color: C.muted }}
+                >
+                  以下完整内容已复制到剪贴板，可直接粘贴发送给会员。
+                </p>
+              </div>
+              <button
+                onClick={() => setCopiedContent("")}
+                aria-label="关闭复制内容预览"
+              >
+                <X size={20} style={{ color: C.muted }} />
+              </button>
+            </div>
+            <pre
+              className="mt-4 whitespace-pre-wrap break-words rounded-2xl border p-4 text-[13px] leading-6"
+              style={{
+                borderColor: C.line,
+                background: C.paper,
+                color: C.ink,
+                fontFamily: "inherit",
+              }}
+            >
+              {copiedContent}
+            </pre>
+            <Button
+              className="mt-4 w-full"
+              onClick={() => setCopiedContent("")}
+            >
+              我已查看
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
-
 function AdminPoints() {
   const rules = trpc.zidingCommerce.adminListPointRules.useQuery();
   const save = trpc.zidingCommerce.adminSavePointRule.useMutation({ onSuccess: () => { rules.refetch(); setOpen(false); } });

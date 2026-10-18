@@ -75,6 +75,33 @@ async function ensureZidingVersionAccess(conn: DbConn, userId: number, grantAcce
   );
 }
 
+function isSystemSuperAdmin(ctx: any) {
+  return (ctx.realUser || ctx.user)?.role === "super_admin";
+}
+
+/** 普通紫鼎管理员只能查看或变更自己手动开通/添加的会员。 */
+async function getManageableMember(
+  conn: DbConn,
+  ctx: any,
+  userId: number,
+  lockForUpdate = false
+) {
+  const [rows] = await conn.execute(
+    `SELECT * FROM ziding_project_members
+     WHERE version_key=? AND user_id=?
+     LIMIT 1${lockForUpdate ? " FOR UPDATE" : ""}`,
+    [ZIDING_PROJECT_KEY, userId]
+  );
+  const member = (rows as any[])[0] || null;
+  if (!member) toError("NOT_FOUND", "未找到该紫鼎会员");
+  if (
+    !isSystemSuperAdmin(ctx) &&
+    Number(member.created_by || 0) !== actorId(ctx)
+  ) {
+    toError("FORBIDDEN", "只能管理由您手动开通或添加的会员");
+  }
+  return member;
+}
 function parseJson<T>(raw: unknown, fallback: T): T {
   if (!raw) return fallback;
   try { return JSON.parse(String(raw)) as T; } catch { return fallback; }
@@ -150,6 +177,16 @@ async function initializeZidingCommerceTables(): Promise<DbConn | null> {
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_ziding_member (version_key, user_id),
     KEY idx_ziding_member_role (version_key, project_role, is_active)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await conn.execute(`CREATE TABLE IF NOT EXISTS ziding_global_login_blocks (
+    user_id BIGINT NOT NULL PRIMARY KEY,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    blocked_by BIGINT NULL,
+    blocked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    restored_by BIGINT NULL,
+    restored_at DATETIME NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_ziding_login_blocks_active (is_active, blocked_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
   await conn.execute(`CREATE TABLE IF NOT EXISTS ziding_products (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -1204,80 +1241,343 @@ export const zidingCommerceRouter = router({
     return { url };
   }),
 
-  adminListMembers: protectedProcedure.query(async ({ ctx }) => {
-    const { conn } = await requireProjectAdmin(ctx, "all");
-    const [rows] = await conn.execute(`SELECT m.*,u.name,u.username,u.avatar FROM ziding_project_members m LEFT JOIN users u ON u.id=m.user_id WHERE m.version_key=? ORDER BY FIELD(m.project_role,'owner','order_admin','catalog_admin','user'),m.updated_at DESC`, [ZIDING_PROJECT_KEY]);
-    return ((rows as any[]) || []).map((row) => ({ userId: Number(row.user_id), name: row.name || row.username || `用户${row.user_id}`, username: row.username || "", avatar: row.avatar || "", tier: row.member_tier as MemberTier, role: row.project_role as ProjectRole, isActive: Number(row.is_active) === 1, updatedAt: row.updated_at }));
-  }),
+  adminListMembers: protectedProcedure
+    .input(
+      z
+        .object({
+          status: z.enum(["active", "deleted"]).optional().default("active"),
+        })
+        .optional()
+    )
+    .query(async ({ ctx, input }) => {
+      const { conn, actorUserId } = await requireProjectAdmin(ctx, "all");
+      const status = input?.status || "active";
+      const where = ["m.version_key=?", "m.is_active=?"];
+      const values: any[] = [ZIDING_PROJECT_KEY, status === "active" ? 1 : 0];
+      // 普通紫鼎管理员的“会员管理”只显示自己创建的账号；系统超管保留故障处理视图。
+      if (!isSystemSuperAdmin(ctx)) {
+        where.push("m.created_by=?");
+        values.push(actorUserId);
+      }
+      const [rows] = await conn.execute(
+        `SELECT m.*,u.name,u.username,u.avatar
+       FROM ziding_project_members m
+       LEFT JOIN users u ON u.id=m.user_id
+       WHERE ${where.join(" AND ")}
+       ORDER BY FIELD(m.project_role,'owner','order_admin','catalog_admin','user'),m.updated_at DESC`,
+        values
+      );
+      return ((rows as any[]) || []).map(row => ({
+        userId: Number(row.user_id),
+        name: row.name || row.username || `用户${row.user_id}`,
+        username: row.username || "",
+        avatar: row.avatar || "",
+        tier: row.member_tier as MemberTier,
+        role: row.project_role as ProjectRole,
+        isActive: Number(row.is_active) === 1,
+        createdBy: row.created_by == null ? null : Number(row.created_by),
+        updatedAt: row.updated_at,
+      }));
+    }),
 
-  adminSearchUsers: protectedProcedure.input(z.object({ keyword: z.string().trim().min(1).max(50) })).query(async ({ ctx, input }) => {
-    const { conn } = await requireProjectAdmin(ctx, "all");
-    const kw = `%${input.keyword}%`;
-    const [rows] = await conn.execute(`SELECT id,name,username,avatar FROM users WHERE name LIKE ? OR username LIKE ? ORDER BY name ASC LIMIT 20`, [kw, kw]);
-    return ((rows as any[]) || []).map((row) => ({ userId: Number(row.id), name: row.name || row.username || `用户${row.id}`, username: row.username || "", avatar: row.avatar || "" }));
-  }),
+  adminSearchUsers: protectedProcedure
+    .input(z.object({ keyword: z.string().trim().min(1).max(50) }))
+    .query(async ({ ctx, input }) => {
+      const { conn } = await requireProjectAdmin(ctx, "all");
+      const kw = `%${input.keyword}%`;
+      const [rows] = await conn.execute(
+        `SELECT id,name,username,avatar FROM users WHERE name LIKE ? OR username LIKE ? ORDER BY name ASC LIMIT 20`,
+        [kw, kw]
+      );
+      return ((rows as any[]) || []).map(row => ({
+        userId: Number(row.id),
+        name: row.name || row.username || `用户${row.id}`,
+        username: row.username || "",
+        avatar: row.avatar || "",
+      }));
+    }),
 
-  adminCheckMemberUsername: protectedProcedure.input(z.object({
-    username: z.string().trim().min(1).max(20).regex(/^[\u4e00-\u9fa5a-zA-Z0-9_]+$/),
-  })).query(async ({ ctx, input }) => {
-    const { conn } = await requireProjectAdmin(ctx, "all");
-    const username = input.username.trim();
-    const [rows] = await conn.execute(`SELECT id FROM users WHERE username=? LIMIT 1`, [username]);
-    return { username, available: !((rows as any[]) || []).length };
-  }),
+  adminCheckMemberUsername: protectedProcedure
+    .input(
+      z.object({
+        username: z
+          .string()
+          .trim()
+          .min(1)
+          .max(20)
+          .regex(/^[\u4e00-\u9fa5a-zA-Z0-9_]+$/),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { conn } = await requireProjectAdmin(ctx, "all");
+      const username = input.username.trim();
+      const [rows] = await conn.execute(
+        `SELECT id FROM users WHERE username=? LIMIT 1`,
+        [username]
+      );
+      return { username, available: !((rows as any[]) || []).length };
+    }),
 
-  adminCreateMember: protectedProcedure.input(z.object({
-    username: z.string().trim().min(1, "请填写用户名").max(20, "用户名最多20个字符").regex(/^[\u4e00-\u9fa5a-zA-Z0-9_]+$/, "用户名只能包含汉字、字母、数字和下划线"),
-    nickname: z.string().trim().max(50, "昵称最多50个字符").optional().default(""),
-  })).mutation(async ({ ctx, input }) => {
-    const { actorUserId } = await requireProjectAdmin(ctx, "all");
-    const initialPassword = newZidingInitialPassword();
-    const passwordHash = await hashPassword(initialPassword);
-    const txConn = await getDbTransactionConnection();
-    if (!txConn) toError("INTERNAL_SERVER_ERROR", "会员服务暂不可用，请稍后重试");
-    try {
-      await txConn.beginTransaction();
-      const [existingRows] = await txConn.execute(`SELECT id FROM users WHERE username=? LIMIT 1 FOR UPDATE`, [input.username]);
-      if ((existingRows as any[]).length) toError("BAD_REQUEST", "用户名已存在，请换一个用户名");
-      // 不论由哪位紫鼎管理员执行开通，新会员均统一归属项目负责人盈盈（susan）。
-      // 版本字段刻意留空，由现有推荐链继承负责人名下的紫鼎版本设置。
-      const referrerUserId = ZIDING_OWNER_USER_ID;
-      const [referrerRows] = await txConn.execute(`SELECT id FROM users WHERE id=? LIMIT 1 FOR UPDATE`, [referrerUserId]);
-      if (!((referrerRows as any[]) || []).length) toError("INTERNAL_SERVER_ERROR", "紫鼎项目负责人账号不存在，无法开通会员");
-      const nickname = input.nickname || input.username;
-      const [created] = await txConn.execute(
-        `INSERT INTO users (openId,username,passwordHash,name,loginMethod,role,version_key,version_switch_scope,invited_by_user_id,invited_at,lastSignedIn)
+  adminCreateMember: protectedProcedure
+    .input(
+      z.object({
+        username: z
+          .string()
+          .trim()
+          .min(1, "请填写用户名")
+          .max(20, "用户名最多20个字符")
+          .regex(
+            /^[\u4e00-\u9fa5a-zA-Z0-9_]+$/,
+            "用户名只能包含汉字、字母、数字和下划线"
+          ),
+        nickname: z
+          .string()
+          .trim()
+          .max(50, "昵称最多50个字符")
+          .optional()
+          .default(""),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { actorUserId } = await requireProjectAdmin(ctx, "all");
+      const initialPassword = newZidingInitialPassword();
+      const passwordHash = await hashPassword(initialPassword);
+      const txConn = await getDbTransactionConnection();
+      if (!txConn)
+        toError("INTERNAL_SERVER_ERROR", "会员服务暂不可用，请稍后重试");
+      try {
+        await txConn.beginTransaction();
+        const [existingRows] = await txConn.execute(
+          `SELECT id FROM users WHERE username=? LIMIT 1 FOR UPDATE`,
+          [input.username]
+        );
+        if ((existingRows as any[]).length)
+          toError("BAD_REQUEST", "用户名已存在，请换一个用户名");
+        // 不论由哪位紫鼎管理员执行开通，新会员均统一归属项目负责人盈盈（susan）。
+        // 版本字段刻意留空，由现有推荐链继承负责人名下的紫鼎版本设置。
+        const referrerUserId = ZIDING_OWNER_USER_ID;
+        const [referrerRows] = await txConn.execute(
+          `SELECT id FROM users WHERE id=? LIMIT 1 FOR UPDATE`,
+          [referrerUserId]
+        );
+        if (!((referrerRows as any[]) || []).length)
+          toError(
+            "INTERNAL_SERVER_ERROR",
+            "紫鼎项目负责人账号不存在，无法开通会员"
+          );
+        const nickname = input.nickname || input.username;
+        const [created] = await txConn.execute(
+          `INSERT INTO users (openId,username,passwordHash,name,loginMethod,role,version_key,version_switch_scope,invited_by_user_id,invited_at,lastSignedIn)
          VALUES (?,?,?,?, 'password','parent',NULL,NULL,?,NOW(),NOW())`,
-        [`ziding_${randomUUID()}`, input.username, passwordHash, nickname, referrerUserId],
-      );
-      const userId = Number((created as any).insertId);
-      await txConn.execute(`UPDATE users SET invite_count=COALESCE(invite_count,0)+1 WHERE id=?`, [referrerUserId]);
-      await txConn.execute(
-        `INSERT INTO ziding_project_members (version_key,user_id,member_tier,project_role,is_active,created_by,updated_by)
+          [
+            `ziding_${randomUUID()}`,
+            input.username,
+            passwordHash,
+            nickname,
+            referrerUserId,
+          ]
+        );
+        const userId = Number((created as any).insertId);
+        await txConn.execute(
+          `UPDATE users SET invite_count=COALESCE(invite_count,0)+1 WHERE id=?`,
+          [referrerUserId]
+        );
+        await txConn.execute(
+          `INSERT INTO ziding_project_members (version_key,user_id,member_tier,project_role,is_active,created_by,updated_by)
          VALUES (?,?,'junior','user',1,?,?)`,
-        [ZIDING_PROJECT_KEY, userId, actorUserId, actorUserId],
-      );
-      await auditAdmin(txConn, actorUserId, "member_created", "member", userId, { username: input.username, nickname: input.nickname || null, tier: "junior", referrerUserId });
-      await txConn.commit();
-      return { userId, username: input.username, nickname, initialPassword };
-    } catch (error) {
-      await txConn.rollback();
-      throw error;
-    } finally {
-      if (typeof (txConn as any).release === "function") (txConn as any).release();
-    }
-  }),
+          [ZIDING_PROJECT_KEY, userId, actorUserId, actorUserId]
+        );
+        await auditAdmin(
+          txConn,
+          actorUserId,
+          "member_created",
+          "member",
+          userId,
+          {
+            username: input.username,
+            nickname: input.nickname || null,
+            tier: "junior",
+            referrerUserId,
+          }
+        );
+        await txConn.commit();
+        return { userId, username: input.username, nickname, initialPassword };
+      } catch (error) {
+        await txConn.rollback();
+        throw error;
+      } finally {
+        if (typeof (txConn as any).release === "function")
+          (txConn as any).release();
+      }
+    }),
 
-  adminSaveMember: protectedProcedure.input(z.object({ userId: z.number().int().positive(), tier: z.enum(["junior", "senior"]), role: z.enum(["user", "order_admin", "catalog_admin", "owner"]), isActive: z.boolean() })).mutation(async ({ ctx, input }) => {
-    const { conn, actorUserId, role: actorRole } = await requireProjectAdmin(ctx, "all");
-    if (input.role === "owner" && actorRole !== "owner" && (ctx.realUser || ctx.user)?.role !== "super_admin") toError("FORBIDDEN", "仅项目负责人可授予负责人权限");
-    if (input.userId === ZIDING_OWNER_USER_ID && (!input.isActive || input.role !== "owner")) toError("BAD_REQUEST", "紫鼎项目负责人不能在此处被停用或降级");
-    await ensureZidingVersionAccess(conn, input.userId, input.isActive);
-    await conn.execute(`INSERT INTO ziding_project_members (version_key,user_id,member_tier,project_role,is_active,created_by,updated_by) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE member_tier=VALUES(member_tier),project_role=VALUES(project_role),is_active=VALUES(is_active),updated_by=VALUES(updated_by)`,
-      [ZIDING_PROJECT_KEY, input.userId, input.tier, input.role, input.isActive ? 1 : 0, actorUserId, actorUserId]);
-    await auditAdmin(conn, actorUserId, "member_updated", "member", input.userId, { tier: input.tier, role: input.role, isActive: input.isActive });
-    return { success: true };
-  }),
+  adminSaveMember: protectedProcedure
+    .input(
+      z.object({
+        userId: z.number().int().positive(),
+        tier: z.enum(["junior", "senior"]),
+        role: z.enum(["user", "order_admin", "catalog_admin", "owner"]),
+        isActive: z.boolean(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const {
+        conn,
+        actorUserId,
+        role: actorRole,
+      } = await requireProjectAdmin(ctx, "all");
+      if (
+        input.role === "owner" &&
+        actorRole !== "owner" &&
+        (ctx.realUser || ctx.user)?.role !== "super_admin"
+      )
+        toError("FORBIDDEN", "仅项目负责人可授予负责人权限");
+      if (
+        input.userId === ZIDING_OWNER_USER_ID &&
+        (!input.isActive || input.role !== "owner")
+      )
+        toError("BAD_REQUEST", "紫鼎项目负责人不能在此处被停用或降级");
+      const [existingRows] = await conn.execute(
+        `SELECT is_active FROM ziding_project_members WHERE version_key=? AND user_id=? LIMIT 1`,
+        [ZIDING_PROJECT_KEY, input.userId]
+      );
+      const existing = (existingRows as any[])[0] || null;
+      if (existing) {
+        await getManageableMember(conn, ctx, input.userId);
+        if (input.isActive && Number(existing.is_active) !== 1) {
+          const [blockRows] = await conn.execute(
+            `SELECT user_id FROM ziding_global_login_blocks WHERE user_id=? AND is_active=1 LIMIT 1`,
+            [input.userId]
+          );
+          if ((blockRows as any[]).length)
+            toError(
+              "BAD_REQUEST",
+              "该账号已被删除，请在“已删除会员”中恢复登录"
+            );
+        }
+      }
+      await ensureZidingVersionAccess(conn, input.userId, input.isActive);
+      await conn.execute(
+        `INSERT INTO ziding_project_members (version_key,user_id,member_tier,project_role,is_active,created_by,updated_by) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE member_tier=VALUES(member_tier),project_role=VALUES(project_role),is_active=VALUES(is_active),updated_by=VALUES(updated_by)`,
+        [
+          ZIDING_PROJECT_KEY,
+          input.userId,
+          input.tier,
+          input.role,
+          input.isActive ? 1 : 0,
+          actorUserId,
+          actorUserId,
+        ]
+      );
+      await auditAdmin(
+        conn,
+        actorUserId,
+        "member_updated",
+        "member",
+        input.userId,
+        { tier: input.tier, role: input.role, isActive: input.isActive }
+      );
+      return { success: true };
+    }),
+
+  adminDeleteMember: protectedProcedure
+    .input(z.object({ userId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const { actorUserId } = await requireProjectAdmin(ctx, "all");
+      if (input.userId === ZIDING_OWNER_USER_ID)
+        toError("BAD_REQUEST", "紫鼎项目负责人不能在此处删除");
+      const txConn = await getDbTransactionConnection();
+      if (!txConn)
+        toError("INTERNAL_SERVER_ERROR", "会员服务暂不可用，请稍后重试");
+      try {
+        await txConn.beginTransaction();
+        const member = await getManageableMember(
+          txConn,
+          ctx,
+          input.userId,
+          true
+        );
+        await txConn.execute(
+          `UPDATE ziding_project_members SET is_active=0,updated_by=? WHERE version_key=? AND user_id=?`,
+          [actorUserId, ZIDING_PROJECT_KEY, input.userId]
+        );
+        await txConn.execute(
+          `INSERT INTO ziding_global_login_blocks (user_id,is_active,blocked_by,blocked_at,restored_by,restored_at)
+         VALUES (?,1,?,NOW(),NULL,NULL)
+         ON DUPLICATE KEY UPDATE is_active=1,blocked_by=VALUES(blocked_by),blocked_at=VALUES(blocked_at),restored_by=NULL,restored_at=NULL`,
+          [input.userId, actorUserId]
+        );
+        await auditAdmin(
+          txConn,
+          actorUserId,
+          "member_globally_disabled",
+          "member",
+          input.userId,
+          {
+            username: member.username || null,
+            createdBy:
+              member.created_by == null ? null : Number(member.created_by),
+          }
+        );
+        await txConn.commit();
+        return { success: true };
+      } catch (error) {
+        await txConn.rollback();
+        throw error;
+      } finally {
+        if (typeof (txConn as any).release === "function")
+          (txConn as any).release();
+      }
+    }),
+
+  adminRestoreMember: protectedProcedure
+    .input(z.object({ userId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const { actorUserId } = await requireProjectAdmin(ctx, "all");
+      const txConn = await getDbTransactionConnection();
+      if (!txConn)
+        toError("INTERNAL_SERVER_ERROR", "会员服务暂不可用，请稍后重试");
+      try {
+        await txConn.beginTransaction();
+        const member = await getManageableMember(
+          txConn,
+          ctx,
+          input.userId,
+          true
+        );
+        await ensureZidingVersionAccess(txConn, input.userId, true);
+        await txConn.execute(
+          `UPDATE ziding_project_members SET is_active=1,updated_by=? WHERE version_key=? AND user_id=?`,
+          [actorUserId, ZIDING_PROJECT_KEY, input.userId]
+        );
+        await txConn.execute(
+          `UPDATE ziding_global_login_blocks
+         SET is_active=0,restored_by=?,restored_at=NOW()
+         WHERE user_id=? AND is_active=1`,
+          [actorUserId, input.userId]
+        );
+        await auditAdmin(
+          txConn,
+          actorUserId,
+          "member_globally_restored",
+          "member",
+          input.userId,
+          {
+            username: member.username || null,
+            createdBy:
+              member.created_by == null ? null : Number(member.created_by),
+          }
+        );
+        await txConn.commit();
+        return { success: true };
+      } catch (error) {
+        await txConn.rollback();
+        throw error;
+      } finally {
+        if (typeof (txConn as any).release === "function")
+          (txConn as any).release();
+      }
+    }),
 
   adminListPointRules: protectedProcedure.query(async ({ ctx }) => {
     const { conn } = await requireProjectAdmin(ctx, "all");

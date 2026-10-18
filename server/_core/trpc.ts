@@ -2,7 +2,7 @@ import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
-import { setCurrentIsGuest } from "../db";
+import { getActiveZidingLoginBlock, setCurrentIsGuest } from "../db";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -54,6 +54,18 @@ const requireUser = t.middleware(async opts => {
 
   if (!ctx.user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+  }
+
+  // 管理员在紫鼎会员管理中执行“删除会员”后，该用户不得继续使用已有会话访问受保护功能。
+  // 系统超级管理员的代入查看仍保留，以便处理支持与恢复操作。
+  if (
+    ctx.realUser?.role !== "super_admin" &&
+    (await getActiveZidingLoginBlock(ctx.user.id))
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "该账号已被管理员停用，请联系为您开通账号的管理员",
+    });
   }
 
   return next({
