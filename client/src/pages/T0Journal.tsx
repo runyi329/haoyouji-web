@@ -1165,6 +1165,17 @@ function formatBeijingMonthDayTime(value: string) {
   return `${Number(values.month)}/${Number(values.day)} ${values.hour}:${values.minute}`;
 }
 
+/**
+ * 提现流水的 created_at 来自账本库的北京时间墙上时间；驱动会把它附上 Z 发送到前端。
+ * 此处仅对提现通知保留原始月日时分，避免再次按 UTC 转换后误显示为次日凌晨。
+ */
+function formatPayoutRecordedBeijingTime(value: string) {
+  const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+  if (!match) return formatBeijingMonthDayTime(value);
+  const [, , month, day, hour, minute] = match;
+  return `${Number(month)}/${Number(day)} ${hour}:${minute}`;
+}
+
 /** 历史列表按真正发生的成交/触发活动排序：挂单取成交时间，自动止盈兼容旧记录取实际落库时间。 */
 function getTradeActivityTime(trade: Pick<PreviewTrade, "createdAt" | "filledAt" | "recordedAt" | "note">) {
   if (trade.filledAt) return trade.filledAt;
@@ -2426,6 +2437,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   /** “盈利”历史记录截图入口：仅导出当前历史记录区块。 */
   const profitableHistoryExportRef = useRef<HTMLElement | null>(null);
   const payoutSharedContentRef = useRef<HTMLDivElement | null>(null);
+  const totalProfitAttributionExportRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedJournalFiltersRef = useRef(false);
   const activeTopFilterStorageKeyRef = useRef<string | null>(null);
   const [hydratedTopFilterStorageKey, setHydratedTopFilterStorageKey] = useState<string | null>(null);
@@ -2636,7 +2648,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ...(Array.isArray(current) ? current.filter((log) => log.id !== createdLog.id) : []),
       ]);
       resetPayoutLogForm();
-      await t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput);
+      await Promise.all([
+        t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput),
+        t0Utils.ledger.t0GetPayoutLogs.invalidate({ ledgerId: 52 as const, allUsers: true }),
+      ]);
       t0Toast.success("资金流水已保存");
     },
     onError: (error) => t0Toast.error(error.message || "资金流水保存失败"),
@@ -2649,7 +2664,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ...(Array.isArray(current) ? current.filter((log) => log.id !== updatedLog.id) : []),
       ]);
       resetPayoutLogForm();
-      await t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput);
+      await Promise.all([
+        t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput),
+        t0Utils.ledger.t0GetPayoutLogs.invalidate({ ledgerId: 52 as const, allUsers: true }),
+      ]);
       t0Toast.success("资金流水已更新");
     },
     onError: (error) => t0Toast.error(error.message || "资金流水更新失败"),
@@ -2662,7 +2680,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       );
       setDeletePayoutLogId(null);
       if (editingPayoutLog?.id === deletedLog.id) resetPayoutLogForm();
-      await t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput);
+      await Promise.all([
+        t0Utils.ledger.t0GetPayoutLogs.invalidate(payoutLogQueryInput),
+        t0Utils.ledger.t0GetPayoutLogs.invalidate({ ledgerId: 52 as const, allUsers: true }),
+      ]);
       t0Toast.success("资金流水已删除");
     },
     onError: (error) => t0Toast.error(error.message || "资金流水删除失败"),
@@ -4269,6 +4290,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 资金账本只对账，不回写或扣减订单收益：投入、提现为两条独立方向；仅提现受当前正向总收益上限约束。
   const withdrawalLogs = payoutLogs.filter((log) => log.direction === "withdrawal");
   const depositLogs = payoutLogs.filter((log) => log.direction === "deposit");
+  const latestWithdrawalLog = useMemo(() => withdrawalLogs
+    .slice()
+    .sort((left, right) => (
+      String(right.createdAt || "").localeCompare(String(left.createdAt || ""))
+      || String(right.id).localeCompare(String(left.id))
+    ))[0] ?? null, [withdrawalLogs]);
   const cumulativePayoutAmount = withdrawalLogs.reduce((total, log) => total + (Number.isFinite(log.amount) ? log.amount : 0), 0);
   const cumulativeDepositAmount = depositLogs.reduce((total, log) => total + (Number.isFinite(log.amount) ? log.amount : 0), 0);
   const payoutProfitCap = Math.max(0, payoutBookTotalIncome);
@@ -8825,37 +8852,62 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               })}</div> : <div className="px-5 py-14 text-center text-sm text-slate-400">当前还没有关联用户订单。</div>}
               </>}
               {globalLedgerTab === "funds" && <>
-                <div className="border-b border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-500">按用户汇总资金流水、订单 / 佣金 / 共享收益及对应支出</div>
-                {globalFundsRows.length > 0 ? <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
-                  <div className="flex h-8 items-center border-b border-slate-200 bg-slate-50 px-1 text-[10px] font-medium text-slate-500"><span className="w-[58px] shrink-0 border-r border-slate-200 pr-1">用户</span><div className="grid min-w-0 flex-1 grid-cols-7 divide-x divide-slate-200"><span className="pr-1 text-right">入金</span><span className="pr-1 text-right">订单收益</span><span className="pr-1 text-right">佣金收益</span><span className="pr-1 text-right">共享收益</span><span className="pr-1 text-right">佣金支出</span><span className="pr-1 text-right">共享支出</span><span className="pr-1 text-right">出金</span></div></div>
-                  {globalFundsRows.map((row) => {
-                    const orderProfitClass = row.orderProfit > 0 ? "text-rose-600" : row.orderProfit < 0 ? "text-emerald-600" : "text-slate-700";
-                    const commissionProfitClass = row.commissionProfit > 0 ? "text-rose-600" : row.commissionProfit < 0 ? "text-emerald-600" : "text-slate-700";
-                    // 佣金支出以负号列示：它已从本人的订单收益中扣减，不会再参与总收益相加。
-                    const commissionExpenseDisplay = -row.commissionExpense;
-                    const commissionExpenseClass = commissionExpenseDisplay > 0 ? "text-rose-600" : commissionExpenseDisplay < 0 ? "text-emerald-600" : "text-slate-700";
-                    // 共享支出同样是来源订单已优先划拨的部分，已经从本人的订单收益中扣减。
-                    const sharedExpenseDisplay = -row.sharedExpense;
-                    const sharedExpenseClass = sharedExpenseDisplay > 0 ? "text-rose-600" : sharedExpenseDisplay < 0 ? "text-emerald-600" : "text-slate-700";
-                    return <button key={row.userId} type="button" onClick={() => {
-                      setRelatedUserFilterIds([row.userId]);
-                      setSelectedAccountIds([]);
-                      setRelatedFundFilterIds([]);
-                      setShowGlobalLedger(false);
-                      t0Toast.message(`已切换至 ${row.name} 的订单视图`);
-                    }} className="flex min-h-[52px] w-full items-center px-1 py-2 text-left transition active:bg-slate-50">
-                      <div className="w-[58px] shrink-0 truncate border-r border-slate-200 pr-1 text-[14px] font-semibold text-slate-800">{row.name}</div>
-                      <div className="grid min-w-0 flex-1 grid-cols-7 divide-x divide-slate-200 tabular-nums">
-                        <span className="whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none text-slate-800">{Math.round(row.deposit).toLocaleString("zh-CN")}</span>
-                        <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${orderProfitClass}`}>{Math.round(row.orderProfit).toLocaleString("zh-CN")}</span>
-                        <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${commissionProfitClass}`}>{Math.round(row.commissionProfit).toLocaleString("zh-CN")}</span>
-                        <span className="whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none text-blue-600">{Math.round(row.sharedProfit).toLocaleString("zh-CN")}</span>
-                        <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${commissionExpenseClass}`}>{Math.round(commissionExpenseDisplay).toLocaleString("zh-CN")}</span>
-                        <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${sharedExpenseClass}`}>{Math.round(sharedExpenseDisplay).toLocaleString("zh-CN")}</span>
-                        <span className="whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none text-slate-700">{Math.round(row.withdrawal).toLocaleString("zh-CN")}</span>
-                      </div>
-                    </button>;
-                  })}
+                <div className="border-b border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500">按用户汇总资金流水、订单 / 佣金 / 共享收益及对应支出 · 左右滑动查看全部字段 · 点击累计出金逐笔编辑</div>
+                {globalFundsRows.length > 0 ? <div className="overflow-x-auto overscroll-x-contain border-y border-slate-200 bg-white">
+                  <div className="min-w-[840px] divide-y divide-slate-200">
+                    <div className="grid h-10 grid-cols-[112px_repeat(7,minmax(104px,1fr))] divide-x divide-slate-200 bg-slate-50 text-[13px] font-medium text-slate-500">
+                      <span className="sticky left-0 z-20 flex items-center bg-slate-50 px-3 shadow-[2px_0_4px_rgba(15,23,42,0.06)]">用户</span>
+                      <span className="flex items-center justify-end px-3">累计入金</span>
+                      <span className="flex items-center justify-end px-3">订单收益</span>
+                      <span className="flex items-center justify-end px-3">佣金收益</span>
+                      <span className="flex items-center justify-end px-3">共享收益</span>
+                      <span className="flex items-center justify-end px-3">佣金支出</span>
+                      <span className="flex items-center justify-end px-3">共享支出</span>
+                      <span className="flex items-center justify-end px-3">累计出金</span>
+                    </div>
+                    {globalFundsRows.map((row) => {
+                      const orderProfitClass = row.orderProfit > 0 ? "text-rose-600" : row.orderProfit < 0 ? "text-emerald-600" : "text-slate-700";
+                      const commissionProfitClass = row.commissionProfit > 0 ? "text-rose-600" : row.commissionProfit < 0 ? "text-emerald-600" : "text-slate-700";
+                      // 佣金支出以负号列示：它已从本人的订单收益中扣减，不会再参与总收益相加。
+                      const commissionExpenseDisplay = -row.commissionExpense;
+                      const commissionExpenseClass = commissionExpenseDisplay > 0 ? "text-rose-600" : commissionExpenseDisplay < 0 ? "text-emerald-600" : "text-slate-700";
+                      // 共享支出同样是来源订单已优先划拨的部分，已经从本人的订单收益中扣减。
+                      const sharedExpenseDisplay = -row.sharedExpense;
+                      const sharedExpenseClass = sharedExpenseDisplay > 0 ? "text-rose-600" : sharedExpenseDisplay < 0 ? "text-emerald-600" : "text-slate-700";
+                      return <div key={row.userId} className="grid min-h-[64px] w-full grid-cols-[112px_repeat(7,minmax(104px,1fr))] divide-x divide-slate-200 text-left">
+                        <button type="button" onClick={() => {
+                          setRelatedUserFilterIds([row.userId]);
+                          setSelectedAccountIds([]);
+                          setRelatedFundFilterIds([]);
+                          setShowGlobalLedger(false);
+                          t0Toast.message(`已切换至 ${row.name} 的订单视图`);
+                        }} className="sticky left-0 z-10 flex min-w-0 items-center truncate bg-white px-3 text-left text-[17px] font-semibold text-slate-800 shadow-[2px_0_4px_rgba(15,23,42,0.06)] active:bg-slate-50" title={`查看 ${row.name} 的订单`}>{row.name}</button>
+                        <span className="flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums text-slate-800">{Math.round(row.deposit).toLocaleString("zh-CN")}</span>
+                        <span className={`flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums ${orderProfitClass}`}>{Math.round(row.orderProfit).toLocaleString("zh-CN")}</span>
+                        <span className={`flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums ${commissionProfitClass}`}>{Math.round(row.commissionProfit).toLocaleString("zh-CN")}</span>
+                        <span className="flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums text-blue-600">{Math.round(row.sharedProfit).toLocaleString("zh-CN")}</span>
+                        <span className={`flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums ${commissionExpenseClass}`}>{Math.round(commissionExpenseDisplay).toLocaleString("zh-CN")}</span>
+                        <span className={`flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums ${sharedExpenseClass}`}>{Math.round(sharedExpenseDisplay).toLocaleString("zh-CN")}</span>
+                        <button type="button" onClick={() => {
+                          setRelatedUserFilterIds([row.userId]);
+                          setSelectedAccountIds([]);
+                          setRelatedFundFilterIds([]);
+                          setGlobalLedgerTab("funds");
+                          openPayoutEntryPage("withdrawal");
+                        }} className="flex items-center justify-end whitespace-nowrap bg-slate-50/60 px-3 text-right text-[18px] font-bold leading-none tabular-nums text-slate-700 transition active:bg-slate-100" title="点击逐笔编辑出金流水" aria-label={`编辑 ${row.name} 的累计出金`}>{Math.round(row.withdrawal).toLocaleString("zh-CN")}</button>
+                      </div>;
+                    })}
+                    <div className="grid min-h-[64px] grid-cols-[112px_repeat(7,minmax(104px,1fr))] divide-x divide-slate-200 border-t-2 border-slate-300 bg-slate-50 shadow-[0_-2px_8px_rgba(15,23,42,0.08)]">
+                      <span className="sticky left-0 z-10 flex items-center bg-slate-50 px-3 text-[17px] font-bold text-slate-900 shadow-[2px_0_4px_rgba(15,23,42,0.06)]">汇总</span>
+                      <span className="flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums text-slate-800">{Math.round(globalFundsSummary.deposit).toLocaleString("zh-CN")}</span>
+                      <span className={`flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums ${globalFundsSummary.orderProfit > 0 ? "text-rose-600" : globalFundsSummary.orderProfit < 0 ? "text-emerald-600" : "text-slate-700"}`}>{Math.round(globalFundsSummary.orderProfit).toLocaleString("zh-CN")}</span>
+                      <span className={`flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums ${globalFundsSummary.commissionProfit > 0 ? "text-rose-600" : globalFundsSummary.commissionProfit < 0 ? "text-emerald-600" : "text-slate-700"}`}>{Math.round(globalFundsSummary.commissionProfit).toLocaleString("zh-CN")}</span>
+                      <span className="flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums text-blue-600">{Math.round(globalFundsSummary.sharedProfit).toLocaleString("zh-CN")}</span>
+                      <span className={`flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums ${globalFundsSummary.commissionExpense > 0 ? "text-emerald-600" : globalFundsSummary.commissionExpense < 0 ? "text-rose-600" : "text-slate-700"}`}>{Math.round(-globalFundsSummary.commissionExpense).toLocaleString("zh-CN")}</span>
+                      <span className={`flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums ${globalFundsSummary.sharedExpense > 0 ? "text-emerald-600" : globalFundsSummary.sharedExpense < 0 ? "text-rose-600" : "text-slate-700"}`}>{Math.round(-globalFundsSummary.sharedExpense).toLocaleString("zh-CN")}</span>
+                      <span className="flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums text-slate-700">{Math.round(globalFundsSummary.withdrawal).toLocaleString("zh-CN")}</span>
+                    </div>
+                  </div>
                 </div> : <div className="px-5 py-14 text-center text-sm text-slate-400">暂无用户资金记录。</div>}
               </>}
             </main>
@@ -8865,18 +8917,6 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <span className="whitespace-nowrap pr-2 text-right text-[19px] font-bold leading-none text-rose-600">{Math.round(globalLedgerSummary.longQuantity).toLocaleString("zh-CN")}</span>
                 <span className="whitespace-nowrap pr-2 text-right text-[19px] font-bold leading-none text-emerald-600">{Math.round(globalLedgerSummary.shortQuantity).toLocaleString("zh-CN")}</span>
                 <span className={`whitespace-nowrap pr-2 text-right text-[19px] font-bold leading-none ${globalLedgerSummary.netPositionClass}`}>{Math.round(Math.abs(globalLedgerSummary.netPosition)).toLocaleString("zh-CN")}<small className="ml-1 align-baseline text-[10px] font-semibold">{globalLedgerSummary.netPositionLabel}</small></span>
-              </div>
-            </footer>}
-            {globalLedgerTab === "funds" && globalFundsRows.length > 0 && <footer className="flex min-h-[56px] shrink-0 items-center border-t-2 border-slate-300 bg-slate-50 px-1 shadow-[0_-2px_8px_rgba(15,23,42,0.08)]">
-              <div className="w-[58px] shrink-0 border-r border-slate-200 pr-1 text-[14px] font-bold text-slate-900">汇总</div>
-              <div className="grid min-w-0 flex-1 grid-cols-7 divide-x divide-slate-200 tabular-nums">
-                <span className="whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none text-slate-800">{Math.round(globalFundsSummary.deposit).toLocaleString("zh-CN")}</span>
-                <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${globalFundsSummary.orderProfit > 0 ? "text-rose-600" : globalFundsSummary.orderProfit < 0 ? "text-emerald-600" : "text-slate-700"}`}>{Math.round(globalFundsSummary.orderProfit).toLocaleString("zh-CN")}</span>
-                <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${globalFundsSummary.commissionProfit > 0 ? "text-rose-600" : globalFundsSummary.commissionProfit < 0 ? "text-emerald-600" : "text-slate-700"}`}>{Math.round(globalFundsSummary.commissionProfit).toLocaleString("zh-CN")}</span>
-                <span className="whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none text-blue-600">{Math.round(globalFundsSummary.sharedProfit).toLocaleString("zh-CN")}</span>
-                <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${globalFundsSummary.commissionExpense > 0 ? "text-emerald-600" : globalFundsSummary.commissionExpense < 0 ? "text-rose-600" : "text-slate-700"}`}>{Math.round(-globalFundsSummary.commissionExpense).toLocaleString("zh-CN")}</span>
-                <span className={`whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none ${globalFundsSummary.sharedExpense > 0 ? "text-emerald-600" : globalFundsSummary.sharedExpense < 0 ? "text-rose-600" : "text-slate-700"}`}>{Math.round(-globalFundsSummary.sharedExpense).toLocaleString("zh-CN")}</span>
-                <span className="whitespace-nowrap pr-1 text-right text-[10px] font-bold leading-none text-slate-700">{Math.round(globalFundsSummary.withdrawal).toLocaleString("zh-CN")}</span>
               </div>
             </footer>}
           </div>
@@ -9018,38 +9058,66 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       {showTotalNetProfitDetail && (
         <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/40 px-5" role="dialog" aria-modal="true" aria-label="总收益归因报告">
           <div className="max-h-[88vh] w-full max-w-sm overflow-y-auto rounded bg-white p-5 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-base font-semibold text-slate-900">总收益归因报告</div>
-                <div className="mt-1 text-xs text-slate-500">{totalProfitAttribution.targetLabel} · 已实现收益</div>
+            <div className="flex justify-end">
+              <div data-html2canvas-ignore="true" className="flex shrink-0 items-center gap-1">
+                <OrderCardImageDownload
+                  targetRef={totalProfitAttributionExportRef}
+                  currentUser={me as any}
+                  orderNo={totalProfitAttribution.targetLabel}
+                  filenamePrefix="T+0总收益归因"
+                  previewTitle="总收益归因报告图片预览"
+                  previewHint="包含收益构成、已实现收益与最近提现"
+                  color="#F37021"
+                  outerPadding={6}
+                  captureFullContent
+                  fullContentHorizontalBleed={0}
+                  exportBackground="#FFFFFF"
+                  variant="bare"
+                  buttonLabel="下载"
+                />
+                <button type="button" onClick={() => {
+                  setShowTotalNetProfitDetail(false);
+                }} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭总收益归因报告">
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-              <button type="button" onClick={() => {
-                setShowTotalNetProfitDetail(false);
-              }} className="rounded p-1 text-slate-400 active:scale-90" aria-label="关闭总收益归因报告">
-                <X className="h-5 w-5" />
-              </button>
             </div>
 
-            <section className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-              <div className="bg-gradient-to-br from-slate-50 via-white to-rose-50/45 px-4 py-3.5 text-left">
-                <div className="text-[11px] font-semibold text-slate-500">总收益</div>
-                <div className={`mt-1.5 whitespace-nowrap text-[26px] font-bold leading-none tabular-nums ${totalNetProfitClass}`}>{formatPrice(totalProfitAttribution.total)} <span className="text-xs font-semibold opacity-70">U</span></div>
+            <div ref={totalProfitAttributionExportRef} className="mt-1.5">
+            <section className="overflow-hidden rounded-xl border border-slate-200">
+              <div className="overflow-hidden bg-gradient-to-br from-slate-50 via-white to-rose-50/45 text-left">
+                <div className={`grid ${totalProfitAttribution.hasIndividualScope && latestWithdrawalLog ? "grid-cols-[minmax(0,1fr)_132px]" : "grid-cols-1"} items-stretch`}>
+                  <div className="min-w-0 px-4 py-3.5">
+                    <div className="flex min-w-0 items-baseline gap-1.5 text-[11px] font-semibold text-slate-500"><span className="shrink-0">总收益</span>{totalProfitAttribution.hasIndividualScope && <span className="min-w-0 truncate font-medium text-slate-400">· {totalProfitAttribution.targetLabel}</span>}</div>
+                    <div className={`mt-1.5 whitespace-nowrap text-[clamp(21px,6.5vw,26px)] font-bold leading-none tabular-nums ${totalNetProfitClass}`}>{formatPrice(totalProfitAttribution.total)} <span className="text-xs font-semibold opacity-70">U</span></div>
+                  </div>
+                  {totalProfitAttribution.hasIndividualScope && latestWithdrawalLog && <aside className="min-w-0 border-l border-[#DC6218] bg-[#F37021] px-2.5 py-2.5 text-left tabular-nums">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1 whitespace-nowrap text-[11px] font-bold leading-none tracking-[0.02em] text-slate-950"><span>最近一笔提现</span><span aria-hidden="true" className="text-[14px] leading-none">🎉</span></div>
+                      <div className="mt-1.5 flex h-7 items-baseline rounded-[3px] bg-white px-1.5 pt-[5px] shadow-[0_1px_0_rgba(255,255,255,0.45)]">
+                        <span className="text-[clamp(18px,5.25vw,22px)] font-extrabold leading-none tracking-[-0.045em] text-slate-950">{formatPrice(latestWithdrawalLog.amount)}</span>
+                        <span className="ml-1 text-[9px] font-bold leading-none text-slate-700">u</span>
+                      </div>
+                      <div className="mt-1.5 whitespace-nowrap text-[10px] font-semibold leading-none text-slate-950/70">{formatPayoutRecordedBeijingTime(latestWithdrawalLog.createdAt)}</div>
+                    </div>
+                  </aside>}
+                </div>
               </div>
               <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 bg-white text-center tabular-nums">
                 <div className="min-w-0 overflow-hidden px-[clamp(5px,1.8vw,9px)] py-3">
-                  <div className="whitespace-nowrap text-[10px] font-medium text-slate-500">订单收益</div>
-                  <div className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(9px,3vw,15px)] font-bold leading-none ${totalProfitAttribution.ownTradingNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(totalProfitAttribution.ownTradingNetProfit)} <span className="text-[8px] font-medium tracking-normal">U</span></div>
-                  <div className="mt-1 whitespace-nowrap text-[9px] text-slate-400">{totalProfitAttribution.ownTradingCount} 笔已平仓</div>
+                  <div className="whitespace-nowrap text-[11px] font-medium text-slate-500">订单收益</div>
+                  <div className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(10px,3.2vw,16px)] font-bold leading-none ${totalProfitAttribution.ownTradingNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(totalProfitAttribution.ownTradingNetProfit)} <span className="text-[9px] font-medium tracking-normal">U</span></div>
+                  <div className="mt-1 whitespace-nowrap text-[10px] text-slate-400">{totalProfitAttribution.ownTradingCount} 笔已平仓</div>
                 </div>
                 <div className="min-w-0 overflow-hidden px-[clamp(5px,1.8vw,9px)] py-3">
-                  <div className="whitespace-nowrap text-[10px] font-medium text-slate-500">分佣收益</div>
-                  <div className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(9px,3vw,15px)] font-bold leading-none ${totalProfitAttribution.commissionShareNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(totalProfitAttribution.commissionShareNetProfit)} <span className="text-[8px] font-medium tracking-normal">U</span></div>
-                  <div className="mt-1 whitespace-nowrap text-[9px] text-slate-400">{totalProfitAttribution.commissionShareCount} 笔分佣收益</div>
+                  <div className="whitespace-nowrap text-[11px] font-medium text-slate-500">分佣收益</div>
+                  <div className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(10px,3.2vw,16px)] font-bold leading-none ${totalProfitAttribution.commissionShareNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{Math.abs(totalProfitAttribution.commissionShareNetProfit) < 0.000001 ? "0.00" : formatPrice(totalProfitAttribution.commissionShareNetProfit)} <span className="text-[9px] font-medium tracking-normal">U</span></div>
+                  <div className="mt-1 whitespace-nowrap text-[10px] text-slate-400">{totalProfitAttribution.commissionShareCount} 笔分佣收益</div>
                 </div>
                 <div className="min-w-0 overflow-hidden px-[clamp(5px,1.8vw,9px)] py-3">
-                  <div className="whitespace-nowrap text-[10px] font-medium text-slate-500">共享收益</div>
-                  <div className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(9px,3vw,15px)] font-bold leading-none ${totalProfitAttribution.sharedIncomeNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(totalProfitAttribution.sharedIncomeNetProfit)} <span className="text-[8px] font-medium tracking-normal">U</span></div>
-                  <div className="mt-1 whitespace-nowrap text-[9px] text-slate-400">{totalProfitAttribution.sharedIncomeCount} 笔共享收益</div>
+                  <div className="whitespace-nowrap text-[11px] font-medium text-slate-500">共享收益</div>
+                  <div className={`mt-1 whitespace-nowrap tracking-[-0.055em] text-[clamp(10px,3.2vw,16px)] font-bold leading-none ${totalProfitAttribution.sharedIncomeNetProfit >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatPrice(totalProfitAttribution.sharedIncomeNetProfit)} <span className="text-[9px] font-medium tracking-normal">U</span></div>
+                  <div className="mt-1 whitespace-nowrap text-[10px] text-slate-400">{totalProfitAttribution.sharedIncomeCount} 笔共享收益</div>
                 </div>
               </div>
             </section>
@@ -9119,7 +9187,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
               ) : <div className="px-3 py-5 text-center text-xs text-slate-400">当前筛选范围暂无已实现收益记录</div>}
               {totalProfitAttributionDetailEntries.length > 0 && totalRevenueDetailTotalPages > 1 && (
-                <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-3 py-2 text-[11px] tabular-nums">
+                <div data-card-export-hide="true" className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-3 py-2 text-[11px] tabular-nums">
                   <button
                   type="button"
                   disabled={totalRevenueDetailPage <= 1}
@@ -9140,8 +9208,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </div>
               )}
             </div>
+            </div>
 
-            <button type="button" onClick={() => setShowTotalNetProfitDetail(false)} className="mt-5 h-11 w-full rounded bg-[#1a56db] text-sm font-semibold text-white active:scale-[0.99]">知道了</button>
+            <button data-html2canvas-ignore="true" type="button" onClick={() => setShowTotalNetProfitDetail(false)} className="mt-5 h-11 w-full rounded bg-[#1a56db] text-sm font-semibold text-white active:scale-[0.99]">知道了</button>
           </div>
         </div>
       )}

@@ -19,6 +19,8 @@ interface OrderCardImageDownloadProps {
   color?: string;
   outerPadding?: number;
   captureFullContent?: boolean;
+  /** 长内容截图额外保留的横向安全留白；默认16px，传0可实现四边等宽。 */
+  fullContentHorizontalBleed?: number;
   exportBackground?: string;
   /** 卡片页眉使用无圆形容器的纯下载箭头；其他入口保持默认样式。 */
   variant?: "default" | "bare";
@@ -143,6 +145,7 @@ function createExactSnapshotContainer(
   watermarkText: string,
   outerPadding: number,
   measureAfterAssets: boolean,
+  fullContentHorizontalBleed: number,
   exportBackground?: string,
   watermarkOpacity = 0.07,
 ) {
@@ -150,7 +153,10 @@ function createExactSnapshotContainer(
   const sourceFullHeight = Math.max(rect.height, target.scrollHeight);
   // 全内容账页导出额外保留水平出血区：移动端金额、分隔线或阴影即使贴近边缘，
   // 也不会在最终图片的左右两侧被画布裁掉。
-  const horizontalPadding = outerPadding + (measureAfterAssets ? 16 : 0);
+  const resolvedHorizontalBleed = Number.isFinite(fullContentHorizontalBleed)
+    ? Math.max(0, fullContentHorizontalBleed)
+    : 16;
+  const horizontalPadding = outerPadding + (measureAfterAssets ? resolvedHorizontalBleed : 0);
   const verticalPadding = outerPadding;
   const clonedTarget = target.cloneNode(true) as HTMLElement;
   copyRenderedStyles(target, clonedTarget);
@@ -326,6 +332,7 @@ export function OrderCardImageDownload({
   color = "#64748B",
   outerPadding = 16,
   captureFullContent = false,
+  fullContentHorizontalBleed = 16,
   exportBackground,
   variant = "default",
   watermarkMode = "user-and-time",
@@ -365,7 +372,7 @@ export function OrderCardImageDownload({
     let snapshotContainer: HTMLElement | null = null;
 
     try {
-      const snapshot = createExactSnapshotContainer(target, watermarkText, outerPadding, captureFullContent, exportBackground, watermarkOpacity);
+      const snapshot = createExactSnapshotContainer(target, watermarkText, outerPadding, captureFullContent, fullContentHorizontalBleed, exportBackground, watermarkOpacity);
       snapshotContainer = snapshot.container;
       await waitForSnapshotAssets(snapshot.clonedTarget);
       const snapshotSize = snapshot.initialSize ?? snapshot.finalizeSnapshot();
