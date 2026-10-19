@@ -1405,6 +1405,13 @@ export default function LedgerAAInitialBalance() {
             ? null
             : marketValue - Number(lot.currentQuantity || 0) * Number(lot.unitCost || 0);
           const marketPnlCny = marketPnl === null ? null : marketPnl * (isUsStock ? usdCnyRate : 1);
+          const marketQuoteLabel = lot.marketQuoteSource === 'intraday'
+            ? '盘中最新价'
+            : lot.marketQuoteSource === 'close'
+              ? '盘尾价'
+              : lot.marketQuoteSource === 'reference'
+                ? '登记参考价'
+                : '等待行情';
           const tradeTimestamp = formatTradeTime(lot.actualTradedAt || lot.openedAt);
           const totalDraftPercentage = (matrix.members as any[]).reduce((total: number, member: any) => {
             const draftPercentage = stockParticipationDrafts[`${lotId}:${member.userId}`]?.percentage;
@@ -1523,7 +1530,7 @@ export default function LedgerAAInitialBalance() {
                 <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>持仓</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{formatNumber(lot.initialQuantity, 4)} 股</b><span className="invisible text-[9px] leading-4">占位</span></div>
                 <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>开仓均价</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(Number(lot.unitCost || 0), isUsStock, 4)}</b></div>
                 <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>开仓市值</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(holdingTotal, isUsStock)}</b></div>
-                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>当前价格</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(lot.marketPrice === null || lot.marketPrice === undefined ? null : Number(lot.marketPrice), isUsStock, 4)}</b></div>
+                <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>{marketQuoteLabel}</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(lot.marketPrice === null || lot.marketPrice === undefined ? null : Number(lot.marketPrice), isUsStock, 4)}</b></div>
                 <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>当前市值</span><b className="mt-0.5 text-xs font-semibold text-gray-700">{renderStockValue(marketValue, isUsStock)}</b></div>
                 <div className="flex min-h-[58px] flex-col items-center justify-center bg-[#F8FAFB] px-1 py-1 text-center text-gray-500"><span>盈亏</span><b className="mt-0.5 text-xs font-semibold" style={{ color: marketPnlCny === null ? '#6B7280' : marketPnlCny >= 0 ? '#D32F2F' : '#2E7D32' }}>{renderStockPnl(marketPnl, isUsStock)}</b></div>
                 <div className="whitespace-nowrap bg-[#F8FAFB] px-0.5 py-1.5 text-center text-gray-500">可分配 <b className="ml-0.5 font-semibold text-gray-700">{formatNumber(lot.availableForParticipation, 4)} 股</b> <span className="text-gray-400">{formatNumber(availablePercent, 2)}%</span></div>
@@ -1827,7 +1834,13 @@ export default function LedgerAAInitialBalance() {
   }, [ledgerId, activeStockParticipationCategoryId, defaultStockParticipationCategoryId]);
   const { data: stockParticipationMatrix, error: stockParticipationError, refetch: refetchStockParticipationMatrix } = trpc.ledger.getStockLotParticipationMatrix.useQuery(
     { ledgerId: 37, categoryId: Number(activeStockParticipationCategoryId || 0) },
-    { enabled: ledgerId === 37 && !!activeStockParticipationCategoryId },
+    {
+      enabled: ledgerId === 37 && !!activeStockParticipationCategoryId,
+      // 盘中报价由服务端每五分钟落库；管理页同步按此节拍读取，不直接请求第三方行情。
+      refetchInterval: 300_000,
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true,
+    },
   );
   const setStockParticipationMutation = trpc.ledger.setStockLotParticipation.useMutation({
     // 单一批次的多位成员在同一个「保存」动作中顺序提交；全部成功后再统一刷新，避免中途重绘覆盖草稿。

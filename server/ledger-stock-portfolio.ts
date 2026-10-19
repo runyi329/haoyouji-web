@@ -1760,11 +1760,15 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
      ORDER BY p.assigned_at ASC, p.id ASC`,
     [categoryId],
   );
-  const [storedQuotes, referenceQuotes] = await Promise.all([
-    getLatestQuotes(categoryId, (lotRows as any[]).map((row) => String(row.symbol))),
+  const symbols = (lotRows as any[]).map((row) => String(row.symbol));
+  // 初始标签管理必须与主组合共用同一报价优先级：盘中最新价 → 盘尾价 → 登记参考价。
+  // 新开仓在下一轮盘中刷新前才会暂时使用登记参考价，不能让旧盘尾或登记价长期占用当前价。
+  const [referenceQuotes, storedQuotes, intradayQuotes] = await Promise.all([
     getLatestReferenceQuotes(categoryId),
+    getLatestQuotes(categoryId, symbols),
+    getLatestIntradayQuotes(categoryId, symbols),
   ]);
-  const quoteMap = { ...referenceQuotes, ...storedQuotes };
+  const quoteMap = mergeLatestQuoteMaps(referenceQuotes, storedQuotes, intradayQuotes);
   const byLot = new Map<number, any[]>();
   for (const row of participationRows as any[]) {
     const lotId = Number(row.lot_id);
@@ -1782,7 +1786,16 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
     const initialQuantity = numberValue(row.initial_quantity);
     const globallySoldQuantity = numberValue(row.globally_sold_quantity);
     const currentQuantity = Math.max(0, initialQuantity - globallySoldQuantity);
-    const marketPrice = quoteMap[String(row.symbol)]?.price ?? null;
+    const symbol = String(row.symbol);
+    const marketQuote = quoteMap[symbol];
+    const marketPrice = marketQuote?.price ?? null;
+    const marketQuoteSource = marketQuote === intradayQuotes[symbol]
+      ? 'intraday'
+      : marketQuote === storedQuotes[symbol]
+        ? 'close'
+        : marketQuote === referenceQuotes[symbol]
+          ? 'reference'
+          : 'unavailable';
     const participations = byLot.get(Number(row.id)) || [];
     const activeAllocatedQuantity = participations.reduce((total, item) => total + item.remainingQuantity, 0);
     return {
@@ -1792,6 +1805,7 @@ async function getStockLotParticipationMatrixInternal(categoryId: number) {
       unitCost: numberValue(row.unit_cost), openingReferencePrice: numberValue(row.opening_reference_price) || null,
       note: String(row.note || ""),
       initialQuantity, globallySoldQuantity, currentQuantity, marketPrice,
+      marketQuoteSource, marketQuoteDate: marketQuote?.priceDate || null, marketQuoteUpdatedAt: marketQuote?.updatedAt || null,
       availableForParticipation: Math.max(0, currentQuantity - activeAllocatedQuantity),
       status: currentQuantity > EPSILON ? "active" as const : "closed" as const,
       participations: participations.map((item) => ({
