@@ -738,7 +738,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [showPreviewCollateralInfo, setShowPreviewCollateralInfo] = useState(false); // 预览卡片-担保缺口说明
   const [showPreviewMarginInfo, setShowPreviewMarginInfo] = useState(false); // 预览卡片-保证金率说明
   const [showPreviewInterestTip, setShowPreviewInterestTip] = useState(false); // 预览卡片-利息说明
-  const [previewViewMode, setPreviewViewMode] = useState<'order' | 'card'>('order'); // 预览模式切换
+  const [previewViewMode] = useState<'order' | 'card'>('order'); // 编辑预览统一使用订单模式
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY'];
 
   // ===== 订单参与者 =====
@@ -1069,8 +1069,16 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     || null;
   useEffect(() => {
     if (!editingOrder?.id || !activeJointOrderTarget) return;
+    const targetUserId = Number(activeJointOrderTarget.userId || 0);
+    const embeddedSnapshotUserId = Number(
+      (editingOrder as any)?._jointSnapshotUserId
+      ?? (editingOrder as any)?.participantInfo?.userId
+      ?? (editingOrder as any)?.participantInfo?.user_id
+      ?? 0,
+    );
+    // 优先读取所选拥有者自己的快照；主订单附带的分段仅在明确属于该用户时才可作为兜底。
     const rawSegments = activeJointOrderTarget.orderSnapshot?.joint_order_segments
-      ?? (Number(activeJointOrderTarget.userId) === Number((editingOrder as any)?.participantInfo?.userId || (editingOrder as any)?.participantInfo?.user_id || 0)
+      ?? (targetUserId > 0 && embeddedSnapshotUserId === targetUserId
         ? (editingOrder as any).joint_order_segments
         : []);
     const sourceSignature = JSON.stringify(rawSegments || []);
@@ -1078,9 +1086,14 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     if (jointOrderSegmentsDirty || jointOrderSegmentsLoadedRef.current === loadKey) return;
     jointOrderSegmentsLoadedRef.current = loadKey;
     setJointOrderTargetUserId(activeJointOrderTarget.userId);
-    setJointOrderSegments(readJointOrderSegments(rawSegments));
-  }, [editingOrder?.id, activeJointOrderTarget, jointOrderSegmentsDirty, (editingOrder as any)?.joint_order_segments]);
+    setJointOrderSegments(readJointOrderSegments(rawSegments).filter((segment: any) => {
+      const ownerUserId = Number(segment?.owner_user_id || 0);
+      return !ownerUserId || ownerUserId === targetUserId;
+    }));
+  }, [editingOrder?.id, activeJointOrderTarget, jointOrderSegmentsDirty, (editingOrder as any)?.joint_order_segments, (editingOrder as any)?._jointSnapshotUserId, (editingOrder as any)?.participantInfo]);
   const selectJointOrderTarget = (userId: number) => {
+    // 立即清空旧拥有者的局部草稿，避免在 effect 装载新快照前出现串读闪屏。
+    setJointOrderSegments([]);
     setJointOrderTargetUserId(userId);
     setJointOrderSegmentsDirty(false);
     jointOrderSegmentsLoadedRef.current = null;
@@ -2543,11 +2556,23 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     setPersonalHeaderDraft(typeof (order as any).personal_header_label === 'string' ? (order as any).personal_header_label : '');
     // 联合子段始终从固定区域所选用户的个人快照恢复；首位拥有者同样独立保存。
     const initialJointTargetId = Number((order as any)?.participantInfo?.userId || (order as any)?.participantInfo?.user_id || order.user_id || 0);
+    const embeddedSnapshotUserId = Number(
+      (order as any)?._jointSnapshotUserId
+      ?? (order as any)?.participantInfo?.userId
+      ?? (order as any)?.participantInfo?.user_id
+      ?? 0,
+    );
+    const initialJointSegments = embeddedSnapshotUserId === initialJointTargetId
+      ? readJointOrderSegments((order as any).joint_order_segments).filter((segment: any) => {
+          const ownerUserId = Number(segment?.owner_user_id || 0);
+          return !ownerUserId || ownerUserId === initialJointTargetId;
+        })
+      : [];
     setJointOrderTargetUserId(initialJointTargetId || null);
     setJointOrderPanelExpanded(false);
     setJointOrderSegmentsDirty(false);
     jointOrderSegmentsLoadedRef.current = null;
-    setJointOrderSegments(readJointOrderSegments((order as any).joint_order_segments));
+    setJointOrderSegments(initialJointSegments);
     // 加载期权信息
     try {
       const oi = order.option_info;
@@ -5873,19 +5898,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${collateralRiskFormula}-${String(displayConfig.floatPnl)}-${String(displayConfig.periodInterestTotal)}-${String(displayConfig.periodInterestTotalPeriod)}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}-${JSON.stringify((editingOrder as any)?.wallet_collateral_contributors || [])}-${JSON.stringify(previewJointOrderSegments)}`;
                 return (
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-xs font-medium text-gray-400">实时预览</div>
-                      {/* 模式切换 Tab */}
-                      <div className="flex items-center gap-1 p-0.5 rounded-full bg-gray-100">
-                        {(['order', 'card'] as const).map(mode => (
-                          <button key={mode} type="button"
-                            onClick={() => setPreviewViewMode(mode)}
-                            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${previewViewMode === mode ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                            {mode === 'card' ? '卡片模式' : '订单模式'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    <div className="mb-2 text-xs font-medium text-gray-400">实时预览</div>
                     {previewViewMode === 'order' || previewHasJointOrderSegments || (formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions') ? (
                       <FunderOrderCard
                         key={previewDisplayKey}

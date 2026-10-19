@@ -2441,8 +2441,8 @@ export default function CryptoPrediction() {
     () => financeOrderSearch.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean),
     [financeOrderSearch],
   );
-  // 融资付息视图模式：卡片模式（银色铭牌）/ 订单模式（原始）
-  const [financeViewMode, setFinanceViewMode] = useState<'card' | 'order'>('card');
+  // 融资付息统一使用订单模式，避免同一订单在不同展示模式下出现不同信息口径。
+  const [financeViewMode] = useState<'card' | 'order'>('order');
   // 共享担保弹窗不得另起一套简化公式；直接复用每张订单卡已经展示的最终担保缺口。
   const [financeExposureGapMap, setFinanceExposureGapMap] = useState<Record<number, number>>({});
   const handleFinanceExposureGapChange = useCallback((orderId: number, gap: number) => {
@@ -2745,51 +2745,6 @@ export default function CryptoPrediction() {
             >
               + 新建订单
             </button>
-          </div>
-        )}
-        {/* 融资付息视图切换：记账图 / 订单图 */}
-        {tab === 'finance' && (
-          <div
-            style={{
-              background: 'rgba(255,255,255,0.18)',
-              borderRadius: '999px',
-              padding: '2px',
-              position: 'relative',
-              cursor: 'pointer',
-              userSelect: 'none',
-              width: '160px',
-              height: '26px',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-            onClick={() => setFinanceViewMode(financeViewMode === 'card' ? 'order' : 'card')}
-          >
-            {/* 滑动块 */}
-            <div style={{
-              position: 'absolute',
-              top: '2px',
-              left: financeViewMode === 'card' ? '2px' : '80px',
-              width: '78px',
-              height: '22px',
-              borderRadius: '999px',
-              background: '#fff',
-              transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1)',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
-            }} />
-            <span style={{
-              position: 'relative', zIndex: 1,
-              fontSize: '11px', fontWeight: 500,
-              color: financeViewMode === 'card' ? '#1A56DB' : 'rgba(255,255,255,0.8)',
-              transition: 'color 0.22s',
-              width: '80px', lineHeight: '22px', textAlign: 'center', display: 'inline-block',
-            }}>卡片模式</span>
-            <span style={{
-              position: 'relative', zIndex: 1,
-              fontSize: '11px', fontWeight: 500,
-              color: financeViewMode === 'order' ? '#1A56DB' : 'rgba(255,255,255,0.8)',
-              transition: 'color 0.22s',
-              width: '80px', lineHeight: '22px', textAlign: 'center', display: 'inline-block',
-            }}>订单模式</span>
           </div>
         )}
       </div>

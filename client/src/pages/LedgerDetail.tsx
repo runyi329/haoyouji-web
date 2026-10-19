@@ -2923,9 +2923,8 @@ export default function LedgerDetail() {
   // 涨跌方向计算：用 localStorage 存储上一次价格，刷新页面后第一次加载就能显示筜头
   const PREV_PRICE_CACHE_KEY = `funder_prev_prices_${ledgerId}`;
   const [funderPriceDirection, setFunderPriceDirection] = useState<Record<string, 'up' | 'down' | 'same'>>({});
-  // 资产订单视图模式：按账本和当前查看用户隔离保存，避免不同用户或账本之间互相覆盖。
-  const funderViewModeStorageKey = `funder_view_mode_${ledgerId}_${viewAsUserId ?? (user as any)?.id ?? 'anonymous'}`;
-  const [funderViewMode, setFunderViewMode] = useState<'card' | 'order'>('card');
+  // 融资付息统一使用订单模式，前台与后台不再提供卡片模式切换。
+  const [funderViewMode] = useState<'card' | 'order'>('order');
   // 仅隐藏当前浏览器会话中的合作金额显示，不影响真实余额、订单或其他用户的数据。
   const [hideFunderSummaryAmounts, setHideFunderSummaryAmounts] = useState(false);
   // 订单卡是担保缺口的唯一完整计算源。共享担保弹窗按订单 ID 复用这些最终结果，
@@ -2936,19 +2935,6 @@ export default function LedgerDetail() {
     if (!Number.isFinite(canonicalOrderId) || !Number.isFinite(gap)) return;
     setFunderExposureGapMap(previous => previous[canonicalOrderId] === gap ? previous : { ...previous, [canonicalOrderId]: gap });
   }, []);
-  useEffect(() => {
-    try {
-      const savedMode = localStorage.getItem(funderViewModeStorageKey);
-      setFunderViewMode(savedMode === 'order' ? 'order' : 'card');
-    } catch {
-      setFunderViewMode('card');
-    }
-  }, [funderViewModeStorageKey]);
-  const toggleFunderViewMode = () => {
-    const nextMode = funderViewMode === 'card' ? 'order' : 'card';
-    setFunderViewMode(nextMode);
-    try { localStorage.setItem(funderViewModeStorageKey, nextMode); } catch {}
-  };
   const [funderOrderTab, setFunderOrderTab] = useState<'mine' | 'participant' | 't0'>('mine');
   useEffect(() => {
     if (funderOrderTab === 't0' && !memberHasT0Orders) setFunderOrderTab('mine');
@@ -5767,50 +5753,6 @@ export default function LedgerDetail() {
             <div className="flex items-center mb-3">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
               <span className="text-xs text-gray-400 ml-1.5">共 {funderVisibleOrders.length} 笔</span>
-              {/* 左右拨动开关 */}
-              <div
-                className="ml-auto flex items-center"
-                style={{
-                  background: '#E5E7EB',
-                  borderRadius: '999px',
-                  padding: '2px',
-                  position: 'relative',
-                  cursor: 'pointer',
-                  userSelect: 'none',
-                  width: '160px',
-                  height: '26px',
-                }}
-                onClick={toggleFunderViewMode}
-              >
-                {/* 滑动块 */}
-                <div style={{
-                  position: 'absolute',
-                  top: '2px',
-                  left: funderViewMode === 'card' ? '2px' : '80px',
-                  width: '78px',
-                  height: '22px',
-                  borderRadius: '999px',
-                  background: '#1A56DB',
-                  transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1)',
-                  boxShadow: '0 1px 4px rgba(26,86,219,0.25)',
-                }} />
-                {/* 左标签：卡片模式 */}
-                <span style={{
-                  position: 'relative', zIndex: 1,
-                  fontSize: '11px', fontWeight: 500,
-                  color: funderViewMode === 'card' ? '#fff' : '#9CA3AF',
-                  transition: 'color 0.22s',
-                  width: '80px', lineHeight: '22px', textAlign: 'center', display: 'inline-block',
-                }}>卡片模式</span>
-                {/* 右标签：订单模式 */}
-                <span style={{
-                  position: 'relative', zIndex: 1,
-                  fontSize: '11px', fontWeight: 500,
-                  color: funderViewMode === 'order' ? '#fff' : '#9CA3AF',
-                  transition: 'color 0.22s',
-                  width: '80px', lineHeight: '22px', textAlign: 'center', display: 'inline-block',
-                }}>订单模式</span>
-              </div>
             </div>
             {funderOrdersLoading ? (
               /* 骨架屏加载动画 */

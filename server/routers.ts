@@ -22337,8 +22337,12 @@ ${klinesSummary}
           }
         }
         const ordersWithPaid = ordersWithParticipantView.map((o: any) => {
-          // 已明确指定当前拥有者个人视图时，其自身快照优先；只有默认主订单卡才补齐分段元数据。
-          const jointMeta = o.participantInfo ? null : jointOrderSnapshotMetaMap[Number(o.id)];
+          // 已明确指定当前拥有者个人视图时，其自身快照优先。
+          // 默认主订单也只能读取主订单拥有者自己的分段，绝不能把另一位拥有者的第二段借来展示。
+          const candidateJointMeta = o.participantInfo ? null : jointOrderSnapshotMetaMap[Number(o.id)];
+          const jointMeta = candidateJointMeta && Number(candidateJointMeta.userId) === Number(o.user_id)
+            ? candidateJointMeta
+            : null;
           return {
             ...o,
             ...(jointMeta ? {
