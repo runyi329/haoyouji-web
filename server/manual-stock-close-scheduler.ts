@@ -250,8 +250,8 @@ function millisecondsUntilNextBeijingClose(): number {
   const next = new Date(now);
   next.setUTCHours(7, 5, 0, 0);
   if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
-  // 周末不触发；节假日若没有日线，任务会保留上一笔盘尾快照而不覆盖。
-  while (next.getUTCDay() === 0 || next.getUTCDay() === 6) next.setUTCDate(next.getUTCDate() + 1);
+  // 37号标签按自然日统一结算，不因周末或海外市场休市跳过；休市时使用15:05
+  // 行情源可取得的最后有效价，保证人民币与美元仓位在同一时刻形成完整日结。
   return next.getTime() - now.getTime();
 }
 
