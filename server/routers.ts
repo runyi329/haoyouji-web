@@ -25466,7 +25466,6 @@ ${klinesSummary}
           }
         }
         if (updateCols.length === 0) return { success: true };
-        updateVals.push(input.id, input.ledgerId);
         // 使用 mysql2 直接连接执行（用 URL 解析避免密码含 @ 符号的问题）
         const mysql = await import('mysql2/promise');
         const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL || 'mysql://root:Miao@20190603@124.223.54.69:3306/crm_db';
@@ -25616,6 +25615,9 @@ ${klinesSummary}
           if (shouldSyncParticipantSnapshot) await ensureFunderParticipantSnapshotColumns();
           if (shouldSyncParticipantSnapshot) await conn.beginTransaction();
 
+          // 结清快照在上方异步生成并追加到 updateCols/updateVals。订单定位参数必须
+          // 最后再追加，确保 JSON 快照永远不会错位绑定到 WHERE 中的数值列。
+          updateVals.push(input.id, input.ledgerId);
           await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
           if (input.ledgerId === 52 && input.status === 'settled') {
             await dbMultiAssetWallet.releaseWalletCollateralLocksForOrder({
