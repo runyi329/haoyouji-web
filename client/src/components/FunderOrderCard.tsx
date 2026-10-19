@@ -12,7 +12,6 @@ import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, Chevr
 import { toast } from "sonner";
 import { formatFunderAnnualRate } from "@/lib/funderAnnualRate";
 import { OrderCardImageDownload } from "@/components/OrderCardImageDownload";
-import { SelfFundedOptionPnlDisclosure } from "@/components/SelfFundedOptionPnlDisclosure";
 import { FinancedOptionPnlDisclosure } from "@/components/FinancedOptionPnlDisclosure";
 import {
   getTagMarginStockMarketValue,
@@ -92,10 +91,6 @@ export function getFunderCollateralRiskFormulaForDisplay(order: any): 'principal
   try {
     const rawConfig = order?.display_config;
     const config = rawConfig ? (typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig) : {};
-    const isSelfFunded = config?.assetFundingType === 'self'
-      || config?.selfFundedAsset === true
-      || config?.selfFundedAsset === 'true';
-    if (isSelfFunded) return 'floating_pnl';
     return config?.collateralRiskFormula === 'principal_coverage'
       || config?.collateralRiskFormula === 'floating_pnl'
       || config?.collateralRiskFormula === 'full_value'
@@ -1060,8 +1055,7 @@ export function FunderOrderCard({
     ).map((sourceOrder: any) => [Number(sourceOrder.id), sourceOrder])
   );
   // 第③项的每笔持仓差额由同一张订单卡回传：订单卡最终缺口中已包含该笔担保物，
-  // 因此普通融资订单要扣除本笔担保物（第④项统一加回）；自有资金期权不叠加担保物，
-  // 其订单卡最终值就是实时合约价值，必须原样使用。
+  // 因此统一扣除本笔担保物，并在第④项统一加回；资金属性仅影响展示标签。
   const sharedOwnerOrders = (Array.isArray((sharedPoolInfo as any)?.orders)
     ? (sharedPoolInfo as any).orders
     : []
@@ -1069,21 +1063,13 @@ export function FunderOrderCard({
     const orderId = Number(summaryOrder.orderId ?? summaryOrder.id);
     const sourceOrder = sharedOrderSourcesById.get(orderId) ?? null;
     const finalGap = readConfirmedExposureGap(popupFinalGapByOrderId[orderId]);
-    let isSelfFundedOption = false;
-    try {
-      const config = sourceOrder?.display_config
-        ? (typeof sourceOrder.display_config === 'string' ? JSON.parse(sourceOrder.display_config) : sourceOrder.display_config)
-        : {};
-      isSelfFundedOption = sourceOrder?.asset_type === 'crypto_option'
-        && (config?.assetFundingType === 'self' || config?.selfFundedAsset === true || config?.selfFundedAsset === 'true');
-    } catch {}
     const collateralValue = Number(summaryOrder.collateralValue ?? 0);
     return {
       ...summaryOrder,
       orderId,
       sourceOrder,
       finalGap,
-      holdingGap: finalGap === null ? null : (isSelfFundedOption ? finalGap : finalGap - (Number.isFinite(collateralValue) ? collateralValue : 0)),
+      holdingGap: finalGap === null ? null : finalGap - (Number.isFinite(collateralValue) ? collateralValue : 0),
     };
   }).filter((candidate: any) => Number.isFinite(candidate.orderId));
   const sharedHoldingGapReady = sharedOwnerOrders.length > 0
@@ -1861,8 +1847,6 @@ export function FunderOrderCard({
   const hasExplicitPrincipalLentOut = (order.principal_lent_out === 1 || order.principal_lent_out === true)
     && assetFundingType !== 'self';
   const primaryAmountLabel = hasExplicitPrincipalLentOut ? '借出本金' : assetFundingType === 'self' ? '自有资金' : '融资金额';
-  // 自有资产期权的浮盈定义为当前合约价值，不将自有权利金重复作为融资成本扣除。
-  const isSelfFundedOption = isOptionOrder && assetFundingType === 'self';
   const calculatedFinancingDisplayAmount = amountCurrency === 'USDT'
     ? financingAmountUsdt
     : amountCurrency === 'CNY'
@@ -2239,7 +2223,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   const spotBuyValueUsdt = qty > 0 && quotedPriceUsdt > 0 ? qty * quotedPriceUsdt : totalU;
   const floatPnlBase = isOptionOrder ? optionPremiumTotal : spotBuyValueUsdt;
   const floatPnl = isOptionOrder
-    ? (isSelfFundedOption ? optionCurrentValue : optionFloatPnl)
+    ? optionFloatPnl
     : (currentValueForRisk !== null && floatPnlBase !== null && floatPnlBase > 0
       ? (isShort ? floatPnlBase - currentValueForRisk : currentValueForRisk - floatPnlBase)
       : null);
@@ -2285,14 +2269,11 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   // “担保−买入价值”始终扣真实买入价值，不能将计息/融资本金误作买入成本。
   const principalLentOutValueForRisk = collateralGapBaseForRisk;
   const optionExposure = isOptionOrder
-    ? (assetFundingType === 'self'
-      // 自有资金期权不需要扣除历史买入成本，也不叠加订单利息或外部担保物。
-      ? optionCurrentValue
-      : usesPrincipalCoverageFormula
-        ? (combinedCollateralValueU === null ? null : combinedCollateralValueU - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
-        : usesFloatingPnlFormula
-          ? (combinedCollateralValueU === null || formulaFloatingPnlU === null ? null : combinedCollateralValueU + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
-          : -principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
+    ? (usesPrincipalCoverageFormula
+      ? (combinedCollateralValueU === null ? null : combinedCollateralValueU - principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
+      : usesFloatingPnlFormula
+        ? (combinedCollateralValueU === null || formulaFloatingPnlU === null ? null : combinedCollateralValueU + formulaFloatingPnlU - accruedForRisk + paidInterestForRisk)
+        : -principalLentOutValueForRisk - accruedForRisk + paidInterestForRisk)
     : null;
   const exposure = isOptionOrder
     ? optionExposure
@@ -2887,14 +2868,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                     <span className="font-medium text-gray-400">{isManualStockPnlSource ? (manualStockCloseQuery.isLoading ? '读取股票报价...' : '等待股票报价') : (_pnlTagSummary ? '暂无37号数据' : '加载37号数据...')}</span>
                   )
                 ) : floatPnl !== null ? (
-                  isSelfFundedOption && optionCurrentValue !== null ? (
-                    <SelfFundedOptionPnlDisclosure
-                      optionMarkPrice={optionMarkPrice}
-                      quantity={optionContractQty}
-                      currentValue={optionCurrentValue}
-                      color="#DC2626"
-                    />
-                  ) : isOptionOrder && optionCurrentValue !== null && optionPremiumTotal !== null && optionFloatPnl !== null ? (
+                  isOptionOrder && optionCurrentValue !== null && optionPremiumTotal !== null && optionFloatPnl !== null ? (
                     <FinancedOptionPnlDisclosure
                       optionMarkPrice={optionMarkPrice}
                       quantity={optionContractQty}
@@ -4122,26 +4096,30 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                           <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
                             <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 担保缺口</div>
                             <div>{isOptionOrder
-                              ? (assetFundingType === 'self'
-                                ? '自有资金：期权实时价值（不扣历史权利金、不叠加利息或担保物）'
-                                : usesPrincipalCoverageFormula
-                                  ? '融资付息（担保差值）：担保物市值 − 买入价值 − 待结利息 + 已结利息'
-                                  : '融资付息（买入价值全额）：−买入价值 − 待结利息 + 已结利息（不计担保物）')
+                              ? (usesPrincipalCoverageFormula
+                                ? '担保差值：担保物市值 − 买入价值 − 待结利息 + 已结利息'
+                                : usesFloatingPnlFormula
+                                  ? '担保＋浮盈：担保物市值 + 期权浮动盈亏 − 待结利息 + 已结利息'
+                                  : '买入价值全额：−买入价值 − 待结利息 + 已结利息（不计担保物）')
                               : usesPrincipalCoverageFormula
                                 ? '担保物市值 − 买入价值 − 待结利息 + 已结利息（正数有余量，负数需补足）'
-                                : '−买入价值 − 待结利息 + 已结利息（全值缺口，不计担保物）'}</div>
+                                : usesFloatingPnlFormula
+                                  ? '担保物市值 + 浮动盈亏 − 待结利息 + 已结利息（正数有余量，负数需补足）'
+                                  : '−买入价值 − 待结利息 + 已结利息（全值缺口，不计担保物）'}</div>
                             <div className="mt-1 font-mono">
                               {exposure === null
                                 ? <span className="text-gray-400">期权标记价加载中...</span>
                                 : isOptionOrder
-                                ? (assetFundingType === 'self'
-                                  ? <span style={{ color: '#3B82F6' }}>= {(optionCurrentValue ?? 0).toFixed(2)}（期权实时价值） = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>+{exposure.toFixed(2)} u</strong></span>
-                                  : usesPrincipalCoverageFormula
-                                    ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)}（担保物） − {principalLentOutValueForRisk.toFixed(2)}（买入价值） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
+                                ? (usesPrincipalCoverageFormula
+                                  ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)}（担保物） − {principalLentOutValueForRisk.toFixed(2)}（买入价值） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
+                                  : usesFloatingPnlFormula
+                                    ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)}（担保物） + {(formulaFloatingPnlU ?? 0).toFixed(2)}（期权浮盈） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
                                     : <span style={{ color: '#3B82F6' }}>= −{principalLentOutValueForRisk.toFixed(2)}（买入价值） − {accruedForRisk.toFixed(2)} + {paidInterestForRisk.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>)
                                 : usesPrincipalCoverageFormula
                                 ? <span style={{ color: '#3B82F6' }}>= {riskValueInOrderCurrency(collateralValue).toFixed(2)} {riskDisplayUnit}（担保物） − {riskValueInOrderCurrency(principalLentOutValueForRisk).toFixed(2)} {riskDisplayUnit}（买入价值） − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
-                                : <span style={{ color: '#3B82F6' }}>= −{riskValueInOrderCurrency(collateralGapBaseForRisk).toFixed(2)} {riskDisplayUnit}（买入价值） − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
+                                : usesFloatingPnlFormula
+                                  ? <span style={{ color: '#3B82F6' }}>= {riskValueInOrderCurrency(collateralValue).toFixed(2)} {riskDisplayUnit}（担保物） + {formulaFloatingPnlU === null ? '浮盈加载中' : `${formulaFloatingPnlU >= 0 ? '+' : ''}${riskValueInOrderCurrency(formulaFloatingPnlU).toFixed(2)} ${riskDisplayUnit}`} − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
+                                  : <span style={{ color: '#3B82F6' }}>= −{riskValueInOrderCurrency(collateralGapBaseForRisk).toFixed(2)} {riskDisplayUnit}（买入价值） − {riskValueInOrderCurrency(accruedForRisk).toFixed(2)} {riskDisplayUnit} + {riskValueInOrderCurrency(paidInterestForRisk).toFixed(2)} {riskDisplayUnit} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{riskValueInOrderCurrency(exposure).toFixed(2)} {riskDisplayUnit}</strong></span>
                               }
                             </div>
                             <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
@@ -4160,8 +4138,8 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
                         <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
                         {isOptionOrder ? (
                           <>
-                            <div>• <strong>自有资金期权</strong> = 期权标记价 × 持有张数；不扣历史权利金，也不叠加订单利息或担保物。</div>
                             <div>• <strong>担保差值</strong> = 担保物市值 − 买入价值 − 待结利息 + 已结利息。</div>
+                            <div>• <strong>担保＋浮盈</strong> = 担保物市值 + 期权浮动盈亏 − 待结利息 + 已结利息。</div>
                             <div>• <strong>买入价值全额</strong> = −买入价值 − 待结利息 + 已结利息；不计担保物或期权市值。</div>
                             <div>• <strong>行权价</strong>只用于到期行权及 Greeks，不参与当前担保缺口。</div>
                           </>

@@ -724,9 +724,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     : null;
   // 三种担保口径：担保差值、担保物+浮盈、买入价值全额。旧的 floating_pnl
   // 保持“担保物+浮盈”的既有含义，避免37号引用订单的风险数值被改写。
-  const collateralRiskFormula = isSelfFundedAsset
-    ? 'floating_pnl'
-    : (explicitCollateralRiskFormula ?? (effectivePrincipalLentOut ? 'principal_coverage' : 'floating_pnl'));
+  // 资金属性只负责顶部展示标签，不能覆盖管理员在此处选择的担保计算口径。
+  const collateralRiskFormula = explicitCollateralRiskFormula
+    ?? (effectivePrincipalLentOut ? 'principal_coverage' : 'floating_pnl');
   const usesPrincipalCoverageFormula = collateralRiskFormula === 'principal_coverage';
   const usesFloatingPnlFormula = collateralRiskFormula === 'floating_pnl';
   const amountDisplayLabel = effectivePrincipalLentOut
@@ -5334,7 +5334,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       />
                     ))}
                   </div>
-                  {ledgerId === 52 && Boolean(displayConfig.collateral) && !isSelfFundedAsset && (
+                  {ledgerId === 52 && Boolean(displayConfig.collateral) && (
                     <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50/60 p-2">
                       <div className="mb-1 text-[11px] font-medium text-blue-700">担保缺口计算口径</div>
                       <div className="grid grid-cols-3 gap-1.5">
