@@ -1,5 +1,5 @@
 import { getDbConnection, getDbTransactionConnection } from "./db";
-import { fetchEndOfDayStockCloseSnapshots, fetchIntradayStockQuotes, getUsdtCnyRate, resolveUsStockExchange, searchManualStocks } from "./price-scanner";
+import { fetchIntradayStockQuotes, getUsdtCnyRate, refreshUsdtCnyRate, resolveUsStockExchange, searchManualStocks } from "./price-scanner";
 
 export type StockEventType = "buy" | "add" | "reduce" | "sell" | "note";
 export type AccountingMode = "manual_balance" | "stock_portfolio";
@@ -227,6 +227,19 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           INDEX idx_ledger_stock_daily_tag_date (category_id, snapshot_date)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+      // 日结金额统一以人民币报告。混合 CNY/USD 标签需保留结算时使用的汇率，
+      // 保证历史日历不会因为未来的实时汇率变化而被重新估值。
+      const [dailySnapshotColumnRows] = await (conn as any).execute(
+        `SELECT COLUMN_NAME FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'ledger_stock_daily_snapshots'
+           AND column_name = 'usd_cny_rate'`,
+      );
+      if ((dailySnapshotColumnRows as any[]).length === 0) {
+        await (conn as any).execute(
+          `ALTER TABLE ledger_stock_daily_snapshots
+           ADD COLUMN usd_cny_rate DECIMAL(16,8) NULL COMMENT '北京时间15:05快照的USD/CNY折算汇率' AFTER position_count`,
+        );
+      }
 
       // 每位成员对每个全局买入批次的参与股数。它不是标签“初始金额”：
       // 进入后的盈亏只从该次分配的参考价开始计算，买卖资金本身不会被当成盈亏。
@@ -1547,17 +1560,33 @@ export async function correctStockTagEvent(input: {
   return createStockTagEvent({ ...input, correctsEventId: input.eventId });
 }
 
-export async function refreshLedgerStockTagCloseSnapshots(): Promise<{ categories: number; symbols: number; updated: number }> {
+/**
+ * 默认由每日15:05调度调用。categoryId 与 snapshotDate 仅供受控的运维修复使用：
+ * 可将“现在能取到的最后有效行情”补写到指定标签的缺失日，不会影响其他标签。
+ */
+export async function refreshLedgerStockTagCloseSnapshots(options: {
+  categoryId?: number;
+  snapshotDate?: string;
+} = {}): Promise<{ categories: number; symbols: number; updated: number }> {
   if (closeRefreshInProgress) return { categories: 0, symbols: 0, updated: 0 };
   closeRefreshInProgress = true;
   try {
     await ensureLedgerStockPortfolioTables();
     const conn = await getDbConnection();
     if (!conn) throw new Error("数据库连接不可用");
+    const requestedCategoryId = Number(options.categoryId || 0);
+    if (options.categoryId !== undefined && (!Number.isInteger(requestedCategoryId) || requestedCategoryId <= 0)) {
+      throw new Error("补写日结时必须提供有效标签编号");
+    }
+    const requestedSnapshotDate = String(options.snapshotDate || "").trim();
+    if (requestedSnapshotDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedSnapshotDate)) {
+      throw new Error("补写日结时日期必须为 YYYY-MM-DD");
+    }
     const [rows] = await (conn as any).execute(
       `SELECT id FROM ledger_categories
-       WHERE ledgerId = ? AND parentId IS NULL AND accounting_mode = 'stock_portfolio'`,
-      [STOCK_LEDGER_ID],
+       WHERE ledgerId = ? AND parentId IS NULL AND accounting_mode = 'stock_portfolio'
+       ${requestedCategoryId ? 'AND id = ?' : ''}`,
+      requestedCategoryId ? [STOCK_LEDGER_ID, requestedCategoryId] : [STOCK_LEDGER_ID],
     );
     const categoryIds = (rows as any[]).map((row) => Number(row.id));
     const symbolsByCategory = new Map<number, string[]>();
@@ -1570,14 +1599,18 @@ export async function refreshLedgerStockTagCloseSnapshots(): Promise<{ categorie
     }
     if (allSymbols.size === 0) return { categories: categoryIds.length, symbols: 0, updated: 0 };
 
-    const quotes = await fetchEndOfDayStockCloseSnapshots(Array.from(allSymbols));
+    // 37号标签的唯一日结时点是北京时间15:05：A股取该时点的收盘后报价，
+    // 美股无论开市与否都取该时点的最后有效价，并统一折算成人民币。
+    await refreshUsdtCnyRate();
+    const quotes = await fetchIntradayStockQuotes(Array.from(allSymbols));
+    const forcedSnapshotDate = requestedSnapshotDate || beijingDate();
     let updated = 0;
     for (const [categoryId, symbols] of Array.from(symbolsByCategory.entries())) {
-      const pricedDates = new Map<string, string>();
+      const pricedSymbols = new Set<string>();
       for (const symbol of symbols) {
         const quote = quotes[symbol];
         if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) continue;
-        // 报价源返回的交易日同时适用于 A 股和美股；禁止用北京时间硬改美股交易日。
+        // 保留行情源实际交易日；日结日期固定为本次北京时间15:05所在自然日。
         const priceDate = quote.priceDate || "";
         if (!priceDate) continue;
         await (conn as any).execute(
@@ -1587,42 +1620,42 @@ export async function refreshLedgerStockTagCloseSnapshots(): Promise<{ categorie
            ON DUPLICATE KEY UPDATE price = VALUES(price), captured_at = NOW()`,
           [STOCK_LEDGER_ID, categoryId, symbol, quote.price, priceDate],
         );
-        pricedDates.set(symbol, priceDate);
+        pricedSymbols.add(symbol);
         updated += 1;
       }
-      const currencies = new Set(symbols.map(stockCurrency));
-      // 同标签混合人民币与美元时，逐笔估值仍实时更新，但不能将两种币直接写进一份金额快照。
-      // 待后续引入带汇率快照的多币种日结表前，保留各自原币种价格而不生成误导性总额。
-      if (currencies.size > 1) continue;
-      const snapshotDates = symbols.map((symbol) => pricedDates.get(symbol) || '');
-      // 仅当该市场的全部持仓都拿到同一真实交易日的收盘价时才固化日结。
-      if (snapshotDates.some((value) => !value) || new Set(snapshotDates).size !== 1) continue;
-      const snapshotDate = snapshotDates[0];
+      // 某一只股票报价失败时，绝不把该仓位按零估值写入日结。
+      if (symbols.some((symbol) => !pricedSymbols.has(symbol))) continue;
       const portfolio = await buildPortfolio(categoryId);
+      const hasUsdPosition = symbols.some((symbol) => stockCurrency(symbol) === 'USD');
+      const usdCnyRate = Number(portfolio.summary.usdCnyRate || 0);
+      // 人民币标签不依赖汇率；含美元标签则只有拿到本次有效汇率才允许固化。
+      if (hasUsdPosition && (!Number.isFinite(usdCnyRate) || usdCnyRate <= 0)) continue;
       // A failed quote leaves the previous valid quote in the calculation; no zero-value snapshot is written.
       if (portfolio.summary.unpricedPositionCount > 0 || portfolio.summary.marketValue === null || portfolio.summary.costValue === null || portfolio.summary.floatingPnl === null || portfolio.summary.realizedPnl === null || portfolio.summary.totalPnl === null) continue;
       await (conn as any).execute(
         `INSERT INTO ledger_stock_daily_snapshots
-         (ledger_id, category_id, snapshot_date, market_value, cost_value, floating_pnl, realized_pnl, total_pnl, position_count, captured_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+         (ledger_id, category_id, snapshot_date, market_value, cost_value, floating_pnl, realized_pnl, total_pnl, position_count, usd_cny_rate, captured_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
          ON DUPLICATE KEY UPDATE
            market_value = VALUES(market_value), cost_value = VALUES(cost_value),
            floating_pnl = VALUES(floating_pnl), realized_pnl = VALUES(realized_pnl),
-           total_pnl = VALUES(total_pnl), position_count = VALUES(position_count), captured_at = NOW()`,
+           total_pnl = VALUES(total_pnl), position_count = VALUES(position_count),
+           usd_cny_rate = VALUES(usd_cny_rate), captured_at = NOW()`,
         [
           STOCK_LEDGER_ID,
           categoryId,
-          snapshotDate,
+          forcedSnapshotDate,
           portfolio.summary.marketValue,
           portfolio.summary.costValue,
           portfolio.summary.floatingPnl,
           portfolio.summary.realizedPnl,
           portfolio.summary.totalPnl,
           portfolio.summary.positionCount,
+          hasUsdPosition ? usdCnyRate : null,
         ],
       );
     }
-    console.log(`[37股票盘尾] ${beijingDate()}：标签 ${categoryIds.length} 个，跟踪 ${allSymbols.size} 只，更新 ${updated} 条行情`);
+    console.log(`[37股票盘尾] ${forcedSnapshotDate}：标签 ${categoryIds.length} 个，跟踪 ${allSymbols.size} 只，更新 ${updated} 条行情`);
     return { categories: categoryIds.length, symbols: allSymbols.size, updated };
   } finally {
     closeRefreshInProgress = false;

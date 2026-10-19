@@ -841,7 +841,11 @@ async function fetchOkxSpotQuote(instId: string): Promise<{ price: number; patch
   } catch { return null; }
 }
 
-async function refreshUsdtCnyRate() {
+/**
+ * 37号混合币种股票标签在北京时间15:05固化日结前显式调用，避免将上一轮扫描
+ * 的旧汇率写为当天的统一人民币结算汇率。
+ */
+export async function refreshUsdtCnyRate(): Promise<number> {
   try {
     const data = await fetchCryptoJson('https://api.gateio.ws/api/v4/spot/tickers?currency_pair=USDT_CNY');
     const rate = Number(Array.isArray(data) ? data[0]?.last : 0);
@@ -853,6 +857,7 @@ async function refreshUsdtCnyRate() {
       if (rate > 5 && rate < 10) usdtCnyRate = rate;
     } catch {}
   }
+  return usdtCnyRate;
 }
 
 async function updateCrypto(coin: string) {

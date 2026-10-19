@@ -335,10 +335,9 @@ function scheduleNextManualStockIntradayRefresh(): void {
       const usCloseSession = getUsCloseSessionToRun();
       if (usCloseSession && usCloseSession !== lastUsCloseSession) {
         lastUsCloseSession = usCloseSession;
-        await Promise.all([
-          refreshManualStockCloseSnapshots(),
-          refreshLedgerStockTagCloseSnapshots(),
-        ]);
+        // 52号订单可在美股收盘后补充其独立盘尾价；37号标签严格只在北京时间
+        // 15:05统一折人民币结算，避免纽约收盘时以另一交易时点改写日历。
+        await refreshManualStockCloseSnapshots();
       }
     } catch (error) {
       console.error("[股票盘中] 同步失败:", error instanceof Error ? error.message : error);
@@ -358,7 +357,7 @@ function refreshIntradayQuotesOnStartup(): void {
   });
 }
 
-/** 启动52号订单与37号股票标签的盘中报价及每日15:05盘尾快照任务。 */
+/** 启动52号订单与37号股票标签的盘中报价及北京时间15:05统一日结任务。 */
 export function startManualStockCloseScheduler(): void {
   if (dailyTimer || intradayTimer) return;
   void ensureTable().catch((error) => {
@@ -371,5 +370,5 @@ export function startManualStockCloseScheduler(): void {
   // 部署或 PM2 重启发生在交易时段时，先立即取一次报价，之后再对齐每五分钟整点。
   refreshIntradayQuotesOnStartup();
   scheduleNextManualStockIntradayRefresh();
-  console.log("[股票行情] 52订单、37股票标签及其股票保证金按中美交易时段每5分钟更新；A股15:05、美股纽约16:00后固化盘尾快照");
+  console.log("[股票行情] 52订单、37股票标签及其股票保证金按中美交易时段每5分钟更新；37标签北京时间15:05统一折人民币日结，52订单美股纽约16:00后独立固化盘尾快照");
 }
