@@ -1772,10 +1772,13 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
   // 共享收益候选人仅按资金账本中已登记的“投入”判断是否已出本金；管理员端一次读取全部用户汇总。
   const [payoutDepositTotalResult] = isAdminScope
     ? await conn.execute(
-      `SELECT related_user_id, COALESCE(SUM(amount), 0) AS cumulative_deposit_amount
-         FROM ledger52_t0_journal_payout_logs
-        WHERE ledger_id = ? AND user_id = ? AND direction = 'deposit'
-        GROUP BY related_user_id`,
+      `SELECT payout.related_user_id, COALESCE(SUM(payout.amount), 0) AS cumulative_deposit_amount,
+              COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), CONCAT('用户#', payout.related_user_id)) AS related_user_name,
+              NULLIF(u.username, '') AS related_username
+         FROM ledger52_t0_journal_payout_logs payout
+         LEFT JOIN users u ON u.id = payout.related_user_id
+        WHERE payout.ledger_id = ? AND payout.user_id = ? AND payout.direction = 'deposit'
+        GROUP BY payout.related_user_id, u.name, u.username`,
       [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
     )
     : [[]];
@@ -1830,6 +1833,8 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
     payoutDepositTotals: asRows(payoutDepositTotalResult).map((row) => ({
       relatedUserId: toNumber(row.related_user_id),
       cumulativeDepositAmount: toNumber(row.cumulative_deposit_amount),
+      relatedUserName: String(row.related_user_name || `用户#${toNumber(row.related_user_id)}`),
+      relatedUsername: row.related_username ? String(row.related_username) : undefined,
     })),
     payoutCashFlows: asRows(payoutCashFlowResult).map((row) => ({
       relatedUserId: toNumber(row.related_user_id),

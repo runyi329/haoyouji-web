@@ -2582,6 +2582,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       : [])
       .map((item: any) => [String(item.relatedUserId), Math.max(0, Number(item.cumulativeDepositAmount) || 0)] as const),
   ), [t0JournalQuery.data]);
+  const payoutDepositorIdentityByRelatedUser = useMemo(() => new Map(
+    (Array.isArray((t0JournalQuery.data as any)?.payoutDepositTotals)
+      ? (t0JournalQuery.data as any).payoutDepositTotals
+      : [])
+      .map((item: any) => [String(item.relatedUserId), {
+        name: String(item.relatedUserName || `用户#${item.relatedUserId}`),
+        username: String(item.relatedUsername || "").trim() || undefined,
+      }] as const),
+  ), [t0JournalQuery.data]);
   const payoutCashFlowsByRelatedUser = useMemo(() => {
     const cashFlowsByUser = new Map<string, Array<{ occurredOn: string; direction: T0JournalPayoutDirection; amount: number }>>();
     const rows = Array.isArray((t0JournalQuery.data as any)?.payoutCashFlows)
@@ -3441,7 +3450,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     setRecentJournalPage((current) => Math.min(current, recentJournalTotalPages));
   }, [recentJournalTotalPages]);
   /**
-   * 共享收益平仓预览：候选人只来自当前仍有未平仓位的其他关联用户；
+   * 共享收益平仓预览：所有已登记投入的关联用户都可参与；仍有未平仓位的用户额外显示持仓参考。
    * 任意正向净收益订单都可先分配共享收益，剩余部分再按该订单的既有快照结算。
    */
   const sharedIncomeClosePreview = useMemo(() => {
@@ -3539,6 +3548,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       if (!Number.isFinite(Number(transfer.amount)) || Number(transfer.amount) <= 0) continue;
       recordSettlementDate(transfer.recipientUserId, getBeijingDateInputValue(new Date(transfer.createdAt)));
     }
+    const now = Date.now();
     for (const opening of trades) {
       if (!ACTIONS[opening.action].opening || !isEligibleSharedIncomeInstrument(opening.instrumentType) || opening.isPending || !opening.relatedUserId || opening.relatedUserId === String(sourceUserId) || opening.relatedUserId === String(managerUserId)) continue;
       const closingQuantity = (buildOpeningClosingAllocations(trades).get(opening.id) || []).reduce((total, allocation) => total + allocation.quantity, 0);
@@ -3568,7 +3578,28 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       if (opening.createdAt < current.firstOpenedAt) current.firstOpenedAt = opening.createdAt;
       candidateByUser.set(opening.relatedUserId, current);
     }
-    const now = Date.now();
+    // 已有入金但当前没有未平仓位的历史用户也应可参与共享收益分配；
+    // 其持仓相关数值归零，仅保留资金、已实现收益与年化参考。
+    for (const [userId, cumulativeDepositAmount] of payoutDepositAmountByRelatedUser) {
+      if (cumulativeDepositAmount <= 0 || userId === String(sourceUserId) || userId === String(managerUserId) || candidateByUser.has(userId)) continue;
+      const identity = payoutDepositorIdentityByRelatedUser.get(userId);
+      const firstDepositDate = (payoutCashFlowsByRelatedUser.get(userId) || [])
+        .filter((cashFlow) => cashFlow.direction === "deposit")
+        .map((cashFlow) => cashFlow.occurredOn)
+        .filter((occurredOn) => getT0CalendarDateUtc(occurredOn) !== null)
+        .sort()[0];
+      candidateByUser.set(userId, {
+        userId,
+        name: identity?.name || `用户#${userId}`,
+        username: identity?.username,
+        remainingQuantity: 0,
+        longQuantity: 0,
+        shortQuantity: 0,
+        firstOpenedAt: firstDepositDate ? `${firstDepositDate}T00:00:00.000+08:00` : new Date(now).toISOString(),
+        basis: 0,
+        unrealizedPnl: 0,
+      });
+    }
     const candidates = Array.from(candidateByUser.values()).map((candidate) => {
       const heldDays = Math.max(1, Math.floor((now - new Date(candidate.firstOpenedAt).getTime()) / 86_400_000) + 1);
       const lastSettlementDate = lastSettlementDateByUser.get(candidate.userId);
@@ -3620,7 +3651,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       shareableAmount: Math.floor((Math.max(0, sourceNetPnl) + 1e-9) * 100) / 100,
       candidates,
     };
-  }, [canManage, closeConfirmationStep, closingSourceTrade?.isCounterpartyView, entryForm.action, entryForm.accountId, entryForm.instrumentType, entryForm.price, entryForm.quantity, entryForm.relatedFundId, entryForm.relatedUserId, entryForm.targetPrice, lastMarkPrice, me, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, profitShareSnapshots, recentJournalTradeDetails, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, trades]);
+  }, [canManage, closeConfirmationStep, closingSourceTrade?.isCounterpartyView, entryForm.action, entryForm.accountId, entryForm.instrumentType, entryForm.price, entryForm.quantity, entryForm.relatedFundId, entryForm.relatedUserId, entryForm.targetPrice, lastMarkPrice, me, payoutCashFlowsByRelatedUser, payoutDepositAmountByRelatedUser, payoutDepositorIdentityByRelatedUser, profitShareSnapshots, recentJournalTradeDetails, sharedIncomeReductionsByClosingEntryId, sharedIncomeTransfers, trades]);
   const sharedIncomeAllocatedTotal = useMemo(() => Object.values(sharedIncomeDrafts).reduce((total, amount) => total + (Number(amount) || 0), 0), [sharedIncomeDrafts]);
   const sharedIncomeSaveAllocations = useMemo(() => Object.entries(sharedIncomeDrafts)
     .map(([recipientUserId, amount]) => ({ recipientUserId: Number(recipientUserId), amount: (Number(amount) || 0).toFixed(2) }))
@@ -8487,7 +8518,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 <span className={`ml-auto self-center whitespace-nowrap text-[10px] font-semibold tabular-nums ${sharedIncomeAllocatedTotal - sharedIncomeClosePreview.shareableAmount > 0.00001 ? "text-rose-600" : "text-slate-500"}`}>分配 {formatPrice(sharedIncomeAllocatedTotal)} · 留存 {formatPrice(Math.max(0, sharedIncomeClosePreview.shareableAmount - sharedIncomeAllocatedTotal))} U</span>
               </div>
               {sharedIncomeClosePreview.candidates.length > 0 ? <div className="mt-2 divide-y divide-slate-100 overflow-hidden rounded border border-slate-200">
-                {sharedIncomeClosePreview.candidates.slice(0, 6).map((candidate) => {
+                {sharedIncomeClosePreview.candidates.map((candidate) => {
                   const currentSharedIncomeDraft = Number(sharedIncomeDrafts[candidate.userId] ?? 0);
                   const currentSharedIncomeAmount = Number.isFinite(currentSharedIncomeDraft) ? Math.max(0, currentSharedIncomeDraft) : 0;
                   const displayedRealizedAnnualized = calculateT0Xirr([
