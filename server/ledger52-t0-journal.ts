@@ -867,6 +867,67 @@ function mapRecoverableAudit(row: any) {
   }
 }
 
+/** 管理员系统动态直接读取不可变审计快照，不另建一套会与真实成交脱节的日志表。 */
+function mapT0JournalSystemActivity(row: any) {
+  const parseSnapshot = (value: unknown) => {
+    try {
+      const parsed = JSON.parse(String(value || "{}"));
+      return parsed && typeof parsed === "object" ? parsed as Record<string, any> : {};
+    } catch {
+      return {} as Record<string, any>;
+    }
+  };
+  const operation = String(row.operation || "");
+  const before = parseSnapshot(row.before_snapshot);
+  const after = parseSnapshot(row.after_snapshot);
+  const note = String(after.note || "").trim();
+  const action = String(after.action || before.action || "") as T0JournalAction;
+  const automaticTakeProfit = operation === "take_profit" && before.automatic === true && before.trigger === "take_profit";
+  const automaticExpirySettlement = operation === "expiry_settlement" && before.automatic === true && before.trigger === "option_expiry";
+  const historicalRecoveryFill = operation === "fill" && note.includes("[系统历史补扫成交]");
+  const automaticFill = operation === "fill" && note.includes("[系统自动成交]");
+  if (!automaticTakeProfit && !automaticExpirySettlement && !historicalRecoveryFill && !automaticFill) return null;
+
+  const actionLabel = action === "openLong" ? "开多" : action === "openShort" ? "开空" : action === "closeLong" ? "平多" : action === "closeShort" ? "平空" : "订单";
+  const entryQuantity = toNumber(after.quantity ?? before.quantity);
+  const executionPrice = toNumber(
+    after.filled_price
+      ?? after.filledPrice
+      ?? (automaticTakeProfit ? before.executionPrice : undefined)
+      ?? after.price
+      ?? before.price,
+  );
+  const eventAt = after.filled_at
+    ?? after.filledAt
+    ?? after.trade_time
+    ?? after.created_at
+    ?? row.created_at;
+  // MySQL 历史 DATETIME 的驱动时区表现可能与 filled_at 不同；系统备注已经以北京时间写入，
+  // 动态页优先复用这份不可变时间文字，避免把同一系统事件二次换算成错误时区。
+  const occurredAtLabel = note.match(/\]\s*(\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}(?::\d{2})?)/)?.[1];
+  const type = historicalRecoveryFill
+    ? "recovery_fill"
+    : automaticFill
+      ? "auto_fill"
+      : automaticTakeProfit
+        ? "take_profit"
+        : "expiry_settlement";
+  return {
+    id: String(row.audit_id || row.id),
+    type,
+    entryId: String(row.entry_id),
+    occurredAt: isoTime(eventAt),
+    occurredAtLabel,
+    recordedAt: isoTime(row.created_at),
+    action: actionLabel,
+    quantity: entryQuantity,
+    price: executionPrice,
+    accountName: String(row.account_name || "").trim() || undefined,
+    relatedUserName: String(row.related_user_name || "").trim() || undefined,
+    note,
+  };
+}
+
 /**
  * 账户与流水均按 ledger 52 + 当前管理员 user_id 分区。
  * 不设外键，避免旧库迁移时受历史数据状态影响；所有读写均由接口侧权限校验保障。
@@ -1521,7 +1582,7 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
          AND shared_income.recipient_user_id = ?
     )
   )`;
-  const [accountResult, entryResult, recoverableAuditResult, recentUserResult, relatedFundResult] = await Promise.all([
+  const [accountResult, entryResult, recoverableAuditResult, recentUserResult, relatedFundResult, systemActivityAuditResult] = await Promise.all([
     isAdminScope
       ? conn.execute(
         `SELECT id, name, last_used_at, created_at
@@ -1625,6 +1686,21 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
         LIMIT 200`,
       [LEDGER_52_T0_JOURNAL_ID, ...memberVisibilityParams],
     ),
+    isAdminScope ? conn.execute(
+      `SELECT audit.id AS audit_id, audit.entry_id, audit.operation, audit.before_snapshot, audit.after_snapshot, audit.created_at,
+              account.name AS account_name,
+              COALESCE(NULLIF(related_user.name, ''), NULLIF(related_user.username, ''), '') AS related_user_name
+         FROM ledger52_t0_journal_entry_audits audit
+         LEFT JOIN ledger52_t0_journal_entries entry_row
+           ON entry_row.id = audit.entry_id AND entry_row.ledger_id = audit.ledger_id AND entry_row.user_id = audit.user_id
+         LEFT JOIN ledger52_t0_journal_accounts account ON account.id = entry_row.account_id
+         LEFT JOIN users related_user ON related_user.id = entry_row.related_user_id
+        WHERE audit.ledger_id = ? AND audit.user_id = ?
+          AND audit.operation IN ('fill', 'take_profit', 'expiry_settlement')
+        ORDER BY audit.created_at DESC, audit.id DESC
+        LIMIT 200`,
+      [LEDGER_52_T0_JOURNAL_ID, journalOwnerUserId],
+    ) : Promise.resolve([[]]),
   ]);
 
   const entryRows = asRows(entryResult);
@@ -1763,6 +1839,10 @@ export async function getLedger52T0Journal(scope: T0JournalReadScope) {
     })),
     recoverableEntries: asRows(recoverableAuditResult)
       .map(mapRecoverableAudit)
+      .filter((item): item is NonNullable<typeof item> => Boolean(item)),
+    // 成员端绝不下发任何系统审计；前端动态页仅在管理员全局账本中显示。
+    systemActivityLogs: asRows(systemActivityAuditResult)
+      .map(mapT0JournalSystemActivity)
       .filter((item): item is NonNullable<typeof item> => Boolean(item)),
   };
 }
@@ -3776,6 +3856,10 @@ let pendingOrderScannerStarted = false;
 let pendingOrderScanActive = false;
 let pendingOrderScanInFlight = false;
 let pendingOrderScanStateRefreshTimer: ReturnType<typeof setInterval> | null = null;
+let pendingOrderHistoryRecoveryInFlight = false;
+let pendingOrderHistoryRecoveryTimer: ReturnType<typeof setInterval> | null = null;
+const T0_PENDING_ORDER_HISTORY_STARTUP_MINUTES = 1_500;
+const T0_PENDING_ORDER_HISTORY_HOURLY_MINUTES = 75;
 
 /** 行情流仅在存在未成交挂单或已成交的止盈计划时才触发数据库写入判定。 */
 export function hasLedger52T0PendingOrders() {
@@ -3811,10 +3895,91 @@ async function refreshLedger52T0PendingOrderScanState() {
 }
 
 /**
+ * 生产进程启动及之后每小时，读取 HTX 最近一分钟标记价K线，为仍处于 pending 的开仓做兜底复核。
+ * 单笔订单只在其最后保存时间之后寻找首次越价；最终更新再次锁定 pending + updated_at，
+ * 因此已删除、已成交、手工修改过或后来新建的订单都不会被历史K线误成交。
+ */
+async function recoverLedger52T0PendingOrdersFromHistory(lookbackMinutes: number, reason: "启动补扫" | "定时补扫") {
+  if (process.env.DEV_BYPASS_AUTH === "true" || pendingOrderHistoryRecoveryInFlight || !pendingOrderScanActive) {
+    return { candidates: 0, matched: 0, filled: 0 };
+  }
+  pendingOrderHistoryRecoveryInFlight = true;
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return { candidates: 0, matched: 0, filled: 0 };
+    await ensureLedger52T0JournalTables(conn);
+    const [pendingRowsResult] = await conn.execute(
+      `SELECT id, action, price, updated_at
+         FROM ledger52_t0_journal_entries
+        WHERE ledger_id = ? AND execution_status = 'pending' AND action IN ('openLong', 'openShort')
+        ORDER BY updated_at ASC, id ASC`,
+      [LEDGER_52_T0_JOURNAL_ID],
+    );
+    const pendingRows = asRows(pendingRowsResult);
+    if (pendingRows.length === 0) return { candidates: 0, matched: 0, filled: 0 };
+    const { getT0EthPerpetualMarkHistory } = await import("./price-scanner");
+    const candles = await getT0EthPerpetualMarkHistory(lookbackMinutes);
+    if (candles.length === 0) return { candidates: pendingRows.length, matched: 0, filled: 0 };
+
+    const matchesByMinute = new Map<number, { candle: typeof candles[number]; entryIds: number[] }>();
+    for (const row of pendingRows) {
+      const entryId = toNumber(row.id);
+      const pendingPrice = toNumber(row.price);
+      const updatedAt = new Date(row.updated_at).getTime();
+      const action = String(row.action) as T0JournalAction;
+      if (entryId <= 0 || pendingPrice <= 0 || !Number.isFinite(updatedAt)) continue;
+      const firstCrossedCandle = candles.find((candle) => {
+        if (candle.observedAt.getTime() <= updatedAt) return false;
+        return action === "openLong" ? candle.low <= pendingPrice : candle.high >= pendingPrice;
+      });
+      if (!firstCrossedCandle) continue;
+      const key = firstCrossedCandle.observedAt.getTime();
+      const batch = matchesByMinute.get(key) ?? { candle: firstCrossedCandle, entryIds: [] };
+      batch.entryIds.push(entryId);
+      matchesByMinute.set(key, batch);
+    }
+
+    let filled = 0;
+    for (const { candle, entryIds } of Array.from(matchesByMinute.values()).sort((left, right) => left.candle.observedAt.getTime() - right.candle.observedAt.getTime())) {
+      const result = await scanLedger52T0PendingOrders({
+        markPrice: candle.close,
+        filledAt: candle.observedAt,
+        rangeHigh: candle.high,
+        rangeLow: candle.low,
+        pendingEntryIds: entryIds,
+        historicalEligibleAt: candle.observedAt,
+        historicalRecovery: true,
+        skipTakeProfit: true,
+      });
+      filled += result.filled;
+    }
+    if (filled > 0) console.log(`[T0自动订单] ${reason}完成：历史标记价命中并成交 ${filled} 笔（仅处理当时仍已生效的 pending 订单）`);
+    return { candidates: pendingRows.length, matched: Array.from(matchesByMinute.values()).reduce((total, batch) => total + batch.entryIds.length, 0), filled };
+  } catch (error) {
+    console.error(`[T0自动订单] ${reason}失败:`, error instanceof Error ? error.message : error);
+    return { candidates: 0, matched: 0, filled: 0 };
+  } finally {
+    pendingOrderHistoryRecoveryInFlight = false;
+  }
+}
+
+/**
  * 自动订单仅引用T+0统一 ETH 永续标记价：先处理开仓挂单，再处理已成交现货/合约的止盈。
  * 多单挂单向下成交、止盈向上平仓；空单挂单向上成交、止盈向下平仓。止盈从不跳过未成交挂单。
  */
-export async function scanLedger52T0PendingOrders(input: { markPrice?: number; filledAt?: Date; rangeHigh?: number; rangeLow?: number } = {}) {
+export async function scanLedger52T0PendingOrders(input: {
+  markPrice?: number;
+  filledAt?: Date;
+  rangeHigh?: number;
+  rangeLow?: number;
+  /** 历史补扫只锁定已被复核命中的指定挂单，绝不让同一根K线影响其他订单。 */
+  pendingEntryIds?: number[];
+  /** 历史K线时点：订单在此时点之后若被编辑，最终更新会拒绝该补扫。 */
+  historicalEligibleAt?: Date;
+  historicalRecovery?: boolean;
+  /** 历史补扫只补开仓挂单，止盈仍由实时扫描处理，避免一根历史K线连续触发两步动作。 */
+  skipTakeProfit?: boolean;
+} = {}) {
   if (process.env.DEV_BYPASS_AUTH === "true" || pendingOrderScanInFlight || !pendingOrderScanActive) {
     return { filled: 0, takeProfit: 0, markPrice: null as number | null };
   }
@@ -3834,6 +3999,14 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
   const rangeLabel = rangeHigh > rangeLow
     ? `ETH永续扫描区间 ${rangeLow.toFixed(2)}–${rangeHigh.toFixed(2)} U`
     : `ETH永续价 ${markPrice.toFixed(2)} U`;
+  const pendingEntryIds = Array.from(new Set((input.pendingEntryIds ?? [])
+    .map((entryId) => Number(entryId))
+    .filter((entryId) => Number.isInteger(entryId) && entryId > 0)));
+  const pendingEntryScopeSql = pendingEntryIds.length > 0
+    ? ` AND id IN (${pendingEntryIds.map(() => "?").join(", ")})`
+    : "";
+  const historicalEligibleAt = input.historicalEligibleAt ? mysqlDateTime(input.historicalEligibleAt) : null;
+  const historicalEligibilitySql = historicalEligibleAt ? " AND updated_at <= ?" : "";
 
   pendingOrderScanInFlight = true;
   const connection = await getDbTransactionConnection();
@@ -3850,12 +4023,12 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
               execution_status, filled_at, filled_price, take_profit_enabled, take_profit_price, take_profit_quantity, take_profit_triggered_at, take_profit_triggered_price, take_profit_triggered_quantity, action, quantity, price, fee_usdt, target_price, note,
               client_request_id, created_by_user_id, trade_time, created_at, updated_at
          FROM ledger52_t0_journal_entries
-        WHERE ledger_id = ? AND execution_status = 'pending' AND action IN ('openLong', 'openShort')
+        WHERE ledger_id = ? AND execution_status = 'pending' AND action IN ('openLong', 'openShort')${pendingEntryScopeSql}${historicalEligibilitySql}
           AND ((action = 'openLong' AND CAST(price AS DECIMAL(36,18)) >= CAST(? AS DECIMAL(36,18)))
             OR (action = 'openShort' AND CAST(price AS DECIMAL(36,18)) <= CAST(? AS DECIMAL(36,18))))
         ORDER BY trade_time ASC, id ASC
         FOR UPDATE`,
-      [LEDGER_52_T0_JOURNAL_ID, String(rangeLow), String(rangeHigh)],
+      [LEDGER_52_T0_JOURNAL_ID, ...pendingEntryIds, ...(historicalEligibleAt ? [historicalEligibleAt] : []), String(rangeLow), String(rangeHigh)],
     );
     let filled = 0;
     const filledOpeningEntryIds = new Set<number>();
@@ -3868,9 +4041,14 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
       const action = String(row.action) as T0JournalAction;
       const isOpenLong = action === "openLong";
       const pendingPrice = toNumber(row.price);
-      // 区间回补命中时按挂单价成交；实时价直接越价时仍按更优的实时标记价成交。
-      const executionPrice = isOpenLong ? Math.min(markPrice, pendingPrice) : Math.max(markPrice, pendingPrice);
-      const systemNote = `[系统自动成交] ${formatBeijingSystemTime(filledAt)}｜${rangeLabel}，达到挂单价 ${pendingPrice.toFixed(2)} U`;
+      // 历史一分钟K线只能确认曾跨价，不能虚构具体撮合点，因此补扫一律按原挂单价成交；
+      // 实时价直接越价时仍按更优的实时标记价成交。
+      const executionPrice = input.historicalRecovery
+        ? pendingPrice
+        : isOpenLong ? Math.min(markPrice, pendingPrice) : Math.max(markPrice, pendingPrice);
+      const systemNote = input.historicalRecovery
+        ? `[系统历史补扫成交] ${formatBeijingSystemTime(filledAt)}｜HTX 1分钟标记价${rangeLabel.replace("ETH永续", "")}，达到挂单价 ${pendingPrice.toFixed(2)} U｜按挂单价确认成交`
+        : `[系统自动成交] ${formatBeijingSystemTime(filledAt)}｜${rangeLabel}，达到挂单价 ${pendingPrice.toFixed(2)} U`;
       const note = appendSystemSettlementNote(row.note, systemNote);
       await tx.execute(
         `UPDATE ledger52_t0_journal_entries
@@ -3902,14 +4080,14 @@ export async function scanLedger52T0PendingOrders(input: { markPrice?: number; f
          FROM ledger52_t0_journal_take_profit_plans plan
          INNER JOIN ledger52_t0_journal_entries e
            ON e.id = plan.opening_entry_id AND e.ledger_id = plan.ledger_id AND e.user_id = plan.user_id
-        WHERE e.ledger_id = ? AND e.execution_status = 'filled' AND e.is_locked = 0
+        WHERE ? = 1 AND e.ledger_id = ? AND e.execution_status = 'filled' AND e.is_locked = 0
           AND e.instrument_type IN ('spot', 'contract') AND e.action IN ('openLong', 'openShort')
           AND plan.status = 'pending'
           AND ((e.action = 'openLong' AND CAST(plan.trigger_price AS DECIMAL(36,18)) <= CAST(? AS DECIMAL(36,18)))
             OR (e.action = 'openShort' AND CAST(plan.trigger_price AS DECIMAL(36,18)) >= CAST(? AS DECIMAL(36,18))))
         ORDER BY e.trade_time ASC, e.id ASC, plan.id ASC
         FOR UPDATE`,
-      [LEDGER_52_T0_JOURNAL_ID, String(rangeHigh), String(rangeLow)],
+      [input.skipTakeProfit ? 0 : 1, LEDGER_52_T0_JOURNAL_ID, String(rangeHigh), String(rangeLow)],
     );
     let takeProfit = 0;
     for (const candidate of asRows(takeProfitRows)) {
@@ -4288,6 +4466,9 @@ export function startLedger52T0PendingOrderScanner() {
       .then((hasPending) => {
         if (reason === "初始化") {
           console.log(`[T0自动订单] 实时标记价触发已启动（${hasPending ? "当前有挂单或止盈" : "当前无自动订单"}）`);
+          if (hasPending) {
+            void recoverLedger52T0PendingOrdersFromHistory(T0_PENDING_ORDER_HISTORY_STARTUP_MINUTES, "启动补扫");
+          }
         } else if (hasPending !== wasActive) {
           console.log(`[T0自动订单] ${hasPending ? "发现待处理挂单或止盈，已恢复行情触发" : "当前无待处理自动订单，暂停行情触发"}`);
         }
@@ -4298,6 +4479,11 @@ export function startLedger52T0PendingOrderScanner() {
   // 状态只留在当前 Node 进程内；定时复核可覆盖服务重启、首次初始化失败，
   // 以及集群请求落在不同进程时未同步到本地内存的情形。
   pendingOrderScanStateRefreshTimer = setInterval(() => refreshScanState("定时复核"), 60_000);
+  // 每小时用最近75分钟K线再做一次兜底：只扫描仍 pending 且当时已经生效的订单，
+  // 扫描中被删除、成交或修改的订单在最终条件更新时都会自动跳过。
+  pendingOrderHistoryRecoveryTimer = setInterval(() => {
+    void recoverLedger52T0PendingOrdersFromHistory(T0_PENDING_ORDER_HISTORY_HOURLY_MINUTES, "定时补扫");
+  }, 60 * 60_000);
 }
 
 export async function updateLedger52T0JournalOpeningEntry(input: {

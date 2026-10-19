@@ -304,6 +304,51 @@ async function fetchEthPerpetualMarkQuote(): Promise<{ price: number; source: st
 
 type EthPerpetualMarkRange = { high: number; low: number };
 
+/** HTX ETH 永续标记价一分钟K线；仅供T+0挂单的启动/定期漏扫复核使用。 */
+export type T0EthPerpetualMarkHistoryCandle = {
+  observedAt: Date;
+  close: number;
+  high: number;
+  low: number;
+};
+
+/**
+ * Gate 当前只提供实时标记价，因此历史补扫固定读取 HTX 官方一分钟标记价K线。
+ * 返回按时间正序排列的有效K线；任何缺价/异常行都不会参与自动订单判断。
+ */
+export async function getT0EthPerpetualMarkHistory(limit = 1_500): Promise<T0EthPerpetualMarkHistoryCandle[]> {
+  const requestedLimit = Math.max(1, Math.min(1_500, Math.floor(limit)));
+  try {
+    const endpoint = new URL('https://api.hbdm.com/index/market/history/linear_swap_mark_price_kline');
+    endpoint.searchParams.set('contract_code', 'ETH-USDT');
+    endpoint.searchParams.set('period', '1min');
+    endpoint.searchParams.set('size', String(requestedLimit));
+    const data = await fetchPerpetualMarkJson(endpoint.toString());
+    const now = Date.now();
+    return (Array.isArray(data?.data) ? data.data : [])
+      .map((row: any) => {
+        const rawEpoch = Number(row?.id);
+        const openedAtMs = rawEpoch > 1_000_000_000_000 ? rawEpoch : rawEpoch * 1_000;
+        const close = Number(row?.close);
+        const high = Number(row?.high);
+        const low = Number(row?.low);
+        if (!Number.isFinite(openedAtMs) || openedAtMs <= 0 || openedAtMs > now + 60_000
+          || !isValidPrice(close) || !isValidPrice(high) || !isValidPrice(low)) return null;
+        return {
+          // 将一分钟K线的事件时点置于该分钟收盘，保证只用已经完整形成的区间。
+          observedAt: new Date(openedAtMs + 59_999),
+          close,
+          high: Math.max(high, low),
+          low: Math.min(high, low),
+        } satisfies T0EthPerpetualMarkHistoryCandle;
+      })
+      .filter((row): row is T0EthPerpetualMarkHistoryCandle => row !== null)
+      .sort((left, right) => left.observedAt.getTime() - right.observedAt.getTime());
+  } catch {
+    return [];
+  }
+}
+
 /**
  * 实时流暂不可用时，读取 HTX 最新一分钟的 ETH 永续标记价高低值。
  * 该区间只在存在自动订单时使用，用于补齐 REST 轮询之间已越过又回落的触发价。

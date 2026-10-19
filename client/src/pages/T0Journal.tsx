@@ -70,6 +70,20 @@ type SharedIncomeReduction = {
   amount: number;
   sourceNetPnl: number;
 };
+type T0JournalSystemActivity = {
+  id: string;
+  type: "auto_fill" | "recovery_fill" | "take_profit" | "expiry_settlement";
+  entryId: string;
+  occurredAt: string;
+  occurredAtLabel?: string;
+  recordedAt: string;
+  action: string;
+  quantity: number;
+  price: number;
+  accountName?: string;
+  relatedUserName?: string;
+  note?: string;
+};
 type TotalProfitAttributionDetailEntry = {
   id: string;
   kind: "order" | "commission" | "shared";
@@ -2399,7 +2413,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [totalRevenueDetailPage, setTotalRevenueDetailPage] = useState(1);
   const [showPayoutLog, setShowPayoutLog] = useState(false);
   const [showGlobalLedger, setShowGlobalLedger] = useState(false);
-  const [globalLedgerTab, setGlobalLedgerTab] = useState<"positions" | "funds">("positions");
+  const [globalLedgerTab, setGlobalLedgerTab] = useState<"positions" | "funds" | "system">("positions");
   const [payoutIncomePage, setPayoutIncomePage] = useState(1);
   const [showPayoutXirrHelp, setShowPayoutXirrHelp] = useState(false);
   const [payoutOccurredOn, setPayoutOccurredOn] = useState(() => getBeijingDateInputValue());
@@ -2530,6 +2544,24 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       reducesRegularDistribution: Boolean(item.reducesRegularDistribution),
       createdAt: String(item.createdAt || ""),
     })).filter((item) => item.id && Number.isFinite(item.amount) && item.amount > 0) : [];
+  }, [t0JournalQuery.data]);
+  // 系统动态来自服务端不可变审计，仅管理员范围下发；不参与仓位、资金或收益口径计算。
+  const systemActivityLogs = useMemo<T0JournalSystemActivity[]>(() => {
+    const rows = (t0JournalQuery.data as any)?.systemActivityLogs;
+    return Array.isArray(rows) ? rows.map((item: any) => ({
+      id: String(item.id || ""),
+      type: item.type === "recovery_fill" || item.type === "take_profit" || item.type === "expiry_settlement" ? item.type : "auto_fill",
+      entryId: String(item.entryId || ""),
+      occurredAt: String(item.occurredAt || ""),
+      occurredAtLabel: item.occurredAtLabel ? String(item.occurredAtLabel) : undefined,
+      recordedAt: String(item.recordedAt || ""),
+      action: String(item.action || "订单"),
+      quantity: Number(item.quantity || 0),
+      price: Number(item.price || 0),
+      accountName: item.accountName ? String(item.accountName) : undefined,
+      relatedUserName: item.relatedUserName ? String(item.relatedUserName) : undefined,
+      note: item.note ? String(item.note) : undefined,
+    })).filter((item) => item.id && item.entryId && item.occurredAt) : [];
   }, [t0JournalQuery.data]);
   const sharedIncomeReductionsByClosingEntryId = useMemo(() => {
     const rows = (t0JournalQuery.data as any)?.sharedIncomeReductions;
@@ -8832,9 +8864,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               <button type="button" onClick={() => setShowGlobalLedger(false)} aria-label="关闭全局账本" className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white active:scale-95"><ArrowLeft className="h-4 w-4 text-slate-700" /></button>
               <div className="min-w-0 flex-1"><h2 className="font-semibold text-slate-900">T+0 全局账本</h2><div className="truncate text-[11px] text-slate-500">仅管理员可见 · 点击用户进入个人订单视图</div></div>
             </header>
-            <div className="grid shrink-0 grid-cols-2 border-b border-slate-200 bg-white px-4 pt-2">
+            <div className="grid shrink-0 grid-cols-3 border-b border-slate-200 bg-white px-4 pt-2">
               <button type="button" onClick={() => setGlobalLedgerTab("positions")} className={`h-9 border-b-2 text-sm font-semibold transition ${globalLedgerTab === "positions" ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400"}`}>币仓</button>
               <button type="button" onClick={() => setGlobalLedgerTab("funds")} className={`h-9 border-b-2 text-sm font-semibold transition ${globalLedgerTab === "funds" ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400"}`}>用户资金</button>
+              <button type="button" onClick={() => setGlobalLedgerTab("system")} className={`h-9 border-b-2 text-sm font-semibold transition ${globalLedgerTab === "system" ? "border-slate-900 text-slate-900" : "border-transparent text-slate-400"}`}>动态</button>
             </div>
             <main className="min-h-0 flex-1 overflow-y-auto">
               {globalLedgerTab === "positions" && <>
@@ -8925,6 +8958,40 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     </div>
                   </div>
                 </div> : <div className="px-5 py-14 text-center text-sm text-slate-400">暂无用户资金记录。</div>}
+              </>}
+              {globalLedgerTab === "system" && <>
+                <div className="border-b border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500">后台自动成交、历史区间补扫、自动止盈与期权到期结算都会在这里留痕 · 共 {systemActivityLogs.length} 条</div>
+                {systemActivityLogs.length > 0 ? <div className="divide-y divide-slate-200 border-y border-slate-200 bg-white">
+                  {systemActivityLogs.map((item) => {
+                    const presentation = item.type === "recovery_fill"
+                      ? { label: "补扫成交", className: "border-blue-200 bg-blue-50 text-blue-700" }
+                      : item.type === "take_profit"
+                        ? { label: "自动止盈", className: "border-emerald-200 bg-emerald-50 text-emerald-700" }
+                        : item.type === "expiry_settlement"
+                          ? { label: "到期结算", className: "border-violet-200 bg-violet-50 text-violet-700" }
+                          : { label: "自动成交", className: "border-sky-200 bg-sky-50 text-sky-700" };
+                    const subject = [item.accountName, item.relatedUserName].filter((value): value is string => Boolean(value && value.trim())).join(" · ");
+                    const hasQuantity = Number.isFinite(item.quantity) && item.quantity > 0;
+                    const hasPrice = Number.isFinite(item.price) && item.price > 0;
+                    return <article key={item.id} className="border-l-4 border-l-slate-300 px-4 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-semibold ${presentation.className}`}>{presentation.label}</span>
+                          <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{subject || `订单 #${item.entryId}`}</span>
+                        </div>
+                        <time className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-slate-400">{item.occurredAtLabel ? item.occurredAtLabel.replace(/^(\d{4})\/(\d{2})\/(\d{2})/, (_match, _year, month, day) => `${Number(month)}/${Number(day)}`) : formatBeijingMonthDayTime(item.occurredAt)}</time>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-slate-600 tabular-nums">
+                        <span>订单 #{item.entryId}</span>
+                        <span className="text-slate-300">·</span>
+                        <span className="font-semibold text-slate-700">{item.action}</span>
+                        {hasQuantity && <><span className="text-slate-300">·</span><span>{formatQuantity(item.quantity)} ETH</span></>}
+                        {hasPrice && <><span className="text-slate-300">·</span><span>{formatPrice(item.price)} u</span></>}
+                      </div>
+                      {item.note && <p className="mt-1.5 break-words text-[11px] leading-relaxed text-slate-500">{item.note}</p>}
+                    </article>;
+                  })}
+                </div> : <div className="px-5 py-14 text-center text-sm text-slate-400">暂时没有后台自动处理的订单动态。</div>}
               </>}
             </main>
             {globalLedgerTab === "positions" && globalLedgerRows.length > 0 && <footer className="flex min-h-[56px] shrink-0 items-center border-t-2 border-slate-300 bg-slate-50 px-4 shadow-[0_-2px_8px_rgba(15,23,42,0.08)]">
