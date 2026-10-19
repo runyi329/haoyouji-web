@@ -3775,6 +3775,7 @@ function remainingOptionOpeningCents(rows: any[], openingEntryId: number): numbe
 let pendingOrderScannerStarted = false;
 let pendingOrderScanActive = false;
 let pendingOrderScanInFlight = false;
+let pendingOrderScanStateRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
 /** 行情流仅在存在未成交挂单或已成交的止盈计划时才触发数据库写入判定。 */
 export function hasLedger52T0PendingOrders() {
@@ -4281,9 +4282,22 @@ export function startLedger52T0ExpiredOptionScanner() {
 export function startLedger52T0PendingOrderScanner() {
   if (pendingOrderScannerStarted || process.env.DEV_BYPASS_AUTH === "true") return;
   pendingOrderScannerStarted = true;
-  void refreshLedger52T0PendingOrderScanState()
-    .then((hasPending) => console.log(`[T0自动订单] 实时标记价触发已启动（${hasPending ? "当前有挂单或止盈" : "当前无自动订单"}）`))
-    .catch((error) => console.error("[T0自动订单] 初始化状态失败:", error instanceof Error ? error.message : error));
+  const refreshScanState = (reason: "初始化" | "定时复核") => {
+    const wasActive = pendingOrderScanActive;
+    void refreshLedger52T0PendingOrderScanState()
+      .then((hasPending) => {
+        if (reason === "初始化") {
+          console.log(`[T0自动订单] 实时标记价触发已启动（${hasPending ? "当前有挂单或止盈" : "当前无自动订单"}）`);
+        } else if (hasPending !== wasActive) {
+          console.log(`[T0自动订单] ${hasPending ? "发现待处理挂单或止盈，已恢复行情触发" : "当前无待处理自动订单，暂停行情触发"}`);
+        }
+      })
+      .catch((error) => console.error(`[T0自动订单] ${reason}状态失败:`, error instanceof Error ? error.message : error));
+  };
+  refreshScanState("初始化");
+  // 状态只留在当前 Node 进程内；定时复核可覆盖服务重启、首次初始化失败，
+  // 以及集群请求落在不同进程时未同步到本地内存的情形。
+  pendingOrderScanStateRefreshTimer = setInterval(() => refreshScanState("定时复核"), 60_000);
 }
 
 export async function updateLedger52T0JournalOpeningEntry(input: {

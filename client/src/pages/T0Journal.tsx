@@ -3125,7 +3125,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       // 成员端账户不属于筛选维度，必须忽略旧版 localStorage 中可能残留的账户条件。
       (isMemberView || selectedAccountIds.length === 0 || selectedAccountIds.includes(trade.accountId))
       && trade.symbol === "ETH"
-      && (relatedUserFilterIds.length === 0
+      // 成员/管理员用户预览的数据范围已经由服务端锁定为“本人订单 + 明确分佣/共享来源”。
+      // 不能再用管理员切换前遗留的用户筛选二次过滤，否则预览中会只剩共享来源，漏掉本人已平订单收益。
+      && (isMemberView
+        || relatedUserFilterIds.length === 0
         || topRelatedUserFilter.waitingForReferralData
         || (topRelatedUserFilter.includesUnlinked && (!trade.relatedUserId || trade.relatedUserHidden))
         || Boolean(trade.relatedUserId && topRelatedUserFilter.userIds.has(trade.relatedUserId))
@@ -3199,6 +3202,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && (historyIsMemberPresentation || historyAccountFilterIds.length === 0 || historyAccountFilterIds.includes(trade.accountId))
       // 用户呈现已在源数据层严格按本人/分层快照过滤，不能再套用管理员的用户、推荐或账户筛选。
       && (isHistoryUserPerspective
+        || isMemberView
         || historyRelatedUserFilterIds.length === 0
         || historyRelatedUserFilter.waitingForReferralData
         || (historyRelatedUserFilter.includesUnlinked && (!trade.relatedUserId || trade.relatedUserHidden))
@@ -3612,17 +3616,23 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   }, [isUserPreview, me, previewUserId, selectedPreviewMember, trades]);
   const payoutLogs = useMemo<T0JournalPayoutLog[]>(() => {
     const rows = t0PayoutLogsQuery.data;
-    return Array.isArray(rows) ? rows.map((row: any) => ({
-      id: String(row.id),
-      relatedUserId: Number(row.relatedUserId || 0),
-      relatedUserName: String(row.relatedUserName || "当前用户"),
-      occurredOn: String(row.occurredOn || "").slice(0, 10),
-      direction: String(row.direction) === "deposit" ? "deposit" : "withdrawal",
-      amount: Number(row.amount || 0),
-      note: String(row.note || "").trim() || undefined,
-      createdAt: String(row.createdAt || ""),
-    })) : [];
-  }, [t0PayoutLogsQuery.data]);
+    const targetUserId = Number(payoutTargetRelatedUserId);
+    if (!Array.isArray(rows) || !Number.isInteger(targetUserId) || targetUserId <= 0) return [];
+    // 用户预览切换时，React Query 可能在新请求返回前短暂保留上一位用户的缓存。
+    // 资金流水必须以当前报告用户为唯一口径：缓存不匹配时宁可暂不显示，也绝不展示别人的提现。
+    return rows
+      .filter((row: any) => Number(row.relatedUserId || 0) === targetUserId)
+      .map((row: any) => ({
+        id: String(row.id),
+        relatedUserId: Number(row.relatedUserId || 0),
+        relatedUserName: String(row.relatedUserName || "当前用户"),
+        occurredOn: String(row.occurredOn || "").slice(0, 10),
+        direction: String(row.direction) === "deposit" ? "deposit" : "withdrawal",
+        amount: Number(row.amount || 0),
+        note: String(row.note || "").trim() || undefined,
+        createdAt: String(row.createdAt || ""),
+      }));
+  }, [payoutTargetRelatedUserId, t0PayoutLogsQuery.data]);
   const availableRelatedFunds = useMemo(
     () => relatedUserFilterIds.length === 0 || topRelatedUserFilter.waitingForReferralData
       ? relatedFunds
@@ -8852,7 +8862,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               })}</div> : <div className="px-5 py-14 text-center text-sm text-slate-400">当前还没有关联用户订单。</div>}
               </>}
               {globalLedgerTab === "funds" && <>
-                <div className="border-b border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500">按用户汇总资金流水、订单 / 佣金 / 共享收益及对应支出 · 左右滑动查看全部字段 · 点击累计出金逐笔编辑</div>
+                <div className="border-b border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500">按用户汇总资金流水、订单 / 佣金 / 共享收益及对应支出 · 左右滑动查看全部字段 · 点击累计入金或累计出金逐笔编辑</div>
                 {globalFundsRows.length > 0 ? <div className="overflow-x-auto overscroll-x-contain border-y border-slate-200 bg-white">
                   <div className="min-w-[840px] divide-y divide-slate-200">
                     <div className="grid h-10 grid-cols-[112px_repeat(7,minmax(104px,1fr))] divide-x divide-slate-200 bg-slate-50 text-[13px] font-medium text-slate-500">
@@ -8882,7 +8892,13 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                           setShowGlobalLedger(false);
                           t0Toast.message(`已切换至 ${row.name} 的订单视图`);
                         }} className="sticky left-0 z-10 flex min-w-0 items-center truncate bg-white px-3 text-left text-[17px] font-semibold text-slate-800 shadow-[2px_0_4px_rgba(15,23,42,0.06)] active:bg-slate-50" title={`查看 ${row.name} 的订单`}>{row.name}</button>
-                        <span className="flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums text-slate-800">{Math.round(row.deposit).toLocaleString("zh-CN")}</span>
+                        <button type="button" onClick={() => {
+                          setRelatedUserFilterIds([row.userId]);
+                          setSelectedAccountIds([]);
+                          setRelatedFundFilterIds([]);
+                          setGlobalLedgerTab("funds");
+                          openPayoutEntryPage("deposit");
+                        }} className="flex items-center justify-end whitespace-nowrap bg-sky-50/45 px-3 text-right text-[18px] font-bold leading-none tabular-nums text-slate-800 transition active:bg-sky-100" title="点击逐笔编辑入金流水" aria-label={`编辑 ${row.name} 的累计入金`}>{Math.round(row.deposit).toLocaleString("zh-CN")}</button>
                         <span className={`flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums ${orderProfitClass}`}>{Math.round(row.orderProfit).toLocaleString("zh-CN")}</span>
                         <span className={`flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums ${commissionProfitClass}`}>{Math.round(row.commissionProfit).toLocaleString("zh-CN")}</span>
                         <span className="flex items-center justify-end whitespace-nowrap px-3 text-[18px] font-bold leading-none tabular-nums text-blue-600">{Math.round(row.sharedProfit).toLocaleString("zh-CN")}</span>

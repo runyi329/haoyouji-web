@@ -762,6 +762,9 @@ async function startServer() {
       // 轻量预览不启动交易、资金、预警等后台任务；但37号保证金、52号担保物和
       // 钱包估值都必须走同一份实时行情缓存，不能把 ETH 等币种按 ¥0 处理。
       startPriceScanner();
+      // DEV_BYPASS_AUTH 本地热预览会在扫描器内部直接退出，不会写入真实流水；
+      // 若生产环境误带 FAST_PREVIEW，仍确保 T+0 自动订单不被整个后台任务短路。
+      startLedger52T0PendingOrderScanner();
       console.log('[FastPreview] 无关后台任务已禁用；统一行情扫描已保留用于实时估值');
       return;
     }
@@ -784,6 +787,10 @@ async function startServer() {
     // 启动实时价格扫描器（每60秒刷新 BTC/ETH/SOL 现货价格）
     startPriceScanner();
 
+    // 必须紧跟行情扫描启动：不能等待商城等无关生命周期任务完成，
+    // 否则其网络或数据库延迟会让已存在的 T+0 挂单错过整段行情。
+    startLedger52T0PendingOrderScanner();
+
     // 紫鼎商城：每 10 分钟释放超时未传凭证订单的预占库存，并自动确认到期已发货订单。
     const runZidingLifecycle = async () => {
       try {
@@ -797,9 +804,6 @@ async function startServer() {
     };
     await runZidingLifecycle();
     setInterval(runZidingLifecycle, 10 * 60 * 1000);
-
-    // 管理员T+0逐笔挂单以统一 ETH 永续标记价自动确认成交；挂单未成交前不计入真实仓位和收益。
-    startLedger52T0PendingOrderScanner();
 
     // T+0 ETH期权在到期日北京时间16:00后，仅以Deribit官方交割记录自动结算并归档。
     startLedger52T0ExpiredOptionScanner();
