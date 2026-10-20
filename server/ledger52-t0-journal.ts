@@ -3957,6 +3957,22 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     );
     const entryId = Number((entryResult as any).insertId || 0);
     if (!entryId) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "速记流水保存失败" });
+    // 插入后立即按交易核心字段复核。若未来新增列时列值数组意外错位，必须整笔事务回滚，
+    // 不能让错误数量、价格或方向继续参与手续费、仓位与收益分配。
+    const [writtenEntryRows] = await tx.execute(
+      `SELECT action, quantity, price
+         FROM ledger52_t0_journal_entries
+        WHERE id = ? AND ledger_id = ? AND user_id = ?
+        LIMIT 1 FOR UPDATE`,
+      [entryId, LEDGER_52_T0_JOURNAL_ID, input.actorUserId],
+    );
+    const writtenEntry = asRows(writtenEntryRows)[0];
+    if (!writtenEntry
+      || String(writtenEntry.action) !== input.action
+      || quantityToCents(writtenEntry.quantity) !== quantityToCents(normalizedQuantity)
+      || Math.abs(toNumber(writtenEntry.price) - toNumber(effectivePrice)) > 0.000001) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "订单核心字段写入校验失败，已自动撤回，请重新保存" });
+    }
     if (!isRetryOfExistingEntry && isOpeningAction(input.action)) {
       if (reminderTemplateId > 0) {
         const [reminderUpdate] = await tx.execute(

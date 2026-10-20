@@ -2435,6 +2435,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   const [closeConfirmationStep, setCloseConfirmationStep] = useState<"input" | "review">("input");
   // 平仓必须以服务端事务提交为准；失败时保留二次确认页，不能让界面误以为已成交。
   const [closeSaveError, setCloseSaveError] = useState<string | null>(null);
+  // 开仓同样不能乐观关闭。顶部提示已静默，所有校验与服务端失败都必须留在当前表单内。
+  const [openingSaveError, setOpeningSaveError] = useState<string | null>(null);
   /** 平仓确认中的共享收益草案：仅在提交当下传入服务端，额度仍由服务端用收益快照复核。 */
   const [sharedIncomeDrafts, setSharedIncomeDrafts] = useState<Record<string, string>>({});
   const [sharedIncomeTargetSelections, setSharedIncomeTargetSelections] = useState<Record<string, number>>({});
@@ -3018,6 +3020,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setSharedIncomeTargetSelections({});
       setCloseSaveError(null);
     }
+    if (!showEntrySheet) setOpeningSaveError(null);
   }, [closeConfirmationStep, showEntrySheet]);
 
   useEffect(() => {
@@ -5652,6 +5655,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         setShowEntrySheet(false);
         setCloseConfirmationStep("input");
         if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
+      } else {
+        // 开仓也以实际落库为准：确认成功后才收起表单，杜绝“看起来已保存”却没有流水。
+        setOpeningSaveError(null);
+        setShowEntrySheet(false);
+        if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
+        void t0JournalQuery.refetch();
       }
       t0Toast.success(isClosingEntry
         ? `已确认${ACTIONS[entry.action].label} ${formatQuantity(entry.quantity)} ETH`
@@ -5672,6 +5681,10 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         setCloseSaveError(message);
         setShowEntrySheet(true);
         setCloseConfirmationStep("review");
+      } else {
+        setOpeningSaveError(message);
+        setShowEntrySheet(true);
+        setCloseConfirmationStep("input");
       }
       t0Toast.error(isClosingEntry ? `平仓未确认：${message}` : message);
     },
@@ -6054,6 +6067,12 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const normalizedQuantity = normalizeEthQuantity(entryForm.quantity);
     const quantity = Number(normalizedQuantity);
     const selectedAction = ACTIONS[entryForm.action];
+    const showSaveValidationError = (message: string) => {
+      if (selectedAction.opening) setOpeningSaveError(message);
+      else setCloseSaveError(message);
+      t0Toast.error(message);
+    };
+    if (selectedAction.opening) setOpeningSaveError(null);
     const isCounterpartyClosing = !selectedAction.opening && Boolean(closingSourceTrade?.isCounterpartyView);
     // 管理员反向投影下的“平空/平多”仅是展示方向；写库仍沿用用户端原始方向，确保 FIFO 永远以真实流水核算。
     const storedAction = isCounterpartyClosing ? invertTradeAction(entryForm.action) : entryForm.action;
@@ -6077,29 +6096,29 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const normalizedRelatedFundName = entryForm.relatedFundName.trim();
 
     if (quantityFormatError) {
-      t0Toast.error(quantityFormatError);
+      showSaveValidationError(quantityFormatError);
       return;
     }
     if (!Number.isFinite(quantity) || quantity <= 0) {
-      t0Toast.error("请输入大于 0 的 ETH 数量");
+      showSaveValidationError("请输入大于 0 的 ETH 数量");
       return;
     }
     if (selectedAction.opening && !entryForm.instrumentType) {
-      t0Toast.error("请选择现货、合约、期权或网格");
+      showSaveValidationError("请选择现货、合约、期权或网格");
       return;
     }
     if (isOptionOpening) {
       if (optionFormValidationMessage) {
-        t0Toast.error(optionFormValidationMessage);
+        showSaveValidationError(optionFormValidationMessage);
         return;
       }
     }
     if (isGridOpening && gridFormValidationMessage) {
-      t0Toast.error(gridFormValidationMessage);
+      showSaveValidationError(gridFormValidationMessage);
       return;
     }
     if (!Number.isFinite(price) || price <= 0) {
-      t0Toast.error(isOptionOpening ? "请输入行权价" : isGridOpening ? "请先填写网格区间" : "请输入成交价格");
+      showSaveValidationError(isOptionOpening ? "请输入行权价" : isGridOpening ? "请先填写网格区间" : "请输入成交价格");
       return;
     }
     const takeProfitPlans = entryForm.isTakeProfit ? normalizeTakeProfitPlanDrafts(entryForm.takeProfitPlans) : [];
@@ -6107,11 +6126,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       && (entryForm.instrumentType === "spot" || entryForm.instrumentType === "contract");
     if (entryForm.isTakeProfit) {
       if (!isTakeProfitEligible) {
-        t0Toast.error("止盈仅支持现货和合约开仓");
+        showSaveValidationError("止盈仅支持现货和合约开仓");
         return;
       }
       if (takeProfitPlans.length === 0) {
-        t0Toast.error("请至少添加一段止盈计划");
+        showSaveValidationError("请至少添加一段止盈计划");
         return;
       }
       let takeProfitTotalQuantity = 0;
@@ -6120,25 +6139,25 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         const takeProfitPrice = Number(plan.price);
         const takeProfitQuantity = Number(plan.quantity);
         if (!Number.isFinite(takeProfitPrice) || takeProfitPrice <= 0) {
-          t0Toast.error(`第 ${index + 1} 段止盈价格无效`);
+          showSaveValidationError(`第 ${index + 1} 段止盈价格无效`);
           return;
         }
         if (!Number.isFinite(takeProfitQuantity) || takeProfitQuantity <= 0) {
-          t0Toast.error(`第 ${index + 1} 段止盈数量无效`);
+          showSaveValidationError(`第 ${index + 1} 段止盈数量无效`);
           return;
         }
         if (selectedAction.side === "long" && takeProfitPrice <= price) {
-          t0Toast.error(`第 ${index + 1} 段多单止盈价须高于开仓价`);
+          showSaveValidationError(`第 ${index + 1} 段多单止盈价须高于开仓价`);
           return;
         }
         if (selectedAction.side === "short" && takeProfitPrice >= price) {
-          t0Toast.error(`第 ${index + 1} 段空单止盈价须低于开仓价`);
+          showSaveValidationError(`第 ${index + 1} 段空单止盈价须低于开仓价`);
           return;
         }
         takeProfitTotalQuantity += takeProfitQuantity;
       }
       if (takeProfitTotalQuantity > quantity + 0.0000001) {
-        t0Toast.error("全部止盈数量合计不得超过本笔可用数量");
+        showSaveValidationError("全部止盈数量合计不得超过本笔可用数量");
         return;
       }
     }
@@ -6148,29 +6167,29 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
         ? undefined
         : archivePriceForSide(selectedAction.side, entryForm.targetPrice);
     if (!hasPersistedAccountId && !normalizedAccountName) {
-      t0Toast.error("请在最后选择或新建下单账户");
+      showSaveValidationError("请在最后选择或新建下单账户");
       return;
     }
     if (entryForm.relatedUserId && !normalizedRelatedUserId) {
-      t0Toast.error("关联用户信息无效，请重新选择或暂不关联");
+      showSaveValidationError("关联用户信息无效，请重新选择或暂不关联");
       return;
     }
     if (entryForm.relatedFundId && entryForm.relatedFundId !== "legacy" && !normalizedRelatedFundId) {
-      t0Toast.error("专项款信息无效，请重新选择或新建");
+      showSaveValidationError("专项款信息无效，请重新选择或新建");
       return;
     }
     if (!normalizedRelatedUserId && (normalizedRelatedFundId || normalizedRelatedFundName)) {
-      t0Toast.error("请先选择关联用户，再选择专项款");
+      showSaveValidationError("请先选择关联用户，再选择专项款");
       return;
     }
     if (selectedAction.opening && !entryForm.editingEntryId && normalizedRelatedUserId && !normalizedRelatedFundId && !normalizedRelatedFundName) {
-      t0Toast.error("关联用户开仓时，请选择或新建专项款");
+      showSaveValidationError("关联用户开仓时，请选择或新建专项款");
       return;
     }
     if (selectedAction.opening && !entryForm.editingEntryId && normalizedRelatedUserId
       && ((normalizedRelatedFundId && !profitShareRules.some((rule) => rule.relatedFundId === normalizedRelatedFundId))
         || (!normalizedRelatedFundId && Boolean(normalizedRelatedFundName)))) {
-      t0Toast.error("请先点击项目右侧的“收益分配”，完成合计100%的用户分配设置");
+      showSaveValidationError("请先点击项目右侧的“收益分配”，完成合计100%的用户分配设置");
       return;
     }
 
@@ -6330,10 +6349,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       setCloseSaveError(null);
       t0Toast.message("正在确认平仓，等待账本写入");
     } else {
-      setShowEntrySheet(false);
-      setCloseConfirmationStep("input");
-      if (canManage) setAdminLadderDisplayMode(entrySheetLadderDisplayModeRef.current);
-      t0Toast.message("已速记，正在后台保存");
+      // 开仓不再乐观收起：服务端提交完成前保留当前表单并禁用保存按钮。
+      setOpeningSaveError(null);
+      t0Toast.message("正在保存，等待账本写入");
     }
     saveEntryMutation.mutate({
       ledgerId: 52,
@@ -8802,13 +8820,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               ? "sticky bottom-0 border-t border-slate-100 bg-white/95 px-4 py-3 backdrop-blur"
               : "fixed inset-x-0 bottom-0 z-20 border-t border-slate-100 bg-white/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur"
             }>
+              {!isCloseReview && openingSaveError && <div role="alert" className="mb-2 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
+                <span className="font-semibold">未保存：</span>{openingSaveError}。请保留当前内容修改后重新保存。
+              </div>}
               {!isCloseReview && (
                 <button
                   disabled={(isEditingEntry ? updateOpeningEntryMutation.isPending || (hasDependentCloseOpeningEdit && (!isPartiallyClosedOpeningEdit || (!hasPartialOpeningMarkerChange && !hasPartialTakeProfitChange))) : saveEntryMutation.isPending || (isClosingEntry && entryForm.targetPrice === undefined)) || Boolean(optionFormValidationMessage)}
                   onClick={() => handleSaveEntry(isPendingFillConfirmationQueued)}
                   className="w-full h-12 rounded bg-indigo-600 text-sm font-semibold text-white shadow-sm disabled:opacity-40 active:scale-[0.99]"
                 >
-                  {isEditingEntry ? "保存修改" : isClosingEntry ? `确认${ACTIONS[entryForm.action].label}参数` : "快速保存并记账"}
+                  {isEditingEntry
+                    ? (updateOpeningEntryMutation.isPending ? "正在保存…" : "保存修改")
+                    : isClosingEntry
+                      ? `确认${ACTIONS[entryForm.action].label}参数`
+                      : (saveEntryMutation.isPending ? "正在保存…" : "快速保存并记账")}
                 </button>
               )}
             </div>}
