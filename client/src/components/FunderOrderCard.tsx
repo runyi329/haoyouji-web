@@ -342,7 +342,7 @@ export function DatePicker({ value, onChange }: { value: string; onChange: (v: s
   );
 }
 
-// ===== 订单公开备注组件 =====
+// ===== 订单共享备注组件 =====
 interface NoteItem { text: string; time: string; userId?: number; userName?: string; userAvatar?: string; }
 export function parseNotes(raw: string): NoteItem[] {
   if (!raw) return [];
@@ -395,7 +395,10 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
     setEditValue('');
   }, [initialNote, participantUserId]);
   const updateNote = trpc.ledger.funderUpdatePublicNote.useMutation();
-  const canEdit = (note: NoteItem) => isAdmin || (currentUser && note.userId && note.userId === currentUser.id);
+  // 管理员可以管理所有共享备注；普通成员仅可管理自己写入且带有作者标识的备注。
+  // 无作者标识的历史备注保守视为他人内容，避免普通成员误删。
+  const canManageNote = (note: NoteItem) => isAdmin || (currentUser && note.userId && note.userId === currentUser.id);
+  const canModifyNote = (note: NoteItem) => Boolean(canManageNote(note) && (!isSettled || isAdmin));
   const saveNotes = async (newNotes: NoteItem[]) => {
     setSaving(true);
     try {
@@ -406,7 +409,7 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
     } finally { setSaving(false); }
   };
   const handleSaveEdit = async (idx: number) => {
-    if (isSettled || !editValue.trim()) return;
+    if (!canModifyNote(notes[idx]) || !editValue.trim()) return;
     await saveNotes(notes.map((n, i) => i === idx ? { ...n, text: editValue.trim(), time: new Date().toISOString() } : n));
     setEditingIdx(null);
   };
@@ -420,21 +423,21 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
     setEditingIdx(null);
   };
   const handleDelete = async (idx: number) => {
-    if (isSettled) return;
+    if (!canModifyNote(notes[idx])) return;
     await saveNotes(notes.filter((_, i) => i !== idx));
   };
   return (
     <div className="text-xs" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <div className="flex items-center gap-1.5">
-          <span className="shrink-0 text-xs font-bold" style={{ color: '#6B7280' }}>公开备注</span>
+          <span className="shrink-0 text-xs font-bold" style={{ color: '#6B7280' }}>共享备注</span>
           {notes.length > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#EEF2FF', color: '#6366F1' }}>{notes.length}</span>}
         </div>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9" /></svg>
       </div>
       {expanded && (
         <div className="mt-1.5">
-          {notes.length === 0 && <div style={{ color: '#C0C8D8' }} className="py-1">暂无备注</div>}
+          {notes.length === 0 && <div style={{ color: '#C0C8D8' }} className="py-1">暂无共享备注</div>}
           {notes.map((note, idx) => (
             <div key={idx}>
               {idx > 0 && <div style={{ borderTop: '1px solid #E8EFFF' }} className="my-1" />}
@@ -472,7 +475,7 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
                         <button type="button" onClick={() => copyFunderNoteText(note.text)} className="p-0.5" title="复制备注">
                           <Copy className="w-[11px] h-[11px]" style={{ color: '#9CA3AF' }} />
                         </button>
-                        {!isSettled && canEdit(note) && (
+                        {canModifyNote(note) && (
                           <>
                             <button onClick={() => { setEditingIdx(idx); setEditValue(note.text); }} className="p-0.5" title="编辑">
                               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -494,7 +497,7 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
           <div style={{ borderTop: notes.length > 0 ? '1px solid #E8EFFF' : 'none' }} className="mt-1 pt-1">
             <button type="button" onClick={handleAddNote} className="flex items-center gap-1" style={{ color: '#9CA3AF' }}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-              <span style={{ fontSize: '11px' }}>添加备注</span>
+              <span style={{ fontSize: '11px' }}>添加共享备注</span>
             </button>
           </div>
         </div>
@@ -651,6 +654,10 @@ export interface FunderOrderCardProps {
   setShowMarginInfo?: (v: boolean) => void;
   /** 预览模式：隐藏底部操作栏、公开备注区、状态操作弹窗 */
   previewMode?: boolean;
+  /** 编辑页浮动预览专用：多段订单仅展开当前指定段。 */
+  previewSegmentFocusId?: string;
+  /** 编辑页浮动预览专用：在浮窗内切换要展开的订单段。 */
+  onPreviewSegmentFocusChange?: (segmentId: string) => void;
   /** 共享担保弹窗点击订单号时，用于查找完整订单数据 */
   allOrders?: any[];
   /** 联合订单的子段卡片：只展示本段，禁止再递归读取下一层子段。 */
@@ -714,6 +721,8 @@ export function FunderOrderCard({
   showMarginInfo: _propShowMarginInfo,
   setShowMarginInfo: _propSetShowMarginInfo,
   previewMode = false,
+  previewSegmentFocusId = '__primary__',
+  onPreviewSegmentFocusChange,
   allOrders,
   jointSegmentMode = false,
 }: FunderOrderCardProps) {
@@ -891,6 +900,16 @@ export function FunderOrderCard({
     if (!Array.isArray(raw)) return [];
     return raw.filter((segment: any) => segment && typeof segment === 'object' && Number(segment.owner_user_id) === Number(_jointSegmentScopeUserId)).slice(0, 8);
   }, [jointSegmentMode, _jointSegmentScopeUserId, (order as any).joint_order_segments]);
+  // 只有编辑器的浮动预览才折叠多段；正式订单卡仍完整显示，避免改变用户端展示。
+  const isPreviewSegmentAccordion = previewMode
+    && !jointSegmentMode
+    && jointOrderSegments.length > 0
+    && typeof onPreviewSegmentFocusChange === 'function';
+  const previewFocusedSegmentId = previewSegmentFocusId === '__primary__'
+    || jointOrderSegments.some((segment, index) => String(segment.id || `segment-${index + 2}`) === previewSegmentFocusId)
+    ? previewSegmentFocusId
+    : '__primary__';
+  const isPrimaryPreviewSegmentExpanded = !isPreviewSegmentAccordion || previewFocusedSegmentId === '__primary__';
   // 「他人」只是一张可查看的订单，不属于当前订单拥有者的任何担保池。
   // 即使历史数据仍保存了“本人订单共享”，也不能从该卡片打开本人共享担保弹窗。
   const _isOtherPerspective = String((order as any).order_perspective || 'self') === 'other';
@@ -2758,6 +2777,35 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       </div>
       </>}
 
+      {isPreviewSegmentAccordion && (
+        <div className="flex items-center gap-1 overflow-x-auto border-b px-3 py-1.5" style={{ borderColor: '#E4E8F5', backgroundColor: '#F8FAFC' }}>
+          <button
+            type="button"
+            onClick={(event) => { event.stopPropagation(); onPreviewSegmentFocusChange?.('__primary__'); }}
+            className={`shrink-0 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors ${previewFocusedSegmentId === '__primary__' ? 'border-blue-500 bg-blue-500 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
+            aria-pressed={previewFocusedSegmentId === '__primary__'}
+          >
+            第 1 段
+          </button>
+          {jointOrderSegments.map((segment, index) => {
+            const segmentId = String(segment.id || `segment-${index + 2}`);
+            const active = previewFocusedSegmentId === segmentId;
+            return (
+              <button
+                key={segmentId}
+                type="button"
+                onClick={(event) => { event.stopPropagation(); onPreviewSegmentFocusChange?.(segmentId); }}
+                className={`shrink-0 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors ${active ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
+                aria-pressed={active}
+              >
+                第 {index + 2} 段
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {isPrimaryPreviewSegmentExpanded && <>
       {/* 主体：左右两栏布局 */}
       <div className="flex">
 
@@ -4713,8 +4761,13 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         </div>
       )}
 
+      </>}
+
         {/* 第二段嵌入同一张订单卡片：共用页眉、结清状态与页尾备注，仅主体数据分段展示。 */}
     {jointOrderSegments.map((segment, index) => {
+      const segmentId = String(segment.id || `segment-${index + 2}`);
+      // 浮动预览中只完整展示当前编辑段；其他段由上方小切换条代表，避免多段订单撑满手机屏幕。
+      if (isPreviewSegmentAccordion && previewFocusedSegmentId !== segmentId) return null;
       let parentDisplayConfig: Record<string, any> = {};
       let segmentDisplayConfig: Record<string, any> = {};
       try { parentDisplayConfig = typeof (order as any).display_config === 'string' ? JSON.parse((order as any).display_config) : ((order as any).display_config || {}); } catch {}
@@ -4750,7 +4803,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
       };
       return (
         <div
-          key={`joint-segment-${order.id}-${String(segment.id || index)}`}
+          key={`joint-segment-${order.id}-${segmentId}`}
           className="w-full"
           style={{ background: String(segment.status || '').toLowerCase() === 'settled' ? '#FFF7F7' : (isParticipantVisual ? '#F0FDF4' : '#ffffff') }}
         >
@@ -5503,7 +5556,7 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
         )}
 
 
-        {/* 公开备注区域 */}
+        {/* 共享备注区域 */}
         {!previewMode && !jointSegmentMode && <FunderNoteRow
           orderId={order.id}
           ledgerId={ledgerId}

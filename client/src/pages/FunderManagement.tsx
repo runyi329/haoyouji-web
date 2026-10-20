@@ -317,6 +317,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   // 联合订单子段保存到指定拥有者／参与者的个人快照；主订单不保存、不共享。
   const [jointOrderSegments, setJointOrderSegments] = useState<JointOrderSegmentDraft[]>([]);
   const [jointOrderPanelExpanded, setJointOrderPanelExpanded] = useState(false);
+  // 浮窗预览仅展开当前编辑的段；第一段用固定标识，后续段使用其稳定 ID。
+  const [floatingPreviewSegmentId, setFloatingPreviewSegmentId] = useState('__primary__');
   const [jointOrderTargetUserId, setJointOrderTargetUserId] = useState<number | null>(null);
   const [jointOrderSegmentsDirty, setJointOrderSegmentsDirty] = useState(false);
   const [jointDatePickerFor, setJointDatePickerFor] = useState<string | null>(null);
@@ -1106,6 +1108,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const selectJointOrderTarget = (userId: number) => {
     // 立即清空旧拥有者的局部草稿，避免在 effect 装载新快照前出现串读闪屏。
     setJointOrderSegments([]);
+    setFloatingPreviewSegmentId('__primary__');
     setJointOrderTargetUserId(userId);
     setJointOrderSegmentsDirty(false);
     jointOrderSegmentsLoadedRef.current = null;
@@ -3247,6 +3250,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     if (!showForm) return;
     floatingPreviewPinnedRef.current = false;
     setFloatingPreviewTop(null);
+    setFloatingPreviewSegmentId('__primary__');
   }, [showForm]);
 
   const clampFloatingPreviewTop = (requestedTop: number) => {
@@ -3411,6 +3415,8 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         membersData={((ledgerData as any)?.members || funderUsers) as any[]}
                         ledgerId={ledgerId}
                         previewMode={true}
+                        previewSegmentFocusId={floatingPreviewSegmentId}
+                        onPreviewSegmentFocusChange={setFloatingPreviewSegmentId}
                         showCollateralInfo={showPreviewCollateralInfo}
                         setShowCollateralInfo={setShowPreviewCollateralInfo}
                         showMarginInfo={showPreviewMarginInfo}
@@ -5952,13 +5958,18 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         const isNegativeRate = String(segment.interest_rate_annual || '').startsWith('-');
                         const segmentPeriodInterestTotalEnabled = segmentDisplay.periodInterestTotal === true;
                         return (
-                          <div key={segment.id} className="space-y-5 border-t border-dashed border-indigo-200 pt-4 first:border-t-0 first:pt-0">
+                          <div
+                            key={segment.id}
+                            className="space-y-5 border-t border-dashed border-indigo-200 pt-4 first:border-t-0 first:pt-0"
+                            onFocusCapture={() => setFloatingPreviewSegmentId(String(segment.id || `segment-${index + 2}`))}
+                            onPointerDownCapture={() => setFloatingPreviewSegmentId(String(segment.id || `segment-${index + 2}`))}
+                          >
                             <div className="flex items-center justify-between gap-3">
                               <div>
                                 <div className="text-sm font-semibold text-indigo-800">第 {index + 2} 段</div>
                                 <div className="mt-0.5 text-[11px] text-indigo-500">仅本段金额、利息、担保和展示设置独立；标的与订单状态共用</div>
                               </div>
-                              <button type="button" onClick={() => { setJointOrderSegments(current => current.filter((_, itemIndex) => itemIndex !== index)); setJointOrderSegmentsDirty(true); }} className="rounded-lg border border-red-100 bg-red-50 p-2 text-red-500 hover:bg-red-100" aria-label={`删除第${index + 2}段`}>
+                              <button type="button" onClick={() => { setJointOrderSegments(current => current.filter((_, itemIndex) => itemIndex !== index)); setFloatingPreviewSegmentId(current => current === String(segment.id || `segment-${index + 2}`) ? '__primary__' : current); setJointOrderSegmentsDirty(true); }} className="rounded-lg border border-red-100 bg-red-50 p-2 text-red-500 hover:bg-red-100" aria-label={`删除第${index + 2}段`}>
                                 <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
@@ -6089,7 +6100,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                           </div>
                         );
                       })}
-                      <button type="button" onClick={() => { const participantUserId = Number(activeJointOrderTarget.userId || 0); setJointOrderSegments(current => [...current, { id: `segment-${Date.now()}`, owner_user_id: participantUserId, amount: '', amount_currency: formData.assetType === 'stock' ? 'CNY' : formData.amountCurrency === 'CNY' ? 'CNY' : 'USDT', buy_date: formData.buyDate || getBeijingToday(), interest_rate_annual: normalizeFunderAnnualRate(formData.interestRateAnnual), interest_base: formData.interestBase || '', interest_base_currency: formData.interestBaseCurrency, interest_rate_currency: formData.interestRateCurrency, interest_payment_type: formData.interestPaymentType || '', interest_start_date: formData.interestStartDate || getBeijingToday(), buy_price: formData.assetType === 'stock' ? '' : formData.buyPrice || '', buy_quantity: formData.assetType === 'stock' ? '' : formData.buyQuantity || '', storage_account: formData.storageAccount || '', broker_name: formData.brokerName || '', broker_account: formData.brokerAccount || '', principal_lent_out: effectivePrincipalLentOut, show_profit_share: Boolean(displayConfig.profitShare), profit_share_ratio: formData.profitShareRatio || '', profit_share_type: formData.profitShareType === 'coin' ? 'coin' : 'interest', commission_share: formData.commissionShare || '', trading_fee_rate_per_mille: formData.tradingFeeRate || '2', trading_fee_status: formData.tradingFeeStatus || 'unpaid', collateral_assets: [], display_config: { ...displayConfig, buyDate: true, holdDuration: true } }]); setJointOrderSegmentsDirty(true); }} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-indigo-300 bg-white py-3 text-sm font-semibold text-indigo-600 hover:bg-indigo-50"><Plus className="h-4 w-4" />添加第二段</button>
+                      <button type="button" onClick={() => { const participantUserId = Number(activeJointOrderTarget.userId || 0); const nextSegmentId = `segment-${Date.now()}`; setJointOrderSegments(current => [...current, { id: nextSegmentId, owner_user_id: participantUserId, amount: '', amount_currency: formData.assetType === 'stock' ? 'CNY' : formData.amountCurrency === 'CNY' ? 'CNY' : 'USDT', buy_date: formData.buyDate || getBeijingToday(), interest_rate_annual: normalizeFunderAnnualRate(formData.interestRateAnnual), interest_base: formData.interestBase || '', interest_base_currency: formData.interestBaseCurrency, interest_rate_currency: formData.interestRateCurrency, interest_payment_type: formData.interestPaymentType || '', interest_start_date: formData.interestStartDate || getBeijingToday(), buy_price: formData.assetType === 'stock' ? '' : formData.buyPrice || '', buy_quantity: formData.assetType === 'stock' ? '' : formData.buyQuantity || '', storage_account: formData.storageAccount || '', broker_name: formData.brokerName || '', broker_account: formData.brokerAccount || '', principal_lent_out: effectivePrincipalLentOut, show_profit_share: Boolean(displayConfig.profitShare), profit_share_ratio: formData.profitShareRatio || '', profit_share_type: formData.profitShareType === 'coin' ? 'coin' : 'interest', commission_share: formData.commissionShare || '', trading_fee_rate_per_mille: formData.tradingFeeRate || '2', trading_fee_status: formData.tradingFeeStatus || 'unpaid', collateral_assets: [], display_config: { ...displayConfig, buyDate: true, holdDuration: true } }]); setFloatingPreviewSegmentId(nextSegmentId); setJointOrderSegmentsDirty(true); }} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-indigo-300 bg-white py-3 text-sm font-semibold text-indigo-600 hover:bg-indigo-50"><Plus className="h-4 w-4" />添加第二段</button>
                     </div>
                   )}
                 </section>

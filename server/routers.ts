@@ -1880,6 +1880,22 @@ function areFunderSettledNotesAppendOnly(existingValue: unknown, nextValue: unkn
     && existingNotes.every((note, index) => JSON.stringify(note) === JSON.stringify(nextNotes[index]));
 }
 
+/**
+ * 非管理员提交共享备注时，其他作者的历史条目必须原样、按原顺序保留。
+ * 因此普通成员只能新增、修改或删除自己的条目；无作者标识的旧备注一律视为受保护内容。
+ */
+function canFunderMemberManageOnlyOwnNotes(existingValue: unknown, nextValue: unknown, actorUserId: number): boolean {
+  const actorId = Number(actorUserId);
+  if (!Number.isFinite(actorId) || actorId <= 0) return false;
+  const existingNotes = parseFunderNoteHistory(existingValue);
+  const nextNotes = parseFunderNoteHistory(nextValue);
+  const isOwn = (note: Record<string, unknown>) => Number(note.userId) === actorId;
+  const protectedExistingNotes = existingNotes.filter((note) => !isOwn(note));
+  const protectedNextNotes = nextNotes.filter((note) => !isOwn(note));
+  return protectedExistingNotes.length === protectedNextNotes.length
+    && protectedExistingNotes.every((note, index) => JSON.stringify(note) === JSON.stringify(protectedNextNotes[index]));
+}
+
 // ===== Deribit 数据库缓存（每天北京时间凌晨 00:00 刷新，跨实例共享）=====
 // 使用数据库存储缓存，解决 Autoscale 无状态环境下内存缓存失效的问题
 const DERIBIT_MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -26168,7 +26184,7 @@ ${klinesSummary}
         `);
         return { success: true };
       }),
-    // 资金方订单公开备注更新（任何成员均可修改）
+    // 资金方订单共享备注更新：管理员可管理全部，普通成员仅可管理自己的条目。
     funderUpdatePublicNote: protectedProcedure
       .input(z.object({
         id: z.number(),
@@ -26215,8 +26231,11 @@ ${klinesSummary}
             const snapshot = parseFunderParticipantSnapshot(participant.order_snapshot) || {};
             const isSettledOrder = input.ledgerId === 52 && (participant.order_status === 'settled' || participant.order_status === 'completed');
             const existingNote = snapshot.public_note ?? participant.note ?? null;
-            if (isSettledOrder && !areFunderSettledNotesAppendOnly(existingNote, input.publicNote)) {
+            if (!isManager && isSettledOrder && !areFunderSettledNotesAppendOnly(existingNote, input.publicNote)) {
               throw new TRPCError({ code: 'FORBIDDEN', message: '已结清订单的历史备注不可修改或删除，仅可追加新备注' });
+            }
+            if (!isManager && !canFunderMemberManageOnlyOwnNotes(existingNote, input.publicNote, ctx.user.id)) {
+              throw new TRPCError({ code: 'FORBIDDEN', message: '仅可修改或删除自己的共享备注' });
             }
             snapshot.public_note = input.publicNote || null;
             await conn.execute(
@@ -26235,8 +26254,11 @@ ${klinesSummary}
             }
             const order = orderRows[0];
             const isSettledOrder = input.ledgerId === 52 && (order.status === 'settled' || order.status === 'completed');
-            if (isSettledOrder && !areFunderSettledNotesAppendOnly(order.public_note, input.publicNote)) {
+            if (!isManager && isSettledOrder && !areFunderSettledNotesAppendOnly(order.public_note, input.publicNote)) {
               throw new TRPCError({ code: 'FORBIDDEN', message: '已结清订单的历史备注不可修改或删除，仅可追加新备注' });
+            }
+            if (!isManager && !canFunderMemberManageOnlyOwnNotes(order.public_note, input.publicNote, ctx.user.id)) {
+              throw new TRPCError({ code: 'FORBIDDEN', message: '仅可修改或删除自己的共享备注' });
             }
             await conn.execute(
               'UPDATE ledger_orders SET public_note = ? WHERE id = ? AND ledger_id = ?',
