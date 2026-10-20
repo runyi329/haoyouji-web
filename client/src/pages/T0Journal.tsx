@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Clock3,
   Eye,
+  Handshake,
   Lock,
   Repeat2,
   LockOpen,
@@ -1654,6 +1655,19 @@ function getOpeningProfitShareSnapshotAllocations(snapshots: ProfitShareSnapshot
     .sort((left, right) => right.percentage - left.percentage || left.beneficiaryUserName.localeCompare(right.beneficiaryUserName, "zh-CN"));
 }
 
+/**
+ * 报价订单的牵手标记只认开仓时固化的分配快照：存在任一非订单人受益人，
+ * 即说明本单不是订单人 100% 独享收益。已平仓继承的同源快照可兼容旧订单。
+ */
+function hasOpeningProfitSharingWithOthers(snapshots: ProfitShareSnapshot[], openingEntryId?: string) {
+  if (!openingEntryId) return false;
+  return snapshots.some((snapshot) => (
+    snapshot.openingEntryId === openingEntryId
+    && snapshot.percentage > 0.000001
+    && snapshot.beneficiaryUserId !== snapshot.sourceUserId
+  ));
+}
+
 function formatProfitSharePercentage(percentage: number) {
   if (!Number.isFinite(percentage)) return "0%";
   return `${Number(percentage.toFixed(4)).toString()}%`;
@@ -2457,7 +2471,11 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   } | null>(null);
   const [showTotalNetProfitDetail, setShowTotalNetProfitDetail] = useState(false);
   const [totalRevenueDetailPage, setTotalRevenueDetailPage] = useState(1);
+  // 总收益报告独立保存所查看的明细，避免关闭个人收益账本后误切换其列表。
+  const [totalProfitDetailTab, setTotalProfitDetailTab] = useState<"income" | "withdrawal" | "deposit">("income");
   const [showPayoutLog, setShowPayoutLog] = useState(false);
+  // 个人收益账本内的三张只读明细表；登记入口仍只开放给管理员。
+  const [payoutLedgerTab, setPayoutLedgerTab] = useState<"income" | "withdrawal" | "deposit">("income");
   const [showGlobalLedger, setShowGlobalLedger] = useState(false);
   const [globalLedgerTab, setGlobalLedgerTab] = useState<"positions" | "funds" | "system">("positions");
   const [payoutIncomePage, setPayoutIncomePage] = useState(1);
@@ -4616,6 +4634,26 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
   // 资金账本只对账，不回写或扣减订单收益：投入、提现为两条独立方向；仅提现受当前正向总收益上限约束。
   const withdrawalLogs = payoutLogs.filter((log) => log.direction === "withdrawal");
   const depositLogs = payoutLogs.filter((log) => log.direction === "deposit");
+  const payoutLedgerCashflowLogs = useMemo(() => {
+    if (payoutLedgerTab === "income") return [];
+    const source = payoutLedgerTab === "withdrawal" ? withdrawalLogs : depositLogs;
+    return source.slice().sort((left, right) => (
+      String(right.occurredOn || "").localeCompare(String(left.occurredOn || ""))
+      || String(right.createdAt || "").localeCompare(String(left.createdAt || ""))
+      || String(right.id).localeCompare(String(left.id))
+    ));
+  }, [depositLogs, payoutLedgerTab, withdrawalLogs]);
+  // 总收益报告与个人收益账本复用同一套、已按当前用户隔离的资金流水，不另建副本。
+  const activeTotalProfitDetailTab = totalProfitAttribution.hasIndividualScope ? totalProfitDetailTab : "income";
+  const totalProfitDetailCashflowLogs = useMemo(() => {
+    if (activeTotalProfitDetailTab === "income") return [];
+    const source = activeTotalProfitDetailTab === "withdrawal" ? withdrawalLogs : depositLogs;
+    return source.slice().sort((left, right) => (
+      String(right.occurredOn || "").localeCompare(String(left.occurredOn || ""))
+      || String(right.createdAt || "").localeCompare(String(left.createdAt || ""))
+      || String(right.id).localeCompare(String(left.id))
+    ));
+  }, [activeTotalProfitDetailTab, depositLogs, withdrawalLogs]);
   const latestWithdrawalLog = useMemo(() => withdrawalLogs
     .slice()
     .sort((left, right) => (
@@ -7019,6 +7057,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   }
                   setShowPayoutXirrHelp(false);
                   setPayoutIncomePage(1);
+                  setPayoutLedgerTab("income");
                   setShowPayoutLog(true);
                 }}
                 aria-haspopup="dialog"
@@ -7137,6 +7176,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               type="button"
               onClick={() => {
                 setTotalRevenueDetailPage(1);
+                setTotalProfitDetailTab("income");
                 setShowTotalNetProfitDetail(true);
               }}
               aria-haspopup="dialog"
@@ -7395,6 +7435,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               };
               const longLockDisplay = resolveLockedDisplay(row.long, row.longOpeningTrade);
               const shortLockDisplay = resolveLockedDisplay(row.short, row.shortOpeningTrade);
+              // 逐笔报价按这张主单的固化分配快照判断；整合报价则同一档内含任一共享订单即提示。
+              const hasProfitSharingAtSlot = (bucket: PositionBucket | undefined, side: PositionSide, openingTrade?: PreviewTrade) => {
+                if (openingTrade) return hasOpeningProfitSharingWithOthers(profitShareSnapshots, getStoredEntryId(openingTrade));
+                if (!bucket) return false;
+                const archiveStep = isIndividualLadderView ? POSITION_ARCHIVE_STEP : integratedArchiveStep;
+                return selectedTrades.some((trade) => (
+                  ACTIONS[trade.action].opening
+                  && ACTIONS[trade.action].side === side
+                  && priceKey(archivePriceForTrade(trade, archiveStep)) === priceKey(bucket.price)
+                  && hasOpeningProfitSharingWithOthers(profitShareSnapshots, getStoredEntryId(trade))
+                ));
+              };
+              const longHasProfitSharing = hasProfitSharingAtSlot(row.long, "long", row.longOpeningTrade);
+              const shortHasProfitSharing = hasProfitSharingAtSlot(row.short, "short", row.shortOpeningTrade);
               return (
                 <div
                   key={row.key}
@@ -7411,6 +7465,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   isCounterparty={Boolean(row.long && row.longOpeningTrade?.isCounterpartyView)}
                   isPending={Boolean(row.long && row.longOpeningTrade?.isPending)}
                   keepReopenReminder={Boolean(row.long && row.longOpeningTrade?.keepReopenReminder)}
+                  hasProfitSharing={longHasProfitSharing}
                   takeProfitEnabled={Boolean(row.long && row.longOpeningTrade?.takeProfitEnabled)}
                   takeProfitQuantity={row.longOpeningTrade ? getPendingTakeProfitQuantity(row.longOpeningTrade) : undefined}
                   readOnly={isMemberView}
@@ -7484,6 +7539,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                   isCounterparty={Boolean(row.short && row.shortOpeningTrade?.isCounterpartyView)}
                   isPending={Boolean(row.short && row.shortOpeningTrade?.isPending)}
                   keepReopenReminder={Boolean(row.short && row.shortOpeningTrade?.keepReopenReminder)}
+                  hasProfitSharing={shortHasProfitSharing}
                   takeProfitEnabled={Boolean(row.short && row.shortOpeningTrade?.takeProfitEnabled)}
                   takeProfitQuantity={row.shortOpeningTrade ? getPendingTakeProfitQuantity(row.shortOpeningTrade) : undefined}
                   readOnly={isMemberView}
@@ -9362,7 +9418,7 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                 </button>
               </div>
               <div className="mt-3 border-y border-slate-300 tabular-nums">
-                <button type="button" onClick={() => { setTotalRevenueDetailPage(1); setShowTotalNetProfitDetail(true); }} aria-haspopup="dialog" aria-label="查看总收益归因报告" className="w-full px-3 py-3 text-left transition active:bg-slate-50">
+                <button type="button" onClick={() => { setTotalRevenueDetailPage(1); setTotalProfitDetailTab("income"); setShowTotalNetProfitDetail(true); }} aria-haspopup="dialog" aria-label="查看总收益归因报告" className="w-full px-3 py-3 text-left transition active:bg-slate-50">
                   <div className="text-xs font-semibold text-slate-600">当前总收益</div>
                   <div className={`mt-1 truncate whitespace-nowrap text-[clamp(23px,6.8vw,29px)] font-bold leading-none ${payoutBookTotalIncomeClass}`}>{formatSigned(payoutBookTotalIncome)}<span className="ml-1 text-xs font-semibold opacity-75">U</span></div>
                   <div className="mt-1 truncate text-[10px] text-slate-400">{payoutXirrSummary.firstInvestmentDate ? `${Number(payoutXirrSummary.firstInvestmentDate.slice(5, 7))}月${Number(payoutXirrSummary.firstInvestmentDate.slice(8, 10))}日 至 ${Number(payoutXirrSummary.asOfDate.slice(5, 7))}月${Number(payoutXirrSummary.asOfDate.slice(8, 10))}日 · ${payoutXirrSummary.daysHeld} 天` : "尚无投入期间"}</div>
@@ -9375,9 +9431,22 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
               </div>
 
               <section className="mt-3 border-y border-slate-200">
-                <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 text-[11px]"><span className="font-semibold text-slate-700">已实现收益</span><span className="text-slate-400">共 {payoutIncomeEntries.length} 笔</span></div>
-                <div className="grid grid-cols-[60px_34px_52px_68px_minmax(0,1fr)] gap-x-1 border-b border-slate-100 px-3 py-1.5 text-[10px] font-medium text-slate-400 tabular-nums"><span className="text-center">时间</span><span className="text-center">类型</span><span className="text-center">数量</span><span className="text-right">价格/来源</span><span className="text-right">收益</span></div>
-                {payoutIncomeEntries.length > 0 ? <div className="divide-y divide-slate-100">{pagedPayoutIncomeEntries.map((entry) => {
+                <div className="flex min-w-0 items-center justify-between gap-2 border-b border-slate-200 px-3 py-1.5 text-[11px]">
+                  <div className="flex min-w-0 items-center gap-1" role="tablist" aria-label="个人账本明细切换">
+                    {([
+                      { id: "income" as const, label: "已实现收益" },
+                      { id: "withdrawal" as const, label: "提现记录" },
+                      { id: "deposit" as const, label: "充值记录" },
+                    ]).map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={payoutLedgerTab === tab.id} onClick={() => {
+                      setPayoutLedgerTab(tab.id);
+                      if (tab.id === "income") setPayoutIncomePage(1);
+                    }} className={`shrink-0 rounded px-1.5 py-1 font-semibold transition active:scale-95 ${payoutLedgerTab === tab.id ? "bg-slate-800 text-white shadow-sm" : "text-slate-500 active:bg-slate-100"}`}>{tab.label}</button>)}
+                  </div>
+                  <span className="shrink-0 text-slate-400">共 {payoutLedgerTab === "income" ? payoutIncomeEntries.length : payoutLedgerCashflowLogs.length} 笔</span>
+                </div>
+                {payoutLedgerTab === "income" ? <>
+                  <div className="grid grid-cols-[60px_34px_52px_68px_minmax(0,1fr)] gap-x-1 border-b border-slate-100 px-3 py-1.5 text-[10px] font-medium text-slate-400 tabular-nums"><span className="text-center">时间</span><span className="text-center">类型</span><span className="text-center">数量</span><span className="text-right">价格/来源</span><span className="text-right">收益</span></div>
+                  {payoutIncomeEntries.length > 0 ? <div className="divide-y divide-slate-100">{pagedPayoutIncomeEntries.map((entry) => {
                   if (entry.kind === "shared") {
                     const sourceTrade = entry.sourceTrade;
                     return <div key={entry.id} className="grid grid-cols-[60px_34px_52px_68px_minmax(0,1fr)] items-center gap-x-1 px-3 py-2 text-[10px] tabular-nums">
@@ -9397,12 +9466,20 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
                     <span className="whitespace-nowrap text-right text-slate-500">{formatPrice(detail.trade.price)}</span>
                     <span className={`whitespace-nowrap text-right font-semibold ${detail.netPnl >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(detail.netPnl)} U</span>
                   </div>;
-                })}</div> : <div className="px-3 py-5 text-center text-xs text-slate-400">暂无已实现收益记录</div>}
-                {payoutIncomeEntries.length > 0 && payoutIncomeTotalPages > 1 && <div data-card-export-hide="true" className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] tabular-nums">
+                  })}</div> : <div className="px-3 py-5 text-center text-xs text-slate-400">暂无已实现收益记录</div>}
+                  {payoutIncomeEntries.length > 0 && payoutIncomeTotalPages > 1 && <div data-card-export-hide="true" className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] tabular-nums">
                   <button type="button" disabled={payoutIncomePage <= 1} onClick={() => setPayoutIncomePage((current) => Math.max(1, current - 1))} className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35">上一页</button>
                   <span className="whitespace-nowrap text-slate-500">第 {payoutIncomePage} 页 / 共 {payoutIncomeTotalPages} 页</span>
                   <button type="button" disabled={payoutIncomePage >= payoutIncomeTotalPages} onClick={() => setPayoutIncomePage((current) => Math.min(payoutIncomeTotalPages, current + 1))} className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35">下一页</button>
-                </div>}
+                  </div>}
+                </> : <>
+                  <div className="grid grid-cols-[74px_minmax(0,1fr)_auto] items-center gap-x-2 border-b border-slate-100 px-3 py-1.5 text-[10px] font-medium text-slate-400 tabular-nums"><span>日期</span><span>备注</span><span className="text-right">金额</span></div>
+                  {payoutLedgerCashflowLogs.length > 0 ? <div className="divide-y divide-slate-100">{payoutLedgerCashflowLogs.map((log) => <div key={log.id} className="grid grid-cols-[74px_minmax(0,1fr)_auto] items-center gap-x-2 px-3 py-2 text-[11px] tabular-nums">
+                    <span className="whitespace-nowrap text-slate-500">{log.occurredOn.replaceAll("-", "/")}</span>
+                    <span className="min-w-0 truncate text-slate-600">{log.note}</span>
+                    <span className={`whitespace-nowrap text-right font-semibold ${payoutLedgerTab === "withdrawal" ? "text-slate-800" : "text-sky-700"}`}>{formatPrice(log.amount)} <span className="text-[9px] font-medium opacity-75">U</span></span>
+                  </div>)}</div> : <div className="px-3 py-5 text-center text-xs text-slate-400">暂无{payoutLedgerTab === "withdrawal" ? "提现" : "充值"}记录</div>}
+                </>}
               </section>
 
             </div>
@@ -9559,59 +9636,79 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
             </section>
 
             <div className="mt-3 overflow-hidden rounded border border-slate-200">
-              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-                <span>已实现收益明细</span>
-                <span>{totalProfitAttributionDetailEntries.length} 笔</span>
+              <div className="flex min-w-0 items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">
+                <div className="flex min-w-0 items-center gap-1" role="tablist" aria-label="总收益报告明细切换">
+                  {([
+                    { id: "income" as const, label: "已实现收益" },
+                    ...(totalProfitAttribution.hasIndividualScope ? [
+                      { id: "deposit" as const, label: "充值记录" },
+                      { id: "withdrawal" as const, label: "提现记录" },
+                    ] : []),
+                  ]).map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTotalProfitDetailTab === tab.id} onClick={() => {
+                    setTotalProfitDetailTab(tab.id);
+                    if (tab.id === "income") setTotalRevenueDetailPage(1);
+                  }} className={`shrink-0 rounded px-1.5 py-1 font-semibold transition active:scale-95 ${activeTotalProfitDetailTab === tab.id ? "bg-slate-800 text-white shadow-sm" : "text-slate-500 active:bg-slate-100"}`}>{tab.label}</button>)}
+                </div>
+                <span className="shrink-0">{activeTotalProfitDetailTab === "income" ? totalProfitAttributionDetailEntries.length : totalProfitDetailCashflowLogs.length} 笔</span>
               </div>
-              {totalProfitAttributionDetailEntries.length > 0 ? (
-                <div className="divide-y divide-slate-100">
-                  {pagedTotalProfitAttributionDetailEntries.map((entry) => {
-                    const referenceTrade = entry.trade ?? entry.sourceTrade;
-                    const isLong = referenceTrade ? ACTIONS[referenceTrade.action].side === "long" : true;
-                    const typeLabel = entry.kind === "shared"
-                      ? "共享"
-                      : entry.kind === "commission"
-                        ? "分佣"
-                        : (referenceTrade ? ACTIONS[referenceTrade.action].label : "订单");
-                    const typeClass = entry.kind === "shared"
-                      ? "text-blue-600"
-                      : entry.kind === "commission"
-                        ? "text-indigo-600"
-                        : (isLong ? "text-rose-600" : "text-emerald-600");
-                    const displayQuantity = entry.quantity ?? referenceTrade?.quantity;
-                    return (
-                      <div key={entry.id} className="flex min-w-0 items-center gap-2 px-3 py-2 text-[11px] tabular-nums whitespace-nowrap">
-                        <span className="shrink-0 text-slate-400">{formatBeijingMonthDayTime(entry.createdAt)}</span>
-                        <span className={`shrink-0 font-semibold ${typeClass}`} title={entry.recipientName}>{typeLabel}</span>
-                        <span className="shrink-0 font-medium text-slate-700">{displayQuantity === undefined ? "—" : `${formatQuantity(displayQuantity)} ETH`}</span>
-                        <span className="shrink-0 text-slate-500">{referenceTrade ? formatPrice(referenceTrade.price) : "—"}</span>
-                        <span className={`ml-auto shrink-0 font-semibold ${entry.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(entry.amount)} U</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : <div className="px-3 py-5 text-center text-xs text-slate-400">当前筛选范围暂无已实现收益记录</div>}
-              {totalProfitAttributionDetailEntries.length > 0 && totalRevenueDetailTotalPages > 1 && (
-                <div data-card-export-hide="true" className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-3 py-2 text-[11px] tabular-nums">
-                  <button
-                  type="button"
-                  disabled={totalRevenueDetailPage <= 1}
-                  onClick={() => setTotalRevenueDetailPage((current) => Math.max(1, current - 1))}
-                    className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
-                  >
-                    上一页
-                  </button>
-                  <span className="whitespace-nowrap text-slate-500">第 {totalRevenueDetailPage} 页 / 共 {totalRevenueDetailTotalPages} 页</span>
-                  <button
-                  type="button"
-                  disabled={totalRevenueDetailPage >= totalRevenueDetailTotalPages}
-                  onClick={() => setTotalRevenueDetailPage((current) => Math.min(totalRevenueDetailTotalPages, current + 1))}
-                    className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
-                  >
-                    下一页
-                  </button>
-                </div>
-              )}
+              {activeTotalProfitDetailTab === "income" ? <>
+                {totalProfitAttributionDetailEntries.length > 0 ? (
+                  <div className="divide-y divide-slate-100">
+                    {pagedTotalProfitAttributionDetailEntries.map((entry) => {
+                      const referenceTrade = entry.trade ?? entry.sourceTrade;
+                      const isLong = referenceTrade ? ACTIONS[referenceTrade.action].side === "long" : true;
+                      const typeLabel = entry.kind === "shared"
+                        ? "共享"
+                        : entry.kind === "commission"
+                          ? "分佣"
+                          : (referenceTrade ? ACTIONS[referenceTrade.action].label : "订单");
+                      const typeClass = entry.kind === "shared"
+                        ? "text-blue-600"
+                        : entry.kind === "commission"
+                          ? "text-indigo-600"
+                          : (isLong ? "text-rose-600" : "text-emerald-600");
+                      const displayQuantity = entry.quantity ?? referenceTrade?.quantity;
+                      return (
+                        <div key={entry.id} className="flex min-w-0 items-center gap-2 px-3 py-2 text-[11px] tabular-nums whitespace-nowrap">
+                          <span className="shrink-0 text-slate-400">{formatBeijingMonthDayTime(entry.createdAt)}</span>
+                          <span className={`shrink-0 font-semibold ${typeClass}`} title={entry.recipientName}>{typeLabel}</span>
+                          <span className="shrink-0 font-medium text-slate-700">{displayQuantity === undefined ? "—" : `${formatQuantity(displayQuantity)} ETH`}</span>
+                          <span className="shrink-0 text-slate-500">{referenceTrade ? formatPrice(referenceTrade.price) : "—"}</span>
+                          <span className={`ml-auto shrink-0 font-semibold ${entry.amount >= 0 ? "text-rose-600" : "text-emerald-600"}`}>{formatSigned(entry.amount)} U</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : <div className="px-3 py-5 text-center text-xs text-slate-400">当前筛选范围暂无已实现收益记录</div>}
+                {totalProfitAttributionDetailEntries.length > 0 && totalRevenueDetailTotalPages > 1 && (
+                  <div data-html2canvas-ignore="true" className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-3 py-2 text-[11px] tabular-nums">
+                    <button
+                    type="button"
+                    disabled={totalRevenueDetailPage <= 1}
+                    onClick={() => setTotalRevenueDetailPage((current) => Math.max(1, current - 1))}
+                      className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      上一页
+                    </button>
+                    <span className="whitespace-nowrap text-slate-500">第 {totalRevenueDetailPage} 页 / 共 {totalRevenueDetailTotalPages} 页</span>
+                    <button
+                    type="button"
+                    disabled={totalRevenueDetailPage >= totalRevenueDetailTotalPages}
+                    onClick={() => setTotalRevenueDetailPage((current) => Math.min(totalRevenueDetailTotalPages, current + 1))}
+                      className="h-7 rounded border border-slate-200 bg-white px-2.5 font-medium text-slate-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      下一页
+                    </button>
+                  </div>
+                )}
+              </> : <>
+                <div className="grid grid-cols-[74px_minmax(0,1fr)_auto] items-center gap-x-2 border-b border-slate-100 px-3 py-1.5 text-[10px] font-medium text-slate-400 tabular-nums"><span>日期</span><span>备注</span><span className="text-right">金额</span></div>
+                {totalProfitDetailCashflowLogs.length > 0 ? <div className="divide-y divide-slate-100">{totalProfitDetailCashflowLogs.map((log) => <div key={log.id} className="grid grid-cols-[74px_minmax(0,1fr)_auto] items-center gap-x-2 px-3 py-2 text-[11px] tabular-nums">
+                  <span className="whitespace-nowrap text-slate-500">{log.occurredOn.replaceAll("-", "/")}</span>
+                  <span className="min-w-0 truncate text-slate-600">{log.note}</span>
+                  <span className={`whitespace-nowrap text-right font-semibold ${activeTotalProfitDetailTab === "withdrawal" ? "text-slate-800" : "text-sky-700"}`}>{formatPrice(log.amount)} <span className="text-[9px] font-medium opacity-75">U</span></span>
+                </div>)}</div> : <div className="px-3 py-5 text-center text-xs text-slate-400">暂无{activeTotalProfitDetailTab === "withdrawal" ? "提现" : "充值"}记录</div>}
+              </>}
             </div>
             </div>
 
@@ -10349,7 +10446,7 @@ function OptionUnrealizedPnlText({
   return <span className={`${className} ${tone}`}>{optionPnl === null ? emptyLabel : `${formatSigned(optionPnl)} U`}</span>;
 }
 
-function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, hasLockedPosition = false, isCounterparty = false, isPending = false, keepReopenReminder = false, takeProfitEnabled = false, takeProfitQuantity }: {
+function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, metadata, isLocked = false, hasLockedPosition = false, isCounterparty = false, isPending = false, keepReopenReminder = false, hasProfitSharing = false, takeProfitEnabled = false, takeProfitQuantity }: {
   bucket: PositionBucket;
   side: PositionSide;
   markPrice: number | null;
@@ -10366,6 +10463,8 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
   isPending?: boolean;
   /** 每次平仓后仍保留待补开提醒的订单，在右下角类型标识旁显示眼睛。 */
   keepReopenReminder?: boolean;
+  /** 本单开仓时已固化对外收益分配，在右下角类型标识旁显示牵手标记。 */
+  hasProfitSharing?: boolean;
   /** 已设止盈在挂单成交后继续保留；部分止盈同时显示计划数量。 */
   takeProfitEnabled?: boolean;
   takeProfitQuantity?: number;
@@ -10519,11 +10618,12 @@ function PositionCell({ bucket, side, markPrice, onClick, readOnly = false, meta
           <span className="shrink-0">·</span>
           <span className="min-w-0 shrink truncate" title={`项目：${metadata.relatedFundName}`}>{metadata.relatedFundName}</span>
         </div>
-        {(isLocked || isCounterparty || isPendingOnly || keepReopenReminder || takeProfitMarkerLabel || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
+        {(isLocked || isCounterparty || isPendingOnly || keepReopenReminder || hasProfitSharing || takeProfitMarkerLabel || metadata.instrumentShortLabel) && <div className="ml-1 flex shrink-0 items-center gap-0.5">
           {isLocked && <Lock className="h-2 w-2 shrink-0 -translate-y-px text-[#f5d78e]/85" strokeWidth={2.5} aria-label="已锁定" />}
           {isCounterparty && <Repeat2 className="h-2.5 w-2.5 shrink-0 text-violet-700" strokeWidth={2.7} aria-label="管理员反向展示" />}
           {isPendingOnly && <Clock3 className="h-[9px] w-[9px] shrink-0 -translate-y-px text-sky-600" strokeWidth={2.5} aria-label="挂单待成交" />}
           {keepReopenReminder && <Eye className={`h-[9px] w-[9px] shrink-0 -translate-y-px ${isLocked && !isPendingOnly ? "text-sky-200" : "text-sky-600"}`} strokeWidth={2.6} title="持续提醒：每次平仓的数量都会以原价位待补开占位保留" aria-label="持续提醒订单" />}
+          {hasProfitSharing && <Handshake className={`h-[9px] w-[9px] shrink-0 -translate-y-px ${isLocked && !isPendingOnly ? "text-[#f5d78e]/85" : "text-[#d32f2f]"}`} strokeWidth={2.65} title="本单已设置收益分配" aria-label="收益共享订单" />}
           {takeProfitMarkerLabel && <span className={`inline-flex shrink-0 items-center gap-px font-semibold ${isLocked && !isPendingOnly ? "text-[#f5d78e]/85" : "text-amber-600"}`} title={takeProfitMarkerLabel} aria-label={takeProfitMarkerLabel}><Target className="h-[9px] w-[9px] -translate-y-px" strokeWidth={2.5} />{takeProfitMarkerQuantity && <span>{takeProfitMarkerQuantity}</span>}</span>}
           {metadata.instrumentShortLabel && <span className={isLocked && !isPendingOnly ? "text-[#f5d78e]/85" : isOption ? "text-violet-100" : isGrid ? "text-cyan-800" : "text-slate-500"} title={metadata.instrumentShortLabel}>{metadata.instrumentShortLabel}</span>}
         </div>}
@@ -10609,6 +10709,7 @@ function LadderCell({
   isCounterparty = false,
   isPending = false,
   keepReopenReminder = false,
+  hasProfitSharing = false,
   takeProfitEnabled = false,
   takeProfitQuantity,
 }: {
@@ -10624,6 +10725,7 @@ function LadderCell({
   isCounterparty?: boolean;
   isPending?: boolean;
   keepReopenReminder?: boolean;
+  hasProfitSharing?: boolean;
   takeProfitEnabled?: boolean;
   takeProfitQuantity?: number;
 }) {
@@ -10640,7 +10742,7 @@ function LadderCell({
     action();
   };
   if (bucket && bucket.remainingQuantity > 0.0000001) {
-    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} isLocked={isLocked} hasLockedPosition={hasLockedPosition} isCounterparty={isCounterparty} isPending={isPending} keepReopenReminder={keepReopenReminder} takeProfitEnabled={takeProfitEnabled} takeProfitQuantity={takeProfitQuantity} />;
+    return <PositionCell bucket={bucket} side={side} markPrice={markPrice} onClick={requireDoubleActivation(onClose)} readOnly={readOnly} metadata={metadata} isLocked={isLocked} hasLockedPosition={hasLockedPosition} isCounterparty={isCounterparty} isPending={isPending} keepReopenReminder={keepReopenReminder} hasProfitSharing={hasProfitSharing} takeProfitEnabled={takeProfitEnabled} takeProfitQuantity={takeProfitQuantity} />;
   }
 
   const isLong = side === "long";

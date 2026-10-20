@@ -1600,6 +1600,20 @@ export async function ensureLedger52T0JournalTables(conn?: any): Promise<void> {
           ADD UNIQUE KEY uq_t0_reopen_reminder_source_generation (ledger_id, user_id, source_opening_entry_id, generation)
       `);
     }
+    // 兼容早期占位创建时遗漏 account_id 的记录：只修复活跃的非财务提醒位，
+    // 账户以其不可变的原开仓流水为准，不影响已发生订单、仓位、收益或分佣。
+    await db.execute(`
+      UPDATE ledger52_t0_journal_reopen_reminders reminder
+      INNER JOIN ledger52_t0_journal_entries opening
+        ON opening.id = reminder.source_opening_entry_id
+       AND opening.ledger_id = reminder.ledger_id
+       AND opening.user_id = reminder.user_id
+         SET reminder.account_id = opening.account_id,
+             reminder.updated_at = NOW(3)
+       WHERE reminder.status = 'active'
+         AND reminder.account_id = 0
+         AND opening.account_id > 0
+    `);
 
     // 将旧版单段止盈兼容为一条多段计划；已触发记录保留为历史，未触发记录保持 pending。
     await db.execute(`
@@ -3874,7 +3888,8 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
         throw new TRPCError({ code: "BAD_REQUEST", message: "平仓记录必须指定对应的开仓价格档位" });
       }
       const [positionRows] = await tx.execute(
-        `SELECT id, action, execution_status, is_locked, keep_reopen_reminder, quantity, price, fee_usdt, target_price, related_user_id, related_fund_id
+        `SELECT id, action, execution_status, is_locked, keep_reopen_reminder, quantity, price, fee_usdt, target_price,
+                account_id, symbol, instrument_type, related_user_id, related_fund_id
            FROM ledger52_t0_journal_entries
           WHERE ledger_id = ? AND user_id = ? AND account_id = ? AND symbol = ?
           ORDER BY created_at ASC, id ASC FOR UPDATE`,
