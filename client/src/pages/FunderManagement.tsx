@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { getUserDisplayName, getUserSearchLabel, matchesUserSearch } from "@/lib/userIdentity";
 import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X, Check, Search } from "lucide-react";
 import { toast } from "sonner";
-import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER } from "@/components/FunderOrderCard";
+import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER, type FunderCollateralFormulaPreview } from "@/components/FunderOrderCard";
 import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
 import { formatFunderAnnualRate, limitFunderAnnualRateInput, normalizeFunderAnnualRate } from "@/lib/funderAnnualRate";
 
@@ -16,6 +16,11 @@ interface FunderManagementProps {
   ledgerIdProp?: number;
   onRecycleBinRef?: (openFn: () => void) => void;
 }
+
+type FormulaPreviewState = {
+  inputKey: string;
+  values: FunderCollateralFormulaPreview;
+};
 
 type ManualStockPosition = {
   name: string;
@@ -738,7 +743,14 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
   const [showPreviewCollateralInfo, setShowPreviewCollateralInfo] = useState(false); // 预览卡片-担保缺口说明
   const [showPreviewMarginInfo, setShowPreviewMarginInfo] = useState(false); // 预览卡片-保证金率说明
   const [showPreviewInterestTip, setShowPreviewInterestTip] = useState(false); // 预览卡片-利息说明
+  // 编辑抽屉中的唯一实时预览：默认随滚动上下避让；管理员拖动后固定在指定高度。
+  const editorDrawerRef = useRef<HTMLDivElement>(null);
+  const floatingPreviewRef = useRef<HTMLDivElement>(null);
+  const floatingPreviewDragRef = useRef<{ pointerId: number; startY: number; startTop: number; dragged: boolean } | null>(null);
+  const floatingPreviewPinnedRef = useRef(false);
+  const [floatingPreviewTop, setFloatingPreviewTop] = useState<number | null>(null);
   const [previewViewMode] = useState<'order' | 'card'>('order'); // 编辑预览统一使用订单模式
+  const [cardFormulaPreview, setCardFormulaPreview] = useState<FormulaPreviewState | null>(null);
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY'];
 
   // ===== 订单参与者 =====
@@ -1448,6 +1460,12 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
 
   const formatLinkedAmountValue = (value: number, field: LinkedAmountField): string => {
     if (!isFinite(value)) return '';
+    // 自动联动时，人民币无论作为融资金额、买入价还是购买币数，均固定保留两位小数。
+    // 这也避免 CNY/CNY 的整额计算在编辑框里被展示成 780000.00000000。
+    const isCnyDenominatedField = field === 'quantity'
+      ? formData.coin === 'CNY'
+      : formData.amountCurrency === 'CNY';
+    if (isCnyDenominatedField) return value.toFixed(2);
     if (field === 'quantity' && INTEGER_COINS_FUNDER.has(formData.coin)) return String(Math.round(value));
     const digits = field === 'amount' ? 2 : 6;
     return parseFloat(value.toFixed(digits)).toString();
@@ -1836,6 +1854,61 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     return -collateralGapBaseValue - previewPendingInterestU + previewPaidInterestU;
   }, [computedCollateralValue, collateralGapBaseValue, previewUsesPrincipalCoverage, previewUsesFloatingPnl, previewFloatingPnlU, previewPendingInterestU, previewPaidInterestU]);
 
+  // 先用编辑器已知数据即时试算；订单卡完成股票、期权或37号实时数据加载后，会以同源结果覆盖。
+  const localFormulaPreview = useMemo<FunderCollateralFormulaPreview>(() => {
+    const hasBase = collateralGapBaseValue > 0 && Number.isFinite(collateralGapBaseValue);
+    const principalCoverageGapU = hasBase
+      ? computedCollateralValue - collateralGapBaseValue - previewPendingInterestU + previewPaidInterestU
+      : null;
+    const floatingPnlGapU = hasBase && previewFloatingPnlU !== null
+      ? computedCollateralValue + previewFloatingPnlU - previewPendingInterestU + previewPaidInterestU
+      : null;
+    const fullValueGapU = hasBase
+      ? -collateralGapBaseValue - previewPendingInterestU + previewPaidInterestU
+      : null;
+    return {
+      collateralValueU: computedCollateralValue,
+      baseValueU: hasBase ? collateralGapBaseValue : null,
+      floatingPnlU: previewFloatingPnlU,
+      pendingInterestU: previewPendingInterestU,
+      paidInterestU: previewPaidInterestU,
+      principalCoverageGapU,
+      floatingPnlGapU,
+      fullValueGapU,
+    };
+  }, [computedCollateralValue, collateralGapBaseValue, previewFloatingPnlU, previewPendingInterestU, previewPaidInterestU]);
+  const formulaPreviewInputKey = useMemo(() => JSON.stringify({
+    assetType: formData.assetType,
+    coin: formData.coin,
+    buyPrice: formData.buyPrice,
+    buyQuantity: formData.buyQuantity,
+    tradeDirection: formData.tradeDirection,
+    financingAmountUsdt,
+    collateralAssets,
+    collateralShareMode,
+    collateralSource: orderCollateralSourceDraft,
+    option: optionFormData,
+  }), [formData.assetType, formData.coin, formData.buyPrice, formData.buyQuantity, formData.tradeDirection, financingAmountUsdt, collateralAssets, collateralShareMode, orderCollateralSourceDraft, optionFormData]);
+  const handleCollateralFormulaPreviewChange = useCallback((_orderId: number, values: FunderCollateralFormulaPreview) => {
+    setCardFormulaPreview(current => {
+      const next: FormulaPreviewState = { inputKey: formulaPreviewInputKey, values };
+      const currentValues = current?.values;
+      const unchanged = current?.inputKey === next.inputKey
+        && currentValues?.collateralValueU === next.values.collateralValueU
+        && currentValues?.baseValueU === next.values.baseValueU
+        && currentValues?.floatingPnlU === next.values.floatingPnlU
+        && currentValues?.pendingInterestU === next.values.pendingInterestU
+        && currentValues?.paidInterestU === next.values.paidInterestU
+        && currentValues?.principalCoverageGapU === next.values.principalCoverageGapU
+        && currentValues?.floatingPnlGapU === next.values.floatingPnlGapU
+        && currentValues?.fullValueGapU === next.values.fullValueGapU;
+      return unchanged ? current : next;
+    });
+  }, [formulaPreviewInputKey]);
+  const formulaPreview = cardFormulaPreview?.inputKey === formulaPreviewInputKey
+    ? cardFormulaPreview.values
+    : localFormulaPreview;
+
   // 预览卡片实时待结佣金（受邀订单专用，每秒更新）
   const [previewCommission, setPreviewCommission] = useState<number>(0);
   useEffect(() => {
@@ -1920,14 +1993,20 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       } else {
         toast.success('更新成功');
       }
+      // 统一订单台、管理员列表和用户端各自使用不同的查询键。保存后必须全部失效并
+      // 等待当前列表重新取数，不能靠浏览器手动刷新才能看到刚保存的担保口径。
+      await Promise.all([
+        trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }),
+        trpcUtils.ledger.funderAdminGetOrderViews.invalidate({ ledgerId }),
+        trpcUtils.ledger.financeGetOrders.invalidate({ ledgerId }),
+      ]);
+      await refetchOrders();
       setShowForm(false);
       setEditingOrder(null);
       editorRootOrderRef.current = null;
       setParticipants([]);
       setJointOrderSegments([]);
       participantsLoadedRef.current = null;
-      refetchOrders();
-      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
     },
     onError: (err) => toast.error(err.message),
   });
@@ -2488,13 +2567,21 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
         ? (['amount', 'price', 'quantity'] as LinkedAmountField[]).filter(field => field !== savedDerivedLinkedField)
         : [];
     setDerivedLinkedField(savedDerivedLinkedField);
+    const formatSavedAutoCnyValue = (value: unknown, field: 'price' | 'quantity') => {
+      const currency = field === 'quantity' ? String(order.coin || '').trim().toUpperCase() : String(editAmountCurrency || '').trim().toUpperCase();
+      const numeric = Number(value);
+      // 仅格式化曾由系统自动推算的字段，避免改写用户手工输入的历史精度。
+      return savedDerivedLinkedField === field && ['CNY', 'RMB', '人民币'].includes(currency) && Number.isFinite(numeric)
+        ? numeric.toFixed(2)
+        : String(value ?? '');
+    };
     setFormData({
       // 协作人卡片的 user_id 必须是当前编辑对象，而非数据库主订单的存储锚点。
       userId: Number(order.participantInfo?.userId ?? order.participantInfo?.user_id ?? order.user_id ?? 0),
       coin: order.asset_type === 'stock' ? 'CNY' : order.coin as CoinType,
       amountCurrency: order.asset_type === 'stock' ? 'CNY' : editAmountCurrency as CoinType,
-      buyPrice: order.asset_type === 'stock' ? '' : order.buy_price || '',
-      buyQuantity: order.asset_type === 'stock' ? '' : order.buy_quantity || '',
+      buyPrice: order.asset_type === 'stock' ? '' : formatSavedAutoCnyValue(order.buy_price, 'price'),
+      buyQuantity: order.asset_type === 'stock' ? '' : formatSavedAutoCnyValue(order.buy_quantity, 'quantity'),
       buyDate: order.buy_date || '',
       storageAccount: order.storage_account || '',
       status: order.status,
@@ -2759,7 +2846,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       const savedCurrency = savedCurrencyRaw === 'U' ? 'USDT' : savedCurrencyRaw === 'RMB' ? 'CNY' : savedCurrencyRaw;
       const normalizedEditCurrency = String(editAmountCurrency).toUpperCase() === 'U' ? 'USDT' : String(editAmountCurrency).toUpperCase() === 'RMB' ? 'CNY' : String(editAmountCurrency).toUpperCase();
       if (savedInputAmount > 0 && savedCurrency === normalizedEditCurrency) {
-        setAmountInputValue(String(savedInputRaw));
+        setAmountInputValue(savedCurrency === 'CNY' ? savedInputAmount.toFixed(2) : String(savedInputRaw));
         return;
       }
       const amtU = order.amount ? parseFloat(order.amount) : NaN;
@@ -3152,6 +3239,213 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
     resetLinkedAmountFields();
     participantsLoadedRef.current = null;
     setShowDatePicker(false);
+    floatingPreviewPinnedRef.current = false;
+    setFloatingPreviewTop(null);
+  };
+
+  useEffect(() => {
+    if (!showForm) return;
+    floatingPreviewPinnedRef.current = false;
+    setFloatingPreviewTop(null);
+  }, [showForm]);
+
+  const clampFloatingPreviewTop = (requestedTop: number) => {
+    const drawer = editorDrawerRef.current;
+    const preview = floatingPreviewRef.current;
+    if (!drawer || !preview) return Math.max(8, requestedTop);
+    const visibleHeight = Math.min(preview.offsetHeight, Math.max(0, drawer.clientHeight - 16));
+    const maxTop = Math.max(8, drawer.clientHeight - visibleHeight - 8);
+    return Math.min(Math.max(8, requestedTop), maxTop);
+  };
+
+  const handleFloatingPreviewPointerDown = (event: any) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    const drawer = editorDrawerRef.current;
+    const preview = floatingPreviewRef.current;
+    if (!drawer || !preview) return;
+    const drawerRect = drawer.getBoundingClientRect();
+    const previewRect = preview.getBoundingClientRect();
+    floatingPreviewDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startTop: previewRect.top - drawerRect.top,
+      dragged: false,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleFloatingPreviewPointerMove = (event: any) => {
+    const drag = floatingPreviewDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const offsetY = event.clientY - drag.startY;
+    if (!drag.dragged && Math.abs(offsetY) < 4) return;
+    drag.dragged = true;
+    floatingPreviewPinnedRef.current = true;
+    event.preventDefault();
+    setFloatingPreviewTop(clampFloatingPreviewTop(drag.startTop + offsetY));
+  };
+
+  const finishFloatingPreviewDrag = (event: any) => {
+    const drag = floatingPreviewDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    floatingPreviewDragRef.current = null;
+  };
+
+  const handleEditorContentScroll = (event: any) => {
+    if (floatingPreviewPinnedRef.current) return;
+    // 编辑上半段时卡片靠下，滚入下半段后自动靠上，始终让当前输入区留出空间。
+    const nextTop = event.currentTarget.scrollTop > 280 ? 12 : null;
+    setFloatingPreviewTop(current => current === nextTop ? current : nextTop);
+  };
+
+  const renderFloatingLiveOrderPreview = () => {
+                // 构造预览用的 order 对象，字段名与数据库/后端返回保持一致
+                const ownerLabel = (() => {
+                  if (formData.ownerLabel) return formData.ownerLabel;
+                  if (formData.userId > 0) {
+                    const allMembers = ((ledgerData as any)?.members || []) as any[];
+                    const m = allMembers.find((mm: any) => mm.userId === formData.userId);
+                    return m?.nickname || m?.name || m?.user_nickname || m?.username || editingOrder?.owner_display_name || editingOrder?.userName || null;
+                  }
+                  return editingOrder?.owner_display_name || editingOrder?.userName || null;
+                })();
+                const previewIsOptionOrder = formData.assetType === 'crypto_option';
+                const previewOptionSummary = previewIsOptionOrder ? getOptionPremiumSummary() : null;
+                const previewCoin = previewIsOptionOrder ? optionFormData.optionCurrency : formData.coin;
+                const previewAmountCurrency = previewIsOptionOrder ? previewOptionSummary?.denomination || 'USDT' : formData.amountCurrency || 'USDT';
+                const previewBuyPrice = previewIsOptionOrder ? optionFormData.premium || null : formData.buyPrice || null;
+                const previewBuyQuantity = previewIsOptionOrder ? optionFormData.buyQty || null : formData.buyQuantity || null;
+                const previewAmount = previewIsOptionOrder
+                  ? (previewOptionSummary?.totalUsdt && previewOptionSummary.totalUsdt > 0 ? previewOptionSummary.totalUsdt.toFixed(4) : null)
+                  : formData.assetType === 'stock' ? amountInputValue || null : financingAmountUsdt || null;
+                const previewDisplayInputAmount = previewIsOptionOrder ? previewOptionSummary?.totalInput || '' : amountInputValue || '';
+                const previewOrder: any = {
+                  id: editingOrder?.id ?? -1,
+                  order_no: editingOrder?.order_no ?? null,
+                  user_id: formData.userId,
+                  owner_label: isSnapshotScopedEdit ? ((editingOrder as any)?.owner_label || ownerLabel) : ownerLabel,
+                  participantInfo: activeJointOrderTarget ? { userId: activeJointOrderTarget.userId, role: activeJointOrderTarget.role, isPersonalOwnerView: activeJointOrderTarget.role === 'owner' } : (isSnapshotScopedEdit ? (editingOrder as any)?.participantInfo : undefined),
+                  _isParticipant: isRestrictedParticipantEdit,
+                  participant_name: activeJointOrderTarget?.userName || (isSnapshotScopedEdit ? (editingOrder as any)?.participant_name : undefined),
+                  order_owner_name: isSnapshotScopedEdit ? (editingOrder as any)?.order_owner_name : undefined,
+                  owner_display_names: activeJointOrderTarget
+                    ? jointOrderTargets.filter(target => target.role === 'owner').map(target => ({ userId: target.userId, name: target.userName }))
+                    : undefined,
+                  personal_header_label: formData.personalHeaderLabel.trim() || null,
+                  coin: previewCoin,
+                  asset_type: formData.assetType || null,
+                  buy_price: previewBuyPrice,
+                  buy_quantity: previewBuyQuantity,
+                  amount: previewAmount,
+                  amount_currency: previewAmountCurrency,
+                  buy_date: formData.buyDate || null,
+                  status: formData.status || 'active',
+                  order_fill_status: formData.orderFillStatus || 'filled',
+                  storage_account: formData.storageAccount || null,
+                  broker_name: formData.brokerName || null,
+                  broker_account: formData.brokerAccount || null,
+                  interest_rate_annual: (() => { const r = normalizeFunderAnnualRate(formData.interestRateAnnual); return r || '0'; })(),
+                  interest_payment_type: formData.interestPaymentType || null,
+                  interest_base: formData.interestBase || null,
+                  interest_base_currency: formData.interestBaseCurrency || 'USDT',
+                  interest_rate_currency: formData.interestRateCurrency || 'USDT',
+                  interest_start_date: formData.interestStartDate || null,
+                  show_profit_share: formData.showProfitShare ? 1 : 0,
+                  commission_share: formData.commissionShare || null,
+                  profit_share_ratio: formData.profitShareRatio || null,
+                  profit_share_type: formData.profitShareType || 'interest',
+                  principal_lent_out: effectivePrincipalLentOut ? 1 : 0,
+                  collateral_assets: collateralAssets.length > 0 ? JSON.stringify(collateralAssets) : null,
+                  // 编辑任一拥有者时，预览统一读取该订单所有已冻结的钱包担保；手工草稿仍只展示当前编辑内容。
+                  wallet_collateral_contributors: (editingOrder as any)?.wallet_collateral_contributors || [],
+                  option_info: formData.assetType === 'crypto_option' ? JSON.stringify({
+                    coin: optionFormData.optionCurrency,
+                    direction: optionFormData.direction,
+                    exerciseDate: optionFormData.exerciseDate || null,
+                    deribitLabel: optionFormData.deribitLabel || null,
+                    strikePrice: optionFormData.strikePrice ? parseFloat(optionFormData.strikePrice) : null,
+                    premium: optionFormData.premium || null,
+                    denomination: optionFormData.premiumDenomination,
+                    buyQty: optionFormData.buyQty || null,
+                  }) : null,
+                  collateral_share_mode: collateralShareMode || 'none',
+                  // 预览使用与保存完全相同的来源草稿，37号引用和手工股票组合都会即时同步。
+                  collateral_source: orderCollateralSourceDraft ? JSON.stringify(orderCollateralSourceDraft) : null,
+                  trade_direction: previewIsOptionOrder ? null : formData.tradeDirection || null,
+                  display_config: JSON.stringify({
+                    ...displayConfig,
+                    // 预览与保存使用同一份担保口径，避免切换按钮后仍沿用编辑前的卡片状态。
+                    collateralRiskFormula,
+                    ownerNameDisplay: 'self',
+                    marginAlertThreshold: marginAlertThreshold || undefined,
+                    rate_negative: normalizeFunderAnnualRate(formData.interestRateAnnual).startsWith('-'),
+                    financingInputAmount: previewDisplayInputAmount,
+                    financingInputCurrency: previewAmountCurrency,
+                  }),
+                  tags: formData.tags && formData.tags.length > 0 ? JSON.stringify(formData.tags) : null,
+                  public_note: null,
+                  admin_note: null,
+                  settled_at: null,
+                  participantCount: 0,
+                  paidTotal: editingOrderPayments && (editingOrderPayments as any[]).length > 0
+                    ? { amount: String((editingOrderPayments as any[]).reduce((s: number, p: any) => s + parseFloat(p.amount || '0'), 0)), currency: (editingOrderPayments as any[])[0]?.currency || 'U' }
+                    : null,
+                  // 实时预览只显示固定区当前选择用户的联合子段；其他参与者的数据始终隔离。
+                  joint_order_segments: previewJointOrderSegments,
+                };
+                const rateValPreview = parseFloat(String(previewOrder.interest_rate_annual || '0'));
+                const previewHasJointOrderSegments = previewJointOrderSegments.length > 0;
+                // 第二段的草稿也纳入 key，确保每次输入都会立即重建预览中的同卡分段内容。
+                const previewDisplayKey = `floating-preview-${previewViewMode}-${formData.assetType}-${collateralRiskFormula}-${String(displayConfig.floatPnl)}-${String(displayConfig.periodInterestTotal)}-${String(displayConfig.periodInterestTotalPeriod)}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}-${JSON.stringify((editingOrder as any)?.wallet_collateral_contributors || [])}-${JSON.stringify(previewJointOrderSegments)}`;
+                return (
+                  <>
+                    {previewViewMode === 'order' || previewHasJointOrderSegments || (formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions') ? (
+                      <FunderOrderCard
+                        key={previewDisplayKey}
+                        order={previewOrder}
+                        livePrices={formLivePrices}
+                        priceDirection={priceDirection}
+                        currentUser={currentUser}
+                        isAdmin={isAdminUser}
+                        membersData={((ledgerData as any)?.members || funderUsers) as any[]}
+                        ledgerId={ledgerId}
+                        previewMode={true}
+                        showCollateralInfo={showPreviewCollateralInfo}
+                        setShowCollateralInfo={setShowPreviewCollateralInfo}
+                        showMarginInfo={showPreviewMarginInfo}
+                        setShowMarginInfo={setShowPreviewMarginInfo}
+                        showInterestTip={showPreviewInterestTip}
+                        setShowInterestTip={setShowPreviewInterestTip}
+                        onCollateralFormulaPreviewChange={handleCollateralFormulaPreviewChange}
+                      />
+                    ) : (
+                      rateValPreview > 0 ? (
+                        <FunderLenderCardSilver
+                          key={previewDisplayKey}
+                          order={previewOrder}
+                          ledgerId={ledgerId}
+                          livePrices={formLivePrices}
+                          priceDirection={priceDirection}
+                          membersData={((ledgerData as any)?.members || funderUsers) as any[]}
+                          currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
+                          isAdmin={isAdminUser}
+                        />
+                      ) : (
+                        <FunderOrderCardV2Silver
+                          key={previewDisplayKey}
+                          order={previewOrder}
+                          ledgerId={ledgerId}
+                          livePrices={formLivePrices}
+                          priceDirection={priceDirection}
+                          membersData={((ledgerData as any)?.members || funderUsers) as any[]}
+                          currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
+                          isAdmin={isAdminUser}
+                        />
+                      )
+                    )}
+                  </>
+                );
   };
 
   return (
@@ -3407,7 +3701,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
       {/* 创建/编辑弹窗 */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col overflow-x-hidden" style={{ overscrollBehavior: 'contain' }}>
+          <div ref={editorDrawerRef} className="relative bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col overflow-x-hidden" style={{ overscrollBehavior: 'contain' }}>
             {!isCollaborativeOrderEdit && (
               <div className="flex-shrink-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl" style={{ zIndex: 10 }}>
                 <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
@@ -3435,7 +3729,7 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 </button>
               </div>
             )}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
+            <div onScroll={handleEditorContentScroll} className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
               {isCollaborativeOrderEdit && editorViewTargets.length > 0 && (
                 <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
                   <div className="mb-1 flex items-center justify-between gap-3">
@@ -5261,9 +5555,9 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
 
               {/* 字段开关面板 */}
               <div className="rounded-xl border border-gray-100 overflow-hidden" style={{ backgroundColor: '#FAFBFF' }}>
-                {/* 用户前端权限 */}
+                {/* 控制开关：展示类权限统一集中，用户下载始终排在第一位。 */}
                 <div className="px-4 py-3">
-                  <div className="mb-1.5 text-xs font-medium text-indigo-500">用户权限</div>
+                  <div className="mb-1.5 text-xs font-medium text-indigo-500">控制开关</div>
                   <div className="grid grid-cols-3 gap-x-2 gap-y-1">
                     <CompactDisplayToggle
                       label="图片下载"
@@ -5271,8 +5565,114 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       onToggle={() => setDisplayConfig(c => ({ ...c, allowUserImageDownload: !c.allowUserImageDownload }))}
                       tone="indigo"
                     />
+                    {ledgerId === 52 && (
+                      <CompactDisplayToggle
+                        label="手续费"
+                        checked={Boolean(displayConfig.tradingFee)}
+                        onToggle={() => setDisplayConfig(c => ({ ...c, tradingFee: !Boolean(c.tradingFee) }))}
+                      />
+                    )}
+                    <CompactDisplayToggle
+                      label="收益分成"
+                      checked={Boolean(displayConfig.profitShare)}
+                      onToggle={() => setDisplayConfig(c => ({ ...c, profitShare: !c.profitShare }))}
+                    />
+                    {formData.assetType === 'crypto_option' && (
+                      <CompactDisplayToggle
+                        label="Greeks"
+                        checked={displayConfig.showGreeks !== false}
+                        onToggle={() => setDisplayConfig(c => ({ ...c, showGreeks: !c.showGreeks, showGreeksManualOverride: true }))}
+                        tone="purple"
+                      />
+                    )}
                   </div>
-                  <p className="mt-1 text-[10px] leading-4 text-gray-400">仅控制用户前端；管理员订单列表始终可下载。</p>
+                  {ledgerId === 52 && displayConfig.tradingFee && (
+                    <div className="mt-2 border-t border-blue-100 pt-2.5">
+                      <div className="mb-1.5 text-xs font-medium text-blue-500">手续费设置</div>
+                      <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium text-gray-700">参考手续费费率</div>
+                            <p className="text-[11px] text-gray-400 mt-0.5">按计息基数（为空时按订单金额）自动计算</p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              value={formData.tradingFeeRate}
+                              onChange={e => setFormData(d => ({ ...d, tradingFeeRate: e.target.value }))}
+                              onBlur={() => setFormData(d => ({ ...d, tradingFeeRate: formatTradingFeeRate(d.tradingFeeRate) }))}
+                              className="w-16 rounded-lg border border-blue-200 bg-white px-2 py-1.5 text-center text-sm font-semibold text-blue-700 outline-none focus:border-blue-500"
+                            />
+                            <span className="text-sm font-medium text-gray-500">‰</span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1.5">手续费支付进度</div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {([
+                              { value: 'unpaid', label: '已付0%' },
+                              { value: 'half_paid', label: '已付50%' },
+                              { value: 'paid', label: '已付100%' },
+                            ] as const).map(item => (
+                              <button
+                                key={item.value}
+                                type="button"
+                                onClick={() => setFormData(d => ({ ...d, tradingFeeStatus: item.value }))}
+                                className={`rounded-lg border px-1 py-1.5 text-xs font-medium transition-colors ${
+                                  formData.tradingFeeStatus === item.value
+                                    ? 'border-blue-500 bg-blue-500 text-white'
+                                    : 'border-gray-200 bg-white text-gray-600'
+                                }`}
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {displayConfig.profitShare && (
+                    <div className="mt-2 border-t border-indigo-100 pt-2.5">
+                      <div className="mb-1.5 text-xs font-medium text-indigo-500">收益分成设置</div>
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setFormData(d => ({ ...d, profitShareType: 'interest' }))}
+                            className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                              formData.profitShareType === 'interest'
+                                ? 'border-blue-500 bg-blue-50 text-blue-600'
+                                : 'border-gray-200 text-gray-500'
+                            }`}
+                          >利息分成</button>
+                          <button
+                            type="button"
+                            onClick={() => setFormData(d => ({ ...d, profitShareType: 'coin' }))}
+                            className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                              formData.profitShareType === 'coin'
+                                ? 'border-blue-500 bg-blue-50 text-blue-600'
+                                : 'border-gray-200 text-gray-500'
+                            }`}
+                          >利润分成</button>
+                        </div>
+                        <div className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2">
+                          <span className="text-sm text-gray-500 shrink-0">分成比例</span>
+                          <input
+                            type="number"
+                            value={formData.profitShareRatio}
+                            onChange={e => setFormData(d => ({ ...d, profitShareRatio: e.target.value }))}
+                            className="flex-1 min-w-0 text-right text-sm focus:outline-none bg-transparent"
+                            placeholder="例如 20"
+                          />
+                          <span className="text-sm text-gray-500 shrink-0">%</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <p className="mt-1 text-[10px] leading-4 text-gray-400">图片下载仅控制用户前端；管理员订单列表始终可下载。手续费和收益分成的具体参数在下方设置。</p>
                 </div>
                 <div className="mx-4 h-px bg-gray-100" />
                 {/* 左栏字段 */}
@@ -5360,6 +5760,31 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                           );
                         })}
                       </div>
+                      <div className="mt-2 rounded-md border border-blue-100 bg-white p-2">
+                        <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] text-slate-500">
+                          <span>实时试算（U）</span>
+                          <span className="tabular-nums">担保 {formulaPreview.collateralValueU === null ? '加载中' : formulaPreview.collateralValueU.toFixed(2)} · 买入 {formulaPreview.baseValueU === null ? '待填写' : formulaPreview.baseValueU.toFixed(2)} · 待结 {formulaPreview.pendingInterestU === null ? '加载中' : formulaPreview.pendingInterestU.toFixed(2)} · 已结 {formulaPreview.paidInterestU === null ? '加载中' : formulaPreview.paidInterestU.toFixed(2)}</span>
+                        </div>
+                        <div className="space-y-1.5 text-[10px] leading-4">
+                          {([
+                            { value: 'principal_coverage', label: '担保差值', formula: '担保物 − 买入价值 − 待结利息 + 已结利息', result: formulaPreview.principalCoverageGapU },
+                            { value: 'floating_pnl', label: '担保＋浮盈', formula: `担保物 + ${formulaPreview.floatingPnlU === null ? '实时浮盈' : `${formulaPreview.floatingPnlU >= 0 ? '+' : ''}${formulaPreview.floatingPnlU.toFixed(2)} u`} − 待结利息 + 已结利息`, result: formulaPreview.floatingPnlGapU },
+                            { value: 'full_value', label: '买入全额', formula: '− 买入价值 − 待结利息 + 已结利息', result: formulaPreview.fullValueGapU },
+                          ] as const).map(item => {
+                            const active = collateralRiskFormula === item.value;
+                            const resultColor = item.result === null ? 'text-slate-400' : item.result >= 0 ? 'text-red-600' : 'text-emerald-600';
+                            return (
+                              <div key={`formula-preview-${item.value}`} className={`rounded px-1.5 py-1 ${active ? 'bg-blue-50 ring-1 ring-blue-200' : 'bg-slate-50'}`}>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className={`font-semibold ${active ? 'text-blue-700' : 'text-slate-600'}`}>{item.label}{active ? '（已选）' : ''}</span>
+                                  <span className={`shrink-0 font-mono font-semibold tabular-nums ${resultColor}`}>{item.result === null ? '实时数据加载中' : `${item.result >= 0 ? '+' : ''}${item.result.toFixed(2)} u`}</span>
+                                </div>
+                                <div className="text-slate-500">{item.formula}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   )}
                   {displayConfig.periodInterestTotal === true && (
@@ -5411,58 +5836,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                     </div>
                   )}
                 </div>
-                {ledgerId === 52 && (
-                  <>
-                    {/* 手续费操作区：交易管理员可调整费率及付款进度 */}
-                    <div className="px-4 pb-3">
-                      <div className="text-xs font-medium text-blue-500 mb-2">手续费操作</div>
-                      <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3 space-y-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-medium text-gray-700">参考手续费费率</div>
-                            <p className="text-[11px] text-gray-400 mt-0.5">按计息基数（为空时按订单金额）自动计算</p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.1"
-                              value={formData.tradingFeeRate}
-                              onChange={e => setFormData(d => ({ ...d, tradingFeeRate: e.target.value }))}
-                              onBlur={() => setFormData(d => ({ ...d, tradingFeeRate: formatTradingFeeRate(d.tradingFeeRate) }))}
-                              className="w-16 rounded-lg border border-blue-200 bg-white px-2 py-1.5 text-center text-sm font-semibold text-blue-700 outline-none focus:border-blue-500"
-                            />
-                            <span className="text-sm font-medium text-gray-500">‰</span>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500 mb-1.5">手续费支付进度</div>
-                          <div className="grid grid-cols-3 gap-2">
-                            {([
-                              { value: 'unpaid', label: '已付0%' },
-                              { value: 'half_paid', label: '已付50%' },
-                              { value: 'paid', label: '已付100%' },
-                            ] as const).map(item => (
-                              <button
-                                key={item.value}
-                                type="button"
-                                onClick={() => setFormData(d => ({ ...d, tradingFeeStatus: item.value }))}
-                                className={`rounded-lg border px-1 py-1.5 text-xs font-medium transition-colors ${
-                                  formData.tradingFeeStatus === item.value
-                                    ? 'border-blue-500 bg-blue-500 text-white'
-                                    : 'border-gray-200 bg-white text-gray-600'
-                                }`}
-                              >
-                                {item.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mx-4 h-px bg-gray-100 my-2" />
-                  </>
-                )}
                 {/* 约等于显示控制 */}
                 <div className="px-4 py-3">
                   <div className="mb-1.5 text-xs font-medium text-blue-500">约等于显示</div>
@@ -5524,80 +5897,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                         )}
                       </div>
                     ))}
-                  </div>
-                </div>
-                <div className="mx-4 h-px bg-gray-100 my-2" />
-                {/* 功能开关 */}
-                <div className="px-4 py-3">
-                  <div className="mb-1.5 text-xs font-medium text-blue-500">功能开关</div>
-                  <div className="grid grid-cols-3 gap-x-2 gap-y-1">
-                    {ledgerId === 52 && (
-                      <CompactDisplayToggle
-                        label="手续费"
-                        checked={Boolean(displayConfig.tradingFee)}
-                        onToggle={() => setDisplayConfig(c => ({ ...c, tradingFee: !Boolean(c.tradingFee) }))}
-                      />
-                    )}
-                    {formData.assetType === 'crypto_option' && (
-                      <CompactDisplayToggle
-                        label="Greeks"
-                        checked={displayConfig.showGreeks !== false}
-                        onToggle={() => setDisplayConfig(c => ({ ...c, showGreeks: !c.showGreeks, showGreeksManualOverride: true }))}
-                        tone="purple"
-                      />
-                    )}
-                  </div>
-                  <p className="mt-1 text-[10px] leading-4 text-gray-400">本金状态已移至页面顶部；担保缺口公式随“担保缺口”展示开关单独设置。</p>
-                </div>
-                <div className="mx-4 h-px bg-gray-100 my-2" />
-                {/* 右栏下半：收益分成区 */}
-                <div className="px-4 py-3">
-                  <div className="mb-1.5 text-xs font-medium text-blue-500">右栏 · 收益分成</div>
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-3 gap-x-2 gap-y-1">
-                      <CompactDisplayToggle
-                        label="收益分成"
-                        checked={Boolean(displayConfig.profitShare)}
-                        onToggle={() => setDisplayConfig(c => ({ ...c, profitShare: !c.profitShare }))}
-                      />
-                    </div>
-                    {displayConfig.profitShare && (
-                      <div className="space-y-2 pt-1">
-                        {/* 分成类型选择：利息分成 / 利润分成 */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setFormData(d => ({ ...d, profitShareType: 'interest' }))}
-                            className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-                              formData.profitShareType === 'interest'
-                                ? 'border-blue-500 bg-blue-50 text-blue-600'
-                                : 'border-gray-200 text-gray-500'
-                            }`}
-                          >利息分成</button>
-                          <button
-                            type="button"
-                            onClick={() => setFormData(d => ({ ...d, profitShareType: 'coin' }))}
-                            className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-                              formData.profitShareType === 'coin'
-                                ? 'border-blue-500 bg-blue-50 text-blue-600'
-                                : 'border-gray-200 text-gray-500'
-                            }`}
-                          >利润分成</button>
-                        </div>
-                        {/* 分成比例输入 */}
-                        <div className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2">
-                          <span className="text-sm text-gray-500 shrink-0">分成比例</span>
-                          <input
-                            type="number"
-                            value={formData.profitShareRatio}
-                            onChange={e => setFormData(d => ({ ...d, profitShareRatio: e.target.value }))}
-                            className="flex-1 min-w-0 text-right text-sm focus:outline-none bg-transparent"
-                            placeholder="例如 20"
-                          />
-                          <span className="text-sm text-gray-500 shrink-0">%</span>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -5796,155 +6095,6 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                 </section>
               )}
 
-              {/* 实时预览卡片 - 复用 FunderOrderCard，与订单列表完全一致 */}
-              {(() => {
-                // 构造预览用的 order 对象，字段名与数据库/后端返回保持一致
-                const ownerLabel = (() => {
-                  if (formData.ownerLabel) return formData.ownerLabel;
-                  if (formData.userId > 0) {
-                    const allMembers = ((ledgerData as any)?.members || []) as any[];
-                    const m = allMembers.find((mm: any) => mm.userId === formData.userId);
-                    return m?.nickname || m?.name || m?.user_nickname || m?.username || editingOrder?.owner_display_name || editingOrder?.userName || null;
-                  }
-                  return editingOrder?.owner_display_name || editingOrder?.userName || null;
-                })();
-                const previewIsOptionOrder = formData.assetType === 'crypto_option';
-                const previewOptionSummary = previewIsOptionOrder ? getOptionPremiumSummary() : null;
-                const previewCoin = previewIsOptionOrder ? optionFormData.optionCurrency : formData.coin;
-                const previewAmountCurrency = previewIsOptionOrder ? previewOptionSummary?.denomination || 'USDT' : formData.amountCurrency || 'USDT';
-                const previewBuyPrice = previewIsOptionOrder ? optionFormData.premium || null : formData.buyPrice || null;
-                const previewBuyQuantity = previewIsOptionOrder ? optionFormData.buyQty || null : formData.buyQuantity || null;
-                const previewAmount = previewIsOptionOrder
-                  ? (previewOptionSummary?.totalUsdt && previewOptionSummary.totalUsdt > 0 ? previewOptionSummary.totalUsdt.toFixed(4) : null)
-                  : formData.assetType === 'stock' ? amountInputValue || null : financingAmountUsdt || null;
-                const previewDisplayInputAmount = previewIsOptionOrder ? previewOptionSummary?.totalInput || '' : amountInputValue || '';
-                const previewOrder: any = {
-                  id: editingOrder?.id ?? -1,
-                  order_no: editingOrder?.order_no ?? null,
-                  user_id: formData.userId,
-                  owner_label: isSnapshotScopedEdit ? ((editingOrder as any)?.owner_label || ownerLabel) : ownerLabel,
-                  participantInfo: activeJointOrderTarget ? { userId: activeJointOrderTarget.userId, role: activeJointOrderTarget.role, isPersonalOwnerView: activeJointOrderTarget.role === 'owner' } : (isSnapshotScopedEdit ? (editingOrder as any)?.participantInfo : undefined),
-                  _isParticipant: isRestrictedParticipantEdit,
-                  participant_name: activeJointOrderTarget?.userName || (isSnapshotScopedEdit ? (editingOrder as any)?.participant_name : undefined),
-                  order_owner_name: isSnapshotScopedEdit ? (editingOrder as any)?.order_owner_name : undefined,
-                  owner_display_names: activeJointOrderTarget
-                    ? jointOrderTargets.filter(target => target.role === 'owner').map(target => ({ userId: target.userId, name: target.userName }))
-                    : undefined,
-                  personal_header_label: formData.personalHeaderLabel.trim() || null,
-                  coin: previewCoin,
-                  asset_type: formData.assetType || null,
-                  buy_price: previewBuyPrice,
-                  buy_quantity: previewBuyQuantity,
-                  amount: previewAmount,
-                  amount_currency: previewAmountCurrency,
-                  buy_date: formData.buyDate || null,
-                  status: formData.status || 'active',
-                  order_fill_status: formData.orderFillStatus || 'filled',
-                  storage_account: formData.storageAccount || null,
-                  broker_name: formData.brokerName || null,
-                  broker_account: formData.brokerAccount || null,
-                  interest_rate_annual: (() => { const r = normalizeFunderAnnualRate(formData.interestRateAnnual); return r || '0'; })(),
-                  interest_payment_type: formData.interestPaymentType || null,
-                  interest_base: formData.interestBase || null,
-                  interest_base_currency: formData.interestBaseCurrency || 'USDT',
-                  interest_rate_currency: formData.interestRateCurrency || 'USDT',
-                  interest_start_date: formData.interestStartDate || null,
-                  show_profit_share: formData.showProfitShare ? 1 : 0,
-                  commission_share: formData.commissionShare || null,
-                  profit_share_ratio: formData.profitShareRatio || null,
-                  profit_share_type: formData.profitShareType || 'interest',
-                  principal_lent_out: effectivePrincipalLentOut ? 1 : 0,
-                  collateral_assets: collateralAssets.length > 0 ? JSON.stringify(collateralAssets) : null,
-                  // 编辑任一拥有者时，预览统一读取该订单所有已冻结的钱包担保；手工草稿仍只展示当前编辑内容。
-                  wallet_collateral_contributors: (editingOrder as any)?.wallet_collateral_contributors || [],
-                  option_info: formData.assetType === 'crypto_option' ? JSON.stringify({
-                    coin: optionFormData.optionCurrency,
-                    direction: optionFormData.direction,
-                    exerciseDate: optionFormData.exerciseDate || null,
-                    deribitLabel: optionFormData.deribitLabel || null,
-                    strikePrice: optionFormData.strikePrice ? parseFloat(optionFormData.strikePrice) : null,
-                    premium: optionFormData.premium || null,
-                    denomination: optionFormData.premiumDenomination,
-                    buyQty: optionFormData.buyQty || null,
-                  }) : null,
-                  collateral_share_mode: collateralShareMode || 'none',
-                  // 预览使用与保存完全相同的来源草稿，37号引用和手工股票组合都会即时同步。
-                  collateral_source: orderCollateralSourceDraft ? JSON.stringify(orderCollateralSourceDraft) : null,
-                  trade_direction: previewIsOptionOrder ? null : formData.tradeDirection || null,
-                  display_config: JSON.stringify({
-                    ...displayConfig,
-                    // 预览与保存使用同一份担保口径，避免切换按钮后仍沿用编辑前的卡片状态。
-                    collateralRiskFormula,
-                    ownerNameDisplay: 'self',
-                    marginAlertThreshold: marginAlertThreshold || undefined,
-                    rate_negative: normalizeFunderAnnualRate(formData.interestRateAnnual).startsWith('-'),
-                    financingInputAmount: previewDisplayInputAmount,
-                    financingInputCurrency: previewAmountCurrency,
-                  }),
-                  tags: formData.tags && formData.tags.length > 0 ? JSON.stringify(formData.tags) : null,
-                  public_note: null,
-                  admin_note: null,
-                  settled_at: null,
-                  participantCount: 0,
-                  paidTotal: editingOrderPayments && (editingOrderPayments as any[]).length > 0
-                    ? { amount: String((editingOrderPayments as any[]).reduce((s: number, p: any) => s + parseFloat(p.amount || '0'), 0)), currency: (editingOrderPayments as any[])[0]?.currency || 'U' }
-                    : null,
-                  // 实时预览只显示固定区当前选择用户的联合子段；其他参与者的数据始终隔离。
-                  joint_order_segments: previewJointOrderSegments,
-                };
-                const rateValPreview = parseFloat(String(previewOrder.interest_rate_annual || '0'));
-                const previewHasJointOrderSegments = previewJointOrderSegments.length > 0;
-                // 第二段的草稿也纳入 key，确保每次输入都会立即重建预览中的同卡分段内容。
-                const previewDisplayKey = `preview-${previewViewMode}-${formData.assetType}-${collateralRiskFormula}-${String(displayConfig.floatPnl)}-${String(displayConfig.periodInterestTotal)}-${String(displayConfig.periodInterestTotalPeriod)}-${JSON.stringify(optionFormData)}-${JSON.stringify(orderCollateralSourceDraft)}-${JSON.stringify((editingOrder as any)?.wallet_collateral_contributors || [])}-${JSON.stringify(previewJointOrderSegments)}`;
-                return (
-                  <div>
-                    <div className="mb-2 text-xs font-medium text-gray-400">实时预览</div>
-                    {previewViewMode === 'order' || previewHasJointOrderSegments || (formData.assetType === 'stock' && stockPnlSourceMode === 'manual_positions') ? (
-                      <FunderOrderCard
-                        key={previewDisplayKey}
-                        order={previewOrder}
-                        livePrices={formLivePrices}
-                        priceDirection={priceDirection}
-                        currentUser={currentUser}
-                        isAdmin={isAdminUser}
-                        membersData={((ledgerData as any)?.members || funderUsers) as any[]}
-                        ledgerId={ledgerId}
-                        previewMode={true}
-                        showCollateralInfo={showPreviewCollateralInfo}
-                        setShowCollateralInfo={setShowPreviewCollateralInfo}
-                        showMarginInfo={showPreviewMarginInfo}
-                        setShowMarginInfo={setShowPreviewMarginInfo}
-                        showInterestTip={showPreviewInterestTip}
-                        setShowInterestTip={setShowPreviewInterestTip}
-                      />
-                    ) : (
-                      rateValPreview > 0 ? (
-                        <FunderLenderCardSilver
-                          key={previewDisplayKey}
-                          order={previewOrder}
-                          ledgerId={ledgerId}
-                          livePrices={formLivePrices}
-                          priceDirection={priceDirection}
-                          membersData={((ledgerData as any)?.members || funderUsers) as any[]}
-                          currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
-                          isAdmin={isAdminUser}
-                        />
-                      ) : (
-                        <FunderOrderCardV2Silver
-                          key={previewDisplayKey}
-                          order={previewOrder}
-                          ledgerId={ledgerId}
-                          livePrices={formLivePrices}
-                          priceDirection={priceDirection}
-                          membersData={((ledgerData as any)?.members || funderUsers) as any[]}
-                          currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
-                          isAdmin={isAdminUser}
-                        />
-                      )
-                    )}
-                  </div>
-                );
-              })()}
               </>
 
             {/* ===== 表单末尾：共同拥有者与历史参与者管理 ===== */}
@@ -6258,6 +6408,26 @@ export default function FunderManagement({ ledgerIdProp, adminOnly, financeOnly,
                       : '确认添加'}
               </button>
             </div>
+            </div>
+            <div
+              ref={floatingPreviewRef}
+              className="absolute left-5 right-5 z-30"
+              style={{
+                top: floatingPreviewTop === null ? undefined : floatingPreviewTop,
+                bottom: floatingPreviewTop === null ? 14 : undefined,
+                maxHeight: 'calc(100% - 28px)',
+                overflowY: 'auto',
+                overscrollBehavior: 'contain',
+                touchAction: 'none',
+                cursor: 'ns-resize',
+              }}
+              onPointerDown={handleFloatingPreviewPointerDown}
+              onPointerMove={handleFloatingPreviewPointerMove}
+              onPointerUp={finishFloatingPreviewDrag}
+              onPointerCancel={finishFloatingPreviewDrag}
+              aria-label="实时订单预览，可上下拖动定位"
+            >
+              {renderFloatingLiveOrderPreview()}
             </div>
           </div>
         </div>

@@ -588,6 +588,17 @@ export function OwnerCollaborationInfoButton({ order, ledgerId }: { order: any; 
 }
 
 // ===== FunderOrderCard 子组件（左右两栏布局，与 FinanceOrderCard 一致）=====
+export type FunderCollateralFormulaPreview = {
+  collateralValueU: number | null;
+  baseValueU: number | null;
+  floatingPnlU: number | null;
+  pendingInterestU: number | null;
+  paidInterestU: number | null;
+  principalCoverageGapU: number | null;
+  floatingPnlGapU: number | null;
+  fullValueGapU: number | null;
+};
+
 export interface FunderOrderCardProps {
   order: any;
   livePrices: Record<string, number>;
@@ -628,6 +639,8 @@ export interface FunderOrderCardProps {
   onConfirmSettle?: (order: any) => void;
   viewMode?: 'default' | 'large' | 'small';
   onExposureGapChange?: (orderId: number, gap: number) => void;
+  /** 编辑页用：回传三种担保口径的同源实时试算，避免编辑器与订单卡片各算一套。 */
+  onCollateralFormulaPreviewChange?: (orderId: number, values: FunderCollateralFormulaPreview) => void;
   sharedGapMap?: Record<number, number>;
   // 弹窗状态（提升到父组件，防止子组件重渲染时 state 被重置）
   showCollateralInfo?: boolean;
@@ -692,6 +705,7 @@ export function FunderOrderCard({
   onConfirmSettle,
   viewMode = 'default',
   onExposureGapChange,
+  onCollateralFormulaPreviewChange,
   sharedGapMap,
   showCollateralInfo: _propShowCollateralInfo,
   setShowCollateralInfo: _propSetShowCollateralInfo,
@@ -2507,6 +2521,77 @@ function mergeOrderWalletCollateralAssets(order: any, assets: Array<{ coin: stri
   const showExposureLoading = (hasExternalPendingInterest && linkedPendingInterestForRisk === null)
     || (hasExternalPaidInterest && linkedPaidInterestForRisk === null)
     || effectiveExposure === null;
+  // 编辑页口径对比直接复用订单卡已经完成的实时行情、37号引用与共享担保计算，
+  // 不能在父级再用简化公式重算，否则股票、期权和人民币利息会与卡片显示不一致。
+  const collateralFormulaPreview = useMemo<FunderCollateralFormulaPreview>(() => {
+    const previewCollateralValueU = isSharedMode
+      ? sharedOrderCollateralValueU
+      : usesConfiguredStockRiskData
+        ? linkedCollateralValueU
+        : combinedCollateralValueU;
+    const previewBaseValueU = isSharedMode
+      ? sharedOrderBorrowedValueU
+      : principalLentOutValueForRisk;
+    const previewFloatingPnlU = isSharedMode
+      ? sharedOrderFloatingPnlU
+      : usesConfiguredStockRiskData
+        ? linkedFloatingPnlU
+        : formulaFloatingPnlU;
+    const previewPendingInterestU = isSharedMode
+      ? sharedOrderPendingInterestU
+      : (hasExternalPendingInterest ? linkedPendingInterestForRisk : accruedForRisk);
+    const previewPaidInterestU = isSharedMode
+      ? sharedOrderPaidInterestU
+      : (hasExternalPaidInterest ? linkedPaidInterestForRisk : paidInterestForRisk);
+    const hasBase = previewBaseValueU !== null && Number.isFinite(previewBaseValueU) && previewBaseValueU > 0;
+    const hasInterest = previewPendingInterestU !== null
+      && Number.isFinite(previewPendingInterestU)
+      && previewPaidInterestU !== null
+      && Number.isFinite(previewPaidInterestU);
+    const principalCoverageGapU = hasBase && hasInterest && previewCollateralValueU !== null && Number.isFinite(previewCollateralValueU)
+      ? previewCollateralValueU - previewBaseValueU - previewPendingInterestU + previewPaidInterestU
+      : null;
+    const floatingPnlGapU = hasBase && hasInterest && previewCollateralValueU !== null && Number.isFinite(previewCollateralValueU)
+      && previewFloatingPnlU !== null && Number.isFinite(previewFloatingPnlU)
+      ? previewCollateralValueU + previewFloatingPnlU - previewPendingInterestU + previewPaidInterestU
+      : null;
+    const fullValueGapU = hasBase && hasInterest
+      ? -previewBaseValueU - previewPendingInterestU + previewPaidInterestU
+      : null;
+    return {
+      collateralValueU: previewCollateralValueU,
+      baseValueU: hasBase ? previewBaseValueU : null,
+      floatingPnlU: previewFloatingPnlU,
+      pendingInterestU: previewPendingInterestU,
+      paidInterestU: previewPaidInterestU,
+      principalCoverageGapU,
+      floatingPnlGapU,
+      fullValueGapU,
+    };
+  }, [
+    isSharedMode,
+    sharedOrderCollateralValueU,
+    sharedOrderBorrowedValueU,
+    sharedOrderFloatingPnlU,
+    sharedOrderPendingInterestU,
+    sharedOrderPaidInterestU,
+    usesConfiguredStockRiskData,
+    linkedCollateralValueU,
+    principalLentOutValueForRisk,
+    linkedFloatingPnlU,
+    formulaFloatingPnlU,
+    hasExternalPendingInterest,
+    linkedPendingInterestForRisk,
+    accruedForRisk,
+    hasExternalPaidInterest,
+    linkedPaidInterestForRisk,
+    paidInterestForRisk,
+  ]);
+  useEffect(() => {
+    if (!onCollateralFormulaPreviewChange) return;
+    const canonicalOrderId = Number(order.id);
+    if (Number.isFinite(canonicalOrderId)) onCollateralFormulaPreviewChange(canonicalOrderId, collateralFormulaPreview);
+  }, [onCollateralFormulaPreviewChange, order.id, collateralFormulaPreview]);
   // 每张订单卡都上报最终担保缺口。共享弹窗直接读取此结果，避免手工组合、37号标签
   // 或人民币利息在服务端摘要中被再次简化或重复计算。
   useEffect(() => {
