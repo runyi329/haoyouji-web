@@ -3917,7 +3917,7 @@ export async function saveLedger52T0JournalEntry(input: SaveT0JournalEntryInput)
     const [entryResult] = await tx.execute(
       `INSERT INTO ledger52_t0_journal_entries
         (ledger_id, user_id, account_id, related_user_id, related_fund_id, symbol, instrument_type, option_direction, option_expiry_date, option_premium, option_premium_currency, grid_direction, grid_range_min, grid_range_max, grid_leverage, grid_count, is_locked, is_counterparty, keep_reopen_reminder, execution_status, take_profit_enabled, take_profit_price, take_profit_quantity, action, quantity, price, fee_usdt, target_price, note, client_request_id, created_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'option' THEN 0 ELSE ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18) END, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'option' THEN 0 ELSE ROUND(CAST(? AS DECIMAL(36,18)) * CAST(? AS DECIMAL(36,18)) * ${OKX_VIP2_TAKER_FEE_RATE}, 18) END, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
       [
         LEDGER_52_T0_JOURNAL_ID,
