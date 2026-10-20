@@ -24,6 +24,8 @@ let intradayRefreshInProgress = false;
 
 const STOCK_LEDGER_ID = 37;
 const EPSILON = 0.00000001;
+/** 股票标签统一按买卖双边各千分之一计入交易成本。 */
+const STOCK_TRADE_FEE_RATE = 0.001;
 
 function asRows(result: any): any[] {
   if (Array.isArray(result?.[0])) return result[0];
@@ -119,6 +121,7 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           stock_name VARCHAR(80) NULL,
           quantity DECIMAL(24,8) NULL,
           execution_price DECIMAL(20,8) NULL,
+          transaction_fee DECIMAL(24,8) NULL COMMENT '实际成交额按统一费率自动计算的手续费',
           actual_traded_at DATETIME NULL COMMENT '管理员确认的实际成交/接单时间',
           server_registered_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '服务器登记时间',
           market_reference_price DECIMAL(20,8) NULL COMMENT '登记时服务器查询的参考价',
@@ -135,6 +138,19 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           INDEX idx_ledger_stock_events_symbol (category_id, symbol, status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+
+      // 手续费独立留存在不可变成交审计上；历史成交没有该字段时继续按原口径读取。
+      const [eventFeeColumnRows] = await (conn as any).execute(
+        `SELECT COLUMN_NAME FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'ledger_stock_events'
+           AND column_name = 'transaction_fee'`,
+      );
+      if ((eventFeeColumnRows as any[]).length === 0) {
+        await (conn as any).execute(
+          `ALTER TABLE ledger_stock_events
+           ADD COLUMN transaction_fee DECIMAL(24,8) NULL COMMENT '实际成交额按统一费率自动计算的手续费' AFTER execution_price`,
+        );
+      }
 
       await (conn as any).execute(`
         CREATE TABLE IF NOT EXISTS ledger_stock_lots (
@@ -298,6 +314,27 @@ export async function ensureLedgerStockPortfolioTables(): Promise<void> {
           INDEX idx_ledger_stock_participation_closure_participation (participation_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
+
+      // 每笔卖出最终利润的分配快照。成员当前持仓可继续调整，但该表保留卖出时管理员确认的比例与金额。
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ledger_stock_sale_profit_allocations (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          sell_event_id BIGINT NOT NULL,
+          recipient_type ENUM('member','account') NOT NULL,
+          participation_id BIGINT NULL,
+          user_id INT NULL,
+          recipient_name VARCHAR(120) NOT NULL,
+          allocation_quantity DECIMAL(24,8) NOT NULL,
+          share_percent DECIMAL(12,8) NOT NULL,
+          distributable_amount DECIMAL(24,8) NOT NULL,
+          currency VARCHAR(3) NOT NULL,
+          created_by INT NOT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_ledger_stock_sale_profit_recipient (sell_event_id, recipient_type, participation_id),
+          INDEX idx_ledger_stock_sale_profit_event (sell_event_id),
+          INDEX idx_ledger_stock_sale_profit_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
     })().catch((error) => {
       tablesReady = null;
       throw error;
@@ -374,7 +411,7 @@ async function getActiveLots(categoryId: number, symbol?: string) {
   if (symbol) params.push(symbol);
   const [rows] = await (conn as any).execute(
     `SELECT l.id, l.symbol, l.stock_name, l.opened_event_id, l.opened_at,
-            l.initial_quantity, l.unit_cost,
+            l.initial_quantity, l.unit_cost, opening_event.transaction_fee AS opening_fee,
             COALESCE(l.note, opening_event.note, '') AS note,
             COALESCE(SUM(CASE WHEN e.status = 'active' THEN a.quantity ELSE 0 END), 0) AS allocated_quantity
      FROM ledger_stock_lots l
@@ -394,10 +431,113 @@ async function getActiveLots(categoryId: number, symbol?: string) {
     openedAt: toIso(row.opened_at),
     initialQuantity: numberValue(row.initial_quantity),
     unitCost: numberValue(row.unit_cost),
+    openingFee: row.opening_fee === null || row.opening_fee === undefined ? null : numberValue(row.opening_fee),
     note: String(row.note || ""),
     allocatedQuantity: numberValue(row.allocated_quantity),
     remainingQuantity: Math.max(0, numberValue(row.initial_quantity) - numberValue(row.allocated_quantity)),
   }));
+}
+
+/**
+ * 已卖出批次从进行中持仓完全分流：只读卖出事件和批次分配，不取实时行情。
+ * 旧记录没有手续费时沿用既有已实现盈亏口径；新记录则保留买卖双边手续费。
+ */
+async function getSoldLots(categoryId: number, lots: Awaited<ReturnType<typeof getActiveLots>>) {
+  const fullyClosedLots = lots.filter((lot) => lot.remainingQuantity <= EPSILON);
+  if (fullyClosedLots.length === 0) return [];
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接不可用");
+  const lotIds = fullyClosedLots.map((lot) => lot.id);
+  const placeholders = lotIds.map(() => '?').join(',');
+  const [rows] = await (conn as any).execute(
+    `SELECT a.lot_id, a.quantity, e.id AS sell_event_id, e.execution_price, e.quantity AS event_quantity, e.transaction_fee,
+            e.actual_traded_at, e.server_registered_at, e.note AS sell_note
+     FROM ledger_stock_event_lot_allocations a
+     INNER JOIN ledger_stock_events e ON e.id = a.event_id
+     WHERE a.lot_id IN (${placeholders})
+       AND e.status = 'active' AND e.event_type = 'sell'
+     ORDER BY COALESCE(e.actual_traded_at, e.server_registered_at) DESC, e.id DESC`,
+    lotIds,
+  );
+  const lotById = new Map(fullyClosedLots.map((lot) => [lot.id, lot]));
+  const grouped = new Map<number, any[]>();
+  for (const row of rows as any[]) {
+    const lotId = Number(row.lot_id);
+    const list = grouped.get(lotId) || [];
+    list.push(row);
+    grouped.set(lotId, list);
+  }
+  const latestSellEventIds = Array.from(grouped.values())
+    .map((saleRows) => Number(saleRows[0]?.sell_event_id))
+    .filter((eventId) => Number.isInteger(eventId) && eventId > 0);
+  const memberSharesBySellEvent = new Map<number, Array<{ userId: number; name: string; percentage: number }>>();
+  if (latestSellEventIds.length > 0) {
+    const sharePlaceholders = latestSellEventIds.map(() => '?').join(',');
+    const [shareRows] = await (conn as any).execute(
+      `SELECT sell_event_id, user_id, recipient_name, share_percent
+       FROM ledger_stock_sale_profit_allocations
+       WHERE recipient_type = 'member' AND sell_event_id IN (${sharePlaceholders})
+       ORDER BY sell_event_id ASC, id ASC`,
+      latestSellEventIds,
+    );
+    for (const row of shareRows as any[]) {
+      const eventId = Number(row.sell_event_id);
+      const list = memberSharesBySellEvent.get(eventId) || [];
+      list.push({
+        userId: Number(row.user_id),
+        name: String(row.recipient_name || `用户#${row.user_id}`),
+        percentage: numberValue(row.share_percent),
+      });
+      memberSharesBySellEvent.set(eventId, list);
+    }
+  }
+  return Array.from(grouped.entries()).flatMap(([lotId, saleRows]) => {
+    const lot = lotById.get(lotId);
+    if (!lot) return [];
+    const soldQuantity = saleRows.reduce((total, row) => total + numberValue(row.quantity), 0);
+    // 新流程要求整笔卖出。历史减仓记录不伪装成完整的“已卖出”订单卡。
+    if (soldQuantity + EPSILON < lot.initialQuantity) return [];
+    const sellValue = saleRows.reduce((total, row) => total + numberValue(row.quantity) * numberValue(row.execution_price), 0);
+    const sellFee = saleRows.reduce((total, row) => {
+      const fee = row.transaction_fee === null || row.transaction_fee === undefined ? 0 : numberValue(row.transaction_fee);
+      const eventQuantity = numberValue(row.event_quantity);
+      return total + (eventQuantity > EPSILON ? fee * numberValue(row.quantity) / eventQuantity : 0);
+    }, 0);
+    const buyFee = saleRows.reduce((total, row) => {
+      // 与 getRealizedPnl 保持一致：仅新式（已留存卖出手续费）的成交计入双边手续费。
+      if (row.transaction_fee === null || row.transaction_fee === undefined) return total;
+      const quantity = numberValue(row.quantity);
+      const perShareFee = lot.openingFee === null
+        ? lot.unitCost * STOCK_TRADE_FEE_RATE
+        : lot.openingFee / Math.max(EPSILON, lot.initialQuantity);
+      return total + quantity * perShareFee;
+    }, 0);
+    const latestSale = saleRows[0];
+    const costValue = soldQuantity * lot.unitCost;
+    return [{
+      lotId,
+      symbol: lot.symbol,
+      stockName: lot.stockName,
+      currency: stockCurrency(lot.symbol),
+      openedAt: lot.openedAt,
+      initialQuantity: lot.initialQuantity,
+      unitCost: lot.unitCost,
+      note: lot.note,
+      sellEventId: Number(latestSale.sell_event_id),
+      soldAt: toIso(latestSale.actual_traded_at || latestSale.server_registered_at),
+      sellNote: String(latestSale.sell_note || ''),
+      memberShares: memberSharesBySellEvent.get(Number(latestSale.sell_event_id)) || [],
+      soldQuantity: Number(soldQuantity.toFixed(8)),
+      sellPrice: soldQuantity > EPSILON ? Number((sellValue / soldQuantity).toFixed(8)) : 0,
+      buyValue: Number(costValue.toFixed(8)),
+      sellValue: Number(sellValue.toFixed(8)),
+      buyFee: Number(buyFee.toFixed(8)),
+      sellFee: Number(sellFee.toFixed(8)),
+      accountNetProfit: Number((sellValue - sellFee - costValue - buyFee).toFixed(8)),
+    }];
+  }).sort((left, right) => (
+    String(right.soldAt).localeCompare(String(left.soldAt)) || right.sellEventId - left.sellEventId
+  ));
 }
 
 /**
@@ -539,15 +679,19 @@ async function getRealizedPnl(categoryId: number, usdCnyRate: number): Promise<n
   const conn = await getDbConnection();
   if (!conn) throw new Error("数据库连接不可用");
   const [rows] = await (conn as any).execute(
-    `SELECT e.id, e.symbol, e.quantity, e.execution_price,
-            COALESCE(SUM(a.quantity * l.unit_cost), 0) AS allocated_cost
+    `SELECT e.id, e.symbol, e.quantity, e.execution_price, e.transaction_fee,
+            COALESCE(SUM(a.quantity * l.unit_cost), 0) AS allocated_cost,
+            COALESCE(SUM(CASE WHEN e.transaction_fee IS NOT NULL
+              THEN a.quantity * COALESCE(opening_event.transaction_fee / NULLIF(l.initial_quantity, 0), l.unit_cost * ?)
+              ELSE 0 END), 0) AS allocated_buy_fee
      FROM ledger_stock_events e
      LEFT JOIN ledger_stock_event_lot_allocations a ON a.event_id = e.id
      LEFT JOIN ledger_stock_lots l ON l.id = a.lot_id
+     LEFT JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
      WHERE e.category_id = ? AND e.status = 'active'
        AND e.event_type IN ('reduce','sell')
      GROUP BY e.id`,
-    [categoryId],
+    [STOCK_TRADE_FEE_RATE, categoryId],
   );
   let total = 0;
   for (const row of rows as any[]) {
@@ -555,7 +699,9 @@ async function getRealizedPnl(categoryId: number, usdCnyRate: number): Promise<n
     const multiplier = currency === 'USD' ? usdCnyRate : 1;
     if (!Number.isFinite(multiplier) || multiplier <= 0) return null;
     const proceeds = numberValue(row.quantity) * numberValue(row.execution_price);
-    total += (proceeds - numberValue(row.allocated_cost)) * multiplier;
+    // 仅对新成交写入的手续费纳入净利润，旧历史成交没有 transaction_fee 时保留原有结果。
+    const sellFee = row.transaction_fee === null || row.transaction_fee === undefined ? 0 : numberValue(row.transaction_fee);
+    total += (proceeds - sellFee - numberValue(row.allocated_cost) - numberValue(row.allocated_buy_fee)) * multiplier;
   }
   return total;
 }
@@ -584,6 +730,7 @@ async function getEventHistory(categoryId: number, limit = 500) {
     stockName: row.stock_name || null,
     quantity: row.quantity === null ? null : numberValue(row.quantity),
     executionPrice: row.execution_price === null ? null : numberValue(row.execution_price),
+    transactionFee: row.transaction_fee === null ? null : numberValue(row.transaction_fee),
     actualTradedAt: toIso(row.actual_traded_at),
     serverRegisteredAt: toIso(row.server_registered_at),
     marketReferencePrice: row.market_reference_price === null ? null : numberValue(row.market_reference_price),
@@ -697,7 +844,8 @@ function summarizePositionsInCny(
 
 async function buildPortfolio(categoryId: number) {
   const allLots = await getActiveLots(categoryId);
-  const symbols = allLots.map((lot) => lot.symbol);
+  const activeLots = allLots.filter((lot) => lot.remainingQuantity > EPSILON);
+  const symbols = activeLots.map((lot) => lot.symbol);
   const [referenceQuotes, storedQuotes, intradayQuotes, usStockExchanges] = await Promise.all([
     getLatestReferenceQuotes(categoryId),
     getLatestQuotes(categoryId, symbols),
@@ -707,7 +855,8 @@ async function buildPortfolio(categoryId: number) {
   const quoteMap = mergeLatestQuoteMaps(referenceQuotes, storedQuotes, intradayQuotes);
   const positionMap = new Map<string, any>();
 
-  for (const lot of allLots) {
+  // 已卖尽的批次不再混入同一股票的“当前持仓”列表，更不会占用持仓编号。
+  for (const lot of activeLots) {
     const current = positionMap.get(lot.symbol) || {
       symbol: lot.symbol,
       stockName: lot.stockName,
@@ -759,6 +908,7 @@ async function buildPortfolio(categoryId: number) {
       initialQuantity: lot.initialQuantity,
       unitCost: lot.unitCost,
     }));
+  const soldLots = await getSoldLots(categoryId, allLots);
 
   const usdCnyRate = Number(getUsdtCnyRate() || 0);
   const realizedPnl = await getRealizedPnl(categoryId, usdCnyRate);
@@ -783,6 +933,7 @@ async function buildPortfolio(categoryId: number) {
   return {
     positions,
     closedLots,
+    soldLots,
     summary: {
       // Never display or persist a partial portfolio aggregate as though missing prices were zero.
       reportingCurrency: 'CNY' as const,
@@ -872,7 +1023,7 @@ export async function getStockTagPublicPortfolio(input: {
   const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
   const memberPortfolio = await buildMemberStockPortfolio(access.categoryId, input.userId);
   if (!memberPortfolio.isEligible && !access.canEdit) throw new Error("该股票标签尚未对您开放");
-  const portfolio = await buildPortfolio(access.categoryId);
+  const { soldLots: _soldLots, ...portfolio } = await buildPortfolio(access.categoryId);
   // 批次备注是管理员维护信息；成员只需看到已分配批次的价格与数量，不能读取备注。
   const publicPositions = portfolio.positions.map((position) => ({
     ...position,
@@ -1037,16 +1188,27 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
     bySymbol.set(String(row.symbol), numberValue(row.price));
     priceByDate.set(date, bySymbol);
   }
-  const dailySnapshots = isMixedCurrency ? [] : Array.from(priceByDate.entries()).map(([snapshotDate, priceBySymbol]) => {
+  // 用户端概览固定按人民币显示。不能因为同一标签同时有 A 股和美股，就把
+  // 成员此前的日历与走势图整段置空；美元部分以当前 USD/CNY 做人民币折算，
+  // 各股票价格仍严格使用已保存的当日盘尾价。
+  const snapshotUsdCnyRate = usdCnyRate > 0 ? usdCnyRate : 0;
+  const dailySnapshots = Array.from(priceByDate.entries()).map(([snapshotDate, priceBySymbol]) => {
     const effective = activeParticipations.filter((item) => (
       item.startDate <= snapshotDate && (!item.pauseDate || snapshotDate <= item.pauseDate)
     ));
     const allPriced = effective.every((item) => priceBySymbol.has(item.symbol));
-    const snapshotCost = effective.reduce((total, item) => total + item.remainingQuantity * item.entryPrice, 0);
-    const snapshotMarket = allPriced
-      ? effective.reduce((total, item) => total + item.remainingQuantity * (priceBySymbol.get(item.symbol) || 0), 0)
+    const hasHistoricalFx = effective.every((item) => stockCurrency(item.symbol) !== 'USD' || snapshotUsdCnyRate > 0);
+    const snapshotCost = effective.reduce((total, item) => {
+      const multiplier = stockCurrency(item.symbol) === 'USD' ? snapshotUsdCnyRate : 1;
+      return total + item.remainingQuantity * item.entryPrice * multiplier;
+    }, 0);
+    const snapshotMarket = allPriced && hasHistoricalFx
+      ? effective.reduce((total, item) => {
+        const multiplier = stockCurrency(item.symbol) === 'USD' ? snapshotUsdCnyRate : 1;
+        return total + item.remainingQuantity * (priceBySymbol.get(item.symbol) || 0) * multiplier;
+      }, 0)
       : null;
-    const snapshotFloating = snapshotMarket === null ? null : snapshotCost - snapshotMarket;
+    const snapshotFloating = snapshotMarket === null ? null : snapshotMarket - snapshotCost;
     return {
       snapshotDate,
       marketValue: snapshotMarket,
@@ -1056,7 +1218,11 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       totalPnl: snapshotFloating === null ? null : snapshotFloating + realizedPnl,
       positionCount: new Set(effective.map((item) => item.symbol)).size,
     };
-  });
+  }).filter((snapshot) => (
+    snapshot.positionCount > 0
+    && snapshot.marketValue !== null
+    && snapshot.totalPnl !== null
+  ));
   const latestSnapshot = dailySnapshots[dailySnapshots.length - 1] || null;
   const priorSnapshot = dailySnapshots.length > 1 ? dailySnapshots[dailySnapshots.length - 2] : null;
   // 成员视图同样按个人累计盈亏的相邻盘尾差额计算，避免新增参与份额被误算成盈亏。
@@ -1085,8 +1251,8 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       unpricedPositionCount: cnySummary.unpricedPositionCount,
       currencySummaries,
       isMixedCurrency,
-      dailyChange: isMixedCurrency ? null : dailyChange,
-      dailyChangePercent: isMixedCurrency ? null : dailyChangePercent,
+      dailyChange,
+      dailyChangePercent,
       latestSnapshot,
       priorSnapshot,
       valuationDate,
@@ -1324,6 +1490,7 @@ export async function createStockTagEvent(input: {
   actualTradedAt?: string;
   note?: string;
   correctsEventId?: number;
+  profitAllocations?: StockSaleProfitAllocationInput[];
 }) {
   const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
   const type = input.eventType;
@@ -1341,7 +1508,7 @@ export async function createStockTagEvent(input: {
   if (type !== "note") {
     executionPrice = Number(input.executionPrice);
     if (!Number.isFinite(executionPrice) || executionPrice <= 0) throw new Error("成交价格必须大于0");
-    if (type === "sell" && isNewOperation) {
+    if (type === "sell" && Number(input.lotId) > 0) {
       const lotId = Number(input.lotId);
       if (!Number.isInteger(lotId) || lotId <= 0) throw new Error("卖出时请选择持仓编号");
       const lots = await getActiveLots(access.categoryId);
@@ -1382,11 +1549,14 @@ export async function createStockTagEvent(input: {
     await (tx as any).beginTransaction();
     const referencePrice = stock?.latestPrice && stock.latestPrice > 0 ? stock.latestPrice : null;
     const referenceTime = stock?.latestPriceUpdatedAt ? new Date(stock.latestPriceUpdatedAt) : null;
+    const transactionFee = quantity !== null && executionPrice !== null
+      ? Number((quantity * executionPrice * STOCK_TRADE_FEE_RATE).toFixed(8))
+      : null;
     const [result] = await (tx as any).execute(
       `INSERT INTO ledger_stock_events
        (ledger_id, category_id, event_type, symbol, stock_name, quantity, execution_price,
-        actual_traded_at, market_reference_price, market_reference_at, note, created_by, corrects_event_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        transaction_fee, actual_traded_at, market_reference_price, market_reference_at, note, created_by, corrects_event_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         access.ledgerId,
         access.categoryId,
@@ -1395,6 +1565,7 @@ export async function createStockTagEvent(input: {
         stock?.name || null,
         quantity,
         executionPrice,
+        transactionFee,
         actualTradedAt,
         referencePrice,
         referenceTime,
@@ -1415,8 +1586,26 @@ export async function createStockTagEvent(input: {
       );
     }
     if (type === "reduce" || type === "sell") {
-      if (type === "sell" && isNewOperation && input.lotId) {
+      if (type === "sell" && input.lotId) {
+        if (input.profitAllocations && input.profitAllocations.length > 0) {
+          await syncStockLotMemberSharesForSale(tx, {
+            ledgerId: access.ledgerId,
+            categoryId: access.categoryId,
+            lotId: Number(input.lotId),
+            closingQuantity: quantity!,
+            createdBy: input.userId,
+            memberShares: input.profitAllocations,
+          });
+        }
         await allocateWholeLot(tx, eventId, access.categoryId, Number(input.lotId), stock!.symbol, quantity!, executionPrice!);
+        await saveStockSaleProfitAllocations(tx, {
+          lotId: Number(input.lotId),
+          sellEventId: eventId,
+          quantity: quantity!,
+          salePrice: executionPrice!,
+          sellFee: transactionFee || 0,
+          createdBy: input.userId,
+        });
       } else {
         await allocateFifo(tx, eventId, access.categoryId, stock!.symbol, quantity!, executionPrice!);
       }
@@ -1549,6 +1738,41 @@ export async function correctStockTagEvent(input: {
       throw new Error("该批次已有后续卖出，请先按时间倒序更正后续操作");
     }
   }
+
+  // 新式卖出始终对应一个完整持仓编号。更正时必须沿用该编号和成员比例，
+  // 不能退回 FIFO，否则会让已卖出卡片与初始标签管理的成员份额脱节。
+  let sellCorrection: { lotId: number; profitAllocations: StockSaleProfitAllocationInput[] } | null = null;
+  if (original.event_type === "sell") {
+    const [allocationRows] = await (conn as any).execute(
+      `SELECT lot_id, SUM(quantity) AS quantity
+       FROM ledger_stock_event_lot_allocations
+       WHERE event_id = ?
+       GROUP BY lot_id`,
+      [input.eventId],
+    );
+    const allocations = allocationRows as any[];
+    if (allocations.length !== 1) {
+      throw new Error("这笔历史卖出关联了多个持仓编号，请先作废后按编号重新登记");
+    }
+    const lotId = Number(allocations[0]?.lot_id);
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      throw new Error("该卖出记录缺少原持仓编号，请先作废后重新登记");
+    }
+    const [closureRows] = await (conn as any).execute(
+      `SELECT p.user_id, SUM(c.quantity) AS quantity
+       FROM ledger_stock_participation_closures c
+       INNER JOIN ledger_stock_lot_participations p ON p.id = c.participation_id
+       WHERE c.sell_event_id = ?
+       GROUP BY p.user_id`,
+      [input.eventId],
+    );
+    const closingQuantity = numberValue(allocations[0]?.quantity);
+    const profitAllocations = (closureRows as any[]).map((row) => ({
+      userId: Number(row.user_id),
+      percentage: closingQuantity > EPSILON ? Number((numberValue(row.quantity) / closingQuantity * 100).toFixed(8)) : 0,
+    })).filter((row) => Number.isInteger(row.userId) && row.userId > 0 && row.percentage > 0);
+    sellCorrection = { lotId, profitAllocations };
+  }
   await voidStockTagEvent({
     ledgerId: input.ledgerId,
     categoryId: input.categoryId,
@@ -1557,7 +1781,11 @@ export async function correctStockTagEvent(input: {
     systemRole: input.systemRole,
     reason: `更正：${String(input.reason || "").trim()}`,
   });
-  return createStockTagEvent({ ...input, correctsEventId: input.eventId });
+  return createStockTagEvent({
+    ...input,
+    correctsEventId: input.eventId,
+    ...(sellCorrection || {}),
+  });
 }
 
 /**
@@ -2006,5 +2234,384 @@ async function closeLotParticipationsFifo(conn: any, lotId: number, sellEventId:
       [closedQuantity, row.id],
     );
     remaining -= closedQuantity;
+  }
+}
+
+type StockSaleProfitAllocationInput = {
+  // 这里是初始标签管理中同一位成员的比例，不是另一份“利润比例”。
+  userId: number;
+  percentage: number;
+};
+
+/**
+ * 卖出确认前，把卖出页的成员比例写回初始标签管理共用的持仓份额。
+ * 必须与结清和最终收益快照处在同一事务，避免两份比例不同步。
+ */
+async function syncStockLotMemberSharesForSale(
+  conn: any,
+  params: {
+    ledgerId: number;
+    categoryId: number;
+    lotId: number;
+    closingQuantity: number;
+    createdBy: number;
+    memberShares: StockSaleProfitAllocationInput[];
+  },
+) {
+  const [lotRows] = await conn.execute(
+    `SELECT l.id, l.unit_cost, l.opened_at, opening_event.market_reference_price
+     FROM ledger_stock_lots l
+     INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
+     WHERE l.id = ? AND l.category_id = ? AND opening_event.status = 'active'
+     LIMIT 1 FOR UPDATE`,
+    [params.lotId, params.categoryId],
+  );
+  const lot = (lotRows as any[])[0];
+  if (!lot) throw new Error("卖出分配所对应的持仓编号不存在");
+
+  const shareByUser = new Map<number, number>();
+  for (const item of params.memberShares) {
+    const userId = Number(item.userId);
+    const percentage = Number(item.percentage);
+    if (!Number.isInteger(userId) || userId <= 0 || shareByUser.has(userId)) {
+      throw new Error("成员分配比例存在重复或无效成员，请刷新后重试");
+    }
+    if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+      throw new Error("每位成员的分配比例必须在0%到100%之间");
+    }
+    shareByUser.set(userId, percentage);
+  }
+  const totalPercentage = Array.from(shareByUser.values()).reduce((sum, value) => sum + value, 0);
+  if (totalPercentage > 100.001) {
+    throw new Error(`成员分配比例合计不能超过100%，当前为${totalPercentage.toFixed(4)}%`);
+  }
+
+  const submittedUserIds = Array.from(shareByUser.keys());
+  if (submittedUserIds.length === 0) return;
+  const memberPlaceholders = submittedUserIds.map(() => '?').join(', ');
+  const [memberRows] = await conn.execute(
+    `SELECT userId FROM ledger_members WHERE ledgerId = ? AND userId IN (${memberPlaceholders}) FOR UPDATE`,
+    [params.ledgerId, ...submittedUserIds],
+  );
+  const validMemberIds = new Set((memberRows as any[]).map((row) => Number(row.userId)));
+  if (validMemberIds.size !== submittedUserIds.length) {
+    throw new Error("分配成员不属于当前37号账本，请刷新后重试");
+  }
+
+  const [participationRows] = await conn.execute(
+    `SELECT id, user_id, allocated_quantity, remaining_quantity, entry_price, start_date, pause_date
+     FROM ledger_stock_lot_participations
+     WHERE lot_id = ? FOR UPDATE`,
+    [params.lotId],
+  );
+  const participations = participationRows as any[];
+  const existingByUser = new Map(participations.map((row) => [Number(row.user_id), row]));
+  const activeNotSubmitted = participations.find((row) => (
+    numberValue(row.remaining_quantity) > EPSILON && !shareByUser.has(Number(row.user_id))
+  ));
+  if (activeNotSubmitted) {
+    throw new Error("成员分配资料已变化，请刷新卖出页后重新确认");
+  }
+
+  const [closureRows] = await conn.execute(
+    `SELECT participation_id, COUNT(*) AS closure_count
+     FROM ledger_stock_participation_closures
+     WHERE participation_id IN (SELECT id FROM ledger_stock_lot_participations WHERE lot_id = ?)
+     GROUP BY participation_id`,
+    [params.lotId],
+  );
+  const closureCountByParticipation = new Map((closureRows as any[]).map((row) => [Number(row.participation_id), Number(row.closure_count)]));
+  const defaultStartDate = normalizeStoredDate(lot.opened_at) || beijingDate();
+  for (const userId of submittedUserIds) {
+    const existing = existingByUser.get(userId);
+    const percentage = shareByUser.get(userId) || 0;
+    const desiredQuantity = Number((params.closingQuantity * percentage / 100).toFixed(8));
+    const hasClosureHistory = existing && (closureCountByParticipation.get(Number(existing.id)) || 0) > 0;
+    if (hasClosureHistory && Math.abs(numberValue(existing.remaining_quantity) - desiredQuantity) > EPSILON) {
+      throw new Error("该成员已有历史卖出结算，不能在本次卖出前修改其原始分配比例");
+    }
+    if (hasClosureHistory) continue;
+    if (desiredQuantity <= EPSILON) {
+      if (existing) await conn.execute(`DELETE FROM ledger_stock_lot_participations WHERE id = ?`, [existing.id]);
+      continue;
+    }
+    if (existing) {
+      await conn.execute(
+        `UPDATE ledger_stock_lot_participations
+         SET allocated_quantity = ?, remaining_quantity = ?, assigned_by = ?
+         WHERE id = ?`,
+        [desiredQuantity, desiredQuantity, params.createdBy, existing.id],
+      );
+    } else {
+      const entryPrice = numberValue(lot.unit_cost) || numberValue(lot.market_reference_price);
+      if (entryPrice <= 0) throw new Error("该股票批次缺少有效开仓价，暂不能新增成员分配");
+      await conn.execute(
+        `INSERT INTO ledger_stock_lot_participations
+         (ledger_id, category_id, lot_id, user_id, allocated_quantity, remaining_quantity, entry_price, start_date, pause_date, assigned_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [params.ledgerId, params.categoryId, params.lotId, userId, desiredQuantity, desiredQuantity, entryPrice, defaultStartDate, null, params.createdBy],
+      );
+    }
+  }
+}
+
+/** 在卖出事务内冻结最终结算。成员为账户长仓的对手盘，因此成员收益与账户净盈亏方向相反。 */
+async function saveStockSaleProfitAllocations(
+  conn: any,
+  params: {
+    lotId: number;
+    sellEventId: number;
+    quantity: number;
+    salePrice: number;
+    sellFee: number;
+    createdBy: number;
+  },
+) {
+  const [lotRows] = await conn.execute(
+    `SELECT l.id, l.symbol, l.initial_quantity, l.unit_cost, opening_event.transaction_fee AS opening_fee
+     FROM ledger_stock_lots l
+     LEFT JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
+     WHERE l.id = ? LIMIT 1 FOR UPDATE`,
+    [params.lotId],
+  );
+  const lot = (lotRows as any[])[0];
+  if (!lot) throw new Error("卖出分配所对应的持仓编号不存在");
+
+  const [participantRows] = await conn.execute(
+    `SELECT c.participation_id, SUM(c.quantity) AS closed_quantity,
+            p.user_id, COALESCE(NULLIF(u.name, ''), u.username, CONCAT('用户#', p.user_id)) AS member_name
+     FROM ledger_stock_participation_closures c
+     INNER JOIN ledger_stock_lot_participations p ON p.id = c.participation_id
+     LEFT JOIN users u ON u.id = p.user_id
+     WHERE c.sell_event_id = ? AND p.lot_id = ?
+     GROUP BY c.participation_id, p.user_id, u.name, u.username
+     ORDER BY MIN(c.id) ASC`,
+    [params.sellEventId, params.lotId],
+  );
+  const memberTargets = (participantRows as any[]).map((row) => ({
+    recipientType: "member" as const,
+    participationId: Number(row.participation_id),
+    userId: Number(row.user_id),
+    name: String(row.member_name || `用户#${row.user_id}`),
+    quantity: numberValue(row.closed_quantity),
+  })).filter((row) => row.quantity > EPSILON);
+  const memberQuantity = memberTargets.reduce((sum, row) => sum + row.quantity, 0);
+  if (memberQuantity - params.quantity > EPSILON) {
+    throw new Error("成员分配股数超过本次可结清数量，请刷新后重试");
+  }
+  if (memberTargets.length === 0) return;
+
+  const openingFee = lot.opening_fee === null || lot.opening_fee === undefined
+    ? params.quantity * numberValue(lot.unit_cost) * STOCK_TRADE_FEE_RATE
+    : numberValue(lot.opening_fee) * params.quantity / Math.max(EPSILON, numberValue(lot.initial_quantity));
+  const accountNetProfit = params.quantity * params.salePrice - params.sellFee - params.quantity * numberValue(lot.unit_cost) - openingFee;
+  for (const target of memberTargets) {
+    const percentage = params.quantity > EPSILON ? target.quantity / params.quantity * 100 : 0;
+    // 成员是账户长仓的对手盘：账户亏损，成员盈利。
+    const recipientProfit = -accountNetProfit * percentage / 100;
+    await conn.execute(
+      `INSERT INTO ledger_stock_sale_profit_allocations
+       (sell_event_id, recipient_type, participation_id, user_id, recipient_name, allocation_quantity, share_percent, distributable_amount, currency, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        params.sellEventId,
+        target.recipientType,
+        target.participationId,
+        target.userId,
+        target.name,
+        target.quantity,
+        Number(percentage.toFixed(8)),
+        Number(recipientProfit.toFixed(8)),
+        stockCurrency(String(lot.symbol || "")),
+        params.createdBy,
+      ],
+    );
+  }
+}
+
+/**
+ * 已卖出订单的修改是原单覆盖：保留同一个卖出事件 ID，只更新价格、时间、备注、
+ * 双边手续费和成员分配结果。不会新增“更正单”，也不会把原单标记为作废。
+ */
+export async function updateStockTagSale(input: {
+  ledgerId: number;
+  categoryId: number;
+  eventId: number;
+  executionPrice: number;
+  actualTradedAt: string;
+  note?: string;
+  profitAllocations?: StockSaleProfitAllocationInput[];
+  userId: number;
+  systemRole?: string;
+}) {
+  const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole, true);
+  const executionPrice = Number(input.executionPrice);
+  if (!Number.isFinite(executionPrice) || executionPrice <= 0) throw new Error("实际卖出价格必须大于 0");
+  const actualTradedAt = new Date(input.actualTradedAt);
+  if (Number.isNaN(actualTradedAt.getTime())) throw new Error("实际成交时间无效");
+  const note = String(input.note || "").trim().slice(0, 3000);
+  const tx = await getDbTransactionConnection();
+  if (!tx) throw new Error("数据库连接不可用");
+  try {
+    await (tx as any).beginTransaction();
+    const [eventRows] = await (tx as any).execute(
+      `SELECT id, event_type, status, quantity
+       FROM ledger_stock_events
+       WHERE id = ? AND ledger_id = ? AND category_id = ?
+       LIMIT 1 FOR UPDATE`,
+      [input.eventId, access.ledgerId, access.categoryId],
+    );
+    const event = (eventRows as any[])[0];
+    if (!event || event.status !== 'active' || event.event_type !== 'sell') {
+      throw new Error("仅可修改有效的已卖出订单");
+    }
+    const [allocationRows] = await (tx as any).execute(
+      `SELECT lot_id, SUM(quantity) AS quantity
+       FROM ledger_stock_event_lot_allocations
+       WHERE event_id = ?
+       GROUP BY lot_id
+       FOR UPDATE`,
+      [input.eventId],
+    );
+    const eventLots = allocationRows as any[];
+    if (eventLots.length !== 1) {
+      throw new Error("该历史卖出包含多个持仓编号，暂不能在此直接修改");
+    }
+    const lotId = Number(eventLots[0].lot_id);
+    const soldQuantity = numberValue(eventLots[0].quantity);
+    if (!Number.isInteger(lotId) || lotId <= 0 || soldQuantity <= EPSILON) {
+      throw new Error("该卖出订单缺少有效的持仓编号或卖出数量");
+    }
+    const [otherClosureRows] = await (tx as any).execute(
+      `SELECT COUNT(*) AS count
+       FROM ledger_stock_participation_closures c
+       INNER JOIN ledger_stock_lot_participations p ON p.id = c.participation_id
+       WHERE p.lot_id = ? AND c.sell_event_id <> ?`,
+      [lotId, input.eventId],
+    );
+    if (numberValue((otherClosureRows as any[])[0]?.count) > 0) {
+      throw new Error("该持仓编号存在其他历史结算，暂不能覆盖此笔卖出");
+    }
+    // 先撤除旧的最终分配快照，随后按本次保存的成员比例重新生成。
+    // 这样即便数据库启用了参与记录外键，也可以安全调整零份额成员。
+    await (tx as any).execute(`DELETE FROM ledger_stock_sale_profit_allocations WHERE sell_event_id = ?`, [input.eventId]);
+
+    if (input.profitAllocations !== undefined) {
+      const shareByUser = new Map<number, number>();
+      for (const item of input.profitAllocations) {
+        const userId = Number(item.userId);
+        const percentage = Number(item.percentage);
+        if (!Number.isInteger(userId) || userId <= 0 || shareByUser.has(userId)) {
+          throw new Error("成员分配比例存在重复或无效成员，请刷新后重试");
+        }
+        if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+          throw new Error("每位成员的分配比例必须在0%到100%之间");
+        }
+        shareByUser.set(userId, percentage);
+      }
+      const totalPercentage = Array.from(shareByUser.values()).reduce((sum, value) => sum + value, 0);
+      if (totalPercentage > 100.001) {
+        throw new Error(`成员分配比例合计不能超过100%，当前为${totalPercentage.toFixed(4)}%`);
+      }
+      const submittedUserIds = Array.from(shareByUser.keys());
+      if (submittedUserIds.length > 0) {
+        const placeholders = submittedUserIds.map(() => '?').join(',');
+        const [memberRows] = await (tx as any).execute(
+          `SELECT userId FROM ledger_members WHERE ledgerId = ? AND userId IN (${placeholders}) FOR UPDATE`,
+          [access.ledgerId, ...submittedUserIds],
+        );
+        if ((memberRows as any[]).length !== submittedUserIds.length) {
+          throw new Error("分配成员不属于当前37号账本，请刷新后重试");
+        }
+      }
+      const [participationRows] = await (tx as any).execute(
+        `SELECT id, user_id, entry_price, start_date, pause_date
+         FROM ledger_stock_lot_participations
+         WHERE lot_id = ? FOR UPDATE`,
+        [lotId],
+      );
+      const participations = participationRows as any[];
+      const existingByUser = new Map(participations.map((row) => [Number(row.user_id), row]));
+      await (tx as any).execute(`DELETE FROM ledger_stock_participation_closures WHERE sell_event_id = ?`, [input.eventId]);
+      for (const participation of participations) {
+        const userId = Number(participation.user_id);
+        const desiredQuantity = Number((soldQuantity * (shareByUser.get(userId) || 0) / 100).toFixed(8));
+        if (desiredQuantity <= EPSILON) {
+          await (tx as any).execute(`DELETE FROM ledger_stock_lot_participations WHERE id = ?`, [participation.id]);
+        } else {
+          await (tx as any).execute(
+            `UPDATE ledger_stock_lot_participations
+             SET allocated_quantity = ?, remaining_quantity = 0, assigned_by = ?
+             WHERE id = ?`,
+            [desiredQuantity, input.userId, participation.id],
+          );
+        }
+      }
+      const [lotRows] = await (tx as any).execute(
+        `SELECT l.unit_cost, l.opened_at, opening_event.market_reference_price
+         FROM ledger_stock_lots l
+         INNER JOIN ledger_stock_events opening_event ON opening_event.id = l.opened_event_id
+         WHERE l.id = ? LIMIT 1 FOR UPDATE`,
+        [lotId],
+      );
+      const lot = (lotRows as any[])[0];
+      if (!lot) throw new Error("卖出订单对应的持仓编号不存在");
+      const defaultEntryPrice = numberValue(lot.unit_cost) || numberValue(lot.market_reference_price);
+      const defaultStartDate = normalizeStoredDate(lot.opened_at) || beijingDate();
+      for (const userId of submittedUserIds) {
+        const desiredQuantity = Number((soldQuantity * (shareByUser.get(userId) || 0) / 100).toFixed(8));
+        if (desiredQuantity <= EPSILON || existingByUser.has(userId)) continue;
+        await (tx as any).execute(
+          `INSERT INTO ledger_stock_lot_participations
+           (ledger_id, category_id, lot_id, user_id, allocated_quantity, remaining_quantity, entry_price, start_date, pause_date, assigned_by)
+           VALUES (?, ?, ?, ?, ?, 0, ?, ?, NULL, ?)`,
+          [access.ledgerId, access.categoryId, lotId, userId, desiredQuantity, defaultEntryPrice, defaultStartDate, input.userId],
+        );
+      }
+      const [updatedParticipationRows] = await (tx as any).execute(
+        `SELECT id, user_id FROM ledger_stock_lot_participations WHERE lot_id = ? FOR UPDATE`,
+        [lotId],
+      );
+      const updatedParticipationByUser = new Map((updatedParticipationRows as any[]).map((row) => [Number(row.user_id), Number(row.id)]));
+      for (const userId of submittedUserIds) {
+        const desiredQuantity = Number((soldQuantity * (shareByUser.get(userId) || 0) / 100).toFixed(8));
+        const participationId = updatedParticipationByUser.get(userId);
+        if (desiredQuantity <= EPSILON || !participationId) continue;
+        await (tx as any).execute(
+          `INSERT INTO ledger_stock_participation_closures (participation_id, sell_event_id, quantity, sale_price)
+           VALUES (?, ?, ?, ?)`,
+          [participationId, input.eventId, desiredQuantity, executionPrice],
+        );
+      }
+    } else {
+      await (tx as any).execute(
+        `UPDATE ledger_stock_participation_closures SET sale_price = ? WHERE sell_event_id = ?`,
+        [executionPrice, input.eventId],
+      );
+    }
+
+    const sellFee = Number((soldQuantity * executionPrice * STOCK_TRADE_FEE_RATE).toFixed(8));
+    await (tx as any).execute(
+      `UPDATE ledger_stock_events
+       SET execution_price = ?, transaction_fee = ?, actual_traded_at = ?, note = ?
+       WHERE id = ?`,
+      [executionPrice, sellFee, actualTradedAt, note || null, input.eventId],
+    );
+    // 最终收益和成员比例是该事件的当前结果；保存时直接覆盖，不保留第二份更正快照。
+    await saveStockSaleProfitAllocations(tx, {
+      lotId,
+      sellEventId: input.eventId,
+      quantity: soldQuantity,
+      salePrice: executionPrice,
+      sellFee,
+      createdBy: input.userId,
+    });
+    await (tx as any).commit();
+    return { success: true, eventId: input.eventId, lotId };
+  } catch (error) {
+    await (tx as any).rollback();
+    throw error;
+  } finally {
+    if (typeof (tx as any).release === 'function') (tx as any).release();
   }
 }

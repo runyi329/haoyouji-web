@@ -12426,6 +12426,11 @@ ${klinesSummary}
         quantity: z.number().positive().max(1_000_000_000).optional(),
         executionPrice: z.number().positive().max(10_000_000).optional(),
         lotId: z.number().int().positive().optional(),
+        profitAllocations: z.array(z.object({
+          // 与初始标签管理共用同一份成员持仓比例；服务端会在结清前同步换算后的股数。
+          userId: z.number().int().positive(),
+          percentage: z.number().min(0).max(100),
+        })).max(200).optional(),
         actualTradedAt: z.string().datetime().optional(),
         note: z.string().max(3000).optional(),
       }).superRefine((value, issue) => {
@@ -12439,6 +12444,23 @@ ${klinesSummary}
       .mutation(async ({ ctx, input }) => {
         const { createStockTagEvent } = await import('./ledger-stock-portfolio');
         return createStockTagEvent({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
+      }),
+    updateStockTagSale: protectedProcedure
+      .input(z.object({
+        ledgerId: z.literal(37),
+        categoryId: z.number(),
+        eventId: z.number().int().positive(),
+        executionPrice: z.number().positive().max(10_000_000),
+        actualTradedAt: z.string().datetime(),
+        note: z.string().max(3000).optional(),
+        profitAllocations: z.array(z.object({
+          userId: z.number().int().positive(),
+          percentage: z.number().min(0).max(100),
+        })).max(200).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { updateStockTagSale } = await import('./ledger-stock-portfolio');
+        return updateStockTagSale({ ...input, userId: ctx.user.id, systemRole: (ctx.user as any).role });
       }),
     voidStockTagEvent: protectedProcedure
       .input(z.object({

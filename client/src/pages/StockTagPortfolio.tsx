@@ -137,6 +137,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   const isLoading = participantView ? memberPortfolioQuery.isLoading : globalPortfolioQuery.isLoading;
   const error = participantView ? memberPortfolioQuery.error : globalPortfolioQuery.error;
   const canEdit = !participantView && Boolean((data as any)?.canEdit);
+  // 已卖出批次由服务端按成交记录冻结；不混入当前报价、当前市值或持仓编号。
+  const soldLots = !participantView && canEdit ? (((data as any)?.soldLots || []) as any[]) : [];
   // Only administrators receive the named, all-member allocation matrix.  The
   // ordinary member route deliberately stays limited to its own allocation.
   const allocationMatrixQuery = trpc.ledger.getStockLotParticipationMatrix.useQuery(
@@ -170,6 +172,8 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
   const [showActionDialog, setShowActionDialog] = useState(false);
   const [showTradeDialog, setShowTradeDialog] = useState(false);
   const [tradeType, setTradeType] = useState<"buy" | "sell">("buy");
+  const [preselectedSellLotId, setPreselectedSellLotId] = useState<number | null>(null);
+  const [editingSale, setEditingSale] = useState<any | null>(null);
   const [eventType, setEventType] = useState<EventType>("buy");
   const [symbolQuery, setSymbolQuery] = useState("");
   const [selectedStock, setSelectedStock] = useState<any | null>(null);
@@ -192,16 +196,6 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     { enabled: shouldSearchStock, staleTime: 3_000 },
   );
   const suggestions = (suggestionsData as any)?.results || [];
-
-  const voidEventMutation = trpc.ledger.voidStockTagEvent.useMutation({
-    onSuccess: () => {
-      toast.success("操作已作废，原始审计记录仍会保留");
-      void utils.ledger.getStockTagPortfolio.invalidate({ ledgerId, categoryId });
-      void utils.ledger.getMyStockTagParticipantPortfolio.invalidate({ ledgerId: 37, categoryId });
-      void utils.ledger.getStockLotParticipationMatrix.invalidate({ ledgerId: 37, categoryId });
-    },
-    onError: (error) => toast.error(`作废失败：${error.message}`),
-  });
 
   const correctEventMutation = trpc.ledger.correctStockTagEvent.useMutation({
     onSuccess: () => {
@@ -241,8 +235,18 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
     setCorrectionReason("");
   };
 
-  const openTrade = (type: "buy" | "sell") => {
+  const openTrade = (type: "buy" | "sell", lotId?: number) => {
+    setEditingSale(null);
     setTradeType(type);
+    setPreselectedSellLotId(type === "sell" && Number(lotId) > 0 ? Number(lotId) : null);
+    setShowTradeDialog(true);
+  };
+
+  const openSoldSaleEdit = (soldLot: any) => {
+    // 已卖出列表字段名为 sellEventId；卖出编辑接口使用 eventId。
+    setEditingSale({ ...soldLot, eventId: Number(soldLot.sellEventId) });
+    setTradeType('sell');
+    setPreselectedSellLotId(null);
     setShowTradeDialog(true);
   };
 
@@ -288,12 +292,6 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       note: note.trim() || undefined,
     };
     correctEventMutation.mutate({ ...payload, ...correctionPayload });
-  };
-
-  const requestVoid = (event: any) => {
-    const reason = window.prompt("填写作废原因（原记录不会删除）：");
-    if (!reason?.trim()) return;
-    voidEventMutation.mutate({ ledgerId: 37, categoryId, eventId: event.id, reason: reason.trim() });
   };
 
   const beginLotNoteEdit = (lotId: number, currentNote: string) => {
@@ -654,6 +652,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
       const holdingPnlTone = Number(holdingPnl || 0) >= 0 ? "text-[#D32F2F]" : "text-[#2E7D32]";
       const positionNumber = String(holding.positionNumber).padStart(2, "0");
       const lotId = Number(holding.lot.id);
+      const hasRemainingLotQuantity = Number(holding.lot.quantity || 0) > 0;
       const exchangeLabel = holding.nativeCurrency === 'USD' ? holding.exchange : null;
       // The local hot preview proxies reads to the currently deployed API. Until the new
       // lot-note field is deployed, show the existing opening-event note as a read-only
@@ -686,7 +685,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
                 <span aria-label={`持仓编号 ${positionNumber}`} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#EDB6B6] text-[9px] font-bold leading-none text-[#9F1D1D]" style={{ background: "radial-gradient(circle at 31% 24%, #FFFFFF 0%, #FFFFFF 12%, #FFF7F7 13%, #FFD8D8 48%, #F09D9D 74%, #B71C1C 100%)", boxShadow: "inset 1px 1px 2px rgba(255,255,255,.95), inset -2px -2px 3px rgba(125,20,20,.42), 0 2px 3px rgba(77,12,12,.30)" }}>{positionNumber}</span>
                 <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5"><span className="font-semibold leading-5 text-[#222222]">{holding.stockName}</span><span className="shrink-0 whitespace-nowrap font-normal text-gray-400">{holding.symbol}</span>{exchangeLabel && <span className="shrink-0 rounded bg-[#EAF2FF] px-1 py-0.5 text-[9px] font-medium leading-4 text-[#1565C0]">{exchangeLabel}</span>}</div>
               </div>
-              {canEdit && <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={() => setSelectedPosition(holding.position)} className="text-[#C62828]">审计</button>{isAdminLotExpanded && <button type="button" aria-label={`收起持仓编号 ${positionNumber}`} title="收起详情" onClick={toggleAdminLotExpanded} className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100"><ChevronUp size={15} /></button>}</div>}
+              {canEdit && <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={() => setSelectedPosition(holding.position)} className="text-[#C62828]">审计</button>{hasRemainingLotQuantity && <button type="button" onClick={() => openTrade("sell", lotId)} className="text-[#C62828]">卖出</button>}{isAdminLotExpanded && <button type="button" aria-label={`收起持仓编号 ${positionNumber}`} title="收起详情" onClick={toggleAdminLotExpanded} className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100"><ChevronUp size={15} /></button>}</div>}
             </div>
           </div>
           {!participantView && canEdit && !isAdminLotExpanded && (
@@ -729,6 +728,44 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
           {snapshotStamp && <div aria-label={snapshotStamp} className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><div className="flex -rotate-12 flex-col items-center rounded-xl border-2 border-[#2586B8]/20 bg-[#E8F6FC]/5 px-4 py-2 text-center text-[#2378A7]/20 opacity-[0.55]"><BadgeCheck className="h-6 w-6" strokeWidth={1.8} /><span className="mt-0.5 text-xs font-bold tracking-[0.14em]">盘尾已结算</span><span className="mt-0.5 text-[9px] font-medium tracking-wide">{snapshotStamp}</span></div></div>}
       </div>;
     })}</div>;
+  };
+
+  const renderSoldLots = () => {
+    if (soldLots.length === 0) return null;
+    return <section className="overflow-hidden rounded-xl border border-[#F2D6D6] bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-[#F3E2E2] bg-[#FFF8F8] px-3 py-2.5">
+        <div><div className="text-sm font-semibold text-[#8F1D1D]">已卖出</div><div className="mt-0.5 text-[10px] text-[#A06B6B]">成交价格、时间和净盈亏均固定为卖出当时的记录</div></div>
+        <span className="rounded-full border border-[#EDC5C5] bg-white px-2 py-0.5 text-[10px] font-medium text-[#9F1D1D]">{soldLots.length} 笔</span>
+      </div>
+      <div className="divide-y divide-[#F0E3E3]">
+        {soldLots.map((lot: any) => {
+          const currency = normalizeCurrency(lot.currency);
+          const accountNetProfit = Number(lot.accountNetProfit || 0);
+          const profitTone = accountNetProfit >= 0 ? 'text-[#C62828]' : 'text-[#2E7D32]';
+          return <div key={`sold-${lot.lotId}-${lot.sellEventId}`} className="relative overflow-hidden bg-[#FFFDFD] text-xs">
+            <div className="relative z-10 border-b border-[#F2E1E1] px-3 py-2.5">
+              <div className="flex min-w-0 items-start justify-between gap-2">
+                <div className="min-w-0"><div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5"><span className="font-semibold text-[#222222]">{lot.stockName}</span><span className="text-[11px] text-gray-400">{lot.symbol}</span><span className="rounded border border-[#F0C9C9] bg-[#FFF4F4] px-1 py-0.5 text-[9px] font-medium text-[#B42323]">已卖出</span></div><div className="mt-1 text-[10px] text-gray-500">卖出于 {formatDateTime(lot.soldAt)}</div></div>
+                {canEdit && <button type="button" onClick={() => openSoldSaleEdit(lot)} className="shrink-0 text-[11px] text-[#1565C0] underline underline-offset-2">修改</button>}
+              </div>
+            </div>
+            <div className="relative z-10 grid grid-cols-3 border-b border-[#F2E1E1] text-center">
+              <div className="min-w-0 border-r border-[#F2E1E1] px-1 py-2"><div className="text-[10px] text-gray-400">卖出数量</div><div className="mt-0.5 break-all text-[11px] font-medium text-[#222222]">{formatQuantity(Number(lot.soldQuantity || 0))} 股</div></div>
+              <div className="min-w-0 border-r border-[#F2E1E1] px-1 py-2"><div className="text-[10px] text-gray-400">买入价</div><div className="mt-0.5 break-all text-[11px] font-medium text-[#222222]">{money(Number(lot.unitCost || 0), 2, currency)}</div></div>
+              <div className="min-w-0 px-1 py-2"><div className="text-[10px] text-gray-400">卖出价</div><div className="mt-0.5 break-all text-[11px] font-medium text-[#222222]">{money(Number(lot.sellPrice || 0), 2, currency)}</div></div>
+            </div>
+            <div className="relative z-10 grid grid-cols-3 border-b border-[#F2E1E1] text-center">
+              <div className="min-w-0 border-r border-[#F2E1E1] px-1 py-2"><div className="text-[10px] text-gray-400">买入金额</div><div className="mt-0.5 break-all text-[11px] font-medium text-[#222222]">{money(Number(lot.buyValue || 0), 2, currency)}</div></div>
+              <div className="min-w-0 border-r border-[#F2E1E1] px-1 py-2"><div className="text-[10px] text-gray-400">卖出金额</div><div className="mt-0.5 break-all text-[11px] font-medium text-[#222222]">{money(Number(lot.sellValue || 0), 2, currency)}</div></div>
+              <div className="min-w-0 px-1 py-2"><div className="text-[10px] text-gray-400">双边手续费</div><div className="mt-0.5 break-all text-[11px] font-medium text-[#222222]">{money(Number(lot.buyFee || 0) + Number(lot.sellFee || 0), 2, currency)}</div></div>
+            </div>
+            <div className="relative z-10 flex items-center justify-between gap-2 px-3 py-2"><span className="text-[11px] text-gray-500">账户净盈亏</span><b className={`text-sm ${profitTone}`}>{signedMoney(accountNetProfit, currency)}</b></div>
+            {lot.sellNote && <div className="relative z-10 border-t border-[#F2E1E1] px-3 py-2 text-[11px] text-gray-500">卖出备注：{lot.sellNote}</div>}
+            <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center"><span className="-rotate-12 rounded-lg border-2 border-[#C62828]/15 px-3 py-1 text-xl font-bold tracking-[0.22em] text-[#C62828]/10">已卖出</span></div>
+          </div>;
+        })}
+      </div>
+    </section>;
   };
 
   return (
@@ -783,6 +820,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
           )}
         </section>
 
+        {renderSoldLots()}
         <div className="space-y-3">
 
 
@@ -794,7 +832,7 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
 
         <section className={participantView ? "border-t border-[#F1E6DE]" : "overflow-hidden rounded-xl border border-[#E4EAF0] bg-white shadow-sm"}>
           <button onClick={() => setShowHistory((value) => !value)} className="w-full px-3 py-3 flex items-center justify-between text-sm font-semibold text-[#222222]"><span className="flex items-center gap-1.5"><History className="w-4 h-4 text-gray-500" />{participantView ? "标签完整操作历史" : "完整操作历史"} ({historyRows.length})</span>{showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
-          {showHistory && <div className="border-t divide-y divide-gray-100">{historyRows.map((event: any) => <div key={event.id} className={`px-3 py-3 ${event.status === "voided" ? "bg-gray-50 opacity-75" : ""}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-1.5"><span className={`rounded px-1.5 py-0.5 text-[10px] ${eventTone[event.type as EventType]}`}>{eventLabels[event.type as EventType]}</span>{event.status === "voided" && <span className="text-[10px] text-gray-500">已作废</span>}<span className="text-xs font-medium text-[#222222] truncate">{event.stockName || "运营备注"}{event.symbol ? ` ${event.symbol}` : ""}</span></div><div className="mt-1 text-[11px] text-gray-500">实际：{formatDateTime(event.actualTradedAt)} · 登记：{formatDateTime(event.serverRegisteredAt)}</div>{event.note && <div className="mt-1 text-[11px] text-gray-600 break-words">{event.note}</div>}{event.status === "voided" && event.voidReason && <div className="mt-1 text-[11px] text-[#C62828]">作废原因：{event.voidReason}</div>}</div><div className="shrink-0 text-right text-xs text-gray-600">{event.quantity !== null ? <>{!participantView && <div>{formatQuantity(event.quantity)} 股</div>}<div className={participantView ? "font-medium text-[#222222]" : "mt-1"}>{money(event.executionPrice, 2, /^\d{6}\.(SH|SZ|BJ)$/.test(String(event.symbol || '')) ? 'CNY' : 'USD')}</div></> : null}{canEdit && event.status === "active" && <div className="mt-2 flex justify-end gap-2"><button onClick={() => openCorrection(event)} className="text-[11px] text-[#1565C0] underline">更正</button><button onClick={() => requestVoid(event)} disabled={voidEventMutation.isPending} className="text-[11px] text-[#C62828] underline">作废</button></div>}</div></div></div>)}</div>}
+          {showHistory && <div className="border-t divide-y divide-gray-100">{historyRows.map((event: any) => <div key={event.id} className={`px-3 py-3 ${event.status === "voided" ? "bg-gray-50 opacity-75" : ""}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-1.5"><span className={`rounded px-1.5 py-0.5 text-[10px] ${eventTone[event.type as EventType]}`}>{eventLabels[event.type as EventType]}</span>{event.status === "voided" && <span className="text-[10px] text-gray-500">历史撤销</span>}<span className="text-xs font-medium text-[#222222] truncate">{event.stockName || "运营备注"}{event.symbol ? ` ${event.symbol}` : ""}</span></div><div className="mt-1 text-[11px] text-gray-500">实际：{formatDateTime(event.actualTradedAt)} · 登记：{formatDateTime(event.serverRegisteredAt)}</div>{event.note && <div className="mt-1 text-[11px] text-gray-600 break-words">{event.note}</div>}{event.status === "voided" && event.voidReason && <div className="mt-1 text-[11px] text-[#C62828]">历史撤销说明：{event.voidReason}</div>}</div><div className="shrink-0 text-right text-xs text-gray-600">{event.quantity !== null ? <>{!participantView && <div>{formatQuantity(event.quantity)} 股</div>}<div className={participantView ? "font-medium text-[#222222]" : "mt-1"}>{money(event.executionPrice, 2, /^\d{6}\.(SH|SZ|BJ)$/.test(String(event.symbol || '')) ? 'CNY' : 'USD')}</div></> : null}</div></div></div>)}</div>}
         </section>
         </div>
       </main>
@@ -854,7 +892,15 @@ export default function StockTagPortfolio({ ledgerId, categoryId, categoryName, 
         categoryName={categoryName}
         open={showTradeDialog}
         type={tradeType}
-        onOpenChange={setShowTradeDialog}
+        initialLotId={tradeType === "sell" ? preselectedSellLotId : null}
+        editingSale={editingSale}
+        onOpenChange={(open) => {
+          setShowTradeDialog(open);
+          if (!open) {
+            setPreselectedSellLotId(null);
+            setEditingSale(null);
+          }
+        }}
       />
 
       <Dialog open={showActionDialog && !!correctingEvent} onOpenChange={(open) => !open && closeActionDialog()}>
