@@ -650,6 +650,39 @@ export default function DepositManage() {
     { enabled: !!ledgerId, refetchInterval: 30000 }
   );
 
+  // 37号标签的保证金、利息与成员初始保证金共用同一个全体暂停状态。
+  // 暂停标签在列表末尾可直接恢复，无需先展开卡片；服务端仍是权限与联动的唯一真源。
+  const handleResumeTagFromList = async (tagName: string) => {
+    if (pauseSaving) return;
+    setPauseSaving(true);
+    try {
+      await setTagMarginPauseMutation.mutateAsync({ ledgerId, tagName, marginPauseDate: null });
+      // 这条是保证金页的补充审计日志；主恢复已由服务端事务成功完成，日志失败不应误报恢复失败。
+      try {
+        await addMarginLogMutation.mutateAsync({
+          ledgerId,
+          tagName,
+          action: '恢复标签',
+          detail: '恢复利息、标签保证金与全体成员初始保证金',
+        });
+      } catch (error) {
+        console.warn('[DepositManage] 标签已恢复，但补充保证金日志写入失败:', error);
+      }
+      await Promise.all([
+        refetch(),
+        refetchAllTagsMarginSummary(),
+        selectedTagForRight === tagName ? refetchRightTagConfig() : Promise.resolve(),
+        selectedTagForRight === tagName ? refetchRightTagSummary() : Promise.resolve(),
+        selectedTagForRight === tagName ? refetchMarginLogs() : Promise.resolve(),
+      ]);
+      toast.success('已恢复标签及全体成员初始保证金');
+    } catch (error: any) {
+      toast.error(error?.message || '恢复标签失败');
+    } finally {
+      setPauseSaving(false);
+    }
+  };
+
   const currentRightMarginRecords = useMemo(() => {
     if (savedRightMarginEdits) {
       return parseTagMarginRecords(savedRightMarginEdits.map((entry) => entry.assetType === 'stock'
@@ -1383,7 +1416,7 @@ export default function DepositManage() {
                 // 计算该标签的保证金占基数比（用于折叠行显示）
                 // 仅在 cryptoPrices 已加载（有 USDT 汇率）时才计算，避免汇率未就绪导致计算错误
                 const tagSummaryData = allTagsMarginSummary?.[cat.name];
-                const isPaused = !!(tagSummaryData?.marginPauseDate);
+                const isPaused = !!(tagSummaryData?.marginPauseDate || (ledgerId === 37 && tagSummaryData?.pauseDate));
                 let collapseRatio: number | null = null;
                 const hasPrices = Object.keys(cryptoPrices).length > 0;
                 if (tagSummaryData && hasPrices) {
@@ -1466,6 +1499,20 @@ export default function DepositManage() {
                         </div>
                       </div>
                     </button>
+
+                    {ledgerId === 37 && isPaused && (
+                      <div className="border-t border-gray-200 bg-gray-50 px-4 py-2.5">
+                        <button
+                          type="button"
+                          disabled={pauseSaving}
+                          onClick={() => void handleResumeTagFromList(cat.name)}
+                          className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                        >
+                          <PlayCircle className="h-4 w-4" />
+                          {pauseSaving ? '恢复中...' : '恢复标签'}
+                        </button>
+                      </div>
+                    )}
 
                     {/* 展开内容 */}
                     {isSelected && (
@@ -2001,7 +2048,9 @@ export default function DepositManage() {
 
                         {/* ── 暂停/恢复按鈕（查看模式）── */}
                         {!rightEditMode && selectedTagForRight && (() => {
-                          const isPaused = !!(rightTagConfig as any)?.margin_pause_date;
+                          const isPaused = ledgerId === 37
+                            ? Boolean((rightTagConfig as any)?.margin_pause_date ?? (rightTagConfig as any)?.pause_date)
+                            : Boolean((rightTagConfig as any)?.margin_pause_date);
                           const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
                           const commitPauseToggle = async (settlementDate?: string) => {
                             const isLedger37 = ledgerId === 37;
@@ -2034,6 +2083,10 @@ export default function DepositManage() {
                             }
                           };
                           const requestPauseToggle = () => {
+                            if (isPaused && ledgerId === 37) {
+                              void handleResumeTagFromList(selectedTagForRight);
+                              return;
+                            }
                             if (ledgerId === 37 && !isPaused) {
                               setTagGlobalPauseDialog({ tagName: selectedTagForRight, settlementDate: today });
                               return;

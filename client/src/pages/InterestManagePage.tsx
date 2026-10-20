@@ -120,10 +120,21 @@ export default function InterestManagePage() {
 
   // 暂停 / 恢复 mutation
   const setTagPauseDateMutation = trpc.ledger.setTagPauseDate.useMutation({
-    onSuccess: () => {
-      refetchTagsConfig();
-      refetchOperationLogs();
-      refetchManualLogs();
+    onSuccess: async () => {
+      await Promise.all([
+        refetchTagsConfig(),
+        refetchOperationLogs(),
+        refetchManualLogs(),
+      ]);
+      // 37号从利息页恢复时，保证金与初始保证金同一时刻解除全体暂停。
+      // 同步失效同页缓存，避免切到其他管理页仍短暂显示旧的“已暂停”状态。
+      if (lid === 37) {
+        await Promise.all([
+          utils.ledger.getAllTagsConfigByLedger.invalidate({ ledgerId: lid }),
+          utils.ledger.getAllTagsMarginSummary.invalidate({ ledgerId: lid }),
+          utils.ledger.adminGetAllInitialBalances.invalidate({ ledgerId: lid }),
+        ]);
+      }
       toast.success('已更新');
     },
     onError: (e) => toast.error(e.message),
@@ -216,7 +227,11 @@ export default function InterestManagePage() {
     const list = categories.map((cat: any) => {
       const tagName = cat.name;
       const tagConfig = (allTagsConfig as any)[tagName];
-      const pauseDate: string | null = tagConfig?.pause_date ?? null;
+      // 37号的标签暂停是利息、保证金和全体成员初始保证金的统一状态。
+      // 兼容早期只留有 margin_pause_date 的记录，确保可在利息页恢复。
+      const pauseDate: string | null = lid === 37
+        ? (tagConfig?.margin_pause_date ?? tagConfig?.pause_date ?? null)
+        : (tagConfig?.pause_date ?? null);
       const periods = allPeriods.filter((p: any) => p.tag_name === tagName);
       const operationLogs = allOperationLogs.filter((log: any) => log.tag_name === tagName);
       const legacyManualLogs = allManualLogs
@@ -335,8 +350,18 @@ export default function InterestManagePage() {
                       {lid === 37 ? '标签全体暂停' : '利息已暂停'} {tag.pauseDate.slice(5)}
                     </span>
                   )}
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                  {lid === 37 && tag.pauseDate && (
+                    <button
+                      type="button"
+                      disabled={setTagPauseDateMutation.isPending}
+                      onClick={() => handleResume(tag.tagName)}
+                      className="min-h-8 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                    >
+                      {setTagPauseDateMutation.isPending ? '恢复中...' : '恢复标签'}
+                    </button>
+                  )}
                   {expandedTag === tag.tagName && (
                     <OrderCardImageDownload
                       targetRef={expandedCardRef}

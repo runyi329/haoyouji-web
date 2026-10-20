@@ -16215,15 +16215,28 @@ ${klinesSummary}
                 ORDER BY (pause_date IS NOT NULL OR margin_pause_date IS NOT NULL), tag_name`
           );
           const list = (rows as any)[0] as any[];
-          return list.map((r: any) => ({
-            tagName: r.tag_name as string,
-            interestPaused: r.pause_date !== null && r.pause_date !== undefined,
-            interestPauseDate: r.pause_date ?? null,
-            marginPaused: r.margin_pause_date !== null && r.margin_pause_date !== undefined,
-            marginPauseDate: r.margin_pause_date ?? null,
-            // 保持旧字段，避免已有调用方把保证金查询暂停误认为活动状态。
-            paused: r.margin_pause_date !== null && r.margin_pause_date !== undefined,
-          }));
+          return list.map((r: any) => {
+            // 37号账本的暂停本来就是三项联动。早期数据可能只保存了
+            // pause_date，读取时必须视作同一笔全体暂停，才能从保证金页正确恢复。
+            const effectiveGlobalPauseDate = input.ledgerId === LEDGER_37_ID
+              ? (r.margin_pause_date ?? r.pause_date ?? null)
+              : null;
+            const marginPauseDate = input.ledgerId === LEDGER_37_ID
+              ? effectiveGlobalPauseDate
+              : (r.margin_pause_date ?? null);
+            const interestPauseDate = input.ledgerId === LEDGER_37_ID
+              ? effectiveGlobalPauseDate
+              : (r.pause_date ?? null);
+            return {
+              tagName: r.tag_name as string,
+              interestPaused: Boolean(interestPauseDate),
+              interestPauseDate,
+              marginPaused: Boolean(marginPauseDate),
+              marginPauseDate,
+              // 保持旧字段，避免已有调用方把保证金查询暂停误认为活动状态。
+              paused: Boolean(marginPauseDate),
+            };
+          });
         } catch (e: any) {
           console.error('[getActiveMarginTags] error:', e.message);
           return [];
@@ -16809,7 +16822,11 @@ ${klinesSummary}
                   WHERE lr2.ledgerId = ${input.ledgerId}
                     AND lr2.type != 'transfer'
                     AND lr2.deleted_at IS NULL
-                    AND lr2.recordDate <= COALESCE(cfg2.margin_pause_date, '9999-12-31')
+                    AND lr2.recordDate <= CASE
+                      WHEN ${input.ledgerId} = ${LEDGER_37_ID}
+                        THEN COALESCE(cfg2.margin_pause_date, cfg2.pause_date, '9999-12-31')
+                      ELSE COALESCE(cfg2.margin_pause_date, '9999-12-31')
+                    END
                   GROUP BY lc2.name
                 )`
         );
@@ -16823,16 +16840,21 @@ ${klinesSummary}
         // 组装结果
         const result: Record<string, { marginByCoin: any; initialAmount: string | null; accountMultiplier: string | null; marginBase: string | null; fundFlow: any; pauseDate: string | null; marginPauseDate: string | null; latestBalance: { balance: number; recordDate: string } | null }> = {};
         for (const cfg of configs) {
+          // 37号旧的全体暂停记录可能只留有 pause_date；列表、详情与恢复按钮
+          // 必须使用同一个有效结算日，不能把这类标签误显示为仍在进行中。
+          const effectiveMarginPauseDate = input.ledgerId === LEDGER_37_ID
+            ? (cfg.margin_pause_date ?? cfg.pause_date ?? null)
+            : (cfg.margin_pause_date ?? null);
           result[cfg.tag_name] = {
             marginByCoin: cfg.margin_by_coin,
             initialAmount: cfg.initial_amount,
             accountMultiplier: cfg.account_multiplier,
             marginBase: cfg.margin_base,
             fundFlow: cfg.fund_flow,
-            pauseDate: cfg.pause_date ?? null,
-            marginPauseDate: cfg.margin_pause_date ?? null,
+            pauseDate: input.ledgerId === LEDGER_37_ID ? effectiveMarginPauseDate : (cfg.pause_date ?? null),
+            marginPauseDate: effectiveMarginPauseDate,
             targetTotal: (cfg as any).target_total ?? null,
-            settlementCutoffDate: cfg.margin_pause_date ?? null,
+            settlementCutoffDate: effectiveMarginPauseDate,
             latestBalance: latestMap[cfg.tag_name] ?? null,
           };
         }
