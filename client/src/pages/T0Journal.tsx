@@ -2660,12 +2660,15 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     })).filter((item) => item.id && item.anchorPrice > 0 && item.defaultQuantity > 0) : [];
   }, [t0JournalQuery.data]);
   const visibleReopenReminders = useMemo(() => reopenReminders.filter((reminder) => (
+    // 待补位只是管理端的运营提醒，不属于用户仓位、收益或交易流水。
+    // 即便管理员正在预览某位用户的客户端视图，也不得显示该占位。
     canManage
+    && !isMemberView
     && (!selectedAccountIds.length || selectedAccountIds.includes(reminder.accountId))
     && (!relatedUserFilterIds.length || (reminder.relatedUserId ? relatedUserFilterIds.includes(reminder.relatedUserId) : false))
     && (!relatedFundFilterIds.length || (reminder.relatedFundId ? relatedFundFilterIds.includes(reminder.relatedFundId) : false))
     && (!instrumentTypeFilterIds.length || instrumentTypeFilterIds.includes(reminder.instrumentType))
-  )), [canManage, instrumentTypeFilterIds, relatedFundFilterIds, relatedUserFilterIds, reopenReminders, selectedAccountIds]);
+  )), [canManage, instrumentTypeFilterIds, isMemberView, relatedFundFilterIds, relatedUserFilterIds, reopenReminders, selectedAccountIds]);
 
   const sharedIncomeReductionsByClosingEntryId = useMemo(() => {
     const rows = (t0JournalQuery.data as any)?.sharedIncomeReductions;
@@ -5113,8 +5116,9 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
     const targetBucket = scopeBuckets.find((bucket) => bucket.side === side && priceKey(bucket.price) === priceKey(targetPrice));
     return Math.max(0, Math.min(sourceRemainingQuantity, targetBucket?.remainingQuantity ?? 0));
   }, [closingSourceTrade, entryForm.targetPrice, isClosingEntry, ladderOpeningClosingAllocations, selectedFilledTrades]);
-  // 整合报价按价位汇总；逐笔报价则按开仓主单逐笔显示，
-  // 两种展示都只使用当前身份本来可见的流水，不改变成员只读权限。
+  // 整合报价只按真实订单价位汇总；逐笔报价则按开仓主单逐笔显示。
+  // 持续提醒不是挂单或仓位，因此只在管理员逐笔报价中作为待补位入口出现，
+  // 不显示在整合报价，也不参与任何价位的数量、成本或盈亏汇总。
   const ladderIntegratedDisplayBuckets = integratedDisplayBuckets;
   const priceRows = useMemo<LadderPriceRow[]>(() => {
     const activePositionPrices = ladderIntegratedDisplayBuckets
@@ -5127,15 +5131,8 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       short: ladderIntegratedDisplayBuckets.find((bucket) => bucket.side === "short" && priceKey(bucket.price) === priceKey(price)),
       isMark: integratedMarkLadderPrice === price,
     }));
-    const reminderRows = visibleReopenReminders.map((reminder) => ({
-      key: `reopen-reminder-${reminder.id}`,
-      // 整合报价与真实仓位使用同一方向归档规则；逐笔报价仍使用原始成交价。
-      price: archivePriceForSide(reminder.side, reminder.anchorPrice, integratedArchiveStep),
-      isMark: false,
-      ...(reminder.side === 'long' ? { longReminder: reminder } : { shortReminder: reminder }),
-    }));
-    return [...actualRows, ...reminderRows].sort((left, right) => right.price - left.price || left.key.localeCompare(right.key));
-  }, [ladderIntegratedDisplayBuckets, integratedMarkLadderPrice, integratedArchiveStep, visibleReopenReminders]);
+    return actualRows.sort((left, right) => right.price - left.price || left.key.localeCompare(right.key));
+  }, [ladderIntegratedDisplayBuckets, integratedMarkLadderPrice, integratedArchiveStep]);
   const individualPriceRows = useMemo<LadderPriceRow[]>(() => {
     const individualBuckets: Array<{ trade: PreviewTrade; bucket: PositionBucket }> = [];
     for (const trade of selectedTrades) {
@@ -5318,13 +5315,14 @@ export function T0JournalView({ embedded = false, allowAdminViewAs = false }: T0
       optionExpiryDate: '', optionPremium: '', optionPremiumCurrency: 'USDT',
       gridDirection: reminder.side, gridRangeMin: '', gridRangeMax: '', gridLeverage: '', gridCount: '',
       isLocked: false, isCounterparty: false,
-      // 默认重新挂单；管理员可按原有时钟按钮切换为直接成交，再保存确认。
-      isPending: true,
+      // 占位本身没有成交价；双击后进入与普通订单相同的录入界面，
+      // 管理员填写实际成交价即可直接开仓，也可按原有时钟按钮改为挂单。
+      isPending: false,
       keepReopenReminder: true,
       reminderTemplateId: reminder.id,
       isTakeProfit: false, takeProfitPrice: '', takeProfitQuantity: '', takeProfitPlans: [],
       quantity: normalizeEthQuantity(String(reminder.defaultQuantity)),
-      price: String(reminder.anchorPrice), note: '', targetPrice: archivePriceForAction(action, reminder.anchorPrice),
+      price: '', note: '', targetPrice: archivePriceForAction(action, reminder.anchorPrice),
     });
     setShowEntrySheet(true);
   };
@@ -10660,6 +10658,7 @@ function ReminderPlaceholderCell({
   onActivate: () => void;
 }) {
   const activationTapAtRef = useRef(0);
+  const activatedAtRef = useRef(0);
   const activate = () => {
     const now = Date.now();
     if (now - activationTapAtRef.current > 700) {
@@ -10667,6 +10666,7 @@ function ReminderPlaceholderCell({
       return;
     }
     activationTapAtRef.current = 0;
+    activatedAtRef.current = now;
     onActivate();
   };
   const content = (
@@ -10675,19 +10675,31 @@ function ReminderPlaceholderCell({
       <div className="mt-0.5 truncate text-[10px] font-medium text-slate-600">
         {reminder.relatedUserName || "未关联用户"} · {formatQuantity(reminder.defaultQuantity)} E
       </div>
-      <div className="mt-0.5 text-[9px] text-slate-500">原价位待补开 · 不计仓位/收益</div>
+      <div className="mt-0.5 text-[9px] text-slate-500">待补位 · 双击录入</div>
     </div>
   );
   const sideClass = side === "long" ? "border-l-4 border-l-sky-500" : "border-r-4 border-r-sky-500";
+  // 服务端不会把占位返回给客户端；此处再做一层防护，避免任何边界状态下向用户露出管理提醒。
   if (readOnly) {
-    return <div className={`min-h-[52px] w-full border border-dashed border-sky-300 bg-sky-50/55 px-2 py-1.5 ${sideClass}`}>{content}</div>;
+    return null;
   }
   return (
     <button
       type="button"
       onClick={activate}
-      title="双击按原价位重新开仓；进入后可关闭当前提醒"
-      aria-label="双击处理持续提醒"
+      onDoubleClick={() => {
+        // 浏览器原生双击会先触发第二次 click；若移动端双击识别已经打开表单，
+        // 此处只清空计时，不重复执行状态切换。
+        if (Date.now() - activatedAtRef.current < 250) {
+          activationTapAtRef.current = 0;
+          return;
+        }
+        activationTapAtRef.current = 0;
+        activatedAtRef.current = Date.now();
+        onActivate();
+      }}
+      title="双击录入新的开仓订单；保存后本提醒自动转为正常订单"
+      aria-label="双击录入持续提醒订单"
       className={`min-h-[52px] w-full border border-dashed border-sky-400 bg-sky-50/70 px-2 py-1.5 text-left transition active:brightness-95 ${sideClass}`}
       style={{ touchAction: "manipulation" }}
     >
