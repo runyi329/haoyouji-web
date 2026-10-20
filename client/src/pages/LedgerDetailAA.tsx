@@ -630,7 +630,7 @@ export default function LedgerDetailAA({
     { ledgerId: 37 },
     // owner/admin 也可能是某一批次的参与人。概览必须同时读取其个人分层，
     // 但不改变其进入标签后仍可维护整账户的管理员权限。
-    { enabled: ledgerId === 37 },
+    { enabled: ledgerId === 37, staleTime: 60_000, refetchOnWindowFocus: false, refetchOnMount: false },
   );
   const stockTagOverview = (stockTagOverviewQuery.data || []) as any[];
   const stockTagOverviewById = useMemo(
@@ -706,8 +706,9 @@ export default function LedgerDetailAA({
     { ledgerId, categoryId: selectedTagId || 0 },
     {
       enabled: Boolean(isSelectedStockPortfolio && !stockParticipantView && selectedTagId),
-      refetchOnWindowFocus: true,
-      staleTime: 10_000,
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+      staleTime: 60_000,
     },
   );
   const stockCalendarPoints = useMemo(() => {
@@ -755,7 +756,6 @@ export default function LedgerDetailAA({
   useEffect(() => {
     if (!isSelectedStockPortfolio || !selectedTagId || showStockPortfolio) return;
     if (stockParticipantView) {
-      void stockTagOverviewQuery.refetch();
       return;
     }
     void stockCalendarSnapshotsQuery.refetch();
@@ -2264,7 +2264,11 @@ export default function LedgerDetailAA({
             <div className="text-base font-semibold truncate">
               {(() => {
                 const viewTarget = viewAsUserId ? (membersData || []).find((m: any) => m.userId === viewAsUserId) : null;
-                return viewTarget ? (viewTarget.nickname || viewTarget.username) : (user?.nickname || user?.username || "用户");
+                const displayUser = viewTarget || user;
+                const username = String(displayUser?.username || '').trim();
+                const nickname = String(displayUser?.nickname || '').trim();
+                if (nickname && username && nickname !== username) return `${nickname} · ${username}`;
+                return nickname || username || "用户";
               })()}
             </div>
 

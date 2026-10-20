@@ -27,6 +27,36 @@ const EPSILON = 0.00000001;
 /** 股票标签统一按买卖双边各千分之一计入交易成本。 */
 const STOCK_TRADE_FEE_RATE = 0.001;
 
+// 成员首页会同时读取标签列表、当前详情和行情。相同用户的并发读取必须合并，
+// 否则远程数据库会被同一页的重复请求拖慢。缓存只保留极短时间，所有交易和份额
+// 写入完成后立即清空，不能让已保存的成交或分配比例延迟显示。
+const MEMBER_STOCK_READ_CACHE_TTL_MS = 20_000;
+type ShortLivedReadCacheEntry<T> = { expiresAt: number; promise: Promise<T> };
+const memberPortfolioReadCache = new Map<string, ShortLivedReadCacheEntry<any>>();
+const memberOverviewReadCache = new Map<string, ShortLivedReadCacheEntry<any[]>>();
+
+function readShortLivedCache<T>(
+  cache: Map<string, ShortLivedReadCacheEntry<T>>,
+  key: string,
+  loader: () => Promise<T>,
+): Promise<T> {
+  const now = Date.now();
+  const cached = cache.get(key);
+  if (cached && cached.expiresAt > now) return cached.promise;
+  const promise = loader();
+  const entry: ShortLivedReadCacheEntry<T> = { expiresAt: now + MEMBER_STOCK_READ_CACHE_TTL_MS, promise };
+  cache.set(key, entry);
+  void promise.catch(() => {
+    if (cache.get(key) === entry) cache.delete(key);
+  });
+  return promise;
+}
+
+function invalidateMemberStockReadCaches() {
+  memberPortfolioReadCache.clear();
+  memberOverviewReadCache.clear();
+}
+
 function asRows(result: any): any[] {
   if (Array.isArray(result?.[0])) return result[0];
   return Array.isArray(result) ? result : [];
@@ -1021,7 +1051,7 @@ export async function getStockTagPublicPortfolio(input: {
   systemRole?: string;
 }) {
   const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
-  const memberPortfolio = await buildMemberStockPortfolio(access.categoryId, input.userId);
+  const memberPortfolio = await getCachedMemberStockPortfolio(access.categoryId, input.userId);
   if (!memberPortfolio.isEligible && !access.canEdit) throw new Error("该股票标签尚未对您开放");
   const { soldLots: _soldLots, ...portfolio } = await buildPortfolio(access.categoryId);
   // 批次备注是管理员维护信息；成员只需看到已分配批次的价格与数量，不能读取备注。
@@ -1045,6 +1075,8 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
             p.start_date, p.pause_date, p.assigned_at,
             l.symbol, l.stock_name, l.opened_at, l.initial_quantity, l.unit_cost,
             COALESCE(SUM(c.quantity), 0) AS closed_quantity,
+            COALESCE(SUM(c.quantity * c.sale_price), 0) AS closed_value,
+            MAX(c.closed_at) AS closed_at,
             COALESCE(SUM(c.quantity * (p.entry_price - c.sale_price)), 0) AS realized_pnl
      FROM ledger_stock_lot_participations p
      INNER JOIN ledger_stock_lots l ON l.id = p.lot_id
@@ -1073,6 +1105,8 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
       allocatedQuantity,
       remainingQuantity,
       closedQuantity: numberValue(row.closed_quantity),
+      closedValue: numberValue(row.closed_value),
+      closedAt: toIso(row.closed_at),
       entryPrice: numberValue(row.entry_price),
       lotInitialQuantity,
       allocationRatio: lotInitialQuantity > EPSILON ? allocatedQuantity / lotInitialQuantity : 0,
@@ -1145,15 +1179,25 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   const cnySummary = summarizePositionsInCny(positions, usdCnyRate);
   const closedLots = visibleParticipations
     .filter((item) => item.remainingQuantity <= EPSILON)
-    .map((item) => ({
-      symbol: item.symbol,
-      stockName: item.stockName,
-      openedAt: item.openedAt,
-      startDate: item.startDate,
-      initialQuantity: item.allocatedQuantity,
-      unitCost: item.entryPrice,
-      realizedPnl: item.realizedPnl,
-    }));
+    .map((item) => {
+      const soldQuantity = item.closedQuantity;
+      const sellValue = item.closedValue;
+      return {
+        symbol: item.symbol,
+        stockName: item.stockName,
+        openedAt: item.openedAt,
+        startDate: item.startDate,
+        soldAt: item.closedAt,
+        initialQuantity: item.allocatedQuantity,
+        soldQuantity,
+        unitCost: item.entryPrice,
+        sellPrice: soldQuantity > EPSILON ? sellValue / soldQuantity : null,
+        buyValue: soldQuantity * item.entryPrice,
+        sellValue,
+        currency: stockCurrency(item.symbol),
+        realizedPnl: item.realizedPnl,
+      };
+    });
   const costValue = cnySummary.costValue;
   const realizedPnl = cnySummary.fxUnavailable
     ? null
@@ -1261,6 +1305,14 @@ async function buildMemberStockPortfolio(categoryId: number, userId: number) {
   };
 }
 
+function getCachedMemberStockPortfolio(categoryId: number, userId: number) {
+  return readShortLivedCache(
+    memberPortfolioReadCache,
+    `${categoryId}:${userId}`,
+    () => buildMemberStockPortfolio(categoryId, userId),
+  );
+}
+
 export async function getMyStockTagParticipantPortfolio(input: {
   ledgerId: number;
   categoryId: number;
@@ -1268,22 +1320,20 @@ export async function getMyStockTagParticipantPortfolio(input: {
   systemRole?: string;
 }) {
   const access = await assertStockTagAccess(input.ledgerId, input.categoryId, input.userId, input.systemRole);
-  const [portfolio, history] = await Promise.all([
-    buildMemberStockPortfolio(access.categoryId, input.userId),
-    getEventHistory(access.categoryId),
-  ]);
+  // 普通成员只读取自己获配批次的估值，不能取得标签完整操作历史。
+  const portfolio = await getCachedMemberStockPortfolio(access.categoryId, input.userId);
   if (!portfolio.isEligible && !access.canEdit) throw new Error("该股票标签尚未对您开放");
   return {
     ...access,
     accountingMode: "stock_portfolio" as const,
     participantView: true,
     ...portfolio,
-    history,
+    history: [] as any[],
   };
 }
 
 /** All immediately-visible stock tags for the effective member, used by 37's overview table. */
-export async function getMyStockTagOverview(input: { ledgerId: number; userId: number; systemRole?: string }) {
+async function buildMyStockTagOverview(input: { ledgerId: number; userId: number; systemRole?: string }) {
   if (input.ledgerId !== STOCK_LEDGER_ID) return [];
   await ensureLedgerStockPortfolioTables();
   const conn = await getDbConnection();
@@ -1301,7 +1351,7 @@ export async function getMyStockTagOverview(input: { ledgerId: number; userId: n
   const result: any[] = [];
   for (const category of categoryRows as any[]) {
     const access = await assertStockTagAccess(input.ledgerId, Number(category.id), input.userId, input.systemRole);
-    const portfolio = await buildMemberStockPortfolio(Number(category.id), input.userId);
+    const portfolio = await getCachedMemberStockPortfolio(Number(category.id), input.userId);
     if (!portfolio.isEligible) continue;
     const chronological: any[] = portfolio.dailySnapshots.slice().reverse();
     const valuationDate = portfolio.summary.valuationDate;
@@ -1356,6 +1406,15 @@ export async function getMyStockTagOverview(input: { ledgerId: number; userId: n
     });
   }
   return result;
+}
+
+export async function getMyStockTagOverview(input: { ledgerId: number; userId: number; systemRole?: string }) {
+  if (input.ledgerId !== STOCK_LEDGER_ID) return [];
+  return readShortLivedCache(
+    memberOverviewReadCache,
+    `${input.ledgerId}:${input.userId}:${input.systemRole || ''}`,
+    () => buildMyStockTagOverview(input),
+  );
 }
 
 export async function getStockTagDailySnapshots(input: {
@@ -1611,6 +1670,7 @@ export async function createStockTagEvent(input: {
       }
     }
     await (tx as any).commit();
+    invalidateMemberStockReadCaches();
     return { id: eventId };
   } catch (error) {
     await (tx as any).rollback();
@@ -2202,6 +2262,7 @@ export async function setStockLotParticipation(input: {
       );
     }
     await (tx as any).commit();
+    invalidateMemberStockReadCaches();
     return { success: true };
   } catch (error) {
     await (tx as any).rollback();
@@ -2607,6 +2668,7 @@ export async function updateStockTagSale(input: {
       createdBy: input.userId,
     });
     await (tx as any).commit();
+    invalidateMemberStockReadCaches();
     return { success: true, eventId: input.eventId, lotId };
   } catch (error) {
     await (tx as any).rollback();

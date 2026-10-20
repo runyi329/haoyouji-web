@@ -51,6 +51,11 @@ function localInputTime(now = new Date()) {
   return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 16);
 }
 
+function localInputDate(now = new Date()) {
+  const offset = now.getTimezoneOffset();
+  return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 10);
+}
+
 /**
  * New stock-tag trades are deliberately limited to two operations:
  * - buy: create a brand-new numbered lot;
@@ -202,7 +207,7 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, init
     setStockMarket('A');
     setQuantity("");
     setExecutionPrice("");
-    setActualTradedAt(localInputTime());
+    setActualTradedAt(type === 'sell' ? localInputDate() : localInputTime());
     setNote("");
     setSelectedLotId(null);
     setProfitSharePercentages({});
@@ -214,7 +219,7 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, init
     if (editingSale && type === 'sell') {
       setSelectedLotId(Number(editingSale.lotId));
       setExecutionPrice(String(editingSale.sellPrice || ''));
-      setActualTradedAt(localInputTime(new Date(editingSale.soldAt)));
+      setActualTradedAt(localInputDate(new Date(editingSale.soldAt)));
       setNote(String(editingSale.sellNote || ''));
     }
   }, [open, type, editingSale?.eventId]);
@@ -257,9 +262,13 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, init
       toast.info("热预览仅供核对界面，不会写入正式股票账本");
       return;
     }
-    const actualDate = new Date(actualTradedAt);
+    // 卖出只按管理员选定的结算日期留档，统一固定在当天中午，避免时区转换把
+    // 日期推到前一天或后一天；买入仍保留原有的完整实际成交时间。
+    const actualDate = type === 'sell'
+      ? new Date(`${actualTradedAt}T12:00:00+08:00`)
+      : new Date(actualTradedAt);
     if (Number.isNaN(actualDate.getTime())) {
-      toast.error("请选择实际成交时间");
+      toast.error(type === 'sell' ? "请选择实际成交日期" : "请选择实际成交时间");
       return;
     }
     const price = Number(executionPrice);
@@ -395,7 +404,7 @@ export function StockTagTradeDialog({ categoryId, categoryName, open, type, init
               <div className="rounded-lg bg-[#F5F7FA] px-3 py-2 text-[11px] leading-5 text-gray-600">{isEditingSale ? '保存会直接覆盖这笔已卖出订单的价格、成交时间、备注和成员分配；不会生成新订单或作废记录。' : '卖出只能结清一个已选持仓编号的全部剩余股数，不能减仓，也不会跨编号 FIFO 扣仓。'}</div>
             </>
           )}
-          <div><Label>实际成交时间</Label><div className="mt-1 flex justify-end"><Input type="datetime-local" value={actualTradedAt} onChange={(event) => setActualTradedAt(event.target.value)} className="w-full min-w-0 max-w-[18rem]" /></div></div>
+          <div><Label>{type === 'sell' ? '实际成交日期' : '实际成交时间'}</Label><div className="mt-1 flex justify-end"><Input type={type === 'sell' ? 'date' : 'datetime-local'} value={actualTradedAt} onChange={(event) => setActualTradedAt(event.target.value)} className="w-full min-w-0 max-w-[18rem]" /></div></div>
           <div><Label>备注（可选）</Label><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="可填写成交说明或补录原因" /></div>
           <div className="rounded-lg bg-[#FAF3ED] px-3 py-2 text-[11px] text-gray-600">服务器会自动记录登记时间与当时参考价；备注与本次买入或卖出一并留档。{readOnlyPreview ? " 当前为热预览，确认交易已禁用。" : ""}</div>
           <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>取消</Button><Button className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C]" onClick={submit} disabled={addEventMutation.isPending || updateSaleMutation.isPending || readOnlyPreview || (type === 'sell' && !profitDistributionValid)}>{readOnlyPreview ? "热预览不可写入" : addEventMutation.isPending || updateSaleMutation.isPending ? "保存中…" : type === "buy" ? "确认买入" : isEditingSale ? "保存修改" : "确认卖出"}</Button></div>
