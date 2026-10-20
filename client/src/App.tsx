@@ -412,7 +412,10 @@ function ActiveLedgerPagePolling() {
   const [location] = useLocation();
   const trpcUtils = trpc.useUtils();
   const pathname = location.split("?")[0];
-  const isRealtimeLedgerPage = /^\/ledger\/(?:37|52)(?:\/|$)/.test(pathname);
+  // 分红管理属于人工核对、回填操作页，不展示实时行情；若也按两秒轮询会不断重拉
+  // 全部成员和分红汇总，移动网络下反而可能让首屏长期停在加载状态。
+  const isDividendManagementPage = /^\/ledger\/(?:37|52)\/aa-dividend-manage$/.test(pathname);
+  const isRealtimeLedgerPage = /^\/ledger\/(?:37|52)(?:\/|$)/.test(pathname) && !isDividendManagementPage;
 
   useEffect(() => {
     if (!isRealtimeLedgerPage || typeof document === "undefined") return;
