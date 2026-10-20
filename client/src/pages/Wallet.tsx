@@ -202,6 +202,8 @@ function getCnyQuickFlowPresentation(noteValue: string | undefined, isIn: boolea
     const transfer = getInternalTransferPresentation(noteValue, isIn ? "in" : "out");
     return { label: transfer?.primary || (isIn ? "站内转账收款" : "站内转账汇款"), detail: transfer?.secondary || note, isIn };
   }
+  if (/分红回填|分红冲正/.test(rawNote)) return { label: "分红回填", detail: note, isIn: false };
+  if (/股票分红|分红入账/.test(rawNote)) return { label: "股票分红", detail: note, isIn: true };
   if (/担保.*(冻结|占用)|冻结/.test(rawNote)) return { label: "担保冻结", detail: note, isIn: false };
   if (/解冻|释放/.test(rawNote)) return { label: "担保解冻", detail: note, isIn: true };
   if (/提现/.test(rawNote)) return { label: "提现", detail: note, isIn: false };
@@ -219,6 +221,10 @@ function getDigitalFlowPresentation(item: { eventType?: string; amount?: number;
       return { label: "担保冻结", status: "已参与联合担保", isIn: false };
     case "collateral_release":
       return { label: "担保解冻", status: "已解冻入账", isIn: true };
+    case "ledger_dividend":
+      return { label: "股票分红", status: "已入账", isIn: true };
+    case "ledger_dividend_reversal":
+      return { label: "分红回填", status: "已扣回", isIn: false };
     case "transfer_in":
     case "transfer_out": {
       const transfer = getInternalTransferPresentation(item.note, item.eventType === "transfer_in" ? "in" : "out", item.counterpartyName);
@@ -243,6 +249,7 @@ type WalletFlowBadge = {
 
 function getWalletFlowBadge(label: string, note: string | undefined, isIn: boolean): WalletFlowBadge {
   const context = `${label} ${note || ""}`;
+  if (/分红回填|分红冲正/.test(context)) return { label: "分红回填", color: "#FCA5A5", background: "rgba(248,113,113,0.12)", border: "rgba(252,165,165,0.20)" };
   if (/股票分红|分红/.test(context)) return { label: "分红", color: "#D8B4FE", background: "rgba(168,85,247,0.13)", border: "rgba(216,180,254,0.22)" };
   if (/解担保|保证金解冻|担保解冻|解冻|释放/.test(context)) return { label: "解担保", color: "#7DD3FC", background: "rgba(56,189,248,0.12)", border: "rgba(125,211,252,0.22)" };
   if (/担保|保证金/.test(context)) return { label: "担保", color: G.goldLight, background: "rgba(201,168,76,0.12)", border: "rgba(245,215,142,0.20)" };

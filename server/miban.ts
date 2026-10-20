@@ -2696,8 +2696,8 @@ export const mibanAdminUserRouter = router({
             m.user_id,
             m.amount,
             CONVERT(CASE
+              WHEN m.note LIKE '%分红冲正%' OR m.note LIKE '%分红回填%' THEN 'ledger_dividend_reversal'
               WHEN m.note LIKE '%股票分红%' OR m.note LIKE '%分红入账%' THEN 'ledger_dividend'
-              WHEN m.note LIKE '%分红冲正%' THEN 'ledger_dividend_reversal'
               WHEN m.note LIKE '%提现%' THEN 'withdraw'
               ELSE 'manual'
             END USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS event_type,

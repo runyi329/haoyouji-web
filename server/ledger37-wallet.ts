@@ -213,6 +213,28 @@ export async function ensureLedger37WalletInfrastructure(): Promise<void> {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='37号钱包资金动作撤回或冲正审计'
       `);
       await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS ledger37_dividend_recovery_actions (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          recovery_no VARCHAR(64) NOT NULL,
+          request_id VARCHAR(112) NOT NULL,
+          recovery_record_id BIGINT UNSIGNED NOT NULL,
+          user_id INT NOT NULL,
+          tag_name VARCHAR(160) NOT NULL,
+          asset_code VARCHAR(16) NOT NULL,
+          asset_amount DECIMAL(36,18) NOT NULL,
+          cny_amount DECIMAL(18,2) NOT NULL,
+          reason VARCHAR(255) NOT NULL,
+          wallet_entry_id BIGINT NULL,
+          actor_user_id INT NOT NULL,
+          wallet_snapshot_json LONGTEXT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_ledger37_dividend_recovery_no (recovery_no),
+          UNIQUE KEY uk_ledger37_dividend_recovery_request (request_id),
+          UNIQUE KEY uk_ledger37_dividend_recovery_record (recovery_record_id),
+          KEY idx_ledger37_dividend_recovery_user (user_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='37号分红多发回填扣回审计流水'
+      `);
+      await (conn as any).execute(`
         CREATE TABLE IF NOT EXISTS ai_wallet_project_hold_migrations (
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
           migration_no VARCHAR(64) NOT NULL,
@@ -1220,11 +1242,16 @@ async function writeFundingDividend(transaction: any, params: {
   amount: string;
   tagName: string;
   note?: string;
-  kind?: 'dividend' | 'reversal';
+  kind?: 'dividend' | 'reversal' | 'recovery';
 }) {
   await getFundingBalanceForUpdate(transaction, params.userId, params.assetCode);
   // 用户钱包只展示资金用途，不再暴露账本编号；标签和备注保留，便于对账。
-  const visibleNote = `${params.kind === 'reversal' ? '股票分红冲正' : '股票分红'} · ${params.tagName}${params.note ? ` · ${params.note}` : ""}`;
+  const actionLabel = params.kind === 'recovery'
+    ? '股票分红回填扣回'
+    : params.kind === 'reversal'
+      ? '股票分红冲正'
+      : '股票分红';
+  const visibleNote = `${actionLabel} · ${params.tagName}${params.note ? ` · ${params.note}` : ""}`;
   const note = params.assetCode === "CNY" ? `[CNY]${visibleNote}` : visibleNote;
   const [insert] = await transaction.execute(
     "INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, CAST(? AS DECIMAL(36,18)), ?, NOW(), NOW())",
@@ -1286,6 +1313,135 @@ export async function createLedger37Dividend(params: {
     );
     if (ownConnection) await transaction.commit();
     return { recordId, cnyValue, assetCode, assetAmount, walletBalanceSnapshot };
+  } catch (error) {
+    if (ownConnection) try { await transaction.rollback(); } catch {}
+    throw error;
+  } finally {
+    if (ownConnection) transaction.release?.();
+  }
+}
+
+/**
+ * 追回37号账本此前多发的分红。
+ * 仅接收正的追回数量；服务端在同一事务中写入负向分红、扣减钱包并留下不可变审计记录。
+ */
+export async function recoverLedger37Dividend(params: {
+  userId: number;
+  tagName: string;
+  assetCode: Ledger37WalletAsset | string;
+  assetAmount: string;
+  reason: string;
+  requestId: string;
+  actorUserId: number;
+  transaction?: any;
+}): Promise<{
+  recoveryNo: string;
+  recordId: number;
+  cnyValue: string;
+  assetCode: Ledger37WalletAsset;
+  assetAmount: string;
+  walletBalanceSnapshot: Ledger37WalletBalanceSnapshot | null;
+  alreadyCompleted: boolean;
+}> {
+  await ensureLedger37WalletInfrastructure();
+  const assetCode = normalizeLedger37WalletAsset(params.assetCode);
+  const assetAmount = decimalText(params.assetAmount);
+  const tagName = String(params.tagName || '').trim().slice(0, 160);
+  const reason = String(params.reason || '').trim().slice(0, 255);
+  const requestId = String(params.requestId || '').trim();
+  if (!tagName) throw new Error('标签名称不能为空');
+  if (!reason) throw new Error('请填写回填原因');
+  if (!(Number(assetAmount) > 0)) throw new Error('回填扣回数量必须大于零');
+  if (!/^[A-Za-z0-9_-]{16,96}$/.test(requestId)) throw new Error('回填请求无效，请刷新后重试');
+
+  const ownConnection = !params.transaction;
+  const conn = params.transaction || await getDbTransactionConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const transaction = conn as any;
+  try {
+    if (ownConnection) await transaction.beginTransaction();
+    const [existingRows] = await transaction.execute(
+      `SELECT recovery_no, recovery_record_id, user_id, tag_name, asset_code, asset_amount, reason, wallet_snapshot_json
+         FROM ledger37_dividend_recovery_actions
+        WHERE request_id = ?
+        LIMIT 1 FOR UPDATE`,
+      [requestId],
+    );
+    const existing = rowsOf(existingRows)[0];
+    if (existing) {
+      const sameRequest = Number(existing.user_id) === params.userId
+        && String(existing.tag_name) === tagName
+        && String(existing.asset_code).toUpperCase() === assetCode
+        && String(existing.asset_amount) === assetAmount
+        && String(existing.reason) === reason;
+      if (!sameRequest) throw new Error('该回填请求已被使用，请刷新后重新填写');
+      let walletBalanceSnapshot: Ledger37WalletBalanceSnapshot | null = null;
+      try { walletBalanceSnapshot = existing.wallet_snapshot_json ? JSON.parse(String(existing.wallet_snapshot_json)) : null; } catch { /* 历史快照缺失时仍返回已完成结果 */ }
+      if (ownConnection) await transaction.commit();
+      return {
+        recoveryNo: String(existing.recovery_no),
+        recordId: Number(existing.recovery_record_id),
+        cnyValue: '0',
+        assetCode,
+        assetAmount,
+        walletBalanceSnapshot,
+        alreadyCompleted: true,
+      };
+    }
+
+    if (isFundingAsset(assetCode)) {
+      const funding = await getFundingBalanceForUpdate(transaction, params.userId, assetCode);
+      if (Number(assetAmount) > funding.available + 1e-8) {
+        throw new Error(`${assetCode} 当前可用余额不足，不能扣回该笔分红`);
+      }
+    }
+
+    const cnyValue = await getCnyValue(assetCode, assetAmount);
+    const recoveryNo = `D37${Date.now().toString(36).toUpperCase()}${randomBytes(4).toString('hex').toUpperCase()}`;
+    const [recordInsert] = await transaction.execute(
+      `INSERT INTO dividend_records
+        (ledger_id, user_id, tag_name, amount, asset_code, asset_amount, note, wallet_request_id, reversal_mode)
+       VALUES (?, ?, ?, CAST(? AS DECIMAL(18,2)), ?, CAST(? AS DECIMAL(36,18)), ?, ?, 'recovery')`,
+      [LEDGER_37_ID, params.userId, tagName, `-${cnyValue}`, assetCode, `-${assetAmount}`, reason, requestId],
+    );
+    const recordId = Number((recordInsert as any).insertId);
+    let walletEntryId: number | null = null;
+    if (isFundingAsset(assetCode)) {
+      walletEntryId = await writeFundingDividend(transaction, {
+        userId: params.userId,
+        assetCode,
+        amount: `-${assetAmount}`,
+        tagName,
+        note: reason,
+        kind: 'recovery',
+      });
+    } else {
+      const debit = await dbMultiAssetWallet.adjustMultiAssetBalance({
+        userId: params.userId,
+        assetCode,
+        amount: `-${assetAmount}`,
+        note: `股票分红回填扣回 · ${tagName} · ${reason}`,
+        requestId: `${requestId}_ASSET`,
+        actorUserId: params.actorUserId,
+        sourceLedgerId: LEDGER_37_ID,
+        eventType: 'ledger_dividend_reversal',
+        transaction,
+      });
+      walletEntryId = Number(debit.entry.id);
+    }
+    const walletBalanceSnapshot = await getLedger37DividendWalletSnapshot(transaction, params.userId, assetCode);
+    await transaction.execute(
+      'UPDATE dividend_records SET wallet_entry_id = ?, wallet_snapshot_json = ? WHERE id = ?',
+      [walletEntryId, JSON.stringify(walletBalanceSnapshot), recordId],
+    );
+    await transaction.execute(
+      `INSERT INTO ledger37_dividend_recovery_actions
+        (recovery_no, request_id, recovery_record_id, user_id, tag_name, asset_code, asset_amount, cny_amount, reason, wallet_entry_id, actor_user_id, wallet_snapshot_json)
+       VALUES (?, ?, ?, ?, ?, ?, CAST(? AS DECIMAL(36,18)), CAST(? AS DECIMAL(18,2)), ?, ?, ?, ?)`,
+      [recoveryNo, requestId, recordId, params.userId, tagName, assetCode, assetAmount, cnyValue, reason, walletEntryId, params.actorUserId, JSON.stringify(walletBalanceSnapshot)],
+    );
+    if (ownConnection) await transaction.commit();
+    return { recoveryNo, recordId, cnyValue, assetCode, assetAmount, walletBalanceSnapshot, alreadyCompleted: false };
   } catch (error) {
     if (ownConnection) try { await transaction.rollback(); } catch {}
     throw error;

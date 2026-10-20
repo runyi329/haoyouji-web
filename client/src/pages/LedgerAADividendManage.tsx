@@ -37,6 +37,15 @@ export default function LedgerAADividendManage() {
   const [editNote, setEditNote] = useState("");
   // 已入账分红不可直接编辑；管理员可选择撤回原记录或写入一笔等额冲正。
   const [revokeDividendRecord, setRevokeDividendRecord] = useState<any | null>(null);
+  // 负数分红不是普通入账：需先确认由钱包扣回的对象、资产和原因。
+  const [recoveryConfirmation, setRecoveryConfirmation] = useState<{
+    targetUserId: number;
+    tagName: string;
+    assetCode: string;
+    assetAmount: string;
+    reason: string;
+    requestId: string;
+  } | null>(null);
 
   // 管理员备注功能（标签维度）
   const [showNoteModal, setShowNoteModal] = useState<{ userId: number; userName: string; tagName: string } | null>(null);
@@ -291,6 +300,19 @@ export default function LedgerAADividendManage() {
       toast.error(err.message || "添加失败");
     },
   });
+  const recoverDividendMutation = trpc.adminRecoverLedger37Dividend.useMutation({
+    onSuccess: async (result) => {
+      toast.success(result.alreadyCompleted ? '该笔分红回填已完成' : `已从成员钱包扣回 ${result.assetAmount} ${result.assetCode}`);
+      setRecoveryConfirmation(null);
+      setShowAddModal(false);
+      setAddForm({ targetUserId: 0, tagName: '', amount: '', assetCode: 'CNY', note: '' });
+      setQuickAmount('');
+      setQuickNote('');
+      setQuickAdd(null);
+      await Promise.all([refetchDividends(), refetchDividendAvailability()]);
+    },
+    onError: (err) => toast.error(err.message || '分红回填失败'),
+  });
 
   // 删除分红（管理员）
   const deleteMutation = trpc.adminDeleteDividend.useMutation({
@@ -337,11 +359,29 @@ export default function LedgerAADividendManage() {
     },
   });
 
+  const buildRecoveryRequestId = () => {
+    const entropy = `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 14).toUpperCase()}`;
+    return `L37REC${entropy}`.padEnd(16, '0');
+  };
+
   const handleAddSubmit = () => {
     if (!addForm.targetUserId) return toast.error("请选择成员");
     if (!addForm.tagName) return toast.error("请选择标签");
     const amount = parseFloat(addForm.amount);
-    if (!amount || amount <= 0) return toast.error("请输入有效金额");
+    if (!Number.isFinite(amount) || amount === 0) return toast.error("请输入有效金额");
+    if (ledgerId === 37 && amount < 0) {
+      if (!addForm.note.trim()) return toast.error('负数回填必须填写回填原因');
+      setRecoveryConfirmation({
+        targetUserId: addForm.targetUserId,
+        tagName: addForm.tagName,
+        assetCode: addForm.assetCode,
+        assetAmount: String(Math.abs(amount)),
+        reason: addForm.note.trim(),
+        requestId: buildRecoveryRequestId(),
+      });
+      return;
+    }
+    if (amount < 0) return toast.error('仅37号账本支持负数分红回填');
     addMutation.mutate({
       ledgerId,
       targetUserId: addForm.targetUserId,
@@ -376,7 +416,20 @@ export default function LedgerAADividendManage() {
   const handleQuickAddSubmit = () => {
     if (!quickAdd) return;
     const amount = parseFloat(quickAmount);
-    if (!amount || amount <= 0) return toast.error("请输入有效金额");
+    if (!Number.isFinite(amount) || amount === 0) return toast.error("请输入有效金额");
+    if (ledgerId === 37 && amount < 0) {
+      if (!quickNote.trim()) return toast.error('负数回填必须填写回填原因');
+      setRecoveryConfirmation({
+        targetUserId: quickAdd.userId,
+        tagName: quickAdd.tagName,
+        assetCode: 'CNY',
+        assetAmount: String(Math.abs(amount)),
+        reason: quickNote.trim(),
+        requestId: buildRecoveryRequestId(),
+      });
+      return;
+    }
+    if (amount < 0) return toast.error('仅37号账本支持负数分红回填');
     addMutation.mutate({
       ledgerId,
       targetUserId: quickAdd.userId,
@@ -744,13 +797,15 @@ export default function LedgerAADividendManage() {
                                     {new Date(rec.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
                                   </div>
                                 </div>
-                                <div className="text-sm font-semibold mr-2" style={{ color: Number(rec.amount) < 0 ? '#2E7D32' : '#D32F2F' }}>
+                                <div className="text-sm font-semibold mr-2" style={{ color: rec.reversal_mode === 'recovery' ? '#C62828' : Number(rec.amount) < 0 ? '#2E7D32' : '#D32F2F' }}>
                                   {String(rec.asset_code || 'CNY').toUpperCase() === 'CNY'
                                     ? `¥${parseFloat(rec.asset_amount ?? rec.amount).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
                                     : `${Number(rec.asset_amount ?? rec.amount).toLocaleString('zh-CN', { maximumFractionDigits: 8 })} ${String(rec.asset_code).toUpperCase()}`}
                                 </div>
                                 {ledgerId === 37 && rec.wallet_request_id ? (
-                                  Number(rec.reversal_of_id || 0) > 0 ? (
+                                  rec.reversal_mode === 'recovery' ? (
+                                    <span className="rounded-lg px-2 py-1 text-[10px] font-medium" style={{ color: '#C62828', backgroundColor: '#FFF0F0' }}>回填扣回</span>
+                                  ) : Number(rec.reversal_of_id || 0) > 0 ? (
                                     <span className="rounded-lg px-2 py-1 text-[10px] font-medium" style={{ color: '#2E7D32', backgroundColor: '#E8F5E9' }}>冲正流水</span>
                                   ) : (
                                     <button
@@ -798,7 +853,7 @@ export default function LedgerAADividendManage() {
                                 <div className="flex-1 flex items-center gap-2">
                                   <input
                                     type="number"
-                                    placeholder="金额"
+                                    placeholder={ledgerId === 37 ? '金额（负数扣回）' : '金额'}
                                     value={quickAmount}
                                     onChange={e => setQuickAmount(e.target.value)}
                                     className="w-20 px-2 py-1.5 rounded-lg text-xs outline-none border"
@@ -807,7 +862,7 @@ export default function LedgerAADividendManage() {
                                   />
                                   <input
                                     type="text"
-                                    placeholder="备注(选填)"
+                                    placeholder={ledgerId === 37 && Number(quickAmount) < 0 ? '回填原因（必填）' : '备注(选填)'}
                                     value={quickNote}
                                     onChange={e => setQuickNote(e.target.value)}
                                     className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-xs outline-none border"
@@ -815,7 +870,7 @@ export default function LedgerAADividendManage() {
                                   />
                                   <button
                                     onClick={handleQuickAddSubmit}
-                                    disabled={addMutation.isPending}
+                                    disabled={addMutation.isPending || recoverDividendMutation.isPending}
                                     className="p-1.5 rounded-lg flex-shrink-0"
                                     style={{ backgroundColor: '#E8F5E9' }}
                                   >
@@ -928,7 +983,7 @@ export default function LedgerAADividendManage() {
 
               {/* 币种与金额 */}
               <div>
-                <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>{ledgerId === 37 ? '入账币种与数量' : '分红金额（¥）'}</div>
+                <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>{ledgerId === 37 ? '入账币种与数量（负数为回填扣回）' : '分红金额（¥）'}</div>
                 <div className={ledgerId === 37 ? 'grid grid-cols-[108px_1fr] gap-2' : ''}>
                   {ledgerId === 37 && (
                     <select value={addForm.assetCode} onChange={e => setAddForm(f => ({ ...f, assetCode: e.target.value }))} className="rounded-xl border bg-white px-2 text-sm outline-none" style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}>
@@ -940,22 +995,22 @@ export default function LedgerAADividendManage() {
                   <input
                     type="number"
                     inputMode="decimal"
-                    placeholder={ledgerId === 37 ? `请输入${addForm.assetCode}数量` : '请输入金额'}
+                    placeholder={ledgerId === 37 ? `请输入${addForm.assetCode}数量，负数为扣回` : '请输入金额'}
                     value={addForm.amount}
                     onChange={e => setAddForm(f => ({ ...f, amount: e.target.value }))}
                     className="w-full px-3 py-2.5 rounded-xl text-sm outline-none border"
                     style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
                   />
                 </div>
-                {ledgerId === 37 && <div className="mt-1.5 text-[11px]" style={{ color: '#78909C' }}>确认后按原币种直接入账至成员全局钱包；页面中的回报统计保留人民币估值快照。</div>}
+                {ledgerId === 37 && <div className="mt-1.5 text-[11px]" style={{ color: Number(addForm.amount) < 0 ? '#C62828' : '#78909C' }}>{Number(addForm.amount) < 0 ? '负数不会作为入账保存：确认后将从成员同币种全局钱包扣回，并写入独立回填审计流水。' : '确认后按原币种直接入账至成员全局钱包；页面中的回报统计保留人民币估值快照。'}</div>}
               </div>
 
               {/* 备注 */}
               <div>
-                <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>备注（选填）</div>
+                <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>{ledgerId === 37 && Number(addForm.amount) < 0 ? '回填原因（必填）' : '备注（选填）'}</div>
                 <input
                   type="text"
-                  placeholder="如：2025年Q1分红"
+                  placeholder={ledgerId === 37 && Number(addForm.amount) < 0 ? '如：前期多发分红回填' : '如：2025年Q1分红'}
                   value={addForm.note}
                   onChange={e => setAddForm(f => ({ ...f, note: e.target.value }))}
                   className="w-full px-3 py-2.5 rounded-xl text-sm outline-none border"
@@ -966,11 +1021,61 @@ export default function LedgerAADividendManage() {
               {/* 提交按钮 */}
               <button
                 onClick={handleAddSubmit}
-                disabled={addMutation.isPending}
+                disabled={addMutation.isPending || recoverDividendMutation.isPending}
                 className="w-full py-3 rounded-xl text-sm font-semibold"
-                style={{ backgroundColor: '#D32F2F', color: '#FFFFFF', opacity: addMutation.isPending ? 0.6 : 1 }}
+                style={{ backgroundColor: ledgerId === 37 && Number(addForm.amount) < 0 ? '#B71C1C' : '#D32F2F', color: '#FFFFFF', opacity: addMutation.isPending || recoverDividendMutation.isPending ? 0.6 : 1 }}
               >
-                {addMutation.isPending ? '提交中...' : '确认添加'}
+                {addMutation.isPending || recoverDividendMutation.isPending ? '提交中...' : ledgerId === 37 && Number(addForm.amount) < 0 ? '核对扣回明细' : '确认添加'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 负数分红的二次确认：这不是普通登记，而是实际从成员钱包扣回资金。 */}
+      {recoveryConfirmation && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end justify-center"
+          style={{ backgroundColor: 'rgba(0,0,0,0.58)' }}
+          onClick={() => !recoverDividendMutation.isPending && setRecoveryConfirmation(null)}
+        >
+          <div
+            className="w-full rounded-t-2xl overflow-hidden"
+            style={{ backgroundColor: '#FFFFFF', maxWidth: 480 }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b" style={{ borderColor: '#FCE4E4', backgroundColor: '#FFF8F8' }}>
+              <div className="text-base font-semibold" style={{ color: '#B71C1C' }}>确认分红回填扣回</div>
+              <div className="mt-1 text-xs leading-5" style={{ color: '#795548' }}>确认后会实际扣减成员全局钱包，并写入一笔负数分红和不可修改的回填审计记录。</div>
+            </div>
+            <div className="px-4 py-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-3"><span style={{ color: '#757575' }}>成员</span><span className="font-medium text-right" style={{ color: '#1A1A1A' }}>{dividendMembers.find((member: any) => Number(member.userId) === recoveryConfirmation.targetUserId)?.displayName ?? `用户${recoveryConfirmation.targetUserId}`}</span></div>
+              <div className="flex items-center justify-between gap-3"><span style={{ color: '#757575' }}>标签</span><span className="font-medium text-right" style={{ color: '#1A1A1A' }}>{recoveryConfirmation.tagName}</span></div>
+              <div className="flex items-center justify-between gap-3"><span style={{ color: '#757575' }}>扣回金额</span><span className="font-semibold text-right" style={{ color: '#C62828' }}>{recoveryConfirmation.assetCode === 'CNY' ? '¥' : ''}{Number(recoveryConfirmation.assetAmount).toLocaleString('zh-CN', { maximumFractionDigits: 8 })}{recoveryConfirmation.assetCode === 'CNY' ? '' : ` ${recoveryConfirmation.assetCode}`}</span></div>
+              <div className="rounded-xl px-3 py-2.5" style={{ backgroundColor: '#FAFAFA' }}>
+                <div className="text-[11px] mb-1" style={{ color: '#9E9E9E' }}>回填原因</div>
+                <div className="text-sm leading-5" style={{ color: '#424242' }}>{recoveryConfirmation.reason}</div>
+              </div>
+              <div className="rounded-xl px-3 py-2.5 text-xs leading-5" style={{ backgroundColor: '#FFF3E0', color: '#8D4B00' }}>如该币种可用余额不足，本次扣回将不会入账，也不会生成分红记录。</div>
+            </div>
+            <div className="flex gap-3 px-4 pb-5">
+              <button
+                type="button"
+                onClick={() => setRecoveryConfirmation(null)}
+                disabled={recoverDividendMutation.isPending}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold"
+                style={{ color: '#616161', backgroundColor: '#F5F5F5', opacity: recoverDividendMutation.isPending ? 0.55 : 1 }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => recoverDividendMutation.mutate({ ledgerId: 37, ...recoveryConfirmation })}
+                disabled={recoverDividendMutation.isPending}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold"
+                style={{ color: '#FFFFFF', backgroundColor: '#B71C1C', opacity: recoverDividendMutation.isPending ? 0.55 : 1 }}
+              >
+                {recoverDividendMutation.isPending ? '扣回中...' : '确认扣回'}
               </button>
             </div>
           </div>

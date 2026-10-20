@@ -34,6 +34,10 @@ function getDigitalFlowPresentation(entry: { eventType?: string; amount?: number
       return { label: "担保冻结", state: "已参与联合担保", incoming: false };
     case "collateral_release":
       return { label: "担保解冻", state: "已解冻入账", incoming: true };
+    case "ledger_dividend":
+      return { label: "股票分红", state: "已入账", incoming: true };
+    case "ledger_dividend_reversal":
+      return { label: "分红回填", state: "已扣回", incoming: false };
     case "transfer_in":
     case "transfer_out": {
       const transfer = getInternalTransferPresentation(

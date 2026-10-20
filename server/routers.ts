@@ -101,6 +101,7 @@ import {
   transferLedger37ManualMarginWalletHold,
   normalizeLedger37WalletAsset,
   createLedger37Dividend,
+  recoverLedger37Dividend,
   revokeLedger37Dividend,
   revokeLedger37WalletHoldRelease,
   ensureLedger37WalletInfrastructure,
@@ -34056,6 +34057,39 @@ insights 数组每项包含：
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       await db.execute(sql`INSERT INTO dividend_records (ledger_id, user_id, tag_name, amount, note) VALUES (${input.ledgerId}, ${input.targetUserId}, ${input.tagName}, ${input.amount}, ${input.note || ''})`);
       return { success: true };
+    }),
+
+  // 37号分红多发时的独立回填：客户端只提交正的扣回数量，服务端原子写入负分红并从钱包扣回。
+  adminRecoverLedger37Dividend: protectedProcedure
+    .input(z.object({
+      ledgerId: z.literal(37),
+      targetUserId: z.number().int().positive(),
+      tagName: z.string().trim().min(1).max(160),
+      assetCode: z.string().trim().min(3).max(16),
+      assetAmount: z.string().trim().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/),
+      reason: z.string().trim().min(1).max(255),
+      requestId: z.string().trim().regex(/^[A-Za-z0-9_-]{16,96}$/),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (process.env.DEV_BYPASS_AUTH === 'true') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '热预览仅展示回填扣回界面，不会修改真实分红或钱包资金' });
+      }
+      if (ctx.user.id !== LEDGER_37_WALLET_OPERATOR_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '37号账本分红仅胡大叔可回填扣回' });
+      }
+      await assertAiWalletOperationEnabled('ledger:37', 'order_debit');
+      const targetMembership = await dbLedger.getUserMembership(LEDGER_37_ID, input.targetUserId);
+      if (!targetMembership) throw new TRPCError({ code: 'NOT_FOUND', message: '目标用户不是37号账本成员' });
+      const result = await recoverLedger37Dividend({
+        userId: input.targetUserId,
+        tagName: input.tagName,
+        assetCode: input.assetCode,
+        assetAmount: input.assetAmount,
+        reason: input.reason,
+        requestId: input.requestId,
+        actorUserId: ctx.user.id,
+      });
+      return { success: true, ...result };
     }),
 
   // 37号已入账分红只能撤回原记录或写入等额冲正，不允许直接改金额或备注。

@@ -6196,6 +6196,7 @@ export default function LedgerDetailAA({
                       const cnyAmount = Number(r.amount || 0);
                       const rawAssetAmount = Number(r.asset_amount);
                       const assetAmount = Number.isFinite(rawAssetAmount) && rawAssetAmount !== 0 ? rawAssetAmount : cnyAmount;
+                      const isRecovery = r.reversal_mode === 'recovery';
                       const isReversal = r.reversal_mode === 'reverse' || cnyAmount < 0;
                       const isWalletEntry = Number(r.wallet_entry_id || 0) > 0;
                       const formattedAssetAmount = assetCode === 'CNY'
@@ -6211,11 +6212,11 @@ export default function LedgerDetailAA({
                               <div className="text-xs" style={{ color: '#9E9E9E' }}>
                                 {(() => { const d = new Date(r.created_at); return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`; })()}
                               </div>
-                              <div className="mt-1 text-sm font-semibold" style={{ color: '#424242' }}>{isReversal ? '分红冲正' : '股票分红'}</div>
+                              <div className="mt-1 text-sm font-semibold" style={{ color: '#424242' }}>{isRecovery ? '分红回填扣回' : isReversal ? '分红冲正' : '股票分红'}</div>
                               {r.note ? <div className="mt-1 text-xs leading-5" style={{ color: '#757575', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{r.note}</div> : null}
                             </div>
                             <div className="shrink-0 text-right">
-                              <div className="text-base font-bold tabular-nums" style={{ color: isReversal ? '#1565C0' : '#D32F2F' }}>
+                              <div className="text-base font-bold tabular-nums" style={{ color: isRecovery ? '#C62828' : isReversal ? '#1565C0' : '#D32F2F' }}>
                                 {isReversal ? '−' : '+'}{formattedAssetAmount}
                               </div>
                               {assetCode !== 'CNY' && <div className="mt-0.5 text-[11px]" style={{ color: '#9E9E9E' }}>≈ ¥{Math.abs(cnyAmount).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
@@ -6223,7 +6224,7 @@ export default function LedgerDetailAA({
                           </div>
                           {isWalletEntry ? (
                             <div className="mt-1 text-xs leading-5" style={{ color: '#607D8B' }}>
-                              {isReversal ? '冲正去向：已从' : '分红去向：已入账至'} {destination}
+                              {isRecovery ? '回填去向：已从' : isReversal ? '冲正去向：已从' : '分红去向：已入账至'} {destination}
                             </div>
                           ) : (
                             <div className="mt-2 text-[11px] leading-5" style={{ color: '#9E9E9E' }}>历史人工登记记录，未关联智能钱包入账。</div>
